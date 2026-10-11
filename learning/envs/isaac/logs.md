@@ -50,3 +50,10 @@
 - 변경: passive-caster 및 wheel-damping Python 시험의 UTF-8 BOM만 제거했다. 모델과 시험 본문은 같다.
 - 증거: main CI의 source encoding guard가 두 파일을 지목했다. 수정 뒤 source guard PASS, 두 Isaac 시험 24 PASS, 독립 byte-only 검토 APPROVE.
 - gate 변화: SOURCE/LOCAL 형식 수정이다. 새 physics/device/field 증거를 주장하지 않는다.
+
+## 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
+
+- 변경: main ea6d4c0a2의 D-627/D-628/D-630 구조를 유지하고 기존 SDK headless/importer/force-drive 수정과 회귀만 적용했다. SDK 전용 pins와 실제 경로·운용 안내를 갱신했다. CORE·계약·Fleet 실행 권한은 그대로다.
+- 증거: 원격 전체 CORE/Isaac/설치 4361 passed, 11 skipped, 0 NEW. 최신 archive 6982파일 hash를 전후 확인한 R2에서 SDK 2400 frames/exit 0, CORE 단일 publisher와 실제 직진·만료/CORE-loss 정지를 관측했다. R1의 이전 archive 덧씌움은 SHA readback으로 적발해 수용 증거에서 제외했다.
+- gate 변화: SOURCE/LOCAL GO, ROS-SIM HOLD 유지. 회전 목표 0.3 rad/s 대비 실제 0.19396으로 observer/scenario exit 1이다. 실제 맵·센서·두 대 Fleet·RL은 미검증이다. [최신 검증 기록](../../../docs/validation/isaac-latest-core-main-2026-10-11/result.md).
+- 교훈: 최신 main에서 만든 archive라도 실행 스크립트가 옛 소스를 덧씌울 수 있다. 실제 runtime 파일 hash를 실행 전과 정리 후 확인한다.

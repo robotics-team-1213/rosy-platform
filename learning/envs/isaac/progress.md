@@ -1,22 +1,23 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified: { commit: "a759f1e6f", date: 2026-10-11 }
 gates:
   SOURCE:
     state: GO
-    cmd: "python -m pytest test/architecture/test_module_structure.py test/test_module_functional_surface.py -q"
-    evidence: "structure scan sees the package; D-73 functional surface declared (3 host tests)"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
+    evidence: "Latest main holder paths retained; SDK importer/headless/force-drive regression tests pass. Runtime source a759f1e6f includes main ea6d4c0a2."
   LOCAL:
     state: GO
-    cmd: "python -m pytest learning/envs/isaac/test -q"
-    evidence: "test_graph_contract·test_model_checks·test_prepare_urdf 통과 (2026-09-30 Windows)"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"
+    evidence: "a759f1e6f remote: 4361 passed, 11 skipped, 0 NEW. Separate Jazzy render/preflight verified Pinky 17 joints/10 meshes."
   ROS-SIM:
     state: HOLD
-    blocker: "Model-PC Isaac 5.1 SDK imported the referenced robot and ran 120 graph callbacks; independent observer received 117 clock and 117 odom messages. Initial and 243 subsequent Gate/USD wheel-target zero checks passed without a Twist publisher. Process exceeded its 120-second bound after SDK close returned (exit 124). Normal shutdown, actual driving/physical freshness stop, Nav2 and two-robot Fleet acceptance remain unverified. Host 33 passed/1 skipped does not promote runtime (D-322/D-434)."
+    blocker: "Latest-main source a759f1e6f verified before/after headless 2400-frame run; SDK exit 0 without SDK Error/Traceback. Single CORE publisher, forward tracking, command-expiry physical stop and owned CORE-loss watchdog stop observed. Rotation target 0.3 rad/s measured 0.19396: tracking failed, observer/scenario exit 1. Map/STL, sensors, Nav2, two-robot Fleet and RL remain unverified; see docs/validation/isaac-latest-core-main-2026-10-11/result.md."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
+adrs: [D-322, D-434]
 plans:
   - docs/plans/2026-10-04-isaac-navigation-integration-review.md
 ---
