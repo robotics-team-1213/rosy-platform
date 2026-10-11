@@ -186,6 +186,40 @@ def test_core_false_adds_no_core():
     assert not _core_nodes(actions, context)
 
 
+def test_nominal_camera_keeps_transport_outside_multi_and_renders_headlessly():
+    from launch.actions import IncludeLaunchDescription
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", nominal_camera="true")
+    assert '--headless-rendering' in _gz_server_args(actions, context)
+    assert _named(actions, context, 'image_bridge') == []
+    uploads = []
+    for action in actions:
+        if isinstance(action, IncludeLaunchDescription):
+            location = _text(action.launch_description_source._LaunchDescriptionSource__location, context)
+            if location.endswith('upload_robot.launch.py'):
+                uploads.append(dict(action.launch_arguments))
+    assert len(uploads) == 2
+    for args in uploads:
+        assert _text(args['camera_width'], context) == '320'
+        assert _text(args['camera_height'], context) == '240'
+        assert _text(args['cam_tilt_deg'], context) == '8'
+
+
+def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch):
+    spec = importlib.util.spec_from_file_location('multi_real', LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, 'get_package_share_directory', lambda name: str(LAUNCH.parents[1]))
+    actions = mod.generate_launch_description().entities
+    context = LaunchContext()
+    context.launch_configurations['learned_lane_pointer'] = '/pinned/model-pointer.txt'
+    for executable in ('image_bridge', 'line_observer_node', 'sim_jpeg_relay.py'):
+        nodes = _named(actions, context, executable)
+        assert len(nodes) == 2
+        assert {_text(n.node_namespace, context).strip('/') for n in nodes} == {'rosy_01', 'rosy_02'}
+    assert _named(actions, context, 'core') == []  # COREs belong to the included multi launch.
+
+
 def test_slam_start_waits_for_sensor_startup_in_wall_time():
     mod = _module()
     actions, _ = _setup(mod, robots="1", core="false", mode="slam")
