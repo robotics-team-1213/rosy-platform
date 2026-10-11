@@ -116,3 +116,27 @@ def test_object_publication_is_idempotent_and_class_file_is_sealed(tmp_path, mon
     (folder / 'object-classes.json').write_bytes(b'changed')
     with pytest.raises(ValueError):
         read_fixed_manifest(folder)
+
+
+@pytest.mark.parametrize('index', [None, True, 1, '0'])
+def test_invalid_class_indices_refuse_before_proof(tmp_path, monkeypatch, index):
+    import class_sets
+    registry, review, calls = fixture(tmp_path, monkeypatch)
+    record = class_sets.object_set(review)
+    record['classes'][0]['index'] = index
+    with review.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('object_class_set',?)", (json.dumps(record),))
+    with pytest.raises(ValueError, match='classes'):
+        bootstrap.ready(registry.root, review.state, tmp_path / 'scratch', target='objects')
+    assert not calls
+
+
+def test_truncated_source_proof_cannot_publish(tmp_path, monkeypatch):
+    registry, review, _ = fixture(tmp_path, monkeypatch)
+    original = bootstrap.prove_frames
+    def truncate(*args, **kwargs):
+        proof = original(*args, **kwargs)
+        return dict(proof, frames=[])
+    monkeypatch.setattr(bootstrap, 'prove_frames', truncate)
+    with pytest.raises(ValueError, match='proof.*count'):
+        bootstrap.publish(registry.root, review.state, 'truncated', tmp_path / 'scratch', target='objects')
