@@ -19,7 +19,7 @@ function inboxButton() {
   inbox.setAttribute("data-ui-tooltip", "알림 창");
   inbox.setAttribute("data-action-icon", "notification");
   actionIcon(inbox, "notification");
-  $("fleet-header-actions").prepend(inbox);
+  $("topbar-extra").prepend(inbox);
   inbox.addEventListener("click", () => {
     const request = new CustomEvent("rosy:inbox", {cancelable: true});
     if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
@@ -31,8 +31,30 @@ export function showInboxCount(count) {
   inbox.textContent = count ? String(count) : "";
   inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
   inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
+  const entry = $("topbar-more");
+  entry.textContent = count ? String(count) : "";
+  entry.setAttribute("aria-label", `접속과 알림 · 미확인 메시지 ${count}개`);
+  entry.setAttribute("data-ui-tooltip", entry.getAttribute("aria-label"));
+  actionIcon(entry, "notification");
   actionIcon(inbox, "notification");
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+}
+
+function bindThemeCycle(listen) {
+  const button = $("fleet-theme"), theme = window.RosyTheme;
+  const current = () => theme.choices.findIndex(choice => choice.value === theme.get());
+  const next = () => theme.choices[(current() + 1) % theme.choices.length];
+  function render() {
+    const choice = theme.choices[current()];
+    const label = `테마: ${choice.label} · 클릭하면 ${next().label}`;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-ui-tooltip", label);
+    button.setAttribute("data-action-icon", choice.icon);
+    actionIcon(button, choice.icon);
+  }
+  listen(button, "click", () => theme.set(next().value));
+  listen(document, "rosy:theme", render);
+  render();
 }
 
 export const roleLabel = role => ROLE[role] || "권한 없음";
@@ -61,6 +83,10 @@ export function setTopbarOpen(open) {
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
   inboxButton();
+  bindThemeCycle(listen);
+  listen($("topbar-extra"), "keydown", event => {
+    if (event.key === "Escape") { setTopbarOpen(false); $("topbar-more").focus(); }
+  });
   listen($("topbar-more"), "click", () => {
     openedForLock = false;
     setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");

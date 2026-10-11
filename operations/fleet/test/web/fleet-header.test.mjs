@@ -7,7 +7,7 @@ import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
-  SESSION_REASON, bindEstop, estopReason, roleLabel, showSession, showSignedOut,
+  SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, roleLabel, showSession, showSignedOut,
 } = await import("../../../ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
@@ -24,12 +24,33 @@ function fakeNode(id) {
 
 function fakeHeader() {
   const nodes = Object.fromEntries(["user-role", "development-badge", "estop", "estop-feedback", "topbar-more",
-    "topbar-extra", "online-pill", "fleet-name", "clock"].map(id => [id, fakeNode(id)]));
+    "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-inbox", "fleet-theme"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
-  globalThis.document = {getElementById: id => nodes[id]};
+  globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
   return nodes;
 }
+
+test("one theme button cycles the shared choices; one status click toggles once", () => {
+  const nodes = fakeHeader();
+  let preference = "dark";
+  const choices = [{value: "dark", label: "dark", icon: "theme-dark"},
+    {value: "light", label: "light", icon: "theme-light"},
+    {value: "system", label: "system", icon: "theme-system"}];
+  globalThis.window = {RosyTheme: {choices, get: () => preference, set: value => {preference = value;}}};
+  bindTopbarToggle();
+  for (const value of ["light", "system", "dark"]) {
+    nodes["fleet-theme"].listeners.click();
+    assert.equal(preference, value);
+  }
+  nodes["topbar-more"].listeners.click();
+  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  nodes["topbar-more"].listeners.click();
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
+  nodes["topbar-more"].focus = () => {nodes["topbar-more"].focused = true;};
+  nodes["topbar-extra"].listeners.keydown({key: "Escape"});
+  assert.equal(nodes["topbar-more"].focused, true);
+});
 
 test("the E-stop locks only on a press the server would refuse", () => {
   assert.equal(estopReason(undefined), "");            // unknown: loading or Fleet unreachable

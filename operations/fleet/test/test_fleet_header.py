@@ -26,7 +26,7 @@ def test_header_ids_and_one_sheet():
     for name in DOCS:
         page, header = _header(name)
         for element_id in ("console-token", "token-save", "user-role", "password-login", "token-access",
-                           "theme-choice", "development-badge", "online-pill", "topbar-more", "estop"):
+                           "fleet-theme", "development-badge", "online-pill", "topbar-more", "estop"):
             assert f'id="{element_id}"' in header, (name, element_id)
         # The old site-map/Cell identity row is gone; one id names one thing on every document.
         for retired in ('id="session"', 'id="credential"', 'id="connect"', "site-access", "cell-access"):
@@ -45,7 +45,7 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
     assert 'id="fleet-header-actions"' in header
     assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
     controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
-    assert '$("fleet-header-actions").prepend(inbox)' in controller
+    assert '$("topbar-extra").prepend(inbox)' in controller
 
 
 def test_estop_is_live_in_markup_and_one_module_gates_it():
