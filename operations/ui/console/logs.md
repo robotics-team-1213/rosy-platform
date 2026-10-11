@@ -33,3 +33,10 @@
 - 변경: 기존 ui-button에 quiet 종류와 처리 중 사유를 명시한다. 기존 권한 검사·중복 요청 차단·요청 본문·갱신·오류 처리는 유지한다.
 - 증거: 같은 기준 SHA의 원격 RED 2 NEW 뒤 수정 SHA에서 공용 UI 계약과 Fleet 사건/알림 시험 61 PASS, NEW 0. 독립 리뷰가 fb54c9f47f의 세 파일을 승인했다.
 - gate 변화: SOURCE/원격 관련 회귀 확인. main 통합·새 CI·배포·주행 수용은 별도다.
+
+## 2026-10-12 - D-668 Fleet header controls
+
+- One upper-right theme button consumes RosyTheme choices/get/set and is usable without operator rights.
+- One status entry opens connection, role and messages; summary open does not mark messages read. Development warning and E-stop remain outside the fold.
+- Shared header owns click toggling; connection view retains auth guidance and focus. Escape closes and restores entry focus. Four documents share identical markup and existing tokens/components.
+- Remote static, token, Node wrapper and architecture regressions passed (103 collected; NEW 0). Independent source review found no new core regression. Opt-in Chromium and integration evidence follow in deployment receipts; no device actuation tested.
