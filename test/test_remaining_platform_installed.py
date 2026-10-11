@@ -23,13 +23,13 @@ def run(args, cwd):
 def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path, delivery):
     staging = tmp_path / 'source'
     sources = []
-    for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console',
+    for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'operations/world',
                      'operations/execution', 'middleware/skills/api'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/ui/console'):
+        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation'):
             sources.append(copied)
     expected = {p.relative_to(ROOT / 'operations/ui/console').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
@@ -44,6 +44,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'operations/ui/console')
+        shutil.rmtree(staging / 'operations/situation')
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
@@ -68,6 +69,13 @@ from rosy.decision.model_tool_contract import ModelToolCall
 from fleet.server import proposal_store
 assert proposal_store.ModelToolCall is ModelToolCall
 assert importlib.util.find_spec('fleet.ai') is None
+from rosy_situation.assessment import AssessmentInput, AssessmentPolicy, EvidenceRef, assess
+assert importlib.util.find_spec('rosy_situation.service') is None
+assert importlib.util.find_spec('rosy_situation.analyzers') is None
+assert importlib.util.find_spec('rosy_situation.incidents') is None
+request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
+                          (EvidenceRef('robot', 'core', 'state-1', 99.0),))
+assert assess(request, now=100.0, policy=AssessmentPolicy('v1', 3, 0, 3)).necessity == 'DO_NOT_INTERVENE'
 from fleet.server.static_routes import WEB_ROOT, CONSOLE_ASSETS, CONSOLE_CSP, install_static_routes
 assert WEB_ROOT == installed / 'fleet/server/web'
 actual = {p.relative_to(WEB_ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -90,6 +98,6 @@ print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
-               'rosy.decision.tool_dispatch']
+               'rosy.decision.tool_dispatch', 'rosy_situation.assessment', 'rosy_situation.snapshot_assessment']
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
