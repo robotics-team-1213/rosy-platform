@@ -41,7 +41,7 @@ def nativeTokens = tasks.register('generateNativeTokens') {
         def folder = generated.get().dir(packageName.replace('.', '/')).asFile
         folder.mkdirs()
         ['RosyMetrics': metrics, 'RosyTokenColors': colours].each { name, body ->
-            new File(folder, "$name.kt").setText("package $packageName\n\n// Generated from shared/web/tokens.css; do not edit.\nobject $name {\n${body.join('\n')}\n}\n", 'UTF-8')
+            new File(folder, "${name}.kt").setText("package $packageName\n\n// Generated from shared/web/tokens.css; do not edit.\nobject $name {\n${body.join('\n')}\n}\n", 'UTF-8')
         }
     }
 }
