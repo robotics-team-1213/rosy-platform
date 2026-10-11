@@ -139,7 +139,8 @@ class LineStuckAnswerLog:
         with closing(self._connect()) as connection:
             rows = connection.execute("""SELECT DISTINCT a.robot_id, a.stuck_id
                 FROM fleet_line_stuck_answers a WHERE a.principal_id='fleet-resolver'
-                AND a.code='STUCK_DECISION_OUTCOME_UNKNOWN' AND a.decision != 'WAIT'
+                AND a.code IN ('STUCK_DECISION_OUTCOME_UNKNOWN', 'FLEET_STUCK_DISPATCH_PENDING')
+                AND a.decision != 'WAIT'
                 AND NOT EXISTS (SELECT 1 FROM fleet_line_stuck_answers r
                     WHERE r.robot_id=a.robot_id AND r.stuck_id=a.stuck_id
                     AND r.code='STUCK_DECISION_RECONCILED' AND r.answer_id>a.answer_id)""").fetchall()

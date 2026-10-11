@@ -29,3 +29,5 @@
 ## 검증 증거
 
 `7c0e4f049` 원격 관련 회귀 238 passed, known_failures NEW 0. Node UI 52 passed. 독립 pipeline_review의 phase/cap/mode/UNKNOWN/시간/학습 원본 경계 리뷰와 Fleet parent 53532 재판정을 반영했다. 마지막 fixture 보강과 최신 main 통합은 tools/land.py의 원격 최종 gate에서 재검증한다. 현장 활성화와 학습 실행 증거는 없다.
+
+자율 대상 설정은 durable Task journal과 백그라운드 stuck resolver가 모두 구성된 경우에만 시작한다. 이동 후보는 owner 호출 전에 기존 원장에 `FLEET_STUCK_DISPATCH_PENDING`을 FULL synchronous로 저장하고, 저장/재대조 실패면 전송하지 않는다. 쓰기 await 뒤 law/AI/사람 점유를 다시 확인한다. 이미 전송을 시작한 pending은 확정 receipt 또는 정확한 CORE 사건 종료를 durable 대조한 뒤에만 해제한다. 강제 프로세스 종료로 receipt 기록이 없어도 재시작에서 pending을 동결하며, 기록 손실을 근거로 재발행하지 않는다. 새 코드들은 Fleet 내부 원장 표식이며 CORE receipt를 위조하지 않는다. 저장 매체 자체의 파손은 별도 현장 장애다.

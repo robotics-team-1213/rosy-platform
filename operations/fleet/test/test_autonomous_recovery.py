@@ -18,6 +18,76 @@ def resolver(**config):
     return core
 
 
+def test_autonomous_start_requires_recording_and_background_resolver(tmp_path):
+    from fleet.server.app import create_app
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    loop, _board, _robot = _setup()
+    console = loop._snapshot._console
+    scope = frozenset({"rosy_01"})
+    with pytest.raises(ValueError, match="durable journal"):
+        create_app(console, autonomous_robots=scope, stuck_resolver_clients={})
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "journal.sqlite3"), robot_ids=scope)
+    with pytest.raises(ValueError, match="background stuck resolver"):
+        create_app(console, task_service=tasks, autonomous_robots=scope)
+    app = create_app(console, task_service=tasks, autonomous_robots=scope, stuck_resolver_clients={})
+    assert app.state.line_stuck._log.path == tasks.store.path
+    assert app.state.fleet_gather.observations is not None
+    assert app.state.stuck_resolver._resolver.autonomous_robots == scope
+    assert create_app(console).state.line_stuck._log is None
+
+
+@pytest.mark.parametrize("result", ["crash", "accepted", "write_failed", "admission_changed"])
+def test_moving_dispatch_is_journaled_before_send_and_rechecked(tmp_path, monkeypatch, result):
+    from copy import deepcopy
+    from fleet.stuck.reports import LineStuckAnswerLog
+    journal = LineStuckAnswerLog(tmp_path / "journal.sqlite3")
+    loop, board, robot = _setup(log=journal)
+    loop._resolver.autonomous_robots = frozenset({"rosy_01"})
+    calls = []
+
+    class Crash(BaseException):
+        pass
+
+    async def send(*args, **kwargs):
+        assert journal.uncertain_motion() == {("rosy_01", "stuck-abc")}
+        calls.append(args)
+        if result == "crash":
+            raise Crash()
+        return {"outcome": "accepted"}
+
+    monkeypatch.setattr(robot, "line_stuck_decision", send)
+    if result == "write_failed":
+        monkeypatch.setattr(journal, "append", lambda *_: (_ for _ in ()).throw(OSError("disk full")))
+    if result == "admission_changed":
+        original, reads = loop._admission_row, []
+
+        async def changed(rid):
+            row = deepcopy(await original(rid))
+            reads.append(rid)
+            if len(reads) == 2:
+                row["state"]["safety"]["estop"] = True
+            return row
+
+        monkeypatch.setattr(loop, "_admission_row", changed)
+    if result == "crash":
+        with pytest.raises(Crash):
+            asyncio.run(loop.run_once())
+        assert journal.rows()[0]["code"] == "FLEET_STUCK_DISPATCH_PENDING"
+        restarted, _board, _robot = _setup(log=journal)
+        restarted._resolver.autonomous_robots = frozenset({"rosy_01"})
+        assert restarted._resolver._uncertain == {("rosy_01", "stuck-abc")}
+        asyncio.run(restarted.run_once())
+        assert _robot.calls == []
+    else:
+        asyncio.run(loop.run_once())
+        assert bool(calls) == (result == "accepted")
+        if result != "write_failed":
+            assert journal.uncertain_motion() == set()
+        else:
+            assert board.view("rosy_01")["resolver"]["escalated"] == "auto_hold:journal_unavailable"
+
+
 def test_accepted_hold_reobserves_and_recovers_once_without_a_person():
     core = resolver()
     row = _row(stuck=_stuck(cause="lane_lost"))

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 import time
 from typing import Awaitable, Callable, Mapping, Optional
 
@@ -70,10 +71,7 @@ class StuckResolverLoop:
         for rid, sid in tuple(getattr(self._resolver, "_uncertain", ())):
             events = self.events_since(rid, 0)
             if any(event.type == "nav.line_stuck_closed" and event.data.get("stuck_id") == sid for event in events):
-                self._board.record(robot_id=rid, stuck_id=sid, decision="ESCALATE", principal_id=PRINCIPAL_ID,
-                                   accepted=None, tier="rule", code="STUCK_DECISION_RECONCILED",
-                                   escalated="auto_reconciled:owner_case_closed")
-                self._resolver._uncertain.discard((rid, sid))
+                await self._reconcile(rid, sid, "owner_case_closed")
                 chain = self._resolver._chains.get(rid)
                 if chain and chain.observing == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
                     chain.observing = None
@@ -220,11 +218,26 @@ class StuckResolverLoop:
             return
         now = self._clock()
         self._rows[answer.robot_id] = row
-        self._resolver.sent(answer, now)
         record = dict(robot_id=answer.robot_id, stuck_id=answer.stuck_id,
                       decision=answer.decision, principal_id=PRINCIPAL_ID,
                       tier="ai" if answer.rule == "ai" else "rule",
                       rule=answer.rule)
+        pending = answer.robot_id in self._resolver.autonomous_robots and answer.decision != "WAIT"
+        if pending:
+            self._resolver._uncertain.add((answer.robot_id, answer.stuck_id))
+            try:
+                await asyncio.to_thread(self._board.record, **record, accepted=None,
+                                        code="FLEET_STUCK_DISPATCH_PENDING", durable=True)
+                row = await self._admission_row(answer.robot_id)
+                hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
+                    or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
+                if hold or self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
+                    await self._reconcile(answer.robot_id, answer.stuck_id, "not_dispatched")
+                    return
+            except (OSError, sqlite3.Error):
+                self._escalated(Hold(answer.robot_id, answer.stuck_id, "journal_unavailable"))
+                return
+        self._resolver.sent(answer, now)
         code: Optional[str] = None
         try:
             extra = {}
@@ -256,6 +269,11 @@ class StuckResolverLoop:
                                message=f"unexpected client error ({type(exc).__name__})")
         else:
             self._board.record(**record, accepted=True, outcome=result.get("outcome"))
+        if pending and code != "STUCK_DECISION_OUTCOME_UNKNOWN":
+            try:
+                await self._reconcile(answer.robot_id, answer.stuck_id, "dispatch_receipt_known")
+            except (OSError, sqlite3.Error):
+                self._escalated(Hold(answer.robot_id, answer.stuck_id, "journal_unavailable"))
         if answer.rule == "ai" and self.ai_board is not None:
             self.ai_board.note_outcome(answer.robot_id, answer.stuck_id, answer.decision, code or "accepted")
             if self.ai_board.log is not None:
@@ -268,3 +286,10 @@ class StuckResolverLoop:
         if escalation is not None:
             self._escalated(escalation, rule=answer.rule if answer.escalate else None,
                             decision=answer.decision if answer.escalate else None)
+
+    async def _reconcile(self, robot_id, stuck_id, reason):
+        await asyncio.to_thread(self._board.record, robot_id=robot_id, stuck_id=stuck_id,
+                                decision="ESCALATE", principal_id=PRINCIPAL_ID, accepted=None,
+                                tier="rule", code="STUCK_DECISION_RECONCILED",
+                                escalated="auto_reconciled:" + reason, durable=True)
+        self._resolver._uncertain.discard((robot_id, stuck_id))
