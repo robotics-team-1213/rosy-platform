@@ -79,7 +79,8 @@ def checked_response(problem, response):
     choice, = response['choices']
     message = choice['message']
     usage = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
-    if (choice['finish_reason'] != 'stop' or message.get('tool_calls')
+    if (response.get('model') != MODEL or message.get('role') != 'assistant'
+            or choice['finish_reason'] != 'stop' or message.get('tool_calls')
             or message.get('function_call') or type(message['content']) is not str
             or any(type(value) is not int or value < 0 for value in usage.values())
             or usage['completion_tokens'] > 1024
