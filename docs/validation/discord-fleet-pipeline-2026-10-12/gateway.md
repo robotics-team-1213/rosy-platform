@@ -25,3 +25,5 @@ Tailscale이 다른 계정으로 바뀌어 첫 통합 시험의 SSH가 끊겼다
 Protocol: [Discord Gateway](https://docs.discord.com/developers/events/gateway).
 
 후속27fc0de96: 최종 수신/자격/구조/wheel+sdist 설치83 PASS/NEW0. threshold 재판정 회귀 통과. 배치 runner fallback을 기록하며 resource floor 수용 증거로 쓰지 않는다. main 착지/이미지/현장 수용은 아직 남았다.
+
+후속b78edf399: optional private config/CLI/정식 Compose 연결 RED3NEW 후138 PASS/NEW0. 독립 검토가 source/Safety를 승인했고 Fleet53617(기존53606+150 내), CLI890/app906을 확인했다. Vision에는 Discord 파일을 mount하지 않는다. 운영은 D-301/D-437/D-441 CI와 서명 gate를 유지하며 source만으로 unsigned image를 교체하지 않는다.

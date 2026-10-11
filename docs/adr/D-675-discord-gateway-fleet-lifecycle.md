@@ -22,3 +22,5 @@ private intake 설정의 `bot_token_file`이 없으면 수신은 OFF다. 토큰 
 Protocol reference: [Discord Gateway](https://docs.discord.com/developers/events/gateway).
 
 Source 인수: 독립 검토2241b7b6b 승인, 최신27fc0de96 원격83 PASS/NEW0(수신·자격·구조·wheel/sdist 설치). 전체 main 착지와 실제 이미지/현장 수용은 별도다.
+
+배포 caller closure: 기존 signed Compose는 Fleet-only private directory를 읽는다. 상호 배제 CLI `--discord-intake-config-optional`은 파일이 없을 때만 OFF이며 잘못된 파일/권한은 fail closed다. 독립 검토b78edf399 승인, 원격138 PASS/NEW0(CLI·수신·compose·설치·구조). Fleet53617은 기존53606+150 내이며 app906과 모든 기존 한도를 유지한다. unsigned 운영 교체나 push 승인은 이 ADR에 포함되지 않는다.

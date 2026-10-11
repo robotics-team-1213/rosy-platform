@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · b78edf399 · D-675 Fleet-only Discord private config
 - 2026-10-12 · uncommitted · fix: sandbox PWD preflight
 - 2026-10-12 · c21b8bea0c · fix: deliberation host admission
 - 2026-10-10 · uncommitted · feat: AI PC local Qwen inference
 - 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 램프
-- 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
