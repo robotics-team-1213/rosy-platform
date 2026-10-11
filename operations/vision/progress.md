@@ -20,13 +20,14 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636]
+adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655]
 plans:
   - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-26-middleware-device-server-contract-integration.md
   - docs/plans/2026-09-28-site-camera-preview-rectification.md
   - docs/plans/2026-10-11-compact-camera-calibration.md
+  - docs/plans/2026-10-11-mapless-fleet-control.md
 ---
 ## 현재 상태 (2026-09-27)
 

@@ -138,7 +138,8 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 | 현재 기능·공백 조사 | 진행 | camera lane CLI, LOCALIZED-only teach, profile example roads, tools-tab formation 확인 |
 | Task 1 초기 계약·검증 | 완료 | D-655/API v1.206, shared survey·facility 모델, 기존 body 보존·근거 활성화 거절·금지 영역 충돌 차단; fb3c1a8c8 원격 88 PASS, NEW 0 |
 | Task 2 빈 지도 입력·편집 | 완료 · source/remote | 기준·장소·도로·신호등·정지선·금지 영역 입력 연결; Node 22 PASS, 전체 지도 Chromium 36+25=61 PASS/NEW 0. 실제 배포 수용은 Task 6 |
-| Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; 1a14e9705a 원격 API 37 PASS/NEW 0, 8596f7042b Chromium 6 PASS/NEW 0. Node 24 PASS. Task 3 전체의 카메라 누적은 다음 작업 |
+| Task 3 상대 주행 조사 | 완료 · source/remote | 지도 UNKNOWN에서도 신선한 odom으로 시작·선 누적·초안 확정 API/UI 구현; frame/continuity 독립 검토 수정 뒤 원격 55 PASS/NEW 0, Node 28 PASS. Task 3 전체 완료가 아님 |
+| Task 3 카메라 관측 누적 | 진행 · source/remote | 누적·근거 보존·검토/재검토·기준/CAS/중복 방어, 최종 원격 12 PASS/NEW 0. endpoint 연결 후보 표시·검토가 남음 |
 | Task 1–5 구현·검증 | 미완료 | 이 계획으로 차례대로 실행; 기존 기능 존재를 새 목표의 PASS로 쓰지 않음 |
 | Task 6 통합·배포·사이트 확인 | 미완료 | 이번 변경의 exact SHA 증거 필요 |
 | 실제 주행·측량·대형 수용 | 미확인 | 로봇 연결·측량·현장 조건이 갖춰졌을 때 별도 확인; 자동 이동으로 조건 만들지 않음 |
@@ -194,3 +195,13 @@ Browser suites use the existing remote runner and CI browser environment. Node t
 
 - Vision `lane_map.generate_map`은 측정 homography·lane width·road seed로 초안을 만들고 별도 evidence 파일에 calibration·frame_sha256·proposal_only를 남긴다. 현재 UI import-camera-map은 초안을 교체하므로 누적 경로가 아니다.
 - 기존 추출기를 재사용하고 관측 근거를 지도 간선까지 연결한다. 누적은 기존 map_id와 전체 survey 기준의 동일성 및 명시적 좌표 정합이 선행돼야 한다. ID 충돌을 보존하고 관측되지 않은 장소/간선 연결을 자동 생성하지 않는다. 저장은 기존 bounded draft PUT/CAS/named operator를 사용하며 활성 지도와 source lineage를 교체하지 않는다.
+
+### 2026-10-11 카메라 관측 누적 구현
+
+- 7ed46c1f54 remote RED는 출력 survey/도로 근거 누락이며 Node RED는 mergeCameraMap 미구현이다. Vision의 기존 extractor에 optional calibration.survey 정규화와 camera/observed 근거를 연결했다. calibration SHA256과 CLI frame SHA256을 간선 note에 보존한다. 기준·도로 검토 전 활성화는 기존 저장소 가드로 거절한다. 975de95358 원격 추출/구조 7 PASS/NEW 0.
+- 기존 replace import와 별도 누적 버튼을 제공한다. 저장된 초안의 전체 survey 기준과 map_id가 같아야 하며 기존 시설·규칙은 보존한다. 새 장소/간선 ID를 재배정하고 동일 geometry/운행 속성은 중복 생성하지 않는다. 초안 수정/교체와 CAS를 확인한다. 입력 metadata를 복사하는 것만으로 image_to_map의 실제 정합이 성립하지 않으므로 기준점 측정 확인을 유지한다.
+- Browser 첫 RED는 fixture 속도 필드 누락이라 수정했고 실제 RED는 merge control 미존재다. 7d3a93d0f2 누적 desktop/mobile·기존 카메라·Vision·구조 9 PASS/NEW 0 (`logs/camera-accumulate-browser-green/run-1.txt`, AI PC 자원 기준 통과). Node 28 PASS.
+- `survey_feature_review`는 조사 metadata 없는 camera map의 marker 편집 재검토 누락, 수동 도로/장소 교정의 원본 근거 삭제, 반복 관측의 새 프레임 근거 누락을 발견했다. marker remote RED로 재현하고 b80fa42817에서 수정했다. 반복의 새 note를 보존해 검토를 무효화하며 동일 파일은 idempotent다. 합계 1000자를 넘으면 원본을 버리지 않고 거절한다. Node는 도로/장소 교정·다른 프레임 반복·overflow·원본 보존을 확인한다. 독립 source 재검토는 해당 수정 범위를 수용했으며 terminal remote GREEN을 확인한다.
+- 일반 camera 초안도 기존 검토 메모로 검토할 수 있다. 간선 운행 속성 수정과 marker 끝점 수정은 camera/observed가 아닌 operator/observed로 재검토하고 기존 프레임 지문을 보존한다. review는 원본 note에 근거를 덧붙인다. UI 검토 fixture에서 닫힌 disclosure를 열지 않은 두 실패는 실제 사용자 조작을 추가해 다시 실행한다. NEW를 known failure로 넣지 않는다.
+- 가까운 기존 장소(0.05 m 이내)를 자동 접합하지 않는다. Task 3의 중첩 경로 연결 후보 표시·검토는 미완료이며 다음 구현에서 명시적 endpoint mapping과 근거 상태를 연결한다. 카메라 누적 slice의 시험 통과를 Task 3 전체·최종 관제·배포 완료로 사용하지 않는다.
+- ebf05b9811 최종 원격 카메라/Vision/marker/desktop/mobile/구조 12 PASS/122 deselected, NEW 0 (`logs/camera-review-final-retry/run-1.txt`, AI PC 자원 기준 통과). Node 28 PASS. 독립 검토자는 소스와 해당 terminal 영수증을 확인해 누적/근거 보존 범위를 수용했다. 전체 browser 69개와 main 통합 회귀는 Task 6에서 확인한다.

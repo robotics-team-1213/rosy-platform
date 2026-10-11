@@ -27,6 +27,9 @@
 
 ### v1.206 지도 없는 조사 좌표와 도로 시설 (D-655)
 
+- 카메라 차선 추출 결과의 간선은 camera/observed 근거를 가진다. calibration JSON의 선택 survey는 기존 SurveyReference와 같고, 생성 결과의 review는 false로 초기화한다. survey가 없으면 reference_revision은 calibration JSON의 SHA256 지문으로 생성한 식별자다. 간선 note는 교정 지문과 CLI 원본 프레임 SHA256을 보존한다. 검토 전 활성화는 기존 ROAD_UNREVIEWED/SURVEY_UNREVIEWED 가드로 거절한다.
+- 화면의 관측 누적은 기존 draft PUT/CAS/named operator만 사용한다. 대상과 입력의 map_id 및 reviewed/review_note를 제외한 전체 survey 기준이 같아야 한다. 기존 시설·규칙·간선을 유지하고 새 관측의 ID는 분류 안에서 재배정한다. 동일 기하·운행 속성의 기존 차로는 중복 추가하지 않는다. 신규 관측 장소가 기존 장소의 0.05 m 이내면 연결이 모호하므로 자동 접합하지 않고 검토를 요구한다. 입력 시설/횡단보도/회전 규칙은 이 차선 누적 경로에서 거절하며 기존 편집 경로를 사용한다.
+- 동일 차로의 다른 관측 note는 기존 근거에 덧붙이고 검토를 무효화한다. 같은 파일의 재누적은 idempotent이며 note 합계 1000자 초과는 거절한다. 검토와 도로/장소 교정은 원본 관측 지문을 유지한다. survey가 없는 카메라 초안도 도로 근거 검토가 가능하며 운행 속성·marker geometry 수정 뒤 operator/observed로 재검토한다.
 - 일반 teach의 시작·샘플·확정과 pose/마커 장소 추가는 활성 지도와 대상 초안의 map_id·전체 survey 기준을 비교한다. 다른 기준은 409 `TEACH_MAP_CHANGED`로 거절한다. 기록 시작의 활성 버전이 바뀌면 기록은 `map_changed`로 종료되고 이전 기록 확정은 거절된다. 기록 종료는 로봇 정지 명령이 아니다. 일반 recording/pending도 시작 시 고정한 `map_id`와, 조사 기준이 있으면 `survey_reference`를 반환하며 화면은 일치하는 좌표계에서만 선을 표시한다.
 - 거절된 odom(시각 역행·동일 시각의 다른 위치 포함)은 조사 기록의 연속성 토큰을 변경한다. 운행 pose의 기존 앵커와 odom epoch는 이를 이유로 초기화하지 않는다. 기존 정상 teach로 같은 조사 지도에 도로를 확정할 때도 odometry observed 근거를 추가하고 조사 검토를 무효화한다. pose/마커 장소 편집도 조사 검토를 무효화하며 마커로 바뀐 간선은 operator observed로 재검토한다.
 - 장소·간선·시설의 ID 유일성은 각 분류 안에서 적용한다. 기존 프로필의 분류 간 같은 ID를 허용하며 편집·삭제는 분류와 ID를 함께 식별한다. 기존 `schemas.HostStatusEvidence` 이름·본문은 유지하고 구현 소유만 기존 `protocol.evidence`로 이동한다.
