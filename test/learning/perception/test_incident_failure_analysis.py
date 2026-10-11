@@ -70,3 +70,19 @@ def test_cli_connects_analysis_only_with_bound_model_feedback(tmp_path, monkeypa
     incident_feedback.main()
     assert json.loads(files['out'].read_text())['schema'].endswith('/3')
     with pytest.raises(FileExistsError): incident_feedback.main()
+
+
+@pytest.mark.parametrize('fault', ['missing_model', 'oversized'])
+def test_cli_rejects_missing_binding_and_oversized_analysis_before_output(tmp_path, monkeypatch, fault):
+    files = {name: tmp_path / (name + '.json') for name in ('incidents', 'markers', 'model', 'analysis', 'out')}
+    for name, value in [('incidents', {'reports': [report()]}), ('markers', markers('stuck-a')),
+                        ('model', model_feedback()), ('analysis', analysis(review()))]:
+        files[name].write_text(json.dumps(value), encoding='utf-8')
+    argv = ['incident_feedback.py', str(files['incidents']), str(files['markers']),
+            '--failure-analysis', str(files['analysis']), '--out', str(files['out'])]
+    if fault == 'oversized':
+        argv += ['--model-feedback', str(files['model'])]
+        files['analysis'].write_bytes(b' ' * 65537)
+    monkeypatch.setattr(sys, 'argv', argv)
+    with pytest.raises(ValueError): incident_feedback.main()
+    assert not files['out'].exists()
