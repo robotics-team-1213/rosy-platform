@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.210
+**Version:** v1.211
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2821,6 +2821,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.206 | 2026-10-11 | Additive (D-660): 읽기 전용 현재 판단·만료와 자연 해소/관측 종료 근거; 실행 허가·CORE writer 유지. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
 | v1.210 | 2026-10-12 | Additive (D-671): 전용 Discord transport 인증과 기명 접수 원장·Console owner read; 실행 권한 없음. |
+| v1.211 | 2026-10-12 | Additive (D-680): 기명 Console 요청 검토와 기존 주행 Task 관계 조회·연결. 기존 실행·승인 계약 유지. |
 | v1.207 | 2026-10-11 | Additive (D-661): 이름 있는 사건 인수·revision 경쟁 검사, 토큰 없는 인증 Console 사건 링크, 기본 OFF 팀 알림 outbox와 개별 전송 상태. |
 | v1.205 | 2026-10-11 | Additive (D-631): named site map profile library with bounded validation, operator writes and revision comparison; active/draft maps and robot authority preserved. |
 | v1.208 | 2026-10-11 | Additive (D-664): bounded Task/Mission work read projection; source identity and state, owner scope and existing execution authority preserved. |
@@ -3205,6 +3206,22 @@ D-635 adds profile kind (lane_course, soccer, general, default lane_course), des
 `GET /api/fleet/incidents`의 line_stuck report에 `handoff`(없으면null), `judgment_revision`(현재 열린 case가 아니면null)을 추가한다. 조회는 선택 `robot_id`와 `stuck_id`를 함께 받으며 기존 limit 안에서 해당 사건만 반환한다. 하나만 주거나 식별자 형식이 잘못되면422다. token 없는 `/console?inbox=1&robot=<id>&incident=<id>` 링크는 기존 viewer/operator 로그인 이후 이 조회와 인수 UI로 연결되며 GET으로 인수하지 않는다. 공개 인수·조회 producer는 Fleet routes/기존 원장, consumer는 Console이다.
 
 `GET /api/fleet/notifications?limit=100`(viewer+)는 `{records:[{event_id,robot_id,stuck_id,kind,channel,state,created_at,expires_at,next_attempt_at,attempts,last_code,provider_id,delivered_at}]}`다. kind는 OPEN/CLOSED, state는 PENDING/SENDING/SENT/RETRY/UNKNOWN/FAILED/EXPIRED/SUPERSEDED, 시각은 UTC epoch seconds다. limit 1..1000, 미인증401/잘못된 limit422이며 private endpoint·메시지 payload·secret·설치 주소를 반환하지 않는다. line_stuck incident report의 `notifications`는 같은 형식의 해당 사건 최근20건이다. SENT는 provider 수락이며 실제 수신/인수/해소가 아니다. UNKNOWN은 맹목 재시도하지 않는다. durable producer는 Fleet 사건/판단 owner, consumer는 opt-in notification worker와 Console이다.
+## v1.211 Discord 요청의 Console 검토·기존 Task 연결 (D-680)
+
+접수 원문은 D-671의 immutable receipt다. 다음 경로는 intake가 설정된 Fleet에서만 제공하며 등록된 기명 operator의 자기 요청만 허용한다. Bot transport credential로는 호출할 수 없다. 인증 없음401, 계정/역할 철회403, 다른 owner 또는 없는 요청404, 원문 hash·검토 revision·작업 관계 충돌409, 잘못된 본문422다.
+
+`GET /api/fleet/channel-requests/{request_id}/review`는 `ChannelWorkflowView`를 반환한다. 필드는 request_id, content_hash, revision(최초0), state(REQUESTED/READY/HOLD/REJECTED/LINKED), candidate, reason, work_kind(task|null), work_id, work_status(기존 원장 상태 그대로 또는 null), request_key다. 없는 작업의 연결은 work_status=UNKNOWN이다. 접수 상태와 실행 상태를 구분한다.
+
+`PUT /api/fleet/channel-requests/{request_id}/review`의 strict `ChannelReviewRequest`는 expected_hash(SHA256 hex64), expected_revision(비음수 정수), state(READY/HOLD/REJECTED), candidate, reason(비어 있지 않은1..256자)다. READY만 `ChannelNavigationCandidate`(robot_id, 유한한 x/y/yaw; map frame, yaw 기본0)를 요구한다. HOLD/REJECTED에는 candidate가 없다. 후보는 Console에서 원문을 확인한 구조화 입력이며 이 경로 자체는 Task 제출·승인·dispatch·장치 호출을 하지 않는다. 모호한 요청은 HOLD로 남긴다.
+
+주행 작업 제출은 기존 `POST /api/fleet/robots/{robot_id}/goal` 및 기명 operator 규약을 유지한다. Idempotency-Key는 반환된 request_key(`discord-{request_id}`)를 사용한다. 기존 trip busy·Task 원장·dispatch admission과 CORE 최종 검사를 우회하지 않는다. 응답 불명 후 새 key나 새 작업을 만들지 않는다. 원장에 이 key의 작업이 있으면 요청 검토를 바꾸지 못한다.
+
+`POST /api/fleet/channel-requests/{request_id}/task`의 strict `ChannelTaskLinkRequest`는 expected_hash, expected_revision, task_id다. READY 요청과 기존 Task의 operator source·actor·key·robot·navigate goal이 모두 일치할 때만 LINKED로 연결한다. 동일 작업의 동일 연결 재요청은 기존 관계를 반환한다. 원장 데이터와 연결은 기존 tasks DB에서 검사하고 기록한다. 작업을 생성·재실행하거나 Task 상태를 변경하지 않는다.
+
+Mission/Cell Job은 기존 owner/proposer/독립 approver 규약을 유지한다. 이 주행 관계 API로 팔 작업을 승인하거나 주행으로 대체하지 않는다. 각 소유자의 관계 어댑터와 시험은 후속이다. 위험 사건 인수·정지 경로도 별도 현행 사건/revision 계약에 따른다.
+
+private `replies_enabled`는 strict bool이며 기본false다. true는 Bot 자격을 요구하고 기존 Fleet lifecycle 안에서만 접수 회신을 처리한다. 회신은 원래 채널·message에 묶이며 immutable 접수와 atomic intent, bounded retry, UNKNOWN 복구를 사용한다. 실제 작업 결과 회신과 위험 사건 대응은 각각 source·배포·실제 수용 증거를 확인한다. WS protocol_version 1.0은 유지한다.
+
 ## v1.210 Discord 기명 요청 접수 (D-671, source only)
 
 `POST /api/fleet/channel-requests/discord`는 전용 transport 인증만 받는다. `X-ROSY-Timestamp`는 epoch-second 정수 문자열, `X-ROSY-Signature`는 전용 secret으로 timestamp + ASCII `.` + raw UTF-8 body에 계산한 HMAC-SHA256 소문자 hex다. 서버 시각과 차이 60초 초과 또는 잘못된 서명은401다. 일반 bearer/cookie는 transport 인증을 대신하지 않는다. raw body 최대8192 bytes(초과413), unknown field/형식 오류422다.
