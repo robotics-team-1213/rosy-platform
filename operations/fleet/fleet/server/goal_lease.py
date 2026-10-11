@@ -29,6 +29,10 @@ logger = logging.getLogger("fleet.goal_lease")
 SOURCES = ("operator", "dispatch", "yield", "trip")
 
 
+class NavigationStopped(RuntimeError):
+    """A changed stop token invalidated this navigation continuation."""
+
+
 def goal_lease_supported(caps: Optional[dict]) -> bool:
     """The robot's rosy.controls/1 base announces ``goal_lease: true``. An older CORE would
     ignore ``lease_ttl_s``, so without it a Fleet goal is unbounded."""
@@ -64,7 +68,7 @@ class GoalLeases(dict):
 
     def check_stop(self, robot_id: str, token: tuple[int, int]) -> None:
         if token != self.stop_token(robot_id):
-            raise RuntimeError("navigation pipeline overlapped a stop; result remains unknown")
+            raise NavigationStopped("navigation pipeline overlapped a stop; result remains unknown")
 
     def view(self, robot_id: str, goal: Optional[dict]) -> Optional[dict]:
         """The console goal record with today's lease state (``goal_lease``); as is when none."""
@@ -107,7 +111,7 @@ class GoalLeases(dict):
             if (stop != self.stop_token(robot_id)
                     and not (isinstance(result, dict) and result.get("accepted") is False)):
                 await client.navigation_cancel()
-                raise RuntimeError("navigation goal overlapped a stop; result remains unknown")
+                raise NavigationStopped("navigation goal overlapped a stop; result remains unknown")
         finally:
             self.pending[robot_id] -= 1
             if not self.pending[robot_id]:
