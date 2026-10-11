@@ -307,9 +307,10 @@ export function stuckSummary(stuck) {
   const decision = DECISION_LABEL[answer?.decision || proposal?.decision] || "조치 미확인";
   if (answer) {
     const source = answer.tier === "ai" ? "영상 분석의 제안을 관제가" : answer.tier === "human" ? "운영자의 판단을 관제가" : "관제가";
+    const reason = typeof answer.message === "string" ? answer.message.slice(answer.message.lastIndexOf(": ") + 2) : "";
     const refusal = {EMERGENCY_ACTIVE: "비상정지 중입니다.", CALIBRATION_ACTIVE: "보정 세션이 로봇을 제어하고 있습니다.",
       OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 로그인이 필요합니다.", FORBIDDEN: "운영자 권한이 필요합니다.",
-      STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || "";
+      STUCK_ID_MISMATCH: "판단 요청이 바뀌었습니다. 새 요청을 확인하세요."}[answer.code] || REFUSAL_REASON[reason] || "거절 이유 미확인입니다.";
     const receipt = answer.accepted === true ? "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다."
       : answer.accepted === false ? `로봇이 거절했습니다. ${refusal} 판단 근거를 확인하세요.` : "로봇의 응답이 미확인입니다. 상태를 다시 확인하세요.";
     return `${source} ${decision} 지시로 전달했습니다. ${receipt}`;
@@ -518,11 +519,9 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     const cause = document.createElement("ui-tag");
     cause.setAttribute("status", "crit");
     cause.textContent = CAUSE_LABEL[stuck.cause] || "원인 미확인";
-    cause.title = stuck.cause || "";
     const phase = document.createElement("ui-tag");
     phase.setAttribute("status", stuck.phase === "BACKING" || stuck.phase === "SETTLING" ? "warn" : "neutral");
     phase.textContent = PHASE_LABEL[stuck.phase] || "단계 미확인";
-    phase.title = stuck.phase || "";
     head.append(cause, phase);
     if (stuck.robot_online === false) {
       const offline = document.createElement("ui-tag");
@@ -654,7 +653,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       result.dataset.kind = last.kind;
       result.setAttribute("role", last.kind === "bad" ? "alert" : "status");
       // Keep the exact wire response available without putting it in the first reading layer.
-      const rawAt = last.kind === "bad" ? last.text.lastIndexOf(" (") : -1;
+      const rawAt = last.kind === "bad" ? last.text.indexOf(" (") : -1;
       result.append(document.createTextNode(rawAt >= 0 ? last.text.slice(0, rawAt) : last.text));
       if (rawAt >= 0) {
         const raw = document.createElement("details"), title = document.createElement("summary"), body = document.createElement("pre");
