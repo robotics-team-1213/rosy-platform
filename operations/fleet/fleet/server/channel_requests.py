@@ -63,6 +63,13 @@ class ChannelRequests:
                 or principal.startswith("development-")):
             raise HTTPException(403, detail="CHANNEL_OPERATOR_REQUIRED")
 
+    def current_receipt(self, receipt):
+        self.operator(receipt['principal_id'])
+        cfg = self.config
+        if (cfg.users.get(receipt['author_id']) != receipt['principal_id']
+                or receipt['guild_id'] != cfg.guild_id or receipt['channel_id'] != cfg.channel_id):
+            raise HTTPException(403, detail='CHANNEL_OWNER_CHANGED')
+
     def receive(self, envelope):
         cfg = self.config
         if (envelope.guild_id != cfg.guild_id or envelope.channel_id != cfg.channel_id
