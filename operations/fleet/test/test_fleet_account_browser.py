@@ -21,13 +21,13 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
-def account_page(tmp_path):
+def account_page(tmp_path, request):
     from playwright.sync_api import sync_playwright
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://127.0.0.1:8080', 'robot-only')],
                            [FakeRobot('rosy_01')])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
     app = create_app(console, task_service=tasks, site_users={}, site_logins={'alice': {
-        'principal_id': 'alice', 'role': 'operator', 'password_scrypt': hash_password('pw-1234')}},
+        'principal_id': 'alice', 'role': 'operator', 'password_scrypt': hash_password(getattr(request, 'param', 'pw-1234'))}},
         web_common=ROOT / 'shared' / 'web', start_task_dispatcher=False)
     listener = safe_listener()
     origin = f'http://localhost:{listener.getsockname()[1]}'
@@ -55,6 +55,42 @@ def account_page(tmp_path):
 def _credentials(page):
     page.locator('[data-login=login]').fill('alice')
     page.locator('[data-login=password]').fill('pw-1234')
+
+
+@pytest.mark.parametrize('account_page', ['alice'], indirect=True)
+def test_first_login_changes_password_before_return_and_does_not_replay_commands(account_page):
+    from playwright.sync_api import expect
+    page, origin = account_page
+    writes = []
+    page.on('request', lambda req: writes.append(req.url) if req.method == 'POST' else None)
+    page.goto(origin + '/console/login?return=%2Fconsole%3Fview%3Dwork')
+    page.locator('[data-login=login]').fill('alice')
+    page.locator('[data-login=password]').fill('alice')
+    page.locator('[data-login=password]').press('Enter')
+    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
+    expect(page).to_have_url(origin + '/console/login?return=%2Fconsole%3Fview%3Dwork')
+    assert page.request.get(origin + '/api/fleet/session').status == 403
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.reload()
+    expect(page.locator('[data-login=form]')).to_have_attribute('aria-label', '첫 로그인 비밀번호 변경')
+    page.locator('[data-login=password]').fill('new-credential-123')
+    page.locator('[data-login=confirm]').fill('different-credential')
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('[data-login=error]')).to_contain_text('일치하지 않습니다')
+    expect(page.locator('[data-login=password]')).to_have_value('')
+    expect(page.locator('[data-login=confirm]')).to_have_value('')
+    assert writes == [origin + '/api/fleet/auth/login']
+    page.locator('[data-login=password]').fill('new-credential-123')
+    page.locator('[data-login=confirm]').fill('new-credential-123')
+    page.evaluate("""() => {
+      document.querySelector('[data-login=submit]').click();
+      document.querySelector('[data-login=form]').requestSubmit();
+    }""")
+    expect(page).to_have_url(origin + '/console?view=work')
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    assert writes == [origin + '/api/fleet/auth/login', origin + '/api/fleet/auth/change-password']
+    session = page.request.get(origin + '/api/fleet/auth/session').json()
+    assert session['password_change_required'] is False
 
 
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
