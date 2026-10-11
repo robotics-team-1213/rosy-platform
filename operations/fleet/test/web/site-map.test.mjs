@@ -346,3 +346,30 @@ test('normal teach previews follow their captured frame and cannot overlay anoth
   assert.equal(teachFrameMatches(observed, {...MAP, survey: {...reference, reviewed: true}}), true);
   assert.equal(teachFrameMatches(observed, {...MAP, survey: {...reference, origin: [3, 4]}}), false);
 });
+
+
+test('camera observations accumulate in the same survey without invented joins or duplicate roads', async () => {
+  const {mergeCameraMap} = await import('../../../ui/console/shared/site-map-edit.js');
+  const reference = {revision: 's1', origin: [0, 0], heading_rad: 0, scale_source: 'measured',
+    measured_distance_m: 2, description: 'Measured frame'};
+  const base = {...MAP, map_id: 'yard', survey: {...reference, reviewed: true, review_note: 'Checked'},
+    facilities: [{id: 'light', kind: 'landmark', name: 'Mark', geometry: [[0, 1]], approaches: []}]};
+  const observation = {schema: 'rosy.site_map/1', map_id: 'yard', survey: {...reference, reviewed: false, review_note: ''},
+    places: [{id: 'A', name: 'Camera A', kind: 'junction', x: 3, y: 0},
+      {id: 'B', name: 'Camera B', kind: 'junction', x: 4, y: 0}],
+    edges: [{...MAP.edges[0], from: 'A', to: 'B', polyline: [[3, 0], [4, 0]],
+      evidence: {source: 'camera', status: 'observed', reference_revision: 's1', note: 'Frame abc'}}]};
+  const merged = mergeCameraMap(base, observation);
+  assert.equal(merged.edges.length, 2);
+  assert.equal(merged.places.length, 4);
+  assert.equal(new Set(merged.places.map(p => p.id)).size, 4);
+  assert.deepEqual(merged.facilities, base.facilities);
+  assert.equal(merged.edges[1].evidence.note, 'Frame abc');
+  assert.equal(merged.survey.reviewed, false);
+  assert.equal(base.survey.reviewed, true);
+  assert.deepEqual(mergeCameraMap(merged, observation), merged);
+  assert.throws(() => mergeCameraMap(base, {...observation, map_id: 'other'}));
+  assert.throws(() => mergeCameraMap(base, {...observation, survey: {...reference, origin: [1, 0]}}));
+  assert.throws(() => mergeCameraMap(base, {...observation, places: observation.places.map(p => ({...p, x: p.x - 3}))}));
+  assert.throws(() => mergeCameraMap(base, {...observation, edges: observation.edges.map(e => ({...e, evidence: undefined}))}));
+});
