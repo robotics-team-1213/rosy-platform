@@ -318,7 +318,9 @@ export function stuckSummary(stuck) {
     return `${source} · 관제 지시 기록: ${decision}. ${receipt}`;
   }
   if (proposal) {
-    const status = {accepted: "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다.",
+    const status = proposal.outcome === "ROBOT_UNREACHABLE" ? "로봇에 연결되지 않아 전달하지 못했습니다. 연결을 확인하세요."
+      : proposal.outcome === "STUCK_DECISION_OUTCOME_UNKNOWN" ? "전달 여부와 처리 결과가 미확인입니다. 이미 적용됐을 수 있으므로 현재 상태를 다시 확인하세요."
+      : {accepted: "로봇이 수락했습니다. 실행 완료는 별도 확인이 필요합니다.",
       refused: "로봇이 거절했습니다. 판단 근거를 확인하세요.",
       pending: "관제가 전달하고 로봇의 응답을 기다립니다.",
       held: `관제가 전달을 보류했습니다. ${AI_HELD_REASON[proposal.verdict] || "보류 이유 미확인"} · 판단 근거를 확인하세요.`}[proposal.class]

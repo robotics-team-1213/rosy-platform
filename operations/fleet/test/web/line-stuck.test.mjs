@@ -32,6 +32,9 @@ test("operator summary separates proposal, transmission, receipt and completion"
   const unreachable = stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: false, code: "ROBOT_UNREACHABLE"}});
   assert.match(unreachable, /전달하지 못했습니다/);
   assert.doesNotMatch(unreachable, /로봇이 거절/);
+  const proposalUnknown = stuckSummary({...STUCK, ai_proposal: {decision: "RESUME", class: "refused", outcome: "STUCK_DECISION_OUTCOME_UNKNOWN"}});
+  assert.match(proposalUnknown, /전달 여부와 처리 결과가 미확인/);
+  assert.doesNotMatch(proposalUnknown, /로봇이 거절/);
 });
 
 test("only robots with an open stuck are pending", () => {
