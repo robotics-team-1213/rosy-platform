@@ -241,7 +241,6 @@ def test_restart_without_read_intent_admission_cannot_skip_observation_budget(tm
         now, seen, handoffs, _, board, store, worker, poll, _ = setup(tmp_path, budget_observations=0)
         worker.feed(poll()); await settled(worker)
         scope = store.active_scopes()[0]
-        await worker.aclose()
         replacement = IncidentCaseWorker(store, worker.observation, board, profiles=worker.profiles,
             providers=worker.providers, admission=worker.admission, current_profiles=worker.current_profiles,
             human_owned=worker.human_owned, budget=worker.budget, final_handoff=worker.final_handoff,
@@ -251,6 +250,7 @@ def test_restart_without_read_intent_admission_cannot_skip_observation_budget(tm
         assert store.case(scope)['state'] == 'HOLD'
         assert handoffs[0][1]['reason'] == 'READ_CONTINUATION_NOT_ADMITTED'
         await replacement.aclose()
+        await worker.aclose()
     asyncio.run(run())
 
 
@@ -338,6 +338,35 @@ def test_legacy_poll_does_not_wait_for_model_and_loop_shutdown_cleans_worker(tmp
         await asyncio.sleep(.01); running.cancel()
         await asyncio.gather(running, return_exceptions=True)
         assert worker.idle and len(store.pending_handoffs()) == 0
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('kind', ['model', 'observation'])
+def test_cancel_at_terminal_commit_preserves_known_receipt_and_closes_active_case(tmp_path, kind):
+    async def run():
+        now, _, handoffs, _, _, store, worker, poll, _ = setup(tmp_path)
+        entered, released = threading.Event(), threading.Event()
+        original = store.complete
+        def delayed(*args, **kwargs):
+            match = kwargs['summary']['reason'] == ('MODEL_CHECKED' if kind == 'model' else 'NEW_CORE_OBSERVATION')
+            if match:
+                entered.set()
+                if not released.wait(3): raise AssertionError('test release missing')
+            return original(*args, **kwargs)
+        if kind == 'observation':
+            worker.feed(poll()); await settled(worker)
+            now[0] += 1
+        store.complete = delayed
+        worker.feed(poll(2 if kind == 'observation' else 1))
+        while not entered.is_set(): await asyncio.sleep(.002)
+        closer = asyncio.create_task(worker.aclose())
+        await asyncio.sleep(.01); released.set(); await closer
+        assert len(handoffs) == 1
+        case = store.case(handoffs[0][0])
+        assert case['state'] == 'HOLD' and case['spent_micros'] == case['reserved_micros'] == 0
+        with store._transaction() as conn:
+            rows = conn.execute('SELECT state,actual_micros FROM fleet_incident_v2_attempts').fetchall()
+            assert rows and all(tuple(row) == ('COMPLETED', 0) for row in rows)
     asyncio.run(run())
 
 
