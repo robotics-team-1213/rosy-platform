@@ -27,7 +27,7 @@ def test_platform_tile_uses_the_canonical_mark_and_brand_tokens():
 def test_small_mark_has_a_visible_unclipped_silhouette(size):
     pytest.importorskip("PIL")
     alpha = RENDER.render(WEB / "brand/mark.svg", size, mono=True).getchannel("A")
-    occupied = sum(value >= 128 for value in alpha.getdata())
+    occupied = sum(value >= 128 for value in alpha.tobytes())
     assert size * size * .1 < occupied < size * size * .6
     left, top, right, bottom = alpha.point(lambda value: 255 if value >= 128 else 0).getbbox()
     assert 0 < left < right < size and 0 < top < bottom < size
