@@ -12,3 +12,7 @@ Reviewer: `/root/safety_structure_review`, 2026-10-11.
 - Reviewer identified missing CI lint and affected-test owner coverage. Final review verified behaviors lint, core_features external source ownership/full CORE suites, control runtime ownership and longest matching source owner. Executor/event/advice source scanners include the moved implementations.
 
 Remote regressions, isolated wheel/source archive execution, ROS graph, ARM64 installation and device/field acceptance remain separate evidence; this review does not claim them. The model-code runtime allowlist is a source-closure follow-up preserving the existing signed release validation, not new model or runtime authority.
+
+## Follow-up source review
+
+Same independent reviewer, commit `33125bf1c`: **APPROVE, no material findings.** Explicit `.dockerignore` admissions cover both moved holders; exact image dependency closure and package selection remain asserted. The import fixture registers its package as a normal loader would, with monkeypatch cleanup. No algorithms, command/Safety authority, activation defaults or installed identities changed. The existing D-649 source approval remains valid. Remote 45-pass evidence is separately recorded; actual image/ROS/device proof is separate.

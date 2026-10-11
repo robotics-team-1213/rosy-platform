@@ -19,4 +19,10 @@ CORE common Safety/Command, calibration-session lease and camera-fault action el
 
 ## Remaining acceptance
 
-Latest-main merge, affected-test recheck and fast-forward integration pending. Exact remote CI and signed Site/AI/Model-PC deployment remain an active separate acceptance goal. The previous `53c557136957` candidate failed map-label browser CI and was not signed/applied. Offline Pinky robots remain intentionally offline on their existing automatic-update path; no robot motion, E-stop reset or field/ARM64 installation is claimed.
+Latest-main merge and affected-test recheck completed through `tools/land.py --tests auto`, three rounds, final source `5da31e05cb8965ad40a7c44b4094470d4f138461`. Final round: 8,342 passed / 263 skipped / 30 subtests and Perception 3,028 passed / 112 skipped / 62 subtests; zero NEW in both logs. Image context and exact closure fixes on `33125bf1c` separately passed 45 checks and received independent source approval. Main fast-forward integration and publication completed; pre-push reused the landing records and passed the additional 208 checks.
+
+Exact remote CI and signed Site/AI/Model-PC deployment remain an active separate acceptance goal. CI run `38126423478` failed only the Fleet header browser group: a shared tooltip intercepted a normal inbox click (1 failed / 1,566 passed in that group). The other 13 groups, including ROS colcon/build/node boot, passed. Unsigned site build `38126423462` succeeded but was not signed/applied; staged model sequence 21 has no READY marker. The previous `53c557136957` candidate failed map-label browser CI and was likewise not applied.
+
+Shared tooltip repair `edd25738b1` preserves coordinate-based hover, normal underlying clicks, keyboard focus and peer activation dismissal. Independent source and narrow 811-line size review approved it after the overlapping-described-control regression was strengthened. Exact committed-source remote browser and architecture checks: 56 passed, zero NEW. This evidence does not elevate the pending full CI or runtime gates.
+
+Offline Pinky robots remain intentionally offline on their existing automatic-update path; no robot motion, E-stop reset or field/ARM64 installation is claimed.
