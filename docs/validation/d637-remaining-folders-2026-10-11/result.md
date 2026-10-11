@@ -43,7 +43,6 @@ Ralph는 PRD6개 story·progress·독립 리뷰·terminal 증거로 운영했다
 
 폴더·source·호스트 설치 증거만 완료다. SOURCE/LOCAL GO는 해당 범위이며 ROS-SIM·ARM64 ARTIFACT·DEVICE·FIELD는 HOLD다. selection은 harness/setup/conftest/workflow 변경으로 FULL이므로 GitHub CI FULL 증거가 남는다. Chromium 옵트인은 실행하지 않아 skip을 수용으로 집계하지 않는다. Jazzy/ARM64 image·sim·모델 활성화·실물 주행·현장 수용을 실행하지 않았다. World 미래 행동 예측과 후속 Decision 모델 파이프라인은 계획이며 현재 기능으로 표시하지 않는다.
 
-설명 commit의 원격 회귀·known_failures·main ancestry·독립 story별 최종 판정은 세션 `evidence/description-closure.json`과 `prd.json`에 terminal readback 후 기록한다. 이 기록은 위 source 시험과 분리하며, 설명 commit 착지 전에 최종 완료로 올리지 않는다.
 
 ## 설명·계획 최종 확정
 
