@@ -1,4 +1,5 @@
 from fakes import run
+import pytest
 from fleet.hub.hub import HubError
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
@@ -33,6 +34,42 @@ def test_manual_navigation_is_durably_queued_before_any_robot_command(tmp_path):
         "REQUESTED", "QUEUED",
     ]
     assert dispatched == []
+
+
+@pytest.mark.parametrize("error", [HubError("COMMAND_REJECTED", "bay admission changed"),
+                                   RobotApiError("rosy_02", 409, "COMMAND_REJECTED", "bay refused")])
+def test_bay_refusal_after_mover_send_keeps_task_unknown(tmp_path, monkeypatch, error):
+    from fakes import FakeRobot
+    from fleet.server.console import FleetConsole
+    from fleet.swarm.robots import RobotEndpoint
+    from fleet.server import console as console_module
+
+    robot, other = FakeRobot("rosy_01"), FakeRobot("rosy_02")
+    console = FleetConsole([RobotEndpoint(r.robot_id, "http://127.0.0.1", "t")
+                            for r in (robot, other)], [robot, other])
+    service = _service(tmp_path / "fleet.sqlite3")
+    run(service.submit_navigation(robot_id="rosy_01", x=1.0, y=0.0, source="operator",
+                                  actor_id="site-console", request_key="bay-refusal"))
+    console._standing_in_the_way = lambda *_args: ["rosy_02"]
+    console._pose_of = lambda _rid: (0.0, 0.0)
+    monkeypatch.setattr(console_module.bays, "best_bay", lambda *_args, **_kw: (1.0, 1.0))
+
+    async def refused(*_args):
+        raise error
+
+    console._send_to_bay = refused
+
+    async def dispatch(attempt):
+        return await console.goal("rosy_01", **attempt["request"]["goal"],
+                                  task_id=attempt["task_id"], attempt_id=attempt["attempt_id"],
+                                  attempt_seq=attempt["attempt_seq"])
+
+    result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    assert result["status"] == "UNKNOWN"
+    assert result["reason"] == "COMMAND_RESULT_UNKNOWN"
+    assert service.store.resource_claims(resource_kind="robot", resource_id="rosy_01")
+    assert run(service.dispatch_next({"rosy_01"}, dispatch=dispatch)) is None
+    assert len([call for call in robot.calls if call[0] == "navigation_goal"]) == 1
 
 
 def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_path):
