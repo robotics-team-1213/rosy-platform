@@ -85,3 +85,10 @@
 - 변경: route·한 바퀴·반복·대열 모두 출발 POST 직전 현재 권한·안전·대형·위치·계획 버전·만료·진행 운행을 다시 검사한다. 목적지 또는 출발·경유지가 달라진 지연 미리보기는 채택하지 않는다. 포커스로 유지한 카드에서도 같은 로봇의 거절 안내만 갱신한다.
 - 증거: 85632eeade Node 305 PASS, 원격 서버/운행 계약 153 PASS/NEW 0. 원격 Chromium 108개 중 focused SELECT의 안내 누락 3 NEW를 재현했고 출발 POST는 0이었다. 17758e2b29에서 안내 갱신 후 card Chromium 19 PASS/NEW 0, Node 305 PASS. 독립 소스 검토는 두 커밋을 수용했다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-11--212133--wall-stop-cross-sim--126256/logs/console-browser-fixed/run-1.txt`와 같은 세션의 `console-contracts/run-1.txt`다.
 - gate 변화: 원격 브라우저는 실제 Fleet 정적 자산과 fake API를 사용한다. 배포된 Console, 실물 주행, 두 대 Fleet 또는 Isaac 카메라 강화학습 완주를 대신하지 않는다. main 통합 후 수용·원격 CI는 별도 확인한다.
+
+
+## 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
+
+- 변경: TRIP_START_CANCELED에 한국어 운행 안내를 연결한다. 원시 오류 코드 대신 상태 확인 뒤 재시작을 안내한다.
+- 증거: source 5f3f033a8의 원격 trip code label/취소/Task/goal 회귀 147 PASS, NEW 0; Node site-map 29 PASS. 서버와 물리 stop 권한은 바꾸지 않는다.
+- gate 변화: SOURCE/호스트 회귀만 추가한다. 배포된 UI와 실제 운행 수용은 미확인이다.
