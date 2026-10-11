@@ -766,7 +766,11 @@ function showTooltip() {
 document.addEventListener("pointerover", event => {
   if (tooltip?.contains(event.target)) return;
   const owner = tooltipTarget(event.target);
-  if (owner !== tooltipHover) { tooltipHover = owner; tooltipDismissed = null; showTooltip(); }
+  if (owner !== tooltipHover) {
+    tooltipHover = owner;
+    if (owner !== tooltipFocus) tooltipDismissed = null;
+    showTooltip();
+  }
 });
 document.addEventListener("pointerout", event => {
   if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || tooltip?.contains(event.relatedTarget)) return;
@@ -776,6 +780,10 @@ document.addEventListener("focusin", event => {
   tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
 });
 document.addEventListener("focusout", () => { tooltipFocus = null; tooltipDismissed = null; showTooltip(); });
+document.addEventListener("click", event => {
+  const owner = tooltipTarget(event.target);
+  if (owner) { tooltipDismissed = owner; hideTooltip(); }
+}, true);
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && tooltip && !tooltip.hidden) {
     tooltipDismissed = tooltipOwner; hideTooltip();
