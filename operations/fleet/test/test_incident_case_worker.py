@@ -410,6 +410,34 @@ def test_second_cancellation_does_not_interrupt_durable_shutdown_cleanup(tmp_pat
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('prepared', [False, True])
+def test_cancel_before_first_attempt_closes_only_owned_created_case(tmp_path, prepared):
+    async def run():
+        _, seen, handoffs, log, _, store, worker, poll, _ = setup(tmp_path)
+        if prepared:
+            log.notifications.set_automation(worker.prepare_receipt)
+            poll()
+            assert len(store.active_scopes()) == 1
+            await worker.aclose()
+        else:
+            entered, released = threading.Event(), threading.Event()
+            original = store.begin_case
+            def delayed(*args, **kwargs):
+                entered.set()
+                if not released.wait(3): raise AssertionError('test release missing')
+                return original(*args, **kwargs)
+            store.begin_case = delayed
+            worker.feed(poll())
+            while not entered.is_set(): await asyncio.sleep(.002)
+            closer = asyncio.create_task(worker.aclose())
+            await asyncio.sleep(.01); released.set(); await closer
+        assert seen == [] and len(handoffs) == 1
+        case = store.case(handoffs[0][0])
+        assert case['state'] == 'HOLD' and case['calls'] == case['observations'] == 0
+        assert handoffs[0][1]['observation_revision'] is not None
+    asyncio.run(run())
+
+
 def test_stale_model_response_retains_verified_billing_and_does_not_become_current(tmp_path):
     async def run():
         entered, released = asyncio.Event(), asyncio.Event()
