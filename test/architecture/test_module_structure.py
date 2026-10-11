@@ -324,8 +324,64 @@ SIZE_VERDICTS = {
         "temporary SSH credential view joined the same robot UI owner; the planned role-resource "
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
+    "core_common": (
+        10_031,
+        "split: independently re-judged by safety_structure_review at 10031 on 2026-10-12. "
+        "Compared with main4dc522986 at9888, only Discord canonical DTO136 and schema re-export7 "
+        "lines were added. Protocol5298 + domain1203 + other3504 + foundation root26. "
+        "The strict contract family already lives in protocol/channel_requests.py; no DB, transport, "
+        "provider, ROS, process or actuation authority and no upstream imports. Keep package10000/+150, "
+        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. No new SIZE_UNITS "
+        "or scan exclusion. Before the next protocol family expansion, review an actual protocol "
+        "subpackage split with installed consumers/direction, one canonical schema facade and same-change "
+        "parent/unit measurements. Preserve prior protocol/schema extraction obligations. "
+        "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
+    ),
     "fleet": (
-        54_074,
+        55_664,
+        "split: independently re-judged by safety_structure_review on 2026-10-12 at 55664 "
+        "= Fleet36296 + Decision1666 + Console17457 + Discord245 after main233ca5746a account/profile "
+        "and Discord integration. Existing PasswordSessions/authorize/SQLite and Console resource owners "
+        "retain all authority; no process/provider/writer/dependency/SIZE_UNITS/exclusions added. "
+        "Keep +150 and every file/hard ceiling, full-progress/observe/server/UI extraction obligation. "
+        "password_session549 reaching600 must move HTTP installation to server/password_routes.py "
+        "while PasswordSessions retains storage/validation. automation472 is at322+150 and requires "
+        "review before any production growth. Principal-switch fence source approval remains pending "
+        "its regression; CI/deployment/runtime are separate. Preserve both snapshot verdicts below. "
+        "Previous verdict at54852: "
+        "split: combined main be457256e5/Discord source independently reviewed by safety_structure_review "
+        "at 54996 = Fleet36094 + Decision1666 + Console16991 + Discord245 on 2026-10-12; keep54852+150, "
+        "no new baseline/units/exclusions. Native claim/pending fences, autonomous empty default, "
+        "separate optional model/Discord lifespans and cleanup preserved. App915 uses incoming reviewed909 "
+        "verdict plus unchanged150; older app906 below is historical. Preserve every extraction obligation. "
+        "Previous verdict: "
+        "split: independently re-judged by safety_structure_review at 54852 on 2026-10-12 "
+        "for D-687/D-693: existing Mission/Cell proposal-resolve-admit and named incident handoff "
+        "retain author/independent approver, evidence/generation/fence and same-DB transaction owners. "
+        "Discord adds scoped relations, bounded original-message replies and Console confirmation; "
+        "pure transport stays in its existing holder. Fleet35961 + Decision1666 + Console16980 + Discord245; "
+        "existing ten nested units excluded once by the innermost filter. No new SIZE_UNITS or writers. "
+        "Keep +150, all file ceilings/hard tiers, app906, TaskStore1035/1060, Console.py1325 zero-growth, "
+        "proposal_store797 with its existing seam review above800, UIconsole1032/1175 and schemas1386/1389. "
+        "Incidents505 stays within360+150; do not expand its allowance. Preserve full-progress, observe, "
+        "server and UI extraction obligations. See docs/plans/2026-10-12-discord-fleet-end-to-end.md. "
+        "CI, signed deployment, live Discord roundtrip and FIELD remain separate. Previous verdict: "
+        "split: independently re-judged by safety_structure_review at 54214 on 2026-10-12 "
+        "for a4a3ad4a0: D-680 atomic existing-Task admission, scoped durable replies and Console review. "
+        "Fleet35511 + Decision1658 + Console16800 + Discord245; app906, TaskStore1035/1060, "
+        "Console1031/1175. Preserve +150, all file ceilings/hard tiers and full-progress/observe/server/UI "
+        "extraction obligations. Mission/Cell/incident additions require a separate review. "
+        "See docs/plans/2026-10-12-discord-fleet-end-to-end.md. Previous verdict: "
+        "split: independently re-judged by safety_structure_review at 53606 on 2026-10-12: "
+        "D-675 adds Discord Gateway transport and optional existing-Fleet lifespan reception, without "
+        "Task/Mission/Job/claim, provider or device authority. Includes every Discord source file; "
+        "keep +150, app.py 906, every file ceiling and full-progress/observe/server/UI obligations. "
+        "Previous verdict: "
+        "split: independently re-judged on 2026-10-12 by safety_structure_review at 53396, including the "
+        "35-line Discord transport holder installed by Fleet. D-671 adds dedicated authenticated reception, "
+        "existing-DB journal and owner-only Console reading, with no work creation or device/model authority. "
+        "app.py remains at its existing 906 ceiling. Keep +150, every file ceiling and existing full-progress/"
+        "observe/server/UI extraction obligations. Previous verdict: "
         "split: independently re-judged on 2026-10-12 by learning_ui at 54074 for D-683/D-686/D-689. "
         "Account/login/profile reuse Fleet authentication, SQLite and Console; no service, dependency, "
         "command authority or SIZE_UNIT added. Keep package +150, all file ceilings and existing "
@@ -1743,7 +1799,8 @@ def _files(name: str, suffixes):
     if name == 'core_features':
         holders = (ROOT / 'middleware/control/drive/behaviors',)
     if name == "fleet":
-        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console")
+        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console",
+                   ROOT / "integrations/messaging/discord")
     for directory in (PACKAGES[name]["dir"], *holders):
         for path in directory.rglob("*"):
             if path.is_file() and path.suffix in suffixes and _is_prod(path):

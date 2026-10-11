@@ -40,7 +40,7 @@ import_rules:
     forbidden_external: [lerobot, torch]   # training stack; devices ship onnxruntime only (D-356)
   operations:
     allow: [contracts, shared_web]
-    integrations: [models, storage]
+    integrations: [models, storage, messaging]
   learning:
     allow: [contracts]
     integrations: [models, policies/lerobot_training, simulation, storage]
@@ -599,6 +599,15 @@ roots:
     concern: learning
 
   # --- integrations ---------------------------------------------------------
+  - path: integrations/messaging/discord
+    part: integrations
+    integration: messaging
+    d427_target: integrations/messaging/discord
+    wave: none
+    import_prefix: [rosy_discord]
+    source_packages: {rosy_discord: rosy_discord}
+    note: D-671 pure mention envelope and signature transport, installed by Fleet; no runtime service or device authority.
+    concern: other
   - path: integrations/robots/omx
     part: integrations
     integration: robots
