@@ -84,7 +84,7 @@ import importlib.metadata
 assert 'core_common==0.0.0' in importlib.metadata.requires('rosy-execution')
 from datetime import datetime, timezone
 projected = project_progress({
-    'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': 100.0,
+    'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
                 'reason': None, 'dispatch_generation': 1, 'action_id': 'a', 'attempt_id': 't'},
     'progress_events': [], 'snapshot_event_id': 1, 'stop_control': None,
     'history': [], 'history_truncated': False,

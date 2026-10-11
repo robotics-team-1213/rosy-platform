@@ -6,8 +6,6 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
-from core_common.protocol.schemas import MissionPhaseProgress, MissionProgressAxis, MissionProgressSnapshot
-
 ACTION_FRESHNESS_SECONDS = 15.0
 GOAL_FRESHNESS_SECONDS = 2.0
 
@@ -52,6 +50,8 @@ def _freshness(observed_at: datetime | None, *, now: datetime,
 def project_progress(data: dict[str, Any], *, now: datetime) -> dict[str, Any]:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("Mission progress clock must be timezone-aware")
+    from core_common.protocol.schemas import MissionPhaseProgress, MissionProgressAxis, MissionProgressSnapshot
+
     mission = data["mission"]
     events = data["progress_events"]
     watermark = data["snapshot_event_id"]
