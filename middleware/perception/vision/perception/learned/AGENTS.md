@@ -4,7 +4,7 @@
 # learned
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-11
 
 ## Purpose
 
@@ -28,17 +28,17 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 
 ### Working In This Directory
 
-- Do not import ROS, `core`, or emit commands. The ROS node is `learned_lane_node.py` one level up in `sensing/`.
-- Weights arrive via `learning/training/perception/model/deliver.py`, never committed under `src/`. `onnxruntime` is imported lazily and is not in the base device image.
+- Do not import ROS, `core`, or emit commands. ROS composition source is `middleware/perception/control/learned_lane_node.py`; this implementation retains the `control.sensing.perception.learned` import identity.
+- Weights arrive via `learning/registry/perception/deliver.py`, never committed under `src/`. `onnxruntime` is imported lazily and is not in the base device image.
 - Keep the output contract (evidence fields, `LaneObservation` sign convention, wire schemas) stable so backends stay swappable. Anything failing validation must be refused, not guessed.
 - Promotion beyond shadow is gated by the D-205 replay gate.
 
 ### Testing Requirements
 
-Tests are in `middleware/perception/test/`; most run without rclpy. Run the sensing suite on its own line:
+Tests are in `middleware/perception/test/`; most run without rclpy. D-584: run the committed-HEAD sensing suite in a separate remote invocation and keep logs in the X session:
 
 ```bash
-python3 -m pytest middleware/perception/test/test_learned_manifest.py middleware/perception/test/test_learned_lane_mask.py middleware/perception/test/test_learned_runner.py middleware/perception/test/test_learned_shadow.py middleware/perception/test/test_learned_status.py -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/learned -- middleware/perception/test/test_learned_manifest.py middleware/perception/test/test_learned_lane_mask.py middleware/perception/test/test_learned_runner.py middleware/perception/test/test_learned_shadow.py middleware/perception/test/test_learned_status.py -q
 ```
 
 ### Common Patterns
@@ -50,7 +50,7 @@ python3 -m pytest middleware/perception/test/test_learned_manifest.py middleware
 
 ### Internal
 
-`..` perception siblings (`lane.py` convention); `sensing/learned_lane_node.py` consumes this package.
+`..` perception siblings (`lane.py` convention); `middleware/perception/control/learned_lane_node.py` consumes this package.
 
 ### External
 

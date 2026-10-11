@@ -30,7 +30,7 @@ Run pytest for one commit on whichever of the model PC (OMEN), AI PC and site PC
 ### Testing Requirements
 
 ```bash
-python -m pytest test/test_remote_pytest.py -q
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/remote-runner-check -- test/test_remote_pytest.py -q
 ```
 
 ## Dependencies
