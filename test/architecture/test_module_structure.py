@@ -99,6 +99,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/traffic",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
+              "fleet/fleet/incidents",
               "perception/vision/perception",
               "perception/vision/perception/learned",
               "perception/vision/perception/drivable")
@@ -131,6 +132,12 @@ SIZE_VERDICTS = {
         "site_update_io.py; candidate verification lives in verify_candidate.py. The updater "
         "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
         "Re-judge on further growth",
+    ),
+    "fleet/fleet/incidents": (
+        360,
+        "accept: named human claims and notification outbox/worker own this D-661 subpackage under "
+        "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md; same DB, no resolver or device authority. "
+        "Measured at 360 after unchanged relocation; +150 remains, re-judge before separate responsibility growth.",
     ),
     "fleet/fleet/server/trip_runner.py": (
         751,
@@ -254,8 +261,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        52_083,
-        "split: independently re-judged on 2026-10-11 by design_consistency_review and measured at "
+        51_933,
+        "split: independently reviewed on 2026-10-11 by responsibility_review: D-661 team notification and "
+        "named human handoff move unchanged into fleet/incidents (360 lines), counted independently under "
+        "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md. Parent measured at 51933; existing "
+        "observe/server/UI split obligations and +150 remain. Previous verdict: "
+        "independently re-judged on 2026-10-11 by design_consistency_review and measured at "
         "52083 after the incident panel seam: D-641 uses existing shared shell/icon/tooltip owners, "
         "and incident-view.js owns report display, review and export while console.js retains session, "
         "polling and command calls at 994 lines below its existing 1175 zero-growth ceiling. No new "

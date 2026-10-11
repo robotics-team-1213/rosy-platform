@@ -1449,3 +1449,9 @@
 - gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
 - 결정: D-665
 
+
+## 2026-10-11 · 9fc0a88c9 · source test import precedence
+
+- 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
+- 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.

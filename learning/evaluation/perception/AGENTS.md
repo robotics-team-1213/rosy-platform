@@ -7,3 +7,5 @@
 `summarize_frames` pools pixel counts within each real/simulation domain and named condition; it never averages frame IoUs or merges domains. Prediction abstention and unknown-only truth remain separate. Boundary distances are image pixels on contours whose four neighbours are known; missing contours and excluded boundary counts remain explicit. This diagnostic summary is not a dataset loader or an independent acceptance receipt.
 
 Use the unified `test/learning/perception` suite and `operations/world/test` through the remote committed-HEAD runner and known-failure comparator. Read repository [AGENTS.md](../../../AGENTS.md), D-637 and D-665 before editing source boundaries. See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md).
+
+`judgment_acceptance.py` owns the first Pinky line-stop/re-observation offline checker (D-662). Named independent labels, frozen hashes/splits, denominators and pre-reviewed limits are required; missing acceptance evidence stays HOLD. PASS_OFFLINE_ONLY is never FIELD or provider activation. Curation's incident feedback remains candidate evidence.
