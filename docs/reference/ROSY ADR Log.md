@@ -670,6 +670,7 @@
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -754,3 +755,8 @@
 - 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
 - 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
 - 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.
+## D-690 — 도로 인지 평가의 출처 단위 불확실성
+
+**Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
+
+검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
