@@ -29,6 +29,12 @@ def test_profile_basic_information_survives_updates_and_restart(tmp_path):
         assert old_client.json()['kind'] == 'soccer'
         assert old_client.json()['description'] == '수정한 설명'
         assert old_client.json()['soccer_field'] == body['soccer_field']
+    path = store.path
+    expected = store.profiles()
+    store.close()
+    again = SiteMapStore(path)
+    assert again.profiles() == expected
+    again.close()
 
 
 @pytest.mark.parametrize('info', [
