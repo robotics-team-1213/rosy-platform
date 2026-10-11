@@ -28,3 +28,31 @@ The additional test/architecture/AGENTS.md closure is approved: it describes the
 Direct log inspection confirms the broad 4214-pass/181-skip/62-subtest run and sensing 34-pass run with zero-NEW readback. The other broad invocation contains 7217 passed, 634 skipped and one failed runbook source-lookup fixture. It must remain recorded as a failed invocation paired with its later focused correction, not relabeled as a complete successful rerun. The later source-fixture gate reaches 168-test 100 percent and final source Fleet gate reaches 24-test 100 percent; their source landing/exit/comparator receipts are described in result.md. The final Node receipt is 290 passed, zero failed. Previous failed and skipped runs are not accepted as runtime/field proof.
 
 No blocking source or current-document issue remains after the identified corrections. APPROVE making the separate explanation candidate concrete and reviewable by committing and running its required remote/document/landing checks. Final US-006 and whole-goal acceptance remain conditional on the actual terminal proof and local-main ancestry. CI FULL, Chromium, Jazzy, ARM64 images, live models, deployment, physical motion and field acceptance remain separate and unproven in this work.
+
+
+## Description-gate correction supplement
+
+The first description gate reported one NEW in behavior-test ownership and was not landed. The exact-eight inherited integration metadata correction is source-approved in independent-learning-behavior-seams-review.md. Regex, scan roots and set equality are unchanged; baseline AST imports match. US-006 remains pending a fresh committed terminal zero-NEW and local-main landing.
+
+# D-637 independent final story acceptance
+
+2026-10-11, independently reviewed the corrected explanation candidate and actual local-main readback `33729c5140` on `refactor/remaining-platform-folders`.
+
+## Terminal and landing readback
+
+The committed description `500c5f94c`, exact inherited behavior-test correction `ff337deb8`, source snapshot `d4988bffba` and tested merge `33729c5140` are all independently confirmed ancestors of local main. At review time both the worktree HEAD and shared main read back `33729c5140`.
+
+Direct inspection of logs/land-description-fixed/refactor-remaining-platform-folders/run-1-1.txt finds the complete 100-percent progress stream: 537 passing marks, 20 skipped marks, zero F/E marks and no FAILED test lines. The terminal receipt in evidence/description-closure.json records runner exit 0. The reviewer independently reran only the log comparator, not pytest, and obtained exit 0 with 0 new, 0 known and 0 listed-but-not-failing. The landed gate lint reads 0 errors and 27 peer/history warnings.
+
+The earlier description gate with one NEW remains a failed historical invocation. The correction keeps the eight exact inherited integration paths, unchanged import/scan evaluator and set equality, and received a fresh committed terminal zero-NEW gate. This gate covers the selected document, architecture, installation and CLI checks plus those eight inherited test modules. It is not a fresh Node run: the description Node step was skipped because no Fleet web test directory was selected. Source snapshot d4988bffba has its separate 290-pass/zero-failure Node receipt.
+
+## Story verdict
+
+US-001 through US-005 remain APPROVED under independent-closing-architecture-review.md and their bounded source/host evidence. US-006 is now APPROVED: the requested explanation was committed after actual source landing, the correction passed the fresh post-review remote/comparator gate, and the explanation and correction are present on local main by verified ancestry. All six adopted structure stories satisfy their acceptance criteria at the source, documentation and recorded host-evidence tiers. CI FULL, Chromium, Jazzy, ARM64 artifacts, model activation, deployment, physical-device motion and field acceptance remain separate and unproven; skipped tests are not acceptance evidence for those tiers.
+
+## Bounded final-record approval
+
+APPROVE the three prose-only Key Files updates in test/architecture/AGENTS.md. They remove obsolete src/domain/root claims and describe the actual declared-root/package-identity and ownership checks. They change no source, regex, guard evaluator, scan, size/import budget or exception set. Approve recording the terminal and ancestry facts above in the plan/result/review receipt as a final small documentation-only closure commit. That last bookkeeping commit still requires its own prescribed remote guards and local-main landing readback before the root agent reports the entire goal closed.
+
+No blocking source or document issue remains in the reviewed adopted structure. No product edit, staging, commit, local pytest, deployment, service activation or device command was performed by the reviewer.
+
