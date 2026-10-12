@@ -34,5 +34,6 @@
 
 ## 2026-10-12 · 1164d858e · D-728 independent natural conversation proposals
 
-- Added pure `rosy.decision.conversation` profile/input/flat semantic-step codec, explicitly installed by the existing Fleet distribution. Model output maps only to existing validated `core_common.intent` grammar. No Fleet writer, network, credential or activation exists in this holder. D-720 status-only calibration exemption cannot admit this profile.
-- Independent structure precheck256 physical lines; source/installed/architecture remote checks71/129/38 passed with0 NEW. Actual synthetic Qwen semantic conformance has three unresolved cases, so admission remains OFF. Fleet retains current authority, durable attempts and grounded replies; CORE retains final motion authority.
+- 변경: Added pure `rosy.decision.conversation` profile/input/flat semantic-step codec, explicitly installed by the existing Fleet distribution. Model output maps only to existing validated `core_common.intent` grammar. No Fleet writer, network, credential or activation exists in this holder. D-720 status-only calibration exemption cannot admit this profile.
+- 증거: Independent structure precheck256 physical lines; source/installed/architecture remote checks71/129/38 passed with0 NEW.
+- gate 변화: Actual synthetic Qwen semantic conformance has three unresolved cases, so admission remains OFF. Fleet retains current authority, durable attempts and grounded replies; CORE retains final motion authority.
