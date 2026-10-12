@@ -41,10 +41,13 @@ def test_no_frame_until_every_channel_has_a_reading():
 
 
 def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
-    callbacks, published = {}, []
+    callbacks, published, timers = {}, [], []
+    now = [1_000_000_000]
     node = SimpleNamespace(
         create_publisher=lambda *_: SimpleNamespace(publish=lambda msg: published.append(msg.data)),
         create_subscription=lambda _type, topic, callback, _qos: callbacks.setdefault(topic, callback),
+        create_timer=lambda _period, callback: timers.append(callback),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=now[0])),
         destroy_node=lambda: None)
 
     def send(name, stamp, distance=.013):
@@ -53,16 +56,34 @@ def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
 
     def spin(_node):
         send('left', 1); send('right', 1)
+        timers[0]()
         assert published == []
         send('mid', 1)
+        timers[0]()
         assert published == [[2000] * 3]
-        send('mid', 2); send('right', 2)
+        now[0] = 2_000_000_000
+        send('mid', 2); send('right', 2); timers[0]()
         assert published == [[2000] * 3]  # Left never reported this frame.
         send('left', 2, math.inf)
+        timers[0]()
         assert published == [[2000] * 3, [100, 2000, 2000]]
         send('left', 2); send('mid', 2); send('right', 2)
+        timers[0]()
         send('left', 1); send('mid', 1); send('right', 1)
+        timers[0]()
         assert len(published) == 2  # Repeated or replayed timestamps cannot refresh evidence.
+        now[0] = 4_000_000_000
+        for name in ('left', 'mid', 'right'):
+            send(name, 3)
+        timers[0]()
+        assert len(published) == 2  # A complete but queued old frame is still stale.
+        for name in ('left', 'mid', 'right'):
+            send(name, 5)
+        timers[0]()
+        assert len(published) == 2  # /clock has not reached the physics frame yet.
+        now[0] = 5_000_000_000
+        timers[0]()
+        assert published[-1] == [2000] * 3 and len(published) == 3
 
     monkeypatch.setitem(sys.modules, 'rclpy', SimpleNamespace(init=lambda: None,
         create_node=lambda _: node, spin=spin, ok=lambda: True, shutdown=lambda: None))
