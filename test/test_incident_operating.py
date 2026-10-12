@@ -107,3 +107,17 @@ def test_importer_does_not_accept_a_fake_flags_only_owner_port():
     fake = dict(report=dict(schema='rosy.incident.operational_acceptance/1', state='PASS_FOR_OPERATION',
                            field_accepted=True, truth_admitted=True, missing=[]))
     with pytest.raises(ValueError): module.import_operation(ExistingOwner(), 'grant', {}, evidence=lambda _: fake)
+
+
+def test_original_source_loader_cannot_use_a_fake_raw_verification_report(tmp_path):
+    module = owner()
+    forged = dict(schema='rosy.pinky-raw-verification/1', verdict='pass', dataset_revision='1' * 64)
+    config = dict(window_sha256='2' * 64, episode_root=str(tmp_path), dataset_revision='1' * 64,
+        observation_database=str(tmp_path / 'absent.sqlite3'), database_sha256='3' * 64,
+        raw_verification=forged)
+    with pytest.raises(ValueError): module.load_original_sources([config], windows=[], max_gap_s=1)
+
+
+def test_empty_original_sources_are_missing_coverage_not_an_accepted_empty_window():
+    module = owner()
+    assert module.load_original_sources([], windows=[], max_gap_s=1) is None
