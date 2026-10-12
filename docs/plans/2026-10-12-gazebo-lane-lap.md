@@ -196,3 +196,28 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   같은 색 벽과 연결된 실제 STOP을 지우는 마스크 반례를 유지한다. confidence 기준,
   unknown HOLD, 안전 거리, 최종 명령 권한은 바꾸지 않는다. 추가 주행 전에
   오인식 분리 근거와 차선 궤적·속도 한계의 독립 검토가 필요하다.
+
+## Leg6 기록 비교와 후속 수정 후보
+
+- A: 기존 `floor_white_mask`는 실제 벽 후보를 지우지만 같은 색 벽과 연결된 STOP,
+  얇은 지평선 주변 STOP까지 지우는 반례가 있다. 후보 삭제 판단에 채택하지 않는다.
+- B: 원본 44개 영상의 해시와 실제 camera TF·odom을 검증한 두 시점 바닥 warp를
+  정상 원격 자원에서 비교했다. 31→32초의 바닥 페인트 밝기 잔차 중앙값은 0,
+  벽 바닥은 1이며 40→41초의 벽 바닥도 0이다. 정지 시점과 동일색 attached STOP
+  합성 반례도 잔차 0이다. 평가 ROI는 사람이 지정한 진단 영역이며 실제 STOP 정답이나
+  운영 임계값이 아니다. 벽 본체는 공통 바닥 관측 영역 밖이므로 그 영역의 성공을
+  주장하지 않는다. 바닥 warp 잔차만으로 벽과 STOP을 분리하는 안도 채택하지 않는다.
+- C: 실제 접근 감속은 첫 paint 겹침보다 약 11.20 wall초 먼저 시작했다.
+  시각 37.209의 기록 명령값 대응에서 scale 0.487369이며 후보 곡률은 3.783308/m,
+  native 곡률은 7.762720/m이다. 같은 실제 자세와 같은 0–12cm 진행 거리의 2mm
+  래스터 비교에서 후보의 첫 paint 겹침은 8.8cm, native는 0.4cm다. 후보도 끝내
+  paint와 겹치므로 감속만을 유일 원인으로 부르지 않는다. 내부 소비 식별,
+  폐루프 반사실 실행과 연속 swept/contact 수용 증거도 아니다.
+- 최소 수정 후보는 움직이는 차선 후보의 교통 감속에서 두 축을 같은 비율로 줄이는
+  것이다. 기존 순수 회전, HOLD, evidence revision, 최종 CORE 권한을 유지하고
+  관련 계약과 실패 회귀를 먼저 고정한다. 벽 의미 인식과 전체 차선 품질은 따로 남는다.
+- 실제 고정 모델 `lane-seg-20261010-ede0ae96`의 manifest·ONNX 해시는 Leg6 기록과
+  일치했다. 클래스는 background, lane_left/right, crosswalk, speed_bump, drivable이며
+  STOP와 wall은 없다. drivable은 차선을 넘지 않고 로봇과 연결되는 바닥으로 선언돼 있고
+  `road_surface/1` 의미 선언은 없다. camera provenance도 provisional이다.
+  이 모델의 background나 drivable 부재를 STOP 부재 또는 벽의 의미 증거로 승격하지 않는다.
