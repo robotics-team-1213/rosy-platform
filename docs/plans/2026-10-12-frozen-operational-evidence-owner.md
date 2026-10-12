@@ -50,3 +50,7 @@
 RED checkpoint들은 새 SOURCE 경계를 확인한 것이며 실측 한계·운영 승인·서명·OS probe·실제 모델·로봇·현장 정답을 만들지 않았다. 최신 code regression `7e212f920`은 strict Model PC의 228 tests, terminal exit 0, known-failures NEW 0이다. 로그는 기존 X: 세션 `logs/us006-source-regression/run-1.txt`. 관련 calibration/cohort/원장과 P6/import 경계를 포함한다. 후속 문서/정리 커밋에서 최종 focused 회귀를 다시 기록한다.
 
 통합 전 독립 ROOT 검토가 필요하다. D-734는 Proposed를 유지하며 US-006 전체, 실제 운영 producer·collector·actor/source/cost/result/recurrence·OS probe admission과 door/arm은 미완료다. 다른 세션 D-732/D-733 예약은 임의 gap 처리하지 않고 ROOT가 승인된 main 통합에서 결합한다. 이 worktree는 push/landing하지 않는다.
+
+## D-427 import 경계 수정
+
+통합 HEAD `704cc8d35`의 원격 architecture 시험은 learning 평가기의 operations Decision import를 1 NEW로 검출했다(586 PASS). D-427 금지 방향이며 baseline/KNOWN_VIOLATIONS를 확대하지 않는다. 기존 ROOT `tools/incident_operating.py`가 실제 ModelProfile/incident_profiles/evaluate_calibration으로 원본을 계산하고 닫힌 bundle-bound 진단 자료만 순수 compiler에 전달한다. callback이나 복제 validator는 추가하지 않는다. 직접 compiler는 프로파일 선택의 자료 구조만 검사하며 미재계산 profile/calibration hash는 null, missing과 scope를 명시한다. caller-supplied 진단은 원본 검증 증거가 아니며 ROOT 조합만 실제 재계산 scope를 보고한다. 모든 경로는 HOLD다. 직접 null/닫힌 진단 shape/ROOT 실제 기존 계산 회귀를 RED 후 구현하고 architecture/raw/calibration 영향군을 strict 원격 시험한다.

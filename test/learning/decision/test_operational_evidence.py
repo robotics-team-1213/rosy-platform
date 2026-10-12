@@ -150,3 +150,38 @@ def test_an_unsupported_profile_domain_is_explicit_hold():
     result = module.compile_evidence(data, trusted={}, now=100)
     assert 'domain_backend_not_supported' in result['missing']
     assert result['state'] == 'HOLD' and result['metrics'] is None
+
+
+def test_direct_compiler_does_not_claim_unrecomputed_profile_or_calibration():
+    module = evaluator(); data = incomplete()
+    data['calibration_input'] = {'fit': [], 'evaluation': [], 'training': {}, 'reviewed_profile': {}}
+    result = module.compile_evidence(data, trusted={}, now=100)
+    assert result['state'] == 'HOLD'
+    assert result['profile_set_sha256'] is None and result['full_profile_sha256'] is None
+    assert result['calibration_sha256'] is None
+    assert result['profile_calibration_scope'] == 'not_recomputed'
+    assert 'root_profile_calibration_not_recomputed' in result['missing']
+
+
+@pytest.mark.parametrize('fault', ['unbound', 'pass_flag', 'unknown_calibration'])
+def test_compiler_accepts_only_closed_bundle_bound_diagnostic_shape(fault):
+    module = evaluator(); data = incomplete()
+    diagnostic = dict(bundle_sha256=module.digest(data), profile_set_sha256='1' * 64,
+        full_profile_sha256='2' * 64, calibration_sha256=None, calibration_state=None,
+        domains=['line_follow'])
+    if fault == 'unbound': diagnostic['bundle_sha256'] = '0' * 64
+    elif fault == 'pass_flag': diagnostic['field_accepted'] = True
+    else: diagnostic['calibration_state'] = 'PASS_FOR_OPERATION'
+    with pytest.raises(ValueError):
+        module.compile_evidence(data, trusted={}, now=100, profile_calibration=diagnostic)
+
+
+def test_supplied_diagnostics_do_not_become_original_calibration_proof():
+    module = evaluator(); data = incomplete()
+    diagnostic = dict(bundle_sha256=module.digest(data), profile_set_sha256='1' * 64,
+        full_profile_sha256='2' * 64, calibration_sha256=None, calibration_state=None,
+        domains=['line_follow'])
+    result = module.compile_evidence(data, trusted={}, now=100, profile_calibration=diagnostic)
+    assert result['state'] == 'HOLD' and result['truth_admitted'] is False
+    assert result['profile_calibration_scope'] == 'caller_supplied_diagnostics_only'
+    assert result['calibration_sha256'] is None and 'calibration' in result['missing']
