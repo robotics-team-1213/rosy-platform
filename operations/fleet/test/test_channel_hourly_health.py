@@ -69,7 +69,7 @@ def setup(tmp_path, now, rows, *, sender=None, enabled=True, ai=None):
     console = FakeConsole(["pinky-01", "pinky-02", "pinky-03"], mono=mono)
     gather = FakeGather(rows, captured_at=now)
     ai = ai or SimpleNamespace(status=lambda: {"state": "absent", "owner_mode": None, "age_s": None})
-    journal = SimpleNamespace(config=config(enabled=enabled))
+    journal = SimpleNamespace(config=config(enabled=enabled), _connect=lambda: sqlite3.connect(db))
     sender = sender or FakeSender()
     health = HourlyHealth(journal, sender, gather, console, ai, clock=lambda: now)
     return health, journal, sender, mono
