@@ -23,6 +23,8 @@ LIBEXEC = Path('/usr/local/libexec/rosy-deliberation')
 INGRESS = LIBEXEC/'model-ingress'
 STATUS = LIBEXEC/'status-broker'
 BROKER = LIBEXEC/'conversation-broker'
+SECURITY_FILES = (Path('/var/lib/rosy-deliberation/glm-coding-plan.json'),
+                  Path('/var/lib/rosy-deliberation/smoke/glm-first-review.spent'))
 KEYS = Path('/etc/ssh/rosy-status-authorized-keys')
 SUDO = Path('/etc/sudoers.d/rosy-status-broker')
 SSHD = Path('/etc/ssh/sshd_config.d/65-rosy-status-broker.conf')
@@ -310,9 +312,7 @@ def main(argv=None):
         print(json.dumps({'state':'INPUT_HASHES_CHECKED_ONLY', 'source_commit':manifest['source_commit']}))
         return 0
     # Retain exact evidence and credentials; nothing in this installer invokes the paid provider.
-    preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS,
-        Path('/var/lib/rosy-deliberation/glm-coding-plan.json'),
-        Path('/var/lib/rosy-deliberation/smoke/glm-first-review.spent')]
+    preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS, *SECURITY_FILES]
     before = {p:p.read_bytes() if p.exists() else None for p in preserved}
     snapshot(target, {**contents, 'semantic-evaluation-proof.json':proof_raw,
                      'semantic-evaluation-receipt.json':receipt_raw, 'requirements.lock':lock}, helper)
