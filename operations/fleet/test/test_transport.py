@@ -37,6 +37,8 @@ def test_it_satisfies_the_protocol():
 def test_conditional_back_transport_preserves_predicate_and_legacy_body():
     seen = []
     def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"stuck": {"conditional_back": True}})
         assert request.url.path == "/api/v1/line-follow/stuck/decision"
         seen.append(json.loads(request.content))
         return httpx.Response(200, json={"outcome": "back"})
@@ -54,6 +56,24 @@ def test_conditional_back_transport_preserves_predicate_and_legacy_body():
          "expected_stuck": {"phase": "ASKING", "attempts": 0}},
         {"stuck_id": "stuck-1", "decision": "WAIT"},
     ]
+
+
+@pytest.mark.parametrize("support", [None, False, "true", 1])
+def test_conditional_back_does_not_post_to_unsupported_core(support):
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return httpx.Response(200, json={"stuck": {"conditional_back": support}})
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(RobotApiError, match="conditional back is unsupported"):
+                await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                    expected_stuck={"phase": "ASKING", "attempts": 0})
+        finally:
+            await client.aclose()
+    run(main())
+    assert methods == ["GET"]
 
 
 def test_power_health_uses_authenticated_read_only_route():
