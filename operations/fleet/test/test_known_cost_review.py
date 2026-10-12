@@ -13,7 +13,7 @@ from test_judgment_profiles import adapter
 
 
 @pytest.mark.parametrize('kind', ['local', 'claude', 'opencode'])
-@pytest.mark.parametrize('fault', ['malformed', 'malformed_text', 'unknown_cost', 'provenance'])
+@pytest.mark.parametrize('fault', ['malformed', 'malformed_text', 'unsafe', 'unknown_cost', 'provenance'])
 def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_path, kind, fault):
     async def run():
         now, reviews, handoffs, _, board, store, old, poll, current = make_incident_worker(tmp_path, provider_cost=.01)
@@ -29,6 +29,7 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
             requests.append(body)
             # The rejected model text cannot become a current-case prior, receipt or evidence.
             rejected = '{broken-json' if fault == 'malformed_text' else {'case_id': 'foreign', 'input_hash': '0' * 64}
+            if fault == 'unsafe': rejected['objections'] = ['unsafe']
             cost = None if fault == 'unknown_cost' else 0 if kind == 'local' else .01
             if kind == 'local':
                 result = dict(model_id='foreign' if fault == 'provenance' else primary.model_id,
@@ -69,6 +70,11 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
             assert attempts[0]['actual_micros'] == (0 if kind == 'local' else 10000)
             assert attempts[0]['input_hash'] == problem.digest
             assert all(row[0] != attempts[0]['attempt_id'] for row in traces)
+        elif fault == 'unsafe':
+            assert case['calls'] == 1 and reviews == [] and len(handoffs) == 1
+            assert attempts[0]['state'] == 'REJECTED'
+            assert attempts[0]['actual_micros'] == (0 if kind == 'local' else 10000)
+            assert traces == [] and case['reason'] == 'MODEL_UNSAFE_REJECTION'
         else:
             assert case['calls'] == 1 and reviews == [] and len(handoffs) == 1
             assert attempts[0]['state'] == 'UNKNOWN' and attempts[0]['actual_micros'] is None
