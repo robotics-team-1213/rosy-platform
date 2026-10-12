@@ -40,7 +40,8 @@ def existing_key(target, payload, uid, gid):
 
 def main():
     if os.geteuid()!=0: raise ValueError('ROOT_IMPORT_REQUIRED')
-    account=pwd.getpwnam('rosy-deliberation'); owner=pwd.getpwnam('ai')
+    from deploy.site.deliberation_install import validated_account
+    account=validated_account(); owner=pwd.getpwnam('ai')
     fd=os.open(SOURCE,os.O_RDONLY|os.O_NOFOLLOW)
     try:
         info=os.fstat(fd)
@@ -84,7 +85,7 @@ if __name__=='__main__':
         print(json.dumps({'state':'HOLD','reason':'MISSING_PATH','path':str(error.filename)}));raise SystemExit(1)
     except ValueError as error:
         code=str(error)
-        allowed={'ROOT_IMPORT_REQUIRED','AUTH_SOURCE_BOUNDARY_FAILED','SELECTED_OPENCODE_API_KEY_REQUIRED',
+        allowed={'DEDICATED_ACCOUNT_CONFLICT','ROOT_IMPORT_REQUIRED','AUTH_SOURCE_BOUNDARY_FAILED','SELECTED_OPENCODE_API_KEY_REQUIRED',
                  'KEY_SIZE_LIMIT','SECRET_PARENT_BOUNDARY_FAILED','EXISTING_SELECTED_KEY_BOUNDARY_FAILED',
                  'EXISTING_SELECTED_KEY_DIFFERS'}
         print(json.dumps({'state':'HOLD','reason':code if code in allowed else 'INVALID_AUTH_DATA'}));raise SystemExit(1)
