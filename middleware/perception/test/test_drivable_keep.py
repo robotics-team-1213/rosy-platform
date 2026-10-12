@@ -144,3 +144,10 @@ def test_missing_current_odometry_cannot_reuse_the_camera_source_pose():
     assert last['expected_path_state'] == 'dropped'
     ways.way = None
     assert _step(steer, ways, last, .4)[0] is None
+
+
+def test_odometry_gap_discards_memory_before_the_stream_returns():
+    steer, ways, last, *_rest = _commit_centre()
+    ways.way = None
+    assert keep_step(steer, ways, last, G, XO, HALF, lambda _stamp: None, .3, None)[0] is None
+    assert _step(steer, ways, last, .4)[0] is None
