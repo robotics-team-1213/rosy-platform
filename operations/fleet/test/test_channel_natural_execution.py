@@ -482,3 +482,51 @@ def test_other_registered_formation_receipt_is_unknown_not_replayed(tmp_path,mis
     rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid));f.journal.recover();asyncio.run(f.worker.step(rid))
     assert f.writes==['formation_start'] and f.journal.view(rid)['steps'][0]['state']=='UNKNOWN'
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_41')[0]['phase']=='UNKNOWN'
+
+
+@pytest.mark.parametrize('loser',['already_spent','capabilities_error','state_error'])
+def test_two_workers_loser_cannot_hold_or_release_winning_pending_rpc(tmp_path,loser):
+    f=fixture(tmp_path,'40번 홈으로 복귀해줘',{'do':'home','robot':'rosy_40'})
+    second=ExecutionWorker(f.journal,f.worker.execution)
+    async def run():
+        blocked=asyncio.Event();release_loser=asyncio.Event();sent=asyncio.Event();release_rpc=asyncio.Event()
+        oldcaps=f.client.capabilities;oldstate=f.client.state
+        async def preflight(method,old):
+            if asyncio.current_task().get_name()=='loser' and method==('state' if loser=='state_error' else 'capabilities'):
+                blocked.set();await release_loser.wait()
+                if loser!='already_spent':raise OSError('late preflight failure')
+            return await old()
+        async def caps():return await preflight('capabilities',oldcaps)
+        async def state():return await preflight('state',oldstate)
+        async def post(path,body):
+            check_dispatch(path=path);f.writes.append(path);sent.set();await release_rpc.wait()
+            return {'accepted':True,'mode':'NAVIGATION'}
+        f.client.capabilities=caps;f.client.state=state;f.client._post=post
+        rid=f.receipt['request_id']
+        losing=asyncio.create_task(second.step(rid),name='loser')
+        await asyncio.wait_for(blocked.wait(),1)
+        winning=asyncio.create_task(f.worker.step(rid),name='winner')
+        await asyncio.wait_for(sent.wait(),1)
+        release_loser.set();await asyncio.wait_for(losing,1)
+        assert f.journal.view(rid)['steps'][0]['state']=='DISPATCHING'
+        assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='DISPATCHING'
+        assert f.journal.view(rid)['reason'] is None
+        release_rpc.set();await asyncio.wait_for(winning,1)
+        assert f.journal.view(rid)['steps'][0]['state']=='ACCEPTED'
+        assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='UNKNOWN'
+        await second.step(rid)
+    asyncio.run(run())
+    assert len(f.writes)==1
+
+
+def test_late_native_receipt_after_recovery_does_not_reopen_unknown_claim(tmp_path):
+    f=fixture(tmp_path,'40번 홈으로 복귀해줘',{'do':'home','robot':'rosy_40'})
+    async def post(path,body):
+        check_dispatch(path=path);f.writes.append(path)
+        f.journal.recover()
+        return {'accepted':True,'mode':'NAVIGATION'}
+    f.client._post=post
+    rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid));asyncio.run(f.worker.step(rid))
+    row=f.journal.view(rid)['steps'][0]
+    assert row['state']=='UNKNOWN' and json.loads(row['receipt_json'])=={'accepted':True,'mode':'NAVIGATION'}
+    assert len(f.writes)==1 and f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='UNKNOWN'
