@@ -697,6 +697,7 @@
 | D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
 | D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
 | D-711 | 새 사건 생성 허가와 기존 pinned 실행 분리 | Accepted |
+| D-712 | Fleet 새 사건의 영속 선택과 원자적 배정 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -926,3 +927,9 @@ root orchestration에서 영속 승인 원장과 기존 Fleet 보정 포트를 �
 
 bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 artifact/hash로 production 보정 검사를 연결한다. 미수용 판정은 제한 검토/읽기만 수행하며 물리 authority·승격을 얻지 않는다. 전문은 [D-705](../adr/D-705-incident-execution-calibration-port.md).
 
+
+## D-712 — Fleet 새 사건의 영속 선택과 원자적 배정
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 SQLite에서 current/previous 선택과 revision CAS·복귀를 기록하고 새 사건 배정을 같은 트랜잭션으로 결속한다. 선택과 모델 수용·안전 권한은 구분한다. 전문은 [D-712](../adr/D-712-incident-transactional-profile-routing.md).
