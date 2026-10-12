@@ -223,6 +223,9 @@ class BodyStopMixin:
             return 0.0, now, c.obstacle_body_margin_m, c.obstacle_body_margin_m
         max_linear, max_angular, floor = envelope
         linear, angular = self._intended
+        common_curve = (limit_velocity(linear, angular, max_linear, max_angular,
+                                       preserve_curvature=True)
+                        if self._curve_preserving_envelope and not preserve_curvature else (0., 0.))
         if not preserve_curvature and linear <= 1e-6 and abs(angular) <= 1e-6:
             linear = c.cruise_speed          # no motion intended: judge the straight line
         if preserve_curvature:
@@ -266,6 +269,13 @@ class BodyStopMixin:
                                                scale_floor=floor, horizon_m=resume, **body)
                     if family is not None and (gap is None or family < gap):
                         gap = family
+                if common_curve[0] > 0.:
+                    # CORE also emits common static clipping for non-tracking LINE manoeuvres.
+                    common_gap = body_path_gap(points, linear=common_curve[0], angular=common_curve[1],
+                                               horizon_m=c.obstacle_path_horizon_m,
+                                               min_travel_m=resume, **body)
+                    if common_gap is not None and (gap is None or common_gap < gap):
+                        gap = common_gap
                 gaps.append(gap)
         gap, source = None, None
         for (name, _), found in zip(groups, gaps):
