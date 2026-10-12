@@ -301,6 +301,7 @@ def gap_lane(frames):
     now = [10.]
     lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: now[0])
     image = np.full((240, 320, 3), 100, np.uint8)
+    lane.history.add(9.9, 0., 0., 0.)  # Odom is already streaming before the first image.
     for index in range(frames):
         now[0] = 10. + index * .1
         lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
