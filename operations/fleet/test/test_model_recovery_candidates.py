@@ -155,7 +155,7 @@ def test_recovery_context_accepts_matching_assessment_revision():
     assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') == recovery_context()
 
 
-@pytest.mark.parametrize('shutdown_during_write', [False, True])
+@pytest.mark.parametrize('shutdown_during_write', [False, True, 'submit'])
 def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, monkeypatch, shutdown_during_write):
     from fleet.incidents.automation.worker import IncidentCaseWorker
     from test_incident_case_worker import make_incident_worker, settled
@@ -173,12 +173,20 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
             providers=tuple(providers), admission=old.admission, current_profiles=lambda: current[0],
             human_owned=old.human_owned, budget=old.budget, final_handoff=old.final_handoff,
             clock=lambda: now[0], enabled=True, recovery_enabled=True)
+        submitted = []
+        async def submit(scope, attempt, problem, owner):
+            assert owner is worker and worker._fresh(problem)
+            recorded = worker.recovery_candidates.candidates(scope)
+            assert len(recorded) == 1 and recorded[0]['attempt_id'] == attempt
+            submitted.append(recorded[0])
+            return True
+        if shutdown_during_write == 'submit': worker.recovery_submit = submit
         snapshot = poll()
         snapshot['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
         snapshot['robots'][0]['state']['line_follow']['stuck']['stuck_id'] = 'lane-1'
         board.observe(snapshot['robots']); board.flush()
         entered, release = threading.Event(), threading.Event()
-        if shutdown_during_write:
+        if shutdown_during_write is True:
             original = worker.recovery_candidates.propose
             def paused(*args, **kwargs):
                 entered.set()
@@ -186,7 +194,7 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
                 return original(*args, **kwargs)
             monkeypatch.setattr(worker.recovery_candidates, 'propose', paused)
         worker.feed(snapshot)
-        if shutdown_during_write:
+        if shutdown_during_write is True:
             try:
                 assert await asyncio.to_thread(entered.wait, 3)
                 scope = store.active_scopes()[0]
@@ -205,6 +213,7 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
         calls = store.case(scope)['calls']
         worker.feed(snapshot); await settled(worker)
         assert store.case(scope)['calls'] == calls
+        assert len(submitted) == (1 if shutdown_during_write == 'submit' else 0)
         await worker.aclose()
     asyncio.run(run())
 

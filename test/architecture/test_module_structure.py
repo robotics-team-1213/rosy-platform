@@ -100,6 +100,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/observe",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
+              "fleet/fleet/stuck/submission",
               "fleet/fleet/incidents",
               "fleet/fleet/incidents/automation",
               "fleet/fleet/incidents/automation/ledger",
@@ -117,6 +118,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/stuck/submission": (
+        203,
+        "accept: D-731 extracts the actual existing loop rule dispatch and adds the same owner's "
+        "conditional model dispatch and owned SQLite writes. No new service, provider or policy. "
+        "docs/plans/2026-10-12-fleet-submission-owner.md records initial 203 physical lines, "
+        "stable loop methods and simultaneous parent measurement. Keep +150 and parent ceilings.",
+    ),
     "fleet/fleet/incidents/automation/operating": (
         294,
         "accept: D-730 owns the actual same-DB validated candidate, signed operating epochs "

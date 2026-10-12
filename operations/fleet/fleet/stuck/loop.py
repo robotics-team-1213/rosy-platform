@@ -16,16 +16,12 @@ import json
 from dataclasses import asdict
 from typing import Awaitable, Callable, Mapping, Optional
 
-import httpx
-
-from fleet.server.console_routes import transport_failure
 from fleet.stuck import closed_loop, pipeline
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.resolver import Answer, Escalate, Hold, StuckResolver
-from fleet.swarm.transport import RobotApiError
 
-PRINCIPAL_ID = "fleet-resolver"
+from .submission.dispatch import PRINCIPAL_ID
 log = logging.getLogger(__name__)
 
 
@@ -36,6 +32,7 @@ class StuckResolverLoop:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
         self.incident_worker = incident_worker
+        self.operating_state, self.operating_grant = None, None
         from fleet.observe.rules import RuleSelectionStore
         self.rule_selections = RuleSelectionStore(board._log.path) if board is not None and board._log is not None else None
         self._rule_selections = {}
@@ -239,105 +236,7 @@ class StuckResolverLoop:
         self._rows = {str(row["robot_id"]): self._row(row) for row in rows}
         return self._rows.get(robot_id)
 
-    async def _answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> None:
-        row = await self._admission_row(answer.robot_id)
-        if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
-            return
-        hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
-            or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
-        if hold is not None:
-            if answer.robot_id in self._resolver.autonomous_robots:
-                chain = self._resolver._chains.get(answer.robot_id)
-                action = self._resolver._escalate(chain, answer.robot_id, answer.stuck_id, hold) if chain else None
-                if action is not None:
-                    self._escalated(action, rule=answer.rule, decision=answer.decision)
-            else:
-                self._resolver.claim(answer.robot_id, answer.stuck_id)
-                self._escalated(Escalate(answer.robot_id, answer.stuck_id, hold),
-                                rule=answer.rule, decision=answer.decision)
-            return
-        client = self._clients().get(answer.robot_id)
-        if client is None:
-            self._resolver.claim(answer.robot_id, answer.stuck_id)   # never retry without a token
-            self._escalated(Escalate(answer.robot_id, answer.stuck_id, "no_resolver_token"))
-            return
-        now = self._clock()
-        self._rows[answer.robot_id] = row
-        record = dict(robot_id=answer.robot_id, stuck_id=answer.stuck_id,
-                      decision=answer.decision, principal_id=PRINCIPAL_ID,
-                      tier="ai" if answer.rule == "ai" else "rule",
-                      rule=answer.rule)
-        pending = answer.robot_id in self._resolver.autonomous_robots and answer.decision != "WAIT"
-        if pending:
-            self._resolver._uncertain.add((answer.robot_id, answer.stuck_id))
-            try:
-                await asyncio.to_thread(self._board.record, **record, accepted=None,
-                                        code="FLEET_STUCK_DISPATCH_PENDING", durable=True)
-                row = await self._admission_row(answer.robot_id)
-                hold = pipeline.law_hold(row, decision=answer.decision, stuck_id=answer.stuck_id) \
-                    or pipeline.ai_hold(self._resolver, answer, selected, row, list(self._rows.values()))
-                if (hold or self._resolver.is_claimed(answer.robot_id, answer.stuck_id)
-                        or self._clients().get(answer.robot_id) is not client):
-                    await self._reconcile(answer.robot_id, answer.stuck_id, "not_dispatched")
-                    return
-            except (OSError, sqlite3.Error):
-                self._escalated(Hold(answer.robot_id, answer.stuck_id, "journal_unavailable"))
-                return
-        self._resolver.sent(answer, now)
-        code: Optional[str] = None
-        try:
-            extra = {}
-            if answer.yield_m is not None and answer.yield_turn_rad is not None:
-                extra = {"yield_m": answer.yield_m, "yield_turn_rad": answer.yield_turn_rad}
-            result = await client.line_stuck_decision(answer.stuck_id, answer.decision, **extra)
-            if pending and result.get("outcome") != {
-                    "BACK_AND_RETRY": "back", "RESUME": "resume", "YIELD": "yield", "ABORT": "idle",
-                    "REALIGN": "realign", "MANUAL": "manual"}.get(answer.decision):
-                raise RobotApiError(answer.robot_id, 200, "BAD_RESPONSE", "missing or mismatched stuck receipt")
-        except asyncio.CancelledError:
-            # Fleet is stopping mid-request: the robot may have applied the answer.
-            self._board.record(**record, accepted=None, code="STUCK_DECISION_OUTCOME_UNKNOWN",
-                               message="resolver stopped before the robot replied")
-            if answer.decision == "YIELD":
-                escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
-                if escalation is not None:
-                    self._escalated(escalation)
-            elif answer.escalate is not None:          # D-577 남은 항목 3: R5's human row is not lost
-                self._escalated(Escalate(answer.robot_id, answer.stuck_id, answer.escalate),
-                                rule=answer.rule, decision=answer.decision)
-            raise
-        except RobotApiError as exc:
-            code = (exc.code if not pending or (400 <= exc.status < 500 and exc.code != "BAD_RESPONSE")
-                    else "STUCK_DECISION_OUTCOME_UNKNOWN")
-            self._board.record(**record, accepted=None if code == "STUCK_DECISION_OUTCOME_UNKNOWN" else False,
-                               code=code, message=exc.message)
-        except (httpx.HTTPError, OSError) as exc:
-            code, message = transport_failure(exc)
-            self._board.record(**record, accepted=False if code == "ROBOT_UNREACHABLE" else None,
-                               code=code, message=f"{message} ({type(exc).__name__})")
-        except Exception as exc:  # noqa: BLE001 - a broken client must not stop the other robots
-            code = "STUCK_DECISION_OUTCOME_UNKNOWN"
-            self._board.record(**record, accepted=None, code=code,
-                               message=f"unexpected client error ({type(exc).__name__})")
-        else:
-            self._board.record(**record, accepted=True, outcome=result.get("outcome"))
-        if pending and code != "STUCK_DECISION_OUTCOME_UNKNOWN":
-            try:
-                await self._reconcile(answer.robot_id, answer.stuck_id, "dispatch_receipt_known")
-            except (OSError, sqlite3.Error):
-                self._escalated(Hold(answer.robot_id, answer.stuck_id, "journal_unavailable"))
-        if answer.rule == "ai" and self.ai_board is not None:
-            self.ai_board.note_outcome(answer.robot_id, answer.stuck_id, answer.decision, code or "accepted")
-            if self.ai_board.log is not None:
-                await asyncio.to_thread(self.ai_board.log.set_outcome, answer.robot_id, answer.stuck_id,
-                                        answer.decision, code or "accepted")
-        self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="ai" if answer.rule == "ai" else "rule",
-                                  rule=answer.rule, decision=answer.decision, escalated=None)
-        escalation = self._resolver.result(answer, code=code)
-        await closed_loop.answered(self, answer, code, now)
-        if escalation is not None:
-            self._escalated(escalation, rule=answer.rule if answer.escalate else None,
-                            decision=answer.decision if answer.escalate else None)
+    from .submission.dispatch import answer as _answer, model_answer as _model_answer
 
     async def _reconcile(self, robot_id, stuck_id, reason):
         await asyncio.to_thread(self._board.record, robot_id=robot_id, stuck_id=stuck_id,
