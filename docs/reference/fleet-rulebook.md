@@ -149,6 +149,38 @@ navigation은 capability/state 대기 뒤 queue를 만들기 전부터 route/obs
 
 기존 Cell Job·signal·advisory 경로는 계약과 회귀를 재사용한다. dispatch action 종류, 배포 profile, policy gate와 AI 대상의 opt-in은 기존 설정을 따른다. 구현·원격 회귀·리뷰·로컬 머지는 현장 활성화 증거가 아니다. 현장 완료에는 설치 revision/overlay readback, 실제 operator 요청과 owner 원장 대조, 두 로봇의 정지·양보·재시작, 센서/지도 신뢰와 물리 도착·HOLD 수용 증거가 필요하다.
 
+### Discord 자연어 요청의 규칙 연결 (D-728)
+
+[D-728](../adr/D-728-natural-language-channel-operations.md)과
+[실행 계획](../plans/2026-10-12-natural-language-channel-operations.md)은
+기명 사용자의 자연어 대화와 조종을 위 파이프라인에 연결한다. 사람이 직접
+누른 기존 조작과 달리 자연어 경로에는 AI 해석이 있지만, 모델의 `CONTROL`
+답변 자체가 실행 허가는 아니다. 다음 표는 소스 연결이며 현장 활성화 증거는 아니다.
+
+| 단계 | 실제 소유자 | 지켜야 할 규칙 |
+|---|---|---|
+| 원문 접수 | `channel.requests.ChannelRequests`, Discord gateway | actor·guild·channel과 원문 hash를 고정하고, 수정·삭제는 기존 요청을 무효화한다. 접수 알림은 명령 실행이 아니다 |
+| 대화·후보 | `channel.conversation.ConversationJobs` / `ConversationWorker`, `rosy.decision.conversation` | 인사·상태·명확화·조종 후보·거절을 구분한다. 원래 actor 범위와 관측 근거를 유지하고 모델이 장치 사실·완료를 만들어내지 않는다 |
+| 원문 law | `channel.execution.instructions.bind_original`, `ExecutionJournal.accept` / `guard` | 명확한 원문과 모델 후보의 대상·동작·값을 대조한다. 인용·부정·가정·주입·E-stop 해제는 이동 권한을 만들지 않는다 |
+| 최종 admission | `ExecutionWorker.preflight` / `fence`, `FleetTaskService.channel_admission`, transport guard | 현재 권한·기기·지도·능력·안전·stop generation·자원 소유권을 await 이후와 전송 직전에 재검사한다. 편대 리더의 기존 이동 owner는 유지한다 |
+| 실행·예약 | 기존 `IntentExecution`, Task/CORE/Formation owner, `ExecutionJournal` | 전송 전 영속 단계와 claim을 확정한다. 경쟁 worker의 늦은 사전 점검 실패가 이미 전송 중인 단계나 점유를 지울 수 없다 |
+| 결과·회신 | 기존 Task projection, channel outbox와 실제 owner receipt | `SENT`는 Discord 전달, `ACCEPTED`는 owner 접수다. 직접 action의 정확한 native readback·종결 연결은 후속 구현 중이며 접수로 물리 완료를 주장하지 않는다 |
+
+대화 설정의 수용 여부, 고정 모델의 의미 평가, 보호된 모델 실행 설치, 실제
+Discord 왕복은 각각 검증한다. 이전 읽기 전용 상태 모델의 허가를 자연어 조종
+허가로 재사용하지 않는다. 과거 모델 제안은 실행 이력이나 선택 권한이 아니다.
+후속 장소 선택은 같은 actor의 검증된 작업·계획 근거에만 연결한다.
+
+정기 health는 한국 시간 매시간 정각의 별도 구독이다. 가짜 사용자 요청이나
+실행 허가를 만들지 않으며, 현재 보관된 관측의 신선도를 읽어 보고한다.
+`SharedGather`를 다시 호출하면 기존 교통·편대 제어가 수행될 수 있으므로,
+보고 자체는 gather·모델 추론·기기 명령을 유발하지 않는다. 누락·오래된 센서와
+AI 관측은 미확인이며 설정만으로 정상이라고 표시하지 않는다. 정기 발송의
+구현·활성화와 실제 첫 시간대의 Discord 게시/readback은 아직 별도 검증 대상이다.
+
+CORE 결과 식별 계약과 건강 보고, 숙고형 모델 수용, 배포·실제 통신, 기록 기반
+독립 평가·후보 학습·승격까지 확인한 뒤 전체 자연어 운영을 완료로 판정한다.
+
 ## 8. 규칙 변경 절차
 
 새 상황은 기존 rule의 조건·거절·인계·종결에서 먼저 표현한다. 소유권·외부 API·안전 경계가 바뀌면 ADR/SRS/API 계약을 먼저 갱신한다. 변경할 rule과 law의 연결, caller, 설정, 로그 및 readback 시험을 함께 수정한다. 번호를 가진 항목을 문서에서 추가하는 것만으로 runtime 규칙을 발효시키지 않는다. main 통합·CI·배포·현장 overlay 활성화·물리 수용은 각각 별도 증거다.
