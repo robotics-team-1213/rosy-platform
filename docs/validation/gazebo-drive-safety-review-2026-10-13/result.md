@@ -4,10 +4,10 @@
 
 | 정확한 역사 커밋 | 검토 범위와 조건 |
 |---|---|
-| `d02a45c9ed426977960f33419aad1a13e281c0c0` | sensor-only SDK worker 이름 분리와 CORE clock 전달. SDK가 최종 motor publisher가 되지 않는다. 즉시 실제 law 게시·설치·readiness 후속과 결합해 평가한다. |
-| `f6731953a263da5564fdef8534d2693fb13d6647` | D-735 이동 traffic 후보의 양축 공통 감속. HOLD와 제자리 회전 의미는 유지한다. 몸 경로·최종 발행의 완전한 후보 일치는 후속 D-737이 필요하다. |
-| `9926a21c51a6cc47ab7e339adee17079cb84b3fc` | 두 대상 파일에서 documentation을 제외한 AST가 부모와 같다. 실행 변경을 승인한 것으로 해석하지 않는다. |
-| `3a7fd7323806d95458c5d74dec129d6a28668898` | 정책 실패의 window/traceback을 구분하고 writer 뒤 기록한다. 이 정확 diff에는 LINE static common clip도 포함한다. 당시 nontracking legacy family가 실제 common 고곡률을 누락할 수 있어 단독 수용하지 않는다. |
+| `d02a45c9ed42` | sensor-only SDK worker 이름 분리와 CORE clock 전달. SDK가 최종 motor publisher가 되지 않는다. 즉시 실제 law 게시·설치·readiness 후속과 결합해 평가한다. |
+| `f6731953a263` | D-735 이동 traffic 후보의 양축 공통 감속. HOLD와 제자리 회전 의미는 유지한다. 몸 경로·최종 발행의 완전한 후보 일치는 후속 D-737이 필요하다. |
+| `9926a21c51a6` | 두 대상 파일에서 documentation을 제외한 AST가 부모와 같다. 실행 변경을 승인한 것으로 해석하지 않는다. |
+| `3a7fd7323806` | 정책 실패의 window/traceback을 구분하고 writer 뒤 기록한다. 이 정확 diff에는 LINE static common clip도 포함한다. 당시 nontracking legacy family가 실제 common 고곡률을 누락할 수 있어 단독 수용하지 않는다. |
 
 필수 후속 `c8286b9bf`의 checked pair·최종 동일 곡률/가속 방지와 `c20c8095f`의 전진·후진 union이 최종 `d157ccbf2`에 함께 존재한다. 독립 리뷰에서 candidate object·mode/input epoch, 최종 공통 ratio, 정책 None/예외 거절, raw SDK guard 및 CORE 단일 writer를 확인했다. deferred announce는 publisher 호출 이후의 기록이며 실제 wheel delivery acknowledgement의 인증은 아니다.
 

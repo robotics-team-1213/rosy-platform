@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정
 - 2026-10-13 · uncommitted · Gazebo drive 역사 안전 검토 기록
 - 2026-10-13 · uncommitted · docs: D-738 폴더 이름과 묶음 규칙
 - 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
 - 2026-10-13 · 2917a9a699 · docs: 현재 설치본 기본 프로필 후속 검증
-- 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
