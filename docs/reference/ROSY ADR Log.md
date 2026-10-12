@@ -702,6 +702,7 @@
 | D-712 | Fleet 새 사건의 영속 선택과 원자적 배정 | Accepted |
 | D-713 | 기존 Fleet runtime의 pinned 모델 worker 분배 | Accepted |
 | D-714 | 고정 프로파일 파일과 설치 제공자 구성 결속 | Accepted |
+| D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -954,3 +955,9 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 **Status:** Accepted (2026-10-12, source contract)
 
 별도 파일 SHA와 전체 프로파일을 설치한 제공자 구성에 결속하고 기존 runtime 설정만 만든다. 전문은 [D-714](../adr/D-714-frozen-incident-profile-installation-binding.md).
+
+## D-715 — 원장 사건 inventory와 독립 비교의 누락 검증
+
+**Status:** Accepted (2026-10-12, source contract)
+
+읽기 전용 원장 목록과 별도 고정 digest로 평가 사건 누락·변경을 거절한다. 전문은 [D-715](../adr/D-715-independent-incident-case-inventory.md).
