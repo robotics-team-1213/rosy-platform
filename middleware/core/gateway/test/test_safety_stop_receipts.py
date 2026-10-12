@@ -1,10 +1,13 @@
 """The actual bodyless safety route captures native owners before its listeners run."""
 
 from uuid import UUID, uuid4
+from types import SimpleNamespace
 
 import pytest
 
 from core_features.command.arbitration import Mode
+from core_features.navigation.manager import NavGoalSpec
+from core.bridge.goal_tracker import GoalTracker
 from test_docking_mode_ownership import docking_robot, OPERATOR
 
 
@@ -88,3 +91,64 @@ def test_failed_owner_capture_cannot_block_safety_latch(core_client, monkeypatch
     assert response.status_code == 200
     assert response.json() == {"estop": True, "operations": []}
     assert services.safety.estop and services.modes.mode is Mode.EMERGENCY
+
+
+@pytest.mark.parametrize("kind", ["navigate", "home"])
+def test_safety_stop_keeps_multiple_owners_and_pending_transport(core_client, kind):
+    client, services = core_client()
+    tracker = GoalTracker()
+    generation = tracker.opening()
+    tracker.accepted(generation, object())
+    services.nav.executor = SimpleNamespace(send_goal=lambda *args, **kw: None,
+        cancel_goal=tracker.cancel_all, native_transport_snapshot=tracker.transport_snapshot)
+    # Both real owner ledgers remain distinct even when their work overlaps.
+    services.modes.transition(Mode.MANUAL)
+    assert services.command.teleop(0.1, 0)[0]
+    services.nav.goal(NavGoalSpec(1, 2, 0), kind=kind)
+    expected = {services.command.native.current.run_id, services.nav.native.current.run_id}
+    response = client.post("/api/v1/safety/stop", headers=VIEWER)
+    operations = response.json()["operations"]
+    assert {UUID(op["run_id"]) for op in operations} == expected
+    assert {op["kind"] for op in operations} == {"teleop", kind}
+    nav_id = services.nav.native.current.run_id
+    pending = services.nav.native_readback(nav_id)
+    assert pending["operation"]["result"] == "CANCELED"
+    assert pending["quiescence"]["pending_submission"]
+    assert not pending["quiescence"]["quiescent"]
+    tracker.finished(generation)
+    assert services.nav.native_readback(nav_id)["quiescence"]["quiescent"]
+
+
+def test_safety_stop_preserves_first_terminal_racing_with_latch(core_client, monkeypatch):
+    client, services = core_client()
+    services.nav.executor = SimpleNamespace(send_goal=lambda *args, **kw: None, cancel_goal=lambda: None)
+    services.nav.goal(NavGoalSpec(1, 2, 0))
+    run_id = services.nav.native.current.run_id
+    trigger = services.safety.trigger_estop
+
+    def complete_then_latch(source):
+        services.nav.on_result(True, native_run_id=run_id)
+        return trigger(source)
+
+    monkeypatch.setattr(services.safety, "trigger_estop", complete_then_latch)
+    response = client.post("/api/v1/safety/stop", headers=VIEWER)
+    operation, = response.json()["operations"]
+    assert operation["run_id"] == str(run_id)
+    assert operation["result"] == "SUCCEEDED"
+    assert services.safety.estop
+
+
+def test_safety_stop_failed_post_readback_retains_pending_identity(core_client, monkeypatch):
+    client, services = core_client()
+    services.modes.transition(Mode.MANUAL)
+    services.command.teleop(0.1, 0)
+    readback = services.command.native_readback
+    captured = readback()["operation"]
+
+    def failed_readback(run_id=None):
+        if run_id is not None:
+            raise RuntimeError("readback unavailable")
+        return readback()
+
+    monkeypatch.setattr(services.command, "native_readback", failed_readback)
+    assert client.post("/api/v1/safety/stop", headers=VIEWER).json()["operations"] == [captured]
