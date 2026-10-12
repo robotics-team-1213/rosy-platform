@@ -176,3 +176,46 @@ def test_revocation_after_claim_preserves_unknown_and_core_reply_fact(tmp_path):
     record = state.finish(scope, state='ACK', reply={'outcome': 'back'})
     assert record['state'] == 'UNKNOWN' and record['reply'] == {'outcome': 'back'}
     with pytest.raises(ValueError): claim(state, scope, epoch=2)
+
+
+@pytest.mark.parametrize('during_get', ['unchanged', 'revoke', 'hold', 'unsupported'])
+def test_actual_http_client_claims_after_get_and_before_one_post(tmp_path, during_get):
+    from fleet.swarm.transport import HttpRobotClient, RobotApiError
+    from fleet.swarm.robots import RobotEndpoint
+    _, _, _, scope, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    calls = []
+    def handler(request):
+        calls.append(request.method)
+        if request.method == 'GET':
+            assert state.submission(scope.subject_id, scope.case_id) is None
+            if during_get == 'revoke': state.apply('line-back', signed(proof, 1, REVOKE))
+            if during_get == 'hold': proof['report']['state'] = 'HOLD'
+            return httpx.Response(200, json={'stuck': {'conditional_back': during_get != 'unsupported'}})
+        record = state.submission(scope.subject_id, scope.case_id)
+        assert record['state'] == 'SUBMITTING'
+        assert json.loads(request.content)['expected_stuck'] == record['expected_stuck']
+        return httpx.Response(200, json={'outcome': 'back'})
+    async def run():
+        async with httpx.AsyncClient(base_url='http://source-fixture', transport=httpx.MockTransport(handler)) as http:
+            client = HttpRobotClient(RobotEndpoint(scope.subject_id, 'http://source-fixture', 'fake'), http=http)
+            async def guard():
+                claim(state, scope)
+                return True
+            invoke = client.line_stuck_decision(scope.case_id, 'BACK_AND_RETRY',
+                expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=guard)
+            if during_get == 'unchanged':
+                reply = await invoke
+                assert state.finish(scope, state='ACK', reply=reply)['state'] == 'ACK'
+            else:
+                with pytest.raises((ValueError, RobotApiError)): await invoke
+                assert state.submission(scope.subject_id, scope.case_id) is None
+    asyncio.run(run())
+    assert calls == (['GET', 'POST'] if during_get == 'unchanged' else ['GET'])
+
+
+def test_revoke_remains_possible_when_original_evidence_expires_or_holds(tmp_path):
+    now, _, _, _, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    proof['report']['state'] = 'HOLD'; now[0] = 131
+    assert state.apply('line-back', signed(proof, 1, REVOKE))['epoch'] == 2
