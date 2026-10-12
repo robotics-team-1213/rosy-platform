@@ -71,6 +71,37 @@ def test_actual_factory_worker_reads_persistent_approval_and_revocation(tmp_path
     asyncio.run(run())
 
 
+def test_registry_bridge_reaches_actual_profile_dispatcher_without_selecting_or_enabling(tmp_path):
+    from fleet.incidents.automation.routing import IncidentProfileRoutes
+    async def run():
+        config, calls, candidate, registry = setup(tmp_path)
+        clock = config.pop('clock')
+        bridge = importlib.import_module('tools.incident_reasoning')
+        combined = dict(profile_workers=(config,), clock=clock)
+        configured = bridge.registry_calibration_config(combined, registry, domain='line_follow')
+        assert configured['clock'] is clock and configured['profile_workers'][0]['providers'] is config['providers']
+        assert 'calibration_artifacts' not in configured and 'calibration_artifacts' not in config
+        application = app(tmp_path / 'site', configured)
+        dispatcher = application.state.stuck_resolver.incident_worker
+        try:
+            snapshot = poll(application)
+            dispatcher.feed(snapshot); await settled(dispatcher)
+            assert calls == [] and dispatcher.store.active_scopes() == ()
+            worker = dispatcher.workers[0]
+            assessment = application.state.line_stuck.intervention_assessment('pinky')
+            routes = IncidentProfileRoutes(dispatcher.store)
+            routes.select_profile('core', assessment.policy_revision, worker.profile_sha256, expected_revision=0)
+            dispatcher.feed(snapshot); await settled(dispatcher)
+            assert [role for _, role, _ in calls] == ['primary']
+            head = registry.history()[-1]['revision']
+            registry.revoke(candidate['revision'], signed(candidate, 'reasoning_revocation', head), expected_head=head)
+            dispatcher.feed(poll(application, stuck='case-2')); await settled(dispatcher)
+            assert [role for _, role, _ in calls] == ['primary', 'primary', 'reviewer']
+            assert len(calls[-1][2]) == 1
+        finally: await dispatcher.aclose()
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize('fault', ['profile', 'domain', 'revoked'])
 def test_registry_will_not_supply_other_or_revoked_calibration(tmp_path, fault):
     config, _, candidate, registry = setup(tmp_path)
