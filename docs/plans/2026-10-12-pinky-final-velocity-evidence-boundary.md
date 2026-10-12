@@ -4,6 +4,8 @@
 
 ## Source checkpoint
 
+최신 main 통합 commit `5f06e03ab1d2a2d870e341c1801259605857552d`를 로컬 착지했다. 적격 Model PC 8GB의 원본 패키지가 설치된 별도 원격 환경에서 관련 20개 파일은 473 passed/skipped 0, terminal exit 0, NEW 0과 lint를 통과했다. Native CDR/MCAP·raw derivation·구조·release·운영 도구 회귀를 포함한다. 고정 로그는 세션 `logs/raw-velocity-land-5f06e03ab1/run-1.txt`다. 아래 107개는 통합 전 전체 Pinky/구조 회귀이며 실제 모델/현장 수용은 포함하지 않는다.
+
 commit `305aa8466f`의 적격 Model PC 7.9GB 원격 Pinky/구조 회귀는 107 passed, skipped 0, terminal exit 0, known-failures NEW 0이다. 로그는 세션 `logs/raw-velocity-green/run-1.txt`다. Native CDR/MCAP RED는 22 NEW/6 passed로 누락을 재현했으며 기존 실패 목록에 추가하지 않았다. 최초 기본 CI 환경의 28 skipped는 별도 미확인 기록이고 통과로 쓰지 않았다.
 
 기존 원본 요구 파일을 별도 dependency hash의 원격 venv에 설치했다. MCAP·numpy 2.2.6·OpenCV 4.12.0 실제 import/version을 확인했고 공유 CI venv를 바꾸지 않았다. 독립 source 검토에서 중요한 blocker는 없었다. main 통합은 같은 원본 환경으로 착지 도구를 실행한다. 실제 자료·정상 개입 원인·모델·배포·현장 수용은 후속이다.
