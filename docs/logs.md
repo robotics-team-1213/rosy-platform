@@ -8024,3 +8024,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
 - 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
 - gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
+
+## 2026-10-12 · 7a03bf1bf08e · UI·첫 로그인 실제 사이트 설치 확인
+
+- 변경: 확정 정보 배치·로그인·기본 내 계정 구현의 실제 배포 증거를 후속 검증 문서에 기록한다. 이전 실패와 설치 관측은 보존한다.
+- 증거: 실제 pre-push 6,763 passed/종료 0/NEW 0 및 push 종료 0. 동일 SHA FULL·Cam/Pilot Android CI·사이트 후보 빌드 성공 후 서명·정식 updater 설치 완료. 실행 인증 코드 네 모듈 및 제공 자산 일곱 개·공용 client가 후보 blob과 일치한다. 실제 브라우저 네 화면 320/1366px 8조합, 로그인·제한된 프로필·첫 변경 화면 및 팀원 네 계정의 변경 전 API 거절·로그아웃을 확인했다.
+- gate 변화: Fleet 사이트 설치·초기 팀원 로그인 확인. 계정 적용 후 기존 외부 채널 매핑 충돌은 설정을 보관·중지해 복구했다. 사용자 본인 기존 계정 복구를 별도 처리한다. 외부 메시지·당사자 최종 비밀번호·실물 로봇/폰/LCD 수용·TLS 신뢰는 확인하지 않았다.
