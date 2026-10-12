@@ -304,6 +304,8 @@ def gap_lane(frames):
     for index in range(frames):
         now[0] = 10. + index * .1
         lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    if frames >= 3:
+        assert lane.keeper.last.get('expected_path_state') == 'live', lane.keeper.last
     output[:] = [np.zeros_like(way), 'lane_marking']
     return lane, now, image, output
 
@@ -315,7 +317,7 @@ def test_camera_gap_uses_only_a_committed_path_without_learning(frames, continue
     now[0] += .1
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(.01, .01, .1))
     decision, state = camera_tick(lane, now[0], gain=1.)
-    assert (decision.linear > 0.) is continues
+    assert (decision.linear > 0.) is continues, (lane.last, lane.keeper.last)
     assert state is None
     if continues:
         assert lane.last['strategy'] == 'expected_path_held'
