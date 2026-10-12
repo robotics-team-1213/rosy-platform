@@ -60,6 +60,51 @@ def test_direct_ack_persists_core_run_and_caller_identity_without_completion(tmp
     assert f.store.resource_claims(resource_kind="robot", resource_id="rosy_40")
 
 
+@pytest.mark.parametrize('verb,text,kind', [('cancel', '40번 이동 취소해줘', 'navigate'),
+                                          ('follow_cancel', '40번 추종 취소해줘', 'follow')])
+def test_native_stop_closes_without_releasing_another_owner_or_advancing(tmp_path, verb, text, kind):
+    f = fixture(tmp_path, text + ' 그리고 ' + HOME_TEXT,
+                {'steps': [{'do': verb, 'robot': 'rosy_40'}, HOME_PLAN]})
+    rid = f.receipt['request_id']
+    operation = _operation(uuid4(), uuid4(), 'original-motion') | {'kind': kind}
+    f.store.reserve_resources(owner_kind='direct_action', owner_id='original-motion', generation=1,
+                              resources=[('robot', 'rosy_40')])
+    sent = []
+    async def cancel(*args):
+        sent.append(True)
+        return {'navigation': 'CANCELED', 'role': 'none', 'active': False,
+                'target_robot_id': None, 'operation': operation}
+    f.client.navigation_cancel = cancel
+    f.client._post = cancel
+    asyncio.run(f.worker.step(rid))
+    async def get(path):
+        return _readback(operation, result='CANCELED')
+    f.client._get = get
+    asyncio.run(f.worker.step(rid))
+    step = f.journal.view(rid)['steps'][0]
+    assert step['state'] == 'CANCELED'
+    evidence = json.loads(step['receipt_json'])
+    assert evidence['outcome']['result'] == 'CANCELED'
+    assert evidence['quiescence']['quiescent'] is True
+    assert evidence.get('safe_released') is not True
+    assert rid not in f.worker.pending()
+    assert f.store.resource_claims(resource_kind='robot', resource_id='rosy_40')[0]['owner_id'] == 'original-motion'
+    asyncio.run(f.worker.step(rid))
+    assert len(sent) == 1
+
+
+def test_site_stop_preserves_each_robot_native_receipt():
+    from core_common.intent import interpret
+    from fleet.server.channel.execution.receipts import owner_receipt
+    operation = _operation(uuid4(), uuid4(), 'motion')
+    accepted, receipt = owner_receipt(interpret({'do': 'estop'})[0], {'robots': [
+        {'robot_id': 'rosy_40', 'stopped': True, 'result': {'estop': True, 'operation': operation}},
+        {'robot_id': 'rosy_41', 'stopped': False, 'result': {}}]}, ['rosy_40', 'rosy_41'])
+    assert accepted is None
+    assert receipt['robots'][0]['operation'] == operation
+    assert 'operation' not in receipt['robots'][1]
+
+
 @pytest.mark.parametrize('change',['run','boot','unknown','owner','pending','callback','lease','admitting','epoch','transport','missing'])
 def test_unproven_readback_cannot_release_claim(tmp_path,change):
     f, run_id, boot_id, sent = _home_with_native_ack(tmp_path)
