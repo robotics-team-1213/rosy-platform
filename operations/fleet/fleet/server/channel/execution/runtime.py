@@ -9,7 +9,7 @@ from .journal import ExecutionJournal
 from .worker import ExecutionWorker
 
 
-def install_execution(app,jobs,task_service,scope,admitted,environment,*,require_operator,read_guard):
+def install_execution(app,jobs,task_service,scope,admitted,environment,*,require_operator,read_guard,refresh):
     if task_service is None:raise ValueError('CHANNEL_TASK_SERVICE_REQUIRED')
     journal=ExecutionJournal(jobs,task_service.store,producer_scope=scope,admitted=admitted,environment=environment)
     if task_service.channel_admission is not None:raise ValueError('ONE_CHANNEL_EXECUTION_OWNER_REQUIRED')
@@ -27,7 +27,9 @@ def install_execution(app,jobs,task_service,scope,admitted,environment,*,require
         journal.recover()
         while True:
             try:
-                for rid in worker.pending():await worker.step(rid)
+                pending=worker.pending()
+                if pending:await refresh()
+                for rid in pending:await worker.step(rid)
             except asyncio.CancelledError:raise
             except Exception:logging.getLogger(__name__).warning('Channel execution cycle held; unknown steps are not replayed')
             await asyncio.sleep(1)

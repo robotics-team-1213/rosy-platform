@@ -98,7 +98,7 @@ def install_conversation(app, config, site_maps, *, task_service=None, require_o
     if task_service is not None:
         from ..execution.runtime import install_execution
         install_execution(app,jobs,task_service,scope,admitted,lambda:bounded_environment(cached()),
-                          require_operator=require_operator,read_guard=read_guard)
+                          require_operator=require_operator,read_guard=read_guard,refresh=snapshot)
     previous = app.router.lifespan_context
 
     async def run():

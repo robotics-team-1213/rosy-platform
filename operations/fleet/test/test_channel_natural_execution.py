@@ -40,6 +40,8 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
     plan=proposal if proposal is not None else {'do':'navigate','robot':'rosy_40','waypoint':'A'}
     result={'profile':profile.model_dump(),'producer_scope':scope,'profile_set_hash':digest(scope),
             'input_hash':question.digest,'answer':answer('CONTROL',intent=plan)}
+    jobs.record_attempt(receipt['request_id'],'primary',state='RESULT',result=result,known_cost_usd=0,
+                        input_hash=question.digest,profile_set_hash=digest(scope))
     jobs.finish(receipt['request_id'],state='ANSWERED',result=result,summary='검토 완료')
     admitted=[True]
     journal=ExecutionJournal(jobs,store,producer_scope=scope,admitted=lambda:admitted[0],
@@ -188,3 +190,117 @@ def test_scoped_guard_is_not_inherited_by_other_concurrent_callers():
     async def run():await asyncio.gather(guarded(),ordinary())
     asyncio.run(run())
     assert checked==['mine']
+
+
+@pytest.mark.parametrize('phase',['discovery','identity'])
+@pytest.mark.parametrize('change',['owner','map','withdraw'])
+def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monkeypatch,phase,change):
+    import httpx
+    from fleet.swarm.robots import RobotEndpoint
+    from fleet.swarm.transport import HttpRobotClient
+    from fleet.swarm.discovery_transport import DiscoveryTransport
+    from fleet.server.enrollment_tls import EnrollmentIdentityTransport
+    from fleet.server.goal_lease import GoalLeases
+    f=fixture(tmp_path)
+    asyncio.run(f.worker.step(f.receipt['request_id']))
+    sent=[];identity_guard=[]
+    def mutate():
+        if change=='owner':f.accounts['op']='viewer'
+        elif change=='map':f.env['map']['version']=2
+        else:f.raw.withdraw(f.receipt['guild_id'],f.receipt['channel_id'],f.receipt['message_id'])
+    inner=httpx.MockTransport(lambda r:sent.append(r) or httpx.Response(200,json={'accepted':True}))
+    ep=RobotEndpoint('rosy_40','http://127.0.0.1:8080','fixture-device-token')
+    if phase=='discovery':
+        ep_discovery=RobotEndpoint('rosy_40','https://robot-a.local:8443','fixture-device-token',discovery=True,tls_ca_file='unused')
+        async def resolve(*args):
+            await asyncio.sleep(0)
+            mutate()
+            return '192.168.1.50',8443
+        monkeypatch.setattr('fleet.swarm.discovery_transport.resolve_robot',resolve)
+        transport=DiscoveryTransport(ep_discovery,inner=inner)
+        base='https://robot-a.local:8443'
+    else:
+        binding=SimpleNamespace(context=lambda:None)
+        transport=EnrollmentIdentityTransport(ep,SimpleNamespace(binding=lambda rid:binding),inner=inner)
+        async def identity(*args):
+            await asyncio.sleep(0)
+            mutate()
+        transport.identity=identity
+        transport.before_send=lambda r:identity_guard.append(r)
+        base=ep.base_url
+    async def run():
+        async with httpx.AsyncClient(base_url=base,transport=transport) as http:
+            client=HttpRobotClient(ep,http=http)
+            leases=GoalLeases(0,{'rosy_40':client})
+            leases.admit_attempt=f.service.admit_attempt
+            async def dispatch(task):
+                return await leases.send('rosy_40',client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
+            return await f.service.dispatch_next({'rosy_40'},dispatch=dispatch)
+    result=asyncio.run(run())
+    assert not sent and result['status']=='HOLD'
+    if phase=='identity':assert len(identity_guard)==1
+
+
+@pytest.mark.parametrize('event',['MESSAGE_UPDATE','MESSAGE_DELETE','MESSAGE_DELETE_BULK'])
+def test_actual_discord_withdrawal_event_invalidates_original_grant(tmp_path,event):
+    from rosy_discord.gateway import DiscordGateway
+    f=fixture(tmp_path)
+    f.journal.accept(f.receipt['request_id'])
+    async def consume(envelope):raise AssertionError('an edit is not a new command')
+    async def withdraw(*args):f.raw.withdraw(*args)
+    bot=f.raw.config.bot_id
+    gateway=DiscordGateway(token='fixture-token',guild_id=f.receipt['guild_id'],channel_id=f.receipt['channel_id'],
+        bot_id=bot,consume=consume,withdraw=withdraw)
+    async def run():
+        await gateway.dispatch({'t':'READY','d':{'user':{'id':bot,'bot':True},'session_id':'test'},'s':1})
+        body={k:f.receipt[k] for k in ('guild_id','channel_id')}
+        body|={'ids':[f.receipt['message_id']]} if event=='MESSAGE_DELETE_BULK' else {'id':f.receipt['message_id']}
+        await gateway.dispatch({'t':event,'d':body,'s':2})
+    asyncio.run(run())
+    with pytest.raises(HTTPException):f.journal.guard(f.receipt['request_id'])
+    assert f.raw.read('op')[0]['content']==f.receipt['content']
+
+
+def test_conflicting_create_tombstone_survives_conflict_exception(tmp_path):
+    from core_common.protocol.channel_requests import DiscordRequestEnvelope
+    f=fixture(tmp_path)
+    f.journal.accept(f.receipt['request_id'])
+    changed=DiscordRequestEnvelope(**{k:f.receipt[k] for k in ('guild_id','channel_id','message_id','author_id')},
+        content='<@'+f.raw.config.bot_id+'> 40번 이동 취소해줘',mentions=[f.raw.config.bot_id],author_bot=False,webhook_id=None)
+    with pytest.raises(HTTPException):f.raw.receive(changed)
+    with pytest.raises(HTTPException):f.journal.guard(f.receipt['request_id'])
+    assert f.raw.read('op')[0]['content']==f.receipt['content']
+
+
+@pytest.mark.parametrize('text,verb',[('전체비상정지해','estop'),('rosy_40 이동 취소해줘','cancel'),
+    ('rosy_40 홈으로 복귀해줘','home'),('rosy_40 도킹 해제해줘','undock')])
+def test_irrelevant_duplicate_alias_does_not_block_clear_registered_target(tmp_path,text,verb):
+    f=fixture(tmp_path,text,{'do':verb,**({'robot':'rosy_40'} if verb!='estop' else {})})
+    f.env['map']['places'].append({'id':'B','name':'A 지점','x':3.,'y':4.,'yaw':None})
+    question=conversation_input(f.receipt,f.env,f.raw.config.bot_id,now=f.clock[0])
+    assert positive_plan(question)['do']==verb
+
+
+def test_duplicate_place_alias_requires_clarification_only_for_that_alias(tmp_path):
+    f=fixture(tmp_path,'40번 A 지점으로 보내줘')
+    f.env['map']['places'].append({'id':'B','name':'A 지점','x':3.,'y':4.,'yaw':None})
+    question=conversation_input(f.receipt,f.env,f.raw.config.bot_id,now=f.clock[0])
+    with pytest.raises(ValueError):positive_plan(question)
+
+
+def test_safety_stop_does_not_wait_for_unavailable_motion_telemetry(tmp_path):
+    f=fixture(tmp_path,'40번 비상정지해줘',{'do':'stop','robot':'rosy_40'})
+    f.env['robots'][0]['online']=False
+    async def bad():raise OSError('telemetry offline')
+    f.client.capabilities=f.client.state=bad
+    asyncio.run(f.worker.step(f.receipt['request_id']))
+    assert f.writes==['estop']
+
+
+def test_reserved_direct_crash_becomes_unknown_and_preserves_resource(tmp_path):
+    f=fixture(tmp_path,'40번 홈으로 복귀해줘',{'do':'home','robot':'rosy_40'})
+    rid=f.receipt['request_id'];f.journal.accept(rid)
+    f.journal.begin(rid,0,[('robot','rosy_40')])
+    f.journal.recover();asyncio.run(f.worker.step(rid))
+    assert not f.writes and f.journal.view(rid)['steps'][0]['state']=='UNKNOWN'
+    assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='UNKNOWN'
