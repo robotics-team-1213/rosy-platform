@@ -358,8 +358,13 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        55_856,
-        "split: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
+        56_077,
+        "split: re-judged at 56077 on 2026-10-12 for the route fact bundle (D-726). "
+        "trip and /route return a fact an AI or another system can read. A caller can "
+        "block an edge or add seconds, and a /route chord shortens only when the nominal "
+        "body would leave the imported lane. The console names TRIP_UNKNOWN_EDGE. "
+        "No new package, command, or Nav2 path. Keep the observation-journal split and +150. "
+        "Previous verdict: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
         "(operations/ui/console/device-watch.js, device-watch.css). Display-only tags and "
         "the existing ceiling frame; no new command, poll, or CORE route. Keep the "
         "observation-journal split and +150. Previous verdict: "
