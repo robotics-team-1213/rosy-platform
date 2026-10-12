@@ -93,6 +93,9 @@ class IncidentCaseWorker:
     def _scope(self, problem):
         return CaseScope(problem.subject_id, problem.case_id, 'core', self.profile_sha256, POLICY.revision)
 
+    def _owns_scope(self, scope):
+        return scope.owner_id == 'core' and scope.profile_sha256 == self.profile_sha256
+
     def _check_budget(self, budget):
         if (type(budget) is not CaseBudget or dict(budget.role_limits) != {p.role: p.max_calls for p in self.profiles}
                 or budget.max_calls > sum(p.max_calls for p in self.profiles)):
@@ -123,13 +126,14 @@ class IncidentCaseWorker:
         while self._snapshot is not None and not self._closed:
             snapshot, self._snapshot = self._snapshot, None
             for scope in await self._db('pending_handoffs'):
+                if not self._owns_scope(scope): continue
                 current = self.board.intervention_assessment(scope.subject_id)
                 if (isinstance(current, Assessment) and current.request.case_id == scope.case_id
                         and current.request.owner == scope.owner_id
                         and current.applies_to(current.request, now=self.clock(), policy_revision=POLICY.revision)
                         and self.human_owned(scope.subject_id, scope.case_id) is False):
                     await self._finish(scope, (await self._db('case', scope))['reason'])
-            scopes = await self._db('active_scopes')
+            scopes = tuple(scope for scope in await self._db('active_scopes') if self._owns_scope(scope))
             for scope in scopes:
                 await self._process(scope, snapshot)
             for row in snapshot['robots']:
@@ -151,6 +155,7 @@ class IncidentCaseWorker:
                     continue
 
     async def _finish(self, scope, reason):
+        if not self._owns_scope(scope): return
         case = await self._db('case', scope)
         if case['state'] == 'ACTIVE': case = await self._db('close_case', scope, state='HOLD', reason=reason)
         summary = await self._db('final_summary', scope)
@@ -177,6 +182,7 @@ class IncidentCaseWorker:
         except Exception: return True
 
     async def _process(self, scope, snapshot):
+        if not self._owns_scope(scope): return
         case = await self._db('case', scope)
         if scope.policy_revision != POLICY.revision or scope.owner_id != 'core':
             await self._finish(scope, 'POLICY_CHANGED'); return
