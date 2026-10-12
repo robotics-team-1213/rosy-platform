@@ -145,9 +145,17 @@ with channel fleet-status read-only gates. The merged parent is55428, a206-line
 delta from prior55222 in existing D-726 route/D-730 recovery owners. Channel1440,
 conversation300, execution588 and operating314 are measured simultaneously;
 Decision deliberation375/contracts373/providers238/evaluation386 retain their
-previous limits. Scoped parent55428 rejudgment preserves historical55120/56077
-verdicts, nested baselines, +150, zero/file/hard ceilings and every prior split
-obligation. This precheck is not terminal regression or runtime acceptance.
+previous limits. The reviewer's initial parent55428 rejudgment was withdrawn after
+fixed-ref lineage recomputation: accepted main56077 minus six legacy owner827
+lines moved into the actual channel unit plus their six identity facades36 gives
+the derived parent baseline55286. Current55428 remains within55286+150 with8
+lines spare. Three additional new facades18 and Task1/2 nonunit growth consume
+the existing allowance rather than increasing the baseline. This retains all
+historical55120/56077 verdicts, nested baselines, +150, zero/file/hard ceilings
+and prior split obligations. Root and independent reviewer approved this stricter
+responsibility-only deduction. Remote d1a5bf443 integration regression377 passed,
+terminal exit0/known_failures0 NEW. Final registry correction is checked separately;
+neither source precheck nor regression establishes runtime acceptance.
 
 - 2026-10-12 사용자 추가 요구: 정기 health 보고를 같은 Discord 채널로
   **매시간 정각(KST)** 보낸다. 별도의 AI 추론 호출 없이 현재 관제 관측,

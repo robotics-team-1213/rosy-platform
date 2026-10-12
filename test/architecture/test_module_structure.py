@@ -405,11 +405,13 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        55_428,
-        "split: independently re-judged by pipeline_review on 2026-10-12 after integrating "
-        "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Actual parent55428 "
-        "= prior55222 +206 from existing D-726 route and D-730 recovery owners; channel1440, "
-        "conversation300, execution588, operating314 measured simultaneously. Retain all prior "
+        55_286,
+        "split: independently derived by pipeline_review on 2026-10-12 after integrating "
+        "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Accepted main56077 "
+        "minus six moved legacy owners827 plus six required identity facades36 gives55286; "
+        "current parent55428 consumes the unchanged +150 allowance, leaving8. Three new facades18 "
+        "and remaining Task1/2 nonunit growth are not rebaselined. Channel1440, conversation300, "
+        "execution588, operating314 measured simultaneously. Retain all prior "
         "55120/56077 histories, every nested baseline, +150, zero/file/hard ceilings and split "
         "obligation. Independent precheck is source scope only; terminal remote regression, "
         "installation, activation and physical acceptance remain separate. "
