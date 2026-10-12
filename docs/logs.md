@@ -8073,6 +8073,18 @@ osy-d395-s1d\`.
 - 증거: 비전 프로필, D-55, D-71, D-310 결정 5, D-12, D-420 Proposed, D-427, D-429, D-430, D-721, 두 어댑터 매니페스트 대조. 시험은 돌리지 않았다.
 - gate 변화: 없음. 분류 결정이며 구현, 장치, 현장 수용은 별도다.
 
+## 2026-10-12 · 0a690a83b · D-676 카메라 종료 보상 구분
+
+- 변경: 무효 관측 학습 제외와 이미 전달한 행동의 terminal 결과 학습을 구분했다. target 상실만 연결하고 센서 오류·비학습 이동·미실행·truncation은 제외한다. 실제 CORE receipt와 episode 경계를 설계에 기록했다.
+- 증거: 원격 RED 후 Isaac·architecture 통합 exit0/NEW0. native 실험과 물리 정지·완주 증거는 별도 기록한다.
+- gate 변화: 없음. 학습 신호 수정이며 완주·Fleet·장치 수용을 뜻하지 않는다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-729 바닥 한 번 뒤의 복귀
+
+- 변경: D-723의 바닥 임무를 D-729 Accepted로 순서를 정했다. 이동은 같은 맵의 기존 waypoint 목표를 차례로 가고, 복귀는 D-721의 `station` 또는 `outing_start` 하나다. 선 따라가기, 팔, 드론, 바닥 구동기 스텝은 넣지 않았다.
+- 증거: MSN-001, MSN-004, NAV-001, WPT-004, MAP-002와 D-12, D-55, D-71, D-310, D-420, D-721, D-723 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 순서 정책이며 미션 엔진, 장치, 현장 수용은 별도다.
+
 ## 2026-10-12 · uncommitted · docs: 공개 트리에서 실험실 주소를 뺀다
 
 - 변경: `docs/` 배치는 `docs/AGENTS.md`와 같아 옮기지 않았다. `docs/reference/AGENTS.md`가 현재 파일과 `legacy-tools/`를 가리키게 고쳤다. 시험 PC·로봇 주소는 gitignored `private/lab-hosts.json`으로 옮기고, 추적 예시는 `tools/remote/hosts.example.json`이다. 살아 있는 도구 기본값과 운영 안내에서 그 주소·현장 SSID를 뺐다. ADR·날짜 계획·검증 기록·로그의 그날 사실은 그대로 둔다.
