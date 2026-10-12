@@ -12,6 +12,7 @@ class HourlyHealth:
         self.journal, self.sender, self.gather = journal, sender, gather
         self.console, self.ai, self.clock = console, ai_facts, clock
         self.started_at = clock()
+        self._reported_slot = None
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_channel_hourly_health (
                 slot TEXT PRIMARY KEY, guild_id TEXT NOT NULL, channel_id TEXT NOT NULL,
@@ -27,7 +28,15 @@ class HourlyHealth:
         start = datetime.fromtimestamp(now, _KST).replace(minute=0, second=0, microsecond=0)
         return start.isoformat(timespec="minutes"), start.timestamp()
 
-    def report(self, now=None):
+    def task_counts(self):
+        with closing(self.journal._connect()) as conn:
+            return dict(conn.execute("SELECT status, COUNT(*) FROM fleet_tasks GROUP BY status"))
+
+    def slot_exists(self, slot):
+        with closing(self.journal._connect()) as conn:
+            return conn.execute("SELECT 1 FROM fleet_channel_hourly_health WHERE slot=?", (slot,)).fetchone() is not None
+
+    def report(self, now, counts):
         now = self.clock() if now is None else now
         captured = self.gather.gathered_at
         collection_age = now - captured if type(captured) in (int, float) and math.isfinite(captured) else None
@@ -59,14 +68,13 @@ class HourlyHealth:
             label = robot if len(robot) <= 72 else robot[:71] + "\u2026"
             link = "\uc5f0\uacb0" if fresh else "\ubbf8\ud655\uc778"
             details.append(f"{label}: {link} | {safe}{battery_text}")
-        with closing(self.journal._connect()) as conn:
-            counts = dict(conn.execute("SELECT status, COUNT(*) FROM fleet_tasks GROUP BY status"))
         active = sum(counts.get(state, 0) for state in ("REQUESTED", "QUEUED", "ACCEPTED", "RUNNING"))
         work = f"\uc791\uc5c5 \uc9c4\ud589 {active} | HOLD {counts.get('HOLD', 0)} | UNKNOWN {counts.get('UNKNOWN', 0)}"
         try:
             ai = self.ai.status()
             ai_state = ai.get("state") if ai.get("state") in {"present", "absent"} else "\ubbf8\ud655\uc778"
-            mode = ai.get("owner_mode") if ai.get("owner_mode") in {"available", "shared", "owner_busy"} else "\ubbf8\ud655\uc778"
+            mode = (ai.get("owner_mode") if ai_state == "present"
+                    and ai.get("owner_mode") in {"available", "shared", "owner_busy"} else "\ubbf8\ud655\uc778")
             age = ai.get("age_s")
             age_text = f" | {age:g}s" if type(age) in (int, float) and math.isfinite(age) and age >= 0 else ""
         except Exception:
@@ -150,8 +158,19 @@ class HourlyHealth:
     async def run_once(self):
         now = self.clock()
         if self._scope() is None: return
-        payload = self.report(now)
+        slot, due = self._slot(now)
+        payload = None
+        scanned_slot = False
+        if (due <= now <= due + _START_WINDOW_S and self._reported_slot != slot
+                and not await asyncio.to_thread(self.slot_exists, slot)):
+            counts = await asyncio.to_thread(self.task_counts)
+            payload = self.report(now, counts)
+            scanned_slot = True
+        elif due <= now <= due + _START_WINDOW_S:
+            scanned_slot = True
         claim = await asyncio.to_thread(self.claim, now, payload)
+        if scanned_slot:
+            self._reported_slot = slot
         if claim is None: return
         result = {"state": "UNKNOWN", "provider_id": None}
         try:
