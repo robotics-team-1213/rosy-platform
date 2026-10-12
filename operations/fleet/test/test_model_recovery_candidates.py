@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 import hashlib
 import json
+import threading
 
 import pytest
 
@@ -50,7 +51,7 @@ def setup(tmp_path, *, terminal='COMPLETED', trace=True):
     store.complete(scope, 'model-1', worker_id='worker', state=terminal,
         actual_cost_usd=0, summary={'reason': 'MODEL_CHECKED'},
         model_receipt=model_receipt(scope, p, b, checked, profiles=(selected,)) if trace else None)
-    from fleet.incidents.automation.execution.recovery_candidates import RecoveryCandidates
+    from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
     return now, store, scope, RecoveryCandidates(store)
 
 
@@ -64,7 +65,7 @@ def test_candidate_persists_without_charging_or_claiming_execution(tmp_path):
     assert candidate['input_hash'] == recovery_problem().digest
     assert store.case(scope) == before
     assert journal.propose(scope, 'model-1', worker_id='worker') == candidate
-    from fleet.incidents.automation.execution.recovery_candidates import RecoveryCandidates
+    from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
     reopened = RecoveryCandidates(IncidentCaseStore(store.path, clock=lambda: 101))
     assert reopened.candidates(scope) == (candidate,)
 
@@ -141,20 +142,21 @@ def test_closed_candidate_is_historical_and_non_executable(tmp_path):
 
 @pytest.mark.parametrize('seq,stamp', [(2, 'stamp-1'), (1, 'stamp-2'), (True, 'stamp-1')])
 def test_recovery_context_requires_exact_assessment_revision(seq, stamp):
-    from fleet.incidents.automation.execution.recovery_candidates import observed_recovery
+    from fleet.incidents.automation.recovery_candidates import observed_recovery
     snapshot = {'robots': [dict(robot_id='pinky', online=True, state=dict(seq=seq, timestamp=stamp,
         line_follow={'stuck': dict(stuck_id='lane-1', **recovery_context())}))]}
     assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') is None
 
 
 def test_recovery_context_accepts_matching_assessment_revision():
-    from fleet.incidents.automation.execution.recovery_candidates import observed_recovery
+    from fleet.incidents.automation.recovery_candidates import observed_recovery
     snapshot = {'robots': [dict(robot_id='pinky', online=True, state=dict(seq=1, timestamp='stamp-1',
         line_follow={'stuck': dict(stuck_id='lane-1', **recovery_context())}))]}
     assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') == recovery_context()
 
 
-def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path):
+@pytest.mark.parametrize('shutdown_during_write', [False, True])
+def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, monkeypatch, shutdown_during_write):
     from fleet.incidents.automation.worker import IncidentCaseWorker
     from test_incident_case_worker import make_incident_worker, settled
     async def run():
@@ -175,12 +177,52 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path):
         snapshot['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
         snapshot['robots'][0]['state']['line_follow']['stuck']['stuck_id'] = 'lane-1'
         board.observe(snapshot['robots']); board.flush()
-        worker.feed(snapshot); await settled(worker)
+        entered, release = threading.Event(), threading.Event()
+        if shutdown_during_write:
+            original = worker.recovery_candidates.propose
+            def paused(*args, **kwargs):
+                entered.set()
+                if not release.wait(5): raise AssertionError('candidate write was not released')
+                return original(*args, **kwargs)
+            monkeypatch.setattr(worker.recovery_candidates, 'propose', paused)
+        worker.feed(snapshot)
+        if shutdown_during_write:
+            try:
+                assert await asyncio.to_thread(entered.wait, 3)
+                scope = store.active_scopes()[0]
+                closing = asyncio.create_task(worker.aclose())
+                await asyncio.sleep(.02)
+                assert not closing.done()
+            finally:
+                release.set()
+            await closing
+            assert len(worker.recovery_candidates.candidates(scope)) == 1
+            return
+        await settled(worker)
         scope = store.active_scopes()[0]
         assert len(worker.recovery_candidates.candidates(scope)) == 1 and handoffs == []
         assert all('back_and_retry' in p.choices for p, _, _ in seen)
         calls = store.case(scope)['calls']
         worker.feed(snapshot); await settled(worker)
         assert store.case(scope)['calls'] == calls
+        await worker.aclose()
+    asyncio.run(run())
+
+
+def test_new_assessment_cannot_reuse_retained_old_recovery_context(tmp_path):
+    from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
+    from test_incident_case_worker import make_incident_worker
+    async def run():
+        _, _, _, _, board, store, worker, poll, _ = make_incident_worker(tmp_path)
+        worker.recovery_candidates = RecoveryCandidates(store)
+        first = poll()
+        first['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
+        worker._latest_snapshot = first
+        original = worker._problem(board.intervention_assessment('pinky'))
+        assert 'back_and_retry' in original.choices
+        poll(2)
+        current = worker._problem(board.intervention_assessment('pinky'))
+        assert 'back_and_retry' not in current.choices
+        assert worker._fresh(original) is False
         await worker.aclose()
     asyncio.run(run())
