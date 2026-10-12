@@ -602,7 +602,7 @@ class DockingManager:
 
     def _tick_undocking(self, now: float) -> None:
         if self.executor is None:
-            self._finish_undock()
+            self._fail("undock executor unavailable")
             return
         if self._phase is DockPhase.TURNING:
             self._parking_phases.tick_turning(now)

@@ -183,11 +183,10 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
         return
     if not goals.accepted(generation, goal_handle):
         # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
-        # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다.
+        # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다. 취소 뒤 결과까지
+        # 추적해야 pending generation 이 실제로 닫힌다 (CID 없는 goal 포함).
         goal_handle.cancel_goal_async()
-        if native_run_id is not None or (goals.correlation_id(generation) is not None
-                                         and goals.is_cancelled(generation)):
-            attach_result(goal_handle.get_result_async(), generation)
+        attach_result(goal_handle.get_result_async(), generation)
         return
     if native_run_id is None:
         nav.on_goal_accepted()
