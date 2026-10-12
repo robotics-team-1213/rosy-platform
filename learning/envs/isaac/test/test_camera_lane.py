@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 
-@pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due"])
+@pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due",
+                                  "learn_transition", "remember_camera_action"])
 def test_native_runner_preserves_camera_guard_exports(name):
     import camera_checks
     import run_map_rl
@@ -328,6 +329,7 @@ def test_camera_loss_penalizes_last_applied_action_without_a_next_observation():
     ((None, 3), True, False, 'camera_lane_lost'),
     (((2, 1), 3), False, False, 'camera_lane_lost'),
     (((2, 1), 3), False, True, 'time_limit'),
+    (((2, 1), 3), True, True, 'camera_lane_lost'),
     (((2, 1), 3), True, False, 'off_route'),
 ])
 def test_missing_camera_terminal_credit_requires_executed_state_and_camera_loss(

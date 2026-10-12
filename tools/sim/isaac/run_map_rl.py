@@ -23,22 +23,7 @@ from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
 from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision, verify_ground_collision
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due,
-                           remember_camera_action)
-
-
-def learn_transition(policy, previous, state, result):
-    if state is None:
-        if (previous is not None and previous[0] is not None and result['terminated']
-                and not result['truncated'] and result.get('reason') == 'camera_lane_lost'
-                and result.get('camera_failure_reason') == 'camera_target_unavailable'):
-            policy.update(*previous, result['reward'], None, terminated=True)
-            return 'terminal_camera_loss'
-        return 'invalid_camera_observation'
-    if previous is None or previous[0] is None:
-        return 'no_previous_observation'
-    policy.update(*previous, result['reward'], state,
-                  terminated=result['terminated'] or result['truncated'])
-    return 'updated'
+                           remember_camera_action, learn_transition)
 
 
 def episode_phases(train_episodes, *, camera, evaluation_only):
