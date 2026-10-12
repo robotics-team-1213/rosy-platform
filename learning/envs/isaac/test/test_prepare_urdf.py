@@ -90,6 +90,16 @@ def test_invalid_reference_transform_is_rejected_before_any_asset_mutation(xyz, 
     assert ET.tostring(root) == before
 
 
+def test_prepared_asset_uses_the_physical_footprint_root(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    monkeypatch.setattr(prepare_urdf.subprocess, 'run', lambda *a, **k:
+                        SimpleNamespace(stdout=ET.tostring(reference_body(), encoding='unicode')))
+    path = prepare_urdf.prepare(tmp_path / 'pinky.urdf')
+    root = ET.parse(path).getroot()
+    assert root.find("./link[@name='base_footprint']/inertial/mass").get('value') == '.8'
+    assert len(root.find("./link[@name='base_link']")) == 0
+
+
 @pytest.mark.skipif(not shutil.which("xacro"), reason="requires a sourced ROS 2 xacro overlay")
 def test_isaac_render_keeps_sim_collision_and_drops_gazebo_plugins():
     source = prepare_urdf.DESCRIPTION / "urdf/robot.urdf.xacro"
