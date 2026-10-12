@@ -29,7 +29,8 @@ from camera_checks import (camera_tick, camera_episode_usable, camera_admission_
 def learn_transition(policy, previous, state, result):
     if state is None:
         if (previous is not None and previous[0] is not None and result['terminated']
-                and not result['truncated'] and result.get('reason') == 'camera_lane_lost'):
+                and not result['truncated'] and result.get('reason') == 'camera_lane_lost'
+                and result.get('camera_failure_reason') == 'camera_target_unavailable'):
             policy.update(*previous, result['reward'], None, terminated=True)
             return 'terminal_camera_loss'
         return 'invalid_camera_observation'
@@ -455,12 +456,14 @@ def main():
                         speed, angular = decision.linear, decision.angular
                         if lane.manager.status().state == 'LOST' and not result['terminated']:
                             result = dict(result, terminated=True, truncated=False, complete=False,
-                                          reason='camera_lane_lost', reward=result['reward'] - 10.)
+                                          reason='camera_lane_lost', reward=result['reward'] - 10.,
+                                          camera_failure_reason=lane.last.get('reason'))
                     if phase == 'train' and lane is not None:
                         if state is None and result['terminated'] and result['reason'] == 'camera_lane_lost':
-                            terminal_credit = last_applied
-                            credit_previous = (None if last_applied is None else
-                                               (last_applied['state'], last_applied['action']))
+                            terminal_credit = (last_applied if result.get('camera_failure_reason') ==
+                                               'camera_target_unavailable' else None)
+                            credit_previous = (None if terminal_credit is None else
+                                               (terminal_credit['state'], terminal_credit['action']))
                         else:
                             credit_previous = previous
                         learning_step = learn_transition(policy, credit_previous, state, result)

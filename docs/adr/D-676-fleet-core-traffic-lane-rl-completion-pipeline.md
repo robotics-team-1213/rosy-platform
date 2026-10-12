@@ -79,6 +79,6 @@ R23 실제 카메라와 소스 비교에서 Isaac의 단색 바닥과 Gazebo tra
 
 앞의 무효 관측 학습 제외는 무효 관측을 다음 state로 승인하지 않는다는 뜻으로 유지한다. 카메라 학습의 명시적 camera_lane_lost 종료에서는 해당 episode에서 마지막으로 유효 state와 함께 CORE를 통해 전달된 행동에 종료 보상을 한 번 반영한다. 다음 state는 None이며 bootstrap은 0이다. 기존의 state=None 조기 반환은 차선 상실의 실패 보상까지 누락했으므로 이를 구분한다. nonterminal·truncation·다른 종료 이유와 미실행 episode의 무효 관측 거절은 유지한다.
 
-실행 기록은 바퀴 명령 적용 함수의 성공 반환 후 receipt가 해당 후보와 일치하고, 최종 명령이 0이 아니며 CORE 경고와 halted 상태가 없을 때만 보관한다. 단순 cmd_vel_cycle 반환은 fallback ZERO일 수 있어 증거가 아니다. 기록은 episode마다 비우고 종료 trace에 원래 frame·state·action·twist를 남긴다. 이 receipt는 명령 전달 증거이며 실제 이동이나 정책의 인과적 책임을 보장하지 않는다. 차선 상실에는 외부 센서 실패가 섞일 수 있으므로 실패 원인별 trace를 보존하고 이 벌점만으로 조향 성능 향상을 주장하지 않는다.
+실행 기록은 바퀴 명령 적용 함수의 성공 반환 후 receipt가 해당 후보와 일치하고, 최종 명령이 0이 아니며 CORE 경고와 halted 상태가 없을 때만 보관한다. 단순 cmd_vel_cycle 반환은 fallback ZERO일 수 있어 증거가 아니다. 기록은 episode마다 비우고 종료 trace에 원래 frame·state·action·twist를 남긴다. 이 receipt는 명령 전달 증거이며 실제 이동이나 정책의 인과적 책임을 보장하지 않는다. 종료 벌점 연결은 camera_failure_reason이 camera_target_unavailable인 경우로 제한한다. stale·추론·scan 등 외인성 실패는 기존 실패 종료와 정지를 유지하되 조향 행동에 벌점을 연결하지 않고 원인을 trace에 남긴다. 이 벌점만으로 조향 성능 향상을 주장하지 않는다.
 
 관측 freshness·차체 여유·CORE 최종 권한·zero와 물리 정지는 변경하지 않는다. 마지막 실행 기록은 보상 계산에만 사용하고 기억된 목표나 명령으로 재주행하지 않는다. 원격 회귀와 native 종료 보상 readback 뒤 동일 조건 baseline/frozen 정책을 비교하며, 이 수정은 병렬 학습·한 대 완주·두 대 Gazebo Fleet 수용을 대신하지 않는다.

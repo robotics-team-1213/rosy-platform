@@ -56,7 +56,8 @@ def test_camera_terminal_credit_survives_invalid_gap_but_not_episode_reset():
     for frame in (43, 44):
         record = remember_camera_action(record, None, 1, frame, (0., 0.), [(0., 0.)], [], False)
     assert record['frame'] == 42
-    terminal = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost')
+    terminal = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                    camera_failure_reason='camera_target_unavailable')
     assert learn_transition(policy, (record['state'], record['action']), None, terminal) == 'terminal_camera_loss'
     assert policy.updates == 1 and policy.table[(2, 1)][3] == -1.5
     record = None  # The runner resets its ledger at each episode boundary.
@@ -295,7 +296,8 @@ def test_camera_loss_penalizes_last_applied_action_without_a_next_observation():
     from run_map_rl import learn_transition
     policy = CameraQPolicy(seed=17, perception=perception_id())
     policy.table[(3, 1)] = [100.] * 4
-    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost')
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason='camera_target_unavailable')
     assert learn_transition(policy, ((2, 1), 3), None, result) == 'terminal_camera_loss'
     assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
     assert None not in policy.table and policy.table[(3, 1)] == [100.] * 4
@@ -313,9 +315,22 @@ def test_missing_camera_terminal_credit_requires_executed_state_and_camera_loss(
     from camera_lane import CameraQPolicy
     from run_map_rl import learn_transition
     policy = CameraQPolicy(seed=17, perception=perception_id())
-    result = dict(reward=-10., terminated=terminated, truncated=truncated, reason=reason)
+    result = dict(reward=-10., terminated=terminated, truncated=truncated, reason=reason,
+                  camera_failure_reason='camera_target_unavailable')
     assert learn_transition(policy, previous, None, result) == 'invalid_camera_observation'
     assert policy.updates == 0 and policy.table == {}
+
+
+@pytest.mark.parametrize('cause', [None, 'camera_source_stale', 'camera_processing_stale',
+    'learned_camera_unavailable', 'native_scan_unavailable', 'native_scan_unknown', 'native_scan_stale'])
+def test_sensor_failure_is_not_credited_to_steering(cause):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason=cause)
+    assert learn_transition(policy, ((2, 1), 3), None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0 and not policy.table
 
 
 def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
