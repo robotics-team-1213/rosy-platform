@@ -217,13 +217,13 @@
       </details>
       <p class="hint" id="map-calibration-status" role="status" hidden></p>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
-      <div class="legend" id="map-legend" hidden>
-        <span data-legend="grid"><i class="sw free"></i>자유</span>
-        <span data-legend="grid"><i class="sw uncertain"></i>불확실</span>
-        <span data-legend="grid"><i class="sw occupied"></i>점유</span>
-        <span data-legend="grid"><i class="sw unknown"></i>미지</span>
-        <span><i class="sw robot"></i>로봇</span>
-        <span><i class="sw goal"></i>목표</span>
+      <div class="legend ui-legend" id="map-legend" hidden>
+        <span data-legend="grid"><i data-swatch="free"></i>자유</span>
+        <span data-legend="grid"><i data-swatch="uncertain"></i>불확실</span>
+        <span data-legend="grid"><i data-swatch="occupied"></i>점유</span>
+        <span data-legend="grid"><i data-swatch="unknown"></i>미지</span>
+        <span><i data-swatch="robot"></i>로봇</span>
+        <span><i data-swatch="goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
