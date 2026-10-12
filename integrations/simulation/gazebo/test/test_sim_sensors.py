@@ -52,9 +52,9 @@ def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
             header=SimpleNamespace(stamp=SimpleNamespace(sec=stamp, nanosec=0))))
 
     def spin(_node):
-        send('left', 1); send('mid', 1)
+        send('left', 1); send('right', 1)
         assert published == []
-        send('right', 1)
+        send('mid', 1)
         assert published == [[2000] * 3]
         send('mid', 2); send('right', 2)
         assert published == [[2000] * 3]  # Left never reported this frame.
