@@ -300,6 +300,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.incidents.automation.recovery_candidates',
                'fleet.incidents.automation.operating.candidates',
                'fleet.incidents.automation.operating.state',
+               'fleet.stuck.submission.dispatch', 'fleet.stuck.submission.owned',
                'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
