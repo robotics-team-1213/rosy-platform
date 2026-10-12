@@ -27,7 +27,7 @@ config = registry_calibration_config(config, registry, domain='line_follow')
 
 ### D-706~D-713 로컬 통합 착지
 
-통합 브랜치 `feat/reasoning-artifact`는 `3a9f812bd2224fa95491289f2177db5b5cf373c6`로 로컬 main에 착지했다. 기존 main 병합에서 도착한 D-692의 stale gap 표시만 제거한 뒤 lint와 적격 AI PC/Model PC의 두 통합 그룹을 통과했다. 각각 5,860 passed/292 skipped와 452 passed/3 skipped, terminal exit 0/NEW 0이다. 고정 로그는 세션 `logs/reasoning-land-91be5f.txt`, `logs/reasoning-land-f24797.txt`다. 선택기가 FULL로 승격했으므로 전체 CI tier는 여전히 필요하며 local landing은 push·CI·배포·모델/현장 수용을 대신하지 않는다. D-714는 별도 worktree에서 개발해 진행 중 착지의 검증 HEAD를 변경하지 않았다.
+통합 브랜치 `feat/reasoning-artifact`는 `3a9f812bd222`로 로컬 main에 착지했다. 기존 main 병합에서 도착한 D-692의 stale gap 표시만 제거한 뒤 lint와 적격 AI PC/Model PC의 두 통합 그룹을 통과했다. 각각 5,860 passed/292 skipped와 452 passed/3 skipped, terminal exit 0/NEW 0이다. 고정 로그는 세션 `logs/reasoning-land-91be5f.txt`, `logs/reasoning-land-f24797.txt`다. 선택기가 FULL로 승격했으므로 전체 CI tier는 여전히 필요하며 local landing은 push·CI·배포·모델/현장 수용을 대신하지 않는다. D-714는 별도 worktree에서 개발해 진행 중 착지의 검증 HEAD를 변경하지 않았다.
 
 ### D-713 기존 runtime의 pinned dispatcher checkpoint
 
