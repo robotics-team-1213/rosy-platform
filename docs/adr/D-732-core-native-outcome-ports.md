@@ -32,6 +32,10 @@ home→goal은 `kind:home`의 단 하나의 native run을 만든다. 별도 home
 
 상태 응답의 `quiescence`는 `boot_id`, `owner_run_id`(없으면 null), `requested_run_id`, `observed_at`(UTC), `admitting`, `pending_submission`, `actuating_callback`, `lease_active`, `quiescent` 필드를 갖는다. boolean은 실제 owner/transport generation 상태를 잠금 경계에서 관측한다. `quiescent:true`는 요청 identity가 동일 boot의 retained terminal이고 현재 owner가 없으며 앞의 네 실행 가능성이 모두 false일 때만 허용한다. lease 만료 시각이 지났다는 사실만으로 callback이 취소되었다고 보지 않는다. 취소한 backend의 승인·결과 callback이 아직 실행을 살릴 수 있다면 false다. 자료가 없거나 reboot/boot 불일치면 proof를 null로 반환한다. Fleet는 정확한 robot/boot/run/claim generation CAS로 이 proof를 적용하고 새로운 owner가 생기면 해당 적용을 무효화한다. terminal 결과와 quiescence는 별도 증거다.
 
+proof는 추가로 owner 범위의 단조 증가 `owner_generation`과 실제 backend `transport_generation`을 포함한다. owner 승인·취소·종결·lease 변경과 backend pending/handle/callback 변경은 각각 generation을 증가시킨다. 두 잠금 경계의 generation을 전후 비교해 변경이 없었던 관측만 proof로 반환한다. Fleet는 자기 monotonic clock으로 readback RPC 시작부터 SAFE_RELEASE CAS까지 최대2초를 허용하며 wall clock observed_at만으로 freshness를 판정하지 않는다. 이것은 remote CORE와 Fleet DB의 원자적 transaction이라는 주장이 아니다. SAFE_RELEASE는 해당 local claim을 끝내는 읽기 전용 분류이고 이후 motion 권한이 아니다.
+
+조회 이후 다른 native run이 생기는 경쟁을 막기 위해 새로운 선택적 command 필드 `expected_owner_generation`(nonnegative integer)을 해당 기존 goal/home/dock/undock/follow/teleop 본문에 추가한다. 선택적 `expected_boot_id` UUID와 함께만 사용한다. 해당 owner의 실제 승인 잠금/Mode commit 안에서 side effect 전에 둘을 검증하며 불일치는 기존409 `OWNER_GENERATION_CHANGED`로 거절한다. Fleet가 SAFE_RELEASE 후 새 명령을 만들 때는 최신 generation을 다시 읽고 기존 원문·권한·안전 gate와 이 native CAS를 모두 통과해야 한다. 기존 본문에 이 필드가 없으면 legacy 동작을 유지한다. CORE의 다른 owner/mode/lease 배타 검사도 그대로 적용하며 SAFE_RELEASE가 그것을 우회하지 않는다.
+
 기존 manager 반환형, 본문 없는 home/undock, keyword 없는 executor, auth/capability/localization/calibration/readiness/mode/lease 검사는 유지한다. E-stop 해제나 불명 명령 자동 재발행은 추가하지 않는다. CORE만 최종 cmd_vel을 선택한다.
 
 ## 문서와 검증
