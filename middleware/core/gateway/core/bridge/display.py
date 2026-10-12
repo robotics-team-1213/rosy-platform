@@ -12,6 +12,8 @@ the decide half.
 
 from __future__ import annotations
 
+import enum
+import math
 import socket
 from typing import Any, Callable, Optional
 
@@ -71,6 +73,46 @@ def api_address(port: Any, host: Optional[str], fallback_host: str) -> str:
     return f"http://{host or fallback_host}:{int(port)}"
 
 
+_LEVELS = frozenset({"ok", "warning", "critical", "deep"})
+
+
+def _finite(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _display_percent(snapshot) -> Optional[float]:
+    """What a screen may call the remaining charge.
+
+    While charging is confirmed, this is the held pre-charge estimate.
+    The live voltage percent stays on ``snapshot.battery`` for policy.
+    ``BatteryStatus`` declares both fields (D-688). Read them directly (C6).
+    """
+    status = snapshot.battery_status
+    if status.charging:
+        shown = _finite(status.shown_percent)
+        if shown is not None:
+            return shown
+    return _finite(snapshot.battery.percent)
+
+
+def _screen_voltage(snapshot) -> Optional[float]:
+    voltage = _finite(snapshot.battery.voltage)
+    if voltage is None or not 0.0 <= voltage <= 30.0:
+        return None
+    return voltage
+
+
+def _screen_level(snapshot) -> Optional[str]:
+    """SAF-005 level name, or None. Production ``level`` is a ``BatteryLevel``."""
+    level = snapshot.battery_status.level
+    if level is None:
+        return None
+    name = level.value if isinstance(level, enum.Enum) else level
+    return name if name in _LEVELS else None
+
+
 def info_payload(snapshot, status, *, health: str, address: str,
                  hold_s: float) -> dict[str, Any]:
     """The `display/info` body.
@@ -82,9 +124,9 @@ def info_payload(snapshot, status, *, health: str, address: str,
     battery, which is the one thing it must not say by accident.
     """
     battery = snapshot.battery
+    percent = _display_percent(snapshot)
     return {
-        "battery_percent": (round(battery.percent, 1)
-                            if battery.percent is not None else None),
+        "battery_percent": round(percent, 1) if percent is not None else None,
         "battery_voltage": (round(battery.voltage, 2)
                             if battery.voltage is not None else None),
         "robot_id": snapshot.robot_id,
@@ -123,6 +165,7 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
     화면이 "DOCKING" 대신 "CHARGING"·"DOCKED" 같은 실제 상태를 말하게 한다.
     """
     battery = snapshot.battery
+    percent = _display_percent(snapshot)
     velocity = snapshot.velocity
     navigating = snapshot.mode.value == "NAVIGATION"
     # C6 — DockState 는 StateSnapshot 이 보장한다(schemas default_factory). reach 없이
@@ -136,8 +179,7 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
         "docking_state": docking_state,
         "speed": (round(velocity.linear, 2)
                   if velocity.linear is not None else None),
-        "battery_percent": (round(battery.percent, 1)
-                            if battery.percent is not None else None),
+        "battery_percent": round(percent, 1) if percent is not None else None,
         "battery_voltage": (round(battery.voltage, 2)
                             if battery.voltage is not None else None),
         "charging": snapshot.battery_status.charging,
@@ -186,7 +228,8 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
     D-394) and the wake card only while CORE keeps its window open. Same
     rounding contract as the cards: ``drive_payload``/``info_payload`` build them.
     """
-    battery = snapshot.battery
+    percent = _display_percent(snapshot)
+    voltage = _screen_voltage(snapshot)
     mode = snapshot.mode.value
     drive = None
     if mode != "IDLE":
@@ -205,8 +248,10 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "power_mode": power_mode.lower() if isinstance(power_mode, str) else None,
         "activity_kind": snapshot.activity.kind if snapshot.activity is not None else None,
         "docking_state": snapshot.docking.state.value,
-        "battery_percent": round(battery.percent, 1) if battery.percent is not None else None,
+        "battery_percent": round(percent, 1) if percent is not None else None,
         "battery_charging": snapshot.battery_status.charging,
+        "battery_voltage": round(voltage, 2) if voltage is not None else None,
+        "battery_level": _screen_level(snapshot),
         "line_follow_mode": line_follow.mode,
         "line_follow_state": line_follow.state,
         "caution": face_cautions(snapshot),
@@ -251,6 +296,7 @@ def _coarse(body: dict) -> dict:
 
     coarse = {key: value for key, value in body.items() if key != "written_at"}
     coarse["battery_percent"] = rounded(coarse.get("battery_percent"), 0)
+    coarse["battery_voltage"] = rounded(coarse.get("battery_voltage"), 1)
     for key in ("drive", "wake"):
         card = coarse.get(key)
         if isinstance(card, dict):
