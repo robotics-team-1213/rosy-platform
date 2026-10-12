@@ -8,9 +8,9 @@ import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'),
-               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test')]
+               str(ROOT / 'operations/decision/src'), str(ROOT / 'learning/registry/policy/test')]
 from test_reasoning_registry import opened, signed
 from test_reasoning_candidate import subject as candidate_api
 from test_judgment_calibration import rows, limits, digest, manifest
