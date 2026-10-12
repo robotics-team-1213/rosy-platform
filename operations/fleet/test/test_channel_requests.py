@@ -4,7 +4,7 @@ import hmac
 import json
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from fleet.server.channel_requests import ChannelConfig, ChannelRequests, install_channel_routes
@@ -54,8 +54,11 @@ def test_durable_dedup_owner_read_and_edit_rejection(tmp_path):
     assert client.get("/api/fleet/channel-requests").json()["rows"] == [first.json()]
     import sqlite3
     with sqlite3.connect(journal.path) as conn:
-        assert conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == [
-            ("fleet_channel_requests",)]
+        assert set(conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()) == {
+            ("fleet_channel_requests",),("fleet_channel_withdrawals",)}
+        assert conn.execute('SELECT reason FROM fleet_channel_withdrawals').fetchall()==[('MESSAGE_CHANGED',)]
+    with pytest.raises(HTTPException):
+        restarted.current_receipt(first.json())
 
 
 @pytest.mark.parametrize("changes", [

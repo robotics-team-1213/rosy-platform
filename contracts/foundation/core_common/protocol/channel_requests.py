@@ -38,6 +38,20 @@ class ChannelRequestList(BaseModel):
     rows: list[ChannelRequestReceipt] = Field(max_length=50)
 
 
+class ChannelModelResult(BaseModel):
+    """D-720 advisory status receipt; carries no admission or action grant."""
+    model_config=ConfigDict(extra='forbid',frozen=True)
+    request_id:str
+    state:Literal['PENDING','RUNNING','ANSWERED','HOLD','UNKNOWN','SUPERSEDED']
+    profile_set_hash:str=Field(pattern=r'^[0-9a-f]{64}$')
+    input_hash:str=Field(pattern=r'^[0-9a-f]{64}$')
+    created_at:FiniteFloat
+    deadline:FiniteFloat
+    completed_at:FiniteFloat|None
+    result:dict|None
+    action_admissible:Literal[False]=False
+
+
 class ChannelNavigationCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     robot_id: str = Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9_.-]+$")

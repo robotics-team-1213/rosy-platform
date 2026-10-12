@@ -4,7 +4,7 @@ import json
 import math
 import tempfile
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from deploy.site.deliberation_sandbox import SandboxLauncher, bounded_process, cleanup_scope, protect_cleanup
@@ -57,7 +57,12 @@ class GlmOpenCodeLauncher:
         if profile is not None or admission is not None or billing_policy is not None:
             from . import deliberation_glm_receipt as bridge
             from rosy.decision.deliberation.profiles import ModelProfile
-            if type(profile) is not ModelProfile or profile != bridge.codec.model_profile(profile.profile_revision):
+            if type(profile) is not ModelProfile:
+                raise ValueError('EXACT_GLM_PROFILE_REQUIRED')
+            selected = bridge.codec.status_model_profile if profile.domains == ('fleet_status',) else bridge.codec.model_profile
+            expected = bridge.status_capabilities() if profile.domains == ('fleet_status',) else bridge.CAPABILITIES
+            if (profile != selected(profile.profile_revision) or admission is not None
+                    and replace(admission,ready=False,isolated=False,cost_verified=False) != expected):
                 raise ValueError('EXACT_GLM_PROFILE_REQUIRED')
             if billing_policy is not None:
                 billing_policy.validate(bridge.digest(asdict(profile)))
@@ -72,8 +77,9 @@ class GlmOpenCodeLauncher:
 
     @property
     def adapter_capabilities(self):
-        from .deliberation_glm_receipt import CAPABILITIES
-        return CAPABILITIES if self._admission is None else self._admission
+        from .deliberation_glm_receipt import CAPABILITIES, status_capabilities
+        if self._admission is not None: return self._admission
+        return status_capabilities() if self.profile is not None and self.profile.domains == ('fleet_status',) else CAPABILITIES
 
     def __enter__(self):
         return self
