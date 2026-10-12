@@ -60,6 +60,18 @@ def test_odometry_moves_the_target_into_the_current_pose():
     assert turned > straight + 0.05      # turned left since the frame: the same point now lies right
 
 
+def test_reset_cannot_republish_the_previous_turn_on_a_fresh_straight_lane():
+    steer = DrivableSteer()
+    corner = _lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.04, x_max=0.33)
+    assert steer.update(corner, 1, G, XO, HALF)[2]["strategy"] == "drivable_turn_left"
+    steer.reset()  # Called when camera evidence is invalidated.
+    straight = _lane(HALF, -HALF)
+    error, confidence, info = steer.update(straight, 2, G, XO, HALF)
+    fresh_error, fresh_confidence, fresh_info = DrivableSteer().update(straight, 2, G, XO, HALF)
+    assert (error, confidence, info["strategy"], info.get("target_now_m")) == (
+        fresh_error, fresh_confidence, fresh_info["strategy"], fresh_info.get("target_now_m"))
+
+
 def test_only_a_wall_within_two_cm_of_the_body_front_invents_a_closed_way():
     way = _lane(0.5, -HALF)                 # open straight ahead in the camera, wide to the left
     distant = DrivableSteer().update(way, 1, G, XO, HALF, wall_ahead_m=0.18)[2]
