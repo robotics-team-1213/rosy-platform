@@ -92,6 +92,8 @@ def main():
         str(target/'deploy/site/requirements-fleet.txt'))
     # Fixed-code local model readback establishes connection admission, never action calibration.
     env={'PATH':'/usr/bin:/bin','PYTHONDONTWRITEBYTECODE':'1',
+         'XDG_RUNTIME_DIR':f'/run/user/{account.pw_uid}',
+         'DBUS_SESSION_BUS_ADDRESS':f'unix:path=/run/user/{account.pw_uid}/bus',
          'PYTHONPATH':os.pathsep.join((str(target),str(target/'operations/decision/src'),str(target/'contracts/foundation')))}
     probe=('from deploy.ai_pc.deliberation_ollama import loaded,exchange;'
            'loaded(exchange("/api/ps",None,5));print("PINNED_LOCAL_MODEL_OK")')
@@ -124,6 +126,11 @@ def main():
         evidence=json.loads(proof.read_text())
         if set(evidence)!={'reviewer_admission','billing_policy'}:raise SystemExit('invalid reviewer evidence')
         cfg.update(evidence)
+        run('/usr/bin/loginctl','enable-linger','rosy-deliberation')
+        run('/usr/bin/systemctl','start',f'user@{account.pw_uid}.service')
+        checked=subprocess.run(['/usr/sbin/runuser','-u','rosy-deliberation','--',str(venv/'bin/python'),
+            '-m','deploy.site.deliberation_preflight'],env=env,check=True,capture_output=True,text=True,timeout=30)
+        if json.loads(checked.stdout)['state']!='PASS_HOST_OFFLINE_ONLY':raise SystemExit('sandbox not admitted')
         # Verify the actual protected key fingerprint without printing or copying the credential.
         probe=('import json;from dataclasses import asdict;'
             'from deploy.ai_pc import deliberation_glm_receipt as b;'

@@ -358,7 +358,15 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        55_664,
+        56_056,
+        "split: D-720 independently re-judged by pipeline_review on 2026-10-12 at56056. "
+        "Durable channel-model storage, bounded worker and fixed SSH/runtime composition remain "
+        "separate small server owners; original receipt/outbox and CORE authority are unchanged. "
+        "Keep +150, every file/zero-growth/hard ceiling and password/full-progress/observe/server/UI "
+        "obligation. Before further independent channel runtime growth, review an actual channel "
+        "subpackage responsibility split with installed consumers and simultaneous parent/unit "
+        "measurements. Source/runtime admission is separate from structural approval. "
+        "docs/plans/2026-10-12-discord-deliberation-runtime.md. Previous55664 verdict: "
         "split: D-699 extracts the existing observation/event journal into fleet.observe, "
         "counted once by the innermost rule. Keep the independently reviewed 55664+150 parent allowance. "
         "docs/plans/2026-10-12-observation-journal-owner.md records source and installed "
