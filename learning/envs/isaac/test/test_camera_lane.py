@@ -7,6 +7,13 @@ import sys
 import numpy as np
 import pytest
 
+
+@pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due"])
+def test_native_runner_preserves_camera_guard_exports(name):
+    import camera_checks
+    import run_map_rl
+    assert getattr(run_map_rl, name) is getattr(camera_checks, name)
+
 ROOT = Path(__file__).resolve().parents[4]
 for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
              'contracts/skill/src', 'middleware/core/services', 'middleware/core/events',
@@ -19,6 +26,130 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
+    import camera_lane
+    from control.sensing.perception.camera_ground import ground_plane
+    from control.sensing.perception.lane import LaneObservation
+    model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda frame:
+        (np.ones((240, 320), np.uint8), 'drivable', {'crosswalk_mask': np.zeros((240, 320), np.uint8)}, 1.))
+    lane = camera_lane.LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                                         camera_x=.03317, clock=lambda: 10.)
+    def observed(*args, **kwargs):
+        lane.keeper.last = {'boundaries': [], 'crosswalk': (.1, .2)}
+        return LaneObservation(.1, .9)
+    monkeypatch.setattr(lane.keeper, 'update', observed)
+    monkeypatch.setattr(camera_lane, 'keep_step', lambda *args: (None, False))
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+        evidence = lane.manager._observation.containment
+        assert evidence.ground_source == 'ISAAC' and evidence.stamp == 1.
+        assert evidence.crosswalk.near_m == .1
+        assert evidence.uncertainty_m is None and evidence.crosswalk_uncertainty_m is None
+        assert lane.last['containment'] == evidence.model_dump()
+        lane.invalidate('camera_target_unavailable')
+        assert lane.state() is None and lane.last['model_used'] is False
+    finally:
+        lane.close()
+
+
+def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
+    import camera_lane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = camera_lane.LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    seen = []
+    original = camera_lane.keep_step
+    def capture(*args):
+        seen.append(args[8])
+        return original(*args)
+    monkeypatch.setattr(camera_lane, 'keep_step', capture)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is True
+        assert lane.manager._return_view.points == ()
+        assert len(lane.manager._return_view.unknown) == 640
+        assert lane.manager._return_source_high_water_ns == 1_000_000_000
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=1., source_now=1., pose=(0., 0., 0.))
+        assert seen == [(None, 1., {'left': None, 'right': None})]
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is False
+        assert lane.state() is None
+        stale = {**sample, 'source_stamp_ns': 2_000_000_000, 'source_now_ns': 3_000_000_000}
+        assert lane.observe_scan(stale, body=NOMINAL_BODY) is False
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('age_ns,accepted', [(0, True), (250_000_001, False), (-1_000_000, False)])
+def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns, accepted):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    source_now = 241 / 240
+    stamp_ns = round(source_now * 1e9) - age_ns
+    assert source_now < round(source_now * 1e9) / 1e9
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=stamp_ns)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY)
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=source_now, source_now=source_now, pose=(0., 0., 0.))
+        assert (lane.state() is not None) is accepted
+        if not accepted:
+            assert lane.last['reason'] == 'native_scan_stale'
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('distance,moving', [(.5, True), (.075, False), (float('inf'), False)])
+def test_native_body_sweep_uses_the_actual_scan_and_holds_unknown(distance, moving):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda frame: (way, 'drivable', {}, 1.)),
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317,
+        clock=lambda: 10., body=NOMINAL_BODY)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    sample['ranges'] = [distance] * 640
+    try:
+        assert lane.manager.config.body_stop_known
+        assert lane.manager.config.obstacle_mode == 'path'
+        admitted = lane.observe_scan(sample, body=NOMINAL_BODY)
+        if admitted:
+            lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                         stamp=1., source_now=1., pose=(0., 0., 0.))
+        decision = lane.manager.tick_gain(10., gain=1.)
+        assert (decision.linear > 0.) is moving
+        if distance == float('inf'):
+            assert not admitted and lane.state() is None
+            assert lane.last['reason'] == 'native_scan_unknown'
+        else:
+            assert admitted and lane.manager._scan_points
+        with pytest.raises(ValueError, match='geometry differ'):
+            lane.observe_scan(sample, body=replace(NOMINAL_BODY, rotation_radius_m=.1))
+    finally:
+        lane.close()
+
+
 @pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
 def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     import math
@@ -29,7 +160,7 @@ def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     wrap = lambda angle: math.degrees(math.atan2(math.sin(angle), math.cos(angle)))
     assert guide[0] == pytest.approx(wrap(math.atan2(-.3, .1) - yaw))
     assert guide[3] == pytest.approx(wrap(-yaw))
-    assert guide[1:3] == (17., True)
+    assert guide[1:3] == (17., False)
     assert guide[4:] == (.012, .03)
 
 
@@ -52,6 +183,28 @@ def test_missing_camera_observation_is_not_a_learning_state():
         assert lane.state() is None
     finally:
         lane.close()
+
+
+def test_unusable_training_episode_preserves_failure_and_allows_later_valid_learning():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import camera_episode_usable, learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    assert camera_episode_usable('train', 0) is False
+    assert learn_transition(policy, ((3, 1), 1), None,
+                            dict(reward=-10., terminated=True, truncated=False)) == 'invalid_camera_observation'
+    assert policy.updates == 0 and policy.table == {}
+    assert camera_episode_usable('train', 1) is True
+    assert learn_transition(policy, ((3, 1), 1), (3, 1),
+                            dict(reward=1., terminated=True, truncated=False)) == 'updated'
+    assert policy.updates == 1
+
+
+@pytest.mark.parametrize('phase', ['baseline', 'eval'])
+def test_camera_admission_still_rejects_an_unusable_baseline_or_evaluation(phase):
+    from run_map_rl import camera_episode_usable
+    assert camera_episode_usable(phase, 1) is True
+    with pytest.raises(RuntimeError, match='candidate not accepted'):
+        camera_episode_usable(phase, 0)
 
 
 def test_learning_state_expires_with_source_age_and_processing_time():
@@ -407,6 +560,34 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     out = lane.manager.tick_gain(10., gain=1.7)
     assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
     assert lane.last['reason'] == 'camera_target_unavailable'
+    assert 'camera_target' in lane.last
+    import json
+    json.dumps(lane.last, allow_nan=False)
+    lane.close()
+
+
+def test_camera_failure_snapshots_preserve_distinct_reasons_without_unbounded_output():
+    from run_map_rl import camera_snapshot_due
+    current = dict(reason='camera_target_unavailable', strategy='drivable_pivot_right')
+    key = (current['reason'], current['strategy'])
+    assert camera_snapshot_due(0, {}, set())
+    assert not camera_snapshot_due(1, dict(reason=None, strategy='drivable_centre'), set())
+    assert camera_snapshot_due(1, current, set())
+    assert not camera_snapshot_due(2, current, {key})
+    assert camera_snapshot_due(2, dict(reason='native_scan_unknown'), {key})
+    assert not camera_snapshot_due(3, current, {(str(i), None) for i in range(8)})
+
+
+@pytest.mark.parametrize('phase,visible,learned,expected', [
+    ('train', 0, 0, None), ('baseline', 1, 0, None), ('eval', 1, 1, None),
+    ('baseline', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 1, 0, 'evaluation visited no learned state'),
+])
+def test_failed_camera_heading_remains_rejected_when_later_headings_are_measured(phase, visible, learned, expected):
+    from run_map_rl import camera_admission_error
+    error = camera_admission_error(phase, visible, learned)
+    assert error is None if expected is None else expected in error
 
 
 def test_inference_wall_time_cannot_refresh_an_old_camera_frame():

@@ -39,8 +39,8 @@ def request(data):
         profile_id = payload.pop('profile_id')
         previous = BoundProfile(primary_profile(payload['profile_revision']), problem.digest)
         checked = judgment(problem, previous, payload, missing_allowlist=missing)
-        if (profile_id != previous.profile.profile_id or problem.fleet_choice is None
-                or checked.choice is None or checked.choice == problem.fleet_choice
+        # Fleet owns review admission; a bound primary can also need calibration review.
+        if (profile_id != previous.profile.profile_id or checked.choice is None
                 or 'unsafe' in checked.payload['objections']):
             raise ValueError('INVALID_VERSIONED_GLM_PRIOR')
         pairs.append((previous, checked))

@@ -18,6 +18,21 @@ def ground():
         principal_x=160., principal_y=120., max_range_m=1.)
 
 
+def test_isaac_does_not_inherit_gazebo_detector_error():
+    from core_common.protocol.lane_containment import LaneContainmentEvidence
+    keeper = {'boundaries': [], 'crosswalk': (.1, .2)}
+    raw = containment_payload(keeper, ground(), stamp=1., source='ISAAC', camera_x=.033,
+                              crosswalk_uncertainty=True)
+    evidence = LaneContainmentEvidence.model_validate(raw)
+    assert evidence.ground_source == 'ISAAC'
+    assert evidence.stamp == 1. and evidence.crosswalk.near_m == .1
+    assert evidence.uncertainty_m is None and evidence.crosswalk_uncertainty_m is None
+    gazebo = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033,
+                                 crosswalk_uncertainty=True)
+    assert gazebo['geometry_id'] != raw['geometry_id']
+    assert gazebo['uncertainty_m'] > 0 and gazebo['crosswalk_uncertainty_m'] > 0
+
+
 def test_payload_preserves_original_image_and_measured_support():
     keeper = {"boundaries": [dict(selected=True, side="left",
                 ends_m=[[.2,.1],[.4,.12]])]}

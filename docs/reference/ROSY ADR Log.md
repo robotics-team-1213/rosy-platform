@@ -673,12 +673,14 @@
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 | Accepted (source design only, 2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
+| D-676 | Fleet 신호·CORE 교통 gate·차선 RL의 두 Pinky 완주 파이프라인 | Accepted (2026-10-12) |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 | D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY | Accepted |
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-692 | Native Isaac 카메라 경계 관측 출처 | Accepted |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
 | D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
@@ -693,6 +695,16 @@
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
 | D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 | Accepted |
+| D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
+| D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
+| D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
+| D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
+| D-711 | 새 사건 생성 허가와 기존 pinned 실행 분리 | Accepted |
+| D-712 | Fleet 새 사건의 영속 선택과 원자적 배정 | Accepted |
+| D-713 | 기존 Fleet runtime의 pinned 모델 worker 분배 | Accepted |
+| D-714 | 고정 프로파일 파일과 설치 제공자 구성 결속 | Accepted |
+| D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
+| D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -799,6 +811,11 @@
 - 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
 - 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
 
+## D-692 · Native Isaac 카메라 경계 관측 출처
+
+- 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
+- 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
+- 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.
 ## D-686 — Fleet 초기 계정과 첫 로그인 비밀번호 변경
 
 - 상태: Accepted (2026-10-12, 사용자 지시).
@@ -886,3 +903,62 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 
 Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 숨기지 않는다. 최종 속도와 불필요 모델 개입·전체 운영 coverage를 구분한다. 전문은 [D-704](../adr/D-704-pinky-final-velocity-evidence-boundary.md).
 
+## D-706 — 판정 후보와 전체 프로파일·독립 보정 입력 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 registry 소유자의 reasoning 후보에서 전체 모델 프로파일과 domain별 독립 보정 원본·재계산 결과를 결속한다. seal된 후보나 offline PASS를 신뢰된 승인·운영 전환·현장 수용으로 해석하지 않는다. 전문은 [D-706](../adr/D-706-reasoning-candidate-binding.md).
+
+## D-707 — 판정 후보 snapshot과 범위가 고정된 승인 receipt
+
+**Status:** Accepted (2026-10-12, source contract)
+
+판정 후보 snapshot·상태와 감사 chain을 보존하고 외부 검증 receipt 및 원장 head CAS로 보정 승인·폐기를 검증한다. 운영 전환·물리 authority와 구분한다. 전문은 [D-707](../adr/D-707-reasoning-registry-approval.md).
+
+## D-709 — 승인 원장과 Fleet 보정 포트 연결
+
+**Status:** Accepted (2026-10-12, source contract)
+
+root orchestration에서 영속 승인 원장과 기존 Fleet 보정 포트를 구성하며 정확한 profile/domain과 현재 신뢰를 재검증한다. 실제 factory/worker에서 승인·폐기·정상 무호출을 확인한다. 전문은 [D-709](../adr/D-709-reasoning-fleet-calibration-bridge.md).
+
+## D-710 — Incident worker의 profile·CORE 소유 scope 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+공유 DB의 다른 profile/owner 사건과 최종 인수를 worker가 대신 종료·처리하지 않도록 기존 CaseScope 소유권을 분리한다. 운영 revision 전환·새 사건 배정과는 구분한다. 전문은 [D-710](../adr/D-710-incident-profile-scope-isolation.md).
+
+## D-711 — 새 사건 생성 허가와 기존 pinned 실행 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 실행·예산은 보존하면서 prepare_receipt와 poll 경로의 새 사건 생성만 별도 local predicate로 제한한다. 영속 전환·원자적 사건 배정 완료와 구분한다. 전문은 [D-711](../adr/D-711-incident-new-case-admission.md).
+## D-705 — Incident 실행 책임과 운영 보정 포트
+
+**Status:** Accepted (2026-10-12, source contract)
+
+bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 artifact/hash로 production 보정 검사를 연결한다. 미수용 판정은 제한 검토/읽기만 수행하며 물리 authority·승격을 얻지 않는다. 전문은 [D-705](../adr/D-705-incident-execution-calibration-port.md).
+
+
+## D-712 — Fleet 새 사건의 영속 선택과 원자적 배정
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 SQLite에서 current/previous 선택과 revision CAS·복귀를 기록하고 새 사건 배정을 같은 트랜잭션으로 결속한다. 선택과 모델 수용·안전 권한은 구분한다. 전문은 [D-712](../adr/D-712-incident-transactional-profile-routing.md).
+
+## D-713 — 기존 Fleet runtime의 pinned 모델 worker 분배
+
+**Status:** Accepted (2026-10-12, source contract)
+
+같은 사건 DB와 기존 loop/outbox에서 기존 사건의 pinned worker와 새 사건의 현재 선택 worker를 분배한다. 전문은 [D-713](../adr/D-713-pinned-incident-profile-dispatcher.md).
+
+## D-714 — 고정 프로파일 파일과 설치 제공자 구성 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+별도 파일 SHA와 전체 프로파일을 설치한 제공자 구성에 결속하고 기존 runtime 설정만 만든다. 전문은 [D-714](../adr/D-714-frozen-incident-profile-installation-binding.md).
+
+## D-715 — 원장 사건 inventory와 독립 비교의 누락 검증
+
+**Status:** Accepted (2026-10-12, source contract)
+
+읽기 전용 원장 목록과 별도 고정 digest로 평가 사건 누락·변경을 거절한다. 전문은 [D-715](../adr/D-715-independent-incident-case-inventory.md).
