@@ -332,8 +332,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
 - 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
 - 2026-10-12 · uncommitted · docs: 자연어 요청을 통합 규칙집에 연결
 - 2026-10-12 · uncommitted · docs: 공개 트리에서 실험실 주소를 뺀다
 - 2026-10-12 · uncommitted · docs(adr): D-729 바닥 한 번 뒤의 복귀
-- 2026-10-12 · 0a690a83b · D-676 카메라 종료 보상 구분
