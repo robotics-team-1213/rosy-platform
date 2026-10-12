@@ -503,7 +503,9 @@ def test_two_workers_loser_cannot_hold_or_release_winning_pending_rpc(tmp_path,l
         async def state():return await preflight('state',oldstate)
         async def post(path,body):
             check_dispatch(path=path);f.writes.append(path);sent.set();await release_rpc.wait()
-            return {'accepted':True,'mode':'NAVIGATION'}
+            return {'accepted':True,'mode':'NAVIGATION','operation':{'run_id':str(uuid4()),
+                'boot_id':body['expected_boot_id'],'kind':'home','correlation_id':body['correlation_id'],
+                'phase':'SUBMITTED','result':None,'reason':None}}
         f.client.capabilities=caps;f.client.state=state;f.client._post=post
         rid=f.receipt['request_id']
         losing=asyncio.create_task(second.step(rid),name='loser')

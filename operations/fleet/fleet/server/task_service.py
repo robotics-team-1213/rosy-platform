@@ -40,7 +40,7 @@ class FleetTaskService:
         self.core_events = None
 
     def bind_native_receipt(self, task_id, attempt_id, robot_id, receipt):
-        from fleet.server.task_results import bind_native_receipt
+        from fleet.server.channel.execution.outcomes.task_receipt import bind_native_receipt
         if bind_native_receipt(self.store, task_id, attempt_id, robot_id, receipt) and self.core_events is not None:
             operation = receipt['operation']
             for event in self.core_events.native_events(robot_id, operation['boot_id'], operation['run_id']):
