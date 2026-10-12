@@ -8,7 +8,7 @@
 
 | 층위 | 실행과 관측 | 한계 |
 |---|---|---|
-| 원격 소스·실제 Chromium 회귀 | `32798ee0bebdb3169251a3026cbc56d2cf460e11`에서 `test_self_profile.py`, `test_password_session.py`, `test_fleet_account_browser.py`, `test_password_login_browser.py`: **104 passed**, exit 0. `known_failures.py`: NEW 0 | 모델 PC, 2 cores/6 GB 하한을 충족한 배치. 가짜 로봇·격리 계정이며 실제 사용자 로그인 증거는 아님 |
+| 원격 소스·실제 Chromium 회귀 | commit `32798ee0bebdb3169251a3026cbc56d2cf460e11` 에서 `test_self_profile.py`, `test_password_session.py`, `test_fleet_account_browser.py`, `test_password_login_browser.py`: **104 passed**, exit 0. `known_failures.py`: NEW 0 | 모델 PC, 2 cores/6 GB 하한을 충족한 배치. 가짜 로봇·격리 계정이며 실제 사용자 로그인 증거는 아님 |
 | 실제 설치 이미지 | source `93aaf437ffb188ad0c69bd5aa4398b0de8e96922`, Fleet image ID `sha256:c0525fb08ed907f3ea66410f63031dae9d796806b2f9ad55fb12497f247f374b`. 동일 이미지의 일회용 컨테이너에서 최초 변경, 프로필 저장, 일반 변경, 옛 세션 거부, 앱 재생성 후 유지, 권한 주입 거부, 로그아웃 **PASS** | `--network none`, 운영 볼륨·비밀 마운트 없음, read-only root, 임시 DB, UID 10001, CPU 2/메모리 6 GB 제한. 운영 사용자 데이터가 아닌 격리 검사 |
 | 설치 후보 CI | [CI 38207734288](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38207734288), [사이트 후보 빌드 38207734299](https://github.com/robotics-team-1213/rosy-platform/actions/runs/38207734299): completed/success | 해당 설치 소스의 증거이며 이번 문서 변경의 CI로 대체하지 않음 |
 | 실제 HTTPS | SSH의 별도 관리자 경로로 읽은 사이트 공개 CA를 사용하고 TLS 체인·유효기간·인증서 호스트 이름 검증을 켬. `/healthz`, `/api/fleet/auth/connection`, 네 Console 문서, 로그인·프로필 문서 총 **8개 HTTP 200** | 승인된 주소에 연결하면서 SNI/HTTP Host는 인증서 이름을 유지. 운영 PC의 자동 DNS나 브라우저 신뢰 저장소 증거는 아님. 폐기 상태는 별도 미확인 |
