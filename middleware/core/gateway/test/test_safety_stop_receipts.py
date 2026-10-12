@@ -56,6 +56,20 @@ def test_safety_stop_empty_owner_is_only_ack(core_client):
     assert services.safety.estop
 
 
+@pytest.mark.parametrize("owner_name", ["nav", "docking", "swarm", "command"])
+def test_missing_native_owner_still_runs_real_safety_latch(core_client, monkeypatch, owner_name):
+    client, services = core_client()
+    services.modes.transition(Mode.MANUAL)
+    command = services.command
+    assert command.teleop(0.1, 0)[0]
+    monkeypatch.delattr(services, owner_name)
+    response = client.post("/api/v1/safety/stop", headers=VIEWER)
+    assert response.status_code == 200
+    assert response.json() == {"estop": True, "operations": []}
+    assert services.safety.estop and services.modes.mode is Mode.EMERGENCY
+    assert command.native.current.result == "CANCELED"
+
+
 @pytest.mark.parametrize("missing", ["pruned", "reboot", "later_owner"])
 def test_safety_stop_never_substitutes_unknown_or_later_identity(core_client, monkeypatch, missing):
     client, services = core_client()
