@@ -133,3 +133,37 @@ def test_inventory_producer_cli_uses_readonly_source_and_exclusive_output(tmp_pa
     assert len(raw) <= 1024 * 1024 and raw.endswith(b'\n') and not raw.endswith(b'\r\n')
     assert data['digest'] == run.stdout.strip() and store.case(scope) == before
     assert subprocess.run(command, capture_output=True).returncode == 1 and output.read_bytes() == raw
+
+
+def test_window_is_end_exclusive_and_other_owner_policy_profile_are_excluded(tmp_path):
+    store, scope, profiles = fixture(tmp_path)
+    for selected in (replace(scope, case_id='owner', owner_id='arm'),
+                     replace(scope, case_id='policy', policy_revision='other'),
+                     replace(scope, case_id='profile', profile_sha256='f' * 64)):
+        store.begin_case(selected, store_budget())
+    from fleet.incidents.automation.store import CaseBudget
+    store.begin_case(replace(scope, case_id='at-end'), CaseBudget(201, 231, 0, 0, 0))
+    assert [row['scope']['case_id'] for row in inventory(store, scope, profiles)['records']] == ['case']
+
+
+def test_resealed_metadata_still_must_match_actual_export(tmp_path):
+    cohort, exports = evidence(tmp_path)
+    from fleet.incidents.automation.store import IncidentCaseStore, CaseScope
+    store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: 101)
+    scope = CaseScope(**exports[0]['case']['scope'])
+    receipt = inventory(store, scope, exports[0]['case']['profiles'])
+    receipt['records'][0]['reason'] = 'OTHER_REASON'
+    receipt['digest'] = consumer().digest(dict(scope=receipt['scope'], records=receipt['records']))
+    with pytest.raises(ValueError, match='INVENTORY_CASE_STATE_DIFFERS'):
+        consumer().compare_with_inventory(cohort, exports, [receipt], expected_digests=[receipt['digest']])
+
+
+def test_oversized_population_is_rejected_instead_of_truncated(tmp_path):
+    store, scope, profiles = fixture(tmp_path)
+    from dataclasses import asdict
+    from rosy.decision.deliberation import canonical
+    with store._transaction() as db:
+        db.executemany('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
+            [(scope.subject_id, f'case-{index}', canonical(asdict(replace(scope, case_id=f'case-{index}'))),
+              canonical(asdict(store_budget())), 'ACTIVE', 'OPEN', 0, 0, 0, 0) for index in range(1000)])
+    with pytest.raises(ValueError, match='INVENTORY_CASE_LIMIT'): inventory(store, scope, profiles)
