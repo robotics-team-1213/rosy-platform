@@ -61,6 +61,12 @@ def test_complete_protected_semantic_proof_is_admitted(monkeypatch):
     assert broker.configuration() == (cfg, profile)
 
 
+def test_semantic_proof_without_inference_source_closure_is_refused(monkeypatch):
+    host_configuration(monkeypatch, json.dumps(proof()).encode())
+    with pytest.raises(ValueError):
+        broker.configuration()
+
+
 @pytest.mark.parametrize('change', ['failed', 'partial', 'duplicate', 'kind', 'input',
                                    'input_type', 'hash', 'profile', 'profile_type', 'policy',
                                    'owner', 'stale', 'fact', 'command'])
