@@ -209,3 +209,68 @@ def test_ingress_account_rejects_supplementary_group(tmp_path,monkeypatch):
     path.chmod(0o600)
     with pytest.raises(ValueError,match='DEDICATED_INGRESS'):
         m.account_registration(None,tmp_path)
+
+@pytest.mark.parametrize('failure', ['verify','reload'])
+def test_activation_rolls_back_every_changed_file_on_failure(tmp_path,monkeypatch,failure):
+    m = module()
+    assert hasattr(m,'activate'), 'transactional activation is missing'
+    monkeypatch.setattr(m,'protected',lambda p:p.read_bytes())
+    monkeypatch.setattr(m,'trusted_directory',lambda p:None)
+    monkeypatch.setattr(m.os,'chown',lambda *a:None)
+    old = tmp_path/'existing'
+    old.write_bytes(b'old')
+    old.chmod(0o600)
+    created = tmp_path/'new'
+    plans = [(old,b'changed',0o600,os.getgid(),(b'old',)), (created,b'new',0o600,os.getgid(),())]
+    calls = []
+    def verify():
+        assert old.read_bytes() == b'changed' and created.read_bytes() == b'new'
+        if failure == 'verify':
+            raise RuntimeError('verify failed')
+    def reload():
+        calls.append('reload')
+        if failure == 'reload' and len(calls) == 1:
+            raise RuntimeError('reload failed')
+    with pytest.raises(RuntimeError,match='failed'):
+        m.activate(plans,verify,reload)
+    assert old.read_bytes() == b'old'
+    assert not created.exists()
+    assert old.with_name('existing.before-'+m.sha(b'old')).read_bytes() == b'old'
+
+
+def test_activation_checks_all_modes_before_first_write(tmp_path,monkeypatch):
+    m = module()
+    assert hasattr(m,'activate'), 'transactional activation is missing'
+    monkeypatch.setattr(m,'protected',lambda p:p.read_bytes())
+    monkeypatch.setattr(m,'trusted_directory',lambda p:None)
+    old = tmp_path/'existing'
+    old.write_bytes(b'same')
+    old.chmod(0o644)
+    plans = [(tmp_path/'new',b'new',0o600,os.getgid(),()), (old,b'same',0o600,os.getgid(),())]
+    with pytest.raises(ValueError,match='MODE_CONFLICT'):
+        m.activate(plans,lambda:None,lambda:None)
+    assert not (tmp_path/'new').exists()
+
+
+def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,monkeypatch):
+    import io
+    import zipfile
+    m = module()
+    assert hasattr(m,'dependencies'), 'offline dependency verification is missing'
+    monkeypatch.setattr(m,'trusted_directory',lambda p:None)
+    monkeypatch.setattr(m,'protected',lambda p:p.read_bytes())
+    (tmp_path/'wheels').mkdir()
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream,'w') as archive:
+        archive.writestr('demo-1.0.dist-info/METADATA','Name: demo\nVersion: 1.0\n')
+    raw = stream.getvalue()
+    (tmp_path/'wheels/demo-1.0-py3-none-any.whl').write_bytes(raw)
+    doc = json.dumps({'wheels':{'demo-1.0-py3-none-any.whl':m.sha(raw)}}).encode()
+    (tmp_path/'dependencies.json').write_bytes(doc)
+    lock = m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
+    assert lock == ('demo==1.0 --hash=sha256:'+m.sha(raw)+'\n').encode()
+    with pytest.raises(ValueError,match='DEPENDENCY'):
+        m.dependencies(tmp_path,m.sha(doc),b'demo==2.0\n')
+    (tmp_path/'wheels/demo-1.0-py3-none-any.whl').write_bytes(b'tampered')
+    with pytest.raises(ValueError,match='SHA'):
+        m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
