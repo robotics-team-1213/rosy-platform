@@ -885,3 +885,9 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 
 Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 숨기지 않는다. 최종 속도와 불필요 모델 개입·전체 운영 coverage를 구분한다. 전문은 [D-704](../adr/D-704-pinky-final-velocity-evidence-boundary.md).
 
+## D-706 — 판정 후보와 전체 프로파일·독립 보정 입력 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 registry 소유자의 reasoning 후보에서 전체 모델 프로파일과 domain별 독립 보정 원본·재계산 결과를 결속한다. seal된 후보나 offline PASS를 신뢰된 승인·운영 전환·현장 수용으로 해석하지 않는다. 전문은 [D-706](../adr/D-706-reasoning-candidate-binding.md).
+
