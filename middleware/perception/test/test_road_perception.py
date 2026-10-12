@@ -85,6 +85,16 @@ def test_broken_stop_bar_is_retained_with_longitudinal_crosswalk(gap):
     assert observation.stop_line.image_row == pytest.approx(160, abs=3)
 
 
+def test_stop_bar_at_edge_of_merged_stripe_group_is_retained():
+    frame, ground = _longitudinal_crosswalk_frame()
+    frame[90:, :24] = 245
+    frame[90:, -24:] = 245
+    frame[159:161, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is not None
+
+
 @pytest.mark.parametrize("marking", [{"lane_x": 160}, {"stop_y": 180}])
 def test_metric_crosswalk_does_not_reclassify_a_lane_or_single_stop_line(marking):
     ground = simulation_ground_plane(
