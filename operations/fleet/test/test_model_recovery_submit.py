@@ -17,7 +17,8 @@ from test_incident_case_worker import make_incident_worker
 
 
 @pytest.mark.parametrize('change', ['none', 'hold', 'human', 'client', 'unsupported', 'disconnect', 'cancel',
-    'crosswalk', 'missing_crosswalk', 'rear', 'fact', 'budget', 'retired', 'peer_unknown', 'map_lost'])
+    'crosswalk', 'missing_crosswalk', 'rear', 'fact', 'budget', 'retired', 'peer_unknown', 'map_lost',
+    'deadline', 'uncertain', 'exhausted'])
 def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_path, change):
     now, store, log, scope, state, proof, _ = opened(tmp_path, generation='core:1:stamp')
     state.apply('line-back', signed(proof, 0))
@@ -51,6 +52,9 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
             if change == 'retired': resolver._chains[scope.subject_id].retired.add('ai')
             if change == 'peer_unknown': peers.append({'robot_id': 'peer', 'online': True, 'state': {}})
             if change == 'map_lost': row['map_pose'] = {'state': 'LOST', 'sourced': True, 'age_s': .1}
+            if change == 'deadline': resolver._chains[scope.subject_id].started_at = now[0] - 61
+            if change == 'uncertain': resolver._uncertain.add((scope.subject_id, 'older-case'))
+            if change == 'exhausted': resolver._chains[scope.subject_id].observing = 'ai_exhausted'
             return httpx.Response(200, json={'stuck': {'conditional_back': change != 'unsupported'}})
         assert state.submission(scope.subject_id, scope.case_id)['state'] == 'SUBMITTING'
         if change == 'disconnect': raise httpx.ReadError('source fixture disconnect')
@@ -64,7 +68,9 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
                 with pytest.raises(asyncio.CancelledError): await operation
             else: await operation
             record = state.submission(scope.subject_id, scope.case_id)
-            if change == 'none': assert record['state'] == 'ACK'
+            if change == 'none':
+                assert record['state'] == 'ACK'
+                assert resolver._chains[scope.subject_id].rule_answers == 1
             elif change in {'disconnect', 'cancel'}: assert record['state'] == 'UNKNOWN'
             else: assert record is None
             first = list(calls)
