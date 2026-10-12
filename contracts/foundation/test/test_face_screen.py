@@ -271,6 +271,33 @@ def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
     assert answer["face"] == "happy"
 
 
+@pytest.mark.parametrize("note,line", [
+    ("crosswalk", "Crosswalk"),
+    ("lane_edge", "Lane edge"),
+    ("yield", "Yielding"),
+])
+def test_a_published_line_note_replaces_going(note, line):
+    answer = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="TRACKING",
+        line_note=note))
+    idle = fs.screen_for(**READY, core=core(line_note=note))
+    blocked = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="BLOCKED", line_note="crosswalk"))
+    turning = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", signal="left", line_note="yield"))
+
+    assert answer["strip"] == line and answer["strip_tone"] == "info"
+    assert idle["strip"] == "Waiting"
+    assert blocked["strip"] == "Route blocked"
+    assert turning["strip"] == "Left"
+
+
+def test_an_unknown_line_note_is_dropped():
+    result = fs.validate_face_inputs(handover(line_note="person"), NOW)
+
+    assert result["line_note"] is None
+
+
 def test_a_line_the_robot_is_on_replaces_going():
     following = fs.screen_for(**READY, core=core(
         robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="TRACKING"))
