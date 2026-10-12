@@ -193,11 +193,34 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
 # --- D-433: the face hand-over (/run/rosy/face-inputs.json) ---------------------
 
 
+_LINE_NOTE = {
+    "ir_guard_crosswalk": "crosswalk",
+    "lane_edge_left": "lane_edge",
+    "lane_edge_right": "lane_edge",
+    "lane_departure": "lane_edge",
+    "stuck_yield": "yield",
+}
+
+
+def face_line_note(line_follow) -> Optional[str]:
+    """A strip name from the published line-follow reason, or None.
+
+    Crosswalk holds and the IR guard resting on a known crosswalk, a lane-edge
+    correction or departure, and a yield. Other reasons stay unnamed.
+    """
+    reason = line_follow.reason if isinstance(line_follow.reason, str) else ""
+    if reason.startswith("crosswalk_"):
+        return "crosswalk"
+    return _LINE_NOTE.get(reason)
+
+
 def face_cautions(snapshot) -> list[str]:
     """Degradations only CORE knows, as ``face_screen.CAUTION_TEXT`` codes."""
     codes = []
     line_follow = snapshot.line_follow
-    if line_follow.mode != "OFF" and line_follow.state == "HOLD":
+    named = face_line_note(line_follow)
+    if (line_follow.mode != "OFF" and line_follow.state == "HOLD"
+            and named not in ("crosswalk", "lane_edge")):
         codes.append("line_follow_hold")
     if snapshot.docking.state.value == "DOCK_FAILED":
         codes.append("dock_failed")
@@ -254,6 +277,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "battery_level": _screen_level(snapshot),
         "line_follow_mode": line_follow.mode,
         "line_follow_state": line_follow.state,
+        "line_note": face_line_note(line_follow),
         "caution": face_cautions(snapshot),
         "recovery": face_recovery(line_follow),
         "signal": drive_signal(

@@ -709,6 +709,7 @@
 | D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
+| D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
