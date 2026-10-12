@@ -5,6 +5,7 @@ import re
 from typing import Literal
 
 from core_common.intent import interpret
+from core_common.intent import request_schema
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
 
@@ -39,6 +40,9 @@ def source_policy(source_commit, profile):
 
 
 class History(Strict):
+    authority: Literal['model_proposal_only'] = 'model_proposal_only'
+    execution_state: Literal['NOT_DISPATCHED'] = 'NOT_DISPATCHED'
+    accepted_execution_context: None = None
     request_id: str = Field(min_length=1, max_length=96)
     principal_id: str = Field(min_length=1, max_length=96)
     author_id: str = Field(pattern=r'^[0-9]{17,20}$')
@@ -119,7 +123,9 @@ def bounded_environment(raw):
             raise ValueError('CONVERSATION_PLACE_INVALID')
         selected.append(p)
     if len({p['id'] for p in selected}) != len(selected):raise ValueError('CONVERSATION_PLACE_DUPLICATE')
-    if map_data is not None and (set(map_data) != {'version', 'sha256', 'places'}
+    if map_data is not None and (set(map_data)-{'version', 'sha256', 'places', 'places_complete'}
+            or not {'version', 'sha256', 'places'} <= set(map_data)
+            or type(map_data.get('places_complete', True)) is not bool
             or type(map_data['version']) is not int or map_data['version'] < 1
             or re.fullmatch('[0-9a-f]{64}', map_data['sha256']) is None):
         raise ValueError('CONVERSATION_MAP_REVISION_REQUIRED')
@@ -146,14 +152,30 @@ class Answer(Strict):
     intent: dict | None
     evidence_refs: list[str] = Field(max_length=32)
     review_required: bool
+    reason: Literal['MISSING_TARGET', 'MISSING_ACTION', 'AMBIGUOUS_REFERENCE', 'UNSUPPORTED',
+                    'SAFETY', 'CONFLICT', 'CREDENTIALS'] | None = None
 
     @model_validator(mode='after')
     def proposal_only(self):
         if (self.kind == 'CONTROL') != (self.intent is not None):
             raise ValueError('CONTROL_PROPOSAL_REQUIRED')
+        if self.kind in ('CLARIFY', 'REFUSE') and self.reason is None:
+            raise ValueError('CONVERSATION_TYPED_REASON_REQUIRED')
         if re.search(r'[@<>\x00-\x08]|https?://|(?:token|password|api[_ -]?key)\s*[:=]|[A-Za-z0-9_=-]{40,}', self.response, re.I):
             raise ValueError('UNSAFE_CONVERSATION_REPLY')
         return self
+
+
+def answer_schema():
+    properties = Answer.model_json_schema()['properties']
+    variants = []
+    for kind in ('CHAT', 'STATUS', 'CLARIFY', 'CONTROL', 'REFUSE'):
+        fields = dict(properties)
+        fields['kind'] = {'type':'string', 'const':kind}
+        fields['intent'] = request_schema() if kind == 'CONTROL' else {'type':'null'}
+        fields['reason'] = (properties['reason']['anyOf'][0] if kind in ('CLARIFY', 'REFUSE') else {'type':'null'})
+        variants.append({'type':'object', 'properties':fields, 'required':list(fields), 'additionalProperties':False})
+    return {'oneOf':variants}
 
 
 def checked_answer(value, question):
@@ -176,12 +198,23 @@ def checked_answer(value, question):
                     for k in ('x', 'y', 'yaw') if k in call.body):
                 raise ValueError('CONVERSATION_REGISTERED_PLACE_CHANGED')
     if answer.kind == 'CHAT' and (answer.evidence_refs or any(r in answer.response for r in robots)
-            or re.search(r'온라인|오프라인|작동 중|이동 완료|정지 완료|연결되어|배터리|전압', answer.response)):
+            or re.search(r'온라인|오프라인|작동\s*중|이동\s*완료|정지\s*완료|연결되어|배터리|전압|'
+                r'\b(?:online|offline|battery|voltage|healthy|executed|completed|stopped|connected|moving)\b',
+                answer.response, re.I)):
         raise ValueError('CHAT_DEVICE_FACTS_REFUSED')
     return answer
 
 
 def reply(answer, question):
+    if answer.kind in ('CLARIFY', 'REFUSE'):
+        reasons = {'MISSING_TARGET':'어느 로봇과 등록된 장소를 말하는지 알려주세요.',
+            'MISSING_ACTION':'원하는 동작을 구체적으로 말씀해 주세요.',
+            'AMBIGUOUS_REFERENCE':'이 대화에서 대상을 확정할 수 없습니다. 로봇과 장소를 다시 지정해 주세요.',
+            'UNSUPPORTED':'현재 등록된 조종 범위에서 처리할 수 없습니다. 지원하는 동작으로 구체화해 주세요.',
+            'SAFETY':'안전 규칙을 무시하거나 비상정지를 자동 해제하는 요청은 처리할 수 없습니다.',
+            'CONFLICT':'요청과 현재 근거가 충돌하여 보류했습니다. 대상과 동작을 구체적으로 알려주세요.',
+            'CREDENTIALS':'인증 정보는 대화에서 제공하지 않습니다.'}
+        return reasons[answer.reason]
     if answer.kind == 'STATUS':
         rows = question.environment['robots']
         return '현재 관제에서 확인한 상태입니다.\n'+'\n'.join(

@@ -46,9 +46,13 @@ class ConversationWorker:
                     if existing['state'] != 'PENDING':return
                 except HTTPException as exc:
                     if exc.status_code != 404:raise
-                    snapshot = await self.snapshot()
-                    question = await self.db('build_input', receipt, snapshot, snapshot['observed_at'])
-                    await self.db('stage', receipt, question, snapshot)
+                    try:
+                        snapshot = await self.snapshot()
+                        question = await self.db('build_input', receipt, snapshot, snapshot['observed_at'])
+                        await self.db('stage', receipt, question, snapshot)
+                    except (ValueError, TypeError, KeyError):
+                        await self.db('reject', receipt)
+                        return
                     existing = await self.db('peek', rid)
                 question = ConversationInput.model_validate_json(existing['problem_json'])
                 if not 0 <= self.clock()-question.observed_at <= 3 or not await self.current(rid, question):
@@ -57,11 +61,13 @@ class ConversationWorker:
                     return
                 attempt = await self.db('reserve', rid, 'primary')
                 if not await self.current(rid, question):
-                    await self.db('abandon', rid, state='HOLD', reason='SCOPE_CHANGED')
+                    await self.finish(rid, 'HOLD', {'reason':'SCOPE_CHANGED'},
+                        '관제 관측·지도·모델 수용이 바뀌어 요청을 보류했습니다. 기기 명령을 보내지 않았습니다.')
                     return
                 self.jobs.guard(rid)
                 if not self.admission() or not self.observation_guard(question.environment):
-                    await self.db('abandon', rid, state='HOLD', reason='SCOPE_CHANGED')
+                    await self.finish(rid, 'HOLD', {'reason':'SCOPE_CHANGED'},
+                        '관제 관측·지도·모델 수용이 바뀌어 요청을 보류했습니다. 기기 명령을 보내지 않았습니다.')
                     return
                 try:
                     remaining = min(self.profile.timeout_s, attempt['deadline']-self.clock())
@@ -69,6 +75,7 @@ class ConversationWorker:
                     raw = await self.provider(question, self.profile, remaining)
                     answer = checked_answer(raw, question)
                     record = {'profile':self.profile.model_dump(), 'input_hash':question.digest,
+                              'models':[{'model_id':self.profile.model_id, 'profile_id':self.profile.profile_id}],
                               'answer':answer.model_dump(), 'action_admissible':False}
                     await self.db('record_attempt', rid, 'primary', state='RESULT', result=record,
                         known_cost_usd=0, input_hash=attempt['input_hash'], profile_set_hash=attempt['profile_set_hash'])
@@ -89,7 +96,8 @@ class ConversationWorker:
                 if answer.review_required:
                     # D-720's protected status codec cannot admit a conversation review.
                     held = Answer(kind='CLARIFY', response='추가 숙고가 필요하지만 대화 검토 모델이 수용되지 않았습니다. '
-                        '대상과 원하는 동작을 구체적으로 말씀해 주세요.', intent=None, evidence_refs=[], review_required=False)
+                        '대상과 원하는 동작을 구체적으로 말씀해 주세요.', intent=None, evidence_refs=[], review_required=False,
+                        reason='CONFLICT')
                     await self.finish(rid, 'HOLD', {**record, 'answer':held.model_dump(),
                         'primary_proposal':answer.model_dump(), 'reason':'CONVERSATION_REVIEWER_NOT_ADMITTED'}, held.response, question)
                     return
