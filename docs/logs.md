@@ -8192,3 +8192,9 @@ osy-d395-s1d\`.
 - 증거: 이 커밋은 폴더를 옮기지 않는다. 규칙 문서와 ADR Log 행이다.
 - gate 변화: 없음. 이후 단계의 이동, 장치, 현장 수용은 각 단계가 따로 한다.
 
+
+## 2026-10-13 · uncommitted · Gazebo drive 역사 안전 검토 기록
+
+- 변경: D-430 기존 사후 검토 방식으로 독립 drive_review가 정확히 검토한 역사 커밋 네 SHA와 조건을 기록했다. 이력·BASELINE·검사 범위·안전 태그는 바꾸지 않았다.
+- 증거: docs/validation/gazebo-drive-safety-review-2026-10-13/result.md. 통합 회귀 17064 PASS/818 SKIP 및 pre-push 289 PASS, 모두 NEW 0 뒤 d157ccbf2 main 착지·push를 확인했다. 첫 CI는 trailer 누락으로 scope 실패·test 미실행이었다. 후속 SOURCE/원격/CI 검증은 별도다.
+- gate 변화: 역사 SOURCE 검토의 추적성만 보완한다. standalone·장치·실물·지도 완주·새 moving-arc admission은 승인하지 않는다.
