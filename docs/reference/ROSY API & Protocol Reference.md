@@ -35,6 +35,8 @@ proof에 단조 증가 `owner_generation`과 `transport_generation`을 포함한
 
 위 명령의 선택적 `expected_owner_generation: nonnegative integer`는 `expected_boot_id: UUID`와 함께만 사용할 수 있다. 기존 owner의 실제 승인 잠금 또는 Mode commit 안에서 side effect 전에 비교하여 불일치면409 `OWNER_GENERATION_CHANGED`다. fields가 없으면 legacy admission 동작을 유지한다. Fleet는 SAFE_RELEASE 이후 새 motion에 최신 native CAS를 사용하고 다른 owner/mode/lease 배타 gate도 유지한다. proof나 종결 receipt 자체가 motion grant가 되지 않는다.
 
+readback의 항상 존재하는 `owner` 객체는 현재 `boot_id:UUID`, `owner_generation:nonnegative integer`, `owner_run_id:null|UUID`를 반환한다. lookup UNKNOWN/empty first boot에도 제공하되 unknown run의 quiescence를 증명하지 않는다. expected epoch 검증부터 mode 전환·제출까지 실제 승인 구간에 결속하고 기존 mode→owner 잠금 순서를 보존한다. 불일치한 요청은 mode를 바꾸지 않는다.
+
 native terminal은 첫 확정 이후 불변이다. backend 거절 FAILED/BACKEND_REJECTED, 알려진 backend 오류 FAILED/BACKEND_ERROR, lease 만료 EXPIRED/LEASE_EXPIRED, 명시적 취소 CANCELED/CANCELED, 안전 취소 CANCELED/SAFETY_STOP, stuck FAILED/STUCK으로 구분한다. 제출·결과 exception의 전달 여부가 불명이면 nonterminal/result=null, reason=BACKEND_RESULT_UNKNOWN을 유지한다. UNKNOWN은 lookup/evidence 분류이며 phase가 아니다. 검증된 owner 실패만 BACKEND_ERROR로 종결하고 통신 불명을 성공·실패로 바꾸지 않는다. navigation callback은 actual backend generation에 캡처한 identity를 사용한다. 도킹·undock 성공과 취소는 별개이며 충전 관측이 terminal을 다시 쓰지 않는다. follow hold는 RUNNING, re-follow 이전 run은 PREEMPTED다. 별도 현재 권한의 cancel/stop은 실제 닫은 이전 run receipt를 반환하며 concurrent 새 run으로 대체하지 않는다. watchdog 종료는 teleop EXPIRED이며 물리 거리 성과가 아니다. 원래 grant 만료·철회 뒤에도 terminal을 읽어 원장에 확정할 수 있지만 새 명령은 발행할 수 없다. 기존 manager 반환형·keyword 없는 executor·auth/capability/localization/calibration/readiness/mode/CORE writer/E-stop 해제 금지 계약을 유지한다.
 
 ### v1.219 경로 사실 묶음 (D-726)
