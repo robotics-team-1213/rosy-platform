@@ -121,3 +121,26 @@ def test_original_source_loader_cannot_use_a_fake_raw_verification_report(tmp_pa
 def test_empty_original_sources_are_missing_coverage_not_an_accepted_empty_window():
     module = owner()
     assert module.load_original_sources([], windows=[], max_gap_s=1) is None
+
+
+def test_revocation_delegates_to_existing_owner_even_when_new_evidence_is_hold(tmp_path):
+    from rosy.contracts.learning import seal
+    from rosy.contracts.learning.incident_operation import REVOKE
+    module = owner()
+    def forbidden(*args):
+        raise AssertionError('revocation must use the stored binding, not new acceptance evidence')
+    evidence = module.OperatingEvidenceOwner(tmp_path / 'absent-original.json', expected_sha256='1' * 64,
+        grant_id='grant', installation=forbidden, calibrations=forbidden, trusted=forbidden,
+        originals=forbidden, clock=forbidden)
+    binding = dict(profile_set_sha256='1' * 64, full_profile_sha256='2' * 64, model_revision='source-only-r1',
+        calibration_sha256='3' * 64, domain='line_follow', action='BACK_AND_RETRY',
+        action_contract='rosy.line_stuck.conditional_back/1', policy_revision='policy-r1', installation_sha256='4' * 64,
+        evaluation_sha256='5' * 64, coverage_sha256='6' * 64, limits_sha256='7' * 64, truth_sha256='8' * 64,
+        evaluation_state='REVIEWED_FOR_OPERATION')
+    receipt = dict(principal='isolated-source-fixture', payload=seal(dict(schema='rosy.incident.operation/1', kind=REVOKE,
+        binding=binding, expected_epoch=1, valid_from_s=1, expires_s=2)), signature='0' * 64)
+    class ExistingOwner:
+        def apply(self, grant_id, received):
+            assert grant_id == 'grant' and received == receipt
+            return 'delegated-to-existing-verifier'
+    assert module.import_operation(ExistingOwner(), 'grant', receipt, evidence=evidence) == 'delegated-to-existing-verifier'
