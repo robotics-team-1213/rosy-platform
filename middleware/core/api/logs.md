@@ -903,8 +903,21 @@
 - 변경: schema 2 status-inputs에 `robot_id`, `core_process_id`, `line_follow_steering_law`를 더한다. 법칙은 이 프로세스가 들고 있는 LineFollowConfig의 순항, 선속도 상한, 게인, 최소 신뢰다. line_follow가 없으면 법칙은 null이다. 토큰과 개인 설정 파일은 넣지 않는다.
 - 증거: 기존 키 집합 시험에 세 키를 더하고, Pinky 법칙이 설정 파일의 0.8 게인이나 인증 토큰이 아닌 유효 값을 내보내는지 보는 시험을 추가했다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
 - gate 변화: 없음. 업데이터가 요구하는 기존 키는 그대로다. 추가 키는 거절하지 않는다.
+
 ## 2026-10-12 · b640234986 · D-720 API 문서 버전 정합
 
 - 변경: additive 읽기 전용 Fleet 숙고 결과 계약의 v1.219에 FastAPI description과 계약 pin들을 맞춘다. envelope1.0·CORE 실행 권한은 변경하지 않는다.
 - 증거: 통합 첫 묶음에서 버전 정합2 NEW/9776 passed를 확인하고 관련 caller를 함께 수정했다. 원격 GREEN·최종 통합은 후속이다.
 - gate 변화: 계약 metadata 수정이며 장치 배포나 물리 수용이 아니다.
+
+## 2026-10-12 · 1cbfe5314a · D-732 안전 정지 native 실행 receipt
+
+- 변경: 본문 없는 Viewer safety stop에서 owner 잠금으로 읽은 현재 실행들을 `operations`로 반환한다. latch가 첫 변경이며 정지 이후에도 같은 UUID만 읽는다. 캡처 실패는 빈 목록, 사후 readback 실패는 원래 pending identity로 남긴다. 첫 terminal·여러 owner·callback pending을 보존한다.
+- 증거: 실제 CORE manager를 쓰는 API RED 9건, 불완전 캡처 RED 1건을 확인했다. 1cbfe5314a의 원격 gateway/API 전체 pytest exit 0/NEW 0. 설치 패키지와 API import boundary 통과. 통합에서 발견한 Decision contracts 383 > 382는 중복 함수 설명 한 줄만 삭제해 382로 맞췄으며 예산은 변경하지 않았다.
+- gate 변화: SOURCE 회귀 근거만 추가한다. 장치 배포·물리 정지·현장 수용 근거는 아니다.
+
+## 2026-10-12 · ddbc7f64aa · D-732 정지 receipt 캡처는 잠금을 기다리지 않는다
+
+- 변경: API 정지 전후 조회를 owner의 `capture_native_operation`으로 바꾼다. owner 잠금을 nonblocking으로 얻어 불변 ledger receipt만 읽으며 backend·transport·중첩 잠금 조회는 없다. 캡처 경합은 전체 빈 목록, 정지 후 경합은 원래 pending identity다.
+- 증거: 실제 네 owner 잠금과 정지 후 잠금 경합 RED 5건을 확인했다. 수정 후 원격 safety/native owner·구조·설치 패키지 묶음 exit 0/NEW 0. navigation 파일 600, swarm 단위 949로 기존 한계를 유지한다.
+- gate 변화: SOURCE 근거만 추가한다. 기존 stop listener 실행 의미와 CORE 최종 command 권한은 유지한다.

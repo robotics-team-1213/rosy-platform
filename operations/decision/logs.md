@@ -37,3 +37,9 @@
 - 변경: Added pure `rosy.decision.conversation` profile/input/flat semantic-step codec, explicitly installed by the existing Fleet distribution. Model output maps only to existing validated `core_common.intent` grammar. No Fleet writer, network, credential or activation exists in this holder. D-720 status-only calibration exemption cannot admit this profile.
 - 증거: Independent structure precheck256 physical lines; source/installed/architecture remote checks71/129/38 passed with0 NEW.
 - gate 변화: Actual synthetic Qwen semantic conformance has three unresolved cases, so admission remains OFF. Fleet retains current authority, durable attempts and grounded replies; CORE retains final motion authority.
+
+## 2026-10-12 · a5925d7ae · D-728 후속 대화 입력
+
+- 변경: 제안 이력과 별도로 같은 사용자·채널의 완료 실행 문맥을 입력에 결속한다. CHAT 응답은 대화 자료로만 보관하며 실행 권한이 아니다.
+- 증거: 원격 집중 시험 284개와 공개 CORE epoch CAS 2개 통과, NEW0. 실제 모델 38개 평가와 보호 설치는 별도 대기다.
+- gate 변화: 없음. 이전 31개 평가를 새 입력·소스의 수용 증거로 재사용하지 않는다.

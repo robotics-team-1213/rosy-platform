@@ -42,17 +42,33 @@ class ConversationJobs(ModelJobsJournal):
             answer = value['answer']
             selected.append(History(**{k:getattr(question, k) for k in ('request_id', 'principal_id',
                 'author_id', 'guild_id', 'channel_id', 'question', 'content_hash')}, answered_at=at,
-                environment_hash=digest(environment), kind=answer['kind'], intent=answer['intent']))
+                environment_hash=digest(environment), kind=answer['kind'], intent=answer['intent'],
+                response=answer['response'] if answer['kind']=='CHAT' else None))
         return selected
 
     def build_input(self, receipt, snapshot, now):
         environment = bounded_environment(snapshot)
-        return conversation_input(receipt, snapshot, self.journal.config.bot_id,
-                                  self.history(receipt, environment, now), now=now)
+        question = conversation_input(receipt, snapshot, self.journal.config.bot_id,
+                                      self.history(receipt, environment, now), now=now)
+        execution = getattr(self, 'execution', None)
+        if execution is not None:
+            with closing(execution.store._connect()) as conn:
+                context = execution.selection(question, conn)
+            question = ConversationInput.model_validate(question.model_dump() | {'accepted_execution_context':context})
+        return question
+
+    def context_current(self, question):
+        context = question.accepted_execution_context
+        if context is None:return True
+        execution = getattr(self, 'execution', None)
+        if execution is None:return False
+        with closing(execution.store._connect()) as conn:
+            return execution.selection(question, conn, bound=context) == context
 
     def validate_input(self, receipt, problem, snapshot):
         if (type(problem) is not ConversationInput or problem != conversation_input(receipt, snapshot,
-                self.journal.config.bot_id, problem.history, now=problem.observed_at)):
+                self.journal.config.bot_id, problem.history, now=problem.observed_at,
+                accepted_execution_context=problem.accepted_execution_context) or not self.context_current(problem)):
             raise ValueError('CONVERSATION_INPUT_REQUIRED')
 
     @staticmethod

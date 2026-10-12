@@ -105,6 +105,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/server/channel/health",
               "fleet/fleet/server/channel/conversation",
               "fleet/fleet/server/channel/execution",
+              "fleet/fleet/server/channel/execution/outcomes",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/stuck/submission",
@@ -167,6 +168,16 @@ SIZE_VERDICTS = {
         "Installed wheel/sdist/source-image closure is a separate remote gate; "
         "source admission never establishes activation or physical completion. "
         "See docs/plans/2026-10-12-natural-language-channel-operations.md.",
+    ),
+    "fleet/fleet/server/channel/execution/outcomes": (
+        332,
+        "accept: D-732 first-response identity binding, exact native outcome readback and local claim "
+        "closure owner independently prechecked by ralph_native_verify on 2026-10-12 at332 in "
+        "041d567e60. Simultaneous execution residual563/channel1453/conversation300/health248/"
+        "Fleet55249/task_store1043 retain every historical parent, file and zero-growth ceiling. "
+        "No new writer, database, process, dependency or scan exclusion. Installed wheel/sdist/"
+        "source-image closure remains a separate gate. See "
+        "docs/plans/2026-10-12-fleet-native-outcome-consumer.md.",
     ),
     "fleet/fleet/server/channel/conversation": (
         280,

@@ -54,6 +54,28 @@ class History(Strict):
     environment_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
     kind: Literal['CHAT', 'STATUS', 'CLARIFY', 'CONTROL', 'REFUSE']
     intent: dict | None
+    response: str | None = Field(default=None, max_length=1000)
+
+
+class AcceptedContext(Strict):
+    authority: Literal['fleet_execution_selection'] = 'fleet_execution_selection'
+    execution_state: Literal['COMPLETED'] = 'COMPLETED'
+    principal_id: str = Field(min_length=1, max_length=96)
+    author_id: str = Field(pattern=r'^[0-9]{17,20}$')
+    guild_id: str = Field(pattern=r'^[0-9]{17,20}$')
+    channel_id: str = Field(pattern=r'^[0-9]{17,20}$')
+    request_id: str = Field(min_length=1, max_length=96)
+    task_id: str = Field(min_length=1, max_length=96)
+    robot_id: str = Field(min_length=1, max_length=96)
+    place_id: str = Field(min_length=1, max_length=96)
+    catalog_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    evidence_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    generation: int = Field(ge=0)
+    expires_at: FiniteFloat
+    boot_id: str | None = Field(default=None, max_length=96)
+    run_id: str | None = Field(default=None, max_length=96)
+    attempt_id: str | None = Field(default=None, max_length=96)
+    owner_generation: int | None = Field(default=None, ge=0)
 
 
 class ConversationInput(Strict):
@@ -68,6 +90,7 @@ class ConversationInput(Strict):
     observed_at: FiniteFloat
     environment: dict
     history: list[History] = Field(max_length=4)
+    accepted_execution_context: dict | None = None
 
     @property
     def digest(self):return digest(self.model_dump())
@@ -82,6 +105,18 @@ class ConversationInput(Strict):
                 raise ValueError('CONVERSATION_HISTORY_SCOPE_CHANGED')
         if bounded_environment(self.environment) != self.environment:
             raise ValueError('CONVERSATION_ENVIRONMENT_NOT_BOUNDED')
+        if self.accepted_execution_context is not None:
+            context = AcceptedContext.model_validate(self.accepted_execution_context).model_dump()
+            if (context != self.accepted_execution_context or context['request_id'] == self.request_id
+                    or any(context[k] != getattr(self, k) for k in
+                           ('principal_id', 'author_id', 'guild_id', 'channel_id'))
+                    or not 0 < context['expires_at']-self.observed_at <= 120
+                    or context['catalog_hash'] != digest({'robot_ids':sorted(r['robot_id'] for r in
+                        self.environment['robots']), 'map':self.environment['map'],
+                        'work_catalog':self.environment['work_catalog']})
+                    or context['robot_id'] not in {r['robot_id'] for r in self.environment['robots']}
+                    or context['place_id'] not in {p['id'] for p in (self.environment['map'] or {}).get('places', [])}):
+                raise ValueError('CONVERSATION_ACCEPTED_CONTEXT_CHANGED')
         return self
 
 
@@ -137,13 +172,14 @@ def bounded_environment(raw):
             {**map_data, 'places': sorted(selected, key=lambda p:p['id'])}, 'work_catalog': sorted(set(work))}
 
 
-def conversation_input(receipt, snapshot, bot_id, history=(), *, now):
+def conversation_input(receipt, snapshot, bot_id, history=(), *, now, accepted_execution_context=None):
     if hashlib.sha256(receipt['content'].encode()).hexdigest() != receipt['content_hash']:
         raise ValueError('CONVERSATION_ORIGINAL_CHANGED')
     question = re.sub(r'<@!?'+re.escape(bot_id)+r'>', '', receipt['content']).strip()
     return ConversationInput(**{k:receipt[k] for k in ('request_id', 'principal_id', 'author_id',
         'guild_id', 'channel_id', 'content_hash')}, question=question, observed_at=now,
-        environment=bounded_environment(snapshot), history=list(history))
+        environment=bounded_environment(snapshot), history=list(history),
+        accepted_execution_context=accepted_execution_context)
 
 
 class Answer(Strict):

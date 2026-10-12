@@ -304,6 +304,9 @@ class CommandManager:
             except Exception:  # event failure cannot change an accepted pulse
                 self.announce_errors += 1
 
+    def capture_native_operation(self, run_id: UUID | None = None):
+        return self.native.capture(self._native_lock, run_id)
+
     def native_readback(self, run_id: UUID | None = None) -> dict:
         with self._native_lock:
             return self.native.readback(

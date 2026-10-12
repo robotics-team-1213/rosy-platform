@@ -3505,3 +3505,14 @@
 - Evidence: Remote source/HTTP/navigation/transport/gateway regression414 passed, terminal exit0 at source8d4d752ee7, known_failures0 NEW/0 known. Prior162 and280-case runs passed; the intermediate run had one NEW old intake test expecting no withdrawal table, corrected to assert the precise new tombstone contract rather than relabelled known. All pytest ran on remote PCs.
 - Structure: Actual execution child579, residual channel1440, conversation300 and Fleet parent55222 measured together with the unchanged harness filters. Independent structural precheck registered-boundary guidance is execution487+150, prior channel1379/conversation280/Fleet55120+150; all file/hard ceilings and historical obligations remain. Root integration owns the reviewed registry update.
 - Gate: SOURCE execution linkage is tested with conformant fakes and existing owner journals. Task3 still needs direct owner readback/reconciliation, rich progress and hourly KST health. Conversation admission remains OFF pending independent semantic conformance/protected installation. No real Discord message, paid GLM call, deployment or device command was sent by Task2.
+
+## 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 변경: CORE 첫 응답의 boot/run/attempt를 기존 Task·channel 원장에 결속하고, 정확한 typed readback과 2초 monotonic/SQLite claim CAS로만 로컬 자원을 해제한다. 같은 CID의 다른 run, 오래된 proof, 재할당 claim, ACK 유실은 자동 재발행하지 않는다. 원문 권한 만료·철회 뒤에도 읽기 전용 결과는 보존한다.
+- 증거: ca2748f050 원격 focused 123 passed, known_failures 0 NEW. db0037481e 설치 wheel/sdist/source-image closure 4 passed, 0 NEW. 확대 Fleet 시험과 독립 구조·코드 검토는 진행 중이다.
+- gate 변화: 실제 장치·Discord 운영·물리 수용으로 승격하지 않는다. CORE 최종 command 권한과 기존 safety/role/map/resource admission을 유지한다.
+
+## 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
+
+- 변경: 기존 실행 선택·Task 원장의 정확한 native 성공 및 안전 해제 증거를 재사용한다. 원문·사용자·채널·지도·권한·세대·receipt 변경을 각 모델 경계와 최종 전송 전에 거절한다. 기존 상태 조회로 이전 run과 현재 boot·owner generation을 확인하고 CORE CAS에 전달한다.
+- 증거: 최초 재현 2 NEW, live 재시작·run 소실 재현 11 NEW 뒤 원격 집중 284개 및 공개 CORE CAS 2개 통과, NEW0. 전송 전 거절은 명령 호출·native marker·점유를 남기지 않는다.
+- gate 변화: 없음. fake owner 경로의 소스 검증이며 실제 모델·보호 설치·Discord·물리 수용은 별도다.
