@@ -72,8 +72,10 @@ def test_ingress_readback_rejects_unreachable_or_unexpected_command(tmp_path,mon
         calls.append((args,kwargs))
         return types.SimpleNamespace(returncode=exitcode,stdout=b'',stderr=b'')
     monkeypatch.setattr(m,'run',run)
-    with pytest.raises(ValueError,match='INGRESS_EXECUTION_READBACK_FAILED'):
+    with pytest.raises(ValueError,match='INGRESS_EXECUTION_READBACK_FAILED') as error:
         m.verify_ingress()
+    detail = json.loads(str(error.value).split(' ',1)[1])
+    assert detail['command'] == 'rosy-conversation-v1' and detail['returncode'] == exitcode
     args,kwargs = calls[0]
     assert args[:4] == ('/usr/sbin/runuser','-u','rosy-model-ingress','--')
     assert args[4] == str(m.INGRESS)
@@ -339,7 +341,9 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
         m.STATUS.write_bytes(b'previous status owner')
         m.STATUS.chmod(0o750)
     status_config = m.CONFIG.parent/'status.json'
-    if stage != 'no_status':status_config.write_bytes(b'previous status config')
+    if stage != 'no_status':
+        status_config.write_bytes(b'previous status config')
+        status_config.chmod(0o640)
     reviewer = m.CONFIG.parent/'status-reviewer-admission.json'
     reviewer.write_bytes(b'previous protected billing evidence')
     original_stat = m.Path.stat
