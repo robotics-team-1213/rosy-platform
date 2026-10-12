@@ -102,6 +102,21 @@ def test_registry_bridge_reaches_actual_profile_dispatcher_without_selecting_or_
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('fault', ['empty', 'nested', 'clock', 'ports', 'top'])
+def test_profile_registry_composition_refuses_ambiguous_or_owned_ports(tmp_path, fault):
+    config, calls, _, registry = setup(tmp_path)
+    clock = config.pop('clock')
+    combined = dict(profile_workers=(config,), clock=clock)
+    if fault == 'empty': combined['profile_workers'] = ()
+    elif fault == 'nested': config['profile_workers'] = (config.copy(),)
+    elif fault == 'clock': config['clock'] = clock
+    elif fault == 'ports': config['approved_artifacts'] = lambda: {}
+    elif fault == 'top': combined['enabled'] = True
+    bridge = importlib.import_module('tools.incident_reasoning')
+    with pytest.raises(ValueError): bridge.registry_calibration_config(combined, registry, domain='line_follow')
+    assert calls == []
+
+
 @pytest.mark.parametrize('fault', ['profile', 'domain', 'revoked'])
 def test_registry_will_not_supply_other_or_revoked_calibration(tmp_path, fault):
     config, _, candidate, registry = setup(tmp_path)
