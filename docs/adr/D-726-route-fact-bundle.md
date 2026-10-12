@@ -19,7 +19,7 @@ Fleet에는 경로를 만드는 자리가 넷이다. 칠해진 차로 그래프�
 - `nav2`: 이 런타임에서 돌리지 않는다. 동작은 `open_floor`. 받는 값은 `x`, `y`, `yaw`. `note`는 `not_this_runtime`이다.
 - `grid`: 이 런타임에서 돌리지 않는다. 동작은 `occupancy`. 받는 값은 `goal`. `note`는 `not_this_runtime`이다.
 
-trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_cost`(차로 id당 0 이상의 유한한 초, 최대 32)는 그 계획에 들어간다. 활성 지도에 없는 id는 422 `TRIP_UNKNOWN_EDGE`와 `detail.edge`다. 빈 값은 지금과 같은 경로다. 차로 id는 그 차로의 양방향을 막거나 비용을 더한다. 재계획은 이 `blocked_edges`를 교통 차단과 합치고 `extra_cost`를 유지한다. `context`는 실행 plan 안이 아니라 그 옆에 기록한다.
+trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_cost`(차로 id당 0 이상의 유한한 초, 최대 32)는 그 계획에 들어간다. 활성 지도에 없는 id는 422 `TRIP_UNKNOWN_EDGE`와 `detail.edge`다. 막힌 차로 옆에 다른 차로가 있으면 그 경로를 반환하고, 남은 차로가 없으면 기존 422 `TRIP_NO_ROUTE`다. 빈 값은 지금과 같은 경로다. 차로 id는 그 차로의 양방향을 막거나 비용을 더한다. 재계획은 이 `blocked_edges`를 교통 차단과 합치고 `extra_cost`를 유지한다. `context`는 실행 plan 안이 아니라 그 옆에 기록한다.
 
 `/route`의 다음 점은 0.20 m다. 그 현이 공칭 차체를 가져온 차로 밖으로 내보내면 점은 0.12 m까지 줄고, 장치 목표 공(0.10 m)보다는 길다. 남은 거리가 0.12 m 이하면 끝을 유지한다. `holds`는 `complete`, `step_m`, `chord_m`, `body_clear_m`, `body_inside`, `s_m`이다. 링의 0.20 m 현은 차체 여유 안이라 줄이지 않는다.
 

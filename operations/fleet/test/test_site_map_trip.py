@@ -226,6 +226,7 @@ def test_caller_blocks_and_costs_reach_the_plan(tmp_path):
     plain = client.post(url, json={"to": "NW"}, headers=OPERATOR)
     costed = client.post(url, json={"to": "NW", "extra_cost": {"ring_s": 2.0}}, headers=OPERATOR)
     blocked = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e"]}, headers=OPERATOR)
+    closed = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e", "east"]}, headers=OPERATOR)
     unknown = client.post(url, json={"to": "NW", "blocked_edges": ["no-such-edge"]}, headers=OPERATOR)
     duplicate = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e", "ring_e"]}, headers=OPERATOR)
     negative = client.post(url, json={"to": "NW", "extra_cost": {"ring_s": -1}}, headers=OPERATOR)
@@ -234,7 +235,12 @@ def test_caller_blocks_and_costs_reach_the_plan(tmp_path):
     assert [s["edge_id"] for s in costed.json()["segments"]] == ["ring_s", "ring_e", "ring_n"]
     assert costed.json()["eta_s"] == pytest.approx(plain.json()["eta_s"] + 2.0)
     assert costed.json()["context"]["supplied"]["extra_cost"] == {"ring_s": 2.0}
-    assert blocked.status_code == 422 and blocked.json()["detail"]["code"] == "TRIP_NO_ROUTE"
+    # ring_s can leave onto east:rev, so closing only ring_e takes that lane.
+    assert blocked.status_code == 200, blocked.text
+    assert [s["edge_id"] for s in blocked.json()["segments"]] == ["ring_s", "east", "ring_n"]
+    assert blocked.json()["context"]["supplied"]["blocked_edges"] == ["ring_e"]
+    assert "ring_e" not in blocked.json()["context"]["holds"]["segments"]
+    assert closed.status_code == 422 and closed.json()["detail"]["code"] == "TRIP_NO_ROUTE"
     assert unknown.status_code == 422 and unknown.json()["detail"]["code"] == "TRIP_UNKNOWN_EDGE"
     assert unknown.json()["detail"]["detail"]["edge"] == "no-such-edge"
     assert duplicate.status_code == 422 and negative.status_code == 422
