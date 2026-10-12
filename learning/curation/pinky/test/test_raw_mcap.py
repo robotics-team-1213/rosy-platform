@@ -40,7 +40,7 @@ float64 z
 
 
 def native_recording(tmp_path, *, raw_linear=.02, mixed_namespace=False,
-                     command_schema='geometry_msgs/msg/Twist'):
+                     command_schema='geometry_msgs/msg/Twist', raw_axis=None):
     pytest.importorskip('mcap_ros2'); cv2 = pytest.importorskip('cv2'); np = pytest.importorskip('numpy')
     from mcap_ros2.writer import Writer
     raw, metadata = recording(tmp_path)
@@ -50,8 +50,11 @@ def native_recording(tmp_path, *, raw_linear=.02, mixed_namespace=False,
         for index in range(2):
             stamp = 1_000_000_000 + index * 100_000_000
             namespace = '/another' if mixed_namespace and index else '/fixture'
-            writer.write_message(namespace + '/cmd_vel', twist, {
-                'linear': {'x': raw_linear, 'y': 0., 'z': 0.}, 'angular': {'x': 0., 'y': 0., 'z': -.1}},
+            command = {'linear': {'x': raw_linear, 'y': 0., 'z': 0.}, 'angular': {'x': 0., 'y': 0., 'z': -.1}}
+            if raw_axis is not None:
+                vector, axis, value = raw_axis
+                command[vector][axis] = value
+            writer.write_message(namespace + '/cmd_vel', twist, command,
                 log_time=stamp, publish_time=stamp)
             writer.write_message('/fixture/camera/front', image, {
                 'header': {'stamp': {'sec': 1, 'nanosec': index * 100_000_000}, 'frame_id': 'front'},
@@ -94,6 +97,23 @@ def test_mixed_robot_namespace_rejected(tmp_path):
     convert(raw, meta, tmp_path / 'common', environment='sim', clock_domain='gazebo_sim')
     with pytest.raises(ValueError, match='namespaces'):
         verify(tmp_path / 'common')
+
+
+@pytest.mark.parametrize('vector,axis', [('linear', 'y'), ('linear', 'z'), ('angular', 'x'), ('angular', 'y')])
+def test_other_velocity_axes_cannot_disappear_from_planar_evidence(tmp_path, vector, axis):
+    from raw_messages import load_tables
+    raw, _ = native_recording(tmp_path, raw_axis=(vector, axis, .01))
+    with pytest.raises(ValueError, match='raw cmd_vel unsupported planar axes'):
+        load_tables(raw)
+
+
+@pytest.mark.parametrize('vector,axis', [(v, a) for v in ('linear', 'angular') for a in ('x', 'y', 'z')])
+@pytest.mark.parametrize('value', [float('nan'), float('inf'), -float('inf')])
+def test_nonfinite_velocity_is_not_cleaned_into_missing_or_zero(tmp_path, vector, axis, value):
+    from raw_messages import load_tables
+    raw, _ = native_recording(tmp_path, raw_axis=(vector, axis, value))
+    with pytest.raises(ValueError, match='raw cmd_vel nonfinite'):
+        load_tables(raw)
 
 
 def test_native_preparation_keeps_research_holds(tmp_path):
