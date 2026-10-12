@@ -98,6 +98,9 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "control/drive/behaviors/swarm",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
+              "fleet/fleet/server/channel",
+              "fleet/fleet/server/channel/conversation",
+              "fleet/fleet/server/channel/execution",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
@@ -106,6 +109,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/incidents/automation/execution",
               "fleet/fleet/incidents/automation/operating",
               "decision/src/rosy/decision/deliberation",
+              "decision/src/rosy/decision/conversation",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
               "decision/src/rosy/decision/deliberation/evaluation",
@@ -123,6 +127,41 @@ SIZE_VERDICTS = {
         "and single-case rule/model claim; no provider or robot client. Initial 294 physical lines; "
         "docs/plans/2026-10-12-incident-operating-subpackage.md records the simultaneous parent "
         "measurement, stable imports and installed closure. Keep +150 and existing parent ceilings.",
+    ),
+    "fleet/fleet/server/channel/execution": (
+        487,
+        "accept: D-728 actual original-instruction grant, durable step/Task linkage and existing-owner "
+        "dispatch subpackage independently prechecked by pipeline_review on 2026-10-12 at487. "
+        "Final source9eebc457c5 measures execution582/residual channel1440/conversation300/Fleet55222 "
+        "simultaneously; retain original channel1379/conversation280/Fleet55120 and every historical "
+        "verdict, +150 allowance, zero/file/hard ceiling and earlier split obligation. "
+        "Installed wheel/sdist/source-image closure is a separate remote gate; "
+        "source admission never establishes activation or physical completion. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md.",
+    ),
+    "fleet/fleet/server/channel/conversation": (
+        280,
+        "accept: D-728 actual conversation journal/worker/runtime owner measured 280 physical lines on "
+        "2026-10-12; independent pipeline_review structural precheck PASS. Residual channel1418 and "
+        "Fleet55132 remain within unchanged1379/55120+150 allowances. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Source/installed closure and "
+        "semantic admission are distinct gates; model remains OFF pending conformance.",
+    ),
+    "decision/src/rosy/decision/conversation": (
+        256,
+        "accept: D-728 pure strict conversation/profile/semantic-step codec measured 256 physical lines "
+        "on 2026-10-12; independent pipeline_review structural precheck PASS. No Fleet writer imports, "
+        "network, credentials or activation. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Independent semantic "
+        "conformance and protected host admission remain required.",
+    ),
+    "fleet/fleet/server/channel": (
+        1_379,
+        "split: D-728 actual channel owner extraction measured on 2026-10-12; independent pipeline_review precheck PASS. "
+        "The nine intake/workflow/Mission/incident/outbox/gateway/model modules retain existing owners and "
+        "guards; stable old module paths alias the same implementation objects. Largest child file249; "
+        "installed wheel/sdist/source-image closure is verified separately. Keep +150 and every file/hard "
+        "ceiling. See docs/plans/2026-10-12-natural-language-channel-operations.md",
     ),
     "decision/src/rosy/decision/deliberation": (
         231,
@@ -366,7 +405,33 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        56_077,
+        55_428,
+        "split: independently re-judged by pipeline_review on 2026-10-12 after integrating "
+        "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Actual parent55428 "
+        "= prior55222 +206 from existing D-726 route and D-730 recovery owners; channel1440, "
+        "conversation300, execution588, operating314 measured simultaneously. Retain all prior "
+        "55120/56077 histories, every nested baseline, +150, zero/file/hard ceilings and split "
+        "obligation. Independent precheck is source scope only; terminal remote regression, "
+        "installation, activation and physical acceptance remain separate. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Previous55120 verdict: "
+        "split: D-728 actual channel subpackage measured parent55120/child1379 together on 2026-10-12; "
+        "independent pipeline_review precheck PASS. Combined56499 includes only55 compatibility/package lines above56444; "
+        "existing nine implementations moved without behavior change. Preserve +150, every zero/file/hard "
+        "ceiling and all prior obligations. See docs/plans/2026-10-12-natural-language-channel-operations.md. "
+        "Previous56444 verdict: split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
+        "on2026-10-12 at56444. Separate durable channel owner and display-only watch keep their "
+        "existing readers/authority; app923, console.py1325, ConsoleJS1035. Preserve +150, all "
+        "zero/file/hard ceilings and every password/full-progress/observe/server/UI/channel split "
+        "obligation. Runtime installation remains a separate gate. Prior56056 and55856 reviews: "
+        "split: D-720 independently re-judged by pipeline_review on 2026-10-12 at56056. "
+        "Durable channel-model storage, bounded worker and fixed SSH/runtime composition remain "
+        "separate small server owners; original receipt/outbox and CORE authority are unchanged. "
+        "Keep +150, every file/zero-growth/hard ceiling and password/full-progress/observe/server/UI "
+        "obligation. Before further independent channel runtime growth, review an actual channel "
+        "subpackage responsibility split with installed consumers and simultaneous parent/unit "
+        "measurements. Source/runtime admission is separate from structural approval. "
+        "docs/plans/2026-10-12-discord-deliberation-runtime.md. Previous55664 verdict: "
+        "split: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
         "split: re-judged at 56077 on 2026-10-12 for the route fact bundle (D-726). "
         "trip and /route return a fact an AI or another system can read. A caller can "
         "block an edge or add seconds, and a /route chord shortens only when the nominal "

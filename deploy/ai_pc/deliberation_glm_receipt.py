@@ -19,9 +19,14 @@ CAPABILITIES = AdapterCapabilities('opencode', 'zai-coding-plan/glm-5.3-flash',
     ('line_follow', 'door', 'arm_target'), ('text',), False, False, False)
 
 
+def status_capabilities():
+    return replace(CAPABILITIES, adapter='opencode-1.18.35-status-json-v2', domains=('fleet_status',))
+
+
 def admission(value):
     if (type(value) is not AdapterCapabilities
-            or replace(value, ready=False, isolated=False, cost_verified=False) != CAPABILITIES):
+            or replace(value, ready=False, isolated=False, cost_verified=False)
+            not in (CAPABILITIES, status_capabilities())):
         raise ValueError('EXACT_GLM_RUNTIME_ADMISSION_REQUIRED')
     return value
 

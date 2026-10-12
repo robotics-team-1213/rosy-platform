@@ -180,3 +180,8 @@
 - 변경: Chromium 계정 전환 시험에 실제 pagehide→pageshow 순서를 적용했다. 이전 pageshow 단독 시험은 인증 재조회가 발생하지 않아 제품 결함 재현 증거로 사용할 수 없다. 기존 scope가 이전 응답을 차단하므로 추가 공통 호출 guard는 만들지 않았다.
 - 증거: 독립 검토가 실제 모든 refreshAuthorization 호출 경로의 기존 scope 무효화를 확인하고 앞선 blocker를 철회했다. 두 줄 principal 방어 보강은 source/Safety 승인했다. 기존 확인 owner의 pending principal 교체는 별도 Node 회귀로 검증한다.
 - gate 변화: 앞선 NEW2는 잘못된 lifecycle fixture의 실패로 정정한다. 원격 GREEN·설치·착지·운영 검증은 후속이다.
+
+## 2026-10-12 · 5941920df7 · D-720 원문 요청의 숙고 상태 표시
+- 변경: 기존 요청 검토 상태에 bound 모델 ID·숙고 상태·실행 승인 아님을 표시한다. owner 결과 조회 실패도 상태가 성공한 것으로 표시하지 않는다.
+- 증거: source scoped review 승인. 실제 브라우저/서명 배포·Discord 왕복은 별도 후속 검증이다.
+- gate 변화: source 연결. 접수·판단·장치 실행·목표 완료는 서로 다른 수용이다.

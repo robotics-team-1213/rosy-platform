@@ -26,3 +26,14 @@
 - 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
 - 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
 - gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · 5941920df7 · D-720 읽기 전용 status 도메인
+- 변경: fleet_status/READ_ONLY_QUERY, channel READ_ONLY schema, 고정 status profile·source-bound calibration-exempt factual-display 정책을 추가했다. 기존3domain payload/digest는 유지한다.
+- 증거: status68, codecs/launcher111 원격 선택 GREEN, NEW0; source review 승인. 모델 ready 자체는 admission 증거가 아니다.
+- gate 변화: source 계약. 일반 사건 calibration과 실제 보호 GLM cost/host/admission·독립 정답 수용은 유지한다.
+
+## 2026-10-12 · 1164d858e · D-728 independent natural conversation proposals
+
+- 변경: Added pure `rosy.decision.conversation` profile/input/flat semantic-step codec, explicitly installed by the existing Fleet distribution. Model output maps only to existing validated `core_common.intent` grammar. No Fleet writer, network, credential or activation exists in this holder. D-720 status-only calibration exemption cannot admit this profile.
+- 증거: Independent structure precheck256 physical lines; source/installed/architecture remote checks71/129/38 passed with0 NEW.
+- gate 변화: Actual synthetic Qwen semantic conformance has three unresolved cases, so admission remains OFF. Fleet retains current authority, durable attempts and grounded replies; CORE retains final motion authority.

@@ -82,6 +82,11 @@ _PICK_PLACE_ARGUMENTS = json.dumps({
 }, separators=(",", ":"))
 
 MODEL_TOOL_CATALOG = MappingProxyType({
+    "get_fleet_state": ModelToolDefinition(
+        name="get_fleet_state", description="Read the current Fleet status for the scoped read-only question.",
+        effect_class=ToolEffectClass.READ_ONLY, feedback_enabled=True,
+        _parameters_json=_EMPTY_OBJECT, scope='channel',
+    ),
     "get_incident_status": ModelToolDefinition(
         name="get_incident_status", description="Read trusted evidence for the already scoped incident.",
         effect_class=ToolEffectClass.READ_ONLY, feedback_enabled=True,
@@ -118,7 +123,7 @@ MODEL_TOOL_CATALOG = MappingProxyType({
 
 def provider_tool_schemas(*, feedback_only: bool = True, scope: str = 'mission') -> list[dict[str, Any]]:
     """Project only the selected turn's catalog entries as fresh JSON objects."""
-    if scope not in {'mission', 'incident'}:
+    if scope not in {'mission', 'incident', 'channel'}:
         raise ValueError('UNSUPPORTED_TOOL_SCOPE')
     return [
         definition.provider_schema()
