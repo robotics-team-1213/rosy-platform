@@ -15,3 +15,5 @@ CORE의 동일 막힘 ID가 BACKING/SETTLING 동안 유지된다. 늦거나 중�
 ## Consequences and verification
 
 상태 기계의 네 지연 답 회귀와 실제 CORE API의 두 phase 회귀를 적격 AI PC에서 확인했다. 원격 관련 시험 terminal exit 0이며 신규 실패 비교·독립 Safety-Review 후 로컬 착지한다. 이 source 수정은 실제 모델·장치 motion·배포·현장 수용의 증거가 아니다.
+
+2026-10-12 독립 `responsibility_review` source Safety-Review: `319dfbf92`의 guard는 기존 manager lock 안에서 중복 BACK을 거절하고 WAIT/ABORT·로컬 재시도·CORE 최종 권한을 보존한다. 중요한 blocker 없음. 최종 `be23fb518e`의 상태 기계/API 원격 회귀는 terminal exit 0, known-failures NEW 0이다. 로그는 세션 `logs/active-back-final/run-1.txt`에 보존한다. 이 승인은 device/field 수용이 아니다.
