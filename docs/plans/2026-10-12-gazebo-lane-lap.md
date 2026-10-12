@@ -415,3 +415,13 @@ a914201e8의 최종 정상 모델 PC 회귀는 877 PASS·34 warnings·terminal 0
 - 종료 후 OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료와 전체 source/install 해시 이상 0을 확인했다. 1,697개 샘플 자세의 차체 paint·wall·외부 겹침은 0이나 연속 접촉 없음과 지도 완주의 증거는 아니다.
 
 다음 비교는 같은 AI PC와 c66d19b83·지도·모델·물리·잡음·안전 기준·Fleet 정체 20 wall초/0.05m·주행 예산을 유지하고, 실행 성능 변수는 CPUQuota만 600%에서 1200%로 늘린다. MemoryMax 6G는 유지한다. 별도의 domain·포트에서 기본 SIM 6코어/8GiB 조건과 추가 여유 12코어 확인, 자기 12/8 lock, 실제 cgroup 제한 readback을 실행 전에 요구한다. RTF·CPU 제한·실제 진행·SDK 거절을 함께 기록한다. 초기 계측 밖 warmup과 후속 관측 구간을 구분하고, RTF가 개선돼도 정체가 남으면 성능만의 설명을 기각한다. 이 비교 준비와 예약은 주행 성공이 아니다. 전체 지도 완주·새 실행 반복·main 착지·push·실물 수용은 미완료다.
+
+## 2026-10-13 · CPU 12 비교 Leg12 종료
+
+- 같은 c66d19b83 전체 동결본으로 새 17패키지를 빌드했다. creator가 직접 반환한 경로·내용·SHA를 검증한 예약 하나만 handoff하고 정상 SIM 자원과 추가 12코어 여유를 다시 확인했다. 실제 정지 점검은 CPU `1200000/100000`·MemoryMax 6GiB, 두 로봇의 명령·이동 0, 이전과 동일한 지도·모델·법칙·640빔·SDK 프로필·CORE 단독 최종 publisher·종료를 확인했다. 주행은 별도 최신 자원·동결 해시 확인 뒤 한 번만 실행했다.
+- Leg12는 0.367661837m 이동했으며 도착 false다. 주행 구간 RTF는 Leg11 0.435에서 Leg12 0.857로 개선됐다. 최종 zero 직전 20 wall초의 동일 native 자세 경로 투영 변화는 약 52.8mm다. Leg11 정체에 성능 기여가 없었다고 결론 내리지 않는다. 초기 warmup은 계측 밖이며, 창별 실제 clock/receipt 계산을 전체 실행의 정상 실시간 보장으로 확대하지 않는다.
+- 최초 zero sim75.366초 직전 SDK는 front 0.079404m, 마지막 zero sim89.165초 직전은 0.059050m였고 두 경우 blocked true·can_rotate false였다. 해당 zero 근처 CORE는 TRACKING이며 traffic은 APPROACH 감속이다. SDK 거절과 실제 zero의 수신 순서는 확인했지만 정확한 소비 frame·임계 빔의 원인은 아직 재생해야 한다.
+- 마지막 zero 약 3.245 wall초 뒤 별도 관측에서 CORE `obstacle_ahead` HOLD, body gap 0.016039m < stop gap 0.0214m가 나왔다. 감독 runner가 OFF·cancel했고 Fleet 최종 상태는 canceled다. 이번 실행은 Fleet stall 재현이 아니다. HOLD의 age null만으로 관측 만료를 단정하지 않으며 일반 scoped 계산인지 legacy 계산인지도 원본 scan 재생으로 대조한다.
+- OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료, source 7,554·install 2,726 해시 이상 0과 진단 오류 0을 확인했다. 두 로봇 각 2,745개 샘플 자세의 차체 겹침은 0이나 연속 접촉·도로 내부 수용은 아니다. CPU 증가만으로 완주 해결은 미수용이다. SDK 임계 거리와 후속 CORE 몸 여유를 따로 재생하며 안전 기준·잡음·빔을 그대로 유지한다.
+
+Leg11 기록의 첫 문서 회귀는 새 로그 제목 형식 오류로 2 NEW였다. 해당 미착지 항목의 제목을 별도 교정 커밋 90f76dbee로 고치고 생성 색인을 갱신했다. 같은 정상 모델 PC 문서 회귀는 terminal 0·NEW 0, harness lint는 error 0이다. 기존 커밋과 실패 원본을 보존했고 제품 로직·Gazebo 동결 소스는 바꾸지 않았다. 지도 완주·독립 반복·main 착지·push·실물 수용은 미완료다.
