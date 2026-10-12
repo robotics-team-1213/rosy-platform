@@ -55,3 +55,8 @@ def camera_admission_error(phase, visible_frames, learned_steps):
 
 def camera_sample_due(frame, episode_start_frame):
     return (frame - episode_start_frame) % 24 == 0
+
+
+def camera_snapshot_due(camera_frames, last, captured):
+    key = (last.get('reason'), last.get('strategy'))
+    return camera_frames == 0 or (bool(key[0]) and key not in captured and len(captured) < 8)

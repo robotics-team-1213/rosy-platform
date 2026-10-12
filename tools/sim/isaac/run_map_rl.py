@@ -23,7 +23,7 @@ from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
 from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision, verify_ground_collision
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due,
-                           remember_camera_action, learn_transition)
+                           remember_camera_action, learn_transition, camera_snapshot_due)
 
 
 def episode_phases(train_episodes, *, camera, evaluation_only):
@@ -33,11 +33,6 @@ def episode_phases(train_episodes, *, camera, evaluation_only):
                                          *[('train', seed, 0.) for seed in range(train_episodes)]]
     return phases + [(phase, seed, angle) for seed, angle in evaluations
                      for phase in (('baseline', 'eval') if camera else ('eval',))]
-
-
-def camera_snapshot_due(camera_frames, last, captured):
-    key = (last.get('reason'), last.get('strategy'))
-    return camera_frames == 0 or (bool(key[0]) and key not in captured and len(captured) < 8)
 
 
 def camera_route_guide(task, pose, result, stamp):
