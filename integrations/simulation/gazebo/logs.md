@@ -382,5 +382,5 @@
 ## 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
 
 - 변경: map_v2_fleet 두 learned line observer에 기존 crosswalk_uncertainty_enabled를 명시했다. 검출된 횡단 구역 또는 미검출 프레임의 lookahead 거리 오차를 기존 containment에 전달한다. 이 입력은 기존 조건부 구역 수용과 IR guard 유예에 사용되므로 보고만의 변경은 아니다. CORE 횡단 gate의 활성 여부·임계값·최종 명령 권한은 변경하지 않는다.
-- 증거: 원격 RED에서 두 namespace 공통 parameter 누락을 재현했다(1 FAIL/2 PASS). 기존 GAZEBO 투영 오차는 경계 미검출 때도 존재하므로 초기 시험의 null 가정을 정정했다. 켜기 전후 lateral 오차 동일, 빈 경계 보존, crosswalk 유무별 finite positive along 오차를 검사한다. 수정 후 관련 원격 회귀는 별도 실행한다.
-- 수용 등급 변화: 없음. 유효 구역 수용·서행/정지 정책·보행자·Fleet·완주는 실제 두 로봇 실행에서 별도로 확인한다.
+- 증거: 원격 RED에서 두 namespace 공통 parameter 누락을 재현했다(1 FAIL/2 PASS). 기존 GAZEBO 투영 오차는 경계 미검출 때도 존재하므로 초기 시험의 null 가정을 정정했다. 켜기 전후 lateral 오차 동일, 빈 경계 보존, crosswalk 유무별 finite positive along 오차를 검사한다. 수정 ac1a13865의 관련 원격 회귀는 AI PC에서 151 PASS, terminal exit 0, known_failures NEW 0으로 확인했다.
+- gate 변화: 수용 등급은 그대로 HOLD이며, 입력 연결은 조건부 구역 수용에 영향을 준다. 유효 구역 수용·서행/정지 정책·보행자·Fleet·완주는 실제 두 로봇 실행에서 별도로 확인한다.
