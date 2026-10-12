@@ -1,5 +1,4 @@
 """The privileged client installer binds only the separately reviewed conversation proof."""
-import copy
 import hashlib
 import importlib.util
 import json
@@ -47,7 +46,7 @@ def test_conversation_config_accepts_separate_proof(installer, admission):
     ('source_commit','b'*40), ('semantic_evidence_sha256','b'*64),
     ('primary_admitted',False), ('primary_admitted',1), ('valid_until',float('inf')),
     ('valid_until',0), ('valid_until',True), ('ssh_port',2222), ('ssh_port',True),
-    ('host','-oProxyCommand=bad'), ('key_file','/tmp/key'), ('hourly_followup',True),
+    ('host','-oProxyCommand=bad'), ('host',123), ('key_file','/tmp/key'), ('hourly_followup',True),
     ('policy',{}), ('profile',{}),
 ])
 def test_conversation_config_refuses_drift(installer, admission, field, value):
@@ -87,3 +86,33 @@ def test_conversation_cli_reaches_root_boundary_without_mutation(tmp_path):
         env={**os.environ,'PYTHONPATH':str(SCRIPT.parents[2])})
     assert result.returncode != 0 and 'root installation required' in result.stderr
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize('name', ['status.json','conversation.json'])
+def test_install_destination_modes_and_status_preservation(installer, admission, tmp_path, monkeypatch, name):
+    import os
+    from types import SimpleNamespace
+    cfg, _ = admission
+    key = tmp_path/'private'; key.write_bytes(b'test-private-key'); key.chmod(0o600)
+    real_path = Path
+    mapped = {'/etc/rosy':tmp_path, '/home/robttt/.rosy/status-incoming/broker.key':key}
+    monkeypatch.setattr(installer,'Path',lambda path:mapped.get(str(path),real_path(path)))
+    monkeypatch.setattr(installer.pwd,'getpwnam',lambda _:SimpleNamespace(pw_uid=os.getuid()))
+    monkeypatch.setattr(installer,'trusted_directory',lambda _:None)
+    monkeypatch.setattr(installer.os,'chown',lambda *args:None)
+    monkeypatch.setattr(installer.subprocess,'check_output',lambda *args,**kwargs:'ssh-ed25519 public')
+    calls=[]
+    monkeypatch.setattr(installer,'install_file',lambda path,data,mode,gid=0:calls.append((path.name,data,mode,gid)))
+    installer.install_client(cfg,b'config',b'model.example ssh-ed25519 host\n',b'ssh-ed25519 public',name)
+    assert calls == [('broker.key',b'test-private-key',0o640,10001),
+        ('known_hosts',b'model.example ssh-ed25519 host\n',0o640 if name=='conversation.json' else 0o644,
+         10001 if name=='conversation.json' else 0), (name,b'config',0o640,10001)]
+
+
+@pytest.mark.parametrize('pins', [b'model.example ssh-ed25519 first\nother ssh-ed25519 second',
+    b'[model.example]:2222 ssh-ed25519 host', b'foreign.example ssh-ed25519 host'])
+def test_pin_scope_refused_before_private_key_access(installer, admission, monkeypatch, pins):
+    cfg, _ = admission
+    monkeypatch.setattr(installer.os,'open',lambda *a:pytest.fail('private key accessed'))
+    with pytest.raises(SystemExit,match='one fixed host pin'):
+        installer.install_client(cfg,b'config',pins,b'public','conversation.json')
