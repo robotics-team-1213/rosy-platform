@@ -91,6 +91,7 @@ def change_context(f, change):
             else:
                 receipt=f.store.get_task(f.task['task_id'])['receipt']
                 if change == 'release':receipt['safe_released']=False
+                elif change == 'quiescence':receipt['quiescence']['quiescent']=False
                 else:receipt['operation'][change]=str(uuid4())
                 conn.execute('UPDATE fleet_tasks SET receipt_json=? WHERE task_id=?',(json.dumps(receipt),f.task['task_id']))
 
@@ -132,7 +133,7 @@ def test_followup_queues_once_and_rechecks_original_after_selection_row_moves(tm
     assert not dispatched and f.store.get_task(queued[0])['status']=='HOLD'
 
 
-@pytest.mark.parametrize('change',['unknown','withdraw','boot_id','run_id','release'])
+@pytest.mark.parametrize('change',['unknown','withdraw','boot_id','run_id','release','quiescence'])
 def test_changed_completed_context_is_absent_on_next_turn(tmp_path,change):
     f=completed_turn(tmp_path)
     change_context(f,change)

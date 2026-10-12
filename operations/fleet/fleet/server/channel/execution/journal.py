@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from core_common.intent import interpret
 from rosy.decision.conversation.codec import AcceptedContext, ConversationInput, checked_answer, conversation_input, digest
 from .instructions import bind_original, catalog_hash
-from .outcomes.evidence import exact_operation
+from .outcomes.evidence import exact_operation, safe_proof
 from ...dispatch_admission import reserve, release
 
 
@@ -59,7 +59,9 @@ class ExecutionJournal:
             if receipt.get('operation') or receipt.get('native_required'):
                 outcome = exact_operation(receipt['outcome'],receipt['operation'])
                 if (receipt.get('safe_released') is not True or outcome['result'] != 'SUCCEEDED'
-                        or outcome['correlation_id'] != row['attempt_id']):return None
+                        or outcome['correlation_id'] != row['attempt_id'] or not safe_proof({
+                            'lookup':'FOUND','operation':outcome,'quiescence':receipt.get('quiescence'),
+                            'owner':receipt.get('quiescence',{})},outcome)):return None
             call = interpret(json.loads(row['plan_json']))[row['step_index']]
             if call.verb != 'navigate' or call.robot != row['robot_id']:return None
             return AcceptedContext(**scope,request_id=bound['request_id'],task_id=row['task_id'],
