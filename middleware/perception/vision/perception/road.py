@@ -254,12 +254,15 @@ def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int,
     stripe_groups = set()
     columns = np.abs(view.y[0, :]) <= CORRIDOR_HALF_M
     for index, (top, bottom) in enumerate(groups):
-        distance = _ground_distance(ground, (top + bottom) / 2., bright.shape[1] / 2.)
-        if distance is None or not near <= distance <= far:
-            continue
-        grid_row = int(np.argmin(np.abs(view.x[:, 0] - distance)))
-        # Only positive D-491 stripe evidence excludes a stop candidate; broken bars stay conservative.
-        if _stripes(grid[grid_row, columns]):
+        # Every source row needs positive stripe evidence; a merged real stop bar must survive.
+        for source_row in range(top, bottom + 1):
+            distance = _ground_distance(ground, source_row, bright.shape[1] / 2.)
+            if distance is None or not near <= distance <= far:
+                break
+            grid_row = int(np.argmin(np.abs(view.x[:, 0] - distance)))
+            if not _stripes(grid[grid_row, columns]):
+                break
+        else:
             stripe_groups.add(index)
     return RoadMarkingObservation(image_row=row, distance_m=near, confidence=confidence), stripe_groups
 
