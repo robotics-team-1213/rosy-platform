@@ -136,7 +136,7 @@ def test_real_cancel_owner_removes_existing_queue_and_calls_core_once(tmp_path):
     task=asyncio.run(f.service.submit_navigation(robot_id='rosy_40',x=1.,y=2.,source='operator',actor_id='op',request_key='old'))
     asyncio.run(f.worker.step(f.receipt['request_id']));asyncio.run(f.worker.step(f.receipt['request_id']))
     assert f.writes==['cancel'] and f.store.get_task(task['task_id'])['status']=='CANCELED'
-    assert f.journal.view(f.receipt['request_id'])['steps'][0]['state']=='ACCEPTED'
+    assert f.journal.view(f.receipt['request_id'])['steps'][0]['state']=='HOLD'
 
 
 def test_direct_unknown_keeps_claim_and_restart_never_replays(tmp_path):
