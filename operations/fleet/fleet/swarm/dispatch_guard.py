@@ -6,16 +6,18 @@ _guards = ContextVar('fleet_dispatch_guards', default=())
 
 
 @contextmanager
-def dispatch_guard(check):
-    token = _guards.set((*_guards.get(), check))
+def dispatch_guard(check, *, paths=None):
+    token = _guards.set((*_guards.get(), (check,paths)))
     try:
         yield
     finally:
         _guards.reset(token)
 
 
-def check_dispatch(request=None):
+def check_dispatch(request=None, *, path=None):
     if request is not None and request.method not in {'POST', 'PUT', 'DELETE'}:
         return
-    for check in _guards.get():
-        check()
+    path=request.url.path if request is not None else path
+    for check,paths in _guards.get():
+        if paths is None or path is None or path in paths:
+            check()

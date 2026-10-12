@@ -102,7 +102,8 @@ class GoalLeases(dict):
             try:
                 from fleet.swarm.dispatch_guard import dispatch_guard
                 with dispatch_guard(lambda: self.admit_attempt(task_id, correlation_id)
-                                    if task_id is not None and self.admit_attempt is not None else None):
+                                    if task_id is not None and self.admit_attempt is not None else None,
+                                    paths={'/api/v1/navigation/goal'}):
                     result = await client.navigation_goal(x, y, yaw, **options)
             except (Exception, asyncio.CancelledError):
                 if stop != self.stop_token(robot_id):

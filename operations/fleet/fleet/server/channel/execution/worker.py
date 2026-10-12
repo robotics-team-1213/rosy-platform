@@ -29,6 +29,17 @@ class ExecutionWorker:
             raise ValueError('CHANNEL_STEP_ALREADY_SPENT')
         if call.verb not in STOP_VERBS and not self.journal.store.dispatch_generation_is_current(row['generation']):
             raise ValueError('STOP_GENERATION_CHANGED_BEFORE_SEND')
+        if call.verb not in STOP_VERBS:
+            targets=[call.robot] if call.robot else list(self.execution.console.robot_ids)
+            if call.verb=='formation_resume':
+                f=self.execution.console.formation_status()
+                targets=list(dict.fromkeys([f.get('leader'),*f.get('assignment',{})]))
+            if call.verb=='follow':targets.append(call.body['target_robot_id'])
+            for target in targets:
+                current=next((r for r in self.journal.environment()['robots'] if r['robot_id']==target),None)
+                # Final fresh observer basis supplements the owner's fresh capability/state checks.
+                if current is None or current['online'] is not True or current.get('estop',current.get('state',{}).get('safety',{}).get('estop')) is not False:
+                    raise ValueError('CURRENT_ROBOT_OBSERVATION_UNKNOWN')
 
     async def preflight(self,rid,index,call):
         self.fence(rid,index,call)
@@ -99,7 +110,8 @@ class ExecutionWorker:
                         return
                     self.journal.begin(rid,index,[('robot',r) for r in robots],stopping=call.verb in STOP_VERBS)
                     began=True
-                    with dispatch_guard(lambda:self.fence(rid,index,call)):
+                    paths={call.path} if call.scope=='robot' else None
+                    with dispatch_guard(lambda:self.fence(rid,index,call),paths=paths):
                         result=await self.execution.step(call,principal,'discord-natural:'+rid,index)
                     accepted=result.get('accepted')
                     if type(accepted) is not bool:
@@ -129,6 +141,9 @@ class ExecutionWorker:
         with self.journal.jobs.journal._connect() as conn,conn:
             try:receipt=self.journal.jobs._receipt(conn,model,active=False)
             except HTTPException:return
+            conn.execute('INSERT OR IGNORE INTO fleet_channel_execution VALUES (?,?,?,?,?,?,?,?,?)',
+                (rid,model['input_hash'],model['profile_set_hash'],model['input_hash'],model['input_hash'],
+                 '{}',model['input_hash'],self.journal.clock(),self.reason(exc)))
             self.journal.jobs.journal.reply_outbox.enqueue(conn,receipt,'EXECUTION:HOLD',
                 '실행을 보류했습니다 · '+self.reason(exc)+'\n원문에 대상과 원하는 동작을 명확히 말씀해 주세요. 기기 명령을 보내지 않았습니다.')
 

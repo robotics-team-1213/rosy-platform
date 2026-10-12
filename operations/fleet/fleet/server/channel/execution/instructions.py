@@ -13,8 +13,9 @@ def _aliases(items, names):
     for item in items:
         for name in names(item):
             if name in result and result[name] != item:
-                raise ValueError('AMBIGUOUS_REGISTERED_ALIAS')
-            result[name] = item
+                result[name] = None
+            else:
+                result[name] = item
     return result
 
 
@@ -30,7 +31,7 @@ def positive_plan(question, *, selection=None):
     steps = []
     for clause in re.split(r'\s*(?:;|그리고|그다음|다음에)\s*', text):
         clause = re.sub(r'\s+', ' ', clause).strip()
-        if re.fullmatch(r'(?:전체|모든 로봇)(?:를|을)? 비상\s*정지(?:해)?'+_PLEASE, clause):
+        if re.fullmatch(r'(?:전체|모든 로봇)(?:를|을)?\s*비상\s*정지(?:해)?'+_PLEASE, clause):
             steps.append({'do':'estop'})
             continue
         if re.fullmatch(r'대형 (중지|정지|재개)(?:해)?'+_PLEASE, clause):
@@ -40,6 +41,7 @@ def positive_plan(question, *, selection=None):
         if not matching:
             raise ValueError('EXPLICIT_REGISTERED_TARGET_REQUIRED')
         alias, robot = max(matching, key=lambda row:len(row[0]))
+        if robot is None:raise ValueError('AMBIGUOUS_REGISTERED_TARGET')
         remaining = clause[len(alias):].strip()
         remaining = re.sub(r'^(?:로봇)?(?:을|를)?\s*', '', remaining).strip()
         rid = robot['robot_id']
@@ -70,6 +72,12 @@ def positive_plan(question, *, selection=None):
         dock = re.fullmatch(r'([A-Za-z0-9_.:-]{1,96})에서 도킹(?:해)?'+_PLEASE, remaining)
         if dock:
             steps.append({'do':'dock','robot':rid,'dock':dock[1]})
+            continue
+        follow = re.fullmatch(r'(.+?)(?:로봇)?(?:을|를)?\s*따라가'+_PLEASE, remaining)
+        if follow:
+            target=robots.get(follow[1].strip())
+            if target is None or target['robot_id']==rid:raise ValueError('REGISTERED_FOLLOW_TARGET_REQUIRED')
+            steps.append({'do':'follow','robot':rid,'target_robot_id':target['robot_id']})
             continue
         raise ValueError('SUPPORTED_EXPLICIT_INSTRUCTION_REQUIRED')
     plan = steps[0] if len(steps) == 1 else {'steps':steps}

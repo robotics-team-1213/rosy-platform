@@ -5,7 +5,7 @@ import time
 
 from fastapi import HTTPException
 from core_common.intent import interpret
-from rosy.decision.conversation.codec import ConversationInput, checked_answer, digest
+from rosy.decision.conversation.codec import ConversationInput, checked_answer, conversation_input, digest
 from .instructions import bind_original, catalog_hash
 from ...dispatch_admission import reserve, release
 
@@ -38,6 +38,8 @@ class ExecutionJournal:
             (question.principal_id,question.author_id,question.guild_id,question.channel_id,self.clock())).fetchone()
         if row is None or row['catalog_hash'] != catalog_hash(question.environment):
             return None
+        try:self.guard(row['request_id'],conn)
+        except (ValueError,HTTPException):return None
         return dict(row)
 
     def guard(self, rid, conn=None):
@@ -45,7 +47,7 @@ class ExecutionJournal:
             with closing(self.store._connect()) as c:
                 return self.guard(rid,c)
         row = conn.execute('SELECT * FROM fleet_channel_execution WHERE request_id=?',(rid,)).fetchone()
-        if row is None or row['reason'] is not None or self.clock() >= row['expires_at']:
+        if row is None or row['reason'] is not None or not 0 < row['expires_at']-self.clock() <= 120:
             raise ValueError('CHANNEL_EXECUTION_GRANT_EXPIRED_OR_HELD')
         model = self.jobs._row(conn,rid)
         receipt = self.jobs._receipt(conn,model,active=False)
@@ -66,8 +68,13 @@ class ExecutionJournal:
             model = self.jobs._row(conn,rid)
             receipt = self.jobs._receipt(conn,model,active=False)
             question = ConversationInput.model_validate_json(model['problem_json'])
+            if question != conversation_input(receipt,question.environment,self.jobs.journal.config.bot_id,
+                question.history,now=question.observed_at):raise ValueError('CHANNEL_EXECUTION_ORIGINAL_CHANGED')
             result = json.loads(model['result_json'])
+            attempt=conn.execute("SELECT state,result_json,known_cost_usd FROM fleet_channel_conversation_attempts WHERE request_id=? AND role='primary'",(rid,)).fetchone()
             if (model['state'] != 'ANSWERED' or self.admitted() is not True or self.scope is None
+                    or attempt is None or attempt['state']!='RESULT' or attempt['known_cost_usd']!=0
+                    or json.loads(attempt['result_json'])!=result
                     or model['profile_set_hash'] != digest(self.scope)
                     or result.get('producer_scope') != self.scope or result.get('profile_set_hash') != digest(self.scope)
                     or result.get('input_hash') != question.digest or model['input_hash'] != question.digest
@@ -122,6 +129,10 @@ class ExecutionJournal:
             if row is None:return None
             try:self.guard(row['request_id'],conn)
             except (ValueError,HTTPException):return 'CHANNEL_EXECUTION_ORIGIN_CHANGED'
+            task=self.store.get_task(task_id)
+            current=next((r for r in self.environment()['robots'] if r['robot_id']==task['robot_id']),None)
+            if current is None or current['online'] is not True or current.get('estop',current.get('state',{}).get('safety',{}).get('estop')) is not False:
+                return 'CHANNEL_EXECUTION_OBSERVATION_UNKNOWN'
         return None
 
     def begin(self,rid,index,resources,*,stopping=False):
