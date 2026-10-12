@@ -144,11 +144,19 @@ class NativeGazeboMapPosePort:
             self._clock = (stamp_ns, now, wall)
             return True
 
-    def observe(self, sample, *, clock_stamp_ns=None):
+    @staticmethod
+    def _ages(row, now, wall):
+        # Native clock age is anchored at join; receipt age keeps its origin.
+        return (max(now-row['received'], row['source_age'] + now-row['joined']),
+                max(wall-row['wall'], row['source_age'] + wall-row['join_wall']))
+
+    def observe(self, sample, *, clock_stamp_ns=None,
+                received_wall=None, received_monotonic=None):
         """Admit a native measurement against the separately received live /clock.
 
         clock_stamp_ns, when supplied, only asserts the already observed clock;
-        it cannot refresh the clock's receipt time.
+        it cannot refresh the clock's receipt time. A runner buffering a future
+        measurement must supply its original receipts, never the admission time.
         """
         with self._lock:
             if not isinstance(sample, NativeGazeboSample):
@@ -162,6 +170,12 @@ class NativeGazeboMapPosePort:
             if robot_id in self._failed:
                 return False
             now, wall = self._mono(), self._wall()
+            original_mono = now if received_monotonic is None else received_monotonic
+            original_wall = wall if received_wall is None else received_wall
+            if (not _finite(original_mono) or not _finite(original_wall)
+                    or not 0 <= now-original_mono <= self.config.max_pair_s
+                    or not 0 <= wall-original_wall <= self.config.max_pair_s):
+                return self._fail(robot_id, 'invalid_native_receipt')
             if (not isinstance(sample, NativeGazeboSample) or sample.binding != self.binding
                     or sample.model != robot.model or sample.frame_id != robot.frame_id):
                 return self._fail(robot_id, 'foreign_binding')
@@ -177,8 +191,9 @@ class NativeGazeboMapPosePort:
                 return self._fail(robot_id, 'native_clock_or_sample_stale')
             previous = self._samples.get(robot_id)
             if previous is not None:
-                if (previous['source_age'] + max(now-previous['received'], wall-previous['wall'])
-                        > self.config.max_pair_s):
+                if (original_mono < previous['received'] or original_wall < previous['wall']):
+                    return self._fail(robot_id, 'native_receipt_replay')
+                if max(self._ages(previous, now, wall)) > self.config.max_pair_s:
                     return self._fail(robot_id, 'native_gap')
                 old = previous['sample']; dt = (sample.stamp_ns - old.stamp_ns) * 1e-9
                 distance = math.dist(sample.pose[:2], old.pose[:2])
@@ -186,10 +201,11 @@ class NativeGazeboMapPosePort:
                 if (dt <= 0 or distance > self.config.max_speed_mps * dt
                         or turn > math.radians(self.config.max_turn_rate_dps) * dt):
                     return self._fail(robot_id, 'native_reset_or_replay')
-            self._samples[robot_id] = dict(sample=sample, received=now, wall=wall,
+            self._samples[robot_id] = dict(sample=sample, received=original_mono,
+                                          wall=original_wall, joined=now, join_wall=wall,
                                           source_age=age)
             history = self._history[robot_id]
-            history.append((now, sample.pose))
+            history.append((original_mono, sample.pose))
             since = now-self.config.max_odom_age_s
             while len(history) > 1 and history[1][0] < since:
                 history.popleft()  # Keep the last before the window as its deadband base.
@@ -229,17 +245,22 @@ class NativeGazeboMapPosePort:
         core = self._core.get(robot_id)
         if row is None or core is None or robot_id in self._failed:
             return None
-        elapsed = self._mono() - row['received']; wall_elapsed = self._wall() - row['wall']
-        sample = row['sample']; captured_wall = row['wall'] - row['source_age']
+        now, wall = self._mono(), self._wall()
+        elapsed = now - row['received']; wall_elapsed = wall - row['wall']
+        native_ages = self._ages(row, now, wall)
+        # Estimate capture against the join clock age, not original receipt minus
+        # that age: the latter would subtract a buffered delay a second time.
+        sample = row['sample']; captured_wall = row['join_wall'] - row['source_age']
         if (not 0 <= elapsed or not 0 <= wall_elapsed
-                or row['source_age'] + max(elapsed, wall_elapsed) > self.config.max_pair_s
+                or now < row['joined'] or wall < row['join_wall']
+                or max(native_ages) > self.config.max_pair_s
                 or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
                 or abs(core.stamp - captured_wall) > self.config.max_interp_gap_s
                 or math.dist((core.x, core.y), sample.pose[:2]) > self.config.max_jump_m
                 or abs(_angle(core.yaw - sample.pose[2])) > math.radians(self.config.max_jump_deg)):
             self._fail(robot_id, 'native_or_core_stale_or_contradictory')
             return None
-        return row, core, row['source_age'] + max(elapsed, wall_elapsed)
+        return row, core, max(native_ages)
 
     def arbitrated_pose(self, robot_id):
         with self._lock:
@@ -280,4 +301,10 @@ class NativeGazeboMapPosePort:
                         clock_stamp_ns=self._clock[0] if self._clock else None,
                         source_age_s=row['source_age'] if row else None,
                         receipt_age_s=self._mono()-row['received'] if row else None,
+                        received_wall=row['wall'] if row else None,
+                        received_monotonic=row['received'] if row else None,
+                        joined_wall=row['join_wall'] if row else None,
+                        joined_monotonic=row['joined'] if row else None,
+                        receipt_wall_age_s=self._wall()-row['wall'] if row else None,
+                        native_age_s=max(self._ages(row, self._mono(), self._wall())) if row else None,
                         core_odom_stamp=pose.odom_stamp if pose else None)
