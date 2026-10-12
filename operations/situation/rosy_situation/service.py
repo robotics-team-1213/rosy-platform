@@ -83,8 +83,14 @@ class Fleet:
         request = urllib.request.Request(self._url + path, data=data, method="GET" if body is None else "POST",
                                          headers={"Authorization": f"Bearer {self._token}",
                                                   "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
-            return json.loads(response.read())
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError:
+            raise
+        except (OSError, ValueError) as exc:
+            _LOG.warning("Fleet %s %s failed: %s", request.method, path.partition("?")[0], type(exc).__name__)
+            raise
 
     def frame(self, path: str, lease: str) -> dict:
         if not isinstance(path, str) or not re.fullmatch(r"/api/vision/sources/[A-Za-z0-9_-]+/frame", path):
