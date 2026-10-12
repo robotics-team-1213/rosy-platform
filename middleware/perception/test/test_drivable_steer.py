@@ -30,6 +30,17 @@ def test_centred_lane_steers_straight():
     assert abs(t["target_m"][1]) < 0.01 and t["both"] and t["ahead_m"] > 0.3
 
 
+def test_observed_centre_path_stops_at_a_gap_between_way_rows():
+    from control.sensing.perception.drivable.target import _row_x
+    way = _lane(HALF, -HALF)
+    way[160:165] = False
+    info = way_target(way, G, XO, HALF)
+    path = info['centre_path_m']
+    assert len(path) > 2
+    assert all(0. < point[0] <= _row_x([165], G, XO)[0] for point in path)
+    assert all(a[0] < b[0] for a, b in zip(path, path[1:]))
+
+
 def test_one_unseen_edge_offsets_from_the_seen_edge():
     t = way_target(_lane(0.4, 0.02), G, XO, HALF)
     assert t["target_m"][1] > 0.02 and not t["both"]
