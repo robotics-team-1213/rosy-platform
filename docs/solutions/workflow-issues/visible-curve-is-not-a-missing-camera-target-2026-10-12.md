@@ -17,7 +17,7 @@ tags: [isaac, camera, segmentation, lane-follow, diagnosis, map-parity]
 
 ## 확인한 사례
 
-소스 `54cba0b3fe0c82f37ac7f2ef1eaf41ba9f67274c`의 R31 baseline 707, simulation 6.600000344s/frame 1850에서 실패 PNG에 흰 바닥 선이 보였다. 동일 trace에는 `target_m=[0.19,0.137]`, `target_now_m=null`, `ahead_m=0`, `strategy=none`, `inference_error=null`이 기록됐다. CORE line 상태는 `HOLD`, 사유는 `camera_invalid_observation`, 최종 후보는 `[0,0]`이었다. 유효 목표점의 현재성 검사를 통과하지 못했음을 확인했으며, segmentation 자체의 실패 여부는 이 trace만으로 확정하지 않는다. `model_used=false`도 별도 inference 오류 없이 관측 무효화 과정에서 기록될 수 있으므로 모델 미실행으로 단정하지 않는다.
+소스 `54cba0b3fe`의 R31 baseline 707, simulation 6.600000344s/frame 1850에서 실패 PNG에 흰 바닥 선이 보였다. 동일 trace에는 `target_m=[0.19,0.137]`, `target_now_m=null`, `ahead_m=0`, `strategy=none`, `inference_error=null`이 기록됐다. CORE line 상태는 `HOLD`, 사유는 `camera_invalid_observation`, 최종 후보는 `[0,0]`이었다. 유효 목표점의 현재성 검사를 통과하지 못했음을 확인했으며, segmentation 자체의 실패 여부는 이 trace만으로 확정하지 않는다. `model_used=false`도 별도 inference 오류 없이 관측 무효화 과정에서 기록될 수 있으므로 모델 미실행으로 단정하지 않는다.
 
 사용자가 제공한 실제 맵 사진의 곡선과 실패 전방 프레임의 선 형상을 별도로 비교해야 한다. 동일 STL 계보와 공유 맵 생성기를 썼다는 사실만으로 실제 사진·Gazebo·Isaac의 곡선, 차선 폭, 카메라 시점이 일치한다고 선언하지 않는다. 전방 프레임에서 각진 선이 보인다는 관찰만으로 맵 전체 형상 불일치도 확정하지 않는다.
 
