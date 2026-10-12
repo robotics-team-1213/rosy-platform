@@ -33,6 +33,10 @@ class ConversationConfig(Strict):
             raise ValueError('CONVERSATION_POLICY_NOT_ADMITTED')
         return self
 
+    def producer_scope(self):
+        return {k:getattr(self, k) for k in ('source_commit', 'policy', 'semantic_evidence_sha256')} | {
+            'profile':self.profile.model_dump()}
+
     @classmethod
     def load(cls, path, *, optional=False):
         if optional and not Path(path).exists():return None
@@ -64,7 +68,8 @@ def install_conversation(app, config, site_maps):
         raise ValueError('ONE_CHANNEL_CONVERSATION_OWNER_REQUIRED')
     journal = getattr(app.state, 'channel_requests', None)
     if journal is None or journal.reply_outbox is None:raise ValueError('CONVERSATION_RECEPTION_AND_REPLIES_REQUIRED')
-    jobs = ConversationJobs(journal, digest(config.profile.model_dump()))
+    scope = config.producer_scope()
+    jobs = ConversationJobs(journal, digest(scope))
     app.state.channel_conversation_jobs = jobs
     gather = app.state.fleet_gather
 
@@ -83,8 +88,11 @@ def install_conversation(app, config, site_maps):
         await gather()
         return cached()
 
+    def admitted():
+        return (config.primary_admitted and time.time() < config.valid_until and
+                config.producer_scope() == scope and config.policy == source_policy(config.source_commit, config.profile))
     worker = ConversationWorker(jobs, snapshot, config.profile, ConversationProvider(config),
-        admission=lambda:config.primary_admitted and time.time() < config.valid_until,
+        admission=admitted, producer_scope=scope,
         observation_guard=lambda basis:bounded_environment(cached()) == basis)
     app.state.channel_conversation_worker = worker
     previous = app.router.lifespan_context

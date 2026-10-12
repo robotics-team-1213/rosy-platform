@@ -8,10 +8,13 @@ from rosy.decision.conversation.codec import Answer, ConversationInput, checked_
 
 
 class ConversationWorker:
-    def __init__(self, jobs, snapshot, profile, provider, *, admission, observation_guard, clock=time.time):
-        if digest(profile.model_dump()) != jobs.profile_set_hash:raise ValueError('CONVERSATION_PROFILE_CHANGED')
+    def __init__(self, jobs, snapshot, profile, provider, *, admission, observation_guard, clock=time.time,
+                 producer_scope=None):
+        expected = digest(profile.model_dump()) if producer_scope is None else digest(producer_scope)
+        if expected != jobs.profile_set_hash:raise ValueError('CONVERSATION_PROFILE_CHANGED')
         self.jobs, self.snapshot, self.profile, self.provider = jobs, snapshot, profile, provider
         self.admission, self.observation_guard, self.clock = admission, observation_guard, clock
+        self.producer_scope = producer_scope
         self._lock = asyncio.Lock()
 
     async def db(self, method, *args, **kwargs):
@@ -75,6 +78,7 @@ class ConversationWorker:
                     raw = await self.provider(question, self.profile, remaining)
                     answer = checked_answer(raw, question)
                     record = {'profile':self.profile.model_dump(), 'input_hash':question.digest,
+                              'producer_scope':self.producer_scope, 'profile_set_hash':self.jobs.profile_set_hash,
                               'models':[{'model_id':self.profile.model_id, 'profile_id':self.profile.profile_id}],
                               'answer':answer.model_dump(), 'action_admissible':False}
                     await self.db('record_attempt', rid, 'primary', state='RESULT', result=record,

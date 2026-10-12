@@ -16,12 +16,12 @@ class ConversationJobs(ModelJobsJournal):
         with closing(self.journal._connect()) as conn:
             rows = conn.execute('''SELECT j.problem_json,j.result_json,j.completed_at
                 FROM fleet_channel_conversation_jobs j
-                WHERE j.state='ANSWERED' AND j.completed_at BETWEEN ? AND ?
+                WHERE j.state='ANSWERED' AND j.completed_at BETWEEN ? AND ? AND j.profile_set_hash=?
                 AND json_extract(j.problem_json,'$.principal_id')=?
                 AND json_extract(j.problem_json,'$.author_id')=?
                 AND json_extract(j.problem_json,'$.guild_id')=?
                 AND json_extract(j.problem_json,'$.channel_id')=?
-                ORDER BY j.completed_at DESC LIMIT 4''', (now-120, now, receipt['principal_id'],
+                ORDER BY j.completed_at DESC LIMIT 4''', (now-120, now, self.profile_set_hash, receipt['principal_id'],
                     receipt['author_id'], receipt['guild_id'], receipt['channel_id'])).fetchall()
         selected = []
         for raw, result, at in reversed(rows):
