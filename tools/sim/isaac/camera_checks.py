@@ -75,6 +75,8 @@ def learn_transition(policy, previous, state, result):
 
 def remember_camera_action(previous, state, action, frame, candidate, receipts, warnings, halted):
     # A normal CORE return may have sent fallback ZERO; credit only confirmed dispatch.
+    if warnings:
+        return None
     if not any(any(twist) for twist in receipts):
         return previous
     if (state is not None and not halted and not warnings and any(candidate)
