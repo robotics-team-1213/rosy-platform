@@ -119,7 +119,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 SIZE_VERDICTS = {
     "fleet/fleet/server/channel": (
         1_379,
-        "split: D-728 actual channel owner extraction measured on 2026-10-12; independent review pending. "
+        "split: D-728 actual channel owner extraction measured on 2026-10-12; independent pipeline_review precheck PASS. "
         "The nine intake/workflow/Mission/incident/outbox/gateway/model modules retain existing owners and "
         "guards; stable old module paths alias the same implementation objects. Largest child file249; "
         "installed wheel/sdist/source-image closure is verified separately. Keep +150 and every file/hard "
@@ -369,7 +369,7 @@ SIZE_VERDICTS = {
     "fleet": (
         55_120,
         "split: D-728 actual channel subpackage measured parent55120/child1379 together on 2026-10-12; "
-        "independent review pending. Combined56499 includes only55 compatibility/package lines above56444; "
+        "independent pipeline_review precheck PASS. Combined56499 includes only55 compatibility/package lines above56444; "
         "existing nine implementations moved without behavior change. Preserve +150, every zero/file/hard "
         "ceiling and all prior obligations. See docs/plans/2026-10-12-natural-language-channel-operations.md. "
         "Previous56444 verdict: split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
