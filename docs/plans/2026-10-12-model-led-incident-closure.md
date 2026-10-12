@@ -18,6 +18,8 @@
 
 현재 실행 중인 D-722는 모델 복구 후보를 실제 완료된 시도와 기존 사건 DB에 결속한다. 첫 보강은 assessment revision과 CORE 관측 seq/timestamp의 일치, 후보 조회의 원본 receipt·전체 내용 재검증, 종료 시 진행 중 DB 작업의 완료 대기다. 후보 저장은 `automation/recovery_candidates.py`, 모델 호출은 기존 `automation/execution/worker.py`가 소유한다. 기존 크기 한도를 유지하며 이 후보는 실행 권한을 부여하지 않는다. 이후 D-716의 단일 rule/model 소비·운영 수용·결과 확인을 연결한다.
 
+첫 보강 `338fa3aa68`은 실제 worker·SQLite·관측 시점·종료 대기와 구조 회귀 104개, 판정·tool catalog·기존 패키지 설치·문서 계약 회귀 258개를 적격 원격 AI PC에서 terminal exit 0/NEW 0으로 확인했다. lint는 0 errors다. 이 시점에는 브랜치 구현이며 로컬 main 병합·후보 모듈 자체의 wheel/sdist 설치·실제 모델·현장 결과는 아직 확인하지 않았다.
+
 D-718은 `f7221c12e6`로 로컬 main에 착지했다. main 변경을 반영해 두 번 통합했으며 마지막 적격 AI PC/Model PC 원격 세 그룹은 합계 18,671 passed/822 skipped/NEW 0 및 lint를 통과했다. 고정 로그는 세션 `logs/stuck-condition-land-f7221c12e6-{1,2,3}.txt`다. API/제어기의 혼합 설치 지원 검사, SDK 의존성·실제 wheel/sdist, 기본 요청 호환성과 CORE 조건부 거절을 포함한다. FULL CI는 착지 도구가 별도로 요구하며 push·배포·실제 모델·현장 수용은 미확인이다. 다음은 typed 물리 후보 원장과 규칙/모델 단일 소비, signed 운영 수용·최종 폐기 재검사와 실제 결과 연결이다. 목표는 ACTIVE다.
 
 D-718 source checkpoint는 [CORE 조건부 막힘 답](../adr/D-718-conditional-core-stuck-answer.md)과 [물리 처리 연결 계획](2026-10-12-model-led-bounded-incident-recovery.md)에 기록한다. 조회 이후 사람 WAIT·CORE local fallback·시도 변경을 실제 적용 시점에 거절하고, 부분 업그레이드에서 조건이 무시되는 제출을 차단했다. SDK/API/Fleet와 실행 의존 소비자의 버전·offline installer·CI pin을 함께 갱신했으며 독립 SOURCE 안전 검토와 수정 후 설치 closure 회귀를 확인했다. 다음은 모델의 typed 물리 후보를 사건 원장에 고정하고 기존 loop 한 곳이 규칙/모델 중 하나만 소비하는 연결이다. 전체 목표는 ACTIVE이며 source의 조건부 API가 모델 운영 수용·현장 성공을 뜻하지 않는다.
