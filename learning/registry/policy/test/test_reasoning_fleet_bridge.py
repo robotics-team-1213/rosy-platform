@@ -1,0 +1,91 @@
+"""Real approved registry -> root config -> existing app factory -> worker; synthetic provider only."""
+import asyncio
+from dataclasses import asdict, replace
+import importlib
+import json
+from pathlib import Path
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path[:0] = [str(ROOT), str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'),
+               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test')]
+from test_reasoning_registry import opened, signed
+from test_reasoning_candidate import subject as candidate_api
+from test_judgment_calibration import rows, limits, digest, manifest
+from test_incident_runtime import app, poll, settings
+from test_incident_case_worker import settled
+from test_judgment_profiles import adapter
+from test_model_judgment import payload
+
+
+def setup(tmp_path):
+    config, _ = settings(enabled=True)
+    profiles = tuple(replace(p, calibration_revision='cal-' + p.role) for p in config['profiles'])
+    providers, calls = [], []
+    for selected in profiles:
+        async def provider(problem, bound, prior, *args, **kwargs):
+            calls.append((problem.case_id, bound.profile.role, prior))
+            raw = payload(problem); raw['evidence_ids'] = list(problem.evidence_ids)
+            for key in ('next_step', 'success_check'): raw[key]['evidence_ids'] = list(problem.evidence_ids)
+            return raw, 0.0
+        provider.profile, provider.adapter = selected, adapter()
+        providers.append(provider)
+    config.update(profiles=profiles, providers=tuple(providers), current_profiles=lambda: profiles)
+    selected = profiles[0]
+    identity = dict(profile_revision=selected.profile_revision, model_revision=selected.model_revision,
+        calibration_revision=selected.calibration_revision, domain='line_follow', full_profile_sha256=digest(asdict(selected)))
+    fit, evaluation = rows('fit'), rows('evaluation')
+    for row in (*fit, *evaluation): row.update(identity)
+    frozen = dict(**identity, choices=['reobserve', 'human'], reviewed_by='fixture-reviewer',
+        fit_sha256=digest(fit), evaluation_sha256=digest(evaluation), training_sha256=digest(manifest()), limits=limits())
+    candidate = candidate_api().build_candidate(asdict(selected), dict(fit=fit, evaluation=evaluation,
+        training=manifest(), reviewed_profile=frozen))
+    path = tmp_path / 'candidate.json'; path.write_text(json.dumps(candidate))
+    registry = opened(tmp_path / 'registry'); registry.register(path)
+    head = registry.history()[-1]['revision']
+    registry.approve(candidate['revision'], signed(candidate, 'reasoning_calibration', head), expected_head=head)
+    return config, calls, candidate, registry
+
+
+def test_actual_factory_worker_reads_persistent_approval_and_revocation(tmp_path):
+    async def run():
+        config, calls, candidate, registry = setup(tmp_path)
+        bridge = importlib.import_module('tools.incident_reasoning')
+        configured = bridge.registry_calibration_config(config, registry, domain='line_follow')
+        application = app(tmp_path / 'site', configured)
+        worker = application.state.stuck_resolver.incident_worker
+        assert worker.store.path == application.state.line_stuck._log.path
+        worker.feed(poll(application, stuck=None)); await settled(worker)
+        assert calls == []
+        worker.feed(poll(application)); await settled(worker)
+        assert [role for _, role, _ in calls] == ['primary'] and worker._waiting
+        head = registry.history()[-1]['revision']
+        registry.revoke(candidate['revision'], signed(candidate, 'reasoning_revocation', head), expected_head=head)
+        worker.feed(poll(application, stuck='case-2')); await settled(worker)
+        assert [(case, role) for case, role, _ in calls] == [('case-1', 'primary'), ('case-2', 'primary'), ('case-2', 'reviewer')]
+        assert len(calls[-1][2]) == 1 and worker._waiting
+        await worker.aclose()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('fault', ['profile', 'domain', 'revoked'])
+def test_registry_will_not_supply_other_or_revoked_calibration(tmp_path, fault):
+    config, _, candidate, registry = setup(tmp_path)
+    profile, domain = asdict(config['profiles'][0]), 'line_follow'
+    if fault == 'profile': profile['max_calls'] = 2
+    elif fault == 'domain': domain = 'door'
+    else:
+        head = registry.history()[-1]['revision']
+        registry.revoke(candidate['revision'], signed(candidate, 'reasoning_revocation', head), expected_head=head)
+    with pytest.raises(ValueError): registry.approved_candidate(profile, domain)
+
+
+def test_bridge_preserves_existing_configuration_and_refuses_port_replacement(tmp_path):
+    config, _, _, registry = setup(tmp_path)
+    bridge = importlib.import_module('tools.incident_reasoning')
+    result = bridge.registry_calibration_config(config, registry, domain='line_follow')
+    assert all(result[key] is value for key, value in config.items())
+    assert 'calibration_artifacts' not in config
+    with pytest.raises(ValueError): bridge.registry_calibration_config(result, registry, domain='line_follow')
