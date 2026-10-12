@@ -44,6 +44,7 @@ def setup(transform=(0., 0., 0.)):
 
 
 def feed(port, sample, clock_ns=2_010_000_000):
+    port.observe_clock(clock_ns)
     return port.observe(sample, clock_stamp_ns=clock_ns)
 
 
@@ -151,4 +152,97 @@ def test_unknown_robot_and_motion_deadband_do_not_invent_poses():
 def test_binding_rejects_unscoped_or_physical_identity(changes):
     m, _, sample, _, _ = setup()
     with pytest.raises(ValueError):
-        m.NativeGazeboMapPosePort(replace(sample.binding, **changes), gather_core=None)
+        m.NativeGazeboMapPosePort(replace(sample.binding, **changes), gather_core=lambda _: None)
+
+
+def test_sample_cannot_refresh_a_stopped_clock_or_hide_delayed_receipt():
+    _, port, sample, clocks, _ = setup()
+    assert feed(port, sample)
+    clocks['mono'] += .3
+    clocks['wall'] += .3
+    newer = replace(sample, stamp_ns=2_011_000_000)
+    assert not port.observe(newer, clock_stamp_ns=2_010_000_000)
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_core_pose_contradiction_and_native_reset_never_recover_in_same_run():
+    _, port, sample, _, core = setup()
+    assert feed(port, sample)
+    core['odom_pose']['x'] = 2.
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    core['odom_pose']['x'] = 1.
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_runner_manifest_must_match_provider_binding():
+    from dataclasses import asdict
+    _, port, sample, _, _ = setup()
+    port.validate_simulation_binding(asdict(sample.binding))
+    with pytest.raises(ValueError):
+        port.validate_simulation_binding({**asdict(sample.binding), 'epoch': 2})
+
+
+def app_with_port(tmp_path, port, *, profile='simulation', expected=None):
+    import inspect
+    from dataclasses import asdict
+    from fastapi.testclient import TestClient
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from fleet.site_map import from_lane_graph
+    from fleet.swarm.robots import RobotEndpoint
+    root = SCRIPT.parents[2]
+    sys.path.insert(0, str(root / 'operations/fleet/test'))
+    from fakes import FakeRobot
+    assert 'simulation_pose_binding' in inspect.signature(create_app).parameters, 'Explicit SIM binding DI is missing'
+    robot = FakeRobot('rosy_02', state={'robot_id': 'rosy_02'})
+    console = FleetConsole([RobotEndpoint('rosy_02', 'http://127.0.0.1:8080', 'robot-rest')], [robot])
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite'), robot_ids={'rosy_02'})
+    maps = SiteMapStore(tmp_path / 'fleet.sqlite')
+    maps.import_if_empty(from_lane_graph(root / 'middleware/perception/map/map_v2_fleet/training-curved/lane_graph.yaml',
+                                         map_id='map_v2_fleet'), source='test-native-source')
+    app = create_app(console, task_service=tasks, console_token='console-secret',
+        start_task_dispatcher=False, site_maps=maps, map_pose_port=port,
+        deployment_profile=profile, simulation_pose_binding=expected or asdict(port.binding))
+    return app, TestClient(app)
+
+
+def test_sim_execution_consumers_share_provider_while_teach_and_ingest_keep_original(tmp_path):
+    _, port, sample, _, _ = setup()
+    assert feed(port, sample)
+    app, client = app_with_port(tmp_path, port)
+    result = client.get('/api/fleet/robots/rosy_02/map-pose', headers={'Authorization': 'Bearer console-secret'})
+    assert result.status_code == 200, result.text
+    assert result.json()['source'] == 'native_gazebo_sim'
+    assert result.json()['state'] == 'LOCALIZED'
+    assert app.state.execution_map_pose is port
+    assert app.state.trip_runner._poses is port
+    assert app.state.lane_compliance._poses is port
+    assert app.state.map_pose is not port
+    assert app.state.teach._poses is app.state.map_pose
+
+
+def test_sim_provider_is_refused_in_production_or_with_foreign_runner_manifest(tmp_path):
+    from dataclasses import asdict
+    _, port, _, _, _ = setup()
+    with pytest.raises(ValueError, match='simulation deployment'):
+        app_with_port(tmp_path, port, profile='production')
+    with pytest.raises(ValueError, match='explicit runner binding'):
+        app_with_port(tmp_path, port, expected={**asdict(port.binding), 'partition': 'foreign'})
+
+
+def test_changed_active_map_revokes_provider_without_recovery():
+    _, port, sample, _, _ = setup()
+    revision = ['map_v2_fleet', 1]
+    port.bind_active_map(lambda: tuple(revision))
+    assert feed(port, sample)
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+    revision[1] = 2
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    revision[1] = 1
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
