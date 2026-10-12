@@ -68,6 +68,7 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                     and pipeline.law_hold(row, decision='BACK_AND_RETRY', stuck_id=scope.case_id) is None
                     and chain is not None and not self._resolver.at_crosswalk(scope.subject_id)
                     and chain.stuck_id == scope.case_id and scope.case_id not in chain.escalated
+                    and action.rule not in chain.retired
                     and self._resolver._continuation_hold(scope.subject_id, chain) is None
                     and self._clock() - chain.started_at <= self._resolver.config.escalate_after_s
                     and lane_lost.ai_proposal_invalid({'decision': 'BACK_AND_RETRY'}, row,
