@@ -75,7 +75,7 @@ async def channel_step(worker, rid, index, call, row):
     journal = worker.journal
     task = journal.store.get_task(row['task_id']) if row['task_id'] else None
     receipt = task['receipt'] or {} if task else _receipt(row)
-    if call.verb in {'stop', 'estop'}:
+    if call.verb in {'stop', 'estop'} or (call.verb in {'cancel', 'follow_cancel'} and 'operation' not in receipt):
         from .stops import stop_step
         return await stop_step(worker, rid, index, call, row, receipt)
     if 'operation' not in receipt:
