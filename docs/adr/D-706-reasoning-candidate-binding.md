@@ -9,3 +9,5 @@ D-705의 외부 승인 공급을 구현하기 전에 기존 `learning/registry/p
 후보 생성은 HOLD·FAIL·PASS_OFFLINE_ONLY를 그대로 보존하며 승인이나 현장 수용을 만들지 않는다. profile이 지원하는 다른 domain까지 보정됐다고 확장하지 않는다. 검수 이름과 hash는 출처 진위의 증거가 아니므로 다음 영속 승인 단계에서 별도의 신뢰된 receipt를 검증한다. 운영 current/previous 전환·CAS·복귀·사건 소유 revision 보존과 실제 품질/현장 수용은 별도다.
 
 후속 구현과 검증 순서는 [프로파일 lifecycle 계획](../plans/2026-10-12-reasoning-profile-lifecycle.md)을 따른다.
+
+후보 JSON과 입력은 각각 2 MiB 이내로 제한한다. 이 내부 소스 계약은 SDK wire나 설치·runtime 활성화를 바꾸지 않는다.
