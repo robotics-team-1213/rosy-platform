@@ -9,12 +9,12 @@ import pytest
 from rosy.decision.deliberation.judgment import judgment
 from rosy.decision.deliberation import canonical
 from test_judgment_profiles import profile
-from test_channel_model_jobs import setup
+from test_channel_model_jobs import _setup
 
 
 def worker(tmp_path, *, change=None):
     from fleet.server.channel_model_worker import ChannelModelWorker
-    jobs,journal,accounts,receipt,snapshot,p,clock=setup(tmp_path)
+    jobs,journal,accounts,receipt,snapshot,p,clock=_setup(tmp_path)
     selected=profile(profile_id='status-primary',adapter='status-json-v2',domains=('fleet_status',),max_calls=1)
     jobs.profile_set_hash=hashlib.sha256(canonical([asdict(selected)]).encode()).hexdigest()
     calls=[]
