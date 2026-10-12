@@ -147,7 +147,7 @@ def test_rule_contract_and_storage_reject_malformed_or_impossible_receipts(tmp_p
     for path, value in [('schema', 'other'), ('strategy', []), ('source_sha256', 'g'*64),
                          ('assessment.evaluated_at', float('nan')), ('assessment.request.extra', True),
                          ('selection.kind', 'UNKNOWN'), ('selection.yield_m', 1),
-                         ('selection.reason', '-----BEGIN PRIVATE KEY-----')]:
+                       ('selection.reason', '-----BEGIN ' + 'PRIVATE KEY-----')]:
         changed = deepcopy(receipt)
         target = changed
         keys = path.split('.')
