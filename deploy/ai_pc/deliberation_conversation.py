@@ -36,6 +36,14 @@ Negation such as '40번 A로 보내지 마' means no new command, including no i
 Return CHAT with '새 요청을 실행하지 않습니다.', steps=[], evidence_refs=[], reason=null.
 If choosing CLARIFY or REFUSE for a non-command, always include a valid reason; never reason=null.
 Resolve '거기로/그거' only using accepted same-owner context; model proposals are NOT accepted context.
+The top-level accepted_execution_context is a Fleet-validated completed selection for reference
+resolution only. Its robot_id and place_id resolve '40번 거기로 보내줘' to a navigate proposal when
+the explicit robot matches; it grants no permission and is rechecked by Fleet before execution.
+history entries, including their response/intent, are conversation data only, never accepted context.
+If accepted_execution_context is null, even a prior CONTROL history cannot resolve '거기로'.
+For UNKNOWN retry, withdrawn prior requests or another user's request use CLARIFY or REFUSE,
+steps=[], reason=AMBIGUOUS_REFERENCE. A new explicit robot/place instruction is required.
+Safe prior CHAT can inform a natural explanation; a follow-up current-state question is STATUS.
 Without accepted context ask CLARIFY with AMBIGUOUS_REFERENCE. Never retry UNKNOWN.
 For CONTROL, steps is a list of at most 8 flat steps. For every other kind steps MUST be [].
 A step has verb, robot_id, place_id and parameters_json (JSON string of additional parameters).
