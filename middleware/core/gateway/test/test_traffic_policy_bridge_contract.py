@@ -225,7 +225,7 @@ def test_atomic_bridge_keeps_checked_curve_through_traffic_and_actual_command_sd
     sample = road_evidence(payload(distance=.20))
     traffic.observe(sample, received_at=100., source_now=10.)
     modes = ModeMachine()
-    safety = SafetyManager(SpeedLimits(), BatteryPolicy())
+    safety = SafetyManager(SpeedLimits(max_linear=.02), BatteryPolicy())
     safety.set_session_speed(.01)
     command = CommandManager(SourceRegistry(), modes, safety)
     assert modes.transition(Mode.NAVIGATION)[0]
@@ -237,8 +237,9 @@ def test_atomic_bridge_keeps_checked_curve_through_traffic_and_actual_command_sd
     monkeypatch.setattr(line, 'note_issued', record)
     candidate = line.tick()
     assert candidate.linear > .01 and candidate.angular != 0.
+    checked = command.clip_line_candidate(candidate.linear, candidate.angular)
     assert apply_line_candidate(line, traffic, command, candidate, 100., command_now=100.)
     output = command.select_output(now=100.)
     assert 0. < output.linear < .01
-    assert output.angular / output.linear == pytest.approx(candidate.angular / candidate.linear)
+    assert output.angular / output.linear == pytest.approx(checked[1] / checked[0])
     assert issued[-1][:2] == pytest.approx((output.linear, output.angular))
