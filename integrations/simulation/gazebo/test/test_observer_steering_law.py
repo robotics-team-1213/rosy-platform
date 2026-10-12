@@ -10,6 +10,13 @@ import yaml
 PARTS = Path(__file__).resolve().parents[1] / 'launch/gz_multi_parts.py'
 
 
+def test_standalone_suite_reads_committed_core_loader_and_default_bundle():
+    from core_common import config
+    foundation = PARTS.parents[4] / 'contracts' / 'foundation'
+    assert Path(config.__file__).resolve() == (foundation / 'core_common/config.py').resolve()
+    assert config._find_default_config().resolve() == (foundation / 'config/rosy_default.yaml').resolve()
+
+
 def _parts():
     spec = importlib.util.spec_from_file_location('observer_law_parts', PARTS)
     module = importlib.util.module_from_spec(spec)
