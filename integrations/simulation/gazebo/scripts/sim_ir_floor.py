@@ -45,6 +45,9 @@ def main():
 
     def on_ray(name, msg):
         stamp = msg.header.stamp
+        if stamp.sec < 0 or not 0 <= stamp.nanosec < 1_000_000_000:
+            latest[name] = None
+            return
         latest[name] = (stamp.sec * 1_000_000_000 + stamp.nanosec,
                         min(msg.ranges) if msg.ranges else None)
 

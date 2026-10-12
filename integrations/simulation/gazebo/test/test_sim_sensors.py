@@ -84,6 +84,12 @@ def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
         now[0] = 5_000_000_000
         timers[0]()
         assert published[-1] == [2000] * 3 and len(published) == 3
+        now[0] = 6_000_000_000
+        send('mid', 6); send('right', 6)
+        callbacks['ir_sim/left'](SimpleNamespace(ranges=[.013],
+            header=SimpleNamespace(stamp=SimpleNamespace(sec=5, nanosec=1_000_000_000))))
+        timers[0]()
+        assert len(published) == 3  # Noncanonical time must not alias the next valid frame.
 
     monkeypatch.setitem(sys.modules, 'rclpy', SimpleNamespace(init=lambda: None,
         create_node=lambda _: node, spin=spin, ok=lambda: True, shutdown=lambda: None))
