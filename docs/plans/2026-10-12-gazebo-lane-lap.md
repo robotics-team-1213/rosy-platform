@@ -221,3 +221,39 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   STOP와 wall은 없다. drivable은 차선을 넘지 않고 로봇과 연결되는 바닥으로 선언돼 있고
   `road_surface/1` 의미 선언은 없다. camera provenance도 provisional이다.
   이 모델의 background나 drivable 부재를 STOP 부재 또는 벽의 의미 증거로 승격하지 않는다.
+
+## Leg7: 곡률 수정 후 전방 거리 정지
+
+- 통합 소스 `a94b024fb` 전체 7,553개 파일과 17개 새 빌드 패키지를 원본 지도에
+  결속했다. 정상 AI PC 자원에서 0.319664m 이동했고 Fleet는 `stopped/stall`로
+  종료했다. APPROACH 255회, FOLLOW 18회, HOLD 0회다. held 0회이며 현재
+  centre/turn_left 관측과 두 로봇의 LOCALIZED 각 260회 갱신이 유지됐다.
+- D-735 적용 후 기록 후보/native 곡률비 중앙값은 1이다. 이는 HTTP 수신 시각을
+  대응한 진단이며 동일 내부 소비 tick 증거가 아니다. 공유 정책 차체의 사각형과
+  회전 원 교집합을 사용한 2mm 래스터에서 selected02 paint 겹침은 1,736개
+  샘플 중 0이다. Leg6의 427개도 같은 형상으로 계산했다. Gazebo collision box와
+  정책 차체는 다르며 연속 swept/contact 및 전체 지도 수용은 증명하지 않았다.
+- 첫 전방 차단 시 거리 0.139323m, 같은 실행 중 해제 시 0.194002m,
+  마지막 차단 시 0.145133m다. 실제 SDK stop/clear는 0.14905/0.17905m다.
+  마지막 양의 명령 뒤 blocked가 발생하고 최종 zero가 뒤따랐다. cliff/tilt/pickup은
+  false이며 traffic은 APPROACH였다. 현재 목표 소실이 직접 원인이라는 근거는 없다.
+- 원본 640개 scan beam과 실제 LiDAR TF를 동결 소스로 재생해 위 세 전방 거리의
+  오차 0을 확인했다. 실제 필터는 5세대 중앙값·1.5Hz다. 초기 0.8초 이전 기록과
+  일부 scan 세대가 없으므로 전체 필터 소비 이력은 동일 재현하지 못했다.
+  후반 필터 출력 최대 오차 약 1.3mm와 raw 즉시 정지 재현을 구분한다.
+- 원본 영상 58개의 해시 불일치·truncation은 0이다. OFF·lease 종료·정지 확인·
+  pending 작업 종료·자기 프로세스/포트/lock 종료, 전체 소스와 설치 해시 보존을
+  확인했다. 이번 실행도 원본 지도 완주와 실물 수용은 false다.
+- 차선 법칙은 `.1/.1/2/.35`지만 모든 명령 모드를 포함하는 실제 SDK 최대속도는
+  0.2m/s다. 이 보수적 정지 거리는 기존 안전 계약이며 오류라고 단정하지 않는다.
+  다음 비교는 SIM 전용 profile과 manual/fleet 한도를 모두 0.1m/s로 제한한다.
+  실제 SpeedLimits·CommandManager·SDK profile 갱신에서 양방향 출력 제한,
+  E-stop zero, 기존 수식의 stop/clear 0.10405/0.13405m를 먼저 확인한다.
+  차체·여유 거리·지연·감속도·모델·차선 법칙은 유지하며 임계값만 덮어쓰지 않는다.
+- 새 한도로 같은 구간을 통과해야 속도 envelope의 기여를 인정한다. 더 작은 거리에서
+  다시 차단되거나 다른 HOLD로 멈추면 벽 접근 궤적·벽/STOP 오인식 등을 계속 조사한다.
+  이전 관측과 주행 이력은 현재 센서 안전 정지의 해제 권한이 아니다.
+- 통합 원격 시험은 제품이 동일한 병합 소스에서 8,104 PASS/457 SKIP,
+  3,718 PASS/113 SKIP였다. 후자는 공개 문서 긴 해시 검사 신규 실패 1개를 포함했고
+  `a94b024fb`에서 문서만 수정했다. 연결 복구 후 미완료 Fleet 등은 4,597 PASS/246
+  SKIP, 수정 검증은 196 PASS로 끝났고 각각 NEW 0이다. GitHub CI와 착지·푸시는 별도다.
