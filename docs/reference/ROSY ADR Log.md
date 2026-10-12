@@ -705,6 +705,7 @@
 | D-714 | 고정 프로파일 파일과 설치 제공자 구성 결속 | Accepted |
 | D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
 | D-717 | 진행 중 제한 후진의 중복 답 거절 | Accepted |
+| D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
@@ -971,6 +972,12 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 **Status:** Accepted (2026-10-12, source safety contract)
 
 BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 시작되는 것을 거절한다. 전문은 [D-717](../adr/D-717-active-back-recovery-answer-guard.md).
+
+## D-718 — CORE 적용 시점의 조건부 막힘 답
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 BACK_AND_RETRY 요청에 선택 ASKING/attempts 조건을 결속하고 CORE manager lock 안에서 현재 사건 조건을 검증한다. 전문은 [D-718](../adr/D-718-conditional-core-stuck-answer.md).
 ## D-716 — 모델 후보와 기존 단일 Fleet 복구 dispatch 연결
 
 **Status:** Proposed (2026-10-12)

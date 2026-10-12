@@ -358,8 +358,12 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        55_664,
-        "split: D-699 extracts the existing observation/event journal into fleet.observe, "
+        55_856,
+        "split: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
+        "(operations/ui/console/device-watch.js, device-watch.css). Display-only tags and "
+        "the existing ceiling frame; no new command, poll, or CORE route. Keep the "
+        "observation-journal split and +150. Previous verdict: "
+        "D-699 extracts the existing observation/event journal into fleet.observe, "
         "counted once by the innermost rule. Keep the independently reviewed 55664+150 parent allowance. "
         "docs/plans/2026-10-12-observation-journal-owner.md records source and installed "
         "identity aliases and simultaneous parent/child measurements. Previous verdict: "
