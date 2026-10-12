@@ -41,6 +41,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
   TRIP_OFF_MAP: '찍은 점에서 차로 폭 두 배 안에 차로가 없습니다',
   TRIP_UNKNOWN_PLACE: '없는 주소입니다',
+  TRIP_UNKNOWN_EDGE: '지도에 없는 차로입니다',
   TRIP_NO_ROUTE: '갈 수 있는 길이 없습니다',
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
@@ -197,6 +198,8 @@ export function tripErrorText(code, detail = {}) {
     return `${base} · ${startCheckText({...detail, code: 'TRIP_START_OFF_LANE'})}`;
   if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
     return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
+  if (code === 'TRIP_UNKNOWN_EDGE' && typeof detail.edge === 'string' && detail.edge)
+    return `${base} · ${detail.edge}`;
   if (code !== 'TRIP_NO_ROUTE') return base;
   const leg = Number.isInteger(detail.segment) ? ` · ${detail.segment + 1}번째 구간` : '';
   return base + leg + (detail.unblock_would_help ? ' · 막은 차로를 풀면 길이 있습니다' : '');
