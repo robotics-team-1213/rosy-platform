@@ -332,6 +332,12 @@ class DrivableSteer:
             return (pursuit_error(LOOKAHEAD_M * math.cos(g), LOOKAHEAD_M * math.sin(g), ONE_CONFIDENCE), ONE_CONFIDENCE,
                     dict(info, strategy="drivable_creep_map"))
         self._tangent_from = None
+        # Keep this separate from target_now_m, which changes shared realignment decisions.
+        if (target is not None and not info.get('exit_from_memory') and not info.get('exit_behind_line')
+                and pose is not None and source_pose is not None
+                and all(math.isfinite(v) for v in (*pose, *source_pose, tx, ty)) and tx > 0
+                and _crosses([_to_current(p, (0.0, 0.0, 0.0), pose) for p in self._edges], tx, ty) is None):
+            info = dict(info, observed_creep_target_m=(tx, ty), observed_creep_key=self._key)
         return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
     def reset(self):
         """Drop latches and any expected-path coast. An exception in the node calls this."""
