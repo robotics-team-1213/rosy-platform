@@ -3464,3 +3464,9 @@
 - 변경: trip과 /route의 200 응답에 계획기별 사실 묶음을 붙였다. 호출자는 막힌 차로와 추가 초를 넘기고, 재계획은 그 값을 유지한다. ring_s에서 ring_e만 막으면 east로 우회하고, ring_e와 east를 함께 막으면 TRIP_NO_ROUTE다. /route의 0.20 m 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄인다. 링의 0.20 m 점은 그대로다.
 - 증거: 모델 PC rosy@100.98.162.71에서 commit f0c5e5c130 원격 pytest 191 passed, 2 warnings, 15.78s, exit 0, known_failures NEW 0. 로그는 X:\DevTemp\route-context\run-1.txt. 직전 e9702c042는 우회를 거절로 기대한 시험 1건이 실패했다.
 - gate 변화: 없다. 출발 검사, 선 추종, Nav2, D-557 링 랩은 그대로다. 로봇에 목표를 보내지 않았다.
+
+## 2026-10-12 · 3ff2ffc1e5 · 없는 차로 문구와 Fleet 크기 재판정
+
+- 변경: 관제 문구에 TRIP_UNKNOWN_EDGE(지도에 없는 차로입니다)를 넣었고, 차로 id가 있으면 그 이름을 붙인다. Fleet 크기 판정을 56077로 다시 적었다. 경로 사실 묶음과 점 단축은 그대로다.
+- 증거: 착지 1회차 commit 1034c4bf0e. 가드 묶음 1 failed/3981 passed/225 skipped. fleet 줄 수가 55856+150을 넘었다. Fleet 시험 1 failed/4536 passed/246 skipped. TRIP_UNKNOWN_EDGE 문구가 없었다. known_failures NEW 1. 로그는 X:\DevTemp\land\fix-route-context\run-1-1.txt 와 run-1-2.txt.
+- gate 변화: 없다. Nav2, 링 랩, 출발 검사는 그대로다.
