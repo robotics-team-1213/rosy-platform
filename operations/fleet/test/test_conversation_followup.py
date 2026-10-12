@@ -80,7 +80,7 @@ def change_context(f, change):
     if change == 'withdraw':
         f.raw.withdraw(f.receipt['guild_id'],f.receipt['channel_id'],f.receipt['message_id'])
     elif change == 'actor':f.accounts['op']='viewer'
-    elif change == 'route':f.raw.config.channel_id='11111111111111111'
+    elif change == 'route':f.raw.config=f.raw.config.model_copy(update={'channel_id':'11111111111111111'})
     elif change == 'map':f.env['map']['version']+=1
     elif change == 'grant':f.admitted[0]=False
     elif change == 'expiry':f.clock[0]+=121
@@ -113,7 +113,7 @@ def test_followup_queues_once_and_rechecks_original_after_selection_row_moves(tm
     assert f.jobs.peek(receipt['request_id'])['state']=='ANSWERED'
     asyncio.run(f.worker.step(receipt['request_id']))
     asyncio.run(f.worker.step(receipt['request_id']))
-    queued=f.store.queued_task_ids()
+    queued=sorted(f.store.queued_task_ids())
     assert len(queued)==1 and f.journal.task_reason(queued[0]) is None
     assert f.journal.guard(receipt['request_id'])['request_id']==receipt['request_id']
     change_context(f,'withdraw')
@@ -141,3 +141,40 @@ def test_foreign_actor_cannot_supply_selected_context(tmp_path):
         author_bot=False,webhook_id=None,content=f'<@{f.raw.config.bot_id}> 40번 거기로 보내줘'))
     q=f.jobs.build_input(receipt,f.env,f.clock[0])
     assert q.history==[] and q.accepted_execution_context is None
+
+
+@pytest.mark.parametrize('phase',['stage','reserve','finish'])
+def test_context_revocation_at_each_durable_boundary_refuses_followup(tmp_path,phase,monkeypatch):
+    f=completed_turn(tmp_path)
+    worker,receipt,calls=followup_worker(f)
+    original=getattr(f.jobs,phase)
+    def changed(*args,**kwargs):
+        if phase=='reserve':
+            value=original(*args,**kwargs)
+            change_context(f,'withdraw')
+            return value
+        change_context(f,'withdraw')
+        return original(*args,**kwargs)
+    monkeypatch.setattr(f.jobs,phase,changed)
+    asyncio.run(worker.step(receipt))
+    assert f.jobs.peek(receipt['request_id'])['state'] in {'HOLD','SUPERSEDED'}
+    assert len(calls)==(1 if phase=='finish' else 0)
+
+
+@pytest.mark.parametrize('change',['map','grant','generation','unknown','boot_id','run_id','release'])
+def test_queued_followup_origin_rechecks_every_bound_fact(tmp_path,change):
+    f=completed_turn(tmp_path)
+    worker,receipt,_=followup_worker(f)
+    asyncio.run(worker.step(receipt));asyncio.run(f.worker.step(receipt['request_id']))
+    queued=next(iter(f.store.queued_task_ids()))
+    change_context(f,change)
+    assert f.journal.task_reason(queued)=='CHANNEL_EXECUTION_ORIGIN_CHANGED'
+
+
+def test_unaccepted_prior_control_proposal_cannot_authorize_followup(tmp_path):
+    f=fixture(tmp_path)
+    f.jobs.execution=f.journal
+    worker,receipt,calls=followup_worker(f)
+    asyncio.run(worker.step(receipt));asyncio.run(f.worker.step(receipt['request_id']))
+    assert calls[0].history[0].kind=='CONTROL' and calls[0].accepted_execution_context is None
+    assert not f.store.queued_task_ids() and not f.writes
