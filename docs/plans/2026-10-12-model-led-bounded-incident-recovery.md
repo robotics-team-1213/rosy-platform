@@ -46,6 +46,8 @@ Read/modify: `operations/decision/src/rosy/decision/model_tool_catalog.py`, `del
 
 ## Task 3: 기존 실제 제출·응답·성공 확인
 
+D-724의 전달 경계는 `fleet/swarm/transport.py::line_stuck_decision`의 선택적 async `before_submit`이다. 조건부 BACK의 지원 확인 GET이 성공한 뒤, POST 입구 직전에 호출한다. 기존 단일 loop의 최종 검증·durable claim을 이 포트에 연결하고, False/오류/취소·미지원 CORE는 POST하지 않는다. 포트 자체는 운영 수용이나 물리 claim 구현이 아니다. signed 운영 receipt → 동일 DB의 사건 단일 claim → pinned dispatcher/ready·inflight·missing·rejected·stale 선택 → 이 제출 포트 → ACK/UNKNOWN/실제 결과 순서로 연결한다. current self probability나 항상 HOLD인 operational_comparison을 수용으로 바꾸지 않는다.
+
 Read/modify: 기존 `fleet/stuck/loop.py::_answer`, `lane_lost.py`, `closed_loop.py`, `automation/closure.py`, `tools/incident_model_feedback.py`와 사건/규칙 inventory·독립 비교. 기존 API reference의 `/api/v1/line-follow/stuck/decision`과 D-407 안전 계약을 사용한다.
 
 1. fresh token/owner/사건·법칙·예산을 await 전후 검증하고 현장 gate가 거절할 때 모델 합의로 완화하지 않는 시험을 추가한다.

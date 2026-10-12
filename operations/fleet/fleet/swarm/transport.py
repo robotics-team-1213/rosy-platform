@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncIterator, Optional, Protocol, Sequence, runtime_checkable
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
 from pydantic import ValidationError
@@ -138,7 +138,8 @@ class RobotClient(Protocol):
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None,
-                                  expected_stuck: dict | None = None) -> dict: ...
+                                  expected_stuck: dict | None = None,
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
@@ -362,8 +363,11 @@ class HttpRobotClient:
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None,
-                                  expected_stuck: dict | None = None) -> dict:
+                                  expected_stuck: dict | None = None,
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
+        if before_submit is not None and (expected_stuck is None or not callable(before_submit)):
+            raise ValueError("conditional request and explicit submission guard required")
         body: dict = {"stuck_id": stuck_id, "decision": decision}
         if expected_stuck is not None:
             if decision != "BACK_AND_RETRY":
@@ -378,6 +382,9 @@ class HttpRobotClient:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
             body["yield_turn_rad"] = yield_turn_rad
+        # D-724: the owner binds final admission and its durable claim after the capability await.
+        if before_submit is not None and await before_submit() is not True:
+            raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED", "final submission guard refused")
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
     async def front_status(self) -> dict:

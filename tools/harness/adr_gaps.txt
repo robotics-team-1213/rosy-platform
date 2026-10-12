@@ -48,7 +48,6 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
-D-719 reserved on uiux/face-notes (face line notes and a deeper waiting mouth) and absent from this branch; remove once its ADR lands
 D-720 reserved by a peer session (Discord read-only fleet status deliberation and fixed broker admission) and absent from this branch; remove once its ADR lands
 D-722 reserved by another session and absent from this branch; remove once its ADR lands
 D-723 reserved by another session and absent from this branch; remove once its ADR lands
