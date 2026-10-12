@@ -2,6 +2,12 @@
 
 2.81 x 1.26 m road track. White lane paint on a dark floor (confirmed by the user 2026-09-22) plus a 155 mm perimeter wall.
 
+All generated worlds use a centred 5 x 5 m ground plane, also read by Isaac.
+This covers the 3 x 1.5 m floor visuals without changing measured walls or paint.
+Native zero-command comparisons found rest-velocity spikes with the previous
+100 m ground and none with 5 m at the same starting pose. This is a simulator
+ground setting; it does not establish driving, traffic or learning acceptance.
+
 | File | Role |
 |---|---|
 | `260919 MAP FILE.STL` | CAD source: binary, mm, Y-up. sha256 `cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b` |
