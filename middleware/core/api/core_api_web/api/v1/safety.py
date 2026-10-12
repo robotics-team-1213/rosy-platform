@@ -13,6 +13,7 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
 from core_common.config import ConfigError, patch_local_config
+from core_common.protocol.native_operation import NativeOperation
 
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,34 @@ safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 
 @safety_router.post("/stop")
 def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    captured = []
+    for owner in (svc.nav, svc.docking, svc.swarm, svc.command):
+        try:
+            view = owner.native_readback()
+            operation = NativeOperation.model_validate(view["operation"])
+            if (operation.phase != "TERMINAL"
+                    and str(operation.run_id) == view["owner"]["owner_run_id"]
+                    and str(operation.boot_id) == view["owner"]["boot_id"]):
+                captured.append((owner, operation))
+        except Exception:
+            # Optional evidence must never prevent the existing safety path.
+            continue
     # Latch first: the mode change runs listeners (docking abort, ...), and
     # nothing they do may leave EMERGENCY without the latch behind it.
     svc.safety.trigger_estop(f"api:{auth.role}")
     svc.modes.transition(Mode.EMERGENCY)
     svc.state.set_estop(True)
-    return {"estop": True}
+    operations = []
+    for owner, operation in captured:
+        try:
+            current = NativeOperation.model_validate(owner.native_readback(operation.run_id)["operation"])
+            if (current.run_id, current.boot_id, current.kind) == (
+                    operation.run_id, operation.boot_id, operation.kind):
+                operation = current
+        except Exception:
+            pass  # Keep the exact pending receipt when its later evidence is unavailable.
+        operations.append(operation.model_dump(mode="json"))
+    return {"estop": True, "operations": operations}
 
 
 @safety_router.post("/release")
