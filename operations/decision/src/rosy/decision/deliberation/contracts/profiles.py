@@ -31,7 +31,7 @@ class AdapterCapabilities:
             identifier(value)
         if self.provider_kind not in {'local', 'http', 'claude', 'opencode'} or type(self.schema_version) is not int:
             raise ValueError('INVALID_ADAPTER_IDENTITY')
-        for field, allowed in (('domains', {'line_follow', 'door', 'arm_target'}), ('modalities', {'text', 'image'})):
+        for field, allowed in (('domains', {'line_follow', 'door', 'arm_target', 'fleet_status'}), ('modalities', {'text', 'image'})):
             object.__setattr__(self, field, capabilities(getattr(self, field), allowed))
         if any(type(getattr(self, field)) is not bool for field in ('ready', 'isolated', 'cost_verified')):
             raise ValueError('INVALID_ADAPTER_ADMISSION')
@@ -79,7 +79,8 @@ class BoundProfile:
     input_hash: str
 
     def validate(self, problem, current_profile=None):
-        if self.input_hash != problem.digest or (current_profile is not None and current_profile != self.profile):
+        if (self.input_hash != problem.digest or problem.domain not in self.profile.domains
+                or (current_profile is not None and current_profile != self.profile)):
             raise ValueError('CASE_OR_PROFILE_CHANGED')
 
 

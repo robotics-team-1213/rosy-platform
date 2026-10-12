@@ -66,13 +66,17 @@ def test_builder_revalidates_typed_judgment_and_stale_checked_evidence_still_rep
     assert checked_receipt(scope, attempt, receipt)['judgment']['input_hash'] == p.digest
 
 
-def test_profile_without_incident_domain_cannot_be_historical_admission_evidence():
-    scope, p, profiles, _, _, _ = fixture()
-    profiles = (replace(profiles[0], domains=('door',)), profiles[1])
+@pytest.mark.parametrize('domains', [('door',), ('fleet_status',)])
+def test_profile_without_incident_domain_cannot_be_historical_admission_evidence(domains):
+    scope, p, profiles, bound, checked, attempt = fixture()
+    raw = json.loads(model_receipt(scope, p, bound, checked, profiles=profiles).payload_json)
+    profiles = (replace(profiles[0], domains=domains), profiles[1])
     scope = replace(scope, profile_sha256=hashlib.sha256(canonical([asdict(v) for v in profiles]).encode()).hexdigest())
-    bound = BoundProfile(profiles[0], p.digest)
-    checked = judgment(p, bound, payload(p))
-    with pytest.raises(ValueError): model_receipt(scope, p, bound, checked, profiles=profiles)
+    raw['profiles'] = [asdict(v) for v in profiles]
+    with pytest.raises(ValueError, match='MODEL_RECEIPT_CASE_OR_ROLE_CHANGED'):
+        checked_receipt(scope, attempt, ModelReceipt(canonical(raw)))
+    with pytest.raises(ValueError):
+        model_receipt(scope, p, BoundProfile(profiles[0], p.digest), checked, profiles=profiles)
 
 
 @pytest.mark.parametrize('forged', [False, True])
