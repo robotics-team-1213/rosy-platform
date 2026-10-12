@@ -635,3 +635,10 @@
 - 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
 - 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
 - gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
+
+- 변경: 얼굴 입력 `line_note`는 `crosswalk`, `lane_edge`, `yield`만 받는다. 내비게이션과 수동에서 막힘·계획·도착 다음에 `Crosswalk`, `Lane edge`, `Yielding`을 말한다. 대기와 모르는 값은 기존 줄을 유지한다.
+- 증거: `test_face_screen.py`에 노트 줄과 모르는 값 시험을 넣었다. 이 브랜치는 커밋 전이라 원격 pytest는 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
