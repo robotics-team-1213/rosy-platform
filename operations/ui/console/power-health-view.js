@@ -22,12 +22,18 @@ export function powerHealthView(robot, receivedAtMs, nowMs) {
   if (battery.sample_age_s + age + elapsed > battery.stale_after_s) {
     return { ...unknown, problem: "", safetyRelease };
   }
-  const percent = Number.isFinite(battery.percent) && battery.percent >= 0 && battery.percent <= 100
-    ? `${Math.round(battery.percent)}%` : "확인 불가";
+  const held = battery.charging_state === "confirmed"
+    && Number.isFinite(battery.shown_percent)
+    && battery.shown_percent >= 0 && battery.shown_percent <= 100
+    ? battery.shown_percent : null;
+  const reading = held !== null ? held : battery.percent;
+  const percent = Number.isFinite(reading) && reading >= 0 && reading <= 100
+    ? `${Math.round(reading)}%` : "확인 불가";
   const chargeAge = battery.charging_evidence_age_s;
+  const chargingLabel = held !== null ? `충전 확인 · ${Math.round(held)}%` : "충전 확인";
   const charging = battery.charging_state !== "confirmed" ? "충전 미확인"
     : Number.isFinite(chargeAge) && chargeAge >= 0 && chargeAge + age + elapsed <= 5
-      ? "충전 확인" : "확인 불가";
+      ? chargingLabel : "확인 불가";
   let problem = "";
   if (battery.level !== "ok") problem = "배터리 경고 — 충전·절전 확인";
   else if (charging !== "충전 확인" && ["DOCKED", "CHARGING"].includes(robot.state?.docking?.state))

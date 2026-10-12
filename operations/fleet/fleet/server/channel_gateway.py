@@ -2,9 +2,11 @@
 import asyncio
 import logging
 import sqlite3
+import ssl
 from contextlib import AsyncExitStack, asynccontextmanager
 
 import httpx
+import certifi
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 from rosy_discord.gateway import DiscordGateway
@@ -38,7 +40,9 @@ def install_gateway(app, journal, token):
             try:
                 tasks.append(asyncio.create_task(worker.run()))
                 if config.replies_enabled:
-                    http = await stack.enter_async_context(httpx.AsyncClient())
+                    # Discord must not inherit the private site-only SSL_CERT_FILE.
+                    http = await stack.enter_async_context(httpx.AsyncClient(
+                        verify=ssl.create_default_context(cafile=certifi.where())))
                     sender = DiscordReplies(channel_id=config.channel_id, bot_id=config.bot_id, token=token, http=http)
                     tasks.append(asyncio.create_task(ChannelReplyWorker(journal.reply_outbox, sender).run()))
                 yield state
