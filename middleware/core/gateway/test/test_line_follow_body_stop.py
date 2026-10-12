@@ -660,6 +660,56 @@ def test_sweep_uses_the_safety_clipped_twist():
     assert _step(m, post, error=-0.3)[1].reason == "obstacle_ahead"
 
 
+def _core_curve_manager(**overrides):
+    from types import SimpleNamespace
+    from core.drive.line_follow import bind_motion_envelope
+    from core_features.traffic_policy import TrafficPolicyMode
+
+    m = _manager(**overrides)
+    traffic = SimpleNamespace(mode=TrafficPolicyMode.ENFORCED,
+                              configuration=lambda: {"active": {"proceed_speed_scale": 0.5}})
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=.1, max_angular=.8))
+    bind_motion_envelope(m, safety=safety, traffic_policy=traffic)
+    return m
+
+
+def test_core_normal_camera_checks_its_curve_but_other_mode_gap_keeps_legacy_family():
+    post = [(0.017, 0.07)]
+    m = _core_curve_manager()
+    decision, status = _step(m, post, error=-.3)
+    assert status.state == "TRACKING" and decision.linear > 0.
+    gap, stop, _ = m.obstacle_gap(decision.linear, decision.angular, now=T)
+    assert gap is not None and gap < stop
+
+
+def test_leg10_critical_beam_does_not_stop_an_unblocked_normal_camera_curve():
+    # Leg10 sim55.4 beam591; sensor-origin point, mount translation is applied once by CORE.
+    point = [(0.07126481320667923 + .017, -0.04552029150062982)]
+    m = _core_curve_manager(cruise_speed=.1, max_linear=.1, steering_gain=2.,
+                            obstacle_path_horizon_m=.4, obstacle_latency_s=0.,
+                            obstacle_blind_floor=False)
+    decision, status = _step(m, point, error=-.059712345293685666, confidence=.6)
+    assert decision.linear == pytest.approx(.036968729829196315)
+    assert status.state == "TRACKING" and status.body_gap_m > status.stop_gap_m
+
+
+def test_core_curve_scope_still_stops_an_actual_body_collision():
+    m = _core_curve_manager(obstacle_blind_floor=False)
+    decision, status = _step(m, _wall(.07), error=-.3)
+    assert decision.linear == 0. and status.reason == "obstacle_ahead"
+
+
+def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_apply_recovery",
+                        lambda now, decision: replace(decision, angular=decision.angular * 2.))
+    decision, status = _step(m, [], error=-.3)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason) == ("HOLD", "motion_unconfirmed")
+
+
 def test_an_unreadable_motion_envelope_fails_closed():
     m = _manager()
 
