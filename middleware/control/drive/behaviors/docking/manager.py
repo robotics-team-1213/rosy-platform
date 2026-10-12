@@ -350,7 +350,7 @@ class DockingManager:
         with self._lock:
             try:
                 if self._state in (DockState.DOCKING, DockState.UNDOCKING):
-                    self._fail(reason)
+                    self._fail(reason, safety_stop=getattr(self._safety, "estop", False))
             finally:
                 # _fail 은 상태를 먼저 적는다 — 정리가 예외를 내도 모드는 놓는다.
                 self._release_mode_when_done()
@@ -437,7 +437,7 @@ class DockingManager:
         # E-Stop 은 어느 단계에서든 즉시 중단시킨다.
         if getattr(self._safety, "estop", False) and self._state in (
                 DockState.DOCKING, DockState.UNDOCKING):
-            self._fail("estop during docking")
+            self._fail("estop during docking", safety_stop=True)
             return
 
         if self._return_pending and self._state is DockState.UNDOCKED:
@@ -702,7 +702,7 @@ class DockingManager:
         dock_type = self._type()
         return dock_type is not None and dock_type.approach == "pose"
 
-    def _fail(self, reason: str) -> None:
+    def _fail(self, reason: str, *, safety_stop: bool = False) -> None:
         """종착이다. 스스로 재시도하지 않는다.
 
         무인 상태로 스무 번 실패한 로봇은 물리적 문제를 갖고 있다. 자동 루프는
@@ -713,8 +713,9 @@ class DockingManager:
         self._state = DockState.DOCK_FAILED
         operation = self.native.current
         if operation is not None:
-            self.native.update(operation.run_id, phase="TERMINAL", result="FAILED",
-                               reason="BACKEND_ERROR")
+            self.native.update(operation.run_id, phase="TERMINAL",
+                               result="CANCELED" if safety_stop else "FAILED",
+                               reason="SAFETY_STOP" if safety_stop else "BACKEND_ERROR")
         self._phase = None
         self._error = reason
         self._release()
