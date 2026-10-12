@@ -7,7 +7,7 @@ import pytest
 
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.board import LineStuckBoard
-from fleet.stuck.resolver import StuckResolver
+from fleet.stuck.resolver import StuckResolver, ResolverConfig
 from fleet.swarm.transport import HttpRobotClient
 from fleet.swarm.robots import RobotEndpoint
 from test_operational_case_claim import opened, signed
@@ -20,7 +20,7 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
     now, store, log, scope, state, proof, _ = opened(tmp_path, generation='core:1:stamp')
     state.apply('line-back', signed(proof, 0))
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
-    resolver = StuckResolver(autonomous_robots={scope.subject_id})
+    resolver = StuckResolver(ResolverConfig(), autonomous_robots={scope.subject_id})
     calls, clients = [], {}
     row = dict(robot_id=scope.subject_id, online=True, state=dict(seq=1, timestamp='stamp',
         line_follow={'stuck': dict(recovery_context(), stuck_id=scope.case_id)}))
@@ -66,7 +66,7 @@ def test_fake_client_swallowing_guard_cannot_dispatch(tmp_path):
     class Fake:
         async def line_stuck_decision(self, *args, **kwargs): raise AssertionError('must not dispatch')
     async def snapshot(): return {'robots': []}
-    loop = StuckResolverLoop(snapshot, LineStuckBoard(log=log), StuckResolver(), clients=lambda: {scope.subject_id: Fake()})
+    loop = StuckResolverLoop(snapshot, LineStuckBoard(log=log), StuckResolver(ResolverConfig()), clients=lambda: {scope.subject_id: Fake()})
     loop.operating_state, loop.operating_grant = state, 'line-back'
     _, _, _, _, _, _, worker, _, _ = make_incident_worker(tmp_path / 'worker')
     worker.store = store
