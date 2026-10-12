@@ -49,6 +49,43 @@ typed evidence 참조로 제한한다. 모델 제안으로 위 owner 지원 표�
 
 ## Task 2: 기존 실행 owner와 영속 권한 fence
 
+### Task 1 implementation evidence (2026-10-12)
+
+The actual owners are `rosy.decision.conversation` (pure profile/input/semantic-step
+codec) and `fleet.server.channel.conversation` (durable channel journal, worker,
+optional runtime). Both status and conversation owners consume the shared fixed
+SSH transport and transaction/attempt journal; D-720 status validation, tables and
+compatibility imports remain unchanged. Conversation uses independent source
+policy and persistent profile/source/policy/semantic-evidence scope. AI proposals
+never call human review or a device owner. Same-actor history is explicitly an
+unaccepted model proposal, with no execution/selection grant.
+
+Independent `pipeline_review` structural precheck at `590604f05` measured
+conversation Fleet child280 (jobs51/runtime117/worker111/init1), Decision child256
+(codec255/init1), residual channel1418 and Fleet parent55132. Register these two
+actual innermost subpackages with their measured baselines, retaining original
+channel1379/Fleet55120 baselines, +150, all file/hard ceilings and prior obligations.
+The existing Fleet distribution explicitly installs the new pure Decision package;
+wheel/sdist/source-image closure is tested through the existing installed delivery
+test after source holders are removed.
+
+Remote source/transaction/runtime regressions:67 passed/0 NEW at `590604f05`.
+Actual AI PC Qwen semantic smoke uses fixed model digest/context and synthetic
+read-only inputs, never Discord or device commands. In the final source smoke,
+greeting/status/navigation/polite request/quotation/ambiguity/injection/E-stop
+unlock cases produced valid expected categories; explanation/hypothetical unsafe
+CHAT claims were rejected, and the negated command produced an invalid intent.
+These failures keep conversation semantic admission OFF. Raw status prose claimed
+an unobserved position and was discarded by the Fleet fact formatter.
+
+Remaining operational gates: independent semantic conformance/admission, protected
+conversation forced-command installation, a separate protected GLM conversation
+codec/admission (D-720 status codec is refused), Task2 original-positive-instruction
+grant/execution closure, Task3 progress/result receipts, and Task4 signed deployment
+and real new Discord message readback. `review_required` currently closes a natural
+HOLD/CLARIFY when the independent conversation reviewer is unavailable. No paid GLM
+call, root install, device command or Discord message was performed by Task1.
+
 - 기존 /api/fleet/do 실행을 같은 shared service로 재사용한다. Discord
   원문 operator 권한과 idempotency/예약을 최종 owner까지 이어준다.
 - 기존 Task navigation·정지·지원 조종 grammar 및 Mission/Cell owner를
