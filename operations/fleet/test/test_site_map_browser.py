@@ -1078,7 +1078,10 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     page.locator('details').filter(has=page.locator('#survey-review-note')).locator('summary').click()
     page.locator('#survey-review-note').fill('Measured calibration and road directions checked')
     page.locator('#survey-review').click()
-    page.locator('#save-draft').click()
+    with page.expect_response(lambda response: response.url.endswith('/api/fleet/site-map/draft')
+                              and response.request.method == 'PUT') as saved_response:
+        page.locator('#save-draft').click()
+    assert saved_response.value.ok
     expect(page.locator('#draft-status')).to_contain_text('저장된 초안')
     reviewed = store.draft_view()
     assert 'survey' not in reviewed['map']
