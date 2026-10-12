@@ -334,11 +334,13 @@ def test_paired_docking_cas_rejects_before_mode_or_backend(core_client):
     assert stale.json()["error"]["code"] == "OWNER_GENERATION_CHANGED"
     assert services.docking.native_readback()["owner"] == before
     assert services.docking.state is DockState.UNDOCKED
+    assert services.modes.mode is Mode.IDLE
 
 
 def test_nav_terminal_reasons_and_single_home_run():
     nav, _events = _nav()
-    nav.executor = SimpleNamespace(send_goal=lambda spec: None, cancel_goal=lambda: None)
+    nav.executor = SimpleNamespace(send_goal=lambda spec, **kwargs: None,
+                                   cancel_goal=lambda: None)
     receipts = []
     spec = NavGoalSpec(1, 2, 0)
     nav.goal(spec, receipt_sink=receipts.append)
