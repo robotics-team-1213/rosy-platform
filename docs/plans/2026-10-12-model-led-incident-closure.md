@@ -16,6 +16,10 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 D-712 checkpoint는 `d0541c3b27`의 영속 local current/previous 선택·revision CAS/복귀와 같은 DB의 원자적 사건 배정이다. 실제 receipt/poll·create_app, 동시 전환·재시작·기존 scope/예산 보존과 설치·크기 회귀는 적격 Model PC에서 terminal exit 0/NEW 0이다. 선택·복귀 책임은 기존 automation/routing에 두고 ledger 허용량을 올리지 않았다. 다음은 설치·승인된 프로파일과 pinned worker dispatcher 연결이다. 이 local 선택을 모델 품질 수용·운영 승격으로 해석하지 않는다.
+
+D-705는 `99e96cd190a0fae123a3dcb5ff52a1a0526e1121`로 로컬 main에 착지했다. main이 이동해 기존 도구의 merge→회귀를 다섯 번 수행했고 마지막 실제 AI PC 통합은 12,035 passed/1,265 skipped/NEW 0, terminal exit 0이다. 고정 로그는 세션 `logs/incident-calibration-land-ae594b.txt`, SHA256 `0caf1d81579e267ed62a1f129b2def4a01b5c1a466fee180bc7ddf80601aa5a3`다. push·CI·배포·실제 모델·현장 증거가 아니며 D-706 이후 작업은 아직 main에 착지하지 않았다. 아래 이전 시작점의 진행 중 표현은 당시 상태다.
+
 2026-10-12 최신 시작점: 통합 목표는 ACTIVE이며 기존 목표·ADR·진행 증거를 초기화하지 않는다. D-706 후보 생산, D-707 영속 보정 승인, D-709 실제 Fleet 판단 포트 연결, D-710 사건 소유권 분리와 D-711 새 사건 생성 허가 분리까지 source checkpoint를 확보했다. D-711의 `31f2cbbe8f`는 적격 AI PC 원격 시험 112 passed/terminal exit 0/NEW 0이며 독립 source 검토에 중요한 blocker가 없었다. 상세와 증거는 [프로파일 lifecycle 계획](2026-10-12-reasoning-profile-lifecycle.md)을 따른다.
 
 바로 다음 구현은 **영속 current/previous 전환과 원자적 사건 배정 → 사건에 고정된 worker dispatch → 복귀·재시작 readback**이다. 로컬 생성 허가와 사건 생성 사이에 current revision이 바뀌는 경쟁을 실제 SQLite 시험으로 먼저 재현한다. 이어 같은 트랜잭션에서 사건 소유 revision을 고정하고, 기존 사건의 예산·시도·UNKNOWN을 보존한다. 아래 D-705 시작점과 이전 source 감사는 당시 기록이며 최신 완료 범위를 대신하지 않는다. D-705 로컬 착지 검증은 진행 중이고 D-706 이후 변경의 main 통합·배포·현장 수용은 미완료다.
