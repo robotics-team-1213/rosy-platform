@@ -17,7 +17,8 @@ def _new():
 
 
 def _centre(ahead=0.40, strategy="drivable_centre", straddle=None, reason=None):
-    return {"ahead_m": ahead, "near_centre_m": (0.20, 0.0), "strategy": strategy,
+    return {"ahead_m": ahead, "near_centre_m": (0.20, 0.0),
+            "centre_path_m": ((.1, 0.), (.1 + ahead / 2, 0.), (.1 + ahead, 0.)), "strategy": strategy,
             "straddle": straddle, "reason": reason}
 
 
@@ -98,10 +99,10 @@ def test_a_missing_frame_holds_the_near_tangent():
     assert abs(start[1]) < 0.01 and abs(end[1]) < 0.01 and end[0] > start[0]
 
 
-def test_shifting_the_end_sideways_does_not_change_held_error():
+def test_far_geometry_does_not_replace_the_near_pursuit_target():
     path = _commit()
     before = path.hold((0.05, 0.0, 0.0), 1.0)
-    path.end_m = (path.end_m[0], path.end_m[1] + 0.20)
+    path._path = (*path._path[:-1], (path._path[-1][0], path._path[-1][1] + .20))
     after = path.hold((0.05, 0.0, 0.0), 1.1)
     assert after["error"] == pytest.approx(before["error"])
     assert abs(before["error"]) < 0.01
@@ -121,9 +122,9 @@ def test_travel_past_the_segment_or_a_quarter_metre_or_two_and_a_half_seconds_dr
     assert cap_drop["error"] is None and cap_drop["state"] == "dropped"
 
     timed = _commit()
-    timed.hold((0.0, 0.0, 0.0), 10.0)
-    assert timed.hold((0.05, 0.0, 0.0), 12.49)["error"] is not None
-    time_drop = timed.hold((0.05, 0.0, 0.0), 12.51)
+    timed.hold((0.0, 0.0, 0.0), 1.0)
+    assert timed.hold((0.05, 0.0, 0.0), 2.69)["error"] is not None
+    time_drop = timed.hold((0.05, 0.0, 0.0), 2.71)
     assert time_drop["error"] is None and time_drop["state"] == "dropped"
 
 
@@ -237,5 +238,9 @@ def test_shape_exhaustion_or_a_target_behind_the_robot_stops():
 
 
 def test_near_point_without_observed_shape_cannot_commit():
-    path = _commit()
+    path = _new()
+    info = _centre()
+    info.pop('centre_path_m')
+    for stamp in (0., .1, .2):
+        path.update((0., 0., 0.), stamp, info)
     assert not path._committed
