@@ -10,7 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'),
-               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test')]
+               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test'),
+               str(ROOT / 'operations/fleet')]
 from rosy.contracts.learning import seal
 from test_judgment_calibration import rows, manifest, profile, limits, IDENTITY
 from test_judgment_profiles import profile as model_profile
