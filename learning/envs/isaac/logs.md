@@ -286,3 +286,12 @@
 - gate 변화: SOURCE/원격 회귀 증거이며 native 종료 credit·완주·독립 병렬 학습·두 대 Fleet 교통 수용은 별도다.
 
 - 실제 R41: d653def0b headless 한 대 학습6회와 고정 평가3회·baseline4회가 종료됐다. Q 갱신27,957회 중 목표 상실 terminal credit5회를 실제 확인했고, trace로 독립 재계산한 최종 Q는 저장 정책과 정확히 일치했다. 각 credit의 원래 nonzero CORE receipt·유효 state·후속 ZERO·종료 bootstrap0을 검사했다. 기록된 정지16개와 실제 영상7개를 검증했지만 전체 완주는0회이며 SDK exit1로 정책 채택은 거절했다. 병렬 학습·교통/Fleet 수용은 여전히 미완료다.
+
+## 2026-10-12 · ba1347294 · 카메라 관측 구간 학습
+
+- 근거: R41 원시 trace에서 동일 source_stamp 내 행동 변경11,055회와 ordinary Q update26,797회를 확인했다. 물리240Hz에 gamma0.95를 적용한 시간 의미를 수정 대상으로 삼았다.
+- 변경: 새 유효 stamp에서 gain 선택, 구간 보상 합산, 성공 dispatch receipt를 가진 구간만 갱신. 매 tick CORE·camera 안전 실행은 유지한다. 종료 credit은1회이며 외인성 실패·미실행 구간은 제외한다. schema2는 이전 physics-tick 정책 복원을 거절한다.
+- 검증: 첫 원격 시험은 helper 미구현 assertion으로4 setup ERROR/NEW4였다. 구현·연결 후 관련129 PASS, legacy schema 거절 추가 후 Isaac 전체와 module_structure322 PASS/1 SKIP/NEW0. runner597행. 이 시험은 SDK 실행을 포함하지 않는다.
+- 후속 검증: CORE select 실패가 warning ZERO를 보낼 때 이전 실행 연결이 남는 문제를 원격 NEW1로 재현해 수정했다. 관련133 PASS, 최신 main 반영 후 Isaac 전체와 module_structure325 PASS/1 SKIP/NEW0. 독립 소스 검토는 f2697eab11ea1f095cba02a97553fb7e611851f7의 카메라 관측 주기 변경을 승인했다.
+- 실제 R42: 같은 SHA로 headless 학습6회·baseline4회·eval3회가 종료됐다. 구간 raw reward 합계와 Q 갱신1,165회(종료6회)를 독립 재계산해 저장 정책과 정확히 일치했다. 동일 관측 행동 유지44,551회, 산출물91개 hash, 영상7개 프레임 수를 검증했다. 정지 receipt16개를 확인했으나 성공 정지 구간 전체 raw sample은 저장되지 않아 연속 정지 독립 검증과 구분한다.
+- gate 변화: 전체13회 모두 camera_lane_lost로 완주0, SDK exit1, 후보 미채택이다. 진행량 증가는 완주나 안정적인 곡선 추종 증거가 아니다. 병렬 환경·신호·횡단보도·Fleet·ROS-SIM·실물 수용은 미완료다. 원본과 독립 verifier는 private/isaac/media/2026-10-12-r42-camera-cadence에 보관했다.
