@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-718은 `f7221c12e6`로 로컬 main에 착지했다. main 변경을 반영해 두 번 통합했으며 마지막 적격 AI PC/Model PC 원격 세 그룹은 합계 18,671 passed/822 skipped/NEW 0 및 lint를 통과했다. 고정 로그는 세션 `logs/stuck-condition-land-f7221c12e6-{1,2,3}.txt`다. API/제어기의 혼합 설치 지원 검사, SDK 의존성·실제 wheel/sdist, 기본 요청 호환성과 CORE 조건부 거절을 포함한다. FULL CI는 착지 도구가 별도로 요구하며 push·배포·실제 모델·현장 수용은 미확인이다. 다음은 typed 물리 후보 원장과 규칙/모델 단일 소비, signed 운영 수용·최종 폐기 재검사와 실제 결과 연결이다. 목표는 ACTIVE다.
+
 D-718 source checkpoint는 [CORE 조건부 막힘 답](../adr/D-718-conditional-core-stuck-answer.md)과 [물리 처리 연결 계획](2026-10-12-model-led-bounded-incident-recovery.md)에 기록한다. 조회 이후 사람 WAIT·CORE local fallback·시도 변경을 실제 적용 시점에 거절하고, 부분 업그레이드에서 조건이 무시되는 제출을 차단했다. SDK/API/Fleet와 실행 의존 소비자의 버전·offline installer·CI pin을 함께 갱신했으며 독립 SOURCE 안전 검토와 수정 후 설치 closure 회귀를 확인했다. 다음은 모델의 typed 물리 후보를 사건 원장에 고정하고 기존 loop 한 곳이 규칙/모델 중 하나만 소비하는 연결이다. 전체 목표는 ACTIVE이며 source의 조건부 API가 모델 운영 수용·현장 성공을 뜻하지 않는다.
 
 현재 통합 목표는 **모델 주도 범용 사건 해결·자체 개선**이며 기존 ACTIVE 목표를 이어간다. 책임은 Fleet의 사건/원장/단일 제출, Decision의 구조화 판단/조건부 검토, AI PC의 설치된 운영 추론, Model PC의 정답/보정/독립 평가, CORE와 각 장치 owner의 최종 실행으로 나눈다. 소스 저장소의 위치와 실제 실행 호스트는 별도 설치 계약으로 확인한다.
