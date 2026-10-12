@@ -124,3 +124,13 @@ def test_reset_forgets_a_committed_path():
     step, decided = _step(steer, ways, last, 1.0)
     assert step is None and decided is False
     assert last["reason"] == "drivable_way_stale"
+
+
+def test_missing_way_cannot_override_a_fresh_off_route_refusal():
+    steer, ways, last, *_rest = _commit_centre()
+    ways.way = None
+    guide = (0., .3, False, 0., .3, 0.)
+    step, decided = keep_step(steer, ways, last, G, XO, HALF, _pose, .3, None, guide)
+    assert step is None and decided is True
+    assert last['reason'] == 'off_route_hold'
+    assert last['expected_path_state'] == 'dropped'
