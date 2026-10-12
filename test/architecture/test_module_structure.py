@@ -98,6 +98,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "control/drive/behaviors/swarm",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
+              "fleet/fleet/server/channel",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
@@ -116,6 +117,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/channel": (
+        1_379,
+        "split: D-728 actual channel owner extraction measured on 2026-10-12; independent review pending. "
+        "The nine intake/workflow/Mission/incident/outbox/gateway/model modules retain existing owners and "
+        "guards; stable old module paths alias the same implementation objects. Largest child file249; "
+        "installed wheel/sdist/source-image closure is verified separately. Keep +150 and every file/hard "
+        "ceiling. See docs/plans/2026-10-12-natural-language-channel-operations.md",
+    ),
     "decision/src/rosy/decision/deliberation": (
         231,
         "split: responsibility_review applied three actual responsibility subpackages on 2026-10-12. "
@@ -358,8 +367,12 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        56_444,
-        "split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
+        55_120,
+        "split: D-728 actual channel subpackage measured parent55120/child1379 together on 2026-10-12; "
+        "independent review pending. Combined56499 includes only55 compatibility/package lines above56444; "
+        "existing nine implementations moved without behavior change. Preserve +150, every zero/file/hard "
+        "ceiling and all prior obligations. See docs/plans/2026-10-12-natural-language-channel-operations.md. "
+        "Previous56444 verdict: split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
         "on2026-10-12 at56444. Separate durable channel owner and display-only watch keep their "
         "existing readers/authority; app923, console.py1325, ConsoleJS1035. Preserve +150, all "
         "zero/file/hard ceilings and every password/full-progress/observe/server/UI/channel split "
