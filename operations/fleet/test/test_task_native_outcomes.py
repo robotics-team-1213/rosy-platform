@@ -167,3 +167,44 @@ def test_stop_during_new_epoch_read_refuses_goal_before_send():
     with pytest.raises(NavigationStopped):
         run(leases.send('rosy_01',SimpleNamespace(_get=get,navigation_goal=goal),{},1.,2.,0.,'attempt',task_id='task'))
     assert not sent
+
+
+@pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack'])
+def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at):
+    from fleet.server.goal_lease import GoalLeases
+    from fleet.swarm.dispatch_guard import check_dispatch
+    store = FleetTaskStore(tmp_path / 'fleet.sqlite3')
+    service = FleetTaskService(store, robot_ids={'rosy_01'})
+    store.rearm_dispatch(expected_generation=store.dispatch_control()['generation'], actor_id='operator')
+    run(service.submit_navigation(robot_id='rosy_01', x=1., y=2., source='operator',
+                                  actor_id='op', request_key='rejected-native'))
+    withdrawn, sent = [], []
+    service.channel_admission = lambda tid: 'CHANNEL_WITHDRAWN' if withdrawn else None
+    leases = GoalLeases(0, {})
+    leases.native_required = lambda tid: True
+    leases.admit_attempt = service.admit_attempt
+    leases.bind_native_receipt = service.bind_native_receipt
+
+    async def get(path):
+        if withdraw_at == 'epoch':
+            withdrawn.append(True)
+        return {'owner': {'boot_id': str(uuid4()), 'owner_generation': 1}}
+
+    async def goal(*args, **kwargs):
+        if withdraw_at == 'transport':
+            withdrawn.append(True)
+        check_dispatch(path='/api/v1/navigation/goal')
+        sent.append(True)
+        return {'accepted': False}
+
+    async def dispatch(attempt):
+        return await leases.send('rosy_01', SimpleNamespace(_get=get, navigation_goal=goal),
+                                 {}, 1., 2., 0., attempt['attempt_id'], task_id=attempt['task_id'])
+
+    result = run(service.dispatch_next({'rosy_01'}, dispatch=dispatch))
+    assert result['status'] == ('FAILED' if withdraw_at == 'negative_ack' else 'HOLD')
+    assert not (result['receipt'] or {}).get('native_required')
+    assert not store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+    with store._connect() as conn:
+        assert not conn.execute('SELECT 1 FROM fleet_robot_reservations').fetchall()
+    assert bool(sent) == (withdraw_at == 'negative_ack')
