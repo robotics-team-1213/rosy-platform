@@ -286,7 +286,7 @@ def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
     assert (stopped.linear, stopped.angular) == (0., 0.) and len(calls) == 1
 
 
-def gap_lane(frames):
+def gap_lane(frames, curvature=0.):
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
     ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
@@ -294,7 +294,12 @@ def gap_lane(frames):
     denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
     with np.errstate(divide='ignore', invalid='ignore'):
         lateral = ground.height_m * (cols - 160) / denominator
-    way = ((denominator > 0) & (np.abs(lateral) < .0925)).astype(np.uint8)
+        forward = ground.height_m * (ground.focal_px * np.cos(ground.pitch_rad)
+            - (rows - 120) * np.sin(ground.pitch_rad)) / denominator + .03317
+        centre = np.zeros_like(forward) if curvature == 0. else (
+            1. - np.sqrt(1. - (curvature * forward) ** 2)) / curvature
+    way = ((denominator > 0) & (np.abs(lateral + centre) < .0925)
+        & ((forward < .45) if curvature else True)).astype(np.uint8)
     output = [way, 'drivable']
     model = SimpleNamespace(model_revision='lane-seg-test',
         infer_drivable=lambda _f: (*output, {}, 1.))
@@ -326,6 +331,18 @@ def test_camera_gap_uses_only_a_committed_path_without_learning(frames, continue
         assert decision.angular < 0.  # Odom moves the old corridor to our right.
     else:
         assert decision.angular == 0.
+    lane.close()
+
+
+def test_a_visible_curve_cannot_be_extended_as_a_straight_corridor():
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(3, curvature=1.)
+    assert abs(lane.keeper.last['drivable_steer']['curvature_1pm']) > .5
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert (decision.linear, decision.angular) == (0., 0.), lane.last
+    assert state is None
     lane.close()
 
 
