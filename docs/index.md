@@ -233,6 +233,7 @@
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
 | D-733 | Hourly KST Discord Fleet health subscription |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -333,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · docs: D-738 폴더 이름과 묶음 규칙
 - 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
 - 2026-10-13 · 2917a9a699 · docs: 현재 설치본 기본 프로필 후속 검증
 - 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
 - 2026-10-12 · uncommitted · docs(adr): D-736 위치추종 기준점과 어둠 안내
-- 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
