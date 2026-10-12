@@ -49,3 +49,7 @@ D-692 reserved by another active session; ADR not yet integrated into this branc
 
 
 D-692 reserved by another active session; ADR not yet landed in this branch
+
+D-705 reserved by another active session; calibration admission ADR not included in this branch
+D-706 reserved by another active session; candidate profile binding ADR not included in this branch
+D-707 reserved by another active session; candidate snapshot approval ADR not included in this branch
