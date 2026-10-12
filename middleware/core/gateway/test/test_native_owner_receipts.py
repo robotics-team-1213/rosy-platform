@@ -139,6 +139,12 @@ def test_each_teleop_pulse_preempts_then_expires_with_exact_terminal_event():
     terminals = [data for name, data in events.events if name == "native.operation.terminal"]
     assert [(data["run_id"], data["result"]) for data in terminals] == [
         (str(first.run_id), "PREEMPTED"), (str(second.run_id), "EXPIRED")]
+    assert command.teleop(0.1, 0, receipt_sink=receipts.append)[0]
+    mode_left = receipts[-1]
+    assert modes.transition(Mode.IDLE)[0]
+    command.announce_pending()
+    assert command.native_readback(mode_left.run_id)["operation"]["result"] == "PREEMPTED"
+    assert command.native_readback(mode_left.run_id)["operation"]["reason"] == "MODE_LEFT"
 
 
 def test_retention_is_exact_and_pruned_identity_is_unknown():
@@ -212,8 +218,10 @@ def test_dock_undock_success_cancel_and_charging_keep_exact_results(core_client)
     assert response.status_code == 200, response.text
     undock = response.json()["operation"]
     assert undock["kind"] == "undock" and undock["phase"] == "SUBMITTED"
+    original_executor = services.docking.executor
     services.docking.executor = None
     services.docking.tick()
+    services.docking.executor = original_executor
     assert services.docking.native_readback(UUID(undock["run_id"]))["operation"]["result"] == "SUCCEEDED"
     assert services.docking.native_readback(dock.run_id)["operation"]["result"] == "SUCCEEDED"
 
@@ -272,3 +280,89 @@ def test_follow_close_fences_new_admission_until_old_cleanup(core_client):
     services.nav.cancel = original_cancel
     token = services.swarm.reserve_follow(SwarmFollowParams(**body))
     services.swarm.release_follow_reservation(token)
+
+
+def test_dock_and_undock_failure_and_undock_cancel_are_distinct(core_client):
+    client, services = docking_robot(core_client)
+    failed_dock = services.docking.native.current.run_id
+    services.docking.abort("backend rejected movement")
+    assert services.docking.native_readback(failed_dock)["operation"]["result"] == "FAILED"
+    assert services.docking.native_readback(failed_dock)["operation"]["reason"] == "BACKEND_ERROR"
+
+    # A fresh owner avoids using a failed dock as an undock prerequisite.
+    client, services = docking_robot(core_client)
+    services.docking._mark_docked()
+    response = client.post("/api/v1/docking/undock", headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    canceled_undock = UUID(response.json()["operation"]["run_id"])
+    assert services.docking.state is DockState.UNDOCKING
+    canceled = client.post("/api/v1/docking/cancel", headers=OPERATOR)
+    assert canceled.status_code == 200, canceled.text
+    assert canceled.json()["operation"]["run_id"] == str(canceled_undock)
+    assert services.docking.native_readback(canceled_undock)["operation"]["result"] == "CANCELED"
+
+    client, services = docking_robot(core_client)
+    services.docking._mark_docked()
+    response = client.post("/api/v1/docking/undock", headers=OPERATOR)
+    failed_undock = UUID(response.json()["operation"]["run_id"])
+    services.docking.abort("backend rejected undock")
+    assert services.docking.native_readback(failed_undock)["operation"]["result"] == "FAILED"
+    assert services.docking.native_readback(failed_undock)["operation"]["reason"] == "BACKEND_ERROR"
+
+    _client, services = docking_robot(core_client)
+    safety_dock = services.docking.native.current.run_id
+    services.safety.estop = True
+    services.docking.abort("emergency stop during docking")
+    assert services.docking.native_readback(safety_dock)["operation"]["result"] == "CANCELED"
+    assert services.docking.native_readback(safety_dock)["operation"]["reason"] == "SAFETY_STOP"
+
+
+def test_paired_docking_cas_rejects_before_mode_or_backend(core_client):
+    from test_docking_parking_wiring import sim_overrides
+
+    client, services = core_client(config_overrides=sim_overrides())
+    before = services.docking.native_readback()["owner"]
+    path = "/api/v1/docking/dock"
+    incomplete = client.post(path, json={"dock": "parking", "expected_boot_id": before["boot_id"]},
+                             headers=OPERATOR)
+    assert incomplete.status_code == 400
+    assert incomplete.json()["error"]["code"] == "VALIDATION_ERROR"
+    stale = client.post(path, json={"dock": "parking", "expected_boot_id": str(UUID(int=0)),
+                                    "expected_owner_generation": before["owner_generation"]},
+                        headers=OPERATOR)
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "OWNER_GENERATION_CHANGED"
+    assert services.docking.native_readback()["owner"] == before
+    assert services.docking.state is DockState.UNDOCKED
+
+
+def test_nav_terminal_reasons_and_single_home_run():
+    nav, _events = _nav()
+    nav.executor = SimpleNamespace(send_goal=lambda spec: None, cancel_goal=lambda: None)
+    receipts = []
+    spec = NavGoalSpec(1, 2, 0)
+    nav.goal(spec, receipt_sink=receipts.append)
+    rejected = receipts[-1].run_id
+    nav.on_result(False, "REJECTED", native_run_id=rejected)
+    assert nav.native_readback(rejected)["operation"]["reason"] == "BACKEND_REJECTED"
+
+    now = [10.0]
+    nav.lease_clock = lambda: now[0]
+    nav.goal(spec, correlation_id="leased", lease_ttl_s=1.0, receipt_sink=receipts.append)
+    leased = receipts[-1].run_id
+    now[0] = 12.0
+    assert nav.expire_goal_lease()
+    assert nav.native_readback(leased)["operation"]["result"] == "EXPIRED"
+    assert nav.native_readback(leased)["operation"]["reason"] == "LEASE_EXPIRED"
+
+    nav.goal(spec, receipt_sink=receipts.append)
+    stuck = receipts[-1].run_id
+    nav.cancel(source="stuck_detector")
+    assert nav.native_readback(stuck)["operation"]["result"] == "FAILED"
+    assert nav.native_readback(stuck)["operation"]["reason"] == "STUCK"
+
+    nav.resolve_goal = lambda **kwargs: NavGoalSpec(0, 0, 0)
+    nav.home(receipt_sink=receipts.append)
+    home = receipts[-1]
+    assert home.kind == "home"
+    assert len({receipt.run_id for receipt in receipts}) == 4
