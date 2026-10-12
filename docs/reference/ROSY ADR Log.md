@@ -720,6 +720,7 @@
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
 
 | D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
+| D-732 | CORE native 실행 결과 식별과 readback | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
