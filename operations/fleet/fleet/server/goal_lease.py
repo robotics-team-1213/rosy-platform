@@ -58,6 +58,7 @@ class GoalLeases(dict):
         self.bind_native_receipt = None
         self.native_required = None
         self.prepare_send = None
+        self.selected_context = None
         self._present_at: Optional[float] = None
         self.pending: dict[str, int] = {}
         self._stop_epoch = 0

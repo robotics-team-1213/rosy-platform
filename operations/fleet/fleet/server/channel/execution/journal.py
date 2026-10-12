@@ -67,8 +67,17 @@ class ExecutionJournal:
             return AcceptedContext(**scope,request_id=bound['request_id'],task_id=row['task_id'],
                 robot_id=call.robot,place_id=call.body['waypoint'],catalog_hash=row['catalog_hash'],
                 expires_at=row['grant_expires_at'],evidence_hash=digest(receipt),
-                generation=row['dispatch_generation']).model_dump()
+                generation=row['dispatch_generation'],boot_id=receipt.get('operation',{}).get('boot_id'),
+                run_id=receipt.get('operation',{}).get('run_id'),attempt_id=receipt.get('operation',{}).get('correlation_id'),
+                owner_generation=receipt.get('quiescence',{}).get('owner_generation')).model_dump()
         except (ValueError,KeyError,TypeError,HTTPException):return None
+
+    def context_for_task(self, task_id):
+        with closing(self.store._connect()) as conn:
+            row=conn.execute('SELECT request_id FROM fleet_channel_execution_steps WHERE task_id=?',(task_id,)).fetchone()
+            if row is None:return None
+            self.guard(row['request_id'],conn)
+            return ConversationInput.model_validate_json(self.jobs._row(conn,row['request_id'])['problem_json']).accepted_execution_context
 
     def guard(self, rid, conn=None, *, visiting=()):
         if conn is None:

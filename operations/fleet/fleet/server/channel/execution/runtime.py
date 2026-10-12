@@ -16,6 +16,7 @@ def install_execution(app,jobs,task_service,scope,admitted,environment,*,refresh
     app.state.channel_execution=journal
     app.state.channel_execution_worker=worker
     jobs.execution=journal
+    app.state.intent_execution.console.goal_leases.selected_context=journal.context_for_task
 
     async def run():
         journal.recover()
