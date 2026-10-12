@@ -99,6 +99,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
               "fleet/fleet/server/channel",
+              "fleet/fleet/server/channel/conversation",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
@@ -106,6 +107,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/incidents/automation/ledger",
               "fleet/fleet/incidents/automation/execution",
               "decision/src/rosy/decision/deliberation",
+              "decision/src/rosy/decision/conversation",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
               "decision/src/rosy/decision/deliberation/evaluation",
@@ -117,6 +119,22 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/channel/conversation": (
+        280,
+        "accept: D-728 actual conversation journal/worker/runtime owner measured 280 physical lines on "
+        "2026-10-12; independent pipeline_review structural precheck PASS. Residual channel1418 and "
+        "Fleet55132 remain within unchanged1379/55120+150 allowances. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Source/installed closure and "
+        "semantic admission are distinct gates; model remains OFF pending conformance.",
+    ),
+    "decision/src/rosy/decision/conversation": (
+        256,
+        "accept: D-728 pure strict conversation/profile/semantic-step codec measured 256 physical lines "
+        "on 2026-10-12; independent pipeline_review structural precheck PASS. No Fleet writer imports, "
+        "network, credentials or activation. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Independent semantic "
+        "conformance and protected host admission remain required.",
+    ),
     "fleet/fleet/server/channel": (
         1_379,
         "split: D-728 actual channel owner extraction measured on 2026-10-12; independent pipeline_review precheck PASS. "

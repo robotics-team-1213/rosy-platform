@@ -149,7 +149,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None,
-               notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None) -> FastAPI:
+               notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
+               conversation_config=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
@@ -808,12 +809,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
     from .channel_model_runtime import install_channel_models
     install_channel_models(app,channel_model_config)
-    if channel_model_config is not None:
+    from .channel.conversation.runtime import install_conversation
+    install_conversation(app,conversation_config,site_maps)
+    if channel_model_config is not None or conversation_config is not None:
         from core_common.protocol.channel_requests import ChannelModelResult
         @app.get('/api/fleet/channel-requests/{request_id}/deliberation',dependencies=read_guard,
                  response_model=ChannelModelResult,tags=['fleet-work'])
         def channel_model_result(request_id:str,principal=Depends(require_operator)):
-            return app.state.channel_model_jobs.read(request_id,principal.principal_id)
+            jobs = (app.state.channel_conversation_jobs if conversation_config is not None
+                    else app.state.channel_model_jobs)
+            return jobs.read(request_id,principal.principal_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,

@@ -21,6 +21,7 @@ from rosy.decision.deliberation.contracts.billing import CallResult,CostEvidence
 
 from .deliberation import ChannelModelJobs,status_snapshot
 from .model_worker import ChannelModelWorker
+from .broker_transport import exchange
 
 
 class BrokerConfig(BaseModel):
@@ -49,48 +50,18 @@ class BrokerProvider:
         _,body=prepare_request(problem,bound,prior,remaining,budget_usd=budget_usd,
                                missing_allowlist=missing_allowlist)
         packet=canonical({'role':self.profile.role,'remaining':remaining,'job':json.loads(body)}).encode()
-        c=self.config
-        argv=('ssh','-F','/dev/null','-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes',
-              '-o','StrictHostKeyChecking=yes','-o','GlobalKnownHostsFile=/dev/null',
-              '-o','UserKnownHostsFile='+c.known_hosts_file,'-o','ConnectTimeout=5',
-              '-o','ClearAllForwardings=yes','-o','IdentityAgent=none','-i',c.key_file,'rosy-model-ingress@'+c.host,'rosy-status-v1')
-        process=None
-        spawn=asyncio.create_task(asyncio.create_subprocess_exec(*argv,stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,start_new_session=True,limit=16385))
-        try:
-            async with asyncio.timeout(remaining):
-                process=await asyncio.shield(spawn)
-                process.stdin.write(packet);await process.stdin.drain();process.stdin.close()
-                output=bytearray()
-                while chunk:=await process.stdout.read(4096):
-                    output.extend(chunk)
-                    if len(output)>16384:raise ValueError('STATUS_BROKER_OUTPUT_LIMIT')
-                if await process.wait()!=0:raise ValueError('STATUS_BROKER_HOLD')
-                result=json.loads(output)
-                if (set(result)!={'source_commit','profile','judgment','cost_usd','cost_evidence'}
-                        or result['source_commit']!=c.source_commit
-                        or canonical(result['profile'])!=canonical(asdict(bound.profile))):
-                    raise ValueError('STATUS_BROKER_IDENTITY_CHANGED')
-                checked=judgment(problem,bound,result['judgment'],missing_allowlist=missing_allowlist)
-                evidence=None if result['cost_evidence'] is None else CostEvidence(canonical(result['cost_evidence']))
-                value=CallResult(checked,result['cost_usd'],evidence)
-                if evidence is not None:evidence.validate(problem,bound,checked,value.cost_usd,body=body)
-                if self.profile.role=='reviewer' and evidence is None:raise ValueError('BILLING_EVIDENCE_REQUIRED')
-                if self.profile.role=='primary' and value.cost_usd!=0:raise ValueError('LOCAL_COST_CHANGED')
-                return value
-        finally:
-            # Owned SSH process is always reaped, including cancellation during spawn.
-            async def cleanup():
-                owned=process if process is not None else await asyncio.shield(spawn)
-                if owned.returncode is None:
-                    try:os.killpg(owned.pid,signal.SIGKILL)
-                    except ProcessLookupError:pass
-                await owned.wait()
-            task=asyncio.create_task(cleanup())
-            try:await asyncio.shield(task)
-            except asyncio.CancelledError:
-                await asyncio.shield(task)
-                raise
+        result=await exchange(self.config, "rosy-status-v1", packet, remaining)
+        if (set(result)!={'source_commit','profile','judgment','cost_usd','cost_evidence'}
+                or result['source_commit']!=self.config.source_commit
+                or canonical(result['profile'])!=canonical(asdict(bound.profile))):
+            raise ValueError('STATUS_BROKER_IDENTITY_CHANGED')
+        checked=judgment(problem,bound,result['judgment'],missing_allowlist=missing_allowlist)
+        evidence=None if result['cost_evidence'] is None else CostEvidence(canonical(result['cost_evidence']))
+        value=CallResult(checked,result['cost_usd'],evidence)
+        if evidence is not None:evidence.validate(problem,bound,checked,value.cost_usd,body=body)
+        if self.profile.role=='reviewer' and evidence is None:raise ValueError('BILLING_EVIDENCE_REQUIRED')
+        if self.profile.role=='primary' and value.cost_usd!=0:raise ValueError('LOCAL_COST_CHANGED')
+        return value
 
 
 def fresh_snapshot(raw,captured_at,monotonic_now,*,now=time.time):

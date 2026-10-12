@@ -31,3 +31,9 @@
 - 변경: fleet_status/READ_ONLY_QUERY, channel READ_ONLY schema, 고정 status profile·source-bound calibration-exempt factual-display 정책을 추가했다. 기존3domain payload/digest는 유지한다.
 - 증거: status68, codecs/launcher111 원격 선택 GREEN, NEW0; source review 승인. 모델 ready 자체는 admission 증거가 아니다.
 - gate 변화: source 계약. 일반 사건 calibration과 실제 보호 GLM cost/host/admission·독립 정답 수용은 유지한다.
+
+## 2026-10-12 · 1164d858e · D-728 independent natural conversation proposals
+
+- 변경: Added pure `rosy.decision.conversation` profile/input/flat semantic-step codec, explicitly installed by the existing Fleet distribution. Model output maps only to existing validated `core_common.intent` grammar. No Fleet writer, network, credential or activation exists in this holder. D-720 status-only calibration exemption cannot admit this profile.
+- 증거: Independent structure precheck256 physical lines; source/installed/architecture remote checks71/129/38 passed with0 NEW.
+- gate 변화: Actual synthetic Qwen semantic conformance has three unresolved cases, so admission remains OFF. Fleet retains current authority, durable attempts and grounded replies; CORE retains final motion authority.
