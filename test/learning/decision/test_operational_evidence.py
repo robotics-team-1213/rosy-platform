@@ -1,6 +1,9 @@
 """Independent evidence compilation; SOURCE fixtures confer no field acceptance."""
 import copy
 import importlib.util
+import hashlib
+import hmac
+import json
 from pathlib import Path
 
 import pytest
@@ -52,3 +55,54 @@ def test_invented_profile_cannot_be_resealed_as_installed_identity():
 def test_unknown_values_are_not_zero_filled_in_limits():
     data = incomplete(); data['limits'] = {'minimum_cases': None}
     with pytest.raises(ValueError): evaluator().compile_evidence(data, trusted={}, now=100)
+
+
+def signed(source, kind, *, principal='independent-reviewer'):
+    raw = lambda v: json.dumps(v, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    payload = dict(schema='rosy.incident.evidence_attestation/1', kind=kind,
+        source_sha256=hashlib.sha256(raw(source)).hexdigest(), valid_from_s=90, expires_s=110)
+    key = b'source-only-independent-test-key!!'
+    receipt = dict(principal=principal, payload=payload,
+        signature=hmac.new(key, raw(payload), hashlib.sha256).hexdigest())
+    trust = {principal: dict(key=key, kinds={kind})}
+    return receipt, trust
+
+
+def test_authentic_review_verifier_binds_original_and_independent_kind():
+    module = evaluator()
+    original = {'truth': 'source-only-review'}
+    receipt, trusted = signed(original, 'operational_truth')
+    assert module.verify_attestation(receipt, original, trusted=trusted, kind='operational_truth', now=100)
+    for source, kind, now in [({'truth': 'changed'}, 'operational_truth', 100),
+                              (original, 'operational_limits', 100), (original, 'operational_truth', 111)]:
+        with pytest.raises(ValueError):
+            module.verify_attestation(receipt, source, trusted=trusted, kind=kind, now=now)
+
+
+def source_window():
+    names = ('observation', 'model', 'command', 'submission', 'result', 'recurrence', 'invoice')
+    stream = dict(run_id='source-fixture-run', frames=[
+        dict(sequence=1, received_at=99, monotonic_at=1, events=[]),
+        dict(sequence=2, received_at=101, monotonic_at=3, events=[])])
+    window = dict(schema='rosy.incident.operational_window/1', subject_id='robot-fixture', start=99,
+        end=101, streams={name: copy.deepcopy(stream) for name in names})
+    receipt, trust = signed(window, 'operational_capture')
+    return {**window, 'attestation': receipt}, trust
+
+
+def test_verified_empty_heartbeat_window_is_still_not_field_acceptance():
+    module = evaluator(); window, trusted = source_window()
+    checked = module.validate_window(window, trusted=trusted, now=100)
+    assert checked['streams']['model']['events'] == []
+    assert 'field_accepted' not in checked
+
+
+@pytest.mark.parametrize('fault', ['sequence', 'boundary', 'clock', 'unsigned', 'invented_complete_flag'])
+def test_missing_or_self_reported_window_coverage_is_rejected(fault):
+    module = evaluator(); window, trusted = source_window()
+    if fault == 'sequence': window['streams']['model']['frames'][1]['sequence'] = 3
+    elif fault == 'boundary': window['streams']['model']['frames'][0]['received_at'] = 100
+    elif fault == 'clock': window['streams']['command']['frames'][1]['monotonic_at'] = 1
+    elif fault == 'unsigned': window['attestation']['signature'] = '0' * 64
+    else: window['complete'] = True
+    with pytest.raises(ValueError): module.validate_window(window, trusted=trusted, now=100)

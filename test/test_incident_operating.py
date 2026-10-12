@@ -30,7 +30,8 @@ def test_loader_pins_original_bytes_instead_of_document_hash(tmp_path):
     with pytest.raises(ValueError): owner().load_frozen_json(path, expected_sha256=expected)
 
 
-@pytest.mark.parametrize('raw', [b'{"value":1,"value":2}', b'{"value":NaN}', b'[]', b'x' * (1048576 + 1)])
+@pytest.mark.parametrize('raw', [b'{"value":1,"value":2}', b'{"value":NaN}', b'[]', b'x' * (1048576 + 1)],
+                         ids=['duplicate', 'nonfinite', 'nonobject', 'oversized'])
 def test_loader_rejects_duplicate_nonfinite_nonobject_or_large_original(tmp_path, raw):
     path, expected = frozen(tmp_path, raw)
     with pytest.raises(ValueError): owner().load_frozen_json(path, expected_sha256=expected)
