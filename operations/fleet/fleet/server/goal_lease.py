@@ -110,7 +110,8 @@ class GoalLeases(dict):
                 with guard:
                     result = await client.navigation_goal(x, y, yaw, **options)
                     if task_id is not None and self.bind_native_receipt is not None:
-                        self.bind_native_receipt(task_id, correlation_id, robot_id, result)
+                        self.bind_native_receipt(task_id, correlation_id, robot_id, result,
+                                                 expected_boot_id=options.get('expected_boot_id'))
             except (Exception, asyncio.CancelledError):
                 if stop != self.stop_token(robot_id):
                     try:
