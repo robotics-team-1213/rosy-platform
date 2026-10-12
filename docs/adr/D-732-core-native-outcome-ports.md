@@ -22,7 +22,7 @@
 
 NavigationManager의 run identity는 실제 RosBridge/GoalTracker backend generation에 캡처된다. 늦은 승인·취소·결과 callback은 캡처한 native identity에만 적용하며 새 run 상태를 바꾸지 않는다. 기존 Fleet Task의 caller correlation 이벤트 projection은 유지한다. home은 선택적 correlation/goal lease 본문을 기존 goal owner로 전달하며 본문 없는 호출도 유지한다.
 
-home→goal은 `kind:home`의 단 하나의 native run을 만든다. 별도 home UUID를 만든 뒤 navigate UUID를 만들지 않는다. backend 거절은 FAILED/BACKEND_REJECTED, 제출·결과 exception은 FAILED/BACKEND_ERROR, native lease 만료는 EXPIRED/LEASE_EXPIRED, 명시적 취소는 CANCELED/CANCELED, 안전 취소는 CANCELED/SAFETY_STOP이다. callback 통신 결과 자체를 알 수 없는 경우 종결 성공을 만들지 않고 SUBMITTED 또는 UNKNOWN으로 유지한다. 기존 NAV-006 stuck 취소는 FAILED/STUCK이다. 첫 terminal은 불변이며 late callback·충전 변화·조회가 다른 결과로 다시 쓰지 못한다.
+home→goal은 `kind:home`의 단 하나의 native run을 만든다. 별도 home UUID를 만든 뒤 navigate UUID를 만들지 않는다. backend 거절은 FAILED/BACKEND_REJECTED, 검증된 owner 실패는 FAILED/BACKEND_ERROR, native lease 만료는 EXPIRED/LEASE_EXPIRED, 명시적 취소는 CANCELED/CANCELED, 안전 취소는 CANCELED/SAFETY_STOP이다. 제출·결과 exception이 backend 수락 여부를 증명하지 못하면 nonterminal phase/result=null과 BACKEND_RESULT_UNKNOWN reason을 유지한다. UNKNOWN은 lookup/evidence 분류이지 operation phase가 아니다. 기존 NAV-006 stuck 취소는 FAILED/STUCK이다. 첫 terminal은 불변이며 late callback·충전 변화·조회가 다른 결과로 다시 쓰지 못한다.
 
 도킹은 도착과 성공적인 undock을 SUCCEEDED로, 취소를 CANCELED로 구분한다. 충전 상태 관측은 도킹 terminal 결과를 다시 쓰지 않는다. 추종 hold는 RUNNING이며 자원을 계속 소유한다. re-follow는 이전 run PREEMPTED, 취소·owner session 종료는 캡처한 이전 run의 terminal이다. Teleop은 watchdog에 제한된 한 번의 velocity pulse다. 새 입력의 선점·watchdog 만료·안전 정지·모드 이탈을 owner 종료로 기록하며 거리 달성을 주장하지 않는다. Fleet keepalive는 추가하지 않는다.
 

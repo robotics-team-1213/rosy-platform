@@ -1,4 +1,4 @@
-# ROSY API & Protocol Reference
+﻿# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
@@ -31,7 +31,7 @@ GET `/api/v1/navigation/state`, `/api/v1/docking/status`, `/api/v1/swarm/state` 
 
 readback `quiescence`는 `boot_id`, `owner_run_id:null|UUID`, `requested_run_id:UUID`, `observed_at:UTC`, boolean `admitting`, `pending_submission`, `actuating_callback`, `lease_active`, `quiescent`를 갖는다. 실제 native owner와 transport generation의 잠금 경계에서 읽으며 요청 run이 동일 boot의 retained terminal, 현재 owner 없음, 네 실행 가능성 모두 false일 때만 quiescent=true다. 조회 identity나 자료가 없으면 null이다. 일반 IDLE·0 velocity·만료된 lease 시각만으로 증명하지 않는다. Fleet의 exact robot/boot/run/claim generation CAS에만 사용한다. SAFE_RELEASED는 완료나 후속 이동 권한이 아니다.
 
-native terminal은 첫 확정 이후 불변이다. backend 거절 FAILED/BACKEND_REJECTED, 알려진 backend 오류 FAILED/BACKEND_ERROR, lease 만료 EXPIRED/LEASE_EXPIRED, 명시적 취소 CANCELED/CANCELED, 안전 취소 CANCELED/SAFETY_STOP, stuck FAILED/STUCK으로 구분한다. 통신 불명은 성공으로 바꾸지 않는다. navigation callback은 actual backend generation에 캡처한 identity를 사용한다. 도킹·undock 성공과 취소는 별개이며 충전 관측이 terminal을 다시 쓰지 않는다. follow hold는 RUNNING, re-follow 이전 run은 PREEMPTED다. 별도 현재 권한의 cancel/stop은 실제 닫은 이전 run receipt를 반환하며 concurrent 새 run으로 대체하지 않는다. watchdog 종료는 teleop EXPIRED이며 물리 거리 성과가 아니다. 원래 grant 만료·철회 뒤에도 terminal을 읽어 원장에 확정할 수 있지만 새 명령은 발행할 수 없다. 기존 manager 반환형·keyword 없는 executor·auth/capability/localization/calibration/readiness/mode/CORE writer/E-stop 해제 금지 계약을 유지한다.
+native terminal은 첫 확정 이후 불변이다. backend 거절 FAILED/BACKEND_REJECTED, 알려진 backend 오류 FAILED/BACKEND_ERROR, lease 만료 EXPIRED/LEASE_EXPIRED, 명시적 취소 CANCELED/CANCELED, 안전 취소 CANCELED/SAFETY_STOP, stuck FAILED/STUCK으로 구분한다. 제출·결과 exception의 전달 여부가 불명이면 nonterminal/result=null, reason=BACKEND_RESULT_UNKNOWN을 유지한다. UNKNOWN은 lookup/evidence 분류이며 phase가 아니다. 검증된 owner 실패만 BACKEND_ERROR로 종결하고 통신 불명을 성공·실패로 바꾸지 않는다. navigation callback은 actual backend generation에 캡처한 identity를 사용한다. 도킹·undock 성공과 취소는 별개이며 충전 관측이 terminal을 다시 쓰지 않는다. follow hold는 RUNNING, re-follow 이전 run은 PREEMPTED다. 별도 현재 권한의 cancel/stop은 실제 닫은 이전 run receipt를 반환하며 concurrent 새 run으로 대체하지 않는다. watchdog 종료는 teleop EXPIRED이며 물리 거리 성과가 아니다. 원래 grant 만료·철회 뒤에도 terminal을 읽어 원장에 확정할 수 있지만 새 명령은 발행할 수 없다. 기존 manager 반환형·keyword 없는 executor·auth/capability/localization/calibration/readiness/mode/CORE writer/E-stop 해제 금지 계약을 유지한다.
 
 ### v1.219 경로 사실 묶음 (D-726)
 
