@@ -5,6 +5,7 @@ import importlib
 import json
 from pathlib import Path
 import sys
+import threading
 
 import pytest
 
@@ -89,3 +90,53 @@ def test_bridge_preserves_existing_configuration_and_refuses_port_replacement(tm
     assert all(result[key] is value for key, value in config.items())
     assert 'calibration_artifacts' not in config
     with pytest.raises(ValueError): bridge.registry_calibration_config(result, registry, domain='line_follow')
+
+
+def test_real_factory_claim_remains_responsive_while_approval_read_is_blocked(tmp_path):
+    async def run():
+        config, calls, _, registry = setup(tmp_path)
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+        original = registry.approved_candidate
+        def blocked(*args):
+            entered.set()
+            release.wait(2)
+            finished.set()
+            return original(*args)
+        registry.approved_candidate = blocked
+        bridge = importlib.import_module('tools.incident_reasoning')
+        application = app(tmp_path / 'site', bridge.registry_calibration_config(config, registry, domain='line_follow'))
+        worker = application.state.stuck_resolver.incident_worker
+        try:
+            worker.feed(poll(application))
+            assert await asyncio.to_thread(entered.wait, 1)
+            assert not finished.is_set()  # The event loop must run before the blocked read returns.
+            scope = worker.store.active_scopes()[0]
+            board = application.state.line_stuck
+            board._log.handoff.claim('pinky', 'case-1', board.judgment_view('pinky'), 'fixture-reviewer', now=100)
+            release.set(); await settled(worker)
+            assert [role for _, role, _ in calls] == ['primary']
+            assert worker.store.case(scope)['state'] == 'HOLD'
+        finally:
+            release.set(); await worker.aclose()
+    asyncio.run(run())
+
+
+def test_revoke_between_artifact_and_map_reads_cannot_certify_primary(tmp_path):
+    async def run():
+        config, calls, candidate, registry = setup(tmp_path)
+        original = registry.approved_candidate
+        def revoke_after_read(*args):
+            snapshot = original(*args)
+            head = registry.history()[-1]['revision']
+            registry.revoke(candidate['revision'], signed(candidate, 'reasoning_revocation', head), expected_head=head)
+            return snapshot
+        registry.approved_candidate = revoke_after_read
+        bridge = importlib.import_module('tools.incident_reasoning')
+        application = app(tmp_path / 'site', bridge.registry_calibration_config(config, registry, domain='line_follow'))
+        worker = application.state.stuck_resolver.incident_worker
+        try:
+            worker.feed(poll(application)); await settled(worker)
+            assert [role for _, role, _ in calls] == ['primary', 'reviewer']
+            assert len(calls[-1][2]) == 1 and registry.approved_artifacts() == {}
+        finally: await worker.aclose()
+    asyncio.run(run())
