@@ -194,7 +194,8 @@ class ExecutionWorker:
                 WHERE (e.request_id IS NULL AND j.state='ANSWERED' AND json_extract(j.result_json,'$.answer.kind')='CONTROL')
                 OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
                     WHERE s.request_id=j.request_id AND (s.state='TASK_QUEUED'
-                        OR (s.state IN ('ACCEPTED','RUNNING','UNKNOWN') AND json_extract(s.receipt_json,'$.operation.run_id') IS NOT NULL)
+                        OR (s.state IN ('ACCEPTED','RUNNING','UNKNOWN') AND (json_extract(s.receipt_json,'$.operation.run_id') IS NOT NULL
+                            OR json_type(s.receipt_json,'$.operations')='array' OR json_type(s.receipt_json,'$.robots')='array'))
                         OR (s.state='READY' AND e.reason IS NULL)))
                 ORDER BY (j.request_id>?) DESC,j.request_id LIMIT 10''',(self._cursor,))]
             if rows:self._cursor=rows[-1]

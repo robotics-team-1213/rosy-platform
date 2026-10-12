@@ -3,6 +3,20 @@ import json
 from contextlib import closing
 
 from core_common.protocol.native.operation import NativeOperation
+from fleet.swarm.dispatch_guard import dispatch_guard
+from .evidence import epoch
+
+
+async def prepare_send(leases, task_id, attempt_id, robot_id, client, options, stop):
+    """Injected Task boundary; the safety lease owner imports no decision code."""
+    native = task_id is not None and leases.native_required is not None and leases.native_required(task_id)
+    if native:
+        options.update(epoch(await client._get('/api/v1/navigation/state')))
+        leases.check_stop(robot_id, stop)
+    def admit():
+        admit_send(leases, task_id, attempt_id, robot_id, native)
+    admit()
+    return dispatch_guard(admit, paths={'/api/v1/navigation/goal'})
 
 
 def admit_send(leases, task_id, attempt_id, robot_id, native):
@@ -18,7 +32,7 @@ def admit_send(leases, task_id, attempt_id, robot_id, native):
         leases.bind_native_receipt(task_id, attempt_id, robot_id, None)
 
 
-def bind_native_receipt(store, task_id, attempt_id, robot_id, receipt, *, unsent=False):
+def bind_native_receipt(store, task_id, attempt_id, robot_id, receipt, *, unsent=False, expected_boot_id=None):
     """Capture the first response before Console performs another await."""
     if unsent or (receipt is not None and receipt.get('accepted') is False and not receipt.get('operation')):
         with closing(store._connect()) as conn, conn:
@@ -48,7 +62,8 @@ def bind_native_receipt(store, task_id, attempt_id, robot_id, receipt, *, unsent
         return False
     operation = NativeOperation.model_validate(receipt['operation']).model_dump(mode='json')
     if (receipt.get('accepted') is not True or operation['kind'] != 'navigate'
-            or operation['correlation_id'] != attempt_id):
+            or operation['correlation_id'] != attempt_id
+            or (expected_boot_id is not None and operation['boot_id'] != expected_boot_id)):
         raise ValueError('NATIVE_TASK_RECEIPT_MISMATCH')
     with closing(store._connect()) as conn, conn:
         conn.execute('BEGIN IMMEDIATE')
