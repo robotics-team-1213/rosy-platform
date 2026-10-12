@@ -7,6 +7,7 @@ import re
 
 from .. import canonical, identifier
 from .judgment import Judgment, judgment
+from .profiles import BoundProfile
 
 
 def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
@@ -16,6 +17,15 @@ def usd(value):
     if type(value) not in (int, float) or not 0 <= value <= 1_000_000 or not math.isfinite(value):
         raise ValueError('INVALID_COST_EVIDENCE_AMOUNT')
     return value
+
+
+class _RejectedJudgment(ValueError):
+    """Internal validated transport cost, never a judgment or independently certified bill."""
+    def __init__(self, bound, cost_usd, unsafe=False):
+        if type(bound) is not BoundProfile or type(unsafe) is not bool:
+            raise ValueError('INVALID_REJECTED_CALL_CONTEXT')
+        self.bound, self.cost_usd, self.unsafe = bound, usd(cost_usd), unsafe
+        super().__init__('MODEL_RESULT_REJECTED')
 
 
 @dataclass(frozen=True)

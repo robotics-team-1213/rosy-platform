@@ -53,3 +53,5 @@ D-725 reserved by another session and absent from this branch; remove once its A
 D-725 reserved by a concurrent session; absent from operational-recovery-receipt
 D-728 reserved by a concurrent session; absent from operational-case-claim
 D-728 reserved by a peer session (Discord natural-language dialogue and governed operator execution pipeline) and absent from this branch; remove once its ADR lands
+D-732 reserved by a concurrent session (CORE native outcome identity and readback ports); absent from this branch, remove once its ADR lands
+D-733 reserved by a concurrent session (hourly Discord health); absent from this branch, remove once its ADR lands
