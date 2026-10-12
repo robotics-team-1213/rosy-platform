@@ -54,7 +54,7 @@ def parse_guide(raw, now):
 def _path_of(steer, half):
     path = getattr(steer, "_expected_path", None)
     if path is None:
-        path = ExpectedPath(half)
+        path = ExpectedPath(half, error_for_target=steer.pursuit_error)
         steer._expected_path = path
     return path
 

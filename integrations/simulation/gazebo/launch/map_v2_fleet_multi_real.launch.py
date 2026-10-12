@@ -1,9 +1,15 @@
 """D-676: two camera robots, one curved world, independent COREs; no motion request."""
 import os
+import sys
+
+_LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_parts import load_run_spec, observer_steering_law, run_spec_overlay
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -24,6 +30,15 @@ def generate_launch_description():
                                   run_spec=LaunchConfiguration('run_spec'),
                                   spawn_poses=LaunchConfiguration('spawn_poses')).items()),
     ]
+    actions.append(OpaqueFunction(function=_observers, kwargs={'control_share': control_share}))
+    return LaunchDescription(actions)
+
+
+def _observers(context, *, control_share):
+    spec = load_run_spec(LaunchConfiguration('run_spec').perform(context))
+    if not spec:
+        raise RuntimeError('two-camera launch requires a runner-owned run_spec')
+    actions = []
     for ns in ('rosy_01', 'rosy_02'):
         actions.extend([
             # D-118: dedicated local camera transport; never in gz_multi's parameter bridge.
@@ -43,7 +58,7 @@ def generate_launch_description():
                      'camera_x_offset_m': .03317,
                      'lane_graph_path': os.path.join(control_share, 'map', 'map_v2_fleet',
                                                     'training-curved', 'lane_graph.yaml'),
-                 }]),
+                 }, observer_steering_law(run_spec_overlay(spec, ns))]),
             Node(package='control', executable='road_observer_node', namespace=ns,
                  name='road_observer_node', output='screen',
                  parameters=[os.path.join(control_share, 'config', 'line_follow.yaml'), {
@@ -58,4 +73,4 @@ def generate_launch_description():
                      'gazebo_camera_max_range_m': .6,
                  }]),
         ])
-    return LaunchDescription(actions)
+    return actions
