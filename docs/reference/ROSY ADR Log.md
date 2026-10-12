@@ -691,6 +691,7 @@
 | D-700 | Fleet 실제 규칙 선택과 모델 비교 기준 | Accepted |
 | D-701 | 실제 규칙 선택의 독립 비교 export | Accepted |
 | D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
+| D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -876,4 +877,10 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 **Status:** Accepted (2026-10-12, source contract)
 
 검수된 구간 최소 표본 수를 오프라인 평가와 advisory 선택에 동일하게 적용한다. 네 가지 금지 오류 건수와 forbidden 사건 분모를 구분하며 부족한 근거는 HOLD다. 전문은 [D-702](../adr/D-702-independent-calibration-bin-support.md).
+
+## D-703 — 실제 모델 원장과 검수 보정 입력 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 model receipt의 prediction과 별도 검수 정답·지연을 같은 사건·시도·프로파일과 외부 고정 dataset hash에 결속한다. 누락·UNKNOWN·split 재사용은 평가 확률로 채우지 않는다. 전문은 [D-703](../adr/D-703-reviewed-feedback-calibration-binding.md).
 
