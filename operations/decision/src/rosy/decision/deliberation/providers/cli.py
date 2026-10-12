@@ -5,6 +5,7 @@ import re
 from dataclasses import asdict
 
 from .. import canonical, identifier, opinion
+from ..contracts.billing import _RejectedJudgment
 
 
 def _argv(kind, model, cli_version, schema, budget_usd):
@@ -19,7 +20,7 @@ def _argv(kind, model, cli_version, schema, budget_usd):
     return ('opencode', 'run', mode, '--format', 'json', '--model', model)
 
 
-def _decode_result(kind, launch, code, raw, output_limit, budget_usd):
+def _decode_result(kind, launch, code, raw, output_limit, budget_usd, *, bound=None):
     if code != 0 or type(raw) is not bytes or len(raw) > output_limit:
         raise ValueError('CLI_RESULT_UNKNOWN')
     if kind == 'claude':
@@ -35,10 +36,16 @@ def _decode_result(kind, launch, code, raw, output_limit, budget_usd):
         costs = [record['part']['cost'] for record in records if record['type'] == 'step_finish']
         if len(texts) != 1 or len(costs) != 1:
             raise ValueError('CLI_RESULT_UNKNOWN')
-        payload, cost = json.loads(texts[0]), costs[0]
+        payload, cost = texts[0], costs[0]
     if (getattr(launch, 'cost_verified', True) is not True
             or type(cost) not in (int, float) or not math.isfinite(cost) or not 0 <= cost <= budget_usd):
         raise ValueError('CLI_COST_UNKNOWN_OR_EXCEEDED')
+    if kind != 'claude':
+        try: payload = json.loads(payload)
+        except (ValueError, TypeError, RecursionError, OverflowError):
+            if bound is not None and getattr(launch, 'billing_receipt', None) is None:
+                raise _RejectedJudgment(bound, cost) from None
+            raise
     return payload, cost
 
 

@@ -100,3 +100,43 @@ def test_existing_direct_provider_call_keeps_value_error_on_invalid_judgment(kin
         transport.result = {'case_id': 'foreign'}
     with pytest.raises(ValueError):
         asyncio.run(provider(target, bound, (), 1, budget_usd=provider.profile.max_cost_usd))
+
+
+@pytest.mark.parametrize('fault', ['input', 'profile', 'type', 'cost'])
+def test_changed_rejected_cost_context_cannot_authorize_a_reviewer(tmp_path, fault):
+    from rosy.decision.deliberation.contracts.billing import _RejectedJudgment
+    async def run():
+        now, reviews, handoffs, _, board, store, old, poll, _ = make_incident_worker(tmp_path, provider_cost=.01)
+        await old.aclose()
+        primary, descriptor = old.profiles[0], old.providers[0].adapter
+        async def launch(*args):
+            return 0, json.dumps(dict(model_id=primary.model_id, model_revision=primary.model_revision,
+                cost_usd=0, usage=dict(input_tokens=1, output_tokens=1), judgment={})).encode()
+        launch.adapter_capabilities, launch.schema_versions, launch.cost_verified = descriptor, (2,), True
+        codec = VersionedLocalProvider(profile=primary, adapter=descriptor, launch=launch)
+        async def altered(*args, **kwargs):
+            try: return await codec(*args, **kwargs)
+            except _RejectedJudgment as error:
+                if fault == 'input': error.bound = replace(error.bound, input_hash='0' * 64)
+                elif fault == 'profile': error.bound = replace(error.bound, profile=replace(primary, model_revision='other'))
+                elif fault == 'cost': error.cost_usd = primary.max_cost_usd + .01
+                else:
+                    class ForeignError(_RejectedJudgment): pass
+                    error = ForeignError(error.bound, error.cost_usd)
+                raise error from None
+        altered.profile, altered.adapter = primary, descriptor
+        worker = IncidentCaseWorker(store, old.observation, board, profiles=old.profiles,
+            providers=(altered, old.providers[1]), admission=old.admission, current_profiles=old.current_profiles,
+            human_owned=old.human_owned, budget=old.budget, final_handoff=old.final_handoff,
+            clock=lambda: now[0], enabled=True)
+        snapshot = poll()
+        scope = worker._scope(worker._problem(board.intervention_assessment('pinky')))
+        worker.feed(snapshot); await settled(worker)
+        case = store.case(scope)
+        with store._transaction() as connection:
+            attempt = dict(connection.execute('SELECT * FROM fleet_incident_v2_attempts').fetchone())
+            assert connection.execute('SELECT COUNT(*) FROM fleet_incident_v2_model_receipts').fetchone()[0] == 0
+        assert case['calls'] == 1 and case['state'] == 'HOLD' and reviews == [] and len(handoffs) == 1
+        assert attempt['state'] == 'UNKNOWN' and attempt['actual_micros'] is None
+        await worker.aclose()
+    asyncio.run(run())
