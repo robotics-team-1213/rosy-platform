@@ -100,6 +100,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/observe",
               "fleet/fleet/server/channel",
               "fleet/fleet/server/channel/conversation",
+              "fleet/fleet/server/channel/execution",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
               "fleet/fleet/incidents",
@@ -119,6 +120,17 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/channel/execution": (
+        487,
+        "accept: D-728 actual original-instruction grant, durable step/Task linkage and existing-owner "
+        "dispatch subpackage independently prechecked by pipeline_review on 2026-10-12 at487. "
+        "Final source9eebc457c5 measures execution582/residual channel1440/conversation300/Fleet55222 "
+        "simultaneously; retain original channel1379/conversation280/Fleet55120 and every historical "
+        "verdict, +150 allowance, zero/file/hard ceiling and earlier split obligation. "
+        "Installed wheel/sdist/source-image closure is a separate remote gate; "
+        "source admission never establishes activation or physical completion. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md.",
+    ),
     "fleet/fleet/server/channel/conversation": (
         280,
         "accept: D-728 actual conversation journal/worker/runtime owner measured 280 physical lines on "
