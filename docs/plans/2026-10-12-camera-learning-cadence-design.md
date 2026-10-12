@@ -20,6 +20,8 @@ R41에서는 같은 카메라 source_stamp 안에서도 조향 행동이 11,055�
 6. 매 tick camera_tick·line_follow·CORE·freshness·obstacle·정지 검사를 유지한다. gain 유지가 오래된 관측 승인이나 명령 재전송 권한이 되지 않는다. held-path는 baseline gain만 쓰고 학습 연결을 끊는다.
 7. baseline은 항상 gain 1, eval은 탐색·Q 쓰기 없이 같은 관측 주기를 따른다. 변경 전 physics-tick 정책을 새 정책으로 복원하지 않도록 camera policy schema를 구분한다. 모델 revision/hash pin은 유지한다.
 
+실행 순서는 기존 runner처럼 새 관측의 행동 선택 → camera_tick 안전 판단 → 이전 구간 Q 갱신이다. 새 행동은 이 경계의 Q 갱신 전 표를 사용하므로 같은 bin의 greedy 선택에는 한 관측 경계 지연이 있을 수 있다. pending과 previous를 분리해 이전 reward가 새 행동으로 넘어가지 않게 한다. 경고·비학습 이동으로 receipt 연결이 끊어지면 누적 reward를 버린다. 같은 유효 관측에서 정상 dispatch가 재개되면 재개가 확인된 이후의 결과만 합산한다. 따라서 이때는 전체 관측 구간이 아닌 확인된 후반 구간의 reward이며, 간극·중단 전 reward는 포함하지 않는다. trace의 camera_learning에 실제 갱신 대상과 합산 reward를 남겨 원시 reward와 대조한다.
+
 ## 변경 경로
 
 - tools/sim/isaac/camera_checks.py 및 필요한 작은 camera 전용 helper: 경계·보상 누적·실행 연결.
