@@ -31,6 +31,12 @@ def step(problem, value, *, read_only):
     call = ModelToolCall(provider_call_id='judgment-v2', tool_name=definition.name,
                          arguments=value['arguments'], turn_id=problem.digest, ordinal=0)
     args = call.arguments
+    if definition.name == 'propose_lane_back':
+        if (problem.domain != 'line_follow' or 'back_and_retry' not in problem.choices
+                or set(args) != {'rationale'} or type(args['rationale']) is not str
+                or not args['rationale'] or args['rationale'] != args['rationale'].strip() or len(args['rationale']) > 512):
+            raise ValueError('INVALID_RECOVERY_CANDIDATE')
+        return
     if definition.effect_class == ToolEffectClass.READ_ONLY:
         if args:
             raise ValueError('INVALID_READ_ARGUMENTS')
@@ -96,6 +102,11 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
         raise ValueError('NORMAL_JUDGMENT_CONFLICT')
     top = max(item['probability'] for item in probabilities)
     winners = [item['choice'] for item in probabilities if item['probability'] == top]
+    if active and payload['next_step']['tool_name'] == 'propose_lane_back':
+        if (payload['verdict'] != 'candidate' or winners != ['back_and_retry']
+                or payload['success_check']['tool_name'] != 'get_incident_status'
+                or payload['success_check']['expected_facts'] != {'state': 'normal'}):
+            raise ValueError('INVALID_RECOVERY_CANDIDATE')
     return Judgment(canonical(payload), winners[0] if active and len(winners) == 1 else None)
 
 
@@ -117,6 +128,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
         entries = []
         scope = 'incident' if problem.domain in {'line_follow', 'door'} else 'mission'
         for definition in MODEL_TOOL_CATALOG.values():
+            if definition.name == 'propose_lane_back' and (problem.domain != 'line_follow' or 'back_and_retry' not in problem.choices):
+                continue
             if definition.scope != scope or not definition.feedback_enabled or (field == 'success_check'
                     and definition.effect_class != ToolEffectClass.READ_ONLY):
                 continue
