@@ -21,11 +21,12 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
+from fleet.routing.brief import route_context
+from fleet.routing.execute import arc_id, plan_body
 from fleet.routing.snap import PlanError
 from fleet.routing.trip import ARRIVED_M, PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
-from fleet.routing.execute import arc_id, plan_body
 from fleet.server.trip_admission import start_check
 from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
 from fleet.swarm.transport import RobotApiError
@@ -67,6 +68,10 @@ class TripRequest(BaseModel):
     via: list[PlaceRef] = Field(default_factory=list, max_length=8)
     arrive_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
     speed_cap: Optional[float] = Field(default=None, gt=0.0, le=5.0, allow_inf_nan=False)
+    #: Edge ids the caller keeps out of this plan. Empty leaves today's route.
+    blocked_edges: list[PlaceRef] = Field(default_factory=list, max_length=32)
+    #: Extra seconds on an edge id. Empty leaves today's route.
+    extra_cost: dict[str, float] = Field(default_factory=dict)
     execute: bool = False
     #: D-517 2: lap ``via`` then ``to`` again and again; the cycle is place ids.
     repeat: bool = False
@@ -84,6 +89,15 @@ class TripRequest(BaseModel):
         if self.start_at is not None and (self.repeat or self.to != self.start_at or not self.via
                                           or self.start_at in self.via):
             raise ValueError("start_at needs a finite trip via another place back to start_at")
+        if len(set(self.blocked_edges)) != len(self.blocked_edges):
+            raise ValueError("blocked_edges contains a duplicate")
+        if len(self.extra_cost) > 32:
+            raise ValueError("extra_cost has more than 32 edges")
+        for edge, cost in self.extra_cost.items():
+            if not 1 <= len(edge) <= 64:
+                raise ValueError("extra_cost edge id must be 1 to 64 characters")
+            if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost < 0.0:
+                raise ValueError("extra_cost must be finite and nonnegative")
         return self
 
 
@@ -119,6 +133,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
+        known_edges = {arc.edge_id for arc in active[2].arcs.values()}
+        for edge in (*body.blocked_edges, *body.extra_cost):
+            if edge not in known_edges:
+                record({"error": "TRIP_UNKNOWN_EDGE", "detail": {"edge": edge}})
+                raise _refuse("TRIP_UNKNOWN_EDGE", {"edge": edge})
         refused = body.convoy and runner.convoy_refusal(robot_id, body.convoy.leader,
                                                         cycle=frozenset([body.to, *body.via]))
         if refused:
@@ -159,6 +178,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             "max_speed_mps": caps.max_speed or None}
         request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
+                              blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
@@ -184,8 +204,21 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 and body["start_check"]["heading_err_deg"] is not None):
             body["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
-        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
-        return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}
+        # The fact bundle sits beside that plan. The trip loop does not execute it.
+        context = route_context(planner="lane_graph", supplied={
+            "to": summary["to"], "via": list(summary.get("via") or []),
+            "arrive_yaw": summary.get("arrive_yaw"), "speed_cap": summary.get("speed_cap"),
+            "blocked_edges": list(summary.get("blocked_edges") or []),
+            "extra_cost": dict(summary.get("extra_cost") or {}),
+        }, holds={
+            "map_version": body["map_version"],
+            "segments": [seg["edge_id"] for seg in body["segments"]],
+            "places": list(body["places"]),
+            "length_m": body["length_m"], "eta_s": body["eta_s"],
+        })
+        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
+                "plan": body, "context": context})
+        return {"plan_id": plan_id, **body, "context": context, "expires_at": time.time() + PLAN_TTL_S}
 
     def trip_error(exc: TripError) -> HTTPException:
         return _refuse(exc.code, exc.detail, exc.status)
