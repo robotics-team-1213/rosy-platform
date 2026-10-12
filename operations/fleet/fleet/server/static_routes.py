@@ -85,6 +85,8 @@ CONSOLE_ASSETS = {
     "traffic-view.js": ("traffic-view.js", "application/javascript"),
     "guide-layer.js": ("shared/guide-layer.js", "application/javascript"),
     "connection-view.js": ("connection-view.js", "application/javascript"),
+    "device-watch.js": ("device-watch.js", "application/javascript"),
+    "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }
 
