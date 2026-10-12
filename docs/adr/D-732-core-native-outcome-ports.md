@@ -36,7 +36,7 @@ proof는 추가로 owner 범위의 단조 증가 `owner_generation`과 실제 ba
 
 조회 이후 다른 native run이 생기는 경쟁을 막기 위해 새로운 선택적 command 필드 `expected_owner_generation`(nonnegative integer)을 해당 기존 goal/home/dock/undock/follow/teleop 본문에 추가한다. 선택적 `expected_boot_id` UUID와 함께만 사용한다. 해당 owner의 실제 승인 잠금/Mode commit 안에서 side effect 전에 둘을 검증하며 불일치는 기존409 `OWNER_GENERATION_CHANGED`로 거절한다. Fleet가 SAFE_RELEASE 후 새 명령을 만들 때는 최신 generation을 다시 읽고 기존 원문·권한·안전 gate와 이 native CAS를 모두 통과해야 한다. 기존 본문에 이 필드가 없으면 legacy 동작을 유지한다. CORE의 다른 owner/mode/lease 배타 검사도 그대로 적용하며 SAFE_RELEASE가 그것을 우회하지 않는다.
 
-readback은 lookup UNKNOWN·빈 초기 상태에서도 `owner` 객체의 현재 `boot_id`, `owner_generation`, `owner_run_id`를 항상 제공한다. 이것은 command CAS epoch를 읽는 metadata이며 unknown 요청의 quiescence 증거가 아니다. 조회한 run의 operation/quiescence가 null이어도 현재 admission epoch는 읽을 수 있다. paired expected fields의 검증은 mode transition보다 앞서고 제출까지 같은 승인 구간에 결속한다. 기존 mode→owner lock 순서를 보존하며 owner→mode 역순 잠금을 추가하지 않는다.
+readback은 lookup UNKNOWN·빈 초기 상태에서도 `owner` 객체의 현재 `boot_id`, `owner_generation`, `owner_run_id`를 항상 제공한다. 이것은 command CAS epoch를 읽는 metadata이며 unknown 요청의 quiescence 증거가 아니다. 조회한 run의 operation/quiescence가 null이어도 현재 admission epoch는 읽을 수 있다. paired expected fields의 검증은 mode transition보다 앞서고 제출까지 같은 승인 구간에 결속한다. 기존 실제 잠금 순서를 보존한다. ModeMachine은 docking owner→mode 순서를 사용하고 listener를 mode lock 밖에서 부른다. API의 mode 전환을 owner lock에 감싸 callback/다른 owner 역순 잠금을 만들지 않는다. mode 변경 전 owner 잠금에서 CAS와 admitting reservation을 확정하고, 잠금을 풀어 mode 전환 후 같은 reservation을 실제 제출 잠금에서 다시 검증한다. 경쟁 취소는 reservation을 철회하여 backend 제출을 막는다.
 
 기존 manager 반환형, 본문 없는 home/undock, keyword 없는 executor, auth/capability/localization/calibration/readiness/mode/lease 검사는 유지한다. E-stop 해제나 불명 명령 자동 재발행은 추가하지 않는다. CORE만 최종 cmd_vel을 선택한다.
 
