@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/envs/isaa
 from prepare_urdf import REPOSITORY, validate_output_path
 from model_checks import check_urdf
 from importer_compat import import_model, reference_model
-from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
+from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints, configure_contact_solver
 from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
 from floor_visuals import map_visual_profile, add_track_visuals
@@ -234,6 +234,7 @@ def main():
                 front_camera.set_world_pose(position=position, orientation=orientation, camera_axes='world')
 
         world.reset()
+        solver_iterations = configure_contact_solver(robot)
         if front_camera is not None:
             from native_scan import NativeScan
             from core_common.robot_body import NOMINAL_BODY
@@ -258,6 +259,7 @@ def main():
                 position=[0., 0., 2.], orientation=[1., 0., 0., 0.])
         stiffness, damping = robot.get_articulation_controller().get_gains()
         summary['physics'] = dict(dt_s=world.get_physics_dt(), restitution=0.,
+                                 solver_iterations=solver_iterations,
                                  dofs=robot.dof_names, stiffness=stiffness.tolist(), damping=damping.tolist())
         print('PHYSICS ' + json.dumps(summary['physics']), flush=True)
         diff = DifferentialController(name='pinky_diff', wheel_radius=contract['wheel_radius'],
