@@ -95,6 +95,28 @@ def test_fake_client_swallowing_guard_cannot_dispatch(tmp_path):
     assert state.submission(scope.subject_id, scope.case_id) is None
 
 
+def test_model_recovery_budget_survives_restuck_in_same_chain():
+    from fleet.stuck.lane_lost import ai_proposal_invalid
+    resolver = StuckResolver(ResolverConfig())
+    resolver.autonomous_robots = frozenset({'pinky'})
+    row = dict(robot_id='pinky', online=True, state={'line_follow': {
+        'crosswalk': None, 'stuck': dict(recovery_context(), stuck_id='case-0')}})
+    for index in range(3):
+        sid = f'case-{index}'
+        row['state']['line_follow']['stuck']['stuck_id'] = sid
+        resolver.step(index, [row])
+        chain = resolver._chains['pinky']
+        floor = ai_proposal_invalid({'decision': 'BACK_AND_RETRY'}, row,
+            row['state']['line_follow']['stuck'], [row], chain, resolver.config, None)
+        if index == 2:
+            assert floor is not None and chain.rule_answers == resolver.config.rule_budget
+            break
+        assert floor is None
+        action = Answer('pinky', sid, 'BACK_AND_RETRY', 'model_v2')
+        resolver.sent(action, index)
+        assert resolver.result(action, code=None) is None
+
+
 @pytest.mark.parametrize('stop', [None, 'WAIT', 'ABORT', 'MANUAL'])
 def test_real_rule_writer_shares_model_slot_and_keeps_stops_outside_it(tmp_path, stop):
     now, store, log, scope, operating, proof, _ = opened(tmp_path, generation='core:1:stamp')
