@@ -112,3 +112,35 @@ def test_baseline_does_not_explore_and_episode_starts_without_credit(window):
     fresh.choose(policy, (1, 2), .1, frame=0, train=True)
     fresh.learn(policy, (1, 2), result(100.), credit=None)
     assert policy.updates == []
+
+
+def test_interrupted_interval_credits_only_confirmed_resumed_suffix(window):
+    policy = Policy()
+    state = (1, 2)
+    action = window.choose(policy, state, 1., frame=10, train=True)
+    window.learn(policy, state, result(0.), credit=None)
+    for frame, reward, credit in (
+            (11, 4., receipt(state, action, 10)),
+            (12, 99., None), (13, 777., None),
+            (14, 2., receipt(state, action, 13))):
+        window.choose(policy, state, 1., frame=frame, train=True)
+        window.learn(policy, state, result(reward), credit=credit)
+    window.choose(policy, state, 1.1, frame=34, train=True)
+    window.learn(policy, state, result(3.), credit=receipt(state, action, 14))
+    assert len(policy.updates) == 1
+    assert policy.updates[0][0][2] == 5.
+    assert window.last_update['reward'] == 5.
+
+
+def test_boundary_selection_precedes_update_without_reassigning_old_credit(window):
+    class ResponsivePolicy(Policy):
+        def choose(self, state, *, explore):
+            return 0 if self.updates else 1
+    policy = ResponsivePolicy()
+    state = (1, 2)
+    assert window.choose(policy, state, 1., frame=10, train=True) == 1
+    window.learn(policy, state, result(0.), credit=None)
+    assert window.choose(policy, state, 1.1, frame=34, train=True) == 1
+    window.learn(policy, state, result(-10.), credit=receipt(state, 1, 33))
+    assert policy.updates[0][0][:3] == (state, 1, -10.)
+    assert window.choose(policy, state, 1.2, frame=58, train=True) == 0
