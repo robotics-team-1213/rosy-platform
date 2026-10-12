@@ -118,6 +118,42 @@ def test_back_tool_is_not_exposed_to_existing_read_only_problem():
     with pytest.raises(ValueError): judgment(p, bound(p), changed)
 
 
+@pytest.mark.parametrize('changed', ['scope', 'action', 'expected_stuck', 'candidate_id', 'input_hash', 'action_admissible', 'source'])
+def test_candidate_read_revalidates_payload_and_completed_source(tmp_path, changed):
+    _, store, scope, journal = setup(tmp_path)
+    candidate = journal.propose(scope, 'model-1', worker_id='worker')
+    with store._transaction() as conn:
+        if changed == 'source':
+            conn.execute("UPDATE fleet_incident_v2_attempts SET state='UNKNOWN'")
+        else:
+            candidate[changed] = True if changed == 'action_admissible' else 'foreign'
+            conn.execute('UPDATE fleet_incident_v2_recovery_candidates SET payload_json=?', (canonical(candidate),))
+    with pytest.raises(ValueError): journal.candidates(scope)
+
+
+def test_closed_candidate_is_historical_and_non_executable(tmp_path):
+    _, store, scope, journal = setup(tmp_path)
+    candidate = journal.propose(scope, 'model-1', worker_id='worker')
+    store.close_case(scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED')
+    assert journal.candidates(scope) == (candidate,)
+    assert candidate['action_admissible'] is False
+
+
+@pytest.mark.parametrize('seq,stamp', [(2, 'stamp-1'), (1, 'stamp-2'), (True, 'stamp-1')])
+def test_recovery_context_requires_exact_assessment_revision(seq, stamp):
+    from fleet.incidents.automation.execution.recovery_candidates import observed_recovery
+    snapshot = {'robots': [dict(robot_id='pinky', online=True, state=dict(seq=seq, timestamp=stamp,
+        line_follow={'stuck': dict(stuck_id='lane-1', **recovery_context())}))]}
+    assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') is None
+
+
+def test_recovery_context_accepts_matching_assessment_revision():
+    from fleet.incidents.automation.execution.recovery_candidates import observed_recovery
+    snapshot = {'robots': [dict(robot_id='pinky', online=True, state=dict(seq=1, timestamp='stamp-1',
+        line_follow={'stuck': dict(stuck_id='lane-1', **recovery_context())}))]}
+    assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') == recovery_context()
+
+
 def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path):
     from fleet.incidents.automation.worker import IncidentCaseWorker
     from test_incident_case_worker import make_incident_worker, settled
