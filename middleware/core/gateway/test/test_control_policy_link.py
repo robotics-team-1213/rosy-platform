@@ -89,6 +89,25 @@ def test_genuine_exception_keeps_traceback_and_first_failure(linked, monkeypatch
     assert caplog.records[0].exc_info[0] is RuntimeError
 
 
+def test_failed_zero_writer_retains_diagnostic_until_a_successful_cycle(linked, monkeypatch, caplog):
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    command, safety, modes, policy, snapshot = linked
+    command.set_nav_twist(Twist(.1, 0.), now=10.21)
+    select = command.select_output
+    monkeypatch.setattr(command, 'select_output', lambda: select(now=10.22))
+    power = SimpleNamespace(on_activity=lambda _: None)
+    def broken(out):
+        raise RuntimeError('writer failed')
+    with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
+        with pytest.raises(RuntimeError, match='writer failed'):
+            cmd_vel_cycle(command, power, broken)
+        assert not caplog.records
+        sent = []
+        cmd_vel_cycle(command, power, sent.append)
+    assert sent == [Twist()] and safety.estop
+    assert len(caplog.records) == 1 and 'snapshot_expired' in caplog.text
+
+
 def test_failed_diagnostic_sink_cannot_escape_or_change_the_latched_zero(linked, monkeypatch):
     command, safety, modes, policy, snapshot = linked
     command.set_nav_twist(Twist(.1, 0.), now=10.21)
