@@ -89,4 +89,32 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
   `TRIP_AUTHORITY_NOT_REQUIRED`로 거절된다. 새 실행 manifest의 두 설정과 실제 caps를
   대조하고 기존 Fleet trip/AuthoritySender로 권한을 생성한다.
 
+## 실제 센서와 주행 전제 확인
+
+- Gazebo r5는 실제 Fleet plan 200 이후 start 422의 `TRIP_MODE_UNSUPPORTED`와
+  `JUNCTION_TURN_UNSUPPORTED`를 확인했다. 이동 0m, CORE lease 없음, OFF 200과
+  실제 정지를 확인했다. pose 기반 계획 생성과 실행 capability 검사는 별도 계약이다.
+  회전 지원을 강제 표시하지 않고 D-400 motion basis의 실제 센서 증거를 확인한다.
+- r6는 기존 URDF의 세 downward ray를 ROS bridge와 기존 `sim_ir_floor`에 연결했다.
+  private SIM profile의 `sensor_adapter.mode=enforce`와 `simulation_sensors=true`를
+  사용했다. 가짜 IR 값이나 현장 floor walker 선언은 사용하지 않았다. 두 로봇 각각
+  세 ray가 동일 시각인 514/514 프레임, 실제 IR·IMU·scan과 junction_turn 및 lane_bend
+  capability를 확인했다. 첫 로봇의 safety blocked=true는 유지하고 두 번째만 false였다.
+  두 CORE 최종 명령 1,283/1,281개가 모두 zero였다. runner exit 0, 정지와 자기
+  프로세스·포트·lock 종료 및 원래 소스 hash 보존을 확인했다. r6는 주행 시험이 아니다.
+- 센서 helper에서 최신 mid와 오래된 좌우 ray를 합쳐 바닥 증거를 갱신하는 별도 오류를
+  수정했다(commit `8226c122f8`). 세 채널의 동일한 정규 timestamp와 source age를
+  검증하고 한 프레임을 한 번만 발행한다. 원격 Gazebo 318 PASS/4 SKIP/NEW 0,
+  독립 SOURCE APPROVE, 착지 검사 584 PASS/4 SKIP/NEW 0 및 push 검사 291 PASS다.
+  main commit `3d5f58a3e9`까지 푸시했다. r6는 수정 전 helper 실행이므로 새 helper의
+  실제 실행 증거로 대체하지 않는다.
+
+다음 주행 시험은 safety blocked=false인 두 번째 로봇만 실제 Fleet trip·통행권으로
+실행한다. 첫 로봇은 OFF를 유지한다. CORE 소스 commit `1e2dc23557`과 새 helper
+commit `8226c122f8`의 조합을 명시하며 전체 최신 소스 실행이라고 부르지 않는다.
+private SIM profile에서 기존 typed `line/route_context`를 활성화하되 실제 positive seq와
+CORE cue는 별도 확인한다. 최대 5 sim s·누적 이동 0.15m·wall 8s 중 먼저 닿는 한계에서
+취소하고 lease 해제·OFF readback·실제 연속 정지를 확인한다. 준비 코드는 독립 SOURCE
+APPROVE이며 자원 gate가 거절한 시도는 실행·주행 결과에 포함하지 않는다.
+
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.
