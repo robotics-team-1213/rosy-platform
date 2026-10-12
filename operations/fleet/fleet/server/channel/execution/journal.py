@@ -43,7 +43,7 @@ class ExecutionJournal:
                 WHERE principal_id=? AND author_id=? AND guild_id=? AND channel_id=? AND expires_at>?''',
                 (question.principal_id,question.author_id,question.guild_id,question.channel_id,self.clock())).fetchone()
         if bound is None or bound['request_id'] in visiting:return None
-        row = conn.execute('''SELECT t.*,s.step_index,e.plan_json,e.catalog_hash,e.expires_at
+        row = conn.execute('''SELECT t.*,s.step_index,e.plan_json,e.catalog_hash,e.expires_at AS grant_expires_at
             FROM fleet_tasks t JOIN fleet_channel_execution_steps s ON s.task_id=t.task_id
             JOIN fleet_channel_execution e ON e.request_id=s.request_id
             WHERE t.task_id=? AND s.request_id=? AND t.status='COMPLETED' ''',
@@ -64,7 +64,7 @@ class ExecutionJournal:
             if call.verb != 'navigate' or call.robot != row['robot_id']:return None
             return AcceptedContext(**scope,request_id=bound['request_id'],task_id=row['task_id'],
                 robot_id=call.robot,place_id=call.body['waypoint'],catalog_hash=row['catalog_hash'],
-                expires_at=row['expires_at'],evidence_hash=digest(receipt),
+                expires_at=row['grant_expires_at'],evidence_hash=digest(receipt),
                 generation=row['dispatch_generation']).model_dump()
         except (ValueError,KeyError,TypeError,HTTPException):return None
 
