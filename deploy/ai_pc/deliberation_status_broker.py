@@ -18,7 +18,7 @@ from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 from . import deliberation_ollama as local
 from . import deliberation_glm_judgment as glm
 from . import deliberation_glm_receipt as billing
-from .deliberation_opencode import Launcher,EXECUTABLE,EXECUTABLE_SHA256
+from .deliberation_opencode import GlmOpenCodeLauncher,EXECUTABLE,EXECUTABLE_SHA256
 from rosy.decision.deliberation.providers.versioned_cli import VersionedCliProvider
 
 CONFIG=Path('/etc/rosy-deliberation/status.json')
@@ -96,7 +96,7 @@ async def execute(data,cfg):
         if hashlib.sha256(Path(EXECUTABLE).read_bytes()).hexdigest()!=EXECUTABLE_SHA256:
             raise ValueError('PINNED_PROVIDER_CHANGED')
         policy=billing.TrustedIncludedPlanPolicy(**cfg['billing_policy'])
-        with Launcher(profile=bound.profile,admission=caps,billing_policy=policy) as launch:
+        with GlmOpenCodeLauncher(profile=bound.profile,admission=caps,billing_policy=policy) as launch:
             provider=VersionedCliProvider(profile=bound.profile,adapter=caps,launch=launch,cli_version='1.18.35')
             raw=await provider(problem,bound,prior,remaining,budget_usd=0,
                                missing_allowlist=('core_state','network','camera','map'))
