@@ -198,3 +198,10 @@
 - 변경: 같은 training-curved world의 ground RGB·크기와 white paint model pose를 native에 적용한다. 원래 wall·caution·CORE·무효 관측 안전 정지와 학습 제외를 유지한다. 현재 알려진 수평 SDF 범위로 제한한다.
 - 증거: source 560515c14 관련 원격 115 PASS·NEW 0, source 71c2fa595의 경로·ground·paint 비정상 입력 거절 보강 원격 8 PASS·NEW 0, 독립 SOURCE APPROVE WITH NOTES. 최신 main을 포함하는 source 66840266e의 7443 파일 hash 검증과 실제 SDK USD 24.5 메타데이터에서 RGB 0.13/0.14/0.13·size 100·paint Z 0.001·23 시각 plane·4 collision wall 및 shader 연결을 확인했다. 이는 116712KiB RSS의 비렌더 검사다.
 - gate 변화: 없음. R26 전체 실행은 자원 gate의 7.9GB 예산으로 기준 8GB에 못 미쳐 SDK 시작 전에 거절됐다. 새 ground의 PhysX·영상·인식 개선·완주·교통/Fleet·병렬 RL은 미확인이다. 시스템 cache 조정에는 관리자 sudo 입력이 필요하며 보호 기준을 낮추거나 다른 프로세스를 종료하지 않았다.
+
+## 2026-10-12 · d778f8b7c · 공유 바닥 native 재평가와 reset 진단
+
+- 변경: 승인된 횡단 막대 구분과 공유 바닥을 통합했다. reset 확인 실패에는 phase·seed·요청 좌표·실제 pose·위치 오차를 남긴다. 기존 위치/속도 기준, 정지·초기화 거절·무효 카메라 정지·CORE 명령 권한은 그대로다.
+- 증거: source 4f617d7c2 통합 원격 325 PASS·1 SKIP·NEW 0. 당시 main의 문서 변경을 포함한 source 40b389415 R29는 7457 source hash를 실행 전후 검증했다. 실제 renderer·주행·5개 960×540 녹화를 수행했고 ffprobe frame 수·renderer/physics receipt·42개 산출물 hash를 독립 대조했다. 무효 관측 후보는 모두 0, 각 episode 종료와 cleanup은 기존 실제 속도 정지 기준 미만이다. source d778f8b7c의 진단 보강은 원격 90 PASS·NEW 0·독립 SOURCE 승인이다.
+- 결과: 첫 방향 baseline/frozen eval은 모두 0.110668m 진행 후 camera_lane_lost. 90도 baseline은 off_route, eval은 camera_lane_lost. 180도 baseline의 유효 카메라는 0회이며 다음 reset 확인에서 SDK exit 1로 중단됐다. 270도는 시작하지 못했다. 기존 정책 evaluation-only이며 새 updates나 개선을 증명하지 않는다.
+- gate 변화: 실제 공유 바닥 렌더와 제한 주행 진단만 확인했다. 네 방향 전체 시험·완주·교통/Fleet·병렬 RL·ROS-SIM·실물 수용은 미완료다. reset 실패의 어느 기준이 초과됐는지 기존 기록으로 구분할 수 없어 값을 보강하며, 추정으로 기준을 바꾸지 않는다. 원본 영상과 실패/정지 검증은 private 일지에 보관했다.

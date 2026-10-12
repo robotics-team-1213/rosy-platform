@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · d778f8b7c · 공유 바닥 native 재평가와 reset 진단
 - 2026-10-12 · 71c2fa595 · 공유 ground와 paint pose
 - 2026-10-12 · 7f8182d71 · 공유 맵 바닥 시각 자산
 - 2026-10-12 · uncommitted · native 카메라 검증 책임 분리
 - 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
-- 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
