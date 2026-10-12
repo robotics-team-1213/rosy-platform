@@ -425,3 +425,13 @@ a914201e8의 최종 정상 모델 PC 회귀는 877 PASS·34 warnings·terminal 0
 - OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료, source 7,554·install 2,726 해시 이상 0과 진단 오류 0을 확인했다. 두 로봇 각 2,745개 샘플 자세의 차체 겹침은 0이나 연속 접촉·도로 내부 수용은 아니다. CPU 증가만으로 완주 해결은 미수용이다. SDK 임계 거리와 후속 CORE 몸 여유를 따로 재생하며 안전 기준·잡음·빔을 그대로 유지한다.
 
 Leg11 기록의 첫 문서 회귀는 새 로그 제목 형식 오류로 2 NEW였다. 해당 미착지 항목의 제목을 별도 교정 커밋 90f76dbee로 고치고 생성 색인을 갱신했다. 같은 정상 모델 PC 문서 회귀는 terminal 0·NEW 0, harness lint는 error 0이다. 기존 커밋과 실패 원본을 보존했고 제품 로직·Gazebo 동결 소스는 바꾸지 않았다. 지도 완주·독립 반복·main 착지·push·실물 수용은 미완료다.
+
+## 2026-10-13 · Leg13b 자연 HOLD 해제와 SDK 회전 거절
+
+- Linux 시험 PC의 SSH 연결을 재확인했고 접속이 복구됐다. 첫 재사용 점검의 설치 inventory 거절, 순수 감독 selfcheck의 잘못된 기대값, Linux 쉘의 CRLF 거절 원본을 보존했다. 정정한 LF 12개 스크립트의 원격 AST·두 bash-n 검사와 감독 selfcheck는 통과했다. 제품 소스·안전 기준·잡음·빔·시간/거리 한도는 바꾸지 않았다.
+- c66d19b83 소스 7,554개와 Leg12 설치를 명시적으로 재사용했다. 설치의 원래 2,726개 해시는 모두 같으며 추가 launch bytecode 6개를 각각 원본 소스·Python header·typed recursive compile 결과로 검증해 2,732개 재사용 manifest를 따로 만들었다. 원래 manifest는 보존했다. 지도 계보에 추가로 기록된 source bytecode 2개도 같은 방식으로 검증했고 기존 지도·모델·법칙·프로필·640빔은 같았다. cache 생성 주체는 미확정이며, 새 빌드나 모든 cache의 일괄 수용을 주장하지 않는다.
+- 정상 SIM 6코어/8GiB와 추가 여유 12코어를 확인한 뒤 CPUQuota 1200%·MemoryMax 6GiB에서 정지 점검을 실행했다. 두 로봇 명령·이동 0, CORE 단독 최종 publisher, native LOCALIZED 각 124개와 종료 5조건을 확인했다. 별도 새 creator-owned 예약과 최신 자원·전체 해시 확인 뒤 주행을 한 번 실행했다.
+- 감독은 기존 한도 안에서 CORE `HOLD/obstacle_ahead`를 기다리고, 다른 안전 실패는 그대로 종료한다. Leg13b는 0.374786833m 이동 후 Fleet `stopped/stall`로 끝났으며 도착 false다. CORE 장애물 HOLD는 실제 발생했고 약 0.295 wall초 뒤 TRACKING으로 풀렸다. RECOVERING 관측은 없다. Leg12의 감독 즉시 OFF/cancel과 구분한다.
+- 최초 zero는 sim77.265초, 최종 zero는 sim84.362초다. 최종 zero 8.55ms 전 SDK는 front 0.127828m > stop 0.10405m·blocked false이지만 can_rotate false였고 CORE는 TRACKING/FREE였다. 이후 SDK blocked가 true가 됐으며 종료까지 false 전환을 관측하지 못했다. CORE HOLD는 최종 zero보다 7.390 wall초 뒤, Fleet stall은 10.466 wall초 뒤다. 따라서 CORE HOLD 해제만으로 native 주행은 재개되지 않았다. 수신 순서에 근거한 원인 분리이며 내부의 정확한 소비 frame 증명은 아니다.
+- 실제 spawn heading은 west 역방향 끝 접선이다. 카메라 경계의 세계 방향 약 180도만으로 현재 몸 아래 도로가 직선이거나 로봇이 36도 잘못 정렬됐다고 단정하지 않는다. 원본 graph의 해당 구간 접선은 빠르게 변하며 출구 직선을 앞서 관측했을 가능성을 따로 평가한다. centre와 border 후보의 정지 구간 SOURCE 재생에서는 기록된 SDK GateInputs 분류를 적용한 반사실 계산이 모두 zero를 냈다. 다음 비교는 목표점 조정과 일반 곡선 명령의 실제 sweep 검증을 분리하며, 제자리 회전 검사를 단순히 끄거나 이전 거절 목표를 부활시키지 않는다.
+- OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료, 소스 7,554·재사용 설치 2,732 전체 해시 이상 0과 진단 오류 0을 확인했다. 두 로봇 각 2,787개 native 샘플의 paint/wall/outside/other 겹침은 0이나 연속 접촉 없음·지도 완주·실물 수용을 증명하지 않는다. 지도 완주와 독립 반복은 아직 미완료다.
