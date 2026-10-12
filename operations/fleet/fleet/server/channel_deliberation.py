@@ -125,21 +125,25 @@ class ChannelModelJobs:
             except sqlite3.IntegrityError:
                 raise HTTPException(409, detail='CHANNEL_MODEL_ROLE_SPENT') from None
             conn.execute("UPDATE fleet_channel_model_jobs SET state='RUNNING' WHERE request_id=?", (request_id,))
-            return {'request_id': request_id, 'role': role, 'input_hash': row['input_hash'], 'deadline': row['deadline']}
+            return {'request_id': request_id, 'role': role, 'input_hash': row['input_hash'],
+                    'profile_set_hash': row['profile_set_hash'], 'deadline': row['deadline']}
 
-    def record_attempt(self, request_id, role, *, state, result, known_cost_usd):
+    def record_attempt(self, request_id, role, *, state, result, known_cost_usd, input_hash, profile_set_hash):
         if (state not in ('RESULT', 'FAILED', 'UNKNOWN') or type(result) is not dict
                 or known_cost_usd is not None and (type(known_cost_usd) not in (int,float)
-                or not math.isfinite(known_cost_usd) or not 0 <= known_cost_usd <= 10)
+                or not math.isfinite(known_cost_usd) or known_cost_usd < 0)
                 or state != 'UNKNOWN' and known_cost_usd is None):
             raise ValueError('CHANNEL_MODEL_RECEIPT_INVALID')
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
-            row = self._row(conn, request_id); self._receipt(conn, row)
+            row = self._row(conn, request_id)
+            # Spent resources remain evidence after expiry or account revocation; this grants no authority.
+            if row['input_hash'] != input_hash or row['profile_set_hash'] != profile_set_hash:
+                raise HTTPException(409, detail='CHANNEL_MODEL_ATTEMPT_CHANGED')
             changed = conn.execute('''UPDATE fleet_channel_model_attempts SET state=?,result_json=?,known_cost_usd=?
-                WHERE request_id=? AND role=? AND state='SUBMITTED' ''',
+                WHERE request_id=? AND role=? AND state IN ('SUBMITTED','UNKNOWN') ''',
                 (state,canonical(result),known_cost_usd,request_id,role)).rowcount
-            if row['state'] != 'RUNNING' or changed != 1:
+            if changed != 1:
                 raise HTTPException(409, detail='CHANNEL_MODEL_ATTEMPT_CHANGED')
 
     def finish(self, request_id, *, state, result, summary):
