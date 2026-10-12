@@ -140,3 +140,34 @@ def test_revoke_between_artifact_and_map_reads_cannot_certify_primary(tmp_path):
             assert len(calls[-1][2]) == 1 and registry.approved_artifacts() == {}
         finally: await worker.aclose()
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('stop', ['deadline', 'cancel'])
+def test_blocked_read_expiry_or_shutdown_cannot_resume_model_calls(tmp_path, stop):
+    async def run():
+        from fleet.incidents.automation.contract import CaseBudget
+        config, calls, _, registry = setup(tmp_path)
+        if stop == 'deadline':
+            config['budget'] = lambda _: CaseBudget(100, 100.1, 2, 1, 0, (('primary', 1), ('reviewer', 1)))
+        entered, release = threading.Event(), threading.Event()
+        original = registry.approved_candidate
+        def blocked(*args):
+            entered.set(); release.wait(2)
+            return original(*args)
+        registry.approved_candidate = blocked
+        bridge = importlib.import_module('tools.incident_reasoning')
+        application = app(tmp_path / 'site', bridge.registry_calibration_config(config, registry, domain='line_follow'))
+        worker = application.state.stuck_resolver.incident_worker
+        try:
+            worker.feed(poll(application))
+            assert await asyncio.to_thread(entered.wait, 1)
+            scope = worker.store.active_scopes()[0]
+            if stop == 'deadline': await settled(worker)
+            else: await asyncio.wait_for(worker.aclose(), 1)
+            assert worker.store.case(scope)['state'] != 'ACTIVE'
+            assert [role for _, role, _ in calls] == ['primary']
+            release.set(); await asyncio.sleep(.02)
+            assert len(calls) == 1 and not worker._waiting
+        finally:
+            release.set(); await worker.aclose()
+    asyncio.run(run())
