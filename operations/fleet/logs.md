@@ -3505,3 +3505,8 @@
 - Evidence: Remote source/HTTP/navigation/transport/gateway regression414 passed, terminal exit0 at source8d4d752ee7, known_failures0 NEW/0 known. Prior162 and280-case runs passed; the intermediate run had one NEW old intake test expecting no withdrawal table, corrected to assert the precise new tombstone contract rather than relabelled known. All pytest ran on remote PCs.
 - Structure: Actual execution child579, residual channel1440, conversation300 and Fleet parent55222 measured together with the unchanged harness filters. Independent structural precheck registered-boundary guidance is execution487+150, prior channel1379/conversation280/Fleet55120+150; all file/hard ceilings and historical obligations remain. Root integration owns the reviewed registry update.
 - Gate: SOURCE execution linkage is tested with conformant fakes and existing owner journals. Task3 still needs direct owner readback/reconciliation, rich progress and hourly KST health. Conversation admission remains OFF pending independent semantic conformance/protected installation. No real Discord message, paid GLM call, deployment or device command was sent by Task2.
+
+## 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 변경: CORE 첫 응답의 boot/run/attempt를 기존 Task·channel 원장에 결속하고, 정확한 typed readback과 2초 monotonic/SQLite claim CAS로만 로컬 자원을 해제한다. 같은 CID의 다른 run, 오래된 proof, 재할당 claim, ACK 유실은 자동 재발행하지 않는다. 원문 권한 만료·철회 뒤에도 읽기 전용 결과는 보존한다.
+- 증거: ca2748f050 원격 focused 123 passed, known_failures 0 NEW. db0037481e 설치 wheel/sdist/source-image closure 4 passed, 0 NEW. 확대 Fleet 시험과 독립 구조·코드 검토는 진행 중이다.
+- gate 변화: 실제 장치·Discord 운영·물리 수용으로 승격하지 않는다. CORE 최종 command 권한과 기존 safety/role/map/resource admission을 유지한다.

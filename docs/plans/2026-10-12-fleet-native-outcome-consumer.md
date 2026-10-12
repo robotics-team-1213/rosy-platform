@@ -62,3 +62,13 @@ The focused gate includes two SQLite workers, stale/delayed readback, reassigned
 claims, exact boot/run, lost ACK without legacy inference, first-ACK/event races,
 read-only closure after role/message/expiry changes, fresh next-command epoch,
 follow RUNNING/HOLD and teleop EXPIRED. This is source evidence only.
+
+Follow-up candidate measurement before independent registry precheck: outcome child
+332, execution residual 563, Fleet residual 55249, task_store.py 1043; channel,
+conversation, health and app.py remain as measured above. The first Task terminal
+native event is now stored before readback; a contradictory readback cannot replace
+it. Pending native closure no longer depends on a still-ANSWERED model grant, and
+a process restart between Task safe release and channel projection cannot replay
+the original Task. Exact installed closure passed 4 cases at db0037481e. Full Fleet
+regression is running against 0a4f7d41ce; this paragraph records no terminal verdict
+for that still-running job. Registry values remain unchanged pending precheck.
