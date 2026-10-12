@@ -99,7 +99,7 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
         current_status = task["status"]
         if operation is not None and (receipt.get('outcome') or {}).get('phase') != 'TERMINAL':
             terminal = terminal_event([{'type': event_type, 'data': {
-                'run_id': run_id, 'boot_id': boot_id, 'error_code': error_code}}], operation)
+                'run_id': run_id, 'boot_id': boot_id, 'error_code': error_code, 'source': source}}], operation)
             if terminal is not None:
                 receipt['outcome'] = terminal
                 connection.execute('UPDATE fleet_tasks SET receipt_json=? WHERE task_id=?',

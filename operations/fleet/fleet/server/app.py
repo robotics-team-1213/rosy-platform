@@ -740,6 +740,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         console.goal_leases.admit_attempt = task_service.admit_attempt
         console.goal_leases.bind_native_receipt = task_service.bind_native_receipt
         console.goal_leases.native_required = task_service.native_required
+        from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
+        console.goal_leases.prepare_send = partial(prepare_send, console.goal_leases)
         task_service.core_events = hub.event_store if hub is not None else None
 
     @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
