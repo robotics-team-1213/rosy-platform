@@ -134,3 +134,13 @@ def test_missing_way_cannot_override_a_fresh_off_route_refusal():
     assert step is None and decided is True
     assert last['reason'] == 'off_route_hold'
     assert last['expected_path_state'] == 'dropped'
+
+
+def test_missing_current_odometry_cannot_reuse_the_camera_source_pose():
+    steer, ways, last, *_rest = _commit_centre()
+    pose_at = lambda stamp: _pose(stamp) if stamp <= ways.stamp else None
+    step, decided = keep_step(steer, ways, last, G, XO, HALF, pose_at, .3, None)
+    assert step is None and decided is True
+    assert last['expected_path_state'] == 'dropped'
+    ways.way = None
+    assert _step(steer, ways, last, .4)[0] is None
