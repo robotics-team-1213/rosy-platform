@@ -79,7 +79,8 @@ class BoundProfile:
     input_hash: str
 
     def validate(self, problem, current_profile=None):
-        if self.input_hash != problem.digest or (current_profile is not None and current_profile != self.profile):
+        if (self.input_hash != problem.digest or problem.domain not in self.profile.domains
+                or (current_profile is not None and current_profile != self.profile)):
             raise ValueError('CASE_OR_PROFILE_CHANGED')
 
 
