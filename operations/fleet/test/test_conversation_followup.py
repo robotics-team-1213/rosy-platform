@@ -118,10 +118,18 @@ def test_followup_queues_once_and_rechecks_original_after_selection_row_moves(tm
     assert f.journal.guard(receipt['request_id'])['request_id']==receipt['request_id']
     change_context(f,'withdraw')
     assert f.journal.task_reason(queued[0])=='CHANNEL_EXECUTION_ORIGIN_CHANGED'
+    from fleet.server.goal_lease import GoalLeases
+    leases=GoalLeases(0,{})
+    leases.admit_attempt=f.service.admit_attempt
+    leases.bind_native_receipt=f.service.bind_native_receipt
+    leases.native_required=f.service.native_required
     dispatched=[]
-    async def dispatch(task):dispatched.append(task);return {'accepted':True}
+    async def goal(*args,**kwargs):dispatched.append(args);return {'accepted':True}
+    f.client.navigation_goal=goal
+    async def dispatch(task):
+        return await leases.send('rosy_40',f.client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
     asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
-    assert not dispatched
+    assert not dispatched and f.store.get_task(queued[0])['status']=='HOLD'
 
 
 @pytest.mark.parametrize('change',['unknown','withdraw','boot_id','run_id','release'])
