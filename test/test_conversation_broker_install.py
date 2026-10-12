@@ -274,3 +274,96 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
     (tmp_path/'wheels/demo-1.0-py3-none-any.whl').write_bytes(b'tampered')
     with pytest.raises(ValueError,match='SHA'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
+
+@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None])
+def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,monkeypatch,stage):
+    import types
+    import time
+    m = module()
+    for name,relative in [('REVIEWED','reviewed'),('VERSIONS','opt/conversation'),('CONFIG','etc/conversation.json'),
+        ('LIBEXEC','libexec'),('INGRESS','libexec/model-ingress'),('STATUS','libexec/status-broker'),
+        ('BROKER','libexec/conversation-broker'),('KEYS','ssh/keys'),('SUDO','sudo/rules'),('SSHD','ssh/sshd')]:
+        path = tmp_path/relative
+        path.parent.mkdir(parents=True,exist_ok=True)
+        monkeypatch.setattr(m,name,path)
+    m.LIBEXEC.mkdir(exist_ok=True)
+    bundle = m.REVIEWED
+    bundle.mkdir()
+    m.STATUS.write_bytes(b'previous status owner')
+    status_config = m.CONFIG.parent/'status.json'
+    status_config.write_bytes(b'previous status config')
+    reviewer = m.CONFIG.parent/'status-reviewer-admission.json'
+    reviewer.write_bytes(b'previous protected billing evidence')
+    original_stat = m.Path.stat
+    # Simulate only the privilege metadata; the actual file writes and rollback run in tmp_path.
+    def simulated_stat(path,*a,**kw):
+        st = original_stat(path,*a,**kw)
+        values = list(st)
+        values[4] = 0
+        values[5] = 0
+        return os.stat_result(values)
+    monkeypatch.setattr(m.Path,'stat',simulated_stat)
+    monkeypatch.setattr(m,'require_admin',lambda:None)
+    monkeypatch.setattr(m,'trusted_directory',lambda p:None)
+    monkeypatch.setattr(m,'protected',lambda p:p.read_bytes())
+    monkeypatch.setattr(m.os,'chown',lambda *a:None)
+    monkeypatch.setattr(m,'account_registration',lambda *a:None)
+    account = types.SimpleNamespace(pw_name='rosy-deliberation',pw_uid=997,pw_gid=0)
+    helper = types.SimpleNamespace(validated_account=lambda:account)
+    def install_file(path,data,mode):
+        if path.exists():
+            assert path.read_bytes() == data
+        else:
+            path.write_bytes(data)
+            path.chmod(mode)
+    helper.install_file = install_file
+    monkeypatch.setattr(m.importlib.util,'module_from_spec',lambda spec:helper)
+    monkeypatch.setattr(m.importlib.util,'spec_from_file_location',lambda *a:types.SimpleNamespace(loader=types.SimpleNamespace(exec_module=lambda m:None)))
+    contents = {'deploy/site/requirements-fleet.txt':b'demo==1.0\n'}
+    manifest = {'source_commit':'a'*40,'files':{k:m.sha(v) for k,v in contents.items()}}
+    proof = {'profile':{'revision':'d728-semantic-v2'},'policy':{'authority':'proposal_only'},'evaluated_at':time.time()}
+    monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,b'proof',b'receipt','ssh-ed25519 fixture'))
+    monkeypatch.setattr(m,'dependencies',lambda *a:b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n')
+    calls = []
+    failures = []
+    def fake_run(*args,**kwargs):
+        calls.append(args)
+        command = ' '.join(args)
+        point = None
+        if args[:4] == ('/usr/bin/python3','-I','-m','venv'):
+            (Path(args[-1])/'bin').mkdir(parents=True)
+        if '--require-hashes' in args:
+            point = 'dependencies'
+            assert '--no-index' in args and '--only-binary=:all:' in args
+        if args[0] == '/usr/sbin/runuser':
+            point = 'model' if 'loaded(exchange(' in command else 'configuration'
+        if args[0] == '/usr/sbin/visudo':point = 'visudo'
+        if args[:2] == ('/usr/sbin/sshd','-t'):point = 'sshd'
+        if args[:2] == ('/usr/sbin/sshd','-T'):point = 'effective'
+        if args[:2] == ('/usr/bin/systemctl','reload'):point = 'reload'
+        if point == stage and stage is not None and not failures:
+            failures.append(point)
+            raise RuntimeError('injected '+point)
+        if args[:2] == ('/usr/sbin/sshd','-T'):
+            return types.SimpleNamespace(stdout='\n'.join(['forcecommand '+str(m.INGRESS),'authorizedkeysfile '+str(m.KEYS),
+                'authenticationmethods publickey','passwordauthentication no','kbdinteractiveauthentication no',
+                'disableforwarding yes','permittty no']))
+        return types.SimpleNamespace(stdout='')
+    monkeypatch.setattr(m,'run',fake_run)
+    argv = [str(bundle)]
+    for name in ('manifest','proof','receipt','public-key','dependencies'):
+        argv += ['--'+name+'-sha256','b'*64]
+    if stage is None:
+        assert m.main(argv) == 0
+        assert m.main(argv) == 0
+        assert len([c for c in calls if '--require-hashes' in c]) == 1
+        cfg = json.loads(m.CONFIG.read_bytes())
+        assert cfg['valid_until'] == proof['evaluated_at']+7*86400
+    else:
+        with pytest.raises(RuntimeError,match='injected '+stage):
+            m.main(argv)
+        assert all(not p.exists() for p in (m.CONFIG,m.BROKER,m.INGRESS,m.KEYS,m.SUDO,m.SSHD))
+    assert m.STATUS.read_bytes() == b'previous status owner'
+    assert status_config.read_bytes() == b'previous status config'
+    assert reviewer.read_bytes() == b'previous protected billing evidence'
+    assert all('execute(' not in ' '.join(c) and '/api/chat' not in ' '.join(c) for c in calls)
