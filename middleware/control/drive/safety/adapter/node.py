@@ -85,7 +85,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         node_kwargs = {'parameter_overrides': parameter_overrides}
         if namespace is not None:
             node_kwargs['namespace'] = namespace
-        super().__init__('safety_node', **node_kwargs)
+        super().__init__('safety_node', cli_args=['--ros-args', '-r', '__node:=safety_node'] if sensor_only and namespace is not None else None, **node_kwargs)
         self.declare_parameter('cmd_in', 'cmd_vel_raw')
         self.declare_parameter('cmd_out', 'cmd_vel')
         self.declare_parameter('start_estopped', True)
