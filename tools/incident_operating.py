@@ -33,6 +33,9 @@ def load_frozen_json(source, *, expected_sha256):
 def import_operation(owner, grant_id, receipt, *, evidence):
     if type(evidence) is not OperatingEvidenceOwner or not callable(getattr(owner, 'apply', None)):
         raise ValueError('EXPLICIT_EXISTING_OPERATION_OWNER_REQUIRED')
+    from rosy.contracts.learning.incident_operation import REVOKE, validate_operation_receipt
+    if validate_operation_receipt(receipt)['payload']['kind'] == REVOKE:
+        return owner.apply(grant_id, receipt)
     proof = evidence(grant_id)
     report = proof.get('report') if type(proof) is dict else None
     if (type(report) is not dict or report.get('state') != 'PASS_FOR_OPERATION'
