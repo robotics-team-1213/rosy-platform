@@ -692,6 +692,7 @@
 | D-701 | 실제 규칙 선택의 독립 비교 export | Accepted |
 | D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
+| D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -883,4 +884,10 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 **Status:** Accepted (2026-10-12, source contract)
 
 실제 model receipt의 prediction과 별도 검수 정답·지연을 같은 사건·시도·프로파일과 외부 고정 dataset hash에 결속한다. 누락·UNKNOWN·split 재사용은 평가 확률로 채우지 않는다. 전문은 [D-703](../adr/D-703-reviewed-feedback-calibration-binding.md).
+
+## D-704 — Pinky 최종 속도 원본의 평면 축 검증
+
+**Status:** Accepted (2026-10-12, source contract)
+
+Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 숨기지 않는다. 최종 속도와 불필요 모델 개입·전체 운영 coverage를 구분한다. 전문은 [D-704](../adr/D-704-pinky-final-velocity-evidence-boundary.md).
 
