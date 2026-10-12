@@ -1,8 +1,11 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Install a separately reviewed D-728 snapshot; root only, no inference or GLM calls."""
 import argparse
 import base64
 import hashlib
+import io
+from email.parser import BytesParser
+import zipfile
 import importlib.util
 import json
 import os
@@ -152,6 +155,82 @@ def replace_managed(path, data, mode, gid, allowed):
         raise ValueError('INSTALL_READBACK_FAILED')
 
 
+def dependencies(bundle, digest, direct):
+    manifest = json.loads(pinned(bundle/'dependencies.json', digest))
+    if set(manifest) != {'wheels'} or type(manifest['wheels']) is not dict or not 1 <= len(manifest['wheels']) <= 100:
+        raise ValueError('DEPENDENCY_MANIFEST_REQUIRED')
+    resolved = {}
+    lines = []
+    for name, expected in manifest['wheels'].items():
+        if not re.fullmatch('[A-Za-z0-9_.+-]+[.]whl', name):
+            raise ValueError('DEPENDENCY_WHEEL_NAME_REFUSED')
+        raw = pinned(bundle/'wheels'/name, expected)
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            metadata = [n for n in archive.namelist() if n.endswith('.dist-info/METADATA')]
+            if len(metadata) != 1 or archive.getinfo(metadata[0]).file_size > 1_000_000:
+                raise ValueError('DEPENDENCY_METADATA_REQUIRED')
+            fields = BytesParser().parsebytes(archive.read(metadata[0]))
+        package, version = fields['Name'], fields['Version']
+        if (not package or not re.fullmatch('[A-Za-z0-9_.-]+', package)
+                or not version or not re.fullmatch('[A-Za-z0-9_.+!-]+', version)):
+            raise ValueError('DEPENDENCY_METADATA_REFUSED')
+        package = re.sub('[-_.]+', '-', package).lower()
+        if package in resolved:
+            raise ValueError('DEPENDENCY_DUPLICATE_REFUSED')
+        resolved[package] = version
+        lines.append(f'{package}=={version} --hash=sha256:{expected}\n')
+    for line in direct.decode().splitlines():
+        if not line or line.startswith('#'):
+            continue
+        match = re.fullmatch('([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)', line)
+        if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[2]:
+            raise ValueError('DEPENDENCY_DIRECT_PIN_MISMATCH')
+    return ''.join(sorted(lines)).encode()
+
+
+def activate(plans, verify, reload):
+    originals = {}
+    for path, data, mode, gid, allowed in plans:
+        trusted_directory(path.parent)
+        if path.exists() or path.is_symlink():
+            raw = protected(path)
+            if raw not in (data, *allowed):
+                raise ValueError('FOREIGN_INSTALL_FILE_REFUSED')
+            info = path.stat()
+            if info.st_mode & 0o777 != mode or info.st_gid != gid:
+                raise ValueError('MANAGED_MODE_CONFLICT')
+            originals[path] = raw
+        else:
+            originals[path] = None
+    changed = []
+    try:
+        for path, data, mode, gid, allowed in plans:
+            if originals[path] != data:
+                # Include the target before atomic replace: readback can fail after replacement.
+                changed.append((path, data, mode, gid))
+            replace_managed(path, data, mode, gid, allowed)
+        verify()
+        reload()
+    except BaseException:
+        for path, data, mode, gid in reversed(changed):
+            old = originals[path]
+            if not path.exists() and not path.is_symlink():
+                if old is not None:
+                    raise ValueError('ROLLBACK_TARGET_DISAPPEARED')
+                continue
+            current = protected(path)
+            if current == old:
+                continue
+            if current != data:
+                raise ValueError('ROLLBACK_FOREIGN_CHANGE_REFUSED')
+            if old is None:
+                path.unlink()
+            else:
+                replace_managed(path, old, mode, gid, (data,))
+        reload()
+        raise
+
+
 def run(*args, **kwargs):
     return subprocess.run(args, check=True, timeout=120, **kwargs)
 
@@ -164,7 +243,7 @@ def account_registration(helper, cfgdir):
     try:
         ingress = pwd.getpwnam('rosy-model-ingress')
     except KeyError:
-        if registration.exists():
+        if registration.exists() or registration.is_symlink():
             raise ValueError('ORPHAN_INGRESS_REGISTRATION')
         run('/usr/sbin/useradd', '--system', '--user-group', '--no-create-home',
             '--home-dir', '/var/empty', '--shell', '/bin/sh', 'rosy-model-ingress')
@@ -205,7 +284,7 @@ def snapshot(target, contents, helper):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle', type=Path)
-    for name in ('manifest', 'proof', 'receipt', 'public-key'):
+    for name in ('manifest', 'proof', 'receipt', 'public-key', 'dependencies'):
         parser.add_argument('--'+name+'-sha256', required=True)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args(argv)
@@ -213,6 +292,7 @@ def main(argv=None):
     os.umask(0o022)
     pins = {name:getattr(args, name+'_sha256') for name in ('manifest','proof','receipt','public_key')}
     manifest, proof, contents, proof_raw, receipt_raw, key = inputs(args.bundle, pins)
+    lock = dependencies(args.bundle, args.dependencies_sha256, contents['deploy/site/requirements-fleet.txt'])
     # The helper is executed only after the independent source inventory has been pinned.
     spec = importlib.util.spec_from_file_location('reviewed_install', args.bundle/'source/deploy/site/deliberation_install.py')
     helper = importlib.util.module_from_spec(spec)
@@ -235,7 +315,7 @@ def main(argv=None):
         Path('/var/lib/rosy-deliberation/smoke/glm-first-review.spent')]
     before = {p:p.read_bytes() if p.exists() else None for p in preserved}
     snapshot(target, {**contents, 'semantic-evaluation-proof.json':proof_raw,
-                     'semantic-evaluation-receipt.json':receipt_raw}, helper)
+                     'semantic-evaluation-receipt.json':receipt_raw, 'requirements.lock':lock}, helper)
     venv = target/'venv'
     marker = target/'dependencies-ready.json'
     if not marker.exists():
@@ -243,10 +323,11 @@ def main(argv=None):
             raise ValueError('INCOMPLETE_VENV_REQUIRES_ADMIN_INSPECTION')
         run('/usr/bin/python3', '-I', '-m', 'venv', str(venv))
         run(str(venv/'bin/python'), '-I', '-m', 'pip', '--isolated', 'install', '--disable-pip-version-check',
-            '-r', str(target/'deploy/site/requirements-fleet.txt'))
-        helper.install_file(marker, json.dumps({'requirements_sha256':manifest['files']['deploy/site/requirements-fleet.txt']}).encode(), 0o644)
+            '--no-index', '--only-binary=:all:', '--require-hashes', '--find-links', str(args.bundle/'wheels'),
+            '-r', str(target/'requirements.lock'))
+        helper.install_file(marker, json.dumps({'requirements_sha256':sha(lock), 'dependencies_sha256':args.dependencies_sha256}).encode(), 0o644)
     else:
-        if json.loads(protected(marker)) != {'requirements_sha256':manifest['files']['deploy/site/requirements-fleet.txt']}:
+        if json.loads(protected(marker)) != {'requirements_sha256':sha(lock), 'dependencies_sha256':args.dependencies_sha256}:
             raise ValueError('DEPENDENCY_RECEIPT_CHANGED')
     for path in venv.rglob('*'):
         if path.is_symlink():
@@ -278,20 +359,25 @@ def main(argv=None):
              (BROKER,wrapper,0o750,account.pw_gid,()), (INGRESS,dispatcher(),0o755,0,()),
              (KEYS,new_key,0o644,0,(old_key,)), (SUDO,NEW_SUDO,0o440,0,(OLD_SUDO,)),
              (SSHD,SSHD_BASE.format(NEW_FORCE).encode(),0o644,0,(SSHD_BASE.format(OLD_FORCE).encode(),))]
-    # Reject every foreign target before changing the first active admission/SSH file.
-    for path,data,mode,gid,allowed in plans:
-        if (path.exists() or path.is_symlink()) and protected(path) not in (data,*allowed):
-            raise ValueError('FOREIGN_INSTALL_FILE_REFUSED')
-    for path,data,mode,gid,allowed in plans:
-        replace_managed(path,data,mode,gid,allowed)
-    run('/usr/sbin/visudo', '-cf', str(SUDO))
-    run('/usr/sbin/sshd', '-t')
-    run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
-        python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import configuration;configuration();'
-                    'print("PROTECTED_CONVERSATION_CONFIGURATION_VALID")'), cwd=target, env=env)
-    if any((p.read_bytes() if p.exists() else None) != data for p,data in before.items()):
-        raise ValueError('PRESERVED_SECURITY_STATE_CHANGED')
-    run('/usr/bin/systemctl', 'reload', 'ssh.service')
+    def verify():
+        run('/usr/sbin/visudo', '-cf', str(SUDO))
+        run('/usr/sbin/sshd', '-t')
+        effective = run('/usr/sbin/sshd', '-T', '-C',
+                        'user=rosy-model-ingress,host=localhost,addr=127.0.0.1',
+                        capture_output=True, text=True).stdout.splitlines()
+        expected = {'forcecommand '+str(INGRESS), 'authorizedkeysfile '+str(KEYS),
+                    'authenticationmethods publickey', 'passwordauthentication no',
+                    'kbdinteractiveauthentication no', 'disableforwarding yes', 'permittty no'}
+        if not expected <= set(effective):
+            raise ValueError('EFFECTIVE_SSH_ADMISSION_CONFLICT')
+        run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
+            python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import configuration;configuration();'
+                        'print("PROTECTED_CONVERSATION_CONFIGURATION_VALID")'), cwd=target, env=env)
+        if any((p.read_bytes() if p.exists() else None) != data for p,data in before.items()):
+            raise ValueError('PRESERVED_SECURITY_STATE_CHANGED')
+    for script in (wrapper, dispatcher()):
+        run('/bin/sh', '-n', input=script)
+    activate(plans, verify, lambda:run('/usr/bin/systemctl', 'reload', 'ssh.service'))
     print(json.dumps({'state':'INSTALLED_TRANSPORT_ONLY', 'source_commit':manifest['source_commit'],
                       'valid_until':cfg['valid_until'], 'inference_performed':False}))
     return 0
