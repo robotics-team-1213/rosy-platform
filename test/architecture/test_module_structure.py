@@ -181,7 +181,8 @@ SIZE_VERDICTS = {
         "split: actual pre-change 299-line IncidentCaseWorker moves from the full 472/472 "
         "automation parent. Owns bounded provider/read execution, cancellation and existing "
         "worker lifecycle; ledger and observation remain separate. Same public class identity, "
-        "Fleet wheel/sdist and DB. D-705 and reasoning-profile-lifecycle plan record tests. "
+        "Fleet wheel/sdist and DB. D-705 and "
+        "docs/plans/2026-10-12-reasoning-profile-lifecycle.md record tests. "
         "Keep parent basis, +150 and file limits; no runtime admission or device authority.",
     ),
     "web/ui.js": (
