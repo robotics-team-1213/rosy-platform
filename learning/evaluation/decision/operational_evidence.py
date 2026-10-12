@@ -11,12 +11,12 @@ BUNDLE = ('schema', 'profiles', 'profile', 'calibration_input', 'cohort', 'expor
           'inventory_digests', 'truth', 'limits', 'windows', 'review')
 LIMITS = ('minimum_cases', 'minimum_accuracy_lower', 'maximum_p95_latency_ms', 'maximum_cost_usd',
           'minimum_resolved_rate', 'maximum_recurrence_rate', 'maximum_capture_gap_s')
-SUPPORTED = ('rosy.calibration.feedback_input/1', 'calibration.schema_version/2',
-    'rosy.incident.operational_cohort/1', 'rosy.incident.operational_cohort/2',
+SUPPORTED = ('rosy.incident.operational_cohort/1', 'rosy.incident.operational_cohort/2',
     'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2', 'rosy.incident.model_feedback/3',
     'rosy.incident.rule_feedback/1', 'rosy.incident.case_inventory/1',
     'rosy.pinky-raw-verification/1', 'rosy.fleet-observation-window/1')
-UNSUPPORTED = ('authenticated_full_command_model_collector', 'physical_actor_credit', 'clock_calibration_admission',
+UNSUPPORTED = ('feedback_prediction_export_lineage_admission',
+    'authenticated_full_command_model_collector', 'physical_actor_credit', 'clock_calibration_admission',
     'original_cost_invoice_admission', 'physical_result_admission', 'recurrence_source_admission',
     'current_runtime_os_probe_admission', 'door_backend', 'arm_target_backend')
 

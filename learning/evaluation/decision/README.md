@@ -48,6 +48,8 @@ known_marginal_micros는 실제 청구가 아닌 원장에 기록된 한계 비�
 
 `operational_evidence.compile_evidence`는 `rosy.incident.operational_evidence/1`의 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review만 받는다. 입력 PASS/report/binding/field_accepted/truth_admitted는 거절한다. 기존 보정 계산과 cohort/export/inventory를 다시 검사하고, truth/limits/review/window 선언의 별도 trusted principal·kind·HMAC·기간을 확인한다. 실제 개인 이름이나 source hash만으로 검수 상태를 만들지 않는다.
 
+calibration_input은 기존 fit/evaluation/training/reviewed_profile 계산 입력이다. 이 compiler는 `rosy.calibration.feedback_input/1`을 직접 소비하거나 tools/decision_calibration.feedback_bundle을 호출하지 않는다. 원장 prediction receipt와 검수 행의 원본 결속은 feedback_prediction_export_lineage_admission으로 명시적으로 미지원이며 현재 schema 지원 목록에 넣지 않는다.
+
 truth 행은 id/subject_id/case_id/session_id/recording_id/session_sha256/recording_sha256/start/end/expected/actor/resolved/recurrence/result_source_sha256/recurrence_source_sha256/latency_source_sha256/latency_ms와 missing_evidence_error/risk_omission/wrong_case/unnecessary_intervention을 가진다. 알려지지 않은 결과·재발·지연은 null이며 case 분모에서 지우지 않는다. 출력 metrics_scope는 authenticated_review_declarations_only다. 이 선언의 hash·서명 검사가 참조한 실제 원본과 물리 truth를 수용하지 않는다. 운영 limits의 형식·서명은 검사하지만 현재 측정값과 비교하지 않는다.
 
 window 진단은 observation/model/command/submission/result/recurrence/invoice stream의 heartbeat run/sequence/receive·monotonic clock/boundary와 event ID·시각·case/generation/source hash·payload dict를 확인한다. payload 내부 의미, 전체 collector, model actor 기여, clock calibration과 실제 비용/결과/재발 상관관계는 미지원이다. 빈 heartbeat event를 실제 0건으로 수용하지 않는다.

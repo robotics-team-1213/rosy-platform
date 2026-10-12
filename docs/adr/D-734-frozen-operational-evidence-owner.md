@@ -12,6 +12,8 @@ D-727/D-730의 서명·원장 소비자는 evidence owner가 실제 truth·한�
 
 내부 `rosy.incident.operational_evidence/1`은 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review를 가진다. PASS report, binding, field_accepted, truth_admitted를 입력으로 받지 않는다. 기존 full profile/calibration/cohort/export 코드가 원래 prediction과 분모를 다시 검사한다. train/fit/evaluation session·recording·원본 hash를 분리하고 UNKNOWN·실패를 누락하지 않는다.
 
+calibration_input은 기존 fit/evaluation/training/reviewed_profile 계산 입력이며 `rosy.calibration.feedback_input/1`을 직접 소비하지 않는다. 기존 feedback_bundle의 원장 prediction receipt→검수 행 원본 결속도 호출하지 않아 feedback_prediction_export_lineage_admission으로 미지원이다. 보정 재계산과 cohort/export 재검증이 이 별도 원본 결속까지 증명하지 않는다.
+
 truth 입력은 정확한 subject/case/session/recording, 결과·재발·지연 원본 hash와 오류를 **선언**하는 검수 행이다. codec과 HMAC 인증은 원본 참조의 실제 진위·측정·physical actor를 확인하지 않는다. signed review가 전체 bundle bytes에 결속됐는지만 검증한다. UNKNOWN 결과·재발·지연은 null로 보존하고 선언 기반 진단 건수/비율의 scope를 명시한다. limits는 검수자가 공급한 닫힌 숫자 표의 형식·서명을 검사하지만 현재 운영 지표와 비교하지 않는다. 성능 한계 값을 코드에서 발명하지 않는다. 실제 팀 최종 truth/limits 수용과 품질 판정은 미완료다.
 
 `rosy.incident.operational_window/1`의 현재 진단 codec은 subject/start/end, stream run, heartbeat sequence·monotonic/receive clock, event ID·시각·case/generation·source hash·payload dict를 검사한다. source principal HMAC은 이 선언을 인증한다. payload dict의 stream별 내부 의미와 실제 collector의 전체 누락·시작/끝·actor/case 상관관계는 검증하지 않는다. 따라서 full command/model/submission/result/recurrence/invoice/observation collector가 아니다. empty heartbeat도 물리 0건의 증거가 아니며 source digest와 서명은 raw 내용 검증의 대체물이 아니다.
