@@ -385,7 +385,9 @@ def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
 import importlib.util
 import json
 import sys
+from pathlib import Path
 sys.path[:0] = json.loads(sys.argv[1])
+roots = [Path(path) for path in json.loads(sys.argv[1])]
 from fleet.stuck.board import LineStuckBoard
 from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal
