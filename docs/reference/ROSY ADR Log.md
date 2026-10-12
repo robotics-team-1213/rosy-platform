@@ -691,6 +691,7 @@
 | D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
+| D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -883,4 +884,10 @@ Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted an
 **Status:** Accepted (2026-10-12, source contract)
 
 Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 숨기지 않는다. 최종 속도와 불필요 모델 개입·전체 운영 coverage를 구분한다. 전문은 [D-704](../adr/D-704-pinky-final-velocity-evidence-boundary.md).
+
+## D-705 — Incident 실행 책임과 운영 보정 포트
+
+**Status:** Accepted (2026-10-12, source contract)
+
+bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 artifact/hash로 production 보정 검사를 연결한다. 미수용 판정은 제한 검토/읽기만 수행하며 물리 authority·승격을 얻지 않는다. 전문은 [D-705](../adr/D-705-incident-execution-calibration-port.md).
 
