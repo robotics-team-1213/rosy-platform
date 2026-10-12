@@ -177,6 +177,7 @@ class LineObserverNode(Node):
         self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
         self._evidence_modes = EvidenceModes()
+        # D-597 amendment 2: with the drivable target, keep steers from the way itself.
         configure_drivable_law(self, _READ_ONLY)
         self._wall_ahead = self._lane_guide = None
         self._odom_history = OdomHistory()
