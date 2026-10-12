@@ -9,3 +9,5 @@ root orchestration `tools/incident_reasoning.py`는 기존 incident_model_config
 보정 artifact와 승인 map은 매 요청마다 원장을 다시 읽는다. 그 사이 폐기·변조·신뢰 변경이 있으면 기존 worker의 미수용→제한 reviewer/최종 인수 경로로 처리한다. 같은 입력 binding·정상 무호출·case/role/time/cost 예산과 CORE 최종 권한을 유지한다. 같은 DB의 실제 factory/worker 흐름에서 승인과 폐기를 검증하며 후보를 action authority로 사용하지 않는다.
 
 설치 trust·Model PC 원장 전달·AI PC 실제 추론·운영 current/previous와 사건별 revision 전환·현장 수용은 후속이며 새 서비스나 SDK 공개 wire는 추가하지 않는다.
+
+동기 원장 읽기·보정 재계산은 worker에서 off-loop 실행하고 기존 case deadline 안에서만 결과를 기다린다. 완료 후 사람 소유권과 현재 사건/관측을 다시 확인하며, 만료 시 최종 미해결 인수로 종결한다. 취소/만료된 readonly thread의 반환으로 추가 모델 호출이나 원장 상태 변경을 하지 않는다.
