@@ -1029,3 +1029,9 @@
 - 변경: D-627 core/drive의 line-follow 배선·docking/swarm 조립을 추출하고 legacy import와 CoreServices 공개 attribute·동일 객체·listener 순서를 유지했다. services.py는 481줄이다. 새 배선 Safety 추적과 앵커 4개를 등록했다.
 - 증거: 추출 전 원격 257 성공, 후보 전체 CORE와 실제 wheel 설치 2575 성공·10 skip, feature 1675 성공. 독립 Safety source 승인과 최초 구현 trailer, 현재 holder를 따르는 종료/사건 scanner 검증. 세부 결과는 docs/validation/d626-holder-migration-2026-10-11/result.md.
 - gate 변화: 없음. 기존 ROS-SIM evidence를 이 후보에 확대하지 않는다. 새 graph·ARM64·장치·현장 수용 미확인.
+
+## 2026-10-12 · uncommitted · 정지 기동 시 교통 정책 snapshot 일치
+
+- 변경: CoreServices가 교통 관리자를 생성한 직후 실제 status를 StateManager에 반영한다. 관측·주행 tick이 없어도 기본 DISABLED 값이 활성 설정을 가리지 않는다. 명령·정책 gate는 변경하지 않는다.
+- 증거: A21 설정 ENFORCED와 snapshot DISABLED 불일치를 추적했다. 기본 snapshot 초기값과 비활성 line-follow tick의 early return을 확인했다. 세 모드의 관측 없는 기동에서 API 관리자 status와 snapshot 일치·HOLD/no_road_evidence 보존 회귀를 추가했다. 원격 시험과 native 직접 readback은 아직 미확인이다.
+- gate 변화: 없음. 신호·위치·도로 증거·명령 admission과 완주 수용은 기존 기준을 유지한다.

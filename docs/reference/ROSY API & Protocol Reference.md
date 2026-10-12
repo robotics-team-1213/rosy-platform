@@ -118,7 +118,7 @@ ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 �
 
 내부 `line/observation`의 CAMERA_LINE 증거는 optional `containment`를 포함할 수 있다.
 원본 영상 `stamp`와 1us 이내로 일치하는 `stamp`, `geometry_id`,
-`ground_source`(NOMINAL/CALIBRATED/GAZEBO), optional `uncertainty_m`와
+`ground_source`(NOMINAL/CALIBRATED/GAZEBO/ISAAC), optional `uncertainty_m`와
 `boundaries`(0~2개)를 보낸다. 각 경계는 `side`(left/right), `slope`,
 `intercept_m`, 실제 관측 구간 `observed_x_min_m`/`observed_x_max_m`를 갖는다.
 좌표는 base footprint 기준 x 전방/y 좌측, 직선 y=slope*x+intercept_m이다.
@@ -129,6 +129,11 @@ null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경�
 증명할 수 없고 관측 구간 밖으로 무제한 외삽하지 않는다. 명령 필드는 없다.
 기존 관측 메시지와 공개 mode/route는 보존한다. 이 계약의 추가는 자동 복구 활성화나
 장치/현장 수용을 뜻하지 않는다.
+
+v1.210(D-692): ISAAC은 native Isaac 영상의 시뮬레이션 출처이며 NOMINAL 실물 관측이나
+GAZEBO 검출기 오차를 대신하지 않는다. 검증된 projection/detection 오차 범위가 없으면
+`uncertainty_m`와 `crosswalk_uncertainty_m`는 null을 유지한다. 해당 관측은 안전한 경계나
+횡단보도 통과를 증명하지 않는다. envelope `protocol_version`은 1.0을 유지한다.
 
 D-491(v1.115): `containment`는 optional `crosswalk`(`near_m`, `far_m`)를 더 가질 수 있다. D-573 6 개정(v1.194): optional `crosswalk_uncertainty_m`(m, 0–1) — 횡단보도 가까운·먼 끝의 앞뒤 최악 한도(영상 시각 몸 좌표). 검출기가 돈 모든 프레임에 둔다(찾았든 못 찾았든). 없으면 검출기가 돌지 않은 것이고 CORE 횡단보도 보고는 `unknown` 이다.
 같은 영상 시각에 카메라가 본 차로와 나란한 줄무늬 횡단보도의 가까운 끝과 먼 끝이며,
@@ -2863,6 +2868,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.211 | 2026-10-12 | Additive (D-689): cookie-owned basic profile and verified-current-password rotation; no human authority via Bearer, no role/account edits. |
 | v1.210 | 2026-10-12 | Additive (D-686): initial-cookie password-change gate, auth/session boolean, POST auth/change-password and source-bound durable scrypt override; existing machine/Bearer and CORE authority unchanged. |
 | v1.209 | 2026-10-11 | Additive (D-655): 지도 없는 조사 기준·도로/시설 근거, 카메라/주행 초안 누적과 지도 변경 경합 거절; 운행 pose와 CORE 권한 유지. |
+| v1.210 | 2026-10-12 | Additive (D-692): native ISAAC containment 출처·같은 영상 경계/횡단보도 관측; 검증되지 않은 오차 null 유지. envelope 1.0과 CORE/Fleet 권한 유지. |
 | v1.210 | 2026-10-12 | Additive (D-671): 전용 Discord transport 인증과 기명 접수 원장·Console owner read; 실행 권한 없음. |
 | v1.211 | 2026-10-12 | Additive (D-680): 기명 Console 요청 검토와 기존 주행 Task 관계 조회·연결. 기존 실행·승인 계약 유지. |
 | v1.212 | 2026-10-12 | Additive (D-680): 기명 요청의 최신 검토와 기존 Task 생성을 같은 트랜잭션에서 확인하는 submit. |
