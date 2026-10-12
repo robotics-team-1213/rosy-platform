@@ -3,13 +3,11 @@ import asyncio
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import Depends
-
 from .journal import ExecutionJournal
 from .worker import ExecutionWorker
 
 
-def install_execution(app,jobs,task_service,scope,admitted,environment,*,require_operator,read_guard,refresh):
+def install_execution(app,jobs,task_service,scope,admitted,environment,*,refresh):
     if task_service is None:raise ValueError('CHANNEL_TASK_SERVICE_REQUIRED')
     journal=ExecutionJournal(jobs,task_service.store,producer_scope=scope,admitted=admitted,environment=environment)
     if task_service.channel_admission is not None:raise ValueError('ONE_CHANNEL_EXECUTION_OWNER_REQUIRED')
@@ -17,11 +15,7 @@ def install_execution(app,jobs,task_service,scope,admitted,environment,*,require
     worker=ExecutionWorker(journal,app.state.intent_execution)
     app.state.channel_execution=journal
     app.state.channel_execution_worker=worker
-
-    @app.get('/api/fleet/channel-requests/{request_id}/execution',dependencies=read_guard,tags=['fleet-work'])
-    def execution(request_id:str,principal=Depends(require_operator)):
-        jobs.read(request_id,principal.principal_id)
-        return journal.view(request_id)
+    jobs.execution=journal
 
     async def run():
         journal.recover()

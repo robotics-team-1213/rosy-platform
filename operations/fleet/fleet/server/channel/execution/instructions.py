@@ -45,6 +45,15 @@ def positive_plan(question, *, selection=None):
         remaining = clause[len(alias):].strip()
         remaining = re.sub(r'^(?:로봇)?(?:을|를)?\s*', '', remaining).strip()
         rid = robot['robot_id']
+        formation=re.fullmatch(r'리더로 (.+?) (FOLLOW|COLUMN|LINE|V|GRID|CIRCLE|TRAIL) 대형 간격 ('+_NUMBER+r') m 최대속도 ('+_NUMBER+r') m/s 시작(?:해)?'+_PLEASE,remaining)
+        if formation:
+            members=[robots.get(a.strip()) for a in formation[1].split(',')]
+            if not members or any(r is None for r in members):raise ValueError('REGISTERED_FORMATION_MEMBERS_REQUIRED')
+            ids=[r['robot_id'] for r in members]
+            if rid in ids or len(set(ids))!=len(ids):raise ValueError('DISTINCT_FORMATION_MEMBERS_REQUIRED')
+            steps.append({'do':'formation_start','leader':rid,'members':[rid,*ids],'formation':formation[2],
+                          'spacing':float(formation[3]),'max_speed':float(formation[4])})
+            continue
         patterns = {'cancel':r'(?:이동 |항법 |작업 )?취소(?:해)?',
                     'stop':r'비상\s*정지(?:해)?', 'home':r'(?:집으로 복귀|홈으로 복귀|귀환)(?:해)?',
                     'follow_cancel':r'추종 (?:취소|중지)(?:해)?', 'undock':r'(?:도킹 해제|언도킹)(?:해)?'}

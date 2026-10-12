@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from fleet.hub.hub import HubError
 
 _LOG = logging.getLogger(__name__)
+STOP_VERBS = frozenset({'estop','cancel','stop','formation_stop','follow_cancel'})
 
 
 async def _site_call(console, call) -> dict:
@@ -45,7 +46,25 @@ class IntentExecution:
         self.console, self.task_service = console, task_service
         self.local_stop_fanout, self.cancel_pending = local_stop_fanout, cancel_pending
 
-    async def step(self, call, principal, idempotency_key, index, *, admission=None):
+    async def step(self, call, principal, idempotency_key, index, *, admission=None, owner_id=None):
+        from fleet.swarm.dispatch_guard import dispatch_guard
+        def resources_available():
+            if self.task_service is None or call.verb in STOP_VERBS or call.verb=='navigate':return
+            robots=[call.robot] if call.robot else call.body.get('members')
+            if robots is None:
+                formation=self.console.formation_status()
+                robots=list(dict.fromkeys([formation.get('leader'),*formation.get('assignment',{})]))
+            for robot in robots:
+                if robot is None:continue
+                claims=self.task_service.store.resource_claims(resource_kind='robot',resource_id=robot)
+                if any(c['owner_kind']!='direct_action' or c['owner_id']!=owner_id for c in claims):
+                    raise HubError('COMMAND_REJECTED','another owner holds the robot resource')
+        resources_available()
+        paths={call.path} if call.scope=='robot' else {'/api/v1/swarm/follow','/api/fleet/formation/resume'}
+        with dispatch_guard(resources_available,paths=paths):
+            return await self._step(call,principal,idempotency_key,index,admission=admission)
+
+    async def _step(self, call, principal, idempotency_key, index, *, admission=None):
         console, task_service = self.console, self.task_service
         local_stop_fanout, cancel_pending = self.local_stop_fanout, self.cancel_pending
         if call.scope == "site":

@@ -51,8 +51,8 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
     async def caps():return {'navigation':{'goal_navigation':True,'return_home':True,
         'max_linear_velocity':.2,'max_angular_velocity':.8},'teleop':True,'docking':{'supported':True}}
     async def state():return {'mode':'IDLE','safety':{'estop':False}}
-    async def cancel():check_dispatch();writes.append('cancel');return {'accepted':True}
-    async def estop():check_dispatch();writes.append('estop');return {'accepted':True}
+    async def cancel():check_dispatch();writes.append('cancel');return {'navigation':'CANCELED'}
+    async def estop():check_dispatch();writes.append('estop');return {'estop':True}
     async def post(path,body):check_dispatch();writes.append((path,body));return {'accepted':True}
     client=SimpleNamespace(capabilities=caps,state=state,navigation_cancel=cancel,estop=estop,_post=post)
     async def console_cancel(robot):return await client.navigation_cancel()
@@ -304,3 +304,117 @@ def test_reserved_direct_crash_becomes_unknown_and_preserves_resource(tmp_path):
     f.journal.recover();asyncio.run(f.worker.step(rid))
     assert not f.writes and f.journal.view(rid)['steps'][0]['state']=='UNKNOWN'
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='UNKNOWN'
+
+
+@pytest.mark.parametrize('change',['owner','map','stop'])
+def test_existing_formation_owner_compensates_first_arm_after_second_fenced(tmp_path,change):
+    from fakes import FakeRobot
+    from fleet.swarm.session import FormationSession, SessionState, SessionError
+    from fleet.swarm.arming import FormationSpec
+    from fleet.formation.geometry import Formation,SlotOffset
+    f=fixture(tmp_path)
+    rid=f.receipt['request_id'];f.journal.accept(rid)
+    armed=[];canceled=[]
+    class Follower(FakeRobot):
+        async def follow(self,params):
+            check_dispatch(path='/api/v1/swarm/follow')
+            armed.append(self.robot_id)
+            if change=='owner':f.accounts['op']='viewer'
+            elif change=='map':f.env['map']['version']=2
+            else:f.store.trip_stop_latch(actor_id='other')
+            return {'role':'follower','active':True,'target_robot_id':params.target_robot_id}
+        async def swarm_cancel(self):
+            check_dispatch(path='/api/v1/swarm/cancel')
+            canceled.append(self.robot_id)
+            return {'role':'none','active':False,'target_robot_id':None}
+    leader=FakeRobot('rosy_40');followers=[Follower('rosy_41'),Follower('rosy_42')]
+    spec=FormationSpec(Formation.COLUMN)
+    session=FormationSession(leader,followers,spec)
+    session.state=SessionState.ARMING
+    async def run():
+        with dispatch_guard(lambda:f.worker.fence(rid,0,interpret({'do':'home','robot':'rosy_40'})[0]),
+                            paths={'/api/v1/swarm/follow'}):
+            await session._arm(spec,{r.robot_id:SlotOffset(.6*(i+1),0.) for i,r in enumerate(followers)})
+    with pytest.raises(SessionError):asyncio.run(run())
+    assert armed==['rosy_41'] and 'rosy_41' in canceled
+    assert 'rosy_42' in canceled # Existing owner treats a transport failure as potentially armed.
+
+
+def test_shared_direct_service_rejects_other_owner_but_preserves_stop(tmp_path):
+    from fleet.server.site_auth import SitePrincipal
+    from fleet.hub.hub import HubError
+    f=fixture(tmp_path,'40번 홈으로 복귀해줘',{'do':'home','robot':'rosy_40'})
+    generation=f.store.dispatch_control()['generation']
+    f.store.reserve_resources(owner_kind='direct_action',owner_id='existing',generation=generation,resources=[('robot','rosy_40')])
+    service=f.worker.execution;principal=SitePrincipal('op','operator')
+    with pytest.raises(HubError):asyncio.run(service.step(interpret({'do':'home','robot':'rosy_40'})[0],principal,'new',0))
+    assert not f.writes
+    asyncio.run(service.step(interpret({'do':'home','robot':'rosy_40'})[0],principal,'new',0,owner_id='existing'))
+    asyncio.run(service.step(interpret({'do':'stop','robot':'rosy_40'})[0],principal,None,0))
+    assert len(f.writes)==2 and f.writes[-1]=='estop'
+
+
+@pytest.mark.parametrize('verb,body,receipt,expected',[
+    ('cancel',{}, {'navigation':'CANCELED'},{'navigation':'CANCELED','rpc_acknowledged':True}),
+    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True}),
+    ('home',{}, {'accepted':True,'mode':'NAVIGATION'},{'accepted':True,'mode':'NAVIGATION'}),
+    ('move',{'linear':.1,'angular':0.}, {'accepted':True},{'accepted':True}),
+    ('dock',{'dock':'dock-a'},{'state':'DOCKING','dock_id':'dock-a','phase':'approach','retries':0,'error':None},
+        {'rpc_acknowledged':True,'state':'DOCKING','dock_id':'dock-a','error_present':False,'phase':'approach','retries':0}),
+    ('undock',{}, {'state':'UNDOCKING','dock_id':'dock-a','phase':None,'retries':0,'error':None},
+        {'rpc_acknowledged':True,'state':'UNDOCKING','dock_id':'dock-a','error_present':False,'phase':None,'retries':0}),
+    ('follow',{'target_robot_id':'rosy_41'},{'role':'follower','active':True,'target_robot_id':'rosy_41'},
+        {'rpc_acknowledged':True,'role':'follower','active':True,'target_robot_id':'rosy_41'}),
+    ('follow_cancel',{}, {'role':'none','active':False,'target_robot_id':None},
+        {'rpc_acknowledged':True,'role':'none','active':False,'target_robot_id':None})])
+def test_native_core_receipts_are_acknowledged_without_physical_success(verb,body,receipt,expected):
+    from fleet.server.channel.execution.receipts import owner_receipt
+    call=interpret({'do':verb,'robot':'rosy_40',**body})[0]
+    known,typed=owner_receipt(call,receipt,['rosy_40','rosy_41'])
+    assert known is True and typed==expected and 'goal_confirmed' not in typed
+
+
+def test_site_estop_keeps_partial_native_receipts_as_unknown():
+    from fleet.server.channel.execution.receipts import owner_receipt
+    call=interpret({'do':'estop'})[0]
+    known,value=owner_receipt(call,{'robots':[{'robot_id':'rosy_40','stopped':True,'result':{'estop':True}},
+        {'robot_id':'rosy_41','stopped':False,'error':{'secret':'discard'}}]},['rosy_40','rosy_41'])
+    assert known is None and value['robots'][0]['estop'] is True
+    assert value['robots'][1]['rpc_acknowledged'] is False and 'secret' not in str(value)
+
+
+def test_correlated_first_goal_completion_survives_later_unknown_and_restart(tmp_path):
+    f=fixture(tmp_path,'40번 A로 보내줘 그리고 40번 홈으로 복귀해줘',
+        {'steps':[{'do':'navigate','robot':'rosy_40','waypoint':'A'},{'do':'home','robot':'rosy_40'}]})
+    rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid))
+    async def dispatch(task):
+        f.service.admit_attempt(task['task_id'],task['attempt_id'])
+        return {'accepted':True}
+    task=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    f.service.project_core_event({'robot_id':'rosy_40','event_id':'arrived','seq':1,'type':'nav.completed',
+                                 'data':{'correlation_id':task['attempt_id']}})
+    async def lost(*args):f.writes.append('home');raise OSError('lost acknowledgement')
+    f.client._post=lost
+    asyncio.run(f.worker.step(rid));f.journal.recover();asyncio.run(f.worker.step(rid))
+    states=f.journal.view(rid)['steps']
+    assert states[0]['state']=='COMPLETED' and states[0]['task_id']==task['task_id']
+    assert states[1]['state']=='UNKNOWN' and f.writes==['home']
+
+
+@pytest.mark.parametrize('change',['other_actor','map','withdraw','expiry','unknown'])
+def test_only_current_completed_execution_supplies_trusted_selection(tmp_path,change):
+    f=fixture(tmp_path);rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid))
+    async def dispatch(task):return {'accepted':True}
+    task=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    f.service.project_core_event({'robot_id':'rosy_40','event_id':'arrived','seq':1,'type':'nav.completed',
+                                 'data':{'correlation_id':task['attempt_id']}})
+    with f.store._connect() as c:
+        assert f.journal.selection(f.question,c)['place_id']=='A'
+        question=f.question
+        if change=='other_actor':question=question.model_copy(update={'principal_id':'other'})
+        elif change=='map':question=question.model_copy(update={'environment':{**question.environment,'map':{**question.environment['map'],'version':2}}})
+        elif change=='withdraw':f.raw.withdraw(f.receipt['guild_id'],f.receipt['channel_id'],f.receipt['message_id'])
+        elif change=='expiry':f.clock[0]+=121
+        else:
+            c.execute("UPDATE fleet_tasks SET status='UNKNOWN' WHERE task_id=?",(task['task_id'],))
+        assert f.journal.selection(question,c) is None
