@@ -23,7 +23,23 @@ def configure_ground_collision(stage, ground_path):
     if (UsdPhysics.CollisionAPI(mesh).GetCollisionEnabledAttr().Get() is not False
             or plane.GetRelationship('material:binding:physics').GetTargets() != targets):
         raise RuntimeError('Single ground collision readback failed')
-    return dict(collider=str(plane.GetPath()), visual_collision=False, material=str(targets[0]))
+    result = dict(collider=str(plane.GetPath()), visual_collision=False, material=str(targets[0]))
+    verify_ground_collision(stage, ground_path, result)
+    return result
+
+
+def verify_ground_collision(stage, ground_path, expected):
+    """Reject reset-time changes or competing ground contacts without repairing them."""
+    from pxr import UsdPhysics, UsdShade
+
+    active = [str(prim.GetPath()) for prim in stage.Traverse()
+              if str(prim.GetPath()).startswith(ground_path + '/')
+              and prim.HasAPI(UsdPhysics.CollisionAPI)
+              and UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Get()]
+    plane = stage.GetPrimAtPath(expected['collider'])
+    material, _ = UsdShade.MaterialBindingAPI(plane).ComputeBoundMaterial(materialPurpose='physics')
+    if active != [expected['collider']] or not material or str(material.GetPath()) != expected['material']:
+        raise RuntimeError('Single ground collision or resolved material changed')
 
 
 def floor_visuals(map_root):

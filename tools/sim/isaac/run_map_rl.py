@@ -21,7 +21,7 @@ from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints, configure_contact_solver
 from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
-from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision
+from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision, verify_ground_collision
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
 
 
@@ -235,6 +235,7 @@ def main():
                 front_camera.set_world_pose(position=position, orientation=orientation, camera_axes='world')
 
         world.reset()
+        verify_ground_collision(stage, ground.prim_path, summary['ground_collision'])
         solver_iterations = configure_contact_solver(robot)
         if front_camera is not None:
             from native_scan import NativeScan
