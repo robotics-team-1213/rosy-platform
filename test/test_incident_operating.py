@@ -1,5 +1,6 @@
 """ROOT frozen file and installation boundaries, with no runtime or provider activation."""
 import hashlib
+import hmac
 import importlib.util
 import json
 from pathlib import Path
@@ -44,3 +45,65 @@ def test_importer_refuses_compiled_hold_before_existing_db_apply():
             raise AssertionError('HOLD must not reach the existing DB importer')
     with pytest.raises(ValueError):
         module.import_operation(ExistingOwner(), 'grant', {}, evidence=lambda _: {'report': {'state': 'HOLD'}})
+
+
+def installation(tmp_path):
+    base = tmp_path / 'installed'; base.mkdir()
+    artifact = base / 'runtime.py'; artifact.write_bytes(b'source-only installed artifact fixture')
+    manifest = dict(schema='rosy.incident.installation/1', installation_id='source-fixture-installation',
+        profile_set_sha256='1' * 64, full_profile_sha256='2' * 64, model_revision='model-r1',
+        calibration_sha256='3' * 64, policy_revision='policy-r1', action_contract='rosy.line_stuck.conditional_back/1',
+        artifacts=[dict(path='runtime.py', sha256=hashlib.sha256(artifact.read_bytes()).hexdigest())])
+    raw = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode()
+    path = tmp_path / 'installation.json'; path.write_bytes(raw)
+    runtime = dict(schema='rosy.incident.runtime/1', installation_id=manifest['installation_id'],
+        profile_set_sha256=manifest['profile_set_sha256'], full_profile_sha256=manifest['full_profile_sha256'],
+        model_revision=manifest['model_revision'], calibration_sha256=manifest['calibration_sha256'],
+        policy_revision=manifest['policy_revision'], action_contract=manifest['action_contract'],
+        artifacts=manifest['artifacts'], observed_at=99, valid_until_s=105,
+        process=dict(pid=10, start_ticks=1234, executable_sha256=manifest['artifacts'][0]['sha256'],
+                     service_revision='service-r1'))
+    key = b'source-only-runtime-attestation-key'
+    encode = lambda v: json.dumps(v, sort_keys=True, separators=(',', ':')).encode()
+    payload = dict(schema='rosy.incident.evidence_attestation/1', kind='operational_runtime',
+        source_sha256=hashlib.sha256(encode(runtime)).hexdigest(), valid_from_s=90, expires_s=110)
+    signed = dict(principal='installation-owner', payload=payload,
+        signature=hmac.new(key, encode(payload), hashlib.sha256).hexdigest())
+    current = {**runtime, 'attestation': signed}
+    trusted = {'installation-owner': dict(key=key, kinds={'operational_runtime'})}
+    return path, hashlib.sha256(raw).hexdigest(), base, artifact, current, trusted
+
+
+def test_getter_derives_current_installation_from_pinned_artifact_and_runtime(tmp_path):
+    module = owner(); path, expected, base, artifact, current, trusted = installation(tmp_path)
+    getter = module.installation_getter(path, expected_sha256=expected, artifact_root=base,
+        current_runtime=lambda: current, trusted=lambda: trusted, clock=lambda: 100)
+    result = getter()
+    assert result['installation_id'] == 'source-fixture-installation'
+    assert len(result['installation_sha256']) == 64 and 'field_accepted' not in result
+    artifact.write_bytes(b'changed installation')
+    with pytest.raises(ValueError): getter()
+
+
+@pytest.mark.parametrize('fault', ['runtime_identity', 'runtime_expired', 'runtime_signature', 'escape'])
+def test_getter_refuses_changed_current_runtime_or_escaping_artifact(tmp_path, fault):
+    module = owner(); path, expected, base, artifact, current, trusted = installation(tmp_path)
+    if fault == 'runtime_identity': current['installation_id'] = 'other-installation'
+    elif fault == 'runtime_expired': current['valid_until_s'] = 99
+    elif fault == 'runtime_signature': current['attestation']['signature'] = '0' * 64
+    else:
+        manifest = json.loads(path.read_bytes()); manifest['artifacts'][0]['path'] = '../outside.py'
+        path.write_text(json.dumps(manifest)); expected = hashlib.sha256(path.read_bytes()).hexdigest()
+    getter = module.installation_getter(path, expected_sha256=expected, artifact_root=base,
+        current_runtime=lambda: current, trusted=lambda: trusted, clock=lambda: 100)
+    with pytest.raises(ValueError): getter()
+
+
+def test_importer_does_not_accept_a_fake_flags_only_owner_port():
+    module = owner()
+    class ExistingOwner:
+        def apply(self, *args):
+            raise AssertionError('fake field flags must not reach SQLite apply')
+    fake = dict(report=dict(schema='rosy.incident.operational_acceptance/1', state='PASS_FOR_OPERATION',
+                           field_accepted=True, truth_admitted=True, missing=[]))
+    with pytest.raises(ValueError): module.import_operation(ExistingOwner(), 'grant', {}, evidence=lambda _: fake)
