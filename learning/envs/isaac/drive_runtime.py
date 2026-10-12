@@ -68,7 +68,7 @@ def configure_velocity_drive(drive, damping=None):
 
 
 def configure_contact_solver(robot):
-    # One velocity iteration produced intermittent wheel/caster rest spikes in native traces.
+    # Native traces with one velocity iteration showed intermittent wheel/caster rest spikes.
     position = int(robot.get_solver_position_iteration_count())
     robot.set_solver_velocity_iteration_count(8)
     observed = dict(position=int(robot.get_solver_position_iteration_count()),

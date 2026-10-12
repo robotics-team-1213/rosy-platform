@@ -104,4 +104,3 @@
 - 2026-10-12 · 1e29edaed · 최신 통합과 CI 도우미 회귀
 - 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
 - 2026-10-12 · uncommitted · 공유 지도 합법 진입 routing fixture 정합성
-- 2026-10-12 · 51176f181 · D-685 crash-consistent admission
