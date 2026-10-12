@@ -107,7 +107,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
     out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False, exit_point_m={},
-               exit_reach_m={}, near_centre_m=None, edges_m=[])
+               exit_reach_m={}, near_centre_m=None, centre_path_m=[], edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -177,6 +177,18 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     near = xs <= float(xs.min()) + NEAR_BAND_M
     out["near_centre_m"] = (round(float(np.median(xs[near])), 3), round(float(np.median(centre[near])), 3))
+    # Keep only the connected near observation; a row gap is not a road segment.
+    connected = [len(rows) - 1]
+    for index in range(len(rows) - 2, -1, -1):
+        if rows[index + 1] - rows[index] > 2 or not math.isfinite(xs[index]) or xs[index] <= 0:
+            break
+        connected.append(index)
+        if xs[index] - xs[connected[0]] >= LOOKAHEAD_M:
+            break
+    if len(connected) >= 2:
+        cx, cy = xs[connected], centre[connected]
+        stations = np.linspace(cx[0], cx[-1], min(32, len(connected)))
+        out['centre_path_m'] = [(float(x), float(y)) for x, y in zip(stations, np.interp(stations, cx, cy))]
     point, curvature, band = _centre_target(xs, centre, lookahead)
     if point is not None:
         out["target_m"] = (round(point[0], 3), round(point[1], 3))

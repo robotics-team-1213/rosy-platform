@@ -12,12 +12,14 @@
 | D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
 | D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 |
 | D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 
 ## 계획·결과 문서
 
 - [2026-10-04-isaac-navigation-integration-review.md](../../../docs/plans/2026-10-04-isaac-navigation-integration-review.md)
 - [2026-10-11-isaac-direction-video.md](../../../docs/plans/2026-10-11-isaac-direction-video.md)
 - [2026-10-11-isaac-map-rl.md](../../../docs/plans/2026-10-11-isaac-map-rl.md)
+- [2026-10-12-observed-path-gap-implementation.md](../../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -29,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
+- 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 - 2026-10-12 · uncommitted · native 카메라 검증 책임 분리
 - 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
 - 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
-- 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
-- 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
