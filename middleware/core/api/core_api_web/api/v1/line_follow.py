@@ -126,6 +126,8 @@ class LineStuckDecisionRequest(BaseModel):
 
 def _status(svc: CoreServicesLike) -> dict:
     data = svc.line_follow.status().model_dump()
+    if data.get("stuck") is not None:
+        data["stuck"]["conditional_back"] = getattr(svc.line_follow, "conditional_back_supported", False) is True
     authority = getattr(svc.line_follow, "authority_status", lambda: None)()
     if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
         data["authority"] = authority
@@ -375,6 +377,8 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         raise ApiError("VALIDATION_ERROR", 400, "realign belongs to REALIGN")
     if body.expected_stuck is not None and body.decision != "BACK_AND_RETRY":
         raise ApiError("VALIDATION_ERROR", 400, "expected_stuck belongs to BACK_AND_RETRY")
+    if body.expected_stuck is not None and getattr(svc.line_follow, "conditional_back_supported", False) is not True:
+        raise ApiError("STUCK_DECISION_REFUSED", 409, "conditional back is unsupported by CORE")
     if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL", "YIELD", "REALIGN"):
         # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
         # calibration lease like POST /mode does; checked before the stuck is consumed.

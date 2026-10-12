@@ -572,7 +572,6 @@ class StuckRecovery:
             "held_s": round(max(0.0, now - self._opened_at), 2),
             "attempts": self._attempts, "max_attempts": self._config.recovery_max_attempts,
             "local_enabled": self._config.recovery_local_enabled,
-            "conditional_back": True,
             "ask_remaining_s": remaining, "last_answer": self._last_answer,
             "decisions": list(self._decisions()),
             "inquiry": None if self._last is None else self._inquiry(self._last),
