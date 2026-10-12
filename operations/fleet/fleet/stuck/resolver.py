@@ -274,9 +274,10 @@ class StuckResolver:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
-        if self._continuation_hold(rid, chain) == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
+        continuation_hold = self._continuation_hold(rid, chain)
+        if continuation_hold == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
             return self._escalate(chain, rid, sid, "core:STUCK_DECISION_OUTCOME_UNKNOWN")
-        if self._continuation_hold(rid, chain) is not None:
+        if continuation_hold is not None:
             return None  # Preserve uncertainty and exhausted budgets even across another hold.
         hold = pipeline.law_hold(row)
         if hold is not None:
