@@ -105,6 +105,52 @@ def test_site_stop_preserves_each_robot_native_receipt():
     assert 'operation' not in receipt['robots'][1]
 
 
+@pytest.mark.parametrize('site', [False, True])
+@pytest.mark.parametrize('empty', [False, True])
+def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_path, site, empty):
+    text, plan = ('전체 비상정지해', {'do': 'estop'}) if site else ('40번 비상정지해', {'do': 'stop', 'robot': 'rosy_40'})
+    f = fixture(tmp_path, text, plan, extra_robots=('rosy_41',) if site else ())
+    robots = f.execution_robots = f.worker.execution.console.robot_ids
+    boot, sent, values = str(uuid4()), [], {}
+    for robot in robots:
+        assert f.store.reserve_resources(owner_kind='direct_action', owner_id='motion:' + robot,
+            generation=f.store.dispatch_control()['generation'], resources=[('robot', robot)])
+        values[robot] = [dict(_operation(uuid4(), boot, robot), kind=kind) for kind in ('navigate', 'teleop')]
+    async def stop():
+        sent.append(True)
+        return {'estop': True, 'operations': [] if empty else values['rosy_40']}
+    async def stop_all():
+        sent.append(True)
+        return {'robots': [{'robot_id': robot, 'stopped': True,
+                           'result': {'estop': True, 'operations': [] if empty else values[robot]}} for robot in robots]}
+    quiescent = [False]
+    def client(robot):
+        async def get(path):
+            operation = next(op for op in values[robot] if op['run_id'] in path)
+            return _readback(operation, result='CANCELED', quiescent=quiescent[0])
+        return SimpleNamespace(_get=get, estop=stop)
+    f.worker.execution.console._client = client
+    f.worker.execution.console.estop_all = stop_all
+    rid = f.receipt['request_id']
+    asyncio.run(f.worker.step(rid))
+    asyncio.run(f.worker.step(rid))
+    current = f.journal.view(rid)['steps'][0]
+    if empty:
+        assert current['state'] == 'HOLD' and rid not in f.worker.pending()
+    else:
+        assert current['state'] == 'UNKNOWN' and rid in f.worker.pending()
+        quiescent[0] = True
+        asyncio.run(f.worker.step(rid))
+        current = f.journal.view(rid)['steps'][0]
+        assert current['state'] == 'CANCELED' and rid not in f.worker.pending()
+        receipt = json.loads(current['receipt_json'])
+        assert len(receipt['stop_outcomes']) == len(robots) * 2
+        assert all(item['quiescence']['quiescent'] for item in receipt['stop_outcomes'])
+        assert not receipt.get('safe_released')
+    assert len(sent) == 1
+    assert all(f.store.resource_claims(resource_kind='robot', resource_id=robot) for robot in robots)
+
+
 @pytest.mark.parametrize('change',['run','boot','unknown','owner','pending','callback','lease','admitting','epoch','transport','missing'])
 def test_unproven_readback_cannot_release_claim(tmp_path,change):
     f, run_id, boot_id, sent = _home_with_native_ack(tmp_path)
