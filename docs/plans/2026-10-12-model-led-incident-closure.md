@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-727은 `32798ee0be`로 로컬 main에 착지했다. 마지막 적격 AI PC/Model PC 원격 두 그룹은 합계 6,255 passed/313 skipped/NEW 0 및 lint다. 고정 로그는 세션 `logs/operational-receipt-land-32798ee0be-{1,2}.txt`다. 공통 서명 계약과 설치 소비자 검증까지의 source 완료이며 운영 품질 수용은 아니다. 다음은 actual 평가 원본·한계·truth·coverage의 독립 재검증, 같은 Fleet DB의 수용/폐기 epoch, 사건당 단일 physical claim, 기존 loop의 rule/model 소비 및 실제 결과 연결이다. FULL CI·실제 모델·배포·현장 수용은 별도이며 목표는 ACTIVE다.
+
 D-724는 `e8d27b00b3`로 로컬 main에 착지했고 마지막 적격 AI PC 원격 통합은 5,558 passed/282 skipped/NEW 0 및 lint다. 고정 로그는 세션 `logs/stuck-final-guard-land-e8d27b00b3.txt`다. D-727은 공통 운영 수용/폐기 서명·현재 owner binding/epoch/기간을 검증하는 SDK 0.1.11과 Fleet 0.1.3 floor·local execution 0.1.5·CI pin을 구현한 브랜치 작업이다. 초기 계약/설치/구조 99개와 source-less wheel/sdist HMAC·UTF-8·CI/문서 회귀 144개는 적격 원격 PC에서 terminal exit 0/NEW 0이며 독립 SOURCE 검토를 승인받았다. actual evaluation 원본이 HOLD이면 signed reviewed 메타도 importer가 거절해야 한다. 운영 품질·같은 DB 수용/폐기 상태·단일 claim·모델/현장 결과는 다음 구현이며 전체 목표는 ACTIVE다.
 
 D-722는 `c55c64e5d4`로 로컬 main에 착지했다. 마지막 적격 Model PC 원격 통합은 5,656 passed/282 skipped/NEW 0 및 lint이며 고정 로그는 세션 `logs/model-recovery-land-c55c64e5d4.txt`다. 후보는 비실행 기록이며 실제 운영 수용·단일 물리 claim·Fleet 제출 연결·모델/현장 결과는 남아 있다. 후속 D-724는 지원 확인 GET 뒤 POST 직전에 최종 검증 포트를 두는 소스 구현이며 관련 원격 회귀 123개, 실제 wheel/sdist 설치·문서 계약 104개는 terminal exit 0/NEW 0이다. D-724 병합은 아직 미확인이다. GLM 관리자 준비 스크립트는 존재하지만 새 설치 경로는 현재 없다. 목표는 ACTIVE이고 실제 호출은 하지 않았다.
