@@ -250,6 +250,32 @@ def test_back_and_retry_refused_when_local_recovery_is_off():
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
 
+@pytest.mark.parametrize("origin", ["console", "ask_timeout"])
+@pytest.mark.parametrize("phase", [BACKING, SETTLING])
+def test_delayed_back_answer_cannot_restart_active_recovery(origin, phase):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    started = 1.0 if origin == "console" else 15.0
+    machine.step(_inp(started))
+    if origin == "console":
+        machine.answer(started, "stuck-1", "BACK_AND_RETRY", "operator")
+    now = started + (0.1 if phase == BACKING else 2.7)
+    action = machine.step(_inp(now))
+    assert machine.phase == phase
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="back_active") as refused:
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver")
+    assert refused.value.code == "STUCK_DECISION_REFUSED"
+    assert machine.phase == phase and machine._until == until
+    assert machine.status(now)["attempts"] == 1
+    assert machine.step(_inp(now)) == action
+    assert len(bus.named("nav.line_stuck_local_attempt")) == 1
+    assert bus.named("nav.line_stuck_answered")[-1]["accepted"] is False
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "back_active"
+    assert machine.answer(now, "stuck-1", "WAIT", "operator") == "hold"
+    assert machine.answer(now, "stuck-1", "ABORT", "operator") == "idle"
+
+
 # ---- timeout and local recovery ----------------------------------------------------
 def test_no_answer_within_ask_s_starts_the_back_off():
     machine, bus = _machine()

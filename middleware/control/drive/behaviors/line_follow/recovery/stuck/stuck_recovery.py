@@ -248,6 +248,8 @@ class StuckRecovery:
             if last.front_band_m is not None and last.front_band_m < stop:
                 return "object_within_stop_distance"
         if decision == "BACK_AND_RETRY":
+            if self._phase in (BACKING, SETTLING):
+                return "back_active"
             if not self._config.recovery_local_enabled:
                 return "local_recovery_disabled"
             if self._attempts >= self._config.recovery_max_attempts:
