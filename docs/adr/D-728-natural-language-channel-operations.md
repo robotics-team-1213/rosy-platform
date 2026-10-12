@@ -35,6 +35,50 @@ GLM credential/billing/최초 smoke spent marker를 유지한다.
 
 ## Acceptance
 
+## Execution contracts
+
+CONTROL classification is a proposal, never an execution grant. An independent
+validator binds a positive, explicit instruction in the immutable original text
+to the registered verb, robot and parameters. Questions, quotations, negation,
+hypotheticals and unsupported scope produce CLARIFY or REFUSE. Operator role
+alone does not authorize interpreting a greeting as a command. Follow-up references
+bind to the same actor, guild, channel and thread, with a short expiry and the
+current selection and map/catalog revision; UNKNOWN is never a retry context.
+
+| Request | Existing owner | Required closure |
+| --- | --- | --- |
+| Navigate to a registered point | FleetTaskService / CORE navigation | Durable channel request-to-task binding, original plan hash, current role/map/catalog and final synchronous admission; correlated CORE event/readback |
+| Cancel navigation | Existing cancel owner and task queue cancellation | Durable step before send, queue cleanup, current stop generation, acknowledgement/readback |
+| Explicit emergency stop | Existing site/robot stop owner | Stop latch and cancellation/fanout preserved; acknowledgement/readback; no reset |
+| Follow, dock, home, bounded move | Existing CORE capability owner | Per-verb capability and safety checks, resource ownership, durable before-send step and final origin fence; ambiguous result stays UNKNOWN |
+| Formation | Existing formation owner | Member/resource/stop generation checks and durable step receipts; no bypass of formation admission |
+| Mission/Cell work | Existing Mission/Cell owner | Existing independent author/approval/evidence/generation admission remains required |
+
+`stop` currently uses the robot E-stop API; wording and responses must disclose
+that behavior rather than silently presenting it as a normal navigation cancel.
+A distance request is not a velocity command: “forward 1 m” requires an admitted
+pose/relative-goal owner, otherwise CLARIFY. Unsupported capabilities are held
+with a concrete reason rather than sent through arbitrary URLs or a new publisher.
+
+Every multi-step request has durable per-step checkpoints. Partial success,
+UNKNOWN and unexecuted later steps survive restart and exceptions; a failed step
+does not replay prior steps. Channel-origin tasks retain their origin binding
+until final dispatch; non-channel task behavior is unchanged. Changes to the
+original receipt, role, accepted plan, selection or map invalidate that grant.
+
+Natural dialogue gets an independent strict conversation profile, source policy
+and admission. D-720's status-only profile and read-only calibration exemption
+do not authorize CHAT/CONTROL. The broker retains fixed transport, sandbox,
+billing evidence and global spent marker and receives no robot credentials or
+execution handles. CHAT prose may be generated; status/control factual claims
+must reference bounded observed state or owner receipts. Replies suppress mass
+mentions and never echo credentials or declare physical success from model text.
+
+Required negative coverage includes duplicate/edited messages, role revocation,
+map changes during awaits and queued dispatch, crash before/after acceptance,
+partial plans and UNKNOWN replies, quoted/negated/hypothetical commands, prompt
+injection, cross-user context and expired follow-up references.
+
 - 실제 Discord의 인사와 상태 질문에 접수 이후 자연어 응답이 온다.
 - 후속 지시의 대상/문맥은 같은 기명 사용자·채널 안에서 검증한다.
 - fake CORE에서 유효한 요청은 기존 owner를 정확히 한 번 호출하고,
