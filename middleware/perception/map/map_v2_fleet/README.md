@@ -4,7 +4,7 @@
 
 All generated worlds use a centred 5 x 5 m ground plane, also read by Isaac.
 This covers the 3 x 1.5 m floor visuals without changing measured walls or paint.
-Native zero-command comparisons found rest-velocity spikes with the previous
+Native zero-target comparisons found rest-velocity spikes with the previous
 100 m ground and none with 5 m at the same starting pose. This is a simulator
 ground setting; it does not establish driving, traffic or learning acceptance.
 

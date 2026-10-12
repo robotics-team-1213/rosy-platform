@@ -119,7 +119,9 @@ def test_shared_ground_covers_measured_wall_footprints(relative):
     size = tuple(map(float, ground.findtext('./collision/geometry/plane/size').split()))
     assert size == (5., 5.)
     assert ground.findtext('./visual/geometry/plane/size') == ground.findtext('./collision/geometry/plane/size')
-    for collision in world.findall("./model[@name='track_v2_fleet']/link/collision"):
+    walls = world.findall("./model[@name='track_v2_fleet']/link/collision")
+    assert len(walls) == 4
+    for collision in walls:
         pose = tuple(map(float, collision.findtext('pose').split()))
         box = tuple(map(float, collision.findtext('./geometry/box/size').split()))
         assert pose[3:] == (0., 0., 0.)
