@@ -604,8 +604,10 @@ def test_only_current_observed_creep_is_admitted(monkeypatch, changes, accepted)
     lane.close()
 
 
-def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_path():
-    lane, now, image, output = gap_lane(0)
+@pytest.mark.parametrize('prior_frames', [0, 3])
+def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_path(prior_frames):
+    lane, now, image, output = gap_lane(prior_frames)
+    now[0] += .1
     ground = lane.ground
     rows, cols = np.mgrid[0:240, 0:320]
     denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
@@ -616,6 +618,12 @@ def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_pa
     output[:] = [((denominator > 0) & (np.abs(lateral) < .06) & (forward < .17)).astype(np.uint8), 'drivable']
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
                  guide=(80., now[0], False, 0., 0., 0.))
+    if prior_frames:
+        assert lane.observation is None
+        assert lane.last['camera_target']['switch_pending'] == 'drivable_creep'
+        now[0] += .1
+        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
+                     guide=(80., now[0], False, 0., 0., 0.))
     assert lane.last.get('camera_provenance') == 'observed_creep', lane.last
     assert lane.keeper.last['expected_path_state'] != 'live'
     assert lane.keeper.last['drivable_steer'].get('target_now_m') is None
