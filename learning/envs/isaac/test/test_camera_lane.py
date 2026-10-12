@@ -286,6 +286,69 @@ def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
     assert (stopped.linear, stopped.angular) == (0., 0.) and len(calls) == 1
 
 
+def gap_lane(frames):
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    rows, cols = np.mgrid[0:240, 0:320]
+    denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lateral = ground.height_m * (cols - 160) / denominator
+    way = ((denominator > 0) & (np.abs(lateral) < .0925)).astype(np.uint8)
+    output = [way, 'drivable']
+    model = SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda _f: (*output, {}, 1.))
+    now = [10.]
+    lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: now[0])
+    image = np.full((240, 320, 3), 100, np.uint8)
+    for index in range(frames):
+        now[0] = 10. + index * .1
+        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    output[:] = [np.zeros_like(way), 'lane_marking']
+    return lane, now, image, output
+
+
+@pytest.mark.parametrize('frames,continues', [(2, False), (3, True)])
+def test_camera_gap_uses_only_a_committed_path_without_learning(frames, continues):
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(frames)
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(.01, .01, .1))
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert (decision.linear > 0.) is continues
+    assert state is None
+    if continues:
+        assert lane.last['strategy'] == 'expected_path_held'
+        assert lane.last['camera_provenance'] == 'odom_expected_path'
+        assert decision.angular < 0.  # Odom moves the old corridor to our right.
+    else:
+        assert decision.angular == 0.
+    lane.close()
+
+
+@pytest.mark.parametrize('loss', ['time', 'distance', 'rewind', 'jump', 'dark', 'inference'])
+def test_camera_held_path_cannot_survive_budgets_or_invalid_input(loss):
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(3)
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    assert camera_tick(lane, now[0], gain=1.)[0].linear > 0.
+    now[0] += 2.5 if loss == 'time' else .1
+    pose = (.25, 0., 0.) if loss == 'distance' else (.26, 0., 0.) if loss == 'jump' else (0., 0., 0.)
+    stamp = 10. if loss == 'rewind' else now[0]
+    if loss == 'dark':
+        image = np.zeros_like(image)
+    if loss == 'inference':
+        def broken(_frame):
+            raise RuntimeError('lost model')
+        lane.worker._slot.poll().infer_drivable = broken
+    lane.observe(image, stamp=stamp, source_now=now[0], pose=pose)
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert state is None
+    lane.close()
+
+
 def test_existing_model_revision_hash_and_roles_must_match_before_inference():
     from camera_lane import camera_model_identity
     model = SimpleNamespace(manifest=SimpleNamespace(model_revision='lane-seg-test',
