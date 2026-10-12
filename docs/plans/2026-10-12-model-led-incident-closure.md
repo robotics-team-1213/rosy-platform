@@ -16,6 +16,19 @@
 
 ### 현재 시작점과 다음 순서
 
+현재 통합 목표는 **모델 주도 범용 사건 해결·자체 개선**이며 기존 ACTIVE 목표를 이어간다. 책임은 Fleet의 사건/원장/단일 제출, Decision의 구조화 판단/조건부 검토, AI PC의 설치된 운영 추론, Model PC의 정답/보정/독립 평가, CORE와 각 장치 owner의 최종 실행으로 나눈다. 소스 저장소의 위치와 실제 실행 호스트는 별도 설치 계약으로 확인한다.
+
+| 다음 실행 묶음 | 핵심 완료 기준 |
+|---|---|
+| CORE 중복 복구 차단 | console/local 복구 진행 중 늦은 답이 타이머·시도 수를 재시작하지 않음; 기존 WAIT/ABORT 보존 |
+| [D-716 물리 처리 연결](2026-10-12-model-led-bounded-incident-recovery.md) | 단일 rule/model 소비, bounded 대기, CORE 적용 시점 사건/phase 확인, signed 운영 수용·폐기 재검사 |
+| 독립 수용·설치·결과 확인 | 전체 기록 창과 검수 정답/한계 결속, 고정 runtime readback, 접수와 실제 해결 구분 |
+| 범용 backend와 개선 | door/arm 고유 실행 owner 연결; 실패 검수→독립 비교→새 사건 승격/복귀; Jev/Laya 역할 교체 |
+
+Qwen이 기본 판단을 맡고 Fleet과의 불일치·응답 문제에는 OpenCode의 기존 GLM 연결로 제한 재평가한다. 정상 사건은 모델 호출·조치 없이 끝내고, 해결 범위를 벗어난 최종 사건만 팀 인수로 남긴다. Discord 실제 작업은 담당 세션이 계속한다. 자기 보고 확률을 자동 처리 근거로 채택하지 않으며 독립 보정·운영 수용과 결과 확인을 함께 요구한다.
+
+D-715는 `ca1dae7902`로 로컬 main에 착지했고 적격 원격 통합은 596 passed/skipped 0/NEW 0 및 lint를 확인했다. 아래 checkpoint들은 당시 증거의 이력이다. D-716은 Proposed이고 실제 조치 연결·운영 수용·배포·현장 검증은 미완료다.
+
 최신 D-715 source checkpoint는 읽기 전용 원장 사건 inventory와 별도 고정 digest를 실제 독립 비교/CLI에 연결한 것이다. 평가에서 실패 사건을 누락하거나 같은 사건의 다른 snapshot으로 덮는 경우를 거절한다. `871591c3e6`의 관련 원격 회귀 및 `9baec27cfb`의 population/실제 CLI 추가 12개 회귀는 terminal exit 0/NEW 0이고 독립 검토를 통과했다. retained_case_rows_only 목록을 전체 정상 명령·모델 호출·재발·정답 coverage로 해석하지 않으며 승격은 HOLD다. D-714는 `e78eca89e3`로 로컬 main에 착지했고 원격 main 통합 378 passed/skipped 0/NEW 0이다. 다음은 population과 원본의 완전한 관측/명령/결과 창 및 독립 정답·한계를 결속하는 것이다. 실제 배포·모델·현장 수용은 미완료이며 목표는 ACTIVE다.
 
 최신 D-714 source checkpoint: 별도 배포 고정 SHA와 전체 profile set을 설치한 provider/config에 결속하는 root 로더를 `4301911968`에서 구현했다. 실제 factory/dispatcher 연결·재로드·변조/미설치 ID/revision/예산 거절과 malformed JSON 오류 비노출을 적격 원격 회귀 terminal exit 0/NEW 0 및 독립 검토로 확인했다. 자동 제공자 생성·호출·권한 확대는 없다. D-706~D-713은 `3a9f812bd222`로 로컬 main에 착지했고 두 원격 통합 그룹 합계 6,312 passed/295 skipped/NEW 0이다. FULL CI와 실제 배포/모델/현장 증거는 별도이며, 다음은 운영 coverage·독립 수용 receipt와 실제 설치/readback·현장 처리의 결속이다. 전체 목표는 ACTIVE다.

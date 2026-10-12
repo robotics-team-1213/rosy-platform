@@ -22,15 +22,23 @@ Read/modify: `operations/fleet/fleet/incidents/automation/ledger/store.py`, `aut
 2. worker는 후보만 기록한다. 사건당 물리 신규 제출 1회와 원자적 단일 소비·최종 상태를 원장에 결속하고, loop 한 곳이 rule/model 중 하나를 제출한다. 알려지지 않은 시도는 재제출하지 않는다.
 3. 현재 원장이 저장한 profile/budget와 generation을 사용하며 새 관측·프로파일 선택/복귀가 물리 한계를 초기화하지 않는지 확인한다. 기존 generic case/모델/관측 예산을 action으로 가장하지 않는다.
 4. 사람 claim·stale·정상 상태·CORE 이미 복구 중·다른 사건에서는 후보 소비/제출을 거절한다. default runtime에는 새 제출 경로가 열리지 않는다.
+5. loop가 ready/inflight/missing/rejected/stale를 구분하는 시험을 먼저 만든다. 적격 inflight에만 CORE 남은 ASKING 시간보다 짧은 고정 대기 상한을 적용하고 만료·누락·거절은 기존 규칙으로 처리한다. 기존 `pipeline.ai_hold`는 유지하며 typed 모델 후보는 별도 명시적 검증 seam을 통과한다. legacy PENDING/UNKNOWN과 사람 WAITING_CONSOLE 처리를 회귀에 포함한다.
+
+### 선행 CORE 수정과 실제 적용 경계
+
+Modify: `middleware/control/drive/behaviors/line_follow/recovery/stuck/stuck_recovery.py`, `stuck_wiring.py`; Test: `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`; Contract: D-407 및 API reference.
+
+먼저 BACKING/SETTLING 중 늦은 BACK_AND_RETRY가 시도 수와 타이머를 다시 시작하는 RED를 console/ask_timeout 두 출처에서 재현하고 거절한다. 이어 모델의 expected phase/episode를 기존 API 경계와 manager lock 안에 결속한다. Fleet의 조회 후 CORE가 local fallback을 시작하는 실제 경쟁을 재현하고 모델 제출을 거절한다. 기존 사람 WAIT/ABORT와 수동 답의 호환성을 유지하며 새 필드가 필요하면 API reference·schema·소비자를 같은 변경에서 갱신한다.
 
 ## Task 2: 실제 공통 JSON 후보와 운영 수용 결속
 
-Read/modify: `operations/decision/src/rosy/decision/model_tool_catalog.py`, `deliberation/__init__.py`, `deliberation/contracts/judgment.py`, 관련 profiles/schema/CLI codecs, `contracts/learning/src/rosy/contracts/learning/incident_model.py`, `learning/registry/policy/reasoning_registry.py`, root `tools/incident_reasoning.py`.
+Read/modify: `operations/decision/src/rosy/decision/model_tool_catalog.py`, `deliberation/__init__.py`, `deliberation/contracts/judgment.py`, 관련 profiles/schema/CLI codecs, `learning/registry/policy/reasoning_registry.py`, root `tools/incident_reasoning.py`. 기존 receipt 구현은 `operations/fleet/fleet/incidents/automation/ledger/receipt.py`, SDK 사건 계약은 `contracts/learning/src/rosy/contracts/learning/incident_rule.py`, `incident_profiles.py`, `incident_handoff.py`다. `incident_model.py`는 현재 없으며 공통 계약이 필요하면 Create 경로로 명시한다.
 
 1. 현행 tools/choices로 물리 후보를 표현할 수 없는 RED와 속도/거리/주소/토큰/다른 사건의 입력 거절을 작성한다.
 2. 첫 후보는 기존 BACK_AND_RETRY 하나에 해당하는 닫힌 choice/tool 계약이다. 모델 파라미터가 physical 거리·속도나 endpoint를 결정하지 않는다. 현재 사건의 trusted 근거와 generation/input을 결속한다.
 3. 동일 profile의 검수 정답·보정과 signed 운영 수용이 모두 필요한 admission을 구성한다. 없음/폐기/자료 누락은 읽기·제한 reviewer 또는 최종 인수로 남기며 자기 확률·합의로 허가하지 않는다.
 4. 공통 receipt 확장 시 `contracts/learning/pyproject.toml`, `operations/fleet/setup.py`, `.github/workflows/ci.yml`, `middleware/execution/local/pyproject.toml`과 원장 exporter/독립 소비자를 같은 SDK revision으로 맞춘다. 실제 설치 artifact 및 source-less import를 검증한다.
+5. 새 운영 receipt kind를 기존 reasoning_calibration과 분리한다. trusted 검수 principal·full profile/model/domain·calibration digest·action/policy revision·site installation identity·독립 품질/coverage를 정확히 결속한다. 미서명·폐기·다른 설치·PASS_OFFLINE_ONLY로는 물리 후보를 수용하지 않는 RED를 추가한다.
 
 ## Task 3: 기존 실제 제출·응답·성공 확인
 
@@ -40,6 +48,7 @@ Read/modify: 기존 `fleet/stuck/loop.py::_answer`, `lane_lost.py`, `closed_loop
 2. 후보 기록·제출 시작·CORE back ACK·후속 정상 관측을 별도 receipt로 기록한다. ACK·read-only 관측은 실제 model action 성공이 아니다.
 3. timeout/cancel/disconnect/restart UNKNOWN에서 재전송 없이 최종 인수와 요약을 연결한다. 재시작 후 owner가 바뀐 사건에 stop/취소를 보내지 않는다.
 4. 정상 상태의 0후보/0제출/0모델 호출, 다른 사건의 조치 0건, 관측 부족·위험 누락 0건을 수용 세트에서 확인한다. 원본 final cmd_vel의 여섯 축 검증과 actor/case/generation·수집 창의 연속성은 별도로 결속한다.
+5. await 이후 durable physical claim 직전에 운영 수용·보정·현재 trust를 재검증한다. 승인 revision/epoch와 claim을 원자적으로 결속하고, 제어된 이벤트로 폐기가 claim보다 먼저/나중인 두 순서를 시험한다. 선행 폐기는 거절하고 이미 제출 중인 시도는 UNKNOWN을 유지한다. 설치 변경·재시작·human claim에도 재제출하지 않는다.
 
 ## Task 4: 독립 검증·병합·실제 수용
 
