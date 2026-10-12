@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {drawMapDatum} from "../../../ui/console/map-datum.js";
 
+globalThis.window = {RosyPalette: {canvasFont: () => "16px monospace"}};
+
 function fakeCtx() {
   return {
     canvas: {width: 800, height: 600},
