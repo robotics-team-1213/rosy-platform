@@ -275,7 +275,9 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
     with pytest.raises(ValueError,match='SHA'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
 
-@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None])
+@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None,
+    'upgrade','upgrade_missing','upgrade_wrong_config','upgrade_wrong_broker','upgrade_lone_config',
+    'upgrade_lone_broker','upgrade_malformed','upgrade_foreign_wrapper','upgrade_rollback'])
 def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,monkeypatch,stage):
     import types
     import time
@@ -326,7 +328,7 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     manifest = {'source_commit':'a'*40,'files':{k:m.sha(v) for k,v in contents.items()}}
     proof = {'profile':{'revision':'d728-semantic-v2'},'policy':{'authority':'proposal_only'},'evaluated_at':time.time()}
     monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,b'proof',b'receipt','ssh-ed25519 fixture'))
-    monkeypatch.setattr(m,'dependencies',lambda *a:b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n')
+    monkeypatch.setattr(m,'dependencies',lambda *a:(calls.append(('dependencies-read',)) or b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n'))
     calls = []
     failures = []
     def fake_run(*args,**kwargs):
@@ -344,7 +346,8 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
         if args[:2] == ('/usr/sbin/sshd','-t'):point = 'sshd'
         if args[:2] == ('/usr/sbin/sshd','-T'):point = 'effective'
         if args[:2] == ('/usr/bin/systemctl','reload'):point = 'reload'
-        if point == stage and stage is not None and not failures:
+        failure_stage = 'configuration' if stage == 'upgrade_rollback' and manifest['source_commit'] == 'd'*40 else stage
+        if point == failure_stage and stage is not None and not failures:
             failures.append(point)
             raise RuntimeError('injected '+point)
         if args[:2] == ('/usr/sbin/sshd','-T'):
@@ -356,7 +359,39 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     argv = [str(bundle)]
     for name in ('manifest','proof','receipt','public-key','dependencies'):
         argv += ['--'+name+'-sha256','b'*64]
-    if stage is None:
+    if stage and stage.startswith('upgrade'):
+        assert m.main(argv) == 0
+        old_config,old_broker = m.CONFIG.read_bytes(),m.BROKER.read_bytes()
+        manifest['source_commit'] = 'd'*40
+        supplied = [m.sha(old_config),m.sha(old_broker)]
+        if stage == 'upgrade_wrong_config':supplied[0] = '0'*64
+        if stage == 'upgrade_wrong_broker':supplied[1] = '0'*64
+        if stage == 'upgrade_malformed':supplied[0] = 'not-a-sha'
+        if stage == 'upgrade_foreign_wrapper':
+            old_broker = b'#!/bin/sh\nexec /bin/sh\n'
+            m.BROKER.write_bytes(old_broker)
+            supplied[1] = m.sha(old_broker)
+        if stage != 'upgrade_missing':
+            if stage != 'upgrade_lone_broker':argv += ['--previous-config-sha256',supplied[0]]
+            if stage != 'upgrade_lone_config':argv += ['--previous-broker-sha256',supplied[1]]
+        calls.clear()
+        if stage in ('upgrade','upgrade_rollback'):
+            if stage == 'upgrade':
+                assert m.main(argv) == 0
+                assert json.loads(m.CONFIG.read_bytes())['source_commit'] == 'd'*40
+                assert (str(m.VERSIONS/('d'*40))).encode() in m.BROKER.read_bytes()
+                for path,raw in ((m.CONFIG,old_config),(m.BROKER,old_broker)):
+                    assert path.with_name(path.name+'.before-'+m.sha(raw)).read_bytes() == raw
+                assert m.main(argv[:-4]) == 0
+            else:
+                with pytest.raises(RuntimeError,match='injected configuration'):m.main(argv)
+                assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
+        else:
+            with pytest.raises(ValueError):m.main(argv)
+            assert calls == []
+            assert not (m.VERSIONS/('d'*40)).exists()
+            assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
+    elif stage is None:
         assert m.main(argv) == 0
         assert m.main(argv) == 0
         assert len([c for c in calls if '--require-hashes' in c]) == 1
