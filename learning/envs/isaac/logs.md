@@ -247,3 +247,10 @@
 - 변경: camera_target 거절 진단에 reason·경계 교차·중심 경로·벽 여유를 보존한다. 계획은 docs/plans/2026-10-12-map-drive-diagnosis.md이며 CORE 안전·학습 admission과 무효 명령 0은 유지한다.
 - 증거: 원격 RED 3 FAIL 뒤 전체 Isaac 214 PASS/1 SKIP/NEW 0, 독립 SOURCE APPROVE. AI PC의 기준 main 소스 Gazebo 정지 관측에서 현재 목표/경로와 guide publisher 0을 확인했고 전체 runner의 Fleet import 실패 exit 1 및 정리 readback을 별도 기록했다. 짧은 목표 fallback은 몸체 여유 증거가 부족해 채택하지 않았다.
 - gate 변화: SOURCE 진단 및 원격 회귀 근거다. Gazebo 부분 관측은 Fleet 연결·자율 주행·완주 수용이 아니다. 실제 Isaac SDK 재실행·네 방향 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · bf7054de3 · 공유 바닥 크기와 기본 정지 분리
+
+- 변경: 기존 맵 생성기의 ground를 100m에서 5m로 바꾸고 Gazebo world 3종을 재생성했다. Isaac은 같은 값을 읽으며 CAD·차선·벽·주의 표시와 정지 기준은 유지한다. 최신 main의 카메라 진단·관측 경로 변경도 통합했다.
+- 증거: 동일 출발 위치·방향에서 100m ground만 있는 조건과 전체 맵 조건은 5개 정지 구간 중 2개가 실패했고 2400개 샘플이 동일했다. 전체 맵을 유지하고 ground만 5m로 바꾼 조건은 5개 모두 통과, 기준 초과 샘플 0이었다. bf7054de3의 실제 SDK에서는 CORE cmd_vel_cycle 0 명령 2400회·경고 0·5개 정지 구간 통과·terminal exit0을 확인했고 실행 전후 7501개 source hash를 대조했다. 원본과 독립 검증은 private 일지에 보관했다.
+- 회귀: bf7054de3 원격 338 PASS/1 SKIP/NEW0·독립 SOURCE 승인. 벽 누락 검사의 무조건 통과를 막은 6cad8938f 후속은 원격 24 PASS/NEW0, lint 0 errors/28 warnings다.
+- gate 변화: 기본 in-process CORE/PhysX 정지 증거다. 주행 후 정지·카메라 곡선 추종·새 강화학습·네 방향 완주·Gazebo 두 대 Fleet·한국 교통 규칙·ROS-SIM·실물 수용은 미완료다. 이 비교만으로 PhysX 내부 원인을 확정하지 않는다.
