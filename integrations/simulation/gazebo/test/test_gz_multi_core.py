@@ -239,7 +239,8 @@ def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch,
     for index, node in enumerate(observers):
         # The mocked share dir has no control/config/line_follow.yaml, so do not
         # evaluate the yaml parameter. The law dict is already the last element.
-        law = node._Node__parameters[-1]
+        from launch_ros.utilities import evaluate_parameters
+        law = evaluate_parameters(context, [node._Node__parameters[-1]])[0]
         assert law['core_cruise_speed'] == pytest.approx(.08+.01*index)
         assert {k for k in law if str(k).startswith('core_')} == {
             'core_cruise_speed', 'core_max_linear', 'core_steering_gain', 'core_min_confidence'}
