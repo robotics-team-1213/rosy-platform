@@ -147,6 +147,7 @@ class RosyCoreNode(Node):
         from core_api_web.api.v1.host import STATUS_INPUTS_PERIOD_S
         self._status_inputs_failed = False
         self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
+        self._write_status_inputs()
         self.core.state.set_map_id(config.get("navigation", {}).get("map_id"))
         self.core.events.publish("system.boot", source="core",
                                  data={"version": SOFTWARE_VERSION})
