@@ -3470,14 +3470,14 @@
 - 증거: AI PC 원격 선택 회귀 65 passed/exit 0, known_failures 0 NEW. 기존 door negative 입력을 유지하고 fleet_status negative 입력을 추가했다. 기존 세 domain binding과 status read-only/hash 회귀를 함께 통과했다. 이전 실패는 잘못된 증거 허용이 아니라 더 이른 binding 거절과 오류 순서/fixture 문제였다.
 - gate 변화: source와 선택 원격 회귀다. 착지·푸시·전체 CI·보호 계정 설치·자동 Discord 통신·CORE 물리 동작은 이 변경에서 확인하지 않았다.
 
-## 2026-10-12 ? D-728 channel owner extraction
+## 2026-10-12 · 36b51d124 · D-728 channel owner extraction
 
 - `refactor/channel-owner-extraction` moves nine existing server channel implementations into `fleet.server.channel`; legacy module paths alias the same objects, including private symbols and monkeypatches. Relative imports are the only implementation AST changes. No request, execution, billing, UNKNOWN or outbox policy changed.
 - Existing `find_packages` and Fleet source root discover the real subpackage; root broker installation still requires an approved source manifest containing the extracted imports. Wheel/sdist and copied source-image regressions now check canonical/legacy identity; source import tests check all nine aliases and the actual gateway HTTP client patch.
 - Simultaneous architecture measurement: parent 55,120, channel 1,379, combined 56,499; +55 compatibility/package lines against previous 56,444. Largest child file 249. Independent `pipeline_review` structure precheck PASS; preserve all historical verdicts, +150 allowances, zero/file/hard ceilings and previous split obligations.
 - Remote AI PC pytest exit 0 (201 cases), known-failure comparison 0 NEW/0 known, log `X:/DevTemp/projects/rosy-platform/2026-10-12--124534--fleet-ai-discord-check--60388b/logs/channel-extract/run-1.txt`; includes wheel/sdist and copied source-image closure. This source-only extraction does not establish natural-language control, signed deployment or physical acceptance.
 
-## 2026-10-12 · D-728 natural conversation source and remaining admission
+## 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
 
 - Independent conversation profile/input/source policy and flat semantic steps map to existing strict intent grammar. Fleet owns separate durable conversation tables, same-actor/channel 120-second unaccepted proposal history, before-model attempts, UNKNOWN no replay and atomic natural reply intent. Source/profile/policy/semantic-proof scope remains immutable across restart. AI never calls human review or a device owner.
 - Optional CLI/runtime, both Compose overlays, fixed `rosy-conversation-v1` transport, protected broker and existing owner-only deliberation API consume the actual owners. Valid large site maps expose deterministic64-place subsets with full map revision/hash and completeness. Status/control/refusal/clarification facts use Fleet formatters; unsafe CHAT facts and command promises are rejected.
