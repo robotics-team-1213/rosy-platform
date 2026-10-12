@@ -34,6 +34,28 @@ def test_it_satisfies_the_protocol():
     assert isinstance(_client(lambda r: httpx.Response(200, json={})), RobotClient)
 
 
+def test_conditional_back_transport_preserves_predicate_and_legacy_body():
+    seen = []
+    def handler(request):
+        assert request.url.path == "/api/v1/line-follow/stuck/decision"
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"outcome": "back"})
+    async def main():
+        client = _client(handler)
+        try:
+            await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                expected_stuck={"phase": "ASKING", "attempts": 0})
+            await client.line_stuck_decision("stuck-1", "WAIT")
+        finally:
+            await client.aclose()
+    run(main())
+    assert seen == [
+        {"stuck_id": "stuck-1", "decision": "BACK_AND_RETRY",
+         "expected_stuck": {"phase": "ASKING", "attempts": 0}},
+        {"stuck_id": "stuck-1", "decision": "WAIT"},
+    ]
+
+
 def test_power_health_uses_authenticated_read_only_route():
     seen = {}
 

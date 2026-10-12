@@ -169,6 +169,60 @@ def test_estop_closes_the_stuck_and_late_answers_are_refused(core_client):
     assert late.status_code == 409
 
 
+@pytest.mark.parametrize("changed", ["none", "wait", "local", "attempts"])
+def test_conditional_back_api_checks_current_episode(core_client, changed):
+    config = {"line_follow": {"recovery_local_enabled": True,
+              "body_lidar_x_m": -0.017, "body_rear_x_m": -0.076,
+              "body_rotation_radius_m": 0.08257}}
+    client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=config, **kw))
+    lf = services.line_follow
+    now = lf._clock()
+    expected = {"phase": "ASKING", "attempts": 0}
+    if changed == "wait":
+        assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                           headers=OPERATOR).status_code == 200
+    elif changed == "local":
+        now += 15.0
+        lf.bind_clock(lambda: now)
+    elif changed == "attempts":
+        expected["attempts"] = 1
+    lf.observe_body_points([(0.15, 0.0), (-0.359, 0.0)], range_min=0.0, received_at=now)
+    if changed == "local":
+        lf.tick(now)
+        assert lf.status().stuck.phase == "BACKING"
+    before = lf.status().stuck
+    until = lf._recovery._until
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    if changed == "none":
+        assert reply.status_code == 200, reply.text
+        assert reply.json()["outcome"] == "back"
+    else:
+        assert reply.status_code == 409 and "stuck_precondition_failed" in reply.text
+        assert lf.status().stuck == before and lf._recovery._until == until
+
+
+@pytest.mark.parametrize("expected", [
+    {"phase": "WAITING_CONSOLE", "attempts": 0}, {"phase": "ASKING", "attempts": True},
+    {"phase": "ASKING", "attempts": "0"}, {"phase": "ASKING", "attempts": -1},
+    {"phase": "ASKING"}, {"phase": "ASKING", "attempts": 0, "extra": 1},
+])
+def test_conditional_back_api_rejects_malformed_predicate(core_client, expected):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    assert reply.status_code == 422
+
+
+def test_conditional_back_predicate_cannot_block_human_wait(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT",
+                                  "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert reply.status_code == 400
+    assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                       headers=OPERATOR).status_code == 200
+
+
 def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     """New keys in the default layer must not collide with an overlay (docs/solutions 2026-10-02)."""
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
