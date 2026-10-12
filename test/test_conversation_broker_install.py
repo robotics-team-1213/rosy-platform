@@ -289,6 +289,9 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     m.LIBEXEC.mkdir(exist_ok=True)
     bundle = m.REVIEWED
     bundle.mkdir()
+    security = (tmp_path/'credential', tmp_path/'spent')
+    for path in security:path.write_bytes(b'unchanged private state')
+    monkeypatch.setattr(m,'SECURITY_FILES',security)
     m.STATUS.write_bytes(b'previous status owner')
     status_config = m.CONFIG.parent/'status.json'
     status_config.write_bytes(b'previous status config')
@@ -363,6 +366,7 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
         with pytest.raises(RuntimeError,match='injected '+stage):
             m.main(argv)
         assert all(not p.exists() for p in (m.CONFIG,m.BROKER,m.INGRESS,m.KEYS,m.SUDO,m.SSHD))
+    assert all(path.read_bytes() == b'unchanged private state' for path in security)
     assert m.STATUS.read_bytes() == b'previous status owner'
     assert status_config.read_bytes() == b'previous status config'
     assert reviewer.read_bytes() == b'previous protected billing evidence'

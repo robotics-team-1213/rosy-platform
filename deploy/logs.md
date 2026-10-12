@@ -2730,3 +2730,9 @@
 - 변경: 별도 root-reviewed SHA source snapshot·전용 forced-command ingress/key/host pin·immutable backups·정확한 root-owned 파일 경계를 준비했다. GLM credential/spent marker는 복사·초기화하지 않는다.
 - 증거: pipeline_review scoped source 승인. source/model/structured Qwen conformance와 GLM 별도 status/billing/offline sandbox 증거가 실제 설치 gate다.
 - gate 변화: 검토 가능한 설치 소스만 승인. 관리자 실행·서명 Fleet 배포·런타임 왕복은 아직 미확인이다.
+
+## 2026-10-12 · conversation broker 관리자 설치
+
+- 변경: 독립 평가 source·proof·receipt·공개키와 오프라인 wheel closure를 SHA로 결속하는 관리자 설치기를 추가한다. 기존 status/GLM 상태를 보존하고 정확한 두 SSH 명령만 전달한다. 설정·SSH 검증 실패는 이번 파일 변경을 원복한다.
+- 증거: 보호 경계·tamper·의존성 pin·계정 충돌·멱등·전체 설치 단계 실패/원복을 원격 시험했다. 관리자 실제 설치와 live Discord 수용은 별도다.
+- gate 변화: 없음. 설치 SOURCE와 시뮬레이션 증거이며 활성화·현장 수용은 주장하지 않는다.
