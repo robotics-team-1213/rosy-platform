@@ -59,3 +59,4 @@ D-732 reserved concurrently and absent from the integrated map-lap candidate; re
 D-733 reserved concurrently and absent from the integrated map-lap candidate; remove once its ADR lands
 D-734 reserved concurrently and absent from the integrated map-lap candidate; remove once its ADR lands
 D-736 reserved concurrently and absent from the map-lap candidate; remove once its ADR lands
+D-737 reserved by another session (refs/adr/D-737) and absent from this branch; remove once its ADR lands
