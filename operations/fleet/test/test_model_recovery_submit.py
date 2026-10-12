@@ -1,6 +1,5 @@
 """Existing Fleet writer with real SQLite and HTTP; fixtures are not field acceptance."""
 import asyncio
-import json
 import threading
 from dataclasses import replace
 
@@ -201,8 +200,7 @@ def test_worker_real_model_writer_audit_readback_and_final_handoff(tmp_path, rep
                 snapshot = poll(2, normal=True)
                 worker.feed(snapshot); await settled(worker)
                 assert store.case(scope)['reason'] == 'RESOLVED_OBSERVED'
-                with store._transaction() as conn:
-                    closure = json.loads(conn.execute('SELECT receipt_json FROM fleet_incident_v2_closures').fetchone()[0])
+                closure = store.observed_closure(scope)
                 assert closure['action_credit'] == 'UNVERIFIED'
                 assert log.reports(1)[0]['closure']['status'] == 'CLEARANCE_OBSERVED'
             else:

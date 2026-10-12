@@ -21,7 +21,7 @@ from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.resolver import Answer, Escalate, Hold, StuckResolver
 
-PRINCIPAL_ID = "fleet-resolver"
+from .submission.dispatch import PRINCIPAL_ID
 log = logging.getLogger(__name__)
 
 
