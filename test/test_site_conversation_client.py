@@ -100,7 +100,10 @@ def test_install_destination_modes_and_status_preservation(installer, admission,
     monkeypatch.setattr(installer.pwd,'getpwnam',lambda _:SimpleNamespace(pw_uid=os.getuid()))
     monkeypatch.setattr(installer,'trusted_directory',lambda _:None)
     monkeypatch.setattr(installer.os,'chown',lambda *args:None)
-    monkeypatch.setattr(installer.subprocess,'check_output',lambda *args,**kwargs:'ssh-ed25519 public')
+    def public_key(args, **kwargs):
+        assert args[:3] == ['/usr/bin/ssh-keygen','-y','-f']
+        return 'ssh-ed25519 public'
+    monkeypatch.setattr(installer.subprocess,'check_output',public_key)
     calls=[]
     monkeypatch.setattr(installer,'install_file',lambda path,data,mode,gid=0:calls.append((path.name,data,mode,gid)))
     installer.install_client(cfg,b'config',b'model.example ssh-ed25519 host\n',b'ssh-ed25519 public',name)
