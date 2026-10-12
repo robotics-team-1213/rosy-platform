@@ -117,8 +117,8 @@ def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_pat
     robots = f.worker.execution.console.robot_ids
     boot, sent, values = str(uuid4()), [], {}
     for robot in robots:
-        assert f.store.reserve_resources(owner_kind='direct_action', owner_id='motion:' + robot,
-            generation=f.store.dispatch_control()['generation'], resources=[('robot', robot)])
+        assert f.store.restore_unresolved_action_claim(owner_kind='direct_action', owner_id='motion:' + robot,
+            generation=f.store.dispatch_control()['generation'], resources=[('robot', robot)], phase='UNKNOWN')
         values[robot] = [dict(_operation(uuid4(), boot, robot), kind=kind) for kind in ('navigate', 'teleop')]
         if fault in {'pruned','conflict'}:
             values[robot] = [op | {'phase':'TERMINAL','result':'CANCELED'} for op in values[robot]]
