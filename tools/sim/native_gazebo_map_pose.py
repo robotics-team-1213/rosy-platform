@@ -145,6 +145,10 @@ class NativeGazeboMapPosePort:
         it cannot refresh the clock's receipt time.
         """
         with self._lock:
+            if not isinstance(sample, NativeGazeboSample):
+                for robot_id in self._robots:
+                    self._fail(robot_id, 'invalid_native_sample')
+                return False
             robot_id = sample.robot_id
             robot = self._robots.get(robot_id)
             if robot is None:
@@ -187,6 +191,10 @@ class NativeGazeboMapPosePort:
             pending = self._refreshing[robot_id] = asyncio.ensure_future(self._gather_core(robot_id))
         try:
             state = await asyncio.shield(pending)
+        except Exception:
+            with self._lock:
+                self._fail(robot_id, 'core_read_failed')
+            raise
         finally:
             if pending.done() and self._refreshing.get(robot_id) is pending:
                 self._refreshing.pop(robot_id, None)
@@ -214,8 +222,8 @@ class NativeGazeboMapPosePort:
                 or row['source_age'] + max(elapsed, wall_elapsed) > self.config.max_pair_s
                 or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
                 or abs(core.stamp - captured_wall) > self.config.max_interp_gap_s
-                or math.dist(core.pose[:2], sample.pose[:2]) > self.config.max_jump_m
-                or abs(_angle(core.pose[2] - sample.pose[2])) > math.radians(self.config.max_jump_deg)):
+                or math.dist((core.x, core.y), sample.pose[:2]) > self.config.max_jump_m
+                or abs(_angle(core.yaw - sample.pose[2])) > math.radians(self.config.max_jump_deg)):
             self._fail(robot_id, 'native_or_core_stale_or_contradictory')
             return None
         return row, core, row['source_age'] + max(elapsed, wall_elapsed)
