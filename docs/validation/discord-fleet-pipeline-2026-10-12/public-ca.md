@@ -1,0 +1,11 @@
+# Discord reply TLS boundary
+
+2026-10-12. Branch: `fix/discord-public-ca`.
+
+The signed site image sets `SSL_CERT_FILE` to its private site CA for robot and camera verification. Discord Gateway reception worked, but the reply client's default HTTPX context inherited that CA. A real named request reached Fleet and its Console review became HOLD with no candidate/work ID. The original receipt reply exhausted three connection retries; the review reply was also retrying. These failures are not successful delivery evidence.
+
+A read-only HTTPS request to Discord's public Gateway API in the running Fleet container reproduced `ConnectError: CERTIFICATE_VERIFY_FAILED`. Explicit `ssl.create_default_context(cafile=certifi.where())` returned HTTP 200 in the same container without changing its `SSL_CERT_FILE`. `certifi` is already installed through HTTPX. Only the optional Discord reply client's TLS context changes; the private site CA, default-OFF configuration, current mapping checks, bounded retries, UNKNOWN/no-replay policy and CORE/device authority remain unchanged.
+
+The existing opt-in lifecycle test now runs with a separate site-only CA and requires the reply client to carry the full public root set, certificate verification and hostname checking. It still exercises durable reception, duplicate intake, one verified original-message reply and worker cancellation. RED source `40c1b02d61`: 1 NEW, 21 deselected. GREEN source `1bbcb632b1`: 115 passed / NEW0 including Gateway/replies, receipt/outbox/workflow and responsibility guards. Logs are in the existing X session under `logs/discord-public-ca-{red,green}`. No new known failure was registered.
+
+The earlier signed source `6a73839f03` passed GitHub full CI and was installed by the normal signed updater. The named operator was restored while preserving all eight existing accounts after a concurrent account migration removed its old mapping. Actual Bot presence, named receipt and Console HOLD were verified. Outbound delivery and restart readback remain pending the corrected signed image. Failed/expired replies are preserved; they are not reset for a blind resend. A fresh request or a fresh explicit Console review is required to create a new delivery intent.
