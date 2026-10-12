@@ -22,6 +22,7 @@ import asyncio
 import logging
 import time
 import uuid
+from contextlib import nullcontext
 from typing import Callable, Optional
 
 logger = logging.getLogger("fleet.goal_lease")
@@ -56,6 +57,7 @@ class GoalLeases(dict):
         self.admit_attempt: Optional[Callable[[str, str], None]] = None
         self.bind_native_receipt = None
         self.native_required = None
+        self.prepare_send = None
         self._present_at: Optional[float] = None
         self.pending: dict[str, int] = {}
         self._stop_epoch = 0
@@ -97,19 +99,15 @@ class GoalLeases(dict):
                      "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
         if correlation_id is not None:
             options["correlation_id"] = correlation_id
-        if task_id is not None and self.native_required is not None and self.native_required(task_id):
-            from fleet.server.channel.execution.outcomes.evidence import epoch
-            options.update(epoch(await client._get('/api/v1/navigation/state')))
-            self.check_stop(robot_id, stop)
-        from fleet.server.channel.execution.outcomes.task_receipt import admit_send
-        def admit():
-            admit_send(self, task_id, correlation_id, robot_id, 'expected_boot_id' in options)
-        admit()
+        guard = nullcontext()
+        if self.prepare_send is not None:
+            guard = await self.prepare_send(task_id, correlation_id, robot_id, client, options, stop)
+        elif task_id is not None and self.admit_attempt is not None:
+            self.admit_attempt(task_id, correlation_id)
         self.pending[robot_id] = self.pending.get(robot_id, 0) + 1
         try:
             try:
-                from fleet.swarm.dispatch_guard import dispatch_guard
-                with dispatch_guard(admit, paths={'/api/v1/navigation/goal'}):
+                with guard:
                     result = await client.navigation_goal(x, y, yaw, **options)
                     if task_id is not None and self.bind_native_receipt is not None:
                         self.bind_native_receipt(task_id, correlation_id, robot_id, result)
