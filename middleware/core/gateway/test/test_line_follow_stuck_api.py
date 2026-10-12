@@ -125,6 +125,7 @@ def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_cl
 @pytest.mark.parametrize("elapsed, phase", [(0.1, "BACKING"), (2.7, "SETTLING")])
 def test_delayed_back_api_answer_preserves_active_recovery(core_client, elapsed, phase):
     pinky = _yaml(PINKY)
+    pinky["line_follow"]["recovery_local_enabled"] = True
     client, services, stuck_id = _stuck(
         lambda **kw: core_client(config_overrides=pinky, **kw))
     lf = services.line_follow
