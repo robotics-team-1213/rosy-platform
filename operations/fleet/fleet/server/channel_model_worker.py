@@ -2,11 +2,13 @@
 import asyncio
 from dataclasses import asdict
 import hashlib
+import json
 import math
 import time
 
 from fastapi import HTTPException
-from rosy.decision.deliberation import canonical
+from rosy.decision.deliberation import Problem, canonical
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 from rosy.decision.deliberation.judgment import Judgment, judgment
 from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile
 
@@ -57,10 +59,21 @@ class ChannelModelWorker:
                 if existing['state']=='RUNNING':return
             except HTTPException as exc:
                 if exc.status_code!=404:raise
-            snapshot=await self.snapshot();basis=status_snapshot(snapshot)
-            problem=status_problem(receipt,snapshot,now=self.clock())
+            try:
+                snapshot=await self.snapshot();basis=status_snapshot(snapshot)
+                problem=status_problem(receipt,snapshot,now=self.clock())
+            except (ValueError,TypeError,KeyError):
+                await self._db('reject',receipt)
+                return
             try:
                 await self._db('stage',receipt,problem,snapshot)
+                stored=await self._db('peek',request_id)
+                problem=Problem(**json.loads(stored['problem_json']))
+                basis=json.loads(stored['snapshot_json'])
+                if not 0 <= self.clock()-problem.observed_at <= 3:
+                    await self._finish(request_id,'HOLD',{'reason':'STALE_INPUT','action_admissible':False},
+                        f'ROSY 상태 검토 · {request_id}\n관측이 오래되어 보류했습니다. 실행 승인 아님.')
+                    return
                 if not self._ready(0):
                     await self._finish(request_id,'HOLD',{'reason':'MODEL_NOT_ADMITTED','action_admissible':False},
                         f'ROSY 읽기 전용 판단 · {request_id}\n숙고형 제공자 미수용 · 실행 승인이나 장치 명령을 만들지 않았습니다.')
@@ -83,10 +96,13 @@ class ChannelModelWorker:
                         if (type(checked) is not Judgment or type(cost) not in (int,float)
                                 or not math.isfinite(cost) or cost<0):raise ValueError('INVALID_MODEL_RECEIPT')
                         checked=judgment(problem,bound,checked.payload,missing_allowlist=('core_state','network','camera','map'))
+                        evidence,evidence_error=call_cost_evidence(raw,problem,bound,checked,cost)
                         record={'profile_id':profile.profile_id,'model_id':profile.model_id,
-                                'judgment':checked.payload,'action_admissible':False}
+                                'judgment':checked.payload,'action_admissible':False,
+                                'cost_evidence':None if evidence is None else evidence.payload}
                         await self._db('record_attempt',request_id,profile.role,state='RESULT',result=record,
                             known_cost_usd=cost,input_hash=attempt['input_hash'],profile_set_hash=attempt['profile_set_hash'])
+                        if evidence_error:raise ValueError('COST_EVIDENCE_UNKNOWN')
                     except asyncio.CancelledError:
                         await self._db('abandon',request_id,state='UNKNOWN',reason='CANCELED_DURING_MODEL_CALL')
                         raise
