@@ -3469,3 +3469,10 @@
 - 변경: calibration feedback은 입력·profile·domain identity를 먼저 확인한 뒤 judgment를 검증한다. 새 status domain을 허용한 이후 강화된 BoundProfile 검사에서 먼저 거절되던 오류를 기존 FEEDBACK_SAMPLE_IDENTITY_CHANGED 경계로 닫는다. 실제 historic receipt 시험은 유효한 judgment를 만든 뒤 profile domain과 manifest를 재봉인하여 reader와 builder가 모두 거절하는지 확인한다.
 - 증거: AI PC 원격 선택 회귀 65 passed/exit 0, known_failures 0 NEW. 기존 door negative 입력을 유지하고 fleet_status negative 입력을 추가했다. 기존 세 domain binding과 status read-only/hash 회귀를 함께 통과했다. 이전 실패는 잘못된 증거 허용이 아니라 더 이른 binding 거절과 오류 순서/fixture 문제였다.
 - gate 변화: source와 선택 원격 회귀다. 착지·푸시·전체 CI·보호 계정 설치·자동 Discord 통신·CORE 물리 동작은 이 변경에서 확인하지 않았다.
+
+## 2026-10-12 ? D-728 channel owner extraction
+
+- `refactor/channel-owner-extraction` moves nine existing server channel implementations into `fleet.server.channel`; legacy module paths alias the same objects, including private symbols and monkeypatches. Relative imports are the only implementation AST changes. No request, execution, billing, UNKNOWN or outbox policy changed.
+- Existing `find_packages` and Fleet source root discover the real subpackage; root broker installation still requires an approved source manifest containing the extracted imports. Wheel/sdist and copied source-image regressions now check canonical/legacy identity; source import tests check all nine aliases and the actual gateway HTTP client patch.
+- Simultaneous architecture measurement: parent 55,120, channel 1,379, combined 56,499; +55 compatibility/package lines against previous 56,444. Largest child file 249. Independent `pipeline_review` structure precheck PASS; preserve all historical verdicts, +150 allowances, zero/file/hard ceilings and previous split obligations.
+- Remote AI PC pytest exit 0 (201 cases), known-failure comparison 0 NEW/0 known, log `X:/DevTemp/projects/rosy-platform/2026-10-12--124534--fleet-ai-discord-check--60388b/logs/channel-extract/run-1.txt`; includes wheel/sdist and copied source-image closure. This source-only extraction does not establish natural-language control, signed deployment or physical acceptance.
