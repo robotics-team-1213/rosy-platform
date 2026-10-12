@@ -235,5 +235,7 @@ def test_live_reboot_before_final_goal_send_cannot_rebind_old_selection(tmp_path
     f.client._get=get;f.client.navigation_goal=goal
     async def dispatch(task):
         return await leases.send('rosy_40',f.client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
-    asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
-    assert not sent
+    result=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    assert not sent and result['status']=='FAILED'
+    assert not (result['receipt'] or {}).get('native_required')
+    assert not f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')
