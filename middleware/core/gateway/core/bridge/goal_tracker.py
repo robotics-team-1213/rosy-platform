@@ -185,7 +185,9 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
         # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
         # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다.
         goal_handle.cancel_goal_async()
-        attach_result(goal_handle.get_result_async(), generation)
+        if native_run_id is not None or (goals.correlation_id(generation) is not None
+                                         and goals.is_cancelled(generation)):
+            attach_result(goal_handle.get_result_async(), generation)
         return
     if native_run_id is None:
         nav.on_goal_accepted()
@@ -202,12 +204,14 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
     """
     correlation_id = goals.correlation_id(generation)
     native_run_id = goals.native_run_id(generation)
+    result_error = None
     try:
         result = future.result()
     except Exception as exc:
         if native_run_id is not None:
             nav.on_backend_unknown(native_run_id)
             return  # keep the handle until explicit cancel; backend state is unknown
+        result_error = exc
         result = None
     if not goals.finished(generation):
         if correlation_id is not None and goals.was_cancelled(generation):
@@ -224,7 +228,7 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
         return
     try:
         if result is None:
-            raise RuntimeError("backend result unavailable")
+            raise result_error or RuntimeError("backend result unavailable")
         if native_run_id is not None:
             nav.on_result(result.status == 4, correlation_id=correlation_id,
                           native_run_id=native_run_id)
