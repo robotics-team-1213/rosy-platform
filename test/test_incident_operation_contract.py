@@ -54,7 +54,7 @@ def test_signature_verification_returns_an_isolated_bound_record_without_authori
 @pytest.mark.parametrize('field', list(binding()))
 def test_trusted_signature_cannot_approve_a_different_binding(field):
     receipt = signed()
-    changed = binding(); changed[field] = 'foreign'
+    changed = binding(); changed[field] = '9' * 64 if field.endswith('_sha256') else 'foreign'
     with pytest.raises(ValueError): verify(receipt, expected_binding=changed)
 
 
@@ -94,3 +94,13 @@ def test_revoke_is_a_separate_signed_kind_and_can_revoke_an_expired_approval():
     receipt = signed(kind=REVOKE)
     assert verify(receipt, now=200, kind=REVOKE) == receipt
     with pytest.raises(ValueError): verify(signed(), now=200, kind=REVOKE)
+
+
+def test_signature_canonicalization_preserves_non_ascii_identity():
+    receipt = signed()
+    receipt['principal'] = '독립 검수자'
+    receipt['payload']['binding']['model_revision'] = '模型-fixed'
+    receipt['payload'] = seal(receipt['payload']); resign(receipt)
+    expected = binding(); expected['model_revision'] = '模型-fixed'
+    assert verify(receipt, expected_binding=expected,
+        trusted={receipt['principal']: TRUST['reviewer']}) == receipt
