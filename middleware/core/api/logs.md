@@ -897,3 +897,9 @@
 - 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
 - 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
 - gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · b640234986 · D-720 API 문서 버전 정합
+
+- 변경: additive 읽기 전용 Fleet 숙고 결과 계약의 v1.219에 FastAPI description과 계약 pin들을 맞춘다. envelope1.0·CORE 실행 권한은 변경하지 않는다.
+- 증거: 통합 첫 묶음에서 버전 정합2 NEW/9776 passed를 확인하고 관련 caller를 함께 수정했다. 원격 GREEN·최종 통합은 후속이다.
+- gate 변화: 계약 metadata 수정이며 장치 배포나 물리 수용이 아니다.
