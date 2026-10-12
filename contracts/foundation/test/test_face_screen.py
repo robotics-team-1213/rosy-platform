@@ -250,13 +250,15 @@ def test_wake_card_beats_the_drive_card_and_standby():
 def test_charging_at_rest_is_a_strip():
     answer = fs.screen_for(**READY, core=core(battery_charging=True, battery_percent=63.4))
 
-    assert answer["strip"] == "Charging 63%" and answer["strip_tone"] == "info"
+    assert answer["strip"] == "Charging · 63%" and answer["strip_tone"] == "info"
 
 
 @pytest.mark.parametrize("mode,nav,line", [
     ("IDLE", "IDLE", "Waiting"),
     ("MANUAL", "IDLE", "Manual"),
     ("NAVIGATION", "NAVIGATING", "Going"),
+    ("NAVIGATION", "PLANNING", "Planning"),
+    ("NAVIGATION", "ARRIVED", "Arrived"),
     ("NAVIGATION", "BLOCKED", "Route blocked"),
     ("NAVIGATION", "FAILED", "Navigation failed"),
     ("DOCKING", "IDLE", "Docking"),
@@ -267,6 +269,44 @@ def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
     assert answer["kind"] == fs.FACE
     assert answer["strip"] == line and answer["strip_tone"] == "info"
     assert answer["face"] == "happy"
+
+
+def test_a_line_the_robot_is_on_replaces_going():
+    following = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="TRACKING"))
+    holding = fs.screen_for(**READY, core=core(
+        robot_mode="MANUAL", line_follow_state="HOLD"))
+    lost = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="LOST"))
+    idle = fs.screen_for(**READY, core=core(line_follow_state="TRACKING"))
+
+    assert following["strip"] == "Following"
+    assert holding["strip"] == "Holding"
+    assert lost["strip"] == "Line lost"
+    assert idle["strip"] == "Waiting"
+
+
+def test_charging_shows_the_held_percent_and_the_voltage():
+    answer = fs.screen_for(**READY, core=core(
+        battery_charging=True, battery_percent=72.4, battery_voltage=8.4))
+
+    assert answer["strip"] == "Charging · 72%  8.40V"
+
+
+def test_a_low_pack_is_named_on_a_calm_line_and_not_on_the_charging_line():
+    low = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", battery_percent=18.2,
+        battery_level="warning"))
+    deep = fs.screen_for(**READY, core=core(battery_percent=4.2, battery_level="deep"))
+    charging = fs.screen_for(**READY, core=core(
+        battery_charging=True, battery_percent=40, battery_level="critical"))
+    caution = fs.screen_for(**READY, core=core(
+        caution=["dock_failed"], battery_percent=18, battery_level="warning"))
+
+    assert low["strip"] == "Going · Low 18%"
+    assert deep["strip"] == "Waiting · Deep 4%"
+    assert charging["strip"] == "Charging · 40%"
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
 
 
 def test_a_fleet_call_names_the_robot_and_wakes_a_sleeping_panel():

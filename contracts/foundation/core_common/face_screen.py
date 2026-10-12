@@ -191,6 +191,8 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "docking_state": _name(data.get("docking_state"), DOCK_STATES),
         "battery_percent": percent if percent is not None and 0.0 <= percent <= 100.0 else None,
         "battery_charging": _flag(data.get("battery_charging")),
+        "battery_voltage": _battery_voltage(data.get("battery_voltage")),
+        "battery_level": _name(data.get("battery_level"), BATTERY_LEVELS),
         "line_follow_mode": _name(data.get("line_follow_mode")),
         "line_follow_state": _name(data.get("line_follow_state")),
         "caution": sorted(set(codes)),
@@ -312,8 +314,42 @@ STOP_RELEASE = "Release: dashboard > E-stop reset"
 #: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
 SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
 NAV_STOP_LINE = {"BLOCKED": "Route blocked", "FAILED": "Navigation failed"}
+#: D-688: travel states that are not "Going", and a line the robot is actually on.
+NAV_TRAVEL_LINE = {"PLANNING": "Planning", "ARRIVED": "Arrived"}
+LINE_SITUATION = {"TRACKING": "Following", "HOLD": "Holding", "LOST": "Line lost"}
+BATTERY_LEVELS = frozenset({"ok", "warning", "critical", "deep"})
+LEVEL_WORD = {"warning": "Low", "critical": "Critical", "deep": "Deep"}
 #: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
 _ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def _battery_voltage(value: Any) -> Optional[float]:
+    """A pack voltage the strip may show, or None. Outside 0–30 V is not a reading."""
+    voltage = _number(value)
+    if voltage is None or not 0.0 <= voltage <= 30.0:
+        return None
+    return voltage
+
+
+def _charging_line(core: Mapping[str, Any]) -> str:
+    """Docked and charging. The percent is the held estimate, never the float voltage."""
+    percent = core.get("battery_percent")
+    line = "Charging" if percent is None else f"Charging · {percent:.0f}%"
+    voltage = core.get("battery_voltage")
+    if voltage is not None:
+        line = f"{line}  {voltage:.2f}V"
+    return line
+
+
+def _with_level(strip: str, core: Mapping[str, Any]) -> str:
+    """Name a low pack on a calm line. The charging line already carries its number."""
+    word = LEVEL_WORD.get(core.get("battery_level"))
+    if word is None:
+        return strip
+    percent = core.get("battery_percent")
+    if percent is None:
+        return f"{strip} · {word}"
+    return f"{strip} · {word} {percent:.0f}%"
 
 
 def _stopped_cause(core: Mapping[str, Any]) -> str:
@@ -444,15 +480,22 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     elif core.get("drive") is not None and drive_card_visible(mode, drive_since, now):
         overlay, row = {"kind": "drive", "payload": {**core["drive"], "kind": "drive"}}, "drive"  # rows 13-16
     if strip is None and mode == "IDLE" and core.get("battery_charging"):  # row 13, resting on the dock
-        percent = core.get("battery_percent")
-        strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
+        strip = _charging_line(core)
         tone = "info"
     elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in robot_state.NAV_STUCK:
         strip = NAV_STOP_LINE[core["nav_state"]]
         tone = "info"
+    elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in NAV_TRAVEL_LINE:
+        strip = NAV_TRAVEL_LINE[core["nav_state"]]
+        tone = "info"
+    elif strip is None and mode in ("NAVIGATION", "MANUAL") and core.get("line_follow_state") in LINE_SITUATION:
+        strip = LINE_SITUATION[core["line_follow_state"]]
+        tone = "info"
     elif strip is None and mode in SITUATION_LINE:
         strip = SITUATION_LINE[mode]
         tone = "info"
+    if strip is not None and tone == "info" and not strip.startswith("Charging"):
+        strip = _with_level(strip, core)
     backlight = 100 if overlay is not None or call_line is not None or ask_line is not None else BACKLIGHT.get(power, 100)
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
             "strip_tone": tone, "backlight": backlight}
