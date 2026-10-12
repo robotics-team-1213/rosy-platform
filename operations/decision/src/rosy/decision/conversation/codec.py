@@ -1,5 +1,6 @@
 """Independent conversation contract; user text and model output are untrusted."""
 import hashlib
+import json
 import math
 import re
 from typing import Literal
@@ -165,8 +166,43 @@ class Answer(Strict):
         return self
 
 
+class SemanticStep(Strict):
+    verb: Literal['navigate','home','cancel','stop','move','follow','follow_cancel','dock','undock',
+                  'formation_start','formation_stop','formation_resume','estop']
+    robot_id: str | None
+    place_id: str | None
+    parameters_json: str = Field(max_length=1000)
+
+
+class SemanticAnswer(Strict):
+    kind: Literal['CHAT', 'STATUS', 'CLARIFY', 'CONTROL', 'REFUSE']
+    response: str = Field(min_length=1, max_length=1000)
+    steps: list[SemanticStep] = Field(max_length=8)
+    evidence_refs: list[str] = Field(max_length=32)
+    review_required: bool
+    reason: Literal['MISSING_TARGET', 'MISSING_ACTION', 'AMBIGUOUS_REFERENCE', 'UNSUPPORTED',
+                    'SAFETY', 'CONFLICT', 'CREDENTIALS'] | None
+
+
+def semantic_answer(value, question):
+    semantic = SemanticAnswer.model_validate(value)
+    steps = []
+    for step in semantic.steps:
+        parameters = json.loads(step.parameters_json)
+        if type(parameters) is not dict or {'do','robot','waypoint','steps'} & set(parameters):
+            raise ValueError('CONVERSATION_PARAMETERS_REFUSED')
+        current = {'do':step.verb, **parameters}
+        if step.robot_id is not None:current['robot'] = step.robot_id
+        if step.place_id is not None:current['waypoint'] = step.place_id
+        steps.append(current)
+    if (semantic.kind == 'CONTROL') != bool(steps):raise ValueError('CONTROL_SEMANTIC_STEPS_REQUIRED')
+    return checked_answer({'kind':semantic.kind,'response':semantic.response,'intent':
+        None if not steps else steps[0] if len(steps) == 1 else {'steps':steps},
+        'evidence_refs':semantic.evidence_refs,'review_required':semantic.review_required,'reason':semantic.reason}, question)
+
+
 def answer_schema():
-    return Answer.model_json_schema()
+    return SemanticAnswer.model_json_schema()
 
 
 def checked_answer(value, question):
