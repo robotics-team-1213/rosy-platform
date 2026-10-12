@@ -58,8 +58,14 @@ gain 2.0)을 조합하면 명령 곡률이 목표의 두 배가 됨을 확인했
 Isaac 소비자가 실제 CORE 설정으로 같은 역산법칙을 사용하도록 수정 중이다. commit
 `45e92d326`의 원격 수학·기억 경로·잘못된 설정 회귀 28 PASS, 기존 관측 회귀 83 PASS,
 Isaac camera 회귀 82 PASS다. 각 known_failures 결과는 NEW 0이다. native camera와
-CORE의 HOME 차이에 따른 운영자 설정 전달은 안전한 기존 status-inputs handover로
-별도 구현·검토하며, 이 전달이 끝나기 전에 제품 전체 수정 완료로 선언하지 않는다.
+CORE의 HOME 차이에 따른 운영자 설정 전달은 기존 status-inputs handover로 구현했다.
+commit `077d2e475`는 유효 법칙 4개와 robot/PID metadata만 기존 0644 원자 기록에 넣고,
+native camera가 소유자·identity·범위·UTC 신선도를 검증한다. 법칙/PID 변경·누락·오래된
+입력에는 이전 조향과 기억 경로를 지우고 관측을 거절한다. CORE API 시작 전에 즉시
+기록하고 이후 기존 1Hz 기록을 유지한다. 쓰기 실패의 기존 정책과 최대 3초 freshness
+창은 유지되므로 실패 상황에서도 이전 payload를 항상 차단한다고 주장하지 않는다.
+전체 관측 회귀 3,140 PASS/110 SKIP, 최종 startup·handover 관련 183 PASS/NEW 0,
+독립 SOURCE APPROVE다. 실제 장치 handover와 재시작은 아직 실행하지 않았다.
 
 긴 Fleet trip에는 지속적으로 유효한 지도 자세가 필요하다. 실제 overhead 영상·로봇 식별·
 accepted Vision 공급은 현재 Gazebo 구성에 없다. 기존 `map_pose_port` 주입을 이용하는
