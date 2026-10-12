@@ -25,6 +25,7 @@ class ExecutionWorker:
     def __init__(self,journal,execution):
         self.journal,self.execution=journal,execution
         self._lock=asyncio.Lock()
+        self._cursor=''
 
     def fence(self,rid,index,call):
         self.journal.guard(rid)
@@ -105,11 +106,12 @@ class ExecutionWorker:
             if caps.get('swarm',{}).get('lead') is not True:raise ValueError('FOLLOW_LEADER_NOT_ADVERTISED')
         return robots
 
-    async def step(self,rid):
+    async def step(self,rid,*,allow_dispatch=True):
         async with self._lock:
             try:view=self.journal.view(rid)
             except HTTPException as exc:
                 if exc.status_code!=404:raise
+                if not allow_dispatch:return
                 try:view=self.journal.accept(rid)
                 except (ValueError,HTTPException) as exc:
                     self.reject(rid,exc)
@@ -131,6 +133,7 @@ class ExecutionWorker:
                     return
                 if row['state']=='COMPLETED':continue
                 if row['state']!='READY':return
+                if not allow_dispatch:return
                 began=False
                 try:
                     robots=await self.preflight(rid,index,call)
@@ -186,10 +189,13 @@ class ExecutionWorker:
 
     def pending(self):
         with self.journal.store._connect() as conn:
-            return [r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
+            rows=[r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
                 LEFT JOIN fleet_channel_execution e USING(request_id) WHERE j.state='ANSWERED'
                 AND json_extract(j.result_json,'$.answer.kind')='CONTROL'
                 AND (e.request_id IS NULL OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
-                    WHERE s.request_id=j.request_id AND (s.state IN ('TASK_QUEUED','ACCEPTED','RUNNING','UNKNOWN')
+                    WHERE s.request_id=j.request_id AND (s.state='TASK_QUEUED'
+                        OR (s.state IN ('ACCEPTED','RUNNING','UNKNOWN') AND json_extract(s.receipt_json,'$.operation.run_id') IS NOT NULL)
                         OR (s.state='READY' AND e.reason IS NULL))))
-                ORDER BY j.created_at LIMIT 10''')]
+                ORDER BY (j.request_id>?) DESC,j.request_id LIMIT 10''',(self._cursor,))]
+            if rows:self._cursor=rows[-1]
+            return rows

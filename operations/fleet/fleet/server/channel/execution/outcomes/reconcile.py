@@ -19,7 +19,7 @@ async def observe(client, receipt, robot, events=None):
     try:
         value = await asyncio.wait_for(client._get(PATHS[original['kind']] + '?run_id=' + original['run_id']), 2)
         operation = exact_operation(value['operation'], original) if value.get('lookup') == 'FOUND' else None
-    except (Exception,):
+    except Exception:
         value, operation = {}, None
     if operation is None and events is not None:
         operation = terminal_event(events.native_events(robot, original['boot_id'], original['run_id']), original)
@@ -133,7 +133,9 @@ async def reconcile_tasks(service, console):
         rows = conn.execute('''SELECT task_id FROM fleet_tasks
             WHERE json_extract(receipt_json,'$.operation.run_id') IS NOT NULL
             AND COALESCE(json_extract(receipt_json,'$.safe_released'),0)=0
-            ORDER BY updated_at LIMIT 20''').fetchall()
+            ORDER BY (task_id>?) DESC,task_id LIMIT 20''', (getattr(service, '_native_cursor', ''),)).fetchall()
+    if rows:
+        service._native_cursor = rows[-1]['task_id']
     for row in rows:
         try:
             task = service.store.get_task(row['task_id'])
