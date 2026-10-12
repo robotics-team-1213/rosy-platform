@@ -10,6 +10,7 @@ import time
 from rosy.decision.deliberation import canonical, identifier
 from .contract import CaseBudget, CaseScope, micros, sha256, summary_json
 from .receipt import checked_receipt
+from ..routing import profile_route
 from fleet.server.sqlite_policy import configure_connection
 
 
@@ -108,7 +109,7 @@ class IncidentCaseStore:
             if prior['scope_json'] != scope_json or prior['budget_json'] != budget_json:
                 raise ValueError('CASE_SCOPE_OR_BUDGET_CHANGED')
         else:
-            route = self._profile_route(conn, scope.owner_id, scope.policy_revision) if routed else None
+            route = profile_route(conn, scope.owner_id, scope.policy_revision) if routed else None
             if routed and (route is None or route['current'] != scope.profile_sha256):
                 raise ValueError('CASE_PROFILE_NOT_SELECTED')
             if conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] >= self.max_cases:
@@ -122,47 +123,6 @@ class IncidentCaseStore:
             if routed:
                 conn.execute('INSERT INTO fleet_incident_v2_assignments VALUES (?,?,?)', (*key, route['revision']))
         return self._case(conn, scope)
-
-    @staticmethod
-    def _profile_route(conn, owner_id, policy_revision):
-        identifier(owner_id); identifier(policy_revision)
-        row = conn.execute('SELECT current,previous,revision FROM fleet_incident_v2_profile_routes '
-                           'WHERE owner_id=? AND policy_revision=?', (owner_id, policy_revision)).fetchone()
-        if row is None: return None
-        sha256(row[0])
-        if row[1] is not None: sha256(row[1])
-        if type(row[2]) is not int or row[2] < 1: raise ValueError('INVALID_PROFILE_ROUTE')
-        return dict(current=row[0], previous=row[1], revision=row[2])
-
-    def profile_route(self, owner_id, policy_revision):
-        with self._transaction() as conn: return self._profile_route(conn, owner_id, policy_revision)
-
-    def _select_profile(self, conn, owner_id, policy_revision, profile_sha256, expected_revision, *, rollback=False):
-        # Selection is local configuration; provider acceptance remains a separate gate.
-        if type(expected_revision) is not int or not 0 <= expected_revision < 2**63 - 1:
-            raise ValueError('EXPLICIT_ROUTE_REVISION_REQUIRED')
-        prior = self._profile_route(conn, owner_id, policy_revision)
-        if (prior['revision'] if prior else 0) != expected_revision: raise ValueError('PROFILE_ROUTE_CHANGED')
-        if rollback:
-            if prior is None or prior['previous'] is None: raise ValueError('PREVIOUS_PROFILE_REQUIRED')
-            profile_sha256 = prior['previous']
-        sha256(profile_sha256)
-        if prior and profile_sha256 == prior['current']: raise ValueError('PROFILE_ALREADY_SELECTED')
-        result = dict(current=profile_sha256, previous=prior['current'] if prior else None,
-                      revision=expected_revision + 1)
-        conn.execute('INSERT INTO fleet_incident_v2_profile_routes VALUES (?,?,?,?,?) '
-                     'ON CONFLICT(owner_id,policy_revision) DO UPDATE SET '
-                     'current=excluded.current,previous=excluded.previous,revision=excluded.revision',
-                     (owner_id, policy_revision, result['current'], result['previous'], result['revision']))
-        return result
-
-    def select_profile(self, owner_id, policy_revision, profile_sha256, *, expected_revision):
-        with self._transaction() as conn:
-            return self._select_profile(conn, owner_id, policy_revision, profile_sha256, expected_revision)
-
-    def rollback_profile(self, owner_id, policy_revision, *, expected_revision):
-        with self._transaction() as conn:
-            return self._select_profile(conn, owner_id, policy_revision, None, expected_revision, rollback=True)
 
     def assignment(self, scope):
         with self._transaction() as conn:
