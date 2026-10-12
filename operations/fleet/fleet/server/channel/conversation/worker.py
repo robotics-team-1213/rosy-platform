@@ -31,8 +31,9 @@ class ConversationWorker:
         return self.observed(question)
 
     def observed(self, question):
-        try:return self.admission() is True and self.observation_guard(question.environment) is True
-        except (ValueError, TypeError, KeyError):return False
+        try:return (self.admission() is True and self.observation_guard(question.environment) is True
+                    and self.jobs.context_current(question))
+        except (ValueError, TypeError, KeyError, HTTPException):return False
 
     async def finish(self, request_id, state, result, summary, question=None):
         try:
