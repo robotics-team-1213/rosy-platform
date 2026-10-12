@@ -16,6 +16,10 @@
 
 ### 현재 시작점과 다음 순서
 
+전체 source 감사(`6a73839f03`)에서 외부 설치·현장 검증 외의 미구현 연결도 확인했다. `select_calibrated`는 production worker가 호출하지 않고 영속 reasoning candidate/current/previous 및 승격/복귀 loader가 없다. global profile 변경으로 기존 사건을 HOLD하는 fence는 새 사건만 교체하는 전환이 아니다. worker는 line_follow/read-only만 연결되어 있고 물리 처리·door/arm backend는 미구현이다. 다음은 [판정 프로파일 lifecycle](2026-10-12-reasoning-profile-lifecycle.md)의 기존 registry 소유자 reasoning 계약·전환 → Fleet 승인 hash/보정 gate → 사건별 revision 보존·복귀다. 전체 운영 coverage·자동 실패 분류/검수 label 수용/training도 남아 있다. 이전 source checkpoint는 각 부분의 증거이며 전체 source나 목표 완료가 아니다.
+
+D-704는 commit `5f06e03ab1d2a2d870e341c1801259605857552d`로 로컬 main에 착지했다. 여섯 축의 비정상 숫자와 네 비평면 축의 움직임을 버리지 않고 거절하는 Pinky 최종 속도 원본 검증이다. Native CDR/MCAP RED 22 NEW를 재현한 뒤 적격 Model PC의 원본 검증 전용 환경에서 main 통합 473 passed/skipped 0/NEW 0과 lint를 확인했다. 전체 Pinky/구조 107개 회귀와 고정 로그는 [최종 속도 원본 계획](2026-10-12-pinky-final-velocity-evidence-boundary.md)에 있다. 공유 CI venv나 장치 runtime을 바꾸지 않았다. 정상 주행 속도와 불필요 모델 개입은 다른 개념이며 전체 명령/재발 coverage는 여전히 미확인이다. GLM 관리자 설치 readback을 기다리며 전체 목표는 ACTIVE다.
+
 실제 V2 런타임 readback: AI PC의 기존 전용 venv에서 입력 검증·자식 import를 모델/네트워크 호출 없이 확인했고, 별도 metadata 1회로 고정 Qwen resident 조건을 확인했다. 소비된 Qwen V2 표식은 유지하며 이전 실패 원인과 실제 응답은 미확인이다. GLM frozen V2 설치 디렉터리가 아직 없고 sudo password가 필요해 관리자 OpenSSH 준비 명령의 실제 실행/readback을 요청했다. 이 준비는 모델 호출·credential importer를 포함하지 않는다. [실제 readback](../validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)의 V2 절을 따른다. 기존 구버전 transport 성공·최신 source 병합·V2 runtime·독립 품질을 혼용하지 않으며 전체 목표는 ACTIVE다.
 
 D-703은 commit `70cff59396a5338346ff6c65e3b7a836d99632e0`로 로컬 main에 착지했다. 실제 model export의 prediction과 별도 검수 정답·오류·지연을 기존 보정/동일 정답 비교 CLI에 결속한다. 개인 profile hash와 receipt·case·attempt·input·generation을 확인하고 원장 밖 확률·UNKNOWN/누락 보간·외부 검수 dataset hash 자동 변경을 거절한다. 적격 Model PC 8.1GB의 관련 main 통합 원격 시험은 569 passed/NEW 0과 lint를 통과했으며 독립 검토 지적을 수정했다. [검수 입력 결속 계획](2026-10-12-reviewed-feedback-calibration-binding.md)에 고정 로그와 통합 전 127개 회귀를 기록했다. 다음은 실제 검수 자료·지연 원본·출처의 수용과 운영 coverage 연결이다. 사람 표시 이름이나 선언된 source hash만으로 진위를 입증하지 않는다. 실제 모델·배포·현장·승격/복귀는 미완료이며 전체 목표는 ACTIVE다.
