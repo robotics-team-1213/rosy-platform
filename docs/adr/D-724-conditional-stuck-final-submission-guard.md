@@ -15,3 +15,7 @@ D-718의 조건부 HttpRobotClient는 CORE 지원을 GET으로 확인한 뒤 POS
 ## Verification
 
 실제 MockTransport GET의 await 이후 최종 포트 실행, strict True/false/null/int/string·오류·취소의 POST 차단, 미지원 CORE의 0 claim, 잘못된 포트의 0 request, 기존 조건부·수동 요청의 호환성을 원격 검증한다. 실제 수용 receipt·physical claim·Fleet loop 연결·모델/현장 검증은 D-716의 후속이다.
+
+## 소비자 수용 전제
+
+독립 SOURCE 검토에서 후속 소비자는 포트를 무시하는 임의 RobotClient를 수용하지 않기로 확인했다. runtime Protocol·메서드 signature·자기 보고 지원 bool만으로 구현을 수용하지 않는다. 등록된 설치 artifact와 실제 검증된 HttpRobotClient 구현·구체 메서드, 최종 client object identity를 결속한다. `**extra`로 포트를 무시하는 fake/override는 모델 소비 회귀에서 0 claim/0 POST로 거절한다. 실제 승인 폐기 epoch·물리 claim의 취소 후 DB 완료 대기·남은 deadline은 이 포트의 존재로 대체하지 않는다.
