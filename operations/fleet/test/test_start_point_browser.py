@@ -271,7 +271,20 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     expect(page.locator('#dispatch-control')).to_be_hidden()  # D-487: one lock banner
     capture_console(page, 'connection-desktop.png')
     page.locator('#connection-guide-action').click()
-    expect(page.locator('#console-token')).to_be_focused()
+    expect(page).to_have_url(page.origin + '/console/login?return=%2Fconsole')
+    expect(page.get_by_role('heading', name='관제 로그인')).to_be_visible()
+    expect(page.locator('#login-availability')).to_be_visible()
+    expect(page.locator('#login-availability')).to_have_text(
+        '이 현장에는 사람 로그인이 설정되지 않았습니다. 현장 관리자에게 계정 설정을 요청하세요.')
+    expect(page.locator('#password-login')).to_be_hidden()
+    back = page.get_by_role('link', name='원래 업무로 돌아가기')
+    expect(back).to_have_attribute('href', '/console')
+    back.click()
+    open_token_access(page)
+    # This fixture seeds its Bearer on every navigation; reproduce the refused session after return.
+    page.locator('#console-token').fill('')
+    page.locator('#token-save').click()
+    expect(page.locator('#connection-guide')).to_be_visible()
     page.locator('#console-token').fill('operator-secret')
     page.locator('#console-token').press('Enter')
     expect(page.locator('#connection-guide')).to_be_hidden()

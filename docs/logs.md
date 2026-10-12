@@ -8018,3 +8018,9 @@ osy-d395-s1d\`.
 - 변경: 실제 resolver step 반환과 Assessment를 기존 DB의 fleet.observe 원장에 결속했다. 현재 fresh RULE_ONLY 선택의 HOLD/HANDOFF만 모델 baseline으로 연결하며 WAIT·물리 명령·MIXED·stale·claim·config 변경을 임의 변환하지 않는다. SDK 0.1.10 필수 설치와 CI/local 버전 동기화를 포함한다.
 - 증거: 최신 main 통합 12개 시험 그룹 원격 621 passed/1 skipped, exit 0/NEW 0/lint, 실제 wheel·sdist 설치·기본 resolver 생성·기존 policy loader 호환과 독립 검토. commit `8520b77d66`으로 local landing. 고정 로그는 세션 `logs/rule-land-8520b77d66/run-1.txt`다.
 - gate 변화: SOURCE·설치 회귀·로컬 착지. 실제 모델 품질·전체 CI·배포·현장 수용·명령/호출/재발 전체 coverage는 미확인이다. 다음은 원장 export·독립 cohort 연결이며 전체 목표는 진행 중이다.
+
+## 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+
+- 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
+- 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
+- gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
