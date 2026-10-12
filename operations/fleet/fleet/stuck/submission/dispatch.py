@@ -48,6 +48,7 @@ async def model_answer(self, scope, attempt_id, problem, worker):
             or client.robot_id != scope.subject_id):
         return False
     claimed, reply, terminal = [], {'code': 'NO_TERMINAL_REPLY'}, 'UNKNOWN'
+    action = Answer(scope.subject_id, scope.case_id, 'BACK_AND_RETRY', 'model_v2')
     try:
         if await owned(operating.submission, scope.subject_id, scope.case_id) is not None: return False
         candidates = await owned(operating.candidates.candidates, scope)
@@ -66,6 +67,9 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                     and worker.human_owned(scope.subject_id, scope.case_id) is False and worker._fresh(problem) is True
                     and pipeline.law_hold(row, decision='BACK_AND_RETRY', stuck_id=scope.case_id) is None
                     and chain is not None and not self._resolver.at_crosswalk(scope.subject_id)
+                    and chain.stuck_id == scope.case_id and scope.case_id not in chain.escalated
+                    and self._resolver._continuation_hold(scope.subject_id, chain) is None
+                    and self._clock() - chain.started_at <= self._resolver.config.escalate_after_s
                     and lane_lost.ai_proposal_invalid({'decision': 'BACK_AND_RETRY'}, row,
                         row['state']['line_follow']['stuck'], list(self._rows.values()), chain,
                         self._resolver.config, self._resolver._painted()) is None
@@ -80,6 +84,7 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                 record = operating.claim_model(scope, grant_id, attempt_id, expected_epoch=approval['epoch'],
                     generation=problem.generation, guard=guard, on_claim=pending)
                 claimed.append(record)
+                self._resolver.sent(action, self._clock())
                 self._board._publish_answer(pending_rows[0])
             await owned(claim)
             return True
@@ -108,6 +113,9 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                     decision='ESCALATE', principal_id=PRINCIPAL_ID, accepted=None, tier='ai',
                     code='STUCK_DECISION_RECONCILED', durable=True)
             else: self._resolver._uncertain.add((scope.subject_id, scope.case_id))
+            escalation = self._resolver.result(action, code=None if terminal == 'ACK' else
+                'STUCK_DECISION_OUTCOME_UNKNOWN' if terminal == 'UNKNOWN' else reply.get('code'))
+            if escalation is not None: self._escalated(escalation, rule=action.rule, decision=action.decision)
     return bool(claimed) and terminal == 'ACK'
 
 async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> dict | None:
