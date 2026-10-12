@@ -35,16 +35,3 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
-
-
-
-
-
-
-
-
-
-
-
-
-D-708 reserved in refs/adr/D-708; ADR not included in this branch

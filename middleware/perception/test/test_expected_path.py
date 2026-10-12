@@ -17,7 +17,8 @@ def _new():
 
 
 def _centre(ahead=0.40, strategy="drivable_centre", straddle=None, reason=None):
-    return {"ahead_m": ahead, "near_centre_m": (0.20, 0.0), "strategy": strategy,
+    return {"ahead_m": ahead, "near_centre_m": (0.20, 0.0),
+            "centre_path_m": ((.1, 0.), (.1 + ahead / 2, 0.), (.1 + ahead, 0.)), "strategy": strategy,
             "straddle": straddle, "reason": reason}
 
 
@@ -94,14 +95,14 @@ def test_a_missing_frame_holds_the_near_tangent():
     held = path.hold((0.05, 0.0, 0.0), 1.0)
     assert held["state"] == "held" and held["error"] is not None
     assert abs(held["target_m"][1]) < 0.01
-    start, end = held["path_m"]
+    start, end = held["path_m"][0], held["path_m"][-1]
     assert abs(start[1]) < 0.01 and abs(end[1]) < 0.01 and end[0] > start[0]
 
 
-def test_shifting_the_end_sideways_does_not_change_held_error():
+def test_far_geometry_does_not_replace_the_near_pursuit_target():
     path = _commit()
     before = path.hold((0.05, 0.0, 0.0), 1.0)
-    path.end_m = (path.end_m[0], path.end_m[1] + 0.20)
+    path._path = (*path._path[:-1], (path._path[-1][0], path._path[-1][1] + .20))
     after = path.hold((0.05, 0.0, 0.0), 1.1)
     assert after["error"] == pytest.approx(before["error"])
     assert abs(before["error"]) < 0.01
@@ -121,9 +122,9 @@ def test_travel_past_the_segment_or_a_quarter_metre_or_two_and_a_half_seconds_dr
     assert cap_drop["error"] is None and cap_drop["state"] == "dropped"
 
     timed = _commit()
-    timed.hold((0.0, 0.0, 0.0), 10.0)
-    assert timed.hold((0.05, 0.0, 0.0), 12.49)["error"] is not None
-    time_drop = timed.hold((0.05, 0.0, 0.0), 12.51)
+    timed.hold((0.0, 0.0, 0.0), 1.0)
+    assert timed.hold((0.05, 0.0, 0.0), 2.69)["error"] is not None
+    time_drop = timed.hold((0.05, 0.0, 0.0), 2.71)
     assert time_drop["error"] is None and time_drop["state"] == "dropped"
 
 
@@ -162,3 +163,117 @@ def test_a_rewound_stamp_or_a_jumped_pose_drops_the_hypothesis():
     assert not jumped.update((0.26, 0.0, 0.0), 1.1, _centre())["committed"]
     assert not jumped.update((0.26, 0.0, 0.0), 1.2, _centre())["committed"]
     assert jumped.update((0.26, 0.0, 0.0), 1.3, _centre())["committed"]
+
+
+def _shape_info(curvature=0., lateral=0.):
+    points = []
+    for index in range(11):
+        x = .10 + index * .03
+        y = lateral if curvature == 0. else (1. - math.sqrt(1. - (curvature * x) ** 2)) / curvature
+        points.append((x, y))
+    return dict(_centre(), near_centre_m=(.10, points[0][1]), centre_path_m=points)
+
+
+def _commit_shape(curvature=0., lateral=0.):
+    path = _new()
+    for stamp in (0., .1, .2):
+        path.update((0., 0., 0.), stamp, _shape_info(curvature, lateral))
+    return path
+
+
+def test_observed_parallel_offset_does_not_rotate_the_lane_tangent():
+    centred = _commit_shape()
+    offset = _commit_shape(lateral=.03)
+    assert offset._heading == pytest.approx(centred._heading, abs=1e-9)
+    target = offset.hold((0., 0., 0.), .3)['target_m']
+    assert target[1] == pytest.approx(.03)
+
+
+@pytest.mark.parametrize('curvature', [-1., 1.])
+def test_observed_curve_is_preserved_and_uses_pursuit_error(curvature):
+    from control.sensing.perception.drivable.drivable_steer import pursuit_error
+    held = _commit_shape(curvature).hold((0., 0., 0.), .3)
+    tx, ty = held['target_m']
+    assert ty * curvature > 0.
+    assert tx * tx + (ty - 1. / curvature) ** 2 == pytest.approx(1., abs=.002)
+    assert held['error'] == pytest.approx(pursuit_error(tx, ty, held['confidence']))
+    assert len(held['path_m']) > 2
+
+
+def test_cached_observation_cannot_restart_the_total_loss_clock():
+    path = _commit_shape()
+    view = path.update((0., 0., 0.), 2.7, _shape_info(), observation_stamp=.2,
+                       current_pose=(.01, 0., 0.))
+    assert view['error'] is None and not view['committed']
+
+
+def test_returning_to_the_loss_pose_does_not_refund_travel():
+    path = _commit_shape()
+    view = None
+    for index, x in enumerate((.05, 0., .05, 0., .05)):
+        view = path.hold((x, 0., 0.), .3 + index * .1)
+    assert view['error'] is None and not view['committed']
+
+
+def test_current_pose_is_distinct_from_cached_source_pose():
+    path = _commit_shape()
+    held = path.update((0., 0., 0.), .3, _shape_info(), observation_stamp=.2,
+                       current_pose=(0., .02, 0.))
+    assert held['target_m'][1] == pytest.approx(-.02)
+
+
+@pytest.mark.parametrize('pose,stamp', [
+    ((float('nan'), 0., 0.), .3), ((0., 0., float('inf')), .3),
+    ((0., 0., 0.), float('nan')), ((0., 0., math.pi), .3),
+])
+def test_invalid_or_reset_odometry_discards_observed_geometry(pose, stamp):
+    held = _commit_shape().hold(pose, stamp)
+    assert held['error'] is None and not held['committed']
+
+
+def test_shape_exhaustion_or_a_target_behind_the_robot_stops():
+    path = _commit_shape()
+    held = path.hold((.40, 0., 0.), .3)
+    assert held['error'] is None
+
+
+def test_near_point_without_observed_shape_cannot_commit():
+    path = _new()
+    info = _centre()
+    info.pop('centre_path_m')
+    for stamp in (0., .1, .2):
+        path.update((0., 0., 0.), stamp, info)
+    assert not path._committed
+
+
+@pytest.mark.parametrize('reason', ['realign', 'creep_heading', 'repeat_failed'])
+def test_fresh_refusal_cannot_be_overridden_by_observed_memory(reason):
+    path = _commit_shape()
+    denied = path.update((0., 0., 0.), .3, dict(_shape_info(), strategy='none', reason=reason))
+    assert not denied['committed'] and denied['error'] is None
+    assert path.hold((0., 0., 0.), .4)['error'] is None
+
+
+def test_cached_frames_between_independent_frames_do_not_count_as_new_evidence():
+    path = _new()
+    info = _shape_info()
+    path.update((0., 0., 0.), 0., info, observation_stamp=0.)
+    path.update((0., 0., 0.), .05, info, observation_stamp=0.)
+    assert not path.update((0., 0., 0.), .1, info, observation_stamp=.1)['committed']
+    path.update((0., 0., 0.), .15, info, observation_stamp=.1)
+    assert path.update((0., 0., 0.), .2, info, observation_stamp=.2)['committed']
+
+
+@pytest.mark.parametrize('shape', [None, [(float('nan'), 0.), (.2, 0.)], [(.2, 0.), (.1, 0.)], [(.1, 0.), (.1, 0.)]])
+def test_new_invalid_geometry_cannot_reactivate_old_memory(shape):
+    path = _commit_shape()
+    denied = path.update((0., 0., 0.), .3, dict(_shape_info(), centre_path_m=shape))
+    assert not denied['committed'] and denied['error'] is None
+    assert path.hold((0., 0., 0.), .4)['error'] is None
+
+
+@pytest.mark.parametrize('strategy', ['drivable_creep', 'drivable_creep_map', 'drivable_map_bridge', 'drivable_reorient_left'])
+def test_non_centre_strategy_cannot_reactivate_old_memory(strategy):
+    path = _commit_shape()
+    assert not path.update((0., 0., 0.), .3, dict(_shape_info(), strategy=strategy))['committed']
+    assert path.hold((0., 0., 0.), .4)['error'] is None
