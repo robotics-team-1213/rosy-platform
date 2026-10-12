@@ -55,6 +55,7 @@ OWN = {
         "confirmed-action.js",
         "camera-warp.js",
         "camera-backdrop.js",
+        "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",
