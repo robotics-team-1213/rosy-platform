@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 from types import SimpleNamespace
+from functools import partial
 import pytest
 
 from fakes import run
@@ -165,7 +166,9 @@ def test_rejection_cleanup_never_erases_bound_native_operation(tmp_path):
 
 def test_stop_during_new_epoch_read_refuses_goal_before_send():
     from fleet.server.goal_lease import GoalLeases, NavigationStopped
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     leases=GoalLeases(0,{})
+    leases.prepare_send=partial(prepare_send, leases)
     leases.native_required=lambda tid:True
     sent=[]
     async def get(path):
@@ -180,6 +183,7 @@ def test_stop_during_new_epoch_read_refuses_goal_before_send():
 @pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack'])
 def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at):
     from fleet.server.goal_lease import GoalLeases
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     from fleet.swarm.dispatch_guard import check_dispatch
     store = FleetTaskStore(tmp_path / 'fleet.sqlite3')
     service = FleetTaskService(store, robot_ids={'rosy_01'})
@@ -189,6 +193,7 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
     withdrawn, sent = [], []
     service.channel_admission = lambda tid: 'CHANNEL_WITHDRAWN' if withdrawn else None
     leases = GoalLeases(0, {})
+    leases.prepare_send = partial(prepare_send, leases)
     leases.native_required = lambda tid: True
     leases.admit_attempt = service.admit_attempt
     leases.bind_native_receipt = service.bind_native_receipt

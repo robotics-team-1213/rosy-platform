@@ -3,6 +3,20 @@ import json
 from contextlib import closing
 
 from core_common.protocol.native.operation import NativeOperation
+from fleet.swarm.dispatch_guard import dispatch_guard
+from .evidence import epoch
+
+
+async def prepare_send(leases, task_id, attempt_id, robot_id, client, options, stop):
+    """Injected Task boundary; the safety lease owner imports no decision code."""
+    native = task_id is not None and leases.native_required is not None and leases.native_required(task_id)
+    if native:
+        options.update(epoch(await client._get('/api/v1/navigation/state')))
+        leases.check_stop(robot_id, stop)
+    def admit():
+        admit_send(leases, task_id, attempt_id, robot_id, native)
+    admit()
+    return dispatch_guard(admit, paths={'/api/v1/navigation/goal'})
 
 
 def admit_send(leases, task_id, attempt_id, robot_id, native):
