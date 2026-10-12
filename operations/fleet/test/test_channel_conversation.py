@@ -142,3 +142,50 @@ def test_independent_profile_policy_cannot_reuse_d720():
 def test_local_semantic_broker_has_independent_codec():
     from deploy.ai_pc.deliberation_conversation import instruction
     assert 'CONTROL' in instruction() and 'proposal' in instruction()
+
+
+@pytest.mark.parametrize('kind',['CLARIFY','REFUSE'])
+def test_reason_reply_cannot_smuggle_model_device_success(tmp_path,kind):
+    from rosy.decision.conversation.codec import reply
+    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    question=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
+    value=checked_answer(answer(kind,response='Everything healthy, robot movement completed.',reason='SAFETY'),question)
+    result=reply(value,question)
+    assert 'completed' not in result and '건강' not in result and '안전' in result
+
+
+@pytest.mark.parametrize('change',['map','admission'])
+def test_reservation_race_finishes_hold_reply_instead_of_ack_only(tmp_path,change,monkeypatch):
+    worker,jobs,journal,receipt,calls=worker_fixture(tmp_path)
+    original=jobs.reserve
+    def reserve(*args):
+        value=original(*args)
+        if change=='map':asyncio.run(worker.snapshot())['map']['version']=2
+        else:worker.admission=lambda:False
+        return value
+    monkeypatch.setattr(jobs,'reserve',reserve)
+    asyncio.run(worker.step(receipt))
+    assert calls==[] and jobs.peek(receipt['request_id'])['state']=='HOLD'
+    with journal._connect() as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE kind='CONVERSATION'").fetchone()[0]==1
+
+
+def test_invalid_input_finishes_one_hold_and_never_model_retries(tmp_path):
+    worker,jobs,journal,receipt,calls=worker_fixture(tmp_path)
+    async def invalid():return {'observed_at':worker.clock(),'robots':[{}]}
+    worker.snapshot=invalid
+    asyncio.run(worker.step(receipt));asyncio.run(worker.step(receipt))
+    assert calls==[] and jobs.peek(receipt['request_id'])['state']=='HOLD'
+    with journal._connect() as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE kind='CONVERSATION'").fetchone()[0]==1
+
+
+def test_partial_large_catalog_declares_completeness_and_unknown_place_is_refused(tmp_path):
+    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    env=environment()
+    env['map']['places_complete']=False
+    env['map']['places']=[{'id':f'P{i}', 'name':f'P{i}', 'x':float(i), 'y':0.} for i in range(64)]
+    question=conversation_input(receipt,env,journal.config.bot_id,now=clock[0])
+    assert question.environment['map']['places_complete'] is False
+    with pytest.raises(ValueError):checked_answer(answer('CONTROL',
+        intent={'do':'navigate','robot':'rosy_40','waypoint':'P400'}),question)
