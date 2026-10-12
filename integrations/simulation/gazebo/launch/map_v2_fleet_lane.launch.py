@@ -3,11 +3,17 @@
 
 import math
 import os
+import sys
 from typing import List
+
+_LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_parts import observer_steering_law
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -72,55 +78,7 @@ def generate_launch_description():
         # 1-2 run exactly as before.
         DeclareLaunchArgument("dock_observer", default_value="false"),
         simulation,
-        Node(
-            package="control",
-            executable="line_observer_node",
-            name="line_observer_node",
-            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay")},
-            output="screen",
-            parameters=[line_config, {
-                "use_sim_time": True,
-                "require_camera_controls_stable": False,
-                # Rendered grey: floor ~103-110, paint 228 near dimming to 214
-                # at 0.44 m (run 193728). The body (~218, rows >= 139) lies
-                # nearer than edge_left's bird's-eye view samples, so 180
-                # (midway) keeps the far paint that 220 lost.
-                "camera_bright_threshold": 180,
-                # Hold the inner block's outline (the lap's left boundary) a
-                # half-width off in bird's-eye view: row-wise pairing stopped
-                # at the 65 deg bends (run 184434). Declared Gazebo camera
-                # geometry (tilt 25 deg, 320x180).
-                "camera_lane_mode": ParameterValue(
-                    LaunchConfiguration("camera_lane_mode"), value_type=str),
-                "debug_overlay": ParameterValue(
-                    LaunchConfiguration("debug_overlay"), value_type=bool),
-                "debug_lane_graph": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                # route_a/route_b/route_ab only; every other mode ignores these.
-                "lane_graph_path": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                "route": ParameterValue(
-                    LaunchConfiguration("route"), value_type=List[str]),
-                "route_start": ParameterValue(
-                    LaunchConfiguration("route_start"), value_type=List[float]),
-                "camera_ground_source": "GAZEBO",
-                "allow_simulation_ground": True,
-                "gazebo_camera_height_m": 0.060194,
-                "gazebo_camera_pitch_rad": math.radians(25.0),
-                "gazebo_camera_hfov_rad": 1.1519,
-                "gazebo_camera_max_range_m": 0.6,
-                "camera_roi_top_fraction": 0.25,
-                "camera_roi_bottom_fraction": 0.75,
-                # Crosswalk bars light ~50% of the band (run 164241); 0.75 still
-                # rejects a washed-out frame.
-                "camera_washed_fraction": 0.75,
-                # 90 deg corners: odometry-bounded turn; the URDF camera sits
-                # 0.020 + 0.015*cos(25 deg) - 0.0121*sin(25 deg) = 0.028481 m
-                # ahead of base_link (D-397 URDF chain at cam_tilt_deg 25).
-                "lane_corner_turning": True,
-                "camera_x_offset_m": 0.028481,
-            }],
-        ),
+        OpaqueFunction(function=_line_observer, kwargs={"line_config": line_config, "control_share": control_share}),
         Node(
             package="control",
             executable="dock_observer_node",
@@ -168,3 +126,56 @@ def generate_launch_description():
             "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
             "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
     ])
+
+
+def _line_observer(context, *, line_config, control_share):
+    return [
+        Node(
+            package="control",
+            executable="line_observer_node",
+            name="line_observer_node",
+            output="screen",
+            parameters=[line_config, {
+                "use_sim_time": True,
+                "require_camera_controls_stable": False,
+                # Rendered grey: floor ~103-110, paint 228 near dimming to 214
+                # at 0.44 m (run 193728). The body (~218, rows >= 139) lies
+                # nearer than edge_left's bird's-eye view samples, so 180
+                # (midway) keeps the far paint that 220 lost.
+                "camera_bright_threshold": 180,
+                # Hold the inner block's outline (the lap's left boundary) a
+                # half-width off in bird's-eye view: row-wise pairing stopped
+                # at the 65 deg bends (run 184434). Declared Gazebo camera
+                # geometry (tilt 25 deg, 320x180).
+                "camera_lane_mode": ParameterValue(
+                    LaunchConfiguration("camera_lane_mode"), value_type=str),
+                "debug_overlay": ParameterValue(
+                    LaunchConfiguration("debug_overlay"), value_type=bool),
+                "debug_lane_graph": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                # route_a/route_b/route_ab only; every other mode ignores these.
+                "lane_graph_path": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                "route": ParameterValue(
+                    LaunchConfiguration("route"), value_type=List[str]),
+                "route_start": ParameterValue(
+                    LaunchConfiguration("route_start"), value_type=List[float]),
+                "camera_ground_source": "GAZEBO",
+                "allow_simulation_ground": True,
+                "gazebo_camera_height_m": 0.060194,
+                "gazebo_camera_pitch_rad": math.radians(25.0),
+                "gazebo_camera_hfov_rad": 1.1519,
+                "gazebo_camera_max_range_m": 0.6,
+                "camera_roi_top_fraction": 0.25,
+                "camera_roi_bottom_fraction": 0.75,
+                # Crosswalk bars light ~50% of the band (run 164241); 0.75 still
+                # rejects a washed-out frame.
+                "camera_washed_fraction": 0.75,
+                # 90 deg corners: odometry-bounded turn; the URDF camera sits
+                # 0.020 + 0.015*cos(25 deg) - 0.0121*sin(25 deg) = 0.028481 m
+                # ahead of base_link (D-397 URDF chain at cam_tilt_deg 25).
+                "lane_corner_turning": True,
+                "camera_x_offset_m": 0.028481,
+            }, observer_steering_law(LaunchConfiguration("core_overlay").perform(context))],
+        )
+    ]
