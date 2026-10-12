@@ -143,3 +143,23 @@ def test_different_full_profiles_cannot_share_one_approved_calibration_revision(
     with pytest.raises(ValueError):
         registry.approve(second['revision'], signed(second, 'reasoning_calibration', head), expected_head=head)
     assert len(registry.history()) == 3
+
+
+@pytest.mark.parametrize('fault', ['removed', 'key', 'scope', 'resealed_receipt'])
+def test_approved_restart_reverifies_current_trust_and_historical_receipt(tmp_path, fault):
+    path, candidate = source(tmp_path)
+    root = tmp_path / 'registry'; registry = opened(root)
+    revision = registry.register(path); head = registry.history()[-1]['revision']
+    registry.approve(revision, signed(candidate, 'reasoning_calibration', head), expected_head=head)
+    trusted = TRUST
+    if fault == 'removed': trusted = {}
+    elif fault == 'key': trusted = {'independent-review': {'key': b'different-key' * 3,
+                                                        'kinds': {'reasoning_calibration'}}}
+    elif fault == 'scope': trusted = {'independent-review': {'key': KEY, 'kinds': {'reasoning_revocation'}}}
+    else:
+        from rosy.contracts.learning import seal
+        with sqlite3.connect(root / 'registry.sqlite3') as db:
+            event = json.loads(db.execute('SELECT body FROM reasoning_events WHERE sequence=2').fetchone()[0])
+            event['data']['receipt']['signature'] = '0' * 64
+            db.execute('UPDATE reasoning_events SET body=? WHERE sequence=2', (canonical(seal(event)),))
+    with pytest.raises(ValueError): opened(root, trusted=trusted).approved_artifacts()
