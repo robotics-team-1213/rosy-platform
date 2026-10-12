@@ -1,6 +1,7 @@
 """ROOT original-file composition; explicit ports only, no default activation."""
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -19,11 +20,16 @@ def load_frozen_json(source, *, expected_sha256):
         return result
     def nonfinite(value):
         raise ValueError('NONFINITE_OPERATING_ORIGINAL')
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number): nonfinite(value)
+        return number
     try:
         with Path(source).open('rb') as stream: raw = stream.read(1024 * 1024 + 1)
         if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != expected_sha256:
             raise ValueError('OPERATING_ORIGINAL_BYTES_DIFFER')
-        document = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=unique, parse_constant=nonfinite)
+        document = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=unique,
+                              parse_constant=nonfinite, parse_float=finite_float)
         if type(document) is not dict: raise ValueError('OPERATING_ORIGINAL_OBJECT_REQUIRED')
         return document
     except (OSError, UnicodeError, RecursionError, OverflowError) as error:

@@ -10,7 +10,7 @@ D-727/D-730의 서명·원장 소비자는 evidence owner가 실제 truth·한�
 
 ## 닫힌 입력과 수용
 
-내부 `rosy.incident.operational_evidence/1`은 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review를 가진다. PASS report, binding, field_accepted, truth_admitted를 입력으로 받지 않는다. 기존 full profile/calibration/cohort/export 코드가 원래 prediction과 분모를 다시 검사한다. train/fit/evaluation session·recording·원본 hash를 분리하고 UNKNOWN·실패를 누락하지 않는다.
+내부 `rosy.incident.operational_evidence/1`은 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review를 가진다. PASS report, binding, field_accepted, truth_admitted를 입력으로 받지 않는다. 기존 full profile/calibration/cohort/export codec으로 보정 입력의 형식·독립 분리와 보존 사건 분모를 재검증한다. 원장 prediction 원본과 검수 행의 결속은 아래 별도 미지원 경계다. UNKNOWN·실패를 사건 분모에서 누락하지 않는다.
 
 calibration_input은 기존 fit/evaluation/training/reviewed_profile 계산 입력이며 `rosy.calibration.feedback_input/1`을 직접 소비하지 않는다. 기존 feedback_bundle의 원장 prediction receipt→검수 행 원본 결속도 호출하지 않아 feedback_prediction_export_lineage_admission으로 미지원이다. 보정 재계산과 cohort/export 재검증이 이 별도 원본 결속까지 증명하지 않는다.
 
