@@ -22,17 +22,8 @@ from drive_runtime import configure_velocity_drive, configure_passive_drive, pas
 from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
 from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision, verify_ground_collision
-from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
-
-
-def learn_transition(policy, previous, state, result):
-    if state is None:
-        return 'invalid_camera_observation'
-    if previous is None or previous[0] is None:
-        return 'no_previous_observation'
-    policy.update(*previous, result['reward'], state,
-                  terminated=result['terminated'] or result['truncated'])
-    return 'updated'
+from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due,
+                           remember_camera_action, learn_transition, camera_snapshot_due)
 
 
 def episode_phases(train_episodes, *, camera, evaluation_only):
@@ -42,11 +33,6 @@ def episode_phases(train_episodes, *, camera, evaluation_only):
                                          *[('train', seed, 0.) for seed in range(train_episodes)]]
     return phases + [(phase, seed, angle) for seed, angle in evaluations
                      for phase in (('baseline', 'eval') if camera else ('eval',))]
-
-
-def camera_snapshot_due(camera_frames, last, captured):
-    key = (last.get('reason'), last.get('strategy'))
-    return camera_frames == 0 or (bool(key[0]) and key not in captured and len(captured) < 8)
 
 
 def camera_route_guide(task, pose, result, stamp):
@@ -275,9 +261,11 @@ def main():
         frame = 0
         epoch = 0
         power = type('DiagnosticPower', (), {'on_activity': lambda self, source: None})()
+        dispatch_receipts, cycle_warnings = [], []
 
         def send(twist):
             robot.apply_wheel_actions(diff.forward(command=np.array([twist.linear, twist.angular])))
+            dispatch_receipts.append((twist.linear, twist.angular))
 
         def read_pose():
             position, quaternion = robot.get_world_pose()
@@ -374,6 +362,7 @@ def main():
             wall_start = time.monotonic()
             episode_start_frame = frame
             previous = None
+            last_applied = None
             frozen = policy.export() if phase == 'eval' or (perception is not None and phase == 'baseline') else None
             if phase == 'eval' and (policy.updates == 0 or not any(
                     value != 0. for values in policy.table.values() for value in values)):
@@ -436,6 +425,7 @@ def main():
                         state = lane.state()
                         now = time.monotonic()
                     learning_step = None
+                    terminal_credit = None
                     if phase == 'train' and lane is None:
                         learning_step = learn_transition(policy, previous, state, result)
                     action = 1 if phase == 'baseline' or state is None else policy.choose(state, explore=phase == 'train')
@@ -446,9 +436,17 @@ def main():
                         speed, angular = decision.linear, decision.angular
                         if lane.manager.status().state == 'LOST' and not result['terminated']:
                             result = dict(result, terminated=True, truncated=False, complete=False,
-                                          reason='camera_lane_lost', reward=result['reward'] - 10.)
+                                          reason='camera_lane_lost', reward=result['reward'] - 10.,
+                                          camera_failure_reason=lane.last.get('reason'))
                     if phase == 'train' and lane is not None:
-                        learning_step = learn_transition(policy, previous, state, result)
+                        if state is None and result['terminated'] and result['reason'] == 'camera_lane_lost':
+                            terminal_credit = (last_applied if result.get('camera_failure_reason') ==
+                                               'camera_target_unavailable' else None)
+                            credit_previous = (None if terminal_credit is None else
+                                               (terminal_credit['state'], terminal_credit['action']))
+                        else:
+                            credit_previous = previous
+                        learning_step = learn_transition(policy, credit_previous, state, result)
                     if phase == 'train':
                         counts = summary['learning_steps']
                         counts[learning_step] = counts.get(learning_step, 0) + 1
@@ -468,10 +466,17 @@ def main():
                             if not lane.manager.apply_if_current(decision, lambda _decision:
                                 owner.submit(intent, observed_at=now, now=now, preserve_curvature=True)):
                                 owner.stop()
-                    cmd_vel_cycle(command=owner, power=power, send=send)
+                    dispatch_receipts.clear()
+                    cycle_warnings.clear()
+                    cmd_vel_cycle(command=owner, power=power, send=send, warn=cycle_warnings.append)
+                    if phase == 'train' and lane is not None:
+                        last_applied = remember_camera_action(last_applied, state, action, frame,
+                            (speed, angular), dispatch_receipts, cycle_warnings, owner.halted)
                     trace.write(json.dumps(dict(frame=frame, sim_s=elapsed, wall_s=time.monotonic() - wall_start,
                                                 pose=pose, action=action, candidate=[speed, angular],
                                                 learning_step=learning_step,
+                                                terminal_credit=terminal_credit, dispatch=dispatch_receipts,
+                                                cycle_warnings=cycle_warnings,
                                                 **({'camera': lane.last, 'line': lane.manager.status().model_dump()}
                                                    if lane is not None else {}), **result)) + '\n')
                     if result['terminated'] or result['truncated']:
