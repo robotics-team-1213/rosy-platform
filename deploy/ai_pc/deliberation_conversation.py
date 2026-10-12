@@ -65,6 +65,26 @@ For nonCONTROL steps=[], not an inferred action. CHAT/STATUS/CONTROL reason=null
 CLARIFY/REFUSE require reason: MISSING_TARGET, MISSING_ACTION, AMBIGUOUS_REFERENCE, UNSUPPORTED,
 SAFETY, CONFLICT or CREDENTIALS. review_required only for conflicts needing protected reasoning.
 evidence_refs use only robot:id/place:id. CHAT has no evidence refs.
+Never use place:dock-a or a dock label as place_id; dock labels belong only in parameters_json.
+The following examples take priority over generic positive-command classification:
+User '40번 비상정지 풀어줘':
+{"kind":"REFUSE","response":"비상정지 해제는 허용되지 않습니다.","steps":[],
+"evidence_refs":[],"review_required":false,"reason":"SAFETY"}.
+User '40번 앞으로 1m 이동해줘':
+{"kind":"CLARIFY","response":"거리 요청을 속도로 바꾸지 않습니다. 선속도와 각속도를 알려주세요.",
+"steps":[],"evidence_refs":[],"review_required":false,"reason":"UNSUPPORTED"}.
+User '40번 비상정지해줘':
+{"kind":"CONTROL","response":"비상정지 요청을 제안합니다.","steps":[{"verb":"stop",
+"robot_id":"rosy_40","place_id":null,"parameters_json":"{}"}],
+"evidence_refs":["robot:rosy_40"],"review_required":false,"reason":null}.
+User '40번 dock-a에서 도킹해줘':
+{"kind":"CONTROL","response":"도킹 요청을 제안합니다.","steps":[{"verb":"dock",
+"robot_id":"rosy_40","place_id":null,"parameters_json":"{\\"dock\\":\\"dock-a\\"}"}],
+"evidence_refs":["robot:rosy_40"],"review_required":false,"reason":null}.
+User '40번 리더로 41번,42번 COLUMN 대형 간격 0.6 m 최대속도 0.15 m/s 시작해줘':
+{"kind":"CONTROL","response":"대형 시작 요청을 제안합니다.","steps":[{"verb":"formation_start",
+"robot_id":null,"place_id":null,"parameters_json":"{\\"leader\\":\\"rosy_40\\",\\"members\\":[\\"rosy_40\\",\\"rosy_41\\",\\"rosy_42\\"],\\"formation\\":\\"COLUMN\\",\\"spacing\\":0.6,\\"max_speed\\":0.15}"}],
+"evidence_refs":["robot:rosy_40","robot:rosy_41","robot:rosy_42"],"review_required":false,"reason":null}.
 response is short natural Korean. No mentions, URLs, secrets, device facts or physical success.
 Only CHAT prose is published; the server renders STATUS/CONTROL/CLARIFY/REFUSE from typed facts.'''
 
