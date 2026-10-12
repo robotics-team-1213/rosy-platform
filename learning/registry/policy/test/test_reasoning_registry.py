@@ -1,5 +1,4 @@
 """Real SQLite restart, immutable snapshots, scoped receipts and CAS; no operating authority."""
-import copy
 import hashlib
 import hmac
 import importlib
