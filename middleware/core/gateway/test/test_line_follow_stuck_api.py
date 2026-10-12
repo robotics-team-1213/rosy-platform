@@ -211,7 +211,7 @@ def test_conditional_back_api_rejects_malformed_predicate(core_client, expected)
     client, _, stuck_id = _stuck(core_client)
     reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
                                   "expected_stuck": expected}, headers=OPERATOR)
-    assert reply.status_code == 422
+    assert reply.status_code == 400 and reply.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_conditional_back_predicate_cannot_block_human_wait(core_client):

@@ -29,6 +29,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
+from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
 from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
@@ -1012,14 +1013,6 @@ class PoseSample(BaseModel):
     for_robot_id: Optional[str] = None
     anchor_age_s: Optional[float] = None  # oldest of the two camera anchors behind this sample
     anchor_hold: Optional[str] = None  # set: Fleet has no usable anchor (why); hold, keep the stream
-
-
-class LineStuckPrecondition(BaseModel):
-    """D-718 conditional BACK admission, checked atomically with the CORE answer."""
-
-    model_config = ConfigDict(extra="forbid")
-    phase: Literal["ASKING"]
-    attempts: int = Field(strict=True, ge=0)
 
 
 class LineStuckStatus(BaseModel):
