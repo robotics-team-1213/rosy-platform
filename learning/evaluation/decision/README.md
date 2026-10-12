@@ -1,5 +1,7 @@
 # 독립 사건 원장 비교
 
+기존 확률 보정은 `python tools/decision_calibration.py <frozen-bundle.json>`과 `--compare` 경로를 사용한다. D-702는 검수된 전체 최소 표본 수에 더해 평가에 등장한 각 구간의 fit/evaluation 최소 표본 수를 요구한다. 표본 부족·미검수 한계는 HOLD, 금지 오류는 FAIL이며 `metrics.error_counts`와 `fit_metrics.error_counts`는 네 가지 오류를 각각 보고한다. `forbidden`은 오류가 하나 이상인 사건 수여서 중복 오류 때문에 사건 분모가 늘지 않는다. PASS_OFFLINE_ONLY는 운영 승인이나 현장 품질 수용이 아니다.
+
 D-701의 `operational_cohort/2`는 기존 /1 필드에 `rules` 후보 목록을 추가한다. 각 규칙 후보는 `strategy_sha256`, `config_sha256`, `owner_id`, `policy_revision`, `exports`를 가지며 exports는 기존과 같은 subject_id·case_id·digest 바인딩이다. 같은 평가 사건 집합의 `rule_feedback/1`과 모델 export를 기존 CLI에 함께 전달한다. 정상 case null은 별도 export로 보존하며 사건 cohort에 가짜 사건으로 넣지 않는다.
 
 규칙 후보는 RULE_ONLY 자료만 허용하며 선택·필요성 건수만 보고한다. 결과·모델 호출·비용·명령·재발은 `null`이다. 보존 기록만으로 운영 coverage를 증명하지 않으며 독립 정답·한계와 운영 근거가 충족되기 전 비교·승격·현장 수용은 HOLD다. 기존 /1 입력과 모델 export /1·/2·/3은 유지한다.
