@@ -303,7 +303,7 @@ def compare_with_rules(cohort, exports):
 
 def compare_with_inventory(cohort, exports, inventories, *, expected_digests):
     report = compare(cohort, exports)
-    candidates = {(row['profile_sha256'], row['policy_revision']) for row in report['candidates'] if row['strategy'] != 'rule'}
+    candidates = {(row['profile_sha256'], row['policy_revision']) for row in cohort['candidates']}
     if (type(inventories) is not list or type(expected_digests) is not list
             or len(inventories) != len(candidates) or len(expected_digests) != len(inventories)):
         raise ValueError('EXPLICIT_FROZEN_INVENTORIES_REQUIRED')
