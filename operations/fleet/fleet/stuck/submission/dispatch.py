@@ -52,6 +52,7 @@ async def model_answer(self, scope, attempt_id, problem, worker):
         if await owned(operating.submission, scope.subject_id, scope.case_id) is not None: return False
         candidates = await owned(operating.candidates.candidates, scope)
         candidate = next(c for c in candidates if c['attempt_id'] == attempt_id)
+        if candidate['input_hash'] != problem.digest: return False
         approval = await owned(operating.grant, grant_id)
         case = await owned(operating.store.case, scope)
         async def before_submit():
@@ -65,8 +66,13 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                     and pipeline.law_hold(row, decision='BACK_AND_RETRY', stuck_id=scope.case_id) is None
                     and context is not None and {k: context[k] for k in ('phase', 'attempts')} == candidate['expected_stuck'])
             def claim():
+                def pending(conn):
+                    self._board.record(robot_id=scope.subject_id, stuck_id=scope.case_id, decision='BACK_AND_RETRY',
+                        principal_id=PRINCIPAL_ID, tier='ai', rule='model_v2', accepted=None,
+                        code='FLEET_STUCK_DISPATCH_PENDING', durable=True, connection=conn)
+                    return True
                 record = operating.claim_model(scope, grant_id, attempt_id, expected_epoch=approval['epoch'],
-                    generation=problem.generation, guard=guard)
+                    generation=problem.generation, guard=guard, on_claim=pending)
                 claimed.append(record)
             await owned(claim)
             return True
@@ -82,7 +88,19 @@ async def model_answer(self, scope, attempt_id, problem, worker):
     except (ValueError, TypeError, KeyError, StopIteration, httpx.HTTPError, OSError, TimeoutError):
         return False
     finally:
-        if claimed: await owned(operating.finish, scope, state=terminal, reply=reply)
+        if claimed:
+            final = await owned(operating.finish, scope, state=terminal, reply=reply)
+            terminal = final['state']
+            await owned(self._board.record, robot_id=scope.subject_id, stuck_id=scope.case_id,
+                decision='BACK_AND_RETRY', principal_id=PRINCIPAL_ID, tier='ai', rule='model_v2',
+                accepted=True if terminal == 'ACK' else False if terminal == 'REFUSED' else None,
+                outcome='back' if terminal == 'ACK' else None, durable=True,
+                code='STUCK_DECISION_OUTCOME_UNKNOWN' if terminal == 'UNKNOWN' else reply.get('code'))
+            if terminal != 'UNKNOWN':
+                await owned(self._board.record, robot_id=scope.subject_id, stuck_id=scope.case_id,
+                    decision='ESCALATE', principal_id=PRINCIPAL_ID, accepted=None, tier='ai',
+                    code='STUCK_DECISION_RECONCILED', durable=True)
+            else: self._resolver._uncertain.add((scope.subject_id, scope.case_id))
     return bool(claimed) and terminal == 'ACK'
 
 async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> dict | None:
