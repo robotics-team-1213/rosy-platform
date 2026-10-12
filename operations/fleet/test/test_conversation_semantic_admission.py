@@ -67,6 +67,17 @@ def test_semantic_proof_without_inference_source_closure_is_refused(monkeypatch)
         broker.configuration()
 
 
+def test_semantic_suite_covers_every_exposed_control_verb():
+    from typing import get_args
+    from deploy.ai_pc import conversation_acceptance as acceptance
+    from core_common.intent import interpret
+    from rosy.decision.conversation.codec import SemanticStep
+    plans = getattr(acceptance, 'EXPECTED', {'navigate': {'do': 'navigate',
+                         'robot': 'rosy_40', 'waypoint': 'A'}})
+    covered = {call.verb for plan in plans.values() for call in interpret(plan)}
+    assert set(get_args(SemanticStep.model_fields['verb'].annotation)) <= covered
+
+
 @pytest.mark.parametrize('change', ['failed', 'partial', 'duplicate', 'kind', 'input',
                                    'input_type', 'hash', 'profile', 'profile_type', 'policy',
                                    'owner', 'stale', 'fact', 'command'])
