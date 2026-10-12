@@ -6,11 +6,11 @@
 
 D-727/D-730의 서명·원장 소비자는 evidence owner가 실제 truth·한계·coverage·설치를 검증했다고 전제한다. 현재 시험의 PASS dict와 임의 hash는 그 producer가 아니다. D-697 비교는 계속 HOLD다. Model PC의 독립 평가가 Fleet writer를 import하거나 호출해서는 안 된다.
 
-기존 `learning/evaluation/decision`에 frozen evidence 진단 compiler를 둔다. 기존 export/cohort/inventory/보정 계약을 재검증하고 인증된 검수 **선언**을 결속한다. 출력은 항상 HOLD이며 운영 producer 완료가 아니다. ROOT `tools/incident_operating.py`의 별도 설치 getter는 외부 고정 SHA로 manifest와 실제 설치 artifact bytes를 확인하고 signed owner runtime 선언에서 설치 hash를 계산한다. OS probe 인증·실제 설치 활성화·현장 truth를 증명하지 않는다. 기존 OperationalState.apply와 같은 DB를 재사용할 importer 준비를 두고 기존 ROOT factory 기본 off를 유지한다. 새 서비스·DB·네트워크·모델 호출·CORE writer는 없다.
+기존 `learning/evaluation/decision`에 순수 frozen evidence 진단 compiler를 둔다. 기존 export/cohort/inventory 계약을 재검증하고 인증된 검수 **선언**을 결속한다. D-427 금지 import 방향을 유지하며 기존 ROOT `tools/incident_operating.py`가 operations의 실제 profile/보정 계산을 조합한다. 출력은 항상 HOLD이며 운영 producer 완료가 아니다. ROOT의 별도 설치 getter는 외부 고정 SHA로 manifest와 실제 설치 artifact bytes를 확인하고 signed owner runtime 선언에서 설치 hash를 계산한다. OS probe 인증·실제 설치 활성화·현장 truth를 증명하지 않는다. 기존 OperationalState.apply와 같은 DB를 재사용할 importer 준비를 두고 기존 ROOT factory 기본 off를 유지한다. 새 서비스·DB·네트워크·모델 호출·CORE writer는 없다.
 
 ## 닫힌 입력과 수용
 
-내부 `rosy.incident.operational_evidence/1`은 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review를 가진다. PASS report, binding, field_accepted, truth_admitted를 입력으로 받지 않는다. 기존 full profile/calibration/cohort/export codec으로 보정 입력의 형식·독립 분리와 보존 사건 분모를 재검증한다. 원장 prediction 원본과 검수 행의 결속은 아래 별도 미지원 경계다. UNKNOWN·실패를 사건 분모에서 누락하지 않는다.
+내부 `rosy.incident.operational_evidence/1`은 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review를 가진다. PASS report, binding, field_accepted, truth_admitted를 입력으로 받지 않는다. 기존 ROOT compile_original_evidence가 full profile/calibration codec으로 보정 입력의 형식·독립 분리를 실제 재계산하고 닫힌 bundle-bound 진단 hash/state/domain 자료를 순수 compiler에 전달한다. compiler 직접 호출은 이 원본을 재계산하지 않아 profile/calibration hash는 null, scope는 not_recomputed다. caller 진단 shape만 검증하면 caller_supplied_diagnostics_only이며 원본 proof가 아니다. ROOT 조합만 root_recomputed_profile_and_calibration_only를 보고한다. compiler의 cohort/export codec은 보존 사건 분모를 재검증한다. 원장 prediction 원본과 검수 행의 결속은 아래 별도 미지원 경계다. UNKNOWN·실패를 사건 분모에서 누락하지 않는다.
 
 calibration_input은 기존 fit/evaluation/training/reviewed_profile 계산 입력이며 `rosy.calibration.feedback_input/1`을 직접 소비하지 않는다. 기존 feedback_bundle의 원장 prediction receipt→검수 행 원본 결속도 호출하지 않아 feedback_prediction_export_lineage_admission으로 미지원이다. 보정 재계산과 cohort/export 재검증이 이 별도 원본 결속까지 증명하지 않는다.
 

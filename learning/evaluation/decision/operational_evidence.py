@@ -1,9 +1,5 @@
-"""Recompute frozen operational originals; no signer, provider or Fleet writer."""
-from dataclasses import asdict
-
-from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
-from rosy.decision.deliberation.calibration import evaluate_calibration
-from .operational_comparison import compare_with_inventory, fields, timestamp
+"""Pure frozen evidence diagnostics; no operations imports or operating acceptance."""
+from .operational_comparison import compare_with_inventory, fields, sha, timestamp
 from .operational_sources import digest, encoded, verify_attestation, validate_window
 from .operational_truth import measure_truth
 
@@ -35,25 +31,45 @@ def reviewed_limits(document):
     return limits
 
 
-def compile_evidence(bundle, *, trusted, now, originals=None):
+def compile_evidence(bundle, *, trusted, now, originals=None, profile_calibration=None):
     fields(bundle, BUNDLE); encoded(bundle); timestamp(now)
     if bundle['schema'] != 'rosy.incident.operational_evidence/1': raise ValueError('INVALID_OPERATING_BUNDLE_SCHEMA')
-    profiles = incident_profiles(tuple(ModelProfile(**p) for p in bundle['profiles']))
-    selected = ModelProfile(**bundle['profile'])
-    if selected not in profiles or selected.calibration_revision is None:
+    profiles, selected = bundle['profiles'], bundle['profile']
+    if (type(profiles) is not list or not 1 <= len(profiles) <= 2 or type(selected) is not dict
+            or any(type(p) is not dict for p in profiles) or selected not in profiles):
         raise ValueError('OPERATING_FULL_PROFILE_NOT_SELECTED')
     missing = [name for name, key in (('calibration', 'calibration_input'), ('cohort', 'cohort'), ('truth', 'truth'),
                                     ('limits', 'limits'), ('windows', 'windows'), ('review', 'review')) if not bundle[key]]
-    if 'line_follow' not in selected.domains: missing.append('domain_backend_not_supported')
-    calibration = None
+    if type(selected.get('domains')) not in (list, tuple) or 'line_follow' not in selected['domains']:
+        missing.append('domain_backend_not_supported')
+    profile_set_sha256 = full_profile_sha256 = calibration_sha256 = None
+    scope = 'not_recomputed'
     if bundle['calibration_input'] is not None:
         fields(bundle['calibration_input'], ('fit', 'evaluation', 'training', 'reviewed_profile'))
-        calibration = evaluate_calibration(**bundle['calibration_input'])
-        report = calibration.report
-        if (report['full_profile_sha256'] != digest(asdict(selected)) or report['domain'] != 'line_follow'
-                or report['model_revision'] != selected.model_revision or report['calibration_revision'] != selected.calibration_revision):
-            raise ValueError('OPERATING_CALIBRATION_OR_PROFILE_DIFFERS')
-        if report['state'] != 'PASS_OFFLINE_ONLY': missing.append('accepted_calibration')
+    if profile_calibration is None:
+        missing.append('root_profile_calibration_not_recomputed')
+    else:
+        fields(profile_calibration, ('bundle_sha256', 'profile_set_sha256', 'full_profile_sha256',
+                                    'calibration_sha256', 'calibration_state', 'domains'))
+        if sha(profile_calibration['bundle_sha256']) != digest(bundle):
+            raise ValueError('PROFILE_CALIBRATION_DIAGNOSTIC_BUNDLE_DIFFERS')
+        profile_set_sha256 = sha(profile_calibration['profile_set_sha256'])
+        full_profile_sha256 = sha(profile_calibration['full_profile_sha256'])
+        calibration_sha256 = profile_calibration['calibration_sha256']
+        state, domains = profile_calibration['calibration_state'], profile_calibration['domains']
+        if (type(domains) is not list or not 1 <= len(domains) <= 3
+                or any(d not in ('line_follow', 'door', 'arm_target') for d in domains)
+                or len(set(domains)) != len(domains)):
+            raise ValueError('INVALID_PROFILE_CALIBRATION_DIAGNOSTIC_DOMAINS')
+        if calibration_sha256 is None:
+            if state is not None or bundle['calibration_input'] is not None:
+                raise ValueError('INVALID_PROFILE_CALIBRATION_DIAGNOSTIC_STATE')
+        else:
+            sha(calibration_sha256)
+            if state not in ('HOLD', 'FAIL', 'PASS_OFFLINE_ONLY') or bundle['calibration_input'] is None:
+                raise ValueError('INVALID_PROFILE_CALIBRATION_DIAGNOSTIC_STATE')
+        if state != 'PASS_OFFLINE_ONLY': missing.append('accepted_calibration')
+        scope = 'caller_supplied_diagnostics_only'
     comparison = None
     if bundle['cohort'] is not None:
         comparison = compare_with_inventory(bundle['cohort'], bundle['exports'], bundle['inventories'],
@@ -92,8 +108,9 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
     missing.extend(UNSUPPORTED)
     return dict(schema='rosy.incident.operational_acceptance/1', state='HOLD', missing=sorted(set(missing)),
         field_accepted=False, truth_admitted=False, evidence_sha256=digest(bundle),
-        profile_set_sha256=digest([asdict(p) for p in profiles]), full_profile_sha256=digest(asdict(selected)),
-        calibration_sha256=calibration.digest if calibration else None, comparison_sha256=digest(comparison) if comparison else None,
+        profile_set_sha256=profile_set_sha256, full_profile_sha256=full_profile_sha256,
+        calibration_sha256=calibration_sha256, profile_calibration_scope=scope,
+        comparison_sha256=digest(comparison) if comparison else None,
         coverage_sha256=digest(windows) if windows else None, limits_sha256=digest(bundle['limits']) if limits else None,
         truth_sha256=digest(bundle['truth']) if bundle['truth'] else None, metrics=metrics,
         metrics_scope='authenticated_review_declarations_only',
