@@ -62,7 +62,8 @@ def test_complete_protected_semantic_proof_is_admitted(monkeypatch):
 
 
 @pytest.mark.parametrize('change', ['failed', 'partial', 'duplicate', 'kind', 'input',
-                                   'hash', 'profile', 'policy', 'owner', 'stale', 'fact'])
+                                   'input_type', 'hash', 'profile', 'profile_type', 'policy',
+                                   'owner', 'stale', 'fact', 'command'])
 def test_semantic_proof_tampering_is_rejected(monkeypatch, change):
     value = proof()
     if change == 'failed': value['verdict'] = 'FAIL'
@@ -70,12 +71,15 @@ def test_semantic_proof_tampering_is_rejected(monkeypatch, change):
     elif change == 'duplicate': value['cases'][1] = value['cases'][0]
     elif change == 'kind': value['cases'][1]['answer']['kind'] = 'CHAT'
     elif change == 'input': value['cases'][0]['input']['principal_id'] = 'other'
+    elif change == 'input_type': value['cases'][0]['input']['schema_version'] = True
     elif change == 'hash': value['cases'][0]['input_hash'] = 'b'*64
     elif change == 'profile': value['profile']['revision'] = 'd728-other'
+    elif change == 'profile_type': value['profile']['max_calls'] = True
     elif change == 'policy': value['policy']['authority'] = 'control'
     elif change == 'owner': value['evaluation_owner'] = 'ai_pc'
     elif change == 'stale': value['evaluated_at'] -= 8*86400
     elif change == 'fact': value['cases'][0]['answer']['response'] = '현재 로봇은 이동 완료 상태입니다.'
+    elif change == 'command': value['cases'][2]['answer']['steps'][0]['verb'] = 'home'
     host_configuration(monkeypatch, json.dumps(value).encode())
     with pytest.raises(ValueError):
         broker.configuration()
