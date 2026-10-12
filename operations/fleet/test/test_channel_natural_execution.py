@@ -199,6 +199,8 @@ def test_scoped_guard_is_not_inherited_by_other_concurrent_callers():
 @pytest.mark.parametrize('phase',['discovery','identity'])
 @pytest.mark.parametrize('change',['owner','map','withdraw'])
 def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monkeypatch,phase,change):
+    from functools import partial
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     import httpx
     from fleet.swarm.robots import RobotEndpoint
     from fleet.swarm.transport import HttpRobotClient
@@ -237,6 +239,7 @@ def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monk
             client=HttpRobotClient(ep,http=http)
             leases=GoalLeases(0,{'rosy_40':client})
             leases.admit_attempt=f.service.admit_attempt
+            leases.prepare_send=partial(prepare_send,leases)
             async def dispatch(task):
                 return await leases.send('rosy_40',client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
             return await f.service.dispatch_next({'rosy_40'},dispatch=dispatch)
@@ -360,7 +363,7 @@ def test_shared_direct_service_rejects_other_owner_but_preserves_stop(tmp_path):
 
 @pytest.mark.parametrize('verb,body,receipt,expected',[
     ('cancel',{}, {'navigation':'CANCELED'},{'navigation':'CANCELED','rpc_acknowledged':True}),
-    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True}),
+    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True,'operations':[]}),
     ('home',{}, {'accepted':True,'mode':'NAVIGATION'},{'accepted':True,'mode':'NAVIGATION'}),
     ('move',{'linear':.1,'angular':0.}, {'accepted':True},{'accepted':True}),
     ('dock',{'dock':'dock-a'},{'state':'DOCKING','dock_id':'dock-a','phase':'approach','retries':0,'error':None},

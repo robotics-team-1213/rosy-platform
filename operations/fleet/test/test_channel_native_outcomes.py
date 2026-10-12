@@ -60,6 +60,117 @@ def test_direct_ack_persists_core_run_and_caller_identity_without_completion(tmp
     assert f.store.resource_claims(resource_kind="robot", resource_id="rosy_40")
 
 
+@pytest.mark.parametrize('verb,text,kind', [('cancel', '40번 이동 취소해줘', 'navigate'),
+                                          ('follow_cancel', '40번 추종 취소해줘', 'follow')])
+def test_native_stop_closes_without_releasing_another_owner_or_advancing(tmp_path, verb, text, kind):
+    f = fixture(tmp_path, text + ' 그리고 ' + HOME_TEXT,
+                {'steps': [{'do': verb, 'robot': 'rosy_40'}, HOME_PLAN]})
+    rid = f.receipt['request_id']
+    operation = _operation(uuid4(), uuid4(), 'original-motion') | {'kind': kind}
+    assert f.store.reserve_resources(owner_kind='direct_action', owner_id='original-motion',
+        generation=f.store.dispatch_control()['generation'], resources=[('robot', 'rosy_40')])
+    sent = []
+    async def cancel(*args):
+        sent.append(True)
+        return {'navigation': 'CANCELED', 'role': 'none', 'active': False,
+                'target_robot_id': None, 'operation': operation}
+    f.client.navigation_cancel = cancel
+    f.client._post = cancel
+    asyncio.run(f.worker.step(rid))
+    async def get(path):
+        return _readback(operation, result='CANCELED')
+    f.client._get = get
+    asyncio.run(f.worker.step(rid))
+    step = f.journal.view(rid)['steps'][0]
+    assert step['state'] == 'CANCELED'
+    evidence = json.loads(step['receipt_json'])
+    assert evidence['outcome']['result'] == 'CANCELED'
+    assert evidence['quiescence']['quiescent'] is True
+    assert evidence.get('safe_released') is not True
+    assert rid not in f.worker.pending()
+    assert f.store.resource_claims(resource_kind='robot', resource_id='rosy_40')[0]['owner_id'] == 'original-motion'
+    asyncio.run(f.worker.step(rid))
+    assert len(sent) == 1
+
+
+def test_site_stop_preserves_each_robot_native_receipt():
+    from core_common.intent import interpret
+    from fleet.server.channel.execution.receipts import owner_receipt
+    operation = _operation(uuid4(), uuid4(), 'motion')
+    accepted, receipt = owner_receipt(interpret({'do': 'estop'})[0], {'robots': [
+        {'robot_id': 'rosy_40', 'stopped': True, 'result': {'estop': True, 'operation': operation}},
+        {'robot_id': 'rosy_41', 'stopped': False, 'result': {}}]}, ['rosy_40', 'rosy_41'])
+    assert accepted is None
+    assert receipt['robots'][0]['operation'] == operation
+    assert 'operation' not in receipt['robots'][1]
+
+
+@pytest.mark.parametrize('site,empty,fault', [(s,e,'none') for s in (False,True) for e in (False,True)] +
+    [(True,False,f) for f in ('delayed','reboot','row','pruned','conflict','partial','revoked')])
+def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_path, monkeypatch, site, empty, fault):
+    from fleet.server.channel.execution.outcomes import reconcile, stops
+    tick = [10.]
+    monkeypatch.setattr(reconcile, 'time', SimpleNamespace(monotonic=lambda: tick[0]))
+    monkeypatch.setattr(stops, 'time', SimpleNamespace(monotonic=lambda: tick[0]))
+    text, plan = ('전체 비상정지해', {'do': 'estop'}) if site else ('40번 비상정지해', {'do': 'stop', 'robot': 'rosy_40'})
+    f = fixture(tmp_path, text, plan, extra_robots=('rosy_41',) if site else ())
+    robots = f.worker.execution.console.robot_ids
+    boot, sent, values = str(uuid4()), [], {}
+    for robot in robots:
+        assert f.store.reserve_resources(owner_kind='direct_action', owner_id='motion:' + robot,
+            generation=f.store.dispatch_control()['generation'], resources=[('robot', robot)])
+        with f.store._connect() as conn, conn:
+            conn.execute("UPDATE fleet_action_claims SET phase='UNKNOWN' WHERE owner_id=?", ('motion:' + robot,))
+        values[robot] = [dict(_operation(uuid4(), boot, robot), kind=kind) for kind in ('navigate', 'teleop')]
+        if fault in {'pruned','conflict'}:
+            values[robot] = [op | {'phase':'TERMINAL','result':'CANCELED'} for op in values[robot]]
+    async def stop():
+        sent.append(True)
+        return {'estop': True, 'operations': [] if empty else values['rosy_40']}
+    async def stop_all():
+        sent.append(True)
+        return {'robots': [{'robot_id': robot, 'stopped': True,
+                           'result': {'estop': True, 'operations': [] if empty else values[robot]}}
+                          for robot in (robots[:-1] if fault == 'partial' else robots)]}
+    quiescent = [False]
+    def client(robot):
+        async def get(path):
+            operation = next(op for op in values[robot] if op['run_id'] in path)
+            value = _readback(operation, result='SUCCEEDED' if fault == 'conflict' else 'CANCELED', quiescent=quiescent[0])
+            if fault == 'pruned': return {'lookup':'UNKNOWN','operation':None}
+            if fault == 'reboot': value['owner']['boot_id'] = str(uuid4())
+            if fault == 'delayed' and quiescent[0]: tick[0] += 2.01
+            if fault == 'row' and quiescent[0]:
+                with f.store._connect() as conn, conn:
+                    conn.execute('UPDATE fleet_channel_execution_steps SET caller_cid=?', (str(uuid4()),))
+            return value
+        return SimpleNamespace(_get=get, estop=stop)
+    f.worker.execution.console._client = client
+    f.worker.execution.console.estop_all = stop_all
+    rid = f.receipt['request_id']
+    asyncio.run(f.worker.step(rid))
+    if fault == 'revoked': f.raw.withdraw(f.receipt['guild_id'], f.receipt['channel_id'], f.receipt['message_id'])
+    asyncio.run(f.worker.step(rid))
+    current = f.journal.view(rid)['steps'][0]
+    if empty or fault == 'partial':
+        assert current['state'] == 'HOLD' and rid not in f.worker.pending()
+    else:
+        assert current['state'] == 'UNKNOWN' and rid in f.worker.pending()
+        quiescent[0] = True
+        asyncio.run(f.worker.step(rid))
+        current = f.journal.view(rid)['steps'][0]
+        closed = fault in {'none','revoked'}
+        assert current['state'] == ('CANCELED' if closed else 'UNKNOWN')
+        assert (rid not in f.worker.pending()) == closed
+        receipt = json.loads(current['receipt_json'])
+        assert len(receipt['stop_outcomes']) == len(robots) * 2
+        if closed: assert all(item['quiescence']['quiescent'] for item in receipt['stop_outcomes'])
+        if fault in {'pruned','conflict'}: assert all(item['outcome']['result']=='CANCELED' for item in receipt['stop_outcomes'])
+        assert not receipt.get('safe_released')
+    assert len(sent) == 1
+    assert all(f.store.resource_claims(resource_kind='robot', resource_id=robot) for robot in robots)
+
+
 @pytest.mark.parametrize('change',['run','boot','unknown','owner','pending','callback','lease','admitting','epoch','transport','missing'])
 def test_unproven_readback_cannot_release_claim(tmp_path,change):
     f, run_id, boot_id, sent = _home_with_native_ack(tmp_path)
@@ -205,17 +316,23 @@ def test_follow_hold_and_teleop_expiry_are_not_completion(tmp_path,kind):
     assert len(sent)==1
 
 
-def test_pruned_exact_event_keeps_result_without_release_or_cid_inference(tmp_path):
+@pytest.mark.parametrize('event_type,source,result,reason', [
+    ('nav.completed', None, 'SUCCEEDED', None),
+    ('nav.canceled', 'goal_lease', 'EXPIRED', 'LEASE_EXPIRED'),
+    ('nav.canceled', 'stuck_detector', 'FAILED', 'STUCK'),
+    ('nav.canceled', 'safety:estop', 'CANCELED', 'SAFETY_STOP'),
+    ('nav.canceled', 'api:operator', 'CANCELED', 'CANCELED')])
+def test_pruned_exact_event_keeps_result_without_release_or_cid_inference(tmp_path,event_type,source,result,reason):
     from fleet.observe.events import CoreEventStore
     f,_,_,sent=_home_with_native_ack(tmp_path);rid=f.receipt['request_id']
     op=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])['operation']
     f.service.core_events=CoreEventStore(f.store.path)
     f.service.core_events.append_event({'robot_id':'rosy_40','event_id':'terminal','seq':1,
-        'type':'nav.completed','data':{k:op[k] for k in ('run_id','boot_id','correlation_id')}})
+        'type':event_type,'data':{k:op[k] for k in ('run_id','boot_id','correlation_id')} | {'source':source}})
     async def get(path):return {'lookup':'UNKNOWN','operation':None,'quiescence':None}
     f.client._get=get;asyncio.run(f.worker.step(rid))
     receipt=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])
-    assert receipt['outcome']['result']=='SUCCEEDED' and not receipt.get('safe_released')
+    assert receipt['outcome']['result']==result and receipt['outcome']['reason']==reason and not receipt.get('safe_released')
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40') and len(sent)==1
 
 
