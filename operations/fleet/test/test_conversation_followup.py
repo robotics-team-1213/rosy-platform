@@ -239,3 +239,46 @@ def test_live_reboot_before_final_goal_send_cannot_rebind_old_selection(tmp_path
     assert not sent and result['status']=='FAILED'
     assert not (result['receipt'] or {}).get('native_required')
     assert not f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')
+
+
+@pytest.mark.parametrize('race',[False,True])
+def test_followup_forwards_selected_epoch_to_public_core_cas(tmp_path,monkeypatch,race):
+    from functools import partial
+    from uuid import UUID
+    from core_common.protocol.native import receipts as native
+    from fleet.server.goal_lease import GoalLeases
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
+    f=completed_turn(tmp_path)
+    worker,receipt,calls=followup_worker(f)
+    asyncio.run(worker.step(receipt));asyncio.run(f.worker.step(receipt['request_id']))
+    context=calls[0].accepted_execution_context
+    core=native.NativeReceipts();core.generation=context['owner_generation']
+    monkeypatch.setattr(native,'BOOT_ID',UUID(context['boot_id']))
+    leases=GoalLeases(0,{})
+    leases.admit_attempt=f.service.admit_attempt
+    leases.native_required=f.service.native_required
+    leases.bind_native_receipt=f.service.bind_native_receipt
+    leases.selected_context=f.journal.context_for_task
+    leases.prepare_send=partial(prepare_send,leases)
+    async def get(path):
+        assert path.endswith('?run_id='+context['run_id'])
+        value=_readback(f.task['receipt']['operation'])
+        if race:monkeypatch.setattr(native,'BOOT_ID',uuid4())
+        return value
+    received=[];admitted=[]
+    async def goal(*args,**kwargs):
+        received.append(kwargs)
+        try:core.expect(UUID(kwargs['expected_boot_id']),kwargs['expected_owner_generation'])
+        except ValueError:return {'accepted':False}
+        operation=core.admit('navigate',kwargs['correlation_id']).model_dump(mode='json')
+        admitted.append(operation)
+        return {'accepted':True,'operation':operation}
+    f.client._get=get;f.client.navigation_goal=goal
+    async def dispatch(task):
+        return await leases.send('rosy_40',f.client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
+    result=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    assert len(received)==1 and received[0]['expected_boot_id']==context['boot_id']
+    assert received[0]['expected_owner_generation']==context['owner_generation']
+    assert len(admitted)==(0 if race else 1)
+    assert result['status']==('FAILED' if race else 'ACCEPTED')
+    if race:assert not f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')
