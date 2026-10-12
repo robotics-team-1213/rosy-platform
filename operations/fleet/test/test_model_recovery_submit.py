@@ -16,7 +16,9 @@ from test_model_recovery_candidates import recovery_problem, recovery_context
 from test_incident_case_worker import make_incident_worker
 
 
-@pytest.mark.parametrize('change', ['none', 'hold', 'human', 'client', 'unsupported', 'disconnect', 'cancel'])
+@pytest.mark.parametrize('change', ['none', 'hold', 'human', 'client', 'unsupported', 'disconnect', 'cancel',
+    'crosswalk', 'missing_crosswalk', 'rear', 'fact', 'budget', 'retired', 'peer_unknown', 'map_lost',
+    'deadline', 'uncertain', 'exhausted', 'prior_refusal'])
 def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_path, change):
     now, store, log, scope, state, proof, _ = opened(tmp_path, generation='core:1:stamp')
     state.apply('line-back', signed(proof, 0))
@@ -25,8 +27,10 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
     resolver.autonomous_robots = frozenset({scope.subject_id})
     calls, clients = [], {}
     row = dict(robot_id=scope.subject_id, online=True, state=dict(seq=1, timestamp='stamp',
-        line_follow={'stuck': dict(recovery_context(), stuck_id=scope.case_id)}))
-    async def snapshot(): return {'robots': [row]}
+        line_follow={'crosswalk': None, 'stuck': dict(recovery_context(), stuck_id=scope.case_id)}))
+    resolver.step(now[0], [row])
+    peers = []
+    async def snapshot(): return {'robots': [row, *peers]}
     loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: clients, clock=lambda: now[0])
     loop.operating_state, loop.operating_grant = state, 'line-back'
     (tmp_path / 'worker').mkdir()
@@ -40,6 +44,21 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
             if change == 'hold': proof['report']['state'] = 'HOLD'
             if change == 'human': resolver.claim(scope.subject_id, scope.case_id)
             if change == 'client': clients.clear()
+            if change == 'crosswalk': row['state']['line_follow']['crosswalk'] = {'state': 'unknown'}
+            if change == 'missing_crosswalk': row['state']['line_follow'].pop('crosswalk')
+            if change == 'rear': row['state']['line_follow']['stuck']['rear_state'] = 'blocked'
+            if change == 'fact': row['ai_facts'] = [{'kind': 'person'}]
+            if change == 'budget': resolver._chains[scope.subject_id].rule_answers = resolver.config.rule_budget
+            if change == 'retired': resolver._chains[scope.subject_id].retired.add('ai')
+            if change == 'peer_unknown': peers.append({'robot_id': 'peer', 'online': True, 'state': {}})
+            if change == 'map_lost': row['map_pose'] = {'state': 'LOST', 'sourced': True, 'age_s': .1}
+            if change == 'deadline': resolver._chains[scope.subject_id].started_at = now[0] - 61
+            if change == 'uncertain': resolver._uncertain.add((scope.subject_id, 'older-case'))
+            if change == 'exhausted': resolver._chains[scope.subject_id].observing = 'ai_exhausted'
+            if change == 'prior_refusal':
+                prior = Answer(scope.subject_id, 'older-case', 'BACK_AND_RETRY', 'model_v2')
+                resolver.sent(prior, now[0])
+                resolver.result(prior, code='STUCK_DECISION_REFUSED')
             return httpx.Response(200, json={'stuck': {'conditional_back': change != 'unsupported'}})
         assert state.submission(scope.subject_id, scope.case_id)['state'] == 'SUBMITTING'
         if change == 'disconnect': raise httpx.ReadError('source fixture disconnect')
@@ -53,7 +72,9 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
                 with pytest.raises(asyncio.CancelledError): await operation
             else: await operation
             record = state.submission(scope.subject_id, scope.case_id)
-            if change == 'none': assert record['state'] == 'ACK'
+            if change == 'none':
+                assert record['state'] == 'ACK'
+                assert resolver._chains[scope.subject_id].rule_answers == 1
             elif change in {'disconnect', 'cancel'}: assert record['state'] == 'UNKNOWN'
             else: assert record is None
             first = list(calls)
@@ -78,19 +99,42 @@ def test_fake_client_swallowing_guard_cannot_dispatch(tmp_path):
     assert state.submission(scope.subject_id, scope.case_id) is None
 
 
+def test_model_recovery_budget_survives_restuck_in_same_chain():
+    from fleet.stuck.lane_lost import ai_proposal_invalid
+    resolver = StuckResolver(ResolverConfig())
+    resolver.autonomous_robots = frozenset({'pinky'})
+    row = dict(robot_id='pinky', online=True, state={'line_follow': {
+        'crosswalk': None, 'stuck': dict(recovery_context(), stuck_id='case-0')}})
+    for index in range(3):
+        sid = f'case-{index}'
+        row['state']['line_follow']['stuck']['stuck_id'] = sid
+        resolver.step(index, [row])
+        chain = resolver._chains['pinky']
+        floor = ai_proposal_invalid({'decision': 'BACK_AND_RETRY'}, row,
+            row['state']['line_follow']['stuck'], [row], chain, resolver.config, None)
+        if index == 2:
+            assert floor is not None and chain.rule_answers == resolver.config.rule_budget
+            break
+        assert floor is None
+        action = Answer('pinky', sid, 'BACK_AND_RETRY', 'model_v2')
+        resolver.sent(action, index)
+        assert resolver.result(action, code=None) is None
+
+
 @pytest.mark.parametrize('stop', [None, 'WAIT', 'ABORT', 'MANUAL'])
 def test_real_rule_writer_shares_model_slot_and_keeps_stops_outside_it(tmp_path, stop):
     now, store, log, scope, operating, proof, _ = opened(tmp_path, generation='core:1:stamp')
     operating.apply('line-back', signed(proof, 0))
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
     row = dict(robot_id=scope.subject_id, online=True, state=dict(seq=1, timestamp='stamp',
-        line_follow=dict(mode='CAMERA_LINE', stuck=dict(recovery_context(), stuck_id=scope.case_id))))
+        line_follow=dict(mode='CAMERA_LINE', crosswalk=None, stuck=dict(recovery_context(), stuck_id=scope.case_id))))
     board.observe([row]); board.flush()
     async def snapshot(): return {'robots': [row]}
     clients, requests = {}, []
     loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig()), clients=lambda: clients, clock=lambda: now[0])
     loop.operating_state, loop.operating_grant = operating, 'line-back'
     loop._resolver.autonomous_robots = frozenset({scope.subject_id})
+    loop._resolver.step(now[0], [row])
     (tmp_path / 'worker').mkdir()
     _, _, _, _, _, _, worker, _, _ = make_incident_worker(tmp_path / 'worker')
     worker.store, worker._fresh = store, lambda _: True
@@ -161,10 +205,12 @@ def test_worker_real_model_writer_audit_readback_and_final_handoff(tmp_path, rep
             providers.append(provider)
         snapshot = poll()
         snapshot['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
+        snapshot['robots'][0]['state']['line_follow']['crosswalk'] = None
         board.observe(snapshot['robots']); board.flush()
         async def gather(): return snapshot
         clients, posts = {}, []
         resolver = StuckResolver(ResolverConfig()); resolver.autonomous_robots = frozenset({'pinky'})
+        resolver.step(now[0], snapshot['robots'])
         loop = StuckResolverLoop(gather, board, resolver, clients=lambda: clients, clock=lambda: now[0])
         report = dict(schema='rosy.incident.operational_acceptance/1', state='PASS_FOR_OPERATION',
             missing=[], field_accepted=True, truth_admitted=True)

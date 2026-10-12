@@ -1,5 +1,7 @@
 # D-731 Fleet 제출 책임 분리 및 연결
 
+추가 감사에서 모델 제출에 기존 작동 AI의 BACK floor 재사용이 누락된 것을 확인했다. 실제 6 NEW를 재현하고 기존 `ai_proposal_invalid`를 최종 guard에 연결했다. 기존 R3의 교차로·지도·동료·현장 사실·규칙 예산·거절 제한을 유지한다. resolver chain 없는 직접 제출도 거절한다. 실제 provider/현장 활성화는 여전히 수행하지 않았다.
+
 SOURCE 검토 반영 후 submission은 223줄, 부모 stuck은 3296줄, operating은 318줄이다. 초기 203/294 기준과 기존 부모 기준을 유지한다. 모델 claim과 기존 사건 PENDING은 같은 transaction으로 기록하며 커밋 뒤에만 관제에 표시한다. 감사 기록 실패·HOLD·기한 만료로 롤백되면 제출과 관제 표시가 모두 없고 POST하지 않는다. 실제 durable terminal을 worker가 소비하며 UNKNOWN/REFUSED는 최종 미해결 인수, ACK는 새로운 정상 관측 확인으로 이어진다.
 
 실제 worker의 SOURCE provider → 기존 HttpRobotClient → 모델 ACK → 새 정상 관측 → 영속 closure/report 흐름에서 CLEARANCE_OBSERVED와 UNVERIFIED action credit를 확인한다. 연결 단절과 HTTP ACK 뒤 폐기에서도 durable UNKNOWN·최종 인수 1회·uncertain 재시작 조회·무재전송을 확인한다. 이는 실제 모델·물리 복구 성공이나 독립 현장 평가가 아니다.

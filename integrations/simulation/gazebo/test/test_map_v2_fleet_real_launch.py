@@ -14,6 +14,23 @@ NOMINAL = ROOT.parent / "middleware" / "devices" / "pinky" / "profile" / "config
 BUNDLE = ROOT.parent / "middleware" / "perception" / "map" / "map_v2_fleet"
 
 
+def test_two_learned_observers_publish_crosswalk_uncertainty():
+    tree = ast.parse((LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py').read_text())
+    observers = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_observers')
+    loop = next(n for n in observers.body if isinstance(n, ast.For))
+    assert ast.literal_eval(loop.iter) == ('rosy_01', 'rosy_02')
+    nodes = [n for n in ast.walk(loop) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == 'Node']
+    line = next(n for n in nodes if any(k.arg == 'executable' and k.value.value == 'line_observer_node'
+                                       for k in n.keywords))
+    params = next(k.value.elts[1] for k in line.keywords if k.arg == 'parameters')
+    constants = {key.value: value.value for key, value in zip(params.keys, params.values)
+                 if isinstance(value, ast.Constant)}
+    assert constants.get('crosswalk_uncertainty_enabled') is True
+    assert constants['camera_ground_source'] == 'GAZEBO'
+    assert constants['allow_simulation_ground'] is True and constants['use_sim_time'] is True
+
+
 def test_two_camera_road_evidence_matches_core_binding_and_has_one_preview_owner():
     path = LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py'
     calls = [n for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Call)
