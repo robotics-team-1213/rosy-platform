@@ -64,7 +64,7 @@ def test_zero_only_interval_does_not_reuse_old_receipt(window):
     assert policy.updates == []
 
 
-def test_terminal_loss_once_and_nonlearning_motion_breaks_credit(window):
+def test_terminal_loss_once(window):
     policy = Policy()
     state = (1, 2)
     action = window.choose(policy, state, 1., frame=10, train=True)
@@ -85,3 +85,30 @@ def test_eval_selects_once_and_invalid_stamp_fails_closed(window):
     assert policy.choices == [(state, False)] and policy.updates == []
     with pytest.raises(ValueError):
         window.choose(policy, state, .9, frame=12, train=False)
+
+
+@pytest.mark.parametrize('cause,credit', [
+    ('camera_source_stale', receipt((1, 2), 1, 10)),
+    ('camera_inference_error', receipt((1, 2), 1, 10)),
+    ('camera_target_unavailable', None),
+])
+def test_external_failure_or_broken_credit_does_not_train(window, cause, credit):
+    policy = Policy()
+    window.choose(policy, (1, 2), 1., frame=10, train=True)
+    window.learn(policy, (1, 2), result(0.), credit=None)
+    terminal = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                    camera_failure_reason=cause)
+    window.choose(policy, None, 1., frame=11, train=True)
+    window.learn(policy, None, terminal, credit=credit)
+    assert policy.updates == [] and window.ended
+
+
+def test_baseline_does_not_explore_and_episode_starts_without_credit(window):
+    policy = Policy()
+    assert window.choose(policy, (1, 2), 1., frame=10, train=False, baseline=True) == 1
+    assert window.choose(policy, (2, 2), 1.1, frame=34, train=False, baseline=True) == 1
+    assert policy.choices == [] and policy.updates == []
+    fresh = type(window)()
+    fresh.choose(policy, (1, 2), .1, frame=0, train=True)
+    fresh.learn(policy, (1, 2), result(100.), credit=None)
+    assert policy.updates == []

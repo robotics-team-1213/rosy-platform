@@ -23,7 +23,7 @@ for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
 
 
 def perception_id():
-    return {'schema': 'isaac-camera-error-confidence/1',
+    return {'schema': 'isaac-camera-error-confidence/2',
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 

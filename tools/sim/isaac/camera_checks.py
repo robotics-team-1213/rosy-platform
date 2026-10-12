@@ -13,6 +13,7 @@ class CameraLearningWindow:
         self.pending = None
         self.reward = 0.
         self.ended = False
+        self.last_update = None
 
     def choose(self, policy, state, stamp, *, frame, train, baseline=False):
         self.pending = None
@@ -28,6 +29,7 @@ class CameraLearningWindow:
         return self.action
 
     def learn(self, policy, state, result, *, credit):
+        self.last_update = None
         if self.ended:
             return 'episode_closed'
         reward = result['reward']
@@ -46,6 +48,8 @@ class CameraLearningWindow:
                 previous = (credit['state'], credit['action'])
                 total = self.reward if eligible else reward
             status = learn_transition(policy, previous, state, dict(result, reward=total))
+            if status in ('updated', 'terminal_camera_loss'):
+                self.last_update = dict(previous=previous, reward=total, next_state=state, terminated=done)
             self.previous = self.pending
             self.reward = 0.
         if done:
