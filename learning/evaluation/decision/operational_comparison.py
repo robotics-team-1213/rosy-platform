@@ -312,8 +312,10 @@ def compare_with_inventory(cohort, exports, inventories, *, expected_digests):
         if exported['schema'].startswith('rosy.incident.model_feedback/'):
             case, _ = checked_export(exported)
             scope = case['scope']
-            available.setdefault((scope['profile_sha256'], scope['policy_revision']), {})[
-                (scope['subject_id'], scope['case_id'])] = case
+            cases = available.setdefault((scope['profile_sha256'], scope['policy_revision']), {})
+            key = (scope['subject_id'], scope['case_id'])
+            if key in cases: raise ValueError('AMBIGUOUS_INVENTORY_CASE_EXPORT')
+            cases[key] = case
     used, receipts = set(), []
     keys = ('scope', 'budget', 'state', 'reason', 'calls', 'observations', 'spent_micros', 'reserved_micros')
     for inventory, expected in zip(inventories, expected_digests):
