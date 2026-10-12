@@ -353,6 +353,8 @@ class SwarmManager(SwarmStatusView):
             self.native.generation += 1
         return SwarmStatus()
 
+    def capture_native_operation(self, run_id: UUID | None = None): return self.native.capture(self._lock, run_id)
+
     def native_readback(self, run_id: UUID | None = None) -> dict:
         with self._lock:
             snapshot = getattr(self.nav.executor, "native_transport_snapshot", None)
