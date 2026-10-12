@@ -189,7 +189,7 @@ def crosswalk_along_uncertainty_m(ground, error, x_m):
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
                         paint_half_width_m=PAINT_HALF_WIDTH_M, crosswalk_uncertainty=False):
     paint_half_width_m = paint_half_width(paint_half_width_m)
-    if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO"):
+    if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO", "ISAAC"):
         return None
     geometry = [source, camera_x, ground.height_m, ground.pitch_rad,
                 ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m,
@@ -215,6 +215,7 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         slope_error = (max(slope_error, SLOPE_SIGMAS*(float(sds[0])*lever+float(sds[1])))
                        if slope_error is not None and all(_real(v) and v >= 0 for v in sds) else None)
     # GAZEBO (allow_simulation_ground only): exact sim geometry, only the detector's pixels.
+    # ISAAC requires stated bounds too: its learned detector has no accepted error bound yet.
     # NOMINAL/CALIBRATED without a stated geometry error stay None: the receiver must not
     # replace that null with a safe tolerance. Segments are taken from the lens (x - camera_x).
     error = (0., 0., 0., GAZEBO_DETECTOR_LATERAL_PX) if source == "GAZEBO" else geometry_bounds
