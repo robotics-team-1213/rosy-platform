@@ -4,6 +4,7 @@ import importlib
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 import pytest
 
@@ -59,3 +60,18 @@ def test_hold_is_preserved_and_null_calibration_revision_is_refused():
     assert subject().validate_candidate(candidate) == candidate
     runtime['calibration_revision'] = None
     with pytest.raises(ValueError): subject().build_candidate(runtime, source)
+
+
+@pytest.mark.parametrize('reviewed', [True, False])
+def test_model_pc_cli_produces_actual_candidate_without_site_imports(tmp_path, reviewed):
+    runtime, source = inputs()
+    if not reviewed: source['reviewed_profile']['limits'] = None
+    frozen = tmp_path / 'candidate-input.json'
+    frozen.write_text(json.dumps(dict(profile=runtime, calibration_input=source)))
+    result = subprocess.run([sys.executable, '-I', '-S', str(ROOT / 'tools/decision_calibration.py'),
+        '--candidate', str(frozen)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == (0 if reviewed else 1), result.stderr
+    candidate = json.loads(result.stdout)
+    assert len(result.stdout.encode()) > 16384
+    assert subject().validate_candidate(candidate) == candidate
+    assert candidate['calibration_report']['state'] == ('PASS_OFFLINE_ONLY' if reviewed else 'HOLD')
