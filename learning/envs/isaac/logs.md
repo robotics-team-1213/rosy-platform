@@ -186,6 +186,50 @@
 - 변경: run_map_rl.py의 카메라 tick·episode admission·sampling 네 검증 함수를 camera_checks.py로 옮기고 기존 이름을 동일 함수로 재노출한다. native 실행 조립은 600줄, 검증은 31줄이며 새 SDK 의존성이 없다.
 - 증거: 착지 통합 회귀에서 628줄 초과 NEW를 확인했다. 이동 전후 함수 AST 일치를 확인했고 기존 기능 회귀와 네 export identity 시험을 유지한다. 독립 검토·원격 수정 후 시험은 진행 중이다. 기록된 정책 digest는 보관된 policy.json과 직접 대조해 기존 exact public provenance에 등록했으며 원본 일지는 보존했다.
 - gate 변화: 없음. 안전 정지·무효 관측 학습 제외·샘플 주기·동일 조건 평가 거절을 변경하지 않았다. 실제 SDK 재실행·완주·병렬 RL 수용은 남았다.
+
+## 2026-10-12 · 7f8182d71 · 공유 맵 바닥 시각 자산
+
+- 변경: 실제 training-curved world의 카펫 18개·기준 사각형 4개·도킹 표식 1개를 native scene에 연결한다. 기존 PNG·pose·크기·색상 modulation을 유지하며 맵 밖·누락 텍스처와 비정상 pose를 거절한다. 벽·페인트·주의 표식 조립은 같은 코드로 이동했고 runner는 584줄이다.
+- 증거: source f6057b410의 맵·카메라·구조 원격 152 PASS·NEW 0. 독립 검토에서 텍스처 tint 누락과 다른 missing asset에 의해 우연히 통과할 수 있는 escape 회귀를 지적해 수정했다. committed source 7f8182d71의 보강 원격 5 PASS·NEW 0·독립 SOURCE APPROVE WITH NOTES다.
+- gate 변화: 없음. SDK shader 렌더·UV 방향·실제 영상 밝기·카메라 인식 개선·주행 정지·전체 완주·병렬 RL과 교통/Fleet 수용은 아직 미확인이다. 기존 ground 배경·road_lines model Z offset까지 전체 시각 일치는 추가 확인한다.
+
+## 2026-10-12 · 71c2fa595 · 공유 ground와 paint pose
+
+- 변경: 같은 training-curved world의 ground RGB·크기와 white paint model pose를 native에 적용한다. 원래 wall·caution·CORE·무효 관측 안전 정지와 학습 제외를 유지한다. 현재 알려진 수평 SDF 범위로 제한한다.
+- 증거: source 560515c14 관련 원격 115 PASS·NEW 0, source 71c2fa595의 경로·ground·paint 비정상 입력 거절 보강 원격 8 PASS·NEW 0, 독립 SOURCE APPROVE WITH NOTES. 최신 main을 포함하는 source 66840266e의 7443 파일 hash 검증과 실제 SDK USD 24.5 메타데이터에서 RGB 0.13/0.14/0.13·size 100·paint Z 0.001·23 시각 plane·4 collision wall 및 shader 연결을 확인했다. 이는 116712KiB RSS의 비렌더 검사다.
+- gate 변화: 없음. R26 전체 실행은 자원 gate의 7.9GB 예산으로 기준 8GB에 못 미쳐 SDK 시작 전에 거절됐다. 새 ground의 PhysX·영상·인식 개선·완주·교통/Fleet·병렬 RL은 미확인이다. 시스템 cache 조정에는 관리자 sudo 입력이 필요하며 보호 기준을 낮추거나 다른 프로세스를 종료하지 않았다.
+
+## 2026-10-12 · d778f8b7c · 공유 바닥 native 재평가와 reset 진단
+
+- 변경: 승인된 횡단 막대 구분과 공유 바닥을 통합했다. reset 확인 실패에는 phase·seed·요청 좌표·실제 pose·위치 오차를 남긴다. 기존 위치/속도 기준, 정지·초기화 거절·무효 카메라 정지·CORE 명령 권한은 그대로다.
+- 증거: source 4f617d7c2 통합 원격 325 PASS·1 SKIP·NEW 0. 당시 main의 문서 변경을 포함한 source 40b389415 R29는 7457 source hash를 실행 전후 검증했다. 실제 renderer·주행·5개 960×540 녹화를 수행했고 ffprobe frame 수·renderer/physics receipt·42개 산출물 hash를 독립 대조했다. 무효 관측 후보는 모두 0, 각 episode 종료와 cleanup은 기존 실제 속도 정지 기준 미만이다. source d778f8b7c의 진단 보강은 원격 90 PASS·NEW 0·독립 SOURCE 승인이다.
+- 결과: 첫 방향 baseline/frozen eval은 모두 0.110668m 진행 후 camera_lane_lost. 90도 baseline은 off_route, eval은 camera_lane_lost. 180도 baseline의 유효 카메라는 0회이며 다음 reset 확인에서 SDK exit 1로 중단됐다. 270도는 시작하지 못했다. 기존 정책 evaluation-only이며 새 updates나 개선을 증명하지 않는다.
+- gate 변화: 실제 공유 바닥 렌더와 제한 주행 진단만 확인했다. 네 방향 전체 시험·완주·교통/Fleet·병렬 RL·ROS-SIM·실물 수용은 미완료다. reset 실패의 어느 기준이 초과됐는지 기존 기록으로 구분할 수 없어 값을 보강하며, 추정으로 기준을 바꾸지 않는다. 원본 영상과 실패/정지 검증은 private 일지에 보관했다.
+
+## 2026-10-12 · b9dc219e4 · R31 정지 실패와 곡선 진단 교훈
+
+- 증거: 사용자의 관리자 적용 이후 ARC 상한 2147483648 bytes와 MemAvailable 9753800kB를 읽었다. 최신 main 포함 source 54cba0b3f, 7465 source hash 검증으로 R31 native SDK를 실행했다. baseline 707은 0.110668m 진행 후 관측 무효화, eval 뒤 실제 정지·cleanup 정지 검사 실패로 exit 1이다. 27개 산출물과 2개 영상을 private에 보존·hash/frame receipt 대조했다. 새 학습 또는 완주 증거가 아니다.
+- 교훈: 실패 전방 PNG에 흰 선이 보이지만 target_now_m=null·ahead_m=0이었다. camera_target_unavailable을 차선이 영상에서 사라졌다는 뜻으로 설명하지 않는다. RGB·mask·투영·목표점·CORE 허용을 분리해서 진단한다. 저장소 workflow 교훈과 private 일지에 사용자 맵 사진 및 trace 시점을 기록했다. segmentation 원본 mask와 맵 렌더 일치 여부는 미확인이다.
+- 변경: velocity solver 반복 1의 rest trace spike에 대해 8로 높이는 수치 정확도 비교 실험을 준비했다. 위치 반복 수 보존과 실제 SDK readback 일치를 강제하고 summary에 남긴다. source b9dc219e4 원격 119 PASS·NEW 0·독립 SOURCE APPROVE. 적용 효과는 SDK 재시험 전 미확인이다. 바퀴 gain·캐스터·정지 .005/.02 및 연속 .3s·2s 제한·CORE/Fleet 권한은 유지한다.
+- gate 변화: 없음. 네 방향 완주·새 RL·두 대 Fleet·교통 규칙·ROS-SIM·실물 수용은 HOLD다.
+
+## 2026-10-12 · 1158008ac1 · held-path 작업 통합과 곡선 거절 진단
+
+- 변경: 사용자 지정 wt-held-path-b73c92의 clean HEAD0bda628988(D-708)을 우리 Isaac worktree에 병합했다. 두 충돌에서 native scan·return pose·stale 검사·wall 전달·CORE containment와 정확한 현재 pose 소비를 함께 보존했다. held camera_tick은 기존 camera_checks helper로 통합하고 runner alias를 유지했다. held 출처는 RL state None·gain1이며 최신 거절을 덮어쓰지 않는다. 상대 worktree 파일은 수정하지 않았다.
+- 증거: source8934364652 목표 거절 원인 보존은 RED3FAIL/67PASS 후 원격90PASS/NEW0·독립 SOURCE APPROVE. 통합1158008ac1은 원격322PASS/1SKIP/NEW0·독립 SOURCE INTEGRATION APPROVE. 병합으로 들어온 D692 gap을 실제 ADR 존재 확인 후 e84631d1a에서 제거했다. 이후 main439e80c47 병합은 Discord 문서2개만 변경했다.
+- 진단: R31 실패 RGB의 동일 frozen model 오프라인 재추론에서 lane7210/drivable18253/way16937픽셀과 target[.19,.137]·ahead0·exitleft를 얻었다. 과거 실시간 mask 증거로 부르지 않는다. 이 프레임의 단독 DrivableSteer 재현은 pivot 허용 true/false 모두 exit_behind_line=true·drivable_closed·출력없음이다. 원래 주행 전체의 odom·LiDAR·이력을 재현한 결과는 아니다. fresh closed 사례는 D708 gap 유지 기능만으로 해결되지 않는다.
+- SDK: R32는 실제 solver position32/velocity8을 읽었지만 4개 최종 episode·중단된 baseline909 영상 이후 정지/cleanup 정지 실패로 exit1, 완주0이다. 실제5개 영상/43개 산출물을 private에 독립 검증 보존했다. R33 source0b4ddd5af9(7469 source hash 검증)는 자원 대기 중이며 SDK 시작 증거는 아직 없다.
+- 조율: 대상 별도 세션은 연결 agent 목록에 없어 직접 메시지 전송이 실패했다. 사용자에게 알리고 private drive-session-handoff에 대상·증거·통합·거절 경로를 기록했다. 문서 존재와 별도 작업자의 수신을 구분한다.
+- gate 변화: 없음. 실제 곡선 완주·새 강화학습·두 대 교통/Fleet·ROS-SIM·실물 수용은 미완료다.
+
+## 2026-10-12 · af519cab1e · Isaac 질량 기준 프레임 보존과 R34 반례
+
+- 변경: 요청한 merge_fixed_joints=true를 SDK에서 읽어도 enabled mass0 footprint actor와 .8kg base_link actor가 별도로 남는 것을 확인했다. Isaac 준비 단계에서 차체의 기존 질량/관성/visual/collision을 footprint 기준으로 옮기고 직계 child joint 원점을 같은 translation만큼 바꾼다. base_link 이름/virtual frame은 유지하며 원본 xacro/Gazebo/실물 모델은 바꾸지 않는다.
+- 증거: RED4FAIL/4PASS/1SKIP 뒤 전체 Isaac229PASS/1SKIP/NEW0·독립 SOURCE APPROVE. 실제 R33/R34 prepared URDF는 0각도/비영 wheel·caster 각도 두 상태에서18개 world frame 차이0, 총질량1.54kg 및 각 질량의 world COM/inertia가 같았다. SDK R34에서 footprint mass.8와 기존 관성, 빈 base_link actor 제거를 읽었다. 같은 source7469 hash를 실행 전후 검증했다.
+- 결과: R34는 첫 baseline 종료 정지 검사와 cleanup 정지 검사에서 exit1이다. 최종 episode0, 중단 영상1/21개 산출물을 private에서 hash/frame receipt 대조했다. 이 구조 수정이 실제 정지 실패 해결이라는 가설은 입증되지 않았다. I1 import 설정/모델 metadata는 얻었지만 종료 timeout124였으며 전체 SDK 성공으로 부르지 않는다.
+- 추가 회귀: held-path 후속831d9bdc6 통합 source9f676b1928의 전체 Perception/Isaac·관련 CORE authority/crosswalk/junction/lane_return3508PASS/113SKIP/NEW0. 이후 최신 main의 incident/calibration 변경을 병합하고 실제 존재하는 D705의 gap을 정리했다.
+- gate 변화: 없음. 기존 traffic 파이프라인은 main19054491e2에 landing17,926PASS/823SKIP/NEW0으로 착지했지만 당시 push는 사전 검사 중이었다. 이번 질량 준비 변경은 작업 브랜치 검증이며 새 RL/네 방향 완주/두 대 Fleet·한국 교통/ROS-SIM/실물 수용은 미완료다. 정지·권한·카메라 gate를 완화하지 않았다.
+
 ## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 
 - 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
@@ -197,3 +241,29 @@
 - 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
 - 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
 - gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · 0fa0161d4 · 관측 곡선 거절과 실행 배선 분리 진단
+
+- 변경: camera_target 거절 진단에 reason·경계 교차·중심 경로·벽 여유를 보존한다. 계획은 docs/plans/2026-10-12-map-drive-diagnosis.md이며 CORE 안전·학습 admission과 무효 명령 0은 유지한다.
+- 증거: 원격 RED 3 FAIL 뒤 전체 Isaac 214 PASS/1 SKIP/NEW 0, 독립 SOURCE APPROVE. AI PC의 기준 main 소스 Gazebo 정지 관측에서 현재 목표/경로와 guide publisher 0을 확인했고 전체 runner의 Fleet import 실패 exit 1 및 정리 readback을 별도 기록했다. 짧은 목표 fallback은 몸체 여유 증거가 부족해 채택하지 않았다.
+- gate 변화: SOURCE 진단 및 원격 회귀 근거다. Gazebo 부분 관측은 Fleet 연결·자율 주행·완주 수용이 아니다. 실제 Isaac SDK 재실행·네 방향 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · bf7054de3 · 공유 바닥 크기와 기본 정지 분리
+
+- 변경: 기존 맵 생성기의 ground를 100m에서 5m로 바꾸고 Gazebo world 3종을 재생성했다. Isaac은 같은 값을 읽으며 CAD·차선·벽·주의 표시와 정지 기준은 유지한다. 최신 main의 카메라 진단·관측 경로 변경도 통합했다.
+- 증거: 동일 출발 위치·방향에서 100m ground만 있는 조건과 전체 맵 조건은 5개 정지 구간 중 2개가 실패했고 2400개 샘플이 동일했다. 전체 맵을 유지하고 ground만 5m로 바꾼 조건은 5개 모두 통과, 기준 초과 샘플 0이었다. bf7054de3의 실제 SDK에서는 CORE cmd_vel_cycle 0 명령 2400회·경고 0·5개 정지 구간 통과·terminal exit0을 확인했고 실행 전후 7501개 source hash를 대조했다. 원본과 독립 검증은 private 일지에 보관했다.
+- 회귀: bf7054de3 원격 338 PASS/1 SKIP/NEW0·독립 SOURCE 승인. 벽 누락 검사의 무조건 통과를 막은 6cad8938f 후속은 원격 24 PASS/NEW0, lint 0 errors/28 warnings다.
+- gate 변화: 기본 in-process CORE/PhysX 정지 증거다. 주행 후 정지·카메라 곡선 추종·새 강화학습·네 방향 완주·Gazebo 두 대 Fleet·한국 교통 규칙·ROS-SIM·실물 수용은 미완료다. 이 비교만으로 PhysX 내부 원인을 확정하지 않는다.
+
+- 후속 기본 운동: 같은 bf7054de3 실제 SDK에서 CORE 명령 3120회·경고 0·terminal exit0. 직진 0.03m/s 1초는 0.030106m, 좌/우 0.3rad/s 1초는 +0.242819/-0.245348rad였다. 각 동작 후 마지막 연속 정지는 1.991667s 이상이며 cleanup도 통과했다. 원본 샘플의 변위·회전 부호·연속 정지와 파일 hash를 독립 재계산했다. 이는 짧은 운동 및 주행 후 정지의 제한된 증거다. 요청 회전량 대비 약 18~19% 편차가 남아 정밀 추종·완주·새 RL 수용은 아니다.
+
+## 2026-10-12 · b98eb3fd1 · SDK 중복 바닥 충돌 제거
+
+- 원인: 실제 SDK stage에서 ground의 표시 Mesh와 Plane 양쪽 충돌이 활성화돼 있었다. SDK GroundPlane wrapper는 표시 Mesh에 collision과 physics material을 붙인다. 초기 출발점 통과와 바닥 크기 조정만으로 다른 자세의 정지 안정성을 보장하지 못했다.
+- 변경: native map runner는 표시 Mesh 충돌을 끄고 기존 바닥 재질을 Plane에 연결한다. 예상 SDK 구조·재질과 변경 readback이 맞지 않으면 실행을 거절한다. CORE 명령·정지 기준·물리 timestep·wheel gain은 유지한다.
+- 증거: 실패 자세의 기존 진단은 초기/cleanup 정지가 실패했다. 중복 충돌 제거 및 재질 연결 비교는 실제 SDK exit0, 3120개 샘플, 직진 0.030046m, 좌/우 +0.245280/-0.248329rad, 모든 정지와 cleanup의 마지막 연속 안정 구간 1.991667초 이상이었다. 원본 hash·운동·정지를 독립 재계산했다.
+- gate 변화: 이는 진단 비교이며 제품 반영 후 재시험·전체 학습·완주·교통/Fleet 수용을 대신하지 않는다. 회전 추종 편차도 남는다.
+
+- 제품 재시험: b98eb3fd1 원격 Isaac 236 PASS/1 SKIP/NEW0. 실제 SDK의 제품 helper·reset 뒤 읽기 전용 검증을 사용한 같은 자세 기본 운동은 exit0, 3120개 샘플과 모든 단계/cleanup 통과였다. 샘플은 진단 비교와 byte hash가 동일했다. 고정 정책 카메라 평가는 별도 진행하며 새 학습 증거로 세지 않는다.
+
+- 카메라 후속: 같은 커밋의 네 시작 방향 고정 정책 평가 8개 episode와 실제 영상 8개가 끝났다. 초기/각 episode/최종/cleanup 정지 11개는 모두 통과했지만 완주는 0이며 camera admission 실패로 SDK exit1이다. 정상 방향 baseline 0.110668m, eval 0.100579m 후 차선 관측 거절이며 정지 안정성 개선을 차선 추종 해결로 표현하지 않는다.

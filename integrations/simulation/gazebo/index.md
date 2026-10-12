@@ -35,6 +35,7 @@
 - [2026-09-21-semantic-road-control-design.md](../../../docs/plans/2026-09-21-semantic-road-control-design.md)
 - [2026-09-21-semantic-road-control.md](../../../docs/plans/2026-09-21-semantic-road-control.md)
 - [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
+- [2026-10-12-map-drive-diagnosis.md](../../../docs/plans/2026-10-12-map-drive-diagnosis.md)
 
 ## 교훈 (docs/solutions)
 
@@ -46,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 8226c122f8 · IR 바닥 ray의 동일 프레임과 신선도 보존
 - 2026-10-12 · d9fbc11ce · A24 두 CORE 도로 관측과 교통 설정 readback
 - 2026-10-12 · 493894894 · 道路 관측 연결 원격 회귀
 - 2026-10-12 · uncommitted · 두 카메라 도로 관측 연결과 A21 실제 정지 시험
 - 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
-- 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback

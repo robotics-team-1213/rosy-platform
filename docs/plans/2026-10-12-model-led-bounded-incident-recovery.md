@@ -12,9 +12,13 @@
 
 ## 먼저 확인한 실제 빈칸
 
+2026-10-12 D-718 선행 CORE/설치 경계는 `f7221c12e6`로 로컬 main에 착지했다. 마지막 원격 통합은 18,671 passed/822 skipped/NEW 0 및 lint이며 세션 `logs/stuck-condition-land-f7221c12e6-{1,2,3}.txt`에 원본을 보존했다. FULL CI·push·배포·실제 모델·현장 수용은 별도다. 이 선행 완료는 아래 모델 후보 생산·단일 소비·운영 receipt·결과 확인의 완료가 아니다.
+
 `deliberation.__init__.CHOICES`에는 물리 복구 선택이 없고 worker의 `_problem`은 reobserve/human만 공급한다. incident catalog에는 읽기 도구 하나만 있다. `_process`는 get_incident_status 외의 단계에서 NO_ADMITTED_READ_OR_REVIEW로 끝난다. StuckResolverLoop._answer는 이미 rule/AI 법칙·token·불명 결과를 다루지만 worker와 같은 물리 ownership을 공유하지 않는다. worker에서 직접 호출하는 빠른 연결은 rule/model 동시 전송 경쟁을 만들므로 사용하지 않는다.
 
 ## Task 1: 실제 후보·제출 소유권을 원장에 고정
+
+2026-10-12 선행 CORE source checkpoint: D-717은 `40fdfec111` 로컬 main 및 원격 통합 5,706 passed/40 skipped/NEW 0으로 확인했다. D-718은 동일 막힘의 ASKING/attempts 조건과 HTTP 처리기·제어기의 동시 지원을 검증하고 구형 SDK 의존성을 거절하는 설치 묶음을 구현했다. 독립 SOURCE 안전 재검토를 승인받았고, native installer pin 수정 뒤 실제 wheel/sdist·CI closure 21개 원격 회귀는 terminal exit 0/NEW 0이다. 기존 모델 호출 예산·소비 표식과 설치 runtime은 바꾸지 않았다. 아래 후보 원장·규칙/모델 단일 소비·운영 수용·실제 결과 연결은 여전히 다음 구현이다.
 
 Read/modify: `operations/fleet/fleet/incidents/automation/ledger/store.py`, `automation/execution/worker.py`, `automation/runtime.py`, `fleet/stuck/loop.py`, `fleet/stuck/pipeline.py`. 필요 시 동일 책임의 작은 helper를 기존 automation/execution owner에 둔다. 새 service와 크기 허용량은 만들지 않는다.
 

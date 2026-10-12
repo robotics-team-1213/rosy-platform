@@ -39,7 +39,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/execution', 'middleware/skills/api', 'integrations/messaging/discord'):
+                     'operations/execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
@@ -50,7 +50,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 76  # D-680 request review plus D-683/D-689 account assets.
+    assert len(expected) == 78  # D-680 request review, D-683/D-689 account assets, device-watch.js and device-watch.css.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js',
@@ -123,7 +123,7 @@ for distribution in distributions.values():
             assert dependency.version in requirement.specifier, (distribution.metadata['Name'], raw_requirement)
 execution_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
                           for r in map(Requirement, importlib.metadata.requires('rosy-execution'))}
-assert ('core-common', '==0.0.1', (), None, None) in execution_requirements, execution_requirements
+assert ('core-common', '==0.0.2', (), None, None) in execution_requirements, execution_requirements
 from datetime import datetime, timezone
 projected = project_progress({
     'mission': {'status': 'ACTION_SUCCEEDED', 'updated_at': '1970-01-01T00:01:40+00:00',
@@ -139,7 +139,21 @@ fleet_files = importlib.metadata.distribution('fleet').files
 assert not any(str(name).startswith('rosy/execution/') for name in fleet_files)
 fleet_requirements = {(canonicalize_name(r.name), str(r.specifier), tuple(sorted(r.extras)), r.marker, r.url)
                       for r in map(Requirement, importlib.metadata.requires('fleet'))}
-assert ('rosy-execution', '==0.1.1', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-execution', '==0.1.2', (), None, None) in fleet_requirements, fleet_requirements
+foundation_floor = [r for r in map(Requirement, importlib.metadata.requires('fleet'))
+                    if canonicalize_name(r.name) == 'core-common']
+assert len(foundation_floor) == 1
+assert '0.0.1' not in foundation_floor[0].specifier
+assert '0.0.2' in foundation_floor[0].specifier
+api_floor = [r for r in map(Requirement, importlib.metadata.requires('core_api_web'))
+             if canonicalize_name(r.name) == 'core-common']
+assert len(api_floor) == 1
+assert '0.0.1' not in api_floor[0].specifier and '0.0.2' in api_floor[0].specifier
+from core_common.protocol.schemas import LineStuckPrecondition
+from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecondition
+assert LineStuckPrecondition is OwnedPrecondition
+assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
+assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
 assert ('rosy-contracts-learning', '>=0.1.10', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
