@@ -52,3 +52,4 @@ D-725 reserved by another session and absent from this branch; remove once its A
 D-725 reserved by a concurrent session; absent from operational-recovery-receipt
 D-731 reserved by concurrent model-recovery-submission-owner worktree; absent from hourly-health branch; remove when integrated
 D-732 reserved by concurrent native owner worktree; absent from hourly-health branch; remove when integrated
+D-731 reserved by peer model-recovery-submission-owner and absent from native-outcome branch; remove when its ADR lands

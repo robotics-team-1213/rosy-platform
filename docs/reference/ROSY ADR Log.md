@@ -720,6 +720,7 @@
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
 
 | D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
+| D-732 | CORE native 실행 결과 식별과 readback | Proposed |
 
 | D-733 | Hourly KST Discord Fleet health subscription | Accepted (source only) |
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -1028,3 +1029,9 @@ Status: Accepted (source contract; no operational activation).
 **Status:** Accepted (2026-10-12, source design; runtime acceptance pending)
 
 원문·기명 대화 문맥과 기존 intent/Task/Mission/CORE owner를 law/rule·현재 근거·영속 예산/최종 fence로 연결하고 자연어 회신까지 처리한다. D-720 읽기 전용 조각만으로 전체 완료를 선언하지 않는다. 전문은 [D-728](../adr/D-728-natural-language-channel-operations.md).
+
+## D-732 — CORE native 실행 결과 식별과 readback
+
+**Status:** Proposed (2026-10-12, contract review before implementation)
+
+기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).

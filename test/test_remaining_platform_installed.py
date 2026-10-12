@@ -153,6 +153,12 @@ assert len(api_floor) == 1
 assert '0.0.1' not in api_floor[0].specifier and '0.0.2' in api_floor[0].specifier
 from core_common.protocol.schemas import LineStuckPrecondition
 from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecondition
+from core_common.protocol.native.operation import NativeOperation
+from core_common.protocol.native_operation import NativeOperation as LegacyNativeOperation
+from core_common.protocol.native.receipts import NativeReceipts
+from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
+assert NativeOperation is LegacyNativeOperation
+assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
