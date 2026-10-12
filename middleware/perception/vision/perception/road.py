@@ -18,7 +18,7 @@ from .drivable.drivable_preview import drivable
 from .follow_preview import draw_follow_evidence
 from .camera_ground import GroundPlane
 from .lane_bev import BirdsEye
-from .crosswalk_stripes import CORRIDOR_HALF_M, MIN_STRIPES, crosswalk_extent
+from .crosswalk_stripes import CORRIDOR_HALF_M, MIN_STRIPES, _stripes, crosswalk_extent
 
 
 @dataclass(frozen=True)
@@ -235,31 +235,33 @@ def _marking(group_indexes: list[int], groups: list[tuple[int, int]],
     )
 
 
-def _horizontal_bar(bright: np.ndarray, group: tuple[int, int], minimum_fraction: float) -> bool:
-    # Separate crosswalk fingers and lane edges do not prove one transverse stop bar.
-    top, bottom = group
-    minimum_width = bright.shape[1] * minimum_fraction
-    return any(end - start + 1 >= minimum_width
-               for row in bright[top:bottom + 1]
-               for start, end in _groups(row > 0))
-
-
-def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int) -> RoadMarkingObservation | None:
+def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int,
+                     groups: list[tuple[int, int]]) -> tuple[RoadMarkingObservation | None, set[int]]:
     # The fixed D-491 detector cannot prove a stricter operator bar-count requirement.
     if not isinstance(ground, GroundPlane) or minimum_bars > MIN_STRIPES:
-        return None
+        return None, set()
     view = BirdsEye(ground, bright.shape[1], bright.shape[0], 0.0)
     grid = view.sample(bright > 0)
     extent = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])
     if extent is None:
-        return None
+        return None, set()
     near, far = extent
     selected = ((view.x >= near) & (view.x <= far)
                 & (np.abs(view.y) <= CORRIDOR_HALF_M) & view.observable)
     confidence = float(grid[selected].mean())
     row = ground.principal_y + ground.focal_px * math.tan(
         math.atan2(ground.height_m, near) - ground.pitch_rad)
-    return RoadMarkingObservation(image_row=row, distance_m=near, confidence=confidence)
+    stripe_groups = set()
+    columns = np.abs(view.y[0, :]) <= CORRIDOR_HALF_M
+    for index, (top, bottom) in enumerate(groups):
+        distance = _ground_distance(ground, (top + bottom) / 2., bright.shape[1] / 2.)
+        if distance is None or not near <= distance <= far:
+            continue
+        grid_row = int(np.argmin(np.abs(view.x[:, 0] - distance)))
+        # Only positive D-491 stripe evidence excludes a stop candidate; broken bars stay conservative.
+        if _stripes(grid[grid_row, columns]):
+            stripe_groups.add(index)
+    return RoadMarkingObservation(image_row=row, distance_m=near, confidence=confidence), stripe_groups
 
 
 def _lane(bright: np.ndarray, horizontal_groups: list[tuple[int, int]],
@@ -329,18 +331,21 @@ def detect_road_observation(bgr: np.ndarray, *, ground=None,
         config.crosswalk_max_gap_px,
         config.crosswalk_min_bars,
     )
-    crosswalk_set = set(crosswalk_indexes)
+    crosswalk = _marking(crosswalk_indexes, horizontal_groups, bright, ground)
+    floor_stripes = set()
+    if crosswalk is None:
+        crosswalk, floor_stripes = _floor_crosswalk(
+            bright, ground, config.crosswalk_min_bars, horizontal_groups)
+    crosswalk_set = set(crosswalk_indexes) | floor_stripes
     stop_indexes = [index for index in range(len(horizontal_groups))
-                    if index not in crosswalk_set
-                    and _horizontal_bar(bright, horizontal_groups[index], config.horizontal_min_fraction)]
+                    if index not in crosswalk_set]
     # A single stop-line verdict is the closest independent horizontal mark.
     stop_indexes = stop_indexes[-1:] if stop_indexes else []
     signal, conflict = _signal(bgr, config)
     return RoadObservation(
         lane=_lane(bright, horizontal_groups, config),
         stop_line=_marking(stop_indexes, horizontal_groups, bright, ground),
-        crosswalk=(_marking(crosswalk_indexes, horizontal_groups, bright, ground)
-                   or _floor_crosswalk(bright, ground, config.crosswalk_min_bars)),
+        crosswalk=crosswalk,
         signal=signal,
         signal_conflict=conflict,
     )
