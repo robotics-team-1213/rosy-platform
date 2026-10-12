@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 COMMON = ROOT / "shared/web"
 GALLERY = ROOT / "middleware/ui/robot"
 HOST = "http://rosy.test"
-ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect"]
+ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect",
+         "login", "account", "logout"]
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "application/javascript"}
 
 
