@@ -42,6 +42,8 @@ core_common 부모10,031은 main4dc522986의9,888 대비 Discord canonical DTO13
 
 ## 진행 기록
 
+- **운영 왕복 확인:** 수정본 `04baa6e258`의 CI·후보 빌드·서명과 기존 updater 설치를 확인했다. 실제 Bot 멘션 원문이 기명 Fleet 접수로 남고, Console에서 오프라인 HOLD를 재검토한 revision2의 회신이 원래 Discord 메시지에 SENT/attempts1로 도착했다. 이후 Fleet 재시작에서도 요청·검토·메시지 ID와 시도 횟수가 유지됐고 중복 회신은 없었다. 기존 첫 접수/검토의 TLS 실패 이력은 보존했다. [TLS 원인·수정·운영 증거](../validation/discord-fleet-pipeline-2026-10-12/public-ca.md). 실제 로봇 주행·팔 작업·위험 사건 개입·모델 활성화는 이 오프라인 HOLD 왕복과 별도 수용 범위다.
+
 - 사건 Console sourceed7eba9644 실제 Chromium10 PASS/NEW0. 기존 native claim의 잘못된 scope.listener 호출을 guard로 고쳐 현재 판단 사건 표시를 복구했다. wheel/sdist/source COPY closure3 PASS/NEW0, Fleet54,852 제한 독립 판정은 기록했다. 최종 크기/API군94 PASS/NEW1은 core_common10031 첫 부모 판정 누락이며 구조 전체 PASS로 표시하지 않는다. [증거](../validation/discord-fleet-pipeline-2026-10-12/incident-console.md). 동일 오류 독립 재확인과 공통 계약 책임 판정을 마치고 최종 착지·운영 왕복으로 진행한다.
 
 - D-693/API1.214 현재 사건 인수를 기존 named claim 소유자에 연결했다. 실제 기존 owner/SQLite 90 PASS/NEW0, source 독립 검토 승인. 같은 트랜잭션의 claim·원문 관계·회신 rollback과 stale/closed/다른 담당/권한 변경, 원래 사건 CLOSED intent를 확인했다. [증거](../validation/discord-fleet-pipeline-2026-10-12/incident-source.md). Console 사건 선택·명시 확인 UI와 Chromium을 이어서 구현한다. 구조 parent NOTPASS/최종 재판정, 설치·최신 main 착지·배포·실제 왕복은 남아 있다.
