@@ -44,6 +44,26 @@
 
 `middleware/skills`와 `middleware/execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
 
+## 폴더 이름과 묶음
+
+[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표는 현재 경로다. 아래 목표 폴더는 아직 만들지 않았다.
+
+규칙은 여섯 가지다. 디렉터리의 마지막 이름은 권한 하나다. import와 ROS 패키지 이름은 유지한다. 같은 입력과 같은 출력은 한 기능 폴더에 둔다. 사실, 명령, 원장, 임대, 후보 검사는 나눈다. 경로는 실행 PC가 아니다. 한 커밋에 한 단계만 착지한다.
+
+| 단계 | 목표 | 이 문서가 기록한 시점 |
+|---|---|---|
+| 1 | `middleware/control`을 `middleware/drive`로 | 이동 전 |
+| 2–3 | 인지 노드의 순수 판단을 그 기능 폴더로 모으고, 남는 조립 폴더를 `middleware/perception/nodes`로 | 이동 전 |
+| 4 | `robot_execution`, `site_execution` | 이동 전 |
+| 5 | `robot_ui`, `site_ui` | 이동 전 |
+| 6 | `overhead`, `front_camera` | 이동 전 |
+| 7 | `lane_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 남긴다 | 이동 전 |
+| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | 이동 전. SQLite는 하나 |
+| 9 | `perception/tools`의 호스트 도구를 `tools/sim`, `tools/calibration`로 | 이동 전 |
+| 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | 이동 전 |
+
+권한이 다른 폴더는 이름이 같아도 합치지 않는다. 보정 세션 임대, 공통 Safety, 장치 로컬 허용 동작, 상황 사실, 로봇 로컬 실행, 천장 관측, CORE 조립은 각 단계를 지나도 자기 폴더에 남는다. 다섯 설치 이름 폴더 `control`, `planning`, `safety`, `sensing`, `wander`도 남는다.
+
 ## 현재 의미 구조와 깊이
 
 **후속 구조 제안:** 현재 배치는 아래 표 그대로이며, 공통 상황평가·작업 규칙·Fleet 어댑터의 추가 책임 분리는 [D-648](../adr/D-648-shared-judgment-target-structure.md)의 [목표 설계](../plans/2026-10-11-shared-judgment-structure-design.md)와 [단계별 계획](../plans/2026-10-11-shared-judgment-structure.md)을 검토한다. Proposed 목표를 이미 이동·설치된 현재 상태로 집계하지 않는다.
