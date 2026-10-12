@@ -13,11 +13,6 @@ HOLD_S = 2.5
 CONF_NEAR = 0.90
 CONF_SLOW = 0.68
 
-_FORBID_PREFIX = ("drivable_pivot_", "drivable_turn_", "drivable_off_line_")
-_FORBID_STRATEGY = {"drivable_crosswalk_straight", "drivable_closed"}
-_FORBID_REASON = {"way_beyond_line", "drivable_closed", "off_route_hold", "wrong_way_hold"}
-
-
 def _angle(delta):
     return abs(math.atan2(math.sin(delta), math.cos(delta)))
 
@@ -47,9 +42,7 @@ def _valid_pose(pose, stamp):
 
 
 def _forbidden(info):
-    strategy = info.get("strategy") or ""
-    return bool(info.get("straddle") or info.get("reason") in _FORBID_REASON
-                or strategy in _FORBID_STRATEGY or strategy.startswith(_FORBID_PREFIX))
+    return bool(info.get('strategy') != 'drivable_centre' or info.get('reason') or info.get('straddle'))
 
 
 def _geometry(pose, info):
@@ -108,7 +101,8 @@ class ExpectedPath:
         self._observation_stamp = observed
         geometry = _geometry(pose, info)
         if geometry is None:
-            return self.hold(current, stamp)
+            self._clear()
+            return self._view('dropped')
         path, heading = geometry
         if not self._committed:
             if self._streak_heading is None or _angle(heading - self._streak_heading) > HEADING_GATE_RAD:

@@ -122,6 +122,7 @@ class LearnedCameraLane:
             self.invalidate('invalid_camera_odometry')
             return
         self.history.add(stamp, *pose)
+        pose_at = lambda when: pose if when == stamp else self.history.pose_at(when)
         self.worker.submit(bgr, tag=self.frame, stamp=stamp)
         self.worker.step()
         mask = self.worker.mask_for(bgr, every_n=1, stamp=stamp,
@@ -138,7 +139,7 @@ class LearnedCameraLane:
         observation = self.keeper.update(bgr, self.ground, paint_mask=mask,
             crosswalk_mask=self.worker.used_crosswalk, lane_half_width_m=.0925)
         step, decided = keep_step(self.steer, self.worker, self.keeper.last, self.ground,
-            self.camera_x, .0925, self.history.pose_at, stamp, None, guide)
+            self.camera_x, .0925, pose_at, stamp, None, guide)
         provenance = 'model_lane_mask'
         if decided:
             info = self.keeper.last.get('drivable_steer', {})
