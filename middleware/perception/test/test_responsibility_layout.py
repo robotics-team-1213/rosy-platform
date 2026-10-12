@@ -122,7 +122,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "from packaging.requirements import Requirement; "
         "from packaging.utils import canonicalize_name; "
         "assert metadata.version('control') == '0.1.1', ('control version', metadata.version('control')); "
-        "assert metadata.version('core_common') == '0.0.1', ('foundation version', metadata.version('core_common')); "
+        "assert metadata.version('core_common') == '0.0.2', ('foundation version', metadata.version('core_common')); "
         "requirements = [Requirement(raw) for raw in metadata.requires('control')]; "
         "expected = Requirement('core_common>=0.0.1'); "
         "assert any(canonicalize_name(r.name) == canonicalize_name(expected.name) "
