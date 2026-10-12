@@ -98,7 +98,8 @@ class NativeGazeboMapPosePort:
         if (type(binding.domain_id) is not int or not 80 <= binding.domain_id <= 99
                 or type(binding.epoch) is not int or binding.epoch < 1
                 or type(binding.map_revision) is not int or binding.map_revision < 1
-                or not _pose(binding.map_from_world) or not binding.robots):
+                or not _pose(binding.map_from_world)
+                or not isinstance(binding.robots, tuple) or not binding.robots):
             raise ValueError('invalid native SIM domain/epoch/map/transform')
         ids, models = set(), set()
         for robot in binding.robots:
