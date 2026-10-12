@@ -405,3 +405,13 @@ Leg10 최종 zero 이전 sim54.7 스캔과 이후 CORE HOLD의 sim55.4 스캔은
 a914201e8은 독립 SOURCE 검토 뒤 같은 cap snapshot의 실제 공통 clip 호를 기존 몸 검사에 추가했다. 전진의 LiDAR·기억·초음파 그룹과 후진의 기존 좌표 변환·몸 윤곽에 추가하며 legacy 검사·정지·재개 기준을 제거하지 않는다. CORE-bound generic 호출도 더 보수적으로 거절될 수 있다는 D-737 6항을 기록했다. 일반 추종의 검사 속도 fence와 달리, 다른 manoeuvre의 검사 이후 cap 증가 및 기존 tiny-speed pivot 근사의 전역 해결을 주장하지 않는다. 최종 원격 회귀와 새 전체 Gazebo 실행은 별도 gate다. Leg11은 준비 카드만 만들었으며 예약·빌드·주행하지 않았다.
 
 a914201e8의 최종 정상 모델 PC 회귀는 877 PASS·34 warnings·terminal 0이며 known_failures 판정 NEW 0이다. 전진·후진 정적 공통 호 반례, 기존 충돌·관측·일반 추종·실제 contained return·복구·bridge·arc·junction·권한·횡단보도·swarm과 구조·문서 검사를 포함한다. 경고는 기존 문서/라이브러리 경고이며 이 결과는 source 계약 회귀다. 설치 이미지·Gazebo 완주·실물 수용으로 대신 세지 않는다.
+
+## 2026-10-13 · Leg11 실행과 Fleet 정체 판정
+
+- c66d19b83의 원본 Git blob 전체 7,554파일을 동결하고 새 17패키지를 빌드했다. 설치 2,726파일과 원본 지도·고정 모델 계보를 검증했다. 새 정지 점검은 두 로봇의 명령·이동 0, 실제 SDK/CORE 법칙·640빔·CORE 단독 최종 publisher·native pose와 OFF·lease·pending·프로세스·포트 종료를 확인했다. 빌드 전 자원 거절 한 번은 기록을 보존했고, 정상 SIM 자원이 다시 확보된 후에만 빌드했다.
+- 같은 소스의 첫 구간 Leg11은 0.370781538m 이동했으며 지도 도착은 false다. Leg10의 legacy 추가 호로 인한 일반 CAMERA 몸 HOLD는 재현되지 않았다. 최초 native zero는 sim48.569초이며 직전 SDK 전방 거리 0.094548m가 stop 0.10405m보다 작았다. CORE는 TRACKING이고 이후 세 구간에서 양의 명령이 다시 나왔다.
+- 최종 zero는 sim56.329초다. 수신 순서는 Fleet `stall` → CORE `junction_stop` HOLD → native zero이며, 직전 SDK는 front 0.133506m·blocked false·can_rotate true다. 최초 SDK 거절과 최종 Fleet 정체 종료를 구분한다. 정책 실패·E-stop은 이번 실행에서 재현되지 않았다.
+- Fleet의 현재 정체 판정은 실제 시간 20초 안에 경로 진행 0.05m를 채우는지를 본다. 마지막 약 20 wall초 동안 sim시간은 약 8.738초, 실제 위치의 누적 이동은 약 42.3mm였고 같은 두 native 자세의 원본 경로 투영 변화는 약 48.7mm다. 완전히 정지한 20초로 해석하지 않는다. 내부 progress reset 시각을 직접 기록한 것은 아니므로 정확한 경계 tick을 확정하지 않는다.
+- 종료 후 OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료와 전체 source/install 해시 이상 0을 확인했다. 1,697개 샘플 자세의 차체 paint·wall·외부 겹침은 0이나 연속 접촉 없음과 지도 완주의 증거는 아니다.
+
+다음 비교는 같은 AI PC와 c66d19b83·지도·모델·물리·잡음·안전 기준·Fleet 정체 20 wall초/0.05m·주행 예산을 유지하고, 실행 성능 변수는 CPUQuota만 600%에서 1200%로 늘린다. MemoryMax 6G는 유지한다. 별도의 domain·포트에서 기본 SIM 6코어/8GiB 조건과 추가 여유 12코어 확인, 자기 12/8 lock, 실제 cgroup 제한 readback을 실행 전에 요구한다. RTF·CPU 제한·실제 진행·SDK 거절을 함께 기록한다. 초기 계측 밖 warmup과 후속 관측 구간을 구분하고, RTF가 개선돼도 정체가 남으면 성능만의 설명을 기각한다. 이 비교 준비와 예약은 주행 성공이 아니다. 전체 지도 완주·새 실행 반복·main 착지·push·실물 수용은 미완료다.
