@@ -2884,9 +2884,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. envelope 1.0 유지. |
-
-| v1.219 | 2026-10-12 | Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. |
+| v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |
 | v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
