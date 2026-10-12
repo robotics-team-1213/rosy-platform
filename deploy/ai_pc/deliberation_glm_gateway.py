@@ -109,7 +109,7 @@ def checked_response(problem, response, *, body=None):
 
 
 def stream_response(response):
-    base = {'id': response['id'], 'object': 'chat.completion.chunk', 'model': MODEL}
+    base = {'id': response['id'], 'object': 'chat.completion.chunk', 'model': response['model']}
     content = response['choices'][0]['message']['content']
     chunks = [{**base, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': content},
                                    'finish_reason': None}]},
