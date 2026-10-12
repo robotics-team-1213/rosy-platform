@@ -260,6 +260,8 @@ def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int,
             if distance is None or not near <= distance <= far:
                 break
             grid_row = int(np.argmin(np.abs(view.x[:, 0] - distance)))
+            if not np.all(view._pixel_row[grid_row, columns] == source_row):
+                break
             if not _stripes(grid[grid_row, columns]):
                 break
         else:
