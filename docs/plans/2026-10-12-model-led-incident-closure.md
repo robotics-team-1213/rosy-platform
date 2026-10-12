@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 D-715 source checkpoint는 읽기 전용 원장 사건 inventory와 별도 고정 digest를 실제 독립 비교/CLI에 연결한 것이다. 평가에서 실패 사건을 누락하거나 같은 사건의 다른 snapshot으로 덮는 경우를 거절한다. `871591c3e6`의 관련 원격 회귀 및 `9baec27cfb`의 population/실제 CLI 추가 12개 회귀는 terminal exit 0/NEW 0이고 독립 검토를 통과했다. retained_case_rows_only 목록을 전체 정상 명령·모델 호출·재발·정답 coverage로 해석하지 않으며 승격은 HOLD다. D-714는 `e78eca89e3`로 로컬 main에 착지했고 원격 main 통합 378 passed/skipped 0/NEW 0이다. 다음은 population과 원본의 완전한 관측/명령/결과 창 및 독립 정답·한계를 결속하는 것이다. 실제 배포·모델·현장 수용은 미완료이며 목표는 ACTIVE다.
+
 최신 D-714 source checkpoint: 별도 배포 고정 SHA와 전체 profile set을 설치한 provider/config에 결속하는 root 로더를 `4301911968`에서 구현했다. 실제 factory/dispatcher 연결·재로드·변조/미설치 ID/revision/예산 거절과 malformed JSON 오류 비노출을 적격 원격 회귀 terminal exit 0/NEW 0 및 독립 검토로 확인했다. 자동 제공자 생성·호출·권한 확대는 없다. D-706~D-713은 `3a9f812bd222`로 로컬 main에 착지했고 두 원격 통합 그룹 합계 6,312 passed/295 skipped/NEW 0이다. FULL CI와 실제 배포/모델/현장 증거는 별도이며, 다음은 운영 coverage·독립 수용 receipt와 실제 설치/readback·현장 처리의 결속이다. 전체 목표는 ACTIVE다.
 
 최신 D-713 source checkpoint는 기존 Fleet loop/outbox의 단일 pinned worker dispatcher와 실제 root 승인 포트 구성이다. 기존 사건의 모델·예산·UNKNOWN은 유지하고 현재 선택의 설치 worker만 새 사건을 생성하며 정상 상태는 호출하지 않는다. `799587b251`의 실제 원장→root→create_app→dispatcher·승인 폐기/제한 reviewer·설치/구조 원격 회귀는 terminal exit 0/NEW 0이다. shutdown의 실제 RED 결함을 수정하고 모든 worker 정리를 기다린 뒤 오류를 보고한다. 상세는 [프로파일 lifecycle 계획](2026-10-12-reasoning-profile-lifecycle.md)의 D-713을 따른다. 통합 병합은 D-692 stale gap lint 오류를 수정해 다시 진행하며, 다음 source 작업은 signed 운영 수용과 실제 설치 loader/readback·운영 coverage 연결이다. source의 모델 분배를 실제 모델 품질·현장 성공으로 대신하지 않는다.

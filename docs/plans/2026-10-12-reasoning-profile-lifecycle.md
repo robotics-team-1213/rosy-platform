@@ -6,6 +6,18 @@
 
 ## D-706 구현 checkpoint
 
+### D-715 보존 사건 population 결속 checkpoint
+
+`871591c3e6`에서 root `tools/incident_case_inventory.py`의 읽기 전용 Fleet DB 트랜잭션과 기존 독립 비교/CLI의 `compare_with_inventory`를 연결했다. 지정한 owner/policy/전체 profile tuple·시작 시간 창의 ACTIVE/HOLD/NOT_NEEDED 사건 행을 모두 목록화한다. caller가 누락한 실제 실패 사건, scope/예산/상태/카운터 변경과 별도 고정 digest 불일치를 거절한다. 독립 검토에서 같은 사건의 유효 이전·후속 export를 여러 전략에 넣으면 마지막 snapshot만 검증되는 결함을 실제 RED 1 NEW로 확인했다. inventory 모드에서 중복 키를 덮어쓰기 전에 거절하며 기존 비교 모드는 유지한다. LF를 고정해 최종 파일도 consumer의 1 MiB 제한 이내로 맞췄다.
+
+관련 5개 파일의 적격 AI PC 원격 회귀는 terminal exit 0/NEW 0이며 로그는 세션 `logs/incident-inventory-final/run-1.txt`다. 실제 생산/비교 CLI와 exclusive output·read-only source를 포함한다. `9baec27cfb`의 추가 population 회귀 12개는 terminal exit 0/NEW 0이며 다른 owner/policy/profile 제외, end-exclusive 창, 재고정된 잘못된 metadata 거절, 1,001건 초과의 전체 거절을 확인했다. 로그는 `logs/incident-inventory-population/run-1.txt`다. 독립 source 재검토에서 중요한 잔여 blocker는 없었다.
+
+이 inventory는 `retained_case_rows_only`, UNREVIEWED, field_accepted=false다. source 수집 누락·정상 무명령·전체 모델 호출·재발·청구·정답·독립 한계와 runtime/현장 수용을 입증하지 않으며 비교/승격은 HOLD를 유지한다. 다음은 이 실제 population과 완전한 관측/명령/결과 창을 결속하고 독립 검수·수용 한계를 공급하는 것이다. source 목록의 digest는 출처 인증을 대신하지 않는다.
+
+### D-714 로컬 통합 착지
+
+`feat/incident-installation-binding`는 `e78eca89e3`로 로컬 main에 착지했다. 처음 통합에서 문서의 Git SHA가 high-entropy token으로 분류되는 NEW 1을 확인해 문서만 식별 가능한 짧은 revision으로 고쳤으며 secret scanner를 변경하지 않았다. 해당 원격 회귀 80개 통과 후 실제 main 통합은 378 passed/skipped 0/terminal exit 0/NEW 0과 lint를 통과했다. 고정 로그는 세션 `logs/incident-manifest-land-4e2598.txt`다. FULL CI, push·배포·모델·현장 수용과는 구분한다.
+
 ### D-714 고정 설치 명세 결속 checkpoint
 
 `feat/incident-installation-binding`의 `4301911968`에서 root composition `tools/incident_reasoning.py`에 `load_incident_profile_config`를 추가했다. 별도 설치 설정의 파일 SHA256과 최대 64 KiB 원본을 확인하고 내부 `rosy.incident.profiles/1` 명세의 전체 ModelProfile set을 이미 구성된 provider/config에 결속한다. 명세는 schema/profile_sets만 허용하며 set은 최대 8개, 각 set의 primary/reviewer는 1~2개다. 제공자 전체 profile·adapter identity/범위와 비교하고 중복 set·미설치 ID/revision/예산·변조·clock 재정의를 거절한다. 원래 admission/current_profiles/budget/enabled/보정 포트는 보존한다. 파일에서 제공자·주소·명령어·credential을 만들거나 호출하지 않는다.
