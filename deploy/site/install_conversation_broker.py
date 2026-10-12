@@ -367,7 +367,7 @@ def main(argv=None):
                         'user=rosy-model-ingress,host=localhost,addr=127.0.0.1',
                         capture_output=True, text=True).stdout.splitlines()
         expected = {'forcecommand '+str(INGRESS), 'authorizedkeysfile '+str(KEYS),
-                    'authenticationmethods publickey', 'passwordauthentication no',
+                    'authenticationmethods publickey', 'pubkeyauthentication yes', 'passwordauthentication no',
                     'kbdinteractiveauthentication no', 'disableforwarding yes', 'permittty no'}
         if not expected <= set(effective):
             raise ValueError('EFFECTIVE_SSH_ADMISSION_CONFLICT')
