@@ -713,6 +713,7 @@
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-720 | Discord 상태 질의와 읽기 전용 숙고형 연결 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
+| D-725 | 격리 Gazebo의 명시적 native SIM MapPose 결속 | Proposed |
 | D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
 | D-726 | 경로 사실 묶음과 호출자가 넘기는 차로 맥락 | Accepted |
@@ -722,7 +723,6 @@
 | D-731 | 기존 Fleet 루프의 단일 규칙·모델 제출 책임 | Accepted |
 | D-734 | 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자 | Proposed |
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
-| D-725 | 격리 Gazebo의 명시적 native SIM MapPose 결속 | Proposed |
 
 | D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
 | D-732 | CORE native 실행 결과 식별과 readback | Proposed |
@@ -1027,6 +1027,11 @@ Status: Accepted (source contract; no operational activation).
 
 전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
 
+## 교통 감속 결정 — D-735
+
+Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
+
+ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
 ## D-730 — 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim
 
 Status: Accepted (source contract; no operational activation).
@@ -1039,6 +1044,11 @@ Status: Accepted (source contract; no operational activation).
 
 전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
 
+## LINE body and command curve agreement - D-737
+
+Status: Accepted (SOURCE contract; runtime and field acceptance separate).
+
+[D-737](../adr/D-737-line-body-command-curve.md).
 ## D-734 — 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자
 
 **Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
@@ -1055,14 +1065,3 @@ Status: Accepted (source contract; no operational activation).
 **Status:** Proposed (2026-10-12, contract review before implementation)
 
 기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).
-## D-735 — 이동 후보의 교통 감속 곡률 보존
-
-Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
-
-ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
-## D-737 - LINE body and command curve agreement
-## LINE body and command curve agreement - D-737
-
-Status: Accepted (SOURCE contract; runtime and field acceptance separate).
-
-[D-737](../adr/D-737-line-body-command-curve.md).
