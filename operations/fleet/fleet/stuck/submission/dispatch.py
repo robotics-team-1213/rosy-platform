@@ -66,14 +66,16 @@ async def model_answer(self, scope, attempt_id, problem, worker):
                     and pipeline.law_hold(row, decision='BACK_AND_RETRY', stuck_id=scope.case_id) is None
                     and context is not None and {k: context[k] for k in ('phase', 'attempts')} == candidate['expected_stuck'])
             def claim():
+                pending_rows = []
                 def pending(conn):
-                    self._board.record(robot_id=scope.subject_id, stuck_id=scope.case_id, decision='BACK_AND_RETRY',
+                    pending_rows.append(self._board.record(robot_id=scope.subject_id, stuck_id=scope.case_id, decision='BACK_AND_RETRY',
                         principal_id=PRINCIPAL_ID, tier='ai', rule='model_v2', accepted=None,
-                        code='FLEET_STUCK_DISPATCH_PENDING', durable=True, connection=conn)
+                        code='FLEET_STUCK_DISPATCH_PENDING', durable=True, connection=conn))
                     return True
                 record = operating.claim_model(scope, grant_id, attempt_id, expected_epoch=approval['epoch'],
                     generation=problem.generation, guard=guard, on_claim=pending)
                 claimed.append(record)
+                self._board._publish_answer(pending_rows[0])
             await owned(claim)
             return True
         async with asyncio.timeout(min(30, max(0, case['deadline'] - operating.store.clock()))):

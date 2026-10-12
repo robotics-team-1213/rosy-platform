@@ -340,9 +340,7 @@ class LineStuckBoard:
                "code": code, "message": message, "audit_id": audit_id,
                "tier": tier, "rule": rule, "escalated": escalated,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
-        self._answers.append(row)
-        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
-                  robot_id, stuck_id, decision, principal_id, accepted, code)
+        if connection is None: self._publish_answer(row)
         if self._log is not None:
             try:
                 self._log.append(row, connection=connection) if connection is not None else self._log.append(row)
@@ -352,3 +350,8 @@ class LineStuckBoard:
                 _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
                                robot_id, stuck_id)
         return row
+
+    def _publish_answer(self, row):
+        self._answers.append(row)
+        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
+                  row['robot_id'], row['stuck_id'], row['decision'], row['principal_id'], row['accepted'], row['code'])
