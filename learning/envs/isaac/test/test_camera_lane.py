@@ -561,6 +561,9 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
     assert lane.last['reason'] == 'camera_target_unavailable'
     assert 'camera_target' in lane.last
+    assert 'reason' in lane.last['camera_target']
+    assert 'exit_behind_line' in lane.last['camera_target']
+    assert 'centre_path_m' in lane.last['camera_target']
     import json
     json.dumps(lane.last, allow_nan=False)
     lane.close()
