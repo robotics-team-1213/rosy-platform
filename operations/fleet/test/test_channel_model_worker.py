@@ -42,9 +42,22 @@ def test_actual_job_reservation_result_and_reply_once(tmp_path):
     value=jobs.read(receipt['request_id'],'op')
     assert value['state']=='ANSWERED' and len(calls)==1
     assert value['result']['action_admissible'] is False
-    row=journal.reply_outbox.rows('op')[0]
+    with journal._connect() as conn:
+        conn.row_factory=__import__('sqlite3').Row
+        row=conn.execute('SELECT * FROM fleet_channel_reply_outbox').fetchone()
     assert row['kind']=='DELIBERATION' and 'pinky' in row['content']
     assert '오프라인' in row['content'] and '실행 승인' in row['content']
+
+
+def test_pending_job_keeps_its_original_input_binding(tmp_path):
+    w,jobs,journal,receipt,calls=worker(tmp_path)
+    snapshot=asyncio.run(w.snapshot())
+    from fleet.server.channel_deliberation import status_problem
+    original=status_problem(receipt,snapshot,now=w.clock())
+    jobs.stage(receipt,original,snapshot)
+    jobs.clock.__closure__[0].cell_contents[0]+=1
+    asyncio.run(w.step(receipt))
+    assert len(calls)==1 and calls[0].digest==original.digest
 
 
 @pytest.mark.parametrize('change',['unadmitted','owner','snapshot','cancel'])
