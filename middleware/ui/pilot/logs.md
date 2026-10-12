@@ -863,3 +863,9 @@
 - 변경: Windows 전용 batch/Java/cache 경로로 Linux에서 실행되던 앱 proxy 시험을 기존 Android CI 방식과 맞춘다. Linux는 Bash로 같은 Gradle wrapper를 실행하고 호스트 Java/SDK/cache 설정을 상속한다. probe·build·프로젝트 cache·Kotlin 상태는 같은 고유 pytest 임시 경로를 쓴다. 실제 bundled page·capability·접속/조작/자산 검사와 offline 실행을 유지한다.
 - 증거: 적정 자원 통합 후보 80a12948c에서 gradlew.bat PermissionError를 NEW로 관측했다. 파일 blob은 기준·main·후보에서 같지만 이를 기존 통과로 계산하지 않는다. Python 구문 확인은 통과했다. 기존 SDK 도구와 수락된 라이선스 상태로 Linux API 35/build-tools 34를 시험 전용 경로에 준비하며 원격 Gradle cache 예열과 실제 앱 proxy 검사는 이어 실행한다.
 - gate 변화: 시험 실행 경로 보완이다. 실제 Android 설치본·태블릿·주행 수용을 뜻하지 않는다.
+
+## 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+
+- 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
+- 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
+- gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.

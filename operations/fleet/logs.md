@@ -3446,3 +3446,9 @@
 - 변경: 최신 관측 기록·채널 작업 계약을 보존하며 통합했다. 새 채널 사건 시험의 setup 도우미와 세 호출만 이름을 바꿨다. 계정 규칙 문서에 확정된 첫 변경·기본 내 계정·현재 비밀번호 검증·결과 재조회를 반영했다.
 - 증거: 최신 도구 선택 회귀 101 passed/exit 0/NEW 0. canonical G1 두 회차는 6165+4371 및 6165+4396 passed, 각 NEW 0; Node 각 318 passed. commit 03378323e를 로컬 main에 착지했다. 새 도우미는 CI 도구 원격 RED 9 NEW 후 commit 1e29edaed의 pytest 7.4 및 최신 도구에서 각각 9 passed/exit 0/NEW 0. native_games_ui가 이름 변경 AST 동등성과 문서 범위를 독립 승인했다. 출하 범위 171개 커밋의 안전 검토 기록 검사도 통과했다.
 - gate 변화: 최신 소스 통합·원격 회귀·독립 검토를 확인했다. 이 후속 도우미 변경의 착지·푸시·전체 CI·서명·설치·계정 발급은 다음 gate다. 선택적 외부 채널 설정은 현장에 없으며 활성화하지 않았다.
+
+## 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+
+- 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
+- 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
+- gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
