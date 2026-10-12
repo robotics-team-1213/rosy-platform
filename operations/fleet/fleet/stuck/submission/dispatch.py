@@ -8,7 +8,7 @@ from .owned import owned
 from fleet.swarm.transport import HttpRobotClient
 from fleet.incidents.automation.recovery_candidates import observed_recovery
 from fleet.server.console_routes import transport_failure
-from .. import closed_loop, pipeline
+from .. import closed_loop, pipeline, lane_lost
 from ..resolver import Answer, Escalate, Hold
 from fleet.swarm.transport import RobotApiError
 PRINCIPAL_ID = "fleet-resolver"
@@ -59,11 +59,16 @@ async def model_answer(self, scope, attempt_id, problem, worker):
             row = await self._admission_row(scope.subject_id)
             def guard(conn):
                 context = observed_recovery({'robots': [row]} if row else {}, scope.subject_id, scope.case_id, problem.generation)
+                chain = self._resolver._chains.get(scope.subject_id)
                 return (self.operating_state is operating and self.operating_grant == grant_id and self._clients().get(scope.subject_id) is client
                     and scope.subject_id in self._resolver.autonomous_robots
                     and not self._resolver.is_claimed(scope.subject_id, scope.case_id)
                     and worker.human_owned(scope.subject_id, scope.case_id) is False and worker._fresh(problem) is True
                     and pipeline.law_hold(row, decision='BACK_AND_RETRY', stuck_id=scope.case_id) is None
+                    and chain is not None and not self._resolver.at_crosswalk(scope.subject_id)
+                    and lane_lost.ai_proposal_invalid({'decision': 'BACK_AND_RETRY'}, row,
+                        row['state']['line_follow']['stuck'], list(self._rows.values()), chain,
+                        self._resolver.config, self._resolver._painted()) is None
                     and context is not None and {k: context[k] for k in ('phase', 'attempts')} == candidate['expected_stuck'])
             def claim():
                 pending_rows = []
