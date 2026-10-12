@@ -72,6 +72,10 @@ class AcceptedContext(Strict):
     evidence_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
     generation: int = Field(ge=0)
     expires_at: FiniteFloat
+    boot_id: str | None = Field(default=None, max_length=96)
+    run_id: str | None = Field(default=None, max_length=96)
+    attempt_id: str | None = Field(default=None, max_length=96)
+    owner_generation: int | None = Field(default=None, ge=0)
 
 
 class ConversationInput(Strict):
