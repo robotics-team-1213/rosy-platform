@@ -21,7 +21,7 @@ from test_judgment_profiles import adapter
 from test_model_judgment import payload
 
 
-def setup(tmp_path):
+def bridge_case(tmp_path):
     config, _ = settings(enabled=True)
     profiles = tuple(replace(p, calibration_revision='cal-' + p.role) for p in config['profiles'])
     providers, calls = [], []
@@ -52,7 +52,7 @@ def setup(tmp_path):
 
 def test_actual_factory_worker_reads_persistent_approval_and_revocation(tmp_path):
     async def run():
-        config, calls, candidate, registry = setup(tmp_path)
+        config, calls, candidate, registry = bridge_case(tmp_path)
         bridge = importlib.import_module('tools.incident_reasoning')
         configured = bridge.registry_calibration_config(config, registry, domain='line_follow')
         application = app(tmp_path / 'site', configured)
@@ -74,7 +74,7 @@ def test_actual_factory_worker_reads_persistent_approval_and_revocation(tmp_path
 def test_registry_bridge_reaches_actual_profile_dispatcher_without_selecting_or_enabling(tmp_path):
     from fleet.incidents.automation.routing import IncidentProfileRoutes
     async def run():
-        config, calls, candidate, registry = setup(tmp_path)
+        config, calls, candidate, registry = bridge_case(tmp_path)
         clock = config.pop('clock')
         bridge = importlib.import_module('tools.incident_reasoning')
         combined = dict(profile_workers=(config,), clock=clock)
@@ -104,7 +104,7 @@ def test_registry_bridge_reaches_actual_profile_dispatcher_without_selecting_or_
 
 @pytest.mark.parametrize('fault', ['empty', 'nested', 'clock', 'ports', 'top'])
 def test_profile_registry_composition_refuses_ambiguous_or_owned_ports(tmp_path, fault):
-    config, calls, _, registry = setup(tmp_path)
+    config, calls, _, registry = bridge_case(tmp_path)
     clock = config.pop('clock')
     combined = dict(profile_workers=(config,), clock=clock)
     if fault == 'empty': combined['profile_workers'] = ()
@@ -119,7 +119,7 @@ def test_profile_registry_composition_refuses_ambiguous_or_owned_ports(tmp_path,
 
 @pytest.mark.parametrize('fault', ['profile', 'domain', 'revoked'])
 def test_registry_will_not_supply_other_or_revoked_calibration(tmp_path, fault):
-    config, _, candidate, registry = setup(tmp_path)
+    config, _, candidate, registry = bridge_case(tmp_path)
     profile, domain = asdict(config['profiles'][0]), 'line_follow'
     if fault == 'profile': profile['max_calls'] = 2
     elif fault == 'domain': domain = 'door'
@@ -130,7 +130,7 @@ def test_registry_will_not_supply_other_or_revoked_calibration(tmp_path, fault):
 
 
 def test_bridge_preserves_existing_configuration_and_refuses_port_replacement(tmp_path):
-    config, _, _, registry = setup(tmp_path)
+    config, _, _, registry = bridge_case(tmp_path)
     bridge = importlib.import_module('tools.incident_reasoning')
     result = bridge.registry_calibration_config(config, registry, domain='line_follow')
     assert all(result[key] is value for key, value in config.items())
@@ -140,7 +140,7 @@ def test_bridge_preserves_existing_configuration_and_refuses_port_replacement(tm
 
 def test_real_factory_claim_remains_responsive_while_approval_read_is_blocked(tmp_path):
     async def run():
-        config, calls, _, registry = setup(tmp_path)
+        config, calls, _, registry = bridge_case(tmp_path)
         entered, release, finished = threading.Event(), threading.Event(), threading.Event()
         original = registry.approved_candidate
         def blocked(*args):
@@ -169,7 +169,7 @@ def test_real_factory_claim_remains_responsive_while_approval_read_is_blocked(tm
 
 def test_revoke_between_artifact_and_map_reads_cannot_certify_primary(tmp_path):
     async def run():
-        config, calls, candidate, registry = setup(tmp_path)
+        config, calls, candidate, registry = bridge_case(tmp_path)
         original = registry.approved_candidate
         def revoke_after_read(*args):
             snapshot = original(*args)
@@ -192,7 +192,7 @@ def test_revoke_between_artifact_and_map_reads_cannot_certify_primary(tmp_path):
 def test_blocked_read_expiry_or_shutdown_cannot_resume_model_calls(tmp_path, stop):
     async def run():
         from fleet.incidents.automation.contract import CaseBudget
-        config, calls, _, registry = setup(tmp_path)
+        config, calls, _, registry = bridge_case(tmp_path)
         if stop == 'deadline':
             config['budget'] = lambda _: CaseBudget(100, 100.1, 2, 1, 0, (('primary', 1), ('reviewer', 1)))
         entered, release = threading.Event(), threading.Event()
