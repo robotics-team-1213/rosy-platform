@@ -190,12 +190,12 @@ class ExecutionWorker:
     def pending(self):
         with self.journal.store._connect() as conn:
             rows=[r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
-                LEFT JOIN fleet_channel_execution e USING(request_id) WHERE j.state='ANSWERED'
-                AND json_extract(j.result_json,'$.answer.kind')='CONTROL'
-                AND (e.request_id IS NULL OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
+                LEFT JOIN fleet_channel_execution e USING(request_id)
+                WHERE (e.request_id IS NULL AND j.state='ANSWERED' AND json_extract(j.result_json,'$.answer.kind')='CONTROL')
+                OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
                     WHERE s.request_id=j.request_id AND (s.state='TASK_QUEUED'
                         OR (s.state IN ('ACCEPTED','RUNNING','UNKNOWN') AND json_extract(s.receipt_json,'$.operation.run_id') IS NOT NULL)
-                        OR (s.state='READY' AND e.reason IS NULL))))
+                        OR (s.state='READY' AND e.reason IS NULL)))
                 ORDER BY (j.request_id>?) DESC,j.request_id LIMIT 10''',(self._cursor,))]
             if rows:self._cursor=rows[-1]
             return rows

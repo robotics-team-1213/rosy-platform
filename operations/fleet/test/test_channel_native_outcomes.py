@@ -233,6 +233,36 @@ def test_ambiguous_native_ack_keeps_claim_and_never_replays(tmp_path,mismatch):
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40') and len(sent)==1
 
 
+def test_pending_native_evidence_does_not_require_current_model_grant(tmp_path):
+    f,_,_,sent=_home_with_native_ack(tmp_path);rid=f.receipt['request_id']
+    op=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])['operation']
+    with f.store._connect() as conn,conn:
+        conn.execute("UPDATE fleet_channel_conversation_jobs SET state='UNKNOWN',result_json=NULL")
+        conn.execute("UPDATE fleet_channel_execution SET reason='GRANT_WITHDRAWN'")
+    assert rid in f.worker.pending()
+    async def get(path):return _readback(op)
+    f.client._get=get;asyncio.run(f.worker.step(rid,allow_dispatch=False))
+    assert f.journal.view(rid)['steps'][0]['state']=='COMPLETED' and len(sent)==1
+
+
+def test_crash_after_task_release_before_step_projection_never_resends(tmp_path):
+    from fleet.server.channel.execution.outcomes.reconcile import task_result
+    f=fixture(tmp_path,'40번 A로 보내줘 그리고 '+HOME_TEXT,
+              {'steps':[{'do':'navigate','robot':'rosy_40','waypoint':'A'},HOME_PLAN]})
+    rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid));sent=[]
+    async def dispatch(attempt):
+        sent.append(attempt['attempt_id'])
+        return {'accepted':True,'operation':_operation(uuid4(),uuid4(),attempt['attempt_id'])|{'kind':'navigate'}}
+    task=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    async def get(path):return _readback(task['receipt']['operation'])
+    asyncio.run(task_result(f.store,SimpleNamespace(_get=get),task))
+    assert f.journal.view(rid)['steps'][0]['state']=='TASK_QUEUED'
+    f.store.close_dispatch_for_startup();f.journal.recover()
+    asyncio.run(f.worker.step(rid))
+    assert [r['state'] for r in f.journal.view(rid)['steps']]==['COMPLETED','HOLD']
+    assert len(sent)==1 and not f.writes
+
+
 def test_terminal_result_does_not_advance_until_exact_quiescence(tmp_path):
     f, run_id, boot_id, sent = _home_with_native_ack(tmp_path)
     cid = sent[0][1].get("correlation_id") if isinstance(sent[0][1], dict) else None

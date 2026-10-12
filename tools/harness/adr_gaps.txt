@@ -50,5 +50,3 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 D-725 reserved by another session and absent from this branch; remove once its ADR lands
 D-725 reserved by a concurrent session; absent from operational-recovery-receipt
-D-731 reserved by concurrent model-recovery-submission-owner worktree; absent from hourly-health branch; remove when integrated
-D-731 reserved by peer model-recovery-submission-owner and absent from native-outcome branch; remove when its ADR lands

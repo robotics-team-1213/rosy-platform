@@ -58,8 +58,8 @@ def notify(journal, conn, rid, index, receipt):
     if row is None:
         raise ValueError('NATIVE_ORIGINAL_REQUEST_MISSING')
     original = json.loads(row[0])
-    operation = receipt['outcome']
-    result = operation['result'] or operation['phase']
+    operation = receipt.get('outcome')
+    result = operation['result'] or operation['phase'] if operation else 'UNKNOWN'
     released = receipt.get('safe_released') is True
     kind = f'EXECUTION:{index}:NATIVE:{result}:{released}'
     note = f"요청 단계 {index + 1} · {result}\n" + ('해당 실행의 자원 해제 확인.' if released else '자원 해제 확인 전입니다.')
@@ -78,7 +78,8 @@ async def channel_step(worker, rid, index, call, row):
     if task:
         await task_result(journal.store, worker.execution.console._client(call.robot), task,
                           events=worker.execution.task_service.core_events)
-        receipt = journal.store.get_task(row['task_id'])['receipt']
+        task = journal.store.get_task(row['task_id'])
+        receipt = task['receipt']
     else:
         started, value, operation = await observe(worker.execution.console._client(call.robot), receipt, call.robot,
                                                 worker.execution.task_service.core_events)
@@ -91,14 +92,14 @@ async def channel_step(worker, rid, index, call, row):
         if not task:
             receipt = record(conn, current, receipt, call.robot, 'direct_action', row['owner_id'], row['generation'],
                              json.loads(row['resources_json'] or '[]'), started, value, operation)
-        if 'outcome' not in receipt:
-            return True
-        operation = receipt['outcome']
-        state = 'RUNNING' if operation['phase'] == 'RUNNING' else row['state']
+        operation = receipt.get('outcome')
+        state = ('RUNNING' if operation and operation['phase'] == 'RUNNING' else row['state'])
+        if (not task and not value.get('operation')) or (task and task['status']=='UNKNOWN'):
+            state = 'UNKNOWN'
         if receipt.get('safe_released') is True:
             state = 'COMPLETED' if operation['result'] == 'SUCCEEDED' else 'FAILED'
         conn.execute('UPDATE fleet_channel_execution_steps SET state=?,receipt_json=?,reason=? WHERE request_id=? AND step_index=?',
-                     (state, json.dumps(receipt), operation['reason'], rid, index))
+                     (state, json.dumps(receipt), operation['reason'] if operation else 'NATIVE_RUN_UNKNOWN', rid, index))
         notify(journal, conn, rid, index, receipt)
     return True
 
@@ -117,6 +118,10 @@ async def task_result(store, client, task, *, events=None):
         receipt = record(conn, row, receipt, task['robot_id'], 'task', task['task_id'], task['dispatch_generation'],
                          [('robot', task['robot_id'])], started, value, operation)
         status, reason = row['status'], row['reason']
+        if operation is None and (receipt.get('outcome') or {}).get('phase') != 'TERMINAL':
+            status, reason = 'UNKNOWN', 'NATIVE_RUN_UNKNOWN'
+        elif operation is not None and operation['phase'] == 'RUNNING' and receipt['outcome']['phase'] != 'TERMINAL':
+            status, reason = 'RUNNING', operation['reason']
         if receipt.get('safe_released') is True:
             status = 'COMPLETED' if receipt['outcome']['result'] == 'SUCCEEDED' else 'FAILED'
             reason = receipt['outcome']['reason']
