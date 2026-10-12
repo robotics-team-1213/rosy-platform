@@ -30,6 +30,7 @@ _PROVIDERS = {"console_linked": False, "calibration_active": True,
 
 
 class StuckRecoveryMixin:
+    conditional_back_supported = True
     def _init_recovery(self) -> None:
         self._recovery = StuckRecovery(self._events, self._config)
         self._recovery_providers: dict[str, Callable[[], object]] = {}

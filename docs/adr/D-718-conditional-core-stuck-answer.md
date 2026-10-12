@@ -16,8 +16,8 @@ CORE는 기존 manager lock 안에서 stuck_id와 현재 phase/attempts를 확�
 
 ## Verification and consequences
 
-신형 상태는 `stuck.conditional_back: true`를 보고한다. 이전 CORE의 필드 누락은 false다. Fleet은 조건을 보낼 때 먼저 기존 GET line-follow로 지원 여부를 확인하고 명시적 true가 없으면 POST를 보내지 않는다. 구형 API가 알 수 없는 요청 필드를 무시하는 경우에도 늦은 모델 제출로 이어지지 않게 한다. 적용 시점 상태 검증은 여전히 CORE 잠금 안에서 한다.
+신형 HTTP 처리기는 제어기의 명시적 conditional_back_supported 지원과 자신의 조건 검증/전달을 결합할 때만 `stuck.conditional_back: true`를 보고한다. 제어기의 원시 상태는 false이며 이전 HTTP 처리기가 새 제어기 상태를 그대로 반환해도 true가 되지 않는다. 이전 CORE의 필드 누락도 false다. Fleet은 조건을 보낼 때 먼저 기존 GET line-follow로 지원 여부를 확인하고 명시적 true가 없으면 POST를 보내지 않는다. 구형 API가 알 수 없는 요청 필드를 무시하거나 신형 API가 구형 제어기를 사용하는 경우도 제출 전에 거절한다. 적용 시점 상태 검증은 여전히 CORE 잠금 안에서 한다.
 
-설치 의존성은 core_common 0.0.2, core_api_web 0.0.1·Fleet 0.1.2의 foundation 최소 0.0.2, rosy-execution 0.1.2의 foundation 정확한 0.0.2로 결속한다. 실행 의존 소비자인 palletizing·site gateway도 0.1.2 및 CI pin으로 함께 갱신한다. 독립 wheel/sdist 설치의 실제 metadata와 클래스 identity를 검사하고 구형 0.0.1이 새 의존성을 충족하지 않는지 확인한다. 직접 REALIGN에 BACK 전용 조건을 붙인 경우도 manager 경계에서 거절한다.
+설치 의존성은 core_common 0.0.2, core_api_web 0.0.1·Fleet 0.1.2의 foundation 최소 0.0.2, rosy-execution 0.1.2의 foundation 정확한 0.0.2로 결속한다. 실행 의존 소비자인 palletizing·site gateway·OMX agent·legacy Cell도 0.1.2 및 CI pin으로 함께 갱신한다. 독립 wheel/sdist 설치의 실제 metadata와 클래스 identity를 검사하고 구형 0.0.1이 새 의존성을 충족하지 않는지 확인한다. 직접 REALIGN에 BACK 전용 조건을 붙인 경우도 manager 경계에서 거절한다.
 
 사람 WAIT·CORE local fallback·시도 불일치·같은 ASKING 조건 수용과 malformed 입력을 실제 상태 기계/API/HTTP transport 회귀로 확인한다. 독립 안전 검토·원격 통합·로컬 착지 후에도 모델 후보 생산/dispatch·운영 receipt·배포·현장 수용은 별도다.
