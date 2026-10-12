@@ -695,6 +695,7 @@
 | D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
 | D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
 | D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
+| D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -906,6 +907,12 @@ Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 
 **Status:** Accepted (2026-10-12, source contract)
 
 root orchestration에서 영속 승인 원장과 기존 Fleet 보정 포트를 구성하며 정확한 profile/domain과 현재 신뢰를 재검증한다. 실제 factory/worker에서 승인·폐기·정상 무호출을 확인한다. 전문은 [D-709](../adr/D-709-reasoning-fleet-calibration-bridge.md).
+
+## D-710 — Incident worker의 profile·CORE 소유 scope 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+공유 DB의 다른 profile/owner 사건과 최종 인수를 worker가 대신 종료·처리하지 않도록 기존 CaseScope 소유권을 분리한다. 운영 revision 전환·새 사건 배정과는 구분한다. 전문은 [D-710](../adr/D-710-incident-profile-scope-isolation.md).
 ## D-705 — Incident 실행 책임과 운영 보정 포트
 
 **Status:** Accepted (2026-10-12, source contract)
