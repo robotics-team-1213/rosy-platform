@@ -1,6 +1,7 @@
 """Conversation owner uses independent tables and immutable same-actor context."""
 import json
 from contextlib import closing
+from fastapi import HTTPException
 
 from rosy.decision.conversation.codec import ConversationInput, History, bounded_environment, conversation_input, digest
 from ..model_journal import ModelJobsJournal
@@ -11,6 +12,16 @@ class ConversationJobs(ModelJobsJournal):
               'fleet_channel_conversation_activation')
     reply_kind = 'CONVERSATION'
     invalid_reply = '현재 관측·지도 또는 대화 입력을 검증하지 못해 보류했습니다. 기기 명령을 보내지 않았습니다.'
+
+    def read(self,request_id,principal):
+        value=super().read(request_id,principal)
+        execution=getattr(self,'execution',None)
+        if execution is not None and value['result'] is not None:
+            try:state=execution.view(request_id)
+            except HTTPException as exc:
+                if exc.status_code!=404:raise
+            else:value['result']['execution']={k:state[k] for k in ('plan_hash','expires_at','reason','steps')}
+        return value
 
     def history(self, receipt, environment, now):
         with closing(self.journal._connect()) as conn:

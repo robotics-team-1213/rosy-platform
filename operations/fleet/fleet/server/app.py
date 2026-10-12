@@ -825,8 +825,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               fanout_local_omx_stops, configured_omx, stop_transport),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
-    install_conversation(app,conversation_config,site_maps,task_service=task_service,
-                         require_operator=require_operator,read_guard=read_guard)
+    install_conversation(app,conversation_config,site_maps,task_service=task_service)
 
     @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
     def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:

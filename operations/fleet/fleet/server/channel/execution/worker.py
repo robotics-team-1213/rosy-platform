@@ -10,6 +10,7 @@ from fleet.server.site_auth import SitePrincipal
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
 from fleet.hub.hub import HubError
+from .receipts import owner_receipt
 
 
 _CAPABILITY = {'navigate':'navigation.goal_navigation','home':'navigation.return_home',
@@ -34,6 +35,7 @@ class ExecutionWorker:
             if call.verb=='formation_resume':
                 f=self.execution.console.formation_status()
                 targets=list(dict.fromkeys([f.get('leader'),*f.get('assignment',{})]))
+            if call.verb=='formation_start':targets=[call.body['leader'],*call.body['members']]
             if call.verb=='follow':targets.append(call.body['target_robot_id'])
             for target in targets:
                 current=next((r for r in self.journal.environment()['robots'] if r['robot_id']==target),None)
@@ -50,6 +52,7 @@ class ExecutionWorker:
             formation=console.formation_status()
             robots=list(dict.fromkeys([formation.get('leader'),*formation.get('assignment',{})]))
             if not robots or None in robots:raise ValueError('FORMATION_OWNER_NOT_ACTIVE')
+        if call.verb=='formation_start':robots=[call.body['leader'],*call.body['members']]
         for rid_robot in robots:
             row=next((r for r in self.journal.environment()['robots'] if r['robot_id']==rid_robot),None)
             if row is None or row['online'] is not True:raise ValueError('ROBOT_OFFLINE_OR_OBSERVATION_UNKNOWN')
@@ -57,6 +60,9 @@ class ExecutionWorker:
             caps=await client.capabilities()
             self.fence(rid,index,call)
             feature=_CAPABILITY.get(call.verb)
+            if call.verb in {'formation_start','formation_resume'}:
+                leader=call.body.get('leader') if call.verb=='formation_start' else formation['leader']
+                feature='swarm.lead' if rid_robot==leader else 'swarm.follow'
             value=caps
             if feature:
                 for part in feature.split('.'):value=value.get(part) if isinstance(value,dict) else None
@@ -64,7 +70,8 @@ class ExecutionWorker:
             state=await client.state()
             self.fence(rid,index,call)
             if call.verb not in STOP_VERBS:
-                if (state.get('safety',{}).get('estop') is not False or state.get('mode') not in {'IDLE','NAVIGATION'}
+                modes={'MANUAL'} if call.verb=='move' else {'IDLE','DOCKING'} if call.verb in {'dock','undock'} else {'IDLE','NAVIGATION'}
+                if (state.get('safety',{}).get('estop') is not False or state.get('mode') not in modes
                         or state.get('capabilities_degraded') or console.trip_busy(rid_robot)):
                     raise ValueError('CURRENT_SAFETY_OR_OWNER_HOLD')
                 if call.verb=='move':
@@ -73,8 +80,21 @@ class ExecutionWorker:
                         cap=nav.get(limit)
                         if type(cap) not in (int,float) or not math.isfinite(cap) or cap<=0 or abs(call.body[field])>cap:
                             raise ValueError('MOVE_LIMIT_NOT_ADVERTISED_OR_EXCEEDED')
-                if call.verb=='dock' and call.body.get('dock') not in self.journal.environment()['work_catalog']:
-                    raise ValueError('DOCK_NOT_REGISTERED')
+                if call.verb in {'dock','undock'}:
+                    status=await client._get('/api/v1/docking/status')
+                    self.fence(rid,index,call)
+                    allowed={'DOCKED','CHARGING'} if call.verb=='undock' else {'UNDOCKED','DOCK_FAILED'}
+                    if status.get('state') not in allowed:raise ValueError('DOCK_OWNER_STATE_NOT_READY')
+                    if call.verb=='dock':
+                        docks=await client._get('/api/v1/docking/docks')
+                        self.fence(rid,index,call)
+                        if not any(d.get('id')==call.body['dock'] for d in docks.get('docks',[])):
+                            raise ValueError('DOCK_NOT_REGISTERED')
+        if call.verb=='follow':
+            target=call.body['target_robot_id']
+            caps=await console._client(target).capabilities()
+            self.fence(rid,index,call)
+            if caps.get('swarm',{}).get('lead') is not True:raise ValueError('FOLLOW_LEADER_NOT_ADVERTISED')
         return robots
 
     async def step(self,rid):
@@ -110,14 +130,12 @@ class ExecutionWorker:
                         return
                     self.journal.begin(rid,index,[('robot',r) for r in robots],stopping=call.verb in STOP_VERBS)
                     began=True
-                    paths={call.path} if call.scope=='robot' else None
+                    paths={call.path} if call.scope=='robot' else {'/api/v1/swarm/follow','/api/fleet/formation/resume'} if call.verb.startswith('formation_') else {'/api/v1/safety/stop'}
                     with dispatch_guard(lambda:self.fence(rid,index,call),paths=paths):
-                        result=await self.execution.step(call,principal,'discord-natural:'+rid,index)
-                    accepted=result.get('accepted')
-                    if type(accepted) is not bool:
-                        self.journal.finish(rid,index,'UNKNOWN',reason='OWNER_RECEIPT_NOT_CORRELATED')
-                    else:
-                        self.journal.finish(rid,index,'ACCEPTED' if accepted else 'FAILED',receipt={'accepted':accepted})
+                        result=await self.execution.step(call,principal,'discord-natural:'+rid,index,owner_id=row['owner_id'])
+                    accepted,receipt=owner_receipt(call,result,self.execution.console.robot_ids)
+                    self.journal.finish(rid,index,'ACCEPTED' if accepted is True else 'FAILED' if accepted is False else 'UNKNOWN',
+                                        receipt=receipt,reason='SITE_STOP_PARTIAL_UNKNOWN' if accepted is None else None)
                     return
                 except asyncio.CancelledError:
                     if began:self.journal.finish(rid,index,'UNKNOWN',reason='DISPATCH_CANCELED_RESULT_UNKNOWN')

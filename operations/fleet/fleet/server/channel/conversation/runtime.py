@@ -62,7 +62,7 @@ class ConversationProvider:
         return checked_answer(value['answer'], question).model_dump()
 
 
-def install_conversation(app, config, site_maps, *, task_service=None, require_operator=None, read_guard=None):
+def install_conversation(app, config, site_maps, *, task_service=None):
     if config is None:return
     if getattr(app.state, 'channel_model_jobs', None) is not None:
         raise ValueError('ONE_CHANNEL_CONVERSATION_OWNER_REQUIRED')
@@ -98,7 +98,7 @@ def install_conversation(app, config, site_maps, *, task_service=None, require_o
     if task_service is not None:
         from ..execution.runtime import install_execution
         install_execution(app,jobs,task_service,scope,admitted,lambda:bounded_environment(cached()),
-                          require_operator=require_operator,read_guard=read_guard,refresh=snapshot)
+                          refresh=snapshot)
     previous = app.router.lifespan_context
 
     async def run():

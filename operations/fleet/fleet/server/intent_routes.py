@@ -15,11 +15,10 @@ from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.task_store import IdempotencyConflict
-from fleet.server.intent_execution import IntentExecution, _site_call, _robot_call
+from fleet.server.intent_execution import IntentExecution, STOP_VERBS, _site_call, _robot_call
 from fleet.swarm.transport import RobotApiError
 
 # D-540 9: these only stop; any other verb moves something and needs a named operator.
-STOP_VERBS = frozenset({"estop", "cancel", "stop", "formation_stop", "follow_cancel"})
 
 
 def install_intent_routes(app, *, console, task_service, require_operator, require_named_operator,
