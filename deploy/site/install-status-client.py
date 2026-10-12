@@ -7,8 +7,10 @@ import os
 from pathlib import Path
 import pwd
 import stat
+import re
 import subprocess
 import tempfile
+import time
 
 from deploy.site.deliberation_install import install_file,trusted_directory
 
@@ -28,7 +30,9 @@ def main():
                      'primary_admitted','reviewer_admitted'}
     if (set(cfg)!=expected_fields or cfg['key_file']!='/run/rosy-deliberation/broker.key'
             or cfg['known_hosts_file']!='/run/rosy-deliberation/known_hosts'
-            or cfg['profile_revision']!='d720-v1' or cfg['primary_admitted'] is not True):
+            or cfg['profile_revision']!='d720-v1' or cfg['primary_admitted'] is not True
+            or type(cfg['reviewer_admitted']) is not bool or not re.fullmatch('[0-9a-f]{40}',cfg['source_commit'])
+            or type(cfg['valid_until']) not in (int,float) or not time.time()<cfg['valid_until']):
         raise SystemExit('verified host admission receipt required')
     raw=args.known_hosts.read_text().strip().split()
     if len(raw)!=3 or raw[:2]!=[cfg['host'],'ssh-ed25519']:raise SystemExit('one fixed host pin required')
@@ -43,10 +47,14 @@ def main():
     with tempfile.TemporaryDirectory(prefix='rosy-status-client-') as temp:
         snapshot=Path(temp)/'key';snapshot.write_bytes(key);snapshot.chmod(0o600)
         public=subprocess.check_output(['ssh-keygen','-y','-f',str(snapshot)],text=True).strip().split()
-    if public!=args.public_key.read_text().split()[:2]:raise SystemExit('approved broker key changed')
+    if (not args.public_key.resolve().is_relative_to('/root/rosy-status-reviewed')
+            or args.public_key.is_symlink() or args.public_key.stat().st_uid!=0
+            or public[:2]!=args.public_key.read_text().split()[:2]):raise SystemExit('approved broker key changed')
     parent=Path('/etc/rosy');trusted_directory(parent)
     destination=parent/'fleet-deliberation'
     destination.mkdir(mode=0o750,exist_ok=True);trusted_directory(destination)
+    if any(destination.iterdir()) and (destination.stat().st_gid!=10001 or stat.S_IMODE(destination.stat().st_mode)!=0o750):
+        raise SystemExit('foreign client directory refused')
     os.chown(destination,0,10001);destination.chmod(0o750)
     install_file(destination/'broker.key',key,0o640,10001)
     install_file(destination/'known_hosts',args.known_hosts.read_bytes(),0o644)

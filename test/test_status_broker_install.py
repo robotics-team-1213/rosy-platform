@@ -13,7 +13,8 @@ def test_installer_requires_admin_before_mutation(tmp_path):
     import os
     if os.geteuid()==0:pytest.skip('requires an unprivileged test account')
     result=subprocess.run([sys.executable,str(SCRIPT),str(tmp_path),str(tmp_path/'manifest'),
-        str(tmp_path/'key'),'--manifest-sha256','a'*64],capture_output=True,text=True,timeout=5)
+        str(tmp_path/'key'),'--manifest-sha256','a'*64],capture_output=True,text=True,timeout=5,
+        env={**os.environ,'PYTHONPATH':str(SCRIPT.parents[2])})
     assert result.returncode!=0 and 'root installation required' in result.stderr
     assert list(tmp_path.iterdir())==[]
 
