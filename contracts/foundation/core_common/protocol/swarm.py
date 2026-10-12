@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import enum
 from typing import Literal, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
@@ -37,3 +38,6 @@ class SwarmFollowParams(BaseModel):
     members: list[str] = Field(default_factory=list)
     #: D-559 additive. trail = replay the leader's driven path `distance` behind (lateral 0).
     mode: Literal["offset", "trail"] = "offset"
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
