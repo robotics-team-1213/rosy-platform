@@ -142,6 +142,10 @@ lease 해제·OFF 200·실제 연속 정지 및 자기 실행 cleanup을 확인�
 typed route context 메시지는 0회다. 이 실행은 실제 전진과 종료의 증거이며 지도 완주나
 곡선 목표 소실 수용의 증거로 사용하지 않는다. 짧은 이동 문턱만으로 정확한 최종 거리
 상한을 보장하지 못했으므로 후속 시험에서도 요청 시점과 정지 후 총거리를 함께 기록한다.
+계획 speed_cap은 0.08m/s였으므로 최대 명령의 약 2.2mm/s 초과도 보존한다. 이 결과로
+속도 상한 준수를 수용하지 않는다. start 이후 목표는 계속 live였으며 held 사용과
+목표 소실은 관측하지 않았다. 후속 비교는 이 곡선 관측의 비주행 replay에 짧은 목표
+gap을 넣어 strict-stop과 bounded ExpectedPath의 변환·예산·새 충돌 거절을 대조한다.
 
 제품 수정 commit `3d5f58a3e9`의 전체 CI run `38206143801`은 terminal SUCCESS다.
 후속 실제 실행은 최초 CORE와 새 IR helper의 조합이므로 전체 최신 main 실행과 구분한다.
