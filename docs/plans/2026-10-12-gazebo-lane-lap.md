@@ -90,3 +90,26 @@ native 55 PASS와 소비자 198 PASS/NEW 0이다. 실제 runner의 clock join도
 법칙 값만 전달한다. 보조 reader를 관측 배선 계층으로 옮긴 후 관련·구조 회귀 117 PASS/NEW 0이다.
 전체 통합 snapshot의 실제 빌드·관측 값 readback·주행은 이어 확인한다. 차체 경계의 샘플 검증은
 기존 2mm paint raster와 NOMINAL_BODY를 사용하며, 원본 contact와 연속 swept 증거는 별도로 구분한다.
+
+## 통합 후보 실제 실행
+
+- `e6d0fe12ba`: 최종 통합 원격 219 PASS/NEW 0, 전체 소스 7,526 파일 고정과 17 ROS 패키지
+  fresh build 13.5초를 확인했다. 실행 자원 기준을 통과한 AI PC에서만 Gazebo를 실행했다.
+- Leg2는 출발 전 전체 ROS 파라미터 조회가 초기화되지 않은 선택 `route`에서 빈 응답을 반환해
+  거절됐다. 이동 0m와 안전 종료를 확인했다. 설치된 Jazzy parameter service와 CLI 소스 및 실제
+  경고를 대조했으며 제품 설정을 바꾸지 않고 네 필수 값의 직접 조회로 실행기를 수정했다.
+- Leg3는 같은 소스·설치 해시와 실제 두 observer의 `.1/.1/2/.35` 조회, CORE 프로세스의
+  설정 경로·domain, native SIM 위치 LOCALIZED, Fleet plan/start 200과 실제 lease를 확인했다.
+  실제 이동은 0.341412m이고 terminal은 `stopped/stall`, `arrived=false`다.
+- 마지막 양의 native 명령은 CORE 후보와 정확히 같은 `.0369939m/s/.117409rad/s`였으며
+  곡률은 3.173743/m이다. 당시 카메라는 current turn-left였고 교통은 clear-road/scale 1이다.
+  최종 명령은 0이 됐지만 CORE 후보는 이후에도 양수였다. 목표 소실을 첫 정지 원인으로
+  확정하지 않는다. 최종 `blocked=true`의 전이 시각과 full scan은 기록되지 않아 직접 원인은 미확정이다.
+- selected02의 pose UNKNOWN은 Fleet stall/OFF 뒤에 나타났다. 원본 native 입력은 신선했고
+  소비자가 더 이상 갱신하지 않은 CORE snapshot과의 시간 차가 1.2초를 넘었다. 이 현상은
+  이번 stall의 선행 원인이 아니다. 다음 runner는 두 CORE의 실제 snapshot 읽기를 2Hz로 유지한다.
+- OFF·lease 해제·실제 연속 정지·futures 종료·자기 프로세스/포트/lock 종료와 소스 보존을 확인했다.
+  1,417개 몸체 샘플의 paint/wall/map-bounds/other-circle 겹침은 0이지만 연속 swept/contact 수용은 아니다.
+- 다음 진단은 같은 제품 후보에서 hazard 전이, full scan, 기존 `safety/motion_limits` 원문을 기록한다.
+  guard 임계값·CORE 명령 권한·지도·source stamp는 바꾸지 않는다. 새 runner의 독립 리뷰 후
+  한 번의 제한 구간을 재실행해 최초 최종 명령 거절을 확인한다. 지도 완주는 계속 미확인이다.
