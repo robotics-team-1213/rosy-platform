@@ -118,4 +118,32 @@ OFF와 취소를 요청한다. 정지 중 이동을 포함한 총거리, lease �
 연속 정지를 따로 확인한다. 준비 코드는 독립 SOURCE
 APPROVE이며 자원 gate가 거절한 시도는 실행·주행 결과에 포함하지 않는다.
 
+## 한정된 실제 Fleet trip
+
+r7는 정규 sim 자원 gate를 통과해 같은 지도와 모델에서 실행했다. Fleet plan/start 200,
+실제 trip lease와 CORE FREE 통행권을 확인했다. 새 helper는 세 ray의 동일 시각 프레임
+525건을 수신하고 ADC 495건을 발행했다. 이 차이는 source age·중복 frame 검사 후 실제
+발행량이며 r6의 수정 전 helper 증거와 구분한다. typed route context publisher는 존재했으나
+메시지와 positive seq는 관측하지 못했다.
+
+진단 stop guard가 이전 제어 tick의 HOLD/authority_none과 갱신된 FREE 통행권을 함께 읽어
+즉시 OFF를 요청했다. 이동 0m·모든 명령 zero이므로 CORE의 차체 거절이나 방향 소실을
+재현했다고 판단하지 않는다. cancel 200과 terminal canceled, lease 해제, OFF 200,
+실제 연속 정지와 자기 프로세스·포트·lock 종료를 확인했다. 다음 시험은 이 진단 guard가
+현재 authority가 FREE/HOLDING인 혼합 응답의 authority_none만 재관측하도록 고친다. 다른 거절,
+정지 문턱, 통행권과 실제 센서 검사는 유지한다.
+
+r8는 이 진단 판정만 수정하고 정규 자원 gate를 통과했다. Fleet start 200·lease와
+CORE FREE 갱신을 거쳐 TRACKING 및 양의 최종 명령을 관측했다. 선택한 두 번째 로봇의
+최대 명령은 0.08221m/s·0.36036rad/s였고 첫 로봇 명령은 모두 zero였다. 4.488 sim s에
+누적 이동 0.171995m에서 정지를 요청했다. 0.15m 문턱보다 약 22mm 늦게 감지됐고,
+정지 중 약 7.1mm를 더 이동해 최종 누적 거리는 0.179107m였다. cancel 200과 canceled,
+lease 해제·OFF 200·실제 연속 정지 및 자기 실행 cleanup을 확인했다. runner exit 0이다.
+typed route context 메시지는 0회다. 이 실행은 실제 전진과 종료의 증거이며 지도 완주나
+곡선 목표 소실 수용의 증거로 사용하지 않는다. 짧은 이동 문턱만으로 정확한 최종 거리
+상한을 보장하지 못했으므로 후속 시험에서도 요청 시점과 정지 후 총거리를 함께 기록한다.
+
+제품 수정 commit `3d5f58a3e9`의 전체 CI run `38206143801`은 terminal SUCCESS다.
+후속 실제 실행은 최초 CORE와 새 IR helper의 조합이므로 전체 최신 main 실행과 구분한다.
+
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.
