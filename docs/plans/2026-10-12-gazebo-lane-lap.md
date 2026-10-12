@@ -44,4 +44,29 @@ Fleet 유한 trip으로 지도 경로를 완주한다. 사용자는 Gazebo부터
 
 ## 증거 상태
 
-최신 전체 소스의 첫 목적지 주행을 준비 중이다. 지도 완주와 새 후보의 실물 수용은 미확인이다.
+최신 전체 소스의 첫 목적지 실행은 실패했고 안전 종료를 확인했다. commit `2e29bd118`의
+7,503개 파일과 17개 ROS 패키지를 새로 빌드한 뒤 CORE02→SW 2.8649m 구간을 실행했다.
+최종 이동은 0.210783m, 중심 옆거리 약 10mm, 차로 접선 대비 방향 오차는 약 +47.45°였다.
+Fleet은 초기 operator pin의 `anchor_age_s=10.244`가 기존 10초 상한을 넘어 정지했다.
+처음 원인으로 읽었던 `out_of_order=1`은 부수 진단이며 직접 DEGRADED 원인이 아니었다.
+native odom 922개 시각은 증가했고 기억 경로가 3프레임 사용됐다. 이후 pivot·off_line·
+drivable_closed를 관측했다. trip은 stopped, arrived=false다. lease 해제·OFF·실제 연속
+정지·자기 프로세스/포트/lock 종료와 원래 source hash 보존을 확인했다.
+
+독립 리뷰에서 관측의 기본 역산법칙(.08m/s, gain .8)과 실제 Pinky CORE 법칙(.10m/s,
+gain 2.0)을 조합하면 명령 곡률이 목표의 두 배가 됨을 확인했다. 현재·creep·기억 경로와
+Isaac 소비자가 실제 CORE 설정으로 같은 역산법칙을 사용하도록 수정 중이다. commit
+`45e92d326`의 원격 수학·기억 경로·잘못된 설정 회귀 28 PASS, 기존 관측 회귀 83 PASS,
+Isaac camera 회귀 82 PASS다. 각 known_failures 결과는 NEW 0이다. native camera와
+CORE의 HOME 차이에 따른 운영자 설정 전달은 안전한 기존 status-inputs handover로
+별도 구현·검토하며, 이 전달이 끝나기 전에 제품 전체 수정 완료로 선언하지 않는다.
+
+긴 Fleet trip에는 지속적으로 유효한 지도 자세가 필요하다. 실제 overhead 영상·로봇 식별·
+accepted Vision 공급은 현재 Gazebo 구성에 없다. 기존 `map_pose_port` 주입을 이용하는
+명시적 SIM-only native-Gazebo 위치 adapter를 검토한다. 원본 좌표·sim stamp·wall receipt,
+map/run/source/domain/partition/frame 결속과 epoch·freshness를 검증하며, authority에는
+실제 CORE snapshot의 UTC odom stamp를 유지한다. trip·차로 감시·지도 자세 조회·교차로
+판단은 같은 위치 provider를 사용하고 camera ingest·operator pin·teach·formation에는
+SIM 위치를 자동 확장하지 않는다. 새 공개 pose 입력 API나 주기 pin, TTL 확대는 사용하지 않는다.
+
+지도 완주와 새 후보의 실물 수용은 미확인이다.
