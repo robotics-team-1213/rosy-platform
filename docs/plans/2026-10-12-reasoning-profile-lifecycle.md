@@ -6,6 +6,14 @@
 
 ## D-706 구현 checkpoint
 
+### D-710 사건 소유권 분리 checkpoint
+
+`e9a5adab14`에서 worker의 active/최종 인수 대기 조회와 `_process`·`_finish`를 자신의 전체 profile tuple SHA 및 CORE owner로 제한했다. 실제 공유 DB 두 worker가 다른 profile 사건을 PROFILE_CHANGED로 닫거나 인수를 대신 큐에 넣는 RED 3 NEW를 재현한 뒤 수정했다. 상태·원래 예산·시도/호출 수를 그대로 보존하고 원 worker만 최종 인수를 처리한다. 같은 profile의 다른 실행 owner도 종료하지 않는다.
+
+적격 Model PC 원격 회귀 135 passed/terminal exit 0/NEW 0을 확인했다. 기존 자기 profile 변경 HOLD·UNKNOWN/재시작·원장·보정/실제 factory·source-less wheel/sdist·구조를 포함한다. 로그는 세션 `logs/incident-profile-scope-green/run-1.txt`다. 독립 source 검토에서 중요한 blocker는 없었다. DB/CaseScope/public API와 기존 안전 fence를 바꾸지 않았다. pinned old/new worker의 새 사건 배정·영속 current/previous·복귀 dispatcher는 여전히 구현해야 한다.
+
+같은 시점의 모델 무호출 AI PC readback은 `/opt/rosy-deliberation/review-cfcba82ddf` missing, 기존 V2 확인 venv Python present, GLM 시험 표식 unreadable이다. 존재/실행 여부를 추정하거나 표식을 변경하지 않았다. runtime_admitted=false이며 실제 GLM 준비·현재 source 설치·첫 실제 모델 결과/독립 품질/현장 수용은 미완료다.
+
 ### D-709 Fleet 판단 포트 연결 checkpoint
 
 기존 registry의 `approved_candidate(profile_json, domain)`가 현재 승인 상태·신뢰와 정확한 전체 profile/domain을 검증한다. root composition `tools/incident_reasoning.py`의 `registry_calibration_config`가 이 결과와 현재 승인 map을 기존 create_app→install_incident_runtime→IncidentCaseWorker로 공급한다. Fleet에서 learning을 import하지 않으며 기존 admission/provider/profile/current/budget/enabled와 이미 지정한 보정 포트의 소유권을 유지한다.
@@ -44,7 +52,7 @@
 | 4 | 사건 소유 revision에 따라 기존 worker를 연결 | 새 사건만 현재 revision으로 생성, 진행 중 사건은 원래 프로파일/예산/시도를 유지. 다른 revision worker가 같은 DB의 사건을 PROFILE_CHANGED로 닫거나 같은 요청을 중복 실행하지 않음 |
 | 5 | 복귀와 운영 readback을 연결 | 새 사건은 이전 승인 revision을 쓰며 위험으로 폐기된 profile의 admission은 중단. UNKNOWN은 재제출하지 않고 E-stop/사람 인수를 해제하지 않음. registry·설정 readback·실제 사건의 활성 revision을 별도 기록 |
 
-새 학습/운영 서비스나 CORE writer를 만들지 않는다. 기존 worker의 `active_scopes`·`pending_handoffs`는 공유 DB를 읽으므로 여러 revision을 구성할 때 소유 scope별 filtering이 필요하다. 단순히 worker 두 개에 전체 snapshot을 공급하거나 global current_profiles를 바꿔 구현 완료로 표시하지 않는다.
+새 학습/운영 서비스나 CORE writer를 만들지 않는다. D-710의 worker는 공유 DB에서 자신의 profile SHA·CORE owner scope만 처리한다. 실제 전환 dispatcher는 진행 사건의 pinned profile과 새 사건 배정 권한도 분리해야 한다. 단순히 worker 두 개에 전체 snapshot을 공급하거나 global current_profiles를 바꿔 구현 완료로 표시하지 않는다.
 
 ## 검증
 
