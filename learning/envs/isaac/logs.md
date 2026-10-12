@@ -197,3 +197,9 @@
 - 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
 - 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
 - gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · 0fa0161d4 · 관측 곡선 거절과 실행 배선 분리 진단
+
+- 변경: camera_target 거절 진단에 reason·경계 교차·중심 경로·벽 여유를 보존한다. 계획은 docs/plans/2026-10-12-map-drive-diagnosis.md이며 CORE 안전·학습 admission과 무효 명령 0은 유지한다.
+- 증거: 원격 RED 3 FAIL 뒤 전체 Isaac 214 PASS/1 SKIP/NEW 0, 독립 SOURCE APPROVE. AI PC의 기준 main 소스 Gazebo 정지 관측에서 현재 목표/경로와 guide publisher 0을 확인했고 전체 runner의 Fleet import 실패 exit 1 및 정리 readback을 별도 기록했다. 짧은 목표 fallback은 몸체 여유 증거가 부족해 채택하지 않았다.
+- gate 변화: SOURCE 진단 및 원격 회귀 근거다. Gazebo 부분 관측은 Fleet 연결·자율 주행·완주 수용이 아니다. 실제 Isaac SDK 재실행·네 방향 완주·실물 수용은 미확인이다.
