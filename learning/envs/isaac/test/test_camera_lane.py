@@ -9,7 +9,7 @@ import pytest
 
 
 @pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due",
-                                  "learn_transition", "remember_camera_action"])
+                                  "learn_transition", "remember_camera_action", "camera_snapshot_due"])
 def test_native_runner_preserves_camera_guard_exports(name):
     import camera_checks
     import run_map_rl
