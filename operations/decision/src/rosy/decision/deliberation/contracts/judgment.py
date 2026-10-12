@@ -95,7 +95,7 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
         if type(proof) is not dict or set(proof) != {'tool_name', 'arguments', 'evidence_ids', 'expected_facts'}:
             raise ValueError('INVALID_DECLARED_SUCCESS_CHECK')
         step(problem, {key: value for key, value in proof.items() if key != 'expected_facts'}, read_only=True)
-        replace(problem, facts_json=canonical(proof['expected_facts']))
+        replace(problem, choices=('reobserve',), fleet_choice=None, facts_json=canonical(proof['expected_facts']))
     elif payload['next_step'] is not None or payload['success_check'] is not None:
         raise ValueError('INACTIVE_JUDGMENT_HAS_STEP')
     if payload['verdict'] == 'do_not_intervene' and problem.necessity != 'DO_NOT_INTERVENE':
