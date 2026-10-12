@@ -3400,11 +3400,40 @@
 - 증거: 분리 전 실제 wheel/sdist 부재와 automation 초과를 AI PC 9 GB 유효 원격 RED 3 NEW로 확인했다. 추출 후 GREEN은 별도 확인한다. 실측 Fleet53408/incidents502/automation429/ledger370; 기존 부모 기준과 +150은 유지한다.
 - gate 변화: 책임 분리 source 검증 중이다. provider·운영 활성화·배포·push·물리 수용을 추가하지 않는다.
 
+## 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
+
+- 변경: lane_rules의 기존 TurnBan으로 NW·SE 재진입을 금지하고 두 lane_graph를 재생성했다. Fleet import·신호 접근로 검사가 금지를 보존하며 camera sim site는 cap1 roundabout과 NE·SW 신호 접근로를 설정한다. Isaac 경로는 reverse 도로로 합법적인 진입을 사용한다.
+- 증거: 두 파생 지도의 접근로·cap1·신호 plan과 실제 routing successor, native 금지 경로 거절 회귀를 추가했다. 원격 시험과 독립 안전 리뷰 결과는 후속 기록한다. 실제 Fleet A18 readback은 이전 설정에서 signals=[]·링 분리 블록을 확인한 원인 증거이며 새 설정의 성공 증거가 아니다.
+- gate 변화: 아직 없음. 새 경로 baseline/RL·네 실제 신호 표시 연결·CORE/Fleet 회전 연결·완주·교통/장애물·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. 다른 경로의 R17/R21 수치를 개선 비교에 사용하지 않는다.
+
+## 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
+
+- 변경: NE·SW 진입/NW·SE 진출 규칙을 공유 지도·Fleet·native route에 반영했다. 독립 D-430 소스 리뷰를 통과했다.
+- 증거: 관련 6개 원격 파일 135 PASS·exit 0·known_failures NEW 0. 현장 PC 격리 pytest이며 물리 주행은 없다. lint 일지 heading 3개를 수정한 후 0 errors·28 warnings. A19 소스 전송은 Broken pipe·exit 1, 후속 SSH 두 번 timeout으로 서버를 실행하지 않았다.
+- gate 변화: SOURCE 회귀만 확인했다. 실제 신호 적재·네 표시·새 경로 baseline/RL·완주·교통 안전·두 대·병렬 학습은 미완료다. 다른 작업의 예약과 부분 전송 소스를 실행 승인으로 해석하지 않는다.
+
+## 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
+
+- 변경: main 16e6fa373을 작업 브랜치에 통합했다. 기존 TurnBan·공유 지도·camera site 신호 설정을 실제 격리 Fleet 서버에서 적재 확인했다.
+- 증거: 통합 후 관련 원격 135 PASS·exit 0·NEW 0, lint 0 errors·28 warnings. A20 source archive SHA 양쪽 일치. 실제 인증 readback에서 map_v2_fleet·두 TurnBan·roundabout cap1·sig_ring NE/SW 접근로·errors=[] 확인. runner exit 0, 종료 후 독립 PID 부재·ECONNREFUSED 확인. private 원본 네 파일 hash 대조 보관.
+- gate 변화: SOURCE/설정 적재만 확인했다. 신호는 virtual occupancy, online 0/total 2이며 실제 CORE/Gazebo·grant·주행·네 표시·완주·병렬 RL 수용이 아니다. main 착지·push는 아직 하지 않았다.
+
+## 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
+
+- 변경: 새 NE/SW 진입 ordered 경로를 기존 segmentation·CORE·frozen RL로 실제 headless 평가했다. 최신 main 통합 소스로 별도 Gazebo build/install과 두 CORE·실제 Fleet 연결 정지 시험을 준비했다.
+- 증거: R23 source 7,337 파일 실행 전후 hash 검증, SDK exit 1, 네 heading baseline/eval 완주 0/8·진행 0m. 영상 8개 ffprobe·SHA·시각 증가, 무효 camera 명령 0·최종 정지·GPU 없음·독립 runner PID 부재 확인. private 원본 56개 hash 대조 보관. A21 ROS 17 패키지 빌드 exit 0; 실행 직전 공식 sim selector는 eligible 없음·exit 1이다.
+- gate 변화: 완주/RL 개선은 HOLD다. trace의 lane_cue null·junction idle과 camera_target_unavailable을 기록했다. native Fleet 회전·공간/오차 승인·재획득과 두 대 실제 주행이 남았다. 정지 sensor/Fleet 연결 script는 준비·syntax 확인뿐이며 A21 SDK/CORE/Fleet 실행을 주장하지 않는다. 기존 안전 정지를 완화하지 않았다.
 ## 2026-10-12 · 51176f181 · D-685 crash-consistent admission
 
 - 변경: durable pending 선기록과 마지막 await 뒤 law/AI/사람 점유/동일 client 재검사를 연결했다. 모호한 receipt·500·crash는 재시작 후에도 동결하고 확정 대조만 해제한다. 자율 설정은 durable journal과 background resolver가 필수다.
 - 증거: 관련 원격 184 passed, exit 0, known-failures NEW 0. pipeline_review 독립 검토 승인 및 stuck 3317 재판정; 기존 +150·이전 이력·책임 분리 의무 유지.
 - gate 변화: SOURCE와 관련 원격 회귀만 확인. 최종 통합 착지·현장 활성화·물리 수용·실제 학습/승격은 별도 증거다.
+
+## 2026-10-12 · uncommitted · 공유 지도 합법 진입 routing fixture 정합성
+
+- 변경: 기존 east:fwd→SE 재진입을 기대하던 golden fixture를 같은 SW 목표의 east:rev→NE 합법 진입으로 갱신했다. east:fwd에서 SW로 가려는 금지 진입은 TRIP_NO_ROUTE로 거절되는 별도 회귀를 추가했다. planner·지도·TurnBan은 변경하지 않았다.
+- 증거: 최신 main 착지 관련 통합 17,662 PASS·814 SKIP에서 크기·비밀 검사·금지 경로 기대 세 NEW를 확인해 착지를 중단했다. 이 경로는 D-676 NE/SW 진입·NW/SE 진출 목표와 맞지 않았다. 독립 검토·수정 후 원격 시험은 진행 중이다.
+- gate 변화: 없음. 실제 통행권·신호·CORE 주행·카메라 절대 위치·완주·병렬 학습은 미완료다. skipped 시험과 CI·push·실물 수용은 별도다.
 
 ## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
 
