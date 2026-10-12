@@ -70,3 +70,17 @@ def test_direct_bound_profile_cannot_smuggle_an_unadmitted_status_domain():
     p=question()
     wrong=BoundProfile(local.model_profile('legacy-1'),p.digest)
     with pytest.raises(ValueError):prepare_request(p,wrong,(),30,budget_usd=0)
+
+
+def test_status_glm_launcher_preserves_default_off_and_refuses_old_admission(monkeypatch):
+    from deploy.ai_pc import deliberation_opencode as cli
+    from deploy.ai_pc import deliberation_glm_receipt as receipt
+    class Sandbox:
+        def close(self): pass
+    monkeypatch.setattr(cli,'SandboxLauncher',lambda *args:Sandbox())
+    selected=reviewer.status_model_profile('status-1')
+    with cli.GlmOpenCodeLauncher(profile=selected) as launch:
+        assert launch.cost_verified is False
+        assert launch.adapter_capabilities==receipt.status_capabilities()
+    with pytest.raises(ValueError):
+        cli.GlmOpenCodeLauncher(profile=selected,admission=receipt.CAPABILITIES)
