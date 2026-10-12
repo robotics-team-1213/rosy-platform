@@ -19,7 +19,7 @@ root=Path(sys.argv[1]);variant=sys.argv[2]
 sys.path[:0]=[str(root/'integrations/simulation/gazebo/launch'),str(root/'middleware/perception'),str(root/'contracts/foundation')]
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument,IncludeLaunchDescription,OpaqueFunction
-from launch.utilities import perform_substitutions
+from launch.utilities import perform_substitutions,normalize_to_list_of_substitutions
 from launch_ros.utilities import evaluate_parameters
 from world_profiles import profile_for,resolve_world_path
 path=root/'integrations/simulation/gazebo/launch/map_v2_fleet_multi_real.launch.py'
@@ -42,8 +42,10 @@ for a in tuple(actions):
  if isinstance(a,OpaqueFunction):actions.extend(a.execute(ctx))
 include=next(a for a in actions if isinstance(a,IncludeLaunchDescription))
 kwargs=dict(include.launch_arguments)
-name=perform_substitutions(ctx,kwargs['world_name'])
+name=perform_substitutions(ctx,normalize_to_list_of_substitutions(kwargs['world_name']))
 assert name==('map_v2_fleet_real.world' if variant=='.' else 'map_v2_fleet_curved.world')
+original=profile_for('map_v2_fleet_real.world');curved=profile_for('map_v2_fleet_curved.world')
+assert all(getattr(original,key)==getattr(curved,key) for key in ['map','inflation_radius','spawn_x','spawn_y','spawn_spacing'])
 world=resolve_world_path(profile_for(name),root/'integrations/simulation/gazebo',package_share=lambda _:share)
 expected=share/'map/map_v2_fleet'/variant
 assert world.resolve()==(expected/'worlds/map_v2_fleet_real.world').resolve() and world.is_file()
@@ -53,7 +55,7 @@ for n in observers:
  params={k:v for group in evaluate_parameters(ctx,n._Node__parameters) if isinstance(group,dict) for k,v in group.items()}
  assert Path(params['lane_graph_path']).resolve()==(expected/'lane_graph.yaml').resolve()
  assert params['camera_lane_mode']=='keep' and params['use_sim_time'] is True
-assert perform_substitutions(ctx,kwargs['mode'])=='none'
+assert perform_substitutions(ctx,normalize_to_list_of_substitutions(kwargs['mode']))=='none'
 print('world and both observer graphs agree; descriptors only')
 """,encoding='utf-8')
     result=subprocess.run(['bash','-c','source /opt/ros/jazzy/setup.bash && exec /usr/bin/python3 "$@"',
