@@ -286,3 +286,10 @@
 - gate 변화: SOURCE/원격 회귀 증거이며 native 종료 credit·완주·독립 병렬 학습·두 대 Fleet 교통 수용은 별도다.
 
 - 실제 R41: d653def0b headless 한 대 학습6회와 고정 평가3회·baseline4회가 종료됐다. Q 갱신27,957회 중 목표 상실 terminal credit5회를 실제 확인했고, trace로 독립 재계산한 최종 Q는 저장 정책과 정확히 일치했다. 각 credit의 원래 nonzero CORE receipt·유효 state·후속 ZERO·종료 bootstrap0을 검사했다. 기록된 정지16개와 실제 영상7개를 검증했지만 전체 완주는0회이며 SDK exit1로 정책 채택은 거절했다. 병렬 학습·교통/Fleet 수용은 여전히 미완료다.
+
+## 2026-10-12 · ba1347294 · 카메라 관측 구간 학습
+
+- 근거: R41 원시 trace에서 동일 source_stamp 내 행동 변경11,055회와 ordinary Q update26,797회를 확인했다. 물리240Hz에 gamma0.95를 적용한 시간 의미를 수정 대상으로 삼았다.
+- 변경: 새 유효 stamp에서 gain 선택, 구간 보상 합산, 성공 dispatch receipt를 가진 구간만 갱신. 매 tick CORE·camera 안전 실행은 유지한다. 종료 credit은1회이며 외인성 실패·미실행 구간은 제외한다. schema2는 이전 physics-tick 정책 복원을 거절한다.
+- 검증: 첫 원격 시험은 helper 미구현 assertion으로4 setup ERROR/NEW4였다. 구현·연결 후 관련129 PASS, legacy schema 거절 추가 후 Isaac 전체와 module_structure322 PASS/1 SKIP/NEW0. runner597행. 이 시험은 SDK 실행을 포함하지 않는다.
+- 상태: 독립 소스 검토 중이며 새 native 학습·Q 재계산·완주·병렬 환경·Fleet 교통 수용은 아직 수행 전이다.
