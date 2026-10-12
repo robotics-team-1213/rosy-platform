@@ -32,9 +32,9 @@
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 접속">
     <ui-button kind="quiet" id="topbar-more" data-icon-only="" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="화면 표시와 고급 접속" title="화면 표시와 고급 접속" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
-    <a id="fleet-login" class="fleet-account-trigger" href="/console/login">로그인</a>
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <details id="fleet-account" hidden>
-      <summary class="fleet-account-trigger">계정</summary>
+      <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
       <div class="fleet-account-panel">
         <p id="fleet-account-identity"></p>
         <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
