@@ -3,6 +3,7 @@
 import importlib.util
 import math
 import re
+import struct
 import sys
 from types import SimpleNamespace
 from pathlib import Path
@@ -168,4 +169,12 @@ def test_gazebo_lidar_covers_one_turn_without_a_repeated_beam():
     lo, hi = (eval(expr[k], {"pi": math.pi}) for k in ("min_angle", "max_angle"))  # noqa: S307
     inc = (hi - lo) / (samples - 1)
     assert samples == 640
-    assert abs((hi - lo + inc) - 2.0 * math.pi) < inc * 0.1
+    assert abs(inc - 2.0 * math.pi / samples) < 1e-12
+    assert abs((hi - lo + inc) - 2.0 * math.pi) < 1e-12
+    # Ogre2's float32 cubemap lookup wraps at the face edge.
+    angle = lo
+    for _ in range(samples):
+        axes = abs(math.sin(angle)), abs(math.cos(angle))
+        uv = 0.5 * (1.0 + min(axes) / max(axes))
+        assert struct.unpack('f', struct.pack('f', uv))[0] < 1.0
+        angle += inc
