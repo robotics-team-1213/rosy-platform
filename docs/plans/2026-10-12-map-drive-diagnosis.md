@@ -89,4 +89,69 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
   `TRIP_AUTHORITY_NOT_REQUIRED`로 거절된다. 새 실행 manifest의 두 설정과 실제 caps를
   대조하고 기존 Fleet trip/AuthoritySender로 권한을 생성한다.
 
+## 실제 센서와 주행 전제 확인
+
+- Gazebo r5는 실제 Fleet plan 200 이후 start 422의 `TRIP_MODE_UNSUPPORTED`와
+  `JUNCTION_TURN_UNSUPPORTED`를 확인했다. 이동 0m, CORE lease 없음, OFF 200과
+  실제 정지를 확인했다. pose 기반 계획 생성과 실행 capability 검사는 별도 계약이다.
+  회전 지원을 강제 표시하지 않고 D-400 motion basis의 실제 센서 증거를 확인한다.
+- r6는 기존 URDF의 세 downward ray를 ROS bridge와 기존 `sim_ir_floor`에 연결했다.
+  private SIM profile의 `sensor_adapter.mode=enforce`와 `simulation_sensors=true`를
+  사용했다. 가짜 IR 값이나 현장 floor walker 선언은 사용하지 않았다. 두 로봇 각각
+  세 ray가 동일 시각인 514/514 프레임, 실제 IR·IMU·scan과 junction_turn 및 lane_bend
+  capability를 확인했다. 첫 로봇의 safety blocked=true는 유지하고 두 번째만 false였다.
+  두 CORE 최종 명령 1,283/1,281개가 모두 zero였다. runner exit 0, 정지와 자기
+  프로세스·포트·lock 종료 및 원래 소스 hash 보존을 확인했다. r6는 주행 시험이 아니다.
+- 센서 helper에서 최신 mid와 오래된 좌우 ray를 합쳐 바닥 증거를 갱신하는 별도 오류를
+  수정했다(commit `8226c122f8`). 세 채널의 동일한 정규 timestamp와 source age를
+  검증하고 한 프레임을 한 번만 발행한다. 원격 Gazebo 318 PASS/4 SKIP/NEW 0,
+  독립 SOURCE APPROVE, 착지 검사 584 PASS/4 SKIP/NEW 0 및 push 검사 291 PASS다.
+  main commit `3d5f58a3e9`까지 푸시했다. r6는 수정 전 helper 실행이므로 새 helper의
+  실제 실행 증거로 대체하지 않는다.
+
+다음 주행 시험은 safety blocked=false인 두 번째 로봇만 실제 Fleet trip·통행권으로
+실행한다. 첫 로봇은 OFF를 유지한다. CORE 소스 commit `1e2dc23557`과 새 helper
+commit `8226c122f8`의 조합을 명시하며 전체 최신 소스 실행이라고 부르지 않는다.
+private SIM profile에서 기존 typed `line/route_context`를 활성화하되 실제 positive seq와
+CORE cue는 별도 확인한다. 5 sim s·누적 이동 0.15m·wall 8s 중 먼저 닿는 문턱에서
+OFF와 취소를 요청한다. 정지 중 이동을 포함한 총거리, lease 해제·OFF readback·실제
+연속 정지를 따로 확인한다. 준비 코드는 독립 SOURCE
+APPROVE이며 자원 gate가 거절한 시도는 실행·주행 결과에 포함하지 않는다.
+
+## 한정된 실제 Fleet trip
+
+r7는 정규 sim 자원 gate를 통과해 같은 지도와 모델에서 실행했다. Fleet plan/start 200,
+실제 trip lease와 CORE FREE 통행권을 확인했다. 새 helper는 세 ray의 동일 시각 프레임
+525건을 수신하고 ADC 495건을 발행했다. 이 차이는 source age·중복 frame 검사 후 실제
+발행량이며 r6의 수정 전 helper 증거와 구분한다. typed route context publisher는 존재했으나
+메시지와 positive seq는 관측하지 못했다.
+
+진단 stop guard가 이전 제어 tick의 HOLD/authority_none과 갱신된 FREE 통행권을 함께 읽어
+즉시 OFF를 요청했다. 이동 0m·모든 명령 zero이므로 CORE의 차체 거절이나 방향 소실을
+재현했다고 판단하지 않는다. cancel 200과 terminal canceled, lease 해제, OFF 200,
+실제 연속 정지와 자기 프로세스·포트·lock 종료를 확인했다. 다음 시험은 이 진단 guard가
+현재 authority가 FREE/HOLDING인 혼합 응답의 authority_none만 재관측하도록 고친다. 다른 거절,
+정지 문턱, 통행권과 실제 센서 검사는 유지한다.
+
+r8는 이 진단 판정만 수정하고 정규 자원 gate를 통과했다. Fleet start 200·lease와
+CORE FREE 갱신을 거쳐 TRACKING 및 양의 최종 명령을 관측했다. 선택한 두 번째 로봇의
+최대 명령은 0.08221m/s·0.36036rad/s였고 첫 로봇 명령은 모두 zero였다. 4.488 sim s에
+누적 이동 0.171995m에서 정지를 요청했다. 0.15m 문턱보다 약 22mm 늦게 감지됐고,
+정지 중 약 7.1mm를 더 이동해 최종 누적 거리는 0.179107m였다. cancel 200과 canceled,
+lease 해제·OFF 200·실제 연속 정지 및 자기 실행 cleanup을 확인했다. runner exit 0이다.
+typed route context 메시지는 0회다. 이 실행은 실제 전진과 종료의 증거이며 지도 완주나
+곡선 목표 소실 수용의 증거로 사용하지 않는다. 짧은 이동 문턱만으로 정확한 최종 거리
+상한을 보장하지 못했으므로 후속 시험에서도 요청 시점과 정지 후 총거리를 함께 기록한다.
+계획 speed_cap은 0.08m/s였으므로 최대 명령과 약 2.2mm/s 차이가 있음을 보존한다.
+독립 소스 추적에서 이 값은 경로 비용·ETA에만 사용되고 CAMERA_LINE 시작과 통행권에는
+속도 필드가 없음을 확인했다. 실제 Pinky profile의 cruise/max는 0.10m/s다. 따라서
+CORE hard cap 위반이나 적용 지연으로 단정하지 않으며, 계획 속도와 실행 한도의 연결이
+없다는 경계로 기록한다. 이 결과로 0.08m/s 준수를 수용하지 않는다.
+start 이후 목표는 계속 live였으며 held 사용과
+목표 소실은 관측하지 않았다. 후속 비교는 이 곡선 관측의 비주행 replay에 짧은 목표
+gap을 넣어 strict-stop과 bounded ExpectedPath의 변환·예산·새 충돌 거절을 대조한다.
+
+제품 수정 commit `3d5f58a3e9`의 전체 CI run `38206143801`은 terminal SUCCESS다.
+후속 실제 실행은 최초 CORE와 새 IR helper의 조합이므로 전체 최신 main 실행과 구분한다.
+
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.

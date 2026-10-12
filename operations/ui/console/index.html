@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
+  <link rel="stylesheet" href="/console/assets/device-watch.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
@@ -176,7 +177,7 @@
         </div>
       </details>
       <div class="map-board">
-      <div class="map-stage" id="map-stage" data-map-state="loading">
+      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="pip">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
@@ -187,6 +188,18 @@
         </div>
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
+        <figure id="watch-front" class="watch-front" hidden>
+          <img id="watch-front-image" alt="">
+        </figure>
+        <section id="device-watch" class="device-watch" aria-labelledby="device-watch-heading">
+          <h3 id="device-watch-heading" class="ui-section-heading">기기 보기</h3>
+          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="true" aria-controls="map-birdseye">천장</ui-button>
+          <div id="watch-tags" class="watch-tags"></div>
+          <details id="watch-readout" class="watch-readout">
+            <summary class="ui-disclosure-row">수치</summary>
+            <div id="watch-numbers"></div>
+          </details>
+        </section>
       </div>
       </div>
       <details id="map-readouts" class="map-readouts">
