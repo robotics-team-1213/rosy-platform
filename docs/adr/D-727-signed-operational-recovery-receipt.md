@@ -19,3 +19,7 @@ ROS-free 공통 SDK에 `rosy.incident.operation/1` receipt를 정의한다. 별�
 ## Verification
 
 수용·폐기 kind 분리, 실제 HMAC, 전 binding 차이·다른 signer/trust kind/key·다른 epoch·만료·NaN/bool·revision 변조·offline/HOLD 거절과 반환 복사본을 원격 검증한다. 실제 wheel/sdist와 소비자 pins를 확인한다. 이 source 검증은 실제 독립 평가·승격·설치·모델 호출·현장 수용의 증거가 아니다.
+
+## 독립 검토로 확인한 소비 조건
+
+`REVIEWED_FOR_OPERATION`은 서명된 검수 메타데이터다. 후속 producer/importer는 actual evaluation 원본이 HOLD이면 이 상태를 가진 서명이 있어도 거절한다. 원본 full profile·검수 limits/truth·coverage·report bytes와 digest를 검증하고 owner가 독립적으로 expected binding을 계산한다. receipt에서 복사한 binding을 기대값으로 사용하지 않는다. SDK 서명 성공은 품질 PASS·owner admission·물리 성공을 의미하지 않는다.

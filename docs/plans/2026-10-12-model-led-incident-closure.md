@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-724는 `e8d27b00b3`로 로컬 main에 착지했고 마지막 적격 AI PC 원격 통합은 5,558 passed/282 skipped/NEW 0 및 lint다. 고정 로그는 세션 `logs/stuck-final-guard-land-e8d27b00b3.txt`다. D-727은 공통 운영 수용/폐기 서명·현재 owner binding/epoch/기간을 검증하는 SDK 0.1.11과 Fleet 0.1.3 floor·local execution 0.1.5·CI pin을 구현한 브랜치 작업이다. 초기 계약/설치/구조 99개와 source-less wheel/sdist HMAC·UTF-8·CI/문서 회귀 144개는 적격 원격 PC에서 terminal exit 0/NEW 0이며 독립 SOURCE 검토를 승인받았다. actual evaluation 원본이 HOLD이면 signed reviewed 메타도 importer가 거절해야 한다. 운영 품질·같은 DB 수용/폐기 상태·단일 claim·모델/현장 결과는 다음 구현이며 전체 목표는 ACTIVE다.
+
 D-722는 `c55c64e5d4`로 로컬 main에 착지했다. 마지막 적격 Model PC 원격 통합은 5,656 passed/282 skipped/NEW 0 및 lint이며 고정 로그는 세션 `logs/model-recovery-land-c55c64e5d4.txt`다. 후보는 비실행 기록이며 실제 운영 수용·단일 물리 claim·Fleet 제출 연결·모델/현장 결과는 남아 있다. 후속 D-724는 지원 확인 GET 뒤 POST 직전에 최종 검증 포트를 두는 소스 구현이며 관련 원격 회귀 123개, 실제 wheel/sdist 설치·문서 계약 104개는 terminal exit 0/NEW 0이다. D-724 병합은 아직 미확인이다. GLM 관리자 준비 스크립트는 존재하지만 새 설치 경로는 현재 없다. 목표는 ACTIVE이고 실제 호출은 하지 않았다.
 
 현재 실행 중인 D-722는 모델 복구 후보를 실제 완료된 시도와 기존 사건 DB에 결속한다. 첫 보강은 assessment revision과 CORE 관측 seq/timestamp의 일치, 후보 조회의 원본 receipt·전체 내용 재검증, 종료 시 진행 중 DB 작업의 완료 대기다. 후보 저장은 `automation/recovery_candidates.py`, 모델 호출은 기존 `automation/execution/worker.py`가 소유한다. 기존 크기 한도를 유지하며 이 후보는 실행 권한을 부여하지 않는다. 이후 D-716의 단일 rule/model 소비·운영 수용·결과 확인을 연결한다.
