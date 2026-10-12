@@ -15,6 +15,7 @@
 - last_applied와 source frame은 episode마다 초기화한다. 유효 state와 실제 CORE 명령 처리가 확인된 뒤에만 갱신한다.
 - send의 바퀴 적용 성공 뒤 receipt가 후보와 일치하고 최종 명령이 nonzero이며 cycle warning·halted가 없을 때만 보관한다. CORE 정상 반환만으로 실행을 추정하지 않는다.
 - 현재 관측이 없고 명시적 camera_lane_lost terminated인 경우만 마지막 실행 행동에 실패 벌점을 준다. 유효 행동이 없거나 nonterminal/truncation/다른 실패이면 기존 무효 관측 거절을 유지한다.
+- 종료의 세부 원인이 camera_target_unavailable인 경우만 연결한다. 카메라 stale·추론 오류·scan 오류와 원인 누락은 기존 실패 종료/정지를 유지하면서 조향 credit에서 제외한다.
 - 유효한 다음 state가 있는 기존 전이는 변경하지 않는다. 동일 종료를 반복 학습하지 않도록 기존 episode break를 유지한다.
 - camera freshness, body sweep, CORE 최종 명령, 실제 정지·cleanup, 평가 수용 기준은 변경하지 않는다.
 - trace에 종료 벌점을 받은 행동의 frame을 남긴다. 원격 RED/GREEN, 무효 상태·다른 종료 회귀, native terminal credit와 정책 update readback을 확인한다.
