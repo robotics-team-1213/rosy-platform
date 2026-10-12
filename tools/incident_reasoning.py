@@ -86,5 +86,5 @@ def load_incident_profile_config(source, *, expected_sha256, installed, clock):
             if key in seen or key not in bindings: raise ValueError('PROFILE_SET_NOT_UNIQUELY_INSTALLED')
             seen.add(key); configs.append(bindings[key])
         return dict(profile_workers=tuple(configs), clock=clock)
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError):
         raise ValueError('INCIDENT_PROFILE_INSTALLATION_BINDING_FAILED') from None
