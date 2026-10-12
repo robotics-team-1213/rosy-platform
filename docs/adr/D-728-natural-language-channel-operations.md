@@ -33,8 +33,6 @@ AI는 현재 소유권에 묶인 제한된 대화 문맥과 신선한 기기/지
 대화와 원장에 연결한다. 일반 사건의 기존 calibration/admission과 보호
 GLM credential/billing/최초 smoke spent marker를 유지한다.
 
-## Acceptance
-
 ## Execution contracts
 
 CONTROL classification is a proposal, never an execution grant. An independent
@@ -78,6 +76,8 @@ Required negative coverage includes duplicate/edited messages, role revocation,
 map changes during awaits and queued dispatch, crash before/after acceptance,
 partial plans and UNKNOWN replies, quoted/negated/hypothetical commands, prompt
 injection, cross-user context and expired follow-up references.
+
+## Acceptance
 
 - 실제 Discord의 인사와 상태 질문에 접수 이후 자연어 응답이 온다.
 - 후속 지시의 대상/문맥은 같은 기명 사용자·채널 안에서 검증한다.
