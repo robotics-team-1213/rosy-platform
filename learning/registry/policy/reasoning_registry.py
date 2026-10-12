@@ -149,6 +149,17 @@ class ReasoningRegistry:
             _, stages, candidates = self._audit(db)
             return self._approved(stages, candidates)
 
+    def approved_candidate(self, profile, domain):
+        if type(profile) is not dict or type(domain) is not str:
+            raise ValueError('EXPLICIT_REASONING_PROFILE_AND_DOMAIN_REQUIRED')
+        with self._ledger._db() as db:
+            _, stages, candidates = self._audit(db)
+            matches = [candidate for revision, candidate in candidates.items()
+                if stages[revision] == 'approved' and candidate['domain'] == domain
+                and canonical(candidate['profile']) == canonical(profile)]
+            if len(matches) != 1: raise ValueError('APPROVED_REASONING_PROFILE_NOT_FOUND')
+            return matches[0]
+
     def _transition(self, revision, receipt, expected_head, operation):
         with self._ledger._db() as db:
             events, stages, candidates = self._audit(db)
