@@ -1021,3 +1021,9 @@ Status: Accepted (source contract; no operational activation).
 **Status:** Accepted (2026-10-12, source contract; no operational activation)
 
 전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
+
+## D-734 ? ?? ?? ??? ?? ??? ???? ?? ?? ???
+
+**Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
+
+??? [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
