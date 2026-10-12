@@ -192,7 +192,8 @@ class StuckRecovery:
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
                principal_ref: Optional[str] = None, *,
-               yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None) -> str:
+               yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None,
+               expected_stuck: Optional[dict] = None) -> str:
         """Apply a console answer; returns hold | back | resume | manual | idle | yield."""
         if decision not in DECISIONS:
             raise AnswerRefused("VALIDATION_ERROR", f"unknown stuck decision {decision!r}")
@@ -200,7 +201,7 @@ class StuckRecovery:
             self._answered(stuck_id, decision, by, principal_ref, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH",
                                 "no open stuck with this id (late or wrong answer)")
-        why = self._answer_refusal(decision, now, yield_m, yield_turn_rad)
+        why = self._answer_refusal(decision, now, yield_m, yield_turn_rad, expected_stuck)
         if why is not None:
             self._answered(stuck_id, decision, by, principal_ref, False, why,
                            evidence=self._last_or(now) if decision == "BACK_AND_RETRY" else None)
@@ -226,7 +227,16 @@ class StuckRecovery:
         return {"RESUME": "resume", "MANUAL": "manual", "ABORT": "idle"}[decision]
 
     def _answer_refusal(self, decision: str, now: float, yield_m: Optional[float] = None,
-                        yield_turn_rad: Optional[float] = None) -> Optional[str]:
+                        yield_turn_rad: Optional[float] = None,
+                        expected_stuck: Optional[dict] = None) -> Optional[str]:
+        if expected_stuck is not None:
+            if (decision != "BACK_AND_RETRY" or type(expected_stuck) is not dict
+                    or set(expected_stuck) != {"phase", "attempts"}
+                    or expected_stuck["phase"] != ASKING
+                    or type(expected_stuck["attempts"]) is not int or expected_stuck["attempts"] < 0):
+                return "invalid_stuck_precondition"
+            if self._phase != ASKING or self._attempts != expected_stuck["attempts"]:
+                return "stuck_precondition_failed"
         last = self._last_or(now)
         if decision in ("RESUME", "BACK_AND_RETRY", "YIELD") and self._answer_clock_invalid(now):
             return "invalid_clock"

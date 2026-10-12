@@ -8043,6 +8043,12 @@ osy-d395-s1d\`.
 - 증거: 지도 저장 관측 수정의 통합 원격 5,433 passed/282 skipped 및 pre-push 추가 291 passed, 각 종료 0/NEW 0. commit 8977f25dad 실제 push와 전체 CI38191711128 모든 시험·최종 결과 성공. 설치 commit 6a73839f03b9의 전체 CI·서명·updater 성공, 실제 인증 코드 네 모듈·공용 client·일곱 자산 대조와 실제 Chromium 8조합 및 첫 변경·제한된 프로필의 최신 PNG 18개를 확인했다.
 - gate 변화: Fleet 설치·실제 화면·초기 팀원 네 계정 확인. 본인 운영자 계정과 기존 외부 연동 설정은 다른 작업에서 복구된 현재 상태를 읽기 전용으로 확인했다. 본인 자격을 추가 초기화하거나 외부 메시지를 보내지 않았다. 실물 매체·현장 작업·TLS 신뢰·당사자 최종 비밀번호와 실제 개인 프로필 수정은 이 증거로 완료 표시하지 않는다.
 
+## 2026-10-12 · 54cba0b3f · 보이는 곡선과 목표점 미채택을 구분한다
+
+- 변경: 사용자가 실제 맵 사진의 뚜렷한 곡선을 지적한 교훈을 workflow 문서로 기록했다. 카메라가 방향을 잃었다는 포괄적 설명 대신 RGB·segmentation·투영·현재 목표점·CORE 허용을 구분한다.
+- 증거: R31 baseline 707의 6.600000344s 실패 PNG에 흰 선이 보이며 같은 trace의 target_now_m=null·ahead_m=0·inference_error=null·CORE HOLD를 대조했다. 원본 class mask와 실제/시뮬 맵 곡률 일치는 미확인으로 명시했다. private에 원본 사진·영상·일지를 보존했다.
+- gate 변화: 없음. 설명·진단 절차의 교훈이며 곡선 주행, 정지 검사, 완주 해결을 주장하지 않는다.
+
 ## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 
 - 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
@@ -8054,3 +8060,9 @@ osy-d395-s1d\`.
 - 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
 - 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
 - gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-721 스테이션과 제자리 복귀 모드
+
+- 변경: 운영자가 필요한 복귀 모드를 D-721 Accepted로 정했다. 목적지는 `station`과 `outing_start`다. station은 기존 도킹 명령, 제자리는 외출 시작 시 LOCALIZED 자세 하나를 기억한 뒤 기존 내비게이션 목표다. 여섯 번째 RobotMode와 스냅샷 필드, 얼굴 줄은 넣지 않았다. SAF-003, SAF-005, DNC-006은 그대로다.
+- 증거: SAF-003, SAF-005, NAV-003, WPT-004, DNC-002, DNC-005, DNC-006과 D-28, D-419, D-502, D-688, 모드 전이표, ROBOT_MODES, NavigationManager.home() 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 정책 결정이며 발행 구현, 장치, 현장 수용은 별도다.

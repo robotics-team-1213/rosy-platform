@@ -162,7 +162,6 @@ class LearnedCameraLane:
             self.invalidate('invalid_camera_odometry')
             return
         self.history.add(stamp, *pose)
-        pose_at = lambda when: pose if when == stamp else self.history.pose_at(when)
         self.manager.observe_return_pose(stamp_ns=round(stamp * 1e9),
             source_now_ns=round(source_now * 1e9), frame='odom',
             x=pose[0], y=pose[1], yaw=pose[2], received_at=captured_at)
@@ -170,6 +169,7 @@ class LearnedCameraLane:
         if self.wall is not None and not 0 <= round(source_now * 1e9) - self.scan_stamp_ns <= 250_000_000:
             self.invalidate('native_scan_stale')
             return
+        pose_at = lambda when: pose if when == stamp else self.history.pose_at(when)
         self.worker.submit(bgr, tag=self.frame, stamp=stamp)
         self.worker.step()
         mask = self.worker.mask_for(bgr, every_n=1, stamp=stamp,
@@ -204,7 +204,10 @@ class LearnedCameraLane:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
                 self.last['camera_target'] = {key: info.get(key) for key in
-                    ('target_m', 'target_now_m', 'ahead_m', 'guided', 'guide_deg', 'straddle')}
+                    ('target_m', 'target_now_m', 'ahead_m', 'guided', 'guide_deg', 'straddle',
+                     'reason', 'exit', 'seen_exit', 'exit_behind_line', 'side_clear_m',
+                     'reorient_deferred', 'pivot_limit', 'exit_from_memory', 'centre_path_m',
+                     'near_centre_m', 'wall_ahead_m')}
                 return
             observation = None if step is None else LaneObservation(*step)
         now = self.clock()

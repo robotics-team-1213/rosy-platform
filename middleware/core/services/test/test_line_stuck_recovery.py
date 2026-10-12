@@ -277,6 +277,45 @@ def test_delayed_back_answer_cannot_restart_active_recovery(origin, phase):
 
 
 # ---- timeout and local recovery ----------------------------------------------------
+@pytest.mark.parametrize("changed", ["wait", "local", "attempts"])
+def test_conditional_back_checks_current_phase_and_attempts(changed):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    expected = {"phase": ASKING, "attempts": 0}
+    now = 0.0
+    if changed == "wait":
+        machine.answer(now, "stuck-1", "WAIT", "operator")
+    elif changed == "local":
+        now = 15.0
+        machine.step(_inp(now))
+    else:
+        expected["attempts"] = 1
+    before = machine.status(now)
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="stuck_precondition_failed"):
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(now) == before and machine._until == until
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "stuck_precondition_failed"
+
+
+def test_conditional_back_accepts_same_asking_episode():
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    assert machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver",
+                          expected_stuck={"phase": ASKING, "attempts": 0}) == "back"
+    assert machine.status(0.0)["attempts"] == 1
+
+
+@pytest.mark.parametrize("expected", [True, {}, {"phase": ASKING, "attempts": True},
+    {"phase": ASKING, "attempts": -1}, {"phase": WAITING_CONSOLE, "attempts": 0}])
+def test_direct_conditional_back_rejects_malformed_predicate(expected):
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    with pytest.raises(AnswerRefused, match="invalid_stuck_precondition"):
+        machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(0.0)["attempts"] == 0 and machine.phase == ASKING
+
+
 def test_no_answer_within_ask_s_starts_the_back_off():
     machine, bus = _machine()
     machine.step(_inp(0.0))

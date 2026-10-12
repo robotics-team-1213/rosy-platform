@@ -36,3 +36,18 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
 D-718 reserved by a peer session (Conditional stuck answer at CORE application time) and absent from this branch; remove once its ADR lands
+
+
+
+
+
+
+
+
+
+
+
+
+
+D-719 reserved on uiux/face-notes (face line notes and a deeper waiting mouth) and absent from this branch; remove once its ADR lands
+D-720 reserved by a peer session (Discord read-only fleet status deliberation and fixed broker admission) and absent from this branch; remove once its ADR lands
