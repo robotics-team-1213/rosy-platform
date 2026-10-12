@@ -715,6 +715,7 @@
 | D-726 | 경로 사실 묶음과 호출자가 넘기는 차로 맥락 | Accepted |
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 | Accepted |
 | D-727 | 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt | Accepted |
+| D-730 | 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1006,3 +1007,9 @@ Status: Accepted (shared source contract; no operating admission).
 Status: Accepted (source contract; no operational activation).
 
 전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
+
+## D-730 — 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-730](../adr/D-730-atomic-fleet-operating-state-and-case-claim.md).
