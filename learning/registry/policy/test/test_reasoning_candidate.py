@@ -75,3 +75,23 @@ def test_isolated_model_pc_cli_produces_actual_candidate(tmp_path, reviewed):
     assert len(result.stdout.encode()) > 16384
     assert subject().validate_candidate(candidate) == candidate
     assert candidate['calibration_report']['state'] == ('PASS_OFFLINE_ONLY' if reviewed else 'HOLD')
+
+
+def test_candidate_cli_binds_real_journal_feedback_and_refuses_changed_receipt(tmp_path):
+    from test_calibration_feedback_cli import data
+    source, _ = data(tmp_path / 'journal')
+    runtime = source['exports'][0]['case']['profiles'][0]
+    path = tmp_path / 'feedback-candidate.json'
+    command = [sys.executable, '-I', str(ROOT / 'tools/decision_calibration.py'),
+               '--candidate', '--from-feedback', str(path)]
+    path.write_text(json.dumps(dict(profile=runtime, calibration_input=source)))
+    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 1 and not result.stderr
+    candidate = subject().validate_candidate(json.loads(result.stdout))
+    assert candidate['calibration_report']['state'] == 'HOLD'
+    assert candidate['calibration_input']['evaluation'][0]['feedback_binding']['receipt_sha256']
+    source['evaluation'][0]['receipt_sha256'] = '0' * 64
+    path.write_text(json.dumps(dict(profile=runtime, calibration_input=source)))
+    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 1 and not result.stderr
+    assert json.loads(result.stdout) == dict(state='HOLD', reason='INVALID_CALIBRATION_INPUT', field_accepted=False)
