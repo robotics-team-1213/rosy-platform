@@ -349,7 +349,7 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
             raise RuntimeError('injected '+point)
         if args[:2] == ('/usr/sbin/sshd','-T'):
             return types.SimpleNamespace(stdout='\n'.join(['forcecommand '+str(m.INGRESS),'authorizedkeysfile '+str(m.KEYS),
-                'authenticationmethods publickey','passwordauthentication no','kbdinteractiveauthentication no',
+                'authenticationmethods publickey','pubkeyauthentication yes','passwordauthentication no','kbdinteractiveauthentication no',
                 'disableforwarding yes','permittty no']))
         return types.SimpleNamespace(stdout='')
     monkeypatch.setattr(m,'run',fake_run)
