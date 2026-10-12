@@ -279,6 +279,7 @@ class FleetTaskService:
             event_type=event_type, correlation_id=correlation_id,
             source=source if isinstance(source, str) else None,
             run_id=data.get('run_id'), boot_id=data.get('boot_id'),
+            error_code=data.get('error_code'),
         )
 
     def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:

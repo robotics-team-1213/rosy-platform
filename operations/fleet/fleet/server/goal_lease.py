@@ -86,6 +86,7 @@ class GoalLeases(dict):
         source = source or ("dispatch" if correlation_id is not None else "operator")
         if source not in SOURCES:
             raise ValueError(f"unknown goal lease source {source!r}")
+        stop = self.stop_token(robot_id)
         self.pop(robot_id, None)
         options = {}
         lease = {"state": "unbounded"}
@@ -99,10 +100,10 @@ class GoalLeases(dict):
         if task_id is not None and self.native_required is not None and self.native_required(task_id):
             from fleet.server.channel.execution.outcomes.evidence import epoch
             options.update(epoch(await client._get('/api/v1/navigation/state')))
+            self.check_stop(robot_id, stop)
             self.bind_native_receipt(task_id, correlation_id, robot_id, None)
         if task_id is not None and self.admit_attempt is not None:
             self.admit_attempt(task_id, correlation_id)
-        stop = self.stop_token(robot_id)
         self.pending[robot_id] = self.pending.get(robot_id, 0) + 1
         try:
             try:

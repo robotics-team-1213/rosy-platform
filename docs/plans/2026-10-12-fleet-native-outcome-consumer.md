@@ -39,3 +39,26 @@
 
 - Current inherited verdict for `fleet/fleet/server/channel/execution` is 487+150; merged source is near the cap. If implementation needs an outcome child unit, first measure the simultaneous `execution` residual, proposed real outcome unit, `channel`, Fleet package, and affected files using the existing scanner. Record dated physical counts, installed wheel/sdist/source-image closure, and independent precheck before changing `SIZE_UNITS`/`SIZE_VERDICTS`. Do not rebaseline or add an exclusion to make an overage green.
 - After each behavior tranche, commit and run the focused remote suite with `known_failures`. At final source: run related Fleet Task/channel/event/replies/transport and architecture/installed tests, then the broader Fleet and gateway suites as selected by `affected`; require terminal 0 NEW on the exact committed HEAD. Parent integration runs its own combined gate. Host pass is not deployment, device, Discord delivery, or physical acceptance.
+
+### 2026-10-12 physical outcome owner precheck
+
+At implementation candidate `ca2748f050`, the existing `_over_budget` scanner was
+run as a source measurement with only the proposed innermost outcome unit added
+in memory; the checked-in SIZE_UNITS/SIZE_VERDICTS remain unchanged pending the
+independent precheck. Simultaneous physical counts: execution residual 563,
+outcomes 315, channel residual 1453, conversation 300, health 248, Fleet residual
+55237, app.py 933 and task_store.py 1041. Execution's 487+150 and Fleet's 55120+150
+remain unchanged; task_store.py stays below its existing hard-tier 1060 ceiling.
+The outcome child owns the actual ACK validator, first-response Task attempt CAS,
+exact native evidence decoding, readback and local claim closure. The old receipts
+import remains a two-line compatibility facade. It introduces no database, process,
+command writer, dependency or scan exclusion. Task and channel callers share the
+same existing SQLite claim owner. Wheel/sdist/source-image closure is checked by
+extending the existing installed-package test, not inferred from source imports.
+
+Remote candidate ca2748f050: 123 focused tests passed; known_failures reported
+0 NEW / 0 known. The initial ed7440855 RED was 5 meaningful failing assertions.
+The focused gate includes two SQLite workers, stale/delayed readback, reassigned
+claims, exact boot/run, lost ACK without legacy inference, first-ACK/event races,
+read-only closure after role/message/expiry changes, fresh next-command epoch,
+follow RUNNING/HOLD and teleop EXPIRED. This is source evidence only.

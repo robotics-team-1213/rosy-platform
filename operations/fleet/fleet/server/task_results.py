@@ -12,7 +12,7 @@ from typing import Protocol
 from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.cancel_all_store import matching_tag as cancel_all_tag_matches
 from fleet.server.dispatch_admission import release as release_dispatch_claims
-from core_common.protocol.native.operation import NativeOperation
+from fleet.server.channel.execution.outcomes.evidence import terminal_event
 
 _LOG = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class _TaskStore(Protocol):
 
 def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: int,
                        event_type: str, correlation_id: str,
-                       source: str | None = None, run_id=None, boot_id=None) -> dict | None:
+                       source: str | None = None, run_id=None, boot_id=None, error_code=None) -> dict | None:
     """Apply a correlated navigation event once to its exact dispatch attempt.
 
     `source` is CORE's `data.source` when the event carries one (D-421 match rule)."""
@@ -97,6 +97,13 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
             (robot_id, event_id, task["task_id"], correlation_id, seq, event_type),
         )
         current_status = task["status"]
+        if operation is not None and (receipt.get('outcome') or {}).get('phase') != 'TERMINAL':
+            terminal = terminal_event([{'type': event_type, 'data': {
+                'run_id': run_id, 'boot_id': boot_id, 'error_code': error_code}}], operation)
+            if terminal is not None:
+                receipt['outcome'] = terminal
+                connection.execute('UPDATE fleet_tasks SET receipt_json=? WHERE task_id=?',
+                                   (json.dumps(receipt), task['task_id']))
         dispatching = (current_status == "QUEUED"
                        and task["dispatch_phase"] == "DISPATCHING")
         if current_status == "HOLD" and task["reason"] == CANCEL_ALL_REASON:

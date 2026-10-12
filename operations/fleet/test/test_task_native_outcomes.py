@@ -140,3 +140,30 @@ def test_task_readback_releases_only_after_fresh_native_quiescence(tmp_path):
     result=service.store.get_task(accepted['task_id'])
     assert result['status']=='COMPLETED' and result['receipt']['safe_released'] is True
     assert not service.store.resource_claims(resource_kind='robot',resource_id='rosy_01')
+
+
+def test_native_terminal_event_cannot_be_replaced_by_conflicting_readback(tmp_path):
+    from fleet.server.channel.execution.outcomes.reconcile import task_result
+    from test_channel_native_outcomes import _readback
+    service,accepted,run_id,boot_id=_accepted_native_task(tmp_path)
+    service.project_core_event({'robot_id':'rosy_01','event_id':'done','seq':1,'type':'nav.completed',
+        'data':{'correlation_id':accepted['attempt_id'],'run_id':str(run_id),'boot_id':str(boot_id)}})
+    current=service.store.get_task(accepted['task_id'])
+    async def get(path):return _readback(accepted['receipt']['operation'],result='FAILED')
+    run(task_result(service.store,SimpleNamespace(_get=get),current))
+    assert service.store.get_task(accepted['task_id'])['receipt']['outcome']['result']=='SUCCEEDED'
+    assert service.store.resource_claims(resource_kind='robot',resource_id='rosy_01')
+
+
+def test_stop_during_new_epoch_read_refuses_goal_before_send():
+    from fleet.server.goal_lease import GoalLeases, NavigationStopped
+    leases=GoalLeases(0,{})
+    leases.native_required=lambda tid:True
+    sent=[]
+    async def get(path):
+        leases.clear()
+        return {'owner':{'boot_id':str(uuid4()),'owner_generation':1}}
+    async def goal(*args,**kwargs):sent.append(args)
+    with pytest.raises(NavigationStopped):
+        run(leases.send('rosy_01',SimpleNamespace(_get=get,navigation_goal=goal),{},1.,2.,0.,'attempt',task_id='task'))
+    assert not sent

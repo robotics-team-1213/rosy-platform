@@ -1,5 +1,6 @@
 """D-732 identity, epoch and quiescence validation at the CORE boundary."""
 from uuid import UUID
+from datetime import datetime
 
 from core_common.protocol.native.operation import NativeOperation
 
@@ -30,7 +31,12 @@ def safe_proof(value, operation):
     if operation['phase'] != 'TERMINAL' or value.get('lookup') != 'FOUND' or not isinstance(proof, dict):
         return False
     owner = value.get('owner', {})
-    return (proof.get('boot_id') == operation['boot_id'] == owner.get('boot_id')
+    try:
+        observed = datetime.fromisoformat(proof['observed_at'].replace('Z', '+00:00'))
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
+    return (observed.utcoffset() is not None and value.get('operation') == operation
+            and proof.get('boot_id') == operation['boot_id'] == owner.get('boot_id')
             and proof.get('requested_run_id') == operation['run_id']
             and 'owner_run_id' in owner and owner['owner_run_id'] is None
             and 'owner_run_id' in proof and proof['owner_run_id'] is None
@@ -55,6 +61,9 @@ def terminal_event(events, original):
         elif event['type'] == 'nav.failed':
             result = 'FAILED'
         if result is not None:
+            reason = data.get('native_reason', data.get('reason'))
+            if event['type'] == 'nav.failed':
+                reason = 'BACKEND_REJECTED' if data.get('error_code') == 'REJECTED' else 'BACKEND_ERROR'
             return exact_operation(original | {'phase': 'TERMINAL', 'result': result,
-                                   'reason': data.get('native_reason', data.get('reason'))}, original)
+                                   'reason': reason}, original)
     return None

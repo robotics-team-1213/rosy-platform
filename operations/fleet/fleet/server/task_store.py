@@ -628,6 +628,8 @@ class FleetTaskStore:
             if (current["status"] != "QUEUED" or current["dispatch_phase"] != "DISPATCHING"
                     or current["lease_owner"] != worker_id):
                 raise InvalidTaskTransition("task is not held by this dispatch attempt")
+            if json.loads(current['receipt_json'] or '{}').get('operation'):
+                raise InvalidTaskTransition('native traffic cancellation requires exact outcome reconciliation')
             connection.execute(
                 """UPDATE fleet_tasks SET dispatch_phase='WAITING_TRAFFIC', reason=?,
                    blocked_by=?, waiting_on_json=?, lease_owner=NULL, lease_until=NULL,
@@ -818,13 +820,13 @@ class FleetTaskStore:
 
     def project_core_event(self, *, robot_id: str, event_id: str, seq: int,
                            event_type: str, correlation_id: str, source: str | None = None,
-                           run_id=None, boot_id=None) -> dict | None:
+                           run_id=None, boot_id=None, error_code=None) -> dict | None:
         from fleet.server.task_results import project_core_event
 
         return project_core_event(
             self, robot_id=robot_id, event_id=event_id, seq=seq,
             event_type=event_type, correlation_id=correlation_id, source=source,
-            run_id=run_id, boot_id=boot_id,
+            run_id=run_id, boot_id=boot_id, error_code=error_code,
         )
 
     def get_task(self, task_id: str) -> dict | None:
