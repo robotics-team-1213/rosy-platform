@@ -81,6 +81,7 @@ def test_drivable_preview_tints_the_way_dims_the_rest_and_skips_legacy_lanes():
 
 def test_keep_step_puts_the_steered_way_into_keep_debug():
     from control.sensing.perception.drivable.drivable_keep import keep_step
+    from control.sensing.perception.drivable.drivable_steer import pursuit_error
     worker = SimpleNamespace(used_crosswalk=None, latest_way=lambda _age: (_way(), 0.75))
     steer = SimpleNamespace(update=lambda *a, **k: (0.1, 0.9, dict(strategy='drivable_centre', target_m=(0.25, 0.0))),
                             crosswalk=lambda _pose: None, pursuit_error=pursuit_error)
