@@ -67,6 +67,17 @@ def configure_velocity_drive(drive, damping=None):
     return damping
 
 
+def configure_contact_solver(robot):
+    # Native traces with one velocity iteration showed intermittent wheel/caster rest spikes.
+    position = int(robot.get_solver_position_iteration_count())
+    robot.set_solver_velocity_iteration_count(8)
+    observed = dict(position=int(robot.get_solver_position_iteration_count()),
+                    velocity=int(robot.get_solver_velocity_iteration_count()))
+    if observed != dict(position=position, velocity=8):
+        raise RuntimeError(f"Contact solver readback failed: {observed}")
+    return observed
+
+
 def force_zero_wheels(controller, wheel_drives):
     # ScriptNode output remains latched when its graph stops computing. Clear it
     # independently of graph execution, then clear the physics drive targets.
