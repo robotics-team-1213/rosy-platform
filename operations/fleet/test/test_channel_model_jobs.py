@@ -98,4 +98,22 @@ def test_late_model_cost_is_retained_after_deadline_or_owner_revocation(tmp_path
     with journal._connect() as conn:
         assert conn.execute('SELECT known_cost_usd FROM fleet_channel_model_attempts').fetchone()[0] == .1
         assert conn.execute('SELECT count(*) FROM fleet_channel_reply_outbox').fetchone()[0] == 0
+
+
+def test_forged_question_cannot_keep_original_receipt_hash(tmp_path):
+    from fleet.server.channel_deliberation import status_problem
+    jobs,journal,_,receipt,snapshot,_,clock=setup(tmp_path)
+    forged={**receipt,'content':'a different question'}
+    problem=status_problem(forged,snapshot,now=clock[0])
+    with pytest.raises(HTTPException):jobs.stage(forged,problem,snapshot)
+    with pytest.raises(HTTPException):jobs.reject(forged)
+    assert journal.reply_outbox.rows('op')==[]
+
+
+def test_publish_checks_observation_inside_transaction(tmp_path):
+    jobs,_,_,receipt,snapshot,p,_=setup(tmp_path)
+    jobs.stage(receipt,p,snapshot)
+    with pytest.raises(HTTPException):
+        jobs.finish(receipt['request_id'],state='ANSWERED',result={},summary='wrong',observation_guard=lambda:False)
+    assert jobs.read(receipt['request_id'],'op')['state']=='PENDING'
     with pytest.raises(HTTPException): jobs.reserve(receipt['request_id'], 'reviewer')
