@@ -13,6 +13,7 @@
 ## 경계와 증거
 
 - last_applied와 source frame은 episode마다 초기화한다. 유효 state와 실제 CORE 명령 처리가 확인된 뒤에만 갱신한다.
+- send의 바퀴 적용 성공 뒤 receipt가 후보와 일치하고 최종 명령이 nonzero이며 cycle warning·halted가 없을 때만 보관한다. CORE 정상 반환만으로 실행을 추정하지 않는다.
 - 현재 관측이 없고 명시적 camera_lane_lost terminated인 경우만 마지막 실행 행동에 실패 벌점을 준다. 유효 행동이 없거나 nonterminal/truncation/다른 실패이면 기존 무효 관측 거절을 유지한다.
 - 유효한 다음 state가 있는 기존 전이는 변경하지 않는다. 동일 종료를 반복 학습하지 않도록 기존 episode break를 유지한다.
 - camera freshness, body sweep, CORE 최종 명령, 실제 정지·cleanup, 평가 수용 기준은 변경하지 않는다.
@@ -21,3 +22,7 @@
 ## 남은 범위
 
 이 수정은 완주나 RL 성능 향상을 보장하지 않는다. physics tick 단위 학습·discount의 시간 의미, 카메라 목표 기하, 한 대 완주, 병렬 학습, 두 대 Gazebo Fleet·교통 규칙 수용은 계속 별도 검증한다.
+
+## 재현
+
+원격 회귀의 camera_loss 선택으로 종료 벌점 누락을 재현했다. 새 positive 사례는 invalid_camera_observation을 반환하여 실패했고, 부정 사례 5개는 통과했다. known_failures 비교는 NEW 1이며 기존 실패로 분류하지 않았다. 앞선 terminal 선택은 positive 함수 이름을 포함하지 못했으므로 RED 증거에서 제외했다.

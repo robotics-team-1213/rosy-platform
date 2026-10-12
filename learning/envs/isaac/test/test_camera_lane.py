@@ -26,6 +26,44 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+@pytest.mark.parametrize('mode', ['applied', 'zero', 'clipped', 'selection_failed', 'invalid', 'halted'])
+def test_terminal_credit_requires_successful_matching_core_dispatch(mode):
+    from camera_checks import remember_camera_action
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    from core_features.command.manager import Twist
+    receipts, warnings = [], []
+    def select():
+        if mode == 'selection_failed':
+            raise RuntimeError('injected selection failure')
+        return Twist(0., 0.) if mode == 'zero' else Twist(.02, .1 if mode == 'clipped' else .2)
+    command = SimpleNamespace(select_output=select, announce_pending=lambda: None)
+    power = SimpleNamespace(on_activity=lambda source: None)
+    cmd_vel_cycle(command, power, lambda twist: receipts.append((twist.linear, twist.angular)), warn=warnings.append)
+    state = None if mode == 'invalid' else (2, 1)
+    record = remember_camera_action(None, state, 3, 42, (.02, .2), receipts, warnings, mode == 'halted')
+    if mode == 'applied':
+        assert record == dict(state=(2, 1), action=3, frame=42, twist=(.02, .2))
+    else:
+        assert record is None
+
+
+def test_camera_terminal_credit_survives_invalid_gap_but_not_episode_reset():
+    from camera_checks import remember_camera_action
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    record = remember_camera_action(None, (2, 1), 3, 42, (.02, .2), [(.02, .2)], [], False)
+    for frame in (43, 44):
+        record = remember_camera_action(record, None, 1, frame, (0., 0.), [(0., 0.)], [], False)
+    assert record['frame'] == 42
+    terminal = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost')
+    assert learn_transition(policy, (record['state'], record['action']), None, terminal) == 'terminal_camera_loss'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == -1.5
+    record = None  # The runner resets its ledger at each episode boundary.
+    assert learn_transition(policy, record, None, terminal) == 'invalid_camera_observation'
+    assert policy.updates == 1
+
+
 def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
     import camera_lane
     from control.sensing.perception.camera_ground import ground_plane
