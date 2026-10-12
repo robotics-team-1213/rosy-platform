@@ -387,3 +387,15 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
 두 카메라 구간의 관측 경계 방향 42.4°/36.4°에 native yaw 138.375°/144.183°를 더하면 world 180.8°/180.6°다. 해당 경계가 서쪽 직선이고 로봇이 아직 정렬 중이라는 가설을 지지하지만 consumed-frame 인과 증명은 아니다. 현재 drivable_turn_left와 ExpectedPath dropped를 실제 도로 곡률로 동일시하지 않는다. 현재 목표는 centre 대신 영상 border exit를 사용한다. 두 비교 후보는 (A) 현재 연결된 metric centreline의 법선 폭·같은 경로의 목표 선택과 (B) 독립 수용된 관측 경로의 odom 연속성이다. B는 현재 거절·만료·이동 예산을 유지하며 검증되지 않은 turn을 승격하지 않는다. Leg7·8·10 원본과 벽·gap·straddle·crop·회전된 직선/곡선 대조를 같은 가드로 평가한다.
 
 공식 [SLAMTEC C1 사양](https://www.slamtec.com/ko/c1/spec)은 거리오차 ±30mm와 분해능 15mm를 구분한다. 이 값을 Gaussian σ나 모든 조건의 절대 상한으로 환산할 근거는 확인하지 못했다. 소스의 σ=0.02는 초기 upstream import에서 상속됐으며 C1 실측 교정 근거는 미확인이다. 따라서 센서 잡음·빔·안전 margin을 낮추는 변경은 채택하지 않았다. [Jazzy Nav2 RPP](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/controller_plugins/configuring_regulated_pp/)는 경로 방향 정렬과 추종을 분리하는 연구 비교 사례다. 이를 현재 CORE의 pivot 승인이나 새 명령 입력으로 대신 사용하지 않는다.
+
+## 2026-10-13 · 실제 몸 경로 재생과 D-737 수정
+
+Leg10 최종 zero 이전 sim54.7 스캔과 이후 CORE HOLD의 sim55.4 스캔은 서로 다르다. 후자의 실제 관측·프로필·신선한 스캔을 정상 원격에서 기존 CORE로 재생하면 의도 `(v,w)=(0.03696873,0.11942469)`의 여유는 25.3mm, 정지 거리 21.4mm다. 기존 선속도만 줄이는 호 집합은 9.4368mm를 선택하여 실제 HOLD와 일치한다. 임계 빔은 591번이며 근접 기억 대신 현재 LiDAR가 선택됐다. 재개 거리 51.4mm보다 작으므로 재개나 미래 충돌 없음의 증거는 아니다. 관측 값과 수신 시각의 일치는 정확한 소비 포인터 증명도 아니다.
+
+[D-737](../adr/D-737-line-body-command-curve.md)은 일반 CAMERA의 검사·발행 곡률과 속도 상한을 맞춘다. 정적 LINE 제한의 정상 원격 RED는 4 NEW이며 공통 제한 함수로 수정한 8e81b91a9의 관련 회귀는 106 PASS·NEW 0이다. 기본 NAVIGATION·MANUAL·DOCKING 제한은 그대로다. 몸 검사와 최종 후보 쪽의 정상 원격 RED는 실제 Leg10 임계 빔, 다른 곡률·같은 곡률의 속도 증가 교체, 검사 후 선·각 cap 증가 및 zero cap의 7 NEW를 확인했다. 기존 실패 목록에 넣지 않았다.
+
+592510e05의 독립 SOURCE 검토는 CORE 명시 연결과 신선한 일반 관측에서만 legacy 추가 호를 생략하고, 같은 snapshot의 clipped pair를 일반 tracking decision에 그대로 반영하도록 확인했다. 최종 공통 감속·zero만 허용하며 다른 후보는 기존 `motion_unconfirmed` HOLD다. 다른 모드의 obstacle_gap, 복구·bridge·junction 쓸기는 기본 legacy 의미를 유지한다. 리뷰에서 발견한 zero/tiny intent의 cruise 부활과 원본 decision pass-through 오인도 커밋 전에 수정했다. 실제 ReturnController의 contained tracking 회귀를 추가했다. 원격 GREEN·구조·설치 검증과 새 전체 Gazebo 실행은 이 SOURCE 승인과 별도다.
+
+목표점 A/B 오프라인 비교는 아직 채택하지 않았다. A는 일부 이전 구간에 페인트 겹침 반례가 남고, B는 실제 48개 관측에서 독립 수용 가능한 경로가 없었다. 안전 빔·잡음·margin·hysteresis를 바꾸거나 현재 거절한 경로를 기억으로 되살리는 수정은 하지 않았다. 원본 지도 완주·새 실행 반복·main 착지·push·실물 수용은 미완료다.
+
+592510e05의 정상 모델 PC 회귀는 몸 검사·실제 lane-return manager·LINE 발행 경계·traffic bridge·차선 추종·LOST 재개·최종 cmd_vel cycle 203 PASS·terminal 0·NEW 0이다. 최종 후보가 다른 곡률이거나 더 빠를 때 거절하고 zero/tiny를 유지하는 회귀를 포함한다. 복구·교차로·다른 모드 및 구조 회귀는 후속 gate이며 새 Gazebo 주행 결과는 아직 없다.
