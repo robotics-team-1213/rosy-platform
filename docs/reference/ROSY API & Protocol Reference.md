@@ -3400,6 +3400,10 @@ record a bounded fresh readback and an exact local claim CAS, independently of r
 Only `SUCCEEDED` together with safe release permits a channel step to become COMPLETED
 and reach another step's original admission checks. `RUNNING` follow/HOLD retains its
 resource; watchdog EXPIRED, PREEMPTED, CANCELED and FAILED are not goal success.
+Stop steps own no motion claim: exact terminal plus fresh quiescence closes them as
+CANCELED with `quiescence`, without `safe_released`, releasing another owner, or
+advancing the plan. Site E-stop preserves each provided native `operation` in its
+robot-associated `robots[]` receipt; RPC acknowledgement alone is not physical stop.
 Channel steps additionally expose the persisted `caller_cid` used by that dispatch.
 Task `receipt.native_required:true` records that native identity was required before
 send; a missing ACK leaves UNKNOWN and cannot use legacy CID-only projection. Explicit
