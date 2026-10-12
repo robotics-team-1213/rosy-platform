@@ -695,13 +695,20 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
+      const cx = col + 0.5;
+      const cy = grid.height - row - 0.5;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(col + 0.5, grid.height - row - 0.5, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
       ctx.lineWidth = 0.5;
       ctx.strokeStyle = css("--series-goal");
       ctx.stroke();
       ctx.restore();
+      const world = toWorld(grid, col, row);
+      const metres = `${world.x.toFixed(2)}, ${world.y.toFixed(2)} m`;
+      drawChip(ctx, null, cx + 2, cy, metres);
+      canvas.setAttribute("aria-label", `${canvas.getAttribute("aria-label")}. ${metres}`);
+      flushChips(ctx);
     }
   }
 
