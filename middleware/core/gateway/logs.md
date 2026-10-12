@@ -1042,3 +1042,9 @@
 - 증거: `test_face_inputs.py`에 사유별 노트와 양보 회전·일반 HOLD 시험을 넣었다. 원격 pytest는 커밋 전이라 돌리지 않았다.
 - gate 변화: 없음.
 - 결정: D-719
+
+## 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
+
+- 변경: 시험만 추가한다. 카메라가 역산한 추종 오차를 실제 `LineFollowManager._steer`에 넣으면, Pinky 0.10/2.0을 포함한 불러온 법칙에서 각속도/선속도가 기하 곡률과 같다. 공백 구간의 ExpectedPath도 같은 인스턴스 법칙을 쓴다.
+- 증거: `test_line_follow_drivable_law.py`. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음.
