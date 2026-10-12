@@ -66,3 +66,11 @@ Isaac ordered 경로는 두 도로를 reverse 방향으로 지나 합법적인 N
 사용자 요청에 따라 모델 PC의 headless Isaac은 한 대의 기존 segmentation·line_follow·CORE 조향 gain RL과 완주를 검증하고, 다른 PC의 headless Gazebo는 두 대의 독립 CORE와 실제 Fleet·신호·횡단·주의 표시·장애물 완주를 검증한다. 동일 map_v2_fleet/STL 파생을 사용하며 Isaac 한 대 결과를 두 대 Fleet 수용으로 계산하지 않는다. 병렬 RL 환경과 독립 평가 요구는 아직 미완료인 별도 증거로 유지한다.
 
 실제 두 대 Gazebo 정지 센서 시험에서 기존 D-426 예약 범위 120..199의 domain 172가 CORE의 0..101 검증에 거절됐다. 검증용 예약·run_spec·sim 전용 watchdog 범위를 80..99로 수정하고 기존 일반 sim 난수 범위는 20..79로 분리한다. 기존 manifest를 새 범위로 몰래 재해석하지 않고 새 run을 예약한다. localhost DDS·partition·신원·포트/domain 충돌 검사를 유지한다. 실제 로봇의 40+N과 수치상 겹칠 수 있으므로 범위 자체를 장치 격리 증거로 쓰지 않는다. CORE 안전 범위와 FOREIGN_NAMESPACE 진단은 변경하지 않는다. 예약 값의 CORE/launch 수용 및 watchdog 경계·만료 시험을 함께 수행한다. 이 수정과 정지 센서 확인은 Fleet 통행권·주행·RL 완주를 증명하지 않는다.
+
+### Addendum 2026-10-12 — 공유 바닥 시각 자산 재현
+
+R23 실제 카메라와 소스 비교에서 Isaac의 단색 바닥과 Gazebo training-curved world의 카펫 재질 차이를 확인했다. 기존 학습 모델 pin은 동일하다. Isaac은 같은 world의 카펫 18개·기준 사각형 4개·도킹 표식 1개의 pose·크기·색상과 기존 PNG를 읽어 시각 plane을 생성한다. 검증되지 않은 parent 회전, 비정상 geometry·pose, 맵 밖이나 누락된 텍스처는 렌더 전에 거절한다. 기존 벽 collision·페인트·주의 표식 생성과 CORE·camera admission·무효 관측 학습 제외는 유지한다.
+
+텍스처는 원래 diffuse 색을 modulation하며 [OpenUSD 공식 규격](https://openusd.org/dev/spec_usdpreviewsurface.html)에 따라 연결 형식을 선언한다. 이 변경은 renderer 사이의 픽셀 동일성이나 인식 개선을 증명하지 않는다. 기존 native ground 배경과 road_lines model Z offset 등 전체 시각 일치는 추가 확인이 필요하다. 실제 SDK 영상·카메라 관측·동일 초기 조건 baseline/frozen RL·전체 완주를 별도로 검증한다. 이 소스 변경이나 호스트 회귀 통과를 RL 성과·Fleet 통행권·교통 수용으로 계산하지 않는다.
+
+후속 source는 같은 world의 ground RGB·100m 사각형 크기와 road_lines model의 Z 0.001m pose도 읽어 적용한다. caution·wall pose, CORE·정지·완주 판정은 유지한다. 현재 알려진 수평 SDF ground 범위만 수용하며 임의 지형이나 엔진 사이의 물리 동일성을 주장하지 않는다. RGB·크기·paint pose의 비정상 값을 거절하고 실제 SDK USD 메타데이터에서는 paint transform을 확인했다. 새 ground의 PhysX·렌더링·픽셀·전체 주행은 아직 별도 수용이 필요하다.

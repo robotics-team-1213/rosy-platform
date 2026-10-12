@@ -366,3 +366,9 @@
 - 변경: 새 도로 관측 연결·기동 snapshot 수정을 포함한 소스를 격리 AI PC에서 빌드·실행했다. 최신 main 6c39ed8ae를 별도 통합해 f2c8b2e1f에서 관련 회귀를 다시 수행했다. 일지 충돌은 양쪽 기록을 보존하고 인덱스를 재생성했다.
 - 증거: A24 source 7,337 파일 hash 확인, 17 ROS 패키지 build exit 0, native 정지 runner exit 0. online 2/2·로봇별 road/line/image 271건·preview publisher 하나·최종 CORE publisher 하나·명령/최종 odom 속도 0. 실제 교통 API와 snapshot ENFORCED 일치. 기존 named operator pin API로 실제 Gazebo 위치 등록 후 LOCALIZED 두 대를 확인했다. 독립 PID 부재·세 포트 ECONNREFUSED·private 원본 47개 SHA 대조. 통합 f2c8b2e1f의 원격 관련 278 PASS·exit 0·known_failures NEW 0.
 - gate 변화: 도로 topic·정지 연결·활성 설정 증거만 추가했다. CORE 내부 valid 수신은 다음 sensors endpoint 확인이 필요하다. 첫 로봇 learned crosswalk 검출과 RGB road crosswalk=false의 차이, 둘째 containment uncertainty=null이 남았다. operator pin은 지속 카메라 위치 증거가 아니며 완주·교통 인식·grant·병렬 RL·실물 수용은 미완료다. A24 native는 main 통합 전 소스다.
+
+## 2026-10-12 · 8226c122f8 · IR 바닥 ray의 동일 프레임과 신선도 보존
+
+- 변경: 기존 sim_ir_floor 변환이 새 mid ray와 옛 좌우 ray를 합쳐 바닥 증거를 갱신하던 오류를 수정했다. 세 ray의 동일한 정규 timestamp·새 프레임·20Hz 한 주기 이내 source age를 확인하고 ROS clock timer에서 한 번만 발행한다. 입력 분류 함수·ADC 형식·바닥 거리·CORE motion gate는 유지한다.
+- 증거: 원격 RED로 혼합 timestamp의 floor 갱신을 재현했다. 수정된 Gazebo 전체 회귀는 318 PASS/4 SKIP/terminal exit 0이고 독립 drive_review가 202c807dc 및 8226c122f8에 SOURCE APPROVE했다. 별도 AI PC R6 정지 실행의 기존 소스에서 두 로봇 각각 세 ray의 동일 시각 514/514 프레임과 실제 IR·IMU·scan, enforce 및 junction_turn capability를 확인했다. R6는 수정 helper 실행 증거가 아니다.
+- gate 변화: SOURCE/원격 회귀와 실제 센서 연결 근거를 구분한다. R6의 첫 로봇 blocked=true는 유지했다. 새 helper의 실제 실행·유효 Fleet 통행권 아래 주행·완주·장치 수용은 별도 검증이 필요하다.

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.217
+**Version:** v1.218
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,12 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.218 CORE 조건부 막힘 답 (D-718)
+
+선택 상태 필드 `line_follow.stuck.conditional_back`은 이 CORE의 조건부 BACK 지원 여부다. 신형 CORE는 true, 이전 데이터의 누락은 false다. 조건을 사용하는 Fleet HttpRobotClient는 먼저 GET `/api/v1/line-follow`에서 명시적 true를 확인하며 없거나 false이면 POST하지 않는다. 지원 여부는 안전·운영 수용·현재 사건 조건 검증을 면제하지 않는다.
+
+POST `/api/v1/line-follow/stuck/decision`의 BACK_AND_RETRY에 선택 `expected_stuck: {phase: "ASKING", attempts: nonnegative strict integer}`를 받는다. 두 필드는 필수이고 추가 키·다른 phase·bool/문자열/음수 attempts는 400 VALIDATION_ERROR다. 다른 decision에 조건을 붙이면 400 VALIDATION_ERROR다. CORE는 stuck_id와 현재 phase/attempts를 기존 manager lock 아래에서 검증하며 조건 불일치는 409 STUCK_DECISION_REFUSED(`stuck_precondition_failed`)로 거절한다. 거절은 타이머·시도 수·현재 복구를 바꾸지 않는다. 기존 조건 없는 요청과 WAIT/ABORT는 유지한다. 조건 일치는 기존 안전/권한 검사를 면제하지 않으며 모델 운영 수용도 아니다. envelope protocol_version은 1.0 유지다.
 
 ### v1.217 Fleet 관측 capture 기록 범위 (D-699)
 
@@ -283,7 +289,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `LANE_ARC_UNAVAILABLE` | 409 | `POST /line-follow/junction` 에 `exit_segment` 가 있는데 능력 `lane_arc` 가 거짓(`line_follow.arc_enabled` 꺼짐, 현장 바닥 선언 `site_floor_map_id` 없음, 또는 `ir_guard_speed_scale` 0) (D-520, v1.145, v1.154) | 로봇 |
 | `JUNCTION_ARC_RUNNING` | 409 | `POST /line-follow/junction` 의 `action: bend` 인데 D-520 호(`line_follow.arc.state: running`)가 달리는 중 — 호가 그 차로를 달리므로 굽이 지시를 받지 않는다. Fleet 은 호가 도는 동안 굽이를 보내지 않는다 (D-520, v1.145) | 로봇 |
 | `STUCK_ID_MISMATCH` | 409 | `POST /line-follow/stuck/decision` 의 `stuck_id` 가 지금 열린 막힘이 아님(늦은 답·이미 닫힌 막힘·막힘 없음). 늦은 답이 다음 막힘에 쓰이지 않게 한다 (D-407, v1.74) | 로봇 |
-| `STUCK_DECISION_REFUSED` | 409 | 막힘 답을 지금 실행할 수 없음 — `RESUME`: 경로 띠 안 물체가 `obstacle_stop_m` 안이거나 scan 이 `clearance_stale_s` 보다 오래되었거나 LiDAR 정지를 쓰는데 scan 이 없음; `BACK_AND_RETRY`: 로컬 복구 꺼짐·시도 소진·뒤 여유 부족·LiDAR 사각·몸 기하 미설정·scan stale; `YIELD`: 구간이 없거나 유한하지 않음·거리 밖(0.05–2.0 m)·회전이 π 를 넘음·회전 여유 없음(`turn_blocked`)·보정 중·몸 기하 미설정·scan 없음·scan stale·선속도 한도 0. 앞에 동료가 있는 것만으로는 거절하지 않는다. 메시지에 사유 (D-407, v1.74; YIELD 는 D-453, v1.95) | 로봇 |
+| `STUCK_DECISION_REFUSED` | 409 | 막힘 답을 지금 실행할 수 없음 — `RESUME`: 경로 띠 안 물체가 `obstacle_stop_m` 안이거나 scan 이 `clearance_stale_s` 보다 오래되었거나 LiDAR 정지를 쓰는데 scan 이 없음; `BACK_AND_RETRY`: BACKING/SETTLING (back_active, D-717); 로컬 복구 꺼짐·시도 소진·뒤 여유 부족·LiDAR 사각·몸 기하 미설정·scan stale; `YIELD`: 구간이 없거나 유한하지 않음·거리 밖(0.05–2.0 m)·회전이 π 를 넘음·회전 여유 없음(`turn_blocked`)·보정 중·몸 기하 미설정·scan 없음·scan stale·선속도 한도 0. 앞에 동료가 있는 것만으로는 거절하지 않는다. 메시지에 사유 (D-407, v1.74; YIELD 는 D-453, v1.95) | 로봇 |
 | `LINE_FOLLOW_ACTIVE` | 409 | 라인 추종이 켜져 있어 도킹/언도킹을 시작하지 않음 — `line-follow/mode` 를 `OFF` 로 먼저 (v1.18) | 로봇 |
 | `IR_FALLBACK_NOT_READY` | 409 | 카메라 고장 상태, IR 라인 증거 최신성, 보정 revision, 또는 센서 안전 정책을 만족하지 못함 | 로봇 |
 | `NO_ODOMETRY` | 409 | 오도메트리가 없어 언도킹 후진 거리를 잴 수 없음 (v1.18) | 로봇 |
@@ -2859,6 +2865,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
 | v1.212 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |
