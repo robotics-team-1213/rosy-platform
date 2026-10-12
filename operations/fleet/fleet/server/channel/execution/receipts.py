@@ -38,6 +38,9 @@ def owner_receipt(call,value,robot_ids):
         leader=value.get('leader')
         members=sorted(value.get('assignment',{}))
         if leader is not None and leader not in robot_ids or not set(members)<=set(robot_ids):raise ValueError('FORMATION_SCOPE_CHANGED')
+        if call.verb=='formation_start' and (leader!=call.body['leader'] or
+                members!=sorted(set(call.body.get('members',robot_ids))-{call.body['leader']})):
+            raise ValueError('FORMATION_RECEIPT_NOT_ORIGINAL_SESSION')
         return True,{'rpc_acknowledged':True,'active':value['active'],'state':state.value,'leader':leader,'members':members}
     if call.verb=='estop':
         rows=value.get('robots')
