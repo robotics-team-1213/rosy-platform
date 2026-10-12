@@ -186,6 +186,41 @@ def test_core_false_adds_no_core():
     assert not _core_nodes(actions, context)
 
 
+def test_nominal_camera_keeps_transport_outside_multi_and_renders_headlessly():
+    from launch.actions import IncludeLaunchDescription
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", nominal_camera="true")
+    assert '--headless-rendering' in _gz_server_args(actions, context)
+    assert _named(actions, context, 'image_bridge') == []
+    uploads = []
+    for action in actions:
+        if isinstance(action, IncludeLaunchDescription):
+            location = _text(action.launch_description_source._LaunchDescriptionSource__location, context)
+            if location.endswith('upload_robot.launch.py'):
+                uploads.append(dict(action.launch_arguments))
+    assert len(uploads) == 2
+    for args in uploads:
+        assert _text(args['camera_width'], context) == '320'
+        assert _text(args['camera_height'], context) == '240'
+        assert _text(args['cam_tilt_deg'], context) == '8'
+
+
+def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch):
+    spec = importlib.util.spec_from_file_location('multi_real', LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, 'get_package_share_directory', lambda name: str(LAUNCH.parents[1]))
+    actions = mod.generate_launch_description().entities
+    context = LaunchContext()
+    context.launch_configurations['learned_lane_pointer'] = '/pinned/model-pointer.txt'
+    for executable in ('image_bridge', 'line_observer_node', 'road_observer_node'):
+        nodes = _named(actions, context, executable)
+        assert len(nodes) == 2
+        assert {_text(n._Node__node_namespace, context).strip('/') for n in nodes} == {'rosy_01', 'rosy_02'}
+    assert _named(actions, context, 'sim_jpeg_relay.py') == []  # Road observer owns each front preview.
+    assert _named(actions, context, 'core') == []  # COREs belong to the included multi launch.
+
+
 def test_slam_start_waits_for_sensor_startup_in_wall_time():
     mod = _module()
     actions, _ = _setup(mod, robots="1", core="false", mode="slam")
@@ -334,7 +369,7 @@ def test_validation_domain_is_delivered_before_all_participants(tmp_path):
     from launch.actions import SetEnvironmentVariable, IncludeLaunchDescription
     spec = {"run_id": "d426-test", "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
-            "gz_partition": "d426-test", "ros_domain_id": 150,
+            "gz_partition": "d426-test", "ros_domain_id": 80,
             "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
     (tmp_path / "core_rosy_01.yaml").write_text(yaml.safe_dump({
         "robot": {"id": "rosy_01"}, "network": {"api_host": "127.0.0.1", "api_port": 31001}}),
@@ -349,7 +384,7 @@ def test_validation_domain_is_delivered_before_all_participants(tmp_path):
             if _text(action.name, context) == "ROS_DOMAIN_ID":
                 applied = True
         elif isinstance(action, (IncludeLaunchDescription, Node, TimerAction)):
-            assert applied and context.environment["ROS_DOMAIN_ID"] == "150"
+            assert applied and context.environment["ROS_DOMAIN_ID"] == "80"
     assert applied and _set_env(actions, context)["GZ_PARTITION"] == "d426-test"
     legacy, context = _setup(_module(), robots="1", core="false")
     assert "ROS_DOMAIN_ID" not in _set_env(legacy, context)
