@@ -55,7 +55,8 @@ def validate_conversation(cfg, raw):
             or cfg.get('key_file')!='/run/rosy-deliberation/broker.key'
             or cfg.get('known_hosts_file')!='/run/rosy-deliberation/known_hosts'
             or cfg.get('primary_admitted') is not True
-            or not re.fullmatch('[0-9a-f]{40}',str(cfg.get('source_commit','')))
+            or type(cfg.get('source_commit')) is not str
+            or not re.fullmatch('[0-9a-f]{40}',cfg['source_commit'])
             or canonical(profile)!=canonical(expected)
             or not re.fullmatch('d728-[a-z0-9-]{1,40}',str(profile.get('revision','')))
             or cfg.get('policy')!=policy
