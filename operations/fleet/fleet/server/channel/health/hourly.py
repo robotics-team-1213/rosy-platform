@@ -161,12 +161,12 @@ class HourlyHealth:
         slot, due = self._slot(now)
         payload = None
         scanned_slot = False
-        if (due <= now <= due + _START_WINDOW_S and self._reported_slot != slot
+        if (due >= self.started_at and due <= now <= due + _START_WINDOW_S and self._reported_slot != slot
                 and not await asyncio.to_thread(self.slot_exists, slot)):
             counts = await asyncio.to_thread(self.task_counts)
             payload = self.report(now, counts)
             scanned_slot = True
-        elif due <= now <= due + _START_WINDOW_S:
+        elif due >= self.started_at and due <= now <= due + _START_WINDOW_S:
             scanned_slot = True
         claim = await asyncio.to_thread(self.claim, now, payload)
         if scanned_slot:
