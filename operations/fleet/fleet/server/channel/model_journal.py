@@ -13,6 +13,7 @@ from rosy.decision.deliberation import canonical
 class ModelJobsJournal:
     tables = ('fleet_channel_model_jobs', 'fleet_channel_model_attempts', 'fleet_channel_model_activation')
     reply_kind = "DELIBERATION"
+    invalid_reply = '입력 또는 관측을 검증하지 못해 보류했습니다. 한 줄 128자 이내 상태 질문을 보내주세요. 실행 승인 아님.'
 
     def __init__(self, journal, profile_set_hash, *, clock=time.time):
         if (type(profile_set_hash) is not str or re.fullmatch('[0-9a-f]{64}', profile_set_hash) is None
@@ -121,7 +122,7 @@ class ModelJobsJournal:
                     'HOLD',:created_at,:deadline,:result,:created_at)''',row).rowcount
             if changed:
                 self.journal.reply_outbox.enqueue(conn,receipt,self.reply_kind,
-                    f"ROSY 상태 검토 · {receipt['request_id']}\n입력 또는 관측을 검증하지 못해 보류했습니다. 한 줄 128자 이내 상태 질문을 보내주세요. 실행 승인 아님.")
+                    f"ROSY 검토 · {receipt['request_id']}\n{self.invalid_reply}")
 
     def record_attempt(self, request_id, role, *, state, result, known_cost_usd, input_hash, profile_set_hash):
         if (state not in ('RESULT', 'FAILED', 'UNKNOWN') or type(result) is not dict

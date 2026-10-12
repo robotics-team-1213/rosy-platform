@@ -811,12 +811,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_channel_models(app,channel_model_config)
     from .channel.conversation.runtime import install_conversation
     install_conversation(app,conversation_config,site_maps)
-    if channel_model_config is not None:
+    if channel_model_config is not None or conversation_config is not None:
         from core_common.protocol.channel_requests import ChannelModelResult
         @app.get('/api/fleet/channel-requests/{request_id}/deliberation',dependencies=read_guard,
                  response_model=ChannelModelResult,tags=['fleet-work'])
         def channel_model_result(request_id:str,principal=Depends(require_operator)):
-            return app.state.channel_model_jobs.read(request_id,principal.principal_id)
+            jobs = (app.state.channel_conversation_jobs if conversation_config is not None
+                    else app.state.channel_model_jobs)
+            return jobs.read(request_id,principal.principal_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,

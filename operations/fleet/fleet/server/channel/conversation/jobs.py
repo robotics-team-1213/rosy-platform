@@ -10,6 +10,7 @@ class ConversationJobs(ModelJobsJournal):
     tables = ('fleet_channel_conversation_jobs', 'fleet_channel_conversation_attempts',
               'fleet_channel_conversation_activation')
     reply_kind = 'CONVERSATION'
+    invalid_reply = '현재 관측·지도 또는 대화 입력을 검증하지 못해 보류했습니다. 기기 명령을 보내지 않았습니다.'
 
     def history(self, receipt, environment, now):
         with closing(self.journal._connect()) as conn:

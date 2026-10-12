@@ -72,7 +72,9 @@ def install_conversation(app, config, site_maps):
         snapshot = fresh_snapshot(gather._snapshot, gather.gathered_at, gather._console._clock())
         view = site_maps.active_view()
         snapshot['map'] = None if view is None else {k:view[k] for k in ('version', 'sha256')} | {
-            'places':[{k:p.get(k) for k in ('id', 'name', 'x', 'y', 'yaw')} for p in view['map']['places']]}
+            'places_complete':len(view['map']['places']) <= 64,
+            'places':[{k:p.get(k) for k in ('id', 'name', 'x', 'y', 'yaw')}
+                      for p in sorted(view['map']['places'], key=lambda p:p['id'])[:64]]}
         # Existing Mission/Cell approvals are not exposed as model authority.
         snapshot['work_catalog'] = []
         return snapshot
