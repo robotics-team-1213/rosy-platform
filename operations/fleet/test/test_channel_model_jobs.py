@@ -84,3 +84,18 @@ def test_status_input_keeps_question_as_data_and_ignores_snapshot_secrets(tmp_pa
     secret = {'robot_id': 'pinky', 'online': False, 'state': None, 'token': 'private', 'base_url': 'private'}
     assert status_problem(receipt, {'robots': [secret]}, now=clock[0]).digest == p.digest
     with pytest.raises(ValueError): status_problem(receipt, {'robots': [{'robot_id': 'pinky', 'online': 'false'}]}, now=clock[0])
+
+
+def test_late_model_cost_is_retained_after_deadline_or_owner_revocation(tmp_path):
+    jobs, journal, accounts, receipt, snapshot, p, clock = setup(tmp_path)
+    jobs.stage(receipt, p, snapshot)
+    attempt = jobs.reserve(receipt['request_id'], 'primary')
+    clock[0] += 61
+    accounts['op'] = 'viewer'
+    jobs.record_attempt(receipt['request_id'], 'primary', state='RESULT',
+        result={'verdict': 'abstain'}, known_cost_usd=.1,
+        input_hash=attempt['input_hash'], profile_set_hash=attempt['profile_set_hash'])
+    with journal._connect() as conn:
+        assert conn.execute('SELECT known_cost_usd FROM fleet_channel_model_attempts').fetchone()[0] == .1
+        assert conn.execute('SELECT count(*) FROM fleet_channel_reply_outbox').fetchone()[0] == 0
+    with pytest.raises(HTTPException): jobs.reserve(receipt['request_id'], 'reviewer')
