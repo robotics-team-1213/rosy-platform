@@ -50,7 +50,7 @@ def trusted_directory(path):
 def protected(path):
     trusted_directory(path.parent)
     info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 2_000_000:
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 128*1024*1024:
         raise ValueError('PROTECTED_FILE_REQUIRED')
     return path.read_bytes()
 
@@ -59,9 +59,9 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def pinned(path, digest):
+def pinned(path, digest, limit=2_000_000):
     raw = protected(path)
-    if not re.fullmatch('[0-9a-f]{64}', digest) or sha(raw) != digest:
+    if len(raw) > limit or not re.fullmatch('[0-9a-f]{64}', digest) or sha(raw) != digest:
         raise ValueError('REVIEWED_INPUT_SHA_MISMATCH')
     return raw
 
@@ -164,7 +164,7 @@ def dependencies(bundle, digest, direct):
     for name, expected in manifest['wheels'].items():
         if not re.fullmatch('[A-Za-z0-9_.+-]+[.]whl', name):
             raise ValueError('DEPENDENCY_WHEEL_NAME_REFUSED')
-        raw = pinned(bundle/'wheels'/name, expected)
+        raw = pinned(bundle/'wheels'/name, expected, limit=128*1024*1024)
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             metadata = [n for n in archive.namelist() if n.endswith('.dist-info/METADATA')]
             if len(metadata) != 1 or archive.getinfo(metadata[0]).file_size > 1_000_000:
@@ -329,6 +329,7 @@ def main(argv=None):
     else:
         if json.loads(protected(marker)) != {'requirements_sha256':sha(lock), 'dependencies_sha256':args.dependencies_sha256}:
             raise ValueError('DEPENDENCY_RECEIPT_CHANGED')
+    trusted_directory(venv)
     for path in venv.rglob('*'):
         if path.is_symlink():
             if not path.resolve().is_relative_to(venv) and path.resolve() != Path('/usr/bin/python3').resolve():
