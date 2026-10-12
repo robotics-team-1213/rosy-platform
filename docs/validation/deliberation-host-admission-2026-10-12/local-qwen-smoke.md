@@ -18,3 +18,15 @@
 이번 모델 요청은 기존 AI PC loopback 서비스의 수동 transport smoke다. 네트워크 차단 sandbox의 제공자 접속을 승인하거나 자동 worker에 연결하지 않았다. 호스트 OFFLINE 수용과 모델 transport 수용은 별도 증거다. 실제 Pinky 사건·사람 정답 기반 독립 평가·FIELD는 미확인이다.
 
 별도 실제 CLI inventory: Claude Code 2.1.274, OpenCode 1.18.35. OpenCode run help에는 --pure가 있고 현재 번역기의 --standalone은 없다. 버전별 실행 번역과 설정·tools·token cap·격리 실행 수용은 병렬 작업의 별도 관문이다. 개인 credential이나 provider 설정은 읽지 않았다.
+
+## V2 설치·무호출 readback
+
+2026-10-12 후속 실제 AI PC readback은 frozen source `cfcba82ddf`의 별도 V2 준비 경로를 확인했다. 앞의 실제 구버전 transport 성공을 V2 성공으로 바꾸지 않는다. Qwen V2 시도 표식이 남아 있으며 이전 `QWEN_V2_PROVIDER_FAILED`의 실제 응답·원인은 미확인이다. 표식을 삭제하거나 모델 요청을 재시도하지 않았다.
+
+시스템 Python에는 pydantic이 없지만, 기존 `import-check-venv`에서 합성 V2 입력의 순수 검증은 차단한 HTTP 경계까지 도달했다. 같은 전용 interpreter의 자식 모듈은 모듈 누락 없이 잘못된 입력에 redacted HOLD를 반환했다. 이 두 진단은 네트워크·모델 호출 0회다. 시스템 interpreter의 의존성 누락은 이번 진단 결과이며 이전 실패의 원인으로 단정하지 않는다.
+
+별도 `/api/ps` 메타데이터 요청 1회에서 `qwen3-vl:8b-instruct`와 위 고정 digest의 resident 조건을 확인했다. 결과는 PASS_RESIDENT_METADATA_ONLY, 모델 호출 0회·runtime_admitted=false·field_accepted=false다. 실제 생성·응답 JSON·정확도·보정·운영 수용을 입증하지 않는다.
+
+GLM V2 root 설치 디렉터리는 없고 관리자 준비 스크립트는 남아 있다. 스크립트 SHA256은 `5ec4699eed5625c58a7e5ec623b7eab23a1fe750148c0be756c130f5f3218e11`이다. 스크립트는 manifest·offline wheels·root 소유 runtime·import probe·오프라인 preflight만 처리하고 credential importer나 provider 호출을 실행하지 않는다. `sudo -n true`는 password required로 거절돼 관리자 터미널 실행이 필요하다. 사용자에게 기존 OpenSSH 준비 명령과 마지막 JSON/PREPARE_EXIT readback을 요청했다. 비밀번호·키·토큰은 요청하지 않았다.
+
+이번 readback 요약은 세션 `logs/v2-runtime-readiness.json`에 있다. source 최신 병합과 이 구버전 frozen runtime의 준비 상태는 별도다. 실제 Qwen/GLM V2 품질·동작·배포·현장 수용은 HOLD를 유지한다.
