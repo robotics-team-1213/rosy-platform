@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-722는 `c55c64e5d4`로 로컬 main에 착지했다. 마지막 적격 Model PC 원격 통합은 5,656 passed/282 skipped/NEW 0 및 lint이며 고정 로그는 세션 `logs/model-recovery-land-c55c64e5d4.txt`다. 후보는 비실행 기록이며 실제 운영 수용·단일 물리 claim·Fleet 제출 연결·모델/현장 결과는 남아 있다. 후속 D-724는 지원 확인 GET 뒤 POST 직전에 최종 검증 포트를 두는 소스 구현이며 관련 원격 회귀 123개, 실제 wheel/sdist 설치·문서 계약 104개는 terminal exit 0/NEW 0이다. D-724 병합은 아직 미확인이다. GLM 관리자 준비 스크립트는 존재하지만 새 설치 경로는 현재 없다. 목표는 ACTIVE이고 실제 호출은 하지 않았다.
+
 현재 실행 중인 D-722는 모델 복구 후보를 실제 완료된 시도와 기존 사건 DB에 결속한다. 첫 보강은 assessment revision과 CORE 관측 seq/timestamp의 일치, 후보 조회의 원본 receipt·전체 내용 재검증, 종료 시 진행 중 DB 작업의 완료 대기다. 후보 저장은 `automation/recovery_candidates.py`, 모델 호출은 기존 `automation/execution/worker.py`가 소유한다. 기존 크기 한도를 유지하며 이 후보는 실행 권한을 부여하지 않는다. 이후 D-716의 단일 rule/model 소비·운영 수용·결과 확인을 연결한다.
 
 첫 보강 `338fa3aa68`은 실제 worker·SQLite·관측 시점·종료 대기와 구조 회귀 104개, 판정·tool catalog·기존 패키지 설치·문서 계약 회귀 258개를 적격 원격 AI PC에서 terminal exit 0/NEW 0으로 확인했다. lint는 0 errors다. 이 시점에는 브랜치 구현이며 로컬 main 병합·후보 모듈 자체의 wheel/sdist 설치·실제 모델·현장 결과는 아직 확인하지 않았다.
