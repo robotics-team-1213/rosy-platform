@@ -1022,8 +1022,8 @@ Status: Accepted (source contract; no operational activation).
 
 전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
 
-## D-734 ? ?? ?? ??? ?? ??? ???? ?? ?? ???
+## D-734 — 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자
 
 **Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
 
-??? [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
+전문은 [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
