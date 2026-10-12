@@ -1,0 +1,301 @@
+﻿#!/usr/bin/env python3
+"""Install a separately reviewed D-728 snapshot; root only, no inference or GLM calls."""
+import argparse
+import base64
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import stat
+import subprocess
+import tempfile
+import time
+
+REVIEWED = Path('/root/rosy-conversation-reviewed')
+VERSIONS = Path('/opt/rosy-deliberation/conversation')
+CONFIG = Path('/etc/rosy-deliberation/conversation.json')
+LIBEXEC = Path('/usr/local/libexec/rosy-deliberation')
+INGRESS = LIBEXEC/'model-ingress'
+STATUS = LIBEXEC/'status-broker'
+BROKER = LIBEXEC/'conversation-broker'
+KEYS = Path('/etc/ssh/rosy-status-authorized-keys')
+SUDO = Path('/etc/sudoers.d/rosy-status-broker')
+SSHD = Path('/etc/ssh/sshd_config.d/65-rosy-status-broker.conf')
+OLD_SUDO = b'rosy-model-ingress ALL=(rosy-deliberation) NOPASSWD: /usr/local/libexec/rosy-deliberation/status-broker ""\n'
+NEW_SUDO = OLD_SUDO + b'rosy-model-ingress ALL=(rosy-deliberation) NOPASSWD: /usr/local/libexec/rosy-deliberation/conversation-broker ""\n'
+OLD_FORCE = 'sudo -n -u rosy-deliberation /usr/local/libexec/rosy-deliberation/status-broker'
+NEW_FORCE = str(INGRESS)
+SSHD_BASE = ('Match User rosy-model-ingress\n    AuthorizedKeysFile /etc/ssh/rosy-status-authorized-keys\n'
+    '    AuthenticationMethods publickey\n    PasswordAuthentication no\n    KbdInteractiveAuthentication no\n'
+    '    DisableForwarding yes\n    PermitTTY no\n    ForceCommand {}\nMatch all\n')
+
+
+def require_admin():
+    if os.geteuid() != 0:
+        raise ValueError('ADMIN_INSTALL_REQUIRED')
+
+
+def trusted_directory(path):
+    for parent in (path, *path.parents):
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError('PROTECTED_DIRECTORY_REQUIRED')
+
+
+def protected(path):
+    trusted_directory(path.parent)
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 2_000_000:
+        raise ValueError('PROTECTED_FILE_REQUIRED')
+    return path.read_bytes()
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def pinned(path, digest):
+    raw = protected(path)
+    if not re.fullmatch('[0-9a-f]{64}', digest) or sha(raw) != digest:
+        raise ValueError('REVIEWED_INPUT_SHA_MISMATCH')
+    return raw
+
+
+def validate_receipt(receipt, proof, proof_sha):
+    if (receipt.get('schema') != 'rosy.conversation-evaluation-receipt/1'
+            or receipt.get('verdict') != 'PASS' or receipt.get('evaluation_owner') != 'model_pc'
+            or receipt.get('candidate_diagnostics_used') is not False
+            or receipt.get('device_commands_performed') is not False
+            or receipt.get('protected_admission_performed') is not False
+            or receipt.get('proof_sha256') != proof_sha
+            or receipt.get('profile_revision') != proof['profile']['revision']
+            or any(receipt.get(k) != proof[k] for k in
+                   ('source_commit', 'source_manifest_sha256', 'suite_sha256', 'evaluated_at'))):
+        raise ValueError('INDEPENDENT_RECEIPT_MISMATCH')
+
+
+def inputs(bundle, pins):
+    if not bundle.is_absolute() or not bundle.is_relative_to(REVIEWED):
+        raise ValueError('ROOT_REVIEWED_BUNDLE_REQUIRED')
+    trusted_directory(bundle)
+    manifest = json.loads(pinned(bundle/'source-manifest.json', pins['manifest']))
+    proof_raw = pinned(bundle/'semantic-evaluation-proof.json', pins['proof'])
+    proof = json.loads(proof_raw)
+    receipt_raw = pinned(bundle/'semantic-evaluation-receipt.json', pins['receipt'])
+    receipt = json.loads(receipt_raw)
+    key_raw = pinned(bundle/'ingress.pub', pins['public_key'])
+    key = key_raw.decode().strip()
+    if not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/]{40,100}={0,2}(?: [A-Za-z0-9_.-]+)?', key):
+        raise ValueError('ONE_ED25519_KEY_REQUIRED')
+    wire = base64.b64decode(key.split()[1], validate=True)
+    if len(wire) != 51 or wire[:19] != b'\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20':
+        raise ValueError('INVALID_ED25519_KEY')
+    if (set(manifest) != {'source_commit', 'files'}
+            or not re.fullmatch('[0-9a-f]{40}', manifest['source_commit'])
+            or type(manifest['files']) is not dict or not 1 <= len(manifest['files']) <= 998):
+        raise ValueError('SOURCE_MANIFEST_REQUIRED')
+    files = manifest['files']
+    contents = {}
+    for name, digest in files.items():
+        path = PurePosixPath(name)
+        if (path.is_absolute() or '..' in path.parts or path.as_posix() != name
+                or not re.fullmatch('[A-Za-z0-9_./-]+', name)):
+            raise ValueError('SOURCE_PATH_REFUSED')
+        contents[name] = pinned(bundle/'source'/name, digest)
+    required = {'deploy/site/deliberation_install.py', 'deploy/site/requirements-fleet.txt',
+        'deploy/ai_pc/conversation_acceptance.py', 'deploy/ai_pc/deliberation_conversation_broker.py',
+        'deploy/ai_pc/deliberation_conversation.py', 'operations/decision/src/rosy/decision/conversation/codec.py'}
+    if not required <= files.keys() or sum(map(len, contents.values())) > 64*1024*1024:
+        raise ValueError('SOURCE_CLOSURE_REQUIRED')
+    manifest_sha = sha(json.dumps(files, sort_keys=True, separators=(',', ':')).encode())
+    if (proof['source_commit'] != manifest['source_commit'] or proof['source_manifest_sha256'] != manifest_sha
+            or proof['profile']['revision'] != 'd728-semantic-v2'):
+        raise ValueError('EVALUATED_SOURCE_MISMATCH')
+    validate_receipt(receipt, proof, pins['proof'])
+    return manifest, proof, contents, proof_raw, receipt_raw, key
+
+
+def dispatcher():
+    return ( '#!/bin/sh\n# ROSY D-728 managed ingress\nset -eu\n[ "$#" = 0 ] || exit 64\n'
+        'case "${SSH_ORIGINAL_COMMAND-}" in\n'
+        f'  rosy-status-v1) exec /usr/bin/sudo -n -u rosy-deliberation {STATUS} ;;\n'
+        f'  rosy-conversation-v1) exec /usr/bin/sudo -n -u rosy-deliberation {BROKER} ;;\n'
+        '  *) exit 64 ;;\nesac\n').encode()
+
+
+def replace_managed(path, data, mode, gid, allowed):
+    trusted_directory(path.parent)
+    if path.exists() or path.is_symlink():
+        old = protected(path)
+        if old == data:
+            info = path.stat()
+            if info.st_mode & 0o777 != mode or info.st_gid != gid:
+                raise ValueError('MANAGED_MODE_CONFLICT')
+            return
+        if old not in allowed:
+            raise ValueError('FOREIGN_INSTALL_FILE_REFUSED')
+        replace_managed(path.with_name(path.name+'.before-'+sha(old)), old, 0o600, 0, ())
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.rosy-conversation-', delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.chmod(temporary, mode)
+            os.chown(temporary, 0, gid)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+    if protected(path) != data:
+        raise ValueError('INSTALL_READBACK_FAILED')
+
+
+def run(*args, **kwargs):
+    return subprocess.run(args, check=True, timeout=120, **kwargs)
+
+
+def account_registration(helper, cfgdir):
+    import grp
+    import pwd
+    import spwd
+    registration = cfgdir/'ingress.json'
+    try:
+        ingress = pwd.getpwnam('rosy-model-ingress')
+    except KeyError:
+        if registration.exists():
+            raise ValueError('ORPHAN_INGRESS_REGISTRATION')
+        run('/usr/sbin/useradd', '--system', '--user-group', '--no-create-home',
+            '--home-dir', '/var/empty', '--shell', '/bin/sh', 'rosy-model-ingress')
+        ingress = pwd.getpwnam('rosy-model-ingress')
+        helper.install_file(registration, json.dumps({'uid':ingress.pw_uid, 'gid':ingress.pw_gid}).encode(), 0o600)
+    group = grp.getgrgid(ingress.pw_gid)
+    if (json.loads(protected(registration)) != {'uid':ingress.pw_uid, 'gid':ingress.pw_gid}
+            or registration.stat().st_mode & 0o777 != 0o600
+            or not 0 < ingress.pw_uid < 1000 or ingress.pw_dir != '/var/empty' or ingress.pw_shell != '/bin/sh'
+            or group.gr_name != ingress.pw_name or group.gr_mem
+            or any(p.pw_gid == ingress.pw_gid and p.pw_name != ingress.pw_name for p in pwd.getpwall())
+            or set(os.getgrouplist(ingress.pw_name, ingress.pw_gid)) != {ingress.pw_gid}
+            or not spwd.getspnam(ingress.pw_name).sp_pwdp.startswith(('!', '*'))):
+        raise ValueError('DEDICATED_INGRESS_ACCOUNT_REQUIRED')
+
+
+def python_code(target, code):
+    roots = [str(target), str(target/'operations/decision/src'), str(target/'contracts/foundation')]
+    return 'import sys;sys.path[:0]='+repr(roots)+';'+code
+
+
+def snapshot(target, contents, helper):
+    trusted_directory(target.parent.parent)
+    target.parent.mkdir(mode=0o755, exist_ok=True)
+    trusted_directory(target.parent)
+    target.mkdir(mode=0o755, exist_ok=True)
+    trusted_directory(target)
+    for name, data in contents.items():
+        path = target/name
+        parent = target
+        for part in Path(name).parts[:-1]:
+            parent = parent/part
+            parent.mkdir(mode=0o755, exist_ok=True)
+            trusted_directory(parent)
+        helper.install_file(path, data, 0o644)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('bundle', type=Path)
+    for name in ('manifest', 'proof', 'receipt', 'public-key'):
+        parser.add_argument('--'+name+'-sha256', required=True)
+    parser.add_argument('--check', action='store_true')
+    args = parser.parse_args(argv)
+    require_admin()
+    os.umask(0o022)
+    pins = {name:getattr(args, name+'_sha256') for name in ('manifest','proof','receipt','public_key')}
+    manifest, proof, contents, proof_raw, receipt_raw, key = inputs(args.bundle, pins)
+    # The helper is executed only after the independent source inventory has been pinned.
+    spec = importlib.util.spec_from_file_location('reviewed_install', args.bundle/'source/deploy/site/deliberation_install.py')
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    account = helper.validated_account()
+    for path in (CONFIG.parent, LIBEXEC, KEYS.parent, SUDO.parent, SSHD.parent, VERSIONS.parent):
+        trusted_directory(path)
+    target = VERSIONS/manifest['source_commit']
+    cfg = {'source_commit':manifest['source_commit'], 'profile':proof['profile'], 'policy':proof['policy'],
+           'valid_until':proof['evaluated_at']+7*86400, 'semantic_evidence_sha256':pins['proof'],
+           'files':{**manifest['files'], 'semantic-evaluation-proof.json':pins['proof']}}
+    if not time.time() < cfg['valid_until']:
+        raise ValueError('EVALUATION_EXPIRED')
+    if args.check:
+        print(json.dumps({'state':'INPUT_HASHES_CHECKED_ONLY', 'source_commit':manifest['source_commit']}))
+        return 0
+    # Retain exact evidence and credentials; nothing in this installer invokes the paid provider.
+    preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS,
+        Path('/var/lib/rosy-deliberation/glm-coding-plan.json'),
+        Path('/var/lib/rosy-deliberation/smoke/glm-first-review.spent')]
+    before = {p:p.read_bytes() if p.exists() else None for p in preserved}
+    snapshot(target, {**contents, 'semantic-evaluation-proof.json':proof_raw,
+                     'semantic-evaluation-receipt.json':receipt_raw}, helper)
+    venv = target/'venv'
+    marker = target/'dependencies-ready.json'
+    if not marker.exists():
+        if venv.exists():
+            raise ValueError('INCOMPLETE_VENV_REQUIRES_ADMIN_INSPECTION')
+        run('/usr/bin/python3', '-I', '-m', 'venv', str(venv))
+        run(str(venv/'bin/python'), '-I', '-m', 'pip', '--isolated', 'install', '--disable-pip-version-check',
+            '-r', str(target/'deploy/site/requirements-fleet.txt'))
+        helper.install_file(marker, json.dumps({'requirements_sha256':manifest['files']['deploy/site/requirements-fleet.txt']}).encode(), 0o644)
+    else:
+        if json.loads(protected(marker)) != {'requirements_sha256':manifest['files']['deploy/site/requirements-fleet.txt']}:
+            raise ValueError('DEPENDENCY_RECEIPT_CHANGED')
+    for path in venv.rglob('*'):
+        if path.is_symlink():
+            if not path.resolve().is_relative_to(venv) and path.resolve() != Path('/usr/bin/python3').resolve():
+                raise ValueError('VENV_LINK_REFUSED')
+        elif path.stat().st_uid != 0 or path.stat().st_mode & 0o022:
+            raise ValueError('VENV_PROTECTION_REQUIRED')
+    env = {'PATH':'/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE':'1',
+           'XDG_RUNTIME_DIR':f'/run/user/{account.pw_uid}',
+           'DBUS_SESSION_BUS_ADDRESS':f'unix:path=/run/user/{account.pw_uid}/bus'}
+    validate = ('import json;from pathlib import Path;from rosy.decision.conversation.codec import Profile,source_policy;'
+        'from deploy.ai_pc.conversation_acceptance import source_files,validate;'
+        'cfg=json.loads(sys.argv[1]);p=Profile.model_validate(cfg["profile"]);'
+        'assert cfg["policy"]==source_policy(cfg["source_commit"],p);'
+        'assert set(source_files(Path.cwd()))<=set(cfg["files"]);'
+        'validate(json.load(open("semantic-evaluation-proof.json")),cfg,p);'
+        'from deploy.ai_pc.deliberation_ollama import loaded,exchange;loaded(exchange("/api/ps",None,5));'
+        'print("SNAPSHOT_EVALUATION_AND_LOADED_MODEL_VALID")')
+    run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
+        python_code(target, validate), json.dumps(cfg), cwd=target, env=env)
+    account_registration(helper, CONFIG.parent)
+    wrapper = ('#!/bin/sh\n# ROSY D-728 managed conversation\nset -eu\n[ "$#" = 0 ] || exit 64\n'
+        f'cd {target}\nexec {venv}/bin/python -I -B -c '+
+        "'"+python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import main;sys.exit(main())')
+        .replace("'", "'\"'\"'")+"'\n").encode()
+    old_key = (f'restrict,command="{OLD_FORCE}" '+key+'\n').encode()
+    new_key = (f'restrict,command="{NEW_FORCE}" '+key+'\n').encode()
+    plans = [(CONFIG,json.dumps(cfg,sort_keys=True).encode(),0o640,account.pw_gid,()),
+             (BROKER,wrapper,0o750,account.pw_gid,()), (INGRESS,dispatcher(),0o755,0,()),
+             (KEYS,new_key,0o644,0,(old_key,)), (SUDO,NEW_SUDO,0o440,0,(OLD_SUDO,)),
+             (SSHD,SSHD_BASE.format(NEW_FORCE).encode(),0o644,0,(SSHD_BASE.format(OLD_FORCE).encode(),))]
+    # Reject every foreign target before changing the first active admission/SSH file.
+    for path,data,mode,gid,allowed in plans:
+        if (path.exists() or path.is_symlink()) and protected(path) not in (data,*allowed):
+            raise ValueError('FOREIGN_INSTALL_FILE_REFUSED')
+    for path,data,mode,gid,allowed in plans:
+        replace_managed(path,data,mode,gid,allowed)
+    run('/usr/sbin/visudo', '-cf', str(SUDO))
+    run('/usr/sbin/sshd', '-t')
+    run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
+        python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import configuration;configuration();'
+                    'print("PROTECTED_CONVERSATION_CONFIGURATION_VALID")'), cwd=target, env=env)
+    if any((p.read_bytes() if p.exists() else None) != data for p,data in before.items()):
+        raise ValueError('PRESERVED_SECURITY_STATE_CHANGED')
+    run('/usr/bin/systemctl', 'reload', 'ssh.service')
+    print(json.dumps({'state':'INSTALLED_TRANSPORT_ONLY', 'source_commit':manifest['source_commit'],
+                      'valid_until':cfg['valid_until'], 'inference_performed':False}))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
