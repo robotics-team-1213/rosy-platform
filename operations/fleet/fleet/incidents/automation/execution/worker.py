@@ -23,7 +23,8 @@ from rosy.decision.deliberation.calibration_selection import select_calibrated
 class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
-                 enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None):
+                 enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None,
+                 new_case_admission=None):
         profiles = incident_profiles(profiles)
         if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
@@ -37,6 +38,9 @@ class IncidentCaseWorker:
         self.current_profiles, self.human_owned, self.budget = current_profiles, human_owned, budget
         self.final_handoff, self.clock, self.enabled, self.baseline = final_handoff, clock, enabled, baseline
         self.calibration_artifacts, self.approved_artifacts = calibration_artifacts, approved_artifacts
+        if new_case_admission is not None and not callable(new_case_admission):
+            raise ValueError('EXPLICIT_NEW_CASE_ADMISSION_REQUIRED')
+        self.new_case_admission = new_case_admission
         self.profile_sha256 = hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest()
         self._snapshot, self._task, self._waiting = None, None, {}
         self._worker_id, self._closed = uuid.uuid4().hex, False
@@ -82,6 +86,7 @@ class IncidentCaseWorker:
             scope = self._scope(problem)
             existing = connection.execute('SELECT budget_json FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?',
                                           (scope.subject_id, scope.case_id)).fetchone()
+            if existing is None and not self._new_case_allowed(scope): return False
             budget = CaseBudget(**json.loads(existing[0])) if existing else self.budget(scope)
             self._check_budget(budget)
             case = self.store.begin_case(scope, budget, connection=connection,
@@ -95,6 +100,12 @@ class IncidentCaseWorker:
 
     def _owns_scope(self, scope):
         return scope.owner_id == 'core' and scope.profile_sha256 == self.profile_sha256
+
+    def _new_case_allowed(self, scope):
+        # shortcut: this local fence needs transactional assignment before profile rollover.
+        if self.new_case_admission is None: return True
+        try: return self.new_case_admission(scope) is True
+        except Exception: return False
 
     def _check_budget(self, budget):
         if (type(budget) is not CaseBudget or dict(budget.role_limits) != {p.role: p.max_calls for p in self.profiles}
@@ -145,6 +156,7 @@ class IncidentCaseWorker:
                     if scope in scopes: continue
                     try: case = await self._db('case', scope)
                     except ValueError:
+                        if not self._new_case_allowed(scope): continue
                         selected = self.budget(scope)
                         self._check_budget(selected)
                         case = await self._db('begin_case', scope, selected,
