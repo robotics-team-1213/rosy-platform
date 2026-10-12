@@ -267,3 +267,13 @@
 - 제품 재시험: b98eb3fd1 원격 Isaac 236 PASS/1 SKIP/NEW0. 실제 SDK의 제품 helper·reset 뒤 읽기 전용 검증을 사용한 같은 자세 기본 운동은 exit0, 3120개 샘플과 모든 단계/cleanup 통과였다. 샘플은 진단 비교와 byte hash가 동일했다. 고정 정책 카메라 평가는 별도 진행하며 새 학습 증거로 세지 않는다.
 
 - 카메라 후속: 같은 커밋의 네 시작 방향 고정 정책 평가 8개 episode와 실제 영상 8개가 끝났다. 초기/각 episode/최종/cleanup 정지 11개는 모두 통과했지만 완주는 0이며 camera admission 실패로 SDK exit1이다. 정상 방향 baseline 0.110668m, eval 0.100579m 후 차선 관측 거절이며 정지 안정성 개선을 차선 추종 해결로 표현하지 않는다.
+
+
+## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
+
+- 원인: shared drivable_creep는 현재 관측·기억 목표를 함께 사용하지만 native Isaac은 관측 출처를 구분할 수 없어 모두 거절했다. 현재 영상의 목표와 누적 경계 검사를 단일 프레임 재추론만으로 대체하면 안 된다.
+- 변경: 실제 선택한 현재 목표와 관측 key를 별도 metadata로 제공한다. 유효 odom·유한 전방 목표·누적 경계 arc 검사를 통과할 때만 제공하며 native는 현재 stamp와 일치하고 전략 전환·기억 출구가 아닐 때만 받는다. shared 조향·예산·realign·ExpectedPath와 CORE 최종 명령 권한은 유지한다.
+- 증거: 원격 RED 2개로 출처 누락과 승인 실패를 재현한 뒤 관련 123개 통과/NEW 0. 실제 mask→shared steer→native 경로 및 전략 전환 거절을 포함한 Isaac·drivable·ExpectedPath 확장 회귀도 exit0/NEW0이다. 제품 소스 독립 검토는 현재 관측 출처와 native 승인 범위에 한정한다.
+- gate 변화: SOURCE 및 원격 회귀 증거. 실제 곡선 주행은 별도 재시험 중이며 완주·교통 규칙·Fleet·ROS-SIM·실물 수용을 승인하지 않는다. nominal arc 검사는 RL gain 적용 후 모든 경계 비횡단을 보장하지 않는다.
+
+- 실제 R39 재시험: 고정 정책으로 네 시작 방향 8회 실행, 완주 0회·정지 11회 통과·SDK exit1. 정상 방향 baseline/eval은 모두 약 0.110668m에서 camera_lane_lost였다. observed_creep 승인 경로는 이 정상 방향 실행에서 사용되지 않았다. 따라서 출처 연결 수정만으로 현재 곡선 실패가 해결됐다고 주장하지 않는다. 연속 way/누적 경계/실제 선택 목표를 추가 기록해 원인을 분리한다.
