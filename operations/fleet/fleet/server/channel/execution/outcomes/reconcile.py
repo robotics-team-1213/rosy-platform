@@ -21,6 +21,8 @@ async def observe(client, receipt, robot, events=None):
         operation = exact_operation(value['operation'], original) if value.get('lookup') == 'FOUND' else None
     except Exception:
         value, operation = {}, None
+    if original['phase'] == 'TERMINAL':
+        operation = original
     if operation is None and events is not None:
         operation = terminal_event(events.native_events(robot, original['boot_id'], original['run_id']), original)
     return started, value, operation

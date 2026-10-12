@@ -110,7 +110,7 @@ def test_site_stop_preserves_each_robot_native_receipt():
 def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_path, site, empty):
     text, plan = ('전체 비상정지해', {'do': 'estop'}) if site else ('40번 비상정지해', {'do': 'stop', 'robot': 'rosy_40'})
     f = fixture(tmp_path, text, plan, extra_robots=('rosy_41',) if site else ())
-    robots = f.execution_robots = f.worker.execution.console.robot_ids
+    robots = f.worker.execution.console.robot_ids
     boot, sent, values = str(uuid4()), [], {}
     for robot in robots:
         assert f.store.reserve_resources(owner_kind='direct_action', owner_id='motion:' + robot,

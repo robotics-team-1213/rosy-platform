@@ -13,6 +13,7 @@ async def stop_step(worker, rid, index, call, row, receipt):
     robots = receipt.get('robots', []) if call.verb == 'estop' else [receipt | {'robot_id': call.robot}]
     complete = bool(robots) and all(r.get('estop') is True and r.get('operations')
                                    and r.get('rpc_acknowledged', True) is True for r in robots)
+    complete = complete and {r['robot_id'] for r in robots} == {r for k, r in json.loads(row['resources_json'] or '[]') if k == 'robot'}
     entries = [{'robot_id': r['robot_id'], 'operation': op} for r in robots for op in r.get('operations', [])]
     prior = {(r['robot_id'], r['operation']['run_id']): r for r in receipt.get('stop_outcomes', [])}
     observations = await asyncio.gather(*(observe(worker.execution.console._client(r['robot_id']), r,
