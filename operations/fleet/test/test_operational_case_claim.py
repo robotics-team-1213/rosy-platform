@@ -229,3 +229,42 @@ def test_final_guard_cannot_replace_current_owner_evidence(tmp_path):
         return True
     with pytest.raises(ValueError): claim(state, scope, guard=guard)
     assert state.submission(scope.subject_id, scope.case_id) is None
+
+
+@pytest.mark.parametrize('change', ['deadline', 'hold'])
+def test_final_guard_cannot_expire_or_close_the_case(tmp_path, change):
+    now, store, _, scope, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    with store._transaction() as conn:
+        budget = json.loads(conn.execute('SELECT budget_json FROM fleet_incident_v2_cases').fetchone()[0])
+        budget['deadline'] = 110
+        conn.execute('UPDATE fleet_incident_v2_cases SET budget_json=?', (canonical(budget),))
+    def guard(conn):
+        if change == 'deadline': now[0] = 111
+        else: conn.execute("UPDATE fleet_incident_v2_cases SET state='HOLD'")
+        return True
+    with pytest.raises(ValueError): claim(state, scope, guard=guard)
+    assert state.submission(scope.subject_id, scope.case_id) is None
+
+
+def test_rule_terminal_receipt_preserves_unknown_and_never_releases_slot(tmp_path):
+    _, _, _, scope, state, _, _ = opened(tmp_path)
+    state.claim_rule(scope.subject_id, scope.case_id, generation='g1', decision='BACK_AND_RETRY', guard=lambda _: True)
+    with pytest.raises(ValueError):
+        state.finish_rule(scope.subject_id, scope.case_id, generation='foreign', state='ACK', reply={})
+    assert state.finish_rule(scope.subject_id, scope.case_id, generation='g1', state='UNKNOWN', reply={})['state'] == 'UNKNOWN'
+    assert state.finish_rule(scope.subject_id, scope.case_id, generation='g1', state='ACK', reply={'outcome': 'back'})['state'] == 'UNKNOWN'
+    with pytest.raises(ValueError):
+        state.claim_rule(scope.subject_id, scope.case_id, generation='g1', decision='RESUME', guard=lambda _: True)
+
+
+@pytest.mark.parametrize('kind', [APPROVE, REVOKE])
+def test_history_resealed_with_bad_signature_is_not_an_authenticated_epoch(tmp_path, kind):
+    _, store, _, _, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    if kind == REVOKE: state.apply('line-back', signed(proof, 1, REVOKE))
+    with store._transaction() as conn:
+        event = json.loads(conn.execute('SELECT body FROM fleet_operation_events ORDER BY epoch DESC LIMIT 1').fetchone()[0])
+        event['receipt']['signature'] = 'f' * 64
+        conn.execute('UPDATE fleet_operation_events SET body=? WHERE epoch=?', (canonical(seal(event)), event['epoch']))
+    with pytest.raises(ValueError): state.epoch()
