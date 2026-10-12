@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 D-713 source checkpoint는 기존 Fleet loop/outbox의 단일 pinned worker dispatcher와 실제 root 승인 포트 구성이다. 기존 사건의 모델·예산·UNKNOWN은 유지하고 현재 선택의 설치 worker만 새 사건을 생성하며 정상 상태는 호출하지 않는다. `799587b251`의 실제 원장→root→create_app→dispatcher·승인 폐기/제한 reviewer·설치/구조 원격 회귀는 terminal exit 0/NEW 0이다. shutdown의 실제 RED 결함을 수정하고 모든 worker 정리를 기다린 뒤 오류를 보고한다. 상세는 [프로파일 lifecycle 계획](2026-10-12-reasoning-profile-lifecycle.md)의 D-713을 따른다. 통합 병합은 D-692 stale gap lint 오류를 수정해 다시 진행하며, 다음 source 작업은 signed 운영 수용과 실제 설치 loader/readback·운영 coverage 연결이다. source의 모델 분배를 실제 모델 품질·현장 성공으로 대신하지 않는다.
+
 최신 D-712 checkpoint는 `d0541c3b27`의 영속 local current/previous 선택·revision CAS/복귀와 같은 DB의 원자적 사건 배정이다. 실제 receipt/poll·create_app, 동시 전환·재시작·기존 scope/예산 보존과 설치·크기 회귀는 적격 Model PC에서 terminal exit 0/NEW 0이다. 선택·복귀 책임은 기존 automation/routing에 두고 ledger 허용량을 올리지 않았다. 다음은 설치·승인된 프로파일과 pinned worker dispatcher 연결이다. 이 local 선택을 모델 품질 수용·운영 승격으로 해석하지 않는다.
 
 D-705는 `99e96cd190a0fae123a3dcb5ff52a1a0526e1121`로 로컬 main에 착지했다. main이 이동해 기존 도구의 merge→회귀를 다섯 번 수행했고 마지막 실제 AI PC 통합은 12,035 passed/1,265 skipped/NEW 0, terminal exit 0이다. 고정 로그는 세션 `logs/incident-calibration-land-ae594b.txt`, SHA256 `0caf1d81579e267ed62a1f129b2def4a01b5c1a466fee180bc7ddf80601aa5a3`다. push·CI·배포·실제 모델·현장 증거가 아니며 D-706 이후 작업은 아직 main에 착지하지 않았다. 아래 이전 시작점의 진행 중 표현은 당시 상태다.
