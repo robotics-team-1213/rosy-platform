@@ -707,6 +707,7 @@
 | D-717 | 진행 중 제한 후진의 중복 답 거절 | Accepted |
 | D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
 | D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
+| D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 | D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
@@ -999,3 +1000,8 @@ BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 �
 Status: Accepted (shared source contract; no operating admission).
 
 전문은 [D-727](../adr/D-727-signed-operational-recovery-receipt.md).
+## D-724 — 조건부 막힘 답의 지원 확인 후 최종 제출 검증
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
