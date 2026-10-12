@@ -3325,6 +3325,10 @@ Mission/Cell Job은 기존 owner/proposer/독립 approver 규약을 유지한다
 
 private `replies_enabled`는 strict bool이며 기본false다. true는 Bot 자격을 요구하고 기존 Fleet lifecycle 안에서만 접수 회신을 처리한다. 회신은 원래 채널·message에 묶이며 immutable 접수와 atomic intent, bounded retry, UNKNOWN 복구를 사용한다. 실제 작업 결과 회신과 위험 사건 대응은 각각 source·배포·실제 수용 증거를 확인한다. WS protocol_version 1.0은 유지한다.
 
+## Fleet private configuration: hourly KST Discord health (D-733, source only)
+
+`hourly_health_enabled` is a strict boolean and defaults to false. When enabled, Fleet posts one cached-facts health summary to the configured Discord channel at each KST hour boundary. A durable SQLite slot claim prevents duplicate sends across workers and restarts; startup skips missed slots, known 429/connect failures have a bounded retry window, and ambiguous delivery is not retried. The report contains per-robot cache freshness and observed safety/battery facts, Fleet collection time, active/HOLD/UNKNOWN Task counts, and the actual AI observer heartbeat. Missing or stale facts are unknown; a heartbeat does not establish model admission. It does not issue robot commands, invoke a model, force a Fleet gather, or attach a synthetic human message reference. Default-off source configuration and tests do not prove deployment or actual Discord delivery; first due-hour channel readback remains required.
+
 ## v1.210 Discord 기명 요청 접수 (D-671, source only)
 
 `POST /api/fleet/channel-requests/discord`는 전용 transport 인증만 받는다. `X-ROSY-Timestamp`는 epoch-second 정수 문자열, `X-ROSY-Signature`는 전용 secret으로 timestamp + ASCII `.` + raw UTF-8 body에 계산한 HMAC-SHA256 소문자 hex다. 서버 시각과 차이 60초 초과 또는 잘못된 서명은401다. 일반 bearer/cookie는 transport 인증을 대신하지 않는다. raw body 최대8192 bytes(초과413), unknown field/형식 오류422다.

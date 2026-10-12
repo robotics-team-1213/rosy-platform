@@ -8090,3 +8090,8 @@ osy-d395-s1d\`.
 - 변경: `docs/` 배치는 `docs/AGENTS.md`와 같아 옮기지 않았다. `docs/reference/AGENTS.md`가 현재 파일과 `legacy-tools/`를 가리키게 고쳤다. 시험 PC·로봇 주소는 gitignored `private/lab-hosts.json`으로 옮기고, 추적 예시는 `tools/remote/hosts.example.json`이다. 살아 있는 도구 기본값과 운영 안내에서 그 주소·현장 SSID를 뺐다. ADR·날짜 계획·검증 기록·로그의 그날 사실은 그대로 둔다.
 - 증거: 배치 시험이 `private/lab-hosts.json` 무시와 예시 추적, 살아 있는 트리의 주소 금지를 본다. 원격 pytest는 이 기록 시점에는 아직이다.
 - gate 변화: 없음. 공개 경계이며 장치·현장 수용은 아니다.
+
+## 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
+- 변경: 기본 비활성화 시간별 KST 알림, 저장소 클레임, 캐시 전용 Fleet/AI 관측 항목, 고정 채널 전송 및 설치 패키지 검증 추가.
+- 증거: 원격 pytest 및 known-failure 비교 예정; 배포와 첫 예정 시간 Discord 채널 수신 확인은 미확인.
+- gate 변화: 없음. D-733은 소스 계약만 수락; 실행 활성화, 로봇 명령, 모델 승인 없음.
