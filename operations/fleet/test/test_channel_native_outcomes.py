@@ -250,17 +250,23 @@ def test_follow_hold_and_teleop_expiry_are_not_completion(tmp_path,kind):
     assert len(sent)==1
 
 
-def test_pruned_exact_event_keeps_result_without_release_or_cid_inference(tmp_path):
+@pytest.mark.parametrize('event_type,source,result,reason', [
+    ('nav.completed', None, 'SUCCEEDED', None),
+    ('nav.canceled', 'goal_lease', 'EXPIRED', 'LEASE_EXPIRED'),
+    ('nav.canceled', 'stuck_detector', 'FAILED', 'STUCK'),
+    ('nav.canceled', 'safety:estop', 'CANCELED', 'SAFETY_STOP'),
+    ('nav.canceled', 'api:operator', 'CANCELED', 'CANCELED')])
+def test_pruned_exact_event_keeps_result_without_release_or_cid_inference(tmp_path,event_type,source,result,reason):
     from fleet.observe.events import CoreEventStore
     f,_,_,sent=_home_with_native_ack(tmp_path);rid=f.receipt['request_id']
     op=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])['operation']
     f.service.core_events=CoreEventStore(f.store.path)
     f.service.core_events.append_event({'robot_id':'rosy_40','event_id':'terminal','seq':1,
-        'type':'nav.completed','data':{k:op[k] for k in ('run_id','boot_id','correlation_id')}})
+        'type':event_type,'data':{k:op[k] for k in ('run_id','boot_id','correlation_id')} | {'source':source}})
     async def get(path):return {'lookup':'UNKNOWN','operation':None,'quiescence':None}
     f.client._get=get;asyncio.run(f.worker.step(rid))
     receipt=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])
-    assert receipt['outcome']['result']=='SUCCEEDED' and not receipt.get('safe_released')
+    assert receipt['outcome']['result']==result and receipt['outcome']['reason']==reason and not receipt.get('safe_released')
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40') and len(sent)==1
 
 

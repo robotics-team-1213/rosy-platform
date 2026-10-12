@@ -164,6 +164,18 @@ def test_rejection_cleanup_never_erases_bound_native_operation(tmp_path):
         assert service.store.resource_claims(resource_kind='robot', resource_id='rosy_01')
 
 
+def test_native_task_canceled_event_preserves_expiry_without_release(tmp_path):
+    service, accepted, run_id, boot_id = _accepted_native_task(tmp_path)
+    task = service.project_core_event({'robot_id': 'rosy_01', 'event_id': 'expired', 'seq': 1,
+        'type': 'nav.canceled', 'data': {'source': 'goal_lease', 'correlation_id': accepted['attempt_id'],
+                                       'run_id': str(run_id), 'boot_id': str(boot_id)}})
+    assert task['status'] == 'UNKNOWN'
+    assert task['receipt']['outcome']['result'] == 'EXPIRED'
+    assert task['receipt']['outcome']['reason'] == 'LEASE_EXPIRED'
+    assert not task['receipt'].get('safe_released')
+    assert service.store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+
+
 def test_stop_during_new_epoch_read_refuses_goal_before_send():
     from fleet.server.goal_lease import GoalLeases, NavigationStopped
     from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
