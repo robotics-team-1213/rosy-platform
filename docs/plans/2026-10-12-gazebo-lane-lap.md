@@ -362,3 +362,11 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   UV=1을 TDD RED로 확인했다. 원격 GREEN·독립 SOURCE 리뷰·새 전체 동결
   source/install 빌드·원본 첫 구간 재주행을 완료하기 전 실행 수용으로 세지 않는다.
   다음 주행의 회전 거절은 실제 후보 궤적과 기존 안전 계약으로 따로 조사한다.
+
+## 2026-10-13 · 새 빔 위상 Leg9와 안전 정책 실패 진단
+
+- c0bb0393c의 독립 SOURCE 승인과 정상 원격 610 PASS·7 SKIP·14 subtests·NEW 0을 확인했다. 전체 동결 소스의 17개 새 패키지와 source 7553·install 2726 파일 해시, 실제 640빔 halfphase, SDK 프로필·CORE 상한·native pose 계보를 새 정지 점검에서 확인했다.
+- 같은 원본 지도 Leg9는 0.286048511 m 진행 뒤 `control:policy_failed`로 E-stop이 걸렸다. 최초 zero는 sim 43.125초이며 직전 compiled limits는 회전 허용과 front 0.204754m를 표시했다. 이전 Leg8의 회전 공간 거절과 같은 원인이라고 단정하지 않는다. Fleet는 E-stop으로 lease를 잃고 종료했으며 OFF·정지·프로세스 종료·전체 해시 보존을 확인했다. 지도 도착은 false다.
+- 현재 SDK의 관측 누락·요청보다 미래인 관측·만료·평가 중 교체는 None이며 CORE는 이를 ValueError로 바꾼다. 실제 evaluator 예외도 같은 policy_failed로 처리되므로 기존 기록만으로 정확한 가지를 확정할 수 없다. probe 수신 시각은 SDK 내부 window 유효성의 증거가 아니다.
+- 36f9fee29의 정상 원격 RED는 진단 회귀 6 NEW를 확인했다. 4d20dbc0d는 SDK의 정확한 평가 window를 스레드별로 기록하고, CORE 첫 예외·요청을 보관해 기존 writer 이후 announce_pending에서 한 번 출력한다. 단일 명령 타이머의 직렬 실행을 전제로 하며, 로깅 실패는 이후 zero와 알림을 방해하지 않는다. 독립 SOURCE 승인과 정상 원격 관련 회귀 terminal 0·NEW 0을 확인했다.
+- TTL·clock·동작 한도·None 반환·E-stop·EMERGENCY 조건은 바꾸지 않았다. 새 전체 source/install 빌드와 정지 점검을 마친 뒤 새 실행에서 원인을 재현한다. Leg9 E-stop 해제·기존 실행 재출발·물리 주행은 수행하지 않는다. 전체 지도 완주와 독립 반복 수용은 여전히 미완료다.
