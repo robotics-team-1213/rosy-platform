@@ -1051,3 +1051,8 @@ Status: Accepted (source contract; no operational activation).
 **Status:** Proposed (2026-10-12, contract review before implementation)
 
 기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).
+## D-735 — 이동 후보의 교통 감속 곡률 보존
+
+Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
+
+ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
