@@ -219,6 +219,9 @@ assert ExportedIncidentRequest is ChannelIncidentClaimRequest
 assert Path(importlib.util.find_spec('fleet.server.channel_incidents').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.gateway').origin).is_relative_to(installed)
+from fleet.server.channel.health import BareDiscordPublisher, HourlyHealth
+health_spec = importlib.util.find_spec('fleet.server.channel.health')
+assert Path(health_spec.origin).resolve().is_relative_to(installed / 'fleet/server/channel/health')
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
@@ -382,7 +385,9 @@ def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
 import importlib.util
 import json
 import sys
+from pathlib import Path
 sys.path[:0] = json.loads(sys.argv[1])
+roots = [Path(path) for path in json.loads(sys.argv[1])]
 from fleet.stuck.board import LineStuckBoard
 from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal
@@ -393,6 +398,9 @@ import importlib
 for name in ('requests', 'workflow', 'missions', 'incidents', 'replies', 'gateway',
              'deliberation', 'model_worker', 'model_runtime'):
     assert importlib.import_module('fleet.server.channel_' + name) is importlib.import_module('fleet.server.channel.' + name)
+from fleet.server.channel.health import BareDiscordPublisher, HourlyHealth
+health_spec = importlib.util.find_spec('fleet.server.channel.health')
+assert Path(health_spec.origin).resolve().is_relative_to(roots[0] / 'fleet/server/channel/health')
 
 from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
