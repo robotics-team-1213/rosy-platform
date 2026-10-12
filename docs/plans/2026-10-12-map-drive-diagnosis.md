@@ -54,5 +54,24 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
 
 ## 후속 결과
 
-원격 재현과 Gazebo 종료 결과를 받은 뒤 이 절에 채택/거절 근거를 추가한다.
+- 최신 소스의 AI PC 단일 frame 재생에서 실패 66/77은 `drivable_closed`와
+  `exit_behind_line=true`를 재현했다. 89는 이력 없이 `drivable_creep`이므로
+  같은 실패를 재현했다고 기록하지 않는다. 세 mask의 SHA와 실제 imported source를 확인했다.
+- 짧은 lookahead 일부가 `_crosses`를 통과했으나 그 검사는 목표 이전 중심 원호에 대한
+  15mm 경계 교차 검사다. 몸체 폭 전체의 여유를 증명하지 않는다. 후보 일부는 최초
+  관측 x보다 앞에 있고, 관측 범위의 후보도 보수적인 body+paint 여유 검사를 충족하지
+  못했다. 따라서 짧은 목표를 바로 채택하는 fallback은 구현하지 않았다.
+- AI PC Gazebo r2는 기준 소스 7,494 파일 hash를 확인하고 17 ROS package를 새로 빌드했다.
+  두 CORE에서 각각 최종 명령 1,671/1,670개가 전부 zero, odom 정지,
+  line/keep_debug 각각 268개를 관측했다. 현재 drivable centre와 live expected path가
+  생성됐다. 두 `line/lane_guide`의 publisher 목록과 개수는 실제로 비어 있었다.
+  현재 keep 모드에서 `lane_graph_path` 설정만으로 안내가 생성되지 않는다.
+- r2 전체 runner는 Fleet의 `rosy.contracts.learning.incident_rule` import 실패로 exit 1이다.
+  CORE 센서·정지 관측 성공과 Fleet 연결 실패를 구분한다. 종료 후 자기 partition의
+  프로세스 부재, 세 포트의 연결 거절, 자기 lock 부재와 source hash 보존을 확인했다.
+- 거절 trace가 admission 실패 전의 원인을 잃는 진단 누락을 보강했다. `camera_target`에
+  reason·경계 거절·관측 중심 경로·near centre·벽 여유를 보존한다. 기존 zero 명령과
+  admission은 유지한다. 원격 RED 3 FAIL 후 전체 Isaac 214 PASS/1 SKIP/NEW 0,
+  독립 SOURCE APPROVE다. 최초 GREEN 전송의 SSH timeout은 시험 통과에 포함하지 않는다.
+
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.
