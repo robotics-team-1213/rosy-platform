@@ -23,7 +23,8 @@ from rosy.decision.deliberation.calibration_selection import select_calibrated
 class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
-                 enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None):
+                 enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None,
+                 new_case_admission=None, routed=False):
         profiles = incident_profiles(profiles)
         if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
@@ -37,6 +38,11 @@ class IncidentCaseWorker:
         self.current_profiles, self.human_owned, self.budget = current_profiles, human_owned, budget
         self.final_handoff, self.clock, self.enabled, self.baseline = final_handoff, clock, enabled, baseline
         self.calibration_artifacts, self.approved_artifacts = calibration_artifacts, approved_artifacts
+        if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
+        self.routed = routed
+        if new_case_admission is not None and not callable(new_case_admission):
+            raise ValueError('EXPLICIT_NEW_CASE_ADMISSION_REQUIRED')
+        self.new_case_admission = new_case_admission
         self.profile_sha256 = hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest()
         self._snapshot, self._task, self._waiting = None, None, {}
         self._worker_id, self._closed = uuid.uuid4().hex, False
@@ -82,16 +88,26 @@ class IncidentCaseWorker:
             scope = self._scope(problem)
             existing = connection.execute('SELECT budget_json FROM fleet_incident_v2_cases WHERE subject_id=? AND case_id=?',
                                           (scope.subject_id, scope.case_id)).fetchone()
+            if existing is None and not self._new_case_allowed(scope): return False
             budget = CaseBudget(**json.loads(existing[0])) if existing else self.budget(scope)
             self._check_budget(budget)
             case = self.store.begin_case(scope, budget, connection=connection,
-                                         initial_revision=problem.generation, worker_id=self._worker_id)
+                                         initial_revision=problem.generation, worker_id=self._worker_id, routed=self.routed)
             return case['state'] == 'ACTIVE' and self.clock() < case['deadline']
         except (ValueError, TypeError, KeyError):
             return False
 
     def _scope(self, problem):
         return CaseScope(problem.subject_id, problem.case_id, 'core', self.profile_sha256, POLICY.revision)
+
+    def _owns_scope(self, scope):
+        return scope.owner_id == 'core' and scope.profile_sha256 == self.profile_sha256
+
+    def _new_case_allowed(self, scope):
+        # shortcut: this local fence needs transactional assignment before profile rollover.
+        if self.new_case_admission is None: return True
+        try: return self.new_case_admission(scope) is True
+        except Exception: return False
 
     def _check_budget(self, budget):
         if (type(budget) is not CaseBudget or dict(budget.role_limits) != {p.role: p.max_calls for p in self.profiles}
@@ -123,13 +139,14 @@ class IncidentCaseWorker:
         while self._snapshot is not None and not self._closed:
             snapshot, self._snapshot = self._snapshot, None
             for scope in await self._db('pending_handoffs'):
+                if not self._owns_scope(scope): continue
                 current = self.board.intervention_assessment(scope.subject_id)
                 if (isinstance(current, Assessment) and current.request.case_id == scope.case_id
                         and current.request.owner == scope.owner_id
                         and current.applies_to(current.request, now=self.clock(), policy_revision=POLICY.revision)
                         and self.human_owned(scope.subject_id, scope.case_id) is False):
                     await self._finish(scope, (await self._db('case', scope))['reason'])
-            scopes = await self._db('active_scopes')
+            scopes = tuple(scope for scope in await self._db('active_scopes') if self._owns_scope(scope))
             for scope in scopes:
                 await self._process(scope, snapshot)
             for row in snapshot['robots']:
@@ -141,16 +158,18 @@ class IncidentCaseWorker:
                     if scope in scopes: continue
                     try: case = await self._db('case', scope)
                     except ValueError:
+                        if not self._new_case_allowed(scope): continue
                         selected = self.budget(scope)
                         self._check_budget(selected)
                         case = await self._db('begin_case', scope, selected,
-                                              initial_revision=problem.generation, worker_id=self._worker_id)
+                                              initial_revision=problem.generation, worker_id=self._worker_id, routed=self.routed)
                     if case['state'] != 'ACTIVE': continue
                     await self._process(scope, snapshot)
                 except (ValueError, TypeError, KeyError):
                     continue
 
     async def _finish(self, scope, reason):
+        if not self._owns_scope(scope): return
         case = await self._db('case', scope)
         if case['state'] == 'ACTIVE': case = await self._db('close_case', scope, state='HOLD', reason=reason)
         summary = await self._db('final_summary', scope)
@@ -177,6 +196,7 @@ class IncidentCaseWorker:
         except Exception: return True
 
     async def _process(self, scope, snapshot):
+        if not self._owns_scope(scope): return
         case = await self._db('case', scope)
         if scope.policy_revision != POLICY.revision or scope.owner_id != 'core':
             await self._finish(scope, 'POLICY_CHANGED'); return
@@ -214,7 +234,14 @@ class IncidentCaseWorker:
             primary = await self._call(scope, problem, 0, ())
             if primary is None: return
             checked, bound = primary
-            review = self._review_needed(problem, bound, checked)
+            remaining = (await self._db('case', scope))['deadline'] - self.clock()
+            try:
+                async with asyncio.timeout(max(0, remaining)):
+                    review = await asyncio.to_thread(self._review_needed, problem, bound, checked)
+            except TimeoutError:
+                await self._finish(scope, 'CASE_BUDGET_EXHAUSTED'); return
+            if self.human_owned(scope.subject_id, scope.case_id) is not False:
+                await self._db('close_case', scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED'); return
             if not self._fresh(problem): return
             if review:
                 if len(self.profiles) == 1: await self._finish(scope, 'REVIEW_PROVIDER_NOT_CONFIGURED'); return

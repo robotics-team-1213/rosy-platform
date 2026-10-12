@@ -225,7 +225,8 @@ with TestClient(app) as client:
     assert client.get('/console/assets/%2e%2e/package.xml').status_code == 404
 print('installed namespace, resources and HTTP guards verified')
 '''
-    modules = ['rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
+    modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
+               'rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',

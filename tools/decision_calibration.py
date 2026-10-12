@@ -97,7 +97,9 @@ def feedback_bundle(data):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('input', type=Path, help='frozen fit/evaluation/training/reviewed_profile JSON')
-    parser.add_argument('--compare', action='store_true', help='compare 2-4 bundles on identical held-out truth')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--compare', action='store_true', help='compare 2-4 bundles on identical held-out truth')
+    mode.add_argument('--candidate', action='store_true', help='bind a full profile to recomputed calibration inputs')
     parser.add_argument('--from-feedback', action='store_true', help='bind model exports to separately reviewed samples')
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
@@ -110,6 +112,14 @@ def main(argv=None):
         if len(raw) > LIMIT:
             raise ValueError('CALIBRATION_INPUT_EXCEEDED')
         data = json.loads(raw)
+        if args.candidate:
+            from rosy.decision.deliberation.evaluation.reasoning_candidate import build_candidate
+            if type(data) is not dict or set(data) != {'profile', 'calibration_input'}:
+                raise ValueError('INVALID_REASONING_CANDIDATE_INPUT')
+            inputs = feedback_bundle(data['calibration_input']) if args.from_feedback else data['calibration_input']
+            candidate = build_candidate(data['profile'], inputs)
+            print(json.dumps(candidate, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False))
+            return 0 if candidate['calibration_report']['state'] == 'PASS_OFFLINE_ONLY' else 1
         if args.from_feedback:
             data = [feedback_bundle(b) for b in data] if args.compare and type(data) is list else feedback_bundle(data)
         if args.compare:
