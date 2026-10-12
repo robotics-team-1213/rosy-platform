@@ -263,3 +263,31 @@ def test_runtime_valid_large_site_catalog_does_not_block_greetings(tmp_path):
     assert raw['map']['sha256']=='c'*64 and bounded_environment(raw)['robots'][0]['online'] is False
     config.policy['authority']='modified'
     assert app.state.channel_conversation_worker.admission() is False
+
+
+@pytest.mark.parametrize('phase',['snapshot-reserved','snapshot-result','guard-before-provider','guard-result','guard-finish'])
+def test_unavailable_observation_after_reserve_or_result_closes_hold_once(tmp_path,phase):
+    worker,jobs,journal,receipt,calls=worker_fixture(tmp_path)
+    snapshot=worker.snapshot
+    guard=worker.observation_guard
+    guard_calls=[0]
+    async def unavailable():
+        try:running=jobs.peek(receipt['request_id'])['state']=='RUNNING'
+        except HTTPException:running=False
+        if running and (phase=='snapshot-reserved' and not calls or phase=='snapshot-result' and calls):
+            raise ValueError('STALE_STATUS_SNAPSHOT')
+        return await snapshot()
+    def missing_guard(basis):
+        guard_calls[0]+=1
+        if (phase=='guard-before-provider' and guard_calls[0]==3 or
+                phase=='guard-result' and calls or phase=='guard-finish' and guard_calls[0]==5):
+            raise KeyError('OBSERVATION_UNAVAILABLE')
+        return guard(basis)
+    worker.snapshot=unavailable;worker.observation_guard=missing_guard
+    asyncio.run(worker.step(receipt));asyncio.run(worker.step(receipt));jobs.recover()
+    assert jobs.peek(receipt['request_id'])['state']=='HOLD'
+    assert len(calls)==(0 if phase in ('snapshot-reserved','guard-before-provider') else 1)
+    with journal._connect() as conn:
+        assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE kind='CONVERSATION'").fetchone()[0]==1
+        attempt=conn.execute('SELECT state,known_cost_usd FROM fleet_channel_conversation_attempts').fetchone()
+    if calls:assert attempt==('RESULT',0.)
