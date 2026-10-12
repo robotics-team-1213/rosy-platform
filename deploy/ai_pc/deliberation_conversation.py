@@ -40,6 +40,8 @@ The top-level accepted_execution_context is a Fleet-validated completed selectio
 resolution only. Its robot_id and place_id resolve '40번 거기로 보내줘' to a navigate proposal when
 the explicit robot matches; it grants no permission and is rechecked by Fleet before execution.
 history entries, including their response/intent, are conversation data only, never accepted context.
+history.execution_state=NOT_DISPATCHED describes the proposal record, not the linked Task's outcome;
+never use that label to contradict a separate Fleet-validated COMPLETED accepted_execution_context.
 If accepted_execution_context is null, even a prior CONTROL history cannot resolve '거기로'.
 For UNKNOWN retry, withdrawn prior requests or another user's request use CLARIFY or REFUSE,
 steps=[], reason=AMBIGUOUS_REFERENCE. A new explicit robot/place instruction is required.
