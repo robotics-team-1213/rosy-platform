@@ -2725,3 +2725,8 @@
 - 변경: 인증서 이름·DNS·공개 CA 등록·Schannel 폐기 정보 오류를 분리하고 계정 재조회 절차를 안내했다.
 - 증거: account-tls-2026-10-12/result.md. 원격 계정/프로필 Chromium 포함 104 passed, exit 0, NEW 0. 실제 설치 이미지의 네트워크 없는 임시 DB 계정 수명주기 PASS; 실제 HTTPS 8개 응답 200, 이름 불일치/신뢰 CA 없는 연결 거부.
 - gate 변화: 실제 개인 계정 브라우저와 운영 PC 자동 DNS/완전한 폐기 상태는 미확인. 실물·현장 수용은 요청에 따라 제외했다. 운영 계정 비밀번호·개인 프로필은 변경하지 않았다.
+
+## 2026-10-12 · 5941920df7 · D-720 보호 상태 브로커 설치 준비
+- 변경: 별도 root-reviewed SHA source snapshot·전용 forced-command ingress/key/host pin·immutable backups·정확한 root-owned 파일 경계를 준비했다. GLM credential/spent marker는 복사·초기화하지 않는다.
+- 증거: pipeline_review scoped source 승인. source/model/structured Qwen conformance와 GLM 별도 status/billing/offline sandbox 증거가 실제 설치 gate다.
+- gate 변화: 검토 가능한 설치 소스만 승인. 관리자 실행·서명 Fleet 배포·런타임 왕복은 아직 미확인이다.

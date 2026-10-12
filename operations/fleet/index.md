@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
+- 2026-10-12 · 36b51d124 · D-728 channel owner extraction
+- 2026-10-12 · 92ba11def · historical 숙고 증거 identity 오류 순서 보완
+- 2026-10-12 · 5941920df7 · D-720 기명 상태 숙고 연결 소스
 - 2026-10-12 · 3ff2ffc1e5 · 없는 차로 문구와 Fleet 크기 재판정
-- 2026-10-12 · f0c5e5c130 · 경로 사실 묶음과 굽이 점 단축
-- 2026-10-12 · e5f078ee02 · 지도 검토 저장 완료 관측 보완
-- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
-- 2026-10-12 · 1e29edaed · 최신 통합과 CI 도우미 회귀

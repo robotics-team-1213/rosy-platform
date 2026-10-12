@@ -27,6 +27,10 @@ trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_co
 
 `/route`의 다음 점은 보통 0.20 m다. 그 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄이며, 0.10 m 장치 목표 공보다는 길다. 남은 거리가 0.12 m 이하면 끝을 유지한다. 링의 0.20 m 현은 차체 여유 안이라 줄이지 않는다. 이 단축은 점 목표만 해당하고 차로 운행의 선 추종이나 링 주행 수용을 바꾸지 않는다. `holds`는 `complete`, `step_m`, `chord_m`, `body_clear_m`, `body_inside`, `s_m`이다. envelope 1.0과 CORE API는 유지한다.
 
+### v1.219 Discord 읽기 전용 숙고 결과 (D-720)
+
+선택 private broker 설정과 기존 기명 Discord 접수·회신이 구성된 경우 `GET /api/fleet/channel-requests/{request_id}/deliberation`은 원문 소유 operator에게 `ChannelModelResult`를 반환한다. 설정 부재·작업 부재는 404, 원문 계정·채널 소유권 변경은 403이다. 필드는 request_id, state(PENDING/RUNNING/ANSWERED/HOLD/UNKNOWN/SUPERSEDED), profile_set_hash, input_hash, created_at, deadline, completed_at, result, action_admissible(false)다. result는 bound 모델 ID·판단·비용 증빙 또는 보류 사유이며 실행·목표 수용이 아니다. 원문을 CORE 사건으로 승격하지 않고 fleet_status/READ_ONLY_QUERY 및 channel 범위 읽기 tool만 허용한다. 영속 호출 예약·UNKNOWN 재호출 금지·현재 관측/계정/profile 재검증·결과와 Discord outbox 원자 기록을 지킨다. 최초 활성화 이전 요청은 재생하지 않는다. 보호된 숙고 모델·비용·host 증빙 없이는 HOLD이며 GLM 최초 1회 spent marker는 배포·rollback에도 유지한다.
+
 ### v1.218 CORE 조건부 막힘 답 (D-718)
 
 선택 상태 필드 `line_follow.stuck.conditional_back`은 이 CORE의 조건부 BACK 지원 여부다. 신형 CORE는 true, 이전 데이터의 누락은 false다. 조건을 사용하는 Fleet HttpRobotClient는 먼저 GET `/api/v1/line-follow`에서 명시적 true를 확인하며 없거나 false이면 POST하지 않는다. 지원 여부는 안전·운영 수용·현재 사건 조건 검증을 면제하지 않는다.
@@ -2881,6 +2885,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. envelope 1.0 유지. |
+
+| v1.219 | 2026-10-12 | Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. |
 | v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |

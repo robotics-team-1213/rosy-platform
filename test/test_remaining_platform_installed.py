@@ -94,6 +94,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
+
 assert not (installed / '_build').exists()
 from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
 from rosy.execution.site.workflow import project_progress
@@ -170,6 +171,13 @@ from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
 from fleet.incidents.automation.operating.candidates import RecoveryCandidates as OperatingCandidates
 assert RecoveryCandidates is OperatingCandidates
 from fleet.stuck.loop import StuckResolverLoop
+for name in ('requests', 'workflow', 'missions', 'incidents', 'replies', 'gateway',
+             'deliberation', 'model_worker', 'model_runtime'):
+    legacy = importlib.import_module('fleet.server.channel_' + name)
+    owner = importlib.import_module('fleet.server.channel.' + name)
+    assert legacy is owner
+    assert Path(owner.__file__).resolve().is_relative_to(installed / 'fleet/server/channel')
+
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
@@ -275,6 +283,13 @@ with TestClient(app) as client:
 print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
+               'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
+               'fleet.server.channel.conversation.worker', 'fleet.server.channel.conversation.runtime',
+               'fleet.server.channel.execution.instructions', 'fleet.server.channel.execution.journal',
+               'fleet.server.channel.execution.worker', 'fleet.server.channel.execution.runtime',
+               'fleet.server.channel.execution.receipts', 'fleet.server.intent_execution',
+               'fleet.swarm.dispatch_guard',
+               'fleet.server.channel.model_journal', 'fleet.server.channel.broker_transport',
                'rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
@@ -374,6 +389,11 @@ from rosy.execution.site.goal_evidence import verify_goal
 from rosy.execution.site.workflow import project_progress
 from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
 from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
+import importlib
+for name in ('requests', 'workflow', 'missions', 'incidents', 'replies', 'gateway',
+             'deliberation', 'model_worker', 'model_runtime'):
+    assert importlib.import_module('fleet.server.channel_' + name) is importlib.import_module('fleet.server.channel.' + name)
+
 from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence

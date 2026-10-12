@@ -3470,3 +3470,38 @@
 - 변경: 관제 문구에 TRIP_UNKNOWN_EDGE(지도에 없는 차로입니다)를 넣었고, 차로 id가 있으면 그 이름을 붙인다. Fleet 크기 판정을 56077로 다시 적었다. 경로 사실 묶음과 점 단축은 그대로다.
 - 증거: 착지 1회차 commit 1034c4bf0e. 가드 묶음 1 failed/3981 passed/225 skipped. fleet 줄 수가 55856+150을 넘었다. Fleet 시험 1 failed/4536 passed/246 skipped. TRIP_UNKNOWN_EDGE 문구가 없었다. known_failures NEW 1. 로그는 X:\DevTemp\land\fix-route-context\run-1-1.txt 와 run-1-2.txt.
 - gate 변화: 없다. Nav2, 링 랩, 출발 검사는 그대로다.
+
+## 2026-10-12 · 5941920df7 · D-720 기명 상태 숙고 연결 소스
+- 변경: 별도 읽기 전용 status job/worker/고정 SSH broker composition과 owner 결과 조회·기존 Discord outbox를 연결했다. source clock·권한/원문/profile·비용 증빙·취소/UNKNOWN 경계를 보강했다.
+- 증거: 원격 선택 회귀65/추가18 passed, exit0, NEW0(겹침으로 합산하지 않음). pipeline_review가5941920df7의 scoped source를 승인했다. 최종 통합·착지 receipt는 후속이다.
+- gate 변화: source/원격 논리 검증. 보호 계정 설치·신규 signed site 배포·자동 숙고/GLM/Discord 왕복·오프라인 CORE 물리 수용은 별도 미확인.
+
+## 2026-10-12 · 92ba11def · historical 숙고 증거 identity 오류 순서 보완
+
+- 변경: calibration feedback은 입력·profile·domain identity를 먼저 확인한 뒤 judgment를 검증한다. 새 status domain을 허용한 이후 강화된 BoundProfile 검사에서 먼저 거절되던 오류를 기존 FEEDBACK_SAMPLE_IDENTITY_CHANGED 경계로 닫는다. 실제 historic receipt 시험은 유효한 judgment를 만든 뒤 profile domain과 manifest를 재봉인하여 reader와 builder가 모두 거절하는지 확인한다.
+- 증거: AI PC 원격 선택 회귀 65 passed/exit 0, known_failures 0 NEW. 기존 door negative 입력을 유지하고 fleet_status negative 입력을 추가했다. 기존 세 domain binding과 status read-only/hash 회귀를 함께 통과했다. 이전 실패는 잘못된 증거 허용이 아니라 더 이른 binding 거절과 오류 순서/fixture 문제였다.
+- gate 변화: source와 선택 원격 회귀다. 착지·푸시·전체 CI·보호 계정 설치·자동 Discord 통신·CORE 물리 동작은 이 변경에서 확인하지 않았다.
+
+## 2026-10-12 · 36b51d124 · D-728 channel owner extraction
+
+- 변경: `refactor/channel-owner-extraction` moves nine existing server channel implementations into `fleet.server.channel`; legacy module paths alias the same objects, including private symbols and monkeypatches. Relative imports are the only implementation AST changes. No request, execution, billing, UNKNOWN or outbox policy changed.
+- Existing `find_packages` and Fleet source root discover the real subpackage; root broker installation still requires an approved source manifest containing the extracted imports. Wheel/sdist and copied source-image regressions now check canonical/legacy identity; source import tests check all nine aliases and the actual gateway HTTP client patch.
+- Simultaneous architecture measurement: parent 55,120, channel 1,379, combined 56,499; +55 compatibility/package lines against previous 56,444. Largest child file 249. Independent `pipeline_review` structure precheck PASS; preserve all historical verdicts, +150 allowances, zero/file/hard ceilings and previous split obligations.
+- 증거: Remote AI PC pytest exit 0 (201 cases), known-failure comparison 0 NEW/0 known, log `X:/DevTemp/projects/rosy-platform/2026-10-12--124534--fleet-ai-discord-check--60388b/logs/channel-extract/run-1.txt`; includes wheel/sdist and copied source-image closure.
+- gate 변화: Source-only extraction does not establish natural-language control, signed deployment or physical acceptance.
+
+## 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
+
+- 변경: Independent conversation profile/input/source policy and flat semantic steps map to existing strict intent grammar. Fleet owns separate durable conversation tables, same-actor/channel 120-second unaccepted proposal history, before-model attempts, UNKNOWN no replay and atomic natural reply intent. Source/profile/policy/semantic-proof scope remains immutable across restart. AI never calls human review or a device owner.
+- Optional CLI/runtime, both Compose overlays, fixed `rosy-conversation-v1` transport, protected broker and existing owner-only deliberation API consume the actual owners. Valid large site maps expose deterministic64-place subsets with full map revision/hash and completeness. Status/control/refusal/clarification facts use Fleet formatters; unsafe CHAT facts and command promises are rejected.
+- 증거: Remote model/journal/runtime closure71 passed; installed wheel/sdist/CLI/app129 passed; architecture38 passed. Every terminal log compared with known_failures:0 NEW. Early extraction syntax error was corrected; a test invocation using two nonexistent paths was corrected, not called passing. All pytest ran remotely.
+- gate 변화: Actual Qwen fixed-digest/context synthetic read-only smoke at source590604f05994a51e512cff31eef0f69beb3a8b8a:8 of11 category cases valid. Explanation/hypothetical unsafe CHAT and negated invalid intent remain rejected. Model semantic admission stays OFF; protected conversation installation, independent GLM codec/admission, Task2 grant/execution, deployment, live Discord and physical acceptance remain pending. No paid GLM, root install, robot command or Discord message was sent.
+
+## 2026-10-12 ? 8d4d752ee ? D-728 original natural instructions and execution source
+
+- ??: `feat/natural-execution` reuses the existing HTTP intent owner through `IntentExecution`; an independent anchored positive instruction validator binds immutable original robot/place aliases and values, with no model-only authority or forged human review. Greetings, quoted/negative/hypothetical/unknown commands remain non-executable. Same-actor selection requires a persisted accepted plan and correlated completed Task; proposal history is never a selection grant.
+- Actual `fleet.server.channel.execution` owns durable grants/step checkpoints in the Task DB, atomic navigation links, queued/final source/profile/semantic/role/map/expiry checks, and direct resource claims. Discovery and enrolled TLS final admission compose scoped motion checks with existing identity checks. Compensating cancel remains available; only formation followers are reserved, preserving the existing leader navigation owner. Partial/unknown outcomes and resources survive restart without command replay.
+- Native CORE cancellation, E-stop, docking, swarm and formation receipts are normalized as bounded RPC acknowledgement/owner state. They are not physical completion. The existing owner-only deliberation result exposes actual execution step/Task links. Edited/deleted Discord requests durably invalidate the original while keeping its immutable content; unknown channel deletions do not grow command tombstones.
+- ??: Remote source/HTTP/navigation/transport/gateway regression414 passed, terminal exit0 at source8d4d752ee7, known_failures0 NEW/0 known. Prior162 and280-case runs passed; the intermediate run had one NEW old intake test expecting no withdrawal table, corrected to assert the precise new tombstone contract rather than relabelled known. All pytest ran on remote PCs.
+- ??: Actual execution child579, residual channel1440, conversation300 and Fleet parent55222 measured together with the unchanged harness filters. Independent structural precheck registered-boundary guidance is execution487+150, prior channel1379/conversation280/Fleet55120+150; all file/hard ceilings and historical obligations remain. Root integration owns the reviewed registry update.
+- gate ??: SOURCE execution linkage is tested with conformant fakes and existing owner journals. Task3 still needs direct owner readback/reconciliation, rich progress and hourly KST health. Conversation admission remains OFF pending independent semantic conformance/protected installation. No real Discord message, paid GLM call, deployment or device command was sent by Task2.
