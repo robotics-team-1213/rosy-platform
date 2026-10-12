@@ -6,6 +6,14 @@
 
 ## D-706 구현 checkpoint
 
+### D-709 Fleet 판단 포트 연결 checkpoint
+
+기존 registry의 `approved_candidate(profile_json, domain)`가 현재 승인 상태·신뢰와 정확한 전체 profile/domain을 검증한다. root composition `tools/incident_reasoning.py`의 `registry_calibration_config`가 이 결과와 현재 승인 map을 기존 create_app→install_incident_runtime→IncidentCaseWorker로 공급한다. Fleet에서 learning을 import하지 않으며 기존 admission/provider/profile/current/budget/enabled와 이미 지정한 보정 포트의 소유권을 유지한다.
+
+독립 검토에서 동기 원장 조회의 event-loop 정지를 실제 RED 1 NEW로 재현했다. `880ef2ff33`에서 조회·재계산을 off-loop로 옮기고 기존 case deadline 잔여 시간만 기다리며 완료 후 사람 소유권과 freshness를 재검증했다. 적격 Model PC의 factory·worker·registry·구조·source-less wheel/sdist 회귀는 229 passed/terminal exit 0, `1247cd22df`의 만료/취소와 늦은 결과 차단 회귀는 54 passed/terminal exit 0, 각각 NEW 0이다. 동일 입력의 reviewer, 정상 0호출, 승인 폐기와 두 조회 사이 폐기, 읽기 중 사람 인수를 실제 원장/app factory로 확인했다. 로그는 세션의 `logs/reasoning-fleet-offloop/run-1.txt`, `logs/reasoning-fleet-stop/run-1.txt`다.
+
+독립 source 재검토에서 중요한 잔여 blocker는 없었다. 별도 보정 승인 전달·실제 설치 trust·운영 current/previous와 기존 사건 revision 보존·새 사건 적용·복귀, 실제 provider/품질/현장 수용은 미완료다. 원장/보정 판정이 물리 authority를 만들지 않으며 전체 목표는 ACTIVE다.
+
 ### D-707 영속 보정 승인 checkpoint
 
 `8c0ca46af0`에서 같은 registry 소유자의 immutable 후보 snapshot·별도 reasoning tables/chain과 signed 보정 승인·폐기를 구현했다. 기존 Registry의 드라이브/trust/FULL BEGIN IMMEDIATE를 재사용하고 Decision validator는 명시적 포트로만 주입한다. 후보와 보정 원본을 매 읽기 재검증하고 candidate/full-profile/domain/calibration digest/kind/expected-head/verdict를 HMAC receipt에 결속한다. head CAS·승인 revision 충돌·폐기 map 제거를 확인한다. 운영 current/previous·action admission은 추가하지 않았다.
