@@ -897,3 +897,9 @@
 - 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
 - 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
 - gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · status-inputs에 유효 조향 법칙을 싣는다
+
+- 변경: schema 2 status-inputs에 `robot_id`, `core_process_id`, `line_follow_steering_law`를 더한다. 법칙은 이 프로세스가 들고 있는 LineFollowConfig의 순항, 선속도 상한, 게인, 최소 신뢰다. line_follow가 없으면 법칙은 null이다. 토큰과 개인 설정 파일은 넣지 않는다.
+- 증거: 기존 키 집합 시험에 세 키를 더하고, Pinky 법칙이 설정 파일의 0.8 게인이나 인증 토큰이 아닌 유효 값을 내보내는지 보는 시험을 추가했다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음. 업데이터가 요구하는 기존 키는 그대로다. 추가 키는 거절하지 않는다.

@@ -68,8 +68,9 @@ def _geometry(pose, info):
 class ExpectedPath:
     """The observed path owns gap budgets; CORE still owns the final motion gates."""
 
-    def __init__(self, half):
+    def __init__(self, half, *, error_for_target=pursuit_error):
         self.half = float(half)
+        self._error_for_target = error_for_target
         self._path = None
         self._heading = None
         self._length = 0.
@@ -174,7 +175,7 @@ class ExpectedPath:
             self._clear()
             return self._view('dropped')
         confidence = CONF_NEAR if self._travel < LOOKAHEAD_M else CONF_SLOW
-        return self._view(state, error=pursuit_error(*target, confidence), confidence=confidence,
+        return self._view(state, error=self._error_for_target(*target, confidence), confidence=confidence,
                           target_m=target, path_m=tuple(_body(p, pose) for p in self._path), s_m=self._travel)
 
     def _jumped(self, pose, stamp):
