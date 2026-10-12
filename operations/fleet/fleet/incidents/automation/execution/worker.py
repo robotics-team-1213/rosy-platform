@@ -174,7 +174,7 @@ class IncidentCaseWorker:
             quality = select_calibrated(problem, bound, checked, self.calibration_artifacts(bound.profile),
                 approved_artifacts=self.approved_artifacts(), current_profile=bound.profile)
             return quality['eligible'] is not True
-        except (ValueError, TypeError, KeyError, OSError): return True
+        except Exception: return True
 
     async def _process(self, scope, snapshot):
         case = await self._db('case', scope)

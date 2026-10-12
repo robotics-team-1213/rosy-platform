@@ -182,6 +182,8 @@ assert calibration.wilson_lower is calibration_owner.wilson_lower
 from fleet.incidents.automation import contract, store
 from fleet.incidents.automation.ledger import contract as ledger_contract, store as ledger_store
 from fleet.incidents.automation import closure, worker
+from fleet.incidents.automation.execution import worker as execution_worker
+assert worker.IncidentCaseWorker is execution_worker.IncidentCaseWorker
 for name in ('dataclass', 'Decimal', 'ROUND_CEILING', 'ROUND_FLOOR', 'math', 're',
              'CHOICES', 'canonical', 'identifier', 'sha256', 'micros',
              'CaseScope', 'CaseBudget', 'summary_json'):
