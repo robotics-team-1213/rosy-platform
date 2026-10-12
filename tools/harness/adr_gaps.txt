@@ -48,6 +48,3 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
-D-706 reserved by another active session; candidate profile binding ADR not included in this branch
-D-707 reserved by another active session; candidate snapshot approval ADR not included in this branch
-D-708 reserved in refs/adr/D-708; ADR not included in this branch
