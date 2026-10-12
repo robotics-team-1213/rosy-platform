@@ -214,7 +214,14 @@ class IncidentCaseWorker:
             primary = await self._call(scope, problem, 0, ())
             if primary is None: return
             checked, bound = primary
-            review = self._review_needed(problem, bound, checked)
+            remaining = (await self._db('case', scope))['deadline'] - self.clock()
+            try:
+                async with asyncio.timeout(max(0, remaining)):
+                    review = await asyncio.to_thread(self._review_needed, problem, bound, checked)
+            except TimeoutError:
+                await self._finish(scope, 'CASE_BUDGET_EXHAUSTED'); return
+            if self.human_owned(scope.subject_id, scope.case_id) is not False:
+                await self._db('close_case', scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED'); return
             if not self._fresh(problem): return
             if review:
                 if len(self.profiles) == 1: await self._finish(scope, 'REVIEW_PROVIDER_NOT_CONFIGURED'); return
