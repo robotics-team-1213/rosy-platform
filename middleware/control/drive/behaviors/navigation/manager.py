@@ -10,8 +10,11 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Protocol
+from uuid import UUID
+from uuid import uuid4
 
 from core_common.protocol.schemas import NavigationState
+from core_common.protocol.native_receipts import NativeReceipts
 
 
 @dataclass
@@ -81,10 +84,12 @@ class NavigationManager:
         #: monotonic clock (not ``clock``, which the bridge may swap for sim time). It counts only
         #: while that correlation id is still the active goal.
         self.lease_clock = lease_clock
-        self._lease: Optional[tuple[str, float]] = None
+        self._lease: Optional[tuple[str, float, UUID]] = None
         # 목표는 uvicorn 워커(REST·WS)와 rclpy executor(브리지 타이머) 양쪽에서
         # 건드려진다(D-1). check-send-set 이 쪼개지면 취소가 목표를 놓친다.
         self._lock = threading.RLock()
+        self.native = NativeReceipts()
+        self._admitting: UUID | None = None
         #: moving goal 세션이 열려 있으면 목표의 임자는 그쪽이다 (SWM-001).
         #: 토큰을 여기서 발급해, 추종자가 자기 락을 쥔 채 이쪽을 부르지 않아도
         #: 취소 뒤에 뒤늦은 목표가 새어 들어오지 못한다.
@@ -125,6 +130,29 @@ class NavigationManager:
             raise NavigationError("CAPABILITY_NOT_SUPPORTED", "navigation executor unavailable")
         return self.executor
 
+    def reserve_goal(self, *, expected_boot_id: UUID | None = None,
+                     expected_owner_generation: int | None = None) -> UUID:
+        self._refuse_while_docking()
+        with self._lock:
+            try:
+                self.native.expect(expected_boot_id, expected_owner_generation)
+            except ValueError as exc:
+                raise NavigationError(str(exc), str(exc)) from exc
+            if (self._admitting is not None or self._moving_session is not None
+                    or self._nav_state not in _IDLE_STATES
+                    or self.native.current is not None and self.native.current.phase != "TERMINAL"):
+                raise NavigationError("NAVIGATION_ACTIVE", "navigation owner is busy")
+            token = uuid4()
+            self._admitting = token
+            self.native.generation += 1
+            return token
+
+    def release_goal_reservation(self, token: UUID) -> None:
+        with self._lock:
+            if self._admitting == token:
+                self._admitting = None
+                self.native.generation += 1
+
     def resolve_goal(self, *, x=None, y=None, yaw=None, waypoint=None) -> NavGoalSpec:
         if waypoint is not None:
             wp = self._waypoints.get(waypoint)
@@ -138,7 +166,11 @@ class NavigationManager:
         return NavGoalSpec(x=float(x), y=float(y), yaw=float(yaw or 0.0))
 
     def goal(self, spec: NavGoalSpec, source: str = "api",
-             correlation_id: str | None = None, lease_ttl_s: float | None = None) -> None:
+             correlation_id: str | None = None, lease_ttl_s: float | None = None,
+             *, kind: str = "navigate", receipt_sink=None,
+             expected_boot_id: UUID | None = None,
+             expected_owner_generation: int | None = None,
+             reservation: UUID | None = None) -> None:
         if lease_ttl_s is not None:
             # D-550 10: a lease is renewed by correlation id, so a leased goal needs one.
             _check_lease_ttl(lease_ttl_s)
@@ -152,6 +184,15 @@ class NavigationManager:
             raise NavigationError("MAPPING_ACTIVE", "mapping session active")
         self._refuse_while_docking()
         with self._lock:
+            if reservation is None:
+                if self._admitting is not None:
+                    raise NavigationError("NAVIGATION_ACTIVE", "navigation admission in progress")
+                try:
+                    self.native.expect(expected_boot_id, expected_owner_generation)
+                except ValueError as exc:
+                    raise NavigationError(str(exc), str(exc)) from exc
+            elif self._admitting != reservation:
+                raise NavigationError("OWNER_GENERATION_CHANGED", "navigation admission was revoked")
             if self._moving_session is not None:
                 # 추종 중에 들어온 단발 목표는 0.5 초 뒤 스트림에 덮인다.
                 # 조용히 덮이느니 거절하는 편이 낫다.
@@ -161,15 +202,34 @@ class NavigationManager:
                 raise NavigationError(
                     "NAVIGATION_ACTIVE",
                     f"navigation in progress ({self._nav_state.value}) — cancel first")
-            if correlation_id is None:
-                executor.send_goal(spec)
-            else:
-                executor.send_goal(spec, correlation_id=correlation_id)
+            if self.native.current is not None and self.native.current.phase != "TERMINAL":
+                raise NavigationError("NAVIGATION_ACTIVE", "native run has unresolved backend evidence")
+            if reservation is not None:
+                self._admitting = None
+                self.native.generation += 1
+            operation = self.native.admit(kind, correlation_id)
+            if receipt_sink is not None:
+                receipt_sink(operation)
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = correlation_id
             self._active_spec = spec
             self._lease = (None if lease_ttl_s is None
-                           else (correlation_id, self.lease_clock() + lease_ttl_s))
+                           else (correlation_id, self.lease_clock() + lease_ttl_s,
+                                 operation.run_id))
+            try:
+                native_send = getattr(executor, "send_native_goal", None)
+                if native_send is not None:
+                    native_send(spec, operation.run_id, correlation_id=correlation_id)
+                elif correlation_id is None:
+                    executor.send_goal(spec)
+                else:
+                    executor.send_goal(spec, correlation_id=correlation_id)
+            except Exception:
+                current = self.native.current
+                if current is not None:
+                    self.native.update(operation.run_id, phase=current.phase,
+                                       reason="BACKEND_RESULT_UNKNOWN")
+                raise
         self._events.publish("nav.started", source="navigation_manager",
                              data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
                                    "by": source, "correlation_id": correlation_id})
@@ -205,7 +265,8 @@ class NavigationManager:
                     or self._nav_state in _IDLE_STATES):
                 raise NavigationError("GOAL_LEASE_NOT_ACTIVE",
                                       f"no active leased goal with correlation_id {correlation_id!r}")
-            self._lease = (correlation_id, self.lease_clock() + ttl_s)
+            self._lease = (correlation_id, self.lease_clock() + ttl_s, self._lease[2])
+            self.native.generation += 1
 
     def expire_goal_lease(self) -> bool:
         """D-550 10: cancel a leased goal whose lease ran out, on the SAF-003 STOP cancel path.
@@ -217,7 +278,7 @@ class NavigationManager:
             # Dropped first: a renewal racing this expiry is refused, not revived.
             self._lease = None
         # A goal that already ended or was replaced is left alone (correlation id check).
-        return self.cancel(source="goal_lease", correlation_id=lease[0])
+        return self.cancel(source="goal_lease", correlation_id=lease[0], run_id=lease[2])
 
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():
@@ -231,6 +292,8 @@ class NavigationManager:
         같은 락 안에서 정해야 그 창이 없다.
         """
         with self._lock:
+            if self._admitting is not None:
+                raise NavigationError("NAVIGATION_ACTIVE", "navigation admission in progress")
             if self.mapping_active:
                 raise NavigationError("MAPPING_ACTIVE",
                                       "a mapping session owns navigation")
@@ -264,6 +327,8 @@ class NavigationManager:
             raise NavigationError("MAPPING_ACTIVE", "mapping session active")
         self._refuse_while_docking()
         with self._lock:
+            if self._admitting is not None:
+                return False
             if session is not None and self._moving_session != session:
                 # 취소된 세션의 뒤늦은 목표. 내보내면 아무도 거두지 않는다.
                 return False
@@ -286,9 +351,17 @@ class NavigationManager:
                 data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw}, "by": source})
         return True
 
-    def home(self, source: str = "api") -> None:
+    def home(self, source: str = "api", correlation_id: str | None = None,
+             lease_ttl_s: float | None = None, *, receipt_sink=None,
+             expected_boot_id: UUID | None = None,
+             expected_owner_generation: int | None = None,
+             reservation: UUID | None = None) -> None:
         spec = self.resolve_goal(waypoint="__home__")
-        self.goal(spec, source=source)
+        self.goal(spec, source=source, correlation_id=correlation_id,
+                  lease_ttl_s=lease_ttl_s, kind="home", receipt_sink=receipt_sink,
+                  expected_boot_id=expected_boot_id,
+                  expected_owner_generation=expected_owner_generation,
+                  reservation=reservation)
 
     # --- NAV-005 Mapping 세션 -------------------------------------------------
 
@@ -297,6 +370,8 @@ class NavigationManager:
         if self._safety.estop:
             raise NavigationError("EMERGENCY_ACTIVE", "e-stop is active")
         with self._lock:
+            if self._admitting is not None:
+                raise NavigationError("NAVIGATION_ACTIVE", "navigation admission in progress")
             if self._moving_session is not None:
                 # `moving_goal` refuses during a mapping session; this is the
                 # other direction. `_nav_state` alone does not see a follow in
@@ -341,7 +416,8 @@ class NavigationManager:
 
     def cancel(self, source: str = "api", close_session: bool = True,
                session: Optional[int] = None,
-               correlation_id: Optional[str] = None) -> bool:
+               correlation_id: Optional[str] = None, *, run_id: UUID | None = None,
+               receipt_sink=None) -> bool:
         """진행 중 목표를 거둔다.
 
         moving goal 세션에서는 상태가 IDLE 계열이어도 취소를 보낸다. 선점된
@@ -359,6 +435,13 @@ class NavigationManager:
         D-419) — 판정과 취소 사이에 들어온 다른 목표를 거두지 않는다. 취소를 보냈으면 True.
         """
         with self._lock:
+            closed_receipt = None
+            if self._admitting is not None and session is None and correlation_id is None:
+                self._admitting = None
+                self.native.generation += 1
+            if run_id is not None and (self.native.current is None
+                                       or self.native.current.run_id != run_id):
+                return False
             if session is not None and self._moving_session != session:
                 return False
             if correlation_id is not None and (
@@ -373,6 +456,14 @@ class NavigationManager:
                 return False
             if self.executor is not None:
                 self.executor.cancel_goal()
+            active = self.native.current
+            if active is not None and active.phase != "TERMINAL":
+                result = "EXPIRED" if source == "goal_lease" else "FAILED" if source == "stuck_detector" else "CANCELED"
+                reason = "LEASE_EXPIRED" if source == "goal_lease" else "STUCK" if source == "stuck_detector" else "SAFETY_STOP" if source.startswith("safety") else "CANCELED"
+                closed_receipt = self.native.update(active.run_id, phase="TERMINAL", result=result, reason=reason)
+                if receipt_sink is not None:
+                    receipt_sink(closed_receipt)
+            self._lease = None
             self._set_state(NavigationState.CANCELED)
             correlation_id = self._active_correlation_id
             self._active_correlation_id = None
@@ -381,7 +472,10 @@ class NavigationManager:
             self._last_progress_pos = None
             self._last_progress_ts = self.clock()
         self._events.publish("nav.canceled", source="navigation_manager",
-                             data={"source": source, "correlation_id": correlation_id})
+                             data={"source": source, "correlation_id": correlation_id,
+                                   **({"run_id": str(closed_receipt.run_id),
+                                       "boot_id": str(closed_receipt.boot_id)}
+                                      if closed_receipt is not None else {})})
         if closed:
             self._notify_session_closed(source)
         return True
@@ -396,8 +490,13 @@ class NavigationManager:
             # 임자의 실패가 취소 경로를 막으면 안 된다.
             pass
 
-    def on_goal_accepted(self) -> None:
+    def on_goal_accepted(self, *, native_run_id: UUID | None = None) -> None:
         with self._lock:
+            if native_run_id is not None:
+                active = self.native.current
+                if active is None or active.run_id != native_run_id or active.phase == "TERMINAL":
+                    return
+                self.native.update(native_run_id, phase="RUNNING")
             self._set_state(NavigationState.NAVIGATING)
             if self._moving_session is not None and self._last_progress_pos is not None:
                 # SWM-002 는 NAV-006 이 그대로 적용된다고 못박았다. 0.5 초마다
@@ -408,19 +507,58 @@ class NavigationManager:
             self._last_progress_ts = self.clock()
 
     def on_result(self, succeeded: bool, error: Optional[str] = None, *,
-                  correlation_id: str | None = None) -> None:
+                  correlation_id: str | None = None,
+                  native_run_id: UUID | None = None) -> None:
+        closed_receipt = None
         with self._lock:
+            if native_run_id is not None:
+                active = self.native.current
+                if active is None or active.run_id != native_run_id or active.phase == "TERMINAL":
+                    return
+                closed_receipt = self.native.update(
+                    native_run_id, phase="TERMINAL",
+                    result="SUCCEEDED" if succeeded else "FAILED",
+                    reason=None if succeeded else "BACKEND_REJECTED" if error == "REJECTED" else "BACKEND_ERROR")
+                self._lease = None
             self._set_state(NavigationState.ARRIVED if succeeded
                             else NavigationState.FAILED)
             if correlation_id == self._active_correlation_id:
                 self._active_correlation_id = None
         if succeeded:
             self._events.publish("nav.completed", source="navigation_manager",
-                                 data={"correlation_id": correlation_id})
+                                 data={"correlation_id": correlation_id,
+                                       **({"run_id": str(closed_receipt.run_id),
+                                           "boot_id": str(closed_receipt.boot_id)}
+                                          if closed_receipt is not None else {})})
         else:
             self._events.publish("nav.failed", severity="error", source="navigation_manager",
                                  data={"error_code": error or "UNKNOWN",
-                                       "correlation_id": correlation_id})
+                                       "correlation_id": correlation_id,
+                                       **({"run_id": str(closed_receipt.run_id),
+                                           "boot_id": str(closed_receipt.boot_id)}
+                                          if closed_receipt is not None else {})})
+
+    def on_backend_unknown(self, native_run_id: UUID) -> None:
+        with self._lock:
+            current = self.native.current
+            if current is not None and current.run_id == native_run_id:
+                self.native.update(native_run_id, phase=current.phase,
+                                   reason="BACKEND_RESULT_UNKNOWN")
+
+    def capture_native_operation(self, run_id: UUID | None = None): return self.native.capture(self._lock, run_id)
+
+    def native_readback(self, run_id: UUID | None = None) -> dict:
+        with self._lock:
+            snapshot = getattr(self.executor, "native_transport_snapshot", None)
+            before = snapshot() if snapshot is not None else None
+            after = snapshot() if snapshot is not None else None
+            stable = before is not None and before == after
+            return self.native.readback(
+                run_id, admitting=self._admitting is not None,
+                pending_submission=before[1] if before else True,
+                actuating_callback=before[2] if before else True,
+                lease_active=self._lease is not None,
+                transport_generation=before[0] if stable else None)
 
     def on_correlated_result(self, succeeded: bool, *,
                              correlation_id: str,

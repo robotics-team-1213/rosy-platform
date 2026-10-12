@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -52,7 +53,11 @@ def _renew(tc, correlation_id, ttl_s=2.0):
 
 
 def _canceled(svc):
-    return [ev.data for ev in svc.events.history() if ev.type == "nav.canceled"]
+    events = [ev.data for ev in svc.events.history() if ev.type == "nav.canceled"]
+    for data in events:
+        assert UUID(data["run_id"]) and UUID(data["boot_id"])
+    return [{"source": data["source"], "correlation_id": data["correlation_id"]}
+            for data in events]
 
 
 def test_expired_lease_cancels_and_clears_so_a_new_goal_is_taken(robot):
@@ -91,9 +96,11 @@ def test_renewal_after_the_goal_ended_is_409_and_sends_nothing(robot, end):
     if end == "cancel":
         tc.post("/api/v1/navigation/cancel", headers=OPERATOR)
     elif end == "arrive":
-        svc.nav.on_result(True, correlation_id="a-1")
+        svc.nav.on_result(True, correlation_id="a-1",
+                          native_run_id=svc.nav.native.current.run_id)
     elif end == "fail":
-        svc.nav.on_result(False, "ABORTED", correlation_id="a-1")
+        svc.nav.on_result(False, "ABORTED", correlation_id="a-1",
+                          native_run_id=svc.nav.native.current.run_id)
     else:
         clock.now += 2.5
         svc.nav.expire_goal_lease()
@@ -107,7 +114,8 @@ def test_newer_goal_invalidates_the_old_lease(robot):
     tc, svc, executor, clock = robot
     _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
     svc.nav.on_goal_accepted()
-    svc.nav.on_result(True, correlation_id="a-1")
+    svc.nav.on_result(True, correlation_id="a-1",
+                      native_run_id=svc.nav.native.current.run_id)
     _goal(tc, correlation_id="a-2", lease_ttl_s=2.0)
     svc.nav.on_goal_accepted()
     assert _renew(tc, "a-1").status_code == 409
@@ -122,7 +130,8 @@ def test_newer_unleased_goal_is_not_cancelled_by_an_old_lease(robot):
     tc, svc, executor, clock = robot
     _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
     svc.nav.on_goal_accepted()
-    svc.nav.on_result(True, correlation_id="a-1")
+    svc.nav.on_result(True, correlation_id="a-1",
+                      native_run_id=svc.nav.native.current.run_id)
     _goal(tc, correlation_id="a-2")
     svc.nav.on_goal_accepted()
     clock.now += 10.0

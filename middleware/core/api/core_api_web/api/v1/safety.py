@@ -22,12 +22,33 @@ safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 
 @safety_router.post("/stop")
 def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    captured = []
+    for owner_name in ("nav", "docking", "swarm", "command"):
+        try:
+            owner = getattr(svc, owner_name)
+            operation = owner.capture_native_operation()
+            if operation is not None:
+                captured.append((owner, operation))
+        except Exception:
+            # Optional evidence must never prevent the existing safety path.
+            captured.clear()
+            break
     # Latch first: the mode change runs listeners (docking abort, ...), and
     # nothing they do may leave EMERGENCY without the latch behind it.
     svc.safety.trigger_estop(f"api:{auth.role}")
     svc.modes.transition(Mode.EMERGENCY)
     svc.state.set_estop(True)
-    return {"estop": True}
+    operations = []
+    for owner, operation in captured:
+        try:
+            current = owner.capture_native_operation(operation.run_id)
+            if current is not None and (current.run_id, current.boot_id, current.kind) == (
+                    operation.run_id, operation.boot_id, operation.kind):
+                operation = current
+        except Exception:
+            pass  # Keep the exact pending receipt when its later evidence is unavailable.
+        operations.append(operation.model_dump(mode="json"))
+    return {"estop": True, "operations": operations}
 
 
 @safety_router.post("/release")

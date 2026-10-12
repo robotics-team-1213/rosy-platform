@@ -94,6 +94,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, sys.argv[1])
 installed = Path(sys.argv[1]).resolve()
+
 assert not (installed / '_build').exists()
 from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
 from rosy.execution.site.workflow import project_progress
@@ -152,6 +153,12 @@ assert len(api_floor) == 1
 assert '0.0.1' not in api_floor[0].specifier and '0.0.2' in api_floor[0].specifier
 from core_common.protocol.schemas import LineStuckPrecondition
 from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecondition
+from core_common.protocol.native.operation import NativeOperation
+from core_common.protocol.native_operation import NativeOperation as LegacyNativeOperation
+from core_common.protocol.native.receipts import NativeReceipts
+from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
+assert NativeOperation is LegacyNativeOperation
+assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
@@ -170,6 +177,13 @@ from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
 from fleet.incidents.automation.operating.candidates import RecoveryCandidates as OperatingCandidates
 assert RecoveryCandidates is OperatingCandidates
 from fleet.stuck.loop import StuckResolverLoop
+for name in ('requests', 'workflow', 'missions', 'incidents', 'replies', 'gateway',
+             'deliberation', 'model_worker', 'model_runtime'):
+    legacy = importlib.import_module('fleet.server.channel_' + name)
+    owner = importlib.import_module('fleet.server.channel.' + name)
+    assert legacy is owner
+    assert Path(owner.__file__).resolve().is_relative_to(installed / 'fleet/server/channel')
+
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
@@ -211,6 +225,9 @@ assert ExportedIncidentRequest is ChannelIncidentClaimRequest
 assert Path(importlib.util.find_spec('fleet.server.channel_incidents').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.intake').origin).is_relative_to(installed)
 assert Path(importlib.util.find_spec('rosy_discord.gateway').origin).is_relative_to(installed)
+from fleet.server.channel.health import BareDiscordPublisher, HourlyHealth
+health_spec = importlib.util.find_spec('fleet.server.channel.health')
+assert Path(health_spec.origin).resolve().is_relative_to(installed / 'fleet/server/channel/health')
 assert importlib.util.find_spec('fleet.server.goal_evidence') is None
 for name in json.loads(sys.argv[2]):
     module = importlib.import_module(name)
@@ -275,6 +292,18 @@ with TestClient(app) as client:
 print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
+               'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
+               'fleet.server.channel.conversation.worker', 'fleet.server.channel.conversation.runtime',
+               'fleet.server.channel.execution.instructions', 'fleet.server.channel.execution.journal',
+               'fleet.server.channel.execution.worker', 'fleet.server.channel.execution.runtime',
+               'fleet.server.channel.execution.receipts', 'fleet.server.intent_execution',
+               'fleet.server.channel.execution.outcomes.evidence',
+               'fleet.server.channel.execution.outcomes.receipts',
+               'fleet.server.channel.execution.outcomes.reconcile',
+               'fleet.server.channel.execution.outcomes.task_receipt',
+               'fleet.server.channel.execution.outcomes.stops',
+               'fleet.swarm.dispatch_guard',
+               'fleet.server.channel.model_journal', 'fleet.server.channel.broker_transport',
                'rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
@@ -368,13 +397,23 @@ def test_fleet_source_image_keeps_only_the_pure_assessment_closure(tmp_path):
 import importlib.util
 import json
 import sys
+from pathlib import Path
 sys.path[:0] = json.loads(sys.argv[1])
+roots = [Path(path) for path in json.loads(sys.argv[1])]
 from fleet.stuck.board import LineStuckBoard
 from fleet.server.mission_service import MissionService
 from rosy.execution.site.goal_evidence import verify_goal
 from rosy.execution.site.workflow import project_progress
 from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
 from fleet.server.channel_incidents import incident_view, install_channel_incident_routes
+import importlib
+for name in ('requests', 'workflow', 'missions', 'incidents', 'replies', 'gateway',
+             'deliberation', 'model_worker', 'model_runtime'):
+    assert importlib.import_module('fleet.server.channel_' + name) is importlib.import_module('fleet.server.channel.' + name)
+from fleet.server.channel.health import BareDiscordPublisher, HourlyHealth
+health_spec = importlib.util.find_spec('fleet.server.channel.health')
+assert Path(health_spec.origin).resolve().is_relative_to(roots[0] / 'fleet/server/channel/health')
+
 from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence

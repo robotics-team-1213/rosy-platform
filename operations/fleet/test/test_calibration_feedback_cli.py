@@ -146,7 +146,7 @@ def test_extra_target_profile_attempt_is_not_silently_excluded(tmp_path):
         subject().feedback_bundle(source)
 
 
-@pytest.mark.parametrize('field,value', [('domains', ['door']), ('modalities', ['image'])])
+@pytest.mark.parametrize('field,value', [('domains', ['door']), ('domains', ['fleet_status']), ('modalities', ['image'])])
 def test_json_resealed_unsupported_profile_is_not_valid_historical_evidence(tmp_path, field, value):
     source, _ = data(tmp_path)
     for exported, split in zip(source['exports'], ('fit', 'evaluation')):
