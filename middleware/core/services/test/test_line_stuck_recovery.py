@@ -306,6 +306,16 @@ def test_conditional_back_accepts_same_asking_episode():
     assert machine.status(0.0)["attempts"] == 1
 
 
+@pytest.mark.parametrize("expected", [True, {}, {"phase": ASKING, "attempts": True},
+    {"phase": ASKING, "attempts": -1}, {"phase": WAITING_CONSOLE, "attempts": 0}])
+def test_direct_conditional_back_rejects_malformed_predicate(expected):
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    with pytest.raises(AnswerRefused, match="invalid_stuck_precondition"):
+        machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(0.0)["attempts"] == 0 and machine.phase == ASKING
+
+
 def test_no_answer_within_ask_s_starts_the_back_off():
     machine, bus = _machine()
     machine.step(_inp(0.0))

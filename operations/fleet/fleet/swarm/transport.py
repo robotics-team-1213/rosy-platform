@@ -17,7 +17,7 @@ import httpx
 from pydantic import ValidationError
 
 from core_common.protocol.localization import CandidateReport, LocalizationDecision
-from core_common.protocol.schemas import SwarmFollowParams
+from core_common.protocol.schemas import LineStuckPrecondition, SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
 
 log = logging.getLogger(__name__)
@@ -137,7 +137,8 @@ class RobotClient(Protocol):
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict: ...
+                                  yield_turn_rad: float | None = None,
+                                  expected_stuck: dict | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
@@ -360,9 +361,14 @@ class HttpRobotClient:
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict:
+                                  yield_turn_rad: float | None = None,
+                                  expected_stuck: dict | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
         body: dict = {"stuck_id": stuck_id, "decision": decision}
+        if expected_stuck is not None:
+            if decision != "BACK_AND_RETRY":
+                raise ValueError("expected_stuck belongs to BACK_AND_RETRY")
+            body["expected_stuck"] = LineStuckPrecondition.model_validate(expected_stuck).model_dump()
         if yield_m is not None:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
