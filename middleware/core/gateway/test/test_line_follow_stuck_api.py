@@ -224,6 +224,21 @@ def test_conditional_back_predicate_cannot_block_human_wait(core_client):
                        headers=OPERATOR).status_code == 200
 
 
+def test_conditional_capability_requires_both_wire_handler_and_controller(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    lf = services.line_follow
+    # Old HTTP handlers dump this controller status without a wire capability assertion.
+    assert lf.status().model_dump()["stuck"]["conditional_back"] is False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
+    lf.conditional_back_supported = False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is False
+    before = lf.status().stuck
+    rejected = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+        "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert rejected.status_code == 409 and "conditional back is unsupported" in rejected.text
+    assert lf.status().stuck == before
+
+
 def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     """New keys in the default layer must not collide with an overlay (docs/solutions 2026-10-02)."""
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
