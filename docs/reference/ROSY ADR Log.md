@@ -700,6 +700,7 @@
 | D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
 | D-711 | 새 사건 생성 허가와 기존 pinned 실행 분리 | Accepted |
 | D-712 | Fleet 새 사건의 영속 선택과 원자적 배정 | Accepted |
+| D-713 | 기존 Fleet runtime의 pinned 모델 worker 분배 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -940,3 +941,9 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 **Status:** Accepted (2026-10-12, source contract)
 
 기존 사건 SQLite에서 current/previous 선택과 revision CAS·복귀를 기록하고 새 사건 배정을 같은 트랜잭션으로 결속한다. 선택과 모델 수용·안전 권한은 구분한다. 전문은 [D-712](../adr/D-712-incident-transactional-profile-routing.md).
+
+## D-713 — 기존 Fleet runtime의 pinned 모델 worker 분배
+
+**Status:** Accepted (2026-10-12, source contract)
+
+같은 사건 DB와 기존 loop/outbox에서 기존 사건의 pinned worker와 새 사건의 현재 선택 worker를 분배한다. 전문은 [D-713](../adr/D-713-pinned-incident-profile-dispatcher.md).
