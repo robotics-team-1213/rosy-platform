@@ -77,6 +77,10 @@ User '40번 비상정지해줘':
 {"kind":"CONTROL","response":"비상정지 요청을 제안합니다.","steps":[{"verb":"stop",
 "robot_id":"rosy_40","place_id":null,"parameters_json":"{}"}],
 "evidence_refs":["robot:rosy_40"],"review_required":false,"reason":null}.
+User '전체 비상정지해줘' means APPLY emergency stop to the site, never release it:
+{"kind":"CONTROL","response":"전체 비상정지 요청을 제안합니다.","steps":[{"verb":"estop",
+"robot_id":null,"place_id":null,"parameters_json":"{}"}],
+"evidence_refs":[],"review_required":false,"reason":null}.
 User '40번 dock-a에서 도킹해줘':
 {"kind":"CONTROL","response":"도킹 요청을 제안합니다.","steps":[{"verb":"dock",
 "robot_id":"rosy_40","place_id":null,"parameters_json":"{\\"dock\\":\\"dock-a\\"}"}],
