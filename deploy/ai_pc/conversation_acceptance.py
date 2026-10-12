@@ -45,7 +45,7 @@ def validate(value, cfg, profile):
             or value['schema'] != 'rosy.conversation-evaluation/1'
             or value['verdict'] != 'PASS' or value['evaluation_owner'] != 'model_pc'
             or value['source_commit'] != cfg['source_commit']
-            or value['profile'] != profile.model_dump() or value['policy'] != cfg['policy']
+            or digest(value['profile']) != digest(profile.model_dump()) or value['policy'] != cfg['policy']
             or value['suite_sha256'] != digest(CASES)
             or type(value['evaluated_at']) not in (int, float)
             or not math.isfinite(value['evaluated_at'])
@@ -55,7 +55,7 @@ def validate(value, cfg, profile):
     for case, row in zip(CASES, value['cases']):
         expected = question(case, value['evaluated_at'])
         if (type(row) is not dict or set(row) != {'case', 'input', 'input_hash', 'answer'}
-                or row['case'] != case[0] or row['input'] != expected.model_dump()
+                or row['case'] != case[0] or digest(row['input']) != expected.digest
                 or row['input_hash'] != expected.digest):
             raise ValueError('CONVERSATION_EVALUATION_INPUT_CHANGED')
         answer = semantic_answer(row['answer'], expected)
