@@ -363,7 +363,7 @@ def test_shared_direct_service_rejects_other_owner_but_preserves_stop(tmp_path):
 
 @pytest.mark.parametrize('verb,body,receipt,expected',[
     ('cancel',{}, {'navigation':'CANCELED'},{'navigation':'CANCELED','rpc_acknowledged':True}),
-    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True}),
+    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True,'operations':[]}),
     ('home',{}, {'accepted':True,'mode':'NAVIGATION'},{'accepted':True,'mode':'NAVIGATION'}),
     ('move',{'linear':.1,'angular':0.}, {'accepted':True},{'accepted':True}),
     ('dock',{'dock':'dock-a'},{'state':'DOCKING','dock_id':'dock-a','phase':'approach','retries':0,'error':None},
