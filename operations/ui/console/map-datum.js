@@ -40,13 +40,12 @@ export function drawMapDatum(ctx, toPoint, bounds, {css}) {
     ctx.fill();
   }
   ctx.restore();
-  const font = globalThis.RosyPalette?.canvasFont?.("micro", "mono") || "12px sans-serif";
   for (const item of labels) {
     const point = transform?.transformPoint ? transform.transformPoint({x: item.x, y: item.y}) : item;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = ink;
-    ctx.font = font;
+    ctx.font = window.RosyPalette.canvasFont("micro", "mono");
     ctx.textAlign = item.text === "0,0" ? "right" : "center";
     ctx.textBaseline = "middle";
     ctx.fillText(item.text, point.x, point.y);
