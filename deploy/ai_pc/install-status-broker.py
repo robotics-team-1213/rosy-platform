@@ -20,6 +20,7 @@ def main():
     parser.add_argument('source',type=Path)
     parser.add_argument('manifest',type=Path)
     parser.add_argument('public_key',type=Path)
+    parser.add_argument('--check',action='store_true',help='validate staged inputs without installing')
     args=parser.parse_args()
     if os.geteuid()!=0:raise SystemExit('root installation required')
     source=args.source.resolve(strict=True)
@@ -40,6 +41,9 @@ def main():
     account=pwd.getpwnam('rosy-deliberation')
     marker=Path('/var/lib/rosy-deliberation/smoke/glm-first-review.spent')
     spent=marker.read_bytes() if marker.exists() else None
+    if args.check:
+        print(json.dumps({'source_commit':commit,'files':len(files),'glm_marker_spent':spent is not None}))
+        return
     target=Path('/opt/rosy-deliberation/status')/commit
     if target.exists():raise SystemExit('version already exists; inspect before reinstall')
     target.mkdir(parents=True,mode=0o755)
@@ -62,7 +66,26 @@ def main():
     if config.exists():shutil.copyfile(config,backup);backup.chmod(0o600)
     cfg={'source_commit':commit,'profile_revision':'d720-v1','valid_until':time.time()+7*86400,
          'reviewer_admission':None,'billing_policy':None,'files':files}
-    config.write_text(json.dumps(cfg,sort_keys=True));config.chmod(0o644)
+    proof=cfgdir/'status-reviewer-admission.json'
+    if proof.exists():
+        info=proof.lstat()
+        if proof.is_symlink() or info.st_uid!=0 or info.st_mode&0o027:raise SystemExit('protected reviewer evidence required')
+        evidence=json.loads(proof.read_text())
+        if set(evidence)!={'reviewer_admission','billing_policy'}:raise SystemExit('invalid reviewer evidence')
+        cfg.update(evidence)
+        # Verify the actual protected key fingerprint without printing or copying the credential.
+        probe=('import json;from dataclasses import asdict;'
+            'from deploy.ai_pc import deliberation_glm_receipt as b;'
+            'from deploy.ai_pc.deliberation_glm_gateway import read_secret;'
+            'from rosy.decision.deliberation.status_profiles import profiles;'
+            'd=json.load(open("/etc/rosy-deliberation/status-reviewer-admission.json"));'
+            'c=b.admission(b.AdapterCapabilities(**d["reviewer_admission"]));'
+            'assert c==b.replace(b.status_capabilities(),ready=True,isolated=True,cost_verified=True);'
+            'p=b.TrustedIncludedPlanPolicy(**d["billing_policy"]);'
+            'p.validate(b.digest(asdict(profiles("d720-v1")[1])));'
+            'b.credential(read_secret(),p.credential_sha256);print("STATUS_REVIEW_POLICY_BOUND")')
+        subprocess.run(['/usr/sbin/runuser','-u','rosy-deliberation','--',str(venv/'bin/python'),'-c',probe],env=env,check=True)
+    config.write_text(json.dumps(cfg,sort_keys=True));os.chown(config,0,account.pw_gid);config.chmod(0o640)
     wrapper=Path('/usr/local/libexec/rosy-deliberation/status-broker')
     previous=wrapper.with_name('status-broker.before-'+commit)
     if wrapper.exists():shutil.copyfile(wrapper,previous);previous.chmod(0o755)
@@ -93,7 +116,7 @@ def main():
     run('/usr/bin/systemctl','reload','ssh.service')
     if (marker.read_bytes() if marker.exists() else None)!=spent:
         raise SystemExit('spent marker changed unexpectedly; do not retry a model call')
-    print(json.dumps({'source_commit':commit,'primary_admitted':True,'reviewer_admitted':False,
+    print(json.dumps({'source_commit':commit,'primary_admitted':True,'reviewer_admitted':proof.exists() and spent is None,
         'valid_until':cfg['valid_until'],'glm_marker_spent':spent is not None,
         'config_backup':str(backup) if backup.exists() else None,'wrapper_backup':str(previous) if previous.exists() else None}))
 
