@@ -129,12 +129,15 @@ def test_delayed_back_api_answer_preserves_active_recovery(core_client, elapsed,
         lambda **kw: core_client(config_overrides=pinky, **kw))
     lf = services.line_follow
     started = lf._clock()
+    rear = pinky["line_follow"]["body_lidar_x_m"] - pinky["line_follow"]["body_rear_x_m"] + 0.30
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=started)
     body = {"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}
     accepted = client.post(URL, json=body, headers=OPERATOR)
-    assert accepted.status_code == 200 and accepted.json()["outcome"] == "back"
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["outcome"] == "back"
     now = started + elapsed
     lf.bind_clock(lambda: now)
-    lf.observe_body_points([(0.15, 0.0)], range_min=0.0, received_at=now)
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=now)
     lf.tick(now)
     assert lf.status().stuck.phase == phase
     until = lf._recovery._until
