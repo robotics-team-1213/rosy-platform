@@ -915,3 +915,9 @@
 - 변경: 본문 없는 Viewer safety stop에서 owner 잠금으로 읽은 현재 실행들을 `operations`로 반환한다. latch가 첫 변경이며 정지 이후에도 같은 UUID만 읽는다. 캡처 실패는 빈 목록, 사후 readback 실패는 원래 pending identity로 남긴다. 첫 terminal·여러 owner·callback pending을 보존한다.
 - 증거: 실제 CORE manager를 쓰는 API RED 9건, 불완전 캡처 RED 1건을 확인했다. 1cbfe5314a의 원격 gateway/API 전체 pytest exit 0/NEW 0. 설치 패키지와 API import boundary 통과. 통합에서 발견한 Decision contracts 383 > 382는 중복 함수 설명 한 줄만 삭제해 382로 맞췄으며 예산은 변경하지 않았다.
 - gate 변화: SOURCE 회귀 근거만 추가한다. 장치 배포·물리 정지·현장 수용 근거는 아니다.
+
+## 2026-10-12 · ddbc7f64aa · D-732 정지 receipt 캡처는 잠금을 기다리지 않는다
+
+- 변경: API 정지 전후 조회를 owner의 `capture_native_operation`으로 바꾼다. owner 잠금을 nonblocking으로 얻어 불변 ledger receipt만 읽으며 backend·transport·중첩 잠금 조회는 없다. 캡처 경합은 전체 빈 목록, 정지 후 경합은 원래 pending identity다.
+- 증거: 실제 네 owner 잠금과 정지 후 잠금 경합 RED 5건을 확인했다. 수정 후 원격 safety/native owner·구조·설치 패키지 묶음 exit 0/NEW 0. navigation 파일 600, swarm 단위 949로 기존 한계를 유지한다.
+- gate 변화: SOURCE 근거만 추가한다. 기존 stop listener 실행 의미와 CORE 최종 command 권한은 유지한다.
