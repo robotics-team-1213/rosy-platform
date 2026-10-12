@@ -41,12 +41,22 @@ def install_gateway(app, journal, token):
             tasks = []
             try:
                 tasks.append(asyncio.create_task(worker.run()))
-                if config.replies_enabled:
+                if config.replies_enabled or config.hourly_health_enabled:
                     # Discord must not inherit the private site-only SSL_CERT_FILE.
                     http = await stack.enter_async_context(httpx.AsyncClient(
                         verify=ssl.create_default_context(cafile=certifi.where())))
                     sender = DiscordReplies(channel_id=config.channel_id, bot_id=config.bot_id, token=token, http=http)
-                    tasks.append(asyncio.create_task(ChannelReplyWorker(journal.reply_outbox, sender).run()))
+                    if config.replies_enabled:
+                        tasks.append(asyncio.create_task(ChannelReplyWorker(journal.reply_outbox, sender).run()))
+                    if config.hourly_health_enabled:
+                        from .health import BareDiscordPublisher, HourlyHealth
+                        publisher = BareDiscordPublisher(guild_id=config.guild_id, channel_id=config.channel_id,
+                                                         bot_id=config.bot_id,
+                                                         token=token, http=sender.http)
+                        health = HourlyHealth(journal, publisher,
+                                              application.state.fleet_gather, application.state.console,
+                                              application.state.ai_facts)
+                        tasks.append(asyncio.create_task(health.run()))
                 yield state
             finally:
                 for task in tasks:

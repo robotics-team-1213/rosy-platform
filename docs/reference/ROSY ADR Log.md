@@ -721,6 +721,7 @@
 
 | D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
 
+| D-733 | Hourly KST Discord Fleet health subscription | Accepted (source only) |
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
