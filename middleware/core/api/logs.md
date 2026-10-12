@@ -903,3 +903,8 @@
 - 변경: schema 2 status-inputs에 `robot_id`, `core_process_id`, `line_follow_steering_law`를 더한다. 법칙은 이 프로세스가 들고 있는 LineFollowConfig의 순항, 선속도 상한, 게인, 최소 신뢰다. line_follow가 없으면 법칙은 null이다. 토큰과 개인 설정 파일은 넣지 않는다.
 - 증거: 기존 키 집합 시험에 세 키를 더하고, Pinky 법칙이 설정 파일의 0.8 게인이나 인증 토큰이 아닌 유효 값을 내보내는지 보는 시험을 추가했다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
 - gate 변화: 없음. 업데이터가 요구하는 기존 키는 그대로다. 추가 키는 거절하지 않는다.
+## 2026-10-12 · b640234986 · D-720 API 문서 버전 정합
+
+- 변경: additive 읽기 전용 Fleet 숙고 결과 계약의 v1.219에 FastAPI description과 계약 pin들을 맞춘다. envelope1.0·CORE 실행 권한은 변경하지 않는다.
+- 증거: 통합 첫 묶음에서 버전 정합2 NEW/9776 passed를 확인하고 관련 caller를 함께 수정했다. 원격 GREEN·최종 통합은 후속이다.
+- gate 변화: 계약 metadata 수정이며 장치 배포나 물리 수용이 아니다.

@@ -22,6 +22,9 @@ import math
 import threading
 import time
 from typing import Optional
+from uuid import UUID, uuid4
+
+from core_common.protocol.native_receipts import NativeReceipts
 
 from core_features.navigation.manager import NavGoalSpec, NavigationError
 from core_common.protocol.schemas import (
@@ -31,6 +34,7 @@ from core_common.protocol.schemas import (
     SwarmStatus,
 )
 from core_common.succession import next_leader
+from core_features.swarm.status_view import SwarmStatusView
 from core_features.swarm.poses import ReferencePose, follow_goal
 from core_features.swarm.trail import Trail, TrailError, trail_twist
 
@@ -49,7 +53,7 @@ class SwarmError(Exception):
         self.code = code
 
 
-class SwarmManager:
+class SwarmManager(SwarmStatusView):
     """SWM-002 follow 프리미티브와 SWM-004 단절 정책."""
 
     def __init__(self, events, state_manager, nav, safety, capability,
@@ -72,6 +76,9 @@ class SwarmManager:
         self._map_id = map_id_provider or (lambda: None)
         self._robot_id = robot_id
         self._lock = threading.RLock()
+        self.native = NativeReceipts()
+        self._admitting: UUID | None = None
+        self._closing = False
         #: 참조가 끊긴 뒤 이 로봇이 승계로 리더가 됐으면 True. 관제가 다시 follow
         #: 나 cancel 을 보내면 지운다 — 로컬 리더와 관제 리더가 겹쳐 남지 않게.
         self._elected = False
@@ -131,46 +138,8 @@ class SwarmManager:
         with self._lock:
             return self._holding
 
-    def status(self) -> SwarmStatus:
-        with self._lock:
-            if self._params is None:
-                if self._elected:
-                    return SwarmStatus(role=SwarmRole.LEADER, active=False)
-                return SwarmStatus()
-            return SwarmStatus(
-                role=SwarmRole.FOLLOWER,
-                formation=self._formation_label(self._params),
-                active=True,
-            )
 
-    def state_payload(self) -> dict:
-        """GET /api/v1/swarm/state (SWM-002). 스냅샷의 swarm 필드보다 자세하다."""
-        with self._lock:
-            status = self.status()
-            return {
-                "role": status.role.value,
-                "formation": status.formation,
-                "active": status.active,
-                "holding": self._holding,
-                "target_robot_id": self._params.target_robot_id if self._params else None,
-                "source": self._params.source.value if self._params else None,
-                "max_speed": self._params.max_speed if self._params else None,
-                "map_mismatch": self._map_mismatch,
-                "mode": self._params.mode if self._params else None,
-                "trail": None if self._trail is None else {
-                    "leader_s": round(self._trail.leader_s, 3),
-                    "progress": round(self._trail.progress, 3),
-                    "hold_reason": self._trail_hold,
-                    "anchor": "fleet" if self._trail_kind == "fleet" else None},
-                "stream_age_s": (
-                    None if self._last_sample_at is None
-                    else round(self._clock() - self._last_sample_at, 3)
-                ),
-            }
 
-    @staticmethod
-    def _formation_label(params: SwarmFollowParams) -> str:
-        return f"follow:{params.target_robot_id}@{params.distance:.2f}/{params.lateral:.2f}"
 
     # --- SWM-002 follow / cancel ---------------------------------------------
 
@@ -216,9 +185,42 @@ class SwarmManager:
                 f"max_speed {params.max_speed} exceeds the SAF-004 ceiling {ceiling}")
 
 
-    def follow(self, params: SwarmFollowParams, source: str = "api") -> SwarmStatus:
+    def reserve_follow(self, params: SwarmFollowParams) -> UUID:
         self.check_follow(params)
         with self._lock:
+            try:
+                self.native.expect(params.expected_boot_id, params.expected_owner_generation)
+            except ValueError as exc:
+                raise SwarmError(str(exc), str(exc)) from exc
+            if self._admitting is not None or self._closing:
+                raise SwarmError("OWNER_GENERATION_CHANGED", "follow admission in progress")
+            token = uuid4()
+            self._admitting = token
+            self.native.generation += 1
+            return token
+
+    def release_follow_reservation(self, token: UUID) -> None:
+        with self._lock:
+            if self._admitting == token:
+                self._admitting = None
+                self.native.generation += 1
+
+    def follow(self, params: SwarmFollowParams, source: str = "api", *,
+               reservation: UUID | None = None, receipt_sink=None) -> SwarmStatus:
+        self.check_follow(params)
+        preempted = None
+        with self._lock:
+            if self._closing:
+                raise SwarmError("OWNER_GENERATION_CHANGED", "follow close in progress")
+            if reservation is None and self._admitting is not None:
+                raise SwarmError("OWNER_GENERATION_CHANGED", "follow admission in progress")
+            if reservation is not None and self._admitting != reservation:
+                raise SwarmError("OWNER_GENERATION_CHANGED", "follow admission was revoked")
+            if reservation is None:
+                try:
+                    self.native.expect(params.expected_boot_id, params.expected_owner_generation)
+                except ValueError as exc:
+                    raise SwarmError(str(exc), str(exc)) from exc
             # check_follow 와 무장 사이에도 e-stop 은 걸릴 수 있다. 여기서는
             # 평범한 읽기뿐이라 항법 락을 잡지 않는다.
             blocked = None
@@ -241,11 +243,22 @@ class SwarmManager:
                     blocked = (exc.code, str(exc))
                     self._session = None
             if blocked is None:
+                if reservation is not None:
+                    self._admitting = None
+                    self.native.generation += 1
+                current = self.native.current
+                if current is not None and current.phase != "TERMINAL":
+                    preempted = self.native.update(current.run_id, phase="TERMINAL",
+                                                   result="PREEMPTED", reason="NEW_FOLLOW")
+                operation = self.native.admit("follow", params.correlation_id)
+                if receipt_sink is not None:
+                    receipt_sink(operation)
                 # 세션을 여는 것과 무장은 한 구간이다. 여기서 락을 놓으면 그
                 # 사이의 cancel 이 임자 없는 세션을 남긴다.
                 previous = self._params
                 session = self._session
                 self._params = params.model_copy()
+                self.native.update(operation.run_id, phase="RUNNING")
                 # 검증만 하고 흘려보내면 계약이 거짓이 된다. 실제로 바퀴에
                 # 닿는 값을 줄인다 (D-2 의 단일 통로를 그대로 쓴다).
                 self._safety.set_session_speed(params.max_speed)
@@ -260,6 +273,14 @@ class SwarmManager:
                 status = self.status()
         if blocked is not None:
             raise SwarmError(*blocked)
+        if preempted is not None:
+            self._events.publish(
+                "swarm.aborted", severity="warning", source="swarm_manager",
+                data={"formation": self._formation_label(previous), "reason": "new_follow",
+                      "by": source, "robots": [previous.target_robot_id],
+                      "run_id": str(preempted.run_id), "boot_id": str(preempted.boot_id),
+                      "kind": preempted.kind, "result": preempted.result,
+                      "native_reason": preempted.reason})
         # D-559 re-follow across modes: no leftover of the other mode may keep driving.
         if params.mode == "trail":
             self.nav.cancel(source="swarm", close_session=False, session=session)  # an offset goal
@@ -276,9 +297,24 @@ class SwarmManager:
         )
         return status
 
-    def cancel(self, source: str = "api", reason: str = "canceled") -> SwarmStatus:
+    def cancel(self, source: str = "api", reason: str = "canceled", *,
+               receipt_sink=None) -> SwarmStatus:
         with self._lock:
+            if self._closing:
+                return SwarmStatus()  # the first cancel still owns backend cleanup
+            closed = None
+            if self._admitting is not None:
+                self._admitting = None
+                self.native.generation += 1
             was_active = self._params is not None
+            self._closing = was_active
+            if was_active and self.native.current is not None:
+                result = "PREEMPTED" if source == "docking" else "CANCELED"
+                machine_reason = "SAFETY_STOP" if source == "safety" else "DOCKING_PREEMPTED" if source == "docking" else "CANCELED"
+                closed = self.native.update(self.native.current.run_id, phase="TERMINAL",
+                                            result=result, reason=machine_reason)
+                if receipt_sink is not None:
+                    receipt_sink(closed)
             formation = self._formation_label(self._params) if self._params else None
             target = self._params.target_robot_id if self._params else None
             was_trail = self._params is not None and self._params.mode == "trail"
@@ -308,8 +344,27 @@ class SwarmManager:
         self._events.publish(
             "swarm.aborted", severity="warning", source="swarm_manager",
             data={"formation": formation, "reason": reason, "by": source,
-                  "robots": [target] if target else []})
+                  "robots": [target] if target else [],
+                  **({"run_id": str(closed.run_id), "boot_id": str(closed.boot_id),
+                      "kind": closed.kind, "result": closed.result,
+                      "native_reason": closed.reason} if closed is not None else {})})
+        with self._lock:
+            self._closing = False
+            self.native.generation += 1
         return SwarmStatus()
+
+    def native_readback(self, run_id: UUID | None = None) -> dict:
+        with self._lock:
+            snapshot = getattr(self.nav.executor, "native_transport_snapshot", None)
+            before = snapshot() if callable(snapshot) else None
+            after = snapshot() if callable(snapshot) else None
+            stable = before is not None and before == after
+            return self.native.readback(
+                run_id, admitting=self._admitting is not None,
+                pending_submission=self._closing or (before[1] if before else True),
+                actuating_callback=before[2] if before else True,
+                lease_active=self._params is not None or self._session is not None,
+                transport_generation=before[0] if stable else None)
 
     # --- 참조 스트림 (SWM-007: 소스를 묻지 않는다) ----------------------------
 
