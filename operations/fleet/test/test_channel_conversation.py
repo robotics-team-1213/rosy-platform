@@ -213,3 +213,53 @@ def test_pending_scope_changed_on_restart_never_reinterprets_original(tmp_path):
     replacement=ConversationJobs(journal,'f'*64,clock=worker.clock)
     with pytest.raises(HTTPException):replacement.guard(receipt['request_id'])
     assert calls==[] and replacement.history(receipt,q.environment,worker.clock())==[]
+
+
+def test_fixed_conversation_provider_binds_source_profile_input_and_command(tmp_path,monkeypatch):
+    from fleet.server.channel.conversation import runtime
+    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    profile=Profile(revision='d728-test')
+    config=runtime.ConversationConfig(host='example',key_file='/run/rosy-deliberation/broker.key',
+        known_hosts_file='/run/rosy-deliberation/known_hosts',profile=profile,source_commit='a'*40,
+        valid_until=9999999999.,primary_admitted=False,semantic_evidence_sha256='b'*64,
+        policy=source_policy('a'*40,profile))
+    q=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
+    calls=[]
+    async def exchange(c,command,packet,remaining):
+        import json
+        value=json.loads(packet)
+        calls.append((command,value))
+        return {'source_commit':c.source_commit,'profile':profile.model_dump(),
+                'input_hash':q.digest,'answer':answer(),'cost_usd':0.}
+    monkeypatch.setattr(runtime,'exchange',exchange)
+    assert asyncio.run(runtime.ConversationProvider(config)(q,profile,30))['kind']=='CHAT'
+    assert calls[0][0]=='rosy-conversation-v1' and calls[0][1]['input_hash']==q.digest
+    assert calls[0][1]['question']['content_hash']==receipt['content_hash']
+    assert config.producer_scope()['source_commit']=='a'*40
+
+
+def test_runtime_valid_large_site_catalog_does_not_block_greetings(tmp_path):
+    import time
+    from types import SimpleNamespace
+    from fastapi import FastAPI
+    from fleet.server.channel.conversation.runtime import ConversationConfig,install_conversation
+    _,journal,_,_,_,_,_=setup(tmp_path)
+    profile=Profile(revision='d728-test')
+    config=ConversationConfig(host='example',key_file='/run/rosy-deliberation/broker.key',
+        known_hosts_file='/run/rosy-deliberation/known_hosts',profile=profile,source_commit='a'*40,
+        valid_until=9999999999.,primary_admitted=False,semantic_evidence_sha256='b'*64,
+        policy=source_policy('a'*40,profile))
+    class Gather:
+        _console=SimpleNamespace(_clock=time.monotonic)
+        _snapshot={'robots':[{'robot_id':'rosy_40','online':False,'state':None}]}
+        gathered_at=time.time()
+        async def __call__(self):pass
+    places=[{'id':f'P{i}','name':f'P{i}','x':float(i),'y':0.,'yaw':None} for i in range(500)]
+    maps=SimpleNamespace(active_view=lambda:{'version':1,'sha256':'c'*64,'map':{'places':places}})
+    app=FastAPI();app.state.channel_requests=journal;app.state.fleet_gather=Gather()
+    install_conversation(app,config,maps)
+    raw=asyncio.run(app.state.channel_conversation_worker.snapshot())
+    assert len(raw['map']['places'])==64 and raw['map']['places_complete'] is False
+    assert raw['map']['sha256']=='c'*64 and bounded_environment(raw)['robots'][0]['online'] is False
+    config.policy['authority']='modified'
+    assert app.state.channel_conversation_worker.admission() is False

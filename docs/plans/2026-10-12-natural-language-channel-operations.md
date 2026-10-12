@@ -47,8 +47,6 @@ typed evidence 참조로 제한한다. 모델 제안으로 위 owner 지원 표�
 - 인사·상태·후속 대화·모호한 요청·환각·prompt injection RED→GREEN을
   실제 고정 Qwen broker에 연결한다. 보호 GLM은 필요한 숙고에만 호출한다.
 
-## Task 2: 기존 실행 owner와 영속 권한 fence
-
 ### Task 1 implementation evidence (2026-10-12)
 
 The actual owners are `rosy.decision.conversation` (pure profile/input/semantic-step
@@ -85,6 +83,8 @@ grant/execution closure, Task3 progress/result receipts, and Task4 signed deploy
 and real new Discord message readback. `review_required` currently closes a natural
 HOLD/CLARIFY when the independent conversation reviewer is unavailable. No paid GLM
 call, root install, device command or Discord message was performed by Task1.
+
+## Task 2: 기존 실행 owner와 영속 권한 fence
 
 - 기존 /api/fleet/do 실행을 같은 shared service로 재사용한다. Discord
   원문 operator 권한과 idempotency/예약을 최종 owner까지 이어준다.
