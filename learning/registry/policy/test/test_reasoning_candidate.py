@@ -1,5 +1,4 @@
 """Registry candidates preserve recomputed offline evidence, never approval."""
-import copy
 from dataclasses import asdict
 import importlib
 import json
