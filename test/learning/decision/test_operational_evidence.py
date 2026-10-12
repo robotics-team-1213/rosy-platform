@@ -130,3 +130,21 @@ def test_unknown_physical_outcome_and_recurrence_remain_null_in_independent_metr
 def test_truth_schema_does_not_infer_or_coerce_final_review_values(field, value):
     module = evaluator(); row = truth_row(); row[field] = value
     with pytest.raises(ValueError): module.measure_truth([row])
+
+
+def test_flags_only_raw_and_capture_reports_do_not_close_original_coverage():
+    module = evaluator(); data = incomplete()
+    originals = dict(raw_recordings=[], observation_windows=[],
+                     coverage_scope='raw_sidecar_and_retained_observations_only')
+    result = module.compile_evidence(data, trusted={}, now=100, originals=originals)
+    assert 'verified_original_sources' in result['missing']
+    assert 'physical_actor_credit' in result['unsupported']
+    assert result['state'] == 'HOLD' and result['metrics'] is None
+
+
+def test_an_unsupported_profile_domain_is_explicit_hold():
+    module = evaluator(); data = incomplete()
+    data['profile']['domains'] = ['door']; data['profiles'] = [data['profile']]
+    result = module.compile_evidence(data, trusted={}, now=100)
+    assert 'domain_backend_not_supported' in result['missing']
+    assert result['state'] == 'HOLD' and result['metrics'] is None
