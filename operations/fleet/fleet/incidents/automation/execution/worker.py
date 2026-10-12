@@ -18,7 +18,7 @@ from ..contract import CaseBudget, CaseScope, micros
 from ..ledger.receipt import model_receipt
 from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 from rosy.decision.deliberation.calibration_selection import select_calibrated
-from .recovery_candidates import RecoveryCandidates, observed_recovery
+from ..recovery_candidates import RecoveryCandidates, observed_recovery
 
 
 class IncidentCaseWorker:
@@ -75,7 +75,7 @@ class IncidentCaseWorker:
         if baseline is not None and (type(baseline) is not FleetBaseline
                 or baseline.request != request or baseline.policy_revision != assessment.policy_revision):
             raise ValueError('FLEET_BASELINE_CHANGED')
-        context = observed_recovery(self._latest_snapshot, request.subject_id, request.case_id) if self.recovery_candidates else None
+        context = observed_recovery(self._latest_snapshot, request.subject_id, request.case_id, request.revision) if self.recovery_candidates else None
         choices = ('reobserve', 'human', 'back_and_retry') if context else ('reobserve', 'human')
         facts = canonical(dict(state='blocked', recovery=context)) if context else '{"state":"blocked"}'
         return Problem(request.subject_id, request.case_id, request.revision, 'line_follow',
@@ -137,7 +137,8 @@ class IncidentCaseWorker:
         if self.idle: self._task = asyncio.create_task(self._drain())
 
     async def _db(self, method, *args, **kwargs):
-        task = asyncio.create_task(asyncio.to_thread(getattr(self.store, method), *args, **kwargs))
+        port = method if callable(method) else getattr(self.store, method)
+        task = asyncio.create_task(asyncio.to_thread(port, *args, **kwargs))
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
@@ -264,7 +265,7 @@ class IncidentCaseWorker:
             elif step and step['tool_name'] == 'propose_lane_back' and self.recovery_candidates is not None:
                 if not self._fresh(problem): return
                 attempt = hashlib.sha256(canonical([problem.digest, 'model', bound.profile.profile_id]).encode()).hexdigest()
-                await asyncio.to_thread(self.recovery_candidates.propose, scope, attempt, worker_id=self._worker_id)
+                await self._db(self.recovery_candidates.propose, scope, attempt, worker_id=self._worker_id)
                 self._waiting[scope] = (problem.generation, dict(tool_name='get_incident_status', arguments={},
                                                               evidence_ids=list(problem.evidence_ids)))
             else: await self._finish(scope, 'NO_ADMITTED_READ_OR_REVIEW')
