@@ -4,9 +4,11 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import sys
 
 from setuptools.command.sdist import sdist
 from setuptools.command.build_py import build_py
+from setuptools.command.develop import develop
 
 
 roots = runpy.run_path('fleet/_source_layout.py')['SOURCE_ROOTS']
@@ -21,6 +23,12 @@ package_dirs = {
     'rosy_discord': roots['discord'] / 'rosy_discord',
 }
 ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment')
+
+
+class HolderDevelop(develop):
+    # Colcon editable cleanup would unlink external source holders; use its full-install fallback.
+    user_options = [option for option in develop.user_options
+                    if option[0] != 'editable' or '--uninstall' in sys.argv]
 
 
 class PureAssessment(build_py):

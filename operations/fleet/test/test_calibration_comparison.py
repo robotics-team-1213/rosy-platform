@@ -79,6 +79,15 @@ def test_missing_reviewed_limits_holds_and_forbidden_error_fails():
     assert compare(values)['state'] == 'FAIL'
 
 
+def test_same_truth_comparison_preserves_reviewed_bin_support_hold():
+    values = [bundle('baseline'), bundle('candidate')]
+    for value in values:
+        value['reviewed_profile']['limits']['minimum_bin_cases'] = 61
+    report = compare(values)
+    assert report['state'] == 'HOLD' and report['promotion_state'] == 'HOLD'
+    assert all(row['calibration_state'] == 'HOLD' for row in report['candidates'])
+
+
 def test_each_candidate_must_keep_training_and_evaluation_independent():
     values = [bundle('baseline'), bundle('candidate')]
     values[1]['training']['sessions'].append('evaluation')

@@ -1,5 +1,18 @@
 # 독립 사건 원장 비교
 
+D-703은 실제 model export와 별도 검수 자료를 기존 보정 계산에 연결한다:
+
+```powershell
+python tools/decision_calibration.py --from-feedback X:/DevTemp/<session>/reviewed-feedback.json
+python tools/decision_calibration.py --from-feedback --compare X:/DevTemp/<session>/reviewed-feedback-candidates.json
+```
+
+입력 schema는 `rosy.calibration.feedback_input/1`이며 exports·fit·evaluation·training·reviewed_profile을 가진다. fit/evaluation 검수 행에는 기존 id·session_id·recording_id·session_sha256·recording_sha256·reviewed_by·expected·latency_ms·네 가지 오류와 export_digest·subject_id·case_id·attempt_id·receipt_sha256·latency_source_sha256을 명시한다. alternatives·abstained·모델 identity는 receipt에서만 읽는다. 다른 역할/모델을 같은 profile의 평가 표본으로 넣지 않는다.
+
+`feedback_bundle`의 변환 행은 `feedback_binding`을 포함한다. 팀이 고정하는 fit/evaluation hash는 이 변환 행을 대상으로 해야 한다. root 도구는 외부 고정 hash를 자동 갱신하지 않는다. UNKNOWN·receipt/검수 누락·변조·중복 입력은 확률이나 지연 0으로 채우지 않는다. 지연 원본 hash는 선언된 결속이며 도구가 원본 측정이나 reviewer 인증을 대신하지 않는다. 이 prediction 평가와 전체 운영 분모·실제 결과·승격은 별도로 검증한다.
+
+기존 확률 보정은 `python tools/decision_calibration.py <frozen-bundle.json>`과 `--compare` 경로를 사용한다. D-702는 검수된 전체 최소 표본 수에 더해 평가에 등장한 각 구간의 fit/evaluation 최소 표본 수를 요구한다. 표본 부족·미검수 한계는 HOLD, 금지 오류는 FAIL이며 `metrics.error_counts`와 `fit_metrics.error_counts`는 네 가지 오류를 각각 보고한다. `forbidden`은 오류가 하나 이상인 사건 수여서 중복 오류 때문에 사건 분모가 늘지 않는다. PASS_OFFLINE_ONLY는 운영 승인이나 현장 품질 수용이 아니다.
+
 D-701의 `operational_cohort/2`는 기존 /1 필드에 `rules` 후보 목록을 추가한다. 각 규칙 후보는 `strategy_sha256`, `config_sha256`, `owner_id`, `policy_revision`, `exports`를 가지며 exports는 기존과 같은 subject_id·case_id·digest 바인딩이다. 같은 평가 사건 집합의 `rule_feedback/1`과 모델 export를 기존 CLI에 함께 전달한다. 정상 case null은 별도 export로 보존하며 사건 cohort에 가짜 사건으로 넣지 않는다.
 
 규칙 후보는 RULE_ONLY 자료만 허용하며 선택·필요성 건수만 보고한다. 결과·모델 호출·비용·명령·재발은 `null`이다. 보존 기록만으로 운영 coverage를 증명하지 않으며 독립 정답·한계와 운영 근거가 충족되기 전 비교·승격·현장 수용은 HOLD다. 기존 /1 입력과 모델 export /1·/2·/3은 유지한다.

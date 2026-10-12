@@ -43,3 +43,18 @@ def test_offline_cli_refuses_changed_dataset_without_exposing_input(tmp_path):
     assert json.loads(result.stdout) == {'state': 'HOLD', 'reason': 'INVALID_CALIBRATION_INPUT',
                                         'field_accepted': False}
     assert not result.stderr
+
+
+def test_offline_cli_keeps_under_supported_bins_on_hold(tmp_path):
+    fit, evaluation = rows('fit'), rows('evaluation')
+    reviewed = limits()
+    reviewed['minimum_bin_cases'] = 61
+    source = tmp_path / 'reviewed.json'
+    source.write_text(json.dumps(dict(fit=fit, evaluation=evaluation, training=manifest(),
+                                     reviewed_profile=profile(fit, evaluation, reviewed))), encoding='utf-8')
+    result = subprocess.run([sys.executable, str(ROOT / 'tools/decision_calibration.py'), str(source)],
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report['state'] == 'HOLD' and report['field_accepted'] is False
+    assert all(value == 0 for value in report['metrics']['error_counts'].values())
