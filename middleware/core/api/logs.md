@@ -921,3 +921,9 @@
 - 변경: API 정지 전후 조회를 owner의 `capture_native_operation`으로 바꾼다. owner 잠금을 nonblocking으로 얻어 불변 ledger receipt만 읽으며 backend·transport·중첩 잠금 조회는 없다. 캡처 경합은 전체 빈 목록, 정지 후 경합은 원래 pending identity다.
 - 증거: 실제 네 owner 잠금과 정지 후 잠금 경합 RED 5건을 확인했다. 수정 후 원격 safety/native owner·구조·설치 패키지 묶음 exit 0/NEW 0. navigation 파일 600, swarm 단위 949로 기존 한계를 유지한다.
 - gate 변화: SOURCE 근거만 추가한다. 기존 stop listener 실행 의미와 CORE 최종 command 권한은 유지한다.
+
+## 2026-10-12 · 4554e84c6e · D-732 선택적 owner 누락에도 E-Stop 유지
+
+- 변경: native owner 속성 조회를 캡처 예외 경계 안으로 옮긴다. 속성 누락은 전체 빈 operations이며 기존 latch·mode·state·listener를 실행한다. Fleet-loss native UUID 이벤트 기대값과 CORE 통합 시험 소유 목록도 실제 계약에 맞춘다.
+- 증거: 통합 NEW 3건과 실제 CORE owner 누락 4건의 원격 RED를 재현했다. 관련 여섯 파일의 전체 시험과 실제 native/잠금 경합 회귀를 포함한 수정 후 원격 묶음 exit 0. 구조 예산 위반 0, safety.py 208줄이다.
+- gate 변화: SOURCE 회귀 수정. 장치 동작·배포·현장 수용은 수행하지 않았다.
