@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · 314e06aca · verify(sim): Leg10 본체 여유 정지
 - 2026-10-13 · c0bb0393c · verify(sim): 새 설치 정지 점검과 원본 맵 Leg9 종료
 - 2026-10-13 · c0bb0393c · verify(sim): 빔 위상 SOURCE 회귀 종료
 - 2026-10-12 · 508334331 · fix(sim): LiDAR cubemap 경계 빔을 반 간격 이동
 - 2026-10-11 · 7b0a8d965 · refactor: Pinky description 장치 holder 이전
-- 2026-10-06 · uncommitted · feat(sim): Gazebo IR 바닥 광선, LiDAR 한 바퀴 각도

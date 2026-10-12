@@ -14,8 +14,8 @@ gates:
     cmd: "docker exec rosy-map-runtime-work bash -lc 'source /opt/ros/jazzy/setup.bash && python3 -m pytest /ws/src/src/sim/description/test -q'"
   ROS-SIM:
     state: HOLD
-    evidence: "c0bb0393c 원본 map_v2_fleet 실제 CORE/Fleet Leg9는 0.286049 m 뒤 control:policy_failed E-stop으로 종료; 정지·lease 종료·프로세스 종료·전체 해시 검증 완료"
-    blocker: "지도 미완주; SDK 관측 사용 불가와 evaluator 예외가 같은 policy_failed로 기록되어 정확한 최초 실패 원인 미확정"
+    evidence: "새 설치 314e06aca의 원본 지도 Leg10은 0.366486 m 뒤 obstacle_ahead로 종료; 이번 정책 예외·E-stop 0, 정지·lease 해제·잔존 프로세스 0·전체 해시 일치"
+    blocker: "지도 미완주; 현재 경로의 body gap이 stop gap 미만이며 이전 Leg9 policy_failed 원인도 실제 재현 미확정"
     cmd: "ros2 launch gz_sim gz_multi.launch.py robots:=1 world_name:=map_260905.world mode:=slam headless:=true core:=true"
   ARTIFACT:
     state: HOLD
