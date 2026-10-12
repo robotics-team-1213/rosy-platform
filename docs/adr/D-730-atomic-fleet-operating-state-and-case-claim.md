@@ -18,4 +18,6 @@ claim은 제출 시작의 선형화 지점이다. 선행 폐기는 거절하고 
 
 ## Verification
 
+독립 SOURCE 검토에서 claim 직전 case 만료·HOLD 재검사, 규칙 제출의 별도 terminal 기록, 과거 APPROVE/REVOKE 서명 인증을 추가했다. 규칙 ACK는 모델 수용을 요구하지 않으며 UNKNOWN은 이후 ACK로 지우지 않는다. CORE 정지·E-stop 경로를 claim으로 막아서는 안 된다. 원장의 slot은 제출 경합을 막는 내부 메커니즘이며 현재 실제 resolver 소비 경로는 아직 연결하지 않았다.
+
 실제 SQLite CAS·restart·경합, 현재 원본 HOLD/digest/profile/보정/trust/epoch/기한/guard 거절, 단일 rule/model slot과 legacy 차단, 취소/UNKNOWN 보존, 실제 installed closure를 원격 검증한다. ROOT의 producer/config와 실제 loop/CORE 응답/결과 연결·모델·현장 수용은 별도이며 전체 목표는 ACTIVE다.
