@@ -38,6 +38,8 @@ def camera_tick(lane, now, *, gain):
     state = lane.state()
     if state is None:
         decision = replace(decision, linear=0., angular=0.)
+    elif lane.last.get('camera_provenance') == 'odom_expected_path':
+        state = None  # An odom hypothesis can bridge a gap, but is not fresh camera evidence for RL.
     return decision, state
 
 
