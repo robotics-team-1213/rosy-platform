@@ -205,3 +205,10 @@
 - 증거: source 4f617d7c2 통합 원격 325 PASS·1 SKIP·NEW 0. 당시 main의 문서 변경을 포함한 source 40b389415 R29는 7457 source hash를 실행 전후 검증했다. 실제 renderer·주행·5개 960×540 녹화를 수행했고 ffprobe frame 수·renderer/physics receipt·42개 산출물 hash를 독립 대조했다. 무효 관측 후보는 모두 0, 각 episode 종료와 cleanup은 기존 실제 속도 정지 기준 미만이다. source d778f8b7c의 진단 보강은 원격 90 PASS·NEW 0·독립 SOURCE 승인이다.
 - 결과: 첫 방향 baseline/frozen eval은 모두 0.110668m 진행 후 camera_lane_lost. 90도 baseline은 off_route, eval은 camera_lane_lost. 180도 baseline의 유효 카메라는 0회이며 다음 reset 확인에서 SDK exit 1로 중단됐다. 270도는 시작하지 못했다. 기존 정책 evaluation-only이며 새 updates나 개선을 증명하지 않는다.
 - gate 변화: 실제 공유 바닥 렌더와 제한 주행 진단만 확인했다. 네 방향 전체 시험·완주·교통/Fleet·병렬 RL·ROS-SIM·실물 수용은 미완료다. reset 실패의 어느 기준이 초과됐는지 기존 기록으로 구분할 수 없어 값을 보강하며, 추정으로 기준을 바꾸지 않는다. 원본 영상과 실패/정지 검증은 private 일지에 보관했다.
+
+## 2026-10-12 · b9dc219e4 · R31 정지 실패와 곡선 진단 교훈
+
+- 증거: 사용자의 관리자 적용 이후 ARC 상한 2147483648 bytes와 MemAvailable 9753800kB를 읽었다. 최신 main 포함 source 54cba0b3f, 7465 source hash 검증으로 R31 native SDK를 실행했다. baseline 707은 0.110668m 진행 후 관측 무효화, eval 뒤 실제 정지·cleanup 정지 검사 실패로 exit 1이다. 27개 산출물과 2개 영상을 private에 보존·hash/frame receipt 대조했다. 새 학습 또는 완주 증거가 아니다.
+- 교훈: 실패 전방 PNG에 흰 선이 보이지만 target_now_m=null·ahead_m=0이었다. camera_target_unavailable을 차선이 영상에서 사라졌다는 뜻으로 설명하지 않는다. RGB·mask·투영·목표점·CORE 허용을 분리해서 진단한다. 저장소 workflow 교훈과 private 일지에 사용자 맵 사진 및 trace 시점을 기록했다. segmentation 원본 mask와 맵 렌더 일치 여부는 미확인이다.
+- 변경: velocity solver 반복 1의 rest trace spike에 대해 8로 높이는 수치 정확도 비교 실험을 준비했다. 위치 반복 수 보존과 실제 SDK readback 일치를 강제하고 summary에 남긴다. source b9dc219e4 원격 119 PASS·NEW 0·독립 SOURCE APPROVE. 적용 효과는 SDK 재시험 전 미확인이다. 바퀴 gain·캐스터·정지 .005/.02 및 연속 .3s·2s 제한·CORE/Fleet 권한은 유지한다.
+- gate 변화: 없음. 네 방향 완주·새 RL·두 대 Fleet·교통 규칙·ROS-SIM·실물 수용은 HOLD다.
