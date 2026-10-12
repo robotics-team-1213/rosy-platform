@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.219
+**Version:** v1.220
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,27 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.220 CORE native outcome ports (D-732)
+
+SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 기존 실행 owner와 최종 cmd_vel 권한, envelope protocol_version 1.0을 유지한다.
+
+| 기존 명령 | 선택적 추가 본문 | 승인 응답 추가 필드 / owner |
+| --- | --- | --- |
+| POST `/api/v1/navigation/goal` | 기존 correlation_id/lease_ttl_s 유지 | `operation`, NavigationManager 승인 잠금에서 캡처 |
+| POST `/api/v1/navigation/home` | `{correlation_id?: string(1..128), lease_ttl_s?: finite number(0,5]}`; lease는 CID 필요; 본문 생략 유지 | `operation`, 기존 goal에 kind=home으로 전달하여 단 하나의 run 생성 |
+| POST `/api/v1/docking/dock` | 기존 dock + `correlation_id?: string(1..128)` | 기존 DockingStatus + captured `operation` |
+| POST `/api/v1/docking/undock` | `{correlation_id?: string(1..128)}`; 본문 생략 유지 | 기존 DockingStatus + captured `operation` |
+| POST `/api/v1/swarm/follow` | 기존 SwarmFollowParams + `correlation_id?: string(1..128)` | 기존 응답 + captured `operation` |
+| POST `/api/v1/teleop` | 기존 linear/angular + `correlation_id?: string(1..128)` | 기존 accepted + captured `operation`; 단발 watchdog pulse이며 거리 달성은 아님 |
+
+`operation`은 CORE 생성 UUID `run_id`, process UUID `boot_id`, kind(navigate/home/dock/undock/follow/teleop), 선택적 correlation_id, phase(SUBMITTED/RUNNING/TERMINAL), result(null/SUCCEEDED/FAILED/CANCELED/PREEMPTED/EXPIRED), reason(null 또는 최대64자 고정 uppercase machine code)를 갖는다. SUBMITTED/RUNNING은 result=null, TERMINAL은 result 필수다. admission 거절은 기존 오류이며 operation을 생성하지 않는다. CID 재사용도 새 native run이다. CID는 admission·멱등·retry 권한이 아니다. API는 잠금 밖 최신 상태를 재조회하여 원래 RPC receipt를 만들지 않는다.
+
+GET `/api/v1/navigation/state`, `/api/v1/docking/status`, `/api/v1/swarm/state` 및 새 viewer GET `/api/v1/teleop/state`에 선택적 UUID query `run_id`를 추가한다. query가 없으면 현재 또는 가장 최근 operation, 있으면 정확히 일치하는 current/최근32 terminal만 반환한다. `lookup:FOUND|UNKNOWN`과 `operation`을 추가하며 missing/pruned/reboot identity는 UNKNOWN/null이다. 최신 다른 run으로 대체하지 않는다. 기존 snapshot 필드를 유지한다. 기존 event/audit 포트는 같은 run_id/boot_id를 포함한 종결 이벤트를 전달한다. 감사 보존은 기존30일/no per-event fsync와 FleetCoreEventStore 규칙을 따른다. 영구 실행 복원·자동 재발행은 하지 않는다.
+
+readback `quiescence`는 `boot_id`, `owner_run_id:null|UUID`, `requested_run_id:UUID`, `observed_at:UTC`, boolean `admitting`, `pending_submission`, `actuating_callback`, `lease_active`, `quiescent`를 갖는다. 실제 native owner와 transport generation의 잠금 경계에서 읽으며 요청 run이 동일 boot의 retained terminal, 현재 owner 없음, 네 실행 가능성 모두 false일 때만 quiescent=true다. 조회 identity나 자료가 없으면 null이다. 일반 IDLE·0 velocity·만료된 lease 시각만으로 증명하지 않는다. Fleet의 exact robot/boot/run/claim generation CAS에만 사용한다. SAFE_RELEASED는 완료나 후속 이동 권한이 아니다.
+
+native terminal은 첫 확정 이후 불변이다. backend 거절 FAILED/BACKEND_REJECTED, 알려진 backend 오류 FAILED/BACKEND_ERROR, lease 만료 EXPIRED/LEASE_EXPIRED, 명시적 취소 CANCELED/CANCELED, 안전 취소 CANCELED/SAFETY_STOP, stuck FAILED/STUCK으로 구분한다. 통신 불명은 성공으로 바꾸지 않는다. navigation callback은 actual backend generation에 캡처한 identity를 사용한다. 도킹·undock 성공과 취소는 별개이며 충전 관측이 terminal을 다시 쓰지 않는다. follow hold는 RUNNING, re-follow 이전 run은 PREEMPTED다. 별도 현재 권한의 cancel/stop은 실제 닫은 이전 run receipt를 반환하며 concurrent 새 run으로 대체하지 않는다. watchdog 종료는 teleop EXPIRED이며 물리 거리 성과가 아니다. 원래 grant 만료·철회 뒤에도 terminal을 읽어 원장에 확정할 수 있지만 새 명령은 발행할 수 없다. 기존 manager 반환형·keyword 없는 executor·auth/capability/localization/calibration/readiness/mode/CORE writer/E-stop 해제 금지 계약을 유지한다.
 
 ### v1.219 경로 사실 묶음 (D-726)
 
