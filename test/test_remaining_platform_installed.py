@@ -243,6 +243,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.incidents.automation.contract', 'fleet.incidents.automation.store',
                'fleet.incidents.automation.observation',
                'fleet.incidents.automation.closure', 'fleet.incidents.automation.worker',
+               'fleet.incidents.automation.execution.worker',
                'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
