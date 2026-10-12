@@ -16,6 +16,10 @@ ROOT factory의 명시적 operating 설정은 trusted/evidence owner 포트와 �
 
 ## Verification
 
+모델 제출도 기존 resolver의 `sent`/`result`를 사용한다. 새 사건으로 재정지해도 같은 chain의 조치 예산을 소비하며, 최종 제출 직전에 전체 resolver 시간 한계·다른 사건의 결과 불명·소진된 관측 상태를 다시 확인한다. ACK·REFUSED·UNKNOWN은 영속 terminal 기준으로 처리하고 UNKNOWN은 재전송하지 않는다.
+
+후속 floor 보완: 모델 BACK도 기존 `lane_lost.ai_proposal_invalid`의 전체 R3 제한을 재사용한다. CORE 교차로 상태 누락/unknown, 지도 관측 소실, 뒤쪽 동료 위치 미확인, 후방 blocked, 현장 AI 사실, 기존 규칙 예산·거절 상태를 모델 합의로 완화하지 않는다. 현재 resolver chain과 동일 관측 창을 요구하며 기존 R6의 peer waiver도 모델에는 적용하지 않는다. 이 source 보완은 기존 작동 AI 제한의 공유이지 새로운 주행 판단식이 아니다.
+
 모델 claim과 기존 사건 PENDING을 같은 DB transaction에 결속한다. 기존 LineStuckAnswerLog는 자신의 DB와 활성 transaction만 받는다. 공개 관제 기록은 commit 성공 후 표시하고 rollback된 제출을 노출하지 않는다. terminal은 operating.finish의 영속 반환 상태를 기준으로 기존 사건 원장과 연결한다. 실제 정상 관측은 UNVERIFIED action credit를 유지하며 모델 성공으로 승격하지 않는다.
 
 실제 SQLite 및 HttpRobotClient 기반 SOURCE fixture에서 단일 POST, GET 중 HOLD/사람 점유/client 교체/미지원 거절, 연결 단절·취소·중복 거절을 원격으로 검증한다. 기존 resolver 회귀와 source 없는 설치 import를 별도로 확인한다. 실제 모델·독립 현장 정답·설치 수용·로봇 복구·FULL CI는 이 source 검증으로 완료하지 않는다.
