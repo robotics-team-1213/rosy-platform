@@ -6,6 +6,12 @@
 
 ## D-706 구현 checkpoint
 
+### D-707 영속 보정 승인 checkpoint
+
+`8c0ca46af0`에서 같은 registry 소유자의 immutable 후보 snapshot·별도 reasoning tables/chain과 signed 보정 승인·폐기를 구현했다. 기존 Registry의 드라이브/trust/FULL BEGIN IMMEDIATE를 재사용하고 Decision validator는 명시적 포트로만 주입한다. 후보와 보정 원본을 매 읽기 재검증하고 candidate/full-profile/domain/calibration digest/kind/expected-head/verdict를 HMAC receipt에 결속한다. head CAS·승인 revision 충돌·폐기 map 제거를 확인한다. 운영 current/previous·action admission은 추가하지 않았다.
+
+적격 AI PC의 관련 registry·구조·source-less wheel/sdist·실제 incident calibration worker 원격 회귀는 `86522505c4`에서 148 passed/terminal exit 0이다. 독립 검토 후 현재 key/kind 제거·변경과 resealed 과거 receipt signature 변조를 추가했고 `6b2e526694`의 실제 재시작 회귀 21 passed/terminal exit 0을 확인했다. 로그는 기존 세션의 `logs/reasoning-registry-boundary/run-1.txt`, `logs/reasoning-registry-restart/run-1.txt`다. 전체 승인 원장과 worker를 연결한 실제 흐름·설치 trust·운영 전환·현장 수용은 아직 남아 있다.
+
 `feat/reasoning-artifact`의 `d94447edea`에서 내부 후보 계산·재검증과 기존 Model PC 도구의 실제 생산 경로를 구현했다. 계산 소유자는 `operations/decision/src/rosy/decision/deliberation/evaluation/reasoning_candidate.py`다. learning registry는 운영 Decision을 직접 import하지 않는다. 전체 ModelProfile·domain과 fit/evaluation/training/reviewed_profile 원본·재계산 보정 결과를 seal하며 입력과 후보는 각각 2 MiB 이내다. 기존 모델 invocation 16 KiB 제한은 유지한다.
 
 `python tools/decision_calibration.py --candidate <input>`의 입력은 `{profile, calibration_input}`이다. `--from-feedback`을 함께 쓰면 실제 원장 export와 검수 입력을 기존 D-703 경계에서 먼저 결속한다. offline PASS만 exit 0이고 HOLD·FAIL도 후보 자료를 보존하며 exit 1이다. 기존 `--compare`와는 배타적이다. 결과의 `field_accepted`는 false이며 후보 생성이 승인·운영 current 설정은 아니다.
