@@ -212,3 +212,12 @@
 - 교훈: 실패 전방 PNG에 흰 선이 보이지만 target_now_m=null·ahead_m=0이었다. camera_target_unavailable을 차선이 영상에서 사라졌다는 뜻으로 설명하지 않는다. RGB·mask·투영·목표점·CORE 허용을 분리해서 진단한다. 저장소 workflow 교훈과 private 일지에 사용자 맵 사진 및 trace 시점을 기록했다. segmentation 원본 mask와 맵 렌더 일치 여부는 미확인이다.
 - 변경: velocity solver 반복 1의 rest trace spike에 대해 8로 높이는 수치 정확도 비교 실험을 준비했다. 위치 반복 수 보존과 실제 SDK readback 일치를 강제하고 summary에 남긴다. source b9dc219e4 원격 119 PASS·NEW 0·독립 SOURCE APPROVE. 적용 효과는 SDK 재시험 전 미확인이다. 바퀴 gain·캐스터·정지 .005/.02 및 연속 .3s·2s 제한·CORE/Fleet 권한은 유지한다.
 - gate 변화: 없음. 네 방향 완주·새 RL·두 대 Fleet·교통 규칙·ROS-SIM·실물 수용은 HOLD다.
+
+## 2026-10-12 · 1158008ac1 · held-path 작업 통합과 곡선 거절 진단
+
+- 변경: 사용자 지정 wt-held-path-b73c92의 clean HEAD0bda628988(D-708)을 우리 Isaac worktree에 병합했다. 두 충돌에서 native scan·return pose·stale 검사·wall 전달·CORE containment와 정확한 현재 pose 소비를 함께 보존했다. held camera_tick은 기존 camera_checks helper로 통합하고 runner alias를 유지했다. held 출처는 RL state None·gain1이며 최신 거절을 덮어쓰지 않는다. 상대 worktree 파일은 수정하지 않았다.
+- 증거: source8934364652 목표 거절 원인 보존은 RED3FAIL/67PASS 후 원격90PASS/NEW0·독립 SOURCE APPROVE. 통합1158008ac1은 원격322PASS/1SKIP/NEW0·독립 SOURCE INTEGRATION APPROVE. 병합으로 들어온 D692 gap을 실제 ADR 존재 확인 후 e84631d1a에서 제거했다. 이후 main439e80c47 병합은 Discord 문서2개만 변경했다.
+- 진단: R31 실패 RGB의 동일 frozen model 오프라인 재추론에서 lane7210/drivable18253/way16937픽셀과 target[.19,.137]·ahead0·exitleft를 얻었다. 과거 실시간 mask 증거로 부르지 않는다. 이 프레임의 단독 DrivableSteer 재현은 pivot 허용 true/false 모두 exit_behind_line=true·drivable_closed·출력없음이다. 원래 주행 전체의 odom·LiDAR·이력을 재현한 결과는 아니다. fresh closed 사례는 D708 gap 유지 기능만으로 해결되지 않는다.
+- SDK: R32는 실제 solver position32/velocity8을 읽었지만 4개 최종 episode·중단된 baseline909 영상 이후 정지/cleanup 정지 실패로 exit1, 완주0이다. 실제5개 영상/43개 산출물을 private에 독립 검증 보존했다. R33 source0b4ddd5af9(7469 source hash 검증)는 자원 대기 중이며 SDK 시작 증거는 아직 없다.
+- 조율: 대상 별도 세션은 연결 agent 목록에 없어 직접 메시지 전송이 실패했다. 사용자에게 알리고 private drive-session-handoff에 대상·증거·통합·거절 경로를 기록했다. 문서 존재와 별도 작업자의 수신을 구분한다.
+- gate 변화: 없음. 실제 곡선 완주·새 강화학습·두 대 교통/Fleet·ROS-SIM·실물 수용은 미완료다.
