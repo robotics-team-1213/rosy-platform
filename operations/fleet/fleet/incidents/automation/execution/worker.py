@@ -16,7 +16,7 @@ from fleet.server.incident_deliberation import FleetBaseline
 from ..closure import observe_closure
 from ..contract import CaseBudget, CaseScope, micros
 from ..ledger.receipt import model_receipt
-from rosy.decision.deliberation.contracts.billing import call_cost_evidence
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence, _RejectedJudgment
 from rosy.decision.deliberation.calibration_selection import select_calibrated
 from ..recovery_candidates import RecoveryCandidates, observed_recovery
 
@@ -300,7 +300,7 @@ class IncidentCaseWorker:
         case = await self._db('case', scope)
         remaining = min(profile.timeout_s, case['deadline'] - self.clock())
         cost, checked, state = None, None, 'UNKNOWN'
-        cost_evidence, evidence_error = None, False
+        cost_evidence, evidence_error, rejected_unsafe = None, False, False
         try:
             if remaining <= 0 or not self._fresh(problem): raise ValueError('INCIDENT_SCOPE_CHANGED')
             async with asyncio.timeout(remaining):
@@ -317,6 +317,14 @@ class IncidentCaseWorker:
                 state='UNKNOWN', actual_cost_usd=cost, summary={'reason': 'WORKER_CANCELLED'}))
             await asyncio.shield(self._finish(scope, 'WORKER_CANCELLED'))
             raise
+        except _RejectedJudgment as error:
+            try:
+                if (type(error) is not _RejectedJudgment or error.bound != bound
+                        or type(error.unsafe) is not bool or micros(error.cost_usd) > micros(profile.max_cost_usd)):
+                    raise ValueError('REJECTED_CALL_CONTEXT_CHANGED')
+                error.bound.validate(problem, profile)
+                cost, state, rejected_unsafe = error.cost_usd, 'REJECTED', error.unsafe
+            except (ValueError, TypeError): cost, state = None, 'UNKNOWN'
         except Exception:
             if cost is not None:
                 try: micros(cost)
@@ -337,6 +345,8 @@ class IncidentCaseWorker:
         updated = await self._db('case', scope)
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
+        if rejected_unsafe:
+            await self._finish(scope, 'MODEL_UNSAFE_REJECTION'); return None
         if completed['state'] != 'COMPLETED' and checked is not None:
             if self._fresh(problem): await self._finish(scope, 'COST_EVIDENCE_REJECTED' if evidence_error else 'MODEL_TRACE_REJECTED')
             return None
