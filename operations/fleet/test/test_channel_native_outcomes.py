@@ -105,9 +105,13 @@ def test_site_stop_preserves_each_robot_native_receipt():
     assert 'operation' not in receipt['robots'][1]
 
 
-@pytest.mark.parametrize('site', [False, True])
-@pytest.mark.parametrize('empty', [False, True])
-def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_path, site, empty):
+@pytest.mark.parametrize('site,empty,fault', [(s,e,'none') for s in (False,True) for e in (False,True)] +
+    [(True,False,f) for f in ('delayed','reboot','row','pruned','conflict','partial','revoked')])
+def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_path, monkeypatch, site, empty, fault):
+    from fleet.server.channel.execution.outcomes import reconcile, stops
+    tick = [10.]
+    monkeypatch.setattr(reconcile, 'time', SimpleNamespace(monotonic=lambda: tick[0]))
+    monkeypatch.setattr(stops, 'time', SimpleNamespace(monotonic=lambda: tick[0]))
     text, plan = ('전체 비상정지해', {'do': 'estop'}) if site else ('40번 비상정지해', {'do': 'stop', 'robot': 'rosy_40'})
     f = fixture(tmp_path, text, plan, extra_robots=('rosy_41',) if site else ())
     robots = f.worker.execution.console.robot_ids
@@ -116,36 +120,50 @@ def test_safety_stop_closes_all_captured_owners_without_borrowed_release(tmp_pat
         assert f.store.reserve_resources(owner_kind='direct_action', owner_id='motion:' + robot,
             generation=f.store.dispatch_control()['generation'], resources=[('robot', robot)])
         values[robot] = [dict(_operation(uuid4(), boot, robot), kind=kind) for kind in ('navigate', 'teleop')]
+        if fault in {'pruned','conflict'}:
+            values[robot] = [op | {'phase':'TERMINAL','result':'CANCELED'} for op in values[robot]]
     async def stop():
         sent.append(True)
         return {'estop': True, 'operations': [] if empty else values['rosy_40']}
     async def stop_all():
         sent.append(True)
         return {'robots': [{'robot_id': robot, 'stopped': True,
-                           'result': {'estop': True, 'operations': [] if empty else values[robot]}} for robot in robots]}
+                           'result': {'estop': True, 'operations': [] if empty else values[robot]}}
+                          for robot in (robots[:-1] if fault == 'partial' else robots)]}
     quiescent = [False]
     def client(robot):
         async def get(path):
             operation = next(op for op in values[robot] if op['run_id'] in path)
-            return _readback(operation, result='CANCELED', quiescent=quiescent[0])
+            value = _readback(operation, result='SUCCEEDED' if fault == 'conflict' else 'CANCELED', quiescent=quiescent[0])
+            if fault == 'pruned': return {'lookup':'UNKNOWN','operation':None}
+            if fault == 'reboot': value['owner']['boot_id'] = str(uuid4())
+            if fault == 'delayed' and quiescent[0]: tick[0] += 2.01
+            if fault == 'row' and quiescent[0]:
+                with f.store._connect() as conn, conn:
+                    conn.execute('UPDATE fleet_channel_execution_steps SET caller_cid=?', (str(uuid4()),))
+            return value
         return SimpleNamespace(_get=get, estop=stop)
     f.worker.execution.console._client = client
     f.worker.execution.console.estop_all = stop_all
     rid = f.receipt['request_id']
     asyncio.run(f.worker.step(rid))
+    if fault == 'revoked': f.raw.withdraw(f.receipt['guild_id'], f.receipt['channel_id'], f.receipt['message_id'])
     asyncio.run(f.worker.step(rid))
     current = f.journal.view(rid)['steps'][0]
-    if empty:
+    if empty or fault == 'partial':
         assert current['state'] == 'HOLD' and rid not in f.worker.pending()
     else:
         assert current['state'] == 'UNKNOWN' and rid in f.worker.pending()
         quiescent[0] = True
         asyncio.run(f.worker.step(rid))
         current = f.journal.view(rid)['steps'][0]
-        assert current['state'] == 'CANCELED' and rid not in f.worker.pending()
+        closed = fault in {'none','revoked'}
+        assert current['state'] == ('CANCELED' if closed else 'UNKNOWN')
+        assert (rid not in f.worker.pending()) == closed
         receipt = json.loads(current['receipt_json'])
         assert len(receipt['stop_outcomes']) == len(robots) * 2
-        assert all(item['quiescence']['quiescent'] for item in receipt['stop_outcomes'])
+        if closed: assert all(item['quiescence']['quiescent'] for item in receipt['stop_outcomes'])
+        if fault in {'pruned','conflict'}: assert all(item['outcome']['result']=='CANCELED' for item in receipt['stop_outcomes'])
         assert not receipt.get('safe_released')
     assert len(sent) == 1
     assert all(f.store.resource_claims(resource_kind='robot', resource_id=robot) for robot in robots)
