@@ -206,7 +206,8 @@ class LearnedCameraLane:
                 self.last['camera_target'] = {key: info.get(key) for key in
                     ('target_m', 'target_now_m', 'ahead_m', 'guided', 'guide_deg', 'straddle',
                      'reason', 'exit', 'seen_exit', 'exit_behind_line', 'side_clear_m',
-                     'reorient_deferred', 'pivot_limit', 'exit_from_memory')}
+                     'reorient_deferred', 'pivot_limit', 'exit_from_memory', 'centre_path_m',
+                     'near_centre_m', 'wall_ahead_m')}
                 return
             observation = None if step is None else LaneObservation(*step)
         now = self.clock()

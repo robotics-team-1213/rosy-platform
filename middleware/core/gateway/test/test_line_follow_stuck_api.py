@@ -122,6 +122,36 @@ def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_cl
     assert refused.status_code == 409 and "body_geometry_unset" in refused.text
 
 
+@pytest.mark.parametrize("elapsed, phase", [(0.1, "BACKING"), (2.7, "SETTLING")])
+def test_delayed_back_api_answer_preserves_active_recovery(core_client, elapsed, phase):
+    pinky = _yaml(PINKY)
+    pinky["line_follow"]["recovery_local_enabled"] = True
+    client, services, stuck_id = _stuck(
+        lambda **kw: core_client(config_overrides=pinky, **kw))
+    lf = services.line_follow
+    started = lf._clock()
+    rear = pinky["line_follow"]["body_lidar_x_m"] - pinky["line_follow"]["body_rear_x_m"] + 0.30
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=started)
+    body = {"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}
+    accepted = client.post(URL, json=body, headers=OPERATOR)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["outcome"] == "back"
+    now = started + elapsed
+    lf.bind_clock(lambda: now)
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=now)
+    lf.tick(now)
+    assert lf.status().stuck.phase == phase
+    until = lf._recovery._until
+    refused = client.post(URL, json=body, headers=OPERATOR)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "STUCK_DECISION_REFUSED"
+    assert "back_active" in refused.text
+    assert lf.status().stuck.phase == phase and lf.status().stuck.attempts == 1
+    assert lf._recovery._until == until
+    stopped = client.post(URL, json={**body, "decision": "WAIT"}, headers=OPERATOR)
+    assert stopped.status_code == 200 and stopped.json()["outcome"] == "hold"
+
+
 @pytest.mark.parametrize("decision, mode", [("ABORT", Mode.IDLE), ("MANUAL", Mode.MANUAL)])
 def test_abort_and_manual_turn_line_follow_off(core_client, decision, mode):
     client, services, stuck_id = _stuck(core_client)

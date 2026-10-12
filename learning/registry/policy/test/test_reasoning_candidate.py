@@ -10,7 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'),
-               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test')]
+               str(ROOT / 'operations/decision/src'), str(ROOT / 'operations/fleet/test'),
+               str(ROOT / 'operations/fleet')]
 from rosy.contracts.learning import seal
 from test_judgment_calibration import rows, manifest, profile, limits, IDENTITY
 from test_judgment_profiles import profile as model_profile
@@ -95,3 +96,12 @@ def test_candidate_cli_binds_real_journal_feedback_and_refuses_changed_receipt(t
     result = subprocess.run(command, capture_output=True, text=True, timeout=30)
     assert result.returncode == 1 and not result.stderr
     assert json.loads(result.stdout) == dict(state='HOLD', reason='INVALID_CALIBRATION_INPUT', field_accepted=False)
+
+
+def test_feedback_fixture_bootstraps_without_fleet_test_collection(tmp_path):
+    script = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+              "import test_reasoning_candidate; from test_calibration_feedback_cli import data; "
+              "data(Path(sys.argv[2]))")
+    result = subprocess.run([sys.executable, '-I', '-c', script, str(Path(__file__).parent),
+                             str(tmp_path / 'isolated-journal')], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
