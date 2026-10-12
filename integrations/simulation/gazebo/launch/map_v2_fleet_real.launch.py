@@ -90,6 +90,7 @@ def generate_launch_description():
             executable="line_observer_node",
             name="line_observer_node",
             output="screen",
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay")},
             parameters=[line_config, {
                 "use_sim_time": True,
                 # Gazebo has no camera controls to report stable.

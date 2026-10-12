@@ -76,6 +76,7 @@ def generate_launch_description():
             package="control",
             executable="line_observer_node",
             name="line_observer_node",
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay")},
             output="screen",
             parameters=[line_config, {
                 "use_sim_time": True,
