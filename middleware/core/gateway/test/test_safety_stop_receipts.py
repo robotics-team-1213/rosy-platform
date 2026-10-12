@@ -62,19 +62,19 @@ def test_safety_stop_never_substitutes_unknown_or_later_identity(core_client, mo
     services.modes.transition(Mode.MANUAL)
     services.command.teleop(0.1, 0)
     captured = services.command.native_readback()["operation"]
-    readback = services.command.native_readback
+    capture = services.command.capture_native_operation
 
     def changed_readback(run_id=None):
-        view = readback(run_id)
+        operation = capture(run_id)
         if run_id is not None:
             if missing == "pruned":
-                view.update(operation=None, lookup="UNKNOWN", quiescence=None)
+                return None
             else:
                 field = "boot_id" if missing == "reboot" else "run_id"
-                view["operation"][field] = str(uuid4())
-        return view
+                operation = operation.model_copy(update={field: uuid4()})
+        return operation
 
-    monkeypatch.setattr(services.command, "native_readback", changed_readback)
+    monkeypatch.setattr(services.command, "capture_native_operation", changed_readback)
     response = client.post("/api/v1/safety/stop", headers=VIEWER)
     assert response.json()["operations"] == [captured]
     assert services.safety.estop
@@ -88,7 +88,7 @@ def test_failed_owner_capture_cannot_block_safety_latch(core_client, monkeypatch
     def unavailable(run_id=None):
         raise RuntimeError("owner readback unavailable")
 
-    monkeypatch.setattr(services.nav, "native_readback", unavailable)
+    monkeypatch.setattr(services.nav, "capture_native_operation", unavailable)
     response = client.post("/api/v1/safety/stop", headers=VIEWER)
     assert response.status_code == 200
     assert response.json() == {"estop": True, "operations": []}
@@ -144,13 +144,13 @@ def test_safety_stop_failed_post_readback_retains_pending_identity(core_client, 
     client, services = core_client()
     services.modes.transition(Mode.MANUAL)
     services.command.teleop(0.1, 0)
-    readback = services.command.native_readback
-    captured = readback()["operation"]
+    capture = services.command.capture_native_operation
+    captured = capture().model_dump(mode="json")
 
     def failed_readback(run_id=None):
         if run_id is not None:
             raise RuntimeError("readback unavailable")
-        return readback()
+        return capture()
 
-    monkeypatch.setattr(services.command, "native_readback", failed_readback)
+    monkeypatch.setattr(services.command, "capture_native_operation", failed_readback)
     assert client.post("/api/v1/safety/stop", headers=VIEWER).json()["operations"] == [captured]

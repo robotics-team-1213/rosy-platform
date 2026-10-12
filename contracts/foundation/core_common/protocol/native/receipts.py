@@ -58,6 +58,17 @@ class NativeReceipts:
         return {"boot_id": str(BOOT_ID), "owner_generation": self.generation,
                 "owner_run_id": str(self.current.run_id) if self.current and self.current.phase != "TERMINAL" else None}
 
+    def capture(self, lock, run_id: UUID | None = None) -> NativeOperation | None:
+        """Copy only the locked ledger; optional safety evidence must never wait."""
+        if not lock.acquire(blocking=False):
+            raise BlockingIOError("native owner is busy")
+        try:
+            operation = self.lookup(run_id)
+            return operation if (run_id is not None or operation is not None
+                                 and operation.phase != "TERMINAL") else None
+        finally:
+            lock.release()
+
     def readback(self, run_id: UUID | None = None, *, admitting: bool = False,
                  pending_submission: bool = False, actuating_callback: bool = False,
                  lease_active: bool = False,

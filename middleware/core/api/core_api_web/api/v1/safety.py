@@ -13,7 +13,6 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
 from core_common.config import ConfigError, patch_local_config
-from core_common.protocol.native_operation import NativeOperation
 
 
 logger = logging.getLogger(__name__)
@@ -26,13 +25,8 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
     captured = []
     for owner in (svc.nav, svc.docking, svc.swarm, svc.command):
         try:
-            view = owner.native_readback()
-            if view["operation"] is None:
-                continue
-            operation = NativeOperation.model_validate(view["operation"])
-            if (operation.phase != "TERMINAL"
-                    and str(operation.run_id) == view["owner"]["owner_run_id"]
-                    and str(operation.boot_id) == view["owner"]["boot_id"]):
+            operation = owner.capture_native_operation()
+            if operation is not None:
                 captured.append((owner, operation))
         except Exception:
             # Optional evidence must never prevent the existing safety path.
@@ -46,8 +40,8 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
     operations = []
     for owner, operation in captured:
         try:
-            current = NativeOperation.model_validate(owner.native_readback(operation.run_id)["operation"])
-            if (current.run_id, current.boot_id, current.kind) == (
+            current = owner.capture_native_operation(operation.run_id)
+            if current is not None and (current.run_id, current.boot_id, current.kind) == (
                     operation.run_id, operation.boot_id, operation.kind):
                 operation = current
         except Exception:
