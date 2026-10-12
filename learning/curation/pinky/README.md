@@ -1,5 +1,7 @@
 # 기존 Pinky 녹화의 공통 Episode
 
+D-704: 원본 Twist의 여섯 축이 모두 유한한 숫자여야 하며, 평면 자료에 포함하지 않는 linear.y/z·angular.x/y는 0이어야 한다. 다른 축의 움직임·NaN·Infinity를 버리거나 null/0으로 보간하지 않고 원본 검증을 거절한다. 최종 속도 기록만으로 모델의 불필요 개입이나 전체 수집 범위·재발 0건을 입증하지 않는다.
+
 닫힌 `rosy.recording.session/1` 원본 폴더와 `bag_to_video.py`의
 `rosy.teleop.video/1` metadata·영상·JSONL·선언된 scan 파일을 입력으로 받는다.
 
