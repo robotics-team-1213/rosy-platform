@@ -28,6 +28,10 @@ def status_snapshot(snapshot):
         selected.append({'robot_id': rid, 'online': row.get('online'),
             'mode': state.get('mode'), 'estop': safety.get('estop') if type(safety) is dict else None,
             'line_state': line.get('state') if type(line) is dict else None})
+        for key in ('mode','line_state'):
+            if selected[-1][key] is not None:identifier(selected[-1][key])
+        if selected[-1]['estop'] is not None and type(selected[-1]['estop']) is not bool:
+            raise ValueError('CHANNEL_STATUS_INVALID')
     if len({r['robot_id'] for r in selected}) != len(selected):
         raise ValueError('CHANNEL_STATUS_INVALID')
     return {'robots': sorted(selected, key=lambda r: r['robot_id'])}
@@ -127,6 +131,23 @@ class ChannelModelJobs:
             conn.execute("UPDATE fleet_channel_model_jobs SET state='RUNNING' WHERE request_id=?", (request_id,))
             return {'request_id': request_id, 'role': role, 'input_hash': row['input_hash'],
                     'profile_set_hash': row['profile_set_hash'], 'deadline': row['deadline']}
+
+    def reject(self, receipt):
+        now=self.clock()
+        row=dict(request_id=receipt['request_id'],receipt_hash=receipt['content_hash'],
+            route_hash=self.journal.reply_outbox.route_hash(),profile_set_hash=self.profile_set_hash,
+            input_hash=receipt['content_hash'],created_at=now,deadline=now+60)
+        with closing(self.journal._connect()) as conn,conn:
+            conn.execute('BEGIN IMMEDIATE')
+            self._receipt(conn,row)
+            # Named parameters keep the immutable receipt and response in one transaction.
+            row['result']=canonical({'reason':'STATUS_INPUT_INVALID','action_admissible':False})
+            changed=conn.execute('''INSERT OR IGNORE INTO fleet_channel_model_jobs
+                VALUES (:request_id,:receipt_hash,:route_hash,:profile_set_hash,:input_hash,'{}','{}',
+                    'HOLD',:created_at,:deadline,:result,:created_at)''',row).rowcount
+            if changed:
+                self.journal.reply_outbox.enqueue(conn,receipt,'DELIBERATION',
+                    f"ROSY 상태 검토 · {receipt['request_id']}\n입력 또는 관측을 검증하지 못해 보류했습니다. 한 줄 128자 이내 상태 질문을 보내주세요. 실행 승인 아님.")
 
     def record_attempt(self, request_id, role, *, state, result, known_cost_usd, input_hash, profile_set_hash):
         if (state not in ('RESULT', 'FAILED', 'UNKNOWN') or type(result) is not dict
