@@ -372,3 +372,15 @@
 - 변경: 기존 sim_ir_floor 변환이 새 mid ray와 옛 좌우 ray를 합쳐 바닥 증거를 갱신하던 오류를 수정했다. 세 ray의 동일한 정규 timestamp·새 프레임·20Hz 한 주기 이내 source age를 확인하고 ROS clock timer에서 한 번만 발행한다. 입력 분류 함수·ADC 형식·바닥 거리·CORE motion gate는 유지한다.
 - 증거: 원격 RED로 혼합 timestamp의 floor 갱신을 재현했다. 수정된 Gazebo 전체 회귀는 318 PASS/4 SKIP/terminal exit 0이고 독립 drive_review가 202c807dc 및 8226c122f8에 SOURCE APPROVE했다. 별도 AI PC R6 정지 실행의 기존 소스에서 두 로봇 각각 세 ray의 동일 시각 514/514 프레임과 실제 IR·IMU·scan, enforce 및 junction_turn capability를 확인했다. R6는 수정 helper 실행 증거가 아니다.
 - gate 변화: SOURCE/원격 회귀와 실제 센서 연결 근거를 구분한다. R6의 첫 로봇 blocked=true는 유지했다. 새 helper의 실제 실행·유효 Fleet 통행권 아래 주행·완주·장치 수용은 별도 검증이 필요하다.
+
+## 2026-10-12 · uncommitted · 시뮬 관찰 법칙은 core_common 의존으로 선언한다
+
+- 변경: `gz_multi_parts.py`가 CORE line_follow 법칙을 읽으므로 `gz_sim/package.xml`에 `core_common` exec_depend를 선언했다.
+- 증거: 착지 라운드의 원격 시험이 `test_every_cross_package_use_is_declared`와 `test_package_xml_covers_imports`를 NEW로 보고 멈췄다. 선언 뒤 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음. 시뮬 완주와 실물 수용은 이 선언으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
+
+- 변경: map_v2_fleet 두 learned line observer에 기존 crosswalk_uncertainty_enabled를 명시했다. 검출된 횡단 구역 또는 미검출 프레임의 lookahead 거리 오차를 기존 containment에 전달한다. 이 입력은 기존 조건부 구역 수용과 IR guard 유예에 사용되므로 보고만의 변경은 아니다. CORE 횡단 gate의 활성 여부·임계값·최종 명령 권한은 변경하지 않는다.
+- 증거: 원격 RED에서 두 namespace 공통 parameter 누락을 재현했다(1 FAIL/2 PASS). 기존 GAZEBO 투영 오차는 경계 미검출 때도 존재하므로 초기 시험의 null 가정을 정정했다. 켜기 전후 lateral 오차 동일, 빈 경계 보존, crosswalk 유무별 finite positive along 오차를 검사한다. 수정 ac1a13865의 관련 원격 회귀는 AI PC에서 151 PASS, terminal exit 0, known_failures NEW 0으로 확인했다.
+- gate 변화: 수용 등급은 그대로 HOLD이며, 입력 연결은 조건부 구역 수용에 영향을 준다. 유효 구역 수용·서행/정지 정책·보행자·Fleet·완주는 실제 두 로봇 실행에서 별도로 확인한다.

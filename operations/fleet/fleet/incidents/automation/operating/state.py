@@ -120,9 +120,9 @@ class OperationalState:
             (subject_id, case_id)).fetchone():
             raise ValueError('LEGACY_CASE_SUBMISSION_ALREADY_EXISTS')
 
-    def claim_model(self, scope, grant_id, attempt_id, *, expected_epoch, generation, guard):
+    def claim_model(self, scope, grant_id, attempt_id, *, expected_epoch, generation, guard, on_claim=None):
         identifier(grant_id); identifier(attempt_id); identifier(generation)
-        if type(expected_epoch) is not int or expected_epoch < 0 or not callable(guard):
+        if type(expected_epoch) is not int or expected_epoch < 0 or not callable(guard) or on_claim is not None and not callable(on_claim):
             raise ValueError('EXPLICIT_EPOCH_AND_FINAL_OWNER_GUARD_REQUIRED')
         with self.store._transaction() as conn:
             self.store._case(conn, scope, active=True)
@@ -152,6 +152,10 @@ class OperationalState:
                 input_hash=candidate['input_hash'], generation=generation, expected_stuck=candidate['expected_stuck'], reply=None))
             conn.execute('INSERT INTO fleet_operation_submissions VALUES (?,?,?)',
                          (scope.subject_id, scope.case_id, canonical(record)))
+            if on_claim is not None:
+                if on_claim(conn) is not True or guard(conn) is not True or self._grant(conn, grant_id) != approval:
+                    raise ValueError('OPERATING_AUDIT_OR_CONTEXT_CHANGED')
+                self.store._case(conn, scope, active=True)
             return record
 
     def claim_rule(self, subject_id, case_id, *, generation, decision, guard):

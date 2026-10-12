@@ -326,7 +326,7 @@ class LineStuckBoard:
                accepted: Optional[bool], outcome: Optional[str] = None,
                code: Optional[str] = None, message: Optional[str] = None,
                audit_id: Optional[str] = None, tier: Optional[str] = None,
-               rule: Optional[str] = None, escalated: Optional[str] = None, durable: bool = False) -> dict:
+               rule: Optional[str] = None, escalated: Optional[str] = None, durable: bool = False, connection=None) -> dict:
         """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
 
         D-438 §8: ``tier`` (human / rule) and ``rule`` say who decided; a resolver hand-off to
@@ -340,15 +340,18 @@ class LineStuckBoard:
                "code": code, "message": message, "audit_id": audit_id,
                "tier": tier, "rule": rule, "escalated": escalated,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
-        self._answers.append(row)
-        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
-                  robot_id, stuck_id, decision, principal_id, accepted, code)
+        if connection is None: self._publish_answer(row)
         if self._log is not None:
             try:
-                self._log.append(row)
+                self._log.append(row, connection=connection) if connection is not None else self._log.append(row)
             except (OSError, sqlite3.Error):
                 if durable:
                     raise
                 _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
                                robot_id, stuck_id)
         return row
+
+    def _publish_answer(self, row):
+        self._answers.append(row)
+        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
+                  row['robot_id'], row['stuck_id'], row['decision'], row['principal_id'], row['accepted'], row['code'])

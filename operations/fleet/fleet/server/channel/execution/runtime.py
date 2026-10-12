@@ -22,8 +22,13 @@ def install_execution(app,jobs,task_service,scope,admitted,environment,*,refresh
         while True:
             try:
                 pending=worker.pending()
-                if pending:await refresh()
-                for rid in pending:await worker.step(rid)
+                fresh=True
+                if pending:
+                    try:await refresh()
+                    except Exception:fresh=False
+                for rid in pending:
+                    try:await worker.step(rid,allow_dispatch=fresh)
+                    except Exception:logging.getLogger(__name__).warning('Channel outcome remains unresolved')
             except asyncio.CancelledError:raise
             except Exception:logging.getLogger(__name__).warning('Channel execution cycle held; unknown steps are not replayed')
             await asyncio.sleep(1)
