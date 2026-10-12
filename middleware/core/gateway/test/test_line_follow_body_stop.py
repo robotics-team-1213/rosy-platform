@@ -660,7 +660,7 @@ def test_sweep_uses_the_safety_clipped_twist():
     assert _step(m, post, error=-0.3)[1].reason == "obstacle_ahead"
 
 
-def _core_curve_manager(**overrides):
+def _core_curve_manager(*, max_l=.1, max_a=.8, **overrides):
     from types import SimpleNamespace
     from core.drive.line_follow import bind_motion_envelope
     from core_features.traffic_policy import TrafficPolicyMode
@@ -668,7 +668,7 @@ def _core_curve_manager(**overrides):
     m = _manager(**overrides)
     traffic = SimpleNamespace(mode=TrafficPolicyMode.ENFORCED,
                               configuration=lambda: {"active": {"proceed_speed_scale": 0.5}})
-    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=.1, max_angular=.8))
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=max_l, max_angular=max_a))
     bind_motion_envelope(m, safety=safety, traffic_policy=traffic)
     return m
 
@@ -708,6 +708,22 @@ def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch):
     decision, status = _step(m, [], error=-.3)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason) == ("HOLD", "motion_unconfirmed")
+
+
+def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monkeypatch):
+    m = _core_curve_manager(max_l=.005)
+    cap = [.005]
+    m._motion_envelope_provider = lambda: (cap[0], .8, .15)
+
+    def raise_cap(now, decision):
+        cap[0] = .1
+        return decision
+
+    monkeypatch.setattr(m, "_apply_recovery", raise_cap)
+    decision, status = _step(m, [], error=-.3)
+    assert decision.linear == pytest.approx(.005)
+    assert decision.angular / decision.linear == pytest.approx(.24 / .0322)
+    assert status.linear == pytest.approx(.005)
 
 
 def test_an_unreadable_motion_envelope_fails_closed():
