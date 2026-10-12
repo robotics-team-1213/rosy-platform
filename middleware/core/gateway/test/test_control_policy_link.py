@@ -78,6 +78,7 @@ def test_genuine_exception_keeps_traceback_and_first_failure(linked, monkeypatch
     def broken(*args, **kwargs):
         raise RuntimeError('diagnostic-test-failure')
     monkeypatch.setattr(policy, 'evaluate', broken)
+    safety.bind_control_policy(policy)
     assert safety.evaluate_candidate(11, 'navigation', .1, 0., 10.1) is None
     assert safety.evaluate_candidate(12, 'navigation', .1, 0., 10.1) is None
     with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
