@@ -2,6 +2,21 @@
 from dataclasses import replace
 
 
+def learn_transition(policy, previous, state, result):
+    if state is None:
+        if (previous is not None and previous[0] is not None and result['terminated']
+                and not result['truncated'] and result.get('reason') == 'camera_lane_lost'
+                and result.get('camera_failure_reason') == 'camera_target_unavailable'):
+            policy.update(*previous, result['reward'], None, terminated=True)
+            return 'terminal_camera_loss'
+        return 'invalid_camera_observation'
+    if previous is None or previous[0] is None:
+        return 'no_previous_observation'
+    policy.update(*previous, result['reward'], state,
+                  terminated=result['terminated'] or result['truncated'])
+    return 'updated'
+
+
 def remember_camera_action(previous, state, action, frame, candidate, receipts, warnings, halted):
     # A normal CORE return may have sent fallback ZERO; credit only confirmed dispatch.
     if not any(any(twist) for twist in receipts):
