@@ -399,3 +399,9 @@ Leg10 최종 zero 이전 sim54.7 스캔과 이후 CORE HOLD의 sim55.4 스캔은
 목표점 A/B 오프라인 비교는 아직 채택하지 않았다. A는 일부 이전 구간에 페인트 겹침 반례가 남고, B는 실제 48개 관측에서 독립 수용 가능한 경로가 없었다. 안전 빔·잡음·margin·hysteresis를 바꾸거나 현재 거절한 경로를 기억으로 되살리는 수정은 하지 않았다. 원본 지도 완주·새 실행 반복·main 착지·push·실물 수용은 미완료다.
 
 592510e05의 정상 모델 PC 회귀는 몸 검사·실제 lane-return manager·LINE 발행 경계·traffic bridge·차선 추종·LOST 재개·최종 cmd_vel cycle 203 PASS·terminal 0·NEW 0이다. 최종 후보가 다른 곡률이거나 더 빠를 때 거절하고 zero/tiny를 유지하는 회귀를 포함한다. 복구·교차로·다른 모드 및 구조 회귀는 후속 gate이며 새 Gazebo 주행 결과는 아직 없다.
+
+19c66b862의 복구·arc·bridge·junction·권한·횡단보도·swarm·구조·문서 회귀는 685 PASS·NEW 0이다. 그러나 독립 후속 검토에서 일반 추종 이외 후보의 정적 공통 clip 호가 legacy 검사에 포함되지 않는 반례를 찾았다. raw `(0.08,0.8)`와 cap `(0.1,0.01)`의 실제 LINE 호는 `(0.001,0.01)`이며 base point `(0.052,0.078)`에 접촉할 수 있다. 수정한 실제 원격 전진·후진 회귀 e9664ab60은 2 NEW·87 PASS로 재현했다. 첫 점 선택이 접촉하지 않았던 실패 시도도 보존했고 회귀의 실제 전제부터 고쳤다.
+
+a914201e8은 독립 SOURCE 검토 뒤 같은 cap snapshot의 실제 공통 clip 호를 기존 몸 검사에 추가했다. 전진의 LiDAR·기억·초음파 그룹과 후진의 기존 좌표 변환·몸 윤곽에 추가하며 legacy 검사·정지·재개 기준을 제거하지 않는다. CORE-bound generic 호출도 더 보수적으로 거절될 수 있다는 D-737 6항을 기록했다. 일반 추종의 검사 속도 fence와 달리, 다른 manoeuvre의 검사 이후 cap 증가 및 기존 tiny-speed pivot 근사의 전역 해결을 주장하지 않는다. 최종 원격 회귀와 새 전체 Gazebo 실행은 별도 gate다. Leg11은 준비 카드만 만들었으며 예약·빌드·주행하지 않았다.
+
+a914201e8의 최종 정상 모델 PC 회귀는 877 PASS·34 warnings·terminal 0이며 known_failures 판정 NEW 0이다. 전진·후진 정적 공통 호 반례, 기존 충돌·관측·일반 추종·실제 contained return·복구·bridge·arc·junction·권한·횡단보도·swarm과 구조·문서 검사를 포함한다. 경고는 기존 문서/라이브러리 경고이며 이 결과는 source 계약 회귀다. 설치 이미지·Gazebo 완주·실물 수용으로 대신 세지 않는다.
