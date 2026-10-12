@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 import time
 
-from pydantic import Field, model_validator
+from pydantic import Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
 
 from rosy.decision.conversation.codec import Profile, Strict, bounded_environment, checked_answer, digest, source_policy
@@ -22,7 +22,7 @@ class ConversationConfig(Strict):
     known_hosts_file: str = Field(pattern=r'^/run/rosy-deliberation/known_hosts$')
     profile: Profile
     source_commit: str = Field(pattern=r'^[0-9a-f]{40}$')
-    valid_until: float
+    valid_until: FiniteFloat
     primary_admitted: bool
     semantic_evidence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     policy: dict

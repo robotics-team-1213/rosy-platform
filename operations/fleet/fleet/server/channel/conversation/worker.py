@@ -25,15 +25,20 @@ class ConversationWorker:
             raise
 
     async def current(self, request_id, question):
-        await self.snapshot()
+        try:await self.snapshot()
+        except (ValueError, TypeError, KeyError):return False
         await self.db('guard', request_id)
-        return self.admission() is True and self.observation_guard(question.environment) is True
+        return self.observed(question)
+
+    def observed(self, question):
+        try:return self.admission() is True and self.observation_guard(question.environment) is True
+        except (ValueError, TypeError, KeyError):return False
 
     async def finish(self, request_id, state, result, summary, question=None):
         try:
             await self.db('finish', request_id, state=state, result={**result, 'action_admissible': False},
                 summary=summary, observation_guard=None if question is None else
-                lambda:self.admission() is True and self.observation_guard(question.environment) is True)
+                lambda:self.observed(question))
         except HTTPException as exc:
             if exc.detail == 'CHANNEL_OBSERVATION_CHANGED':
                 await self.finish(request_id, 'HOLD', {'reason':'OBSERVATION_CHANGED'},
@@ -68,7 +73,7 @@ class ConversationWorker:
                         '관제 관측·지도·모델 수용이 바뀌어 요청을 보류했습니다. 기기 명령을 보내지 않았습니다.')
                     return
                 self.jobs.guard(rid)
-                if not self.admission() or not self.observation_guard(question.environment):
+                if not self.observed(question):
                     await self.finish(rid, 'HOLD', {'reason':'SCOPE_CHANGED'},
                         '관제 관측·지도·모델 수용이 바뀌어 요청을 보류했습니다. 기기 명령을 보내지 않았습니다.')
                     return

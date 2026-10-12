@@ -27,7 +27,8 @@ def configuration():
         raise ValueError('INDEPENDENT_CONVERSATION_HOST_ADMISSION_REQUIRED')
     profile = Profile.model_validate(cfg['profile'])
     if (cfg['policy'] != source_policy(cfg['source_commit'], profile)
-            or type(cfg['valid_until']) not in (int, float) or not time.time() < cfg['valid_until']
+            or type(cfg['valid_until']) not in (int, float) or not math.isfinite(cfg['valid_until'])
+            or not time.time() < cfg['valid_until']
             or cfg['semantic_evidence_sha256'] not in cfg['files'].values()):
         raise ValueError('CONVERSATION_HOST_NOT_ADMITTED')
     if type(cfg['files']) is not dict or not 1 <= len(cfg['files']) <= 1000:
