@@ -8048,3 +8048,9 @@ osy-d395-s1d\`.
 - 변경: 사용자가 실제 맵 사진의 뚜렷한 곡선을 지적한 교훈을 workflow 문서로 기록했다. 카메라가 방향을 잃었다는 포괄적 설명 대신 RGB·segmentation·투영·현재 목표점·CORE 허용을 구분한다.
 - 증거: R31 baseline 707의 6.600000344s 실패 PNG에 흰 선이 보이며 같은 trace의 target_now_m=null·ahead_m=0·inference_error=null·CORE HOLD를 대조했다. 원본 class mask와 실제/시뮬 맵 곡률 일치는 미확인으로 명시했다. private에 원본 사진·영상·일지를 보존했다.
 - gate 변화: 없음. 설명·진단 절차의 교훈이며 곡선 주행, 정지 검사, 완주 해결을 주장하지 않는다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.

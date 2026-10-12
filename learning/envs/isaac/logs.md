@@ -221,3 +221,9 @@
 - SDK: R32는 실제 solver position32/velocity8을 읽었지만 4개 최종 episode·중단된 baseline909 영상 이후 정지/cleanup 정지 실패로 exit1, 완주0이다. 실제5개 영상/43개 산출물을 private에 독립 검증 보존했다. R33 source0b4ddd5af9(7469 source hash 검증)는 자원 대기 중이며 SDK 시작 증거는 아직 없다.
 - 조율: 대상 별도 세션은 연결 agent 목록에 없어 직접 메시지 전송이 실패했다. 사용자에게 알리고 private drive-session-handoff에 대상·증거·통합·거절 경로를 기록했다. 문서 존재와 별도 작업자의 수신을 구분한다.
 - gate 변화: 없음. 실제 곡선 완주·새 강화학습·두 대 교통/Fleet·ROS-SIM·실물 수용은 미완료다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.
