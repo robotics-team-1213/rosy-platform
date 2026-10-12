@@ -699,31 +699,34 @@ def test_core_curve_scope_still_stops_an_actual_body_collision():
     assert decision.linear == 0. and status.reason == "obstacle_ahead"
 
 
-def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch):
+@pytest.mark.parametrize("linear_scale,angular_scale", [(1., 2.), (2., 2.)])
+def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch, linear_scale, angular_scale):
     from dataclasses import replace
 
     m = _core_curve_manager()
     monkeypatch.setattr(m, "_apply_recovery",
-                        lambda now, decision: replace(decision, angular=decision.angular * 2.))
+                        lambda now, decision: replace(decision, linear=decision.linear * linear_scale,
+                                                       angular=decision.angular * angular_scale))
     decision, status = _step(m, [], error=-.3)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason) == ("HOLD", "motion_unconfirmed")
 
 
-def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monkeypatch):
-    m = _core_curve_manager(max_l=.005)
-    cap = [.005]
-    m._motion_envelope_provider = lambda: (cap[0], .8, .15)
+@pytest.mark.parametrize("max_l,max_a", [(.005, .8), (.1, .05), (0., .8)])
+def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monkeypatch, max_l, max_a):
+    m = _core_curve_manager(max_l=max_l, max_a=max_a)
+    cap = [max_l, max_a]
+    m._motion_envelope_provider = lambda: (*cap, .15)
 
     def raise_cap(now, decision):
-        cap[0] = .1
+        cap[:] = [.1, .8]
         return decision
 
     monkeypatch.setattr(m, "_apply_recovery", raise_cap)
     decision, status = _step(m, [], error=-.3)
-    assert decision.linear == pytest.approx(.005)
-    assert decision.angular / decision.linear == pytest.approx(.24 / .0322)
-    assert status.linear == pytest.approx(.005)
+    scale = min(1., max_l / .0322, max_a / .24)
+    assert (decision.linear, decision.angular) == pytest.approx((.0322 * scale, .24 * scale))
+    assert status.linear == pytest.approx(.0322 * scale)
 
 
 def test_an_unreadable_motion_envelope_fails_closed():
