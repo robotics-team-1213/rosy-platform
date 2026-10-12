@@ -13,6 +13,7 @@ from rosy.decision.conversation.codec import ConversationInput, Profile, source_
 from rosy.decision.deliberation import canonical
 from .deliberation_conversation import execute
 from .deliberation_status_broker import protected
+from .conversation_acceptance import validate as validate_evaluation
 
 CONFIG = Path('/etc/rosy-deliberation/conversation.json')
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,15 +29,19 @@ def configuration():
     profile = Profile.model_validate(cfg['profile'])
     if (cfg['policy'] != source_policy(cfg['source_commit'], profile)
             or type(cfg['valid_until']) not in (int, float) or not math.isfinite(cfg['valid_until'])
-            or not time.time() < cfg['valid_until']
-            or cfg['semantic_evidence_sha256'] not in cfg['files'].values()):
+            or not time.time() < cfg['valid_until']):
         raise ValueError('CONVERSATION_HOST_NOT_ADMITTED')
     if type(cfg['files']) is not dict or not 1 <= len(cfg['files']) <= 1000:
         raise ValueError('CONVERSATION_SOURCE_MANIFEST_REQUIRED')
+    evidence = []
     for name, sha in cfg['files'].items():
         path = ROOT/name
         if not path.resolve().is_relative_to(ROOT):raise ValueError('CONVERSATION_SOURCE_PATH_REFUSED')
-        if hashlib.sha256(protected(path)).hexdigest() != sha:raise ValueError('CONVERSATION_SOURCE_CHANGED')
+        raw = protected(path)
+        if hashlib.sha256(raw).hexdigest() != sha:raise ValueError('CONVERSATION_SOURCE_CHANGED')
+        if sha == cfg['semantic_evidence_sha256']:evidence.append(raw)
+    if len(evidence) != 1:raise ValueError('CONVERSATION_SEMANTIC_EVIDENCE_REQUIRED')
+    validate_evaluation(json.loads(evidence[0]), cfg, profile)
     return cfg, profile
 
 
