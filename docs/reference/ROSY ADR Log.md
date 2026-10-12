@@ -1056,3 +1056,8 @@ Status: Accepted (source contract; no operational activation).
 Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
 
 ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
+## D-737 - LINE body and command curve agreement
+
+Status: Accepted (SOURCE contract; runtime and field acceptance separate).
+
+[D-737](../adr/D-737-line-body-command-curve.md).
