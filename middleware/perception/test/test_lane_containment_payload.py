@@ -41,7 +41,8 @@ def test_gazebo_crosswalk_bound_is_reported_even_without_a_detected_zone(crosswa
     disabled = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033)
     assert math.isfinite(enabled['crosswalk_uncertainty_m']) and enabled['crosswalk_uncertainty_m'] > 0
     assert 'crosswalk_uncertainty_m' not in disabled
-    assert enabled['uncertainty_m'] is None  # No lateral boundary evidence is invented.
+    assert enabled['uncertainty_m'] == disabled['uncertainty_m']
+    assert enabled['boundaries'] == []  # Enabling the bound does not invent a lane boundary.
     assert ('crosswalk' in enabled) is (crosswalk is not None)
 
 
