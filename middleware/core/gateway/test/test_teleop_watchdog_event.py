@@ -112,7 +112,7 @@ def test_the_stop_reaches_the_wheels_before_the_announcement():
 
     cycle(command, 101.0, log=order)
 
-    assert order == ["wheels", "event:safety.watchdog"], order
+    assert order == ["wheels", "event:native.operation.terminal", "event:safety.watchdog"], order
 
 
 def test_it_is_announced_once_not_once_per_cycle():
