@@ -82,7 +82,11 @@ class ChannelModelWorker:
                     return
                 results=[];prior=()
                 for index,(profile,provider) in enumerate(zip(self.profiles,self.providers)):
-                    if index and (not results[-1]['review_required'] or not self._ready(index)):break
+                    if index and not results[-1]['review_required']:break
+                    if index and not self._ready(index):
+                        await self._finish(request_id,'HOLD',{'models':results,'reason':'REVIEWER_NOT_ADMITTED','action_admissible':False},
+                            f'ROSY 상태 검토 · {request_id}\n추가 숙고가 필요하지만 검토 모델이 미수락 상태입니다. 실행 승인 아님.',basis)
+                        return
                     if not await self._current(request_id,basis) or not self._ready(index):
                         await self._finish(request_id,'HOLD',{'reason':'SCOPE_CHANGED','action_admissible':False},
                             f'ROSY 읽기 전용 판단 · {request_id}\n관측·설정 변경으로 보류했습니다. 실행 승인 아님.')

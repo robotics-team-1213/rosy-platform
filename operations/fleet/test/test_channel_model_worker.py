@@ -93,6 +93,9 @@ def test_external_reviewer_requires_cost_evidence_and_respects_budget(tmp_path,c
     async def provider(problem,bound,prior,*args,**kwargs):
         calls.append(bound.profile.role)
         raw=status_payload(problem);raw['profile_revision']=bound.profile.profile_revision
+        raw['evidence_ids']=list(problem.evidence_ids)
+        raw['next_step']['evidence_ids']=list(problem.evidence_ids)
+        raw['success_check']['evidence_ids']=list(problem.evidence_ids)
         raw['objections']=['conflict']
         return judgment(problem,bound,raw),0 if bound.profile.role=='primary' else cost
     w=ChannelModelWorker(jobs,w.snapshot,selected,(provider,provider),admission=lambda *_:True,
