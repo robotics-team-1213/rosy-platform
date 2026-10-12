@@ -23,4 +23,6 @@
 ### 진행
 
 - 계약과 구현 계획 작성 완료.
-- RED, 구현, GREEN, 독립 검토는 진행 중.
+- 기하 반례 RED 12개, 소비 경계 RED 13개, 최신 거절/현재 odom/무효 기하 RED 9개와 odom 복귀 RED 1개를 원격에서 확인하고 수정했다. 직선 횡오프셋·좌우 곡선·실제 관측 age·누적거리·거절 우선권·RL gain 제외를 구현했다.
+- 독립 SOURCE APPROVE. 구현 commit `afb9205c2`의 유효 자원 원격 회귀 498 PASS·1 SKIP·NEW 0이다. 초기 affected의 네 NEW는 preview fixture, ADR 번호 gap, 문서 commit 표기의 검사로 나뉘었고 같은 회귀에서 모두 수정 확인했다. 노트북에서 잘못 시작한 affected 실행은 중단·폐기했으며 자원 floor 미달 fallback 결과도 수용에 쓰지 않는다.
+- 전체 affected 후속 검증을 기록한다. 실제 Isaac 재실행, R29 최초 소실 해결, main 착지, push 및 실물 수용은 확인하지 않았다.

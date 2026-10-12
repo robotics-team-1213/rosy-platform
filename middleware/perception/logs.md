@@ -1486,3 +1486,9 @@
 - 교훈: 연속 폭만 요구한 첫 후보는 1px 끊김 정지선을 놓쳐 독립 검토에서 폐기했다. 중앙 한 행의 근거로 전체 그룹을 제외하는 후속 후보도 실제 띠를 놓쳤다. 통합 그룹 회귀를 원격 RED 1 NEW로 재현하고 모든 행 및 실제 sample 행 일치로 보강했다.
 - 증거: 최종 source 관련 원격 227 PASS·terminal exit 0·NEW 0, 독립 SOURCE 승인. 1·2·10px 끊김, 횡단 그룹 끝의 실제 띠, 얇은 띠의 BEV 행 alias를 보존한다. 저장된 실제 두 Gazebo 프레임 offline 재생에서 가까운 횡단 막대 오인은 제외됐고 횡단 거리 0.305m·confidence 0.6786과 lane·signal은 유지됐다.
 - gate 변화: 새로운 ROS runtime·학습·주행 증거가 아니다. 화면 위쪽 108행의 거리 불명 후보는 남았으며 전체 clear 검사는 exit 1이다. 전체 오인 해소·교통 규칙 완주·실물 정지선 정확도는 아직 미완료다. private 일지에 source·이미지 hash·실패와 결과를 구분해 보관한다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.

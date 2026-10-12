@@ -12,12 +12,14 @@
 | D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
 | D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 |
 | D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 
 ## 계획·결과 문서
 
 - [2026-10-04-isaac-navigation-integration-review.md](../../../docs/plans/2026-10-04-isaac-navigation-integration-review.md)
 - [2026-10-11-isaac-direction-video.md](../../../docs/plans/2026-10-11-isaac-direction-video.md)
 - [2026-10-11-isaac-map-rl.md](../../../docs/plans/2026-10-11-isaac-map-rl.md)
+- [2026-10-12-observed-path-gap-implementation.md](../../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -29,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 - 2026-10-12 · 1158008ac1 · held-path 작업 통합과 곡선 거절 진단
 - 2026-10-12 · b9dc219e4 · R31 정지 실패와 곡선 진단 교훈
 - 2026-10-12 · d778f8b7c · 공유 바닥 native 재평가와 reset 진단
 - 2026-10-12 · 71c2fa595 · 공유 ground와 paint pose
-- 2026-10-12 · 7f8182d71 · 공유 맵 바닥 시각 자산
