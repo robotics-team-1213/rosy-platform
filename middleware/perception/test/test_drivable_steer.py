@@ -252,6 +252,46 @@ def test_no_turn_circle_creeps_along_the_way_then_holds():
     assert debug.get("reason") != "wrong_way_hold", debug     # a polyline joint, the lane ahead agrees
 
 
+def test_creep_exposes_only_current_boundary_checked_target():
+    steer = DrivableSteer()
+    steer._key = 10.0
+    pose = (0.0, 0.0, 0.0)
+    info = dict(target_m=(0.2, 0.05), exit=None)
+    error, confidence, debug = steer._creep(info, pose, pose, HALF)
+    assert error is not None and confidence > 0
+    assert debug['observed_creep_target_m'] == (0.2, 0.05)
+    assert debug.get('target_now_m') is None
+    assert debug['observed_creep_key'] == 10.0
+    _, _, remembered = steer._creep(dict(target_m=None, exit=None), pose, pose, HALF)
+    assert remembered.get('observed_creep_key') is None
+    assert remembered.get('observed_creep_target_m') is None
+
+
+def test_creep_never_marks_a_target_across_remembered_boundary_as_observed():
+    steer = DrivableSteer()
+    steer._key = 10.0
+    pose = (0.0, 0.0, 0.0)
+    # A point on the pure-pursuit arc to (0.2, 0.05), beyond the body-near exclusion.
+    radius = (0.2 ** 2 + 0.05 ** 2) / (2 * 0.05)
+    steer._edges = [(0.1, radius - (radius ** 2 - 0.1 ** 2) ** 0.5)]
+    _, _, debug = steer._creep(dict(target_m=(0.2, 0.05), exit=None), pose, pose, HALF)
+    assert debug.get('observed_creep_key') is None
+    assert debug.get('observed_creep_target_m') is None
+
+
+def test_creep_metadata_does_not_change_shared_steering_or_promote_memory():
+    from control.sensing.perception.drivable.drivable_steer import pursuit_error, ONE_CONFIDENCE
+    pose = (0.0, 0.0, 0.0)
+    for flags, source in [({}, pose), ({'exit_from_memory': True}, pose),
+                          ({'exit_behind_line': True}, pose), ({}, None)]:
+        steer = DrivableSteer()
+        steer._key = 10.0
+        error, confidence, info = steer._creep(dict(target_m=(.2, .05), exit=None, **flags), pose, source, HALF)
+        assert (error, confidence) == (pursuit_error(.2, .05, ONE_CONFIDENCE), ONE_CONFIDENCE)
+        assert info['strategy'] == 'drivable_creep' and info.get('target_now_m') is None
+        assert ('observed_creep_key' in info) == (not flags and source is not None)
+
+
 def test_driving_context_rules(monkeypatch):
     # (b) a side opening is not an exit where the map goes on (bend < 15 deg)
     both = _lane(0.5, -0.5, x_max=0.15) | _lane(0.03, -0.03, x_max=0.33)
