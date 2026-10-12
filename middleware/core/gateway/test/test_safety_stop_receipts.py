@@ -82,6 +82,8 @@ def test_safety_stop_never_substitutes_unknown_or_later_identity(core_client, mo
 
 def test_failed_owner_capture_cannot_block_safety_latch(core_client, monkeypatch):
     client, services = core_client()
+    services.modes.transition(Mode.MANUAL)
+    assert services.command.teleop(0.1, 0)[0]
 
     def unavailable(run_id=None):
         raise RuntimeError("owner readback unavailable")
