@@ -38,6 +38,7 @@
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 | D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
 | D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 
 ## 계획·결과 문서
 
@@ -58,6 +59,7 @@
 - [2026-09-22-scene-context-road.md](../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](../../docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-12-observed-path-gap-implementation.md](../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -70,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 - 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
 - 2026-10-11 · 9fc0a88c9 · source test import precedence
 - 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
 - 2026-10-11 · 177e7faff · refactor: legacy Drive entry source ownership (D-649)
-- 2026-10-11 · 92b5cff5e · fix(control): preserve the ROS-free paint map boundary after holder moves
