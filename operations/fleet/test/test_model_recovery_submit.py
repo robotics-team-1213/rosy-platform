@@ -137,3 +137,76 @@ def test_owned_write_waits_through_repeated_cancellation(tmp_path):
         with pytest.raises(asyncio.CancelledError): await task
         assert committed == [True]
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('reply_kind', ['ack', 'unknown', 'revoked'])
+def test_worker_real_model_writer_audit_readback_and_final_handoff(tmp_path, reply_kind):
+    from dataclasses import asdict
+    from fleet.incidents.automation.worker import IncidentCaseWorker
+    from fleet.incidents.automation.operating.state import OperationalState
+    from rosy.contracts.learning.incident_operation import REVOKE
+    from test_judgment_profiles import adapter
+    from test_model_recovery_candidates import recovery_payload
+    from test_operational_case_claim import digest, TRUST
+    from test_incident_case_worker import settled
+    async def run():
+        now, seen, handoffs, log, board, store, old, poll, current = make_incident_worker(tmp_path)
+        await old.aclose()
+        profiles = tuple(replace(p, calibration_revision='cal-1') for p in old.profiles)
+        current[0] = profiles
+        providers = []
+        for selected in profiles:
+            async def provider(p, b, *args, **kwargs): return recovery_payload(p), 0
+            provider.profile, provider.adapter = selected, adapter()
+            providers.append(provider)
+        snapshot = poll()
+        snapshot['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
+        board.observe(snapshot['robots']); board.flush()
+        async def gather(): return snapshot
+        clients, posts = {}, []
+        resolver = StuckResolver(ResolverConfig()); resolver.autonomous_robots = frozenset({'pinky'})
+        loop = StuckResolverLoop(gather, board, resolver, clients=lambda: clients, clock=lambda: now[0])
+        report = dict(schema='rosy.incident.operational_acceptance/1', state='PASS_FOR_OPERATION',
+            missing=[], field_accepted=True, truth_admitted=True)
+        binding = dict(profile_set_sha256=digest([asdict(p) for p in profiles]), full_profile_sha256=digest(asdict(profiles[0])),
+            model_revision=profiles[0].model_revision, calibration_sha256='c'*64, domain='line_follow', action='BACK_AND_RETRY',
+            action_contract='rosy.line_stuck.conditional_back/1', policy_revision=old._scope(old._problem(board.intervention_assessment('pinky'))).policy_revision,
+            installation_sha256='d'*64, evaluation_sha256=digest(report), coverage_sha256='f'*64,
+            limits_sha256='1'*64, truth_sha256='2'*64, evaluation_state='REVIEWED_FOR_OPERATION')
+        proof = dict(binding=binding, report=report, profiles=[asdict(p) for p in profiles], profile=asdict(profiles[0]),
+            approved_calibrations={'cal-1':'c'*64})
+        operating = OperationalState(store, trusted=lambda: TRUST, evidence=lambda _: proof)
+        operating.apply('line-back', signed(proof, 0))
+        loop.operating_state, loop.operating_grant = operating, 'line-back'
+        worker = IncidentCaseWorker(store, old.observation, board, profiles=profiles, providers=tuple(providers),
+            admission=old.admission, current_profiles=lambda: profiles, human_owned=old.human_owned,
+            budget=old.budget, final_handoff=old.final_handoff, clock=lambda: now[0], enabled=True,
+            recovery_enabled=True, recovery_submit=loop._model_answer)
+        def handler(request):
+            if request.method == 'GET': return httpx.Response(200, json={'stuck': {'conditional_back':True}})
+            posts.append(True)
+            if reply_kind == 'unknown': raise httpx.ReadError('synthetic lost reply')
+            if reply_kind == 'revoked': operating.apply('line-back', signed(proof, 1, REVOKE))
+            return httpx.Response(200, json={'outcome':'back'})
+        async with httpx.AsyncClient(base_url='http://source-fixture', transport=httpx.MockTransport(handler)) as http:
+            clients['pinky'] = HttpRobotClient(RobotEndpoint('pinky', 'http://source-fixture', 'fake'), http=http)
+            worker.feed(snapshot); await settled(worker)
+            scope = worker._scope(worker._problem(board.intervention_assessment('pinky')))
+            assert posts == [True]
+            assert any(a.get('rule') == 'model_v2' for a in board.answers())
+            if reply_kind == 'ack':
+                assert operating.submission('pinky', 'lane-1')['state'] == 'ACK' and not handoffs
+                now[0] = 103
+                snapshot = poll(2, normal=True)
+                worker.feed(snapshot); await settled(worker)
+                assert store.case(scope)['reason'] == 'RESOLVED_OBSERVED'
+                assert store.export_case(scope)['closure']['action_credit'] == 'UNVERIFIED'
+                assert log.reports(1)[0]['closure']['status'] == 'CLEARANCE_OBSERVED'
+            else:
+                assert operating.submission('pinky', 'lane-1')['state'] == 'UNKNOWN'
+                assert len(handoffs) == 1 and store.case(scope)['reason'] == 'RECOVERY_SUBMISSION_NOT_CONFIRMED'
+                assert ('pinky', 'lane-1') in log.uncertain_motion()
+            worker.feed(snapshot); await settled(worker)
+            assert posts == [True]
+        await worker.aclose()
+    asyncio.run(run())
