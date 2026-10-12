@@ -585,10 +585,10 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
 ])
 def test_only_current_observed_creep_is_admitted(monkeypatch, changes, accepted):
     import camera_lane
-    lane, now, _, image = gap_lane(1)
+    lane, now, image, _ = gap_lane(1)
     now[0] = 10.1
     info = dict(strategy='drivable_creep', observed_creep_key=now[0],
-                observed_creep_target_m=(.2, .05), **{})
+                observed_creep_target_m=(.2, .05))
     info.update(changes)
     def keep(*args, **kwargs):
         args[2].update(strategy=info['strategy'], drivable_steer=info)
