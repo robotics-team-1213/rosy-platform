@@ -112,7 +112,6 @@ class ChannelModelJobs:
             snapshot_json=canonical(status_snapshot(snapshot)), state='PENDING', created_at=now, deadline=now+60)
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
-            self._receipt(conn, row)
             original=self._receipt(conn,row)
             if original!=receipt:raise HTTPException(409,detail='CHANNEL_RECEIPT_CHANGED')
             conn.execute('''INSERT OR IGNORE INTO fleet_channel_model_jobs
@@ -190,8 +189,10 @@ class ChannelModelJobs:
             conn.execute('BEGIN IMMEDIATE')
             row = self._row(conn, request_id)
             receipt = self._receipt(conn, row)
-            if observation_guard is not None and observation_guard() is not True:
-                raise HTTPException(409,detail='CHANNEL_OBSERVATION_CHANGED')
+            if observation_guard is not None:
+                try:current=observation_guard() is True
+                except (ValueError,TypeError,KeyError):current=False
+                if not current:raise HTTPException(409,detail='CHANNEL_OBSERVATION_CHANGED')
             if row['state'] not in ('PENDING','RUNNING'):
                 raise HTTPException(409, detail='CHANNEL_MODEL_ALREADY_FINISHED')
             conn.execute('UPDATE fleet_channel_model_jobs SET state=?,result_json=?,completed_at=? WHERE request_id=?',

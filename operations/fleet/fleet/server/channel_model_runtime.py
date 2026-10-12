@@ -53,7 +53,7 @@ class BrokerProvider:
         argv=('ssh','-F','/dev/null','-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes',
               '-o','StrictHostKeyChecking=yes','-o','GlobalKnownHostsFile=/dev/null',
               '-o','UserKnownHostsFile='+c.known_hosts_file,'-o','ConnectTimeout=5',
-              '-o','ClearAllForwardings=yes','-i',c.key_file,'rosy-model-ingress@'+c.host,'rosy-status-v1')
+              '-o','ClearAllForwardings=yes','-o','IdentityAgent=none','-i',c.key_file,'rosy-model-ingress@'+c.host,'rosy-status-v1')
         process=None
         spawn=asyncio.create_task(asyncio.create_subprocess_exec(*argv,stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,start_new_session=True,limit=16385))

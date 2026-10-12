@@ -48,8 +48,11 @@ class ChannelModelWorker:
     async def _finish(self,request_id,state,result,summary,basis=None):
         guard=None if basis is None or self.observation_guard is None else lambda:self.observation_guard(basis)
         try:await self._db('finish',request_id,state=state,result=result,summary=summary,observation_guard=guard)
-        except HTTPException:
-            await self._db('abandon',request_id,state='SUPERSEDED',reason='OWNER_OR_SCOPE_CHANGED')
+        except HTTPException as exc:
+            if exc.detail=='CHANNEL_OBSERVATION_CHANGED':
+                await self._finish(request_id,'HOLD',{'reason':'OBSERVATION_CHANGED','action_admissible':False},
+                    f'ROSY 상태 검토 · {request_id}\n관측이 바뀌거나 오래되어 결과 적용을 보류했습니다. 실행 승인 아님.')
+            else:await self._db('abandon',request_id,state='SUPERSEDED',reason='OWNER_OR_SCOPE_CHANGED')
 
     async def step(self,receipt):
         async with self._lock:
