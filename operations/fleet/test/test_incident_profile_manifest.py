@@ -83,3 +83,19 @@ def test_manifest_boundary_errors_are_redacted_and_do_not_call_providers(tmp_pat
     with pytest.raises(ValueError) as error:
         subject().load_incident_profile_config(path, expected_sha256=checksum, installed=(config,), clock=clock)
     assert 'hidden-secret' not in str(error.value) and calls == []
+
+
+@pytest.mark.parametrize('fault', ['deep', 'integer', 'duplicate-key'])
+def test_adversarial_json_is_bounded_and_rejected_with_redacted_value_error(tmp_path, fault):
+    config, calls = settings(); clock = config.pop('clock')
+    path, _ = manifest(tmp_path, config)
+    if fault == 'deep': raw = b'[' * 2000 + b'0' + b']' * 2000
+    elif fault == 'integer':
+        profiles = [asdict(p) for p in config['profiles']]; profiles[0]['timeout_s'] = 10**500
+        raw = json.dumps(dict(schema='rosy.incident.profiles/1', profile_sets=[profiles])).encode()
+    else: raw = path.read_bytes().replace(b'"schema":', b'"schema":"hidden-secret", "schema":', 1)
+    path.write_bytes(raw)
+    with pytest.raises(ValueError, match='INCIDENT_PROFILE_INSTALLATION_BINDING_FAILED'):
+        subject().load_incident_profile_config(path, expected_sha256=hashlib.sha256(raw).hexdigest(),
+                                              installed=(config,), clock=clock)
+    assert calls == []
