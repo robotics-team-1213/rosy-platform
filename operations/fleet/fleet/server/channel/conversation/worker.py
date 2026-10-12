@@ -5,17 +5,31 @@ import time
 from fastapi import HTTPException
 
 from rosy.decision.conversation.codec import Answer, ConversationInput, checked_answer, digest, reply
+from ..execution.instructions import selected_readback
 
 
 class ConversationWorker:
     def __init__(self, jobs, snapshot, profile, provider, *, admission, observation_guard, clock=time.time,
-                 producer_scope=None):
+                 producer_scope=None, context_reader=None):
         expected = digest(profile.model_dump()) if producer_scope is None else digest(producer_scope)
         if expected != jobs.profile_set_hash:raise ValueError('CONVERSATION_PROFILE_CHANGED')
         self.jobs, self.snapshot, self.profile, self.provider = jobs, snapshot, profile, provider
         self.admission, self.observation_guard, self.clock = admission, observation_guard, clock
         self.producer_scope = producer_scope
+        self.context_reader, self._live_context = context_reader, None
         self._lock = asyncio.Lock()
+
+    async def refresh_context(self, question):
+        context=question.accepted_execution_context
+        if context is None or context.get('boot_id') is None:return True
+        self._live_context=None
+        if self.context_reader is None:return False
+        started=time.monotonic()
+        try:value=await asyncio.wait_for(self.context_reader(context),2)
+        except Exception:return False
+        if not selected_readback(context,value) or time.monotonic()-started>2:return False
+        self._live_context=(digest(context),started)
+        return True
 
     async def db(self, method, *args, **kwargs):
         task = asyncio.create_task(asyncio.to_thread(getattr(self.jobs, method), *args, **kwargs))
@@ -28,11 +42,16 @@ class ConversationWorker:
         try:await self.snapshot()
         except (ValueError, TypeError, KeyError):return False
         await self.db('guard', request_id)
-        return self.observed(question)
+        return await self.refresh_context(question) and self.observed(question)
 
     def observed(self, question):
-        try:return self.admission() is True and self.observation_guard(question.environment) is True
-        except (ValueError, TypeError, KeyError):return False
+        context=question.accepted_execution_context
+        if context is not None and context.get('boot_id') is not None and (
+                self._live_context is None or self._live_context[0]!=digest(context)
+                or not 0<=time.monotonic()-self._live_context[1]<=2):return False
+        try:return (self.admission() is True and self.observation_guard(question.environment) is True
+                    and self.jobs.context_current(question))
+        except (ValueError, TypeError, KeyError, HTTPException):return False
 
     async def finish(self, request_id, state, result, summary, question=None):
         try:
@@ -57,6 +76,7 @@ class ConversationWorker:
                     try:
                         snapshot = await self.snapshot()
                         question = await self.db('build_input', receipt, snapshot, snapshot['observed_at'])
+                        if not await self.refresh_context(question):raise ValueError('CONVERSATION_SELECTED_RUN_CHANGED')
                         await self.db('stage', receipt, question, snapshot)
                     except (ValueError, TypeError, KeyError):
                         await self.db('reject', receipt)

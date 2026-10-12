@@ -2,6 +2,7 @@
 import asyncio
 import json
 import math
+from dataclasses import replace
 
 from fastapi import HTTPException
 from core_common.intent import interpret
@@ -11,6 +12,8 @@ from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.transport import RobotApiError
 from fleet.hub.hub import HubError
 from .receipts import owner_receipt
+from .outcomes.evidence import KINDS, PATHS, epoch
+from .outcomes.reconcile import channel_step
 
 
 _CAPABILITY = {'navigate':'navigation.goal_navigation','home':'navigation.return_home',
@@ -22,6 +25,7 @@ class ExecutionWorker:
     def __init__(self,journal,execution):
         self.journal,self.execution=journal,execution
         self._lock=asyncio.Lock()
+        self._cursor=''
 
     def fence(self,rid,index,call):
         self.journal.guard(rid)
@@ -102,19 +106,24 @@ class ExecutionWorker:
             if caps.get('swarm',{}).get('lead') is not True:raise ValueError('FOLLOW_LEADER_NOT_ADVERTISED')
         return robots
 
-    async def step(self,rid):
+    async def step(self,rid,*,allow_dispatch=True):
         async with self._lock:
             try:view=self.journal.view(rid)
             except HTTPException as exc:
                 if exc.status_code!=404:raise
+                if not allow_dispatch:return
                 try:view=self.journal.accept(rid)
                 except (ValueError,HTTPException) as exc:
                     self.reject(rid,exc)
                     return
-            if view['reason'] is not None:return
             calls=interpret(view['plan'])
             for index,call in enumerate(calls):
                 row=self.journal.view(rid)['steps'][index]
+                if row['state'] in {'ACCEPTED','RUNNING','UNKNOWN','TASK_QUEUED'}:
+                    if await channel_step(self,rid,index,call,row):
+                        if self.journal.view(rid)['steps'][index]['state']=='COMPLETED':continue
+                        return
+                if view['reason'] is not None:return
                 if row['state']=='TASK_QUEUED':
                     task=self.journal.store.get_task(row['task_id'])
                     if task['status'] in {'COMPLETED','FAILED','HOLD','CANCELED','EXPIRED','UNKNOWN'}:
@@ -124,6 +133,7 @@ class ExecutionWorker:
                     return
                 if row['state']=='COMPLETED':continue
                 if row['state']!='READY':return
+                if not allow_dispatch:return
                 began=False
                 try:
                     robots=await self.preflight(rid,index,call)
@@ -133,14 +143,21 @@ class ExecutionWorker:
                         await self.execution.step(call,principal,'discord-natural:'+rid,index,
                             admission=lambda conn,task_id:self.journal.link_task(rid,index,task_id,conn))
                         return
+                    native_epoch = {}
+                    if call.verb in KINDS:
+                        native_epoch = epoch(await self.execution.console._client(call.robot)._get(PATHS[KINDS[call.verb]]))
+                        self.fence(rid,index,call)
                     self.journal.begin(rid,index,[('robot',r) for r in self.execution.resources(call)],stopping=call.verb in STOP_VERBS)
                     began=True
+                    if call.verb in KINDS:
+                        row=self.journal.view(rid)['steps'][index]
+                        call=replace(call,body=call.body | native_epoch | {'correlation_id':row['caller_cid']})
                     paths={call.path} if call.scope=='robot' else {'/api/v1/swarm/follow','/api/fleet/formation/resume'} if call.verb.startswith('formation_') else {'/api/v1/safety/stop'}
                     with dispatch_guard(lambda:self.fence(rid,index,call),paths=paths):
                         result=await self.execution.step(call,principal,'discord-natural:'+rid,index,owner_id=row['owner_id'])
                     accepted,receipt=owner_receipt(call,result,self.execution.console.robot_ids)
                     self.journal.finish(rid,index,'ACCEPTED' if accepted is True else 'FAILED' if accepted is False else 'UNKNOWN',
-                                        receipt=receipt,reason='SITE_STOP_PARTIAL_UNKNOWN' if accepted is None else None,expected_state='DISPATCHING')
+                                        receipt=receipt,reason='OWNER_IDENTITY_OR_ACK_UNKNOWN' if accepted is None else None,expected_state='DISPATCHING')
                     return
                 except asyncio.CancelledError:
                     if began:self.journal.finish(rid,index,'UNKNOWN',reason='DISPATCH_CANCELED_RESULT_UNKNOWN',expected_state='DISPATCHING')
@@ -172,9 +189,16 @@ class ExecutionWorker:
 
     def pending(self):
         with self.journal.store._connect() as conn:
-            return [r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
-                LEFT JOIN fleet_channel_execution e USING(request_id) WHERE j.state='ANSWERED'
-                AND json_extract(j.result_json,'$.answer.kind')='CONTROL' AND e.reason IS NULL
-                AND (e.request_id IS NULL OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
-                    WHERE s.request_id=j.request_id AND s.state IN ('READY','TASK_QUEUED')))
-                ORDER BY j.created_at LIMIT 10''')]
+            rows=[r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
+                LEFT JOIN fleet_channel_execution e USING(request_id)
+                WHERE (e.request_id IS NULL AND j.state='ANSWERED' AND json_extract(j.result_json,'$.answer.kind')='CONTROL')
+                OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
+                    WHERE s.request_id=j.request_id AND (s.state='TASK_QUEUED'
+                        OR (s.state IN ('ACCEPTED','RUNNING','UNKNOWN') AND (json_extract(s.receipt_json,'$.operation.run_id') IS NOT NULL
+                            OR json_type(s.receipt_json,'$.operations')='array' OR json_type(s.receipt_json,'$.robots')='array'
+                            OR (json_extract(s.receipt_json,'$.rpc_acknowledged')=1 AND
+                                (json_type(s.receipt_json,'$.navigation')='text' OR json_extract(s.receipt_json,'$.role')='none'))))
+                        OR (s.state='READY' AND e.reason IS NULL)))
+                ORDER BY (j.request_id>?) DESC,j.request_id LIMIT 10''',(self._cursor,))]
+            if rows:self._cursor=rows[-1]
+            return rows

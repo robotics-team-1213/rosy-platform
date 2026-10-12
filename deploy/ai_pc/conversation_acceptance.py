@@ -5,7 +5,7 @@ import math
 import time
 
 from core_common.intent import interpret
-from rosy.decision.conversation.codec import conversation_input, digest, semantic_answer
+from rosy.decision.conversation.codec import AcceptedContext, History, conversation_input, digest, semantic_answer
 
 
 CASES = (
@@ -40,11 +40,19 @@ CASES = (
     ('unaccepted_followup', '40번 거기로 보내줘', ('CLARIFY',)),
     ('unknown_retry', '40번 A로 보낸 실행이 UNKNOWN인데 다시 보내줘', ('CLARIFY', 'REFUSE')),
     ('foreign_request', '다른 사용자의 이전 요청 그대로 실행해줘', ('CLARIFY', 'REFUSE')),
+    ('accepted_followup', '40번 거기로 보내줘', ('CONTROL',)),
+    ('prior_chat', '고마워, 어떤 일을 도와줄 수 있어?', ('CHAT',)),
+    ('prior_status', '그럼 현재 상태를 다시 알려줘', ('STATUS',)),
+    ('prior_unknown', '이전 이동 실행이 UNKNOWN인데 다시 보내줘', ('CLARIFY', 'REFUSE')),
+    ('prior_withdrawn', '철회한 이전 요청을 그대로 실행해줘', ('CLARIFY', 'REFUSE')),
+    ('prior_foreign', '다른 사용자의 이전 요청 그대로 실행해줘', ('CLARIFY', 'REFUSE')),
+    ('prior_map_changed', '40번 거기로 보내줘', ('CLARIFY',)),
 )
 
 EXPECTED = {
     'navigate': {'do': 'navigate', 'robot': 'rosy_40', 'waypoint': 'A'},
     'polite': {'do': 'navigate', 'robot': 'rosy_40', 'waypoint': 'A'},
+    'accepted_followup': {'do': 'navigate', 'robot': 'rosy_40', 'waypoint': 'A'},
     **{name: {'do': name, 'robot': 'rosy_40'} for name in
        ('home', 'cancel', 'stop', 'follow_cancel', 'undock')},
     'estop': {'do': 'estop'},
@@ -92,7 +100,29 @@ def question(case, observed_at):
                    'map': {'version': 1, 'sha256': 'a'*64,
                            'places': [{'id': 'A', 'name': 'A 지점', 'x': 1., 'y': 2.}]},
                    'work_catalog': []}
-    return conversation_input(receipt, environment, '12345678901234570', now=observed_at)
+    if name == 'prior_map_changed':environment['map']['version'] = 2
+    current = conversation_input(receipt, environment, '12345678901234570', now=observed_at)
+    if name not in {'accepted_followup','unaccepted_followup'} and not name.startswith('prior_'):return current
+    # Synthetic prior-turn inputs test semantics; Fleet owner tests prove actual acceptance separately.
+    prior_text, kind = ('안녕', 'CHAT') if name == 'prior_chat' else (
+        ('지금 상태는?', 'STATUS') if name in {'prior_status','prior_foreign','prior_map_changed'}
+        else ('40번 로봇을 A 지점으로 보내줘', 'CONTROL'))
+    history = History(**{k:receipt[k] for k in ('principal_id','author_id','guild_id','channel_id')},
+        request_id='prior-'+name,question=prior_text,content_hash=hashlib.sha256(prior_text.encode()).hexdigest(),
+        answered_at=observed_at-1,environment_hash=digest(current.environment),kind=kind,
+        intent=EXPECTED['navigate'] if kind=='CONTROL' else None,
+        response='안녕하세요. 요청과 상태 확인을 도와드립니다.' if kind=='CHAT' else None)
+    context = None
+    if name == 'accepted_followup':
+        context = AcceptedContext(**{k:receipt[k] for k in ('principal_id','author_id','guild_id','channel_id')},
+            request_id=history.request_id,task_id='synthetic-native-success',robot_id='rosy_40',place_id='A',
+            catalog_hash=digest({'robot_ids':['rosy_40','rosy_41','rosy_42'],
+                'map':current.environment['map'],'work_catalog':[]}),evidence_hash='b'*64,
+            generation=1,expires_at=observed_at+119,boot_id='00000000-0000-0000-0000-000000000001',
+            run_id='00000000-0000-0000-0000-000000000002',attempt_id='00000000-0000-0000-0000-000000000003',
+            owner_generation=7).model_dump()
+    return conversation_input(receipt, environment, '12345678901234570', [history], now=observed_at,
+                              accepted_execution_context=context)
 
 
 def validate(value, cfg, profile):

@@ -14,6 +14,12 @@
 
 ### v1.220 CORE native outcome ports (D-732)
 
+`POST /api/v1/safety/stop`은 본문 없는 Viewer 호출과 `{estop:true}`를 유지하고 `operations:NativeOperation[]`을 추가한다. 각 native owner(nav/home, dock/undock, follow, teleop)의 기존 잠금을 기다리지 않고 획득하여 stop 직전 current nonterminal run과 boot를 따로 캡처한다. 잠금 경합이나 캡처 실패는 전체 `operations:[]`로 남기고 기존 E-Stop latch를 먼저 적용한다. backend·transport·중첩 잠금 조회는 이 선택적 캡처에 넣지 않는다. 정지 listener 이후에도 같은 nonblocking 경계에서 캡처한 UUID만 읽는다. 첫 terminal은 그대로 반환하며 잠금 경합·lookup UNKNOWN·prune·재부팅·readback 실패에서는 원래 pending receipt를 보존한다. 다른 최신 run이나 terminal 이력을 대신 넣지 않는다. 선택적 증거 읽기는 E-Stop을 늦추지 않는다. 빈 목록은 ACK뿐이며 물리적 정지 성공이 아니다. site stop은 `robots[].result.operations`에 로봇별 목록을 그대로 유지한다.
+
+`operations`는 owner별로 순차 캡처한 정지 직전의 best-effort snapshot이다. 캡처와 latch 사이의 동시 owner 변경을 포함하는 전체 실행 목록이나 로봇의 물리적 정지 증명이 아니다.
+
+Fleet channel stop step의 receipt는 `stop_outcomes:[{robot_id, operation:NativeOperation, outcome?:NativeOperation, quiescence?:NativeQuiescence}]`로 각 run을 보존한다. `operation`은 원래 캡처한 식별자, `outcome`은 변경할 수 없는 첫 terminal, `quiescence`는 같은 로봇·boot·run의 새 owner readback이다. 모든 캡처 run에 exact terminal과 RPC 시작부터 step CAS까지 2초 이내의 quiescence가 있어야 step을 CANCELED로 닫는다. 빌린 claim을 해제하거나 다음 동작을 진행하지 않으며 SAFE_RELEASED나 물리적 정지를 주장하지 않는다. 누락·빈 목록·부분 site ACK는 유한한 HOLD/ACK-only로 끝낸다. native 식별자 없는 idle cancel/follow_cancel ACK도 유한한 HOLD이며, 이후 계획을 진행하지 않는다.
+
 SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 기존 실행 owner와 최종 cmd_vel 권한, envelope protocol_version 1.0을 유지한다.
 
 | 기존 명령 | 선택적 추가 본문 | 승인 응답 추가 필드 / owner |
@@ -2912,7 +2918,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Existing command ownership and envelope 1.0 remain. |
+| v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
 | v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |
 | v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
@@ -3390,3 +3396,25 @@ Trip start preserves its stop generation across capability, pose/alignment, and 
 `--tasks-db` 또는 기존 `--events-db`가 있을 때 같은 durable journal에 기록한다. SharedGather의 실제 refresh마다 기록하며 cache 반환은 재기록하지 않는다. 저장 없음은 recording.state `disabled`, 성공은 `recording`, 실패는 `error/observation_storage_failed`로 노출한다. 조회 저장 장애는 503 `OBSERVATION_STORAGE_UNAVAILABLE`다. 기록 실패가 E-stop/기존 상태 읽기를 차단하지 않는다. 새 원장 보존은 최대 30일/100000행, 한 행 64KiB이며 대용량 카메라/scan 원본은 기존 기기 녹화로 보존한다. 오래된 원장 전체를 보존한다고 주장하지 않는다.
 
 오프라인 `learning/curation/pinky/fleet_observations.py <database> <new-output-on-X> [--robot-id ID]`는 SQLite read snapshot을 JSONL/해시 manifest로 내보내고 다시 검증한다. 신규 출력만 만들며 원본과 기존 출력은 변경하지 않는다. schema `rosy.fleet-observations/1`은 학습 준비 원본으로 `train_eligible:false`, `labels:null`, `action_outcome:not_inferred`다. 실제 센서/행동 학습은 기존 device recording → Pinky Episode/원본 검증 → DatasetManifest/registry → 독립 평가/승격 경로에서 수행한다. Fleet 목표와 AI 선택은 CORE 실제 출력/정답 라벨이 아니다. 이벤트·Task·Mission·stuck 원장의 ID와 시간/시계 근거를 함께 대조하고 모호한 연결을 확정하지 않는다.
+
+### D-732 Fleet native outcome projection
+
+The existing Task `receipt` and channel execution step `receipt_json` preserve the first
+CORE `operation` unchanged. Optional `outcome` is an exact `NativeOperation` readback;
+its first terminal result is immutable. Optional `safe_released:true` and `quiescence`
+record a bounded fresh readback and an exact local claim CAS, independently of result.
+Only `SUCCEEDED` together with safe release permits a channel step to become COMPLETED
+and reach another step's original admission checks. `RUNNING` follow/HOLD retains its
+resource; watchdog EXPIRED, PREEMPTED, CANCELED and FAILED are not goal success.
+Stop steps own no motion claim: exact terminal plus fresh quiescence closes them as
+CANCELED with `quiescence`, without `safe_released`, releasing another owner, or
+advancing the plan. Site E-stop preserves each provided native `operation` in its
+robot-associated `robots[]` receipt; RPC acknowledgement alone is not physical stop.
+Channel steps additionally expose the persisted `caller_cid` used by that dispatch.
+Task `receipt.native_required:true` records that native identity was required before
+send; a missing ACK leaves UNKNOWN and cannot use legacy CID-only projection. Explicit
+legacy Task attempts without native identity keep their existing event projection.
+New channel native commands carry the paired current CORE boot/owner-generation CAS.
+Read-only closure preserves immutable original-request linkage after expiry/withdrawal;
+current authorization still controls delivery and access. A revoked recipient's reply
+intent may be SUPERSEDED while result evidence remains in the existing Fleet database.

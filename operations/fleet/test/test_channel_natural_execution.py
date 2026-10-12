@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import json
+from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
@@ -55,7 +56,9 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None,*,extra
     async def cancel():check_dispatch();writes.append('cancel');return {'navigation':'CANCELED'}
     async def estop():check_dispatch();writes.append('estop');return {'estop':True}
     async def post(path,body):check_dispatch();writes.append((path,body));return {'accepted':True}
-    client=SimpleNamespace(capabilities=caps,state=state,navigation_cancel=cancel,estop=estop,_post=post)
+    boot_id=str(uuid4())
+    async def get(path):return {'owner':{'boot_id':boot_id,'owner_generation':0,'owner_run_id':None}, 'lookup':'UNKNOWN','operation':None}
+    client=SimpleNamespace(capabilities=caps,state=state,navigation_cancel=cancel,estop=estop,_post=post,_get=get)
     async def console_cancel(robot):return await client.navigation_cancel()
     canceled=[]
     def cancel_pending(robot=None,*,actor_id):
@@ -133,7 +136,7 @@ def test_real_cancel_owner_removes_existing_queue_and_calls_core_once(tmp_path):
     task=asyncio.run(f.service.submit_navigation(robot_id='rosy_40',x=1.,y=2.,source='operator',actor_id='op',request_key='old'))
     asyncio.run(f.worker.step(f.receipt['request_id']));asyncio.run(f.worker.step(f.receipt['request_id']))
     assert f.writes==['cancel'] and f.store.get_task(task['task_id'])['status']=='CANCELED'
-    assert f.journal.view(f.receipt['request_id'])['steps'][0]['state']=='ACCEPTED'
+    assert f.journal.view(f.receipt['request_id'])['steps'][0]['state']=='HOLD'
 
 
 def test_direct_unknown_keeps_claim_and_restart_never_replays(tmp_path):
@@ -196,6 +199,8 @@ def test_scoped_guard_is_not_inherited_by_other_concurrent_callers():
 @pytest.mark.parametrize('phase',['discovery','identity'])
 @pytest.mark.parametrize('change',['owner','map','withdraw'])
 def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monkeypatch,phase,change):
+    from functools import partial
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     import httpx
     from fleet.swarm.robots import RobotEndpoint
     from fleet.swarm.transport import HttpRobotClient
@@ -234,6 +239,7 @@ def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monk
             client=HttpRobotClient(ep,http=http)
             leases=GoalLeases(0,{'rosy_40':client})
             leases.admit_attempt=f.service.admit_attempt
+            leases.prepare_send=partial(prepare_send,leases)
             async def dispatch(task):
                 return await leases.send('rosy_40',client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
             return await f.service.dispatch_next({'rosy_40'},dispatch=dispatch)
@@ -357,7 +363,7 @@ def test_shared_direct_service_rejects_other_owner_but_preserves_stop(tmp_path):
 
 @pytest.mark.parametrize('verb,body,receipt,expected',[
     ('cancel',{}, {'navigation':'CANCELED'},{'navigation':'CANCELED','rpc_acknowledged':True}),
-    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True}),
+    ('stop',{}, {'estop':True},{'estop':True,'rpc_acknowledged':True,'operations':[]}),
     ('home',{}, {'accepted':True,'mode':'NAVIGATION'},{'accepted':True,'mode':'NAVIGATION'}),
     ('move',{'linear':.1,'angular':0.}, {'accepted':True},{'accepted':True}),
     ('dock',{'dock':'dock-a'},{'state':'DOCKING','dock_id':'dock-a','phase':'approach','retries':0,'error':None},
@@ -500,7 +506,9 @@ def test_two_workers_loser_cannot_hold_or_release_winning_pending_rpc(tmp_path,l
         async def state():return await preflight('state',oldstate)
         async def post(path,body):
             check_dispatch(path=path);f.writes.append(path);sent.set();await release_rpc.wait()
-            return {'accepted':True,'mode':'NAVIGATION'}
+            return {'accepted':True,'mode':'NAVIGATION','operation':{'run_id':str(uuid4()),
+                'boot_id':body['expected_boot_id'],'kind':'home','correlation_id':body['correlation_id'],
+                'phase':'SUBMITTED','result':None,'reason':None}}
         f.client.capabilities=caps;f.client.state=state;f.client._post=post
         rid=f.receipt['request_id']
         losing=asyncio.create_task(second.step(rid),name='loser')
