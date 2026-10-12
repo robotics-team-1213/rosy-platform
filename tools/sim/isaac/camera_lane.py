@@ -191,9 +191,16 @@ class LearnedCameraLane:
         if decided:
             info = self.keeper.last.get('drivable_steer', {})
             strategy = self.keeper.last.get('strategy', '')
+            creep_target = info.get('observed_creep_target_m')
             if info.get('target_now_m') and (strategy == 'drivable_centre'
                     or strategy.startswith('drivable_turn_')):
                 provenance = 'observed_target'
+            elif (strategy == 'drivable_creep' and info.get('observed_creep_key') == stamp
+                    and not any(info.get(key) for key in ('switch_pending', 'exit_from_memory', 'exit_behind_line'))
+                    and isinstance(creep_target, (tuple, list)) and len(creep_target) == 2
+                    and all(isinstance(v, (int, float)) and math.isfinite(v) for v in creep_target)
+                    and creep_target[0] > 0):
+                provenance = 'observed_creep'
             elif (strategy.startswith('drivable_off_line_') and info.get('target_m')
                     and strategy == 'drivable_off_line_' + str(info.get('straddle'))):
                 provenance = 'observed_straddle'
@@ -207,7 +214,8 @@ class LearnedCameraLane:
                     ('target_m', 'target_now_m', 'ahead_m', 'guided', 'guide_deg', 'straddle',
                      'reason', 'exit', 'seen_exit', 'exit_behind_line', 'side_clear_m',
                      'reorient_deferred', 'pivot_limit', 'exit_from_memory', 'centre_path_m',
-                     'near_centre_m', 'wall_ahead_m')}
+                     'near_centre_m', 'wall_ahead_m', 'observed_creep_key',
+                     'observed_creep_target_m', 'switch_pending')}
                 return
             observation = None if step is None else LaneObservation(*step)
         now = self.clock()

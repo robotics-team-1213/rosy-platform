@@ -572,6 +572,64 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     lane.close()
 
 
+@pytest.mark.parametrize('changes,accepted', [
+    ({}, True),
+    ({'observed_creep_key': 9.0}, False),
+    ({'observed_creep_target_m': None}, False),
+    ({'observed_creep_target_m': (-.2, .05)}, False),
+    ({'observed_creep_target_m': (.2, float('nan'))}, False),
+    ({'exit_from_memory': True}, False),
+    ({'exit_behind_line': True}, False),
+    ({'switch_pending': 'drivable_centre'}, False),
+    ({'strategy': 'drivable_creep_map'}, False),
+])
+def test_only_current_observed_creep_is_admitted(monkeypatch, changes, accepted):
+    import camera_lane
+    lane, now, image, _ = gap_lane(1)
+    now[0] = 10.1
+    info = dict(strategy='drivable_creep', observed_creep_key=now[0],
+                observed_creep_target_m=(.2, .05))
+    info.update(changes)
+    def keep(*args, **kwargs):
+        args[2].update(strategy=info['strategy'], drivable_steer=info)
+        return (-.1, .6), True
+    monkeypatch.setattr(camera_lane, 'keep_step', keep)
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    if accepted:
+        assert lane.observation is not None
+        assert lane.last['camera_provenance'] == 'observed_creep'
+    else:
+        assert lane.observation is None
+        assert lane.last['reason'] == 'camera_target_unavailable'
+    lane.close()
+
+
+@pytest.mark.parametrize('prior_frames', [0, 3])
+def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_path(prior_frames):
+    lane, now, image, output = gap_lane(prior_frames)
+    now[0] += .1
+    ground = lane.ground
+    rows, cols = np.mgrid[0:240, 0:320]
+    denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lateral = ground.height_m * (cols - 160) / denominator
+        forward = ground.height_m * (ground.focal_px * np.cos(ground.pitch_rad)
+            - (rows - 120) * np.sin(ground.pitch_rad)) / denominator + .03317
+    output[:] = [((denominator > 0) & (np.abs(lateral) < .06) & (forward < .17)).astype(np.uint8), 'drivable']
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
+                 guide=(80., now[0], False, 0., 0., 0.))
+    if prior_frames:
+        assert lane.observation is None
+        assert lane.last['camera_target']['switch_pending'] == 'drivable_creep'
+        now[0] += .1
+        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
+                     guide=(80., now[0], False, 0., 0., 0.))
+    assert lane.last.get('camera_provenance') == 'observed_creep', lane.last
+    assert lane.keeper.last['expected_path_state'] != 'live'
+    assert lane.keeper.last['drivable_steer'].get('target_now_m') is None
+    lane.close()
+
+
 def test_camera_failure_snapshots_preserve_distinct_reasons_without_unbounded_output():
     from run_map_rl import camera_snapshot_due
     current = dict(reason='camera_target_unavailable', strategy='drivable_pivot_right')
