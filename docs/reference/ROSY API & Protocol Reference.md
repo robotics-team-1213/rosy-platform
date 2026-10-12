@@ -14,6 +14,8 @@
 
 ### v1.218 CORE 조건부 막힘 답 (D-718)
 
+선택 상태 필드 `line_follow.stuck.conditional_back`은 이 CORE의 조건부 BACK 지원 여부다. 신형 CORE는 true, 이전 데이터의 누락은 false다. 조건을 사용하는 Fleet HttpRobotClient는 먼저 GET `/api/v1/line-follow`에서 명시적 true를 확인하며 없거나 false이면 POST하지 않는다. 지원 여부는 안전·운영 수용·현재 사건 조건 검증을 면제하지 않는다.
+
 POST `/api/v1/line-follow/stuck/decision`의 BACK_AND_RETRY에 선택 `expected_stuck: {phase: "ASKING", attempts: nonnegative strict integer}`를 받는다. 두 필드는 필수이고 추가 키·다른 phase·bool/문자열/음수 attempts는 400 VALIDATION_ERROR다. 다른 decision에 조건을 붙이면 400 VALIDATION_ERROR다. CORE는 stuck_id와 현재 phase/attempts를 기존 manager lock 아래에서 검증하며 조건 불일치는 409 STUCK_DECISION_REFUSED(`stuck_precondition_failed`)로 거절한다. 거절은 타이머·시도 수·현재 복구를 바꾸지 않는다. 기존 조건 없는 요청과 WAIT/ABORT는 유지한다. 조건 일치는 기존 안전/권한 검사를 면제하지 않으며 모델 운영 수용도 아니다. envelope protocol_version은 1.0 유지다.
 
 ### v1.217 Fleet 관측 capture 기록 범위 (D-699)

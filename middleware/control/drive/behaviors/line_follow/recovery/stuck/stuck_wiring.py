@@ -19,7 +19,8 @@ from core_features.line_follow.clearance import (Point, body_clearances, body_en
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
 from core_features.line_follow.recovery.stuck.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
-from core_features.line_follow.recovery.stuck.stuck_recovery import REPORT_ONLY, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck.stuck_recovery import (AnswerRefused, REPORT_ONLY,
+                                                                  StuckInput, StuckRecovery)
 from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
 #: Providers CORE binds at start (core/drive/line_follow.py). Unbound or failing ones read as
@@ -184,6 +185,8 @@ class StuckRecoveryMixin:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
+            if expected_stuck is not None and decision != "BACK_AND_RETRY":
+                raise AnswerRefused("VALIDATION_ERROR", "expected_stuck belongs to BACK_AND_RETRY")
             if (decision in ("RESUME", "BACK_AND_RETRY", "YIELD", "REALIGN")
                     and not self._recovery._answer_clock_invalid(current)):
                 # Refresh evidence without advancing phases or replenishing the attempt budget.

@@ -1025,6 +1025,7 @@ class LineStuckStatus(BaseModel):
     attempts: int = 0
     max_attempts: int = 0
     local_enabled: bool = False
+    conditional_back: bool = False  # D-718: absent on old CORE; no conditional POST admission
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)

@@ -369,6 +369,11 @@ class HttpRobotClient:
             if decision != "BACK_AND_RETRY":
                 raise ValueError("expected_stuck belongs to BACK_AND_RETRY")
             body["expected_stuck"] = LineStuckPrecondition.model_validate(expected_stuck).model_dump()
+            current = await self.line_follow()
+            stuck = current.get("stuck")
+            if not isinstance(stuck, dict) or stuck.get("conditional_back") is not True:
+                raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED",
+                                    "conditional back is unsupported by CORE")
         if yield_m is not None:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
