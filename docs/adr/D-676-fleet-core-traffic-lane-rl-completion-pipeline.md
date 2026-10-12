@@ -82,3 +82,11 @@ R23 실제 카메라와 소스 비교에서 Isaac의 단색 바닥과 Gazebo tra
 실행 기록은 바퀴 명령 적용 함수의 성공 반환 후 receipt가 해당 후보와 일치하고, 최종 명령이 0이 아니며 CORE 경고와 halted 상태가 없을 때만 보관한다. 단순 cmd_vel_cycle 반환은 fallback ZERO일 수 있어 증거가 아니다. 기록은 episode마다 비우고 종료 trace에 원래 frame·state·action·twist를 남긴다. 이 receipt는 명령 전달 증거이며 실제 이동이나 정책의 인과적 책임을 보장하지 않는다. 종료 벌점 연결은 camera_failure_reason이 camera_target_unavailable인 경우로 제한한다. stale·추론·scan 등 외인성 실패는 기존 실패 종료와 정지를 유지하되 조향 행동에 벌점을 연결하지 않고 원인을 trace에 남긴다. 이 벌점만으로 조향 성능 향상을 주장하지 않는다.
 
 관측 freshness·차체 여유·CORE 최종 권한·zero와 물리 정지는 변경하지 않는다. 마지막 실행 기록은 보상 계산에만 사용하고 기억된 목표나 명령으로 재주행하지 않는다. 원격 회귀와 native 종료 보상 readback 뒤 동일 조건 baseline/frozen 정책을 비교하며, 이 수정은 병렬 학습·한 대 완주·두 대 Gazebo Fleet 수용을 대신하지 않는다.
+
+### Addendum 2026-10-12 — 카메라 관측 단위 조향 학습
+
+동일 source_stamp에서 physics tick마다 재탐색·Q 갱신하던 시간 단위를 수정한다. 새 유효 카메라 source_stamp에서만 bounded 조향 gain을 선택하고, 다음 유효 관측 또는 episode 종료에서 확인된 실행 구간의 measured reward를 합쳐 한 번 갱신한다. gamma0.95는 관측 구간 단위다. 현재 취득 간격은0.1 sim second이며 다른 취득 간격의 시간 의미는 별도 검증한다. 첫 관측·미실행 구간은 보상을 연결하지 않고 역행·비유한 stamp는 거절한다.
+
+매 tick 기존 camera_tick·line_follow·CORE·freshness·장애물·정지 판단을 유지한다. gain을 유지하는 것은 관측 갱신이나 주행 허가가 아니다. ZERO와 비학습 이동의 실행 연결 구분, target 상실 종료 원인 제한과 일회성 처리를 유지한다. baseline은 gain1, eval은 탐색·Q 갱신 없이 같은 관측 경계를 따른다. camera policy schema는 isaac-camera-error-confidence/2로 구분해 이전 physics-tick 정책 복원을 거절한다. 고정 모델 revision/hash는 유지한다.
+
+설계·시험 범위는 [관측 단위 학습 설계](../plans/2026-10-12-camera-learning-cadence-design.md)를 따른다. 이 변경의 회귀 통과는 native 재학습·Q 독립 재계산·전체 완주·병렬 RL·Fleet 교통 수용을 대신하지 않는다.

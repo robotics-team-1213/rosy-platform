@@ -27,6 +27,17 @@ def perception_id():
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
 
 
+def test_physics_tick_camera_policy_cannot_restore_as_observation_policy():
+    from camera_lane import CameraQPolicy
+    current = perception_id()
+    old = CameraQPolicy(17, perception=current).export()
+    old['perception']['schema'] = 'isaac-camera-error-confidence/1'
+    with pytest.raises(ValueError, match='identity differs'):
+        CameraQPolicy.restore(old, perception=current)
+    with pytest.raises(ValueError, match='identity required'):
+        CameraQPolicy(17, perception=old['perception'])
+
+
 @pytest.mark.parametrize('mode', ['applied', 'zero', 'clipped', 'selection_failed', 'invalid', 'halted'])
 def test_terminal_credit_requires_successful_matching_core_dispatch(mode):
     from camera_checks import remember_camera_action
