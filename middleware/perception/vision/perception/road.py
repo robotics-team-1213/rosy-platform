@@ -16,6 +16,9 @@ import numpy as np
 from .lane import LaneObservation
 from .drivable.drivable_preview import drivable
 from .follow_preview import draw_follow_evidence
+from .camera_ground import GroundPlane
+from .lane_bev import BirdsEye
+from .crosswalk_stripes import CORRIDOR_HALF_M, MIN_STRIPES, crosswalk_extent
 
 
 @dataclass(frozen=True)
@@ -232,6 +235,24 @@ def _marking(group_indexes: list[int], groups: list[tuple[int, int]],
     )
 
 
+def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int) -> RoadMarkingObservation | None:
+    # The fixed D-491 detector cannot prove a stricter operator bar-count requirement.
+    if not isinstance(ground, GroundPlane) or minimum_bars > MIN_STRIPES:
+        return None
+    view = BirdsEye(ground, bright.shape[1], bright.shape[0], 0.0)
+    grid = view.sample(bright > 0)
+    extent = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])
+    if extent is None:
+        return None
+    near, far = extent
+    selected = ((view.x >= near) & (view.x <= far)
+                & (np.abs(view.y) <= CORRIDOR_HALF_M) & view.observable)
+    confidence = float(grid[selected].mean())
+    row = ground.principal_y + ground.focal_px * math.tan(
+        math.atan2(ground.height_m, near) - ground.pitch_rad)
+    return RoadMarkingObservation(image_row=row, distance_m=near, confidence=confidence)
+
+
 def _lane(bright: np.ndarray, horizontal_groups: list[tuple[int, int]],
           config: RoadPerceptionConfig) -> LaneObservation | None:
     masked = bright.copy()
@@ -308,8 +329,8 @@ def detect_road_observation(bgr: np.ndarray, *, ground=None,
     return RoadObservation(
         lane=_lane(bright, horizontal_groups, config),
         stop_line=_marking(stop_indexes, horizontal_groups, bright, ground),
-        crosswalk=_marking(
-            crosswalk_indexes, horizontal_groups, bright, ground),
+        crosswalk=(_marking(crosswalk_indexes, horizontal_groups, bright, ground)
+                   or _floor_crosswalk(bright, ground, config.crosswalk_min_bars)),
         signal=signal,
         signal_conflict=conflict,
     )

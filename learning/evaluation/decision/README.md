@@ -1,5 +1,14 @@
 # 독립 사건 원장 비교
 
+D-715는 비교에서 실패·UNKNOWN 사건이 누락되지 않도록 보존 사건 inventory를 별도로 고정한다. 원장 사본에서 전체 profile tuple·owner·policy와 `start <= budget.started_at < end` 시간 창을 지정한다. 모든 상태를 포함하며 최대 1,000건을 넘으면 잘라서 수용하지 않는다.
+
+```powershell
+python tools/incident_case_inventory.py X:/DevTemp/<session>/fleet.sqlite3 --profiles X:/DevTemp/<session>/profiles.json --owner core --policy <policy-revision> --start <epoch-start> --end <epoch-end> --out X:/DevTemp/<session>/inventory.json
+python learning/evaluation/decision/operational_comparison.py X:/DevTemp/<session>/cohort.json X:/DevTemp/<session>/case.json --inventory X:/DevTemp/<session>/inventory.json --inventory-digest <independently-frozen-digest> --out X:/DevTemp/<session>/comparison.json
+```
+
+명세의 예상 digest는 별도 수용 설정에서 고정하며 읽은 파일의 자기 보고 hash를 자동 수용하지 않는다. 모델 전략마다 inventory 한 개가 필요하고 CLI에 경로·digest를 순서대로 전달한다. 같은 profile/policy/case의 이전·후속 export를 여러 전략에 사용하면 마지막 값을 덮어쓰지 않고 inventory 모드에서 모호한 자료로 거절한다. 기존 비교 모드는 유지한다. 결과의 `case_inventory.coverage`는 `retained_case_rows_only`이고 정상 명령·모델 호출·재발·정답·전체 원본 수집 coverage와 승격은 여전히 별도이며 HOLD를 유지한다. inventory 생산과 비교는 기존 출력을 덮어쓰지 않는다.
+
 D-703은 실제 model export와 별도 검수 자료를 기존 보정 계산에 연결한다:
 
 ```powershell

@@ -67,8 +67,8 @@ def load_run_spec(path_text: str) -> dict:
     if missing:
         raise RuntimeError(f"run_spec is missing runner fields: {', '.join(missing)}")
     domain = spec.get("ros_domain_id")
-    if type(domain) is not int or not 120 <= domain <= 199:
-        raise RuntimeError("run_spec ros_domain_id must be an integer in 120..199")
+    if type(domain) is not int or not 80 <= domain <= 99:
+        raise RuntimeError("run_spec ros_domain_id must be an integer in 80..99")
     rows = spec.get("robots")
     if not isinstance(rows, list) or not 1 <= len(rows) <= 8:
         raise RuntimeError("run_spec robots must contain 1..8 namespace reservations")

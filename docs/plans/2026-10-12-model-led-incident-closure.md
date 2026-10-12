@@ -16,6 +16,32 @@
 
 ### 현재 시작점과 다음 순서
 
+최신 D-715 source checkpoint는 읽기 전용 원장 사건 inventory와 별도 고정 digest를 실제 독립 비교/CLI에 연결한 것이다. 평가에서 실패 사건을 누락하거나 같은 사건의 다른 snapshot으로 덮는 경우를 거절한다. `871591c3e6`의 관련 원격 회귀 및 `9baec27cfb`의 population/실제 CLI 추가 12개 회귀는 terminal exit 0/NEW 0이고 독립 검토를 통과했다. retained_case_rows_only 목록을 전체 정상 명령·모델 호출·재발·정답 coverage로 해석하지 않으며 승격은 HOLD다. D-714는 `e78eca89e3`로 로컬 main에 착지했고 원격 main 통합 378 passed/skipped 0/NEW 0이다. 다음은 population과 원본의 완전한 관측/명령/결과 창 및 독립 정답·한계를 결속하는 것이다. 실제 배포·모델·현장 수용은 미완료이며 목표는 ACTIVE다.
+
+최신 D-714 source checkpoint: 별도 배포 고정 SHA와 전체 profile set을 설치한 provider/config에 결속하는 root 로더를 `4301911968`에서 구현했다. 실제 factory/dispatcher 연결·재로드·변조/미설치 ID/revision/예산 거절과 malformed JSON 오류 비노출을 적격 원격 회귀 terminal exit 0/NEW 0 및 독립 검토로 확인했다. 자동 제공자 생성·호출·권한 확대는 없다. D-706~D-713은 `3a9f812bd222`로 로컬 main에 착지했고 두 원격 통합 그룹 합계 6,312 passed/295 skipped/NEW 0이다. FULL CI와 실제 배포/모델/현장 증거는 별도이며, 다음은 운영 coverage·독립 수용 receipt와 실제 설치/readback·현장 처리의 결속이다. 전체 목표는 ACTIVE다.
+
+최신 D-713 source checkpoint는 기존 Fleet loop/outbox의 단일 pinned worker dispatcher와 실제 root 승인 포트 구성이다. 기존 사건의 모델·예산·UNKNOWN은 유지하고 현재 선택의 설치 worker만 새 사건을 생성하며 정상 상태는 호출하지 않는다. `799587b251`의 실제 원장→root→create_app→dispatcher·승인 폐기/제한 reviewer·설치/구조 원격 회귀는 terminal exit 0/NEW 0이다. shutdown의 실제 RED 결함을 수정하고 모든 worker 정리를 기다린 뒤 오류를 보고한다. 상세는 [프로파일 lifecycle 계획](2026-10-12-reasoning-profile-lifecycle.md)의 D-713을 따른다. 통합 병합은 D-692 stale gap lint 오류를 수정해 다시 진행하며, 다음 source 작업은 signed 운영 수용과 실제 설치 loader/readback·운영 coverage 연결이다. source의 모델 분배를 실제 모델 품질·현장 성공으로 대신하지 않는다.
+
+최신 D-712 checkpoint는 `d0541c3b27`의 영속 local current/previous 선택·revision CAS/복귀와 같은 DB의 원자적 사건 배정이다. 실제 receipt/poll·create_app, 동시 전환·재시작·기존 scope/예산 보존과 설치·크기 회귀는 적격 Model PC에서 terminal exit 0/NEW 0이다. 선택·복귀 책임은 기존 automation/routing에 두고 ledger 허용량을 올리지 않았다. 다음은 설치·승인된 프로파일과 pinned worker dispatcher 연결이다. 이 local 선택을 모델 품질 수용·운영 승격으로 해석하지 않는다.
+
+D-705는 `99e96cd190a0fae123a3dcb5ff52a1a0526e1121`로 로컬 main에 착지했다. main이 이동해 기존 도구의 merge→회귀를 다섯 번 수행했고 마지막 실제 AI PC 통합은 12,035 passed/1,265 skipped/NEW 0, terminal exit 0이다. 고정 로그는 세션 `logs/incident-calibration-land-ae594b.txt`, SHA256 `0caf1d81579e267ed62a1f129b2def4a01b5c1a466fee180bc7ddf80601aa5a3`다. push·CI·배포·실제 모델·현장 증거가 아니며 D-706 이후 작업은 아직 main에 착지하지 않았다. 아래 이전 시작점의 진행 중 표현은 당시 상태다.
+
+2026-10-12 최신 시작점: 통합 목표는 ACTIVE이며 기존 목표·ADR·진행 증거를 초기화하지 않는다. D-706 후보 생산, D-707 영속 보정 승인, D-709 실제 Fleet 판단 포트 연결, D-710 사건 소유권 분리와 D-711 새 사건 생성 허가 분리까지 source checkpoint를 확보했다. D-711의 `31f2cbbe8f`는 적격 AI PC 원격 시험 112 passed/terminal exit 0/NEW 0이며 독립 source 검토에 중요한 blocker가 없었다. 상세와 증거는 [프로파일 lifecycle 계획](2026-10-12-reasoning-profile-lifecycle.md)을 따른다.
+
+바로 다음 구현은 **영속 current/previous 전환과 원자적 사건 배정 → 사건에 고정된 worker dispatch → 복귀·재시작 readback**이다. 로컬 생성 허가와 사건 생성 사이에 current revision이 바뀌는 경쟁을 실제 SQLite 시험으로 먼저 재현한다. 이어 같은 트랜잭션에서 사건 소유 revision을 고정하고, 기존 사건의 예산·시도·UNKNOWN을 보존한다. 아래 D-705 시작점과 이전 source 감사는 당시 기록이며 최신 완료 범위를 대신하지 않는다. D-705 로컬 착지 검증은 진행 중이고 D-706 이후 변경의 main 통합·배포·현장 수용은 미완료다.
+
+2026-10-12 통합 목표 재확인: 기존 ACTIVE 목표와 진행 증거를 보존하고 아래 순서로 계속한다. 현재 D-705 작업은 실제 worker 실행 책임 분리와 외부 승인 hash/보정 포트 연결이다. 정상 입력은 모델 호출 없이 유지하고, 미수용 보정에서는 같은 입력의 primary 판정을 제한 reviewer에 전달한다. GLM 실제 입력 codec의 불일치 전제와 승인 포트 예외 처리, 설치 공개 import를 회귀로 확인한다. 영속 승인 공급·사건별 revision 전환·물리 조치·현장 성공은 이 단계의 완료 범위가 아니다.
+
+| 통합 목표의 남은 실행 순서 | 완료 판단 |
+|---|---|
+| 운영 보정 gate와 설치 호환성 | 실제 worker·GLM codec·wheel/sdist 원격 회귀, 독립 검토, 승인된 로컬 착지 |
+| 영속 reasoning 원장과 프로파일 교체 | candidate/current/previous 승인 hash, CAS·재시작·복귀; 기존 사건 revision 보존 |
+| 범용 처리·결과 연결 | Pinky부터 domain별 근거·허용 조치·성공 확인을 연결하고 CORE가 최종 admission |
+| 최종 인수·피드백·독립 평가 | 정상 미개입·누락·위험·다른 사건 조치·불필요 명령·재발·지연·비용의 실제 증거 |
+| 제한 토론과 개선 수용 | Qwen 기본, GLM 조건부, Jev/Laya 교체; 독립 기준 통과 후 새 사건에만 적용·복귀 |
+
+Discord 실제 설정·발송은 담당 세션이 진행한다. 모델의 자기 보고 확률만으로 자동 처리 범위를 늘리지 않고 독립 보정·기존 안전/호출 예산·결과 readback을 함께 확인한다. 사람은 최종 미해결 사건과 평가 정답·한계를 검수한다.
+
 전체 source 감사(`6a73839f03`)에서 외부 설치·현장 검증 외의 미구현 연결도 확인했다. `select_calibrated`는 production worker가 호출하지 않고 영속 reasoning candidate/current/previous 및 승격/복귀 loader가 없다. global profile 변경으로 기존 사건을 HOLD하는 fence는 새 사건만 교체하는 전환이 아니다. worker는 line_follow/read-only만 연결되어 있고 물리 처리·door/arm backend는 미구현이다. 다음은 [판정 프로파일 lifecycle](2026-10-12-reasoning-profile-lifecycle.md)의 기존 registry 소유자 reasoning 계약·전환 → Fleet 승인 hash/보정 gate → 사건별 revision 보존·복귀다. 전체 운영 coverage·자동 실패 분류/검수 label 수용/training도 남아 있다. 이전 source checkpoint는 각 부분의 증거이며 전체 source나 목표 완료가 아니다.
 
 D-704는 commit `5f06e03ab1d2a2d870e341c1801259605857552d`로 로컬 main에 착지했다. 여섯 축의 비정상 숫자와 네 비평면 축의 움직임을 버리지 않고 거절하는 Pinky 최종 속도 원본 검증이다. Native CDR/MCAP RED 22 NEW를 재현한 뒤 적격 Model PC의 원본 검증 전용 환경에서 main 통합 473 passed/skipped 0/NEW 0과 lint를 확인했다. 전체 Pinky/구조 107개 회귀와 고정 로그는 [최종 속도 원본 계획](2026-10-12-pinky-final-velocity-evidence-boundary.md)에 있다. 공유 CI venv나 장치 runtime을 바꾸지 않았다. 정상 주행 속도와 불필요 모델 개입은 다른 개념이며 전체 명령/재발 coverage는 여전히 미확인이다. GLM 관리자 설치 readback을 기다리며 전체 목표는 ACTIVE다.

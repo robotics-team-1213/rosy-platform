@@ -891,3 +891,9 @@
 - 변경: 계정·프로필과 Discord 요청 계약을 함께 보존하고 API 설명 두 곳과 버전 시험을 v1.215로 정렬했다.
 - 증거: 각 브랜치의 v1.211/v1.214 설명 충돌을 확인했다. 과거 계약 이력을 보존하고 통합 버전의 원격 검증을 진행한다.
 - gate 변화: 없음. CORE API 동작과 최종 명령 권한은 유지한다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.

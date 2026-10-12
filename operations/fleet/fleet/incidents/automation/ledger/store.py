@@ -10,6 +10,7 @@ import time
 from rosy.decision.deliberation import canonical, identifier
 from .contract import CaseBudget, CaseScope, micros, sha256, summary_json
 from .receipt import checked_receipt
+from ..routing import profile_route
 from fleet.server.sqlite_policy import configure_connection
 
 
@@ -53,6 +54,13 @@ class IncidentCaseStore:
                 PRIMARY KEY(subject_id,case_id,attempt_id),
                 FOREIGN KEY(subject_id,case_id,attempt_id)
                 REFERENCES fleet_incident_v2_attempts(subject_id,case_id,attempt_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_profile_routes (
+                owner_id TEXT NOT NULL, policy_revision TEXT NOT NULL, current TEXT NOT NULL,
+                previous TEXT, revision INTEGER NOT NULL, PRIMARY KEY(owner_id,policy_revision))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_assignments (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, route_revision INTEGER NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
 
     @contextmanager
     def _transaction(self):
@@ -79,7 +87,8 @@ class IncidentCaseStore:
                 raise ValueError('CASE_NOT_ACTIVE_OR_EXPIRED')
         return result
 
-    def begin_case(self, scope, budget, *, connection=None, initial_revision=None, worker_id=None):
+    def begin_case(self, scope, budget, *, connection=None, initial_revision=None, worker_id=None, routed=False):
+        if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
         if initial_revision is not None: identifier(initial_revision)
         if worker_id is not None: identifier(worker_id)
         if connection is not None:
@@ -87,11 +96,11 @@ class IncidentCaseStore:
                     or not any(row[1] == 'main' and Path(row[2]).resolve() == self.path.resolve()
                                for row in connection.execute('PRAGMA database_list'))):
                 raise ValueError('CALLER_TRANSACTION_REQUIRED')
-            return self._begin_case(connection, scope, budget, initial_revision, worker_id)
+            return self._begin_case(connection, scope, budget, initial_revision, worker_id, routed)
         with self._transaction() as conn:
-            return self._begin_case(conn, scope, budget, initial_revision, worker_id)
+            return self._begin_case(conn, scope, budget, initial_revision, worker_id, routed)
 
-    def _begin_case(self, conn, scope, budget, initial_revision, worker_id):
+    def _begin_case(self, conn, scope, budget, initial_revision, worker_id, routed):
         if type(budget) is not CaseBudget:
             raise ValueError('EXPLICIT_CASE_BUDGET_REQUIRED')
         key, scope_json, budget_json = self._key(scope), canonical(asdict(scope)), canonical(asdict(budget))
@@ -100,6 +109,9 @@ class IncidentCaseStore:
             if prior['scope_json'] != scope_json or prior['budget_json'] != budget_json:
                 raise ValueError('CASE_SCOPE_OR_BUDGET_CHANGED')
         else:
+            route = profile_route(conn, scope.owner_id, scope.policy_revision) if routed else None
+            if routed and (route is None or route['current'] != scope.profile_sha256):
+                raise ValueError('CASE_PROFILE_NOT_SELECTED')
             if conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] >= self.max_cases:
                 raise ValueError('CASE_CAPACITY')
             conn.execute('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -108,7 +120,16 @@ class IncidentCaseStore:
                 conn.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)', (*key, initial_revision))
             if worker_id is not None:
                 conn.execute('INSERT INTO fleet_incident_v2_creators VALUES (?,?,?)', (*key, worker_id))
+            if routed:
+                conn.execute('INSERT INTO fleet_incident_v2_assignments VALUES (?,?,?)', (*key, route['revision']))
         return self._case(conn, scope)
+
+    def assignment(self, scope):
+        with self._transaction() as conn:
+            self._case(conn, scope)
+            row = conn.execute('SELECT route_revision FROM fleet_incident_v2_assignments '
+                               'WHERE subject_id=? AND case_id=?', self._key(scope)).fetchone()
+            return row[0] if row else None
 
     def requires_resume_admission(self, scope, worker_id):
         with self._transaction() as conn:
