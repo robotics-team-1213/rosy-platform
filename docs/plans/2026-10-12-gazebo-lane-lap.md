@@ -144,3 +144,24 @@ CORE가 실제 `use_sim_time`을 명시 전달한다. 기존 namespace·topic re
 실행 의미는 유지한다. 정상 원격 자원에서 실제 Jazzy 실행을 포함한 115 PASS/NEW 0과
 독립 SOURCE 승인을 확인했다. Leg4의 실행 소스에는 이 수정이 없으며 수정 후 실제
 Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
+
+## Leg5: 원본 지도와 흰 벽의 정지선 오인식
+
+- `8ce7a7abc` 전체 7,528개 소스를 새로 빌드했다. 실제 17개 ROS 패키지 빌드와
+  원본 `map_variant=.`의 world·graph·Fleet import·native binding 결속을 확인했다.
+  두 namespace 각각 CORE 1개·safety_node 1개, 실제 clock·sensor subscription,
+  `.1/.1/2/.35` observer 법칙과 원본 graph hash를 출발 전에 확인했다.
+- 이동은 0m, 최종 Fleet `stopped/stall`이다. 조향 후보가 양수인 동안 실제 전방 거리는
+  약 0.44m로 정지 기준 0.14905m보다 컸고 hazard는 false였다. 교통 정책은 실제
+  `stop_distance_unavailable` HOLD를 89회 반환했다. 카메라 차선 관측과 두 위치는
+  유지됐다. 각각 173회의 LOCALIZED 갱신, 종료 후 남은 작업 0을 확인했다.
+- 실제 RGB 센서 영상을 BGR로 복원한 lossless PNG에서 밝은 가로 그룹은 `[0,122]`다.
+  흰 벽 전체가 정지선 후보가 됐고 평균행 61, confidence 0.952667683을 정확 재현했다.
+  유효 카메라 지평선은 80.424이므로 평균행의 거리 계산은 None이다. 후보 하단 122는
+  지평선 아래이므로 후보 전체가 지평선 위라는 설명은 틀리다. 주행 전후 네 기록 영상에서
+  같은 결과를 확인했다. 첫 내부 소비 snapshot 식별과는 별도인 기록 영상 재생 증거다.
+- 단순 그룹 삭제나 지평선 아래 crop은 채택하지 않는다. 전자는 벽에 연결된 실제 STOP을
+  지울 수 있고 후자는 남은 벽을 다시 정지선으로 만든다. 기존 `floor_white_mask`의
+  벽 접촉·바닥 페인트 분리를 우선 비교한다. 모호한 STOP의 거리 None/HOLD는 유지한다.
+- OFF 200·lease 해제·실제 정지·작업 종료·자기 프로세스/포트/lock 종료와
+  소스·설치 해시 보존을 확인했다. 원본 지도 완주와 실물 수용은 계속 미확인이다.
