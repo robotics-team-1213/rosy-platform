@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
 - 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
 - 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder
 - 2026-10-10 · 181b569b5 · fix(discovery): 빈 검색 캐시 재사용
 - 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
-- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
