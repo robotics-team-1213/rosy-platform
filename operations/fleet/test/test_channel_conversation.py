@@ -1,0 +1,144 @@
+"""Natural model proposals preserve original authority and close real durable replies."""
+import asyncio
+import hashlib
+
+import pytest
+from fastapi import HTTPException
+
+from rosy.decision.conversation.codec import (Profile, Answer, History, bounded_environment,
+    conversation_input, checked_answer, digest, source_policy)
+from fleet.server.channel.conversation.jobs import ConversationJobs
+from fleet.server.channel.conversation.worker import ConversationWorker
+from test_channel_model_jobs import setup
+
+
+def environment():
+    return {'robots':[{'robot_id':'rosy_40', 'online':True,
+        'state':{'mode':'IDLE', 'safety':{'estop':False}, 'line_follow':{'state':'OFF'}}}],
+        'map':{'version':1, 'sha256':'a'*64,
+            'places':[{'id':'A', 'name':'A 지점', 'x':1., 'y':2., 'yaw':None}]}, 'work_catalog':[]}
+
+
+def receipt_text(receipt, text):
+    return {**receipt, 'content':text, 'content_hash':hashlib.sha256(text.encode()).hexdigest()}
+
+
+def answer(kind='CHAT', **values):
+    return {'kind':kind, 'response':'안녕하세요. 무엇을 도와드릴까요?', 'intent':None,
+        'evidence_refs':[], 'review_required':False} | values
+
+
+def test_online_environment_normalization_is_idempotent():
+    raw = bounded_environment(environment())
+    assert bounded_environment(raw) == raw
+    assert raw['robots'][0]['mode'] == 'IDLE' and raw['robots'][0]['estop'] is False
+
+
+def test_full_original_multiline_question_and_only_bot_mention_removed(tmp_path):
+    _, journal, _, receipt, _, _, clock = setup(tmp_path)
+    text = '<@'+journal.config.bot_id+'> 안녕\n'+('질문 '*400)+'<@12345678901234567>'
+    value = conversation_input(receipt_text(receipt, text), environment(), journal.config.bot_id, now=clock[0])
+    assert value.question == text.replace('<@'+journal.config.bot_id+'>', '').strip()
+    assert len(value.question) > 128
+
+
+@pytest.mark.parametrize('change',['principal_id','author_id','channel_id','guild_id','expired','map'])
+def test_history_never_crosses_owner_channel_expiry_or_map(tmp_path, change):
+    _, journal, _, receipt, _, _, clock = setup(tmp_path)
+    value = conversation_input(receipt, environment(), journal.config.bot_id, now=clock[0])
+    h = {k:getattr(value,k) for k in ('request_id','principal_id','author_id','channel_id','guild_id','question','content_hash')}
+    h |= {'answered_at':clock[0], 'environment_hash':digest(value.environment), 'kind':'CHAT', 'intent':None}
+    if change == 'expired':h['answered_at']-=121
+    elif change == 'map':h['environment_hash']='b'*64
+    else:h[change] = 'different' if change == 'principal_id' else '11111111111111111'
+    with pytest.raises(ValueError):conversation_input(receipt, environment(), journal.config.bot_id,
+        [History(**h)], now=clock[0])
+
+
+@pytest.mark.parametrize('bad',[
+    answer('CHAT',response='rosy_40 온라인입니다.'), answer(response='@everyone 안녕'),
+    answer(response='password=secret'), answer('CONTROL',intent={'do':'move','robot':'unknown','linear':1.}),
+    answer('CONTROL',intent={'do':'navigate','robot':'rosy_40','waypoint':'unknown'}),
+    answer('CONTROL',intent={'do':'navigate','robot':'rosy_40','waypoint':'A','x':999.,'y':2.}),
+    answer('CONTROL',intent={'do':'reset_estop','robot':'rosy_40'}),
+    answer('STATUS',evidence_refs=['robot:unknown']),
+])
+def test_untrusted_answer_rejects_unknown_scope_facts_secrets_and_reset(tmp_path,bad):
+    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    question=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
+    with pytest.raises(ValueError):checked_answer(bad,question)
+
+
+def worker_fixture(tmp_path, *, text='안녕', change=None, output=None):
+    _, journal, accounts, receipt, _, _, clock = setup(tmp_path)
+    updated=receipt_text(receipt,text)
+    with journal._connect() as conn:
+        import json
+        conn.execute('UPDATE fleet_channel_requests SET receipt=?',(json.dumps(updated),))
+    profile=Profile(revision='d728-test')
+    jobs=ConversationJobs(journal,digest(profile.model_dump()),clock=lambda:clock[0])
+    snapshot=environment()|{'observed_at':clock[0]}
+    calls=[]
+    async def current():return snapshot
+    async def provider(question,p,remaining):
+        calls.append(question)
+        assert jobs.peek(updated['request_id'])['state']=='RUNNING'
+        if change=='owner':accounts['op']='viewer'
+        if change=='map':snapshot['map']['version']=2
+        if change=='cancel':raise asyncio.CancelledError()
+        return output or answer()
+    worker=ConversationWorker(jobs,current,profile,provider,clock=lambda:clock[0],
+        admission=lambda:change!='unadmitted',observation_guard=lambda e:bounded_environment(snapshot)==e)
+    return worker,jobs,journal,updated,calls
+
+
+def test_actual_worker_records_model_result_and_natural_reply_once(tmp_path):
+    worker,jobs,journal,receipt,calls=worker_fixture(tmp_path)
+    asyncio.run(worker.step(receipt));asyncio.run(worker.step(receipt))
+    assert len(calls)==1 and jobs.peek(receipt['request_id'])['state']=='ANSWERED'
+    with journal._connect() as conn:
+        rows=conn.execute("SELECT content FROM fleet_channel_reply_outbox WHERE kind='CONVERSATION'").fetchall()
+    assert rows==[('안녕하세요. 무엇을 도와드릴까요?',)]
+    assert jobs.read(receipt['request_id'],'op')['action_admissible'] is False
+
+
+@pytest.mark.parametrize('change',['owner','map','unadmitted'])
+def test_final_origin_and_observation_fences(tmp_path,change):
+    worker,jobs,_,receipt,calls=worker_fixture(tmp_path,change=change)
+    asyncio.run(worker.step(receipt))
+    assert jobs.peek(receipt['request_id'])['state'] in ('HOLD','SUPERSEDED')
+    assert len(calls)==(0 if change=='unadmitted' else 1)
+
+
+def test_cancel_and_restart_preserve_unknown_no_model_replay(tmp_path):
+    worker,jobs,_,receipt,calls=worker_fixture(tmp_path,change='cancel')
+    with pytest.raises(asyncio.CancelledError):asyncio.run(worker.step(receipt))
+    jobs.recover();asyncio.run(worker.step(receipt))
+    assert len(calls)==1 and jobs.peek(receipt['request_id'])['state']=='UNKNOWN'
+
+
+def test_control_is_only_proposal_and_status_is_grounded(tmp_path):
+    value=answer('CONTROL',intent={'do':'navigate','robot':'rosy_40','waypoint':'A'},evidence_refs=['robot:rosy_40','place:A'])
+    worker,jobs,_,receipt,calls=worker_fixture(tmp_path,text='40번 로봇을 A 지점으로 보내줘',output=value)
+    asyncio.run(worker.step(receipt))
+    assert jobs.read(receipt['request_id'],'op')['result']['answer']['intent']==value['intent']
+    assert jobs.read(receipt['request_id'],'op')['action_admissible'] is False
+    with pytest.raises(HTTPException):jobs.read(receipt['request_id'],'other')
+
+
+def test_independent_profile_policy_cannot_reuse_d720():
+    with pytest.raises(ValueError):Profile(revision='d720-old')
+    from fleet.server.channel.conversation.runtime import ConversationConfig
+    profile=Profile(revision='d728-test')
+    data={'host':'example','key_file':'/run/rosy-deliberation/broker.key',
+        'known_hosts_file':'/run/rosy-deliberation/known_hosts','profile':profile.model_dump(),
+        'source_commit':'a'*40,'valid_until':9999999999.,'primary_admitted':True,
+        'semantic_evidence_sha256':'b'*64,'policy':{'authority':'read_only'}}
+    with pytest.raises(ValueError):ConversationConfig(**data)
+    data['policy']=source_policy(data['source_commit'],profile)
+    assert ConversationConfig(**data).profile==profile
+
+
+def test_local_semantic_broker_has_independent_codec():
+    from deploy.ai_pc.deliberation_conversation import instruction
+    assert 'CONTROL' in instruction() and 'proposal' in instruction()
