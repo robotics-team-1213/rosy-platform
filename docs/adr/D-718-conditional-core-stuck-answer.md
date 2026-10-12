@@ -21,3 +21,5 @@ CORE는 기존 manager lock 안에서 stuck_id와 현재 phase/attempts를 확�
 설치 의존성은 core_common 0.0.2, core_api_web 0.0.1·Fleet 0.1.2의 foundation 최소 0.0.2, rosy-execution 0.1.2의 foundation 정확한 0.0.2로 결속한다. 실행 의존 소비자인 palletizing·site gateway·OMX agent·legacy Cell도 0.1.2 및 CI pin으로 함께 갱신한다. 독립 wheel/sdist 설치의 실제 metadata와 클래스 identity를 검사하고 구형 0.0.1이 새 의존성을 충족하지 않는지 확인한다. 직접 REALIGN에 BACK 전용 조건을 붙인 경우도 manager 경계에서 거절한다.
 
 사람 WAIT·CORE local fallback·시도 불일치·같은 ASKING 조건 수용과 malformed 입력을 실제 상태 기계/API/HTTP transport 회귀로 확인한다. 독립 안전 검토·원격 통합·로컬 착지 후에도 모델 후보 생산/dispatch·운영 receipt·배포·현장 수용은 별도다.
+
+2026-10-12 독립 `responsibility_review`는 `fa048a18d`의 D-430 SOURCE 안전 재검토를 승인했다. 기존 manager lock의 조건 검사, REALIGN 우회 차단, 혼합 API/제어기 capability와 SDK 의존성 결속에 중요한 blocker 없음. 원격 `fa048a18d` 관련 회귀에서 native installer의 오래된 execution pin 1건을 확인했고, `60da01830`의 설치·wheel/sdist·CI closure 21개 회귀가 terminal exit 0/NEW 0이다. 세션 로그 `stuck-condition-closure-final/run-1.txt`, `stuck-condition-installed-final/run-1.txt`에 원본을 보존한다. 통합 회귀는 착지 도구로 다시 검증하며 이 승인은 실제 device/field 수용이 아니다.
