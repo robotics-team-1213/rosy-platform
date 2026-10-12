@@ -163,8 +163,42 @@ def test_lane_tracking_does_not_invent_a_blinker():
     snap = _snapshot()
     snap.line_follow = SimpleNamespace(mode="CAMERA", state="TRACKING", reason="lane_edge_left",
                                         angular=-0.5, stuck=None, junction=None)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
 
-    assert _payload(snap)["signal"] is None
+    assert payload["signal"] is None and payload["line_note"] == "lane_edge"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Lane edge"
+
+
+@pytest.mark.parametrize("reason,note,strip", [
+    ("crosswalk_person_present", "crosswalk", "Crosswalk"),
+    ("ir_guard_crosswalk", "crosswalk", "Crosswalk"),
+    ("lane_departure", "lane_edge", "Lane edge"),
+    ("stuck_yield", "yield", "Yielding"),
+    ("tracking", None, "Following"),
+])
+def test_a_published_reason_names_the_strip(reason, note, strip):
+    state = "RECOVERING" if reason == "stuck_yield" else "TRACKING"
+    if reason in ("crosswalk_person_present", "lane_departure"):
+        state = "HOLD"
+    snap = _snapshot(line_mode="CAMERA", line_state=state, line_reason=reason)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["line_note"] == note
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == strip
+
+
+def test_a_yield_turn_stays_the_side_and_a_plain_hold_stays_a_caution():
+    turning = _snapshot(line_mode="CAMERA", line_state="RECOVERING", line_reason="stuck_yield")
+    turning.line_follow = SimpleNamespace(mode="CAMERA", state="RECOVERING", reason="stuck_yield",
+                                           angular=0.3, stuck=None, junction=None)
+    holding = _snapshot(line_mode="CAMERA", line_state="HOLD", line_reason="obstacle_ahead")
+    read = fs.validate_face_inputs(json.loads(json.dumps(_payload(turning))), NOW)
+
+    assert _payload(turning)["signal"] == "left" and _payload(turning)["line_note"] == "yield"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Left"
+    assert display.face_cautions(holding) == ["line_follow_hold"]
 
 
 def test_a_moving_return_keeps_recovery_while_the_question_is_also_named():
