@@ -21,7 +21,7 @@ from importer_compat import import_model, reference_model
 from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints, configure_contact_solver
 from graph_contract import robot_contract
 from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
-from floor_visuals import map_visual_profile, add_track_visuals
+from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision
 from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due)
 
 
@@ -189,8 +189,9 @@ def main():
                 configure_velocity_drive(drive)
         world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
         profile = map_visual_profile(MAP)
-        world.scene.add_ground_plane(size=profile['ground_size'],
+        ground = world.scene.add_ground_plane(size=profile['ground_size'],
             color=np.array(profile['ground_colour']), restitution=0.)
+        summary['ground_collision'] = configure_ground_collision(stage, ground.prim_path)
         scene = track['scene']
         add_track_visuals(stage, track, profile)
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
