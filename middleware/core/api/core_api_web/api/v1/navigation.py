@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 from core_api_web.api.v1.common import (
     enter_navigation_mode,
@@ -34,6 +35,15 @@ class GoalRequest(BaseModel):
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
     #: D-550 10: optional goal lease; needs correlation_id. Checked before the mode changes.
     lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
+
+
+class HomeRequest(BaseModel):
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
 
 
 class GoalLeaseRequest(BaseModel):
@@ -58,13 +68,21 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
     require_kept(svc, "navigation.goal_navigation")
     with localized_start(svc):
         spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
-        enter_navigation_mode(svc, auth)
-        svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
-                     lease_ttl_s=body.lease_ttl_s)
+        token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
+                                     expected_owner_generation=body.expected_owner_generation)
+        receipt = []
+        try:
+            enter_navigation_mode(svc, auth)
+            svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
+                         lease_ttl_s=body.lease_ttl_s, reservation=token,
+                         receipt_sink=receipt.append)
+        finally:
+            svc.nav.release_goal_reservation(token)
     return {
         "accepted": True,
         "mode": svc.modes.mode.value,
         "goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
+        "operation": receipt[0].model_dump(mode="json"),
     }
 
 
@@ -79,14 +97,20 @@ def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(op
 @navigation_router.post("/navigation/cancel")
 def navigation_cancel(auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
-    svc.nav.cancel(source=f"api:{auth.role}")
+    receipt = []
+    svc.nav.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
     stop_ends_trip_lease(svc, auth)
-    return {"navigation": svc.nav.nav_state.value}
+    return {"navigation": svc.nav.nav_state.value,
+            "operation": receipt[0].model_dump(mode="json") if receipt else None}
 
 
 @navigation_router.post("/navigation/home")
 def navigation_home(auth: AuthContext = Depends(operator),
-                    svc: CoreServicesLike = Depends(get_services)):
+                    svc: CoreServicesLike = Depends(get_services),
+                    body: HomeRequest | None = None):
+    body = body or HomeRequest()
+    if body.lease_ttl_s is not None and body.correlation_id is None:
+        raise ApiError("VALIDATION_ERROR", 400, "lease_ttl_s needs a correlation_id")
     require_manual_released(svc)
     if svc.line_follow.active:
         raise ApiError("LINE_FOLLOW_ACTIVE", 409,
@@ -94,15 +118,26 @@ def navigation_home(auth: AuthContext = Depends(operator),
     TaskKind.RETURN_HOME.require(svc.capability)
     require_kept(svc, "navigation.return_home")
     with localized_start(svc):
-        enter_navigation_mode(svc, auth)
-        svc.nav.home(source=f"api:{auth.role}")
-    return {"accepted": True, "mode": svc.modes.mode.value}
+        token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
+                                     expected_owner_generation=body.expected_owner_generation)
+        receipt = []
+        try:
+            enter_navigation_mode(svc, auth)
+            svc.nav.home(source=f"api:{auth.role}", correlation_id=body.correlation_id,
+                         lease_ttl_s=body.lease_ttl_s, reservation=token,
+                         receipt_sink=receipt.append)
+        finally:
+            svc.nav.release_goal_reservation(token)
+    return {"accepted": True, "mode": svc.modes.mode.value,
+            "operation": receipt[0].model_dump(mode="json")}
 
 
 @navigation_router.get("/navigation/state")
-def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services),
+                     run_id: UUID | None = None):
     readiness = svc.readiness.snapshot()
     return {
+        **svc.nav.native_readback(run_id),
         "navigation": svc.nav.nav_state.value,
         "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
