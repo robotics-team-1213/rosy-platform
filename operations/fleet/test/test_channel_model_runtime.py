@@ -56,3 +56,41 @@ def test_stale_future_or_missing_source_clock_is_unknown(received):
     value=fresh_snapshot(data,50,100,now=lambda:51)
     assert value['robots'][0]['online'] is None and value['observed_at']==50
     with pytest.raises(ValueError):fresh_snapshot(data,50,100,now=lambda:54)
+
+
+@pytest.mark.parametrize('failure',[None,'identity','oversize','timeout'])
+def test_fixed_ssh_exchange_is_bounded_and_always_reaped(tmp_path,monkeypatch,failure):
+    import asyncio
+    import sys
+    from dataclasses import asdict
+    from test_channel_model_jobs import setup
+    from test_channel_model_status import status_payload
+    from fleet.server.channel_model_runtime import BrokerConfig,BrokerProvider
+    from rosy.decision.deliberation.status_profiles import profiles
+    from rosy.decision.deliberation.profiles import BoundProfile
+    _,_,_,_,_,problem,_=setup(tmp_path)
+    selected=profiles('d720-v1')[0]
+    raw=status_payload(problem);raw['profile_revision']=selected.profile_revision
+    raw['evidence_ids']=list(problem.evidence_ids)
+    for key in ('next_step','success_check'):raw[key]['evidence_ids']=list(problem.evidence_ids)
+    cfg=BrokerConfig(host='ai.example',key_file='/run/rosy-deliberation/broker.key',
+        known_hosts_file='/run/rosy-deliberation/known_hosts',profile_revision='d720-v1',source_commit='a'*40,
+        valid_until=9999999999.0,primary_admitted=True,reviewer_admitted=False)
+    reply={'source_commit':('b' if failure=='identity' else 'a')*40,'profile':asdict(selected),
+           'judgment':raw,'cost_usd':0,'cost_evidence':None}
+    original=asyncio.create_subprocess_exec;processes=[]
+    async def spawn(*argv,**options):
+        assert argv[:3]==('ssh','-F','/dev/null')
+        assert argv[-2:]==('rosy-model-ingress@ai.example','rosy-status-v1')
+        script='import sys,json,time;d=json.load(sys.stdin);assert d["role"]=="primary";'
+        script+=('time.sleep(10);' if failure=='timeout' else '')
+        script+='sys.stdout.write('+repr('x'*20000 if failure=='oversize' else json.dumps(reply))+')'
+        p=await original(sys.executable,'-c',script,**options);processes.append(p);return p
+    monkeypatch.setattr(asyncio,'create_subprocess_exec',spawn)
+    async def call():
+        return await BrokerProvider(cfg,selected)(problem,BoundProfile(selected,problem.digest),(),
+            .2 if failure=='timeout' else 5,budget_usd=0)
+    if failure:
+        with pytest.raises((ValueError,TimeoutError)):asyncio.run(call())
+    else:assert asyncio.run(call()).cost_usd==0
+    assert len(processes)==1 and processes[0].returncode is not None

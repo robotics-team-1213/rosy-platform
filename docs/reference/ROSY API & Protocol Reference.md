@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.218
+**Version:** v1.219
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.219 Discord 읽기 전용 숙고 결과 (D-720)
+
+선택 private broker 설정과 기존 기명 Discord 접수·회신이 구성된 경우 `GET /api/fleet/channel-requests/{request_id}/deliberation`은 원문 소유 operator에게 `ChannelModelResult`를 반환한다. 설정 부재·작업 부재는 404, 원문 계정·채널 소유권 변경은 403이다. 필드는 request_id, state(PENDING/RUNNING/ANSWERED/HOLD/UNKNOWN/SUPERSEDED), profile_set_hash, input_hash, created_at, deadline, completed_at, result, action_admissible(false)다. result는 bound 모델 ID·판단·비용 증빙 또는 보류 사유이며 실행·목표 수용이 아니다. 원문을 CORE 사건으로 승격하지 않고 fleet_status/READ_ONLY_QUERY 및 channel 범위 읽기 tool만 허용한다. 영속 호출 예약·UNKNOWN 재호출 금지·현재 관측/계정/profile 재검증·결과와 Discord outbox 원자 기록을 지킨다. 최초 활성화 이전 요청은 재생하지 않는다. 보호된 숙고 모델·비용·host 증빙 없이는 HOLD이며 GLM 최초 1회 spent marker는 배포·rollback에도 유지한다.
 
 ### v1.218 CORE 조건부 막힘 답 (D-718)
 

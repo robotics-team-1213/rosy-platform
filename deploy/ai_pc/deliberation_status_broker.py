@@ -12,7 +12,7 @@ import time
 
 from rosy.decision.deliberation import Problem,canonical
 from rosy.decision.deliberation.profiles import BoundProfile
-from rosy.decision.deliberation.status_profiles import profiles
+from rosy.decision.deliberation.status_profiles import profiles,status_query_policy
 from rosy.decision.deliberation.versioned_request import prepare_request
 from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 from . import deliberation_ollama as local
@@ -68,10 +68,12 @@ def configuration():
     import pwd
     if os.getuid()!=pwd.getpwnam('rosy-deliberation').pw_uid:raise ValueError('PROTECTED_BROKER_UID_REQUIRED')
     cfg=json.loads(protected(CONFIG))
-    if set(cfg)!={'source_commit','profile_revision','valid_until','reviewer_admission','billing_policy','files'}:
+    if set(cfg)!={'source_commit','profile_revision','valid_until','reviewer_admission','billing_policy','files','status_query_policy'}:
         raise ValueError('INVALID_HOST_ADMISSION')
     if type(cfg['valid_until']) not in (int,float) or not time.time()<cfg['valid_until']:
         raise ValueError('HOST_ADMISSION_EXPIRED')
+    if cfg['status_query_policy']!=status_query_policy(cfg['source_commit'],cfg['profile_revision']):
+        raise ValueError('STATUS_QUERY_POLICY_NOT_ADMITTED')
     files=cfg['files']
     if type(files) is not dict or not files or len(files)>1000:raise ValueError('SOURCE_MANIFEST_REQUIRED')
     for name,digest in files.items():
