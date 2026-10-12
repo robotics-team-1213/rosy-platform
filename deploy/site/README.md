@@ -71,7 +71,7 @@ other state and command controls still require a site user token. Access through
 a public address retains the token requirement. This proxy exception depends
 on Fleet and Vision staying unpublished on the internal Compose network.
 
-On 2026-10-01 a site moved from 192.168.1.0/24 to 10.16.36.0/24. The proxy was
+On 2026-10-01 a site moved from one RFC1918 subnet to another. The proxy was
 published on the old interface IP, so the next start failed with "cannot
 assign requested address" and the console, cameras, robots and the discovery
 bridge went down together. The site stack therefore never names a LAN

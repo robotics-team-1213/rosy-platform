@@ -115,6 +115,8 @@ flowchart LR
   `package.xml`로 확인한다.
 - **공개 저장소 경계** — 이 저장소는 공개다. 실제 장치 주소·계정·채워진 장치 설정은
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
+  시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
+  `tools/remote/hosts.example.json`을 복사한다.
   날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
   `docs/` 하나에 둔다.
 
