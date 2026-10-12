@@ -27,10 +27,12 @@ def install_gateway(app, journal, token):
             raise OSError("Discord reception journal unavailable") from None
 
     config = journal.config
+    async def withdraw(guild,channel,message,reason):
+        await run_in_threadpool(journal.withdraw,guild,channel,message,reason)
     if config.replies_enabled:
         journal.reply_outbox = ChannelReplyOutbox(journal)
     worker = DiscordGateway(token=token, guild_id=config.guild_id, channel_id=config.channel_id,
-                            bot_id=config.bot_id, consume=consume)
+                            bot_id=config.bot_id, consume=consume, withdraw=withdraw)
     previous = app.router.lifespan_context
 
     @asynccontextmanager

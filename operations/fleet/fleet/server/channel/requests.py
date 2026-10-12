@@ -50,6 +50,9 @@ class ChannelRequests:
                for user, principal in config.users.items()):
             raise ValueError("Discord users require currently registered operators")
         with closing(self._connect()) as conn, conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_channel_withdrawals (
+                guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,message_id TEXT NOT NULL,
+                reason TEXT NOT NULL,PRIMARY KEY(guild_id,channel_id,message_id))''')
             conn.execute('''CREATE TABLE IF NOT EXISTS fleet_channel_requests (
                 guild_id TEXT, channel_id TEXT, message_id TEXT, digest TEXT NOT NULL,
                 principal_id TEXT NOT NULL, receipt TEXT NOT NULL,
@@ -69,6 +72,18 @@ class ChannelRequests:
         if (cfg.users.get(receipt['author_id']) != receipt['principal_id']
                 or receipt['guild_id'] != cfg.guild_id or receipt['channel_id'] != cfg.channel_id):
             raise HTTPException(403, detail='CHANNEL_OWNER_CHANGED')
+        with closing(self._connect()) as conn:
+            if conn.execute('SELECT 1 FROM fleet_channel_withdrawals WHERE guild_id=? AND channel_id=? AND message_id=?',
+                            (receipt['guild_id'],receipt['channel_id'],receipt['message_id'])).fetchone():
+                raise HTTPException(409,detail='CHANNEL_ORIGINAL_WITHDRAWN')
+
+    def withdraw(self,guild_id,channel_id,message_id,reason='MESSAGE_CHANGED'):
+        if ((guild_id,channel_id)!=(self.config.guild_id,self.config.channel_id)
+                or re.fullmatch(r'[0-9]{17,20}',message_id) is None):
+            return
+        with closing(self._connect()) as conn,conn:
+            conn.execute('INSERT OR IGNORE INTO fleet_channel_withdrawals VALUES (?,?,?,?)',
+                         (guild_id,channel_id,message_id,reason))
 
     def receive(self, envelope):
         cfg = self.config
@@ -86,8 +101,12 @@ class ChannelRequests:
                                "guild_id=? AND channel_id=? AND message_id=?", scope).fetchone()
             if old:
                 if old[0] != digest:
+                    conn.execute('INSERT OR IGNORE INTO fleet_channel_withdrawals VALUES (?,?,?,?)',
+                                 (*scope,'MESSAGE_CHANGED'))
+                    conn.commit()
                     raise HTTPException(409, detail="CHANNEL_MESSAGE_CHANGED")
                 receipt = json.loads(old[1])
+                self.current_receipt(receipt)
                 if receipt["principal_id"] != principal:
                     raise HTTPException(403, detail="CHANNEL_OWNER_CHANGED")
                 if self.reply_outbox is not None:

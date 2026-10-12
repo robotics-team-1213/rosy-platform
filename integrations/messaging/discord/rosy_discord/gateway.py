@@ -27,6 +27,7 @@ class DiscordGateway:
     channel_id: str
     bot_id: str
     consume: object = field(repr=False)
+    withdraw: object = field(default=None,repr=False)
     session_id: str | None = None
     sequence: int | None = None
     awaiting_ack: bool = False
@@ -63,6 +64,18 @@ class DiscordGateway:
                 raise GatewayStop("Discord resume endpoint refused")
             self.url, self.session_id = resume.rstrip("/"), data["session_id"]
             LOG.info("Discord Gateway READY")
+        elif event in {'MESSAGE_UPDATE','MESSAGE_DELETE','MESSAGE_DELETE_BULK'}:
+            if self.session_id is None:
+                raise GatewayStop('Discord withdrawal before verified READY')
+            if (type(data) is dict and data.get('guild_id')==self.guild_id
+                    and data.get('channel_id')==self.channel_id and self.withdraw is not None):
+                ids=data.get('ids',[]) if event=='MESSAGE_DELETE_BULK' else [data.get('id')]
+                if type(ids) is not list or len(ids)>100:raise GatewayStop('Discord withdrawal scope refused')
+                for message in ids:
+                    if type(message) is str and re.fullmatch(r'[0-9]{17,20}',message):
+                        self.pending=True
+                        await self.withdraw(self.guild_id,self.channel_id,message,event)
+                        self.pending=False
         elif event == "MESSAGE_CREATE":
             if self.session_id is None:
                 raise GatewayStop("Discord message before verified READY")

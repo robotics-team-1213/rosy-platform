@@ -810,7 +810,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from .channel_model_runtime import install_channel_models
     install_channel_models(app,channel_model_config)
     from .channel.conversation.runtime import install_conversation
-    install_conversation(app,conversation_config,site_maps)
     if channel_model_config is not None or conversation_config is not None:
         from core_common.protocol.channel_requests import ChannelModelResult
         @app.get('/api/fleet/channel-requests/{request_id}/deliberation',dependencies=read_guard,
@@ -826,6 +825,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               fanout_local_omx_stops, configured_omx, stop_transport),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
+    install_conversation(app,conversation_config,site_maps,task_service=task_service,
+                         require_operator=require_operator,read_guard=read_guard)
 
     @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
     def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
