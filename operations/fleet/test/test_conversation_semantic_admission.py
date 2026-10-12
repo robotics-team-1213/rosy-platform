@@ -92,7 +92,8 @@ def test_semantic_suite_covers_every_exposed_control_verb():
 
 @pytest.mark.parametrize('path', ['deploy/ai_pc/deliberation_conversation.py',
     'deploy/ai_pc/deliberation_conversation_broker.py', 'deploy/ai_pc/conversation_acceptance.py',
-    'operations/decision/src/rosy/decision/conversation/codec.py'])
+    'operations/decision/src/rosy/decision/conversation/codec.py',
+    'operations/decision/src/rosy/decision/__init__.py', 'deploy/site/requirements-fleet.txt'])
 @pytest.mark.parametrize('change', ['omitted', 'changed'])
 def test_semantic_proof_binds_inference_dependency_source(monkeypatch, path, change):
     host_configuration(monkeypatch, json.dumps(proof()).encode(),

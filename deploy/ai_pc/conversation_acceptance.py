@@ -62,8 +62,7 @@ EXPECTED = {
 
 
 def source_files(root):
-    folders = ('deploy/ai_pc', 'operations/decision/src/rosy/decision/conversation',
-               'operations/decision/src/rosy/decision/deliberation',
+    folders = ('deploy/ai_pc', 'operations/decision/src/rosy/decision',
                'contracts/foundation/core_common')
     paths = {p for folder in folders for p in (root/folder).rglob('*.py')}
     paths.update((root/'deploy/site').glob('deliberation_*.py'))
@@ -71,6 +70,8 @@ def source_files(root):
         'deploy/ai_pc/conversation_acceptance.py', 'deploy/ai_pc/deliberation_conversation.py',
         'deploy/ai_pc/deliberation_conversation_broker.py',
         'operations/decision/src/rosy/decision/conversation/codec.py',
+        'operations/decision/src/rosy/decision/__init__.py',
+        'deploy/site/requirements-fleet.txt',
         'contracts/foundation/core_common/intent.py'))
     return sorted(p.relative_to(root).as_posix() for p in paths)
 
