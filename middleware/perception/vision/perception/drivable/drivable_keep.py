@@ -124,10 +124,10 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
     # No fresh way. A committed straight corridor is republished from odometry.
     # Otherwise the tape keeper must not steer in between
     # (its corners and one-sided targets fought the way, 8kcn 20261009T234748Z).
-    held = path.hold(pose, stamp) if pose is not None else None
+    held = path.hold(pose, stamp)
+    _remember_path(last, held)
     steer.lost(stamp)
     if held is not None and held["error"] is not None:
-        _remember_path(last, held)
         target = held["target_m"]
         last.update(strategy='expected_path_held', reason=None,
                     error=round(held["error"], 3), confidence=held["confidence"],
