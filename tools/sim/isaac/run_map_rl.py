@@ -347,7 +347,9 @@ def main():
                 step()
             initial = read_pose()
             if math.dist(initial[:2], route[0]) > .015 or initial[3] >= .005 or abs(initial[4]) >= .02:
-                raise RuntimeError('reset pose or rest readback differs')
+                summary['reset_failure'] = dict(phase=phase, seed=seed, target_xy=route[0],
+                    actual_pose=initial, position_error_m=math.dist(initial[:2], route[0]))
+                raise RuntimeError('reset pose or rest readback differs: ' + json.dumps(summary['reset_failure']))
             epoch += 1
             owner.begin(epoch)
             if lane is not None:
