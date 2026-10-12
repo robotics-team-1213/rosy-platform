@@ -718,6 +718,7 @@
 | D-727 | 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt | Accepted |
 | D-730 | 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim | Accepted |
 | D-731 | 기존 Fleet 루프의 단일 규칙·모델 제출 책임 | Accepted |
+| D-734 | 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자 | Proposed |
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
 
 | D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
@@ -1031,6 +1032,12 @@ Status: Accepted (source contract; no operational activation).
 **Status:** Accepted (2026-10-12, source contract; no operational activation)
 
 전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
+
+## D-734 — 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자
+
+**Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
+
+전문은 [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
 ## D-728 — 기명 자연어 대화와 기존 조종 owner 연결
 
 **Status:** Accepted (2026-10-12, source design; runtime acceptance pending)

@@ -545,6 +545,8 @@ class NavigationManager:
                 self.native.update(native_run_id, phase=current.phase,
                                    reason="BACKEND_RESULT_UNKNOWN")
 
+    def capture_native_operation(self, run_id: UUID | None = None): return self.native.capture(self._lock, run_id)
+
     def native_readback(self, run_id: UUID | None = None) -> dict:
         with self._lock:
             snapshot = getattr(self.executor, "native_transport_snapshot", None)

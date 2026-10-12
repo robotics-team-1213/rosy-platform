@@ -152,7 +152,7 @@ def _core_nodes(actions, context):
 def _env(node, context) -> dict:
     # Node → ExecuteLocal.process_description (launch.descriptions.Executable) .additional_env:
     # [(key_substitutions, value_substitutions), ...]
-    return {_text(k, context): _text(v, context) for k, v in node.process_description.additional_env}
+    return {_text(k, context): _text(v, context) for k, v in (node.process_description.additional_env or [])}
 
 
 def test_core_true_adds_one_core_per_robot_with_distinct_ports_and_homes():
@@ -239,7 +239,8 @@ def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch,
     for index, node in enumerate(observers):
         # The mocked share dir has no control/config/line_follow.yaml, so do not
         # evaluate the yaml parameter. The law dict is already the last element.
-        law = node._Node__parameters[-1]
+        from launch_ros.utilities import evaluate_parameters
+        law = evaluate_parameters(context, [node._Node__parameters[-1]])[0]
         assert law['core_cruise_speed'] == pytest.approx(.08+.01*index)
         assert {k for k in law if str(k).startswith('core_')} == {
             'core_cruise_speed', 'core_max_linear', 'core_steering_gain', 'core_min_confidence'}
