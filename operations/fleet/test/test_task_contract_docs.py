@@ -17,6 +17,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
         encoding="utf-8")
     intent = (ROOT / "operations/fleet/fleet/server/intent_routes.py").read_text(
         encoding="utf-8")
+    execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
     web_root = ROOT / "operations/ui/console"
     web = (web_root / "console.js").read_text(encoding="utf-8")
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
@@ -60,7 +61,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     }
     assert 'alias="Idempotency-Key"' in task_dispatch
     assert 'alias="Idempotency-Key"' in intent
-    assert 'call.verb == "navigate"' in intent
+    assert 'await execution.step(call, principal, idempotency_key' in intent
+    assert 'call.verb == "navigate"' in execution
     assert '"Idempotency-Key": crypto.randomUUID()' in web
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
