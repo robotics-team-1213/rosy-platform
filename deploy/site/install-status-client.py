@@ -126,7 +126,7 @@ def install_client(cfg,config,pins,approved,name):
     finally:os.close(fd)
     with tempfile.TemporaryDirectory(prefix='rosy-status-client-') as temp:
         snapshot=Path(temp)/'key';snapshot.write_bytes(key);snapshot.chmod(0o600)
-        public=subprocess.check_output(['ssh-keygen','-y','-f',str(snapshot)],text=True).strip().split()
+        public=subprocess.check_output(['/usr/bin/ssh-keygen','-y','-f',str(snapshot)],text=True).strip().split()
     if public[:2]!=approved.decode().split()[:2]:raise SystemExit('approved broker key changed')
     parent=Path('/etc/rosy');trusted_directory(parent)
     destination=parent/'fleet-deliberation'
