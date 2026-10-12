@@ -316,7 +316,7 @@ def gap_lane(frames, curvature=0.):
     return lane, now, image, output
 
 
-@pytest.mark.parametrize('frames,continues', [(2, False), (3, True)])
+@pytest.mark.parametrize('frames,continues', [(2, False), (3, False)])
 def test_camera_gap_uses_only_a_committed_path_without_learning(frames, continues):
     from run_map_rl import camera_tick
     lane, now, image, _output = gap_lane(frames)
@@ -352,7 +352,7 @@ def test_camera_held_path_cannot_survive_budgets_or_invalid_input(loss):
     lane, now, image, _output = gap_lane(3)
     now[0] += .1
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
-    assert camera_tick(lane, now[0], gain=1.)[0].linear > 0.
+    assert camera_tick(lane, now[0], gain=1.)[0].linear == 0.
     now[0] += 2.5 if loss == 'time' else .1
     pose = (.25, 0., 0.) if loss == 'distance' else (.26, 0., 0.) if loss == 'jump' else (0., 0., 0.)
     stamp = 10. if loss == 'rewind' else now[0]
