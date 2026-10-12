@@ -6,6 +6,12 @@
 
 ## D-706 구현 checkpoint
 
+### D-711 새 사건 생성 허가 분리 checkpoint
+
+`31f2cbbe8f`에서 기존 worker의 선택적 `new_case_admission(scope)`를 새 사건 생성 두 경로에 연결했다. 기존 outbox receipt 트랜잭션과 poll에서 사건이 없을 때만 exact true를 요구한다. false·None·숫자·문자열·일반 오류는 생성과 모델 호출을 막는다. 이미 맡은 사건은 기존 프로파일·예산으로 이어가며 기존 안전 admission과 UNKNOWN·사람 소유권 검증을 유지한다.
+
+실제 SQLite receipt/poll 거절과 두 프로파일·두 로봇의 기존 사건 보존을 RED 6 NEW로 재현한 뒤 수정했다. 적격 AI PC 원격 회귀 112 passed/terminal exit 0/NEW 0이며 로그는 세션 `logs/incident-new-case-green/run-1.txt`다. 독립 source 검토에서 중요한 blocker는 없었다. D-711은 빠른 local 생성 fence이며 mutable current 선택과 begin_case의 원자성을 제공하지 않는다. 영속 전환·원자적 배정·pinned dispatcher와 실제 운영 수용을 이어 구현해야 한다.
+
 ### D-710 사건 소유권 분리 checkpoint
 
 `e9a5adab14`에서 worker의 active/최종 인수 대기 조회와 `_process`·`_finish`를 자신의 전체 profile tuple SHA 및 CORE owner로 제한했다. 실제 공유 DB 두 worker가 다른 profile 사건을 PROFILE_CHANGED로 닫거나 인수를 대신 큐에 넣는 RED 3 NEW를 재현한 뒤 수정했다. 상태·원래 예산·시도/호출 수를 그대로 보존하고 원 worker만 최종 인수를 처리한다. 같은 profile의 다른 실행 owner도 종료하지 않는다.
