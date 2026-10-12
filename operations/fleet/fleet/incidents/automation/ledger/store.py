@@ -53,6 +53,13 @@ class IncidentCaseStore:
                 PRIMARY KEY(subject_id,case_id,attempt_id),
                 FOREIGN KEY(subject_id,case_id,attempt_id)
                 REFERENCES fleet_incident_v2_attempts(subject_id,case_id,attempt_id))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_profile_routes (
+                owner_id TEXT NOT NULL, policy_revision TEXT NOT NULL, current TEXT NOT NULL,
+                previous TEXT, revision INTEGER NOT NULL, PRIMARY KEY(owner_id,policy_revision))''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS fleet_incident_v2_assignments (
+                subject_id TEXT NOT NULL, case_id TEXT NOT NULL, route_revision INTEGER NOT NULL,
+                PRIMARY KEY(subject_id,case_id),
+                FOREIGN KEY(subject_id,case_id) REFERENCES fleet_incident_v2_cases(subject_id,case_id))''')
 
     @contextmanager
     def _transaction(self):
@@ -79,7 +86,8 @@ class IncidentCaseStore:
                 raise ValueError('CASE_NOT_ACTIVE_OR_EXPIRED')
         return result
 
-    def begin_case(self, scope, budget, *, connection=None, initial_revision=None, worker_id=None):
+    def begin_case(self, scope, budget, *, connection=None, initial_revision=None, worker_id=None, routed=False):
+        if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
         if initial_revision is not None: identifier(initial_revision)
         if worker_id is not None: identifier(worker_id)
         if connection is not None:
@@ -87,11 +95,11 @@ class IncidentCaseStore:
                     or not any(row[1] == 'main' and Path(row[2]).resolve() == self.path.resolve()
                                for row in connection.execute('PRAGMA database_list'))):
                 raise ValueError('CALLER_TRANSACTION_REQUIRED')
-            return self._begin_case(connection, scope, budget, initial_revision, worker_id)
+            return self._begin_case(connection, scope, budget, initial_revision, worker_id, routed)
         with self._transaction() as conn:
-            return self._begin_case(conn, scope, budget, initial_revision, worker_id)
+            return self._begin_case(conn, scope, budget, initial_revision, worker_id, routed)
 
-    def _begin_case(self, conn, scope, budget, initial_revision, worker_id):
+    def _begin_case(self, conn, scope, budget, initial_revision, worker_id, routed):
         if type(budget) is not CaseBudget:
             raise ValueError('EXPLICIT_CASE_BUDGET_REQUIRED')
         key, scope_json, budget_json = self._key(scope), canonical(asdict(scope)), canonical(asdict(budget))
@@ -100,6 +108,9 @@ class IncidentCaseStore:
             if prior['scope_json'] != scope_json or prior['budget_json'] != budget_json:
                 raise ValueError('CASE_SCOPE_OR_BUDGET_CHANGED')
         else:
+            route = self._profile_route(conn, scope.owner_id, scope.policy_revision) if routed else None
+            if routed and (route is None or route['current'] != scope.profile_sha256):
+                raise ValueError('CASE_PROFILE_NOT_SELECTED')
             if conn.execute('SELECT COUNT(*) FROM fleet_incident_v2_cases').fetchone()[0] >= self.max_cases:
                 raise ValueError('CASE_CAPACITY')
             conn.execute('INSERT INTO fleet_incident_v2_cases VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -108,7 +119,57 @@ class IncidentCaseStore:
                 conn.execute('INSERT INTO fleet_incident_v2_origins VALUES (?,?,?)', (*key, initial_revision))
             if worker_id is not None:
                 conn.execute('INSERT INTO fleet_incident_v2_creators VALUES (?,?,?)', (*key, worker_id))
+            if routed:
+                conn.execute('INSERT INTO fleet_incident_v2_assignments VALUES (?,?,?)', (*key, route['revision']))
         return self._case(conn, scope)
+
+    @staticmethod
+    def _profile_route(conn, owner_id, policy_revision):
+        identifier(owner_id); identifier(policy_revision)
+        row = conn.execute('SELECT current,previous,revision FROM fleet_incident_v2_profile_routes '
+                           'WHERE owner_id=? AND policy_revision=?', (owner_id, policy_revision)).fetchone()
+        if row is None: return None
+        sha256(row[0])
+        if row[1] is not None: sha256(row[1])
+        if type(row[2]) is not int or row[2] < 1: raise ValueError('INVALID_PROFILE_ROUTE')
+        return dict(current=row[0], previous=row[1], revision=row[2])
+
+    def profile_route(self, owner_id, policy_revision):
+        with self._transaction() as conn: return self._profile_route(conn, owner_id, policy_revision)
+
+    def _select_profile(self, conn, owner_id, policy_revision, profile_sha256, expected_revision, *, rollback=False):
+        # Selection is local configuration; provider acceptance remains a separate gate.
+        if type(expected_revision) is not int or not 0 <= expected_revision < 2**63 - 1:
+            raise ValueError('EXPLICIT_ROUTE_REVISION_REQUIRED')
+        prior = self._profile_route(conn, owner_id, policy_revision)
+        if (prior['revision'] if prior else 0) != expected_revision: raise ValueError('PROFILE_ROUTE_CHANGED')
+        if rollback:
+            if prior is None or prior['previous'] is None: raise ValueError('PREVIOUS_PROFILE_REQUIRED')
+            profile_sha256 = prior['previous']
+        sha256(profile_sha256)
+        if prior and profile_sha256 == prior['current']: raise ValueError('PROFILE_ALREADY_SELECTED')
+        result = dict(current=profile_sha256, previous=prior['current'] if prior else None,
+                      revision=expected_revision + 1)
+        conn.execute('INSERT INTO fleet_incident_v2_profile_routes VALUES (?,?,?,?,?) '
+                     'ON CONFLICT(owner_id,policy_revision) DO UPDATE SET '
+                     'current=excluded.current,previous=excluded.previous,revision=excluded.revision',
+                     (owner_id, policy_revision, result['current'], result['previous'], result['revision']))
+        return result
+
+    def select_profile(self, owner_id, policy_revision, profile_sha256, *, expected_revision):
+        with self._transaction() as conn:
+            return self._select_profile(conn, owner_id, policy_revision, profile_sha256, expected_revision)
+
+    def rollback_profile(self, owner_id, policy_revision, *, expected_revision):
+        with self._transaction() as conn:
+            return self._select_profile(conn, owner_id, policy_revision, None, expected_revision, rollback=True)
+
+    def assignment(self, scope):
+        with self._transaction() as conn:
+            self._case(conn, scope)
+            row = conn.execute('SELECT route_revision FROM fleet_incident_v2_assignments '
+                               'WHERE subject_id=? AND case_id=?', self._key(scope)).fetchone()
+            return row[0] if row else None
 
     def requires_resume_admission(self, scope, worker_id):
         with self._transaction() as conn:

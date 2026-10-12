@@ -10,7 +10,6 @@ from fleet.incidents.automation.store import CaseScope
 from fleet.incidents.automation.worker import IncidentCaseWorker
 from test_incident_case_store import store, budget
 from test_incident_case_worker import make_incident_worker, settled
-from test_incident_new_case_admission import fenced
 
 
 def scope(profile='a', case='case'):
@@ -98,7 +97,6 @@ def test_actual_worker_routes_receipt_and_poll_without_stopping_pinned_case(tmp_
                 assert worker.prepare_receipt(connection, board.judgment_view('pinky')) is False
             worker.feed(snapshot); await settled(worker)
             assert not calls and not ledger.active_scopes()
-            request = board.intervention_assessment('pinky').request
             ledger.select_profile('core', board.intervention_assessment('pinky').policy_revision,
                                   worker.profile_sha256, expected_revision=0)
             if receipt_first:

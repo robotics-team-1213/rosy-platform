@@ -24,7 +24,7 @@ class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
                  enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None,
-                 new_case_admission=None):
+                 new_case_admission=None, routed=False):
         profiles = incident_profiles(profiles)
         if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
@@ -38,6 +38,8 @@ class IncidentCaseWorker:
         self.current_profiles, self.human_owned, self.budget = current_profiles, human_owned, budget
         self.final_handoff, self.clock, self.enabled, self.baseline = final_handoff, clock, enabled, baseline
         self.calibration_artifacts, self.approved_artifacts = calibration_artifacts, approved_artifacts
+        if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
+        self.routed = routed
         if new_case_admission is not None and not callable(new_case_admission):
             raise ValueError('EXPLICIT_NEW_CASE_ADMISSION_REQUIRED')
         self.new_case_admission = new_case_admission
@@ -90,7 +92,7 @@ class IncidentCaseWorker:
             budget = CaseBudget(**json.loads(existing[0])) if existing else self.budget(scope)
             self._check_budget(budget)
             case = self.store.begin_case(scope, budget, connection=connection,
-                                         initial_revision=problem.generation, worker_id=self._worker_id)
+                                         initial_revision=problem.generation, worker_id=self._worker_id, routed=self.routed)
             return case['state'] == 'ACTIVE' and self.clock() < case['deadline']
         except (ValueError, TypeError, KeyError):
             return False
@@ -160,7 +162,7 @@ class IncidentCaseWorker:
                         selected = self.budget(scope)
                         self._check_budget(selected)
                         case = await self._db('begin_case', scope, selected,
-                                              initial_revision=problem.generation, worker_id=self._worker_id)
+                                              initial_revision=problem.generation, worker_id=self._worker_id, routed=self.routed)
                     if case['state'] != 'ACTIVE': continue
                     await self._process(scope, snapshot)
                 except (ValueError, TypeError, KeyError):
