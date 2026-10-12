@@ -246,3 +246,47 @@ def test_changed_active_map_revokes_provider_without_recovery():
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
     revision[1] = 1
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_motion_deadband_uses_recent_window_and_expires_after_stillness():
+    _, port, sample, clocks, core = setup()
+    assert feed(port, sample)
+    stamp = sample.stamp_ns
+    for i in range(1, 6):
+        clocks['wall'] += .05; clocks['mono'] += .05; stamp += 50_000_000
+        assert feed(port, replace(sample, stamp_ns=stamp, pose=(1. + i*.004, 2., .3)), stamp + 10_000_000)
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.moved('rosy_02', .01, 1.)
+    for _ in range(32):
+        clocks['wall'] += .1; clocks['mono'] += .1; stamp += 100_000_000
+        assert feed(port, replace(sample, stamp_ns=stamp, pose=(1.02, 2., .3)), stamp + 10_000_000)
+        core['odom_pose'].update(x=1.02, stamp=clocks['wall'])
+        asyncio.run(port.refresh('rosy_02'))
+    assert not port.moved('rosy_02', .01, 1.)
+
+
+def test_same_core_stamp_cannot_describe_a_different_pose():
+    _, port, sample, _, core = setup()
+    assert feed(port, sample)
+    asyncio.run(port.refresh('rosy_02'))
+    core['odom_pose']['x'] = 1.01
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_clock_gap_is_revoked_even_without_an_intermediate_pose_read():
+    _, port, sample, clocks, _ = setup()
+    assert feed(port, sample)
+    clocks['mono'] += .3; clocks['wall'] += .3
+    assert not port.observe_clock(2_310_000_000)
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_native_gap_is_revoked_even_while_clock_keeps_advancing():
+    _, port, sample, clocks, _ = setup()
+    assert feed(port, sample)
+    for i in range(1, 7):
+        clocks['mono'] += .05; clocks['wall'] += .05
+        assert port.observe_clock(2_010_000_000 + i*50_000_000)
+    assert not port.observe(replace(sample, stamp_ns=2_300_000_000))
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
