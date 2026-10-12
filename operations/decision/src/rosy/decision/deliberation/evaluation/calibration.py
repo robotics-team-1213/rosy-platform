@@ -4,11 +4,10 @@ import json
 import re
 
 from .. import identifier
-from .calibration_metrics import calibrated_metrics, digest, finite, metrics, serialize, wilson_lower
+from .calibration_metrics import ERRORS, calibrated_metrics, digest, finite, metrics, serialize, wilson_lower
 
 IDENTITY = ('profile_revision', 'model_revision', 'domain', 'calibration_revision', 'full_profile_sha256')
 LINEAGE = ('session_id', 'recording_id', 'session_sha256', 'recording_sha256')
-ERRORS = ('unsafe_error', 'binding_error', 'unnecessary_effect', 'required_abstain_error')
 
 
 def hash_value(value):
@@ -113,7 +112,9 @@ def evaluate_calibration(fit, evaluation, *, training, reviewed_profile):
                 (('brier', 'maximum_brier'), ('ece', 'maximum_ece'), ('p95_latency_ms', 'maximum_p95_latency_ms')))
             or any(test_metrics[metric] is not None and test_metrics[metric] > limits[field] for metric, field in
                 (('calibrated_top_brier', 'maximum_brier'), ('calibrated_ece', 'maximum_ece'))))
-        complete = test_metrics['calibrated_coverage'] == 1
+        complete = test_metrics['calibrated_coverage'] == 1 and all(
+            min(bucket['count'], bucket['fit_count']) >= limits['minimum_bin_cases']
+            for bucket in bins if bucket['count'])
         report['state'] = ('FAIL' if failed else 'PASS_OFFLINE_ONLY') if enough and complete else 'HOLD'
     if fit_metrics['forbidden'] or test_metrics['forbidden']:
         report['state'] = 'FAIL'

@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-702 보정 기준 보완은 commit `d34e8c2e358129143dd9933b2ace33f42558aafb`로 로컬 main에 착지했다. 기존 독립 확률 보정 계산의 PASS에도 검수된 `minimum_bin_cases`를 적용하고 네 가지 금지 오류 건수를 보고한다. 적격 AI PC 9GB의 Fleet 전체·제공자·설치·구조·release 통합은 5,039 passed/246 skipped, terminal exit 0, NEW 0과 lint를 통과했고 독립 검토에서 중요한 blocker는 없었다. [구간 표본 수 계획](2026-10-12-independent-calibration-bin-support.md)에 고정 로그와 통합 전 110개 회귀 근거를 기록했다. 실제 원장·별도 검수 정답·latency와 source lineage를 결속하는 평가 입력 생산은 다음 작업이다. 없는 정답·지연·coverage를 추정하지 않으며 실제 모델·배포·현장 수용·승격/복귀는 미완료이고 전체 목표는 ACTIVE다.
+
 최신 D-701 source checkpoint: commit `410d69f8e72ed223fcfba9f52982c8df4bd34294`로 실제 규칙 선택의 읽기 전용 export와 독립 cohort /2 비교를 로컬 main에 착지했다. 기존 /1·단독 primary /3과 동일 사건·hash·scope·split 검증을 유지한다. 적격 AI PC 9GB의 관련 26개 파일 원격 통합 시험 667 passed, terminal exit 0, known-failures NEW 0과 lint를 확인했다. 독립 검토의 전체 JSON 크기·실제 CLI 연결 지적도 수정했다. 고정 로그는 세션 `logs/rule-export-land-410d69f8e7/run-1.txt`다. 상세는 [독립 규칙 export 계획](2026-10-12-independent-rule-export.md)을 따른다.
 
 다음은 독립 정답·수용 한계와 정상 무명령·모델 호출·재발의 완전한 기록 범위다. 규칙 선택만으로 운영 성공이나 0건을 주장하지 않으며 실제 모델·배포·현장 수용·승격/복귀는 미완료다. 통합 목표는 ACTIVE다. 아래 D-700 checkpoint는 이전 단계의 증거다.
