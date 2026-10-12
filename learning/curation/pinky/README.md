@@ -46,6 +46,16 @@ python -B -m pytest learning/curation/pinky/test -q -p no:cacheprovider --basete
 ```
 
 
+## 실제 규칙 선택 export
+
+D-701의 규칙 선택 원장을 모델 평가와 독립적으로 내보낸다:
+
+```powershell
+python learning/curation/pinky/fleet_rules.py <fleet-journal.sqlite3> <new-rule-json-on-X> --subject-id <robot-id> --case-id <case-id> --owner-id <owner> --config-sha256 <rule-config-hash> --policy-revision <policy> --start <epoch-start> --end <epoch-end>
+```
+
+정상 선택은 `--case-id`를 생략해 null로 유지한다. 최대 24시간·4,096행·전체 JSON과 줄바꿈 1MiB를 검증하고 기존 DB와 출력 파일을 덮어쓰지 않는다. `retained_selections_only`는 보존된 선택 기록만 뜻한다. 실행 성공·모델 호출 0건·정상 명령 0건·재발 0건은 별도 완전한 근거가 필요하다.
+
 ## Fleet 관측 이력의 학습 준비 원본
 
 D-699의 기록 창 검증은 전체 원본 export와 별도로 수행한다:
