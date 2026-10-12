@@ -126,7 +126,7 @@ def test_actual_worker_links_checked_output_and_preserves_billing_on_trace_failu
     if builder_rejected:
         def reject(*args, **kwargs): raise ValueError('TRACE_SCOPE_CHANGED')
         monkeypatch.setattr('fleet.incidents.automation.ledger.store.checked_receipt'
-                           if failure == 'store' else 'fleet.incidents.automation.worker.model_receipt', reject)
+                           if failure == 'store' else 'fleet.incidents.automation.execution.worker.model_receipt', reject)
     async def run():
         _, seen, _, _, _, store, worker, poll, _ = make_incident_worker(tmp_path, provider_cost=.05)
         worker.feed(poll()); await settled(worker)
