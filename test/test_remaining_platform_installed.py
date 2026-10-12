@@ -166,6 +166,9 @@ assert incident_operation.verify_operation_receipt(operation,
     expected_binding=json.loads(sys.argv[5]), epoch=3, now=101,
     kind=incident_operation.APPROVE) == operation
 assert 'action_admissible' not in operation
+from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
+from fleet.incidents.automation.operating.candidates import RecoveryCandidates as OperatingCandidates
+assert RecoveryCandidates is OperatingCandidates
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
