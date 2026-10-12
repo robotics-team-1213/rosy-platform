@@ -168,7 +168,7 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
 
 ## Leg6: 거리 복원 뒤 벽 오인식과 궤적 문제
 
-- 전체 소스 `72c525516231af3699fbef2a54e12927238c3578`을 새로 빌드하고
+- 전체 소스 `72c525516`을 새로 빌드하고
   원본 `map_variant=.`에서 0.346443m 이동했다. Fleet terminal은 `stopped/stall`,
   완주와 도착은 false다. 거리 None에 의한 HOLD는 0회지만 벽 오인식은 남아 있다.
 - road stamp 43.375의 STOP confidence 0.415625는 실제 traffic 기준 0.5보다 낮다.
