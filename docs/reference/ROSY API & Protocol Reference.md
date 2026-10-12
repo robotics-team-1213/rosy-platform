@@ -1194,8 +1194,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `calibration.session_ended` | info | 로봇 | `{session_id, kind, owner, by, duration_s}` — `by` 는 끝낸 토큰 id(Admin 강제 해제면 owner 와 다름) (v1.68) |
 | `calibration.session_expired` | warning | 로봇 | `{session_id, kind, owner, ttl_s}` — `ttl_s` 안에 heartbeat 가 없어 lease 가 풀림. 보정 도구가 죽었거나 링크가 끊겼다는 신호 (v1.68) |
 | `nav.started` | info | 로봇 | `{goal, by, correlation_id}` — `goal` 은 `{x, y, yaw}`; Fleet가 dispatch 시도 ID를 보낸 경우 그 값, 아니면 `null` |
-| `nav.completed` | info | 로봇 | `{correlation_id, run_id, boot_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 정확한 run/boot ID가 붙는다 |
-| `nav.failed` | error | 로봇 | `{error_code, correlation_id, run_id, boot_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 정확한 run/boot ID가 붙는다 |
+| `nav.completed` | info | 로봇 | `{correlation_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 추가 `run_id`, `boot_id`가 붙는다 |
+| `nav.failed` | error | 로봇 | `{error_code, correlation_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 추가 `run_id`, `boot_id`가 붙는다 |
 | `nav.canceled` | info | 로봇 | `{source, correlation_id, run_id, boot_id}` — 로컬 취소 요청을 냈다는 뜻이며 액션 완료나 물리 정지를 증명하지 않는다. native goal이면 정확한 run/boot ID가 붙는다 |
 | `nav.stuck` | error | 로봇 | `{timeout_s}` — NAV-006 무진척 판정 시간(초) |
 | `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음. CAMERA_LINE은 D-407 개정 2026-10-10에 따라 차선이 다시 보이면 같은 모드로 이어 감, `nav.lane_reacquired`) |
@@ -1250,15 +1250,15 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `localization.mission` | info | 로봇 | `{phase, kind, reason, elapsed_s, travelled_m, turned_rad}` — D-395 P2-7 미션이 시작했거나(`phase: started`, `reason: null`) 끝났다(`phase: done`\|`aborted`, `reason` 은 `POST /localization/mission` 의 끝 사유). 같은 내용이 ROS `localization/mission` 으로 로봇 sensing 노드에 가서 다시 탐색하게 한다 (v1.73) |
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
-| `docking.docked` | info | 로봇 | `{dock_id, run_id, boot_id, kind, result, native_reason}` — dock native 종결이면 ID와 결과가 붙는다 (D-732) |
+| `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
-| `docking.undocked` | info | 로봇 | `{run_id, boot_id, kind, result, native_reason}` — undock native 종결이면 ID와 결과가 붙는다 (D-732) |
-| `docking.canceled` | info | 로봇 | `{dock_id, run_id, boot_id, kind, result, native_reason}` — 닫힌 dock/undock의 ID와 결과 (D-732) |
+| `docking.undocked` | info | 로봇 | `{}` — undock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
+| `docking.canceled` | info | 로봇 | `{dock_id}` — 닫힌 dock/undock의 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason` (D-732) |
 | `docking.retry` | warning | 로봇 | `{reason, attempt}` — 접근 재시도 |
 | `docking.reseat` | warning | 로봇 | `{reason, attempt}` — 접점 재착좌 |
-| `docking.failed` | error | 로봇 | `{reason, dock_id, run_id, boot_id, kind, result, native_reason}` — 종착이며 스스로 재시도하지 않는다 (D-28/D-732) |
+| `docking.failed` | error | 로봇 | `{reason, dock_id}` — 종착이며 스스로 재시도하지 않는다. native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason` (D-28/D-732) |
 | `docking.return_started` | warning | 로봇 | `{dock_id, reason}` — SAF-005 저배터리 복귀 |
 | `mission.assigned` | info | Fleet | `{mission_id, robot_id}` |
 | `mission.started` | info | Fleet | `{mission_id}` |
