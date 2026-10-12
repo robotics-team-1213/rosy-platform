@@ -1,6 +1,6 @@
 # CORE native outcome ports 구현 계획
 
-날짜: 2026-10-12. 브랜치: `feat/native-outcome-ports`. 시작 HEAD: `6211d3823f95fac83252187775697b3d765551e6`. 계약: D-732, D-728.
+날짜: 2026-10-12. 브랜치: `feat/native-outcome-ports`. 시작 HEAD: `6211d3823f95`. 계약: D-732, D-728.
 
 1. D-732와 APIRef additive 계약을 독립 검토한다. 기존 manager caller/fixture/export, 실제 승인 잠금과 callback generation을 목록화한다.
 2. 실제 docking/swarm protocol 메시지군과 swarm 상태 출력을 분리한다. 공개 import identity와 validator를 보존한다. zero-growth 파일·기존 unit 기준과 새 family의 동시 측정을 독립 검토하기 전에는 baseline을 바꾸지 않는다.
