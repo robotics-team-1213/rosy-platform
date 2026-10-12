@@ -696,6 +696,7 @@
 | D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
 | D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
 | D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
+| D-711 | 새 사건 생성 허가와 기존 pinned 실행 분리 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -913,6 +914,12 @@ root orchestration에서 영속 승인 원장과 기존 Fleet 보정 포트를 �
 **Status:** Accepted (2026-10-12, source contract)
 
 공유 DB의 다른 profile/owner 사건과 최종 인수를 worker가 대신 종료·처리하지 않도록 기존 CaseScope 소유권을 분리한다. 운영 revision 전환·새 사건 배정과는 구분한다. 전문은 [D-710](../adr/D-710-incident-profile-scope-isolation.md).
+
+## D-711 — 새 사건 생성 허가와 기존 pinned 실행 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 실행·예산은 보존하면서 prepare_receipt와 poll 경로의 새 사건 생성만 별도 local predicate로 제한한다. 영속 전환·원자적 사건 배정 완료와 구분한다. 전문은 [D-711](../adr/D-711-incident-new-case-admission.md).
 ## D-705 — Incident 실행 책임과 운영 보정 포트
 
 **Status:** Accepted (2026-10-12, source contract)
