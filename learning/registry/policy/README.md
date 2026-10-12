@@ -12,6 +12,8 @@ offline PASS만 승인할 수 있으며 HOLD·FAIL 보관이 승인을 뜻하지
 
 아래 행동 policy의 metadata promotion과 판정 보정 승인을 혼용하지 않는다.
 
+D-709의 root composition `tools.incident_reasoning.registry_calibration_config(config, registry, domain=...)`가 승인 원장과 기존 Fleet app의 incident_model_config를 연결한다. `approved_candidate(profile_json, domain)`는 현재 승인된 정확한 후보만 반환한다. 보정 읽기는 사건의 남은 시간 안에서 off-loop로 처리하고, 완료 뒤 claim·freshness를 다시 확인한다. 기존 설정을 활성화하거나 포트를 덮어쓰지 않는다. 실제 설치 trust·Model PC 원장 전달과 운영 profile 전환은 아직 별도다.
+
 D-449 Proposed의 offline 정책 원장이다. SQLite BEGIN IMMEDIATE 트랜잭션,
 FULL synchronous, 파일 snapshot, canonical event hash chain과 단계 CAS를 사용한다.
 register는 실제 policy 파일/정규화/평가 bytes를 다시 검증해 원장 내부로 복사한다.
