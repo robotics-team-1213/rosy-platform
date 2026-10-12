@@ -340,6 +340,10 @@ def test_a_visible_curve_keeps_its_observed_shape_during_a_gap(curvature):
     assert decision.linear > 0. and decision.angular * curvature > 0., lane.last
     assert lane.last['camera_provenance'] == 'odom_expected_path'
     assert state is None
+    assert lane.state() is None
+    boosted, boosted_state = camera_tick(lane, now[0], gain=1.7)
+    assert (boosted.linear, boosted.angular) == pytest.approx((decision.linear, decision.angular))
+    assert boosted_state is None
     lane.close()
 
 
