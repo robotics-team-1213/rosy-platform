@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def evaluator():
     path = ROOT / 'learning/evaluation/decision/operational_evidence.py'
     assert path.exists(), 'frozen operational evidence compiler missing'
-    spec = importlib.util.spec_from_file_location('operational_evidence', path)
+    spec = importlib.util.spec_from_file_location('learning.evaluation.decision.operational_evidence', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
