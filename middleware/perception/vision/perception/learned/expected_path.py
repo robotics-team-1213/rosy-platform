@@ -104,7 +104,7 @@ class ExpectedPath:
             self._clear()
             return self._view('dropped')
         if self._observation_stamp is not None and observed <= self._observation_stamp:
-            return self.hold(current, stamp)
+            return self._held(current, stamp)
         self._observation_stamp = observed
         geometry = _geometry(pose, info)
         if geometry is None:
@@ -123,7 +123,7 @@ class ExpectedPath:
             else:
                 self._replace += 1
             if self._replace < COMMIT_FRAMES:
-                return self.hold(current, stamp)
+                return self._held(current, stamp)
         self._path, self._heading = path, heading
         self._length = min(SLOW_M, sum(_dist(a, b) for a, b in zip(path, path[1:])))
         self._accepted_stamp = observed
@@ -135,6 +135,11 @@ class ExpectedPath:
 
     def hold(self, pose, stamp):
         """Move the observed shape into this pose without refreshing its age or distance."""
+        self._streak = self._replace = 0
+        self._streak_heading = self._replace_heading = None
+        return self._held(pose, stamp)
+
+    def _held(self, pose, stamp):
         if not _valid_pose(pose, stamp) or self._jumped(pose, stamp):
             self._clear()
             if _valid_pose(pose, stamp):
@@ -142,8 +147,6 @@ class ExpectedPath:
             return self._view('dropped')
         self._remember(pose, stamp)
         if not self._committed:
-            self._streak = 0
-            self._streak_heading = None
             return self._view('dropped' if self._dropped else None)
         if self._travel >= self._length or stamp - self._accepted_stamp >= HOLD_S:
             self._clear()
@@ -184,7 +187,7 @@ class ExpectedPath:
         if self._pose is None:
             return False
         return (stamp < self._stamp or _dist(pose, self._pose) > SLOW_M
-                or _angle(pose[2] - self._pose[2]) > HEADING_GATE_RAD)
+                or _angle(pose[2] - self._pose[2]) >= math.pi / 2)
 
     def _remember(self, pose, stamp):
         if self._pose is not None:
