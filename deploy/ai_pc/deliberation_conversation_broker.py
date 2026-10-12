@@ -13,7 +13,7 @@ from rosy.decision.conversation.codec import ConversationInput, Profile, source_
 from rosy.decision.deliberation import canonical
 from .deliberation_conversation import execute
 from .deliberation_status_broker import protected
-from .conversation_acceptance import validate as validate_evaluation
+from .conversation_acceptance import source_files, validate as validate_evaluation
 
 CONFIG = Path('/etc/rosy-deliberation/conversation.json')
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +33,8 @@ def configuration():
         raise ValueError('CONVERSATION_HOST_NOT_ADMITTED')
     if type(cfg['files']) is not dict or not 1 <= len(cfg['files']) <= 1000:
         raise ValueError('CONVERSATION_SOURCE_MANIFEST_REQUIRED')
+    if not set(source_files(ROOT)) <= set(cfg['files']):
+        raise ValueError('CONVERSATION_SOURCE_CLOSURE_REQUIRED')
     evidence = []
     for name, sha in cfg['files'].items():
         path = ROOT/name

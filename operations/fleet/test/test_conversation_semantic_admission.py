@@ -9,17 +9,24 @@ from deploy.ai_pc import deliberation_conversation_broker as broker
 from rosy.decision.conversation.codec import Profile, source_policy
 
 
-def host_configuration(monkeypatch, raw):
+def host_configuration(monkeypatch, raw, *, include_source=True, omit=None, mutation=None):
     import pwd
     profile = Profile(revision='d728-test')
     cfg = {'source_commit': 'a'*40, 'profile': profile.model_dump(),
            'policy': source_policy('a'*40, profile), 'valid_until': 9999999999.,
            'semantic_evidence_sha256': hashlib.sha256(raw).hexdigest(),
            'files': {'proof.json': hashlib.sha256(raw).hexdigest()}}
+    from deploy.ai_pc.conversation_acceptance import source_files
+    contents = {name: (broker.ROOT/name).read_bytes() for name in source_files(broker.ROOT)}
+    if mutation: contents[mutation] = b'changed source'
+    if include_source:
+        cfg['files'].update({name: hashlib.sha256(data).hexdigest() for name, data in contents.items()})
+    if omit: cfg['files'].pop(omit)
     monkeypatch.setattr(pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=997))
     monkeypatch.setattr(broker.os, 'getuid', lambda: 997)
     monkeypatch.setattr(broker, 'protected', lambda p: json.dumps(cfg).encode()
-                        if p == broker.CONFIG else raw)
+                        if p == broker.CONFIG else raw if p.name == 'proof.json'
+                        else contents[p.relative_to(broker.ROOT).as_posix()])
     return cfg, profile
 
 
@@ -33,7 +40,7 @@ def test_manifest_hash_alone_never_admits_conversation(monkeypatch, raw):
 
 def proof():
     import time
-    from deploy.ai_pc.conversation_acceptance import CASES, question
+    from deploy.ai_pc.conversation_acceptance import CASES, EXPECTED, question, source_files, source_digest
     from rosy.decision.conversation.codec import digest
     profile = Profile(revision='d728-test')
     at = time.time()
@@ -46,14 +53,19 @@ def proof():
         if kind in ('CLARIFY', 'REFUSE'):
             answer['reason'] = 'UNSUPPORTED'
         if kind == 'CONTROL':
-            answer['steps'] = [{'verb': 'navigate', 'robot_id': 'rosy_40',
-                                'place_id': 'A', 'parameters_json': '{}'}]
+            plan = EXPECTED[case[0]]
+            for step in plan.get('steps', [plan]):
+                parameters = {k: v for k, v in step.items() if k not in {'do', 'robot', 'waypoint'}}
+                answer['steps'].append({'verb': step['do'], 'robot_id': step.get('robot'),
+                    'place_id': step.get('waypoint'), 'parameters_json': json.dumps(parameters)})
         cases.append({'case': case[0], 'input': value.model_dump(),
                       'input_hash': value.digest, 'answer': answer})
     return {'schema': 'rosy.conversation-evaluation/1', 'verdict': 'PASS',
             'evaluation_owner': 'model_pc', 'source_commit': 'a'*40,
             'profile': profile.model_dump(), 'policy': source_policy('a'*40, profile),
-            'suite_sha256': digest(CASES), 'evaluated_at': at, 'cases': cases}
+            'suite_sha256': digest({'cases': CASES, 'expected': EXPECTED}),
+            'source_manifest_sha256': source_digest({name: hashlib.sha256((broker.ROOT/name).read_bytes()).hexdigest()
+                for name in source_files(broker.ROOT)}), 'evaluated_at': at, 'cases': cases}
 
 
 def test_complete_protected_semantic_proof_is_admitted(monkeypatch):
@@ -62,7 +74,7 @@ def test_complete_protected_semantic_proof_is_admitted(monkeypatch):
 
 
 def test_semantic_proof_without_inference_source_closure_is_refused(monkeypatch):
-    host_configuration(monkeypatch, json.dumps(proof()).encode())
+    host_configuration(monkeypatch, json.dumps(proof()).encode(), include_source=False)
     with pytest.raises(ValueError):
         broker.configuration()
 
@@ -76,6 +88,17 @@ def test_semantic_suite_covers_every_exposed_control_verb():
                          'robot': 'rosy_40', 'waypoint': 'A'}})
     covered = {call.verb for plan in plans.values() for call in interpret(plan)}
     assert set(get_args(SemanticStep.model_fields['verb'].annotation)) <= covered
+
+
+@pytest.mark.parametrize('path', ['deploy/ai_pc/deliberation_conversation.py',
+    'deploy/ai_pc/deliberation_conversation_broker.py', 'deploy/ai_pc/conversation_acceptance.py',
+    'operations/decision/src/rosy/decision/conversation/codec.py'])
+@pytest.mark.parametrize('change', ['omitted', 'changed'])
+def test_semantic_proof_binds_inference_dependency_source(monkeypatch, path, change):
+    host_configuration(monkeypatch, json.dumps(proof()).encode(),
+                       **({'omit': path} if change == 'omitted' else {'mutation': path}))
+    with pytest.raises(ValueError):
+        broker.configuration()
 
 
 @pytest.mark.parametrize('change', ['failed', 'partial', 'duplicate', 'kind', 'input',
