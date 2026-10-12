@@ -121,7 +121,7 @@ def test_approach_distance_adaptively_reduces_linear_speed(rig):
     decision = manager.gate(0.08, 0.1)
 
     assert 0.0 < decision.linear < 0.08
-    assert decision.angular == pytest.approx(0.1)
+    assert decision.angular / decision.linear == pytest.approx(0.1 / 0.08)
     assert manager.status().state == "APPROACH"
 
 
@@ -215,7 +215,7 @@ def test_unsignalized_rule_proceeds_after_stop_and_dwell():
     decision = manager.gate(0.06, -0.05)
 
     assert decision.linear == pytest.approx(0.06 * 0.5)
-    assert decision.angular == pytest.approx(-0.05)
+    assert decision.angular == pytest.approx(-0.05 * 0.5)
     assert manager.status().state == "PROCEED"
     assert manager.status().reason == "unsignalized_proceed"
 
@@ -561,6 +561,34 @@ def test_conflicting_or_unbound_evidence_holds(rig, sample, reason):
     assert manager.gate(0.08, 0.0).linear == 0.0
     assert manager.status().state == "HOLD"
     assert manager.status().reason == reason
+
+
+@pytest.mark.parametrize('mode', list(TrafficPolicyMode))
+@pytest.mark.parametrize('phase', ['FOLLOW', 'APPROACH', 'PROCEED', 'HOLD'])
+@pytest.mark.parametrize('linear,angular', [(.08, .2), (-.08, .2), (.08, 0.), (0., .2), (0., 0.)])
+def test_traffic_scaling_preserves_moving_curve_and_stationary_turn(rig, mode, phase, linear, angular):
+    now, manager = rig
+    sample = evidence(stop_visible=phase != 'FOLLOW',
+        stop_distance_m={'FOLLOW': .5, 'APPROACH': .20, 'PROCEED': .08, 'HOLD': None}[phase],
+        stop_confidence=.9, signal_colour='GREEN', signal_confidence=.9)
+    observe(manager, now, sample)
+    if phase == 'PROCEED':
+        manager.gate(.06, .1)
+        now[0] += .51
+        observe(manager, now, sample)
+    manager.set_mode(mode)
+    decision = manager.gate(linear, angular)
+    if mode is not TrafficPolicyMode.ENFORCED:
+        assert (decision.linear, decision.angular) == pytest.approx((linear, angular))
+    elif phase == 'HOLD':
+        assert (decision.linear, decision.angular) == (0., 0.)
+    else:
+        scale = manager.status().linear_scale
+        assert decision.linear == pytest.approx(linear * scale)
+        if linear:
+            assert decision.angular / decision.linear == pytest.approx(angular / linear)
+        else:
+            assert decision.angular == angular
 
 
 def test_stale_evidence_holds(rig):
