@@ -8119,3 +8119,9 @@ osy-d395-s1d\`.
 - 변경: docs/validation/profile-workflow-2026-10-13/result.md에 설치 이미지, 원격 Chromium 회귀, 운영 계정 유지, read-only 프로필 메타데이터의 증거 층위를 기록했다.
 - 증거: 동일 설치 commit의 프로필/계정 화면 원격 40 passed, exit 0, NEW 0. 격리 설치 이미지의 저장·비밀번호 변경·재시작 유지·세션 무효화·권한 주입 거부 PASS.
 - gate 변화: 없음. 실제 본인 로그인 브라우저 저장은 연결 부재로 미확인이고, 운영 프로필·비밀번호는 변경하지 않았다. 실물·현장 수용은 요청에 따라 제외했다.
+
+## 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
+
+- 변경: `docs/reference/platform-folder-responsibilities.md` 앞에 편집 집 열두 개를 두었다. 기존 manifest root를 찾는 단위로 묶고, 설치 이름과 2026-10-11 소스 배치 기록은 그대로 둔다.
+- 증거: 폴더 이동과 패키지 이름 변경은 없다. 착지 도구의 lint와 영향 시험이 이 문서 변경의 검사다.
+- gate 변화: 없음. 찾기 지도이며 구현, 장치, 현장 수용은 아니다.
