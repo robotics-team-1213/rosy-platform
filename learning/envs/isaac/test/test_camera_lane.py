@@ -65,6 +65,26 @@ def test_camera_terminal_credit_survives_invalid_gap_but_not_episode_reset():
     assert policy.updates == 1
 
 
+@pytest.mark.parametrize('state,candidate,receipts,warnings,halted', [
+    (None, (.02, .2), [(.02, .2)], [], False),
+    ((2, 1), (.02, .2), [(.02, .1)], [], False),
+    ((2, 1), (.02, .2), [(.02, .2)], ['delivery warning'], False),
+    ((2, 1), (.02, .2), [(.02, .2)], [], True),
+])
+def test_unlearned_motion_breaks_prior_terminal_credit(state, candidate, receipts, warnings, halted):
+    from camera_checks import remember_camera_action
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    record = remember_camera_action(None, (2, 1), 3, 42, (.02, .2), [(.02, .2)], [], False)
+    record = remember_camera_action(record, state, 1, 43, candidate, receipts, warnings, halted)
+    assert record is None
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason='camera_target_unavailable')
+    assert learn_transition(policy, record, None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0
+
+
 def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
     import camera_lane
     from control.sensing.perception.camera_ground import ground_plane
