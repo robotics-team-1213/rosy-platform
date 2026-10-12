@@ -85,6 +85,7 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
+#: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("control/drive/behaviors/line_follow",
@@ -99,6 +100,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
               "fleet/fleet/server/channel",
+              "fleet/fleet/server/channel/health",
               "fleet/fleet/server/channel/conversation",
               "fleet/fleet/server/channel/execution",
               "fleet/fleet/localization",
@@ -403,6 +405,17 @@ SIZE_VERDICTS = {
         "subpackage split with installed consumers/direction, one canonical schema facade and same-change "
         "parent/unit measurements. Preserve prior protocol/schema extraction obligations. "
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
+    ),
+    "fleet/fleet/server/channel/health": (
+        193,
+        "accept: fixed KST scheduling, durable claim, cache-only report and bounded bare Discord publisher "
+        "are an actual subscription lifecycle owner distinct from interactive channel intake. "
+        "pipeline_review independently prechecked 2026-10-12: Fleet55428/channel1645/health193/"
+        "conversation300/execution588 simultaneously; registering this owner leaves residual channel1452. "
+        "Preserve Fleet55286/channel1379/conversation280/execution487 baselines, +150, all historical "
+        "filters, file/hard ceilings and prior split obligations. Installed wheel/sdist/source closure "
+        "and first real Discord readback remain separate gates. "
+        "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "fleet": (
         55_286,

@@ -26,6 +26,7 @@ class ChannelConfig(BaseModel):
     users: dict[str, str] = Field(min_length=1, max_length=100)
     bot_token_file: str | None = Field(default=None, min_length=1, max_length=4096)
     replies_enabled: bool = False
+    hourly_health_enabled: bool = False
 
     @classmethod
     def load(cls, path, *, optional=False):
@@ -185,6 +186,8 @@ def install_channel_feature(app, *, config, task_service, principals, site_login
             raise ValueError("invalid or shared Discord Bot credential")
     if config.replies_enabled and token is None:
         raise ValueError("Discord replies require a Bot credential")
+    if config.hourly_health_enabled and token is None:
+        raise ValueError("hourly Discord health requires a Bot credential")
     for credential in (key, token):
         if credential is None:
             continue
