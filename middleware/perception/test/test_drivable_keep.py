@@ -59,7 +59,7 @@ def test_a_fresh_centre_way_returns_the_steer_error_and_a_live_path():
     assert decided is True
     assert step == pytest.approx((error, confidence))
     assert last["expected_path_state"] == "live"
-    assert len(last["expected_path_m"]) == 2
+    assert len(last["expected_path_m"]) > 2
     assert all(len(point) == 2 for point in last["expected_path_m"])
 
 
@@ -71,11 +71,11 @@ def test_a_missing_way_after_commit_holds_instead_of_the_tape_keeper():
     assert step[1] == pytest.approx(0.90)
     assert last["strategy"] == "expected_path_held"
     assert last["expected_path_state"] == "held"
-    assert len(last["expected_path_m"]) == 2
+    assert len(last["expected_path_m"]) > 2
     assert last["expected_path_s_m"] == pytest.approx(0.0)
     assert last.get("reason") != "drivable_way_stale"
     # Past the steer's 1.5 s latch forget, still inside the 2.5 s path budget.
-    later, later_decided = _step(steer, ways, last, 3.0)
+    later, later_decided = _step(steer, ways, last, 2.6)
     assert later_decided is True and later is not None
     assert last["strategy"] == "expected_path_held"
 

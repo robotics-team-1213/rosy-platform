@@ -95,7 +95,7 @@ def test_a_missing_frame_holds_the_near_tangent():
     held = path.hold((0.05, 0.0, 0.0), 1.0)
     assert held["state"] == "held" and held["error"] is not None
     assert abs(held["target_m"][1]) < 0.01
-    start, end = held["path_m"]
+    start, end = held["path_m"][0], held["path_m"][-1]
     assert abs(start[1]) < 0.01 and abs(end[1]) < 0.01 and end[0] > start[0]
 
 
