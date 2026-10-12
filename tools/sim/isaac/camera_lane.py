@@ -149,6 +149,9 @@ class LearnedCameraLane:
             elif (strategy.startswith('drivable_off_line_') and info.get('target_m')
                     and strategy == 'drivable_off_line_' + str(info.get('straddle'))):
                 provenance = 'observed_straddle'
+            elif (strategy == 'expected_path_held' and self.keeper.last.get('expected_path_state') == 'held'
+                    and self.keeper.last.get('target_m') and self.keeper.last.get('expected_path_m')):
+                provenance = 'odom_expected_path'
             else:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
