@@ -15,8 +15,8 @@ Review fixes (2026-10-02):
   A point enters memory only from outside the URDF body outline (D-507 item 10; on the
   outline counts as outside). With a range_min inside the body (the C1 LiDAR's 0.05 m vs 0.0565 m to
   the nearest edge) every vanished point is inside on entry, so nothing is remembered.
-- The sweep covers the arcs the traffic gate (linear scaled by s in [floor, 1], angular kept)
-  and the safety clip can make of the intended twist (M1, re-review HIGH 2).
+- D-735 scales both moving axes; retain the legacy linear-only traffic arc family as a
+  conservative superset alongside safety clipping (M1, re-review HIGH 2).
 """
 
 from __future__ import annotations
