@@ -19,7 +19,8 @@ from core_features.line_follow.clearance import (Point, body_clearances, body_en
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
 from core_features.line_follow.recovery.stuck.progress_watch import ProgressWatch
 from core_features.line_follow.recovery.junction.gate import MANEUVER
-from core_features.line_follow.recovery.stuck.stuck_recovery import REPORT_ONLY, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck.stuck_recovery import (AnswerRefused, REPORT_ONLY,
+                                                                  StuckInput, StuckRecovery)
 from core_features.line_follow.recovery.stuck.trail import ForwardTrail
 
 #: Providers CORE binds at start (core/drive/line_follow.py). Unbound or failing ones read as
@@ -29,6 +30,7 @@ _PROVIDERS = {"console_linked": False, "calibration_active": True,
 
 
 class StuckRecoveryMixin:
+    conditional_back_supported = True
     def _init_recovery(self) -> None:
         self._recovery = StuckRecovery(self._events, self._config)
         self._recovery_providers: dict[str, Callable[[], object]] = {}
@@ -179,17 +181,21 @@ class StuckRecoveryMixin:
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
                        principal_ref: Optional[str] = None, now: Optional[float] = None,
-                       yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None) -> str:
+                       yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None,
+                       expected_stuck: Optional[dict] = None) -> str:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
+            if expected_stuck is not None and decision != "BACK_AND_RETRY":
+                raise AnswerRefused("VALIDATION_ERROR", "expected_stuck belongs to BACK_AND_RETRY")
             if (decision in ("RESUME", "BACK_AND_RETRY", "YIELD", "REALIGN")
                     and not self._recovery._answer_clock_invalid(current)):
                 # Refresh evidence without advancing phases or replenishing the attempt budget.
                 self._recovery._last = self._stuck_input(current)
             outcome = self._recovery.answer(
                 current, stuck_id, decision, by, principal_ref,
-                yield_m=yield_m, yield_turn_rad=yield_turn_rad)
+                yield_m=yield_m, yield_turn_rad=yield_turn_rad,
+                **({"expected_stuck": expected_stuck} if expected_stuck is not None else {}))
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1
