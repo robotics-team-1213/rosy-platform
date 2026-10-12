@@ -82,3 +82,9 @@
 - 변경: D-626 devices/pinky/description으로 이동하며 URDF/mesh/launch/CMake/package bytes를 유지했다. 소비자와 설치 소스 경로를 정렬했다.
 - 증거: Pinky 원격 885 성공·2 skip 중 URDF surface/collision geometry 계약 포함, 독립 source 리뷰. logs는 R100 보존 뒤 추가, known_failures 0 NEW/0 known.
 - gate 변화: 없음. 새 ROS 렌더/Gazebo/ARM64/실물 geometry 수용은 미확인.
+
+## 2026-10-12 · 508334331 · fix(sim): LiDAR cubemap 경계 빔을 반 간격 이동
+
+- 변경: Gazebo LiDAR의 두 각도 끝점만 반빔 이동해 cubemap face 경계를 피한다. 640개·2pi/640 간격·비중복 한 바퀴·10Hz·잡음 0.02·TF·range·topic은 유지한다. 장치 LiDAR 설정과 vendor 파일은 바꾸지 않는다.
+- 증거: 동일 원본 지도와 정지 자세의 두 설정에서 각 102개 동일 header, 전체 거리/강도 GZ↔ROS 일치와 종료·해시 보존을 확인했다. 전체 visual ray 잔차 표준편차는 51.15→20.23mm지만 원본 회전 거절 SOURCE 재생은 7→11/102회 남았다. 모델 PC TDD RED는 기존 grid의 float32 UV=1 실패 1 NEW를 확인했으며 기존 실패로 등록하지 않았다.
+- gate 변화: 새 후보의 원격 회귀·독립 리뷰·새 전체 빌드 주행 전 SOURCE/ROS-SIM HOLD. 센서 경계 수정만으로 주행 정지·지도 완주·실물 수용이 해결됐다고 주장하지 않는다.

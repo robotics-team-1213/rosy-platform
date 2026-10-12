@@ -351,3 +351,14 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   [Gazebo Sensor 구현](https://raw.githubusercontent.com/gazebosim/gz-sensors/gz-sensors8_8.2.2/src/Sensor.cc)은
   예약 시각 이후 실제 업데이트 시각으로 발행한다. 명목 10Hz 설정과 실제 시각을
   구분하고 충분한 동일 header 수집을 유지했다. 제품의 신선도·안전 기준은 바꾸지 않았다.
+
+- 후속 정상 자원의 전체 visual ray 분석에서 잔차 표준편차는 원본 0.051153m,
+  반빔 0.020229m다. 고정 빔의 잔차는 80번 +0.3824→+0.0020m,
+  400번 -0.9761→-0.0074m, 560번 +0.5586→-0.0014m로 줄었다.
+  원본 `scan_geometry`의 회전 공간 거절 재생은 7/102→11/102회이며
+  실제 SDK worker 실행·최종 명령 수용은 아니다. 잡음과 회전 여유 문제는 남는다.
+- Gazebo 센서 입력 후보로 두 각도만 반빔 이동하고, 기존 비중복 한 바퀴 시험에
+  float32 cubemap face 경계 회귀를 추가한다. 정상 모델 PC에서 기존 grid의
+  UV=1을 TDD RED로 확인했다. 원격 GREEN·독립 SOURCE 리뷰·새 전체 동결
+  source/install 빌드·원본 첫 구간 재주행을 완료하기 전 실행 수용으로 세지 않는다.
+  다음 주행의 회전 거절은 실제 후보 궤적과 기존 안전 계약으로 따로 조사한다.
