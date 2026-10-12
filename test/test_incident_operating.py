@@ -145,3 +145,43 @@ def test_revocation_delegates_to_existing_owner_even_when_new_evidence_is_hold(t
             assert grant_id == 'grant' and received == receipt
             return 'delegated-to-existing-verifier'
     assert module.import_operation(ExistingOwner(), 'grant', receipt, evidence=evidence) == 'delegated-to-existing-verifier'
+
+
+def calibration_bundle():
+    from dataclasses import asdict
+    from rosy.decision.deliberation.profiles import ModelProfile
+    module = owner()
+    selected = asdict(ModelProfile(profile_id='primary', profile_revision='r1', role='primary', provider_kind='local',
+        model_id='fixture', model_revision='model-r1', adapter='local-v2', domains=('line_follow',),
+        modalities=('text',), timeout_s=1, max_output_bytes=1024, max_calls=1, max_cost_usd=0,
+        calibration_revision='cal-r1'))
+    identity = dict(profile_revision='r1', model_revision='model-r1', domain='line_follow',
+                    calibration_revision='cal-r1', full_profile_sha256=module.digest(selected))
+    def rows(split):
+        return [dict(id=split, session_id=split, recording_id=split, session_sha256=module.digest(split),
+            recording_sha256=module.digest(split), reviewed_by='fixture', expected='human', **identity,
+            alternatives=[dict(choice='human', probability=.9), dict(choice='reobserve', probability=.1)],
+            abstained=False, latency_ms=1, unsafe_error=False, binding_error=False,
+            unnecessary_effect=False, required_abstain_error=False)]
+    fit, evaluation = rows('fit'), rows('evaluation')
+    training = dict(sessions=[], recordings=[], session_hashes=[], recording_hashes=[])
+    reviewed = dict(**identity, choices=['human', 'reobserve'], reviewed_by='fixture', limits=None,
+        fit_sha256=module.digest(fit), evaluation_sha256=module.digest(evaluation), training_sha256=module.digest(training))
+    calibration = dict(fit=fit, evaluation=evaluation, training=training, reviewed_profile=reviewed)
+    return dict(schema='rosy.incident.operational_evidence/1', profiles=[selected], profile=selected,
+        calibration_input=calibration, cohort=None, exports=[], inventories=[], inventory_digests=[],
+        truth=None, limits=None, windows=[], review=None)
+
+
+def test_root_recomputes_existing_profile_and_calibration_without_operating_acceptance():
+    from rosy.decision.deliberation.calibration import evaluate_calibration
+    module = owner(); data = calibration_bundle()
+    result = module.compile_original_evidence(data, trusted={}, now=100)
+    assert result['profile_set_sha256'] == module.digest(data['profiles'])
+    assert result['full_profile_sha256'] == module.digest(data['profile'])
+    assert result['calibration_sha256'] == evaluate_calibration(**data['calibration_input']).digest
+    assert result['profile_calibration_scope'] == 'root_recomputed_profile_and_calibration_only'
+    assert result['state'] == 'HOLD' and result['field_accepted'] is False
+    assert 'accepted_calibration' in result['missing']
+    data['calibration_input']['evaluation'][0]['expected'] = 'reobserve'
+    with pytest.raises(ValueError): module.compile_original_evidence(data, trusted={}, now=100)
