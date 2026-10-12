@@ -91,4 +91,6 @@ class IncidentProfileDispatcher:
         if self._task is not None and not self._task.done():
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
-        await asyncio.gather(*(w.aclose() for w in self.workers))
+        results = await asyncio.gather(*(w.aclose() for w in self.workers), return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException): raise result
