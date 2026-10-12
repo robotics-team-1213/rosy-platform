@@ -257,3 +257,39 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   3,718 PASS/113 SKIP였다. 후자는 공개 문서 긴 해시 검사 신규 실패 1개를 포함했고
   `a94b024fb`에서 문서만 수정했다. 연결 복구 후 미완료 Fleet 등은 4,597 PASS/246
   SKIP, 수정 검증은 196 PASS로 끝났고 각각 NEW 0이다. GitHub CI와 착지·푸시는 별도다.
+
+## Leg8: 전체 0.1m/s 구성 비교와 회전 여유 정지
+
+- `ab29002f6` 전체 7,553개 소스와 새 17개 설치 패키지를 사용했다. SIM 전용
+  복사 profile의 max_linear_velocity, CORE safety.manual_linear/fleet_linear만
+  0.1m/s로 맞췄다. 실제 loader의 절대 robot.profile 경로와 파일 해시, API의
+  max/manual 및 base/trip 한도, SDK의 max 0.1·angular 0.8과 stop/clear
+  0.10405/0.13405m를 정지 점검과 주행 전 점검에서 각각 확인했다.
+  별도 Fleet 개별 한도 API 필드는 없으므로 설정 해시 결속과 실제 전체 한도를 구분한다.
+- 정지 점검은 이동·주행 요청·양쪽 명령 0으로 종료했다. 새 주행은 정상 AI 자원
+  22.0 cores/8.3GiB에서 한 회차만 수행했다. 26.01 sim초에 0.360837m 이동하고
+  `stopped/stall`로 종료했다. Leg7보다 0.041174m 더 갔지만 첫 구간을 통과하지 못했다.
+  따라서 속도 envelope만으로 완주 문제가 해결된다는 가설은 지지하지 않는다.
+- 마지막 양의 native 명령은 monotonic 56057.257350이다. 그 뒤 limits
+  56057.329256은 front 0.138966m > stop 0.10405m, blocked false,
+  can_rotate false였고 native zero는 56057.332345에 나왔다. 후속 blocked true는
+  56057.538624이며 front 0.101999m다. 최종 zero 직전 회전 여유 거절과 뒤의
+  전방 차단을 구분하며 정확한 내부 소비 tick을 증명했다고 주장하지 않는다.
+- 원본 55.7초 scan·TF 재생에서 front 오차 0과 오른쪽 점
+  `(0.040645,-0.074618)m`, 중심 거리 0.084970m를 재현했다. 기존 회전 원과 여유
+  0.09257m 안에 들어온다는 SOURCE 판정은 can_rotate false를 뒷받침한다.
+  이후 다섯 전방 차단 거리도 원본 scan 재생 오차 0이다. 현재 정지 후 거리
+  0.113902m는 최초 차단 거리와 다르며 clear보다 작아 유지되는 상태다.
+- 카메라 centre 275·turn_left 156·held 0, traffic APPROACH 228·FOLLOW 21·
+  HOLD 0, 두 로봇 LOCALIZED 각 252회다. 원본 영상 54개의 해시·truncation 이상은
+  0이다. 정책 차체 paint 겹침은 1,691개 샘플 중 0이지만 연속 주행·접촉·도로 내부
+  수용은 아니다. OFF·lease·정지·pending 종료와 자기 프로세스/포트/lock 종료,
+  소스 7,553개와 설치 1,912개 해시 보존을 확인했다.
+- 정상 원격 자원의 고정 장면 비교에서는 현재 곡률로 계속 가면 약 10cm 뒤 paint와
+  겹치는 예측이 나왔다. 폐루프 접촉 증거가 아니다. 짧은 0.15m 목표가 이 장면에는
+  도움이 되지만 Leg7의 다른 장면에서는 벽에 접근하는 반례가 있어 무조건 단축하지 않는다.
+  frame-border 출구 목표가 곡선 변화에도 거의 고정되는 현상은 후속 검토 후보다.
+- 동결 URDF의 LiDAR 잡음은 gaussian mean 0/stddev 0.02다.
+  [SDFormat 명세](https://sdformat.org/spec/1.11/sensor/)의 stddev는 Gaussian
+  표준편차이며 오차 상한이 아니다. 원본 측정점과 실제 world·TF·pose의 예상 ray
+  거리를 대조해 잡음의 기여를 조사한다. 센서 잡음 축소나 안전 거절 해제는 수행하지 않았다.
