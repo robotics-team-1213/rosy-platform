@@ -101,6 +101,28 @@ def test_prompt_examples_are_valid_typed_proposals():
         semantic_answer(value, question(CASES[0], 1.))
 
 
+def test_frozen_prior_turn_cases_include_accepted_and_unaccepted_context():
+    from deploy.ai_pc.conversation_acceptance import CASES, question
+    cases={case[0]:question(case,1000.) for case in CASES}
+    for name in ('accepted_followup','unaccepted_followup','prior_chat','prior_status',
+                 'prior_unknown','prior_withdrawn','prior_foreign','prior_map_changed'):
+        assert len(cases[name].history)==1
+        assert (cases[name].accepted_execution_context is not None)==(name=='accepted_followup')
+    assert cases['prior_chat'].history[0].response
+
+
+@pytest.mark.parametrize('change',['context','history','intent','order'])
+def test_prior_turn_proof_cannot_omit_or_rewrite_frozen_context(monkeypatch,change):
+    value=proof()
+    row=next(r for r in value['cases'] if r['case']=='accepted_followup')
+    if change=='context':row['input']['accepted_execution_context']=None
+    elif change=='history':row['input']['history']=[]
+    elif change=='intent':row['answer']['steps'][0]['robot_id']='rosy_41'
+    else:value['cases'].reverse()
+    host_configuration(monkeypatch,json.dumps(value).encode())
+    with pytest.raises(ValueError):broker.configuration()
+
+
 @pytest.mark.parametrize('path', ['deploy/ai_pc/deliberation_conversation.py',
     'deploy/ai_pc/deliberation_conversation_broker.py', 'deploy/ai_pc/conversation_acceptance.py',
     'operations/decision/src/rosy/decision/conversation/codec.py',
