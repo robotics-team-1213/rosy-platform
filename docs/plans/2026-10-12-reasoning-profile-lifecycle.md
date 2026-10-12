@@ -6,6 +6,29 @@
 
 ## D-706 구현 checkpoint
 
+### D-714 고정 설치 명세 결속 checkpoint
+
+`feat/incident-installation-binding`의 `4301911968`에서 root composition `tools/incident_reasoning.py`에 `load_incident_profile_config`를 추가했다. 별도 설치 설정의 파일 SHA256과 최대 64 KiB 원본을 확인하고 내부 `rosy.incident.profiles/1` 명세의 전체 ModelProfile set을 이미 구성된 provider/config에 결속한다. 명세는 schema/profile_sets만 허용하며 set은 최대 8개, 각 set의 primary/reviewer는 1~2개다. 제공자 전체 profile·adapter identity/범위와 비교하고 중복 set·미설치 ID/revision/예산·변조·clock 재정의를 거절한다. 원래 admission/current_profiles/budget/enabled/보정 포트는 보존한다. 파일에서 제공자·주소·명령어·credential을 만들거나 호출하지 않는다.
+
+초기 missing loader RED 13 NEW 이후 실제 create_app→dispatcher→선택된 stub 경로와 재로드를 확인했다. 추가 원본 JSON 시험에서 큰 정수의 내부 OverflowError 노출을 RED 1 NEW로 재현했고, RecursionError/OverflowError도 같은 redacted ValueError from None으로 변환했다. 깊은 JSON과 중복 key는 거절 회귀로만 확인했으며 별도 RecursionError 재현을 주장하지 않는다. `4301911968`의 실제 원격 6개 파일 회귀는 terminal exit 0/NEW 0, 로그는 기존 세션 `logs/incident-manifest-final/run-1.txt`다. 원격 시험·독립 source 검토에 중요한 잔여 blocker는 없으며 설치·구조 회귀도 포함한다. 실제 모델·trust/호스트 설치는 수행하지 않았다.
+
+기존 root 구성 호출자는 다음 순서로 연결한다. `installed_configs`는 이미 구성된 기존 provider와 명시적 admission/budget 설정이며 clock을 포함하지 않는다. `installed_file_sha256`은 신뢰된 설치 구성의 별도 값이다. 로더가 파일 자체에서 예상 hash를 계산해 수용하지 않는다.
+
+```python
+from tools.incident_reasoning import load_incident_profile_config, registry_calibration_config
+
+config = load_incident_profile_config(profile_file,
+    expected_sha256=installed_file_sha256, installed=installed_configs, clock=clock)
+config = registry_calibration_config(config, registry, domain='line_follow')
+# Existing create_app(..., incident_model_config=config); selection remains explicit CAS.
+```
+
+이 source 결속은 실제 고정 명세 배포·실행 성공이나 signed 운영 품질 수용이 아니다. 다음은 운영 coverage와 독립 수용 receipt의 결속, 실제 설치 readback·provider 결과·현장 처리/성공 확인이다. 파일과 callables의 구성을 신뢰하는 기존 root 경계는 계속 필요하다.
+
+### D-706~D-713 로컬 통합 착지
+
+통합 브랜치 `feat/reasoning-artifact`는 `3a9f812bd2224fa95491289f2177db5b5cf373c6`로 로컬 main에 착지했다. 기존 main 병합에서 도착한 D-692의 stale gap 표시만 제거한 뒤 lint와 적격 AI PC/Model PC의 두 통합 그룹을 통과했다. 각각 5,860 passed/292 skipped와 452 passed/3 skipped, terminal exit 0/NEW 0이다. 고정 로그는 세션 `logs/reasoning-land-91be5f.txt`, `logs/reasoning-land-f24797.txt`다. 선택기가 FULL로 승격했으므로 전체 CI tier는 여전히 필요하며 local landing은 push·CI·배포·모델/현장 수용을 대신하지 않는다. D-714는 별도 worktree에서 개발해 진행 중 착지의 검증 HEAD를 변경하지 않았다.
+
 ### D-713 기존 runtime의 pinned dispatcher checkpoint
 
 `b5648d15a6`에서 기존 Fleet factory/loop/outbox의 단일 worker 슬롯에 opt-in `profile_workers` 구성을 연결했다. 같은 store·board·관측·clock을 공유하는 고정 profile worker 최대 8개를 만들고, active/최종 인수 대기 사건의 원 profile과 새 사건의 현재 선택에 로봇의 공개 CORE 상태만 분배한다. 기존 사건과 같은 case가 고정돼 있으면 current worker에 중복 전달하지 않는다. case가 바뀌면 이전 사건 정리와 새 사건 생성은 각 worker가 맡으며 최종 생성 선택 검증은 D-712의 동일 DB 트랜잭션이다. outbox receipt는 같은 트랜잭션에서 원 scope 또는 현재 선택의 worker 하나에만 연결한다.
