@@ -136,7 +136,7 @@ def test_detector_nearest_stop_edge_reaches_existing_core_gate(rig, unknown):
         width_px=320, height_px=240, height_m=.06343, pitch_rad=.13962634015954636,
         hfov_rad=1.0334, max_range_m=.6)
     frame = np.full((240, 320, 3), 35, dtype=np.uint8)
-    frame[81:84 if unknown else 220, 55:265] = 245
+    frame[81:84 if unknown else 230, 55:265] = 245
     if not unknown:
         frame[:140] = 35
     observation = detect_road_observation(frame, ground=ground)
