@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from core_common.robot_body import NOMINAL_BODY
-from control.safety import footprint_sweep as sweep
+import control.control.footprint_sweep as sweep
 
 
 FAR = ((2., 2.), (2., -2.), (-2., 2.))
