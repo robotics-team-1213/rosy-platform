@@ -290,3 +290,10 @@ def test_native_gap_is_revoked_even_while_clock_keeps_advancing():
         assert port.observe_clock(2_010_000_000 + i*50_000_000)
     assert not port.observe(replace(sample, stamp_ns=2_300_000_000))
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_immutable_run_binding_refuses_mutable_robot_collections():
+    m, _, sample, _, _ = setup()
+    with pytest.raises(ValueError):
+        m.NativeGazeboMapPosePort(replace(sample.binding, robots=list(sample.binding.robots)),
+                                 gather_core=lambda _: None)
