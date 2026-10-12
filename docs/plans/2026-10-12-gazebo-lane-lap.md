@@ -113,3 +113,32 @@ native 55 PASS와 소비자 198 PASS/NEW 0이다. 실제 runner의 clock join도
 - 다음 진단은 같은 제품 후보에서 hazard 전이, full scan, 기존 `safety/motion_limits` 원문을 기록한다.
   guard 임계값·CORE 명령 권한·지도·source stamp는 바꾸지 않는다. 새 runner의 독립 리뷰 후
   한 번의 제한 구간을 재실행해 최초 최종 명령 거절을 확인한다. 지도 완주는 계속 미확인이다.
+
+## Leg4: 전방 제한과 곡선 후보의 실제 정지
+
+- Leg4도 전체 소스 `e6d0fe12ba`와 같은 설치 해시를 사용했다. AI PC의 정상 SIM 자원
+  기준을 충족했고, 두 로봇의 실제 CORE snapshot을 2Hz로 읽어 위치를 유지했다.
+  LOCALIZED 갱신은 각각 205회이며 실패와 종료 후 남은 작업은 0이다.
+- 이동 0.311955m 후 `stopped/stall`, `arrived=false`다. 전방 blocked 전이 시각은
+  monotonic 40357.751841, 최초 native zero는 40357.757975다. Fleet stall 확인은
+  그보다 약 19초 뒤다. 현재 카메라 관측이 유지되는 동안 전방 제한이 먼저 발생했다.
+- 실제 `safety/motion_limits`의 전방 거리는 0.130544m, 정지 기준은 0.14905m이다.
+  회전 간격은 허용됐지만 양의 선속도를 가진 곡선 후보에서 선속도만 0으로 만들면
+  검사한 궤적이 바뀐다. CORE의 기존 곡률 보존 제한이 최종 두 축을 0으로 만든다.
+  원본 scan 640개와 실제 lidar TF를 소스에 재생한 전방 거리는 발행값과 일치했다.
+  재생은 분류 근거이며 내부 evaluator가 소비한 개별 snapshot 식별 증거는 아니다.
+- OFF 200, lease 해제, 실제 연속 정지, 작업 종료, 자기 프로세스·포트·lock 종료와
+  소스·설치 해시 보존을 확인했다. 원본 지도 완주·연속 swept/contact·실물 수용은 미확인이다.
+- 비교 A의 초기 기록 재생은 실제 관측 polyline 안의 목표 선택을 검토한다. 고정 0.12m 단축은 초기
+  직선에서 과도한 곡률을 만들고 코너에서는 오히려 회전 예견을 없애므로 채택하지 않는다.
+  비교 B의 기존 CORE REALIGN 회전은 인증된 turn spot과 회전 증거가 필요하다.
+  `can_rotate=true`만으로 차선 안의 회전을 승인하지 않는다. 안전 기준은 유지한다.
+
+## 내장 센서 노드 이름 수정
+
+`47ace984f2`는 CORE의 전역 ROS 이름 remap이 내장 SafetyNode 이름까지 덮는 문제를
+수정했다. namespace가 명시된 sensor-only 노드에만 자체 이름 remap을 적용하고,
+CORE가 실제 `use_sim_time`을 명시 전달한다. 기존 namespace·topic remap·독립 센서
+실행 의미는 유지한다. 정상 원격 자원에서 실제 Jazzy 실행을 포함한 115 PASS/NEW 0과
+독립 SOURCE 승인을 확인했다. Leg4의 실행 소스에는 이 수정이 없으며 수정 후 실제
+Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
