@@ -16,7 +16,9 @@
 
 `POST /api/v1/safety/stop`은 본문 없는 Viewer 호출과 `{estop:true}`를 유지하고 `operations:NativeOperation[]`을 추가한다. 각 native owner(nav/home, dock/undock, follow, teleop)의 기존 잠금을 기다리지 않고 획득하여 stop 직전 current nonterminal run과 boot를 따로 캡처한다. 잠금 경합이나 캡처 실패는 전체 `operations:[]`로 남기고 기존 E-Stop latch를 먼저 적용한다. backend·transport·중첩 잠금 조회는 이 선택적 캡처에 넣지 않는다. 정지 listener 이후에도 같은 nonblocking 경계에서 캡처한 UUID만 읽는다. 첫 terminal은 그대로 반환하며 잠금 경합·lookup UNKNOWN·prune·재부팅·readback 실패에서는 원래 pending receipt를 보존한다. 다른 최신 run이나 terminal 이력을 대신 넣지 않는다. 선택적 증거 읽기는 E-Stop을 늦추지 않는다. 빈 목록은 ACK뿐이며 물리적 정지 성공이 아니다. site stop은 `robots[].result.operations`에 로봇별 목록을 그대로 유지한다.
 
-Fleet channel stop step의 receipt는 `stop_outcomes:[{robot_id, operation:NativeOperation, outcome?:NativeOperation, quiescence?:NativeQuiescence}]`로 각 run을 보존한다. `operation`은 원래 캡처한 식별자, `outcome`은 변경할 수 없는 첫 terminal, `quiescence`는 같은 로봇·boot·run의 새 owner readback이다. 모든 캡처 run에 exact terminal과 RPC 시작부터 step CAS까지 2초 이내의 quiescence가 있어야 step을 CANCELED로 닫는다. 빌린 claim을 해제하거나 다음 동작을 진행하지 않으며 SAFE_RELEASED나 물리적 정지를 주장하지 않는다. 누락·빈 목록·부분 site ACK는 유한한 HOLD/ACK-only로 끝낸다.
+`operations`는 owner별로 순차 캡처한 정지 직전의 best-effort snapshot이다. 캡처와 latch 사이의 동시 owner 변경을 포함하는 전체 실행 목록이나 로봇의 물리적 정지 증명이 아니다.
+
+Fleet channel stop step의 receipt는 `stop_outcomes:[{robot_id, operation:NativeOperation, outcome?:NativeOperation, quiescence?:NativeQuiescence}]`로 각 run을 보존한다. `operation`은 원래 캡처한 식별자, `outcome`은 변경할 수 없는 첫 terminal, `quiescence`는 같은 로봇·boot·run의 새 owner readback이다. 모든 캡처 run에 exact terminal과 RPC 시작부터 step CAS까지 2초 이내의 quiescence가 있어야 step을 CANCELED로 닫는다. 빌린 claim을 해제하거나 다음 동작을 진행하지 않으며 SAFE_RELEASED나 물리적 정지를 주장하지 않는다. 누락·빈 목록·부분 site ACK는 유한한 HOLD/ACK-only로 끝낸다. native 식별자 없는 idle cancel/follow_cancel ACK도 유한한 HOLD이며, 이후 계획을 진행하지 않는다.
 
 SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 기존 실행 owner와 최종 cmd_vel 권한, envelope protocol_version 1.0을 유지한다.
 
