@@ -65,7 +65,7 @@ def main(argv=None):
         with args.profiles.open('rb') as stream: raw = stream.read(65537)
         if len(raw) > 65536: raise ValueError('INVENTORY_PROFILE_LIMIT')
         result = snapshot(args.database, json.loads(raw), owner=args.owner, policy=args.policy, start=args.start, end=args.end)
-        with args.out.open('x', encoding='utf-8') as output: output.write(feedback_json(result) + '\n')
+        with args.out.open('x', encoding='utf-8', newline='\n') as output: output.write(feedback_json(result) + '\n')
         print(result['digest']); return 0
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, RecursionError, OverflowError):
         print('CASE_INVENTORY_REJECTED'); return 1
