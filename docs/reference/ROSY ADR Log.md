@@ -711,6 +711,8 @@
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
 
+| D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
@@ -989,3 +991,9 @@ BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 �
 **Status:** Proposed (2026-10-12)
 
 새 후보·단일 dispatch·원장/CORE 결과와 독립 수용을 분리한다. 전문은 [D-716](../adr/D-716-model-led-bounded-incident-recovery.md).
+
+## D-728 — 기명 자연어 대화와 기존 조종 owner 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance pending)
+
+원문·기명 대화 문맥과 기존 intent/Task/Mission/CORE owner를 law/rule·현재 근거·영속 예산/최종 fence로 연결하고 자연어 회신까지 처리한다. D-720 읽기 전용 조각만으로 전체 완료를 선언하지 않는다. 전문은 [D-728](../adr/D-728-natural-language-channel-operations.md).

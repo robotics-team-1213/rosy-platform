@@ -1,0 +1,52 @@
+# 기명 자연어 대화·조종 실행 계획
+
+**Goal:** Discord의 인사·현재 상태·후속 지시·명확한 조종 요청을 AI와 관제가
+자연어로 처리하고 실제 기존 owner 결과까지 회신한다. 통신 접수만은 완료가 아니다.
+
+**Architecture:** 기존 ChannelRequests/작업 DB/outbox, core_common.intent,
+Task/Mission/CORE owner를 사용한다. AI는 구조화된 해석/계획, Fleet은 현재
+권한·law/rule·관측·지도·예산을 검증하고 실제 owner를 실행한다.
+
+## Task 0: 기존 계약과 책임 경계 정리
+
+- 새 status domain 때문에 기존 incident historical admission이 확장된
+  회귀2개를 고친다. 이전 incident domain 검증은 그대로 유지한다.
+- API v1.219 pin·pairing overlay·공개 digest scanner 정합 수정의 원격188
+  GREEN/known_failures를 유지한다. 이전 전체 착지 실패는 PASS로 바꾸지 않는다.
+- 다음 channel growth 전 기존 책임의 실제 channel subpackage 분리와
+  compatibility facade/설치 closure·parent/unit 측정·독립 검토를 수행한다.
+
+## Task 1: 대화 계약과 고정 실제 AI 해석
+
+- 원문/기명 actor/채널/기한/현재 profile/source와 제한된 대화 문맥,
+  기기·지도·기존 작업 catalog를 hash로 결속한다.
+- CHAT/STATUS/CLARIFY/CONTROL/REFUSE의 strict 출력, 기존 허용 intent grammar,
+  evidence references, 명확한 대상·수치·현재 지도 결속을 검증한다.
+- 인사·상태·후속 대화·모호한 요청·환각·prompt injection RED→GREEN을
+  실제 고정 Qwen broker에 연결한다. 보호 GLM은 필요한 숙고에만 호출한다.
+
+## Task 2: 기존 실행 owner와 영속 권한 fence
+
+- 기존 /api/fleet/do 실행을 같은 shared service로 재사용한다. Discord
+  원문 operator 권한과 idempotency/예약을 최종 owner까지 이어준다.
+- 기존 Task navigation·정지·지원 조종 grammar 및 Mission/Cell owner를
+  사용하고 raw URL/코드/새 publisher를 만들지 않는다.
+- map/source·capability·mode/safety·owner revocation을 마지막 await 뒤와
+  최종 dispatch에서 재검증한다. 모호한 목표는 명확화로, offline/잠금은
+  이유 있는 HOLD로, 불명 실행은 UNKNOWN no replay로 닫는다.
+
+## Task 3: 응답·진행·실제 결과
+
+- 접수 후 자연어 답변/필요한 명확화/보류 이유/작업 연결을 outbox에 기록한다.
+- 실제 owner의 진행·실행 receipt·readback·목표 검증을 동일 원문·대화에 연결한다.
+- API/Console/Discord에서 접수·AI 해석·실행·목표 완료를 구분한다.
+
+## Task 4: 검토·배포·운영 검증과 후속 개선
+
+- meaningful 원격 회귀·known_failures·설치 closure·독립 spec/quality 검토,
+  최신 main 통합과 local FF를 완료한다. 서명 배포와 실제 신규 메시지로
+  인사·상태·후속 대화·보류와 가능한 조종 결과까지 읽어 확인한다.
+- 준비한 D-720 보호 설치는 기초 source이며 자연어 전체 운영 수용이 아니다.
+  root 설치/예산/credential 경계와 승인된 SHA를 유지한 후 새 scope를 배포한다.
+- 운영 수용 뒤 기존 독립 평가·원장 inventory·learning pipeline을 조사하고
+  실제 결과 기반 curation/replay/후보학습/안전·품질 비교와 검증된 개선 반영을 구현한다.
