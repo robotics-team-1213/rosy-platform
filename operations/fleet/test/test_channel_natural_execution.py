@@ -466,3 +466,19 @@ def test_untracked_discord_deletion_does_not_grow_durable_command_journal(tmp_pa
     f.raw.withdraw(f.receipt['guild_id'],f.receipt['channel_id'],'99999999999999999')
     with f.raw._connect() as conn:
         assert conn.execute('SELECT count(*) FROM fleet_channel_withdrawals').fetchone()[0]==0
+
+
+@pytest.mark.parametrize('mismatch',['leader','members'])
+def test_other_registered_formation_receipt_is_unknown_not_replayed(tmp_path,mismatch):
+    proposal={'do':'formation_start','leader':'rosy_40','members':['rosy_40','rosy_41','rosy_42'],
+              'formation':'COLUMN','spacing':.6,'max_speed':.15}
+    text='40번 리더로 41번,42번 COLUMN 대형 간격 0.6 m 최대속도 0.15 m/s 시작해줘'
+    f=fixture(tmp_path,text,proposal,extra_robots=('rosy_41','rosy_42'))
+    async def start(leader,formation,spacing,speed,*,members):
+        f.writes.append('formation_start')
+        return {'state':'RUNNING','active':True,'leader':'rosy_42' if mismatch=='leader' else leader,
+                'assignment':{'rosy_41':{}} if mismatch=='members' else {'rosy_41':{},'rosy_42':{}}}
+    f.worker.execution.console.formation_start=start
+    rid=f.receipt['request_id'];asyncio.run(f.worker.step(rid));f.journal.recover();asyncio.run(f.worker.step(rid))
+    assert f.writes==['formation_start'] and f.journal.view(rid)['steps'][0]['state']=='UNKNOWN'
+    assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_41')[0]['phase']=='UNKNOWN'
