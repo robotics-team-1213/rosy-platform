@@ -62,6 +62,41 @@ certificate identity, config revision, and readback in the site validation
 record. These steps require the actual site host and devices for SITE/FIELD
 acceptance; local Compose checks establish only LOCAL behavior.
 
+### Operator PC: resolve the name and verify trust before login
+
+운영자는 인증서의 `ROSY_SITE_TLS_HOST`와 같은 이름으로
+`https://<site-fqdn>:8443/console`을 연다. DNS SAN만 있는 인증서에 LAN IP로
+접속하면 이름 검증이 실패한다. 브라우저의 인증서 경고를 통과시키거나
+`curl -k`로 확인한 화면은 TLS 신뢰 검증 결과로 기록하지 않는다.
+
+1. 운영 PC에서 `<site-fqdn>`이 현장 호스트의 승인된 주소로 해석되는지
+   확인한다. 현장 PC의 Avahi가 실행 중이어도 다른 PC의 `.local` 이름 해석은
+   별도로 확인해야 한다. 실패하면 LAN의 mDNS 경로를 복구하거나 관리자가
+   승인한 DNS/hosts 매핑을 설치한다. hosts를 쓰면 주소 변경 때 함께 갱신한다.
+2. 별도의 신뢰된 관리자 경로로 받은 **사이트 CA 공개 인증서**의 지문을
+   확인하고 운영 PC/브라우저의 신뢰 저장소에 등록한다. 서버 개인 키를
+   복사하거나 서버 leaf 인증서를 CA로 등록하지 않는다.
+3. Windows PowerShell에서는 `curl` 별칭 대신 `curl.exe`로 검사한다.
+   아래 두 번째 명령은 이름 해석 실패와 인증서 실패를 구분하는 진단이며,
+   브라우저 DNS 설정을 고치거나 로그인 성공을 증명하지는 않는다.
+
+   ```powershell
+   curl.exe --fail --show-error "https://<site-fqdn>:8443/api/fleet/auth/connection"
+   curl.exe --fail --show-error --resolve "<site-fqdn>:8443:<approved-site-ip>" "https://<site-fqdn>:8443/api/fleet/auth/connection"
+   ```
+
+   Schannel이 `CRYPT_E_NO_REVOCATION_CHECK`로 거부하고 해당 사설 CA에
+   폐기 목록 배포 지점이 없거나 닿지 않으면, 진단에 한해
+   `--ssl-revoke-best-effort`를 추가할 수 있다. 인증서 체인·유효기간·이름
+   검증은 유지되지만 이 결과는 완전한 폐기 상태 검증이 아니다.
+   [curl 공식 옵션 설명](https://curl.se/docs/manpage.html#--ssl-revoke-best-effort)을
+   따르고, 결과에 이 제한을 기록한다. `--ssl-no-revoke`를 기본값으로 넣지 않는다.
+4. 같은 호스트 이름으로 경고 없이 브라우저를 열고 우상단 로그인 →
+   최초 비밀번호 변경(해당 계정만) → 계정 → 내 프로필을 확인한다.
+   표시 이름 저장 후 새로고침해 값을 다시 읽는다. 비밀번호 변경과 기존
+   세션 무효화 검사는 격리된 시험 계정으로 수행하고, 팀원의 새 비밀번호를
+   시험자가 임의로 정하지 않는다. 실제 계정 검사와 격리 검사를 따로 기록한다.
+
 ## LAN access
 
 The site Caddy proxy lets a browser on a private LAN address open the camera
