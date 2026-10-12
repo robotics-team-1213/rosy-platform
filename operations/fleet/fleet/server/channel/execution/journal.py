@@ -2,6 +2,7 @@
 from contextlib import closing
 import json
 import time
+from uuid import uuid4
 
 from fastapi import HTTPException
 from core_common.intent import interpret
@@ -32,6 +33,8 @@ class ExecutionJournal:
                 expires_at REAL NOT NULL, PRIMARY KEY(principal_id,author_id,guild_id,channel_id));''')
             if 'resources_json' not in {r['name'] for r in conn.execute('PRAGMA table_info(fleet_channel_execution_steps)')}:
                 conn.execute('ALTER TABLE fleet_channel_execution_steps ADD COLUMN resources_json TEXT')
+            if 'caller_cid' not in {r['name'] for r in conn.execute('PRAGMA table_info(fleet_channel_execution_steps)')}:
+                conn.execute('ALTER TABLE fleet_channel_execution_steps ADD COLUMN caller_cid TEXT')
 
     def selection(self, question, conn):
         row = conn.execute('''SELECT s.* FROM fleet_channel_execution_selection s
@@ -147,8 +150,8 @@ class ExecutionJournal:
                     not reserve(conn,owner_kind='direct_action',owner_id=row['owner_id'],generation=row['generation'],
                                 resources=resources,phase='DISPATCHING')):
                 raise ValueError('DISPATCH_CLOSED_OR_RESOURCE_BUSY')
-            conn.execute("UPDATE fleet_channel_execution_steps SET state='DISPATCHING',resources_json=? WHERE request_id=? AND step_index=?",
-                         (json.dumps(resources),rid,index))
+            conn.execute("UPDATE fleet_channel_execution_steps SET state='DISPATCHING',resources_json=?,caller_cid=? WHERE request_id=? AND step_index=?",
+                         (json.dumps(resources),str(uuid4()),rid,index))
 
     def finish(self,rid,index,state,*,reason=None,receipt=None,expected_state=None):
         with closing(self.store._connect()) as conn,conn:
@@ -163,7 +166,7 @@ class ExecutionJournal:
                 return False
             conn.execute('UPDATE fleet_channel_execution_steps SET state=?,reason=?,receipt_json=? WHERE request_id=? AND step_index=?',
                 (state,reason,json.dumps(receipt) if receipt is not None else None,rid,index))
-            if state in {'UNKNOWN','ACCEPTED'}:
+            if state in {'UNKNOWN','ACCEPTED','RUNNING'}:
                 conn.execute("UPDATE fleet_action_claims SET phase='UNKNOWN' WHERE owner_kind='direct_action' AND owner_id=?",(row['owner_id'],))
                 plan=json.loads(conn.execute('SELECT plan_json FROM fleet_channel_execution WHERE request_id=?',(rid,)).fetchone()[0])
                 if row['resources_json'] and interpret(plan)[index].verb not in {'cancel','stop','estop','formation_stop','follow_cancel'}:
@@ -185,7 +188,7 @@ class ExecutionJournal:
 
     def recover(self):
         with closing(self.store._connect()) as conn:
-            rows=conn.execute("SELECT * FROM fleet_channel_execution_steps WHERE state IN ('DISPATCHING','UNKNOWN','ACCEPTED')").fetchall()
+            rows=conn.execute("SELECT * FROM fleet_channel_execution_steps WHERE state IN ('DISPATCHING','UNKNOWN','ACCEPTED','RUNNING')").fetchall()
         for row in rows:self.finish(row['request_id'],row['step_index'],'UNKNOWN' if row['state']=='DISPATCHING' else row['state'],
             reason='PROCESS_RESTARTED_AFTER_RESERVATION' if row['state']=='DISPATCHING' else row['reason'],
             receipt=json.loads(row['receipt_json']) if row['receipt_json'] else None,expected_state=row['state'])

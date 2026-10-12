@@ -105,8 +105,10 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/server/channel/health",
               "fleet/fleet/server/channel/conversation",
               "fleet/fleet/server/channel/execution",
+              "fleet/fleet/server/channel/execution/outcomes",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
+              "fleet/fleet/stuck/submission",
               "fleet/fleet/incidents",
               "fleet/fleet/incidents/automation",
               "fleet/fleet/incidents/automation/ledger",
@@ -125,6 +127,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/stuck/submission": (
+        203,
+        "accept: D-731 extracts the actual existing loop rule dispatch and adds the same owner's "
+        "conditional model dispatch and owned SQLite writes. No new service, provider or policy. "
+        "docs/plans/2026-10-12-fleet-submission-owner.md records initial 203 physical lines, "
+        "stable loop methods and simultaneous parent measurement. Keep +150 and parent ceilings.",
+    ),
     "foundation/core_common/protocol/native": (
         106,
         "accept: D-732 strict native operation contract and ROS-free bounded receipt bookkeeping "
@@ -159,6 +168,16 @@ SIZE_VERDICTS = {
         "Installed wheel/sdist/source-image closure is a separate remote gate; "
         "source admission never establishes activation or physical completion. "
         "See docs/plans/2026-10-12-natural-language-channel-operations.md.",
+    ),
+    "fleet/fleet/server/channel/execution/outcomes": (
+        332,
+        "accept: D-732 first-response identity binding, exact native outcome readback and local claim "
+        "closure owner independently prechecked by ralph_native_verify on 2026-10-12 at332 in "
+        "041d567e60. Simultaneous execution residual563/channel1453/conversation300/health248/"
+        "Fleet55249/task_store1043 retain every historical parent, file and zero-growth ceiling. "
+        "No new writer, database, process, dependency or scan exclusion. Installed wheel/sdist/"
+        "source-image closure remains a separate gate. See "
+        "docs/plans/2026-10-12-fleet-native-outcome-consumer.md.",
     ),
     "fleet/fleet/server/channel/conversation": (
         280,

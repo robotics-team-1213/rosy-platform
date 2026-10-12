@@ -37,6 +37,20 @@ class FleetTaskService:
         self._max_evidence_age_s = max_evidence_age_s
         self._clock = clock
         self.channel_admission = None
+        self.core_events = None
+
+    def bind_native_receipt(self, task_id, attempt_id, robot_id, receipt, *, unsent=False):
+        from fleet.server.channel.execution.outcomes.task_receipt import bind_native_receipt
+        if bind_native_receipt(self.store, task_id, attempt_id, robot_id, receipt, unsent=unsent) and self.core_events is not None:
+            operation = receipt['operation']
+            for event in self.core_events.native_events(robot_id, operation['boot_id'], operation['run_id']):
+                self.project_core_event(event)
+
+    def native_required(self, task_id):
+        if self.channel_admission is None:
+            return False
+        with self.store._connect() as conn:
+            return conn.execute('SELECT 1 FROM fleet_channel_execution_steps WHERE task_id=?', (task_id,)).fetchone() is not None
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
@@ -168,8 +182,16 @@ class FleetTaskService:
             raw_receipt = await dispatch(attempt)
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")
+            self.bind_native_receipt(task['task_id'], attempt['attempt_id'], task['robot_id'], raw_receipt)
+            native_receipt = self.store.get_task(task['task_id']).get('receipt') or {}
+            if native_receipt.get('native_required') and not native_receipt.get('operation'):
+                return self.store.transition(task['task_id'], 'UNKNOWN', actor_id=task['actor_id'],
+                                             source=task['source'], reason='NATIVE_ACK_IDENTITY_UNKNOWN')
             accepted = raw_receipt.get("accepted")
             if raw_receipt.get("queued") is True:
+                if (self.store.get_task(task['task_id']).get('receipt') or {}).get('operation'):
+                    return self.store.transition(task['task_id'], 'UNKNOWN', actor_id=task['actor_id'],
+                                                 source=task['source'], reason='NATIVE_TRAFFIC_RESULT_PENDING')
                 dispatch_attempted = raw_receipt.get("dispatch_attempted") is True
                 cancel_confirmed = raw_receipt.get("cancel_confirmed") is True
                 if dispatch_attempted and not cancel_confirmed:
@@ -195,6 +217,7 @@ class FleetTaskService:
             if accepted is True and raw_receipt.get("queued") is not True:
                 receipt = {key: raw_receipt[key] for key in ("accepted", "queued")
                            if key in raw_receipt and isinstance(raw_receipt[key], bool)}
+                receipt.update(self.store.get_task(task['task_id']).get('receipt') or {})
                 return self.store.transition(task["task_id"], "ACCEPTED", actor_id=task["actor_id"],
                                              source=task["source"], receipt=receipt)
             # The legacy console may report a memory-only traffic queue after sending/canceling.
@@ -255,6 +278,8 @@ class FleetTaskService:
             robot_id=robot_id, event_id=event_id, seq=seq,
             event_type=event_type, correlation_id=correlation_id,
             source=source if isinstance(source, str) else None,
+            run_id=data.get('run_id'), boot_id=data.get('boot_id'),
+            error_code=data.get('error_code'),
         )
 
     def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:

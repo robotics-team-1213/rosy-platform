@@ -45,6 +45,19 @@ def test_app_without_model_configuration_preserves_no_worker(tmp_path):
     assert app(tmp_path).state.stuck_resolver.incident_worker is None
 
 
+def test_root_factory_binds_existing_submission_owner_without_default_approval(tmp_path):
+    config, calls = settings()
+    config.update(recovery_enabled=True, operating=dict(grant_id='line-back', trusted=lambda: {}, evidence=lambda _: None))
+    application = app(tmp_path, config)
+    loop = application.state.stuck_resolver
+    worker = loop.incident_worker
+    assert loop.operating_state.store is worker.store
+    assert worker.recovery_submit.__self__ is loop
+    assert worker.recovery_submit.__func__ is loop._model_answer.__func__
+    assert loop.operating_state.epoch() == 0 and calls == []
+    with pytest.raises(ValueError): loop.operating_state.grant('line-back')
+
+
 @pytest.mark.parametrize('missing', ['journal', 'resolver'])
 def test_runtime_configuration_requires_existing_journal_and_loop(tmp_path, missing):
     config, _ = settings()
