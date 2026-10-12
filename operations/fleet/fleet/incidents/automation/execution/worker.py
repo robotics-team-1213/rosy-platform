@@ -18,13 +18,14 @@ from ..contract import CaseBudget, CaseScope, micros
 from ..ledger.receipt import model_receipt
 from rosy.decision.deliberation.contracts.billing import call_cost_evidence
 from rosy.decision.deliberation.calibration_selection import select_calibrated
+from ..recovery_candidates import RecoveryCandidates, observed_recovery
 
 
 class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
                  enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None,
-                 new_case_admission=None, routed=False):
+                 new_case_admission=None, routed=False, recovery_enabled=False):
         profiles = incident_profiles(profiles)
         if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
@@ -38,6 +39,9 @@ class IncidentCaseWorker:
         self.current_profiles, self.human_owned, self.budget = current_profiles, human_owned, budget
         self.final_handoff, self.clock, self.enabled, self.baseline = final_handoff, clock, enabled, baseline
         self.calibration_artifacts, self.approved_artifacts = calibration_artifacts, approved_artifacts
+        if type(recovery_enabled) is not bool:
+            raise ValueError('EXPLICIT_RECOVERY_MODE_REQUIRED')
+        self.recovery_candidates = RecoveryCandidates(store) if recovery_enabled else None
         if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
         self.routed = routed
         if new_case_admission is not None and not callable(new_case_admission):
@@ -45,6 +49,7 @@ class IncidentCaseWorker:
         self.new_case_admission = new_case_admission
         self.profile_sha256 = hashlib.sha256(canonical([asdict(p) for p in profiles]).encode()).hexdigest()
         self._snapshot, self._task, self._waiting = None, None, {}
+        self._latest_snapshot = None
         self._worker_id, self._closed = uuid.uuid4().hex, False
         self._submitted, self._shutdown_task = set(), None
 
@@ -70,9 +75,12 @@ class IncidentCaseWorker:
         if baseline is not None and (type(baseline) is not FleetBaseline
                 or baseline.request != request or baseline.policy_revision != assessment.policy_revision):
             raise ValueError('FLEET_BASELINE_CHANGED')
+        context = observed_recovery(self._latest_snapshot, request.subject_id, request.case_id, request.revision) if self.recovery_candidates else None
+        choices = ('reobserve', 'human', 'back_and_retry') if context else ('reobserve', 'human')
+        facts = canonical(dict(state='blocked', recovery=context)) if context else '{"state":"blocked"}'
         return Problem(request.subject_id, request.case_id, request.revision, 'line_follow',
             min(e.observed_at for e in request.evidence), tuple(e.reference for e in request.evidence),
-            ('reobserve', 'human'), 'INTERVENE', facts_json='{"state":"blocked"}',
+            choices, 'INTERVENE', facts_json=facts,
             fleet_choice=baseline.choice if baseline is not None else None)
 
     def prepare_receipt(self, connection, receipt):
@@ -125,10 +133,12 @@ class IncidentCaseWorker:
             clean.append(dict(robot_id=row.get('robot_id'), online=row.get('online'),
                 state={key: state.get(key) for key in ('seq', 'timestamp', 'line_follow')}))
         self._snapshot = json.loads(canonical({'robots': clean}))
+        self._latest_snapshot = self._snapshot
         if self.idle: self._task = asyncio.create_task(self._drain())
 
     async def _db(self, method, *args, **kwargs):
-        task = asyncio.create_task(asyncio.to_thread(getattr(self.store, method), *args, **kwargs))
+        port = method if callable(method) else getattr(self.store, method)
+        task = asyncio.create_task(asyncio.to_thread(port, *args, **kwargs))
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
@@ -252,6 +262,12 @@ class IncidentCaseWorker:
             step = checked.payload['next_step'] if checked is not None else None
             if step and step['tool_name'] == 'get_incident_status':
                 self._waiting[scope] = (problem.generation, step)
+            elif step and step['tool_name'] == 'propose_lane_back' and self.recovery_candidates is not None:
+                if not self._fresh(problem): return
+                attempt = hashlib.sha256(canonical([problem.digest, 'model', bound.profile.profile_id]).encode()).hexdigest()
+                await self._db(self.recovery_candidates.propose, scope, attempt, worker_id=self._worker_id)
+                self._waiting[scope] = (problem.generation, dict(tool_name='get_incident_status', arguments={},
+                                                              evidence_ids=list(problem.evidence_ids)))
             else: await self._finish(scope, 'NO_ADMITTED_READ_OR_REVIEW')
         except ValueError as error:
             if str(error) in {'ATTEMPT_ALREADY_RESERVED', 'CASE_ATTEMPT_INFLIGHT'}: return
@@ -335,6 +351,7 @@ class IncidentCaseWorker:
 
     async def _shutdown(self):
         self._closed, self._snapshot = True, None
+        self._latest_snapshot = None
         if self._task is not None and not self._task.done():
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)

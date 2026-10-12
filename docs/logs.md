@@ -8060,3 +8060,15 @@ osy-d395-s1d\`.
 - 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
 - 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
 - gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-721 스테이션과 제자리 복귀 모드
+
+- 변경: 운영자가 필요한 복귀 모드를 D-721 Accepted로 정했다. 목적지는 `station`과 `outing_start`다. station은 기존 도킹 명령, 제자리는 외출 시작 시 LOCALIZED 자세 하나를 기억한 뒤 기존 내비게이션 목표다. 여섯 번째 RobotMode와 스냅샷 필드, 얼굴 줄은 넣지 않았다. SAF-003, SAF-005, DNC-006은 그대로다.
+- 증거: SAF-003, SAF-005, NAV-003, WPT-004, DNC-002, DNC-005, DNC-006과 D-28, D-419, D-502, D-688, 모드 전이표, ROBOT_MODES, NavigationManager.home() 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 정책 결정이며 발행 구현, 장치, 현장 수용은 별도다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-723 장치 범주는 능력과 최종 작성자
+
+- 변경: 청소, 팔, 다른 이동 로봇, 드론을 새 폴더나 모드로 나누지 않기로 D-723 Accepted를 적었다. 청소는 기존 `mobile_base` 위의 Fleet 미션이고 복귀는 D-721이다. 팔은 `manipulator`와 별도 작성자이고 OMX는 꺼져 있다. 드론은 비행 스택과 최종 작성자 확인 전 폴더와 공통 action API를 예약하지 않는다.
+- 증거: 비전 프로필, D-55, D-71, D-310 결정 5, D-12, D-420 Proposed, D-427, D-429, D-430, D-721, 두 어댑터 매니페스트 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 분류 결정이며 구현, 장치, 현장 수용은 별도다.

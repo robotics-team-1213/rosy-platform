@@ -706,8 +706,13 @@
 | D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
 | D-717 | 진행 중 제한 후진의 중복 답 거절 | Accepted |
 | D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
+| D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
+| D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
+| D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -977,8 +982,20 @@ BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 �
 **Status:** Accepted (2026-10-12, source contract)
 
 기존 BACK_AND_RETRY 요청에 선택 ASKING/attempts 조건을 결속하고 CORE manager lock 안에서 현재 사건 조건을 검증한다. 전문은 [D-718](../adr/D-718-conditional-core-stuck-answer.md).
+
+## D-722 — 검증된 모델 복구 후보와 기존 사건 원장 결속
+
+**Status:** Accepted (2026-10-12, source contract; no operational admission)
+
+완료된 검증 모델 시도에서 고정된 비실행 복구 후보를 기존 사건 DB에 기록한다. 전문은 [D-722](../adr/D-722-validated-model-recovery-candidate-journal.md).
 ## D-716 — 모델 후보와 기존 단일 Fleet 복구 dispatch 연결
 
 **Status:** Proposed (2026-10-12)
 
 새 후보·단일 dispatch·원장/CORE 결과와 독립 수용을 분리한다. 전문은 [D-716](../adr/D-716-model-led-bounded-incident-recovery.md).
+
+## D-724 — 조건부 막힘 답의 지원 확인 후 최종 제출 검증
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
