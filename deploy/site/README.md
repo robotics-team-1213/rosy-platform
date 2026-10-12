@@ -1750,3 +1750,11 @@ SSH/sudo/config의 기존 내용과 mode를 모두 확인하고, 변경 후 검�
 
 사이트 클라이언트는 별도로 보호된 개인키, 고정 `known_hosts`, 동일 source/profile/policy
 설정이 필요하다. 설치기가 개인키를 출력하거나 사이트 client 설정을 자동 활성화하지 않는다.
+
+상태·대화 client의 `ssh_port`는 생략 시 22이며, 고정 대체 포트 2222만 추가로 허용한다.
+Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설정에 도달하지 않는다.
+이 경우 관리자가 `tailscale serve --bg --tcp=2222 tcp://127.0.0.1:22`로 tailnet 안에서만
+기존 OpenSSH를 연결하고, client는 `ssh_port: 2222`와 신뢰한 host key의
+`[<host>]:2222` 항목을 쓴다. 기존 Serve 설정을 먼저 확인하며, 다른 포트·Funnel·SSH
+정책·일반 계정 권한은 바꾸지 않는다. 설치, 포트 readback, 고정 명령 시험과 실제
+Discord 회신을 각각 확인한다.

@@ -51,3 +51,9 @@ def test_ssh_uses_the_configured_openssh_listener(monkeypatch):
     assert seen[0][seen[0].index('-p')+1] == '2222'
     assert 'StrictHostKeyChecking=yes' in seen[0]
     assert seen[0][-2:] == ('rosy-model-ingress@example', 'rosy-conversation-v1')
+
+
+@pytest.mark.parametrize('port', [True, 443, '2222'])
+def test_transport_refuses_an_unvalidated_port_before_spawn(port):
+    with pytest.raises(ValueError, match='FIXED_BROKER_PORT_REQUIRED'):
+        asyncio.run(exchange(SimpleNamespace(ssh_port=port), 'rosy-conversation-v1', b'{}', 3))
