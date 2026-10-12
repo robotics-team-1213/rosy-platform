@@ -69,6 +69,7 @@ def feedback_bundle(data):
                             domain=problem.domain, calibration_revision=profile.calibration_revision,
                             full_profile_sha256=digest(asdict(profile)))
             if (canonical(asdict(problem)) != canonical(receipt['problem'])
+                    or problem.domain not in profile.domains or 'text' not in profile.modalities
                     or any(identity[k] != frozen[k] for k in IDENTITY)
                     or list(problem.choices) != frozen['choices']
                     or (problem.subject_id, problem.case_id) != (row['subject_id'], row['case_id'])
@@ -121,7 +122,7 @@ def main(argv=None):
                 training=data['training'], reviewed_profile=data['reviewed_profile'])
         print(artifact.report_json)
         return 0 if artifact.report['state'] in {'PASS_OFFLINE_ONLY', 'PASS_COMPARISON_OFFLINE_ONLY'} else 1
-    except (OSError, ValueError, TypeError, KeyError, ImportError):
+    except (OSError, ValueError, TypeError, KeyError, ImportError, RecursionError, OverflowError):
         print('{"state":"HOLD","reason":"INVALID_CALIBRATION_INPUT","field_accepted":false}')
         return 1
 

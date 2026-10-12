@@ -28,12 +28,13 @@ def subject():
     return module
 
 
-def data(tmp_path):
+def data(tmp_path, model_revision='digest-1'):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     exports, labels, transformed = [], {}, {}
     for split in ('fit', 'evaluation'):
         scope, problem, models, _, _, _ = fixture()
         problem = replace(problem, case_id=split)
-        models = tuple(replace(p, calibration_revision='cal-1') for p in models)
+        models = tuple(replace(p, calibration_revision='cal-1', model_revision=model_revision) for p in models)
         scope = replace(scope, case_id=split, profile_sha256=digest([asdict(p) for p in models]))
         bound = BoundProfile(models[0], problem.digest)
         checked = judgment(problem, bound, payload(problem))
@@ -117,3 +118,44 @@ def test_existing_offline_cli_consumes_feedback_and_hides_bad_input(tmp_path):
     result = subprocess.run(command, capture_output=True, text=True, timeout=15)
     assert json.loads(result.stdout) == dict(state='HOLD', reason='INVALID_CALIBRATION_INPUT', field_accepted=False)
     assert not result.stderr
+
+
+def test_extra_target_profile_attempt_is_not_silently_excluded(tmp_path):
+    source, _ = data(tmp_path)
+    exported = source['exports'][1]
+    extra = copy.deepcopy(exported['case']['attempts'][0])
+    extra['attempt_id'] = 'unreviewed-attempt'
+    exported['case']['attempts'].append(extra)
+    exported['case']['calls'] = exported['case']['budget']['max_calls'] = 2
+    exported['digest'] = digest(exported['case'])
+    source['evaluation'][0]['export_digest'] = exported['digest']
+    with pytest.raises(ValueError, match='INCOMPLETE_FEEDBACK_REVIEW'):
+        subject().feedback_bundle(source)
+
+
+def test_json_resealed_foreign_domain_profile_is_not_valid_historical_evidence(tmp_path):
+    source, _ = data(tmp_path)
+    for exported, split in zip(source['exports'], ('fit', 'evaluation')):
+        case = exported['case']
+        for p in case['profiles']: p['domains'] = ['door']
+        case['scope']['profile_sha256'] = digest(case['profiles'])
+        receipt = case['attempts'][0]['model_receipt']
+        receipt['profiles'] = copy.deepcopy(case['profiles'])
+        exported['digest'] = digest(case)
+        source[split][0].update(export_digest=exported['digest'], receipt_sha256=digest(receipt))
+    source['reviewed_profile']['full_profile_sha256'] = digest(source['exports'][0]['case']['profiles'][0])
+    with pytest.raises(ValueError, match='FEEDBACK_SAMPLE_IDENTITY_CHANGED'):
+        subject().feedback_bundle(source)
+
+
+def test_feedback_compare_cli_reuses_identical_reviewed_truth(tmp_path):
+    first, _ = data(tmp_path / 'first')
+    second, _ = data(tmp_path / 'second', model_revision='another-model')
+    path = tmp_path / 'comparison.json'
+    path.write_text(json.dumps([first, second]), encoding='utf-8')
+    result = subprocess.run([sys.executable, str(TOOL), '--from-feedback', '--compare', str(path)],
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report['state'] == report['promotion_state'] == 'HOLD'
+    assert len(report['candidates']) == 2 and report['field_accepted'] is False
