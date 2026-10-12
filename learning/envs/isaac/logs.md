@@ -222,6 +222,14 @@
 - 조율: 대상 별도 세션은 연결 agent 목록에 없어 직접 메시지 전송이 실패했다. 사용자에게 알리고 private drive-session-handoff에 대상·증거·통합·거절 경로를 기록했다. 문서 존재와 별도 작업자의 수신을 구분한다.
 - gate 변화: 없음. 실제 곡선 완주·새 강화학습·두 대 교통/Fleet·ROS-SIM·실물 수용은 미완료다.
 
+## 2026-10-12 · af519cab1e · Isaac 질량 기준 프레임 보존과 R34 반례
+
+- 변경: 요청한 merge_fixed_joints=true를 SDK에서 읽어도 enabled mass0 footprint actor와 .8kg base_link actor가 별도로 남는 것을 확인했다. Isaac 준비 단계에서 차체의 기존 질량/관성/visual/collision을 footprint 기준으로 옮기고 직계 child joint 원점을 같은 translation만큼 바꾼다. base_link 이름/virtual frame은 유지하며 원본 xacro/Gazebo/실물 모델은 바꾸지 않는다.
+- 증거: RED4FAIL/4PASS/1SKIP 뒤 전체 Isaac229PASS/1SKIP/NEW0·독립 SOURCE APPROVE. 실제 R33/R34 prepared URDF는 0각도/비영 wheel·caster 각도 두 상태에서18개 world frame 차이0, 총질량1.54kg 및 각 질량의 world COM/inertia가 같았다. SDK R34에서 footprint mass.8와 기존 관성, 빈 base_link actor 제거를 읽었다. 같은 source7469 hash를 실행 전후 검증했다.
+- 결과: R34는 첫 baseline 종료 정지 검사와 cleanup 정지 검사에서 exit1이다. 최종 episode0, 중단 영상1/21개 산출물을 private에서 hash/frame receipt 대조했다. 이 구조 수정이 실제 정지 실패 해결이라는 가설은 입증되지 않았다. I1 import 설정/모델 metadata는 얻었지만 종료 timeout124였으며 전체 SDK 성공으로 부르지 않는다.
+- 추가 회귀: held-path 후속831d9bdc6 통합 source9f676b1928의 전체 Perception/Isaac·관련 CORE authority/crosswalk/junction/lane_return3508PASS/113SKIP/NEW0. 이후 최신 main의 incident/calibration 변경을 병합하고 실제 존재하는 D705의 gap을 정리했다.
+- gate 변화: 없음. 기존 traffic 파이프라인은 main19054491e2에 landing17,926PASS/823SKIP/NEW0으로 착지했지만 당시 push는 사전 검사 중이었다. 이번 질량 준비 변경은 작업 브랜치 검증이며 새 RL/네 방향 완주/두 대 Fleet·한국 교통/ROS-SIM/실물 수용은 미완료다. 정지·권한·카메라 gate를 완화하지 않았다.
+
 ## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
 
 - 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
