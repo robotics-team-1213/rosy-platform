@@ -270,7 +270,8 @@ class IncidentCaseWorker:
                 attempt = hashlib.sha256(canonical([problem.digest, 'model', bound.profile.profile_id]).encode()).hexdigest()
                 await self._db(self.recovery_candidates.propose, scope, attempt, worker_id=self._worker_id)
                 if self.recovery_submit is not None:
-                    await self.recovery_submit(scope, attempt, problem, self)
+                    if await self.recovery_submit(scope, attempt, problem, self) is not True:
+                        await self._finish(scope, 'RECOVERY_SUBMISSION_NOT_CONFIRMED'); return
                 self._waiting[scope] = (problem.generation, dict(tool_name='get_incident_status', arguments={},
                                                               evidence_ids=list(problem.evidence_ids)))
             else: await self._finish(scope, 'NO_ADMITTED_READ_OR_REVIEW')
