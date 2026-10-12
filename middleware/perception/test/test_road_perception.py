@@ -155,6 +155,60 @@ def test_single_wide_horizontal_group_is_a_stop_line_not_a_crosswalk():
     assert observation.crosswalk is None
 
 
+def test_thick_stop_distance_uses_the_nearest_visible_edge():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame(lane_x=220)
+    frame[140:220, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line.image_row == 219.0
+    assert observation.stop_line.distance_m == pytest.approx(ground.distance(219))
+    assert observation.stop_line.distance_m < .12 < ground.distance(179.5)
+    payload = road_observation_payload('CAMERA_ROAD', 1., 'map', 'rev', observation)
+    assert payload['stop_line']['image_row'] == 219.0
+    assert payload['stop_line']['distance_m'] == observation.stop_line.distance_m
+    assert observation.lane.error == pytest.approx(detect_road_observation(frame).lane.error)
+
+
+def test_transverse_crosswalk_distance_matches_nearest_bar_edge():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame(crosswalk_rows=(130, 145, 160))
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is None
+    assert observation.crosswalk.image_row == 161.0
+    assert observation.crosswalk.distance_m == pytest.approx(ground.distance(161))
+
+
+def test_same_colour_wall_and_attached_stop_remain_visible():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame()
+    frame[:123] = 240
+    frame[123:131, 55:265] = 240
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is not None
+    assert observation.stop_line.image_row == 130.0
+    assert observation.stop_line.distance_m == pytest.approx(ground.distance(130))
+    assert observation.stop_line.confidence > .9
+
+
+@pytest.mark.parametrize('case', ['thin_horizon', 'far_floor', 'above_horizon', 'no_ground', 'invalid_ground'])
+def test_unknown_marking_range_preserves_visible_evidence(case):
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame()
+    top, bottom = {'thin_horizon': (78, 84), 'far_floor': (81, 84),
+                   'above_horizon': (30, 36)}.get(case, (170, 180))
+    frame[top:bottom, 55:265] = 245
+    if case == 'no_ground':
+        ground = None
+    elif case == 'invalid_ground':
+        ground = simulation_ground_plane(source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+            width_px=WIDTH, height_px=HEIGHT, height_m=0., pitch_rad=.14, hfov_rad=1., max_range_m=.6)
+        assert ground is None
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is not None and observation.stop_line.distance_m is None
+    assert observation.stop_line.image_row == float(bottom - 1)
+    assert observation.stop_line.confidence > .5
+
+
 def test_repeated_wide_horizontal_groups_are_a_crosswalk():
     observation = detect_road_observation(
         _frame(lane_x=160, crosswalk_rows=(125, 137, 149, 161)))

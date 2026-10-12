@@ -125,6 +125,30 @@ def test_approach_distance_adaptively_reduces_linear_speed(rig):
     assert manager.status().state == "APPROACH"
 
 
+@pytest.mark.parametrize('unknown', [False, True])
+def test_detector_nearest_stop_edge_reaches_existing_core_gate(rig, unknown):
+    import numpy as np
+    from control.sensing.perception.camera_ground import simulation_ground_plane
+    from control.sensing.perception.road import detect_road_observation, road_observation_payload
+    from core.bridge.translate import road_evidence
+
+    ground = simulation_ground_plane(source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=320, height_px=240, height_m=.06343, pitch_rad=.13962634015954636,
+        hfov_rad=1.0334, max_range_m=.6)
+    frame = np.full((240, 320, 3), 35, dtype=np.uint8)
+    frame[81:84 if unknown else 220, 55:265] = 245
+    if not unknown:
+        frame[:140] = 35
+    observation = detect_road_observation(frame, ground=ground)
+    sample = road_evidence(road_observation_payload('CAMERA_ROAD', 10.,
+        'map_260905_update_v2', 'road-scene-v1', observation))
+    now, manager = rig
+    observe(manager, now, sample)
+    assert manager.gate(.08, .1).linear == 0.
+    assert manager.status().state == ('HOLD' if unknown else 'STOP_REQUIRED')
+    assert manager.status().reason == ('stop_distance_unavailable' if unknown else 'stop_dwell')
+
+
 def test_green_at_stop_line_requires_complete_stop_and_dwell(rig):
     now, manager = rig
     sample = evidence(
