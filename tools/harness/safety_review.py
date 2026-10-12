@@ -367,6 +367,52 @@ EXEMPT: dict[str, str] = {
         "94a6aa65a, which has a Safety-Review trailer; no new executable stop logic in this merge. "
         "Remote AI/model-PC tests on follow-up af2933291f passed with 0 new failures. See "
         "docs/validation/d591-merge-safety-review-2026-10-10/result.md; device acceptance separate.",
+    "d83cf43a18976c591c32134547c3190a83192fd1":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "origin/attempt admission requires 4ff29b07e and owner/worker fences require aae232f11, "
+        "8d4d752ee, ba3645264. See docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "4ff29b07e3f49ef162185f5afd9ffa3860efd68f":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "origin/withdrawal fences additionally require aae232f11, 8d4d752ee, ba3645264 for exact "
+        "owner acknowledgements and competing workers. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "1b75148cedace28685439b5f14427079921c8ce7":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "native docking admission requires 84331745a, cleanup/undock/stale-callback correction "
+        "675aa7bc6 and dock safety-stop classification 93100165b. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md and spec-note-2026-10-13.md; "
+        "no standalone or device acceptance.",
+    "1d709ffe22875d764dc3589d5763c3b4f772d0f0":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "consumer closure requires db0037481, 0a4f7d41c, 041d567e6 and the unsent, injection, boot "
+        "and stop fixes listed in docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "db0037481ec3ddd7843f5a1868b32db8bc09901f":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "proof/event/stop fencing still requires 0a4f7d41c, 041d567e6, b9dae83e3, 80f54e300 and "
+        "b5efedabe. See docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "b9dae83e323952c8cea43a9fc41ba4ecbfd73c38":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "exact unsent-marker cleanup and row CAS require 80f54e300 safety/decision injection and "
+        "b5efedabe boot/cancel evidence. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "80f54e3003ece34777aa928fc2d6573f63775fbd":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "injected preparation removes decision imports from the safety lease owner; later boot "
+        "and stop closure remain required. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "b5efedabe147638a092ce307acd7ea77b0c5ac74":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "exact cancellation/boot acknowledgement requires 3a8d211af, 1dbea2742, CORE producer "
+        "fixes through 36c74cfaa and idle closure 080eb36a7. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "ed761a9577dfc226898dd6e486d773c49b1821d3":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "live selected-run checks and final epoch binding require 7b0855fa2 for known-unsent "
+        "context rejection and orphan-marker cleanup. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
