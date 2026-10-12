@@ -1703,3 +1703,50 @@ Ubuntu AppArmor의 namespace 거절은 `deliberation_install`의 전용 계정·
 로컬 Qwen의 수동 호출과 Decision의 관측 부족 HOLD도 확인했다.
 [실제 수용 증거와 제한](../../docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)을 따른다.
 운영 제공자·자동 worker·로봇 실행은 활성화하지 않았다.
+
+## 보호 대화 broker의 관리자 설치 (D-728)
+
+`install_conversation_broker.py`는 AI PC에서 root가 검토된 별도 snapshot을 설치하는 도구다.
+자연어 대화의 독립 평가와 source inventory는 같은 commit에 묶여야 한다. 현재 checkout이나
+새 installer를 평가한 source inventory에 추가하지 않는다. 설치 성공은 SSH transport와
+보호 설정의 readback이며 Discord 회신, 실행 admission, 물리 수용은 별도로 확인한다.
+
+관리자가 검토하고 SHA256을 고정한 묶음을 `/root/rosy-conversation-reviewed/<release>/`에
+복사한다. 모든 상위 디렉터리와 파일은 root 소유이며 group/other 쓰기를 허용하지 않는다.
+묶음에는 다음 파일이 필요하다.
+
+- `source/`: 평가 당시의 source 파일들. `source-manifest.json`은 `source_commit`과
+  상대 경로별 SHA256인 `files`를 가진다.
+- `semantic-evaluation-proof.json`, `semantic-evaluation-receipt.json`: Model PC 독립 평가
+  proof와 provenance receipt. 후보 자체의 진단 결과를 평가로 대체하지 않는다.
+- `ingress.pub`: 하나의 Ed25519 공개키. 개인키는 이 묶음에 넣지 않는다.
+- `dependencies.json`: `{"wheels":{"<wheel-file>.whl":"<sha256>"}}`와 `wheels/`의
+  검토된 Linux/Python 버전별 전체 wheel closure. source의 직접 요구 버전과 일치해야 한다.
+
+installer 자체도 별도 검토된 파일을 root 소유 디렉터리에 복사하고 SHA256을 확인한 뒤
+다음 명령을 실행한다. 관리자 셸에서 실행하며 암호나 SSH 개인키를 명령문에 넣지 않는다.
+
+```sh
+python3 -I -B /root/rosy-conversation-reviewed/<release>/install_conversation_broker.py \
+  /root/rosy-conversation-reviewed/<release> \
+  --manifest-sha256 <manifest-sha256> --proof-sha256 <proof-sha256> \
+  --receipt-sha256 <receipt-sha256> --public-key-sha256 <public-key-sha256> \
+  --dependencies-sha256 <dependencies-sha256>
+```
+
+`--check`는 관리자 권한·입력 SHA·wheel closure·계정·보호 상위 경로만 확인하며
+설치·semantic validator 실행·모델 적재 확인을 대신하지 않는다. 실제 설치는 root 소유
+`/opt/rosy-deliberation/conversation/<source-commit>/`와 오프라인 hashed venv를 준비한 뒤
+그 snapshot의 validator로 평가 proof를 검사한다. `rosy-deliberation` UID의 `/api/ps`
+조회로 고정 모델 digest와 context 8192만 확인한다. inference나 GLM 호출은 하지 않는다.
+
+새 config의 만료는 평가 시각부터 최대 7일이다. 기존 상태 broker·GLM credential·billing
+증거·최초 smoke spent marker는 보존한다. 등록되지 않은 기존 ingress 계정, 계정/그룹
+충돌, 외부 파일, 다른 공개키, source 변조는 거절한다. SSH ingress는 정확한
+`rosy-status-v1`·`rosy-conversation-v1`만 받아 각각 zero-argument UID wrapper로 전달한다.
+SSH/sudo/config의 기존 내용과 mode를 모두 확인하고, 변경 후 검증이나 reload 실패 시
+이번에 바꾼 파일을 원복한다. 원래 파일의 hash 이름 백업은 유지한다. 실패한 의존성 준비는
+재시도 전에 관리자가 미완성 version을 확인해야 하며 자동 삭제하지 않는다.
+
+사이트 클라이언트는 별도로 보호된 개인키, 고정 `known_hosts`, 동일 source/profile/policy
+설정이 필요하다. 설치기가 개인키를 출력하거나 사이트 client 설정을 자동 활성화하지 않는다.
