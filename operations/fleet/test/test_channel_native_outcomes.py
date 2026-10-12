@@ -67,8 +67,8 @@ def test_native_stop_closes_without_releasing_another_owner_or_advancing(tmp_pat
                 {'steps': [{'do': verb, 'robot': 'rosy_40'}, HOME_PLAN]})
     rid = f.receipt['request_id']
     operation = _operation(uuid4(), uuid4(), 'original-motion') | {'kind': kind}
-    f.store.reserve_resources(owner_kind='direct_action', owner_id='original-motion', generation=1,
-                              resources=[('robot', 'rosy_40')])
+    assert f.store.reserve_resources(owner_kind='direct_action', owner_id='original-motion',
+        generation=f.store.dispatch_control()['generation'], resources=[('robot', 'rosy_40')])
     sent = []
     async def cancel(*args):
         sent.append(True)

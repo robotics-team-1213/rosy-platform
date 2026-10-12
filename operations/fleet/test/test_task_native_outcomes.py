@@ -192,7 +192,7 @@ def test_stop_during_new_epoch_read_refuses_goal_before_send():
     assert not sent
 
 
-@pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack'])
+@pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack', 'wrong_boot'])
 def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at):
     from fleet.server.goal_lease import GoalLeases
     from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
@@ -220,6 +220,10 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
             withdrawn.append(True)
         check_dispatch(path='/api/v1/navigation/goal')
         sent.append(True)
+        if withdraw_at == 'wrong_boot':
+            return {'accepted': True, 'operation': {'boot_id': str(uuid4()), 'run_id': str(uuid4()),
+                'kind': 'navigate', 'correlation_id': kwargs['correlation_id'], 'phase': 'SUBMITTED',
+                'result': None, 'reason': None}}
         return {'accepted': False}
 
     async def dispatch(attempt):
@@ -227,6 +231,11 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
                                  {}, 1., 2., 0., attempt['attempt_id'], task_id=attempt['task_id'])
 
     result = run(service.dispatch_next({'rosy_01'}, dispatch=dispatch))
+    if withdraw_at == 'wrong_boot':
+        assert result['status'] == 'UNKNOWN'
+        assert result['receipt'] == {'native_required': True}
+        assert store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+        return
     assert result['status'] == ('FAILED' if withdraw_at == 'negative_ack' else 'HOLD')
     assert not (result['receipt'] or {}).get('native_required')
     assert not store.resource_claims(resource_kind='robot', resource_id='rosy_01')

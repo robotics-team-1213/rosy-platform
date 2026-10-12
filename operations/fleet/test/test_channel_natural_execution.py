@@ -199,6 +199,8 @@ def test_scoped_guard_is_not_inherited_by_other_concurrent_callers():
 @pytest.mark.parametrize('phase',['discovery','identity'])
 @pytest.mark.parametrize('change',['owner','map','withdraw'])
 def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monkeypatch,phase,change):
+    from functools import partial
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     import httpx
     from fleet.swarm.robots import RobotEndpoint
     from fleet.swarm.transport import HttpRobotClient
@@ -237,6 +239,7 @@ def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monk
             client=HttpRobotClient(ep,http=http)
             leases=GoalLeases(0,{'rosy_40':client})
             leases.admit_attempt=f.service.admit_attempt
+            leases.prepare_send=partial(prepare_send,leases)
             async def dispatch(task):
                 return await leases.send('rosy_40',client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
             return await f.service.dispatch_next({'rosy_40'},dispatch=dispatch)
