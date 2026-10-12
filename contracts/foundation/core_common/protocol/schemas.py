@@ -29,6 +29,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
+from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
 from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
@@ -1024,6 +1025,7 @@ class LineStuckStatus(BaseModel):
     attempts: int = 0
     max_attempts: int = 0
     local_enabled: bool = False
+    conditional_back: bool = False  # D-718: absent on old CORE; no conditional POST admission
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
