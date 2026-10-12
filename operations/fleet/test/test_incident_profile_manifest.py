@@ -95,7 +95,11 @@ def test_adversarial_json_is_bounded_and_rejected_with_redacted_value_error(tmp_
         raw = json.dumps(dict(schema='rosy.incident.profiles/1', profile_sets=[profiles])).encode()
     else: raw = path.read_bytes().replace(b'"schema":', b'"schema":"hidden-secret", "schema":', 1)
     path.write_bytes(raw)
-    with pytest.raises(ValueError, match='INCIDENT_PROFILE_INSTALLATION_BINDING_FAILED'):
-        subject().load_incident_profile_config(path, expected_sha256=hashlib.sha256(raw).hexdigest(),
-                                              installed=(config,), clock=clock)
+    original_limit = sys.getrecursionlimit()
+    try:
+        if fault == 'deep': sys.setrecursionlimit(1000)
+        with pytest.raises(ValueError, match='INCIDENT_PROFILE_INSTALLATION_BINDING_FAILED'):
+            subject().load_incident_profile_config(path, expected_sha256=hashlib.sha256(raw).hexdigest(),
+                                                  installed=(config,), clock=clock)
+    finally: sys.setrecursionlimit(original_limit)
     assert calls == []
