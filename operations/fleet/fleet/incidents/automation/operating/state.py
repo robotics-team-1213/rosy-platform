@@ -43,6 +43,9 @@ class OperationalState:
             identifier(event['grant_id']); validate_operation_receipt(event['receipt'])
             if event['receipt']['payload']['expected_epoch'] != index - 1:
                 raise ValueError('OPERATION_HISTORY_EPOCH_CHANGED')
+            payload = event['receipt']['payload']
+            verify_operation_receipt(event['receipt'], trusted=self.trusted(), expected_binding=payload['binding'],
+                epoch=index - 1, now=payload['valid_from_s'], kind=payload['kind'])
             previous = event['revision']; events.append(event)
         return events
 
@@ -142,6 +145,7 @@ class OperationalState:
                 raise ValueError('CURRENT_OPERATING_CONTEXT_CHANGED')
             if self._grant(conn, grant_id) != approval:
                 raise ValueError('OPERATING_ADMISSION_CHANGED_AT_CLAIM')
+            self.store._case(conn, scope, active=True)
             record = seal(dict(subject_id=scope.subject_id, case_id=scope.case_id, scope=asdict(scope),
                 actor='model', action=candidate['action'], state='SUBMITTING', grant_id=grant_id,
                 admission_revision=approval['revision'], admission_epoch=approval['epoch'], candidate_id=candidate['candidate_id'],
@@ -175,6 +179,20 @@ class OperationalState:
 
     def submission(self, subject_id, case_id):
         with self.store._transaction() as conn: return self._submission(conn, subject_id, case_id)
+
+    def finish_rule(self, subject_id, case_id, *, generation, state, reply):
+        if state not in {'ACK', 'REFUSED', 'UNKNOWN'} or type(reply) is not dict or len(canonical(reply).encode()) > 4096:
+            raise ValueError('BOUNDED_SUBMISSION_REPLY_REQUIRED')
+        with self.store._transaction() as conn:
+            record = self._submission(conn, subject_id, case_id)
+            if (record is None or record.get('actor') != 'rule' or record.get('generation') != generation
+                    or record.get('state') not in {'SUBMITTING', 'UNKNOWN'}):
+                raise ValueError('OWNED_RULE_SUBMISSION_REQUIRED')
+            record.update(state='UNKNOWN' if record['state'] == 'UNKNOWN' else state, reply=reply)
+            record = seal(record)
+            conn.execute('UPDATE fleet_operation_submissions SET body=? WHERE subject_id=? AND case_id=?',
+                         (canonical(record), subject_id, case_id))
+            return record
 
     def finish(self, scope, *, state, reply):
         if state not in {'ACK', 'REFUSED', 'UNKNOWN'} or type(reply) is not dict or len(canonical(reply).encode()) > 4096:
