@@ -16,6 +16,12 @@
 
 ### 현재 시작점과 다음 순서
 
+실제 V2 런타임 readback: AI PC의 기존 전용 venv에서 입력 검증·자식 import를 모델/네트워크 호출 없이 확인했고, 별도 metadata 1회로 고정 Qwen resident 조건을 확인했다. 소비된 Qwen V2 표식은 유지하며 이전 실패 원인과 실제 응답은 미확인이다. GLM frozen V2 설치 디렉터리가 아직 없고 sudo password가 필요해 관리자 OpenSSH 준비 명령의 실제 실행/readback을 요청했다. 이 준비는 모델 호출·credential importer를 포함하지 않는다. [실제 readback](../validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)의 V2 절을 따른다. 기존 구버전 transport 성공·최신 source 병합·V2 runtime·독립 품질을 혼용하지 않으며 전체 목표는 ACTIVE다.
+
+D-703은 commit `70cff59396a5338346ff6c65e3b7a836d99632e0`로 로컬 main에 착지했다. 실제 model export의 prediction과 별도 검수 정답·오류·지연을 기존 보정/동일 정답 비교 CLI에 결속한다. 개인 profile hash와 receipt·case·attempt·input·generation을 확인하고 원장 밖 확률·UNKNOWN/누락 보간·외부 검수 dataset hash 자동 변경을 거절한다. 적격 Model PC 8.1GB의 관련 main 통합 원격 시험은 569 passed/NEW 0과 lint를 통과했으며 독립 검토 지적을 수정했다. [검수 입력 결속 계획](2026-10-12-reviewed-feedback-calibration-binding.md)에 고정 로그와 통합 전 127개 회귀를 기록했다. 다음은 실제 검수 자료·지연 원본·출처의 수용과 운영 coverage 연결이다. 사람 표시 이름이나 선언된 source hash만으로 진위를 입증하지 않는다. 실제 모델·배포·현장·승격/복귀는 미완료이며 전체 목표는 ACTIVE다.
+
+D-702 보정 기준 보완은 commit `d34e8c2e358129143dd9933b2ace33f42558aafb`로 로컬 main에 착지했다. 기존 독립 확률 보정 계산의 PASS에도 검수된 `minimum_bin_cases`를 적용하고 네 가지 금지 오류 건수를 보고한다. 적격 AI PC 9GB의 Fleet 전체·제공자·설치·구조·release 통합은 5,039 passed/246 skipped, terminal exit 0, NEW 0과 lint를 통과했고 독립 검토에서 중요한 blocker는 없었다. [구간 표본 수 계획](2026-10-12-independent-calibration-bin-support.md)에 고정 로그와 통합 전 110개 회귀 근거를 기록했다. 실제 원장·별도 검수 정답·latency와 source lineage를 결속하는 평가 입력 생산은 다음 작업이다. 없는 정답·지연·coverage를 추정하지 않으며 실제 모델·배포·현장 수용·승격/복귀는 미완료이고 전체 목표는 ACTIVE다.
+
 최신 D-701 source checkpoint: commit `410d69f8e72ed223fcfba9f52982c8df4bd34294`로 실제 규칙 선택의 읽기 전용 export와 독립 cohort /2 비교를 로컬 main에 착지했다. 기존 /1·단독 primary /3과 동일 사건·hash·scope·split 검증을 유지한다. 적격 AI PC 9GB의 관련 26개 파일 원격 통합 시험 667 passed, terminal exit 0, known-failures NEW 0과 lint를 확인했다. 독립 검토의 전체 JSON 크기·실제 CLI 연결 지적도 수정했다. 고정 로그는 세션 `logs/rule-export-land-410d69f8e7/run-1.txt`다. 상세는 [독립 규칙 export 계획](2026-10-12-independent-rule-export.md)을 따른다.
 
 다음은 독립 정답·수용 한계와 정상 무명령·모델 호출·재발의 완전한 기록 범위다. 규칙 선택만으로 운영 성공이나 0건을 주장하지 않으며 실제 모델·배포·현장 수용·승격/복귀는 미완료다. 통합 목표는 ACTIVE다. 아래 D-700 checkpoint는 이전 단계의 증거다.

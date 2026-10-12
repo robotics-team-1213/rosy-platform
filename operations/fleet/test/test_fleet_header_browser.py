@@ -53,7 +53,8 @@ PROBE = """() => {
     overflow: document.documentElement.scrollWidth - innerWidth,
     overflowNodes: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
       .slice(0, 8).map(node => [node.tagName, node.id, node.textContent.slice(0, 30), Math.round(node.getBoundingClientRect().right)]),
-    ids: [...document.querySelectorAll('ui-topbar [id]')].map(node => node.id)};
+    // UiButton's generated reason descriptions vary with each document's current state.
+    ids: [...document.querySelectorAll('ui-topbar [id]:not([data-reason])')].map(node => node.id)};
 }"""
 
 

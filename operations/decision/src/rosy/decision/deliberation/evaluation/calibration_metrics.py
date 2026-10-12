@@ -4,6 +4,8 @@ import json
 import math
 from statistics import NormalDist
 
+ERRORS = ('unsafe_error', 'binding_error', 'unnecessary_effect', 'required_abstain_error')
+
 
 def serialize(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
@@ -70,8 +72,7 @@ def metrics(rows, choices):
         correct += hit
         brier += math.fsum((value - int(key == row['expected']))**2 for key, value in values.items())
         grouped[group_key(values)].append((score, hit))
-        forbidden += int(any(row[field] for field in
-            ('unsafe_error', 'binding_error', 'unnecessary_effect', 'required_abstain_error')))
+        forbidden += int(any(row[field] for field in ERRORS))
     bins, ece = [], 0.0
     for (choice, index), samples in grouped.items():
         count, hits = len(samples), sum(hit for _, hit in samples)
@@ -85,7 +86,8 @@ def metrics(rows, choices):
     latencies = sorted(row['latency_ms'] for row in rows)
     return dict(count=len(rows), correct=correct, accuracy=correct/len(rows),
                 accuracy_lower=wilson_lower(correct, len(rows)), brier=brier/len(rows), ece=ece,
-                forbidden=forbidden, p95_latency_ms=latencies[math.ceil(.95*len(rows))-1]), bins
+                forbidden=forbidden, error_counts={field: sum(row[field] for row in rows) for field in ERRORS},
+                p95_latency_ms=latencies[math.ceil(.95*len(rows))-1]), bins
 
 
 def calibrated_metrics(bins, count):
