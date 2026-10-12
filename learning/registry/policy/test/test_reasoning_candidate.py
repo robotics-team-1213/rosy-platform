@@ -23,7 +23,7 @@ def inputs():
 
 
 def subject():
-    return importlib.import_module('reasoning_candidate')
+    return importlib.import_module('rosy.decision.deliberation.evaluation.reasoning_candidate')
 
 
 def test_candidate_json_roundtrip_recomputes_and_preserves_scope():
