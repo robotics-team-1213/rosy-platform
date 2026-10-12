@@ -333,8 +333,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
 - 2026-10-13 · 2917a9a699 · docs: 현재 설치본 기본 프로필 후속 검증
 - 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
 - 2026-10-12 · uncommitted · docs(adr): D-736 위치추종 기준점과 어둠 안내
 - 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
-- 2026-10-12 · uncommitted · docs: 자연어 요청을 통합 규칙집에 연결
