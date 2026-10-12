@@ -284,3 +284,5 @@
 - 변경: 실제 CORE nonzero 전달 receipt로 확인한 episode 내 마지막 유효 행동에만 target 상실의 terminal reward를 연결한다. ZERO 구간은 기록을 유지하고 held 등 비학습 이동은 연결을 끊는다. stale·추론·scan 오류는 제외하며 invalid state bootstrap과 기억 명령 재실행은 허용하지 않는다.
 - 검증: 유효/미실행/다른 종료/외인성 오류/held 연결 차단 회귀 통과. Isaac 전체와 architecture 원격 통합은 exit0/NEW0. 기존 helper를 camera_checks에 옮겨 재노출하며 600줄 기준을 유지했다.
 - gate 변화: SOURCE/원격 회귀 증거이며 native 종료 credit·완주·독립 병렬 학습·두 대 Fleet 교통 수용은 별도다.
+
+- 실제 R41: d653def0b headless 한 대 학습6회와 고정 평가3회·baseline4회가 종료됐다. Q 갱신27,957회 중 목표 상실 terminal credit5회를 실제 확인했고, trace로 독립 재계산한 최종 Q는 저장 정책과 정확히 일치했다. 각 credit의 원래 nonzero CORE receipt·유효 state·후속 ZERO·종료 bootstrap0을 검사했다. 기록된 정지16개와 실제 영상7개를 검증했지만 전체 완주는0회이며 SDK exit1로 정책 채택은 거절했다. 병렬 학습·교통/Fleet 수용은 여전히 미완료다.
