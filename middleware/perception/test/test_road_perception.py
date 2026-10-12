@@ -158,13 +158,13 @@ def test_single_wide_horizontal_group_is_a_stop_line_not_a_crosswalk():
 def test_thick_stop_distance_uses_the_nearest_visible_edge():
     _, ground = _longitudinal_crosswalk_frame()
     frame = _frame(lane_x=220)
-    frame[140:220, 55:265] = 245
+    frame[140:230, 55:265] = 245
     observation = detect_road_observation(frame, ground=ground)
-    assert observation.stop_line.image_row == 219.0
-    assert observation.stop_line.distance_m == pytest.approx(ground.distance(219))
-    assert observation.stop_line.distance_m < .12 < ground.distance(179.5)
+    assert observation.stop_line.image_row == 229.0
+    assert observation.stop_line.distance_m == pytest.approx(ground.distance(229))
+    assert observation.stop_line.distance_m < .12 < ground.distance(184.5)
     payload = road_observation_payload('CAMERA_ROAD', 1., 'map', 'rev', observation)
-    assert payload['stop_line']['image_row'] == 219.0
+    assert payload['stop_line']['image_row'] == 229.0
     assert payload['stop_line']['distance_m'] == observation.stop_line.distance_m
     assert observation.lane.error == pytest.approx(detect_road_observation(frame).lane.error)
 
