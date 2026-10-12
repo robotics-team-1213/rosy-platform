@@ -317,7 +317,7 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
 @pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None,
     'upgrade','upgrade_missing','upgrade_wrong_config','upgrade_wrong_broker','upgrade_lone_config',
     'upgrade_lone_broker','upgrade_malformed','upgrade_foreign_wrapper','upgrade_rollback',
-    'ingress','migration','migration_foreign','migration_rollback'])
+    'ingress','migration','migration_foreign','migration_rollback','no_status'])
 def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,monkeypatch,stage):
     import types
     import time
@@ -335,9 +335,11 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     security = (tmp_path/'credential', tmp_path/'spent')
     for path in security:path.write_bytes(b'unchanged private state')
     monkeypatch.setattr(m,'SECURITY_FILES',security)
-    m.STATUS.write_bytes(b'previous status owner')
+    if stage != 'no_status':
+        m.STATUS.write_bytes(b'previous status owner')
+        m.STATUS.chmod(0o750)
     status_config = m.CONFIG.parent/'status.json'
-    status_config.write_bytes(b'previous status config')
+    if stage != 'no_status':status_config.write_bytes(b'previous status config')
     reviewer = m.CONFIG.parent/'status-reviewer-admission.json'
     reviewer.write_bytes(b'previous protected billing evidence')
     original_stat = m.Path.stat
@@ -371,6 +373,7 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,b'proof',b'receipt','ssh-ed25519 fixture'))
     monkeypatch.setattr(m,'dependencies',lambda *a:(calls.append(('dependencies-read',)) or b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n'))
     calls = []
+    ingress_probes = []
     failures = []
     def fake_run(*args,**kwargs):
         calls.append(args)
@@ -398,6 +401,9 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
                 'disableforwarding yes','permittty no']))
         if point == 'ingress':
             name = kwargs['env']['SSH_ORIGINAL_COMMAND']
+            ingress_probes.append((name,len(args)))
+            if stage == 'no_status' and name == 'rosy-status-v1' and len(args) == 5:
+                raise AssertionError('Absent optional status broker must not be probed')
             reason = {'rosy-status-v1':'STATUS', 'rosy-conversation-v1':'CONVERSATION'}.get(name)
             if reason and len(args) == 5:
                 return types.SimpleNamespace(returncode=1,stdout=json.dumps({'state':'HOLD','reason':reason+'_BROKER_NOT_ADMITTED_OR_RESULT_UNKNOWN'}).encode(),stderr=b'')
@@ -456,18 +462,25 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
             assert calls == []
             assert not (m.VERSIONS/('d'*40)).exists()
             assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
-    elif stage is None:
+    elif stage in (None,'no_status'):
         assert m.main(argv) == 0
         assert m.main(argv) == 0
         assert len([c for c in calls if '--require-hashes' in c]) == 1
         cfg = json.loads(m.CONFIG.read_bytes())
         assert cfg['valid_until'] == proof['evaluated_at']+7*86400
+        assert ('rosy-conversation-v1',5) in ingress_probes
+        assert ('unknown',5) in ingress_probes
+        assert ('rosy-status-v1',6) in ingress_probes and ('rosy-conversation-v1',6) in ingress_probes
+        assert (('rosy-status-v1',5) in ingress_probes) == (stage is None)
     else:
         with pytest.raises(RuntimeError,match='injected '+stage):
             m.main(argv)
         assert all(not p.exists() for p in (m.CONFIG,m.BROKER,m.INGRESS,m.KEYS,m.SUDO,m.SSHD))
     assert all(path.read_bytes() == b'unchanged private state' for path in security)
-    assert m.STATUS.read_bytes() == b'previous status owner'
-    assert status_config.read_bytes() == b'previous status config'
+    if stage == 'no_status':
+        assert not m.STATUS.exists() and not status_config.exists()
+    else:
+        assert m.STATUS.read_bytes() == b'previous status owner'
+        assert status_config.read_bytes() == b'previous status config'
     assert reviewer.read_bytes() == b'previous protected billing evidence'
     assert all('execute(' not in ' '.join(c) and '/api/chat' not in ' '.join(c) for c in calls)
