@@ -24,3 +24,27 @@ proof plus tampering remotely; improve the fixed inference instructions; run the
 actual fixed-model cases and independent evaluation; review source before merge.
 Affected owners: AI PC broker/inference, deployment evidence, Fleet broker tests.
 No new command endpoint, model provider, dependency or credential handling.
+
+## Prior-turn context closure
+
+Reuse the existing execution selection and linked Task rows. The conversation
+input carries an immutable `accepted_execution_context` alongside proposal-only
+history; the latter may retain a CHAT response for ordinary dialogue. A native
+selection requires exact successful operation/outcome identity and verified safe
+release, not an ACK, model answer, Discord delivery or terminal event alone.
+Bind the context to the source request, Task, named actor/channel, catalog,
+execution grant expiry, dispatch generation and receipt fingerprint. Validate it
+at staging, model reservation/result/finish, execution acceptance and final Task
+admission. Re-read the bound source Task after a new request replaces the latest
+selection row; never silently substitute a different previous request.
+
+The frozen suite now contains 38 cases, including eight nonempty prior histories:
+accepted navigation, ordinary CHAT/status, unaccepted proposal and UNKNOWN,
+withdrawn, foreign and changed-map references. These inputs are synthetic semantic
+fixtures. Separate Fleet tests obtain native success and safe release through the
+existing Task/event/readback owners before constructing an actual follow-up.
+Exact ordered inputs, all command parameters and the complete inference source
+manifest remain bound to independent model proof. Earlier 31-case evidence does
+not cover this source or schema addition. The optional new field keeps source
+callers compatible; the protected old strict broker requires a fresh pinned
+snapshot and independent 38-case proof before the new Fleet input is enabled.
