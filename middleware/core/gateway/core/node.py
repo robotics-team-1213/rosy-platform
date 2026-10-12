@@ -109,7 +109,7 @@ class RosyCoreNode(Node):
                 overlay=sensor_cfg.get("parameters") or {}, simulation=simulation)
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
-            sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace,
+            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time}, namespace=namespace,
             policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
