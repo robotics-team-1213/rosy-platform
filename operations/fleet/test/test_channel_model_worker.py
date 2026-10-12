@@ -60,6 +60,27 @@ def test_pending_job_keeps_its_original_input_binding(tmp_path):
     assert len(calls)==1 and calls[0].digest==original.digest
 
 
+def test_revocation_while_reserving_prevents_model_entry(tmp_path,monkeypatch):
+    w,jobs,journal,receipt,calls=worker(tmp_path)
+    original=jobs.reserve
+    def reserve(*args):
+        result=original(*args)
+        journal.accounts['op']='viewer'
+        return result
+    monkeypatch.setattr(jobs,'reserve',reserve)
+    asyncio.run(w.step(receipt))
+    assert calls==[] and jobs.peek(receipt['request_id'])['state']=='SUPERSEDED'
+
+
+def test_cancel_records_one_unknown_reply_and_never_replays(tmp_path):
+    w,jobs,journal,receipt,calls=worker(tmp_path,change='cancel')
+    with pytest.raises(asyncio.CancelledError):asyncio.run(w.step(receipt))
+    jobs.recover();asyncio.run(w.step(receipt))
+    assert len(calls)==1
+    assert len(journal.reply_outbox.rows('op'))==1
+    assert jobs.read(receipt['request_id'],'op')['state']=='UNKNOWN'
+
+
 @pytest.mark.parametrize('change',['unadmitted','owner','snapshot','cancel'])
 def test_admission_revocation_changed_observation_and_cancel_do_not_replay(tmp_path,change):
     w,jobs,journal,receipt,calls=worker(tmp_path,change=change)
