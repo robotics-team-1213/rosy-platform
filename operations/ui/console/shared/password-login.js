@@ -111,7 +111,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         }
         if (link) link.textContent = '로그인';
         host.hidden = false;
-        part('principal').textContent = `${session.principal_id} · ${session.role}`;
+        part('principal').textContent = '';
         part('logout').textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
         part('logout').title = cookie ? '이 브라우저의 현장 로그인 종료' : '서버 토큰은 폐기하지 않습니다';
         part('logout').disabled = false;
