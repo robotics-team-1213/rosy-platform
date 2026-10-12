@@ -17,7 +17,7 @@ from test_incident_case_worker import make_incident_worker
 
 
 @pytest.mark.parametrize('change', ['none', 'hold', 'human', 'client', 'unsupported', 'disconnect', 'cancel',
-    'crosswalk', 'missing_crosswalk', 'rear', 'fact', 'budget', 'retired'])
+    'crosswalk', 'missing_crosswalk', 'rear', 'fact', 'budget', 'retired', 'peer_unknown', 'map_lost'])
 def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_path, change):
     now, store, log, scope, state, proof, _ = opened(tmp_path, generation='core:1:stamp')
     state.apply('line-back', signed(proof, 0))
@@ -28,7 +28,8 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
     row = dict(robot_id=scope.subject_id, online=True, state=dict(seq=1, timestamp='stamp',
         line_follow={'crosswalk': None, 'stuck': dict(recovery_context(), stuck_id=scope.case_id)}))
     resolver.step(now[0], [row])
-    async def snapshot(): return {'robots': [row]}
+    peers = []
+    async def snapshot(): return {'robots': [row, *peers]}
     loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: clients, clock=lambda: now[0])
     loop.operating_state, loop.operating_grant = state, 'line-back'
     (tmp_path / 'worker').mkdir()
@@ -48,6 +49,8 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
             if change == 'fact': row['ai_facts'] = [{'kind': 'person'}]
             if change == 'budget': resolver._chains[scope.subject_id].rule_answers = resolver.config.rule_budget
             if change == 'retired': resolver._chains[scope.subject_id].retired.add('ai')
+            if change == 'peer_unknown': peers.append({'robot_id': 'peer', 'online': True, 'state': {}})
+            if change == 'map_lost': row['map_pose'] = {'state': 'LOST', 'sourced': True, 'age_s': .1}
             return httpx.Response(200, json={'stuck': {'conditional_back': change != 'unsupported'}})
         assert state.submission(scope.subject_id, scope.case_id)['state'] == 'SUBMITTING'
         if change == 'disconnect': raise httpx.ReadError('source fixture disconnect')
