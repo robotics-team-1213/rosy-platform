@@ -15,6 +15,22 @@ import os
 
 import yaml
 
+
+def observer_steering_law(path):
+    """Forward four nonsecret law parameters; CORE's private overlay stays with CORE."""
+    from core_common.config import load_config
+    previous = os.environ.get('ROSY_CONFIG')
+    os.environ['ROSY_CONFIG'] = str(path)
+    try:
+        raw = load_config(fleet_link=False)['line_follow']
+        return {'core_'+key: float(raw[key]) for key in
+                ('cruise_speed', 'max_linear', 'steering_gain', 'min_confidence')}
+    finally:
+        if previous is None:
+            os.environ.pop('ROSY_CONFIG', None)
+        else:
+            os.environ['ROSY_CONFIG'] = previous
+
 #: 시뮬 로봇의 API 토큰. core_common 의 개발 토큰(`config/rosy_dev_auth.yaml`)이다. D-193 7 이후
 #: 기본값에는 토큰이 없으므로 core 노드는 `ROSY_DEV_AUTH=1` 로 띄운다.
 SIM_OPERATOR_TOKEN = "rosy-dev-operator"
