@@ -729,6 +729,27 @@ def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monke
     assert status.linear == pytest.approx(.0322 * scale)
 
 
+def test_core_curve_scope_accepts_common_slowdown_and_does_not_reuse_the_previous_tick(monkeypatch):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_crosswalk_gate", lambda now, decision: replace(
+        decision, linear=decision.linear * .5, angular=decision.angular * .5))
+    first, _ = _step(m, [], error=-.3)
+    second, _ = _step(m, [], error=.2, t=T + .1)
+    assert (first.linear, first.angular) == pytest.approx((.0161, .12))
+    assert (second.linear, second.angular) == pytest.approx((.0174, -.08))
+    assert m._checked_line_curve is None
+
+
+@pytest.mark.parametrize("confidence", [.35, .350000001])
+def test_core_curve_scope_never_turns_zero_or_tiny_intent_into_cruise(confidence):
+    m = _core_curve_manager()
+    decision, _ = _step(m, [], error=0., confidence=confidence)
+    assert decision.linear == pytest.approx(.04 * (confidence - .35) / .65, abs=1e-15)
+    assert decision.angular == 0.
+
+
 def test_an_unreadable_motion_envelope_fails_closed():
     m = _manager()
 
