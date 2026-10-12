@@ -33,12 +33,12 @@ def test_candidate_import_keeps_actual_class_identity():
 def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
-def opened(tmp_path):
+def opened(tmp_path, *, generation='g1'):
     from fleet.incidents.automation.operating.state import OperationalState
     now = [101.0]
     store = IncidentCaseStore(tmp_path / 'fleet.db', clock=lambda: now[0])
     log = LineStuckAnswerLog(store.path)
-    p = replace(recovery_problem(), observed_at=100)
+    p = replace(recovery_problem(), observed_at=100, generation=generation)
     selected = profile(calibration_revision='cal-1')
     bound = bind_profile(p, selected, adapter(), required_modalities=('text',))
     checked = judgment(p, bound, recovery_payload(p))
