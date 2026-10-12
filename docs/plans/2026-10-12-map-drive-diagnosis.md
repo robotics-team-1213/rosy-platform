@@ -113,8 +113,9 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
 실행한다. 첫 로봇은 OFF를 유지한다. CORE 소스 commit `1e2dc23557`과 새 helper
 commit `8226c122f8`의 조합을 명시하며 전체 최신 소스 실행이라고 부르지 않는다.
 private SIM profile에서 기존 typed `line/route_context`를 활성화하되 실제 positive seq와
-CORE cue는 별도 확인한다. 최대 5 sim s·누적 이동 0.15m·wall 8s 중 먼저 닿는 한계에서
-취소하고 lease 해제·OFF readback·실제 연속 정지를 확인한다. 준비 코드는 독립 SOURCE
+CORE cue는 별도 확인한다. 5 sim s·누적 이동 0.15m·wall 8s 중 먼저 닿는 문턱에서
+OFF와 취소를 요청한다. 정지 중 이동을 포함한 총거리, lease 해제·OFF readback·실제
+연속 정지를 따로 확인한다. 준비 코드는 독립 SOURCE
 APPROVE이며 자원 gate가 거절한 시도는 실행·주행 결과에 포함하지 않는다.
 
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.
