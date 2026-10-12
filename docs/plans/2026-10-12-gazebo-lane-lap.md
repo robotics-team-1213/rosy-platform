@@ -75,4 +75,6 @@ map/run/source/domain/partition/frame 결속과 epoch·freshness를 검증하며
 판단은 같은 위치 provider를 사용하고 camera ingest·operator pin·teach·formation에는
 SIM 위치를 자동 확장하지 않는다. 새 공개 pose 입력 API나 주기 pin, TTL 확대는 사용하지 않는다.
 
-지도 완주와 새 후보의 실물 수용은 미확인이다.
+SIM 위치 후보 `34b7856198`은 독립 SOURCE APPROVE와 정상 원격 115 PASS/NEW 0이다.
+최신 main과 조향법칙·native handover·SIM 위치 후보를 통합한 전체 소스로 새 빌드와 구간 시험을 진행한다.
+사용자는 Gazebo부터 진행하고 실물 감독은 추후 확정하기로 했다. 지도 완주와 새 후보의 실물 수용은 미확인이다.
