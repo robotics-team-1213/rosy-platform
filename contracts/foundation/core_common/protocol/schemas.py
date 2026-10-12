@@ -896,6 +896,7 @@ class BatteryStatus(BaseModel):
     shutdown_armed: bool = False
     filtered_voltage: Optional[float] = None
     charging: bool = False      # 확인된 충전 — DEEP 셧다운을 억제한다 (D-27)
+    shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
 class DockState(str, enum.Enum):

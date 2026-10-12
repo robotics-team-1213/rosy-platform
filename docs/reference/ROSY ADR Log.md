@@ -677,6 +677,7 @@
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY | Accepted |
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
 | D-692 | Native Isaac 카메라 경계 관측 출처 | Accepted |
