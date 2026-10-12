@@ -321,6 +321,8 @@ class FormationSession:
                     f"cannot resume: {follower.robot_id} is no longer following; "
                     "reform to re-arm or stop")
         await self._verify_resumable(seq)
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(path='/api/fleet/formation/resume')
         self.relay.resume()
         self.state = SessionState.RUNNING
         self.reason = None

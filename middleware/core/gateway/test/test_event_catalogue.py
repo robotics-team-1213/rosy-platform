@@ -322,7 +322,7 @@ def fingerprint(node: ast.AST) -> str:
 #: 곧 "이 함수를 다시 읽었다"는 서명이다 — 그러라고 있는 목록이다.
 PINNED_RELAYS = {
     ("services/core_features/docking/manager.py", "DockingManager._emit"):
-        "15ae9dd72fa20f0b",
+        "8ed6498003123b06",
     ("services/core_features/safety/manager.py", "SafetyManager._emit"):
         "e0aca301e45601ff",
     ("services/core_features/power/battery.py", "BatteryMonitor._emit_all"):

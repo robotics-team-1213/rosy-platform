@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
 - 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)
 - 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분
 - 2026-10-11 · uncommitted · fix(core): fresh lane boundary evidence (D-623)
 - 2026-10-10 · uncommitted · fix(core): bounded lane search
-- 2026-10-10 · uncommitted · feat: robot situation inquiry

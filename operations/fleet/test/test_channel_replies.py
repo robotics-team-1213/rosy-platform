@@ -144,5 +144,9 @@ def test_replies_require_explicit_boolean_opt_in():
                   transport_key="test-key-" * 5, users={USER: "op"})
     assert ChannelConfig(**config).replies_enabled is False
     assert ChannelConfig(**config, replies_enabled=True).replies_enabled is True
+    assert ChannelConfig(**config).hourly_health_enabled is False
+    assert ChannelConfig(**config, hourly_health_enabled=True).hourly_health_enabled is True
     with pytest.raises(ValidationError):
         ChannelConfig(**config, replies_enabled="true")
+    with pytest.raises(ValidationError):
+        ChannelConfig(**config, hourly_health_enabled="true")
