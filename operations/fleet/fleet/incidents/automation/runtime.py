@@ -5,6 +5,7 @@ import time
 from .store import IncidentCaseStore
 from .observation import IncidentObservationPort
 from .worker import IncidentCaseWorker
+from .dispatcher import IncidentProfileDispatcher
 
 
 def install_incident_runtime(app, config):
@@ -17,14 +18,24 @@ def install_incident_runtime(app, config):
     if loop.incident_worker is not None:
         raise ValueError('EXISTING_INCIDENT_JOURNAL_AND_EMPTY_WORKER_REQUIRED')
     clock = config.get('clock', time.time)
-    config = {**config, 'baseline': config.get('baseline', loop.rule_baseline)}
+    variants = config.get('profile_workers')
+    if variants is not None:
+        if (set(config) - {'profile_workers', 'clock'} or type(variants) not in (tuple, list)
+                or not 1 <= len(variants) <= 8 or any(type(v) is not dict or 'clock' in v
+                or v.get('routed', True) is not True for v in variants)):
+            raise ValueError('EXPLICIT_PROFILE_WORKER_CONFIGS_REQUIRED')
+        configs = tuple({**v, 'clock': clock, 'routed': True} for v in variants)
+    else: configs = (config,)
     def human_owned(robot_id, case_id):
         return log.handoff.get(robot_id, case_id) is not None or loop._resolver.is_claimed(robot_id, case_id)
     async def final_handoff(scope, summary):
         return await asyncio.to_thread(log.notifications.enqueue_final, scope, summary, now=clock())
-    worker = IncidentCaseWorker(IncidentCaseStore(log.path, clock=clock),
-        IncidentObservationPort(loop._board, human_owned=human_owned, clock=clock), loop._board,
-        human_owned=human_owned, final_handoff=final_handoff, **config)
+    store = IncidentCaseStore(log.path, clock=clock)
+    observation = IncidentObservationPort(loop._board, human_owned=human_owned, clock=clock)
+    workers = tuple(IncidentCaseWorker(store, observation, loop._board,
+        human_owned=human_owned, final_handoff=final_handoff,
+        **{**v, 'baseline': v.get('baseline', loop.rule_baseline)}) for v in configs)
+    worker = IncidentProfileDispatcher(workers) if variants is not None else workers[0]
     log.notifications.set_automation(worker.prepare_receipt)
     loop.incident_worker = worker
     return worker
