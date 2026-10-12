@@ -5,10 +5,38 @@ import math
 from pathlib import Path
 import re
 import sys
+from dataclasses import asdict
 
-from learning.evaluation.decision.operational_evidence import compile_evidence
-from learning.evaluation.decision.operational_sources import digest, verify_attestation
+from learning.evaluation.decision.operational_evidence import BUNDLE, compile_evidence
+from learning.evaluation.decision.operational_sources import digest, encoded, verify_attestation
 from learning.evaluation.decision.operational_comparison import fields, sha, text, timestamp
+
+
+def compile_original_evidence(bundle, *, trusted, now, originals=None):
+    """ROOT composition of existing codecs; recomputation is diagnostic, never admission."""
+    from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
+    from rosy.decision.deliberation.calibration import evaluate_calibration
+    fields(bundle, BUNDLE); encoded(bundle); timestamp(now)
+    profiles = incident_profiles(tuple(ModelProfile(**p) for p in bundle['profiles']))
+    selected = ModelProfile(**bundle['profile'])
+    if selected not in profiles or selected.calibration_revision is None:
+        raise ValueError('OPERATING_FULL_PROFILE_NOT_SELECTED')
+    calibration = None
+    if bundle['calibration_input'] is not None:
+        fields(bundle['calibration_input'], ('fit', 'evaluation', 'training', 'reviewed_profile'))
+        calibration = evaluate_calibration(**bundle['calibration_input'])
+        report = calibration.report
+        if (report['full_profile_sha256'] != digest(asdict(selected)) or report['domain'] != 'line_follow'
+                or report['model_revision'] != selected.model_revision
+                or report['calibration_revision'] != selected.calibration_revision):
+            raise ValueError('OPERATING_CALIBRATION_OR_PROFILE_DIFFERS')
+    diagnostic = dict(bundle_sha256=digest(bundle), profile_set_sha256=digest([asdict(p) for p in profiles]),
+        full_profile_sha256=digest(asdict(selected)), domains=list(selected.domains),
+        calibration_sha256=calibration.digest if calibration else None,
+        calibration_state=calibration.report['state'] if calibration else None)
+    result = compile_evidence(bundle, trusted=trusted, now=now, originals=originals, profile_calibration=diagnostic)
+    result['profile_calibration_scope'] = 'root_recomputed_profile_and_calibration_only'
+    return result
 
 
 def load_frozen_json(source, *, expected_sha256):
@@ -148,7 +176,7 @@ class OperatingEvidenceOwner:
     def __call__(self, grant_id):
         if grant_id != self.grant_id: raise ValueError('UNREGISTERED_OPERATING_GRANT')
         bundle = load_frozen_json(self.source, expected_sha256=self.expected_sha256)
-        report = compile_evidence(bundle, trusted=self.trusted(), now=self.clock(), originals=self.originals(bundle))
+        report = compile_original_evidence(bundle, trusted=self.trusted(), now=self.clock(), originals=self.originals(bundle))
         if report['state'] != 'PASS_FOR_OPERATION': raise ValueError('ORIGINAL_OPERATING_EVIDENCE_HOLD')
         installed, approved = self.installation(), self.calibrations()
         profile = bundle['profile']
