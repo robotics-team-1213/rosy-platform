@@ -954,3 +954,9 @@
 - 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 80 Git blob 동일, 독립 Safety 승인. 초기 원격 CORE 4498 passed와 경로 guard 실패 3건; 수정 후 설치/guard 117 passed, 0 NEW.
 - gate 변화: 배포·ARM64·DEVICE·FIELD gate 변경 없음. 최신 main 통합 시험 별도.
 - 결정: D-649
+
+## 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
+
+- 변경: navigation·docking·swarm·command owner가 각자의 기존 native lock을 쓰는 capture_native_operation을 제공한다. 동일 ledger helper를 쓰며 실행·취소·readback 상태 전이는 바꾸지 않는다.
+- 증거: 실제 네 owner 잠금을 점유한 정지 latch 시험과 정지 후 잠금 경합 시험의 RED 5건 후 원격 safety/native owner·구조·설치 패키지 exit 0/NEW 0. navigation 600줄, swarm 단위 949줄, docking 788줄로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. CORE 단일 writer와 현장 수용 gate는 그대로다.
