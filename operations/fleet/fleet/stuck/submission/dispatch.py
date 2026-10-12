@@ -8,7 +8,7 @@ from .owned import owned
 from fleet.swarm.transport import HttpRobotClient
 from fleet.incidents.automation.recovery_candidates import observed_recovery
 from fleet.server.console_routes import transport_failure
-from .. import pipeline
+from .. import closed_loop, pipeline
 from ..resolver import Answer, Escalate, Hold
 from fleet.swarm.transport import RobotApiError
 PRINCIPAL_ID = "fleet-resolver"
@@ -85,7 +85,7 @@ async def model_answer(self, scope, attempt_id, problem, worker):
         if claimed: await owned(operating.finish, scope, state=terminal, reply=reply)
     return bool(claimed) and terminal == 'ACK'
 
-async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> None:
+async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[dict] = None) -> dict | None:
     row = await self._admission_row(answer.robot_id)
     if self._resolver.is_claimed(answer.robot_id, answer.stuck_id):
         return
