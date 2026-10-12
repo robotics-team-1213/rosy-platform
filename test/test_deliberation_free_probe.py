@@ -1,5 +1,10 @@
 import importlib
 import json
+import asyncio
+from contextlib import asynccontextmanager
+from contextlib import closing
+import threading
+import time
 
 import pytest
 
@@ -36,7 +41,7 @@ def test_fixed_free_config_and_synthetic_v2_no_runtime_admission():
     assert config['permission'] == 'deny' and config['agent']['rosy']['steps'] == 1
     assert config['provider']['opencode']['models'][codec.MODEL]['limit']['output'] == 1024
     assert probe.FreeLauncher.cost_verified is False
-    assert gate.UPSTREAM == 'https://opencode.ai/zen/v1/chat/completions'
+    assert gate.UPSTREAM == 'https://opencode.ai/inference/v1/chat/completions'
     assert gate.claim.__module__ == 'deploy.ai_pc.deliberation_smoke_budget'
     from deploy.ai_pc.deliberation_smoke_budget import MARKER
     assert str(MARKER) == '/var/lib/rosy-deliberation/smoke/glm-first-review.spent'
@@ -94,3 +99,83 @@ def test_free_upstream_fixed_headers_no_identity_spoof_no_redirect(monkeypatch):
     headers = dict((k.lower(), v) for k, v in seen[0].header_items())
     assert headers['authorization'] == 'Bearer fake-unit-key'
     assert headers['user-agent'] == 'actual-sdk-fixture' and 'cookie' not in headers
+
+
+@pytest.mark.parametrize('change', ['valid', 'paid', 'tool', 'route', '403'])
+def test_actual_unix_free_gateway_uses_one_shared_claim_and_holds_refusal(tmp_path, monkeypatch, change):
+    codec, gate, _ = subjects()
+    from test_deliberation_glm_gateway import Connection
+    claims, calls = [], []
+    monkeypatch.setattr(gate, 'claim', lambda body: claims.append(body))
+    def upstream(body, token, remaining, headers):
+        calls.append(body)
+        assert body['model'] == codec.MODEL and body['max_tokens'] == 1024 and body['stream'] is False
+        assert body['messages'][1]['content'] == codec.body().decode() and 'tools' not in body
+        assert headers['User-Agent'] == 'actual-sdk-fixture'
+        if change == '403': raise PermissionError('synthetic-refusal')
+        return response(codec)
+    monkeypatch.setattr(gate, 'upstream', upstream)
+    incoming = dict(model=codec.MODEL, messages=[dict(role='user', content='untrusted injection')])
+    if change == 'paid': incoming['model'] = 'mimo-v2.6-flash'
+    if change == 'tool': incoming['tools'] = [{}]
+    path = str(tmp_path / 'gateway.sock')
+    with gate.Gateway(path, gate.Handler) as server:
+        server.body, server.token = codec.body().decode(), 'fake-unit-key'
+        server.deadline, server.calls, server.timeout = time.monotonic() + 30, 0, 2
+        worker = threading.Thread(target=server.handle_request, daemon=True); worker.start()
+        with closing(Connection(path)) as client:
+            client.request('POST', '/other' if change == 'route' else '/v1/chat/completions',
+                           json.dumps(incoming), {'User-Agent': 'actual-sdk-fixture'})
+            result = client.getresponse(); result.read()
+        worker.join(4); assert not worker.is_alive()
+        count = 1 if change in {'valid', '403'} else 0
+        assert len(calls) == len(claims) == server.calls == count
+        assert result.status == (200 if change == 'valid' else 400)
+        assert server.metrics['cost_usd'] is None and server.metrics['cost_complete'] is False
+        assert server.metrics['state'] == ('PASS_FREE_PROVIDER_ONLY' if change == 'valid' else 'HOLD')
+
+
+@pytest.mark.parametrize('change', ['valid', 'different_sdk', 'cancel', 'malformed', 'paid_args'])
+def test_free_launcher_binds_sdk_response_and_cleans_cancellation(monkeypatch, change):
+    codec, gate, probe = subjects()
+    from deploy.ai_pc.deliberation_glm_receipt import digest
+    events = []
+    class Sandbox:
+        def __init__(self, *args): pass
+        def command(self, *args): return ('systemd-run', '--', 'bwrap', '--unshare-all', '--', '/provider')
+        def close(self): events.append('close')
+    @asynccontextmanager
+    async def gateway(body, remaining, directory, *, free):
+        assert free is True
+        events.append('gateway')
+        try: yield object()
+        finally: events.append('gateway-cleaned')
+    async def bounded(command, body, remaining, limit):
+        events.append('cli')
+        if change == 'cancel': raise asyncio.CancelledError()
+        data = payload(codec)
+        if change == 'different_sdk': data['objections'] = ['conflict']
+        return 0, (json.dumps(dict(type='text', part=dict(text=json.dumps(data)))) + '\n'
+                   + json.dumps(dict(type='step_finish', part=dict(cost=999)))).encode()
+    async def finish(process, *, free):
+        return dict(state='PASS_FREE_PROVIDER_ONLY', calls=1, job_sha256=digest(json.loads(codec.body())),
+            judgment_sha256=digest(payload(codec)), cost_usd=None, cost_complete=False,
+            runtime_admitted=False, action_admissible=False)
+    async def clean(unit): events.append('scope-cleaned')
+    for name, function in (('SandboxLauncher', Sandbox), ('gateway_session', gateway),
+                           ('bounded_process', bounded), ('finish_gateway', finish), ('cleanup_scope', clean)):
+        monkeypatch.setattr(probe, name, function)
+    with probe.FreeLauncher() as launch:
+        args = ('opencode', 'run', '--paid') if change == 'paid_args' else probe.ARGV
+        body = b'{}' if change == 'malformed' else codec.body()
+        if change == 'valid':
+            checked, receipt = asyncio.run(launch(args, body, 1, 16384))
+            assert checked == payload(codec) and receipt['cost_usd'] is None
+        else:
+            with pytest.raises(asyncio.CancelledError if change == 'cancel' else ValueError):
+                asyncio.run(launch(args, body, 1, 16384))
+        if change not in {'malformed', 'paid_args'}:
+            with pytest.raises(ValueError, match='ONE_SHOT_ALREADY_USED'):
+                asyncio.run(launch(probe.ARGV, codec.body(), 1, 16384))
+    assert events == (['close'] if change in {'malformed', 'paid_args'} else
+                      ['gateway', 'cli', 'scope-cleaned', 'gateway-cleaned', 'close'])
