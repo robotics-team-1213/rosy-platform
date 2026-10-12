@@ -40,3 +40,13 @@
 - Update the evaluation README with the closed schema and separate SOURCE versus actual acceptance.
 - Record exact terminal remote evidence and remaining data/producer/runtime work. Actual field labels, reviewer/source trust, full collection and deployment cannot be replaced by fixtures.
 - Give root agent the committed branch, changed paths, test logs and integration caveats. No landing/push; goal remains incomplete.
+
+## SOURCE readiness 하위 checkpoint — US-006 전체 미완료
+
+현재 구현은 authenticated review declaration 진단이다. window의 stream payload는 generic dict이며 실제 collector/actor-credit/clock calibration/cost/result/recurrence 상관관계를 수용하지 않는다. 운영 limits는 형식·서명 검증까지이고 측정값 비교는 없다. 지원하는 기존 calibration/cohort/export/inventory 원본을 재검증하고 UNKNOWN·미지원 domain·빈 원본 자료를 HOLD/null로 보존한다. raw/capture loader는 기존 원본 검증기를 직접 호출하며 caller-supplied fake raw pass report를 받지 않는다.
+
+별도 설치 getter는 pinned manifest·실제 artifact bytes·signed owner process/runtime 선언에서 설치 hash를 계산한다. runtime scope는 signed_owner_declaration_only이며 실제 OS probe나 FIELD 증거가 아니다. compiler는 explicit unsupported 때문에 항상 HOLD이므로 OperatingEvidenceOwner의 installation/calibration/binding branch는 준비 코드이고 현재 evidence 호출에서 실행되지 않는다. ROOT factory 기본 off와 기존 comparison HOLD는 그대로다. importer는 flags-only callback을 거절하고 폐기는 기존 DB stored-binding 검증에 맡긴다.
+
+RED checkpoint들은 새 SOURCE 경계를 확인한 것이며 실측 한계·운영 승인·서명·OS probe·실제 모델·로봇·현장 정답을 만들지 않았다. 최신 code regression `7e212f920`은 strict Model PC의 228 tests, terminal exit 0, known-failures NEW 0이다. 로그는 기존 X: 세션 `logs/us006-source-regression/run-1.txt`. 관련 calibration/cohort/원장과 P6/import 경계를 포함한다. 후속 문서/정리 커밋에서 최종 focused 회귀를 다시 기록한다.
+
+통합 전 독립 ROOT 검토가 필요하다. D-734는 Proposed를 유지하며 US-006 전체, 실제 운영 producer·collector·actor/source/cost/result/recurrence·OS probe admission과 door/arm은 미완료다. 다른 세션 D-732/D-733 예약은 임의 gap 처리하지 않고 ROOT가 승인된 main 통합에서 결합한다. 이 worktree는 push/landing하지 않는다.

@@ -43,3 +43,15 @@ known_marginal_micros는 실제 청구가 아닌 원장에 기록된 한계 비�
 현재 규칙 생산 기준, 독립 정답과 수용 한계, 정상 명령·재발의 완전한 추적 창, 실제 청구·운영 admission 근거가 부족하다. 단독 모델 생산은 source에 연결했지만 실제 Qwen 품질·현장 수용은 별도다. caller가 명시한 cohort·전략 hash도 데이터 출처 인증이 아니다. 따라서 누락 항목과 null을 남긴다. 두 역할 export를 규칙·단일 모델 자료로 가장하지 않는다. 다음 구현은 이 생산 경로와 출처 수용을 채우고 독립 비교 한계를 적용하는 것이다.
 
 시험: `test/learning/decision/test_operational_comparison.py`와 기존 architecture 소유자·의존·크기 검사. pytest는 커밋된 HEAD를 적격 원격 호스트에 전달해 실행한다.
+
+## D-734 SOURCE 진단 checkpoint
+
+`operational_evidence.compile_evidence`는 `rosy.incident.operational_evidence/1`의 profiles/profile/calibration_input/cohort/exports/inventories/inventory_digests/truth/limits/windows/review만 받는다. 입력 PASS/report/binding/field_accepted/truth_admitted는 거절한다. 기존 보정 계산과 cohort/export/inventory를 다시 검사하고, truth/limits/review/window 선언의 별도 trusted principal·kind·HMAC·기간을 확인한다. 실제 개인 이름이나 source hash만으로 검수 상태를 만들지 않는다.
+
+truth 행은 id/subject_id/case_id/session_id/recording_id/session_sha256/recording_sha256/start/end/expected/actor/resolved/recurrence/result_source_sha256/recurrence_source_sha256/latency_source_sha256/latency_ms와 missing_evidence_error/risk_omission/wrong_case/unnecessary_intervention을 가진다. 알려지지 않은 결과·재발·지연은 null이며 case 분모에서 지우지 않는다. 출력 metrics_scope는 authenticated_review_declarations_only다. 이 선언의 hash·서명 검사가 참조한 실제 원본과 물리 truth를 수용하지 않는다. 운영 limits의 형식·서명은 검사하지만 현재 측정값과 비교하지 않는다.
+
+window 진단은 observation/model/command/submission/result/recurrence/invoice stream의 heartbeat run/sequence/receive·monotonic clock/boundary와 event ID·시각·case/generation/source hash·payload dict를 확인한다. payload 내부 의미, 전체 collector, model actor 기여, clock calibration과 실제 비용/결과/재발 상관관계는 미지원이다. 빈 heartbeat event를 실제 0건으로 수용하지 않는다.
+
+ROOT `tools.incident_operating.load_original_sources`는 caller가 별도로 고정한 episode root/dataset revision/observation DB SHA를 받아 기존 verify_raw와 capture_window를 실행한다. raw pass dict를 대신 넣지 못하며 raw_sidecar_and_retained_observations_only scope를 보존한다. 별도 installation_getter는 pinned manifest와 실제 artifact bytes, signed owner runtime/process 선언을 확인하고 manifest+process 설치 hash를 독립 계산한다. signed_owner_declaration_only이며 OS probe/활성화/physical truth가 아니다.
+
+현재 compiler 출력은 unsupported 목록으로 항상 HOLD다. OperatingEvidenceOwner의 운영 binding branch는 이 HOLD 때문에 도달하지 않으며 installation/calibration getter를 매 evidence 호출에서 실행하는 연결이 아니다. 승인 importer는 flags-only callback을 거절하고 현재 기존 DB apply를 재사용하도록 준비했으며 폐기는 저장된 binding의 기존 검증에 맡긴다. 새 ROOT 설정·서명·운영 활성화는 없다. 이 checkpoint는 US-006 전체 producer 완료가 아니다. 전체 collector·actor credit·clock calibration·원본 invoice·실제 결과/재발·OS probe admission·door/arm을 다음 source/외부 수용 작업으로 남긴다.

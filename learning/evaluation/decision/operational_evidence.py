@@ -1,10 +1,9 @@
 """Recompute frozen operational originals; no signer, provider or Fleet writer."""
 from dataclasses import asdict
-import json
 
 from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
 from rosy.decision.deliberation.calibration import evaluate_calibration
-from .operational_comparison import compare_with_inventory, fields, sha, timestamp
+from .operational_comparison import compare_with_inventory, fields, timestamp
 from .operational_sources import digest, encoded, verify_attestation, validate_window
 from .operational_truth import measure_truth
 
