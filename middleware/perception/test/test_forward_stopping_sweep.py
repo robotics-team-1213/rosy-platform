@@ -59,20 +59,25 @@ def test_old_heading_rotates_future_braking_path_not_only_current_body():
 
 def test_intermediate_contact_when_both_endpoint_footprints_clear():
     # A larger applied profile exercises the continuous-cover math, not runtime admission.
-    point = (math.sin(.6), 1. - math.cos(.6))
+    curvature = .2
+    point = (math.sin(.6 * curvature) / curvature,
+             (1. - math.cos(.6 * curvature)) / curvature)
     body = NOMINAL_BODY
     hull = sweep._hull(sweep._points(((body.front_x_m, body.half_width_m),
         (body.front_x_m, -body.half_width_m), (body.rear_x_m, -body.half_width_m),
         (body.rear_x_m, body.half_width_m))))
     reach = max(np.linalg.norm(vertex) for vertex in hull)
-    pad = body.sweep_pad_m + (1. + reach) * (body.latency_s + .01)
+    travel = 1. + body.margin_m
+    pad = body.sweep_pad_m + (1. + curvature * (reach + travel)) * (body.latency_s + .01)
+    pad += (1. + curvature * reach) * travel / 128.
     for distance in (0., 1. + body.margin_m):
-        angle = distance
+        angle = distance * curvature
         rotation = np.array(((math.cos(angle), math.sin(angle)),
                              (-math.sin(angle), math.cos(angle))))
-        polygon = hull @ rotation + (math.sin(angle), 1. - math.cos(angle))
+        polygon = hull @ rotation + (math.sin(angle) / curvature,
+                                     (1. - math.cos(angle)) / curvature)
         assert sweep._clearance(sweep._points((point, *FAR)), polygon) > pad
-    assert judge((point, *FAR), linear=1., angular=1., limits=(1., 1.),
+    assert judge((point, *FAR), linear=1., angular=curvature, limits=(1., 1.),
                  previous_limits=(0., 0.), scan_age=0., source_age=0.) <= 0.
 
 
