@@ -72,3 +72,11 @@ a process restart between Task safe release and channel projection cannot replay
 the original Task. Exact installed closure passed 4 cases at db0037481e. Full Fleet
 regression is running against 0a4f7d41ce; this paragraph records no terminal verdict
 for that still-running job. Registry values remain unchanged pending precheck.
+
+Independent structural precheck: ralph_native_verify approved committed 041d567e60
+on 2026-10-12: register only `fleet/fleet/server/channel/execution/outcomes` at332.
+The reviewer independently measured exact 0a4 archived source at outcomes327,
+execution563/channel1453/conversation300/health248/Fleet55249/task_store1043,
+and confirmed the subsequent reconcile-only +5 yields332. The checked-in registry
+now adds this one real child; all historical parent/file/hard-tier baselines,
+allowances, exclusions and previous split obligations remain unchanged.
