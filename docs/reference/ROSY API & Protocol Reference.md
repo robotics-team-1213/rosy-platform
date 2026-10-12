@@ -23,7 +23,7 @@
 - `nav2`: live false, `open_floor`, give `x`·`y`·`yaw`, note `not_this_runtime`.
 - `grid`: live false, `occupancy`, give `goal`, note `not_this_runtime`.
 
-trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_cost`(차로 id → 0 이상 유한 초, 최대 32)는 그 계획에 들어간다. 없는 차로 id는 422 `TRIP_UNKNOWN_EDGE`와 `detail.edge`다. 재계획은 이 차단을 교통 차단과 합치고 비용을 유지한다. 빈 값은 오늘과 같은 경로다. `context`는 실행 plan 안에 넣지 않고 plan 옆에 기록한다.
+trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_cost`(차로 id → 0 이상 유한 초, 최대 32)는 그 계획에 들어간다. 없는 차로 id는 422 `TRIP_UNKNOWN_EDGE`와 `detail.edge`다. 막힌 차로 옆에 다른 차로가 있으면 그 경로를 반환하고, 남은 차로가 없으면 기존 422 `TRIP_NO_ROUTE`다. 재계획은 이 차단을 교통 차단과 합치고 비용을 유지한다. 빈 값은 오늘과 같은 경로다. `context`는 실행 plan 안에 넣지 않고 plan 옆에 기록한다.
 
 `/route`의 다음 점은 보통 0.20 m다. 그 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄이며, 0.10 m 장치 목표 공보다는 길다. 남은 거리가 0.12 m 이하면 끝을 유지한다. 링의 0.20 m 현은 차체 여유 안이라 줄이지 않는다. 이 단축은 점 목표만 해당하고 차로 운행의 선 추종이나 링 주행 수용을 바꾸지 않는다. `holds`는 `complete`, `step_m`, `chord_m`, `body_clear_m`, `body_inside`, `s_m`이다. envelope 1.0과 CORE API는 유지한다.
 
