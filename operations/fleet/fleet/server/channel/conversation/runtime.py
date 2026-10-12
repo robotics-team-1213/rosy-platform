@@ -5,6 +5,7 @@ import json
 import logging
 from pathlib import Path
 import time
+from typing import Literal
 
 from pydantic import Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
@@ -18,6 +19,7 @@ from ..model_runtime import fresh_snapshot
 
 class ConversationConfig(Strict):
     host: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$')
+    ssh_port: Literal[22, 2222] = 22
     key_file: str = Field(pattern=r'^/run/rosy-deliberation/broker.key$')
     known_hosts_file: str = Field(pattern=r'^/run/rosy-deliberation/known_hosts$')
     profile: Profile
