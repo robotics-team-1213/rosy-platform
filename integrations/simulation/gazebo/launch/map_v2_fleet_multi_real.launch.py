@@ -50,6 +50,7 @@ def _observers(context, *, control_share):
                  parameters=[os.path.join(control_share, 'config', 'line_follow.yaml'), {
                      'use_sim_time': True, 'camera_lane_mode': 'keep', 'paint_source': 'learned',
                      'learned_paint_target': 'drivable', 'learned_paint_every_n': 1,
+                     'crosswalk_uncertainty_enabled': True,
                      'learned_lane_pointer': ParameterValue(LaunchConfiguration('learned_lane_pointer'), value_type=str),
                      'require_camera_controls_stable': False,
                      'camera_ground_source': 'GAZEBO', 'allow_simulation_ground': True,
