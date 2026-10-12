@@ -4,7 +4,7 @@
 
 ## 배포 후보와 검사
 
-배포 소스는 `7a03bf1bf08e74340220f6e88ce3766f1279f5f3`이다. 움직이는 공유 main과 별개로 `uiux/header-release-candidate`의 깨끗한 등록 worktree에서 검사·푸시했다. 이후 동료의 커밋은 설치본과 혼동하지 않는다.
+배포 source commit `7a03bf1bf08e74340220f6e88ce3766f1279f5f3`를 움직이는 공유 main과 별개로 `uiux/header-release-candidate`의 깨끗한 등록 worktree에서 검사·푸시했다. 이후 동료의 커밋은 설치본과 혼동하지 않는다.
 
 | 증거 | 결과 |
 |---|---|
