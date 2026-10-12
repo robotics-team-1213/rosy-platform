@@ -12,6 +12,7 @@ import math
 import re
 import threading
 import time
+from collections import deque
 from dataclasses import asdict, dataclass
 
 from fleet.localization.map_pose import MapPose, MapPoseConfig, odom_from_snapshot
@@ -75,6 +76,7 @@ class NativeGazeboMapPosePort:
         self._gather_core, self._wall, self._mono = gather_core, wall, monotonic
         self._robots = {robot.robot_id: robot for robot in binding.robots}
         self._samples, self._core, self._failed, self._refreshing = {}, {}, {}, {}
+        self._history = {robot_id: deque() for robot_id in self._robots}
         self._clock = None
         self._active_map = None
         self._lock = threading.RLock()
@@ -130,12 +132,15 @@ class NativeGazeboMapPosePort:
     def observe_clock(self, stamp_ns):
         """Separate actual /clock callback. Replayed or reset clocks revoke this run."""
         with self._lock:
+            now, wall = self._mono(), self._wall()
             if (type(stamp_ns) is not int or stamp_ns < 0
-                    or (self._clock is not None and stamp_ns <= self._clock[0])):
+                    or (self._clock is not None and (stamp_ns <= self._clock[0]
+                        or not 0 <= now-self._clock[1] <= self.config.max_pair_s
+                        or not 0 <= wall-self._clock[2] <= self.config.max_pair_s))):
                 for robot_id in self._robots:
                     self._fail(robot_id, 'clock_reset_or_replay')
                 return False
-            self._clock = (stamp_ns, self._mono(), self._wall())
+            self._clock = (stamp_ns, now, wall)
             return True
 
     def observe(self, sample, *, clock_stamp_ns=None):
@@ -170,17 +175,23 @@ class NativeGazeboMapPosePort:
                     or not 0 <= age <= self.config.max_pair_s):
                 return self._fail(robot_id, 'native_clock_or_sample_stale')
             previous = self._samples.get(robot_id)
-            moving = False
             if previous is not None:
+                if (previous['source_age'] + max(now-previous['received'], wall-previous['wall'])
+                        > self.config.max_pair_s):
+                    return self._fail(robot_id, 'native_gap')
                 old = previous['sample']; dt = (sample.stamp_ns - old.stamp_ns) * 1e-9
                 distance = math.dist(sample.pose[:2], old.pose[:2])
                 turn = abs(_angle(sample.pose[2] - old.pose[2]))
                 if (dt <= 0 or distance > self.config.max_speed_mps * dt
                         or turn > math.radians(self.config.max_turn_rate_dps) * dt):
                     return self._fail(robot_id, 'native_reset_or_replay')
-                moving = (distance, turn)
             self._samples[robot_id] = dict(sample=sample, received=now, wall=wall,
-                                          source_age=age, moving=moving)
+                                          source_age=age)
+            history = self._history[robot_id]
+            history.append((now, sample.pose))
+            since = now-self.config.max_odom_age_s
+            while len(history) > 1 and history[1][0] < since:
+                history.popleft()  # Keep the last before the window as its deadband base.
             return True
 
     async def refresh(self, robot_id, *, force_rest=False):
@@ -203,7 +214,8 @@ class NativeGazeboMapPosePort:
             previous = self._core.get(robot_id)
             if (not isinstance(state, dict) or state.get('robot_id') != robot_id or core is None
                     or not 0 <= self._wall() - core.stamp <= self.config.max_odom_age_s
-                    or (previous is not None and core.stamp < previous.stamp)):
+                    or (previous is not None and (core.stamp < previous.stamp
+                        or (core.stamp == previous.stamp and core != previous)))):
                 self._fail(robot_id, 'core_snapshot_invalid_or_stale')
                 return
             self._core[robot_id] = core
@@ -245,12 +257,17 @@ class NativeGazeboMapPosePort:
                            anchor_source='native_gazebo_sim')
 
     def moved(self, robot_id, min_m, min_deg):
+        """D-511 base/any-delta over the recent receipt-monotonic 3 s window."""
         with self._lock:
             current = self._current(robot_id)
             if current is None:
                 return False
-            moving = current[0]['moving']
-            return bool(moving and (moving[0] > min_m or moving[1] > math.radians(min_deg)))
+            history = self._history[robot_id]
+            since = self._mono()-self.config.max_odom_age_s
+            base = next((pose for at, pose in reversed(history) if at < since), history[0][1])
+            return any(math.dist(pose[:2], base[:2]) > min_m
+                       or abs(_angle(pose[2]-base[2])) > math.radians(min_deg)
+                       for at, pose in history if at >= since)
 
     def diagnostics(self, robot_id):
         with self._lock:
