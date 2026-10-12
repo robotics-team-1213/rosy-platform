@@ -104,6 +104,7 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "fleet/fleet/incidents/automation",
               "fleet/fleet/incidents/automation/ledger",
               "fleet/fleet/incidents/automation/execution",
+              "fleet/fleet/incidents/automation/operating",
               "decision/src/rosy/decision/deliberation",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
@@ -116,6 +117,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/incidents/automation/operating": (
+        294,
+        "accept: D-730 owns the actual same-DB validated candidate, signed operating epochs "
+        "and single-case rule/model claim; no provider or robot client. Initial 294 physical lines; "
+        "docs/plans/2026-10-12-incident-operating-subpackage.md records the simultaneous parent "
+        "measurement, stable imports and installed closure. Keep +150 and existing parent ceilings.",
+    ),
     "decision/src/rosy/decision/deliberation": (
         231,
         "split: responsibility_review applied three actual responsibility subpackages on 2026-10-12. "

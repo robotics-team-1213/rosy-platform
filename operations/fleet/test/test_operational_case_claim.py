@@ -25,6 +25,11 @@ KEY = b'operating-state-source-fixture-key'
 TRUST = {'reviewer': {'key': KEY, 'kinds': {APPROVE, REVOKE}}}
 
 
+def test_candidate_import_keeps_actual_class_identity():
+    from fleet.incidents.automation.operating.candidates import RecoveryCandidates as moved
+    assert moved is RecoveryCandidates
+
+
 def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
