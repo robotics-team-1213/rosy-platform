@@ -3,6 +3,8 @@
 import importlib.util
 import math
 import re
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import yaml
@@ -36,6 +38,38 @@ def test_no_frame_until_every_channel_has_a_reading():
     ir = _ir()
     assert ir.ir_raw([None, 0.013, 0.013]) is None
     assert ir.ir_raw([0.013, 0.013, None]) is None
+
+
+def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
+    callbacks, published = {}, []
+    node = SimpleNamespace(
+        create_publisher=lambda *_: SimpleNamespace(publish=lambda msg: published.append(msg.data)),
+        create_subscription=lambda _type, topic, callback, _qos: callbacks.setdefault(topic, callback),
+        destroy_node=lambda: None)
+
+    def send(name, stamp, distance=.013):
+        callbacks['ir_sim/' + name](SimpleNamespace(ranges=[distance],
+            header=SimpleNamespace(stamp=SimpleNamespace(sec=stamp, nanosec=0))))
+
+    def spin(_node):
+        send('left', 1); send('mid', 1)
+        assert published == []
+        send('right', 1)
+        assert published == [[2000] * 3]
+        send('mid', 2); send('right', 2)
+        assert published == [[2000] * 3]  # Left never reported this frame.
+        send('left', 2, math.inf)
+        assert published == [[2000] * 3, [100, 2000, 2000]]
+        send('left', 2); send('mid', 2); send('right', 2)
+        send('left', 1); send('mid', 1); send('right', 1)
+        assert len(published) == 2  # Repeated or replayed timestamps cannot refresh evidence.
+
+    monkeypatch.setitem(sys.modules, 'rclpy', SimpleNamespace(init=lambda: None,
+        create_node=lambda _: node, spin=spin, ok=lambda: True, shutdown=lambda: None))
+    monkeypatch.setitem(sys.modules, 'rclpy.qos', SimpleNamespace(qos_profile_sensor_data=object()))
+    monkeypatch.setitem(sys.modules, 'sensor_msgs.msg', SimpleNamespace(LaserScan=object))
+    monkeypatch.setitem(sys.modules, 'std_msgs.msg', SimpleNamespace(UInt16MultiArray=SimpleNamespace))
+    _ir().main()
 
 
 def test_values_are_valid_ir_on_the_worker_thresholds():
