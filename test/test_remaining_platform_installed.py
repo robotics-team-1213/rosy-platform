@@ -301,6 +301,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.server.channel.execution.outcomes.receipts',
                'fleet.server.channel.execution.outcomes.reconcile',
                'fleet.server.channel.execution.outcomes.task_receipt',
+               'fleet.server.channel.execution.outcomes.stops',
                'fleet.swarm.dispatch_guard',
                'fleet.server.channel.model_journal', 'fleet.server.channel.broker_transport',
                'rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',

@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 from types import SimpleNamespace
+from functools import partial
 import pytest
 
 from fakes import run
@@ -163,9 +164,23 @@ def test_rejection_cleanup_never_erases_bound_native_operation(tmp_path):
         assert service.store.resource_claims(resource_kind='robot', resource_id='rosy_01')
 
 
+def test_native_task_canceled_event_preserves_expiry_without_release(tmp_path):
+    service, accepted, run_id, boot_id = _accepted_native_task(tmp_path)
+    task = service.project_core_event({'robot_id': 'rosy_01', 'event_id': 'expired', 'seq': 1,
+        'type': 'nav.canceled', 'data': {'source': 'goal_lease', 'correlation_id': accepted['attempt_id'],
+                                       'run_id': str(run_id), 'boot_id': str(boot_id)}})
+    assert task['status'] == 'UNKNOWN'
+    assert task['receipt']['outcome']['result'] == 'EXPIRED'
+    assert task['receipt']['outcome']['reason'] == 'LEASE_EXPIRED'
+    assert not task['receipt'].get('safe_released')
+    assert service.store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+
+
 def test_stop_during_new_epoch_read_refuses_goal_before_send():
     from fleet.server.goal_lease import GoalLeases, NavigationStopped
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     leases=GoalLeases(0,{})
+    leases.prepare_send=partial(prepare_send, leases)
     leases.native_required=lambda tid:True
     sent=[]
     async def get(path):
@@ -177,9 +192,10 @@ def test_stop_during_new_epoch_read_refuses_goal_before_send():
     assert not sent
 
 
-@pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack'])
+@pytest.mark.parametrize('withdraw_at', ['epoch', 'transport', 'negative_ack', 'wrong_boot'])
 def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at):
     from fleet.server.goal_lease import GoalLeases
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
     from fleet.swarm.dispatch_guard import check_dispatch
     store = FleetTaskStore(tmp_path / 'fleet.sqlite3')
     service = FleetTaskService(store, robot_ids={'rosy_01'})
@@ -189,6 +205,7 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
     withdrawn, sent = [], []
     service.channel_admission = lambda tid: 'CHANNEL_WITHDRAWN' if withdrawn else None
     leases = GoalLeases(0, {})
+    leases.prepare_send = partial(prepare_send, leases)
     leases.native_required = lambda tid: True
     leases.admit_attempt = service.admit_attempt
     leases.bind_native_receipt = service.bind_native_receipt
@@ -203,6 +220,10 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
             withdrawn.append(True)
         check_dispatch(path='/api/v1/navigation/goal')
         sent.append(True)
+        if withdraw_at == 'wrong_boot':
+            return {'accepted': True, 'operation': {'boot_id': str(uuid4()), 'run_id': str(uuid4()),
+                'kind': 'navigate', 'correlation_id': kwargs['correlation_id'], 'phase': 'SUBMITTED',
+                'result': None, 'reason': None}}
         return {'accepted': False}
 
     async def dispatch(attempt):
@@ -210,6 +231,11 @@ def test_native_rejection_before_send_releases_task_claim(tmp_path, withdraw_at)
                                  {}, 1., 2., 0., attempt['attempt_id'], task_id=attempt['task_id'])
 
     result = run(service.dispatch_next({'rosy_01'}, dispatch=dispatch))
+    if withdraw_at == 'wrong_boot':
+        assert result['status'] == 'UNKNOWN'
+        assert result['receipt'] == {'native_required': True}
+        assert store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+        return
     assert result['status'] == ('FAILED' if withdraw_at == 'negative_ack' else 'HOLD')
     assert not (result['receipt'] or {}).get('native_required')
     assert not store.resource_claims(resource_kind='robot', resource_id='rosy_01')
