@@ -5,7 +5,6 @@ import re
 from typing import Literal
 
 from core_common.intent import interpret
-from core_common.intent import request_schema
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 from rosy.decision.deliberation import canonical
 
@@ -167,15 +166,7 @@ class Answer(Strict):
 
 
 def answer_schema():
-    properties = Answer.model_json_schema()['properties']
-    variants = []
-    for kind in ('CHAT', 'STATUS', 'CLARIFY', 'CONTROL', 'REFUSE'):
-        fields = dict(properties)
-        fields['kind'] = {'type':'string', 'const':kind}
-        fields['intent'] = request_schema() if kind == 'CONTROL' else {'type':'null'}
-        fields['reason'] = (properties['reason']['anyOf'][0] if kind in ('CLARIFY', 'REFUSE') else {'type':'null'})
-        variants.append({'type':'object', 'properties':fields, 'required':list(fields), 'additionalProperties':False})
-    return {'oneOf':variants}
+    return Answer.model_json_schema()
 
 
 def checked_answer(value, question):
