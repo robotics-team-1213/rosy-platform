@@ -54,6 +54,8 @@ class GoalLeases(dict):
         #: there is a task store; without one a dispatch lease is never renewed (it expires).
         self.attempt_open: Optional[Callable[[str, str], bool]] = None
         self.admit_attempt: Optional[Callable[[str, str], None]] = None
+        self.bind_native_receipt = None
+        self.native_required = None
         self._present_at: Optional[float] = None
         self.pending: dict[str, int] = {}
         self._stop_epoch = 0
@@ -94,6 +96,10 @@ class GoalLeases(dict):
                      "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
         if correlation_id is not None:
             options["correlation_id"] = correlation_id
+        if task_id is not None and self.native_required is not None and self.native_required(task_id):
+            from fleet.server.channel.execution.outcomes.evidence import epoch
+            options.update(epoch(await client._get('/api/v1/navigation/state')))
+            self.bind_native_receipt(task_id, correlation_id, robot_id, None)
         if task_id is not None and self.admit_attempt is not None:
             self.admit_attempt(task_id, correlation_id)
         stop = self.stop_token(robot_id)
@@ -105,6 +111,8 @@ class GoalLeases(dict):
                                     if task_id is not None and self.admit_attempt is not None else None,
                                     paths={'/api/v1/navigation/goal'}):
                     result = await client.navigation_goal(x, y, yaw, **options)
+                    if task_id is not None and self.bind_native_receipt is not None:
+                        self.bind_native_receipt(task_id, correlation_id, robot_id, result)
             except (Exception, asyncio.CancelledError):
                 if stop != self.stop_token(robot_id):
                     try:

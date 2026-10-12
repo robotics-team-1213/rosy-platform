@@ -738,6 +738,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
         console.goal_leases.admit_attempt = task_service.admit_attempt
+        console.goal_leases.bind_native_receipt = task_service.bind_native_receipt
+        console.goal_leases.native_required = task_service.native_required
+        task_service.core_events = hub.event_store if hub is not None else None
 
     @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
     def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
@@ -865,6 +868,8 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
     while True:
         try:
             task_service.scheduler.expire_queued()
+            from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
+            await reconcile_tasks(task_service, console)
             snapshot = await console.snapshot()
             console.prune_task_queue_entries(task_service.store.queued_task_ids())
             available = {

@@ -286,12 +286,18 @@ class HttpRobotClient:
 
     async def navigation_goal(self, x: float, y: float, yaw: float, *,
                               correlation_id: str | None = None,
-                              lease_ttl_s: float | None = None) -> dict:
+                              lease_ttl_s: float | None = None,
+                              expected_boot_id: str | None = None,
+                              expected_owner_generation: int | None = None) -> dict:
         body = {"x": x, "y": y, "yaw": yaw}
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
         if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
             body["lease_ttl_s"] = lease_ttl_s
+        if expected_boot_id is not None or expected_owner_generation is not None:
+            if expected_boot_id is None or expected_owner_generation is None:
+                raise ValueError('NATIVE_OWNER_EPOCH_PAIR_REQUIRED')
+            body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
         return await self._post("/api/v1/navigation/goal", body)
 
     async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:

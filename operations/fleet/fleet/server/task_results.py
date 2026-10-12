@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
@@ -11,8 +12,42 @@ from typing import Protocol
 from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.cancel_all_store import matching_tag as cancel_all_tag_matches
 from fleet.server.dispatch_admission import release as release_dispatch_claims
+from core_common.protocol.native.operation import NativeOperation
 
 _LOG = logging.getLogger(__name__)
+
+
+def bind_native_receipt(store, task_id, attempt_id, robot_id, receipt):
+    """Capture the first response before Console performs another await."""
+    if receipt is None:
+        with closing(store._connect()) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            changed = conn.execute('''UPDATE fleet_tasks SET receipt_json='{"native_required":true}'
+                WHERE task_id=? AND attempt_id=? AND robot_id=? AND receipt_json IS NULL''',
+                (task_id, attempt_id, robot_id)).rowcount
+            if changed != 1:
+                raise ValueError('NATIVE_TASK_ATTEMPT_ALREADY_PREPARED')
+        return False
+    if receipt.get('operation') is None:
+        return False
+    operation = NativeOperation.model_validate(receipt['operation']).model_dump(mode='json')
+    if (receipt.get('accepted') is not True or operation['kind'] != 'navigate'
+            or operation['correlation_id'] != attempt_id):
+        raise ValueError('NATIVE_TASK_RECEIPT_MISMATCH')
+    with closing(store._connect()) as conn, conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT * FROM fleet_tasks WHERE task_id=? AND attempt_id=? AND robot_id=?',
+                           (task_id, attempt_id, robot_id)).fetchone()
+        if row is None:
+            raise ValueError('NATIVE_TASK_ATTEMPT_CHANGED')
+        old = json.loads(row['receipt_json']) if row['receipt_json'] else {}
+        if old.get('operation') is not None:
+            if old['operation'] != operation:
+                raise ValueError('NATIVE_TASK_RECEIPT_CHANGED')
+            return True
+        conn.execute('UPDATE fleet_tasks SET receipt_json=? WHERE task_id=? AND attempt_id=?',
+                     (json.dumps(old | {'accepted': True, 'operation': operation}), task_id, attempt_id))
+    return True
 
 
 class _TaskStore(Protocol):
@@ -28,7 +63,7 @@ class _TaskStore(Protocol):
 
 def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: int,
                        event_type: str, correlation_id: str,
-                       source: str | None = None) -> dict | None:
+                       source: str | None = None, run_id=None, boot_id=None) -> dict | None:
     """Apply a correlated navigation event once to its exact dispatch attempt.
 
     `source` is CORE's `data.source` when the event carries one (D-421 match rule)."""
@@ -57,6 +92,14 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
         if task is None:
             connection.commit()
             return None
+
+        receipt = json.loads(task['receipt_json']) if task['receipt_json'] else {}
+        operation = receipt.get('operation')
+        if ((operation is not None and (operation['run_id'] != run_id or operation['boot_id'] != boot_id))
+                or (operation is None and (receipt.get('native_required') or run_id is not None or boot_id is not None))):
+            # The durable CORE audit can backfill only after the exact first ACK binds.
+            connection.commit()
+            return store._task_dict(task)
 
         prior = connection.execute(
             """SELECT seq FROM fleet_task_core_events
@@ -108,7 +151,7 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
             )
             store._append_history(connection, task["task_id"], status,
                                   "core-event", robot_id, now, reason)
-            if terminal:
+            if terminal and operation is None:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
