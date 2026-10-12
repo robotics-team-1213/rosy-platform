@@ -708,6 +708,8 @@
 | D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
 | D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
 | D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
+| D-735 | 이동 후보의 교통 감속 곡률 보존 | Accepted |
+| D-737 | LINE body and command curve agreement | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-720 | Discord 상태 질의와 읽기 전용 숙고형 연결 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
@@ -1057,6 +1059,7 @@ Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
 
 ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
 ## D-737 - LINE body and command curve agreement
+## LINE body and command curve agreement - D-737
 
 Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 
