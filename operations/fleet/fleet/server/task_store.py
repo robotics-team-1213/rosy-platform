@@ -792,6 +792,9 @@ class FleetTaskStore:
             if status not in _TASK_TRANSITIONS.get(current["status"], set()):
                 raise InvalidTaskTransition(f"{current['status']} cannot transition to {status}")
             new_receipt = receipt_json if receipt_json is not None else current["receipt_json"]
+            old_receipt = json.loads(current['receipt_json'] or '{}')
+            if old_receipt.get('operation') or old_receipt.get('native_required'):
+                new_receipt = _safe_json(json.loads(new_receipt or '{}') | old_receipt)
             connection.execute(
                 """UPDATE fleet_tasks SET status = ?, reason = ?, receipt_json = ?, updated_at = ?
                    WHERE task_id = ?""",
@@ -805,7 +808,8 @@ class FleetTaskStore:
             )
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
                                      (task_id,)).fetchone()
-            if status in {"FAILED", "COMPLETED", "HOLD", "CANCELED", "EXPIRED"}:
+            if status in {"FAILED", "COMPLETED", "HOLD", "CANCELED", "EXPIRED"} and not (
+                    new_receipt and (json.loads(new_receipt).get('operation') or json.loads(new_receipt).get('native_required'))):
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task_id,))
                 release_dispatch_claims(connection, owner_kind="task", owner_id=task_id)
@@ -813,12 +817,14 @@ class FleetTaskStore:
         return self._task_dict(row)
 
     def project_core_event(self, *, robot_id: str, event_id: str, seq: int,
-                           event_type: str, correlation_id: str, source: str | None = None) -> dict | None:
+                           event_type: str, correlation_id: str, source: str | None = None,
+                           run_id=None, boot_id=None) -> dict | None:
         from fleet.server.task_results import project_core_event
 
         return project_core_event(
             self, robot_id=robot_id, event_id=event_id, seq=seq,
             event_type=event_type, correlation_id=correlation_id, source=source,
+            run_id=run_id, boot_id=boot_id,
         )
 
     def get_task(self, task_id: str) -> dict | None:

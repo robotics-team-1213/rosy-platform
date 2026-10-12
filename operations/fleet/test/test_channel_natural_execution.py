@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import json
+from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
@@ -55,7 +56,9 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None,*,extra
     async def cancel():check_dispatch();writes.append('cancel');return {'navigation':'CANCELED'}
     async def estop():check_dispatch();writes.append('estop');return {'estop':True}
     async def post(path,body):check_dispatch();writes.append((path,body));return {'accepted':True}
-    client=SimpleNamespace(capabilities=caps,state=state,navigation_cancel=cancel,estop=estop,_post=post)
+    boot_id=str(uuid4())
+    async def get(path):return {'owner':{'boot_id':boot_id,'owner_generation':0,'owner_run_id':None}, 'lookup':'UNKNOWN','operation':None}
+    client=SimpleNamespace(capabilities=caps,state=state,navigation_cancel=cancel,estop=estop,_post=post,_get=get)
     async def console_cancel(robot):return await client.navigation_cancel()
     canceled=[]
     def cancel_pending(robot=None,*,actor_id):
