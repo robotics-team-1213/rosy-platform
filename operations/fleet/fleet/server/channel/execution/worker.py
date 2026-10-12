@@ -42,6 +42,11 @@ class ExecutionWorker:
                 # Final fresh observer basis supplements the owner's fresh capability/state checks.
                 if current is None or current['online'] is not True or current.get('estop',current.get('state',{}).get('safety',{}).get('estop')) is not False:
                     raise ValueError('CURRENT_ROBOT_OBSERVATION_UNKNOWN')
+                if row['state']=='DISPATCHING' and target in self.execution.resources(call):
+                    claims=self.journal.store.resource_claims(resource_kind='robot',resource_id=target)
+                    if not any(c['owner_kind']=='direct_action' and c['owner_id']==row['owner_id']
+                               and c['generation']==row['generation'] and c['phase']=='DISPATCHING' for c in claims):
+                        raise ValueError('CHANNEL_RESOURCE_OWNERSHIP_CHANGED')
 
     async def preflight(self,rid,index,call):
         self.fence(rid,index,call)
@@ -128,7 +133,7 @@ class ExecutionWorker:
                         await self.execution.step(call,principal,'discord-natural:'+rid,index,
                             admission=lambda conn,task_id:self.journal.link_task(rid,index,task_id,conn))
                         return
-                    self.journal.begin(rid,index,[('robot',r) for r in robots],stopping=call.verb in STOP_VERBS)
+                    self.journal.begin(rid,index,[('robot',r) for r in self.execution.resources(call)],stopping=call.verb in STOP_VERBS)
                     began=True
                     paths={call.path} if call.scope=='robot' else {'/api/v1/swarm/follow','/api/fleet/formation/resume'} if call.verb.startswith('formation_') else {'/api/v1/safety/stop'}
                     with dispatch_guard(lambda:self.fence(rid,index,call),paths=paths):
