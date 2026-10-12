@@ -351,7 +351,7 @@ def test_camera_geometry_hold_stops_at_budgets_and_invalid_input(loss):
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
     assert camera_tick(lane, now[0], gain=1.)[0].linear > 0.
     if loss == 'time':
-        for _ in range(24):
+        for _ in range(25):
             now[0] += .1
             lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
     else:
