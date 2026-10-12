@@ -70,6 +70,7 @@ def test_factory_unknown_current_has_no_calls_then_selected_provider_only(tmp_pa
         first, calls_a = settings(enabled=True)
         second, calls_b = settings(enabled=True)
         second['profiles'] = tuple(replace(p, model_id='replacement') for p in second['profiles'])
+        second['current_profiles'] = lambda: second['profiles']
         for provider, profile in zip(second['providers'], second['profiles']):
             provider.profile = profile; provider.adapter = replace(provider.adapter, model_id='replacement')
         clock = first.pop('clock'); second.pop('clock')
@@ -89,6 +90,38 @@ def test_factory_unknown_current_has_no_calls_then_selected_provider_only(tmp_pa
             dispatcher.feed(snapshot); await settled(dispatcher)
             assert calls_b == ['case-1']  # UNKNOWN is never submitted again.
             assert application.state.line_stuck._log.notifications._prepare_receipt.__self__ is dispatcher
+        finally: await dispatcher.aclose()
+    asyncio.run(run())
+
+
+def test_selected_normal_has_no_calls_and_shutdown_reaps_inflight_once(tmp_path):
+    async def run():
+        started = asyncio.Event()
+        async def blocked(_):
+            started.set()
+            await asyncio.Event().wait()
+        _, calls, _, _, board, store, base, poll, _ = make_incident_worker(tmp_path, provider_hook=blocked)
+        await base.aclose()
+        worker = IncidentCaseWorker(store, base.observation, board, **configured(base))
+        dispatcher = IncidentProfileDispatcher((worker,))
+        routes = IncidentProfileRoutes(store)
+        snapshot = poll()
+        request = board.intervention_assessment('pinky')
+        routes.select_profile('core', request.policy_revision, worker.profile_sha256, expected_revision=0)
+        try:
+            dispatcher.feed(poll(2, normal=True)); await settled(dispatcher)
+            assert calls == [] and store.active_scopes() == ()
+            dispatcher.feed(poll(3))
+            await asyncio.wait_for(started.wait(), 2)
+            scope = store.active_scopes()[0]
+            await asyncio.wait_for(dispatcher.aclose(), 2)
+            assert store.case(scope)['state'] == 'HOLD' and len(calls) == 1
+            with store._transaction() as conn:
+                assert conn.execute('SELECT state FROM fleet_incident_v2_attempts').fetchone()[0] == 'UNKNOWN'
+            dispatcher.feed(snapshot); await settled(dispatcher)
+            assert len(calls) == 1
+            with store._transaction() as conn:
+                assert dispatcher.prepare_receipt(conn, board.judgment_view('pinky')) is False
         finally: await dispatcher.aclose()
     asyncio.run(run())
 
