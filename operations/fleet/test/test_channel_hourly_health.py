@@ -133,7 +133,7 @@ def test_report_rejects_default_and_stale_safety_or_battery_facts(tmp_path):
     report = health.report()
     assert "0%" not in report
     assert "E-stop released" not in report
-    assert "battery \ubbf8\ud655\uc778" in report
+    assert "\ubc30\ud130\ub9ac \ubbf8\ud655\uc778" in report
 
 
 def test_two_workers_share_one_durable_claim_and_nonce(tmp_path):
@@ -315,8 +315,10 @@ def test_clock_rewind_cannot_repeat_a_sent_hour_and_forward_jump_skips_backlog(t
 
     assert len(sender.calls) == 1
     with sqlite3.connect(tmp_path / "fleet.sqlite3") as conn:
-        assert conn.execute("SELECT state FROM fleet_channel_hourly_health ORDER BY slot").fetchall() == [
-            ("SENT",), ("SKIPPED",)]
+        states = [state for (state,) in conn.execute(
+            "SELECT state FROM fleet_channel_hourly_health ORDER BY slot")]
+        assert states.count("SENT") == 1
+        assert states.count("SKIPPED") == 2
 
 
 

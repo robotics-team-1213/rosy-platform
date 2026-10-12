@@ -33,7 +33,7 @@ class HourlyHealth:
         collection_age = now - captured if type(captured) in (int, float) and math.isfinite(captured) else None
         collection = "recent" if collection_age is not None and 0 <= collection_age <= 5 else "\ubbf8\ud655\uc778"
         stamp = (datetime.fromtimestamp(captured, _KST).strftime("%m-%d %H:%M")
-                 if collection_age is not None and collection_age >= 0 else "\ubbf8\ud655\uc778")
+                 if collection_age is not None and 0 <= collection_age <= 5 else "\ubbf8\ud655\uc778")
         rows = {row.get("robot_id"): row for row in (self.gather._snapshot or {}).get("robots", [])
                 if isinstance(row, dict) and isinstance(row.get("robot_id"), str)}
         mono, robots = self.console._clock(), sorted(self.console.clients())
