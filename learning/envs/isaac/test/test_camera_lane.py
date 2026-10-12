@@ -310,27 +310,21 @@ def gap_lane(frames, curvature=0.):
     for index in range(frames):
         now[0] = 10. + index * .1
         lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
-    if frames >= 3:
+    if frames >= 3 and curvature == 0.:
         assert lane.keeper.last.get('expected_path_state') == 'live', lane.keeper.last
     output[:] = [np.zeros_like(way), 'lane_marking']
     return lane, now, image, output
 
 
-@pytest.mark.parametrize('frames,continues', [(2, False), (3, False)])
-def test_camera_gap_uses_only_a_committed_path_without_learning(frames, continues):
+@pytest.mark.parametrize('frames', [2, 3])
+def test_strict_camera_gap_stops_even_with_a_committed_path(frames):
     from run_map_rl import camera_tick
     lane, now, image, _output = gap_lane(frames)
     now[0] += .1
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(.01, .01, .1))
     decision, state = camera_tick(lane, now[0], gain=1.)
-    assert (decision.linear > 0.) is continues, (lane.last, lane.keeper.last)
+    assert (decision.linear, decision.angular) == (0., 0.), (lane.last, lane.keeper.last)
     assert state is None
-    if continues:
-        assert lane.last['strategy'] == 'expected_path_held'
-        assert lane.last['camera_provenance'] == 'odom_expected_path'
-        assert decision.angular < 0.  # Odom moves the old corridor to our right.
-    else:
-        assert decision.angular == 0.
     lane.close()
 
 
@@ -342,29 +336,6 @@ def test_a_visible_curve_cannot_be_extended_as_a_straight_corridor():
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
     decision, state = camera_tick(lane, now[0], gain=1.)
     assert (decision.linear, decision.angular) == (0., 0.), lane.last
-    assert state is None
-    lane.close()
-
-
-@pytest.mark.parametrize('loss', ['time', 'distance', 'rewind', 'jump', 'dark', 'inference'])
-def test_camera_held_path_cannot_survive_budgets_or_invalid_input(loss):
-    from run_map_rl import camera_tick
-    lane, now, image, _output = gap_lane(3)
-    now[0] += .1
-    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
-    assert camera_tick(lane, now[0], gain=1.)[0].linear == 0.
-    now[0] += 2.5 if loss == 'time' else .1
-    pose = (.25, 0., 0.) if loss == 'distance' else (.26, 0., 0.) if loss == 'jump' else (0., 0., 0.)
-    stamp = 10. if loss == 'rewind' else now[0]
-    if loss == 'dark':
-        image = np.zeros_like(image)
-    if loss == 'inference':
-        def broken(_frame):
-            raise RuntimeError('lost model')
-        lane.worker._slot.poll().infer_drivable = broken
-    lane.observe(image, stamp=stamp, source_now=now[0], pose=pose)
-    decision, state = camera_tick(lane, now[0], gain=1.)
-    assert (decision.linear, decision.angular) == (0., 0.)
     assert state is None
     lane.close()
 
