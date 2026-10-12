@@ -92,13 +92,20 @@ async def channel_step(worker, rid, index, call, row):
             return True
         if not task:
             receipt = record(conn, current, receipt, call.robot, 'direct_action', row['owner_id'], row['generation'],
-                             json.loads(row['resources_json'] or '[]'), started, value, operation)
+                             [] if call.verb in {'cancel', 'follow_cancel', 'stop'} else json.loads(row['resources_json'] or '[]'),
+                             started, value, operation)
         operation = receipt.get('outcome')
         state = ('RUNNING' if operation and operation['phase'] == 'RUNNING' else row['state'])
         if (not task and not value.get('operation')) or (task and task['status']=='UNKNOWN'):
             state = 'UNKNOWN'
         if receipt.get('safe_released') is True:
             state = 'COMPLETED' if operation['result'] == 'SUCCEEDED' else 'FAILED'
+        if (not task and call.verb in {'cancel', 'follow_cancel', 'stop'} and operation
+                and safe_proof(value, operation) and 0 <= time.monotonic() - started <= 2):
+            state, receipt = 'CANCELED', receipt | {'quiescence': value['quiescence']}
+        if state in {'FAILED', 'CANCELED'}:
+            conn.execute('UPDATE fleet_channel_execution SET reason=? WHERE request_id=?',
+                         (operation['result'] if operation else state, rid))
         conn.execute('UPDATE fleet_channel_execution_steps SET state=?,receipt_json=?,reason=? WHERE request_id=? AND step_index=?',
                      (state, json.dumps(receipt), operation['reason'] if operation else 'NATIVE_RUN_UNKNOWN', rid, index))
         notify(journal, conn, rid, index, receipt)

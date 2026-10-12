@@ -16,6 +16,9 @@ def owner_receipt(call,value,robot_ids):
         if call.verb in KINDS and (operation['kind'] != KINDS[call.verb]
                 or operation['correlation_id'] != call.body.get('correlation_id')):
             raise ValueError('NATIVE_ACK_IDENTITY_CHANGED')
+        if (call.verb == 'cancel' and operation['kind'] not in {'navigate', 'home'}
+                or call.verb == 'follow_cancel' and operation['kind'] != 'follow'):
+            raise ValueError('NATIVE_STOP_OWNER_CHANGED')
         receipt['operation'] = operation
     elif call.body.get('correlation_id') and call.verb in KINDS and accepted is True:
         accepted = None
@@ -68,6 +71,9 @@ def _owner_receipt(call,value,robot_ids):
             if row.get('robot_id') not in robot_ids or type(row.get('stopped')) is not bool:raise ValueError('SITE_STOP_RECEIPT_INVALID')
             result.append({'robot_id':row['robot_id'],'rpc_acknowledged':row['stopped'],
                            'estop':(row.get('result') or {}).get('estop') is True})
+            operation = (row.get('result') or {}).get('operation')
+            if operation is not None:
+                result[-1]['operation'] = NativeOperation.model_validate(operation).model_dump(mode='json')
         if len({r['robot_id'] for r in result})!=len(result):raise ValueError('SITE_STOP_RECEIPT_INVALID')
         complete=set(r['robot_id'] for r in result)==set(robot_ids) and all(r['estop'] and r['rpc_acknowledged'] for r in result)
         return True if complete else None,{'rpc_acknowledged':True,'robots':result}
