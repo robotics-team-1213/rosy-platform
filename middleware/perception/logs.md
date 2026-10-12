@@ -1514,3 +1514,9 @@
 - 변경: 주행 중 카메라 오차는 모듈 기본 0.08/0.8이 아니라, 그 프로세스가 불러온 CORE 법칙(순항, 상한, 게인, 최소 신뢰)을 역산한다. 시뮬 관찰기는 같은 run_spec 오버레이를 읽고, 장치 카메라는 rosy-core가 쓴 status-inputs가 신선할 때만 DrivableSteer를 만든다. 법칙이 없거나 바뀌면 기억 경로를 버리고 테이프 추종으로 내려가지 않는다. 곡선 거절, ExpectedPath의 최신 거절 우선, 출발 거부는 그대로다.
 - 증거: 역산은 `error_for_k`가 신뢰 스케일과 곡선 감속을 포함한 뒤 CORE `_steer`의 곡률을 되돌리게 맞춘다. 장치 인계는 소유자, 모드, 크기, 로봇 ID, 프로세스 ID, 3초 이내의 시각을 본다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
 - gate 변화: 없음. 출발 게이트와 10초 자세 정지는 유지한다. 시뮬 완주와 실물 수용은 이 변경만으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
+
+- 변경: `test_drivable_preview`의 가짜 steer가 `pursuit_error`를 갖는다. keep가 ExpectedPath를 만들 때 그 함수를 쓴다.
+- 증거: 착지 라운드의 `middleware/perception/test`가 `test_keep_step_puts_the_steered_way_into_keep_debug`에서 AttributeError로 멈췄다. 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음.
