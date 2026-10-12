@@ -155,6 +155,14 @@ def test_native_terminal_event_cannot_be_replaced_by_conflicting_readback(tmp_pa
     assert service.store.resource_claims(resource_kind='robot',resource_id='rosy_01')
 
 
+def test_rejection_cleanup_never_erases_bound_native_operation(tmp_path):
+    service, accepted, _, _ = _accepted_native_task(tmp_path)
+    for receipt, unsent in [({'accepted': False}, False), (None, True)]:
+        service.bind_native_receipt(accepted['task_id'], accepted['attempt_id'], 'rosy_01', receipt, unsent=unsent)
+        assert service.store.get_task(accepted['task_id'])['receipt'] == accepted['receipt']
+        assert service.store.resource_claims(resource_kind='robot', resource_id='rosy_01')
+
+
 def test_stop_during_new_epoch_read_refuses_goal_before_send():
     from fleet.server.goal_lease import GoalLeases, NavigationStopped
     leases=GoalLeases(0,{})

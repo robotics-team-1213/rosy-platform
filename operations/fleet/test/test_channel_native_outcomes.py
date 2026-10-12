@@ -80,7 +80,7 @@ def test_unproven_readback_cannot_release_claim(tmp_path,change):
     assert len(sent)==1
 
 
-@pytest.mark.parametrize('change',['delayed','reassigned','extra_claim','step_generation'])
+@pytest.mark.parametrize('change',['delayed','reassigned','extra_claim','step_generation','step_resources','step_cid'])
 def test_release_cas_rechecks_elapsed_and_exact_sqlite_claim(tmp_path,monkeypatch,change):
     from fleet.server.channel.execution.outcomes import reconcile
     f, _, _, sent=_home_with_native_ack(tmp_path)
@@ -92,6 +92,8 @@ def test_release_cas_rechecks_elapsed_and_exact_sqlite_claim(tmp_path,monkeypatc
         with f.store._connect() as conn,conn:
             if change=='reassigned':conn.execute("UPDATE fleet_action_claims SET owner_id='other',generation=generation+1")
             if change=='step_generation':conn.execute('UPDATE fleet_channel_execution_steps SET generation=generation+1')
+            if change=='step_resources':conn.execute("UPDATE fleet_channel_execution_steps SET resources_json='[]'")
+            if change=='step_cid':conn.execute("UPDATE fleet_channel_execution_steps SET caller_cid='changed'")
         if change=='extra_claim':f.store.reserve_resources(owner_kind='direct_action',owner_id=row['owner_id'],generation=row['generation'],resources=[('robot','rosy_41')])
         return value
     f.client._get=get;asyncio.run(f.worker.step(rid))
