@@ -38,6 +38,8 @@ def test_missing_originals_produce_hold_and_null_not_fake_acceptance():
     assert report['truth_admitted'] is False
     assert {'calibration', 'cohort', 'truth', 'limits', 'windows', 'review'} <= set(report['missing'])
     assert report['metrics'] is None and data == before
+    assert 'rosy.calibration.feedback_input/1' not in report['supported_original_contracts']
+    assert 'feedback_prediction_export_lineage_admission' in report['unsupported']
 
 
 @pytest.mark.parametrize('field,value', [('state', 'PASS_FOR_OPERATION'), ('binding', {}),
