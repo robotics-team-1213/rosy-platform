@@ -325,6 +325,7 @@ class DrivableSteer:
         """Drop latches and any expected-path coast. An exception in the node calls this."""
         self._forget_latches()
         self._expected_path = None
+        self._last_out = self._pending = None
 
     def lost(self, stamp):
         """No fresh way this frame: forget the latch only after FORGET_S without one.
