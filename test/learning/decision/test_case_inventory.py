@@ -97,3 +97,39 @@ def test_inventory_mutation_or_scope_drift_cannot_bias_comparison(tmp_path, faul
     if fault != 'pin': receipt['digest'] = consumer().digest(dict(scope=receipt['scope'], records=receipt['records']))
     with pytest.raises(ValueError):
         consumer().compare_with_inventory(cohort, exports, [receipt], expected_digests=[pinned])
+
+
+def test_two_valid_snapshots_of_same_case_cannot_overwrite_inventory_binding(tmp_path):
+    store, scope, profiles = fixture(tmp_path)
+    old = exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles)
+    store.complete(scope, 'attempt', worker_id='private-worker', state='UNKNOWN',
+                   actual_cost_usd=None, summary={'reason': 'PROVIDER_OUTCOME_UNKNOWN'})
+    current = exporter().snapshot(store.path, scope.subject_id, scope.case_id, profiles)
+    candidate = dict(strategy='primary_reviewer', profile_sha256=scope.profile_sha256,
+                     policy_revision=scope.policy_revision)
+    cohort = dict(schema='rosy.incident.operational_cohort/1', domain='line_follow', training=[], fit=[],
+        evaluation=[dict(subject_id=scope.subject_id, case_id=scope.case_id,
+                         session_id='eval', recording_id='eval', source_sha256='d' * 64)],
+        candidates=[dict(**candidate, strategy_sha256=label * 64,
+            exports=[dict(subject_id=scope.subject_id, case_id=scope.case_id, digest=exported['digest'])])
+            for label, exported in [('e', old), ('f', current)]])
+    assert len(consumer().compare(cohort, [old, current])['candidates']) == 2
+    receipt = inventory(store, scope, profiles)
+    with pytest.raises(ValueError, match='AMBIGUOUS_INVENTORY_CASE_EXPORT'):
+        consumer().compare_with_inventory(cohort, [old, current], [receipt], expected_digests=[receipt['digest']])
+
+
+def test_inventory_producer_cli_uses_readonly_source_and_exclusive_output(tmp_path):
+    store, scope, profiles = fixture(tmp_path)
+    frozen = tmp_path / 'profiles.json'; frozen.write_text(json.dumps(profiles))
+    output = tmp_path / 'inventory.json'
+    command = [sys.executable, str(ROOT / 'tools/incident_case_inventory.py'), str(store.path),
+        '--profiles', str(frozen), '--owner', scope.owner_id, '--policy', scope.policy_revision,
+        '--start', '99', '--end', '201', '--out', str(output)]
+    before = store.case(scope)
+    run = subprocess.run(command, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    raw = output.read_bytes(); data = json.loads(raw)
+    assert len(raw) <= 1024 * 1024 and raw.endswith(b'\n') and not raw.endswith(b'\r\n')
+    assert data['digest'] == run.stdout.strip() and store.case(scope) == before
+    assert subprocess.run(command, capture_output=True).returncode == 1 and output.read_bytes() == raw
