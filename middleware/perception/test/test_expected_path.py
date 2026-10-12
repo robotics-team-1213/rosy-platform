@@ -244,3 +244,21 @@ def test_near_point_without_observed_shape_cannot_commit():
     for stamp in (0., .1, .2):
         path.update((0., 0., 0.), stamp, info)
     assert not path._committed
+
+
+@pytest.mark.parametrize('reason', ['realign', 'creep_heading', 'repeat_failed'])
+def test_fresh_refusal_cannot_be_overridden_by_observed_memory(reason):
+    path = _commit_shape()
+    denied = path.update((0., 0., 0.), .3, dict(_shape_info(), strategy='none', reason=reason))
+    assert not denied['committed'] and denied['error'] is None
+    assert path.hold((0., 0., 0.), .4)['error'] is None
+
+
+def test_cached_frames_between_independent_frames_do_not_count_as_new_evidence():
+    path = _new()
+    info = _shape_info()
+    path.update((0., 0., 0.), 0., info, observation_stamp=0.)
+    path.update((0., 0., 0.), .05, info, observation_stamp=0.)
+    assert not path.update((0., 0., 0.), .1, info, observation_stamp=.1)['committed']
+    path.update((0., 0., 0.), .15, info, observation_stamp=.1)
+    assert path.update((0., 0., 0.), .2, info, observation_stamp=.2)['committed']
