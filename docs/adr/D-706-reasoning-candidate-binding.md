@@ -11,3 +11,5 @@ D-705의 외부 승인 공급을 구현하기 전에 reasoning 후보의 내부 
 후속 구현과 검증 순서는 [프로파일 lifecycle 계획](../plans/2026-10-12-reasoning-profile-lifecycle.md)을 따른다.
 
 후보 JSON과 입력은 각각 2 MiB 이내로 제한하며 모델 invocation의 16 KiB 제한과 혼용하지 않는다. 이 내부 소스 계약은 SDK wire나 runtime 활성화를 바꾸지 않는다. Decision은 기존 Fleet wheel/sdist에 포함되며 실제 설치 import closure를 확인한다.
+
+기존 Model PC 도구 `tools/decision_calibration.py --candidate <input>`가 `{profile, calibration_input}`에서 후보를 실제 생산한다. `--from-feedback`을 함께 쓰면 기존 원장·검수 입력 결속을 먼저 수행한다. 비교 모드와는 배타적이며 offline PASS일 때만 exit 0, HOLD·FAIL은 후보를 보존하면서 exit 1이다. 모델·네트워크·장치 호출은 없다.
