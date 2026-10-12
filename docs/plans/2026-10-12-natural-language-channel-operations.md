@@ -67,7 +67,9 @@ The existing Fleet distribution explicitly installs the new pure Decision packag
 wheel/sdist/source-image closure is tested through the existing installed delivery
 test after source holders are removed.
 
-Remote source/transaction/runtime regressions:67 passed/0 NEW at `590604f05`.
+Remote source/transaction/runtime regressions:71 passed/0 NEW at `1164d858e`;
+installed wheel/sdist/CLI/app closure129 passed/0 NEW at `8c400f734` and structural
+guards38 passed/0 NEW at `7f4e2fefd`.
 Actual AI PC Qwen semantic smoke uses fixed model digest/context and synthetic
 read-only inputs, never Discord or device commands. In the final source smoke,
 greeting/status/navigation/polite request/quotation/ambiguity/injection/E-stop
