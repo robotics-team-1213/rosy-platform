@@ -2,11 +2,11 @@
 import {workStatus} from "/console/assets/work-view.js";
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
-  let receipt = null, review = null, version = 0, busy = false, incidentRows = [];
+  let receipt = null, review = null, version = 0, busy = false, incidentRows = [], modelState = "";
   const panel = el("channel-review"), state = el("channel-review-state");
   const path = () => `/api/fleet/channel-requests/${encodeURIComponent(receipt.request_id)}`;
   function reset() {
-    version++; receipt = review = null; panel.hidden = true;
+    version++; receipt = review = null; modelState = ""; panel.hidden = true;
     el("channel-review-reason").value = "";
   }
   function paint() {
@@ -23,6 +23,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     el("channel-review-cell-holder").hidden = review.state === "LINKED" && review.work_kind !== "cell_job";
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
     state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
+    if (modelState) state.textContent += ` · ${modelState}`;
     for (const name of ["ready", "hold", "reject"])
       setOff(el(`channel-review-${name}`), busy || review.state === "LINKED", reason);
     el("channel-review-submit-holder").hidden = review.state !== "READY";
@@ -38,7 +39,13 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     try {
       const result = await call(`/api/fleet/channel-requests/${encodeURIComponent(row.request_id)}/review`);
       life.check(); if (current !== version) return;
-      receipt = row; review = result;
+      receipt = row; review = result; modelState = "숙고 결과 조회 안 됨 · 실행 승인 아님";
+      try {
+        const model = await call(`/api/fleet/channel-requests/${encodeURIComponent(row.request_id)}/deliberation`);
+        life.check(); if (current !== version) return;
+        const models = model.result?.models?.map(item => item.model_id).join(", ") || model.result?.reason || "";
+        modelState = `숙고 ${model.state} · ${models} · 실행 승인 아님`;
+      } catch { life.check(); if (current !== version) return; }
       el("channel-review-original").textContent = row.content;
       const picker = el("channel-review-robot"); picker.replaceChildren();
       const empty = new Option("로봇 선택", ""); picker.append(empty);
