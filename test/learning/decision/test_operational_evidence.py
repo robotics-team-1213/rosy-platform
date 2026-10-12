@@ -106,3 +106,27 @@ def test_missing_or_self_reported_window_coverage_is_rejected(fault):
     elif fault == 'unsigned': window['attestation']['signature'] = '0' * 64
     else: window['complete'] = True
     with pytest.raises(ValueError): module.validate_window(window, trusted=trusted, now=100)
+
+
+def truth_row():
+    return dict(id='evaluation-case', subject_id='robot-fixture', case_id='case-1', session_id='session-1',
+        recording_id='recording-1', session_sha256='1' * 64, recording_sha256='2' * 64,
+        start=99, end=101, expected='BACK_AND_RETRY', actor='model', resolved=None, recurrence=None,
+        result_source_sha256=None, recurrence_source_sha256=None, latency_source_sha256=None, latency_ms=None,
+        missing_evidence_error=False, risk_omission=False, wrong_case=False, unnecessary_intervention=False)
+
+
+def test_unknown_physical_outcome_and_recurrence_remain_null_in_independent_metrics():
+    module = evaluator()
+    metrics, missing = module.measure_truth([truth_row()])
+    assert metrics['case_count'] == 1 and metrics['unknown_outcomes'] == 1
+    assert metrics['resolved_rate'] is None and metrics['recurrence_rate'] is None
+    assert metrics['p95_latency_ms'] is None
+    assert {'outcome_originals', 'recurrence_originals', 'latency_originals'} <= set(missing)
+
+
+@pytest.mark.parametrize('field,value', [('actor', 'qwen'), ('resolved', 1), ('recurrence', 'no'),
+    ('latency_ms', -1), ('risk_omission', None), ('expected', 'raw-command'), ('result_source_sha256', 'fake')])
+def test_truth_schema_does_not_infer_or_coerce_final_review_values(field, value):
+    module = evaluator(); row = truth_row(); row[field] = value
+    with pytest.raises(ValueError): module.measure_truth([row])
