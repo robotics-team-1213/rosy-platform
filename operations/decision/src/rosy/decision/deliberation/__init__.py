@@ -44,13 +44,15 @@ class Problem:
         for value in (self.subject_id, self.case_id, self.generation):
             identifier(value)
         identifier(self.goal)
-        if self.domain not in {'door', 'arm_target', 'line_follow'} or self.necessity not in {
-                'INTERVENE', 'DO_NOT_INTERVENE', 'ABSTAIN'}:
+        if (self.domain not in {'door', 'arm_target', 'line_follow', 'fleet_status'}
+                or self.necessity not in ({'READ_ONLY_QUERY'} if self.domain == 'fleet_status'
+                                        else {'INTERVENE', 'DO_NOT_INTERVENE', 'ABSTAIN'})):
             raise ValueError('invalid domain or necessity')
         if type(self.observed_at) not in (int, float) or not math.isfinite(self.observed_at):
             raise ValueError('invalid observation time')
         facts = json.loads(self.facts_json)
-        valid = ({'state': {'unknown', 'blocked', 'normal'}} if self.domain == 'line_follow' else
+        valid = ({'state': {'unknown', 'offline', 'online', 'mixed', 'empty'}} if self.domain == 'fleet_status' else
+                 {'state': {'unknown', 'blocked', 'normal'}} if self.domain == 'line_follow' else
                  {'state': {'unknown', 'open', 'closed'}, 'door_state': {'unknown', 'open', 'closed'}}
                  if self.domain == 'door' else {'state': {'unknown', 'present', 'missing'},
                                               'target_state': {'unknown', 'present', 'missing'}})
