@@ -8,6 +8,10 @@
 Fleet 유한 trip으로 지도 경로를 완주한다. 사용자는 Gazebo부터 진행하고 실물 감독은
 추후 확정하기로 했다. 실물 주행은 현재 실행 범위에서 제외한다.
 
+기준 구간과 첫 수정 비교는 기존 `training-curved` 파생 지도다. 이 지도는 동쪽 S자 곡선을
+강화한 훈련용이며 원본 실측 지도와 같지 않다. 이를 명시하고, 최종 지도 수용에는 원본
+`map_variant=.` real profile의 유한 완주와 새 실행의 반복 확인을 별도로 요구한다.
+
 이전 R8은 0.179107m 전진·취소·권한 해제·정지를 확인했지만 목표 소실과 기억 경로를
 사용하지 않았다. 완주 증거로 대체하지 않는다. 시작 기준 소스는 commit `2e29bd118`이며
 후속 후보마다 전체 source·model·map·effective profile과 실제 import/install 경로를 고정한다.
@@ -78,3 +82,11 @@ SIM 위치를 자동 확장하지 않는다. 새 공개 pose 입력 API나 주�
 SIM 위치 후보 `34b7856198`은 독립 SOURCE APPROVE와 정상 원격 115 PASS/NEW 0이다.
 최신 main과 조향법칙·native handover·SIM 위치 후보를 통합한 전체 소스로 새 빌드와 구간 시험을 진행한다.
 사용자는 Gazebo부터 진행하고 실물 감독은 추후 확정하기로 했다. 지도 완주와 새 후보의 실물 수용은 미확인이다.
+
+원본 native receipt를 보관 후 join 시각과 구분한 `ba37decc42`는 독립 SOURCE 승인,
+native 55 PASS와 소비자 198 PASS/NEW 0이다. 실제 runner의 clock join도 별도 SOURCE 승인됐다.
+넓은 통합 회귀 `94aed4a52e`는 14,168 PASS/816 SKIP와 구조 검사 2 NEW로 끝났다.
+`c43f21105`는 Perception의 CORE 설정 import를 제거하고 Gazebo launch에서 4개 읽기 전용
+법칙 값만 전달한다. 보조 reader를 관측 배선 계층으로 옮긴 후 관련·구조 회귀 117 PASS/NEW 0이다.
+전체 통합 snapshot의 실제 빌드·관측 값 readback·주행은 이어 확인한다. 차체 경계의 샘플 검증은
+기존 2mm paint raster와 NOMINAL_BODY를 사용하며, 원본 contact와 연속 swept 증거는 별도로 구분한다.
