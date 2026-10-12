@@ -287,14 +287,16 @@ def test_follow_close_fences_new_admission_until_old_cleanup(core_client):
     worker = threading.Thread(target=services.swarm.cancel)
     worker.start()
     assert entered.wait(2)
-    services.swarm.cancel()  # a no-op cancel must not revoke first cancel's fence
-    with pytest.raises(SwarmError) as refused:
-        services.swarm.reserve_follow(SwarmFollowParams(**body))
-    assert refused.value.code == "OWNER_GENERATION_CHANGED"
-    release.set()
-    worker.join(2)
+    try:
+        services.swarm.cancel()  # a no-op cancel must not revoke first cancel's fence
+        with pytest.raises(SwarmError) as refused:
+            services.swarm.reserve_follow(SwarmFollowParams(**body))
+        assert refused.value.code == "OWNER_GENERATION_CHANGED"
+    finally:
+        release.set()
+        worker.join(2)
+        services.nav.cancel = original_cancel
     assert not worker.is_alive()
-    services.nav.cancel = original_cancel
     token = services.swarm.reserve_follow(SwarmFollowParams(**body))
     services.swarm.release_follow_reservation(token)
 

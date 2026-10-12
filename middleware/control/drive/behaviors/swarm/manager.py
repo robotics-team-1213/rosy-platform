@@ -300,6 +300,8 @@ class SwarmManager(SwarmStatusView):
     def cancel(self, source: str = "api", reason: str = "canceled", *,
                receipt_sink=None) -> SwarmStatus:
         with self._lock:
+            if self._closing:
+                return SwarmStatus()  # the first cancel still owns backend cleanup
             closed = None
             if self._admitting is not None:
                 self._admitting = None
