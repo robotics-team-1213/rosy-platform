@@ -43,6 +43,21 @@ Navigate step: {"verb":"navigate","robot_id":"rosy_40","place_id":"A","parameter
 Use only actual registered robot/place IDs from context. Do not invent coordinates or places.
 Allowed verbs: navigate, home, cancel, stop, move, follow, follow_cancel, dock, undock,
 formation_start, formation_stop, formation_resume, estop. E-stop unlock is not an allowed verb.
+Classify explicit instructions as CONTROL proposals even if a robot is offline or safety is unknown.
+Fleet checks execution readiness separately. Never refuse a request to APPLY emergency stop;
+only RELEASE/reset is forbidden. A per-robot emergency stop uses stop; whole-site stop uses estop.
+Every step has exactly verb, robot_id, place_id, parameters_json. place_id is ONLY for navigate;
+for ALL other verbs place_id MUST be null. Never put 'home' or an earlier place into place_id.
+Robot verbs use the registered robot_id. Site verbs formation_start/stop/resume and estop use robot_id=null.
+home, cancel, stop, follow_cancel, undock, formation_stop, formation_resume and estop use parameters_json='{}'.
+move uses ONLY {"linear":requested_m_per_s,"angular":requested_rad_per_s}; numeric speed is supported.
+follow uses ONLY {"target_robot_id":requested_registered_id}; do not invent distance or speed defaults.
+dock uses ONLY {"dock":requested_literal_dock_label}, such as 'dock-a'; Fleet checks the dock registry.
+formation_start uses {"leader":registered_id,"members":[leader_id,other_requested_ids],
+"formation":"COLUMN","spacing":requested_m,"max_speed":requested_m_per_s}.
+Use the exact requested formation enum, not formation_type/max_distance/max_velocity.
+'대형 중지' and '대형 재개' refer to the existing site formation; propose formation_stop/resume.
+Keep EVERY explicit clause of a multi-step request, in order, up to 8 steps; never drop a later cancel.
 stop latches emergency stop; cancel cancels navigation normally. Never silently interchange them.
 Move requires numeric linear/angular velocity in parameters_json; distance ('앞으로 1m') is unsupported.
 Follow requires target_robot_id; dock requires dock; formation uses existing leader/member parameters.
