@@ -3,6 +3,7 @@ import asyncio
 import json
 from datetime import datetime
 import sqlite3
+import threading
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -79,6 +80,11 @@ def at(hour, minute=0, second=0):
     return datetime(2026, 10, 12, hour, minute, second, tzinfo=KST).timestamp()
 
 
+def render(health, now=None):
+    now = health.clock() if now is None else now
+    return health.report(now, health.task_counts())
+
+
 def test_report_uses_cached_per_robot_freshness_and_only_observed_sensor_values(tmp_path):
     now = at(9)
     rows = [
@@ -93,7 +99,7 @@ def test_report_uses_cached_per_robot_freshness_and_only_observed_sensor_values(
                             ai=SimpleNamespace(status=lambda: {"state": "present", "owner_mode": "owner_busy",
                                                                "age_s": 0.8}))
 
-    report = health.report()
+    report = render(health)
 
     assert "pinky-01" in report and "0%" in report and "E-stop \ud574\uc81c" in report
     assert "pinky-02: \ubbf8\ud655\uc778" in report and "pinky-03: \ubbf8\ud655\uc778" in report
@@ -102,15 +108,18 @@ def test_report_uses_cached_per_robot_freshness_and_only_observed_sensor_values(
     assert "\ubaa8\ub378 admission: \ubbf8\ud655\uc778" in report
     assert "91%" not in report and "request_json" not in report
 
+    health.ai.status = lambda: {"state": "absent", "owner_mode": "available", "age_s": 6.0}
+    assert "AI \uad00\uce21\uae30 absent | \ubbf8\ud655\uc778" in render(health)
+
 
 def test_report_marks_missing_or_stale_collection_unknown(tmp_path):
     now = at(9)
     health, _, _, _ = setup(tmp_path, now, [], enabled=True)
-    assert "\uc218\uc9d1 recent" in health.report()
+    assert "\uc218\uc9d1 recent" in render(health)
     health.gather.gathered_at = 0
     health.gather._snapshot = None
-    assert "\uc218\uc9d1 \ubbf8\ud655\uc778 | \uad00\uce21 \ubbf8\ud655\uc778" in health.report()
-    assert "pinky-01: \ubbf8\ud655\uc778" in health.report()
+    assert "\uc218\uc9d1 \ubbf8\ud655\uc778 | \uad00\uce21 \ubbf8\ud655\uc778" in render(health)
+    assert "pinky-01: \ubbf8\ud655\uc778" in render(health)
 
 
 
@@ -118,7 +127,7 @@ def test_report_bounds_large_roster_and_discloses_omitted_robots(tmp_path):
     now = at(9)
     health, _, _, _ = setup(tmp_path, now, [])
     health.console._robots = [f"robot-{index:03}-" + "x" * 80 for index in range(100)]
-    report = health.report()
+    report = render(health)
     assert len(report) <= 2000
     assert "100" in report and "\uc0dd\ub7b5" in report
 
@@ -130,10 +139,48 @@ def test_report_rejects_default_and_stale_safety_or_battery_facts(tmp_path):
                        "evidence": {"safety": {"evidence": "unavailable"},
                                     "battery": {"evidence": "stale"}}}}]
     health, _, _, _ = setup(tmp_path, now, rows)
-    report = health.report()
+    report = render(health)
     assert "0%" not in report
     assert "E-stop released" not in report
     assert "\ubc30\ud130\ub9ac \ubbf8\ud655\uc778" in report
+
+
+def test_slow_task_count_read_does_not_block_event_loop(tmp_path):
+    now = at(9)
+    health, _, _, _ = setup(tmp_path, now, [])
+    loop_thread = threading.get_ident()
+    entered, release, responsive = threading.Event(), threading.Event(), threading.Event()
+    reader_threads = []
+    read_counts = health.task_counts
+
+    def blocked_read():
+        reader_threads.append(threading.get_ident())
+        entered.set()
+        if reader_threads[-1] != loop_thread:
+            release.wait()
+            assert responsive.is_set()
+        return read_counts()
+
+    health.task_counts = blocked_read
+
+    async def run():
+        loop = asyncio.get_running_loop()
+
+        def unblock_from_loop():
+            responsive.set()
+            release.set()
+
+        def schedule_unblock():
+            entered.wait()
+            loop.call_soon_threadsafe(unblock_from_loop)
+
+        controller = threading.Thread(target=schedule_unblock)
+        controller.start()
+        await health.run_once()
+        controller.join()
+
+    asyncio.run(run())
+    assert reader_threads and reader_threads[0] != loop_thread
 
 
 def test_two_workers_share_one_durable_claim_and_nonce(tmp_path):
@@ -204,12 +251,14 @@ def test_late_confirmed_send_is_recorded_after_recovery_without_replay(tmp_path)
 
 def test_mid_hour_start_skips_slot_without_backlog_then_sends_next_boundary(tmp_path):
     health, _, sender, _ = setup(tmp_path, at(9, 0, 1), [])
+    health.task_counts = lambda: pytest.fail("off-hour scans must not build a health report")
     asyncio.run(health.run_once())
     assert sender.calls == []
     with sqlite3.connect(tmp_path / "fleet.sqlite3") as conn:
         assert conn.execute("SELECT state FROM fleet_channel_hourly_health").fetchone()[0] == "SKIPPED"
 
     health.clock = lambda: at(10)
+    health.task_counts = lambda: {"RUNNING": 1, "HOLD": 0, "UNKNOWN": 0}
     asyncio.run(health.run_once())
     assert len(sender.calls) == 1
     assert "KST 10:00" in sender.calls[0][1]
