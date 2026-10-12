@@ -90,6 +90,17 @@ def test_semantic_suite_covers_every_exposed_control_verb():
     assert set(get_args(SemanticStep.model_fields['verb'].annotation)) <= covered
 
 
+def test_prompt_examples_are_valid_typed_proposals():
+    import re
+    from deploy.ai_pc.deliberation_conversation import instruction
+    from deploy.ai_pc.conversation_acceptance import CASES, question
+    from rosy.decision.conversation.codec import semantic_answer
+    text = instruction()
+    for match in re.finditer(r'\{"kind":', text):
+        value, _ = json.JSONDecoder().raw_decode(text[match.start():])
+        semantic_answer(value, question(CASES[0], 1.))
+
+
 @pytest.mark.parametrize('path', ['deploy/ai_pc/deliberation_conversation.py',
     'deploy/ai_pc/deliberation_conversation_broker.py', 'deploy/ai_pc/conversation_acceptance.py',
     'operations/decision/src/rosy/decision/conversation/codec.py',
