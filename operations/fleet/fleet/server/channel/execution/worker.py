@@ -119,7 +119,7 @@ class ExecutionWorker:
                     task=self.journal.store.get_task(row['task_id'])
                     if task['status'] in {'COMPLETED','FAILED','HOLD','CANCELED','EXPIRED','UNKNOWN'}:
                         self.journal.finish(rid,index,task['status'] if task['status']!='EXPIRED' else 'HOLD',
-                                            reason=task['reason'] or task['status'])
+                                            reason=task['reason'] or task['status'],expected_state='TASK_QUEUED')
                         if task['status']=='COMPLETED':continue
                     return
                 if row['state']=='COMPLETED':continue
@@ -140,18 +140,18 @@ class ExecutionWorker:
                         result=await self.execution.step(call,principal,'discord-natural:'+rid,index,owner_id=row['owner_id'])
                     accepted,receipt=owner_receipt(call,result,self.execution.console.robot_ids)
                     self.journal.finish(rid,index,'ACCEPTED' if accepted is True else 'FAILED' if accepted is False else 'UNKNOWN',
-                                        receipt=receipt,reason='SITE_STOP_PARTIAL_UNKNOWN' if accepted is None else None)
+                                        receipt=receipt,reason='SITE_STOP_PARTIAL_UNKNOWN' if accepted is None else None,expected_state='DISPATCHING')
                     return
                 except asyncio.CancelledError:
-                    if began:self.journal.finish(rid,index,'UNKNOWN',reason='DISPATCH_CANCELED_RESULT_UNKNOWN')
+                    if began:self.journal.finish(rid,index,'UNKNOWN',reason='DISPATCH_CANCELED_RESULT_UNKNOWN',expected_state='DISPATCHING')
                     raise
                 except (ValueError,HTTPException,HubError,RobotApiError) as exc:
                     # An owner can have sent some recipients before an exception; preserve ambiguity.
                     self.journal.finish(rid,index,'UNKNOWN' if began else 'HOLD',
-                        reason='COMMAND_REJECTED_OR_SCOPE_CHANGED' if began else self.reason(exc))
+                        reason='COMMAND_REJECTED_OR_SCOPE_CHANGED' if began else self.reason(exc),expected_state='DISPATCHING' if began else 'READY')
                     return
                 except Exception:
-                    self.journal.finish(rid,index,'UNKNOWN' if began else 'HOLD',reason='COMMAND_RESULT_UNKNOWN' if began else 'PREFLIGHT_UNAVAILABLE')
+                    self.journal.finish(rid,index,'UNKNOWN' if began else 'HOLD',reason='COMMAND_RESULT_UNKNOWN' if began else 'PREFLIGHT_UNAVAILABLE',expected_state='DISPATCHING' if began else 'READY')
                     return
 
     @staticmethod

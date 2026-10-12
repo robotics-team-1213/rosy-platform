@@ -150,11 +150,17 @@ class ExecutionJournal:
             conn.execute("UPDATE fleet_channel_execution_steps SET state='DISPATCHING',resources_json=? WHERE request_id=? AND step_index=?",
                          (json.dumps(resources),rid,index))
 
-    def finish(self,rid,index,state,*,reason=None,receipt=None):
+    def finish(self,rid,index,state,*,reason=None,receipt=None,expected_state=None):
         with closing(self.store._connect()) as conn,conn:
             conn.execute('BEGIN IMMEDIATE')
             row=conn.execute('SELECT * FROM fleet_channel_execution_steps WHERE request_id=? AND step_index=?',(rid,index)).fetchone()
             if row is None:raise ValueError('CHANNEL_STEP_NOT_FOUND')
+            if expected_state is not None and row['state']!=expected_state:
+                # A late owned receipt remains evidence, but cannot reopen an unknown dispatch.
+                if receipt is not None and row['state']=='UNKNOWN' and row['receipt_json'] is None:
+                    conn.execute('UPDATE fleet_channel_execution_steps SET receipt_json=? WHERE request_id=? AND step_index=?',
+                                 (json.dumps(receipt),rid,index))
+                return False
             conn.execute('UPDATE fleet_channel_execution_steps SET state=?,reason=?,receipt_json=? WHERE request_id=? AND step_index=?',
                 (state,reason,json.dumps(receipt) if receipt is not None else None,rid,index))
             if state in {'UNKNOWN','ACCEPTED'}:
@@ -182,4 +188,4 @@ class ExecutionJournal:
             rows=conn.execute("SELECT * FROM fleet_channel_execution_steps WHERE state IN ('DISPATCHING','UNKNOWN','ACCEPTED')").fetchall()
         for row in rows:self.finish(row['request_id'],row['step_index'],'UNKNOWN' if row['state']=='DISPATCHING' else row['state'],
             reason='PROCESS_RESTARTED_AFTER_RESERVATION' if row['state']=='DISPATCHING' else row['reason'],
-            receipt=json.loads(row['receipt_json']) if row['receipt_json'] else None)
+            receipt=json.loads(row['receipt_json']) if row['receipt_json'] else None,expected_state=row['state'])

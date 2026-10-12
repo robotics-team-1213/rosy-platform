@@ -96,6 +96,44 @@ call, root install, device command or Discord message was performed by Task1.
   최종 dispatch에서 재검증한다. 모호한 목표는 명확화로, offline/잠금은
   이유 있는 HOLD로, 불명 실행은 UNKNOWN no replay로 닫는다.
 
+### Task 2 source checkpoint (2026-10-12)
+
+The actual `fleet.server.channel.execution` subpackage owns original-positive
+instruction grants, per-step checkpoints and existing owner dispatch. It consumes
+immutable conversation producer/attempt scope, retains original content on
+edits/deletes, and never forges a human review. Navigation links atomically to
+Task admission; direct steps reuse resource/stop generations and final scoped
+discovery/TLS identity checks. Safety compensation remains available. Formation
+claims followers, preserving the existing independent leader navigation owner.
+Native receipts prove RPC acknowledgement/owner state, with exact original
+formation leader/follower binding, rather than physical goal completion.
+
+Independent `pipeline_review` structural precheck approved the actual execution
+boundary at487 physical lines. Register it at487 with the unchanged +150 limit.
+Source9eebc457c5 measures execution582/residual channel1440/conversation300/Fleet
+parent55222 together. Original channel1379/conversation280/Fleet55120 baselines,
+all historical verdicts/obligations, and zero/file/hard ceilings remain unchanged.
+Subsequent ownership CAS closes competing-worker preflight/dispatch races within
+that same limit, preserving late receipts as evidence without reopening UNKNOWN.
+
+Remote source8d4d752ee7:414 passed/terminal exit0/known_failures0 NEW. This covers
+negative/quoted/hypothetical commands, immutable values, role/source/map and final
+transport await changes, edited/deleted requests, duplicate aliases, real cancel
+cleanup, partial success/UNKNOWN/restart, resource ownership, formation
+compensation and independent leader goals. Installed wheel/sdist/copied-source
+checks add every actual execution owner import in
+`logs/natural-execution-closure/run-1.txt` under the existing session evidence
+directory; actual registered architecture checks run separately in
+`logs/natural-execution-structure/run-1.txt`. Terminal results remain required;
+these source checkpoints do not establish activation or device acceptance.
+
+Task3 still owns direct outcome readback/claim reconciliation, rich progress and
+hourly KST health. A home/dock/swarm RPC acknowledgement is not physical completion.
+Missing outcomes are not resent. Conversation semantic admission/protected
+installation, signed deployment, real Discord and physical acceptance remain
+separate gates. No device command, paid reviewer call or Discord message was sent
+by these source tests.
+
 ## Task 3: 응답·진행·실제 결과
 
 - 2026-10-12 사용자 추가 요구: 정기 health 보고를 같은 Discord 채널로
