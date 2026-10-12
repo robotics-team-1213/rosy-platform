@@ -252,6 +252,34 @@ def test_measured_terminal_transition_does_not_bootstrap_and_counts_real_update(
     assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
 
 
+def test_camera_loss_penalizes_last_applied_action_without_a_next_observation():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.table[(3, 1)] = [100.] * 4
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost')
+    assert learn_transition(policy, ((2, 1), 3), None, result) == 'terminal_camera_loss'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
+    assert None not in policy.table and policy.table[(3, 1)] == [100.] * 4
+
+
+@pytest.mark.parametrize('previous,terminated,truncated,reason', [
+    (None, True, False, 'camera_lane_lost'),
+    ((None, 3), True, False, 'camera_lane_lost'),
+    (((2, 1), 3), False, False, 'camera_lane_lost'),
+    (((2, 1), 3), False, True, 'time_limit'),
+    (((2, 1), 3), True, False, 'off_route'),
+])
+def test_missing_camera_terminal_credit_requires_executed_state_and_camera_loss(
+        previous, terminated, truncated, reason):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=terminated, truncated=truncated, reason=reason)
+    assert learn_transition(policy, previous, None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0 and policy.table == {}
+
+
 def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
     from camera_lane import LearnedCameraLane
     from control.sensing.perception.camera_ground import ground_plane
