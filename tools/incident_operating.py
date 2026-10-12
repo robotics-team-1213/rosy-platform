@@ -6,7 +6,7 @@ import re
 import sys
 
 from learning.evaluation.decision.operational_evidence import compile_evidence
-from learning.evaluation.decision.operational_sources import digest, encoded, verify_attestation
+from learning.evaluation.decision.operational_sources import digest, verify_attestation
 from learning.evaluation.decision.operational_comparison import fields, sha, text, timestamp
 
 
