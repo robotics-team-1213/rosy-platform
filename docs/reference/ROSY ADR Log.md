@@ -962,3 +962,9 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 **Status:** Accepted (2026-10-12, source contract)
 
 읽기 전용 원장 목록과 별도 고정 digest로 평가 사건 누락·변경을 거절한다. 전문은 [D-715](../adr/D-715-independent-incident-case-inventory.md).
+
+## D-720 — Discord 상태 질의와 읽기 전용 숙고형 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance separate)
+
+기명 원문·현재 관측·고정 profile·bounded broker·영속 모델 job·기존 답글을 읽기 전용으로 연결한다. 장치 권한과 보호 계정·비용·독립 수용 경계를 유지한다. 전문은 [D-720](../adr/D-720-discord-read-only-deliberation.md).
