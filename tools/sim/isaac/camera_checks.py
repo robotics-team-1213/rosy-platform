@@ -1,5 +1,57 @@
 """Camera admission and sampling guards for the native simulation diagnostic."""
 from dataclasses import replace
+import math
+
+
+class CameraLearningWindow:
+    """Select once per acquired image; credit only the executed interval."""
+
+    def __init__(self):
+        self.stamp = None
+        self.action = 1
+        self.previous = None
+        self.pending = None
+        self.reward = 0.
+        self.ended = False
+
+    def choose(self, policy, state, stamp, *, frame, train, baseline=False):
+        self.pending = None
+        if self.ended or state is None:
+            return 1
+        if (type(stamp) not in (int, float) or not math.isfinite(stamp)
+                or (self.stamp is not None and stamp < self.stamp)):
+            raise ValueError('Finite nondecreasing camera source stamp required')
+        if self.stamp is None or stamp > self.stamp:
+            self.stamp = stamp
+            self.action = 1 if baseline else policy.choose(state, explore=train)
+            self.pending = (state, self.action, frame)
+        return self.action
+
+    def learn(self, policy, state, result, *, credit):
+        if self.ended:
+            return 'episode_closed'
+        reward = result['reward']
+        if not math.isfinite(reward):
+            raise ValueError('Finite measured reward required')
+        eligible = (credit is not None and self.previous is not None
+                    and (credit['state'], credit['action']) == self.previous[:2]
+                    and credit['frame'] >= self.previous[2])
+        self.reward = self.reward + reward if eligible else 0.
+        done = result['terminated'] or result['truncated']
+        status = 'waiting_camera'
+        if done or self.pending is not None:
+            previous = self.previous[:2] if eligible else None
+            total = self.reward
+            if done and state is None and credit is not None:
+                previous = (credit['state'], credit['action'])
+                total = self.reward if eligible else reward
+            status = learn_transition(policy, previous, state, dict(result, reward=total))
+            self.previous = self.pending
+            self.reward = 0.
+        if done:
+            self.ended = True
+            self.previous = None
+        return status
 
 
 def learn_transition(policy, previous, state, result):
