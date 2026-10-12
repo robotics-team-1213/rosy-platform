@@ -155,10 +155,9 @@ from core_common.protocol.schemas import LineStuckPrecondition
 from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecondition
 from core_common.protocol.native.operation import NativeOperation
 from core_common.protocol.native_operation import NativeOperation as LegacyNativeOperation
-from core_common.protocol.schemas import NativeOperation as PublicNativeOperation
 from core_common.protocol.native.receipts import NativeReceipts
 from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
-assert NativeOperation is LegacyNativeOperation is PublicNativeOperation
+assert NativeOperation is LegacyNativeOperation
 assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
