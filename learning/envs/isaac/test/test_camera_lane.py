@@ -23,8 +23,19 @@ for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
 
 
 def perception_id():
-    return {'schema': 'isaac-camera-error-confidence/1',
+    return {'schema': 'isaac-camera-error-confidence/2',
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
+
+
+def test_physics_tick_camera_policy_cannot_restore_as_observation_policy():
+    from camera_lane import CameraQPolicy
+    current = perception_id()
+    old = CameraQPolicy(17, perception=current).export()
+    old['perception']['schema'] = 'isaac-camera-error-confidence/1'
+    with pytest.raises(ValueError, match='identity differs'):
+        CameraQPolicy.restore(old, perception=current)
+    with pytest.raises(ValueError, match='identity required'):
+        CameraQPolicy(17, perception=old['perception'])
 
 
 @pytest.mark.parametrize('mode', ['applied', 'zero', 'clipped', 'selection_failed', 'invalid', 'halted'])
@@ -46,6 +57,31 @@ def test_terminal_credit_requires_successful_matching_core_dispatch(mode):
         assert record == dict(state=(2, 1), action=3, frame=42, twist=(.02, .2))
     else:
         assert record is None
+
+
+def test_core_selection_failure_zero_breaks_existing_camera_interval():
+    from camera_checks import CameraLearningWindow, remember_camera_action
+    from camera_lane import CameraQPolicy
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    policy = CameraQPolicy(17, perception=perception_id())
+    window = CameraLearningWindow()
+    state = (2, 1)
+    action = window.choose(policy, state, 1., frame=42, train=True)
+    result = dict(reward=.1, terminated=False, truncated=False, reason='running')
+    window.learn(policy, state, result, credit=None)
+    prior = remember_camera_action(None, state, action, 42, (.02, .2), [(.02, .2)], [], False)
+    receipts, warnings = [], []
+    def failed_select():
+        raise RuntimeError('injected failure after valid dispatch')
+    command = SimpleNamespace(select_output=failed_select, announce_pending=lambda: None)
+    cmd_vel_cycle(command, SimpleNamespace(on_activity=lambda source: None),
+                  lambda twist: receipts.append((twist.linear, twist.angular)), warn=warnings.append)
+    assert receipts == [(0., 0.)] and warnings
+    credit = remember_camera_action(prior, state, action, 43, (.02, .2), receipts, warnings, False)
+    assert credit is None
+    window.choose(policy, state, 1.1, frame=66, train=True)
+    window.learn(policy, state, result, credit=credit)
+    assert policy.updates == 0
 
 
 def test_camera_terminal_credit_survives_invalid_gap_but_not_episode_reset():
