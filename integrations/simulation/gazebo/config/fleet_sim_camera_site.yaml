@@ -3,5 +3,19 @@
 # Those launches run sim_jpeg_relay.py (Gazebo camera -> camera/preview/compressed),
 # so CORE's /api/v1/vision/front/status is live and D-601 checks it as on a device.
 fleet:
+  traffic:
+    zones:
+      roundabout:
+        edges: [ring_n, ring_s, ring_e, ring_w]
+        capacity: 1
+    signals:
+      sig_ring:
+        zone: roundabout
+        # The shared graph's reversed roads end at the NE/SW entrances.
+        phases:
+          - {approach: "east:rev", green_s: 8}
+          - {approach: "west:rev", green_s: 8}
+        yellow_s: 2
+        all_red_s: 1
   trip:
     lane_camera_check: true

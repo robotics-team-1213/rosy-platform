@@ -298,3 +298,71 @@
 - 변경: map_v2_fleet_real.launch.py의 map_variant:=training-curved가 world와 lane_graph를 같은 파생 번들에서 선택한다. 기본 실행은 기존 실물 기준 맵이다.
 - 증거: bb6347eba의 맵·그래프·런치 관련 모델 PC 원격 pytest 57 passed, known_failures 0 new/0 known. 시뮬레이터 실행·신호 준수·두 로봇 Fleet 수용은 아직 확인하지 않았다.
 - gate 변화: 없음. 파생 맵의 ROS-SIM 수용은 별도다.
+
+## 2026-10-12 · 785b46314 · feat(sim): 두 대 Gazebo의 공통 curved 맵 선택
+
+- 변경: D-676 사용자 분담에 따라 Isaac은 한 대 학습·완주, 다른 PC의 Gazebo는 두 대 Fleet 검증으로 구분한다. gz_multi의 world_name:=map_v2_fleet_curved.world가 Isaac과 같은 training-curved/worlds/map_v2_fleet_real.world를 선택한다. 시각 차선 곡률만 바뀌므로 외곽 충돌 벽의 기존 occupancy map을 공유한다. 두 대는 분리된 spawn_poses를 명시한다.
+- 증거: AI PC 원격 world_profiles 11개 PASS, known_failures0NEW. 함께 요청한 gz_multi Core/run-spec 모듈은 ROS launch import 조건이 있어 이 결과로 검증됐다고 주장하지 않는다. 두 로봇 native 실행·카메라·Fleet·완주·신호 수용은 아직 미확인이다.
+- gate 변화: 없음. 이전 단일 로봇 ROS-SIM 결과를 새 curved 두 대 수용으로 승격하지 않는다.
+
+## 2026-10-12 · 3c50387944 · feat(sim): D-676 camera 두 대 전용 launch
+
+- 요청: 모델 PC Isaac 한 대 camera/RL, 다른 PC Gazebo 두 대 actual CORE/Fleet를 같은 curved 맵으로 검증한다.
+- 변경: gz_multi는 image transport 없이 nominal camera geometry와 headless rendering만 선택한다. map_v2_fleet_multi_real 전용 launch가 runner-owned run_spec·모델 pointer를 받고 두 namespaced local image bridge·기존 line_observer·JPEG relay를 구성한다. camera Fleet은 fleet_sim_camera_site.yaml의 preview admission을 유지한다.
+- 증거: 원격65pass1skip·D601/package16pass·known_failures0NEW. AI PC ROS Jazzy에서 두 namespaced 인식/미리보기 각3노드와 CORE2개 launch graph를 확인했다. ROS pytest 모듈은 skip이며 graph 확인이 native 실행을 대신하지 않는다.
+- gate 변화: 없음. 초기 연결 구성이다. 신호/횡단보도 gate·Fleet 실행·두 대 주행/완주·RL 성공은 아직 미검증이다. 기본 gz_multi와 D-118 parameter bridge에는 생 Image를 추가하지 않았다.
+
+## 2026-10-12 · 3c50387944 · test(sim): Gazebo 두 카메라·CORE 정지 상태 연결
+
+- 변경: 제품 런타임 변경 없이 AI PC 신규 A16 환경의17개 colcon package를 빌드하고 전용camera launch로 두 로봇을 실제 headless 생성했다. 독립API·HOME·namespace·loopback DDS·run_spec를 사용하고 Fleet/주행 요청은 하지 않았다.
+- 증거: rosy_01 image310/scan387/odom1137/line310/cmd1933, rosy_02도 센서/미리보기 수신, 각 LiDAR finite640·320x240 camera·CORE publisher1개·cmd 최대0·실제 odom속도0. 원본result/사진/log/cleanup은 private/isaac/results/gazebo-a16-stationary-two-camera에 보관했다. partition에 남은 own process13개를 종료하고 residual_after0을 확인했다.
+- gate 변화: 없음. CORE runtime의 DOMAIN_ID_INVALID와 FOREIGN_NAMESPACE를 확인했다. runner run_spec120..199와 CORE Linux-safe0..101 계약이 모순이며 domain172는 ERROR다. 연결 증거일 뿐 Fleet runtime 준비/카메라 주행/교통/완주/RL 수용이 아니다. 서로다른 로봇namespace 진단과 domain allocator/validator를 계약·시험과 함께 바로잡아야 한다.
+
+
+## 2026-10-12 · eae0f59da0 · fix(sim): CORE 범위와 Gazebo 예약 도메인 일치
+
+- 변경: 검증 allocator·run_spec·sim-only watchdog 80..99, 일반 sim 20..79. CORE 0..101/localhost/partition/namespace/실제 context/monotonic expiry 유지. 기존 120..199 catalog는 거절하며 새 output_root가 필요하다.
+- 증거: 관련 원격 87PASS1SKIP·known_failures 0NEW·독립 소스 안전 검토 차단 없음. 신규 17 packages 빌드 후 실제 headless Gazebo 두 CORE domain 80, 각 320x240 camera 311·finite640 LiDAR389·odom1143·최종 publisher 한 개·명령 0 확인. ROS ERROR가 사라지고 FOREIGN_NAMESPACE 경고는 유지. 자체 partition 종료 후 잔여 0.
+- gate 변화: 정지 runtime 도메인 결함 해결. Fleet 서버·교통·주행·완주·카메라 RL 수용은 미완료. 당시 모델 PC의 Isaac 한 대 재시험은 7.6GB로 8GB 기준을 넘지 못해 SDK 기동 전 거절됐다. 이후 실제 학습은 Isaac 일지에 별도 기록한다.
+
+## 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
+
+- 변경: lane_rules의 기존 TurnBan으로 NW·SE 재진입을 금지하고 두 lane_graph를 재생성했다. Fleet import·신호 접근로 검사가 금지를 보존하며 camera sim site는 cap1 roundabout과 NE·SW 신호 접근로를 설정한다. Isaac 경로는 reverse 도로로 합법적인 진입을 사용한다.
+- 증거: 두 파생 지도의 접근로·cap1·신호 plan과 실제 routing successor, native 금지 경로 거절 회귀를 추가했다. 원격 시험과 독립 안전 리뷰 결과는 후속 기록한다. 실제 Fleet A18 readback은 이전 설정에서 signals=[]·링 분리 블록을 확인한 원인 증거이며 새 설정의 성공 증거가 아니다.
+- gate 변화: 아직 없음. 새 경로 baseline/RL·네 실제 신호 표시 연결·CORE/Fleet 회전 연결·완주·교통/장애물·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. 다른 경로의 R17/R21 수치를 개선 비교에 사용하지 않는다.
+
+## 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
+
+- 변경: NE·SW 진입/NW·SE 진출 규칙을 공유 지도·Fleet·native route에 반영했다. 독립 D-430 소스 리뷰를 통과했다.
+- 증거: 관련 6개 원격 파일 135 PASS·exit 0·known_failures NEW 0. 현장 PC 격리 pytest이며 물리 주행은 없다. lint 일지 heading 3개를 수정한 후 0 errors·28 warnings. A19 소스 전송은 Broken pipe·exit 1, 후속 SSH 두 번 timeout으로 서버를 실행하지 않았다.
+- gate 변화: SOURCE 회귀만 확인했다. 실제 신호 적재·네 표시·새 경로 baseline/RL·완주·교통 안전·두 대·병렬 학습은 미완료다. 다른 작업의 예약과 부분 전송 소스를 실행 승인으로 해석하지 않는다.
+
+## 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
+
+- 변경: main 16e6fa373을 작업 브랜치에 통합했다. 기존 TurnBan·공유 지도·camera site 신호 설정을 실제 격리 Fleet 서버에서 적재 확인했다.
+- 증거: 통합 후 관련 원격 135 PASS·exit 0·NEW 0, lint 0 errors·28 warnings. A20 source archive SHA 양쪽 일치. 실제 인증 readback에서 map_v2_fleet·두 TurnBan·roundabout cap1·sig_ring NE/SW 접근로·errors=[] 확인. runner exit 0, 종료 후 독립 PID 부재·ECONNREFUSED 확인. private 원본 네 파일 hash 대조 보관.
+- gate 변화: SOURCE/설정 적재만 확인했다. 신호는 virtual occupancy, online 0/total 2이며 실제 CORE/Gazebo·grant·주행·네 표시·완주·병렬 RL 수용이 아니다. main 착지·push는 아직 하지 않았다.
+
+## 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
+
+- 변경: 새 NE/SW 진입 ordered 경로를 기존 segmentation·CORE·frozen RL로 실제 headless 평가했다. 최신 main 통합 소스로 별도 Gazebo build/install과 두 CORE·실제 Fleet 연결 정지 시험을 준비했다.
+- 증거: R23 source 7,337 파일 실행 전후 hash 검증, SDK exit 1, 네 heading baseline/eval 완주 0/8·진행 0m. 영상 8개 ffprobe·SHA·시각 증가, 무효 camera 명령 0·최종 정지·GPU 없음·독립 runner PID 부재 확인. private 원본 56개 hash 대조 보관. A21 ROS 17 패키지 빌드 exit 0; 실행 직전 공식 sim selector는 eligible 없음·exit 1이다.
+- gate 변화: 완주/RL 개선은 HOLD다. trace의 lane_cue null·junction idle과 camera_target_unavailable을 기록했다. native Fleet 회전·공간/오차 승인·재획득과 두 대 실제 주행이 남았다. 정지 sensor/Fleet 연결 script는 준비·syntax 확인뿐이며 A21 SDK/CORE/Fleet 실행을 주장하지 않는다. 기존 안전 정지를 완화하지 않았다.
+
+## 2026-10-12 · uncommitted · 두 카메라 도로 관측 연결과 A21 실제 정지 시험
+
+- 변경: 두 namespace에 기존 road_observer_node를 연결하고 중복 preview relay를 제거했다. CORE와 map/scene 식별자를 맞췄다. simulation 지면 guard가 거절하는 GZ 값을 GAZEBO로 수정하고 실제 shared projection helper의 생성 회귀를 추가했다.
+- 증거: A21 실제 두 CORE·Fleet online 2/2, 카메라·차선·scan·odom 수신과 namespace별 최종 cmd_vel publisher CORE 하나를 확인했다. 모든 명령·최종 odom 속도 0, 종료 후 소유 프로세스·포트 부재 확인. private 원본 39개 SHA 대조 보관. roslogs/latest 절대 symlink는 안전 추출에서 제외했다. 새 도로 연결의 원격 회귀·native 실행은 아직 미확인이다.
+- gate 변화: 실제 정지 연결 증거만 추가했다. 위치 UNKNOWN, 설정 ENFORCED와 snapshot DISABLED 불일치로 교통 모드 수용은 보류다. 주행·도로 검출 정확도·신호 표시·완주·병렬 RL 개선은 미완료다.
+
+## 2026-10-12 · 493894894 · 道路 관측 연결 원격 회귀
+
+- 변경: 새 Gazebo 도로 관측 연결의 source 검토와 원격 계약 시험 결과를 기록했다.
+- 증거: 독립 Safety-Review SOURCE APPROVE. AI PC의 committed HEAD 시험은 관련 네 파일 60 PASS·exit 0, known_failures 0 new·0 known이다. 실제 projection helper에 launch params를 전달한 회귀가 포함됐다. harness lint 0 errors·28 warnings.
+- gate 변화: 원격 회귀만 통과했다. 실제 road/observation 수신·교통 endpoint 모드·preview 단일 발행과 주행 완주는 별도 미확인이다.
+
+## 2026-10-12 · d9fbc11ce · A24 두 CORE 도로 관측과 교통 설정 readback
+
+- 변경: 새 도로 관측 연결·기동 snapshot 수정을 포함한 소스를 격리 AI PC에서 빌드·실행했다. 최신 main 6c39ed8ae를 별도 통합해 f2c8b2e1f에서 관련 회귀를 다시 수행했다. 일지 충돌은 양쪽 기록을 보존하고 인덱스를 재생성했다.
+- 증거: A24 source 7,337 파일 hash 확인, 17 ROS 패키지 build exit 0, native 정지 runner exit 0. online 2/2·로봇별 road/line/image 271건·preview publisher 하나·최종 CORE publisher 하나·명령/최종 odom 속도 0. 실제 교통 API와 snapshot ENFORCED 일치. 기존 named operator pin API로 실제 Gazebo 위치 등록 후 LOCALIZED 두 대를 확인했다. 독립 PID 부재·세 포트 ECONNREFUSED·private 원본 47개 SHA 대조. 통합 f2c8b2e1f의 원격 관련 278 PASS·exit 0·known_failures NEW 0.
+- gate 변화: 도로 topic·정지 연결·활성 설정 증거만 추가했다. CORE 내부 valid 수신은 다음 sensors endpoint 확인이 필요하다. 첫 로봇 learned crosswalk 검출과 RGB road crosswalk=false의 차이, 둘째 containment uncertainty=null이 남았다. operator pin은 지속 카메라 위치 증거가 아니며 완주·교통 인식·grant·병렬 RL·실물 수용은 미완료다. A24 native는 main 통합 전 소스다.

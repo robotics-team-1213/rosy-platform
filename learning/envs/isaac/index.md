@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · c229738784 · fix(isaac): 명시적 렌더에서 카메라 receipt 갱신
-- 2026-10-11 · e2a94abaa3 · fix(isaac): 현재 경로 접선과 전방 안내각 분리
-- 2026-10-11 · 152cb908fe · feat(isaac): 동일 조건 카메라 기준선과 고정 정책 비교
-- 2026-10-11 · fb355522f5 · fix(isaac): 유효 카메라 관측만 Q-learning에 반영
-- 2026-10-11 · 764b591ed6 · refactor(isaac): 여러 package 조합 진단을 tools/sim에 배치
+- 2026-10-12 · uncommitted · native 카메라 검증 책임 분리
+- 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
+- 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
+- 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
+- 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성

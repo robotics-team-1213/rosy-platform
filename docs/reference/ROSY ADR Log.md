@@ -673,12 +673,14 @@
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 | Accepted (source design only, 2026-10-12) |
 | D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
 | D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
+| D-676 | Fleet 신호·CORE 교통 gate·차선 RL의 두 Pinky 완주 파이프라인 | Accepted (2026-10-12) |
 | D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
 | D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
 | D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
 | D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY | Accepted |
 | D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
 | D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-692 | Native Isaac 카메라 경계 관측 출처 | Accepted |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
 | D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
 | D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
@@ -799,6 +801,11 @@
 - 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
 - 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
 
+## D-692 · Native Isaac 카메라 경계 관측 출처
+
+- 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
+- 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
+- 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.
 ## D-686 — Fleet 초기 계정과 첫 로그인 비밀번호 변경
 
 - 상태: Accepted (2026-10-12, 사용자 지시).
