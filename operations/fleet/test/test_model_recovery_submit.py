@@ -20,13 +20,15 @@ def test_actual_loop_model_writer_checks_final_context_and_never_repeats(tmp_pat
     now, store, log, scope, state, proof, _ = opened(tmp_path, generation='core:1:stamp')
     state.apply('line-back', signed(proof, 0))
     board = LineStuckBoard(log=log, clock=lambda: now[0], wall=lambda: now[0])
-    resolver = StuckResolver(ResolverConfig(), autonomous_robots={scope.subject_id})
+    resolver = StuckResolver(ResolverConfig())
+    resolver.autonomous_robots = frozenset({scope.subject_id})
     calls, clients = [], {}
     row = dict(robot_id=scope.subject_id, online=True, state=dict(seq=1, timestamp='stamp',
         line_follow={'stuck': dict(recovery_context(), stuck_id=scope.case_id)}))
     async def snapshot(): return {'robots': [row]}
     loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: clients, clock=lambda: now[0])
     loop.operating_state, loop.operating_grant = state, 'line-back'
+    (tmp_path / 'worker').mkdir()
     _, _, _, _, _, _, worker, _, _ = make_incident_worker(tmp_path / 'worker')
     worker.store = store
     worker._fresh = lambda _: True
@@ -68,6 +70,7 @@ def test_fake_client_swallowing_guard_cannot_dispatch(tmp_path):
     async def snapshot(): return {'robots': []}
     loop = StuckResolverLoop(snapshot, LineStuckBoard(log=log), StuckResolver(ResolverConfig()), clients=lambda: {scope.subject_id: Fake()})
     loop.operating_state, loop.operating_grant = state, 'line-back'
+    (tmp_path / 'worker').mkdir()
     _, _, _, _, _, _, worker, _, _ = make_incident_worker(tmp_path / 'worker')
     worker.store = store
     asyncio.run(loop._model_answer(scope, 'model-1', recovery_problem(), worker))
