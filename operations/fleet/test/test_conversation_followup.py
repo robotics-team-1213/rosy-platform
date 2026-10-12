@@ -73,6 +73,8 @@ def followup_worker(f, *, during=None, text='40번 거기로 보내줘'):
     worker = ConversationWorker(f.jobs,snapshot,Profile(**f.scope['profile']),provider,
         admission=lambda:f.admitted[0],observation_guard=lambda env:bounded_environment(f.env)==env,
         clock=lambda:f.clock[0],producer_scope=f.scope)
+    async def read_context(context):return await f.client._get('/api/v1/navigation/state?run_id='+context['run_id'])
+    worker.context_reader=read_context
     return worker,receipt,calls
 
 
@@ -124,6 +126,9 @@ def test_followup_queues_once_and_rechecks_original_after_selection_row_moves(tm
     leases.admit_attempt=f.service.admit_attempt
     leases.bind_native_receipt=f.service.bind_native_receipt
     leases.native_required=f.service.native_required
+    from functools import partial
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
+    leases.prepare_send=partial(prepare_send,leases)
     dispatched=[]
     async def goal(*args,**kwargs):dispatched.append(args);return {'accepted':True}
     f.client.navigation_goal=goal
@@ -187,3 +192,48 @@ def test_unaccepted_prior_control_proposal_cannot_authorize_followup(tmp_path):
     asyncio.run(worker.step(receipt));asyncio.run(f.worker.step(receipt['request_id']))
     assert calls[0].history[0].kind=='CONTROL' and calls[0].accepted_execution_context is None
     assert not f.store.queued_task_ids() and not f.writes
+
+
+@pytest.mark.parametrize('change',['reboot','pruned','new_owner','new_generation','wrong_run'])
+@pytest.mark.parametrize('phase',['stage','result'])
+def test_live_selected_native_readback_change_refuses_followup(tmp_path,change,phase):
+    f=completed_turn(tmp_path)
+    value=_readback(f.task['receipt']['operation'])
+    def mutate():
+        if change=='reboot':value['owner']['boot_id']=str(uuid4())
+        elif change=='pruned':value['lookup']='UNKNOWN';value['operation']=None
+        elif change=='new_owner':value['owner']['owner_run_id']=str(uuid4())
+        elif change=='new_generation':value['owner']['owner_generation']+=1;value['quiescence']['owner_generation']+=1
+        else:value['operation']['run_id']=str(uuid4())
+    if phase=='stage':mutate()
+    async def get(path):return value
+    f.client._get=get
+    worker,receipt,calls=followup_worker(f,during=mutate if phase=='result' else None)
+    asyncio.run(worker.step(receipt))
+    assert f.jobs.peek(receipt['request_id'])['state']=='HOLD'
+    assert len(calls)==(0 if phase=='stage' else 1)
+
+
+def test_live_reboot_before_final_goal_send_cannot_rebind_old_selection(tmp_path):
+    from functools import partial
+    from fleet.server.goal_lease import GoalLeases
+    from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
+    f=completed_turn(tmp_path)
+    worker,receipt,calls=followup_worker(f)
+    asyncio.run(worker.step(receipt));asyncio.run(f.worker.step(receipt['request_id']))
+    context=calls[0].accepted_execution_context
+    leases=GoalLeases(0,{})
+    leases.admit_attempt=f.service.admit_attempt
+    leases.native_required=f.service.native_required
+    leases.bind_native_receipt=f.service.bind_native_receipt
+    leases.selected_context=lambda task_id:context
+    leases.prepare_send=partial(prepare_send,leases)
+    value=_readback(f.task['receipt']['operation']);value['owner']['boot_id']=str(uuid4())
+    async def get(path):return value
+    sent=[]
+    async def goal(*args,**kwargs):sent.append(kwargs);return {'accepted':False}
+    f.client._get=get;f.client.navigation_goal=goal
+    async def dispatch(task):
+        return await leases.send('rosy_40',f.client,{},1.,2.,0.,task['attempt_id'],task_id=task['task_id'])
+    asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=dispatch))
+    assert not sent
