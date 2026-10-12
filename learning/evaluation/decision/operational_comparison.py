@@ -301,18 +301,71 @@ def compare_with_rules(cohort, exports):
     return report
 
 
+def compare_with_inventory(cohort, exports, inventories, *, expected_digests):
+    report = compare(cohort, exports)
+    candidates = {(row['profile_sha256'], row['policy_revision']) for row in report['candidates'] if row['strategy'] != 'rule'}
+    if (type(inventories) is not list or type(expected_digests) is not list
+            or len(inventories) != len(candidates) or len(expected_digests) != len(inventories)):
+        raise ValueError('EXPLICIT_FROZEN_INVENTORIES_REQUIRED')
+    available = {}
+    for exported in exports:
+        if exported['schema'].startswith('rosy.incident.model_feedback/'):
+            case, _ = checked_export(exported)
+            scope = case['scope']
+            available.setdefault((scope['profile_sha256'], scope['policy_revision']), {})[
+                (scope['subject_id'], scope['case_id'])] = case
+    used, receipts = set(), []
+    keys = ('scope', 'budget', 'state', 'reason', 'calls', 'observations', 'spent_micros', 'reserved_micros')
+    for inventory, expected in zip(inventories, expected_digests):
+        fields(inventory, ('schema', 'scope', 'records', 'digest', 'label_state', 'field_accepted', 'coverage'))
+        if (inventory['schema'] != 'rosy.incident.case_inventory/1' or inventory['label_state'] != 'UNREVIEWED'
+                or inventory['field_accepted'] is not False or inventory['coverage'] != 'retained_case_rows_only'
+                or digest(dict(scope=inventory['scope'], records=inventory['records'])) != sha(expected)
+                or inventory['digest'] != expected): raise ValueError('INVENTORY_DIGEST_OR_ADMISSION_DIFFERS')
+        scope = inventory['scope']
+        fields(scope, ('owner_id', 'policy_revision', 'profile_sha256', 'start', 'end'))
+        text(scope['owner_id']); text(scope['policy_revision']); sha(scope['profile_sha256'])
+        if not 0 < timestamp(scope['end']) - timestamp(scope['start']) <= 86400: raise ValueError('INVALID_INVENTORY_WINDOW')
+        strategy = (scope['profile_sha256'], scope['policy_revision'])
+        if strategy not in candidates or strategy in used: raise ValueError('INVENTORY_STRATEGY_DIFFERS')
+        rows = inventory['records']
+        if type(rows) is not list or len(rows) > 1000: raise ValueError('INVENTORY_CASE_LIMIT')
+        matched = set()
+        for row in rows:
+            fields(row, keys)
+            fields(row['scope'], ('subject_id', 'case_id', 'owner_id', 'profile_sha256', 'policy_revision'))
+            key = (text(row['scope']['subject_id']), text(row['scope']['case_id']))
+            cases = available.get(strategy, {})
+            if key in matched or key not in cases: raise ValueError('INVENTORY_CASE_SET_DIFFERS')
+            case = cases[key]
+            if (row != {name: case[name] for name in keys} or case['scope']['owner_id'] != scope['owner_id']
+                    or not scope['start'] <= case['budget']['started_at'] < scope['end']):
+                raise ValueError('INVENTORY_CASE_STATE_DIFFERS')
+            matched.add(key)
+        if matched != set(available.get(strategy, {})): raise ValueError('INVENTORY_CASE_SET_DIFFERS')
+        used.add(strategy); receipts.append(expected)
+    report['case_inventory'] = dict(coverage='retained_case_rows_only', digests=receipts)
+    return report
+
+
 def main(argv=None):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cohort', type=Path)
     parser.add_argument('exports', type=Path, nargs='+')
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--inventory', type=Path, nargs='+')
+    parser.add_argument('--inventory-digest', nargs='+')
     args = parser.parse_args(argv)
     def read(path):
         with path.open('rb') as source: raw = source.read(1024 * 1024 + 1)
         if len(raw) > 1024 * 1024: raise ValueError('COMPARISON_INPUT_LIMIT')
         return json.loads(raw)
-    report = compare(read(args.cohort), [read(path) for path in args.exports])
+    if (args.inventory is None) != (args.inventory_digest is None):
+        raise ValueError('EXPLICIT_FROZEN_INVENTORIES_REQUIRED')
+    cohort, exports = read(args.cohort), [read(path) for path in args.exports]
+    report = (compare_with_inventory(cohort, exports, [read(path) for path in args.inventory],
+              expected_digests=args.inventory_digest) if args.inventory else compare(cohort, exports))
     with args.out.open('x', encoding='utf-8') as output:
         output.write(json.dumps(report, sort_keys=True, allow_nan=False) + '\n')
     return 0
