@@ -82,8 +82,9 @@ class ChannelRequests:
                 or re.fullmatch(r'[0-9]{17,20}',message_id) is None):
             return
         with closing(self._connect()) as conn,conn:
-            conn.execute('INSERT OR IGNORE INTO fleet_channel_withdrawals VALUES (?,?,?,?)',
-                         (guild_id,channel_id,message_id,reason))
+            conn.execute('''INSERT OR IGNORE INTO fleet_channel_withdrawals SELECT ?,?,?,?
+                WHERE EXISTS (SELECT 1 FROM fleet_channel_requests WHERE guild_id=? AND channel_id=? AND message_id=?)''',
+                         (guild_id,channel_id,message_id,reason,guild_id,channel_id,message_id))
 
     def receive(self, envelope):
         cfg = self.config

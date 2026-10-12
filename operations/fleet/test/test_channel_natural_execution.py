@@ -20,7 +20,7 @@ from test_channel_model_jobs import setup
 from test_channel_conversation import environment, receipt_text, answer
 
 
-def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
+def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None,*,extra_robots=()):
     _,raw,accounts,receipt,_,_,clock=setup(tmp_path)
     receipt=receipt_text(receipt,text)
     with raw._connect() as conn,conn:
@@ -34,6 +34,7 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
            'policy':source_policy('1'*40,profile)}
     jobs=ConversationJobs(raw,digest(scope),clock=lambda:clock[0])
     env=environment()
+    for rid in extra_robots:env['robots'].append({**copy.deepcopy(env['robots'][0]),'robot_id':rid})
     question=conversation_input(receipt,env,raw.config.bot_id,now=clock[0])
     jobs.stage(receipt,question,env)
     jobs.reserve(receipt['request_id'],'primary')
@@ -49,7 +50,7 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
     service.channel_admission=journal.task_reason
     writes=[]
     async def caps():return {'navigation':{'goal_navigation':True,'return_home':True,
-        'max_linear_velocity':.2,'max_angular_velocity':.8},'teleop':True,'docking':{'supported':True}}
+        'max_linear_velocity':.2,'max_angular_velocity':.8},'teleop':True,'docking':{'supported':True},'swarm':{'lead':True,'follow':True}}
     async def state():return {'mode':'IDLE','safety':{'estop':False}}
     async def cancel():check_dispatch();writes.append('cancel');return {'navigation':'CANCELED'}
     async def estop():check_dispatch();writes.append('estop');return {'estop':True}
@@ -59,7 +60,7 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None):
     canceled=[]
     def cancel_pending(robot=None,*,actor_id):
         canceled.extend(service.cancel_queued_for_robot(robot,actor_id=actor_id) if robot else service.cancel_all_queued(actor_id=actor_id))
-    console=SimpleNamespace(robot_ids=['rosy_40'],_client=lambda robot:client,trip_busy=lambda robot:False,cancel=console_cancel)
+    console=SimpleNamespace(robot_ids=['rosy_40',*extra_robots],_client=lambda robot:client,trip_busy=lambda robot:False,cancel=console_cancel)
     execution=IntentExecution(console,service,lambda *_args,**_kwargs:{},cancel_pending)
     worker=ExecutionWorker(journal,execution)
     return SimpleNamespace(journal=journal,jobs=jobs,service=service,store=store,worker=worker,raw=raw,
@@ -418,3 +419,50 @@ def test_only_current_completed_execution_supplies_trusted_selection(tmp_path,ch
         else:
             c.execute("UPDATE fleet_tasks SET status='UNKNOWN' WHERE task_id=?",(task['task_id'],))
         assert f.journal.selection(question,c) is None
+
+
+def test_native_formation_follower_claim_preserves_existing_leader_goal_owner(tmp_path):
+    text='40번 리더로 41번,42번 COLUMN 대형 간격 0.6 m 최대속도 0.15 m/s 시작해줘'
+    proposal={'do':'formation_start','leader':'rosy_40','members':['rosy_40','rosy_41','rosy_42'],
+              'formation':'COLUMN','spacing':.6,'max_speed':.15}
+    f=fixture(tmp_path,text,proposal,extra_robots=('rosy_41','rosy_42'))
+    async def start(leader,formation,spacing,speed,*,members):
+        for member in members:
+            if member==leader:continue
+            check_dispatch(path='/api/v1/swarm/follow')
+            f.writes.append(('follow',member))
+        return {'active':True,'state':'RUNNING','leader':leader,'assignment':{r:{} for r in members if r!=leader}}
+    f.worker.execution.console.formation_start=start
+    asyncio.run(f.worker.step(f.receipt['request_id']))
+    assert len(f.writes)==2 and not f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')
+    for rid in ('rosy_41','rosy_42'):assert f.store.resource_claims(resource_kind='robot',resource_id=rid)
+    task=asyncio.run(f.service.submit_navigation(robot_id='rosy_40',x=3.,y=4.,source='operator',actor_id='op',request_key='leader-goal'))
+    async def goal(attempt):
+        f.service.admit_attempt(attempt['task_id'],attempt['attempt_id'])
+        f.writes.append(('goal','rosy_40'))
+        return {'accepted':True}
+    result=asyncio.run(f.service.dispatch_next({'rosy_40'},dispatch=goal))
+    assert result['task_id']==task['task_id'] and result['status']=='ACCEPTED' and f.writes[-1]==('goal','rosy_40')
+
+
+def test_direct_resource_revoked_during_transport_wait_cannot_send(tmp_path):
+    f=fixture(tmp_path,'40번 홈으로 복귀해줘',{'do':'home','robot':'rosy_40'})
+    async def post(path,body):
+        owner=f.journal.view(f.receipt['request_id'])['steps'][0]['owner_id']
+        f.store.release_resources(owner_kind='direct_action',owner_id=owner)
+        await asyncio.sleep(0)
+        check_dispatch(path=path)
+        f.writes.append(path)
+        return {'accepted':True}
+    f.client._post=post
+    asyncio.run(f.worker.step(f.receipt['request_id']))
+    assert not f.writes and f.journal.view(f.receipt['request_id'])['steps'][0]['state']=='UNKNOWN'
+    f.journal.recover()
+    assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40')[0]['phase']=='UNKNOWN'
+
+
+def test_untracked_discord_deletion_does_not_grow_durable_command_journal(tmp_path):
+    f=fixture(tmp_path)
+    f.raw.withdraw(f.receipt['guild_id'],f.receipt['channel_id'],'99999999999999999')
+    with f.raw._connect() as conn:
+        assert conn.execute('SELECT count(*) FROM fleet_channel_withdrawals').fetchone()[0]==0

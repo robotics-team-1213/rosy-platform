@@ -24,12 +24,14 @@ class ExecutionJournal:
                 CREATE TABLE IF NOT EXISTS fleet_channel_execution_steps (
                 request_id TEXT NOT NULL, step_index INTEGER NOT NULL, state TEXT NOT NULL,
                 owner_id TEXT NOT NULL UNIQUE, generation INTEGER NOT NULL, task_id TEXT UNIQUE,
-                receipt_json TEXT, reason TEXT, PRIMARY KEY(request_id,step_index));
+                receipt_json TEXT, reason TEXT, resources_json TEXT, PRIMARY KEY(request_id,step_index));
                 CREATE TABLE IF NOT EXISTS fleet_channel_execution_selection (
                 principal_id TEXT NOT NULL, author_id TEXT NOT NULL, guild_id TEXT NOT NULL,
                 channel_id TEXT NOT NULL, request_id TEXT NOT NULL, task_id TEXT NOT NULL,
                 robot_id TEXT NOT NULL, place_id TEXT NOT NULL, catalog_hash TEXT NOT NULL,
                 expires_at REAL NOT NULL, PRIMARY KEY(principal_id,author_id,guild_id,channel_id));''')
+            if 'resources_json' not in {r['name'] for r in conn.execute('PRAGMA table_info(fleet_channel_execution_steps)')}:
+                conn.execute('ALTER TABLE fleet_channel_execution_steps ADD COLUMN resources_json TEXT')
 
     def selection(self, question, conn):
         row = conn.execute('''SELECT s.* FROM fleet_channel_execution_selection s
@@ -92,7 +94,7 @@ class ExecutionJournal:
                  json.dumps(plan,ensure_ascii=False),digest(plan),self.clock()+120))
             generation = self.store.dispatch_control()['generation']
             for index,_ in enumerate(interpret(plan)):
-                conn.execute('INSERT INTO fleet_channel_execution_steps VALUES (?,?,?,?,?,NULL,NULL,NULL)',
+                conn.execute('INSERT INTO fleet_channel_execution_steps (request_id,step_index,state,owner_id,generation) VALUES (?,?,?,?,?)',
                     (rid,index,'READY',f'channel:{rid}:{index}',generation))
             self.jobs.journal.reply_outbox.enqueue(conn,receipt,'EXECUTION:VALIDATED',
                 '원문 지시와 현재 대상·지도·권한을 검증했습니다. 기존 실행 경로에 연결합니다. 동작 완료는 아직 확인 전입니다.')
@@ -145,7 +147,8 @@ class ExecutionJournal:
                     not reserve(conn,owner_kind='direct_action',owner_id=row['owner_id'],generation=row['generation'],
                                 resources=resources,phase='DISPATCHING')):
                 raise ValueError('DISPATCH_CLOSED_OR_RESOURCE_BUSY')
-            conn.execute("UPDATE fleet_channel_execution_steps SET state='DISPATCHING' WHERE request_id=? AND step_index=?",(rid,index))
+            conn.execute("UPDATE fleet_channel_execution_steps SET state='DISPATCHING',resources_json=? WHERE request_id=? AND step_index=?",
+                         (json.dumps(resources),rid,index))
 
     def finish(self,rid,index,state,*,reason=None,receipt=None):
         with closing(self.store._connect()) as conn,conn:
@@ -156,6 +159,14 @@ class ExecutionJournal:
                 (state,reason,json.dumps(receipt) if receipt is not None else None,rid,index))
             if state in {'UNKNOWN','ACCEPTED'}:
                 conn.execute("UPDATE fleet_action_claims SET phase='UNKNOWN' WHERE owner_kind='direct_action' AND owner_id=?",(row['owner_id'],))
+                plan=json.loads(conn.execute('SELECT plan_json FROM fleet_channel_execution WHERE request_id=?',(rid,)).fetchone()[0])
+                if row['resources_json'] and interpret(plan)[index].verb not in {'cancel','stop','estop','formation_stop','follow_cancel'}:
+                    missing=[(k,r) for k,r in json.loads(row['resources_json']) if not conn.execute(
+                        'SELECT 1 FROM fleet_action_claims WHERE resource_key=? AND owner_kind=? AND owner_id=? AND generation=?',
+                        (k+':'+r,'direct_action',row['owner_id'],row['generation'])).fetchone()]
+                    if missing and not reserve(conn,owner_kind='direct_action',owner_id=row['owner_id'],generation=row['generation'],
+                                               resources=missing,phase='UNKNOWN'):
+                        raise ValueError('UNRESOLVED_CHANNEL_RESOURCE_CONFLICT')
             elif state in {'HOLD','FAILED','COMPLETED','CANCELED'}:
                 release(conn,owner_kind='direct_action',owner_id=row['owner_id'],generation=row['generation'])
             if state == 'HOLD':conn.execute('UPDATE fleet_channel_execution SET reason=? WHERE request_id=?',(reason,rid))
@@ -168,5 +179,7 @@ class ExecutionJournal:
 
     def recover(self):
         with closing(self.store._connect()) as conn:
-            rows=conn.execute("SELECT request_id,step_index FROM fleet_channel_execution_steps WHERE state='DISPATCHING'").fetchall()
-        for row in rows:self.finish(row['request_id'],row['step_index'],'UNKNOWN',reason='PROCESS_RESTARTED_AFTER_RESERVATION')
+            rows=conn.execute("SELECT * FROM fleet_channel_execution_steps WHERE state IN ('DISPATCHING','UNKNOWN','ACCEPTED')").fetchall()
+        for row in rows:self.finish(row['request_id'],row['step_index'],'UNKNOWN' if row['state']=='DISPATCHING' else row['state'],
+            reason='PROCESS_RESTARTED_AFTER_RESERVATION' if row['state']=='DISPATCHING' else row['reason'],
+            receipt=json.loads(row['receipt_json']) if row['receipt_json'] else None)

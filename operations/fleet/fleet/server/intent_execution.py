@@ -46,14 +46,17 @@ class IntentExecution:
         self.console, self.task_service = console, task_service
         self.local_stop_fanout, self.cancel_pending = local_stop_fanout, cancel_pending
 
+    def resources(self,call):
+        if call.robot:return [call.robot]
+        if call.verb=='formation_start':return [r for r in call.body.get('members',self.console.robot_ids) if r!=call.body['leader']]
+        if call.verb in {'formation_resume','formation_stop'}:return list(self.console.formation_status().get('assignment',{}))
+        return list(self.console.robot_ids)
+
     async def step(self, call, principal, idempotency_key, index, *, admission=None, owner_id=None):
         from fleet.swarm.dispatch_guard import dispatch_guard
         def resources_available():
             if self.task_service is None or call.verb in STOP_VERBS or call.verb=='navigate':return
-            robots=[call.robot] if call.robot else call.body.get('members')
-            if robots is None:
-                formation=self.console.formation_status()
-                robots=list(dict.fromkeys([formation.get('leader'),*formation.get('assignment',{})]))
+            robots=self.resources(call)
             for robot in robots:
                 if robot is None:continue
                 claims=self.task_service.store.resource_claims(resource_kind='robot',resource_id=robot)
