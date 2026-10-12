@@ -8,6 +8,8 @@
 
 **Tech Stack:** 기존 Python/FastAPI/SQLite/httpx/SSH, Ollama, isolated OpenCode GLM launcher. 새 의존성과 장치 writer는 추가하지 않는다.
 
+읽기 전용 질의는 별도 `READ_ONLY_QUERY` 필요성 값으로 묶는다. CORE의 `INTERVENE/DO_NOT_INTERVENE/ABSTAIN`과 혼동하지 않으며 일반 도메인에서는 허용하지 않는다. 원문은 기존 goal의 bounded data로 직렬화하고 기존 세 domain의 dataclass 필드·payload·digest는 바꾸지 않는다. status adapter/profile/calibration은 별도 고정 identity다. Discord 답변은 검증된 verdict와 현재 robot별 관측의 deterministic formatter이며 자유 모델 문장을 장치 사실로 전달하지 않는다. 명시적 상태 질의는 한도 내 Qwen을 호출할 수 있으나 정상 CORE 사건의 모델 무호출 규칙은 유지한다. 기존 GLM 단일 spent marker는 새 profile·배포·rollback에서도 보존한다.
+
 ## Scope and current evidence
 
 - 현장 서명 후보와 Discord 수신/회신은 실행 중이다. 신규 실제 메시지의 접수·자동 회신과 원래 메시지 reference를 provider에서 읽어 확인했다.
