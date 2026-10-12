@@ -6,6 +6,26 @@
 
 ## D-706 구현 checkpoint
 
+### D-713 기존 runtime의 pinned dispatcher checkpoint
+
+`b5648d15a6`에서 기존 Fleet factory/loop/outbox의 단일 worker 슬롯에 opt-in `profile_workers` 구성을 연결했다. 같은 store·board·관측·clock을 공유하는 고정 profile worker 최대 8개를 만들고, active/최종 인수 대기 사건의 원 profile과 새 사건의 현재 선택에 로봇의 공개 CORE 상태만 분배한다. 기존 사건과 같은 case가 고정돼 있으면 current worker에 중복 전달하지 않는다. case가 바뀌면 이전 사건 정리와 새 사건 생성은 각 worker가 맡으며 최종 생성 선택 검증은 D-712의 동일 DB 트랜잭션이다. outbox receipt는 같은 트랜잭션에서 원 scope 또는 현재 선택의 worker 하나에만 연결한다.
+
+독립 검토에서 한 worker 종료 오류가 다른 worker 정리보다 먼저 dispatcher를 종료하는 결함을 RED 1 NEW로 재현했다. 모든 worker의 cleanup terminal을 기다린 뒤 오류를 그대로 보고하도록 수정했다. 정상 0호출·미설치 current 0호출·기존 예산과 assignment 보존·복귀·UNKNOWN 재제출 금지·in-flight 취소·중복/unrouted 거절을 실제 원장과 create_app 경로에서 확인했다. `b5648d15a6`의 관련 8개 파일 원격 회귀는 terminal exit 0이며 로그는 세션 `logs/incident-dispatch-final/run-1.txt`다. source-less wheel/sdist와 구조 검사도 포함한다. 독립 source 검토에서 중요한 잔여 blocker는 없었고 실측은 Fleet 55,472/automation 331/execution 343/ledger 492로 기존 기준을 유지했다.
+
+`799587b251`의 root `registry_calibration_config`는 같은 opt-in profile_workers 각각에 기존 엄격한 보정 승인 읽기 포트를 구성한다. top clock과 기존 providers/admission/current/budget/enabled를 보존하고 nested workers·variant clock·소유된 포트 재정의를 거절한다. 실제 SQLite 승인→root 구성→create_app→dispatcher에서 primary만 호출하고, 폐기 후 새 사건은 동일 입력의 primary+reviewer로 제한되는 흐름을 확인했다. 관련 원격 회귀는 terminal exit 0/NEW 0, 로그는 `logs/incident-dispatch-registry-green/run-1.txt`다. `deb4429b44`의 구성 경계 추가 시험은 15개 통과/terminal exit 0/NEW 0, 로그는 `logs/incident-dispatch-composition/run-1.txt`다. 실제 모델·운영 trust 설치를 사용하지 않았다.
+
+내부 구성에서 `profile_a`와 `profile_b`는 기존 worker 설정이며 clock을 포함하지 않는다. flat 설정은 계속 단일 worker를 만들고 기본 미활성 동작을 유지한다.
+
+```python
+configured = registry_calibration_config(
+    {'clock': clock, 'profile_workers': (profile_a, profile_b)},
+    registry, domain='line_follow')
+# Existing create_app(..., incident_model_config=configured) owns installation.
+# Profile selection still requires the existing Fleet journal and explicit CAS.
+```
+
+선택 목록·보정의 PASS_OFFLINE_ONLY는 운영 품질 승격이 아니다. 다음은 signed 운영 수용·실제 설치 loader/readback과 운영 coverage 결속이다. 실제 모델 결과·독립 품질·현장 수용, 물리 처리/door/arm·실패 분류/training도 여전히 남아 있다. D-706 이후 통합 착지는 lint에서 이미 도착한 D-692의 stale gap 표시 때문에 중단됐으며 실제 ADR/Log 확인 후 `92edcab97`로 표시만 제거했다. 기존 실행은 terminal로 종료됐고 수정 후 새 통합 실행을 한다.
+
 ### D-712 영속 선택·원자적 사건 배정 checkpoint
 
 `d0541c3b27`에서 기존 Fleet 사건 DB에 owner/policy별 current/previous profile tuple SHA·증가 revision과 사건별 assignment revision을 기록한다. 새 사건은 선택 일치 확인·생성·assignment 기록을 같은 BEGIN IMMEDIATE 또는 기존 outbox 트랜잭션에서 수행한다. 기존 사건의 scope·예산·시도·assignment는 변경하지 않는다. 선택이 없거나 다른 profile/owner/policy면 routed 새 사건을 거절한다. 선택·복귀는 revision CAS로 경쟁 전환과 ABA를 거절하며 재시작 후 읽어 확인한다.
