@@ -1773,4 +1773,8 @@ SSH dispatcher는 ingress 계정이 접근할 수 있는 root 소유
 그 파일의 정확한 관리 바이트·소유·mode·group을 확인한 경우에만 기존 key와 sshd의
 고정 경로를 바꾸고 이전 파일은 보존한다. 설치 완료 전 실제 ingress UID로 두 명령에
 잘못된 `{}` 요청을 보내 broker HOLD를 확인하고, 알 수 없는 명령과 추가 인자는
-exit 64인지 확인한다. 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
+exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없으면 선택 기능 미설치로
+기록하고 status 정상 경로 시험만 생략한다. conversation 정상 경로와 두 명령의 추가 인자
+거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
+`optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
+이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
