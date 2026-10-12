@@ -386,10 +386,10 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
         </collision>
         <visual name="visual">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
           <material><ambient>{floor}</ambient><diffuse>{floor}</diffuse></material>
         </visual>
       </link>
