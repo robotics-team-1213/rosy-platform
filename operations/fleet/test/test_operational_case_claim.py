@@ -219,3 +219,13 @@ def test_revoke_remains_possible_when_original_evidence_expires_or_holds(tmp_pat
     state.apply('line-back', signed(proof, 0))
     proof['report']['state'] = 'HOLD'; now[0] = 131
     assert state.apply('line-back', signed(proof, 1, REVOKE))['epoch'] == 2
+
+
+def test_final_guard_cannot_replace_current_owner_evidence(tmp_path):
+    _, _, _, scope, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    def guard(conn):
+        proof['report']['state'] = 'HOLD'
+        return True
+    with pytest.raises(ValueError): claim(state, scope, guard=guard)
+    assert state.submission(scope.subject_id, scope.case_id) is None

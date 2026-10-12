@@ -4,7 +4,7 @@ import hashlib
 import json
 
 from rosy.contracts.learning import seal
-from rosy.contracts.learning.incident_operation import APPROVE, REVOKE, verify_operation_receipt, validate_operation_receipt
+from rosy.contracts.learning.incident_operation import APPROVE, REVOKE, verify_operation_receipt, validate_operation_receipt, validate_operation_binding
 from rosy.decision.deliberation import canonical, identifier
 from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
 from ..store import IncidentCaseStore
@@ -58,7 +58,7 @@ class OperationalState:
         if type(proof) is not dict or set(proof) != {'binding', 'report', 'profiles', 'profile', 'approved_calibrations'}:
             raise ValueError('INDEPENDENT_CURRENT_OPERATING_EVIDENCE_REQUIRED')
         proof = json.loads(canonical(proof))
-        report, binding = proof['report'], proof['binding']
+        report, binding = proof['report'], validate_operation_binding(proof['binding'])
         if (type(report) is not dict or report.get('schema') != 'rosy.incident.operational_acceptance/1'
                 or report.get('state') != 'PASS_FOR_OPERATION' or report.get('missing') != []
                 or report.get('field_accepted') is not True or report.get('truth_admitted') is not True
@@ -140,6 +140,8 @@ class OperationalState:
                     or selected['model_revision'] != binding['model_revision']
                     or selected['calibration_revision'] is None or guard(conn) is not True):
                 raise ValueError('CURRENT_OPERATING_CONTEXT_CHANGED')
+            if self._grant(conn, grant_id) != approval:
+                raise ValueError('OPERATING_ADMISSION_CHANGED_AT_CLAIM')
             record = seal(dict(subject_id=scope.subject_id, case_id=scope.case_id, scope=asdict(scope),
                 actor='model', action=candidate['action'], state='SUBMITTING', grant_id=grant_id,
                 admission_revision=approval['revision'], admission_epoch=approval['epoch'], candidate_id=candidate['candidate_id'],
