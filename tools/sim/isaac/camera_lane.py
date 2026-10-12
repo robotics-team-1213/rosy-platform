@@ -98,7 +98,7 @@ class LearnedCameraLane:
         self.worker = LearnedPaintWorker(SimpleNamespace(poll=lambda: model), clock=clock,
                                          start=False, target='drivable')
         self.keeper = LaneKeeper(camera_x_offset_m=camera_x)
-        self.steer, self.history = DrivableSteer(), OdomHistory()
+        self.steer, self.history = DrivableSteer.from_config(vars(config)), OdomHistory()
         self.frame, self.stamp, self.received_at = 0, None, None
         self.observation = None
         self.wall, self.scan_stamp_ns = None, None
