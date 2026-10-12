@@ -59,8 +59,9 @@ ui-topbar {
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
-.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
-.fleet-link-status ui-tag { box-sizing: border-box; flex: none; white-space: nowrap; }
+.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+#development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-actions [hidden] { display: none; }
@@ -97,12 +98,9 @@ ui-topbar {
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  /* 320px에서 태그 세 줄(141px)은 창 높이의 20%를 넘고, 개발 배지를 숨기면 줄이 빠져 높이가 바뀐다.
-     한 줄로 두고 배지는 줄이지 않는다. 역할·연결 태그만 줄어 배지 칸이 남는다. */
-  .fleet-link-status { justify-content: flex-start; align-content: center; flex-wrap: nowrap; min-height: 0; overflow: hidden; }
+  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
   .fleet-header-actions { gap: 0; }
-  .fleet-link-status ui-tag { min-height: var(--space-5); flex: 0 1 auto; min-width: 0; overflow: hidden; }
-  #development-badge { flex: none; min-width: max-content; overflow: visible; }
+  .fleet-link-status ui-tag { min-height: var(--space-5); }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }
