@@ -28,19 +28,31 @@ def subject():
     return module
 
 
-def data(tmp_path, model_revision='digest-1'):
+def data(tmp_path, model_revision='digest-1', primary_only=False, cost_evidence=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
     exports, labels, transformed = [], {}, {}
     for split in ('fit', 'evaluation'):
         scope, problem, models, _, _, _ = fixture()
         problem = replace(problem, case_id=split)
         models = tuple(replace(p, calibration_revision='cal-1', model_revision=model_revision) for p in models)
+        if primary_only: models = models[:1]
         scope = replace(scope, case_id=split, profile_sha256=digest([asdict(p) for p in models]))
         bound = BoundProfile(models[0], problem.digest)
         checked = judgment(problem, bound, payload(problem))
-        receipt = model_receipt(scope, problem, bound, checked, profiles=models)
+        cost = None
+        if cost_evidence:
+            from rosy.decision.deliberation.contracts.billing import CostEvidence
+            from rosy.decision.deliberation import canonical
+            cost = CostEvidence(canonical(dict(schema='rosy.model.cost_evidence/1',
+                input_hash=problem.digest, job_sha256=digest({}), profile_sha256=digest(asdict(models[0])),
+                judgment_sha256=digest(checked.payload), basis='local_free', policy_revision='cost-policy',
+                evidence_sha256='e'*64, credential_sha256=None, provider_request_id=None, provider_response_id=None,
+                usage=dict(input_tokens=0, output_tokens=1, total_tokens=1),
+                marginal_cash_usd=0, observed_usd_charge=None)))
+        receipt = model_receipt(scope, problem, bound, checked, profiles=models, cost_evidence=cost)
         store = IncidentCaseStore(tmp_path / (split+'.db'), clock=lambda: 101)
-        store.begin_case(scope, CaseBudget(100, 200, 1, 0, 0))
+        store.begin_case(scope, CaseBudget(100, 200, 1, 0, 0,
+                                         role_limits=(('primary', 2),) if primary_only else ()))
         store.reserve(scope, attempt_id='attempt', input_hash=problem.digest, observation_revision=problem.generation,
                       kind='model', role='primary', max_cost_usd=0, worker_id='worker')
         store.mark_submitting(scope, 'attempt', worker_id='worker')
@@ -73,8 +85,9 @@ def data(tmp_path, model_revision='digest-1'):
                 training=manifest(), reviewed_profile=frozen), transformed
 
 
-def test_actual_producer_predictions_and_external_review_hashes_join(tmp_path):
-    source, expected = data(tmp_path)
+@pytest.mark.parametrize('primary_only,cost_evidence', [(False, False), (False, True), (True, False), (True, True)])
+def test_actual_producer_predictions_and_external_review_hashes_join(tmp_path, primary_only, cost_evidence):
+    source, expected = data(tmp_path, primary_only=primary_only, cost_evidence=cost_evidence)
     before = copy.deepcopy(source)
     assembled = subject().feedback_bundle(source)
     assert assembled['fit'] == expected['fit'] and assembled['evaluation'] == expected['evaluation']
@@ -133,11 +146,12 @@ def test_extra_target_profile_attempt_is_not_silently_excluded(tmp_path):
         subject().feedback_bundle(source)
 
 
-def test_json_resealed_foreign_domain_profile_is_not_valid_historical_evidence(tmp_path):
+@pytest.mark.parametrize('field,value', [('domains', ['door']), ('modalities', ['image'])])
+def test_json_resealed_unsupported_profile_is_not_valid_historical_evidence(tmp_path, field, value):
     source, _ = data(tmp_path)
     for exported, split in zip(source['exports'], ('fit', 'evaluation')):
         case = exported['case']
-        for p in case['profiles']: p['domains'] = ['door']
+        for p in case['profiles']: p[field] = value
         case['scope']['profile_sha256'] = digest(case['profiles'])
         receipt = case['attempts'][0]['model_receipt']
         receipt['profiles'] = copy.deepcopy(case['profiles'])
