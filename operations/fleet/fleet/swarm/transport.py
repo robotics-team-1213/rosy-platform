@@ -124,7 +124,8 @@ class RobotClient(Protocol):
 
     async def navigation_goal(
         self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
-        lease_ttl_s: float | None = None,
+        lease_ttl_s: float | None = None, expected_boot_id: str | None = None,
+        expected_owner_generation: int | None = None,
     ) -> dict: ...
 
     async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict: ...
