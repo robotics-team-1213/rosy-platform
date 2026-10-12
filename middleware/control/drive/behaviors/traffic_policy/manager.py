@@ -469,7 +469,8 @@ class TrafficPolicyManager:
         if self._config.mode is TrafficPolicyMode.MONITOR_ONLY:
             return linear, angular
         if state in ("FOLLOW", "APPROACH", "PROCEED"):
-            return linear * scale, angular
+            # D-735: moving candidates keep curvature; stationary timed turns keep angular speed.
+            return linear * scale, angular * (scale if linear != 0.0 else 1.0)
         return 0.0, 0.0
 
     def _verdict(self, now: float):
