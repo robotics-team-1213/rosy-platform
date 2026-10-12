@@ -48,6 +48,56 @@ def feed(port, sample, clock_ns=2_010_000_000):
     return port.observe(sample, clock_stamp_ns=clock_ns)
 
 
+@pytest.mark.parametrize('delay', [.03, .2])
+def test_buffered_join_preserves_receipt_without_counting_delay_twice(delay):
+    _, port, sample, clocks, _ = setup()
+    clocks['wall'] += delay
+    clocks['mono'] += delay
+    assert port.observe_clock(2_000_000_000 + round(delay * 1e9))
+    assert port.observe(sample, received_wall=1000., received_monotonic=10.)
+    asyncio.run(port.refresh('rosy_02'))
+    diag = port.diagnostics('rosy_02')
+    assert diag['receipt_age_s'] == pytest.approx(delay)
+    assert diag['native_age_s'] == pytest.approx(delay)
+    assert diag['received_wall'] == 1000.
+    assert diag['received_monotonic'] == 10.
+    assert port.arbitrated_pose('rosy_02').age_s == pytest.approx(delay)
+    assert port._history['rosy_02'][0][0] == 10.
+    clocks['wall'] += .01
+    clocks['mono'] += .01
+    assert port.arbitrated_pose('rosy_02').age_s == pytest.approx(delay + .01)
+
+
+@pytest.mark.parametrize('wall,mono', [
+    (True, 10.), (1000., True), (float('nan'), 10.),
+    (1000., float('inf')), (1000.01, 10.), (1000., 10.01),
+    (999.74, 10.), (1000., 9.74),
+])
+def test_original_receipt_malformed_future_or_stale_latches_unknown(wall, mono):
+    _, port, sample, _, _ = setup()
+    assert port.observe_clock(2_010_000_000)
+    assert not port.observe(sample, received_wall=wall, received_monotonic=mono)
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_original_receipt_cannot_reverse_previous_receipt():
+    _, port, sample, clocks, _ = setup()
+    assert feed(port, sample)
+    clocks['wall'] += .05
+    clocks['mono'] += .05
+    assert port.observe_clock(2_060_000_000)
+    assert not port.observe(replace(sample, stamp_ns=2_050_000_000),
+                            received_wall=999.99, received_monotonic=9.99)
+
+
+def test_buffered_receipt_does_not_refresh_independent_clock_age():
+    _, port, sample, clocks, _ = setup()
+    assert port.observe_clock(2_010_000_000)
+    clocks['wall'] += .26
+    clocks['mono'] += .26
+    assert not port.observe(sample, received_wall=1000.25, received_monotonic=10.25)
+
+
 def test_native_pose_preserves_real_core_utc_stamp_and_declares_sim_source():
     _, port, sample, _, _ = setup()
     assert feed(port, sample)
