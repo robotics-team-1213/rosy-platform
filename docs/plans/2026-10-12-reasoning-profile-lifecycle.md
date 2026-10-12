@@ -6,6 +6,30 @@
 
 ## D-706 구현 checkpoint
 
+### D-712 영속 선택·원자적 사건 배정 checkpoint
+
+`d0541c3b27`에서 기존 Fleet 사건 DB에 owner/policy별 current/previous profile tuple SHA·증가 revision과 사건별 assignment revision을 기록한다. 새 사건은 선택 일치 확인·생성·assignment 기록을 같은 BEGIN IMMEDIATE 또는 기존 outbox 트랜잭션에서 수행한다. 기존 사건의 scope·예산·시도·assignment는 변경하지 않는다. 선택이 없거나 다른 profile/owner/policy면 routed 새 사건을 거절한다. 선택·복귀는 revision CAS로 경쟁 전환과 ABA를 거절하며 재시작 후 읽어 확인한다.
+
+책임 경계는 기존 `automation/routing.py`의 `IncidentProfileRoutes(store)`가 current/previous 선택·CAS·복귀를 맡고, `ledger/store.py`가 같은 트랜잭션의 사건 생성·배정만 맡는 것이다. 초기 구현에서 ledger 532 > 기존 370+150을 실제 원격 구조 시험으로 확인했으며 이 책임 추출로 해결했다. 새 SIZE_UNITS나 허용량 증액은 없다. 실제 두 경쟁 선택, case 트랜잭션 중 선택 차단, 잘못된 revision/hash·이전 선택 부재, receipt/poll와 실제 create_app opt-in 연결을 확인했다. 원격 회귀는 적격 Model PC에서 terminal exit 0/NEW 0이며 로그는 세션 `logs/incident-routing-owner-green/run-1.txt`다. source-less 설치 import와 구조 검사도 포함한다.
+
+내부 구성 예시는 다음과 같다. worker의 `routed=True`는 명시적 opt-in이고 기본값 false를 유지한다. 아래 선택은 모델 수용·활성화·물리 authority가 아니며 기존 admission/current_profiles/보정 gate를 우회하지 않는다. signed 운영 수용과 설치 loader, 여러 pinned worker dispatcher, 실제 전환·복귀 readback과 현장 수용은 남아 있다.
+
+```python
+from fleet.incidents.automation.routing import IncidentProfileRoutes
+from rosy_situation.snapshot_assessment import POLICY
+
+routes = IncidentProfileRoutes(worker.store)
+selected = routes.select_profile('core', POLICY.revision, worker.profile_sha256,
+                                 expected_revision=0)
+# A later profile selection must use the readback revision; rollback requires previous.
+current = routes.profile_route('core', POLICY.revision)
+assignment_revision = worker.store.assignment(case_scope)
+```
+
+다음은 기존 factory/loop/outbox의 단일 worker 소유자에서 pinned worker dispatcher를 구성하는 것이다. 새 사건은 현재 선택의 설치된 worker에만 배정하고 기존 사건은 원래 worker에 전달한다. 설치되지 않은 current, 폐기된 admission, 사람 claim·UNKNOWN·취소·재시작을 fail-closed로 확인한다. 후보의 offline PASS를 운영 수용으로 올리지 않는다.
+
+독립 source 재검토에서 중요한 잔여 blocker는 없었다. 동일 필터의 실측은 Fleet 55,471, automation 224, execution 343, ledger 492행이며 각 기존 기준·허용량 이내다. lint는 0 errors/28 기존 검증 기록 경고였다. 원격 GREEN 확인과 읽기 전용 검토를 실제 운영 수용으로 대신하지 않는다.
+
 ### D-711 새 사건 생성 허가 분리 checkpoint
 
 `31f2cbbe8f`에서 기존 worker의 선택적 `new_case_admission(scope)`를 새 사건 생성 두 경로에 연결했다. 기존 outbox receipt 트랜잭션과 poll에서 사건이 없을 때만 exact true를 요구한다. false·None·숫자·문자열·일반 오류는 생성과 모델 호출을 막는다. 이미 맡은 사건은 기존 프로파일·예산으로 이어가며 기존 안전 admission과 UNKNOWN·사람 소유권 검증을 유지한다.
