@@ -152,7 +152,7 @@ def _core_nodes(actions, context):
 def _env(node, context) -> dict:
     # Node → ExecuteLocal.process_description (launch.descriptions.Executable) .additional_env:
     # [(key_substitutions, value_substitutions), ...]
-    return {_text(k, context): _text(v, context) for k, v in node.process_description.additional_env}
+    return {_text(k, context): _text(v, context) for k, v in (node.process_description.additional_env or [])}
 
 
 def test_core_true_adds_one_core_per_robot_with_distinct_ports_and_homes():
