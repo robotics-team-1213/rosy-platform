@@ -3463,3 +3463,9 @@
 - 변경: 별도 읽기 전용 status job/worker/고정 SSH broker composition과 owner 결과 조회·기존 Discord outbox를 연결했다. source clock·권한/원문/profile·비용 증빙·취소/UNKNOWN 경계를 보강했다.
 - 증거: 원격 선택 회귀65/추가18 passed, exit0, NEW0(겹침으로 합산하지 않음). pipeline_review가5941920df7의 scoped source를 승인했다. 최종 통합·착지 receipt는 후속이다.
 - gate 변화: source/원격 논리 검증. 보호 계정 설치·신규 signed site 배포·자동 숙고/GLM/Discord 왕복·오프라인 CORE 물리 수용은 별도 미확인.
+
+## 2026-10-12 · 92ba11def · historical 숙고 증거 identity 오류 순서 보완
+
+- 변경: calibration feedback은 입력·profile·domain identity를 먼저 확인한 뒤 judgment를 검증한다. 새 status domain을 허용한 이후 강화된 BoundProfile 검사에서 먼저 거절되던 오류를 기존 FEEDBACK_SAMPLE_IDENTITY_CHANGED 경계로 닫는다. 실제 historic receipt 시험은 유효한 judgment를 만든 뒤 profile domain과 manifest를 재봉인하여 reader와 builder가 모두 거절하는지 확인한다.
+- 증거: AI PC 원격 선택 회귀 65 passed/exit 0, known_failures 0 NEW. 기존 door negative 입력을 유지하고 fleet_status negative 입력을 추가했다. 기존 세 domain binding과 status read-only/hash 회귀를 함께 통과했다. 이전 실패는 잘못된 증거 허용이 아니라 더 이른 binding 거절과 오류 순서/fixture 문제였다.
+- gate 변화: source와 선택 원격 회귀다. 착지·푸시·전체 CI·보호 계정 설치·자동 Discord 통신·CORE 물리 동작은 이 변경에서 확인하지 않았다.
