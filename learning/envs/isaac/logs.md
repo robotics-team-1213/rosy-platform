@@ -262,7 +262,7 @@
 - 원인: 실제 SDK stage에서 ground의 표시 Mesh와 Plane 양쪽 충돌이 활성화돼 있었다. SDK GroundPlane wrapper는 표시 Mesh에 collision과 physics material을 붙인다. 초기 출발점 통과와 바닥 크기 조정만으로 다른 자세의 정지 안정성을 보장하지 못했다.
 - 변경: native map runner는 표시 Mesh 충돌을 끄고 기존 바닥 재질을 Plane에 연결한다. 예상 SDK 구조·재질과 변경 readback이 맞지 않으면 실행을 거절한다. CORE 명령·정지 기준·물리 timestep·wheel gain은 유지한다.
 - 증거: 실패 자세의 기존 진단은 초기/cleanup 정지가 실패했다. 중복 충돌 제거 및 재질 연결 비교는 실제 SDK exit0, 3120개 샘플, 직진 0.030046m, 좌/우 +0.245280/-0.248329rad, 모든 정지와 cleanup의 마지막 연속 안정 구간 1.991667초 이상이었다. 원본 hash·운동·정지를 독립 재계산했다.
-- 한계: 이는 진단 비교이며 제품 반영 후 재시험·전체 학습·완주·교통/Fleet 수용을 대신하지 않는다. 회전 추종 편차도 남는다.
+- gate 변화: 이는 진단 비교이며 제품 반영 후 재시험·전체 학습·완주·교통/Fleet 수용을 대신하지 않는다. 회전 추종 편차도 남는다.
 
 - 제품 재시험: b98eb3fd1 원격 Isaac 236 PASS/1 SKIP/NEW0. 실제 SDK의 제품 helper·reset 뒤 읽기 전용 검증을 사용한 같은 자세 기본 운동은 exit0, 3120개 샘플과 모든 단계/cleanup 통과였다. 샘플은 진단 비교와 byte hash가 동일했다. 고정 정책 카메라 평가는 별도 진행하며 새 학습 증거로 세지 않는다.
 
