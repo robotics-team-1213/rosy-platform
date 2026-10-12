@@ -12,6 +12,48 @@ from floor_visuals import floor_visuals, map_visual_profile
 MAP = ROOT / 'middleware/perception/map/map_v2_fleet'
 
 
+@pytest.mark.parametrize('fault', [None, 'missing_plane', 'missing_material', 'write_failed'])
+def test_sdk_ground_has_one_material_bound_collision_surface(monkeypatch, fault):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from floor_visuals import configure_ground_collision
+
+    mesh, plane, material = (MagicMock() for _ in range(3))
+    mesh.GetTypeName.return_value = 'Mesh'
+    plane.GetTypeName.return_value = 'Plane' if fault != 'missing_plane' else ''
+    plane.GetPath.return_value = '/ground/collisionPlane'
+    for prim in (mesh, plane, material):
+        prim.HasAPI.return_value = True
+    enabled = {mesh: True, plane: True}
+    bindings = {mesh: ['/material'] if fault != 'missing_material' else [], plane: []}
+    for prim in (mesh, plane):
+        prim.GetCollisionEnabledAttr.return_value.Get.side_effect = lambda p=prim: enabled[p]
+        prim.GetCollisionEnabledAttr.return_value.Set.side_effect = (
+            lambda value, p=prim: enabled.update({p: value}) if fault != 'write_failed' else None)
+        prim.GetRelationship.return_value.GetTargets.side_effect = lambda p=prim: bindings[p]
+    stage = MagicMock()
+    stage.GetPrimAtPath.side_effect = {'/ground/geom': mesh, '/ground/collisionPlane': plane,
+                                     '/material': material}.__getitem__
+    binding_api = MagicMock()
+    def bind(value, *, materialPurpose):
+        assert value is material and materialPurpose == 'physics'
+        bindings[plane] = ['/material']
+    binding_api.Apply.return_value.Bind.side_effect = bind
+    monkeypatch.setitem(sys.modules, 'pxr', SimpleNamespace(
+        UsdPhysics=SimpleNamespace(CollisionAPI=lambda prim: prim, MaterialAPI=object()),
+        UsdShade=SimpleNamespace(Material=lambda prim: prim, MaterialBindingAPI=binding_api)))
+    if fault:
+        with pytest.raises(RuntimeError):
+            configure_ground_collision(stage, '/ground')
+        if fault in ('missing_plane', 'missing_material'):
+            assert enabled[mesh] and not bindings[plane]
+    else:
+        result = configure_ground_collision(stage, '/ground')
+        assert enabled == {mesh: False, plane: True}
+        assert result == dict(collider='/ground/collisionPlane', visual_collision=False, material='/material')
+        assert configure_ground_collision(stage, '/ground') == result
+
+
 def test_native_ground_and_paint_use_shared_world_values():
     profile = map_visual_profile(MAP)
     assert profile['ground_colour'] == (.13, .14, .13)

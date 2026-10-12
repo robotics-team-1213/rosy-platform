@@ -3,6 +3,29 @@ import math
 import xml.etree.ElementTree as ET
 
 
+def configure_ground_collision(stage, ground_path):
+    """Keep the SDK ground's display mesh out of the physical contact solver."""
+    from pxr import UsdPhysics, UsdShade
+
+    mesh = stage.GetPrimAtPath(ground_path + '/geom')
+    plane = stage.GetPrimAtPath(ground_path + '/collisionPlane')
+    if (not mesh or not plane or mesh.GetTypeName() != 'Mesh' or plane.GetTypeName() != 'Plane'
+            or not mesh.HasAPI(UsdPhysics.CollisionAPI) or not plane.HasAPI(UsdPhysics.CollisionAPI)
+            or UsdPhysics.CollisionAPI(plane).GetCollisionEnabledAttr().Get() is not True):
+        raise RuntimeError('Unexpected SDK ground collision layout')
+    targets = mesh.GetRelationship('material:binding:physics').GetTargets()
+    if len(targets) != 1 or not stage.GetPrimAtPath(targets[0]).HasAPI(UsdPhysics.MaterialAPI):
+        raise RuntimeError('SDK ground physics material missing')
+    # Isaac 5.1 wraps /geom as a collider beside the already active collisionPlane.
+    UsdPhysics.CollisionAPI(mesh).GetCollisionEnabledAttr().Set(False)
+    UsdShade.MaterialBindingAPI.Apply(plane).Bind(
+        UsdShade.Material(stage.GetPrimAtPath(targets[0])), materialPurpose='physics')
+    if (UsdPhysics.CollisionAPI(mesh).GetCollisionEnabledAttr().Get() is not False
+            or plane.GetRelationship('material:binding:physics').GetTargets() != targets):
+        raise RuntimeError('Single ground collision readback failed')
+    return dict(collider=str(plane.GetPath()), visual_collision=False, material=str(targets[0]))
+
+
 def floor_visuals(map_root):
     world = ET.parse(map_root / 'training-curved/worlds/map_v2_fleet_real.world')
     result = []
