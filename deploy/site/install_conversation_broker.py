@@ -267,6 +267,42 @@ def python_code(target, code):
     return 'import sys;sys.path[:0]='+repr(roots)+';'+code
 
 
+def broker_wrapper(target):
+    venv = target/'venv'
+    return ('#!/bin/sh\n# ROSY D-728 managed conversation\nset -eu\n[ "$#" = 0 ] || exit 64\n'
+        f'cd {target}\nexec {venv}/bin/python -I -B -c '+
+        "'"+python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import main;sys.exit(main())')
+        .replace("'", "'\"'\"'")+"'\n").encode()
+
+
+def previous_admission(config_pin, broker_pin, config, wrapper, gid):
+    pins = (config_pin, broker_pin)
+    reviewed = any(pin is not None for pin in pins)
+    if reviewed and any(type(pin) is not str or not re.fullmatch('[0-9a-f]{64}', pin) for pin in pins):
+        raise ValueError('PAIRED_PREVIOUS_SHA256_REQUIRED')
+    current = []
+    for path, wanted, mode, pin in ((CONFIG, config, 0o640, config_pin), (BROKER, wrapper, 0o750, broker_pin)):
+        if not path.exists() and not path.is_symlink():
+            if reviewed:raise ValueError('REVIEWED_PREVIOUS_FILE_MISSING')
+            current.append(None)
+            continue
+        raw = protected(path)
+        info = path.stat()
+        if info.st_mode & 0o777 != mode or info.st_gid != gid:
+            raise ValueError('MANAGED_MODE_CONFLICT')
+        if (reviewed and sha(raw) != pin) or (not reviewed and raw != wanted):
+            raise ValueError('REVIEWED_PREVIOUS_SHA256_REQUIRED')
+        current.append(raw)
+    if reviewed:
+        previous = json.loads(current[0])
+        commit = previous.get('source_commit')
+        if (type(commit) is not str or not re.fullmatch('[0-9a-f]{40}', commit)
+                or current[1] != broker_wrapper(VERSIONS/commit)):
+            raise ValueError('PREVIOUS_MANAGED_VERSION_REQUIRED')
+        return tuple((raw,) for raw in current)
+    return (), ()
+
+
 def snapshot(target, contents, helper):
     trusted_directory(target.parent.parent)
     target.parent.mkdir(mode=0o755, exist_ok=True)
@@ -288,13 +324,14 @@ def main(argv=None):
     parser.add_argument('bundle', type=Path)
     for name in ('manifest', 'proof', 'receipt', 'public-key', 'dependencies'):
         parser.add_argument('--'+name+'-sha256', required=True)
+    parser.add_argument('--previous-config-sha256')
+    parser.add_argument('--previous-broker-sha256')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args(argv)
     require_admin()
     os.umask(0o022)
     pins = {name:getattr(args, name+'_sha256') for name in ('manifest','proof','receipt','public_key')}
     manifest, proof, contents, proof_raw, receipt_raw, key = inputs(args.bundle, pins)
-    lock = dependencies(args.bundle, args.dependencies_sha256, contents['deploy/site/requirements-fleet.txt'])
     # The helper is executed only after the independent source inventory has been pinned.
     spec = importlib.util.spec_from_file_location('reviewed_install', args.bundle/'source/deploy/site/deliberation_install.py')
     helper = importlib.util.module_from_spec(spec)
@@ -308,6 +345,11 @@ def main(argv=None):
            'files':{**manifest['files'], 'semantic-evaluation-proof.json':pins['proof']}}
     if not time.time() < cfg['valid_until']:
         raise ValueError('EVALUATION_EXPIRED')
+    config = json.dumps(cfg, sort_keys=True).encode()
+    wrapper = broker_wrapper(target)
+    previous_config, previous_broker = previous_admission(
+        args.previous_config_sha256, args.previous_broker_sha256, config, wrapper, account.pw_gid)
+    lock = dependencies(args.bundle, args.dependencies_sha256, contents['deploy/site/requirements-fleet.txt'])
     if args.check:
         print(json.dumps({'state':'INPUT_HASHES_CHECKED_ONLY', 'source_commit':manifest['source_commit']}))
         return 0
@@ -350,14 +392,10 @@ def main(argv=None):
     run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
         python_code(target, validate), json.dumps(cfg), cwd=target, env=env)
     account_registration(helper, CONFIG.parent)
-    wrapper = ('#!/bin/sh\n# ROSY D-728 managed conversation\nset -eu\n[ "$#" = 0 ] || exit 64\n'
-        f'cd {target}\nexec {venv}/bin/python -I -B -c '+
-        "'"+python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import main;sys.exit(main())')
-        .replace("'", "'\"'\"'")+"'\n").encode()
     old_key = (f'restrict,command="{OLD_FORCE}" '+key+'\n').encode()
     new_key = (f'restrict,command="{NEW_FORCE}" '+key+'\n').encode()
-    plans = [(CONFIG,json.dumps(cfg,sort_keys=True).encode(),0o640,account.pw_gid,()),
-             (BROKER,wrapper,0o750,account.pw_gid,()), (INGRESS,dispatcher(),0o755,0,()),
+    plans = [(CONFIG,config,0o640,account.pw_gid,previous_config),
+             (BROKER,wrapper,0o750,account.pw_gid,previous_broker), (INGRESS,dispatcher(),0o755,0,()),
              (KEYS,new_key,0o644,0,(old_key,)), (SUDO,NEW_SUDO,0o440,0,(OLD_SUDO,)),
              (SSHD,SSHD_BASE.format(NEW_FORCE).encode(),0o644,0,(SSHD_BASE.format(OLD_FORCE).encode(),))]
     def verify():
