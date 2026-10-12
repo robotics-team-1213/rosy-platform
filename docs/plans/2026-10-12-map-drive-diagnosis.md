@@ -21,7 +21,7 @@ CORE는 최종 명령을 소유하고 Fleet의 통행·회전 권한은 별도�
 | 실행 환경 | source/map/model SHA, effective config, ROS domain, Gazebo partition, 자원 예약 | runner 또는 launch | 지정 소스·맵·모델이 실제 적재되고 타세션과 격리됨 |
 | 관측 | RGB, class mask, ground, 원본 시각, source/current odom | Perception | 사용한 frame과 투영·기억의 시각을 함께 재현함 |
 | 목표 채택 | centre polyline, 출구 후보, remembered edges, `exit_behind_line`, `ahead_m`, `target_now_m` | Drive 관측 추종 | 채택과 거절 모두 원래 경계 검사로 설명됨 |
-| 경로 안내 | `line/lane_guide` publisher 수, 실제 메시지, Fleet route와 pose trust | 안내 배선 | subscriber 존재와 실제 publisher/message를 각각 확인함 |
+| 경로 안내 | `line/lane_guide`와 `line/route_context`의 publisher·메시지, CORE lane cue, Fleet route와 pose trust | 안내 배선 | 각 채널의 발행·수신·만료·효과를 구분해 확인함 |
 | 최종 명령 | CORE mode/owner, body/scan/containment refusal, 최종 command와 실제 odom | CORE | 권한과 안전 게이트가 승인한 명령만 나감 |
 | 물리 정지 | zero command, wheel/caster 속도, 연속 정지, reset와 cleanup | simulator actuator/contact | 기존 정지 기준을 그대로 만족함 |
 
@@ -65,7 +65,10 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
   두 CORE에서 각각 최종 명령 1,671/1,670개가 전부 zero, odom 정지,
   line/keep_debug 각각 268개를 관측했다. 현재 drivable centre와 live expected path가
   생성됐다. 두 `line/lane_guide`의 publisher 목록과 개수는 실제로 비어 있었다.
-  현재 keep 모드에서 `lane_graph_path` 설정만으로 안내가 생성되지 않는다.
+  현재 keep 모드에서 `lane_graph_path` 설정만으로 이 legacy heading guide가 생성되지 않는다.
+  CORE의 `line/route_context`와 observer의 수신 경로는 이미 존재한다. 따라서 legacy
+  lane guide가 없다는 사실을 모든 trip 안내의 부재로 확대하지 않는다. 실제 trip에서
+  route context의 positive sequence·신선도·bend 효과와 CORE cue를 따로 확인한다.
 - r2 전체 runner는 Fleet의 `rosy.contracts.learning.incident_rule` import 실패로 exit 1이다.
   CORE 센서·정지 관측 성공과 Fleet 연결 실패를 구분한다. 종료 후 자기 partition의
   프로세스 부재, 세 포트의 연결 거절, 자기 lock 부재와 source hash 보존을 확인했다.
