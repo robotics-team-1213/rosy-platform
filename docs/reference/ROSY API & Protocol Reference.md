@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.217
+**Version:** v1.218
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,10 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.218 CORE 조건부 막힘 답 (D-718)
+
+POST `/api/v1/line-follow/stuck/decision`의 BACK_AND_RETRY에 선택 `expected_stuck: {phase: "ASKING", attempts: nonnegative strict integer}`를 받는다. 두 필드는 필수이고 추가 키·다른 phase·bool/문자열/음수 attempts는 422다. 다른 decision에 조건을 붙이면 400 VALIDATION_ERROR다. CORE는 stuck_id와 현재 phase/attempts를 기존 manager lock 아래에서 검증하며 조건 불일치는 409 STUCK_DECISION_REFUSED(`stuck_precondition_failed`)로 거절한다. 거절은 타이머·시도 수·현재 복구를 바꾸지 않는다. 기존 조건 없는 요청과 WAIT/ABORT는 유지한다. 조건 일치는 기존 안전/권한 검사를 면제하지 않으며 모델 운영 수용도 아니다. envelope protocol_version은 1.0 유지다.
 
 ### v1.217 Fleet 관측 capture 기록 범위 (D-699)
 
@@ -2859,6 +2863,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
 | v1.212 | 2026-10-12 | Additive (D-691): `rosy-overhead/1` downlink `demand.wanted`. An authorized preview read from any Rosy keeps that source sending for 30 s, then the phone releases the sensor and stops JPEG. Severe phone heat pauses that sensor until it cools. Older peers keep streaming. |

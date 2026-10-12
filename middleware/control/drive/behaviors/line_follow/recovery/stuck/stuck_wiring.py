@@ -179,7 +179,8 @@ class StuckRecoveryMixin:
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
                        principal_ref: Optional[str] = None, now: Optional[float] = None,
-                       yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None) -> str:
+                       yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None,
+                       expected_stuck: Optional[dict] = None) -> str:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
@@ -189,7 +190,8 @@ class StuckRecoveryMixin:
                 self._recovery._last = self._stuck_input(current)
             outcome = self._recovery.answer(
                 current, stuck_id, decision, by, principal_ref,
-                yield_m=yield_m, yield_turn_rad=yield_turn_rad)
+                yield_m=yield_m, yield_turn_rad=yield_turn_rad,
+                **({"expected_stuck": expected_stuck} if expected_stuck is not None else {}))
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1

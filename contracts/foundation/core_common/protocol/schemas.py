@@ -1014,6 +1014,14 @@ class PoseSample(BaseModel):
     anchor_hold: Optional[str] = None  # set: Fleet has no usable anchor (why); hold, keep the stream
 
 
+class LineStuckPrecondition(BaseModel):
+    """D-718 conditional BACK admission, checked atomically with the CORE answer."""
+
+    model_config = ConfigDict(extra="forbid")
+    phase: Literal["ASKING"]
+    attempts: int = Field(strict=True, ge=0)
+
+
 class LineStuckStatus(BaseModel):
     """D-407 open lane stuck: the console answers it by ``stuck_id``."""
 
