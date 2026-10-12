@@ -759,9 +759,10 @@ def test_core_curve_scope_accepts_lane_return_tracking_passthrough(monkeypatch):
     assert status.state == "TRACKING"
 
 
-def test_core_nontracking_sweep_covers_the_static_common_clip_curve():
+@pytest.mark.parametrize("direction", [1., -1.])
+def test_core_nontracking_sweep_covers_the_static_common_clip_curve(direction):
     m = _core_curve_manager(max_a=.01)
-    point = [(.052 + .017, .078)]
+    point = [(direction * .052 + .017, direction * .078)]
     m.observe_body_points(point, range_min=.05, received_at=T)
     m.observe_scan_points(point, received_at=T)
     # A LINE manoeuvre (.08, .8) becomes (.001, .01), rather than (.08, .01).
@@ -769,7 +770,7 @@ def test_core_nontracking_sweep_covers_the_static_common_clip_curve():
                                min_travel_m=.08, **BODY)
     assert actual_gap is not None and actual_gap < .08
     with m._lock:
-        assert not m._sweep_clear(T, .08, .8)
+        assert not m._sweep_clear(T, direction * .08, .8)
 
 
 def test_an_unreadable_motion_envelope_fails_closed():
