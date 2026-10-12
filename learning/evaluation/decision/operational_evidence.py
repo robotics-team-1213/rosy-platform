@@ -6,11 +6,20 @@ from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
 from rosy.decision.deliberation.calibration import evaluate_calibration
 from .operational_comparison import compare_with_inventory, fields, sha, timestamp
 from .operational_sources import digest, encoded, verify_attestation, validate_window
+from .operational_truth import measure_truth
 
 BUNDLE = ('schema', 'profiles', 'profile', 'calibration_input', 'cohort', 'exports', 'inventories',
           'inventory_digests', 'truth', 'limits', 'windows', 'review')
 LIMITS = ('minimum_cases', 'minimum_accuracy_lower', 'maximum_p95_latency_ms', 'maximum_cost_usd',
           'minimum_resolved_rate', 'maximum_recurrence_rate', 'maximum_capture_gap_s')
+SUPPORTED = ('rosy.calibration.feedback_input/1', 'calibration.schema_version/2',
+    'rosy.incident.operational_cohort/1', 'rosy.incident.operational_cohort/2',
+    'rosy.incident.model_feedback/1', 'rosy.incident.model_feedback/2', 'rosy.incident.model_feedback/3',
+    'rosy.incident.rule_feedback/1', 'rosy.incident.case_inventory/1',
+    'rosy.pinky-raw-verification/1', 'rosy.fleet-observation-window/1')
+UNSUPPORTED = ('authenticated_full_command_model_collector', 'physical_actor_credit', 'clock_calibration_admission',
+    'original_cost_invoice_admission', 'physical_result_admission', 'recurrence_source_admission',
+    'current_runtime_os_probe_admission', 'door_backend', 'arm_target_backend')
 
 
 def reviewed_limits(document):
@@ -60,11 +69,13 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
     if len({w['source_sha256'] for w in windows}) != len(windows): raise ValueError('DUPLICATE_OPERATING_WINDOW')
     if limits and any(gap > limits['maximum_capture_gap_s'] for w in windows for s in w['streams'].values() for gap in s['gaps']):
         missing.append('complete_capture_cadence')
+    metrics = None
     if bundle['truth'] is not None:
         fields(bundle['truth'], ('schema', 'rows', 'attestation'))
         if bundle['truth']['schema'] != 'rosy.incident.operational_truth/1': raise ValueError('INVALID_OPERATING_TRUTH_SCHEMA')
         verify_attestation(bundle['truth']['attestation'], {k: v for k, v in bundle['truth'].items() if k != 'attestation'},
                            trusted=trusted, kind='operational_truth', now=now)
+        metrics, missing_truth = measure_truth(bundle['truth']['rows']); missing.extend(missing_truth)
     if bundle['review'] is not None:
         original = {k: v for k, v in bundle.items() if k != 'review'}
         review = verify_attestation(bundle['review'], original, trusted=trusted, kind='operational_review', now=now)
@@ -72,9 +83,15 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
             raise ValueError('INDEPENDENT_REVIEWER_AND_SOURCE_REQUIRED')
     # Original recorder/command/result correlation is required even with signed review metadata.
     if originals is None: missing.append('verified_original_sources')
+    elif type(originals) is not dict or set(originals) != {'raw_recordings', 'observation_windows', 'coverage_scope'}:
+        raise ValueError('ORIGINAL_SOURCE_LOADER_CONTRACT_REQUIRED')
+    elif originals['coverage_scope'] != 'raw_sidecar_and_retained_observations_only':
+        raise ValueError('ORIGINAL_SOURCE_SCOPE_CANNOT_BE_WIDENED')
+    missing.extend(UNSUPPORTED)
     return dict(schema='rosy.incident.operational_acceptance/1', state='HOLD', missing=sorted(set(missing)),
         field_accepted=False, truth_admitted=False, evidence_sha256=digest(bundle),
         profile_set_sha256=digest([asdict(p) for p in profiles]), full_profile_sha256=digest(asdict(selected)),
         calibration_sha256=calibration.digest if calibration else None, comparison_sha256=digest(comparison) if comparison else None,
         coverage_sha256=digest(windows) if windows else None, limits_sha256=digest(bundle['limits']) if limits else None,
-        truth_sha256=digest(bundle['truth']) if bundle['truth'] else None, metrics=None)
+        truth_sha256=digest(bundle['truth']) if bundle['truth'] else None, metrics=metrics,
+        supported_original_contracts=list(SUPPORTED), unsupported=list(UNSUPPORTED))

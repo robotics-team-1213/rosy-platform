@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 
 from learning.evaluation.decision.operational_evidence import compile_evidence
 from learning.evaluation.decision.operational_sources import digest, encoded, verify_attestation
@@ -86,9 +87,44 @@ def installation_getter(source, *, expected_sha256, artifact_root, current_runti
         text(process['service_revision']); sha(process['executable_sha256'])
         if process['executable_sha256'] not in {row['sha256'] for row in artifacts}:
             raise ValueError('CURRENT_PROCESS_ARTIFACT_NOT_INSTALLED')
-        return {**{key: manifest[key] for key in identity},
+        return {**{key: manifest[key] for key in identity}, 'runtime_scope': 'signed_owner_declaration_only',
                 'installation_sha256': digest(dict(manifest=manifest, process=process))}
     return read
+
+
+def load_original_sources(configs, *, windows, max_gap_s):
+    """Run existing raw/capture readers; their bounded scopes never imply full operation coverage."""
+    if type(configs) is not list or len(configs) > 4096 or type(windows) is not list:
+        raise ValueError('EXPLICIT_ORIGINAL_SOURCE_CONFIG_REQUIRED')
+    if not configs: return None
+    for config in configs:
+        fields(config, ('window_sha256', 'episode_root', 'dataset_revision', 'observation_database', 'database_sha256'))
+    from learning.curation.pinky.fleet_observations import capture_window
+    source_dir = Path(__file__).resolve().parents[1] / 'learning/curation/pinky'
+    if str(source_dir) not in sys.path: sys.path.insert(0, str(source_dir))
+    from learning.curation.pinky.verify_raw import verify
+    available = {digest({k: v for k, v in window.items() if k != 'attestation'}): window for window in windows}
+    seen, recordings, captures = set(), [], []
+    for config in configs:
+        key = sha(config['window_sha256']); sha(config['dataset_revision']); sha(config['database_sha256'])
+        if key in seen or key not in available: raise ValueError('ORIGINAL_SOURCE_WINDOW_DIFFERS')
+        window = available[key]
+        database = Path(config['observation_database'])
+        if Path(str(database) + '-wal').exists(): raise ValueError('FROZEN_OBSERVATION_DATABASE_REQUIRED')
+        def file_sha(path):
+            with Path(path).open('rb') as stream: return hashlib.file_digest(stream, 'sha256').hexdigest()
+        if file_sha(database) != config['database_sha256']: raise ValueError('ORIGINAL_OBSERVATION_BYTES_DIFFER')
+        raw = verify(config['episode_root'])
+        if raw['dataset_revision'] != config['dataset_revision']: raise ValueError('ORIGINAL_RAW_DATASET_DIFFERS')
+        captured = capture_window(database, robot_id=window['subject_id'], start=window['start'],
+                                  end=window['end'], max_gap_s=max_gap_s)
+        if file_sha(database) != config['database_sha256']: raise ValueError('ORIGINAL_OBSERVATION_CHANGED_DURING_READ')
+        recordings.append(dict(window_sha256=key, verification=raw))
+        captures.append(dict(window_sha256=key, verification=captured))
+        seen.add(key)
+    if seen != set(available): raise ValueError('ORIGINAL_WINDOW_SOURCE_SET_INCOMPLETE')
+    return dict(raw_recordings=recordings, observation_windows=captures,
+                coverage_scope='raw_sidecar_and_retained_observations_only')
 
 
 class OperatingEvidenceOwner:
