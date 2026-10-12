@@ -135,3 +135,36 @@ def test_dispatcher_rejects_duplicate_profile_or_unrouted_worker(tmp_path):
             with pytest.raises(ValueError): IncidentProfileDispatcher((worker, worker))
         finally: await worker.aclose()
     asyncio.run(run())
+
+
+def test_shutdown_waits_for_every_worker_before_reporting_cleanup_error(tmp_path):
+    async def run():
+        first, _ = settings(enabled=True)
+        second, _ = settings(enabled=True)
+        second['profiles'] = tuple(replace(p, model_id='replacement') for p in second['profiles'])
+        second['current_profiles'] = lambda: second['profiles']
+        for provider, profile in zip(second['providers'], second['profiles']):
+            provider.profile = profile; provider.adapter = replace(provider.adapter, model_id='replacement')
+        clock = first.pop('clock'); second.pop('clock')
+        application = app(tmp_path, dict(profile_workers=(first, second), clock=clock))
+        dispatcher = application.state.stuck_resolver.incident_worker
+        started, release = asyncio.Event(), asyncio.Event()
+        async def failed(): raise RuntimeError('synthetic cleanup failure')
+        async def blocked():
+            started.set()
+            await release.wait()
+        closers = tuple(w.aclose for w in dispatcher.workers)
+        dispatcher.workers[0].aclose = failed; dispatcher.workers[1].aclose = blocked
+        closing = asyncio.create_task(dispatcher.aclose())
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            await asyncio.sleep(.01)
+            assert not closing.done()
+            release.set()
+            with pytest.raises(RuntimeError, match='synthetic cleanup failure'):
+                await closing
+        finally:
+            release.set()
+            await asyncio.gather(closing, return_exceptions=True)
+            for closer in closers: await closer()
+    asyncio.run(run())

@@ -5,6 +5,7 @@ import json
 from core_common.protocol.schemas import FleetJudgmentReceipt
 from rosy.decision.deliberation import canonical
 from rosy_situation.snapshot_assessment import POLICY
+from rosy_situation.assessment import Assessment
 from .contract import CaseScope
 from .routing import IncidentProfileRoutes, profile_route
 from .worker import IncidentCaseWorker
@@ -65,8 +66,12 @@ class IncidentProfileDispatcher:
             route = await asyncio.to_thread(IncidentProfileRoutes(self.store).profile_route, 'core', POLICY.revision)
             grouped = {key: [] for key in self._by_profile}
             for row in snapshot['robots']:
-                selected = {s.profile_sha256 for s in scopes if s.owner_id == 'core' and s.subject_id == row['robot_id']}
-                if route: selected.add(route['current'])
+                pinned = tuple(s for s in scopes if s.owner_id == 'core' and s.subject_id == row['robot_id'])
+                selected = {s.profile_sha256 for s in pinned}
+                assessment = first.board.intervention_assessment(row['robot_id'])
+                if route and not (isinstance(assessment, Assessment)
+                                  and any(s.case_id == assessment.request.case_id for s in pinned)):
+                    selected.add(route['current'])
                 for key in selected & grouped.keys(): grouped[key].append(row)
             if self._closed: return
             for key, rows in grouped.items():
