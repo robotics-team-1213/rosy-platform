@@ -34,9 +34,10 @@ def learn_transition(policy, previous, state, result):
 
 
 def camera_tick(lane, now, *, gain):
-    decision = lane.manager.tick_gain(now, gain=gain)
+    held = lane.last.get('camera_provenance') == 'odom_expected_path'
+    decision = lane.manager.tick_gain(now, gain=1. if held else gain)
     state = lane.state()
-    if state is None:
+    if state is None and not (held and lane.current()):
         decision = replace(decision, linear=0., angular=0.)
     return decision, state
 
