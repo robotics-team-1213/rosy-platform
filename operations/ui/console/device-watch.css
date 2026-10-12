@@ -59,8 +59,6 @@
 .device-watch .ui-disclosure-row {
   min-height: 0;
   padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
 }
 
 .watch-readout dl {
@@ -94,7 +92,7 @@
   display: none;
 }
 
-@media (max-width: 63.99rem) {
+@media (width < 64rem) {
   .device-watch {
     left: var(--space-2);
     bottom: var(--space-2);
