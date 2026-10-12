@@ -141,7 +141,7 @@ def test_independent_profile_policy_cannot_reuse_d720():
 
 def test_local_semantic_broker_has_independent_codec():
     from deploy.ai_pc.deliberation_conversation import instruction
-    assert 'CONTROL' in instruction() and 'proposal' in instruction()
+    assert 'CONTROL' in instruction() and 'proposal' in instruction() and '????' not in instruction()
 
 
 @pytest.mark.parametrize('kind',['CLARIFY','REFUSE'])
@@ -189,3 +189,25 @@ def test_partial_large_catalog_declares_completeness_and_unknown_place_is_refuse
     assert question.environment['map']['places_complete'] is False
     with pytest.raises(ValueError):checked_answer(answer('CONTROL',
         intent={'do':'navigate','robot':'rosy_40','waypoint':'P400'}),question)
+
+
+def test_flat_semantic_steps_map_existing_grammar_and_reject_arbitrary_parameters(tmp_path):
+    from rosy.decision.conversation.codec import semantic_answer
+    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    q=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
+    value={'kind':'CONTROL','response':'제안을 기록합니다.','steps':[
+        {'verb':'navigate','robot_id':'rosy_40','place_id':'A','parameters_json':'{}'}],
+        'evidence_refs':[],'review_required':False,'reason':None}
+    assert semantic_answer(value,q).intent=={'do':'navigate','robot':'rosy_40','waypoint':'A'}
+    value['steps'][0]['parameters_json']='{"url":"https://unknown"}'
+    with pytest.raises(ValueError):semantic_answer(value,q)
+
+
+def test_pending_scope_changed_on_restart_never_reinterprets_original(tmp_path):
+    worker,jobs,journal,receipt,calls=worker_fixture(tmp_path)
+    snapshot=asyncio.run(worker.snapshot())
+    q=jobs.build_input(receipt,snapshot,worker.clock())
+    jobs.stage(receipt,q,snapshot)
+    replacement=ConversationJobs(journal,'f'*64,clock=worker.clock)
+    with pytest.raises(HTTPException):replacement.guard(receipt['request_id'])
+    assert calls==[] and replacement.history(receipt,q.environment,worker.clock())==[]
