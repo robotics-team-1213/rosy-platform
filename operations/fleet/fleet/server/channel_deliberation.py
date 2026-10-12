@@ -183,6 +183,27 @@ class ChannelModelJobs:
             if principal != receipt['principal_id']: raise HTTPException(403,detail='CHANNEL_OWNER_REQUIRED')
             return self._view(row)
 
+    def peek(self, request_id):
+        with closing(self.journal._connect()) as conn:
+            return self._row(conn,request_id)
+
+    def guard(self, request_id):
+        with closing(self.journal._connect()) as conn:
+            row=self._row(conn,request_id)
+            self._receipt(conn,row)
+            if row['state'] not in ('PENDING','RUNNING'):
+                raise HTTPException(409,detail='CHANNEL_MODEL_ALREADY_FINISHED')
+
+    def abandon(self, request_id, *, state, reason):
+        if state not in ('HOLD','UNKNOWN','SUPERSEDED') or type(reason) is not str or len(reason)>128:
+            raise ValueError('CHANNEL_MODEL_TERMINAL_INVALID')
+        with closing(self.journal._connect()) as conn,conn:
+            conn.execute('UPDATE fleet_channel_model_jobs SET state=?,result_json=?,completed_at=? '
+                         "WHERE request_id=? AND state IN ('PENDING','RUNNING')",
+                         (state,canonical({'reason':reason,'action_admissible':False}),self.clock(),request_id))
+            conn.execute("UPDATE fleet_channel_model_attempts SET state='UNKNOWN' WHERE request_id=? AND state='SUBMITTED'",
+                         (request_id,))
+
     @staticmethod
     def _view(row):
         return {k:row[k] for k in ('request_id','state','profile_set_hash','input_hash','created_at','deadline','completed_at')} | {
