@@ -160,6 +160,29 @@ assert Path(incident_rule.__file__).is_relative_to(installed)
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
+from fleet.swarm.transport import HttpRobotClient, RobotApiError
+from fleet.swarm.robots import RobotEndpoint
+import asyncio
+import httpx
+async def check_installed_submission_guard():
+    calls = []
+    def handler(request):
+        calls.append(request.method)
+        return httpx.Response(200, json={'stuck': {'conditional_back': True}})
+    async def refuse():
+        assert calls == ['GET']
+        return False
+    client = HttpRobotClient(RobotEndpoint('robot', 'http://robot:8080', 'test-token'),
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://robot:8080'))
+    try:
+        await client.line_stuck_decision('case', 'BACK_AND_RETRY',
+            expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=refuse)
+        raise AssertionError('installed submission guard did not refuse')
+    except RobotApiError as error:
+        assert error.code == 'STUCK_DECISION_REFUSED' and calls == ['GET']
+    finally:
+        await client.aclose()
+asyncio.run(check_installed_submission_guard())
 loop = StuckResolverLoop(None, LineStuckBoard(), StuckResolver(ResolverConfig()), clients=lambda: {})
 assert loop.rule_selections is None
 request = AssessmentInput('robot', None, 'state-1', 'core', 'normal',
@@ -249,6 +272,7 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',
                'rosy.decision.deliberation.contracts.profiles',
                'rosy.decision.deliberation.contracts.judgment',
+               'rosy.decision.deliberation.contracts.recovery',
                'rosy.decision.deliberation.providers.cli',
                'rosy.decision.deliberation.providers.versioned_cli',
                'rosy.decision.deliberation.providers.versioned_request',
@@ -261,6 +285,7 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.incidents.automation.observation',
                'fleet.incidents.automation.closure', 'fleet.incidents.automation.worker',
                'fleet.incidents.automation.execution.worker',
+               'fleet.incidents.automation.recovery_candidates',
                'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',

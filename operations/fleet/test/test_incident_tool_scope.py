@@ -5,7 +5,7 @@ import pytest
 from core_common.protocol.schemas import MissionFeedbackTurnScope
 from fleet.server import model_feedback_dispatch
 from rosy.decision.deliberation.judgment import judgment, judgment_schema
-from rosy.decision.model_tool_catalog import ToolEffectClass, provider_tool_schemas
+from rosy.decision.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass, provider_tool_schemas
 from test_model_judgment import bound, payload, problem
 
 
@@ -14,8 +14,13 @@ def test_incident_projection_does_not_change_mission_provider_catalog():
     assert [tool['name'] for tool in provider_tool_schemas(feedback_only=False)] == [
         'get_mission_status', 'propose_replan', 'propose_pick_place']
     tools = provider_tool_schemas(scope='incident')
-    assert [tool['name'] for tool in tools] == ['get_incident_status']
+    assert [tool['name'] for tool in tools] == ['get_incident_status', 'propose_lane_back']
     assert tools[0]['parameters'] == {'type': 'object', 'properties': {}, 'additionalProperties': False}
+    assert tools[1]['parameters'] == dict(type='object',
+        properties={'rationale': dict(type='string', minLength=1, maxLength=512)},
+        required=['rationale'], additionalProperties=False)
+    assert MODEL_TOOL_CATALOG['propose_lane_back'].effect_class == ToolEffectClass.CANDIDATE_WRITING
+    assert MODEL_TOOL_CATALOG['propose_lane_back'].device_action_api is False
 
 
 @pytest.mark.parametrize('domain', ['line_follow', 'door'])

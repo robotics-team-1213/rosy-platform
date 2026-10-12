@@ -48,6 +48,10 @@ _REPLAN_ARGUMENTS = json.dumps({
     "required": ["based_on_event_id", "rationale"],
     "additionalProperties": False,
 }, separators=(",", ":"))
+_LANE_BACK_ARGUMENTS = json.dumps({
+    'type': 'object', 'properties': {'rationale': {'type': 'string', 'minLength': 1, 'maxLength': 512}},
+    'required': ['rationale'], 'additionalProperties': False,
+}, separators=(",", ":"))
 _PICK_PLACE_ARGUMENTS = json.dumps({
     "type": "object",
     "properties": {
@@ -95,6 +99,11 @@ MODEL_TOOL_CATALOG = MappingProxyType({
         description="Submit a non-executable replan candidate for Fleet review.",
         effect_class=ToolEffectClass.CANDIDATE_WRITING, feedback_enabled=True,
         _parameters_json=_REPLAN_ARGUMENTS,
+    ),
+    'propose_lane_back': ModelToolDefinition(
+        name='propose_lane_back', description='Record a bounded lane recovery proposal; never issue a device command.',
+        effect_class=ToolEffectClass.CANDIDATE_WRITING, feedback_enabled=True,
+        _parameters_json=_LANE_BACK_ARGUMENTS, scope='incident',
     ),
     "propose_pick_place": ModelToolDefinition(
         name="propose_pick_place",

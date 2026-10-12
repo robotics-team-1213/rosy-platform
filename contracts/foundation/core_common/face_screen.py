@@ -195,6 +195,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "battery_level": _name(data.get("battery_level"), BATTERY_LEVELS),
         "line_follow_mode": _name(data.get("line_follow_mode")),
         "line_follow_state": _name(data.get("line_follow_state")),
+        "line_note": _name(data.get("line_note"), LINE_NOTES),
         "caution": sorted(set(codes)),
         "recovery": _name(data.get("recovery"), RECOVERY_PHASES),
         "signal": data.get("signal") if data.get("signal") in robot_state.DRIVE_SIGNALS else None,
@@ -317,6 +318,9 @@ NAV_STOP_LINE = {"BLOCKED": "Route blocked", "FAILED": "Navigation failed"}
 #: D-688: travel states that are not "Going", and a line the robot is actually on.
 NAV_TRAVEL_LINE = {"PLANNING": "Planning", "ARRIVED": "Arrived"}
 LINE_SITUATION = {"TRACKING": "Following", "HOLD": "Holding", "LOST": "Line lost"}
+#: Closed notes the bridge copies from a published line-follow reason (D-719).
+LINE_NOTES = frozenset({"crosswalk", "lane_edge", "yield"})
+LINE_NOTE_TEXT = {"crosswalk": "Crosswalk", "lane_edge": "Lane edge", "yield": "Yielding"}
 BATTERY_LEVELS = frozenset({"ok", "warning", "critical", "deep"})
 LEVEL_WORD = {"warning": "Low", "critical": "Critical", "deep": "Deep"}
 #: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
@@ -487,6 +491,9 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         tone = "info"
     elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in NAV_TRAVEL_LINE:
         strip = NAV_TRAVEL_LINE[core["nav_state"]]
+        tone = "info"
+    elif strip is None and mode in ("NAVIGATION", "MANUAL") and core.get("line_note") in LINE_NOTE_TEXT:
+        strip = LINE_NOTE_TEXT[core["line_note"]]
         tone = "info"
     elif strip is None and mode in ("NAVIGATION", "MANUAL") and core.get("line_follow_state") in LINE_SITUATION:
         strip = LINE_SITUATION[core["line_follow_state"]]

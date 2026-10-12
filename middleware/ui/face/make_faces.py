@@ -86,6 +86,23 @@ def frame(name: str, phase: int) -> Image.Image:
             ellipse((160 - half + wall, top + wall,
                      160 + half - wall, bot + depth), BLACK)
 
+    def heavy_frown(end_y: float, sag: float, half: float, up: float, down: float) -> None:
+        """Thick frown. The center is higher than the corners."""
+        count = 33
+        upper, lower = [], []
+        for index in range(count):
+            t = -1 + 2 * index / (count - 1)
+            x = 160 + half * t
+            mid = end_y + bob - sag * (1 - t * t)
+            upper.append((sc(x), sc(mid - up)))
+            lower.append((sc(x), sc(mid + down)))
+        draw.polygon(upper + lower[::-1], fill=PINK)
+        for sign in (-1, 1):
+            x = 160 + sign * half
+            y = end_y + bob
+            rad = max(up, down)
+            ellipse((x - rad, y - up, x + rad, y + down), PINK)
+
     def smile_eye(cx: float, y: float) -> None:
         """Squinting eye with the pupil still in the pink."""
         cy = y + bob
@@ -140,10 +157,10 @@ def frame(name: str, phase: int) -> Image.Image:
         laugh_eye(EYE_R, 164)
         filled_smile(50, 26, 176)
     elif name == "bored":
-        # Low lids, then a short frown that sags under them.
+        # Low lids, then a thick frown under them. The lower edge stays above y=224.
         heavy_eye(EYE_L, 176)
         heavy_eye(EYE_R, 176)
-        stroke(bow(160, 204 + bob, 40, 4), 12)
+        heavy_frown(204, 8, 62, 7, 10)
     elif name == "sad":
         open_eye(EYE_L, 116, 24, 22, look * 0.15, 7)
         open_eye(EYE_R, 116, 24, 22, look * 0.15, 7)

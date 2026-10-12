@@ -1035,3 +1035,10 @@
 - 변경: CoreServices가 교통 관리자를 생성한 직후 실제 status를 StateManager에 반영한다. 관측·주행 tick이 없어도 기본 DISABLED 값이 활성 설정을 가리지 않는다. 명령·정책 gate는 변경하지 않는다.
 - 증거: A21 설정 ENFORCED와 snapshot DISABLED 불일치를 추적했다. 기본 snapshot 초기값과 비활성 line-follow tick의 early return을 확인했다. 세 모드의 관측 없는 기동에서 API 관리자 status와 snapshot 일치·HOLD/no_road_evidence 보존 회귀를 추가했다. 원격 시험과 native 직접 readback은 아직 미확인이다.
 - gate 변화: 없음. 신호·위치·도로 증거·명령 admission과 완주 수용은 기존 기준을 유지한다.
+
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로
+
+- 변경: `face_line_note`가 발행된 `line_follow.reason`만 본다. `crosswalk_`와 `ir_guard_crosswalk`는 횡단보도, 차선 가장자리 셋은 차선 가장자리, `stuck_yield`는 양보다. 그 이름으로 붙은 HOLD는 선 소실 주의를 내지 않는다. 각속도가 있는 양보는 기존 좌우 신호가 남는다.
+- 증거: `test_face_inputs.py`에 사유별 노트와 양보 회전·일반 HOLD 시험을 넣었다. 원격 pytest는 커밋 전이라 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
