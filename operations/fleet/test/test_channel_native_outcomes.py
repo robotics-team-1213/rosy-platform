@@ -34,6 +34,8 @@ def _home_with_native_ack(tmp_path):
     f = fixture(tmp_path, HOME_TEXT, HOME_PLAN)
     run_id, boot_id = uuid4(), uuid4()
     sent = []
+    async def owner(path):return {'owner':{'boot_id':str(boot_id),'owner_generation':0,'owner_run_id':None}}
+    f.client._get=owner
 
     async def post(path, body):
         sent.append((path, body))
@@ -102,6 +104,8 @@ def test_closure_survives_revoked_origin_and_suppresses_next_step(tmp_path,revok
     plan={'steps':[HOME_PLAN,HOME_PLAN]}
     f=fixture(tmp_path,HOME_TEXT+' 그리고 '+HOME_TEXT,plan)
     sent=[]; operation=_operation(uuid4(),uuid4(),None)
+    async def owner(path):return {'owner':{'boot_id':operation['boot_id'],'owner_generation':0,'owner_run_id':None}}
+    f.client._get=owner
     async def post(path,body):
         sent.append(body);operation['correlation_id']=body['correlation_id']
         return {'accepted':True,'operation':dict(operation)}
@@ -176,6 +180,8 @@ def test_follow_hold_and_teleop_expiry_are_not_completion(tmp_path,kind):
     plan={'do':'follow','robot':'rosy_40','target_robot_id':'rosy_41'} if kind=='follow' else {'do':'move','robot':'rosy_40','linear':.1,'angular':0.}
     f=fixture(tmp_path,text,plan,extra_robots=('rosy_41',));sent=[]
     op=_operation(uuid4(),uuid4(),None)|{'kind':kind}
+    async def owner(path):return {'owner':{'boot_id':op['boot_id'],'owner_generation':0,'owner_run_id':None}}
+    f.client._get=owner
     async def state():return {'mode':'MANUAL' if kind=='teleop' else 'IDLE','safety':{'estop':False}}
     async def post(path,body):
         sent.append(body);op['correlation_id']=body['correlation_id']
@@ -208,6 +214,22 @@ def test_pruned_exact_event_keeps_result_without_release_or_cid_inference(tmp_pa
     f.client._get=get;asyncio.run(f.worker.step(rid))
     receipt=json.loads(f.journal.view(rid)['steps'][0]['receipt_json'])
     assert receipt['outcome']['result']=='SUCCEEDED' and not receipt.get('safe_released')
+    assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40') and len(sent)==1
+
+
+@pytest.mark.parametrize('mismatch',['boot','kind','cid','negative','missing'])
+def test_ambiguous_native_ack_keeps_claim_and_never_replays(tmp_path,mismatch):
+    f=fixture(tmp_path,HOME_TEXT,HOME_PLAN);sent=[]
+    async def post(path,body):
+        sent.append(body)
+        op=_operation(uuid4(),body['expected_boot_id'],body['correlation_id'])
+        if mismatch=='boot':op['boot_id']=str(uuid4())
+        if mismatch=='kind':op['kind']='dock'
+        if mismatch=='cid':op['correlation_id']='someone-else'
+        return {'accepted':mismatch!='negative',**({'operation':op} if mismatch!='missing' else {})}
+    f.client._post=post;rid=f.receipt['request_id']
+    asyncio.run(f.worker.step(rid));f.journal.recover();asyncio.run(f.worker.step(rid))
+    assert f.journal.view(rid)['steps'][0]['state']=='UNKNOWN'
     assert f.store.resource_claims(resource_kind='robot',resource_id='rosy_40') and len(sent)==1
 
 

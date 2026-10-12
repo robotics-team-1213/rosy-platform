@@ -10,6 +10,9 @@ def owner_receipt(call,value,robot_ids):
     accepted, receipt = _owner_receipt(call,value,robot_ids)
     if value.get('operation') is not None:
         operation = NativeOperation.model_validate(value['operation']).model_dump(mode='json')
+        if accepted is False or (call.body.get('expected_boot_id') is not None
+                                and operation['boot_id'] != call.body['expected_boot_id']):
+            raise ValueError('NATIVE_ACK_ADMISSION_CHANGED')
         if call.verb in KINDS and (operation['kind'] != KINDS[call.verb]
                 or operation['correlation_id'] != call.body.get('correlation_id')):
             raise ValueError('NATIVE_ACK_IDENTITY_CHANGED')
