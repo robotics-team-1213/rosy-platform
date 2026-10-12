@@ -248,6 +248,9 @@ with TestClient(app) as client:
 print('installed namespace, resources and HTTP guards verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
+               'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
+               'fleet.server.channel.conversation.worker', 'fleet.server.channel.conversation.runtime',
+               'fleet.server.channel.model_journal', 'fleet.server.channel.broker_transport',
                'rosy.world.api', 'rosy.execution.api', 'rosy.skills.api',
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
