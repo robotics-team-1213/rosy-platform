@@ -5,6 +5,7 @@ import time
 from uuid import uuid4
 
 from fastapi import HTTPException
+from fleet.hub.hub import HubError
 from core_common.intent import interpret
 from rosy.decision.conversation.codec import AcceptedContext, ConversationInput, checked_answer, conversation_input, digest
 from .instructions import bind_original, catalog_hash
@@ -76,7 +77,8 @@ class ExecutionJournal:
         with closing(self.store._connect()) as conn:
             row=conn.execute('SELECT request_id FROM fleet_channel_execution_steps WHERE task_id=?',(task_id,)).fetchone()
             if row is None:return None
-            self.guard(row['request_id'],conn)
+            try:self.guard(row['request_id'],conn)
+            except (ValueError,HTTPException) as exc:raise HubError('COMMAND_REJECTED','CHANNEL_SELECTED_CONTEXT_CHANGED') from exc
             return ConversationInput.model_validate_json(self.jobs._row(conn,row['request_id'])['problem_json']).accepted_execution_context
 
     def guard(self, rid, conn=None, *, visiting=()):

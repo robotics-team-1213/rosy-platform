@@ -4,6 +4,7 @@ import time
 from contextlib import closing
 
 from core_common.protocol.native.operation import NativeOperation
+from fleet.hub.hub import HubError
 from fleet.swarm.dispatch_guard import dispatch_guard
 from .evidence import epoch
 
@@ -16,14 +17,21 @@ async def prepare_send(leases, task_id, attempt_id, robot_id, client, options, s
     if native:
         from ..instructions import selected_readback
         suffix='?run_id='+context['run_id'] if context and context.get('boot_id') else ''
-        value=await client._get('/api/v1/navigation/state'+suffix)
-        if suffix and not selected_readback(context,value):raise ValueError('CHANNEL_SELECTED_RUN_CHANGED')
+        try:value=await client._get('/api/v1/navigation/state'+suffix)
+        except Exception as exc:
+            if suffix:raise HubError('COMMAND_REJECTED','CHANNEL_SELECTED_RUN_UNAVAILABLE') from exc
+            raise
+        if suffix and not selected_readback(context,value):raise HubError('COMMAND_REJECTED','CHANNEL_SELECTED_RUN_CHANGED')
         options.update(epoch(value))
         leases.check_stop(robot_id, stop)
     def admit():
-        if context is not None and (leases.selected_context(task_id)!=context or time.monotonic()-started>2):
-            raise ValueError('CHANNEL_SELECTED_CONTEXT_CHANGED')
-        admit_send(leases, task_id, attempt_id, robot_id, native)
+        try:
+            if context is not None and (leases.selected_context(task_id)!=context or time.monotonic()-started>2):
+                raise HubError('COMMAND_REJECTED','CHANNEL_SELECTED_CONTEXT_CHANGED')
+            admit_send(leases, task_id, attempt_id, robot_id, native)
+        except Exception:
+            if native:leases.bind_native_receipt(task_id,attempt_id,robot_id,None,unsent=True)
+            raise
     admit()
     return dispatch_guard(admit, paths={'/api/v1/navigation/goal'})
 
