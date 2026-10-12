@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source
 - 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
 - 2026-10-12 · 36b51d124 · D-728 channel owner extraction
 - 2026-10-12 · 92ba11def · historical 숙고 증거 identity 오류 순서 보완
 - 2026-10-12 · 5941920df7 · D-720 기명 상태 숙고 연결 소스
-- 2026-10-12 · 3ff2ffc1e5 · 없는 차로 문구와 Fleet 크기 재판정
