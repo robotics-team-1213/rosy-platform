@@ -36,6 +36,7 @@ class FleetTaskService:
         self._policy_evidence = policy_evidence
         self._max_evidence_age_s = max_evidence_age_s
         self._clock = clock
+        self.channel_admission = None
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
@@ -130,9 +131,11 @@ class FleetTaskService:
                 or task["status"] != "QUEUED" or task["dispatch_phase"] != "DISPATCHING"):
             raise HubError("COMMAND_REJECTED", "task no longer owns the dispatch attempt")
         reason = None
-        if not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
+        if self.channel_admission is not None:
+            reason = self.channel_admission(task_id)
+        if reason is None and not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
             reason = "STOP_GENERATION_CHANGED_BEFORE_SEND"
-        elif task["source"] == "policy":
+        elif reason is None and task["source"] == "policy":
             reason = self._policy_admission_reason(task["evidence"]["evidence_id"], robot_id=task["robot_id"])
             if reason is None and not self.POLICY_DISPATCH_ENABLED:
                 reason = "POLICY_NOT_ACCEPTED"
