@@ -8,7 +8,7 @@ import math
 import time
 from dataclasses import asdict, dataclass
 
-CHOICES = frozenset({'reobserve', 'human', 'map_correction', 'object_reacquire'})
+CHOICES = frozenset({'reobserve', 'human', 'map_correction', 'object_reacquire', 'back_and_retry'})
 OBJECTIONS = frozenset({'unsafe', 'insufficient_evidence', 'conflict'})
 
 
@@ -50,13 +50,23 @@ class Problem:
         if type(self.observed_at) not in (int, float) or not math.isfinite(self.observed_at):
             raise ValueError('invalid observation time')
         facts = json.loads(self.facts_json)
+        recovery_choice = type(self.choices) in (tuple, list) and 'back_and_retry' in self.choices
+        if type(facts) is dict and 'recovery' in facts:
+            from .contracts.recovery import recovery_context
+            if (self.domain != 'line_follow' or self.necessity != 'INTERVENE'
+                    or set(facts) != {'state', 'recovery'} or facts['state'] != 'blocked'
+                    or not recovery_choice):
+                raise ValueError('INVALID_RECOVERY_PROBLEM')
+            recovery_context(facts['recovery'])
         valid = ({'state': {'unknown', 'blocked', 'normal'}} if self.domain == 'line_follow' else
                  {'state': {'unknown', 'open', 'closed'}, 'door_state': {'unknown', 'open', 'closed'}}
                  if self.domain == 'door' else {'state': {'unknown', 'present', 'missing'},
                                               'target_state': {'unknown', 'present', 'missing'}})
         if (type(facts) is not dict or not facts or any(key not in valid or type(value) is not str
-                or value not in valid[key] for key, value in facts.items())):
+                or value not in valid[key] for key, value in facts.items() if key != 'recovery')):
             raise ValueError('invalid approved observation facts')
+        if recovery_choice and (self.domain != 'line_follow' or 'recovery' not in facts):
+            raise ValueError('INVALID_RECOVERY_PROBLEM')
         object.__setattr__(self, 'facts_json', canonical(facts))
         for name, allowed in (('evidence_ids', None), ('choices', CHOICES)):
             values = getattr(self, name)
