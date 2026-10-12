@@ -13,7 +13,7 @@ from test_judgment_profiles import adapter
 
 
 @pytest.mark.parametrize('kind', ['local', 'claude', 'opencode'])
-@pytest.mark.parametrize('fault', ['malformed', 'unknown_cost', 'provenance'])
+@pytest.mark.parametrize('fault', ['malformed', 'malformed_text', 'unknown_cost', 'provenance'])
 def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_path, kind, fault):
     async def run():
         now, reviews, handoffs, _, board, store, old, poll, current = make_incident_worker(tmp_path, provider_cost=.01)
@@ -28,7 +28,7 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
             body = json.loads(args[0] if kind == 'local' else args[1])
             requests.append(body)
             # The rejected model text cannot become a current-case prior, receipt or evidence.
-            rejected = {'case_id': 'foreign', 'input_hash': '0' * 64}
+            rejected = '{broken-json' if fault == 'malformed_text' else {'case_id': 'foreign', 'input_hash': '0' * 64}
             cost = None if fault == 'unknown_cost' else 0 if kind == 'local' else .01
             if kind == 'local':
                 result = dict(model_id='foreign' if fault == 'provenance' else primary.model_id,
@@ -38,7 +38,7 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
             if kind == 'claude':
                 return 0, json.dumps(dict(is_error=False, structured_output=rejected, total_cost_usd=cost)).encode()
             return 0, ('\n'.join(json.dumps(row) for row in (
-                dict(type='text', part=dict(text=json.dumps(rejected))),
+                dict(type='text', part=dict(text=rejected if fault == 'malformed_text' else json.dumps(rejected))),
                 dict(type='step_finish', part=dict(cost=cost))))).encode()
 
         launch.adapter_capabilities, launch.schema_versions, launch.cost_verified = descriptor, (2,), True
@@ -62,7 +62,7 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
             traces = connection.execute('SELECT attempt_id FROM fleet_incident_v2_model_receipts').fetchall()
         assert len(requests) == 1 and requests[0]['problem']['input_hash'] == problem.digest
         assert requests[0]['problem']['case_id'] == scope.case_id
-        if fault == 'malformed':
+        if fault in {'malformed', 'malformed_text'}:
             assert case['calls'] == 2 and len(reviews) == 1 and not handoffs
             assert reviews[0][0].digest == problem.digest and reviews[0][2] == ()
             assert attempts[0]['state'] == 'REJECTED'
