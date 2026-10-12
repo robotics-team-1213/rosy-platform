@@ -60,7 +60,7 @@ def test_real_snapshot_restart_approval_revocation_and_idempotent_registration(t
     assert opened(tmp_path / 'registry').approved_artifacts() == {}
 
 
-@pytest.mark.parametrize('fault', ['signature', 'profile', 'domain', 'candidate', 'calibration', 'kind', 'head', 'trust'])
+@pytest.mark.parametrize('fault', ['signature', 'profile', 'domain', 'candidate', 'calibration', 'kind', 'head', 'trust', 'scope'])
 def test_wrong_or_self_declared_receipt_cannot_approve(tmp_path, fault):
     path, candidate = source(tmp_path)
     registry = opened(tmp_path / 'registry')
@@ -69,6 +69,8 @@ def test_wrong_or_self_declared_receipt_cannot_approve(tmp_path, fault):
     receipt = signed(candidate, 'reasoning_calibration', head)
     if fault == 'signature': receipt['signature'] = '0' * 64
     elif fault == 'trust': registry = opened(tmp_path / 'registry', trusted={})
+    elif fault == 'scope': registry = opened(tmp_path / 'registry', trusted={
+        'independent-review': {'key': KEY, 'kinds': {'reasoning_revocation'}}})
     else:
         key = {'profile': 'profile_sha256', 'domain': 'domain', 'candidate': 'candidate_revision',
                'calibration': 'calibration_sha256', 'kind': 'kind', 'head': 'expected_head'}[fault]
@@ -108,3 +110,36 @@ def test_tampered_persistent_state_refuses_all_readback(tmp_path, fault):
             if fault == 'state': db.execute("UPDATE reasoning_candidates SET stage='approved'")
             else: db.execute("UPDATE reasoning_events SET body='{}'")
     with pytest.raises(ValueError): opened(root).approved_artifacts()
+
+
+def test_approved_digest_matches_actual_calibration_artifact_with_unicode(tmp_path):
+    from rosy.decision.deliberation.calibration import CalibrationArtifact
+    profile, data = inputs()
+    data['reviewed_profile']['reviewed_by'] = '현장검수'
+    candidate = candidate_api().build_candidate(profile, data)
+    path = tmp_path / 'unicode.json'; path.write_text(json.dumps(candidate))
+    registry = opened(tmp_path / 'registry'); revision = registry.register(path)
+    head = registry.history()[-1]['revision']
+    registry.approve(revision, signed(candidate, 'reasoning_calibration', head), expected_head=head)
+    artifact = CalibrationArtifact(json.dumps(candidate['calibration_report']))
+    assert registry.approved_artifacts() == {profile['calibration_revision']: artifact.digest}
+
+
+def test_different_full_profiles_cannot_share_one_approved_calibration_revision(tmp_path):
+    from test_judgment_calibration import digest
+    path, first = source(tmp_path)
+    profile, data = inputs(); profile['model_revision'] = 'different-model'
+    identity = dict(full_profile_sha256=digest(profile), model_revision=profile['model_revision'])
+    data['reviewed_profile'].update(identity)
+    for row in (*data['fit'], *data['evaluation']): row.update(identity)
+    data['reviewed_profile'].update(fit_sha256=digest(data['fit']), evaluation_sha256=digest(data['evaluation']))
+    second = candidate_api().build_candidate(profile, data)
+    other = tmp_path / 'other.json'; other.write_text(json.dumps(second))
+    registry = opened(tmp_path / 'registry')
+    registry.register(path); registry.register(other)
+    head = registry.history()[-1]['revision']
+    registry.approve(first['revision'], signed(first, 'reasoning_calibration', head), expected_head=head)
+    head = registry.history()[-1]['revision']
+    with pytest.raises(ValueError):
+        registry.approve(second['revision'], signed(second, 'reasoning_calibration', head), expected_head=head)
+    assert len(registry.history()) == 3
