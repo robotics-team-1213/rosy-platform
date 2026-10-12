@@ -41,10 +41,11 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
     if bundle['schema'] != 'rosy.incident.operational_evidence/1': raise ValueError('INVALID_OPERATING_BUNDLE_SCHEMA')
     profiles = incident_profiles(tuple(ModelProfile(**p) for p in bundle['profiles']))
     selected = ModelProfile(**bundle['profile'])
-    if selected not in profiles or selected.calibration_revision is None or 'line_follow' not in selected.domains:
+    if selected not in profiles or selected.calibration_revision is None:
         raise ValueError('OPERATING_FULL_PROFILE_NOT_SELECTED')
     missing = [name for name, key in (('calibration', 'calibration_input'), ('cohort', 'cohort'), ('truth', 'truth'),
                                     ('limits', 'limits'), ('windows', 'windows'), ('review', 'review')) if not bundle[key]]
+    if 'line_follow' not in selected.domains: missing.append('domain_backend_not_supported')
     calibration = None
     if bundle['calibration_input'] is not None:
         fields(bundle['calibration_input'], ('fit', 'evaluation', 'training', 'reviewed_profile'))
@@ -87,6 +88,8 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
         raise ValueError('ORIGINAL_SOURCE_LOADER_CONTRACT_REQUIRED')
     elif originals['coverage_scope'] != 'raw_sidecar_and_retained_observations_only':
         raise ValueError('ORIGINAL_SOURCE_SCOPE_CANNOT_BE_WIDENED')
+    elif not originals['raw_recordings'] or not originals['observation_windows']:
+        missing.append('verified_original_sources')
     missing.extend(UNSUPPORTED)
     return dict(schema='rosy.incident.operational_acceptance/1', state='HOLD', missing=sorted(set(missing)),
         field_accepted=False, truth_admitted=False, evidence_sha256=digest(bundle),
@@ -94,4 +97,5 @@ def compile_evidence(bundle, *, trusted, now, originals=None):
         calibration_sha256=calibration.digest if calibration else None, comparison_sha256=digest(comparison) if comparison else None,
         coverage_sha256=digest(windows) if windows else None, limits_sha256=digest(bundle['limits']) if limits else None,
         truth_sha256=digest(bundle['truth']) if bundle['truth'] else None, metrics=metrics,
+        metrics_scope='authenticated_review_declarations_only',
         supported_original_contracts=list(SUPPORTED), unsupported=list(UNSUPPORTED))
