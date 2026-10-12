@@ -87,7 +87,8 @@ async def channel_step(worker, rid, index, call, row):
         conn.execute('BEGIN IMMEDIATE')
         current = conn.execute('SELECT * FROM fleet_channel_execution_steps WHERE request_id=? AND step_index=?',
                                (rid, index)).fetchone()
-        if any(current[key] != row[key] for key in ('owner_id', 'generation', 'task_id', 'receipt_json', 'state')):
+        if any(current[key] != row[key] for key in ('owner_id', 'generation', 'task_id', 'receipt_json', 'state',
+                                                   'resources_json', 'caller_cid')):
             return True
         if not task:
             receipt = record(conn, current, receipt, call.robot, 'direct_action', row['owner_id'], row['generation'],
