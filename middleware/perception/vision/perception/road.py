@@ -235,6 +235,15 @@ def _marking(group_indexes: list[int], groups: list[tuple[int, int]],
     )
 
 
+def _horizontal_bar(bright: np.ndarray, group: tuple[int, int], minimum_fraction: float) -> bool:
+    # Separate crosswalk fingers and lane edges do not prove one transverse stop bar.
+    top, bottom = group
+    minimum_width = bright.shape[1] * minimum_fraction
+    return any(end - start + 1 >= minimum_width
+               for row in bright[top:bottom + 1]
+               for start, end in _groups(row > 0))
+
+
 def _floor_crosswalk(bright: np.ndarray, ground, minimum_bars: int) -> RoadMarkingObservation | None:
     # The fixed D-491 detector cannot prove a stricter operator bar-count requirement.
     if not isinstance(ground, GroundPlane) or minimum_bars > MIN_STRIPES:
@@ -322,7 +331,8 @@ def detect_road_observation(bgr: np.ndarray, *, ground=None,
     )
     crosswalk_set = set(crosswalk_indexes)
     stop_indexes = [index for index in range(len(horizontal_groups))
-                    if index not in crosswalk_set]
+                    if index not in crosswalk_set
+                    and _horizontal_bar(bright, horizontal_groups[index], config.horizontal_min_fraction)]
     # A single stop-line verdict is the closest independent horizontal mark.
     stop_indexes = stop_indexes[-1:] if stop_indexes else []
     signal, conflict = _signal(bgr, config)
