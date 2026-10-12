@@ -23,9 +23,11 @@ def step(problem, value, *, read_only):
     if type(value) is not dict or set(value) != {'tool_name', 'arguments', 'evidence_ids'}:
         raise ValueError('INVALID_JUDGMENT_STEP')
     definition = MODEL_TOOL_CATALOG.get(value['tool_name']) if type(value['tool_name']) is str else None
-    scope = 'incident' if problem.domain in {'line_follow', 'door'} else 'mission'
+    scope = ('channel' if problem.domain == 'fleet_status' else
+             'incident' if problem.domain in {'line_follow', 'door'} else 'mission')
     if (definition is None or definition.scope != scope or not definition.feedback_enabled or definition.device_action_api
-            or read_only and definition.effect_class != ToolEffectClass.READ_ONLY):
+            or (read_only or problem.domain == 'fleet_status')
+            and definition.effect_class != ToolEffectClass.READ_ONLY):
         raise ValueError('STEP_NOT_ADMITTED')
     refs(value['evidence_ids'], problem.evidence_ids, required=True)
     call = ModelToolCall(provider_call_id='judgment-v2', tool_name=definition.name,
@@ -81,8 +83,10 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
     refs(payload['missing_evidence'], allowed_missing)
     refs(payload['objections'], OBJECTIONS)
     active = payload['verdict'] in ('candidate', 'reobserve')
+    if problem.domain == 'fleet_status' and payload['verdict'] == 'candidate':
+        raise ValueError('STATUS_CANDIDATE_REFUSED')
     if active:
-        if problem.necessity != 'INTERVENE':
+        if problem.necessity != ('READ_ONLY_QUERY' if problem.domain == 'fleet_status' else 'INTERVENE'):
             raise ValueError('INTERVENTION_NOT_REQUESTED')
         step(problem, payload['next_step'], read_only=payload['verdict'] == 'reobserve')
         proof = payload['success_check']
@@ -92,7 +96,8 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
         replace(problem, facts_json=canonical(proof['expected_facts']))
     elif payload['next_step'] is not None or payload['success_check'] is not None:
         raise ValueError('INACTIVE_JUDGMENT_HAS_STEP')
-    if payload['verdict'] == 'do_not_intervene' and problem.necessity != 'DO_NOT_INTERVENE':
+    if (payload['verdict'] == 'do_not_intervene' and problem.domain != 'fleet_status'
+            and problem.necessity != 'DO_NOT_INTERVENE'):
         raise ValueError('NORMAL_JUDGMENT_CONFLICT')
     top = max(item['probability'] for item in probabilities)
     winners = [item['choice'] for item in probabilities if item['probability'] == top]
@@ -105,7 +110,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                              'uniqueItems': True, 'maxItems': 16}
     properties = {key: {'const': getattr(problem, key)} for key in ('subject_id', 'case_id', 'generation')}
     properties.update(schema_version={'const': 2}, profile_revision={'const': bound.profile.profile_revision},
-                      input_hash={'const': problem.digest}, verdict={'enum': list(VERDICTS)},
+                      input_hash={'const': problem.digest},
+                      verdict={'enum': [v for v in VERDICTS if problem.domain != 'fleet_status' or v != 'candidate']},
                       evidence_ids={**array(problem.evidence_ids), 'minItems': 1},
                       missing_evidence=array(tuple(identifier(v) for v in missing_allowlist)), objections=array(OBJECTIONS),
                       alternatives={'type': 'array', 'minItems': len(problem.choices), 'maxItems': len(problem.choices),
@@ -115,7 +121,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                                                   'probability': {'type': 'number', 'minimum': 0, 'maximum': 1}}}})
     for field in ('next_step', 'success_check'):
         entries = []
-        scope = 'incident' if problem.domain in {'line_follow', 'door'} else 'mission'
+        scope = ('channel' if problem.domain == 'fleet_status' else
+                 'incident' if problem.domain in {'line_follow', 'door'} else 'mission')
         for definition in MODEL_TOOL_CATALOG.values():
             if definition.scope != scope or not definition.feedback_enabled or (field == 'success_check'
                     and definition.effect_class != ToolEffectClass.READ_ONLY):

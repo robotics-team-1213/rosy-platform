@@ -64,5 +64,4 @@ def test_status_question_is_not_operational_intervention_and_old_hash_is_unchang
     with pytest.raises(ValueError): replace(problem(), necessity='READ_ONLY_QUERY')
     original = problem()
     assert original.facts_json == '{"state":"unknown"}'
-    assert original.digest == Problem('robot', 'case', 'g1', 'line_follow', 1,
-        ('e1',), ('human', 'reobserve'), 'INTERVENE').digest
+    assert original.digest == 'ba4d1447f9c793a9685c05213ffd960747d169c5e5534a8e7bee3a96c9632fd3'

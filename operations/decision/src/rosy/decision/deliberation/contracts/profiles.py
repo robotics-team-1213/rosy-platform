@@ -31,7 +31,7 @@ class AdapterCapabilities:
             identifier(value)
         if self.provider_kind not in {'local', 'http', 'claude', 'opencode'} or type(self.schema_version) is not int:
             raise ValueError('INVALID_ADAPTER_IDENTITY')
-        for field, allowed in (('domains', {'line_follow', 'door', 'arm_target'}), ('modalities', {'text', 'image'})):
+        for field, allowed in (('domains', {'line_follow', 'door', 'arm_target', 'fleet_status'}), ('modalities', {'text', 'image'})):
             object.__setattr__(self, field, capabilities(getattr(self, field), allowed))
         if any(type(getattr(self, field)) is not bool for field in ('ready', 'isolated', 'cost_verified')):
             raise ValueError('INVALID_ADAPTER_ADMISSION')
