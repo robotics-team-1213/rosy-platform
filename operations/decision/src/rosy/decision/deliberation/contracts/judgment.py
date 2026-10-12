@@ -124,7 +124,7 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
         scope = ('channel' if problem.domain == 'fleet_status' else
                  'incident' if problem.domain in {'line_follow', 'door'} else 'mission')
         for definition in MODEL_TOOL_CATALOG.values():
-            if definition.scope != scope or not definition.feedback_enabled or (field == 'success_check'
+            if definition.scope != scope or not definition.feedback_enabled or ((field == 'success_check' or problem.domain == 'fleet_status')
                     and definition.effect_class != ToolEffectClass.READ_ONLY):
                 continue
             entries.append({'type': 'object', 'additionalProperties': False,
@@ -132,7 +132,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                                 'tool_name': {'const': definition.name}, 'arguments': definition.parameters,
                                 'evidence_ids': {**array(problem.evidence_ids), 'minItems': 1}}})
             if field == 'success_check':
-                states = {'line_follow': ['unknown', 'blocked', 'normal'], 'door': ['unknown', 'open', 'closed'],
+                states = {'fleet_status': ['unknown', 'offline', 'online', 'mixed', 'empty'],
+                          'line_follow': ['unknown', 'blocked', 'normal'], 'door': ['unknown', 'open', 'closed'],
                           'arm_target': ['unknown', 'present', 'missing']}[problem.domain]
                 fact_keys = ['state'] + ({'door': ['door_state'], 'arm_target': ['target_state']}.get(problem.domain, []))
                 entries[-1]['required'].append('expected_facts')
