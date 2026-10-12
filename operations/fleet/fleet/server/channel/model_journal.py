@@ -117,7 +117,7 @@ class ModelJobsJournal:
             # Named parameters keep the immutable receipt and response in one transaction.
             row['result']=canonical({'reason':'STATUS_INPUT_INVALID','action_admissible':False})
             changed=conn.execute(f'''INSERT OR IGNORE INTO {self.tables[0]}
-                VALUES (:request_id,:receipt_hash,:route_hash,:profile_set_hash,:input_hash,'{}','{}',
+                VALUES (:request_id,:receipt_hash,:route_hash,:profile_set_hash,:input_hash,'{{}}','{{}}',
                     'HOLD',:created_at,:deadline,:result,:created_at)''',row).rowcount
             if changed:
                 self.journal.reply_outbox.enqueue(conn,receipt,self.reply_kind,
