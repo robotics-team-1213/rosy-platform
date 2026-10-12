@@ -179,3 +179,22 @@ def test_free_launcher_binds_sdk_response_and_cleans_cancellation(monkeypatch, c
                 asyncio.run(launch(probe.ARGV, codec.body(), 1, 16384))
     assert events == (['close'] if change in {'malformed', 'paid_args'} else
                       ['gateway', 'cli', 'scope-cleaned', 'gateway-cleaned', 'close'])
+
+
+def test_fixed_synthetic_request_matches_across_hash_seeds():
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    environment = {**os.environ, 'PYTHONPATH': os.pathsep.join((str(root),
+        str(root / 'operations/decision/src'), str(root / 'contracts/foundation')))}
+    request = subprocess.run((sys.executable, '-c',
+        'from deploy.ai_pc.deliberation_free_codec import body; import sys; sys.stdout.buffer.write(body())'),
+        env={**environment, 'PYTHONHASHSEED': '1'}, capture_output=True, check=True, timeout=10).stdout
+    for seed in ('2', '3', '4'):
+        subprocess.run((sys.executable, '-c',
+            'from deploy.ai_pc.deliberation_free_codec import trusted_body; import sys; trusted_body(sys.stdin.buffer.read())'),
+            input=request, env={**environment, 'PYTHONHASHSEED': seed},
+            capture_output=True, check=True, timeout=10)
