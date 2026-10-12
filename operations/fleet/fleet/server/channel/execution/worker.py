@@ -1,0 +1,142 @@
+"""Dispatch admitted original steps once through the existing intent owners."""
+import asyncio
+import json
+import math
+
+from fastapi import HTTPException
+from core_common.intent import interpret
+from fleet.server.intent_routes import STOP_VERBS
+from fleet.server.site_auth import SitePrincipal
+from fleet.swarm.dispatch_guard import dispatch_guard
+from fleet.swarm.transport import RobotApiError
+from fleet.hub.hub import HubError
+
+
+_CAPABILITY = {'navigate':'navigation.goal_navigation','home':'navigation.return_home',
+               'move':'teleop','follow':'swarm.follow','follow_cancel':'swarm.follow',
+               'dock':'docking.supported','undock':'docking.supported'}
+
+
+class ExecutionWorker:
+    def __init__(self,journal,execution):
+        self.journal,self.execution=journal,execution
+        self._lock=asyncio.Lock()
+
+    def fence(self,rid,index,call):
+        self.journal.guard(rid)
+        row=self.journal.view(rid)['steps'][index]
+        if row['state'] not in {'READY','DISPATCHING','TASK_QUEUED'}:
+            raise ValueError('CHANNEL_STEP_ALREADY_SPENT')
+        if call.verb not in STOP_VERBS and not self.journal.store.dispatch_generation_is_current(row['generation']):
+            raise ValueError('STOP_GENERATION_CHANGED_BEFORE_SEND')
+
+    async def preflight(self,rid,index,call):
+        self.fence(rid,index,call)
+        console=self.execution.console
+        robots=[call.robot] if call.robot else list(console.robot_ids)
+        if call.verb in STOP_VERBS:return robots
+        if call.verb=='formation_resume':
+            formation=console.formation_status()
+            robots=list(dict.fromkeys([formation.get('leader'),*formation.get('assignment',{})]))
+            if not robots or None in robots:raise ValueError('FORMATION_OWNER_NOT_ACTIVE')
+        for rid_robot in robots:
+            row=next((r for r in self.journal.environment()['robots'] if r['robot_id']==rid_robot),None)
+            if row is None or row['online'] is not True:raise ValueError('ROBOT_OFFLINE_OR_OBSERVATION_UNKNOWN')
+            client=console._client(rid_robot)
+            caps=await client.capabilities()
+            self.fence(rid,index,call)
+            feature=_CAPABILITY.get(call.verb)
+            value=caps
+            if feature:
+                for part in feature.split('.'):value=value.get(part) if isinstance(value,dict) else None
+                if value is not True:raise ValueError('CAPABILITY_NOT_ADVERTISED')
+            state=await client.state()
+            self.fence(rid,index,call)
+            if call.verb not in STOP_VERBS:
+                if (state.get('safety',{}).get('estop') is not False or state.get('mode') not in {'IDLE','NAVIGATION'}
+                        or state.get('capabilities_degraded') or console.trip_busy(rid_robot)):
+                    raise ValueError('CURRENT_SAFETY_OR_OWNER_HOLD')
+                if call.verb=='move':
+                    nav=caps.get('navigation',{})
+                    for field,limit in [('linear','max_linear_velocity'),('angular','max_angular_velocity')]:
+                        cap=nav.get(limit)
+                        if type(cap) not in (int,float) or not math.isfinite(cap) or cap<=0 or abs(call.body[field])>cap:
+                            raise ValueError('MOVE_LIMIT_NOT_ADVERTISED_OR_EXCEEDED')
+                if call.verb=='dock' and call.body.get('dock') not in self.journal.environment()['work_catalog']:
+                    raise ValueError('DOCK_NOT_REGISTERED')
+        return robots
+
+    async def step(self,rid):
+        async with self._lock:
+            try:view=self.journal.view(rid)
+            except HTTPException as exc:
+                if exc.status_code!=404:raise
+                try:view=self.journal.accept(rid)
+                except (ValueError,HTTPException) as exc:
+                    self.reject(rid,exc)
+                    return
+            if view['reason'] is not None:return
+            calls=interpret(view['plan'])
+            for index,call in enumerate(calls):
+                row=self.journal.view(rid)['steps'][index]
+                if row['state']=='TASK_QUEUED':
+                    task=self.journal.store.get_task(row['task_id'])
+                    if task['status'] in {'COMPLETED','FAILED','HOLD','CANCELED','EXPIRED','UNKNOWN'}:
+                        self.journal.finish(rid,index,task['status'] if task['status']!='EXPIRED' else 'HOLD',
+                                            reason=task['reason'] or task['status'])
+                        if task['status']=='COMPLETED':continue
+                    return
+                if row['state']=='COMPLETED':continue
+                if row['state']!='READY':return
+                began=False
+                try:
+                    robots=await self.preflight(rid,index,call)
+                    original=self.journal.guard(rid)
+                    principal=SitePrincipal(original['principal_id'],'operator')
+                    if call.verb=='navigate':
+                        await self.execution.step(call,principal,'discord-natural:'+rid,index,
+                            admission=lambda conn,task_id:self.journal.link_task(rid,index,task_id,conn))
+                        return
+                    self.journal.begin(rid,index,[('robot',r) for r in robots],stopping=call.verb in STOP_VERBS)
+                    began=True
+                    with dispatch_guard(lambda:self.fence(rid,index,call)):
+                        result=await self.execution.step(call,principal,'discord-natural:'+rid,index)
+                    accepted=result.get('accepted')
+                    if type(accepted) is not bool:
+                        self.journal.finish(rid,index,'UNKNOWN',reason='OWNER_RECEIPT_NOT_CORRELATED')
+                    else:
+                        self.journal.finish(rid,index,'ACCEPTED' if accepted else 'FAILED',receipt={'accepted':accepted})
+                    return
+                except asyncio.CancelledError:
+                    if began:self.journal.finish(rid,index,'UNKNOWN',reason='DISPATCH_CANCELED_RESULT_UNKNOWN')
+                    raise
+                except (ValueError,HTTPException,HubError,RobotApiError) as exc:
+                    # An owner can have sent some recipients before an exception; preserve ambiguity.
+                    self.journal.finish(rid,index,'UNKNOWN' if began else 'HOLD',
+                        reason='COMMAND_REJECTED_OR_SCOPE_CHANGED' if began else self.reason(exc))
+                    return
+                except Exception:
+                    self.journal.finish(rid,index,'UNKNOWN' if began else 'HOLD',reason='COMMAND_RESULT_UNKNOWN' if began else 'PREFLIGHT_UNAVAILABLE')
+                    return
+
+    @staticmethod
+    def reason(exc):
+        if isinstance(exc,ValueError) and str(exc).replace('_','').isalnum() and str(exc).isascii():return str(exc)[:96]
+        return 'CURRENT_AUTHORITY_OR_OBSERVATION_HOLD'
+
+    def reject(self,rid,exc):
+        model=self.journal.jobs.peek(rid)
+        with self.journal.jobs.journal._connect() as conn,conn:
+            try:receipt=self.journal.jobs._receipt(conn,model,active=False)
+            except HTTPException:return
+            self.journal.jobs.journal.reply_outbox.enqueue(conn,receipt,'EXECUTION:HOLD',
+                '실행을 보류했습니다 · '+self.reason(exc)+'\n원문에 대상과 원하는 동작을 명확히 말씀해 주세요. 기기 명령을 보내지 않았습니다.')
+
+    def pending(self):
+        with self.journal.store._connect() as conn:
+            return [r[0] for r in conn.execute('''SELECT j.request_id FROM fleet_channel_conversation_jobs j
+                LEFT JOIN fleet_channel_execution e USING(request_id) WHERE j.state='ANSWERED'
+                AND json_extract(j.result_json,'$.answer.kind')='CONTROL' AND e.reason IS NULL
+                AND (e.request_id IS NULL OR EXISTS (SELECT 1 FROM fleet_channel_execution_steps s
+                    WHERE s.request_id=j.request_id AND s.state IN ('READY','TASK_QUEUED')))
+                ORDER BY j.created_at LIMIT 10''')]
