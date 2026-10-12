@@ -32,6 +32,7 @@ def test_offline_installers_use_the_current_learning_contract_wheel():
 
 @pytest.mark.parametrize('delivery', ['wheel', 'sdist'])
 def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path, delivery):
+    from test_incident_operation_contract import APPROVE, KEY, binding, signed
     staging = tmp_path / 'source'
     support = staging / 'tools/packaging/fleet_sources.py'
     support.parent.mkdir(parents=True)
@@ -154,9 +155,17 @@ from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecon
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
-assert ('rosy-contracts-learning', '>=0.1.10', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-contracts-learning', '>=0.1.11', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
+from rosy.contracts.learning import incident_operation
+assert Path(incident_operation.__file__).is_relative_to(installed)
+operation = json.loads(sys.argv[4])
+assert incident_operation.verify_operation_receipt(operation,
+    trusted={'reviewer': {'key': bytes.fromhex(sys.argv[6]), 'kinds': {incident_operation.APPROVE}}},
+    expected_binding=json.loads(sys.argv[5]), epoch=3, now=101,
+    kind=incident_operation.APPROVE) == operation
+assert 'action_admissible' not in operation
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
@@ -292,7 +301,8 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
                'rosy.execution.site.workflow']
     for order in (modules, list(reversed(modules))):
-        run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected)], tmp_path)
+        run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected),
+             json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex()], tmp_path)
     if delivery == 'wheel':
         native = tmp_path / 'native/lib/python3.12/site-packages'
         excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')

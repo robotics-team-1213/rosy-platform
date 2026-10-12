@@ -713,6 +713,7 @@
 | D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 | Accepted |
+| D-727 | 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -994,6 +995,11 @@ BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 �
 
 새 후보·단일 dispatch·원장/CORE 결과와 독립 수용을 분리한다. 전문은 [D-716](../adr/D-716-model-led-bounded-incident-recovery.md).
 
+## D-727 — 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt
+
+Status: Accepted (shared source contract; no operating admission).
+
+전문은 [D-727](../adr/D-727-signed-operational-recovery-receipt.md).
 ## D-724 — 조건부 막힘 답의 지원 확인 후 최종 제출 검증
 
 Status: Accepted (source contract; no operational activation).
