@@ -93,7 +93,9 @@ def install_conversation(app, config, site_maps, *, task_service=None):
                 config.producer_scope() == scope and config.policy == source_policy(config.source_commit, config.profile))
     worker = ConversationWorker(jobs, snapshot, config.profile, ConversationProvider(config),
         admission=admitted, producer_scope=scope,
-        observation_guard=lambda basis:bounded_environment(cached()) == basis)
+        observation_guard=lambda basis:bounded_environment(cached()) == basis,
+        context_reader=lambda context:app.state.intent_execution.console._client(context['robot_id'])._get(
+            '/api/v1/navigation/state?run_id='+context['run_id']))
     app.state.channel_conversation_worker = worker
     if task_service is not None:
         from ..execution.runtime import install_execution

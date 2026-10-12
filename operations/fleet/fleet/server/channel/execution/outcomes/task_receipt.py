@@ -1,5 +1,6 @@
 """Attempt-CAS binding of the first native Task response."""
 import json
+import time
 from contextlib import closing
 
 from core_common.protocol.native.operation import NativeOperation
@@ -10,10 +11,18 @@ from .evidence import epoch
 async def prepare_send(leases, task_id, attempt_id, robot_id, client, options, stop):
     """Injected Task boundary; the safety lease owner imports no decision code."""
     native = task_id is not None and leases.native_required is not None and leases.native_required(task_id)
+    context=leases.selected_context(task_id) if native and leases.selected_context is not None else None
+    started=time.monotonic()
     if native:
-        options.update(epoch(await client._get('/api/v1/navigation/state')))
+        from ..instructions import selected_readback
+        suffix='?run_id='+context['run_id'] if context and context.get('boot_id') else ''
+        value=await client._get('/api/v1/navigation/state'+suffix)
+        if suffix and not selected_readback(context,value):raise ValueError('CHANNEL_SELECTED_RUN_CHANGED')
+        options.update(epoch(value))
         leases.check_stop(robot_id, stop)
     def admit():
+        if context is not None and (leases.selected_context(task_id)!=context or time.monotonic()-started>2):
+            raise ValueError('CHANNEL_SELECTED_CONTEXT_CHANGED')
         admit_send(leases, task_id, attempt_id, robot_id, native)
     admit()
     return dispatch_guard(admit, paths={'/api/v1/navigation/goal'})

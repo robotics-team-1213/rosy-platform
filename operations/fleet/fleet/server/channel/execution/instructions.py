@@ -3,9 +3,19 @@ import re
 
 from core_common.intent import interpret
 from rosy.decision.conversation.codec import digest
+from .outcomes.evidence import exact_operation, safe_proof, epoch
 
 _PLEASE = r'\s*(?:줘|주세요|줄래|줄래요|주실래요|주십시오|해|하라)(?:요)?[?.!]?'
 _NUMBER = r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)'
+
+
+def selected_readback(context, value):
+    try:
+        operation=exact_operation(value['operation'],{'kind':'navigate','boot_id':context['boot_id'],
+            'run_id':context['run_id'],'correlation_id':context['attempt_id']})
+        return (operation['result']=='SUCCEEDED' and safe_proof(value,operation) and epoch(value)=={
+            'expected_boot_id':context['boot_id'],'expected_owner_generation':context['owner_generation']})
+    except (ValueError,KeyError,TypeError):return False
 
 
 def _aliases(items, names):

@@ -118,7 +118,9 @@ def question(case, observed_at):
             request_id=history.request_id,task_id='synthetic-native-success',robot_id='rosy_40',place_id='A',
             catalog_hash=digest({'robot_ids':['rosy_40','rosy_41','rosy_42'],
                 'map':current.environment['map'],'work_catalog':[]}),evidence_hash='b'*64,
-            generation=1,expires_at=observed_at+119).model_dump()
+            generation=1,expires_at=observed_at+119,boot_id='00000000-0000-0000-0000-000000000001',
+            run_id='00000000-0000-0000-0000-000000000002',attempt_id='00000000-0000-0000-0000-000000000003',
+            owner_generation=7).model_dump()
     return conversation_input(receipt, environment, '12345678901234570', [history], now=observed_at,
                               accepted_execution_context=context)
 
