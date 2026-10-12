@@ -19,6 +19,7 @@
 - [2026-10-04-isaac-navigation-integration-review.md](../../../docs/plans/2026-10-04-isaac-navigation-integration-review.md)
 - [2026-10-11-isaac-direction-video.md](../../../docs/plans/2026-10-11-isaac-direction-video.md)
 - [2026-10-11-isaac-map-rl.md](../../../docs/plans/2026-10-11-isaac-map-rl.md)
+- [2026-10-12-map-drive-diagnosis.md](../../../docs/plans/2026-10-12-map-drive-diagnosis.md)
 - [2026-10-12-observed-path-gap-implementation.md](../../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
@@ -31,7 +32,11 @@
 
 ## 최근 기록
 
+- 2026-10-12 · 0fa0161d4 · 관측 곡선 거절과 실행 배선 분리 진단
+- 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
 - 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+- 2026-10-12 · uncommitted · native 카메라 검증 책임 분리
+- 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
 - 2026-10-12 · af519cab1e · Isaac 질량 기준 프레임 보존과 R34 반례
 - 2026-10-12 · 1158008ac1 · held-path 작업 통합과 곡선 거절 진단
 - 2026-10-12 · b9dc219e4 · R31 정지 실패와 곡선 진단 교훈
