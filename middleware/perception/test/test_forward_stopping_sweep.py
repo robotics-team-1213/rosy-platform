@@ -46,6 +46,17 @@ def test_old_different_curve_transition_cannot_be_assumed_to_match_new_curve():
     assert judge(points, linear=.05, angular=0., previous_limits=(.1, 8.)) <= 0.
 
 
+def test_old_heading_rotates_future_braking_path_not_only_current_body():
+    # Old in-place rotation can yaw the entire subsequent straight stopping path.
+    distance, heading = 1. + NOMINAL_BODY.margin_m, 2. * (.15 + .01)
+    point = (distance * math.cos(heading), distance * math.sin(heading))
+    reach = math.hypot(-NOMINAL_BODY.rear_x_m, NOMINAL_BODY.half_width_m)
+    insufficient_pad = .010 + (1. + 2. * reach) * (.15 + .01)
+    assert point[1] - NOMINAL_BODY.half_width_m > insufficient_pad
+    assert judge((point, *FAR), linear=1., angular=0., limits=(1., .8),
+                 previous_limits=(0., 2.), scan_age=0., source_age=0.) <= 0.
+
+
 def test_intermediate_contact_when_both_endpoint_footprints_clear():
     # A larger applied profile exercises the continuous-cover math, not runtime admission.
     point = (math.sin(.6), 1. - math.cos(.6))
