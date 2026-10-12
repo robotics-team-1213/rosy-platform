@@ -759,6 +759,19 @@ def test_core_curve_scope_accepts_lane_return_tracking_passthrough(monkeypatch):
     assert status.state == "TRACKING"
 
 
+def test_core_nontracking_sweep_covers_the_static_common_clip_curve():
+    m = _core_curve_manager(max_a=.01)
+    point = [(0.017, .07)]
+    m.observe_body_points(point, range_min=.05, received_at=T)
+    m.observe_scan_points(point, received_at=T)
+    # A LINE manoeuvre (.08, .8) becomes (.001, .01), rather than (.08, .01).
+    actual_gap = body_path_gap([(0., .07)], linear=.001, angular=.01,
+                               min_travel_m=.08, **BODY)
+    assert actual_gap is not None and actual_gap < .08
+    with m._lock:
+        assert not m._sweep_clear(T, .08, .8)
+
+
 def test_an_unreadable_motion_envelope_fails_closed():
     m = _manager()
 
