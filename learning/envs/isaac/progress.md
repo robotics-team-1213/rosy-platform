@@ -17,8 +17,9 @@ gates:
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
-adrs: [D-322, D-434, D-638]
+adrs: [D-322, D-434, D-638, D-708]
 plans:
+  - docs/plans/2026-10-12-observed-path-gap-implementation.md
   - docs/plans/2026-10-04-isaac-navigation-integration-review.md
   - docs/plans/2026-10-11-isaac-map-rl.md
   - docs/plans/2026-10-11-isaac-direction-video.md

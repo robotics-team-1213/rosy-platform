@@ -694,6 +694,7 @@
 | D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 | Accepted |
 | D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
 | D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
 | D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
