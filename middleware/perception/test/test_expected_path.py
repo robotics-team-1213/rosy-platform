@@ -162,3 +162,80 @@ def test_a_rewound_stamp_or_a_jumped_pose_drops_the_hypothesis():
     assert not jumped.update((0.26, 0.0, 0.0), 1.1, _centre())["committed"]
     assert not jumped.update((0.26, 0.0, 0.0), 1.2, _centre())["committed"]
     assert jumped.update((0.26, 0.0, 0.0), 1.3, _centre())["committed"]
+
+
+def _shape_info(curvature=0., lateral=0.):
+    points = []
+    for index in range(11):
+        x = .10 + index * .03
+        y = lateral if curvature == 0. else (1. - math.sqrt(1. - (curvature * x) ** 2)) / curvature
+        points.append((x, y))
+    return dict(_centre(), near_centre_m=(.10, points[0][1]), centre_path_m=points)
+
+
+def _commit_shape(curvature=0., lateral=0.):
+    path = _new()
+    for stamp in (0., .1, .2):
+        path.update((0., 0., 0.), stamp, _shape_info(curvature, lateral))
+    return path
+
+
+def test_observed_parallel_offset_does_not_rotate_the_lane_tangent():
+    centred = _commit_shape()
+    offset = _commit_shape(lateral=.03)
+    assert offset._heading == pytest.approx(centred._heading, abs=1e-9)
+    target = offset.hold((0., 0., 0.), .3)['target_m']
+    assert target[1] == pytest.approx(.03)
+
+
+@pytest.mark.parametrize('curvature', [-1., 1.])
+def test_observed_curve_is_preserved_and_uses_pursuit_error(curvature):
+    from control.sensing.perception.drivable.drivable_steer import pursuit_error
+    held = _commit_shape(curvature).hold((0., 0., 0.), .3)
+    tx, ty = held['target_m']
+    assert ty * curvature > 0.
+    assert tx * tx + (ty - 1. / curvature) ** 2 == pytest.approx(1., abs=.002)
+    assert held['error'] == pytest.approx(pursuit_error(tx, ty, held['confidence']))
+    assert len(held['path_m']) > 2
+
+
+def test_cached_observation_cannot_restart_the_total_loss_clock():
+    path = _commit_shape()
+    view = path.update((0., 0., 0.), 2.7, _shape_info(), observation_stamp=.2,
+                       current_pose=(.01, 0., 0.))
+    assert view['error'] is None and not view['committed']
+
+
+def test_returning_to_the_loss_pose_does_not_refund_travel():
+    path = _commit_shape()
+    view = None
+    for index, x in enumerate((.05, 0., .05, 0., .05)):
+        view = path.hold((x, 0., 0.), .3 + index * .1)
+    assert view['error'] is None and not view['committed']
+
+
+def test_current_pose_is_distinct_from_cached_source_pose():
+    path = _commit_shape()
+    held = path.update((0., 0., 0.), .3, _shape_info(), observation_stamp=.2,
+                       current_pose=(0., .02, 0.))
+    assert held['target_m'][1] == pytest.approx(-.02)
+
+
+@pytest.mark.parametrize('pose,stamp', [
+    ((float('nan'), 0., 0.), .3), ((0., 0., float('inf')), .3),
+    ((0., 0., 0.), float('nan')), ((0., 0., math.pi), .3),
+])
+def test_invalid_or_reset_odometry_discards_observed_geometry(pose, stamp):
+    held = _commit_shape().hold(pose, stamp)
+    assert held['error'] is None and not held['committed']
+
+
+def test_shape_exhaustion_or_a_target_behind_the_robot_stops():
+    path = _commit_shape()
+    held = path.hold((.40, 0., 0.), .3)
+    assert held['error'] is None
+
+
+def test_near_point_without_observed_shape_cannot_commit():
+    path = _commit()
+    assert not path._committed
