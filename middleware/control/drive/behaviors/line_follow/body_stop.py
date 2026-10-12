@@ -250,8 +250,8 @@ class BodyStopMixin:
                                     horizon_m=c.obstacle_path_horizon_m, min_travel_m=resume,
                                     **body)
                 if floor < 1.0 and abs(angular) > 1e-6:
-                    # The traffic gate scales linear only, by any s in [floor, 1]: every such
-                    # arc is tighter. Only contacts within the resume gap change the decision.
+                    # D-735 scales both moving axes. Keep this legacy tighter-arc superset;
+                    # it includes the original curve and cannot relax the resume-gap guard.
                     family = body_envelope_gap(points, linear=linear, angular=angular,
                                                scale_floor=floor, horizon_m=resume, **body)
                     if family is not None and (gap is None or family < gap):
