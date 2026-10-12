@@ -193,6 +193,8 @@ def test_fleet_lifespan_starts_and_cancels_worker(monkeypatch, tmp_path):
 
 
 def test_opt_in_lifespan_receives_and_persists_verified_reply(monkeypatch, tmp_path):
+    import ssl
+    import certifi
     import httpx
     from fastapi import FastAPI
     from fleet.server import channel_gateway
@@ -200,6 +202,17 @@ def test_opt_in_lifespan_receives_and_persists_verified_reply(monkeypatch, tmp_p
 
     sent, stopped = [], []
     client = httpx.AsyncClient
+    public_roots = ssl.create_default_context(cafile=certifi.where()).get_ca_certs(binary_form=True)
+    site_ca = tmp_path / "site-ca.pem"
+    site_ca.write_text(ssl.DER_cert_to_PEM_cert(public_roots[0]))
+    monkeypatch.setenv("SSL_CERT_FILE", str(site_ca))
+
+    def public_client(**options):
+        context = options.get("verify")
+        assert isinstance(context, ssl.SSLContext)
+        assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+        assert set(context.get_ca_certs(binary_form=True)) == set(public_roots)
+        return client(transport=httpx.MockTransport(handle), **options)
 
     async def handle(request):
         assert request.method == "POST"
@@ -224,8 +237,7 @@ def test_opt_in_lifespan_receives_and_persists_verified_reply(monkeypatch, tmp_p
             stopped.append(True)
 
     monkeypatch.setattr(DiscordGateway, "run", run)
-    monkeypatch.setattr(channel_gateway.httpx, "AsyncClient",
-                        lambda: client(transport=httpx.MockTransport(handle)))
+    monkeypatch.setattr(channel_gateway.httpx, "AsyncClient", public_client)
     config = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, replies_enabled=True,
                            transport_key="transport-key-" * 3, users={USER: "operator"})
     journal = ChannelRequests(tmp_path / "tasks.db", config, {"operator": "operator"})
@@ -255,6 +267,9 @@ def test_reply_client_startup_failure_leaves_no_gateway_task(monkeypatch, tmp_pa
     from fleet.server.channel_requests import ChannelConfig, ChannelRequests
 
     class Unavailable:
+        def __init__(self, **options):
+            pass
+
         async def __aenter__(self):
             await asyncio.sleep(0)
             raise OSError("HTTP client unavailable")
