@@ -226,6 +226,7 @@ def checked_answer(value, question):
                 raise ValueError('CONVERSATION_REGISTERED_PLACE_CHANGED')
     if answer.kind == 'CHAT' and (answer.evidence_refs or any(r in answer.response for r in robots)
             or re.search(r'온라인|오프라인|작동\s*중|이동\s*완료|정지\s*완료|연결되어|배터리|전압|'
+                r'보내겠|보내드|이동하겠|정지하겠|실행하겠|현재.*(?:로봇|상태)|즉시.*이동|정상.*이동|'
                 r'\b(?:online|offline|battery|voltage|healthy|executed|completed|stopped|connected|moving)\b',
                 answer.response, re.I)):
         raise ValueError('CHAT_DEVICE_FACTS_REFUSED')
