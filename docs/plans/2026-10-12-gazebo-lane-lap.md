@@ -293,3 +293,36 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
   [SDFormat 명세](https://sdformat.org/spec/1.11/sensor/)의 stddev는 Gaussian
   표준편차이며 오차 상한이 아니다. 원본 측정점과 실제 world·TF·pose의 예상 ray
   거리를 대조해 잡음의 기여를 조사한다. 센서 잡음 축소나 안전 거절 해제는 수행하지 않았다.
+
+## Leg8 센서 재생과 정지 상태의 빔 위상 비교 설계
+
+- 실제 TF·IMU roll/pitch·odom 높이와 GPU가 읽는 visual geometry를 사용해 두 원본
+  scan을 재생했다. 55.7초의 회전 거절 점은 원래 북쪽 벽 거리 0.157649m보다
+  0.063357m 짧고, 55.8초의 후속 전방 차단 점은 0.059306m 짧다.
+  각각 설정된 잡음의 약 -3.17/-2.97 표준편차다. pose 대응은 -8/-6ms이며
+  roll/pitch는 4.5e-8rad 이하다. 내부 소비 pose와 RNG 원인을 완전히 증명한 것은 아니다.
+- GPU LiDAR는 collision 대신 visual geometry를 읽는다.
+  [Gazebo sensors 8 원문](https://github.com/gazebosim/gz-sensors/blob/gz-sensors8/include/gz/sensors/GpuLidarSensor.hh)에
+  근거해 벽·테이프·메시와 두 로봇의 visual을 포함했다. 근접 점에 대해 실제 최초
+  visual hit는 북쪽 벽 y=0.625m이며 원본 range의 점은 그 안쪽이다.
+- 전체 640개 잔차의 표준편차는 약 0.051/0.050m로 설정 0.02m와 다르다.
+  80/400/560번 빔에는 두 scan 모두 약 0.37/-1.0/0.52m의 큰 오차가 있고 이웃은
+  정상 벽 거리다. 이 번호를 사후 제외한 637개는 약 0.0205/0.0207m지만,
+  이 제외는 진단이며 운영 입력에서 빔을 삭제하거나 전체 정상 판정으로 세지 않는다.
+- 설치된 gz-rendering 8.2.3의
+  [Ogre2GpuRays](https://raw.githubusercontent.com/gazebosim/gz-rendering/gz-rendering8_8.2.3/ogre2/src/Ogre2GpuRays.cc)는
+  cube-face UV를 생성하고, OgreNext 2.3.3의
+  [TextureUnitState](https://raw.githubusercontent.com/OGRECave/ogre-next/v2.3.3/OgreMain/src/OgreTextureUnitState.cpp)는
+  기본 addressing을 WRAP으로 지정한다. 설치 material에 addressing override가 없다.
+  정확한 소스 계산에서 80/240/400/560번의 float32 UV=1이 반대 경계로 돌아가는
+  가설을 재생했다. 그 반대 경계의 예상 거리와 원본 값은 모두 ±2 표준편차 안이다.
+  실제 GPU sampler state의 직접 readback이나 런타임 원인 확정은 아직 아니다.
+- 비교 A는 원래 640개 grid, B는 반빔 위상의 min=-pi+pi/640,
+  max=pi-pi/640이다. 둘 다 간격 2pi/640·640개·전체 원주·중복 방향 없음을 유지한다.
+  원본 world·두 로봇 geometry와 동일 정지 자세, 잡음 0.02를 유지하고 CORE와
+  주행 명령 발행자를 실행하지 않는다. 실물·설치 vendor 파일을 변경하지 않는다.
+- 각 비교의 생성 SDF 해시·원본 자산 해시·실제 TF/자세·버전·정상 SIM 자원과
+  Gazebo raw↔ROS의 같은 header/range 대응을 기록한다. 모든 빔과 nonfinite 값을
+  보존하며 각 grid의 실제 각도로 visual ray 예상값을 다시 계산한다. 단일 scan의
+  range 일치를 수용 기준으로 삼지 않고 반복되는 고정 번호 오차를 비교한다.
+  정지 상태의 센서 생성 진단이며 지도 완주·차선 품질·실물 수용을 대신하지 않는다.
