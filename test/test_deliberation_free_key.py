@@ -33,3 +33,26 @@ def test_existing_symlink_rejected(tmp_path):
     with pytest.raises(ValueError,match='EXISTING_SELECTED_KEY_BOUNDARY_FAILED'):
         key.existing_key(target,b'new',os.getuid(),os.getgid())
     assert original.read_bytes()==b'private'
+
+def test_import_preserves_real_account_owned_home_and_original_budget(tmp_path, monkeypatch):
+    from deploy.site import deliberation_install
+    home=tmp_path/'home';home.mkdir(mode=0o750)
+    budget=home/'smoke';budget.mkdir(mode=0o700)
+    marker=budget/'glm-first-review.spent';marker.write_bytes(b'unknown-existing-spend')
+    source=tmp_path/'auth.json';source.write_text('{"opencode":{"type":"api","key":"selected"},"google":{"key":"other"}}')
+    source.chmod(0o600)
+    account=SimpleNamespace(pw_uid=os.getuid(),pw_gid=os.getgid())
+    monkeypatch.setattr(deliberation_install,'validated_account',lambda:account)
+    monkeypatch.setattr(key.pwd,'getpwnam',lambda name:account)
+    monkeypatch.setattr(key.os,'geteuid',lambda:0)
+    monkeypatch.setattr(key,'SOURCE',source)
+    monkeypatch.setattr(key,'TARGET',home/'opencode-free.json')
+    before=home.stat()
+    key.main()
+    after=home.stat()
+    assert (before.st_uid,before.st_gid,before.st_mode)==(after.st_uid,after.st_gid,after.st_mode)
+    assert (home/'opencode-free.json').read_bytes()==b'{"type":"api","key":"selected"}'
+    assert (home/'opencode-free.json').stat().st_mode & 0o777==0o600
+    assert marker.read_bytes()==b'unknown-existing-spend'
+    key.main()
+    assert marker.read_bytes()==b'unknown-existing-spend'
