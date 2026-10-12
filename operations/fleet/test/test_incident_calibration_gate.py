@@ -27,7 +27,7 @@ async def setup(tmp_path, *, approved=True, broken=False):
             fit_sha256=digest(fit), evaluation_sha256=digest(evaluation), training_sha256=digest(manifest()), limits=limits())
         artifacts[profile.profile_id] = evaluate_calibration(fit, evaluation, training=manifest(), reviewed_profile=frozen)
     def artifact(profile):
-        if broken: raise OSError('private approval source unavailable')
+        if broken: raise broken('private approval source unavailable')
         return artifacts[profile.profile_id]
     def approval():
         # Same revision in two profiles intentionally cannot certify both different full hashes.
@@ -39,7 +39,8 @@ async def setup(tmp_path, *, approved=True, broken=False):
     return worker, now, seen, handoffs, store, poll
 
 
-@pytest.mark.parametrize('approved,broken,calls', [(True, False, 1), (False, False, 2), (True, True, 2)])
+@pytest.mark.parametrize('approved,broken,calls', [(True, False, 1), (False, False, 2),
+                                                (True, OSError, 2), (True, RuntimeError, 2)])
 def test_actual_worker_uses_approved_full_profile_calibration_for_review(tmp_path, approved, broken, calls):
     async def run():
         worker, _, seen, handoffs, store, poll = await setup(tmp_path, approved=approved, broken=broken)
