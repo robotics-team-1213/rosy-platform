@@ -178,6 +178,7 @@ def test_conditional_back_api_checks_current_episode(core_client, changed):
     lf = services.line_follow
     now = lf._clock()
     expected = {"phase": "ASKING", "attempts": 0}
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
     if changed == "wait":
         assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
                            headers=OPERATOR).status_code == 200

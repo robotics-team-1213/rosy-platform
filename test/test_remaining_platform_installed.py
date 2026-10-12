@@ -39,7 +39,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/execution', 'middleware/skills/api', 'integrations/messaging/discord'):
+                     'operations/execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
@@ -145,6 +145,10 @@ foundation_floor = [r for r in map(Requirement, importlib.metadata.requires('fle
 assert len(foundation_floor) == 1
 assert '0.0.1' not in foundation_floor[0].specifier
 assert '0.0.2' in foundation_floor[0].specifier
+api_floor = [r for r in map(Requirement, importlib.metadata.requires('core_api_web'))
+             if canonicalize_name(r.name) == 'core-common']
+assert len(api_floor) == 1
+assert '0.0.1' not in api_floor[0].specifier and '0.0.2' in api_floor[0].specifier
 from core_common.protocol.schemas import LineStuckPrecondition
 from core_common.protocol.line_stuck import LineStuckPrecondition as OwnedPrecondition
 assert LineStuckPrecondition is OwnedPrecondition
