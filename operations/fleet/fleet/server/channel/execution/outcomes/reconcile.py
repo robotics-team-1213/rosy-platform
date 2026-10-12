@@ -53,13 +53,13 @@ def record(conn, row, receipt, robot, owner_kind, owner_id, generation, resource
     return receipt | {'safe_released': True, 'quiescence': value['quiescence']}
 
 
-def notify(journal, conn, rid, index, receipt):
+def notify(journal, conn, rid, index, receipt, *, result=None):
     row = conn.execute("SELECT receipt FROM fleet_channel_requests WHERE json_extract(receipt,'$.request_id')=?", (rid,)).fetchone()
     if row is None:
         raise ValueError('NATIVE_ORIGINAL_REQUEST_MISSING')
     original = json.loads(row[0])
     operation = receipt.get('outcome')
-    result = operation['result'] or operation['phase'] if operation else 'UNKNOWN'
+    result = result or (operation['result'] or operation['phase'] if operation else 'UNKNOWN')
     released = receipt.get('safe_released') is True
     kind = f'EXECUTION:{index}:NATIVE:{result}:{released}'
     note = f"요청 단계 {index + 1} · {result}\n" + ('해당 실행의 자원 해제 확인.' if released else '자원 해제 확인 전입니다.')
@@ -73,6 +73,9 @@ async def channel_step(worker, rid, index, call, row):
     journal = worker.journal
     task = journal.store.get_task(row['task_id']) if row['task_id'] else None
     receipt = task['receipt'] or {} if task else _receipt(row)
+    if call.verb in {'stop', 'estop'}:
+        from .stops import stop_step
+        return await stop_step(worker, rid, index, call, row, receipt)
     if 'operation' not in receipt:
         return False
     if task:
