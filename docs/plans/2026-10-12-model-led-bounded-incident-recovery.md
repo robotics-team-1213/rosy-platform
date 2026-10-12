@@ -12,6 +12,8 @@
 
 ## 먼저 확인한 실제 빈칸
 
+2026-10-12 D-718 선행 CORE/설치 경계는 `f7221c12e6`로 로컬 main에 착지했다. 마지막 원격 통합은 18,671 passed/822 skipped/NEW 0 및 lint이며 세션 `logs/stuck-condition-land-f7221c12e6-{1,2,3}.txt`에 원본을 보존했다. FULL CI·push·배포·실제 모델·현장 수용은 별도다. 이 선행 완료는 아래 모델 후보 생산·단일 소비·운영 receipt·결과 확인의 완료가 아니다.
+
 `deliberation.__init__.CHOICES`에는 물리 복구 선택이 없고 worker의 `_problem`은 reobserve/human만 공급한다. incident catalog에는 읽기 도구 하나만 있다. `_process`는 get_incident_status 외의 단계에서 NO_ADMITTED_READ_OR_REVIEW로 끝난다. StuckResolverLoop._answer는 이미 rule/AI 법칙·token·불명 결과를 다루지만 worker와 같은 물리 ownership을 공유하지 않는다. worker에서 직접 호출하는 빠른 연결은 rule/model 동시 전송 경쟁을 만들므로 사용하지 않는다.
 
 ## Task 1: 실제 후보·제출 소유권을 원장에 고정
