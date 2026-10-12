@@ -251,6 +251,8 @@ class HttpRobotClient:
         return self._check(await self._http.get(path, headers=self._headers()))
 
     async def _post(self, path: str, body: Optional[dict[str, Any]] = None) -> dict:
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(path=path)
         return self._check(await self._http.post(path, json=body, headers=self._headers()))
 
     async def state(self) -> dict:

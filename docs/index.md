@@ -231,6 +231,7 @@
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
 
 ## 계획·결과 문서
 
@@ -331,8 +332,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
+- 2026-10-12 · uncommitted · docs: 자연어 요청을 통합 규칙집에 연결
 - 2026-10-12 · uncommitted · docs: 공개 트리에서 실험실 주소를 뺀다
 - 2026-10-12 · uncommitted · docs(adr): D-729 바닥 한 번 뒤의 복귀
 - 2026-10-12 · 0a690a83b · D-676 카메라 종료 보상 구분
-- 2026-10-12 · uncommitted · docs(adr): D-723 장치 범주는 능력과 최종 작성자
-- 2026-10-12 · uncommitted · docs(adr): D-721 스테이션과 제자리 복귀 모드
