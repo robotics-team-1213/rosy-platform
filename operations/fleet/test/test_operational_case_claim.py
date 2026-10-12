@@ -284,3 +284,23 @@ def test_model_claim_and_existing_pending_audit_roll_back_together(tmp_path):
     assert state.submission(scope.subject_id, scope.case_id) is None
     with store._transaction() as conn:
         assert conn.execute('SELECT COUNT(*) FROM fleet_line_stuck_answers').fetchone()[0] == 0
+
+
+def test_board_transaction_pending_is_not_published_before_commit(tmp_path):
+    from fleet.stuck.board import LineStuckBoard
+    _, store, log, scope, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    board = LineStuckBoard(log=log)
+    def expired_audit(conn):
+        board.record(robot_id=scope.subject_id, stuck_id=scope.case_id, decision='BACK_AND_RETRY',
+            principal_id='fleet-resolver', accepted=None, code='FLEET_STUCK_DISPATCH_PENDING',
+            durable=True, connection=conn)
+        assert board.answers() == []
+        proof['report']['state'] = 'HOLD'
+        return True
+    with pytest.raises(ValueError):
+        state.claim_model(scope, 'line-back', 'model-1', expected_epoch=1, generation='g1',
+            guard=lambda _: True, on_claim=expired_audit)
+    assert board.answers() == [] and state.submission(scope.subject_id, scope.case_id) is None
+    with store._transaction() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM fleet_line_stuck_answers').fetchone()[0] == 0
