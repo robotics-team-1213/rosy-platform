@@ -13,9 +13,12 @@ SECRET = '/var/lib/rosy-deliberation/glm-coding-plan.json'
 
 
 @asynccontextmanager
-async def gateway_session(body, remaining, directory, *, credential_sha256=None):
+async def gateway_session(body, remaining, directory, *, credential_sha256=None, free=False):
+    if type(free) is not bool or free and credential_sha256 is not None:
+        raise ValueError('FIXED_GATEWAY_VARIANT_REQUIRED')
+    secret = '/var/lib/rosy-deliberation/opencode-free.json' if free else SECRET
     job = {'body': body.decode('utf-8'), 'deadline_s': remaining,
-           'socket_path': str(directory / 'gateway.sock'), 'secret_path': SECRET}
+           'socket_path': str(directory / 'gateway.sock'), 'secret_path': secret}
     if credential_sha256 is not None:
         job['credential_sha256'] = credential_sha256
     data = (json.dumps(job, ensure_ascii=True, separators=(',', ':')) + '\n').encode()
@@ -25,7 +28,7 @@ async def gateway_session(body, remaining, directory, *, credential_sha256=None)
     versioned = 'schema' in json.loads(body) or 'profile_revision' in json.loads(body)
     interpreter = sys.executable if versioned else '/usr/bin/python3'
     spawn = asyncio.create_task(asyncio.create_subprocess_exec(interpreter, '-m',
-        'deploy.ai_pc.deliberation_glm_gateway', stdin=asyncio.subprocess.PIPE,
+        'deploy.ai_pc.deliberation_free_gateway' if free else 'deploy.ai_pc.deliberation_glm_gateway', stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         start_new_session=True, cwd=str(ROOT), limit=4097,
         env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': os.pathsep.join(
@@ -57,7 +60,9 @@ async def gateway_session(body, remaining, directory, *, credential_sha256=None)
         await protect_cleanup(cleanup())
 
 
-async def finish_gateway(process):
+async def finish_gateway(process, *, free=False):
+    if type(free) is not bool:
+        raise ValueError('FIXED_GATEWAY_VARIANT_REQUIRED')
     raw = bytearray()
     while chunk := await process.stdout.read(4097):
         raw.extend(chunk)
@@ -65,7 +70,8 @@ async def finish_gateway(process):
             raise ValueError('GATEWAY_OUTPUT_LIMIT')
     code = await process.wait()
     receipt = json.loads(raw)
-    if (code != 0 or type(receipt) is not dict or receipt.get('state') != 'PASS_GLM_PROVIDER_ONLY'
+    expected = 'PASS_FREE_PROVIDER_ONLY' if free else 'PASS_GLM_PROVIDER_ONLY'
+    if (code != 0 or type(receipt) is not dict or receipt.get('state') != expected
             or type(receipt.get('calls')) is not int or receipt['calls'] != 1):
         raise ValueError('GATEWAY_RESULT_UNKNOWN')
     return receipt

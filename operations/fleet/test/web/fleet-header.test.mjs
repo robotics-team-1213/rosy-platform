@@ -53,6 +53,7 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes["fleet-account-identity"].textContent, "bob · 운영자");
   assert.equal(nodes["user-role"].textContent, "운영자");
   assert.equal(nodes["user-role"].title, "bob · operator");
+  assert.equal(nodes["user-role"].getAttribute("status"), "active");
   assert.equal(nodes.estop.disabled, false);
   assert.equal(nodes["development-badge"].hidden, true);
 
@@ -64,6 +65,7 @@ test("a session shows its Korean role and title identity; a development session 
   showSession({principal_id: "vic", role: "viewer"});
   assert.equal(nodes["user-role"].textContent, "보기 전용");
   assert.equal(nodes["user-role"].title, "vic · viewer");
+  assert.equal(nodes["user-role"].getAttribute("status"), "neutral");
   assert.equal(nodes.estop.disabled, true);
   assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
 });
@@ -75,6 +77,7 @@ test("a refused session locks the E-stop and opens the fold once; a lost Fleet d
   assert.equal(nodes.estop.disabled, false);
 
   showSignedOut();
+  assert.equal(nodes["user-role"].getAttribute("status"), "crit");
   assert.equal(nodes.estop.disabled, true);
   assert.equal(nodes.estop.getAttribute("reason"), SESSION_REASON);
   assert.equal(nodes["topbar-extra"].dataset.open, "true");

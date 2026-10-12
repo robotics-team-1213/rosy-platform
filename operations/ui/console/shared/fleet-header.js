@@ -77,7 +77,7 @@ export function showSession(identity) {
   const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = `${identity.principal_id} · ${identity.role}`;
-  tag.setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+  tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
   if (development) $("development-badge").hidden = false;
   gateEstop(identity);
   if (openedForLock) setTopbarOpen(false);
