@@ -13,5 +13,6 @@ Fleet worker는 예외의 정확한 타입과 현재 BoundProfile·입력·프�
 - `6dbf700f7`: 실제 Local/Claude/OpenCode codec→worker에서 파싱 가능한 잘못된 판정과 깨진 JSON 6건의 RED를 적격 AI PC(여유 메모리 8.8GB)에서 확인했다. terminal exit 1, known_failures 6 NEW. 기존 불명확 비용·제공자 근거/직접 ValueError 호환 검사는 통과했다.
 - `ae8650196`: unsafe의 검증된 비용 보존 회귀를 추가했다. 모든 원격 시험 호스트가 연결되지 않아 120초 대기 후 NOT_RUN으로 끝났다. 추가 RED/GREEN은 확인하지 못했다.
 - 변경된 결속(input/profile/type/cost) 거절 회귀와 실제 wheel/sdist·기존 worker/codec/원장/P6 영향군의 committed-head GREEN은 원격 호스트 복구 후 확인해야 한다. 확인 전 착지·push하지 않는다. 노트북 pytest와 실제 제공자 호출은 수행하지 않았다.
+- Source `a95c5c1cb`: 소유한 5개 구현 파일의 stdlib AST 문법 검사는 통과했다. harness lint는 terminal exit 0, 오류 0·기존 검증 revision 경고 29건이다. 실제 P6 physical-line 필터로 contracts 374/382, providers 255/354, execution 376/449를 확인했다. 부모 deliberation 349/381과 evaluation 386/425도 기존 한도 이내다. root의 독립 소스 검토에서 중요 blocker는 발견되지 않았으나 최신 원격 GREEN은 미확인이다.
 
 모든 기존 P6 기준과 한도를 유지한다. 내부 예외는 기존 계약 holder에, transport 오류 변환은 기존 provider holder에, 제한 재평가는 기존 worker에 둔다. 새 서비스·DB·writer·운영 승인 포트는 추가하지 않는다.
