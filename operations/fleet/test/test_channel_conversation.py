@@ -57,6 +57,8 @@ def test_history_never_crosses_owner_channel_expiry_or_map(tmp_path, change):
 
 @pytest.mark.parametrize('bad',[
     answer('CHAT',response='rosy_40 온라인입니다.'), answer(response='@everyone 안녕'),
+    answer('CHAT',response='40번을 A로 보내드릴게요.'),
+    answer('CHAT',response='현재 로봇은 IDLE 상태입니다.'),
     answer(response='password=secret'), answer('CONTROL',intent={'do':'move','robot':'unknown','linear':1.}),
     answer('CONTROL',intent={'do':'navigate','robot':'rosy_40','waypoint':'unknown'}),
     answer('CONTROL',intent={'do':'navigate','robot':'rosy_40','waypoint':'A','x':999.,'y':2.}),
