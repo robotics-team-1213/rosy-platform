@@ -149,6 +149,9 @@ class LearnedCameraLane:
             elif (strategy.startswith('drivable_off_line_') and info.get('target_m')
                     and strategy == 'drivable_off_line_' + str(info.get('straddle'))):
                 provenance = 'observed_straddle'
+            elif (strategy == 'expected_path_held' and self.keeper.last.get('expected_path_state') == 'held'
+                    and self.keeper.last.get('target_m') and self.keeper.last.get('expected_path_m')):
+                provenance = 'odom_expected_path'
             else:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
@@ -173,11 +176,14 @@ class LearnedCameraLane:
                      'error': None if self.observation is None else self.observation.error,
                      'confidence': 0. if self.observation is None else self.observation.confidence}
 
-    def state(self):
+    def current(self):
         if self.observation is None or self.received_at is None or not self.last.get('model_used'):
-            return None
+            return False
         elapsed = self.clock() - self.received_at
-        if not 0 <= elapsed <= self.manager.config.stale_after_s - self.last['source_age_s']:
+        return 0 <= elapsed <= self.manager.config.stale_after_s - self.last['source_age_s']
+
+    def state(self):
+        if not self.current() or self.last.get('camera_provenance') == 'odom_expected_path':
             return None
         error, confidence = self.observation.error, self.observation.confidence
         return (bisect.bisect_right((-.6, -.2, -.05, .05, .2, .6), error),

@@ -75,6 +75,12 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         steer.crosswalk(pose_at(stamp))
     latest = worker.latest_way(WAY_MAX_AGE_S)
     last.pop('junction_ahead_m', None)   # the way chose the branch: the tape keeper's junction HOLD does not apply
+    if (guide is not None and abs(stamp - guide[1]) <= CONTEXT_FRESH_S
+            and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M):
+        _remember_path(last, path.update(None, stamp, {}))
+        last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
+                    drivable_steer=dict(off_route_m=round(guide[4], 3)))
+        return None, True
     if latest is not None:
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
@@ -87,12 +93,6 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
             last['context'] = dict(s=None if s is None else round(s, 3), age_s=round(age, 2),
                                    confidence=round(math.exp(-age / 2.0) * math.exp(-ds / 0.3), 3))
             extra.update(guide_s=s, guide_fresh=fresh)
-            if fresh and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M:
-                # off the map's road: the camera's carpet is no lane, HOLD for Fleet (D-607 R7)
-                _remember_path(last, path.update(None, stamp, {}))
-                last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
-                            drivable_steer=dict(off_route_m=round(guide[4], 3)))
-                return None, True
             extra['guide_deg'], extra['guide_pivot_ok'], extra['guide_here_deg'] = guide[0], guide[2], guide[3]
         source = pose_at(way_stamp)
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
