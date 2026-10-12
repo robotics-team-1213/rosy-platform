@@ -18,6 +18,8 @@ def install_incident_runtime(app, config):
     if loop.incident_worker is not None:
         raise ValueError('EXISTING_INCIDENT_JOURNAL_AND_EMPTY_WORKER_REQUIRED')
     clock = config.get('clock', time.time)
+    operating_config = config.get('operating')
+    config = {k: v for k, v in config.items() if k != 'operating'}
     variants = config.get('profile_workers')
     if variants is not None:
         if (set(config) - {'profile_workers', 'clock'} or type(variants) not in (tuple, list)
@@ -31,11 +33,22 @@ def install_incident_runtime(app, config):
     async def final_handoff(scope, summary):
         return await asyncio.to_thread(log.notifications.enqueue_final, scope, summary, now=clock())
     store = IncidentCaseStore(log.path, clock=clock)
+    if operating_config is not None:
+        from .operating.state import OperationalState
+        from rosy.decision.deliberation import identifier
+        if (type(operating_config) is not dict or set(operating_config) != {'trusted', 'evidence', 'grant_id'}
+                or any(v.get('recovery_enabled') is not True for v in configs)):
+            raise ValueError('EXPLICIT_OPERATING_OWNER_PORTS_REQUIRED')
+        grant_id = identifier(operating_config['grant_id'])
+        operating = OperationalState(store, trusted=operating_config['trusted'], evidence=operating_config['evidence'])
+        configs = tuple({**v, 'recovery_submit': loop._model_answer} for v in configs)
     observation = IncidentObservationPort(loop._board, human_owned=human_owned, clock=clock)
     workers = tuple(IncidentCaseWorker(store, observation, loop._board,
         human_owned=human_owned, final_handoff=final_handoff,
         **{**v, 'baseline': v.get('baseline', loop.rule_baseline)}) for v in configs)
     worker = IncidentProfileDispatcher(workers) if variants is not None else workers[0]
     log.notifications.set_automation(worker.prepare_receipt)
+    if operating_config is not None:
+        loop.operating_state, loop.operating_grant = operating, grant_id
     loop.incident_worker = worker
     return worker
