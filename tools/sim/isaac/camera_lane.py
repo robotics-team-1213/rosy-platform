@@ -162,6 +162,7 @@ class LearnedCameraLane:
             self.invalidate('invalid_camera_odometry')
             return
         self.history.add(stamp, *pose)
+        pose_at = lambda when: pose if when == stamp else self.history.pose_at(when)
         self.manager.observe_return_pose(stamp_ns=round(stamp * 1e9),
             source_now_ns=round(source_now * 1e9), frame='odom',
             x=pose[0], y=pose[1], yaw=pose[2], received_at=captured_at)
@@ -185,7 +186,7 @@ class LearnedCameraLane:
         observation = self.keeper.update(bgr, self.ground, paint_mask=mask,
             crosswalk_mask=self.worker.used_crosswalk, lane_half_width_m=.0925)
         step, decided = keep_step(self.steer, self.worker, self.keeper.last, self.ground,
-            self.camera_x, .0925, self.history.pose_at, stamp, self.wall, guide)
+            self.camera_x, .0925, pose_at, stamp, self.wall, guide)
         provenance = 'model_lane_mask'
         if decided:
             info = self.keeper.last.get('drivable_steer', {})
@@ -196,6 +197,9 @@ class LearnedCameraLane:
             elif (strategy.startswith('drivable_off_line_') and info.get('target_m')
                     and strategy == 'drivable_off_line_' + str(info.get('straddle'))):
                 provenance = 'observed_straddle'
+            elif (strategy == 'expected_path_held' and self.keeper.last.get('expected_path_state') == 'held'
+                    and self.keeper.last.get('target_m') and self.keeper.last.get('expected_path_m')):
+                provenance = 'odom_expected_path'
             else:
                 self.invalidate('camera_target_unavailable')
                 self.last['strategy'] = strategy
@@ -230,11 +234,14 @@ class LearnedCameraLane:
                      'error': None if self.observation is None else self.observation.error,
                      'confidence': 0. if self.observation is None else self.observation.confidence}
 
-    def state(self):
+    def current(self):
         if self.observation is None or self.received_at is None or not self.last.get('model_used'):
-            return None
+            return False
         elapsed = self.clock() - self.received_at
-        if not 0 <= elapsed <= self.manager.config.stale_after_s - self.last['source_age_s']:
+        return 0 <= elapsed <= self.manager.config.stale_after_s - self.last['source_age_s']
+
+    def state(self):
+        if not self.current() or self.last.get('camera_provenance') == 'odom_expected_path':
             return None
         error, confidence = self.observation.error, self.observation.confidence
         return (bisect.bisect_right((-.6, -.2, -.05, .05, .2, .6), error),

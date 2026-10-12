@@ -84,7 +84,7 @@ def test_keep_step_puts_the_steered_way_into_keep_debug():
     steer = SimpleNamespace(update=lambda *a, **k: (0.1, 0.9, dict(strategy='drivable_centre', target_m=(0.25, 0.0))),
                             crosswalk=lambda _pose: None)
     last = {}
-    assert keep_step(steer, worker, last, None, 0.03, 0.0925, lambda _s: None, 1.0, None) == ((0.1, 0.9), True)
+    assert keep_step(steer, worker, last, None, 0.03, 0.0925, lambda _s: (0., 0., 0.), 1.0, None) == ((0.1, 0.9), True)
     assert last['drivable_way']['age_s'] == 0.25 and (way_mask(last['drivable_way']) == (_way()[2::4, 2::4] > 0)).all()
 
 

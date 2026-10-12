@@ -694,6 +694,7 @@
 | D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 | Accepted |
 | D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
 | D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
 | D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
@@ -704,6 +705,7 @@
 | D-714 | 고정 프로파일 파일과 설치 제공자 구성 결속 | Accepted |
 | D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
 | D-717 | 진행 중 제한 후진의 중복 답 거절 | Accepted |
+| D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
@@ -968,3 +970,8 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 **Status:** Accepted (2026-10-12, source safety contract)
 
 BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 시작되는 것을 거절한다. 전문은 [D-717](../adr/D-717-active-back-recovery-answer-guard.md).
+## D-716 — 모델 후보와 기존 단일 Fleet 복구 dispatch 연결
+
+**Status:** Proposed (2026-10-12)
+
+새 후보·단일 dispatch·원장/CORE 결과와 독립 수용을 분리한다. 전문은 [D-716](../adr/D-716-model-led-bounded-incident-recovery.md).
