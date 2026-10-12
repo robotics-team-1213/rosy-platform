@@ -4,10 +4,12 @@ from dataclasses import replace
 
 def remember_camera_action(previous, state, action, frame, candidate, receipts, warnings, halted):
     # A normal CORE return may have sent fallback ZERO; credit only confirmed dispatch.
+    if not any(any(twist) for twist in receipts):
+        return previous
     if (state is not None and not halted and not warnings and any(candidate)
             and receipts == [candidate]):
         return dict(state=state, action=action, frame=frame, twist=candidate)
-    return previous
+    return None  # Unlearned motion (including held-path motion) breaks the credit chain.
 
 
 def camera_tick(lane, now, *, gain):
