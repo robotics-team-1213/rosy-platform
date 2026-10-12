@@ -694,6 +694,7 @@
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
 | D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
 | D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
+| D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -898,4 +899,9 @@ Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 
 **Status:** Accepted (2026-10-12, source contract)
 
 판정 후보 snapshot·상태와 감사 chain을 보존하고 외부 검증 receipt 및 원장 head CAS로 보정 승인·폐기를 검증한다. 운영 전환·물리 authority와 구분한다. 전문은 [D-707](../adr/D-707-reasoning-registry-approval.md).
+## D-705 — Incident 실행 책임과 운영 보정 포트
+
+**Status:** Accepted (2026-10-12, source contract)
+
+bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 artifact/hash로 production 보정 검사를 연결한다. 미수용 판정은 제한 검토/읽기만 수행하며 물리 authority·승격을 얻지 않는다. 전문은 [D-705](../adr/D-705-incident-execution-calibration-port.md).
 
