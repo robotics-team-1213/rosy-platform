@@ -358,7 +358,12 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (
-        56_056,
+        56_444,
+        "split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
+        "on2026-10-12 at56444. Separate durable channel owner and display-only watch keep their "
+        "existing readers/authority; app923, console.py1325, ConsoleJS1035. Preserve +150, all "
+        "zero/file/hard ceilings and every password/full-progress/observe/server/UI/channel split "
+        "obligation. Runtime installation remains a separate gate. Prior56056 and55856 reviews: "
         "split: D-720 independently re-judged by pipeline_review on 2026-10-12 at56056. "
         "Durable channel-model storage, bounded worker and fixed SSH/runtime composition remain "
         "separate small server owners; original receipt/outbox and CORE authority are unchanged. "
@@ -367,7 +372,11 @@ SIZE_VERDICTS = {
         "subpackage responsibility split with installed consumers and simultaneous parent/unit "
         "measurements. Source/runtime admission is separate from structural approval. "
         "docs/plans/2026-10-12-discord-deliberation-runtime.md. Previous55664 verdict: "
-        "split: D-699 extracts the existing observation/event journal into fleet.observe, "
+        "split: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
+        "(operations/ui/console/device-watch.js, device-watch.css). Display-only tags and "
+        "the existing ceiling frame; no new command, poll, or CORE route. Keep the "
+        "observation-journal split and +150. Previous verdict: "
+        "D-699 extracts the existing observation/event journal into fleet.observe, "
         "counted once by the innermost rule. Keep the independently reviewed 55664+150 parent allowance. "
         "docs/plans/2026-10-12-observation-journal-owner.md records source and installed "
         "identity aliases and simultaneous parent/child measurements. Previous verdict: "
