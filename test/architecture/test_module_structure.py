@@ -88,6 +88,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("control/drive/behaviors/line_follow",
+              "foundation/core_common/protocol/native",
+              "control/drive/behaviors/navigation",
               "control/drive/behaviors/line_follow/recovery",
               "control/drive/behaviors/line_follow/recovery/junction",
               "control/drive/behaviors/line_follow/recovery/stuck",
@@ -121,6 +123,23 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "foundation/core_common/protocol/native": (
+        106,
+        "accept: D-732 strict native operation contract and ROS-free bounded receipt bookkeeping "
+        "live in one installed protocol/native subpackage. Independent native-verify precheck on "
+        "2026-10-12 measured native106 and residual core_common10142 simultaneously, below unchanged "
+        "core_common10031+150. Stable old-path facades preserve object identity; no new writer, "
+        "storage, dispatcher or authority. Keep +150 and all historical file/hard ceilings. "
+        "See docs/plans/2026-10-12-core-native-outcome-ports.md.",
+    ),
+    "control/drive/behaviors/navigation": (
+        773,
+        "accept: D-732 actual navigation goal/readback owner was already an installed physical "
+        "subpackage. Independent native-verify precheck on 2026-10-12 measured navigation773 "
+        "and residual core_features9410 simultaneously; core_features remains below10000. "
+        "No route planner, process, writer, authority or scan exclusion moved. Keep +150 and "
+        "existing file/hard ceilings. See docs/plans/2026-10-12-core-native-outcome-ports.md.",
+    ),
     "fleet/fleet/incidents/automation/operating": (
         294,
         "accept: D-730 owns the actual same-DB validated candidate, signed operating epochs "
@@ -398,10 +417,11 @@ SIZE_VERDICTS = {
         "lines were added. Protocol5298 + domain1203 + other3504 + foundation root26. "
         "The strict contract family already lives in protocol/channel_requests.py; no DB, transport, "
         "provider, ROS, process or actuation authority and no upstream imports. Keep package10000/+150, "
-        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. No new SIZE_UNITS "
-        "or scan exclusion. Before the next protocol family expansion, review an actual protocol "
-        "subpackage split with installed consumers/direction, one canonical schema facade and same-change "
-        "parent/unit measurements. Preserve prior protocol/schema extraction obligations. "
+        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. D-732 registers "
+        "the actual installed protocol/native strict contract and receipt subpackage after independent "
+        "precheck on 2026-10-12: unit106, residual parent10142, below unchanged10031+150. "
+        "Canonical schema facade and public object identity stay stable; no scan exclusion. "
+        "Preserve prior protocol/schema extraction obligations and every historical baseline. "
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
     "fleet": (

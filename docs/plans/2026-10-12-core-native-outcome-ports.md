@@ -18,3 +18,11 @@
 - quiescence는 실제 owner generation과 pending backend 가능성까지 증명하고 단순 IDLE/0 속도를 사용하지 않는다.
 - 기존 auth/CORE 최종 writer/manager 반환형과 legacy API·executor·패키징 호환을 유지한다.
 - 원격 결과·known failure 비교·독립 구조/spec/품질 증거를 분리해 보고한다.
+
+## 2026-10-12 structural extraction and independent precheck
+
+D-732 adds a strict native operation DTO and a small ROS-free receipt ledger. The canonical implementation now lives in `contracts/foundation/core_common/protocol/native/` (106 physical Python lines), and the former `native_operation.py` and `native_receipts.py` paths are stable re-export facades. Their public classes and validators retain object identity. This subpackage is discovered by foundation `find_packages`; installed-wheel/source-image closure is a separate remote check. It owns UUID/boot identity, first immutable terminal, bounded last-32 history and admission epoch bookkeeping only. It does not own an executor, transport, audit writer, persistent store, actuation or authority decision.
+
+The existing physical `middleware/control/drive/behaviors/navigation/` subpackage owns Nav2 goal admission, callback binding, lease, and readback. It is already included by `core_features` `_source_layout`; registration reflects this real owner without moving a route planner or adding a wrapper. No runtime import or callback identity changes merely to satisfy scanning.
+
+The simultaneous independent static precheck by `native-verify` measured the proposed innermost units at native 106 and navigation 773 physical lines. Residual `core_common` was 10,142, within its unchanged 10,031 + 150 verdict; residual `core_features` was 9,410, below 10,000. Control was 34,914 within unchanged 34,855 + 150; swarm unit 945 within 799 + 150. The named files were navigation manager 598 (<600), docking manager 784 (<813), swarm manager 687 (<784), command manager 477 (<600), and RosBridge 910. All prior verdict histories, the schemas zero-growth ceiling 1,389, hard tiers, and file ceilings stay intact. The registry adds these two actual subpackages and their dated verdicts in the same change. The core_features package remains below 10,000, so no new package verdict is registered. Remote architecture and installed import tests still determine final acceptance.

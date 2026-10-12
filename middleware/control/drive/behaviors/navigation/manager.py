@@ -132,6 +132,7 @@ class NavigationManager:
 
     def reserve_goal(self, *, expected_boot_id: UUID | None = None,
                      expected_owner_generation: int | None = None) -> UUID:
+        self._refuse_while_docking()
         with self._lock:
             try:
                 self.native.expect(expected_boot_id, expected_owner_generation)
