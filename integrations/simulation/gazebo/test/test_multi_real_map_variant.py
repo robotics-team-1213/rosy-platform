@@ -49,7 +49,7 @@ assert all(getattr(original,key)==getattr(curved,key) for key in ['map','inflati
 world=resolve_world_path(profile_for(name),root/'integrations/simulation/gazebo',package_share=lambda _:share)
 expected=share/'map/map_v2_fleet'/variant
 assert world.resolve()==(expected/'worlds/map_v2_fleet_real.world').resolve() and world.is_file()
-observers=[a for a in actions if getattr(a,'_Node__node_executable',None) and perform_substitutions(ctx,a._Node__node_executable)=='line_observer_node']
+observers=[a for a in actions if getattr(a,'_Node__node_executable',None) and perform_substitutions(ctx,normalize_to_list_of_substitutions(a._Node__node_executable))=='line_observer_node']
 assert len(observers)==2
 for n in observers:
  params={k:v for group in evaluate_parameters(ctx,n._Node__parameters) if isinstance(group,dict) for k,v in group.items()}
