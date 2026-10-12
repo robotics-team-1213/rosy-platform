@@ -166,6 +166,9 @@ assert incident_operation.verify_operation_receipt(operation,
     expected_binding=json.loads(sys.argv[5]), epoch=3, now=101,
     kind=incident_operation.APPROVE) == operation
 assert 'action_admissible' not in operation
+from fleet.incidents.automation.recovery_candidates import RecoveryCandidates
+from fleet.incidents.automation.operating.candidates import RecoveryCandidates as OperatingCandidates
+assert RecoveryCandidates is OperatingCandidates
 from fleet.stuck.loop import StuckResolverLoop
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.resolver import StuckResolver, ResolverConfig
@@ -295,6 +298,8 @@ print('installed namespace, resources and HTTP guards verified')
                'fleet.incidents.automation.closure', 'fleet.incidents.automation.worker',
                'fleet.incidents.automation.execution.worker',
                'fleet.incidents.automation.recovery_candidates',
+               'fleet.incidents.automation.operating.candidates',
+               'fleet.incidents.automation.operating.state',
                'fleet.incidents.automation.ledger.contract', 'fleet.incidents.automation.ledger.store',
                'fleet.server.incident_deliberation',
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
