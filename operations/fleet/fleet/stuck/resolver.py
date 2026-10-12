@@ -175,7 +175,7 @@ class StuckResolver:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
         if ((answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
-             or answer.rule == "ai" and answer.decision != "WAIT")
+             or answer.rule in {"ai", "model_v2"} and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME" and answer.rule != "meet" and not (    # D-610 2: a re-stuck goes back to the AI
@@ -274,11 +274,9 @@ class StuckResolver:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
-        if rid in self.autonomous_robots and any(robot == rid for robot, _case in self._uncertain):
+        if self._continuation_hold(rid, chain) == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
             return self._escalate(chain, rid, sid, "core:STUCK_DECISION_OUTCOME_UNKNOWN")
-        if rid in self.autonomous_robots and chain.observing is not None and (
-                chain.observing.startswith("core:") or chain.observing in (
-                    "rule_budget", "deadline", "ai_exhausted", "ai_oscillation")):
+        if self._continuation_hold(rid, chain) is not None:
             return None  # Preserve uncertainty and exhausted budgets even across another hold.
         hold = pipeline.law_hold(row)
         if hold is not None:
@@ -311,6 +309,15 @@ class StuckResolver:
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
         return pipeline.candidate(self, now, row, stuck, rows, chain)
+
+    def _continuation_hold(self, rid: str, chain: _Chain) -> Optional[str]:
+        if rid in self.autonomous_robots:
+            if any(robot == rid for robot, _case in self._uncertain):
+                return "core:STUCK_DECISION_OUTCOME_UNKNOWN"
+            if chain.observing is not None and (chain.observing.startswith("core:")
+                    or chain.observing in ("rule_budget", "deadline", "ai_exhausted", "ai_oscillation")):
+                return chain.observing
+        return None
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
         if rid in self.autonomous_robots and not reason.startswith("human_class:") and reason not in (
