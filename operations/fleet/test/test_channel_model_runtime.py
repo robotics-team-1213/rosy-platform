@@ -47,3 +47,12 @@ def test_runtime_queue_never_replays_historical_requests(tmp_path):
             (original['guild_id'],original['channel_id'],original['message_id'],'digest',
              original['principal_id'],json.dumps(original)))
     assert [r['request_id'] for r in jobs.pending_receipts()]==['new-request']
+
+
+@pytest.mark.parametrize('received',[None,90,101,float('nan')])
+def test_stale_future_or_missing_source_clock_is_unknown(received):
+    from fleet.server.channel_model_runtime import fresh_snapshot
+    data={'robots':[{'robot_id':'pinky','online':True,'state':{'mode':'MANUAL'},'_state_mono':received}]}
+    value=fresh_snapshot(data,50,100,now=lambda:51)
+    assert value['robots'][0]['online'] is None and value['observed_at']==50
+    with pytest.raises(ValueError):fresh_snapshot(data,50,100,now=lambda:54)

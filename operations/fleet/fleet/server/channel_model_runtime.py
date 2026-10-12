@@ -93,6 +93,18 @@ class BrokerProvider:
                 raise
 
 
+def fresh_snapshot(raw,captured_at,monotonic_now,*,now=time.time):
+    if raw is None or not 0<=now()-captured_at<=3:raise ValueError('STALE_STATUS_SNAPSHOT')
+    rows=[]
+    for item in raw['robots']:
+        row=dict(item);received=row.get('_state_mono')
+        if row.get('online') is True and (type(received) not in (int,float)
+                or not math.isfinite(received) or not 0<=monotonic_now-received<=3):
+            row['online']=None;row['state']=None
+        rows.append(row)
+    return {'robots':rows,'observed_at':captured_at}
+
+
 def install_channel_models(app,config):
     if config is None:return
     journal=getattr(app.state,'channel_requests',None)
@@ -103,16 +115,7 @@ def install_channel_models(app,config):
     gather=app.state.fleet_gather
 
     def cached():
-        raw=gather._snapshot
-        if raw is None or not 0<=time.time()-gather.gathered_at<=3:raise ValueError('STALE_STATUS_SNAPSHOT')
-        rows=[];now=gather._console._clock()
-        for item in raw['robots']:
-            row=dict(item);received=row.get('_state_mono')
-            if row.get('online') is True and (type(received) not in (int,float)
-                    or not math.isfinite(received) or not 0<=now-received<=3):
-                row['online']=None;row['state']=None
-            rows.append(row)
-        return {'robots':rows,'observed_at':gather.gathered_at}
+        return fresh_snapshot(gather._snapshot,gather.gathered_at,gather._console._clock())
 
     async def snapshot():
         await gather()
