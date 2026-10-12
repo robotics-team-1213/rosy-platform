@@ -291,3 +291,24 @@ def test_unavailable_observation_after_reserve_or_result_closes_hold_once(tmp_pa
         assert conn.execute("SELECT count(*) FROM fleet_channel_reply_outbox WHERE kind='CONVERSATION'").fetchone()[0]==1
         attempt=conn.execute('SELECT state,known_cost_usd FROM fleet_channel_conversation_attempts').fetchone()
     if calls:assert attempt==('RESULT',0.)
+
+
+@pytest.mark.parametrize('expiry',[float('inf'),float('nan'),True])
+def test_independent_conversation_expiry_must_be_finite_on_client_and_host(expiry,monkeypatch):
+    import json
+    import pwd
+    from types import SimpleNamespace
+    from fleet.server.channel.conversation.runtime import ConversationConfig
+    from deploy.ai_pc import deliberation_conversation_broker as broker
+    profile=Profile(revision='d728-test')
+    policy=source_policy('a'*40,profile)
+    common={'source_commit':'a'*40,'profile':profile.model_dump(),'valid_until':expiry,
+            'semantic_evidence_sha256':hashlib.sha256(b'proof').hexdigest(),'policy':policy}
+    with pytest.raises(ValueError):ConversationConfig(**common,host='example',
+        key_file='/run/rosy-deliberation/broker.key',known_hosts_file='/run/rosy-deliberation/known_hosts',
+        primary_admitted=False)
+    host=common|{'files':{'proof.json':common['semantic_evidence_sha256']}}
+    monkeypatch.setattr(pwd,'getpwnam',lambda _:SimpleNamespace(pw_uid=997))
+    monkeypatch.setattr(broker.os,'getuid',lambda:997)
+    monkeypatch.setattr(broker,'protected',lambda p:json.dumps(host).encode() if p==broker.CONFIG else b'proof')
+    with pytest.raises(ValueError):broker.configuration()
