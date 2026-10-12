@@ -24,3 +24,47 @@ def test_swarm_family_preserves_models_defaults_and_validation():
     assert params.mode == "offset"
     with pytest.raises(ValidationError):
         swarm.SwarmFollowParams(target_robot_id="robot-a", mode="unsupported")
+
+
+def test_native_operation_phase_result_coherence():
+    from core_common.protocol.native_operation import NativeOperation
+    from pydantic import ValidationError
+    from uuid import uuid4
+    import pytest
+
+    base = {"run_id": str(uuid4()), "boot_id": str(uuid4()), "kind": "home"}
+    accepted = NativeOperation(**base, phase="SUBMITTED")
+    assert accepted.result is None
+    with pytest.raises(ValidationError):
+        NativeOperation(**base, phase="SUBMITTED", result="SUCCEEDED")
+    with pytest.raises(ValidationError):
+        NativeOperation(**base, phase="TERMINAL")
+    terminal = NativeOperation(**base, phase="TERMINAL", result="CANCELED", reason="CANCELED")
+    with pytest.raises(ValidationError):
+        terminal.result = "SUCCEEDED"
+
+
+def test_native_operation_rejects_unbounded_or_untyped_reason():
+    from core_common.protocol.native_operation import NativeOperation
+    from pydantic import ValidationError
+    from uuid import uuid4
+    import pytest
+
+    base = {"run_id": str(uuid4()), "boot_id": str(uuid4()), "kind": "teleop", "phase": "SUBMITTED"}
+    for reason in ("raw error with user content", "X" * 65):
+        with pytest.raises(ValidationError):
+            NativeOperation(**base, reason=reason)
+    with pytest.raises(ValidationError):
+        NativeOperation(**base, phase="UNKNOWN")
+
+
+def test_uncertain_backend_outcome_is_nonterminal():
+    from core_common.protocol.native_operation import NativeOperation
+    from uuid import uuid4
+
+    operation = NativeOperation(
+        run_id=str(uuid4()), boot_id=str(uuid4()), kind="navigate",
+        phase="SUBMITTED", reason="BACKEND_RESULT_UNKNOWN",
+    )
+    assert operation.result is None
+    assert operation.phase == "SUBMITTED"
