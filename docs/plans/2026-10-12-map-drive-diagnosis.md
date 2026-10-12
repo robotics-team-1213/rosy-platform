@@ -73,5 +73,17 @@ Isaac SDK, CI, 장치·현장 수용은 별도 결과로 기록한다.
   reason·경계 거절·관측 중심 경로·near centre·벽 여유를 보존한다. 기존 zero 명령과
   admission은 유지한다. 원격 RED 3 FAIL 후 전체 Isaac 214 PASS/1 SKIP/NEW 0,
   독립 SOURCE APPROVE다. 최초 GREEN 전송의 SSH timeout은 시험 통과에 포함하지 않는다.
+- Gazebo r3는 같은 소스와 모델에서 supervised CAMERA_LINE 요청을 실제 CORE에 전달했다.
+  0.17 sim s에 `authority_none` HOLD로 거절됐으며 누적 이동은 0m,
+  두 CORE 명령 각각 1,682개가 모두 zero였다. OFF 200·최종 OFF·실제 odom 연속
+  0.3 sim s 정지를 확인했다. 전체 runner exit 0, source hash 보존과 자기 partition
+  프로세스/포트/lock 종료를 독립 확인했다. 실제 주행 성공은 아니다.
+- r3의 Fleet import 누락은 같은 소스의 `contracts/learning/src` 검색 경로를 포함해
+  해결했다. ROS package build 성공만으로 Fleet wheel source closure를 증명하지 않는다.
+- r3의 CORE overlay는 `authority_required=true`였으나 Fleet camera site는 통행권 발급이
+  기본 false였다. 기존 기본 CORE/Fleet의 false/false 조합과 이 통행권 실행의 true/true
+  조합을 구분해야 한다. shared camera site만 true로 바꾸면 기존 CORE false인 실행은
+  `TRIP_AUTHORITY_NOT_REQUIRED`로 거절된다. 새 실행 manifest의 두 설정과 실제 caps를
+  대조하고 기존 Fleet trip/AuthoritySender로 권한을 생성한다.
 
 현재 길 찾기 해결·네 방향 완주·물리 정지 안정성은 미확인이다.
