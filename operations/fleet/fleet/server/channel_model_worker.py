@@ -16,7 +16,7 @@ from .channel_deliberation import status_problem, status_snapshot
 
 
 class ChannelModelWorker:
-    def __init__(self,jobs,snapshot,profiles,providers,*,admission,current_profiles,clock=time.time):
+    def __init__(self,jobs,snapshot,profiles,providers,*,admission,current_profiles,clock=time.time,observation_guard=None):
         if (type(profiles) is not tuple or len(profiles) not in (1,2)
                 or len(providers)!=len(profiles) or any(type(p) is not ModelProfile
                 or p.domains!=('fleet_status',) or p.max_calls!=1 for p in profiles)
@@ -25,6 +25,7 @@ class ChannelModelWorker:
             raise ValueError('EXACT_STATUS_PROFILE_SET_REQUIRED')
         self.jobs,self.snapshot,self.profiles,self.providers=jobs,snapshot,profiles,providers
         self.admission,self.current_profiles,self.clock=admission,current_profiles,clock
+        self.observation_guard=observation_guard
         self._lock=asyncio.Lock()
 
     async def _db(self,method,*args,**kwargs):
@@ -44,8 +45,9 @@ class ChannelModelWorker:
         await self._db('guard',request_id)
         return status_snapshot(current)==basis and self.current_profiles()==self.profiles
 
-    async def _finish(self,request_id,state,result,summary):
-        try:await self._db('finish',request_id,state=state,result=result,summary=summary)
+    async def _finish(self,request_id,state,result,summary,basis=None):
+        guard=None if basis is None or self.observation_guard is None else lambda:self.observation_guard(basis)
+        try:await self._db('finish',request_id,state=state,result=result,summary=summary,observation_guard=guard)
         except HTTPException:
             await self._db('abandon',request_id,state='SUPERSEDED',reason='OWNER_OR_SCOPE_CHANGED')
 
@@ -61,7 +63,7 @@ class ChannelModelWorker:
                 if exc.status_code!=404:raise
             try:
                 snapshot=await self.snapshot();basis=status_snapshot(snapshot)
-                problem=status_problem(receipt,snapshot,now=self.clock())
+                problem=status_problem(receipt,snapshot,now=snapshot.get('observed_at',self.clock()))
             except (ValueError,TypeError,KeyError):
                 await self._db('reject',receipt)
                 return
@@ -86,6 +88,16 @@ class ChannelModelWorker:
                             f'ROSY 읽기 전용 판단 · {request_id}\n관측·설정 변경으로 보류했습니다. 실행 승인 아님.')
                         return
                     attempt=await self._db('reserve',request_id,profile.role)
+                    if not await self._current(request_id,basis) or not self._ready(index):
+                        await self._finish(request_id,'HOLD',{'reason':'SCOPE_CHANGED','action_admissible':False},
+                            f'ROSY 상태 검토 · {request_id}\n관측 또는 권한이 바뀌어 보류했습니다. 실행 승인 아님.')
+                        await self._db('abandon',request_id,state='HOLD',reason='SCOPE_CHANGED')
+                        return
+                    # No await between the final authority guard and provider entry.
+                    self.jobs.guard(request_id)
+                    if self.observation_guard is not None and not self.observation_guard(basis):
+                        await self._db('abandon',request_id,state='HOLD',reason='OBSERVATION_CHANGED')
+                        return
                     bound=BoundProfile(profile,problem.digest)
                     try:
                         remaining=min(profile.timeout_s,attempt['deadline']-self.clock())
@@ -102,8 +114,12 @@ class ChannelModelWorker:
                                 'cost_evidence':None if evidence is None else evidence.payload}
                         await self._db('record_attempt',request_id,profile.role,state='RESULT',result=record,
                             known_cost_usd=cost,input_hash=attempt['input_hash'],profile_set_hash=attempt['profile_set_hash'])
-                        if evidence_error:raise ValueError('COST_EVIDENCE_UNKNOWN')
+                        if (evidence_error or cost>profile.max_cost_usd
+                                or profile.provider_kind!='local' and evidence is None):
+                            raise ValueError('COST_EVIDENCE_UNKNOWN')
                     except asyncio.CancelledError:
+                        await self._finish(request_id,'UNKNOWN',{'reason':'CANCELED_DURING_MODEL_CALL','action_admissible':False},
+                            f'ROSY 상태 검토 · {request_id}\n모델 결과 불명 · 자동 재호출하지 않습니다. 실행 승인 아님.')
                         await self._db('abandon',request_id,state='UNKNOWN',reason='CANCELED_DURING_MODEL_CALL')
                         raise
                     except Exception:
@@ -125,7 +141,7 @@ class ChannelModelWorker:
                     lines.append(f"{row['robot_id']} · {label}")
                 lines.append('모델: '+', '.join(r['model_id'] for r in results))
                 lines.append('현재 관제 관측에 대한 검토입니다. 실행 승인·장치 성공이 아니며 명령을 보내지 않았습니다.')
-                await self._finish(request_id,'ANSWERED',{'models':results,'action_admissible':False},'\n'.join(lines))
+                await self._finish(request_id,'ANSWERED',{'models':results,'action_admissible':False},'\n'.join(lines),basis)
             except asyncio.CancelledError:raise
             except HTTPException:
                 await self._db('abandon',request_id,state='SUPERSEDED',reason='OWNER_OR_SCOPE_CHANGED')

@@ -67,6 +67,18 @@ class ChannelModelJobs:
                 request_id TEXT NOT NULL, role TEXT NOT NULL, state TEXT NOT NULL,
                 submitted_at REAL NOT NULL, result_json TEXT, known_cost_usd REAL,
                 PRIMARY KEY(request_id,role));''')
+            conn.execute('CREATE TABLE IF NOT EXISTS fleet_channel_model_activation (id INTEGER PRIMARY KEY,at REAL NOT NULL)')
+            conn.execute('INSERT OR IGNORE INTO fleet_channel_model_activation VALUES (1,?)',(clock(),))
+
+    def pending_receipts(self):
+        with closing(self.journal._connect()) as conn:
+            rows=conn.execute('''SELECT r.receipt FROM fleet_channel_requests r
+                LEFT JOIN fleet_channel_model_jobs j ON j.request_id=json_extract(r.receipt,'$.request_id')
+                WHERE j.state='PENDING' OR (j.request_id IS NULL AND
+                    julianday(json_extract(r.receipt,'$.received_at')) >
+                    julianday((SELECT at FROM fleet_channel_model_activation WHERE id=1),'unixepoch'))
+                ORDER BY r.rowid LIMIT 10''').fetchall()
+            return [json.loads(r[0]) for r in rows]
 
     def _row(self, conn, request_id):
         conn.row_factory = sqlite3.Row
@@ -101,6 +113,8 @@ class ChannelModelJobs:
         with closing(self.journal._connect()) as conn, conn:
             conn.execute('BEGIN IMMEDIATE')
             self._receipt(conn, row)
+            original=self._receipt(conn,row)
+            if original!=receipt:raise HTTPException(409,detail='CHANNEL_RECEIPT_CHANGED')
             conn.execute('''INSERT OR IGNORE INTO fleet_channel_model_jobs
                 (request_id,receipt_hash,route_hash,profile_set_hash,input_hash,problem_json,snapshot_json,
                  state,created_at,deadline) VALUES (:request_id,:receipt_hash,:route_hash,:profile_set_hash,
@@ -139,7 +153,8 @@ class ChannelModelJobs:
             input_hash=receipt['content_hash'],created_at=now,deadline=now+60)
         with closing(self.journal._connect()) as conn,conn:
             conn.execute('BEGIN IMMEDIATE')
-            self._receipt(conn,row)
+            original=self._receipt(conn,row)
+            if original!=receipt:raise HTTPException(409,detail='CHANNEL_RECEIPT_CHANGED')
             # Named parameters keep the immutable receipt and response in one transaction.
             row['result']=canonical({'reason':'STATUS_INPUT_INVALID','action_admissible':False})
             changed=conn.execute('''INSERT OR IGNORE INTO fleet_channel_model_jobs
@@ -167,7 +182,7 @@ class ChannelModelJobs:
             if changed != 1:
                 raise HTTPException(409, detail='CHANNEL_MODEL_ATTEMPT_CHANGED')
 
-    def finish(self, request_id, *, state, result, summary):
+    def finish(self, request_id, *, state, result, summary, observation_guard=None):
         if (state not in ('ANSWERED','HOLD','UNKNOWN') or type(result) is not dict
                 or type(summary) is not str or not 1 <= len(summary) <= 1600 or '\x00' in summary):
             raise ValueError('CHANNEL_MODEL_RESULT_INVALID')
@@ -175,6 +190,8 @@ class ChannelModelJobs:
             conn.execute('BEGIN IMMEDIATE')
             row = self._row(conn, request_id)
             receipt = self._receipt(conn, row)
+            if observation_guard is not None and observation_guard() is not True:
+                raise HTTPException(409,detail='CHANNEL_OBSERVATION_CHANGED')
             if row['state'] not in ('PENDING','RUNNING'):
                 raise HTTPException(409, detail='CHANNEL_MODEL_ALREADY_FINISHED')
             conn.execute('UPDATE fleet_channel_model_jobs SET state=?,result_json=?,completed_at=? WHERE request_id=?',
