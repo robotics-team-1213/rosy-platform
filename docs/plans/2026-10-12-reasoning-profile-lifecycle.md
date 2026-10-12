@@ -4,6 +4,16 @@
 
 **Status:** Planned; implementation and operational acceptance are incomplete.
 
+## D-706 구현 checkpoint
+
+`feat/reasoning-artifact`의 `d94447edea`에서 내부 후보 계산·재검증과 기존 Model PC 도구의 실제 생산 경로를 구현했다. 계산 소유자는 `operations/decision/src/rosy/decision/deliberation/evaluation/reasoning_candidate.py`다. learning registry는 운영 Decision을 직접 import하지 않는다. 전체 ModelProfile·domain과 fit/evaluation/training/reviewed_profile 원본·재계산 보정 결과를 seal하며 입력과 후보는 각각 2 MiB 이내다. 기존 모델 invocation 16 KiB 제한은 유지한다.
+
+`python tools/decision_calibration.py --candidate <input>`의 입력은 `{profile, calibration_input}`이다. `--from-feedback`을 함께 쓰면 실제 원장 export와 검수 입력을 기존 D-703 경계에서 먼저 결속한다. offline PASS만 exit 0이고 HOLD·FAIL도 후보 자료를 보존하며 exit 1이다. 기존 `--compare`와는 배타적이다. 결과의 `field_accepted`는 false이며 후보 생성이 승인·운영 current 설정은 아니다.
+
+적격 AI PC 9GB에서 기존 registry·보정·비교·피드백 CLI·구조와 source-less wheel/sdist 설치 import 회귀 195 passed, terminal exit 0을 확인했다. 실제 SQLite 원장→별도 검수→후보 CLI와 receipt 변조 거절을 포함한다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-12--033443--deliberation-local-gateway--fc42b3/logs/reasoning-candidate-feedback/run-1.txt`다. 로컬 main 착지와 전체 통합 검증은 아직 완료하지 않았다.
+
+다음 구현은 같은 registry 소유자의 immutable candidate snapshot, 범위가 제한된 신뢰 receipt 검증, CAS와 감사 원장이다. 후보의 self-reported PASS/검수 이름/hash만으로 승인하지 않는다. 이후 Fleet의 명시적 승인 포트 공급, 기존 사건 소유 revision 보존·새 사건 전환·복귀를 연결한다. 운영 성과 비교 HOLD와 부족한 coverage를 수용으로 바꾸지 않는다.
+
 ## 실제 소스 감사 결과
 
 2026-10-12 `6a73839f03`에서 root와 독립 읽기 검토가 확인했다. `select_calibrated`의 호출자는 보정 시험뿐이며 production worker에는 호출이 없다. `approved_artifacts`는 외부 dict 포트로 남아 있다. `install_incident_runtime`은 Python config를 직접 주입하는 factory이며 영속 후보/현재/이전 프로파일 loader는 없다. worker의 `current_profiles` 불일치는 기존 사건을 PROFILE_CHANGED/HOLD로 종료하므로, 다음 사건만 새 revision을 적용하는 전환이 아니다.
