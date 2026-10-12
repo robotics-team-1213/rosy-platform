@@ -693,6 +693,7 @@
 | D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
 | D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
 | D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
+| D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -891,4 +892,10 @@ Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 
 **Status:** Accepted (2026-10-12, source contract)
 
 기존 registry 소유자의 reasoning 후보에서 전체 모델 프로파일과 domain별 독립 보정 원본·재계산 결과를 결속한다. seal된 후보나 offline PASS를 신뢰된 승인·운영 전환·현장 수용으로 해석하지 않는다. 전문은 [D-706](../adr/D-706-reasoning-candidate-binding.md).
+
+## D-707 — 판정 후보 snapshot과 범위가 고정된 승인 receipt
+
+**Status:** Accepted (2026-10-12, source contract)
+
+판정 후보 snapshot·상태와 감사 chain을 보존하고 외부 검증 receipt 및 원장 head CAS로 보정 승인·폐기를 검증한다. 운영 전환·물리 authority와 구분한다. 전문은 [D-707](../adr/D-707-reasoning-registry-approval.md).
 
