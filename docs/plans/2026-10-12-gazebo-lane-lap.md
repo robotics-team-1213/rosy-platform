@@ -370,3 +370,20 @@ Gazebo graph와 주행 readback은 다음 후보에서 확인한다.
 - 현재 SDK의 관측 누락·요청보다 미래인 관측·만료·평가 중 교체는 None이며 CORE는 이를 ValueError로 바꾼다. 실제 evaluator 예외도 같은 policy_failed로 처리되므로 기존 기록만으로 정확한 가지를 확정할 수 없다. probe 수신 시각은 SDK 내부 window 유효성의 증거가 아니다.
 - 36f9fee29의 정상 원격 RED는 진단 회귀 6 NEW를 확인했다. 4d20dbc0d는 SDK의 정확한 평가 window를 스레드별로 기록하고, CORE 첫 예외·요청을 보관해 기존 writer 이후 announce_pending에서 한 번 출력한다. 단일 명령 타이머의 직렬 실행을 전제로 하며, 로깅 실패는 이후 zero와 알림을 방해하지 않는다. 독립 SOURCE 승인과 정상 원격 관련 회귀 terminal 0·NEW 0을 확인했다.
 - TTL·clock·동작 한도·None 반환·E-stop·EMERGENCY 조건은 바꾸지 않았다. 새 전체 source/install 빌드와 정지 점검을 마친 뒤 새 실행에서 원인을 재현한다. Leg9 E-stop 해제·기존 실행 재출발·물리 주행은 수행하지 않는다. 전체 지도 완주와 독립 반복 수용은 여전히 미완료다.
+
+## 2026-10-13 · Leg10 종료와 두 정지 원인의 분리
+
+- 314e06aca의 최종 구조·문서 회귀 239 PASS·NEW 0과 독립 재판정을 확인했다. Git archive의 줄끝 변환 시도 두 건을 보존하고, 같은 커밋의 원본 blob으로 채운 전체 동결본 7553파일의 바이트 일치와 SHA를 검증했다. 새 설치 17패키지·2726파일, 양 로봇 0 명령·이동 0·실제 640빔·SDK/CORE 법칙·원본 STL 계보·CORE 단독 최종 publisher·종료5조건을 정지 점검에서 확인했다.
+- Leg10 한 회차는 0.366485589 m 이동 뒤 `obstacle_ahead`로 종료했다. 실제 CORE는 `HOLD`, body gap 0.0094368m가 stop gap 0.0214m보다 작았고 감독 runner가 OFF/cancel했다. 정해진 거리·시간 예산 이전 정지이며 지도 도착은 false다.
+- 최초 zero sim 47.766초 뒤에는 양의 명령이 다시 나왔다. 최종 zero는 54.768초이며 직전 limits는 blocked true·can_rotate false였다. 두 시점을 같은 정지 사건으로 묶지 않는다. 이번 정책 예외 로그·E-stop은 0건이며 이전 Leg9 None/예외 원인이 해결됐다는 증거는 아니다.
+- 실제 camera PNG 52개·raw scan 522개·ExpectedPath live 254/held 2/dropped 154/None 13을 확보했다. sampled native pose의 paint/wall/outside/other overlap은 0이지만 연속 접촉·전체 미래 몸 쓸기 수용을 뜻하지 않는다. 종료5조건·OFF·lease 해제·잔존 프로세스 0·포트 닫힘·source/install 해시 일치를 확인했다. 추가 회차는 실행하지 않았다.
+- 다음 독립 분석은 임계 빔과 실제 visual ray의 차이, 현재 카메라 목표의 곡률과 관측 도로 경계/벽의 관계를 분리한다. 현재 관측이 거절한 경로를 기억으로 되살리거나, 모든 경우에 짧은 목표를 강제하거나, 안전 빔·margin·hysteresis를 제거하지 않는다.
+- 자원 예약 생성 전 목록 조회가 실패한 상태에서 파일을 정리한 절차 오류를 원본 ship receipt에 보존했다. 파일 소유권을 사후 추정으로 확정하지 않으며 다음 정리는 직접 소유 증거가 있을 때만 수행한다. 빌드와 각 실행의 실제 정상 자원 판정은 별도 기록이다.
+
+### 임계 빔·직선 방향·후보 검증
+
+정상 원격의 전체 640빔 SOURCE 재생에서 전방 거리는 실제 SDK 게시값과 두 구간 모두 일치했다. 최초 zero 전 임계 582번은 raw 0.118606m / 명목 visual 벽 교차 0.186310m이며 잔차 -0.067704m(-3.385σ)다. 최종 zero 전 568번은 0.101853m / 0.159249m, 잔차 -0.057396m(-2.870σ)다. 전체 잔차 표준편차는 0.019783/0.019881m로 선언 σ=0.02와 일관된다. 입력은 실제 scan/TF와 2/6ms 인접 native pose이며 같은 pose stamp의 accepted LOCALIZED join도 확인했다. GPU 정밀도·움직이는 바퀴 위상·sensor yaw 직렬화 오차는 미모델이며 정확한 소비 snapshot·renderer 원인 증명으로 세지 않는다. 실제 CORE 본체 여유 계약은 SDK 전방 거리와 별개다.
+
+두 카메라 구간의 관측 경계 방향 42.4°/36.4°에 native yaw 138.375°/144.183°를 더하면 world 180.8°/180.6°다. 해당 경계가 서쪽 직선이고 로봇이 아직 정렬 중이라는 가설을 지지하지만 consumed-frame 인과 증명은 아니다. 현재 drivable_turn_left와 ExpectedPath dropped를 실제 도로 곡률로 동일시하지 않는다. 현재 목표는 centre 대신 영상 border exit를 사용한다. 두 비교 후보는 (A) 현재 연결된 metric centreline의 법선 폭·같은 경로의 목표 선택과 (B) 독립 수용된 관측 경로의 odom 연속성이다. B는 현재 거절·만료·이동 예산을 유지하며 검증되지 않은 turn을 승격하지 않는다. Leg7·8·10 원본과 벽·gap·straddle·crop·회전된 직선/곡선 대조를 같은 가드로 평가한다.
+
+공식 [SLAMTEC C1 사양](https://www.slamtec.com/ko/c1/spec)은 거리오차 ±30mm와 분해능 15mm를 구분한다. 이 값을 Gaussian σ나 모든 조건의 절대 상한으로 환산할 근거는 확인하지 못했다. 소스의 σ=0.02는 초기 upstream import에서 상속됐으며 C1 실측 교정 근거는 미확인이다. 따라서 센서 잡음·빔·안전 margin을 낮추는 변경은 채택하지 않았다. [Jazzy Nav2 RPP](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/controller_plugins/configuring_regulated_pp/)는 경로 방향 정렬과 추종을 분리하는 연구 비교 사례다. 이를 현재 CORE의 pivot 승인이나 새 명령 입력으로 대신 사용하지 않는다.

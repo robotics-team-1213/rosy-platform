@@ -102,3 +102,11 @@
 - gate 변화: LOCAL HOLD→GO(새 설치 렌더·센서·정지 상태 점검 범위), ROS-SIM HOLD 유지(지도 미완주). ARTIFACT/DEVICE/FIELD 변동 없음.
 - 결정: E-stop을 해제하거나 추가 주행하지 않는다. SDK None과 evaluator 예외를 기존 정지 이후 알림 경로에서 구분한 뒤 원인을 재현한다.
 - 교훈: probe의 신선한 limits만으로 SDK 내부 관측 window의 유효성을 증명할 수 없다. 종료된 runner의 exit 0은 지도 도착을 의미하지 않는다.
+
+## 2026-10-13 · 314e06aca · verify(sim): Leg10 본체 여유 정지
+
+- 변경: 같은 원본 지도·반빔 위상·안전 조건의 새 전체 설치와 정지 점검을 거쳐 한 회차를 실행하고 결과를 분리해 기록했다.
+- 증거: 17패키지·source 7553/install 2726 해시 일치, 실제 양 CORE 단독 publisher·0 명령·이동 0·640빔·SDK/조향 법칙을 확인했다. Leg10은 0.366485589m 뒤 obstacle_ahead HOLD이며 body gap 0.0094368m < stop gap 0.0214m다. 47.766초의 일시 zero 후 양의 명령이 재개됐고 최종 zero는 54.768초다. 정책 예외·E-stop 0건, 종료5조건·lease 해제·잔존 프로세스 0·포트 닫힘·전체 해시 보존을 확인했다.
+- gate 변화: LOCAL GO, ROS-SIM HOLD 유지(지도 미완주). ARTIFACT/DEVICE/FIELD 변동 없음.
+- 결정: 실제 경로와 임계 visual ray를 독립 분석하며 이전 Leg9 예외는 미재현 상태로 남긴다. 추가 주행·E-stop 해제·안전 완화는 하지 않았다.
+- 교훈: 안전 정지의 반복 원인은 고정 빔 경계 오류와 별개로 검증해야 한다. sampled overlap 0을 미래 궤적·지도 완주 수용으로 대신하지 않는다.
