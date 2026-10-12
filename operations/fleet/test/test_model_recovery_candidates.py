@@ -36,7 +36,7 @@ def recovery_payload(p):
     return raw
 
 
-def setup(tmp_path, *, terminal='COMPLETED', trace=True):
+def make_recovery_case(tmp_path, *, terminal='COMPLETED', trace=True):
     p, selected = recovery_problem(), profile()
     b = bound(p)
     checked = judgment(p, b, recovery_payload(p))
@@ -56,7 +56,7 @@ def setup(tmp_path, *, terminal='COMPLETED', trace=True):
 
 
 def test_candidate_persists_without_charging_or_claiming_execution(tmp_path):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = make_recovery_case(tmp_path)
     before = store.case(scope)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     assert candidate['state'] == 'RECORDED' and candidate['action_admissible'] is False
@@ -71,7 +71,7 @@ def test_candidate_persists_without_charging_or_claiming_execution(tmp_path):
 
 
 def test_concurrent_duplicate_candidates_have_one_durable_record(tmp_path):
-    _, _, scope, journal = setup(tmp_path)
+    _, _, scope, journal = make_recovery_case(tmp_path)
     with ThreadPoolExecutor(2) as pool:
         results = list(pool.map(lambda _: journal.propose(scope, 'model-1', worker_id='worker'), range(2)))
     assert results[0] == results[1] and journal.candidates(scope) == (results[0],)
@@ -79,14 +79,14 @@ def test_concurrent_duplicate_candidates_have_one_durable_record(tmp_path):
 
 @pytest.mark.parametrize('terminal,trace', [('UNKNOWN', True), ('REJECTED', True), ('COMPLETED', False)])
 def test_noncompleted_or_untraced_model_cannot_propose(tmp_path, terminal, trace):
-    _, _, scope, journal = setup(tmp_path, terminal=terminal, trace=trace)
+    _, _, scope, journal = make_recovery_case(tmp_path, terminal=terminal, trace=trace)
     with pytest.raises(ValueError): journal.propose(scope, 'model-1', worker_id='worker')
     assert journal.candidates(scope) == ()
 
 
 @pytest.mark.parametrize('changed', ['worker', 'profile', 'owner', 'policy', 'expired', 'held', 'tampered'])
 def test_candidate_rechecks_full_scope_and_recorded_source(tmp_path, changed):
-    now, store, scope, journal = setup(tmp_path)
+    now, store, scope, journal = make_recovery_case(tmp_path)
     worker = 'worker'
     if changed == 'worker': worker = 'foreign'
     if changed == 'profile': scope = replace(scope, profile_sha256='a' * 64)
@@ -121,7 +121,7 @@ def test_back_tool_is_not_exposed_to_existing_read_only_problem():
 
 @pytest.mark.parametrize('changed', ['scope', 'action', 'expected_stuck', 'candidate_id', 'input_hash', 'action_admissible', 'source'])
 def test_candidate_read_revalidates_payload_and_completed_source(tmp_path, changed):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = make_recovery_case(tmp_path)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     with store._transaction() as conn:
         if changed == 'source':
@@ -133,7 +133,7 @@ def test_candidate_read_revalidates_payload_and_completed_source(tmp_path, chang
 
 
 def test_closed_candidate_is_historical_and_non_executable(tmp_path):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = make_recovery_case(tmp_path)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     store.close_case(scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED')
     assert journal.candidates(scope) == (candidate,)
