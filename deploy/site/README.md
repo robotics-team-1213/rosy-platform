@@ -1766,3 +1766,11 @@ wrapper를 의존성 준비·모델 조회·파일 변경 전에 확인한다. �
 들어가며 SSH·sudo·키·GLM 정책의 교체 권한은 늘어나지 않는다. 잘못되거나 한쪽만 있는
 pin은 거절한다. 성공 뒤 동일 버전 재확인은 이전 pin을 빼고 실행한다. 이전 pin을 계속
 지정하면 현재 파일과 다르므로 거절하며, 관리자 검토 없이 새 이전값을 추정하지 않는다.
+
+SSH dispatcher는 ingress 계정이 접근할 수 있는 root 소유
+`/usr/local/libexec/rosy-model-ingress`에 둔다. 실제 broker 디렉터리의 0750과
+전용 계정의 group 격리는 유지한다. 이전 보호 디렉터리 안 dispatcher에서 옮길 때는
+그 파일의 정확한 관리 바이트·소유·mode·group을 확인한 경우에만 기존 key와 sshd의
+고정 경로를 바꾸고 이전 파일은 보존한다. 설치 완료 전 실제 ingress UID로 두 명령에
+잘못된 `{}` 요청을 보내 broker HOLD를 확인하고, 알 수 없는 명령과 추가 인자는
+exit 64인지 확인한다. 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
