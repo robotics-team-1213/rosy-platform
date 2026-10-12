@@ -81,6 +81,29 @@ def test_cancel_records_one_unknown_reply_and_never_replays(tmp_path):
     assert jobs.read(receipt['request_id'],'op')['state']=='UNKNOWN'
 
 
+@pytest.mark.parametrize('cost',[0,11])
+def test_external_reviewer_requires_cost_evidence_and_respects_budget(tmp_path,cost):
+    from fleet.server.channel_model_worker import ChannelModelWorker
+    from test_channel_model_status import status_payload
+    w,jobs,journal,receipt,calls=worker(tmp_path)
+    primary=w.profiles[0]
+    reviewer=replace(primary,profile_id='status-reviewer',role='reviewer',provider_kind='opencode',max_cost_usd=10)
+    selected=(primary,reviewer)
+    jobs.profile_set_hash=hashlib.sha256(canonical([asdict(p) for p in selected]).encode()).hexdigest()
+    async def provider(problem,bound,prior,*args,**kwargs):
+        calls.append(bound.profile.role)
+        raw=status_payload(problem);raw['profile_revision']=bound.profile.profile_revision
+        raw['objections']=['conflict']
+        return judgment(problem,bound,raw),0 if bound.profile.role=='primary' else cost
+    w=ChannelModelWorker(jobs,w.snapshot,selected,(provider,provider),admission=lambda *_:True,
+                         current_profiles=lambda:selected,clock=w.clock)
+    asyncio.run(w.step(receipt))
+    assert calls==['primary','reviewer']
+    assert jobs.read(receipt['request_id'],'op')['state']=='UNKNOWN'
+    with journal._connect() as conn:
+        assert conn.execute("SELECT known_cost_usd FROM fleet_channel_model_attempts WHERE role='reviewer'").fetchone()[0]==cost
+
+
 @pytest.mark.parametrize('change',['unadmitted','owner','snapshot','cancel'])
 def test_admission_revocation_changed_observation_and_cancel_do_not_replay(tmp_path,change):
     w,jobs,journal,receipt,calls=worker(tmp_path,change=change)
