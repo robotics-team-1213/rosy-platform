@@ -48,3 +48,15 @@ manifest remain bound to independent model proof. Earlier 31-case evidence does
 not cover this source or schema addition. The optional new field keeps source
 callers compatible; the protected old strict broker requires a fresh pinned
 snapshot and independent 38-case proof before the new Fleet input is enabled.
+
+For a native selection, re-read the exact previous run through the existing CORE
+navigation state endpoint before staging and each model boundary. Require its
+original boot/run/correlation identity, terminal success, quiescence and unchanged
+owner generation; keep at most two seconds of observation for the synchronous
+reply guard. Inputs without a selected native context perform no extra read.
+The existing injected GoalLeases preparation repeats this read immediately before
+submission and forwards the selected boot/owner generation to CORE's existing
+compare-and-set fields. Context drift before transport is a known rejection:
+remove only the matching unsent marker and allow the existing Task failure path
+to release its claim. A bound native operation remains retained. A reboot after
+the read is refused by CORE's public epoch contract, never rebound to a new boot.
