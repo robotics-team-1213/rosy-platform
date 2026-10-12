@@ -172,6 +172,75 @@ def _geometry(points, footprint, center, uncertainty, body_radius, scan_age):
     return obstacles,hull,pivot_radius,.010+2*uncertainty+padding
 
 
+def forward_stopping_sweep_clearance(points, *, body, linear, angular, limits,
+                                    previous_limits, scan_age, source_age,
+                                    evaluation_budget_s=.01):
+    """Normal forward stopping geometry; no sensor or command admission.
+
+    Points are complete observed obstacles in base_footprint, supplied by the
+    caller with trusted applied RobotBody and absolute previously-issued speed
+    bounds. Unknown coverage and candidate/revision identity are caller gates.
+    The outer rectangle encloses the rounded nominal body, without shrinking it.
+
+    D-422's forward margin extends braking travel, while D-424's sweep pad is
+    lateral. During age/latency/evaluation the old command may have different
+    curvature: translation plus heading error covers the ENTIRE future path
+    (reach + braking travel), not only vertices of the current body. Nominal
+    braking keeps curvature as both velocities decrease at a common ratio.
+    """
+    from core_common.robot_body import RobotBody
+
+    def bound(pair):
+        return (type(pair) is tuple and len(pair) == 2 and
+                all(_number(value) and value >= 0. for value in pair))
+
+    try:
+        if (not isinstance(body, RobotBody) or not bound(limits) or not bound(previous_limits)
+                or not all(_number(value) for value in
+                           (linear, angular, scan_age, source_age, evaluation_budget_s))
+                or not 0. < linear <= limits[0] or abs(angular) > limits[1]
+                or not 0. <= scan_age <= .2 or not 0. <= source_age <= .2
+                or evaluation_budget_s < .01):
+            return None
+        body.__post_init__()
+        if (body.margin_m < .020 or body.sweep_pad_m < .010 or
+                body.latency_s < .15 or body.decel_mps2 > .5):
+            return None
+        obstacles = _points(points)
+        if len(obstacles) > 4096:
+            return None
+        hull = _hull(_points(((body.front_x_m, body.half_width_m),
+                             (body.front_x_m, -body.half_width_m),
+                             (body.rear_x_m, -body.half_width_m),
+                             (body.rear_x_m, body.half_width_m))))
+        reach = float(np.max(np.linalg.norm(hull, axis=1)))
+        travel = linear * linear / (2. * body.decel_mps2) + body.margin_m
+        curvature = angular / linear
+        delay = max(scan_age, source_age) + body.latency_s + evaluation_budget_s
+        # |T_old p - p| <= oldV*T + oldW*T*|p|, with |p| <= reach+travel.
+        padding = body.sweep_pad_m + (max(previous_limits[0], linear) +
+            max(previous_limits[1], abs(angular)) * (reach + travel)) * delay
+        intervals = 64
+        # Arc-length derivative of any vertex is bounded by 1+|k|*reach.
+        padding += (1. + abs(curvature) * reach) * travel / intervals / 2.
+        if not all(math.isfinite(value) for value in (travel, curvature, padding)):
+            return None
+        polygons = []
+        for index in range(intervals + 1):
+            distance = travel * index / intervals
+            angle = curvature * distance
+            sine, cosine = math.sin(angle), math.cos(angle)
+            one_minus_cosine = 2. * math.sin(angle / 2.) ** 2
+            sinc = sine / angle if angle else 1.
+            cosc = one_minus_cosine / angle if angle else 0.
+            shift = np.array((distance * sinc, distance * cosc))
+            polygons.append(hull @ np.array(((cosine, sine), (-sine, cosine))) + shift)
+        clearance = min(_clearances(obstacles, polygons)) - padding
+        return clearance if math.isfinite(clearance) else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def footprint_sweep_clearance(points, footprint, center, uncertainty, body_radius,
                               v, w, horizon, scan_age):
     """Signed continuous swept clearance; None means no valid evidence."""
