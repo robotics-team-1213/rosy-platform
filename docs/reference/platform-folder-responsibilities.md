@@ -6,6 +6,44 @@
 
 `middleware`는 장치 실행과 권한, `operations`는 관측 사실과 작업 조정, `learning`은 경험·학습·평가·아티팩트 관리를 맡는다. `contracts`는 교환 형식, `integrations`는 외부 기술 접점, `shared/web`은 여러 UI가 실제로 공유하는 기반이다. 같은 concern이 같은 실행 권한을 뜻하지 않는다.
 
+## 편집 집
+
+세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 2026-10-11 소스 배치 스냅샷은 그대로다.
+
+| 집 | 이름 | 현재 경로 |
+|---|---|---|
+| 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/ui` |
+| 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
+| 3 | Drive 동작 | `middleware/control/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
+| 4 | Drive 근거 | `middleware/control/drive/{safety,tracking,planning,recovery,calibration}` |
+| 5 | 인지 구현 | `middleware/perception/sensors/sensing`, `middleware/perception/vision/perception` |
+| 6 | 인지 노드 | `middleware/perception/control`. ROS 패키지 이름은 `control`. 다섯 호환 초기화 폴더는 설치 이름만 잇고, 노드·어댑터 파일이 이 집의 본체다 |
+| 7 | 장치 | `middleware/devices`, `middleware/drivers` |
+| 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |
+| 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
+| 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/execution` |
+| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/ui/{console,cam}`, `operations/apps`, `operations/vision` |
+| 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
+
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World의 `predicted`는 odom dead reckoning이다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+
+같은 영어 단어는 집을 나눈다.
+
+| 단어 | 의미 | 집 | 현재 경로 |
+|---|---|---|---|
+| control | 센서·카메라 노드 조립 | 6 | `middleware/perception`. ROS 패키지 `control` |
+| control | Drive 알고리즘 | 3, 4 | `middleware/control/drive` |
+| decision | 장치 로컬 허용 동작 | 2 | `core_features.decision` |
+| decision | 현장 후보·모델 제안 | 10 | `operations/decision`. 설치는 Fleet 배포 |
+| safety | 공통 E-stop·배터리·Fleet 상실 | 2 | `core_features.safety` |
+| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/control/drive/safety` |
+| execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/execution/local` |
+| execution | 현장 목표·진척 | 10 | `operations/execution` |
+| vision | 앞 카메라 구현 | 5 | `middleware/perception/vision` |
+| vision | 천장 관측 | 11 | `operations/vision` |
+
+`middleware/skills`와 `middleware/execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
+
 ## 현재 의미 구조와 깊이
 
 **후속 구조 제안:** 현재 배치는 아래 표 그대로이며, 공통 상황평가·작업 규칙·Fleet 어댑터의 추가 책임 분리는 [D-648](../adr/D-648-shared-judgment-target-structure.md)의 [목표 설계](../plans/2026-10-11-shared-judgment-structure-design.md)와 [단계별 계획](../plans/2026-10-11-shared-judgment-structure.md)을 검토한다. Proposed 목표를 이미 이동·설치된 현재 상태로 집계하지 않는다.
