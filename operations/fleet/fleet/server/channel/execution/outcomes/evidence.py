@@ -66,4 +66,10 @@ def terminal_event(events, original):
                 reason = 'BACKEND_REJECTED' if data.get('error_code') == 'REJECTED' else 'BACKEND_ERROR'
             return exact_operation(original | {'phase': 'TERMINAL', 'result': result,
                                    'reason': reason}, original)
+        if event['type'] == 'nav.canceled':
+            source = data.get('source') or ''
+            result, reason = ('EXPIRED', 'LEASE_EXPIRED') if source == 'goal_lease' else (
+                ('FAILED', 'STUCK') if source == 'stuck_detector' else
+                ('CANCELED', 'SAFETY_STOP' if source.startswith('safety') else 'CANCELED'))
+            return exact_operation(original | {'phase': 'TERMINAL', 'result': result, 'reason': reason}, original)
     return None
