@@ -1758,3 +1758,11 @@ Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설�
 `[<host>]:2222` 항목을 쓴다. 기존 Serve 설정을 먼저 확인하며, 다른 포트·Funnel·SSH
 정책·일반 계정 권한은 바꾸지 않는다. 설치, 포트 readback, 고정 명령 시험과 실제
 Discord 회신을 각각 확인한다.
+
+기존 보호 conversation 버전을 교체할 때는 검토한 이전 CONFIG와 BROKER의 SHA256을
+`--previous-config-sha256 <sha256>`와 `--previous-broker-sha256 <sha256>`로 함께 지정한다.
+두 파일의 root 소유·mode·group·정확한 해시와, 이전 source commit의 고정 zero-argument
+wrapper를 의존성 준비·모델 조회·파일 변경 전에 확인한다. 이 두 파일만 교체 허용 목록에
+들어가며 SSH·sudo·키·GLM 정책의 교체 권한은 늘어나지 않는다. 잘못되거나 한쪽만 있는
+pin은 거절한다. 성공 뒤 동일 버전 재확인은 이전 pin을 빼고 실행한다. 이전 pin을 계속
+지정하면 현재 파일과 다르므로 거절하며, 관리자 검토 없이 새 이전값을 추정하지 않는다.
