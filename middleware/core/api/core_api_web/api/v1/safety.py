@@ -27,6 +27,8 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
     for owner in (svc.nav, svc.docking, svc.swarm, svc.command):
         try:
             view = owner.native_readback()
+            if view["operation"] is None:
+                continue
             operation = NativeOperation.model_validate(view["operation"])
             if (operation.phase != "TERMINAL"
                     and str(operation.run_id) == view["owner"]["owner_run_id"]
@@ -34,7 +36,8 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
                 captured.append((owner, operation))
         except Exception:
             # Optional evidence must never prevent the existing safety path.
-            continue
+            captured.clear()
+            break
     # Latch first: the mode change runs listeners (docking abort, ...), and
     # nothing they do may leave EMERGENCY without the latch behind it.
     svc.safety.trigger_estop(f"api:{auth.role}")
