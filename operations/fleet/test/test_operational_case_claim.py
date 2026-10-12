@@ -268,3 +268,19 @@ def test_history_resealed_with_bad_signature_is_not_an_authenticated_epoch(tmp_p
         event['receipt']['signature'] = 'f' * 64
         conn.execute('UPDATE fleet_operation_events SET body=? WHERE epoch=?', (canonical(seal(event)), event['epoch']))
     with pytest.raises(ValueError): state.epoch()
+
+
+def test_model_claim_and_existing_pending_audit_roll_back_together(tmp_path):
+    _, store, log, scope, state, proof, _ = opened(tmp_path)
+    state.apply('line-back', signed(proof, 0))
+    def rejected_audit(conn):
+        log.append(dict(at='1970-01-01T00:01:41+00:00', audit_id=None, robot_id=scope.subject_id,
+            stuck_id=scope.case_id, decision='BACK_AND_RETRY', principal_id='fleet-resolver',
+            accepted=None, outcome=None, code='FLEET_STUCK_DISPATCH_PENDING', message=None), connection=conn)
+        return False
+    with pytest.raises(ValueError):
+        state.claim_model(scope, 'line-back', 'model-1', expected_epoch=1, generation='g1',
+            guard=lambda _: True, on_claim=rejected_audit)
+    assert state.submission(scope.subject_id, scope.case_id) is None
+    with store._transaction() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM fleet_line_stuck_answers').fetchone()[0] == 0
