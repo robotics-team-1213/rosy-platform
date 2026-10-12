@@ -16,7 +16,7 @@ from core_common.protocol.native_receipts import BOOT_ID, NativeReceipts
 from core_common.protocol.schemas import DockState, SwarmFollowParams
 from core_features.swarm.manager import SwarmError
 
-from test_docking_mode_ownership import docking_robot, OPERATOR
+from test_docking_mode_ownership import docking_robot, DrivingExecutor, OPERATOR
 
 
 class _State:
@@ -218,10 +218,14 @@ def test_dock_undock_success_cancel_and_charging_keep_exact_results(core_client)
     assert response.status_code == 200, response.text
     undock = response.json()["operation"]
     assert undock["kind"] == "undock" and undock["phase"] == "SUBMITTED"
-    original_executor = services.docking.executor
-    services.docking.executor = None
+    class TravelledExecutor(DrivingExecutor):
+        def travelled_m(self):
+            return 1.0  # beyond this dock type's measured undock distance
+
+    services.docking.executor = TravelledExecutor(services)
+    turn_yaw = services.docking._dock.yaw + services.docking._type().undock_turn_rad
+    services.state.set_pose(-1.2696, 0.0, turn_yaw)
     services.docking.tick()
-    services.docking.executor = original_executor
     assert services.docking.native_readback(UUID(undock["run_id"]))["operation"]["result"] == "SUCCEEDED"
     assert services.docking.native_readback(dock.run_id)["operation"]["result"] == "SUCCEEDED"
 
@@ -231,6 +235,18 @@ def test_dock_undock_success_cancel_and_charging_keep_exact_results(core_client)
     closed = client.post("/api/v1/docking/cancel", headers=OPERATOR).json()["operation"]
     assert closed["run_id"] == canceled and closed["result"] == "CANCELED"
     assert services.docking.native_readback(UUID(undock["run_id"]))["operation"]["result"] == "SUCCEEDED"
+
+
+def test_lost_undock_executor_cannot_be_a_native_success(core_client):
+    client, services = docking_robot(core_client)
+    services.docking._mark_docked()
+    response = client.post("/api/v1/docking/undock", headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    run_id = UUID(response.json()["operation"]["run_id"])
+    services.docking.executor = None
+    services.docking.tick()
+    result = services.docking.native_readback(run_id)["operation"]
+    assert (result["result"], result["reason"]) == ("FAILED", "BACKEND_ERROR")
 
 
 def test_follow_hold_refollow_and_exact_closed_cancel(core_client):
@@ -271,6 +287,7 @@ def test_follow_close_fences_new_admission_until_old_cleanup(core_client):
     worker = threading.Thread(target=services.swarm.cancel)
     worker.start()
     assert entered.wait(2)
+    services.swarm.cancel()  # a no-op cancel must not revoke first cancel's fence
     with pytest.raises(SwarmError) as refused:
         services.swarm.reserve_follow(SwarmFollowParams(**body))
     assert refused.value.code == "OWNER_GENERATION_CHANGED"
