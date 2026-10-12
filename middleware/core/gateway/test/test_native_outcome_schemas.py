@@ -55,7 +55,7 @@ def test_native_operation_rejects_unbounded_or_untyped_reason():
         with pytest.raises(ValidationError):
             NativeOperation(**base, reason=reason)
     with pytest.raises(ValidationError):
-        NativeOperation(**base, phase="UNKNOWN")
+        NativeOperation(**{**base, "phase": "UNKNOWN"})
 
 
 def test_uncertain_backend_outcome_is_nonterminal():
