@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-10-12, source contract)
 
-D-705의 외부 승인 공급을 구현하기 전에 기존 `learning/registry/policy` 소유자에서 reasoning 후보의 내부 계약을 분리한다. 행동 PolicyArtifact의 stage나 promotion은 판정 모델 승인으로 사용하지 않는다. 새 서비스·CORE writer·SDK 공개 필드를 만들지 않는다(D-427·D-449).
+D-705의 외부 승인 공급을 구현하기 전에 reasoning 후보의 내부 계약을 분리한다. 계산·재검증은 기존 Decision 순수 evaluation 소유자가 맡고, 영속 snapshot·신뢰 receipt·전환은 기존 `learning/registry/policy` 소유자가 맡는다. learning registry에서 운영 Decision을 import하지 않으며 검증된 자료를 공통 JSON과 신뢰 포트로 전달한다. 행동 PolicyArtifact의 stage나 promotion은 판정 모델 승인으로 사용하지 않는다. 새 서비스·CORE writer·SDK 공개 필드를 만들지 않는다(D-427·D-449).
 
 후보는 하나의 정확한 ModelProfile, 한 domain의 fit/evaluation/training/reviewed_profile 원본과 재계산한 CalibrationArtifact를 포함한다. 역할·모델·adapter·capability·호출 예산·calibration revision을 포함한 전체 profile hash를 검증한다. 기존 독립 보정 계산과 split/lineage/금지 오류 검증을 재사용한다. 원본과 결과를 함께 seal하고 읽을 때 다시 계산해, hash를 다시 붙인 위조 PASS나 다른 profile/domain 결속도 거절한다.
 
@@ -10,4 +10,4 @@ D-705의 외부 승인 공급을 구현하기 전에 기존 `learning/registry/p
 
 후속 구현과 검증 순서는 [프로파일 lifecycle 계획](../plans/2026-10-12-reasoning-profile-lifecycle.md)을 따른다.
 
-후보 JSON과 입력은 각각 2 MiB 이내로 제한한다. 이 내부 소스 계약은 SDK wire나 설치·runtime 활성화를 바꾸지 않는다.
+후보 JSON과 입력은 각각 2 MiB 이내로 제한하며 모델 invocation의 16 KiB 제한과 혼용하지 않는다. 이 내부 소스 계약은 SDK wire나 runtime 활성화를 바꾸지 않는다. Decision은 기존 Fleet wheel/sdist에 포함되며 실제 설치 import closure를 확인한다.
