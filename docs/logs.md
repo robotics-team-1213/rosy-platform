@@ -8324,3 +8324,9 @@ osy-d395-s1d\`.
 - 변경: plans/2026-10-14-learning-collection-storage.md에 수집·용량 현황, 대량 전송·복구, 자료 계보·적격성, 조직 Hub 전송, Spaces 탐색·피드백의 단계와 수용 기준을 기록했다. D-755/D-756와 기존 registry 전송 경로를 재사용하며 첫 구현은 읽기 전용 현황이다.
 - 증거: 기준 main 39817a51e의 import 제한·영상 처리·OMX 변환·Hub 도구를 대조했다. 공식 저장 조건은 2026-10-14 확인 자료를 참조하고 운영 시 재확인한다. 문서·계약 검사는 이 계획 커밋에서 수행한다.
 - gate 변화: 없음. 구현 계획이며 업로드·유료 증설·삭제·배포 또는 실제 학습 수용을 수행하지 않는다.
+
+## 2026-10-14 · uncommitted · OMX 시뮬레이션 경로 조사와 준비
+
+- 변경: 기존 Gazebo/Pilot·녹화·LeRobot·ACT·Isaac 코드를 대조하고 재현 경로를 plans/2026-10-14-omx-simulation-preparation.md에 정리했다. 최신 ROBOTIS Zenoh 안내와 고정 Jazzy/CycloneDDS의 차이, native/SIM 단위 경계를 명시했다.
+- 증거: Compose 해석·vendor 패치·모델 입력 검사 성공, 원격 baseline 19 passed. 새 live SIM은 메모리 여유 부족으로 미확인이다.
+- gate 변화: 없음. D-756 부록은 실행 재개 조건이며 장치나 정책 수용이 아니다.

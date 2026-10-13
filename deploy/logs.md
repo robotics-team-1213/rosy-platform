@@ -2766,3 +2766,9 @@
 - 변경: 장치를 열지 않는 설정 검사기와 LeRobot 0.4.4 녹화 예제를 추가했다. private/local-only 기본값과 normalized 단위를 검사한다.
 - 증거: 원격 기본 70개와 별도 공식 parser/reader/ACT 통합 1개 통과.
 - gate 변화: 없음. 실물 runtime과 보정·정지 수용은 별도다.
+
+## 2026-10-14 · uncommitted · OMX Pilot SIM 실행 준비
+
+- 변경: hardware 서비스와 분리한 compose.pilot-sim.yaml, 실행별 이미지 이름과 Pilot base image 입력, 기존 조작·녹화·export 경로의 원격 실행 안내를 추가했다.
+- 증거: 실제 Compose 설정 해석, 고정 vendor 패치 4개 적용·문법 검사, OMX-F/L URDF 생성 성공. 기존 원격 baseline 19 passed, NEW 0. 새 회귀 결과는 후속 기록한다.
+- gate 변화: 없음. 비현장 PC의 예약 반영 메모리 부족으로 새 이미지 build·Gazebo 실행은 보류다. D-756 부록에 재개 조건을 기록했다.
