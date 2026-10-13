@@ -74,6 +74,7 @@ def read_report(root, name, baseline=None):
         result['reasons'] = [str(reason)[:500] for reason in doc.get('reasons', [])[:20]] if isinstance(doc.get('reasons'), list) else []
         pipeline = doc.get('review_autobuild')
         if isinstance(pipeline, dict) and isinstance(pipeline.get('status'), str):
+            result['declared'].pop('outcome', None)
             result['declared']['status'] = pipeline['status'][:100]
             if isinstance(pipeline.get('blockers'), list):
                 result['reasons'].extend(str(reason)[:500] for reason in pipeline['blockers'][:20])
