@@ -59,7 +59,7 @@ ui-topbar {
 /* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
 .fleet-header-actions { grid-area: actions; position: relative; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-actions [hidden] { display: none; }
-#fleet-login,
+#fleet-login:not([hidden]),
 #fleet-account > summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
 .fleet-account-panel .password-login-who { flex-wrap: wrap; }
