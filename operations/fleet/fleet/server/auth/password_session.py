@@ -513,6 +513,14 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         managed = ({"account_id": principal.account_id, "site_resource": principal.site_resource,
                     "grants": [{"resource": resource, "capabilities": list(capabilities)}
                                for resource, capabilities in principal.grants]} if principal.account_id else {})
+        if principal.account_id and not principal.password_change_required:
+            try:
+                context = sessions.account_context(request.cookies.get(COOKIE, ''))
+            except SessionStorageUnavailable:
+                raise _storage_unavailable() from None
+            if not context:
+                raise HTTPException(401, detail={'code':'ACCOUNT_CHANGED'})
+            managed.update(session_family=context['session_family'], revision=context['revision'])
         return JSONResponse(headers=NO_STORE, content={
             "principal_id": principal.principal_id, "role": principal.role,
             "via": getattr(request.state, "site_auth_via", "bearer"),

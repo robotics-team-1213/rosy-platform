@@ -114,3 +114,27 @@ def test_logout_retries_revocation_after_outage(receiver):
     client.post = original
     client.retry_revocations()
     assert calls[-1][0] == 'revoke'
+
+
+def test_expired_refresh_cannot_change_account_identity(receiver):
+    client, clock, _, _ = receiver
+    cookie = session(client)
+    clock[0] += 301
+    private, public = keys()
+    client.public_keys['other-key'] = public
+    client.post = lambda endpoint, fields: {'active':True} if endpoint == 'introspect' else {'access_token':sign_access({**claims(), 'sub':'different-account',
+        'iat':clock[0], 'exp':clock[0]+300}, private, key_id='other-key'),
+        'refresh_token':'different-refresh-token-long-enough', 'token_type':'Bearer'}
+    assert client.resolve(cookie) is None
+
+
+def test_bearer_requires_initial_online_check_and_rechecks_at_ten_seconds(receiver):
+    client, clock, _, active = receiver
+    token = client.post('token', {})['access_token']
+    active[0] = 'offline'
+    with pytest.raises(AccountUnavailable): client.verify_bearer(token)
+    active[0] = True
+    assert client.verify_bearer(token)
+    active[0] = False
+    clock[0] += 10
+    with pytest.raises(AccountDenied): client.verify_bearer(token)

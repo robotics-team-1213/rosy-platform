@@ -1,8 +1,25 @@
 import {createFleetClient} from '/common/fleet-client.js';
 import {canManageAccounts, CAPABILITIES} from '/console/assets/account-permissions.js';
 
-const request = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
+const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
 let owner = null, rows = [], selected = null, busy = false;
+const lifetime = new AbortController();
+let invalidated = false;
+function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
+window.addEventListener('storage', event => {
+  if (event.key === 'rosy.fleet.account.identity' && owner && event.newValue !== owner) {
+    invalidated = true; lifetime.abort(); fail(changed());
+  }
+});
+async function request(path, init = {}) {
+  if (invalidated) throw changed();
+  const held = owner;
+  const result = await rawRequest(path, {...init, signal:lifetime.signal,
+    headers:{...init.headers, 'X-Rosy-Session':owner.split(':')[1]}});
+  await identity();
+  if (invalidated || owner !== held) throw changed();
+  return result;
+}
 function status(text, state = 'ready') {
   $('account-status').textContent = text; $('account-status').setAttribute('state', state);
 }
@@ -20,22 +37,24 @@ function fail(error) {
     : '처리 결과를 확인하지 못했습니다. 현재 상태를 다시 조회하세요.', 'warning');
 }
 async function identity() {
-  const session = await request('/api/fleet/auth/session');
+  if (invalidated) throw changed();
+  const session = await rawRequest('/api/fleet/auth/session', {signal:lifetime.signal});
   if (!canManageAccounts(session)) throw Object.assign(new Error(), {status: 403});
-  if (owner && owner !== session.account_id) throw Object.assign(new Error(), {code: 'ACCOUNT_CHANGED'});
-  owner = session.account_id; return session;
+  const current = `${session.account_id}:${session.session_family}:${session.revision}`;
+  if (invalidated || (owner && owner !== current)) throw changed();
+  owner = current; return session;
 }
 async function perform(fn) {
   if (busy) return;
   busy = true;
   for (const button of document.querySelectorAll('ui-button, button')) {
-    button.disabled = true; button.setAttribute('reason', '?? ?? ?? ?? ?');
+    button.disabled = true; button.setAttribute('reason', '처리 결과 확인 중');
   }
   try { await identity(); await fn(); } catch (error) { fail(error); }
   finally {
     busy = false;
     for (const button of document.querySelectorAll('ui-button, button')) {
-      button.disabled = false; button.removeAttribute('reason');
+      button.disabled = invalidated; if (!invalidated) button.removeAttribute('reason');
     }
   }
 }

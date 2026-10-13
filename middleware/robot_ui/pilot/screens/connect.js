@@ -545,15 +545,15 @@ export async function mountConnect(root, {onReady, onEnter} = {}) {
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
   root.__pilotForm = () => (inPilotApp() ? renderAppSession(root) : renderTokenForm(root, run));
+  await restoreAccount();
   if (inPilotApp()) {
-    if (!token()) {
+    if (!authenticated()) {
       renderAppSession(root);
       return;
     }
     run();
     return;
   }
-  await restoreAccount();
   if (account?.enabled && !account.authenticated) {
     window.location.assign('/api/account/login?return=/pilot');
     return;

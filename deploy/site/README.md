@@ -33,6 +33,19 @@ Resume the updater only after the configuration and running identities agree.
 
 ## Where the control console runs
 
+### Rosy Account activation (D-757)
+
+Prepare `/etc/rosy/account/authority.json` and its signing key outside the checkout.
+Fleet alone mounts this directory at `/run/rosy-account`; use directory mode0700
+and files mode0400 owned by Fleet's runtime UID10001. Set
+`ROSY_ACCOUNT_CONFIG=/run/rosy-account/authority.json` in the existing site env
+only after preparing the approved HTTPS issuer, registered app callbacks, trust
+keys and explicit existing bootstrap login. Empty leaves first activation off;
+an activated ledger refuses downgrade to legacy human credentials.
+The [Account protocol](../../docs/reference/rosy-account-protocol.md) defines the
+JSON and migration checks. Use the signed candidate deployment path, then read
+back accounts, grants and session revocation. Source tests do not activate SSO.
+
 | Role | Installation and current responsibility |
 |---|---|
 | Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |

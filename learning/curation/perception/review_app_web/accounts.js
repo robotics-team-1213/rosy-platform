@@ -10,7 +10,10 @@ async function api(path, body) {
     headers:body===undefined?{}:{'Content-Type':'application/json','X-Pinky-Token':token || ''},
     body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json();
-  if (!response.ok) throw new Error(data.error || '요청을 처리하지 못했습니다.');
+  if (!response.ok) {
+    const failure = new Error(data.error || '요청을 처리하지 못했습니다.');
+    failure.status = response.status; throw failure;
+  }
   return data;
 }
 function line(parent,text) { const p=document.createElement('p'); p.textContent=text; parent.append(p); return p; }
@@ -35,6 +38,10 @@ async function refresh() {
   let session;
   try { session=await api('/api/accounts/session'); }
   catch(e) {
+    if (e.status !== 401 && e.status !== 403) {
+      token=null; active=false; $('signed-in').hidden=true;
+      throw e;
+    }
     if(options.rosy_account) {
       $('login-panel').hidden=true; $('signed-in').hidden=true;
       $('account-status').textContent='Rosy Account로 연결 중…';
@@ -84,7 +91,12 @@ $('login-form').addEventListener('submit',event=>{event.preventDefault();perform
   const password=$('password').value; $('password').value='';
   await api('/api/accounts/login',{username:$('username').value,password}); await refresh();
 });});
-$('logout').addEventListener('click',()=>perform(async()=>{await api('/api/accounts/logout',{});await refresh();}));
+$('logout').addEventListener('click',()=>perform(async()=>{
+  active=false; $('signed-in').hidden=true;
+  for(const id of ['connections','imports','connection']) $(id).replaceChildren();
+  try { await api('/api/accounts/logout',{}); } finally { token=null; }
+  await refresh();
+}));
 for(const [id,purpose] of [['hf-login','login'],['hf-link','link']]) $(id).addEventListener('click',()=>perform(async()=>{
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }));
