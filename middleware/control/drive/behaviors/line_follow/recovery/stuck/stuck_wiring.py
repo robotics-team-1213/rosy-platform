@@ -155,7 +155,8 @@ class StuckRecoveryMixin:
             # ponytail: any held instruction, also a finished or aborted one, until the next
             # instruction or mode change; narrow to moving states if the scan view costs CPU.
             arc = getattr(self, '_arc', None)
-            if (self._junction is not None or (arc is not None and arc.get('state') == 'running')) \n                    and self._proof_live():
+            held = self._junction is not None or (arc is not None and arc.get('state') == 'running')
+            if held and self._proof_live():
                 return True
             return (self._config.recovery_local_enabled
                     and self._return_controller is not None
