@@ -21,6 +21,17 @@ import rosy_harness as harness
 ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
+
+def test_external_drive_holders_select_their_installing_distribution():
+    repo = affected.Repo.load(ROOT)
+    behavior = 'middleware/control/drive/behaviors/line_follow/manager.py'
+    assert repo.module_for(behavior)['name'] == 'core_features'
+    assert repo.module_for('middleware/control/drive/runtime/goal_node.py')['name'] == 'control'
+    assert repo.module_for('middleware/control/drive/planning/nav2/package.xml')['name'] == 'navigation'
+    selection = affected.select(repo, [behavior])
+    assert 'middleware/core/services/test' in selection.reasons
+    assert 'middleware/core/gateway/test' in selection.reasons
+
 HARNESS_YAML = """\
 modules:
   - name: core
@@ -33,8 +44,8 @@ modules:
     path: contracts/foundation
     tests: [contracts/foundation/test]
   - name: core_api_web
-    path: middleware/core/api_web
-    tests: [middleware/core/api_web/test]
+    path: middleware/core/api
+    tests: [middleware/core/api/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -52,7 +63,7 @@ roots:
     import_prefix: [core]
   - path: middleware/perception
     import_prefix: [control]
-  - path: middleware/core/api_web
+  - path: middleware/core/api
     import_prefix: [core_api_web]
   - path: tools
   - path: docs
@@ -68,8 +79,8 @@ FILES = {
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
     "middleware/core/gateway/test/test_battery.py": "import core\n",
     "middleware/core/gateway/test/conftest.py": "",
-    "middleware/core/api_web/core_api_web/app.py": "import core\n",
-    "middleware/core/api_web/test/test_app.py": "import core_api_web\n",
+    "middleware/core/api/core_api_web/app.py": "import core\n",
+    "middleware/core/api/test/test_app.py": "import core_api_web\n",
     "deploy/robot/run.sh": "echo run\n",
     "deploy/robot/pinky_pro/udev/99-rosy.rules": "# pinky\n",
     "deploy/robot/omx/udev/99-rosy.rules": "# omx\n",
@@ -275,6 +286,32 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
     assert owner["middleware/core/gateway/test"] != owner["middleware/perception/test"]
     for entry in affected.CI_FULL_MATRIX:
         assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
+
+
+def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
+    # Successful main CI 38056130519: round-robin took 307/107/313 seconds.
+    costs = {
+        "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
+        "test_blocks.py": 89, "test_start_point_browser.py": 45,
+        "test_console_roles_browser.py": 28, "test_password_session.py": 28,
+        "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
+        "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
+        "test_signal_phase.py": 13, "test_trip_runner.py": 11,
+        "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
+    }
+    repo = affected.Repo.load(ROOT)
+    selection = affected.Selection("full", [])
+    matrix = affected.ci_matrix(repo, selection)["include"]
+    shards = [e for e in matrix if e["name"].startswith("fleet-")]
+    paths = [p for e in shards for inv in e["invocations"] for p in inv]
+    expected = sorted(p for p in repo.test_files if p.startswith("operations/fleet/test/"))
+    assert sorted(paths) == expected
+    loads = [sum(costs.get(PurePosixPath(p).name, 1) for inv in e["invocations"] for p in inv)
+             for e in shards]
+    assert max(loads) <= 210, loads
+    assert all(e["gating"] and e["ros"] == "none" for e in shards)
+    repo.test_files.reverse()
+    assert affected.ci_matrix(repo, selection)["include"] == matrix
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):

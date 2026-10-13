@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   AVAHI_HINT, DISCOVERY_LABELS, MESSAGES, canManage, codeError, discoveryActions, formatCode,
   messageFor, normalizeCode, parseAddress, retryUntil, rowActions, rowText,
-} from "../../fleet/server/web/enrollment.js";
+} from "../../../ui/console/enrollment.js";
 
 const CODE = "7KXM" + "P3QA";
 

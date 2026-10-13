@@ -120,6 +120,15 @@ def test_expected_path_is_yellow_on_the_bev_panel_without_paint():
     assert int(empty[yellow].sum()) == 0
 
 
+def test_expected_curve_draws_the_segments_after_the_first_pair():
+    frame = np.zeros((32, 32), np.uint8)
+    view = BirdsEye(GROUND, 320, 240, CAM_X)
+    points = [[.15, 0.], [.25, 0.], [.35, .04], [.4, .08]]
+    short = render_debug(frame, SimpleNamespace(last={'expected_path_m': points[:2]}, view=view), None, mode='keep')
+    whole = render_debug(frame, SimpleNamespace(last={'expected_path_m': points}, view=view), None, mode='keep')
+    assert np.count_nonzero(whole != short) > 0
+
+
 def test_rate_limiter_survives_float_jitter_at_a_matching_rate():
     """Camera 5 Hz, max_hz 5.0: 1.2 - 1.0 == 0.19999999999999996 < 0.2 in
     plain float subtraction, which must not read as "not yet due"."""

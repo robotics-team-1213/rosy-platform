@@ -1,24 +1,29 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "055fd333ce", date: 2026-10-11 }
+last_verified: { commit: "764b591ed6", date: 2026-10-11 }
 gates:
   SOURCE:
     state: GO
-    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-headless-contracts -- test/architecture/test_module_structure.py test/test_module_functional_surface.py"
-    evidence: "structure scan sees the package; D-73 functional surface declared; validation runs remotely per D-584"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
+    evidence: "CORE final port and existing Drive reused by D-638 diagnostic. 764b591ed6 tools/sim/isaac ownership fix and Isaac/architecture/release/harness remote regression exit 0, 0 NEW; independent source review approved placement, native recording and frozen policy restore. Runtime revisions and source hash readback are separate in docs/validation/isaac-map-rl-2026-10-11/result.md."
   LOCAL:
     state: GO
-    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-headless -- learning/envs/isaac/test"
-    evidence: "2026-10-11 원격 pytest 75 passed/1 skipped, known_failures 신규 0; 실제 Jazzy URDF 생성·mesh 검사는 별도 통과"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"
+    evidence: "a759f1e6f full remote: 4361 passed, 11 skipped, 0 NEW. D-638 dc25401e61 relevant CORE/Drive/Isaac/harness regression and e0e5b38d78 Isaac regression exit 0, 0 NEW. b6a8d0d2e8 recording/restore and Drive/CORE cycle/harness regression exit 0, 0 NEW; 764b591ed6 placement/Isaac/architecture/release/harness remote regression exit 0, 0 NEW. Jazzy URDF preflight remains separate."
   ROS-SIM:
     state: HOLD
-    blocker: "2026-10-11 별도 SDK pip check/헤드리스 CORE 연결 확인. fixed links 병합으로 무명령 caster jitter를 줄이고 wheel force drive에서 기존 CORE auth API의 전진·회전·입력 만료 후 실제 정지를 관찰했다. 격리된 CORE 강제 종료 뒤 SDK watchdog 정지도 관찰했다. 목표 angular 0.3 rad/s에 약 0.19 rad/s로 추종 오차가 남아 I1 HOLD. SDK GUI menu는 종료 시 정리 대신 시작 단계에서 제외한다. 상세 source/실행/종료 판정은 docs/validation/isaac-headless-repair-2026-10-11/result.md 참조. 실제 STL 맵, 센서, Nav2, 두 대 Fleet와 RL은 미확인(D-322/D-434)."
+    blocker: "Full ROS-SIM rotation tracking remains failed (0.3 target versus 0.19396 measured). D-638 native one-Pinky CPU Q-learning completed ordered 9.342m curved-map route; R8 full post-shutdown-fix retraining at 57ad87993f had SDK exit 0/error 0. R9 b6a8d0d2e8 frozen evaluations at four initial headings completed with native Camera recordings and physical stop, SDK exit 0/error 0. These are not ROS/Fleet or Isaac Lab acceptance. Sensors/localization, Nav2, two-robot Fleet/signals and device acceptance remain unverified. See docs/validation/isaac-map-rl-2026-10-11/result.md."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
+adrs: [D-322, D-434, D-638, D-708]
 plans:
+  - docs/plans/2026-10-12-map-drive-diagnosis.md
+  - docs/plans/2026-10-12-observed-path-gap-implementation.md
   - docs/plans/2026-10-04-isaac-navigation-integration-review.md
+  - docs/plans/2026-10-11-isaac-map-rl.md
+  - docs/plans/2026-10-11-isaac-direction-video.md
 ---
 ## 2026-09-30 initial marker
 

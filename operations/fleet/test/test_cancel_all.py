@@ -249,7 +249,8 @@ def test_a_dispatch_overlapping_cancel_all_is_canceled_again(tmp_path):
     stored = service.store.get_task(task["task_id"])
     assert stored["status"] == "UNKNOWN" and stored["reason"] == DISPATCH_OVERLAP_REASON
     names = [call[0] for call in robot.calls]
-    assert names[names.index("navigation_goal"):].count("navigation_cancel") == 1
+    # GoalLeases and the cancel-all fence each recall the late delivery.
+    assert names[names.index("navigation_goal"):].count("navigation_cancel") == 2
 
 
 def test_fence_lets_a_dispatch_through_when_no_cancel_overlaps():
@@ -364,7 +365,7 @@ def test_cancel_all_contract_is_documented_and_wired_to_the_console():
     root = Path(__file__).resolve().parents[3]
     reference = (root / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
     srs = (root / "docs/spec/ROSY FLEET SRS.md").read_text(encoding="utf-8")
-    web = root / "operations/fleet/fleet/server/web"
+    web = root / "operations/ui/console"
     console_js = (web / "console.js").read_text(encoding="utf-8")
     index = (web / "index.html").read_text(encoding="utf-8")
 
@@ -517,6 +518,39 @@ def test_an_overlapping_goal_that_raises_is_still_canceled_again(tmp_path):
     assert task["status"] == "UNKNOWN" and task["reason"] == "COMMAND_RESULT_UNKNOWN"
     assert _origins(service, task) == ["fence"]                # _recancel tagged it
     assert _nav_canceled(service, task)["status"] == "HOLD"
+
+
+def test_cancel_all_fence_preserves_async_cancellation():
+    async def scenario():
+        from types import SimpleNamespace
+        entered, release = asyncio.Event(), asyncio.Event()
+        cancels = []
+
+        async def goal(*_args, **_kwargs):
+            entered.set()
+            await release.wait()
+            raise asyncio.CancelledError()
+
+        async def cancel(robot_id):
+            cancels.append(robot_id)
+
+        console = SimpleNamespace(goal=goal, cancel=cancel)
+        fence = DriveCancelFence()
+        task = {"robot_id": "rosy_01", "task_id": "t-1", "attempt_id": "a-1", "attempt_seq": 1,
+                "request": {"goal": {"x": 1.0, "y": 0.0, "yaw": 0.0}}}
+        sending = asyncio.create_task(fence.fenced_goal(console, task))
+        await entered.wait()
+        with fence.window():
+            pass
+        release.set()
+        try:
+            await sending
+        except asyncio.CancelledError:
+            assert cancels == ["rosy_01"]
+        else:
+            raise AssertionError("cancel-all converted async cancellation into a Task result")
+
+    run(scenario())
 
 
 def test_an_overlapping_dispatch_also_recalls_a_robot_sent_to_a_bay_for_it(tmp_path):

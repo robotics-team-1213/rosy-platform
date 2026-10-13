@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-683 | Fleet 계정 진입점과 전용 로그인·업무 복귀 | Accepted |
+| D-686 | Fleet bootstrap accounts and mandatory first-login password change | Accepted (2026-10-12) |
+| D-689 | Fleet self profile and authenticated password change | Accepted (2026-10-12) |
 | D-1 | 단일 프로세스 (rclpy + uvicorn 스레드) | Accepted |
 | D-2 | 자체 cmd_vel 멀렉서 (Nav2 출력 remap) | Accepted |
 | D-3 | Flask 완전 대체 — FastAPI 전면 이관 | Accepted |
@@ -612,5 +615,453 @@
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 | Accepted (2026-10-10, 사용자 결정; SOURCE·원격 시험·ARTIFACT·DEVICE·FIELD 별도) |
 
 | D-619 | 공통 상황 판단과 장치별 처리 방향: 관찰을 영상 ID에 묶고 상황 유형·불확실성·처리 방향을 반환, 모델 검증은 unverified, 이동 로봇·로봇암 실행 권한은 장치별 기존 계약 유지 | Accepted (2026-10-10, 사용자 결정; 구현·원격 계약·현장 모델 증거는 별도) |
+| D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 | Accepted (2026-10-11, 사용자 결정; 구조 방향·계획·이전 도구 준비에 한정, 실제 이동·실행 권한 변경·장치 수용은 별도) |
 | D-623 | 최신 RAW 사건 영상과 지도 방향을 Fleet·AI·프론트에 전달하고 경계 기하 변화에서만 재문의한다; 프레임 캐시·신선도 수정, 수락과 완료 구분, 이동 권한 유지 | Accepted (2026-10-10; SOURCE·원격 시험·배포·현장 별도) |
 | D-624 | 색상 역할·공용 컴포넌트·디자인 법칙; 팔레트 값 보존, 전체 웹 CSS 역할 소비, 갤러리 통합, Fleet·로봇 레이아웃 개선 | Accepted (2026-10-11; SOURCE·원격 G1·G2·G3·장치 수용 별도) |
+| D-631 | Named map profiles and coordinate/overlay/raw views; activation and calibration remain explicit | Accepted (2026-10-11) |
+| D-633 | 심한 렌즈 왜곡과 부분 시야를 위한 측정 카메라 교정 | Proposed |
+| D-634 | 카메라 촬영·교정·관측·좌표 표시의 역할 분담과 표시 안정성 | Proposed |
+| D-635 | 지도 프로필의 용도와 기본 정보 및 Games 경기장 재사용 | Accepted (2026-10-11) |
+| D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 | Accepted (2026-10-11) |
+| D-629 | 일반 조작 48px·글자·여백 통일, 58px 안전 예외 유지; 현재 개입·지도·로봇을 먼저 보고 사건 기록은 중립·접힘·별도 시작 시각으로 구분 | Accepted (2026-10-11; SOURCE·원격 G1·G2·설치본·현장 수용 별도) |
+| D-632 | 공통 Fleet 알림 진입점과 오른쪽 알림 창; 현재 개입·관제 메시지 조회, 반복 폴링 중복 방지, 읽음과 실제 처리 상태 분리 | Accepted (2026-10-11; SOURCE·원격 시험·설치본·현장 별도) |
+| D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 | Accepted (2026-10-11, 사용자 후속 실행 요청; M3–M6 source 이전, 설치·장치·현장 수용은 별도) |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 | Accepted (2026-10-11, 사용자 요청; 소스·원격 시험만, 장치 수용 별도) |
+| D-628 | CORE Drive 후보 수명·곡률 보존·복구 현재 근거·KTURN 후진 sweep과 남은 조립 책임 분리 | Accepted (2026-10-11, 사용자 후속 실행 요청; source·원격 시험과 장치 수용 별도) |
+| D-630 | 나머지 인지·Drive 계산·World 현재 상태·Situation 책임 holder 이전, 설치 identity와 원장·Safety 권한 보존 | Accepted (2026-10-11, 사용자 Ralph·전체 폴더 정리·단위별 착지 요청; source와 장치 수용 별도) |
+| D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 | Accepted (2026-10-11) |
+| D-639 | 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성 | Accepted (2026-10-11; 구현·CI·설치본·현장 수용 별도) |
+| D-641 | 운용 화면의 다섯 영역·의미 아이콘·단계별 근거 공개 | Accepted (2026-10-11; implementation and installed acceptance separate) |
+
+| D-637 | Remaining Decision Console learning holders and source consumer closure | Accepted (2026-10-11, user remaining folder cleanup request; source/local main only) |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 | Accepted (2026-10-12) |
+| D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 | Proposed (2026-10-11) |
+| D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 | Proposed (2026-10-11) |
+| D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 | Proposed (2026-10-11) |
+| D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 | Proposed (2026-10-11) |
+| D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 | Proposed (2026-10-11) |
+| D-647 | 공통 판단 0단계 World·Work Orchestration·Fleet 책임과 배포 경계 | Proposed (2026-10-11) |
+| D-648 | 공통 상황평가·Decision·작업 실행·Fleet 목표 소스 구조 | Proposed (2026-10-11) |
+| D-653 | Isaac 두 대 진단의 CORE 명령과 카메라 상태를 장치별로 분리한다 | Accepted (2026-10-11) |
+| D-651 | 작업 중심 Fleet 지도와 선택 로봇 작업면 | Accepted (2026-10-11) |
+| D-650 | Isaac 카메라 차선 진단은 기존 인식 모델과 CORE 차선 추종을 재사용한다 | Accepted (2026-10-11) |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers | Accepted (2026-10-11; internal shadow only, no command or wire changes) |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 | Accepted |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 | Accepted (2026-10-11; logical responsibility and staged execution only) |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 | Accepted (2026-10-11) |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 | Accepted (2026-10-11) |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox | Accepted (2026-10-11) |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 | Accepted (2026-10-11) |
+
+| D-649 | Drive behavior source ownership and compatibility identities | Accepted |
+| D-657 | 모델 도구 Fleet 어댑터와 순수 목표·진척 규칙 분리 | Accepted (2026-10-11; source and install extraction only) |
+| D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 | Accepted (2026-10-11) |
+| D-658 | Fleet 공용 헤더의 네 역할 영역과 접속 상세 분리 | Accepted (2026-10-11) |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 | Accepted (2026-10-11) |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 | Accepted (2026-10-11) |
+| D-666 | 고정 도로면/현재 구역 정답과 관측 입력의 독립 재생 실행 계약 | Accepted (2026-10-11) |
+| D-667 | 오프라인 인지 평가의 공통 관측 계약 | Accepted (2026-10-12) |
+| D-672 | Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임 | Accepted (2026-10-12) |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 | Accepted (2026-10-12) |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 | Accepted (2026-10-12) |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 | Accepted (2026-10-12, 계약; 운영 활성화·현장 수용 별도) |
+| D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
+| D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
+| D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
+| D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
+| D-680 | Discord 요청의 Fleet 작업 연결과 결과 회신 | Accepted (source design only, 2026-10-12) |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 | Accepted (source design only, 2026-10-12) |
+| D-671 | Discord 기명 요청 접수와 Fleet 소유 경계 | Accepted (source only, 2026-10-12) |
+| D-673 | 정답 없는 도로 관측을 고정 파일로 산출하고 hash로 다시 읽는다 | Accepted |
+| D-676 | Fleet 신호·CORE 교통 gate·차선 RL의 두 Pinky 완주 파이프라인 | Accepted (2026-10-12) |
+| D-674 | Fleet 통합 규칙집과 자동 판단 파이프라인 | Accepted |
+| D-682 | 예약된 물체 정답과 고정 detector의 인지 적합성 재생 | Accepted (2026-10-12) |
+| D-678 | Fleet 실행 승인과 결과 대조 파이프라인 완결 | Accepted |
+| D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY | Accepted |
+| D-685 | Fleet 자율 대기·조건 회복·검증된 재계획 | Accepted |
+| D-690 | 도로 인지 평가의 출처 단위 불확실성 | Accepted |
+| D-692 | Native Isaac 카메라 경계 관측 출처 | Accepted |
+| D-693 | Discord 요청과 현재 사건의 기명 인수 연결 | Accepted (source design only, 2026-10-12) |
+| D-691 | Rosy Cam은 Rosy가 영상을 읽는 동안만 보내고, 그 뒤 30초를 유지한 다음 센서를 끈다 | Accepted (2026-10-12, 사용자 결정) |
+| D-694 | 모델 비용 근거와 사건 receipt v2 | Accepted |
+| D-696 | 비식별 사건 인수 근거 export | Accepted |
+| D-695 | 사건 실패 분류 제안과 최종 검토 분리 | Accepted |
+| D-697 | 독립 운영 성과 비교와 증거 생산 책임 | Accepted |
+| D-698 | 단독 기본 모델 사건 처리와 프로파일 원장 근거 | Accepted |
+| D-699 | Fleet 관측 capture 식별과 기록 창 무결성 | Accepted |
+| D-700 | Fleet 실제 규칙 선택과 모델 비교 기준 | Accepted |
+| D-701 | 실제 규칙 선택의 독립 비교 export | Accepted |
+| D-702 | 독립 보정 평가의 구간 표본 수와 금지 오류 | Accepted |
+| D-703 | 실제 모델 원장과 검수 보정 입력 결속 | Accepted |
+| D-704 | Pinky 최종 속도 원본의 평면 축 검증 | Accepted |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 | Accepted |
+| D-706 | 판정 후보와 전체 프로파일·독립 보정 입력 결속 | Accepted |
+| D-707 | 판정 후보 snapshot과 범위가 고정된 승인 receipt | Accepted |
+| D-709 | 승인 원장과 Fleet 보정 포트 연결 | Accepted |
+| D-710 | Incident worker의 profile·CORE 소유 scope 분리 | Accepted |
+| D-711 | 새 사건 생성 허가와 기존 pinned 실행 분리 | Accepted |
+| D-712 | Fleet 새 사건의 영속 선택과 원자적 배정 | Accepted |
+| D-713 | 기존 Fleet runtime의 pinned 모델 worker 분배 | Accepted |
+| D-714 | 고정 프로파일 파일과 설치 제공자 구성 결속 | Accepted |
+| D-715 | 원장 사건 inventory와 독립 비교의 누락 검증 | Accepted |
+| D-717 | 진행 중 제한 후진의 중복 답 거절 | Accepted |
+| D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
+| D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
+| D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
+| D-735 | 이동 후보의 교통 감속 곡률 보존 | Accepted |
+| D-737 | LINE body and command curve agreement | Accepted |
+| D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
+| D-720 | Discord 상태 질의와 읽기 전용 숙고형 연결 | Accepted |
+| D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
+| D-725 | 격리 Gazebo의 명시적 native SIM MapPose 결속 | Proposed |
+| D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
+| D-726 | 경로 사실 묶음과 호출자가 넘기는 차로 맥락 | Accepted |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 | Accepted |
+| D-727 | 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt | Accepted |
+| D-730 | 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim | Accepted |
+| D-731 | 기존 Fleet 루프의 단일 규칙·모델 제출 책임 | Accepted |
+| D-734 | 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자 | Proposed |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
+
+| D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
+| D-732 | CORE native 실행 결과 식별과 readback | Proposed |
+
+| D-733 | Hourly KST Discord Fleet health subscription | Accepted (source only) |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
+
+## D-628 — CORE Drive 출력과 복구의 현재 근거
+
+- 상태: Accepted (2026-10-11).
+- 결정: owning-mode epoch 아래 불변 후보를 원자적으로 저장하고 정책 평가 전후 identity를 확인한다. line 후보의 profile/traffic 검토 뒤 공통 감속은 곡률을 유지하며 비동일 actuation을 거절한다. 복구 응답은 현재 근거를 재검사하고 KTURN 후진은 차체 sweep을 확인한다.
+- 계약과 범위: [ADR 본문](../adr/D-628-core-drive-output-and-recovery-boundaries.md). 기존 Base/Arm writer와 bounded budget을 유지한다. D-442 전체 producer identity와 장치 수용은 후속이다.
+- 검토: [독립 소스 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md).
+
+## D-630 — 나머지 Platform 의미 holder와 설치 경계
+
+- 상태: Accepted (2026-10-11).
+- 결정: sensor/vision evidence와 기존 Drive backend를 물리적으로 분리하고 pure MapPose를 World 현재 상태 projection으로 옮긴다. Situation의 분석과 incident 구현을 구분한다. import/package/install identity와 Fleet 원장·CORE/Arm 실행 권한은 유지한다.
+- 계약과 범위: [ADR 본문](../adr/D-630-remaining-platform-semantic-holders.md). [전체 root 판정](platform-folder-responsibilities.md)은 유지·이전·분리·보류를 실제 소비자에 따라 구분한다. 미래 행동 예측은 별도 후속 계약이다.
+- 검토: [독립 holder Safety 리뷰](../validation/d630-platform-holders-2026-10-11/safety-review.md).
+
+## D-639 — 운영 UI의 역할 토큰·공용 조작·표면 검사 폐쇄성
+
+- 상태: Accepted (2026-10-11).
+- 결정: 등록 표면의 역할·토큰 참조·공용 조작·캔버스 글자·native 척도를 하나의 출처와 검사로 닫는다. 화면별 시각 덧칠과 중복 YAML 키를 거절한다. 입력 기하·도메인 자료·고정 매체는 구분한다.
+- 계약과 범위: [ADR 본문](../adr/D-639-operational-ui-role-token-closure.md), [실행 계획](../plans/2026-10-11-platform-ui-role-tokens.md). 기존 CORE/Fleet 권한과 API는 유지하며 모든 표면 구현·설치본·현장 수용은 별도 검증이다.
+
+## D-637 ? Remaining Decision Console learning holders
+
+- Status: Accepted (2026-10-11).
+- Decision: Execute D-429 rosy.decision rename, Console physical asset carve and existing learning owner split; preserve transactions, wire, resource installs, store lineage and final writers.
+- Contract: [ADR](../adr/D-637-remaining-decision-console-learning-folders.md), [execution plan](../plans/2026-10-11-remaining-platform-folders.md). Push, deployment and physical acceptance remain separate.
+
+## D-641 - Operator shell zones, semantic icons and progressive evidence
+
+- Status: Accepted (2026-10-11).
+- Decision: Separate header, document navigation, work area, contextual status and footer. Use common semantic icons and disclose evidence and raw diagnosis by role. Preserve APIs and final CORE authority.
+- Contract: [ADR](../adr/D-641-operator-shell-icons-and-progressive-evidence.md), [plan](../plans/2026-10-11-operator-shell-icons.md). Implementation, CI, signed installation and physical acceptance remain separate.
+
+## D-654 ROSY 플랫폼 경로 R 심볼
+
+- Status: Accepted (2026-10-11).
+- Decision: One canonical platform mark, shared token-driven wordmark application, distinct role icons, accessible names, and separately evidenced rollout.
+- Contract: [ADR](../adr/D-654-rosy-platform-route-mark.md), [plan](../plans/2026-10-11-rosy-brand.md).
+
+## D-658 Fleet 공용 헤더 영역
+
+- 상태: Accepted (2026-10-11).
+- Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
+
+## D-667 — 오프라인 인지 평가의 공통 관측 계약
+
+- 상태: Accepted (2026-10-12).
+- 결정: 관측 snapshot과 순수 유효성 검사를 공통 계약에 두고 World의 기존 import 객체를 유지한다. 학습의 운영 구현 직접 참조를 제거한다.
+- 계약: [ADR 본문](../adr/D-667-shared-observation-contract-for-offline-fitness.md). 형식 검증은 실물 보정·성능·주행 승인을 대신하지 않는다.
+
+## D-671 — Discord 기명 요청 접수와 Fleet 소유 경계
+
+- 상태: Accepted (source only, 2026-10-12).
+- 결정: Fleet 소유 기명 접수 원장과 Console owner read; 실행·모델·장치 권한 없음.
+- 계약: [ADR](../adr/D-671-discord-named-request-intake.md). Gateway/token/runtime 수신은 후속 gate.
+## D-672 — Pinky 판단과 후보 토론의 연결 및 호스트 실행 책임
+
+- 상태: Accepted (2026-10-12).
+- 결정: Fleet 판단과 원장, Decision 후보·번역, 호스트 격리·설치 책임을 분리한다. 정상·기권은 모델 미호출이며 현재 사건의 후보만 기록한다.
+- 계약: [ADR](../adr/D-672-pinky-advisory-deliberation-host-boundary.md). 실제 모델·현장 수용은 별도다.
+
+## D-675 — Discord Gateway 수신과 기존 Fleet lifecycle
+
+- 상태: Accepted (source only, 2026-10-12).
+- 결정: 기존 Fleet lifespan의 선택적 수신; receipt commit 후 resume, 미해결 session 공백은 정지.
+- 계약: [ADR](../adr/D-675-discord-gateway-fleet-lifecycle.md). source 설치 검증 완료, 실제 이미지/수신은 별도이며 실행 권한 없음.
+
+## D-680 — Discord 요청의 Fleet 작업 연결과 결과 회신
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기명 접수와 기존 작업의 관계, Console 확인, 고정 목적지의 durable 결과 회신을 연결한다. 기존 승인과 장치 권한을 유지한다.
+- 계약: [ADR](../adr/D-680-discord-request-workflow-and-reply-boundary.md). 실제 수신·승인·결과 회신과 FIELD는 별도 증거로 검증한다.
+## D-682 — 예약된 물체 정답과 고정 detector의 인지 적합성 재생
+
+- 상태: Accepted (2026-10-12).
+- 결정: 학습 export와 구별한 예약 MCAP 물체 정답 출판, 고정 detector·관측·학습 참조 결속과 HOLD 재생을 정의한다.
+- 계약: [ADR](../adr/D-682-fixed-object-truth-and-fitness-replay.md). 실제 독립 성능·장치 수용은 별도다.
+## D-679 — Fleet·Qwen 불일치와 제한된 GLM 재평가
+
+- 상태: Accepted (2026-10-12).
+- 결정: 무료 Qwen 기본 추론을 유지하고 Fleet 판단 불일치·응답 문제를 한 번의 GLM 검토로 기록한다. 재평가는 HOLD이며 실행 권한을 만들지 않는다.
+- 계약: [ADR](../adr/D-679-conditional-fleet-qwen-glm-review.md). 최초 실제 검증은 합성 사건 1건·1회, 출력 1,024 토큰·30초·자동 재시도 없음이다.
+
+## D-681 — 교체 가능한 판정 모델과 모델 주도 사건 종결
+
+- 상태: Accepted (2026-10-12).
+- 결정: 같은 판정 계약으로 Qwen·GLM·Jev·Laya를 교체하고 독립 보정·안전·결과 확인으로 자동 처리한다. 사람은 최종 미해결 사건을 인수한다.
+- 계약: [ADR](../adr/D-681-model-led-incident-closure.md). 모델 보고 확률과 실측 신뢰도를 구분하며 첫 연결 시험 한도와 HOLD는 유지한다.
+
+## D-687 — Discord Mission·Cell Job의 기존 소유자 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 proposal/resolve/admit과 service author·독립 승인 규칙을 보존한다. 원문 owner/hash/revision을 확인하고 실행 전 관계부터 연결한다.
+- 계약: [ADR](../adr/D-687-discord-mission-cell-owner-adapters.md). source/size 검토·CI·서명 배포·실제 왕복과 FIELD는 별도 gate다.
+
+## D-693 — Discord 요청과 현재 사건의 기명 인수 연결
+
+- 상태: Accepted (source design only, 2026-10-12).
+- 결정: 기존 current case/revision/freshness와 기명 claim 소유자를 유지하고 같은 트랜잭션으로 원문 관계·회신을 예약한다.
+- 계약: [ADR](../adr/D-693-discord-current-incident-handoff.md). 정지·취소/CORE 권한, source·크기·배포·실제 왕복은 별도 gate다.
+## D-684 — Pinky 사건 재관측과 지속 예산 원장
+
+- 상태: Accepted (2026-10-12, 계약).
+- 결정: Mission scope와 차선 사건을 구분하고, 읽기 전용 사건 관측과 재시작에도 유지되는 부모/시도 예산 원장으로 제한 루프를 연결한다.
+- 계약: [ADR](../adr/D-684-pinky-incident-observation-budget.md). 최신 동일 사건 CORE readback만 종결 근거이며 미수용 제공자는 기본 비활성이다.
+
+## D-692 · Native Isaac 카메라 경계 관측 출처
+
+- 상태: Accepted (2026-10-12, D-676 승인 파이프라인의 관측 연결).
+- 결정: strict containment source에 ISAAC을 추가하고 native keeper의 image-bound 경계/횡단보도 관측을 CORE에 연결한다. 승인된 오차 범위 없이는 uncertainty null을 유지한다.
+- 계약: [ADR](../adr/D-692-isaac-camera-containment-provenance.md), API reference v1.210. CORE 명령 권한·NOMINAL driver hold·Fleet/교통/회복 gate는 유지하며 실제 완주 수용을 대신하지 않는다.
+## D-686 — Fleet 초기 계정과 첫 로그인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 사용자 지시).
+- 결정: 초기 ID와 비밀번호를 일치시키되 초기 쿠키는 비밀번호 변경에만 사용하고 완료 전 운용 API를 거절한다. 기존 SQLite의 source-bound 자격과 원자적 세션 회전을 사용한다.
+- 계약: [ADR](../adr/D-686-fleet-first-login-password-change.md). 실제 명단은 private 기록에서만 다루고 설치·발급·당사자 변경은 별도 증거다.
+
+## D-689 — Fleet 내 프로필과 본인 비밀번호 변경
+
+- 상태: Accepted (2026-10-12, 기본 프로필만).
+- 결정: 표시 이름과 현재 비밀번호 확인 변경은 본인 쿠키에만 제공한다. ID·이메일·권한 원본은 읽기 전용으로 유지하며 기존 SQLite/세션 경로를 재사용한다.
+- 계약: [ADR](../adr/D-689-fleet-self-profile.md). 사진·추가 연락처·관리자 편집은 범위에 없으며 운용 문서의 principal·역할 표시와 초안을 보존한다. 화면 이름은 운용 용어 규칙에 맞춰 `내 계정`으로 통일한다.
+## D-690 — 도로 인지 평가의 출처 단위 불확실성
+
+**Status:** Accepted (2026-10-12, 내부 평가 진단 계약)
+
+검증된 capture group 전체를 재표집하여 도로면·현재 구역의 출처별 표본 수, coverage와 경험적 구간을 표시한다. 단일 출처와 정의되지 않은 분모는 구간을 산출하지 않는다. 인지 승인과 주행 수용은 HOLD다. 전문은 [D-690](../adr/D-690-perception-source-uncertainty.md).
+
+## D-691 — Rosy Cam은 요청이 있는 동안만 보낸다
+
+- 상태: Accepted (2026-10-12, 사용자 결정).
+- 결정: 인증된 Vision 미리보기 읽기가 영상을 요청한다. 마지막 읽기 뒤 30초를 유지하고, demand.wanted가 false면 폰은 소켓을 유지한 채 센서와 JPEG를 멈춘다. 심한 발열(화면 끄기와 같은 기준)이면 요청보다 먼저 멈춘다.
+- 계약: [ADR](../adr/D-691-cam-stream-on-request.md). 2026-10-12 S21에서 Fleet lease JPEG 순번이 늘었다. 현장 Vision은 demand를 보내지 않아 2초 유예 송출이었다. 발열 정지는 배터리 36.2°C라 기기에서 확인하지 않았다. 대기 전류와 첫 프레임 지연은 측정하지 않았다.
+## D-694 — 모델 비용 근거와 사건 receipt v2
+
+**Status:** Accepted (2026-10-12, 소스 계약)
+
+포함 요금제 marginal cash와 미관측 청구액을 분리하고 검증된 호출별 비용 근거를 숫자 원장과 원자적으로 결속한다. 과거 tuple2와 model receipt/1을 유지하며 계정·원문 키를 export하지 않는다. 실제 제공자 활성화는 별도 admission이다. 전문은 [D-694](../adr/D-694-model-cost-evidence.md).
+
+## D-695 — 사건 실패 분류 제안과 최종 검토 분리
+
+**Status:** Accepted (2026-10-12, source 계약)
+
+동일 사건·모델 근거 hash에 실패 책임 제안을 결속하고 모델 의견과 사람 최종 검토 후보를 구분한다. 기존 원인·정답 상태와 원장·CORE API는 유지한다. 전문은 [D-695](../adr/D-695-incident-failure-responsibility.md).
+
+## D-697 — 독립 운영 성과 비교와 증거 생산 책임
+
+**Status:** Accepted (2026-10-12, 설계 계약)
+
+모델 주도 범용 사건 종결 목표의 독립 운영 비교를 learning에 두고 Fleet 불변 export로 연결한다. 규칙·기본 모델·조건부 검토의 동일 cohort, 인수·정상 명령·재발·비용의 생산 책임과 자료 부족 HOLD를 고정한다. 전문은 [D-697](../adr/D-697-independent-operational-comparison.md).
+## D-696 — 비식별 사건 인수 근거 export
+
+**Status:** Accepted (2026-10-12).
+
+Opt-in same-snapshot deidentified handoff evidence; queued, provider accepted and case-only named claim remain distinct. [D-696](../adr/D-696-incident-handoff-evidence.md).
+
+## D-698 — 단독 기본 모델 사건 처리와 프로파일 원장 근거
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 단독 primary 실행과 새 receipt/export /3을 결속한다. 검토가 필요하면 미구성 제공자를 호출하지 않고 최종 인수한다. 전문은 [D-698](../adr/D-698-primary-only-incident-evidence.md).
+
+## D-699 — Fleet 관측 capture 식별과 기록 창 무결성
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 관측 이력에 실제 append run/sequence와 snapshot roster를 결속한다. 누락과 재시작을 구분하며 CORE 명령·모델 호출·재발 없음으로 가장하지 않는다. 전문은 [D-699](../adr/D-699-observation-capture-integrity.md).
+
+## D-700 — Fleet 실제 규칙 선택과 모델 비교 기준
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 resolver 반환과 필요성 판단을 같은 pass에 결속한다. RULE_ONLY/MIXED와 선택/실행을 구분하고 물리 명령을 reobserve/human으로 가장하지 않는다. 전문은 [D-700](../adr/D-700-fleet-rule-selection-evidence.md).
+
+## D-701 — 실제 규칙 선택의 독립 비교 export
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 선택 원장의 read-only export와 별도 규칙 후보를 같은 사건 cohort에 결속한다. 선택 건수와 전체 운영 성과를 구분하며 미확인 coverage/결과/비용은 null·HOLD다. 전문은 [D-701](../adr/D-701-independent-rule-selection-export.md).
+
+## D-702 — 독립 보정 평가의 구간 표본 수와 금지 오류
+
+**Status:** Accepted (2026-10-12, source contract)
+
+검수된 구간 최소 표본 수를 오프라인 평가와 advisory 선택에 동일하게 적용한다. 네 가지 금지 오류 건수와 forbidden 사건 분모를 구분하며 부족한 근거는 HOLD다. 전문은 [D-702](../adr/D-702-independent-calibration-bin-support.md).
+
+## D-703 — 실제 모델 원장과 검수 보정 입력 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+실제 model receipt의 prediction과 별도 검수 정답·지연을 같은 사건·시도·프로파일과 외부 고정 dataset hash에 결속한다. 누락·UNKNOWN·split 재사용은 평가 확률로 채우지 않는다. 전문은 [D-703](../adr/D-703-reviewed-feedback-calibration-binding.md).
+
+## D-704 — Pinky 최종 속도 원본의 평면 축 검증
+
+**Status:** Accepted (2026-10-12, source contract)
+
+Pinky 평면 행동 자료에 다른 축의 움직임이나 비정상 숫자를 숨기지 않는다. 최종 속도와 불필요 모델 개입·전체 운영 coverage를 구분한다. 전문은 [D-704](../adr/D-704-pinky-final-velocity-evidence-boundary.md).
+
+## D-706 — 판정 후보와 전체 프로파일·독립 보정 입력 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 registry 소유자의 reasoning 후보에서 전체 모델 프로파일과 domain별 독립 보정 원본·재계산 결과를 결속한다. seal된 후보나 offline PASS를 신뢰된 승인·운영 전환·현장 수용으로 해석하지 않는다. 전문은 [D-706](../adr/D-706-reasoning-candidate-binding.md).
+
+## D-707 — 판정 후보 snapshot과 범위가 고정된 승인 receipt
+
+**Status:** Accepted (2026-10-12, source contract)
+
+판정 후보 snapshot·상태와 감사 chain을 보존하고 외부 검증 receipt 및 원장 head CAS로 보정 승인·폐기를 검증한다. 운영 전환·물리 authority와 구분한다. 전문은 [D-707](../adr/D-707-reasoning-registry-approval.md).
+
+## D-709 — 승인 원장과 Fleet 보정 포트 연결
+
+**Status:** Accepted (2026-10-12, source contract)
+
+root orchestration에서 영속 승인 원장과 기존 Fleet 보정 포트를 구성하며 정확한 profile/domain과 현재 신뢰를 재검증한다. 실제 factory/worker에서 승인·폐기·정상 무호출을 확인한다. 전문은 [D-709](../adr/D-709-reasoning-fleet-calibration-bridge.md).
+
+## D-710 — Incident worker의 profile·CORE 소유 scope 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+공유 DB의 다른 profile/owner 사건과 최종 인수를 worker가 대신 종료·처리하지 않도록 기존 CaseScope 소유권을 분리한다. 운영 revision 전환·새 사건 배정과는 구분한다. 전문은 [D-710](../adr/D-710-incident-profile-scope-isolation.md).
+
+## D-711 — 새 사건 생성 허가와 기존 pinned 실행 분리
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 실행·예산은 보존하면서 prepare_receipt와 poll 경로의 새 사건 생성만 별도 local predicate로 제한한다. 영속 전환·원자적 사건 배정 완료와 구분한다. 전문은 [D-711](../adr/D-711-incident-new-case-admission.md).
+## D-705 — Incident 실행 책임과 운영 보정 포트
+
+**Status:** Accepted (2026-10-12, source contract)
+
+bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 artifact/hash로 production 보정 검사를 연결한다. 미수용 판정은 제한 검토/읽기만 수행하며 물리 authority·승격을 얻지 않는다. 전문은 [D-705](../adr/D-705-incident-execution-calibration-port.md).
+
+
+## D-712 — Fleet 새 사건의 영속 선택과 원자적 배정
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 사건 SQLite에서 current/previous 선택과 revision CAS·복귀를 기록하고 새 사건 배정을 같은 트랜잭션으로 결속한다. 선택과 모델 수용·안전 권한은 구분한다. 전문은 [D-712](../adr/D-712-incident-transactional-profile-routing.md).
+
+## D-713 — 기존 Fleet runtime의 pinned 모델 worker 분배
+
+**Status:** Accepted (2026-10-12, source contract)
+
+같은 사건 DB와 기존 loop/outbox에서 기존 사건의 pinned worker와 새 사건의 현재 선택 worker를 분배한다. 전문은 [D-713](../adr/D-713-pinned-incident-profile-dispatcher.md).
+
+## D-714 — 고정 프로파일 파일과 설치 제공자 구성 결속
+
+**Status:** Accepted (2026-10-12, source contract)
+
+별도 파일 SHA와 전체 프로파일을 설치한 제공자 구성에 결속하고 기존 runtime 설정만 만든다. 전문은 [D-714](../adr/D-714-frozen-incident-profile-installation-binding.md).
+
+## D-715 — 원장 사건 inventory와 독립 비교의 누락 검증
+
+**Status:** Accepted (2026-10-12, source contract)
+
+읽기 전용 원장 목록과 별도 고정 digest로 평가 사건 누락·변경을 거절한다. 전문은 [D-715](../adr/D-715-independent-incident-case-inventory.md).
+
+## D-720 — Discord 상태 질의와 읽기 전용 숙고형 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance separate)
+
+기명 원문·현재 관측·고정 profile·bounded broker·영속 모델 job·기존 답글을 읽기 전용으로 연결한다. 장치 권한과 보호 계정·비용·독립 수용 경계를 유지한다. 전문은 [D-720](../adr/D-720-discord-read-only-deliberation.md).
+## D-717 — 진행 중 제한 후진의 중복 답 거절
+
+**Status:** Accepted (2026-10-12, source safety contract)
+
+BACKING/SETTLING 중 늦은 BACK_AND_RETRY로 타이머·시도 수가 다시 시작되는 것을 거절한다. 전문은 [D-717](../adr/D-717-active-back-recovery-answer-guard.md).
+
+## D-718 — CORE 적용 시점의 조건부 막힘 답
+
+**Status:** Accepted (2026-10-12, source contract)
+
+기존 BACK_AND_RETRY 요청에 선택 ASKING/attempts 조건을 결속하고 CORE manager lock 안에서 현재 사건 조건을 검증한다. 전문은 [D-718](../adr/D-718-conditional-core-stuck-answer.md).
+
+## D-722 — 검증된 모델 복구 후보와 기존 사건 원장 결속
+
+**Status:** Accepted (2026-10-12, source contract; no operational admission)
+
+완료된 검증 모델 시도에서 고정된 비실행 복구 후보를 기존 사건 DB에 기록한다. 전문은 [D-722](../adr/D-722-validated-model-recovery-candidate-journal.md).
+## D-716 — 모델 후보와 기존 단일 Fleet 복구 dispatch 연결
+
+**Status:** Proposed (2026-10-12)
+
+새 후보·단일 dispatch·원장/CORE 결과와 독립 수용을 분리한다. 전문은 [D-716](../adr/D-716-model-led-bounded-incident-recovery.md).
+
+## D-727 — 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt
+
+Status: Accepted (shared source contract; no operating admission).
+
+전문은 [D-727](../adr/D-727-signed-operational-recovery-receipt.md).
+## D-724 — 조건부 막힘 답의 지원 확인 후 최종 제출 검증
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
+
+## 교통 감속 결정 — D-735
+
+Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
+
+ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
+## D-730 — 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-730](../adr/D-730-atomic-fleet-operating-state-and-case-claim.md).
+
+## D-731 — 기존 Fleet 루프의 단일 규칙·모델 제출 책임
+
+**Status:** Accepted (2026-10-12, source contract; no operational activation)
+
+전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
+
+## LINE body and command curve agreement - D-737
+
+Status: Accepted (SOURCE contract; runtime and field acceptance separate).
+
+[D-737](../adr/D-737-line-body-command-curve.md).
+## D-734 — 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자
+
+**Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
+
+전문은 [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
+## D-728 — 기명 자연어 대화와 기존 조종 owner 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance pending)
+
+원문·기명 대화 문맥과 기존 intent/Task/Mission/CORE owner를 law/rule·현재 근거·영속 예산/최종 fence로 연결하고 자연어 회신까지 처리한다. D-720 읽기 전용 조각만으로 전체 완료를 선언하지 않는다. 전문은 [D-728](../adr/D-728-natural-language-channel-operations.md).
+
+## D-732 — CORE native 실행 결과 식별과 readback
+
+**Status:** Proposed (2026-10-12, contract review before implementation)
+
+기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).

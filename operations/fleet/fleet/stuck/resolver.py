@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Optional, Union
 
 from fleet.stuck.peer_pose import _map_pose
+from fleet.stuck import pipeline
 
 #: CORE codes that mean "this answer was judged and refused": try the next candidate.
 REFUSED = "STUCK_DECISION_REFUSED"
@@ -61,6 +62,11 @@ class Escalate:
     reason: str
 
 
+@dataclass(frozen=True)
+class Hold(Escalate):
+    """Autonomous observation retains ownership; no human claim or implicit retry."""
+
+
 Action = Union[Answer, Escalate]
 
 
@@ -80,6 +86,8 @@ class _Chain:
     seen_at: float = 0.0                             # when the current stuck id was first seen
     ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
     held: dict = field(default_factory=dict)         # stuck id -> R5 escalation sent (D-577 남은 항목 2)
+    observing: Optional[str] = None
+    unresolved: set = field(default_factory=set)
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -144,12 +152,17 @@ class StuckResolver:
         #: D-573 개정 2026-10-10: robot_id -> on / at a mapped crosswalk (the lane monitor's view).
         self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
         self.ai_first = None                          # D-610 3: `ai_first.AiFirst` (app.py), None = D-577 only
+        self.autonomous_robots: frozenset[str] = frozenset()
+        self._uncertain: set[tuple[str, str]] = set()
 
     # ---- inputs -----------------------------------------------------------------------
 
     def claim(self, robot_id: str, stuck_id: str) -> None:
         """A human opened this stuck's decision (D-438 §1): the resolver stays silent."""
         self._claims.add((robot_id, stuck_id))
+
+    def is_claimed(self, robot_id: str, stuck_id: str) -> bool:
+        return (robot_id, stuck_id) in self._claims
 
     def sent(self, answer: Answer, now: float) -> None:
         chain = self._chains.get(answer.robot_id)
@@ -162,7 +175,7 @@ class StuckResolver:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
         if ((answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
-             or answer.rule == "ai" and answer.decision != "WAIT")
+             or answer.rule in {"ai", "model_v2"} and answer.decision != "WAIT")
                 and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME" and answer.rule != "meet" and not (    # D-610 2: a re-stuck goes back to the AI
@@ -174,6 +187,12 @@ class StuckResolver:
         chain = self._chains.get(answer.robot_id)
         if chain is None:
             return None
+        if answer.robot_id in self.autonomous_robots and code is None and answer.decision == "WAIT":
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, answer.escalate or "waiting")
+        if (answer.robot_id in self.autonomous_robots and code == "STUCK_DECISION_OUTCOME_UNKNOWN"
+                and answer.decision != "WAIT"):
+            self._uncertain.add((answer.robot_id, answer.stuck_id))
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
         if code is None and answer.escalate is None:
             if answer.decision == "RESUME" and answer.rule == "meet":
                 chain.resume_id = answer.stuck_id
@@ -188,7 +207,8 @@ class StuckResolver:
                 chain.retries[answer.stuck_id] = 1    # WAIT stops; resending it once is safe
                 chain.answered.discard(answer.stuck_id)
                 return None
-            return self._escalate(chain, answer.robot_id, answer.stuck_id, answer.escalate)
+            reason = f"core:{code}" if answer.robot_id in self.autonomous_robots and code else answer.escalate
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, reason)
         if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
             return None                               # late reply from an older chain
         if code == REFUSED:
@@ -205,8 +225,7 @@ class StuckResolver:
             chain.retries[answer.stuck_id] = 1
             chain.answered.discard(answer.stuck_id)
             return None
-        chain.escalated.add(answer.stuck_id)
-        return Escalate(answer.robot_id, answer.stuck_id, f"core:{code}")
+        return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
 
     # ---- decision ---------------------------------------------------------------------
 
@@ -230,6 +249,8 @@ class StuckResolver:
         stuck, mode = _stuck_of(row), _mode_of(row)
         chain = self._chains.get(rid)
         if chain is not None and (mode and chain.mode and mode != chain.mode
+                                  and not (rid in self.autonomous_robots and stuck is not None
+                                           and chain.stuck_id == str(stuck["stuck_id"]))
                                   or (chain.closed_at is not None
                                       and now - chain.closed_at > self.config.restuck_s)):
             del self._chains[rid]                  # mode changed or the window passed
@@ -248,54 +269,64 @@ class StuckResolver:
             chain.mode = mode
         if chain.stuck_id != sid:
             chain.stuck_id, chain.closed_at, chain.seen_at = sid, None, now
+            chain.observing = None
             if chain.resume_id is not None and sid != chain.resume_id:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
-        state = row.get("state") or {}
-        if (state.get("safety") or {}).get("estop"):
-            return self._escalate(chain, rid, sid, "estop")
-        if state.get("activity"):                  # attended calibration lease (D-321)
-            return self._escalate(chain, rid, sid, "calibration")
+        continuation_hold = self._continuation_hold(rid, chain)
+        if continuation_hold == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
+            return self._escalate(chain, rid, sid, "core:STUCK_DECISION_OUTCOME_UNKNOWN")
+        if continuation_hold is not None:
+            return None  # Preserve uncertainty and exhausted budgets even across another hold.
+        hold = pipeline.law_hold(row)
+        if hold is not None:
+            return self._escalate(chain, rid, sid, hold)
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
-        from fleet.stuck.lane_lost import ai_answer, ai_late
+        if rid in self.autonomous_robots and chain.observing is not None:
+            # A changed clock is not recovery evidence; only a newly admissible candidate reopens WAIT.
+            if stuck.get("phase") == "YIELDED":
+                if chain.rule_answers >= self.config.rule_budget:
+                    return self._escalate(chain, rid, sid, "rule_budget")
+                action = self._next_segment(row, rows)
+            elif stuck.get("phase") in ("ASKING", "WAITING_CONSOLE"):
+                action = pipeline.candidate(self, now, row, stuck, rows, chain)
+            else:
+                return None
+            if not isinstance(action, Answer) or action.decision == "WAIT":
+                return action if isinstance(action, Escalate) else None
+            if action.decision in chain.unresolved:
+                return None
+            chain.answered.discard(sid)
+            chain.held.pop(sid, None)
+            chain.observing = None
+            return action
+        from fleet.stuck.lane_lost import ai_late
 
         if sid in chain.answered:
             ai_late(self, now, row, chain)
             return self._next_segment(row, rows)
         if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
             return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
-        from fleet.stuck.ai_first import ai_answer    # D-610: AI-first robots, else the D-577 path
-        if stuck.get("cause") in LOST_LIKE and self.at_crosswalk(rid):
-            # XW removed (independent Safety-Review 2026-10-10; D-577 rev 6, D-573): never RESUME here.
-            return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
+        return pipeline.candidate(self, now, row, stuck, rows, chain)
 
-        proposed = ai_answer(self, now, row, stuck, rows, chain)
-        if proposed is not None:
-            return None if proposed == "wait" else proposed
-        rule = self._rule(row, stuck, rows, chain)
-        ai = next((fact["kind"] for fact in row.get("ai_facts") or ()), None)
-        if ai is not None and rule is not None and rule[1] == "BACK_AND_RETRY":
-            rule = ("R5", "WAIT", f"ai:{ai}")         # D-577 7 (2): an acting AI fact only stops a back-off
-        if rule is not None and rule[1] == "ESCALATE":
-            return self._escalate(chain, rid, sid, "meet")
-        if rule is not None and rule[1] == "RESUME":
-            rule = ("meet", "WAIT")                   # resume only after a finished segment
-        if rule is None:
-            return self._escalate(chain, rid, sid, "no_rule")
-        if rule[0] == "R5":                           # result() raises the human row after the send
-            return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
-        # §5: the one transport resend repeats an answer already counted; never block it.
-        if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
-            return self._escalate(chain, rid, sid, "rule_budget")
-        if stuck.get("cause") in LOST_LIKE and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
-            return self._escalate(chain, rid, sid, "no_rule")   # D-577 1: never RESUME/YIELD on lane_lost
-        if len(rule) == 4:
-            return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
-        return Answer(rid, sid, rule[1], rule[0])
+    def _continuation_hold(self, rid: str, chain: _Chain) -> Optional[str]:
+        if rid in self.autonomous_robots:
+            if any(robot == rid for robot, _case in self._uncertain):
+                return "core:STUCK_DECISION_OUTCOME_UNKNOWN"
+            if chain.observing is not None and (chain.observing.startswith("core:")
+                    or chain.observing in ("rule_budget", "deadline", "ai_exhausted", "ai_oscillation")):
+                return chain.observing
+        return None
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
+        if rid in self.autonomous_robots and not reason.startswith("human_class:") and reason not in (
+                "ai_manual", "no_resolver_token"):
+            if chain.observing == reason:
+                return None
+            chain.observing = reason
+            return Hold(rid, sid, reason)
         chain.escalated.add(sid)
         return Escalate(rid, sid, reason)
 
