@@ -232,7 +232,8 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   /* 320px에서 이름·역할·정지가 한 줄에 다 들어가게 사이를 줄인다. 역할 글(세 글자)이 잘리지 않는다. */
   ui-topbar { column-gap: var(--space-1); padding: var(--space-1) var(--space-2); }
   ui-brand small { display: none; }
-  ui-brand b { gap: var(--space-1); }
+  /* R 심볼만 남긴다(Fleet과 같다). 링크의 접근 이름(Rosy Robot 홈)은 그대로다. 긴 역할 글(인증 대기)이 그 폭을 쓴다. */
+  ui-brand b { gap: var(--space-1); max-width: 1em; overflow: hidden; }
   #shell-role:not([hidden]) { padding-inline: var(--space-1); }
   /* 320×568에서 머리 64px + 레일 줄 49px = 113px로 창 높이의 20%(113.6px) 안이다. */
   #surface-switch { padding-block: 0; }
