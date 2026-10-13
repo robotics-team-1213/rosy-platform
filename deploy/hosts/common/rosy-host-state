@@ -13,7 +13,9 @@ writes /var/lib/rosy-host-state/status.json. It never pulls the repo.
 
 Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x|deploy/x> [mode] (a source
 ending in .in gets @LOGIN@ replaced; sudoers files must pass visudo -c), enabled <unit>,
-disabled <unit>, masked <unit>, linger, wifi-allow. ROSY_HOST_STATE_ROOT prefixes every absolute
+disabled <unit>, masked <unit>, linger, wifi-allow, apt <package>... (approval policy only; checked with
+dpkg-query; only the missing names are installed, with --no-upgrade --no-remove; D-571 keeps these on
+approval=sim). ROSY_HOST_STATE_ROOT prefixes every absolute
 path (tests).
 """
 
@@ -53,6 +55,8 @@ def read_manifest(dirs: dict[str, Path]) -> list[tuple[str, str, list[str]]]:
             if raw:
                 if raw[0] not in ("safe", "report", "approval") and not raw[0].startswith("approval="):
                     raise SystemExit(f"bad policy: {raw}")
+                if raw[1:2] == ["apt"] and not raw[0].startswith("approval"):
+                    raise SystemExit(f"apt needs an approval policy (D-571): {raw}")
                 lines.append((raw[0], raw[1], raw[2:]))
     return lines
 
@@ -100,6 +104,16 @@ def want_bytes(source: str, dirs: dict[str, Path]) -> bytes:
     return data.replace(b"@LOGIN@", login_user().encode()) if source.endswith(".in") else data
 
 
+# Only the missing names, never an upgrade or a removal: another person's stack lives on a shared PC.
+APT_INSTALL = ["apt-get", "install", "-y", "-q", "--no-install-recommends", "--no-upgrade", "--no-remove"]
+
+
+def apt_missing(names: list[str]) -> list[str]:
+    out = sh("dpkg-query", "-W", "-f=${Package} ${Status}\n", *names).stdout
+    have = {line.split()[0] for line in out.splitlines() if line.endswith(" install ok installed")}
+    return [name for name in names if name not in have]
+
+
 def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     """Return a one-line description of the drift, or None when the host matches."""
     if kind == "file":
@@ -142,6 +156,9 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
             return None
         extra = [n for n in wifi_autoconnect() if n not in allowed]
         return f"wifi autoconnect outside the allow list: {', '.join(extra)}" if extra else None
+    if kind == "apt":
+        missing = apt_missing(args)
+        return f"apt packages missing: {' '.join(missing)} ({' '.join(APT_INSTALL)})" if missing else None
     raise SystemExit(f"unknown kind: {kind}")
 
 
@@ -218,6 +235,14 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
                 sh("nmcli", "connection", "modify", name, "connection.autoconnect", "no")
                 done.append(name)
         return f"autoconnect off: {', '.join(done)}"
+    if kind == "apt":
+        env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
+        missing = apt_missing(args)
+        for cmd in (["apt-get", "update", "-q"], [*APT_INSTALL, "--", *missing]):
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600, env=env)
+            if result.returncode != 0:
+                raise RuntimeError(f"{' '.join(cmd[:2])}: {result.stderr.strip()[-400:]}")
+        return f"installed {' '.join(missing)}"
     raise SystemExit(f"unknown kind: {kind}")
 
 

@@ -22,7 +22,7 @@
 | [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
 | [cam](operations/ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](integrations/simulation/gazebo/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
-| [navigation](middleware/control/drive/planning/nav2/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [navigation](middleware/drive/planning/nav2/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](middleware/devices/pinky/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [emotion](middleware/ui/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](middleware/drivers/pinky_led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |

@@ -52,7 +52,7 @@ def test_core_law_mirror_matches_core_defaults():
     assert value("steering_gain") == lane_bev.CORE_STEERING_GAIN
     assert value("min_confidence") == lane_bev.CORE_MIN_CONFIDENCE
     assert value("stale_after_s") == lane_bev.ODOM_MAX_SKEW_S
-    manager = ((ROOT.parents[1] / "middleware") / "control/drive/behaviors/line_follow/manager.py"
+    manager = ((ROOT.parents[1] / "middleware") / "drive/behaviors/line_follow/manager.py"
                ).read_text(encoding="utf-8")
     assert "max(0.2, 1.0 - 0.65 * abs(error))" in manager
     assert lane_bev.CORE_CURVE_SLOWDOWN == 0.65

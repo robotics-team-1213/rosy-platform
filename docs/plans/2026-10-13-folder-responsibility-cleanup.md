@@ -8,7 +8,7 @@
 
 **Tech Stack:** Git worktree, Python/setuptools·ament, ROS 2 Jazzy, 기존 원격 pytest/harness, PowerShell workspace 관리 도구.
 
-**상태:** P0 안내 적용 · P1 분류/부분 이관 · 나머지 PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
+**상태:** P0 안내 적용 · P1 분류/부분 이관 · S1 source·원격 검사 PASS, S2~S10·P2·P3 PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
 
 **P0 실행 기록 (2026-10-13, `docs/folder-guidance-p0`):** 현재 Control/Fleet/UI 안내와 root Docker source 설명을 정정하고 관리 도구로 `.worktrees` 안내를 설치했다. 우산 README·archive의 현재 소스 안내는 제품 Git 밖에서 수정하며 X: 세션 `folder-guidance-p0`에 전후 근거를 보존한다. 원격 시험과 local main 착지 결과는 Git 및 해당 세션 로그로 확인한다. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 근거가 없어 HOLD로 보존한다. P1·S1~S10·P2·P3는 아직 PLANNED다.
 
@@ -17,6 +17,8 @@
 **P1 HOLD 재확인 (2026-10-13, `docs/artifact-hold-review`):** 사용자 지정 15곳을 재조사하여 비활성 orphan bytecode/cache/시험 자료 1,847개·40.54 MiB를 X:로 이관했다. [검증 기록](../validation/artifact-hold-review-2026-10-13/result.md)의 결과는 8곳 정리/2곳 부분 정리/5곳 유지다. 남은 협업 상태·lock·미확정 기록, 자격/producer 미확정 `pidA/wsA.json`, 참조되는 build/install/log는 보존한다. 15곳 전체 제거로 집계하지 않는다. S1~S10·P2·P3는 계속 PLANNED다.
 
 근거: [조사 보고서](../assessments/2026-10-13-folder-responsibility-audit.md), Accepted [D-738](../adr/D-738-folder-one-authority.md), [현재 폴더 책임](../reference/platform-folder-responsibilities.md), [platform_parts.yaml](../../tools/harness/platform_parts.yaml). 조사 SHA `a967ab11a`는 과거 스냅샷이다. 각 작업 시작 시 최신 main에서 현재 경로와 이미 완료된 단계를 다시 확인한다. 다른 세션이 완료한 이동을 다시 실행하지 않는다.
+
+**구조 토론 후 S1:** [D-743](../adr/D-743-drive-holder-promotion.md)과 [S1 실행 계획](2026-10-13-drive-holder-s1.md)에 따라 안쪽 Drive를 middleware/drive로 승격한다. S6의 signal_observer 범위는 실행 전에 따로 확정한다. 단계 순서는 유지한다.
 
 ## 범위·책임·순서
 
@@ -59,7 +61,7 @@
 
 | 단계 | 현재 → 목표/판정 | 반드시 보존할 경계 | 집중 검증 경로 |
 |---|---|---|---|
-| S1 | `middleware/control` → `middleware/drive` | 설치 import, CORE `core/drive` 조립은 별도 | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_folder_package_names.py` |
+| S1 | `middleware/control/drive` → `middleware/drive` (D-743) | 설치 import, CORE `core/drive` 조립은 별도 | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_folder_package_names.py` |
 | S2 | `middleware/perception/control/loc_assist.py`, `watch.py` 및 나머지 순수 판단을 출력별 기능 holder로 판정 | facts/lease/command/graph 판단을 구분; 이미 이전된 Drive runtime은 다시 옮기지 않음 | `middleware/perception/test/`의 해당 adapter·순수 판단 시험 |
 | S3 | S2 뒤 남은 `middleware/perception/control` 조립 → `middleware/perception/nodes` | `control` ROS package와 다섯 호환 설치 initializer | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_colcon_roots.py` |
 | S4 | `middleware/execution` → `middleware/robot_execution`; `operations/execution` → `operations/site_execution` | local policy/receipt와 site goal/progress, `rosy.execution.*` | `middleware/execution/local/test/`, `test/test_judgment_extraction.py`, gateway/palletizing 소비 시험; 이동 뒤 시험 경로로 실행 |
