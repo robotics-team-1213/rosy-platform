@@ -17,7 +17,7 @@
 - 사용자 확정: Fleet에 한정하지 않고 로봇·Pilot까지 통합. 후속 요청으로 학습·리뷰 등 모든 앱을 하나의 Rosy Account로 연결한다.
 - 사용자 확정: 각 앱 로그인 뒤 별도 인증 코드·토큰 붙여넣기·세션 연결 절차 없이 권한 내 기능을 바로 사용한다.
 - 감사 결과: password/session/profile/site-users/server-app 131개 원격 시험 통과, NEW 0. 실제 최신 배포 및 개인 브라우저 수용은 미확인이다.
-- D-549는 Proposed다. D-519/683/686/689의 기존 구현과 D-755의 외부 계정·협업 계획을 이 문서의 출발점으로 한다.
+- D-757이 통합 신원/세션 architecture를 확정하고 D-549를 대체한다. D-519/683/686/689의 기존 구현과 D-755의 외부 계정·협업 계획을 이 문서의 출발점으로 한다.
 - 작업 브랜치: `docs/rosy-account-plan`. 다른 세션의 학습 계정 작업을 덮어쓰지 않고 착수 때 현재 main과 해당 구현을 다시 읽는다.
 
 ## 1. 제품의 완료 상태
@@ -74,7 +74,7 @@ authority는 하나의 논리적 계정 원장이다. 사이트마다 같은 사
 - **앱 간 연결:** 같은 origin만 가정하지 않는다. HTTPS의 등록된 callback, 일회용 교환, 요청 결속/재사용 방지, native public client의 PKCE 등 필요한 표준 보호를 검토해 확정한다. 새 자체 인증 protocol을 즉석에서 만들지 않는다.
 - **자격 보관:** 중앙 쿠키는 HttpOnly/Secure와 CSRF 보호. URL·로그·localStorage에 장기 bearer/refresh token을 전달하지 않는다. Android는 플랫폼 보안 저장소와 검증된 callback을 사용한다.
 - **토큰 검증:** 서명·issuer·audience·만료·용도·허용 알고리즘을 고정 검증한다. unknown key, 잘못된 시간, 타 사이트/로봇 replay는 거부한다. 키 배포·회전·폐기와 오프라인 시계 조건도 포함한다.
-- **권한 회수:** 제안 목표는 연결 중인 모든 앱/CORE에서 30초 이내 회수, 단절된 verifier의 접근 자격은 최대 5분 만료다. 이는 아직 구현된 SLA가 아니다. 영속된 계정/권한 revision과 갱신 시 재검증으로 증명하고, 무조건 즉시 회수라고 표현하지 않는다.
+- **권한 회수:** D-757의 목표 계약은 연결 중인 모든 앱/CORE에서 30초 이내 회수, 단절된 verifier의 접근 자격은 최대 5분 만료다. 이는 아직 구현된 SLA가 아니다. 영속된 계정/권한 revision과 갱신 시 재검증으로 증명하고, 무조건 즉시 회수라고 표현하지 않는다.
 - **로그아웃:** 기본 사용자 로그아웃은 해당 로그인 session family의 전 앱 자격/갱신을 종료한다. 관리자의 계정 정지·비밀번호 초기화·전체 로그아웃은 모든 기기 세션을 회수한다. 이미 발급된 오프라인 자격의 잔여 시간은 위 한계를 따른다.
 - **장애:** Account 장애 시 새 로그인/자격 갱신/관리 쓰기는 거부한다. 기존 제한 수명 자격의 허용 범위만 유지하고 만료 후 무인증으로 전환하지 않는다. Pilot은 기존 deadman/lease 종료를 따르고 CORE의 안전·정지 경로를 보존한다.
 - **외부 서비스:** Rosy Account가 모든 외부 provider의 계정을 대체한다는 뜻은 아니다. 최초 연결/동의 뒤에는 권한 내 세션을 자동 처리하며 연결 해제·scope 축소·작업 중 회수를 D-755와 함께 처리한다.
@@ -88,7 +88,7 @@ authority는 하나의 논리적 계정 원장이다. 사이트마다 같은 사
 **Files:** `shared/web/surfaces.yaml`, `docs/adr/D-549-central-auth-service.md`(참조), `docs/adr/D-755-learning-data-and-collaborative-provider-accounts.md`(참조), `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, `contracts/foundation/core_common/protocol/schemas.py`.
 
 1. surface→API/WS→인증 owner→runtime host→설치 이미지→권한→검증 시험 표를 만든다. CLI/다운로드/영상/worker 경로도 포함한다.
-2. D-549 제안과 다른 역할·scope·회수·전 앱 연결 계약은 새 ADR로 명시한다. 파일 직전에 `python tools/harness/adr_reserve.py next "Rosy Account unified identity and app sessions"`로 번호를 선점한다.
+2. Architecture 결정은 [D-757](../adr/D-757-rosy-account-unified-app-sessions.md)로 완료했다. protocol·capability·migration schema의 상세 계약과 전체 진입점 매트릭스는 아직 남아 있다. 추가 ADR이 필요하면 파일 직전에 선점 도구를 사용한다.
 3. 기존 역할의 허용/거부 표와 신규 관리 권한을 정의하고 default deny를 고정한다. 관리자라고 모든 조작/승인이 자동 허용되지는 않는다.
 4. API reference와 shared schema에 확정된 protocol만 반영한다. 안전 경로 변경은 D-430 독립 검토를 계획한다.
 
