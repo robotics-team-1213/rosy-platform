@@ -47,7 +47,7 @@ class MainActivity : Activity() {
         incoming.data = null
         io.execute {
             val ok = runCatching { account!!.session.complete(callback) }.isSuccess
-            main.post { returnToLobby(); status.text = if (ok) "???? ? ??? ?????" else "???? ???? ?????. ?? ?????." }
+            main.post { returnToLobby(); status.text = if (ok) "로그인했습니다. 로봇을 선택하세요" else "로그인을 완료하지 못했습니다. 다시 시도하세요." }
         }
     }
     override fun onNewIntent(incoming: android.content.Intent) {
@@ -154,9 +154,9 @@ class MainActivity : Activity() {
         header.addView(label(if (compact) "Pilot · 로봇 선택" else "로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
-        if (accountConfigured) list.addView(button("Rosy Account ? ???? / ?? ??") {
+        if (accountConfigured) list.addView(button("Rosy Account 로그아웃 / 계정 변경") {
             endSession { io.execute { val ok = account!!.session.logout(); main.post {
-                status.text = if (ok) "????? ? ??? ???? ??????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????"
+                status.text = if (ok) "로그아웃했습니다. 로봇을 선택하여 다시 로그인하세요" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다"
             } } }
         })
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
