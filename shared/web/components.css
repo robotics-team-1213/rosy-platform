@@ -43,6 +43,24 @@
   font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
 }
 
+/* Occupancy legend swatches. The surface places the row. Cost matches the cell map.js paints. */
+.ui-legend i[data-swatch="free"],
+.ui-legend [data-swatch="free"]::before { background: var(--raster-free); }
+.ui-legend i[data-swatch="uncertain"],
+.ui-legend [data-swatch="uncertain"]::before { background: var(--raster-uncertain); }
+.ui-legend i[data-swatch="occupied"],
+.ui-legend [data-swatch="occupied"]::before { background: var(--raster-occupied); }
+.ui-legend i[data-swatch="unknown"],
+.ui-legend [data-swatch="unknown"]::before { background: var(--raster-unknown); }
+.ui-legend i[data-swatch="cost"],
+.ui-legend [data-swatch="cost"]::before { background: var(--status-warn); }
+.ui-legend i[data-swatch="path"],
+.ui-legend [data-swatch="path"]::before { background: var(--series-primary); }
+.ui-legend i[data-swatch="robot"],
+.ui-legend [data-swatch="robot"]::before { background: var(--ink); }
+.ui-legend i[data-swatch="goal"],
+.ui-legend [data-swatch="goal"]::before { background: var(--series-goal); }
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -535,6 +553,23 @@ ui-tag[status="warn"] {
 ui-tag[status="crit"] {
   color: var(--text-on-danger);
   border-color: transparent;
+  background: var(--status-crit);
+}
+
+/* D-668: values inside one summary control retain state without nested pill outlines. */
+ui-tag[variant="inline"] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+ui-tag[variant="inline"][status="crit"] { color: var(--text-primary); }
+ui-tag[variant="inline"][status="crit"]::before {
+  content: "";
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-flag);
   background: var(--status-crit);
 }
 

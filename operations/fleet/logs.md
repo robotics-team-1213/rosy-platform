@@ -3522,3 +3522,14 @@
 - 변경: 기존 실행 선택·Task 원장의 정확한 native 성공 및 안전 해제 증거를 재사용한다. 원문·사용자·채널·지도·권한·세대·receipt 변경을 각 모델 경계와 최종 전송 전에 거절한다. 기존 상태 조회로 이전 run과 현재 boot·owner generation을 확인하고 CORE CAS에 전달한다.
 - 증거: 최초 재현 2 NEW, live 재시작·run 소실 재현 11 NEW 뒤 원격 집중 284개 및 공개 CORE CAS 2개 통과, NEW0. 전송 전 거절은 명령 호출·native marker·점유를 남기지 않는다.
 - gate 변화: 없음. fake owner 경로의 소스 검증이며 실제 모델·보호 설치·Discord·물리 수용은 별도다.
+
+## 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
+- 변경: `fleet/server/AGENTS.md`의 옛 `web` 편집 안내를 `operations/ui/console` 정본과 설치 `fleet/server/web` mapping으로 정정했다.
+- 증거: `fleet._source_layout.console_root`, `static_routes.WEB_ROOT`와 실제 Console source holder를 읽었다. 링크/원격 검사·착지 결과는 X: `folder-guidance-p0` 세션과 Git으로 확인한다.
+- gate 변화: 없음. SQLite/auth/admission/serving은 수정하지 않았다.
+
+## 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
+- 변경: 규칙 선택 계약(`rosy-contracts-learning` 0.1.12)이 `REALIGN` ANSWER를 받고 `pipeline.selection_receipt`가 조작 본문을 `selection.realign_sha256`으로만 결속한다. R9 선택 하나가 그 poll 전체의 선택 원장과 모델 baseline을 버리던 결함을 고쳤다. `realign_hold:*`는 `autonomous_robots`에도 있는 로봇에서도 자율 `Hold`가 아니라 사람 인계가 되고(`resolver._escalate`, 96b86c039), 그 막힘에는 보류 사유가 풀려도 REALIGN을 다시 고르지 않는다. Fleet은 0.1.4다. `loop._rule_config`가 `realign_robots`와 복구 영역을 설정 digest에 넣는다.
+- 증거: `test_rule_selection.py`(R9 기록과 같은 poll의 다른 로봇 기록 유지, realign 설정 변경 시 baseline 거절), `test_stuck_realign.py`(이중 등록 로봇의 사람 인계와 재선택 없음, 한쪽 목록 로봇은 그대로). 원격 시험 로그는 X: `land-recent/realign-fu` 세션이다.
+- 이행: REALIGN 행은 0.1.11 독자가 거절한다. 어느 현장이든 `realign_robots`를 켜기 전에 현장 Fleet과 모델 PC wheel이 `rosy-contracts-learning` 0.1.12여야 한다.
+- gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.

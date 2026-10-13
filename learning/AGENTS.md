@@ -1,7 +1,7 @@
 # learning
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-07
+**Generated:** 2026-10-07 · **Updated:** 2026-10-12
 
 ## Purpose
 
@@ -12,7 +12,7 @@ D-427 learning part. Perception curation, replay evaluation and offline training
 | Directory | Purpose |
 |-----------|---------|
 | `curation/` | Perception recording/review/dataset preparation, OMX LeRobot export, and Pinky Episode conversion (see `curation/AGENTS.md`) |
-| `evaluation/perception/` | Existing road-replay inputs and metrics (see `evaluation/perception/AGENTS.md`) |
+| `evaluation/` | Replay evaluation holder. The implementation is `perception/` (see `evaluation/AGENTS.md`) |
 | `envs/` | Simulation environments. `isaac/` is ROS package `isaac_sim` (see `envs/AGENTS.md`) |
 | `registry/` | Shared perception artifact/provenance store and model lifecycle, plus offline policy metadata (see `registry/AGENTS.md`) |
 | `training/` | Offline jobs for perception, OMX ACT, and Pinky speed models (see `training/AGENTS.md`) |

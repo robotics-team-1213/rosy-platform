@@ -1,6 +1,9 @@
 <!-- Parent: ../AGENTS.md -->
 # deliberation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-12
+
 Bounded advisory opinions only (D-640). `__init__.py` owns canonical Problem,
 semantic validation and the finite supervisor; `cli.py` translates fixed provider
 argv/output through a mandatory trusted isolated launcher. No shell, database,

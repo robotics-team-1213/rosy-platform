@@ -933,3 +933,8 @@
 - 변경: native owner 속성 조회를 캡처 예외 경계 안으로 옮긴다. 속성 누락은 전체 빈 operations이며 기존 latch·mode·state·listener를 실행한다. Fleet-loss native UUID 이벤트 기대값과 CORE 통합 시험 소유 목록도 실제 계약에 맞춘다.
 - 증거: 통합 NEW 3건과 실제 CORE owner 누락 4건의 원격 RED를 재현했다. 관련 여섯 파일의 전체 시험과 실제 native/잠금 경합 회귀를 포함한 수정 후 원격 묶음 exit 0. 구조 예산 위반 0, safety.py 208줄이다.
 - gate 변화: SOURCE 회귀 수정. 장치 동작·배포·현장 수용은 수행하지 않았다.
+
+## 2026-10-13 · 7c9547f52 · docs: correct dashboard source holder guidance
+- 변경: `core_api_web/api/AGENTS.md`의 옛 `../web` 안내를 실제 `middleware/ui/robot`과 설치 `share/dashboard` 우선순위로 정정했다.
+- 증거: `app.py::_dashboard_root`의 설치/source fallback과 source holder를 읽었다. 문서 링크 검사는 X: `folder-guidance-p0` 세션에 기록하고, committed HEAD를 원격 착지 gate에서 검증한다.
+- gate 변화: 없음. API/serving/runtime 코드는 수정하지 않았다.
