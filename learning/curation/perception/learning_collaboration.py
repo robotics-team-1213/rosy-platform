@@ -28,6 +28,8 @@ class Collaboration:
             if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
                     or parsed.path or parsed.query or parsed.fragment):
                 raise ValueError('public_origin must be an HTTPS origin without path')
+        if oauth:
+            oauth.validate_origin(self.origin)
         with store.connect() as db:
             row = db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone()
             if row and row[0] != accounts.project_id:
