@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import sys
 import threading
 import time
 import urllib.error
@@ -56,6 +57,8 @@ class HFTransport:
         return parsed
 
     def _open(self, url, token):
+        if not isinstance(token, str) or not token or any(not 33 <= ord(c) <= 126 for c in token):
+            raise ValueError('invalid provider credential')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
         for _ in range(6):
             parsed = self.check_url(url)
@@ -177,7 +180,10 @@ class LearningImports:
                 or not isinstance(rights.get('evidence'), str) or not rights['evidence'].strip()
                 or len(rights['evidence']) > 4000):
             raise ValueError('internal use evidence required')
-        rights = {key: rights[key] for key in ('internal_use', 'evidence', 'gated_team_use', 'team_use_evidence')
+        if 'license' in rights and (not isinstance(rights['license'], str) or len(rights['license']) > 200):
+            raise ValueError('invalid license')
+        rights = {key: rights[key] for key in ('internal_use', 'evidence', 'license',
+                                              'gated_team_use', 'team_use_evidence')
                   if key in rights}
         if 'team_use_evidence' in rights and (not isinstance(rights['team_use_evidence'], str)
                                              or len(rights['team_use_evidence']) > 4000):
@@ -209,14 +215,17 @@ class LearningImports:
                    gated=gated, private=bool(metadata.get('private')), status='queued')
         if gated and not (rights.get('gated_team_use') is True and rights.get('team_use_evidence', '').strip()):
             job['status'] = 'rights_hold'
+            job['error'] = 'gated_team_use_evidence_required'
         self._credentials(actor, job)
         with self.lock, self._db() as db:
             rows = [json.loads(row[0]) for row in db.execute('SELECT document FROM jobs')]
             for previous in rows:
                 keys = ('project_id', 'requester_id', 'connection_id', 'generation', 'repo_type',
-                        'repo_id', 'revision', 'files', 'rights')
+                        'repo_id', 'revision', 'rights')
+                selected = [{key: item[key] for key in ('path', 'bytes', 'expected_sha256')}
+                            for item in previous['files']]
                 if previous['status'] not in ('cancelled', 'failed', 'blocked') and all(
-                        previous[key] == job[key] for key in keys):
+                        previous[key] == job[key] for key in keys) and selected == entries:
                     return previous
             if sum(row['status'] in ('queued', 'running') for row in rows) >= 32:
                 raise ValueError('import queue full')
@@ -241,7 +250,7 @@ class LearningImports:
         with self.lock:
             job = self.get(actor, project_id, job_id)
             self._credentials(actor, job)
-            if job['status'] not in ('failed', 'interrupted', 'blocked', 'cancelled'):
+            if job['status'] not in ('queued', 'failed', 'interrupted', 'blocked', 'cancelled'):
                 raise ValueError('import cannot retry')
             job.update(status='queued', error=None)
             with self._db() as db:
@@ -266,6 +275,87 @@ class LearningImports:
             raise InterruptedError('import cancelled')
         return self._credentials(actor, job)
 
+    @staticmethod
+    def _media(stage, job):
+        extensions = ('.png', '.jpg', '.jpeg', '.webp', '.mp4', '.mkv', '.mov', '.avi')
+        if job['repo_type'] != 'dataset' or not any(
+                row['path'].lower().endswith(extensions) for row in job['files']):
+            return
+        contracts = str(Path(__file__).resolve().parents[3] / 'contracts/learning/src')
+        if contracts not in sys.path:
+            sys.path.insert(0, contracts)
+        from rosy.contracts.learning.artifacts import seal
+        from rosy.contracts.learning.media import media_eligibility, validate_media
+        rights = json.dumps(job['rights'], sort_keys=True).encode('utf-8')
+        rights_path = stage / 'rights.json'
+        LearningImports._safe(rights_path)
+        rights_path.write_bytes(rights)
+        evidence = {'path': 'rights.json', 'sha256': hashlib.sha256(rights).hexdigest(), 'bytes': len(rights)}
+        doc = seal(dict(schema='rosy.media-manifest/1', profile='actionless_media_v1',
+            media_id=job['id'], project_id=job['project_id'], media_kind='unknown',
+            source=dict(kind='external_unknown', capture_session=None, source_group=None, parents=[],
+                upstream=dict(provider='huggingface', repo_type='dataset', repo_id=job['repo_id'],
+                              revision=job['revision'])),
+            files=[dict(path='files/' + row['path'], sha256=row['sha256'], bytes=row['bytes'])
+                   for row in job['files']],
+            labels=dict(ontology_revision=None, semantic_ids=[], origin='none', status='unreviewed',
+                        author=None, reviewer=None, evidence=[]),
+            rights=dict(license=None, evidence=[evidence], view='unknown', train='unknown',
+                        infer='unknown', share='unknown')))
+        validate_media(doc, root=stage)
+        job['eligibility'] = media_eligibility(doc)
+        job['media_revision'] = doc['revision']
+        sidecar = stage / 'media.json'
+        LearningImports._safe(sidecar)
+        sidecar.write_text(json.dumps(doc, sort_keys=True), encoding='utf-8')
+
+    def _recover(self, actor, job, final):
+        self._safe(final)
+        manifest = final / 'manifest.json'
+        self._safe(manifest)
+        if not manifest.is_file() or manifest.stat().st_size > 1024 ** 2:
+            raise ValueError('invalid published artifact')
+        published = json.loads(manifest.read_text(encoding='utf-8'))
+        for key in ('id', 'project_id', 'requester_id', 'connection_id', 'generation',
+                    'repo_type', 'repo_id', 'revision', 'rights'):
+            if published.get(key) != job[key]:
+                raise ValueError('published artifact identity mismatch')
+        if len(published['files']) != len(job['files']):
+            raise ValueError('published file count mismatch')
+        for row, expected in zip(published['files'], job['files']):
+            if any(row[key] != expected[key] for key in ('path', 'bytes', 'expected_sha256')):
+                raise ValueError('published file identity mismatch')
+            path = final / 'files' / _filename(row['path'])
+            self._safe(path)
+            digest = hashlib.sha256()
+            if path.stat().st_size != row['bytes']:
+                raise ValueError('published size mismatch')
+            with path.open('rb') as stream:
+                for chunk in iter(lambda: stream.read(1024 ** 2), b''):
+                    self._checkpoint(actor, job)
+                    digest.update(chunk)
+            if (digest.hexdigest() != row['sha256'] or (expected['expected_sha256'] is not None
+                    and digest.hexdigest() != expected['expected_sha256'])):
+                raise ValueError('published checksum mismatch')
+        if published.get('media_revision'):
+            contracts = str(Path(__file__).resolve().parents[3] / 'contracts/learning/src')
+            if contracts not in sys.path:
+                sys.path.insert(0, contracts)
+            from rosy.contracts.learning.media import validate_media
+            sidecar = final / 'media.json'
+            self._safe(sidecar)
+            if sidecar.stat().st_size > 1024 ** 2:
+                raise ValueError('invalid media sidecar')
+            doc = validate_media(json.loads(sidecar.read_text(encoding='utf-8')), root=final)
+            if doc['revision'] != published['media_revision']:
+                raise ValueError('published media revision mismatch')
+        with self.lock:
+            self._checkpoint(actor, job)
+            published.pop('schema', None)
+            published.update(status='completed', error=None)
+            with self._db() as db:
+                self._write(db, published)
+
     def run(self, job_id, actor):
         with self.worker:
             with self.lock, self._db() as db:
@@ -278,6 +368,9 @@ class LearningImports:
             final = self.root / 'artifacts' / job_id
             try:
                 self._checkpoint(actor, job)
+                if final.exists():
+                    self._recover(actor, job, final)
+                    return
                 self._safe(stage)
                 stage.mkdir(parents=True, exist_ok=True, mode=0o700)
                 for entry in job['files']:
@@ -302,6 +395,8 @@ class LearningImports:
                                                   and digest.hexdigest() != entry['expected_sha256']):
                         raise ValueError('download verification failed')
                     entry['sha256'] = digest.hexdigest()
+                self._checkpoint(actor, job)
+                self._media(stage, job)
                 with self.lock:
                     self._checkpoint(actor, job)
                     job.update(status='completed', completed_at=time.time(), error=None)

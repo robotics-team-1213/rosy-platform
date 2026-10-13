@@ -349,6 +349,10 @@ def check_bind_host(host):
 def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None):
     check_bind_host(host)
     collaboration = None
+    with store.connect() as db:
+        bound = db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone()
+    if bound and not accounts:
+        raise ValueError('collaboration-bound workspace requires its account configuration')
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:

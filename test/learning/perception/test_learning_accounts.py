@@ -113,3 +113,14 @@ def test_shared_database_keeps_project_sessions_and_connections_separate(account
     assert other.connections(other_bob) == []
     with pytest.raises(AccountError): other.credential(other_bob, conn['connection_id'])
 
+
+def test_pat_and_oidc_subject_namespaces_cannot_overwrite_each_other(accounts):
+    _, alice = accounts.login('alice', 'alice-password')
+    pat = accounts.connect_token(alice, 'hf_pat', transport=lambda token: {'id': 'same-id', 'name': 'Alice', 'type': 'user'})
+    oauth = accounts.connect_oauth(alice, 'same-id', 'Alice', 'oauth-secret', accounts.clock() + 300)
+    assert pat['connection_id'] != oauth['connection_id']
+    assert pat['subject_kind'] == 'pat'
+    assert oauth['subject_kind'] == 'oidc'
+    assert pat['subject'] == oauth['subject'] == 'same-id'
+    assert accounts.credential(alice, pat['connection_id'])['token'] == 'hf_pat'
+

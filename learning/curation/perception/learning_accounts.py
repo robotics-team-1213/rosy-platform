@@ -143,7 +143,7 @@ class Accounts:
                 uid, username = user['user_id'], user['username']
                 if any(not isinstance(v, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', v) for v in (uid, username)):
                     raise ValueError
-                if uid in ids or username in names or user.get('password'):
+                if uid in ids or username in names or 'password' in user:
                     raise ValueError
                 ids.add(uid); names.add(username)
                 if user.get('password_hash'): _password_parts(user['password_hash'])
@@ -265,12 +265,14 @@ class Accounts:
     def link_subject(self, principal, subject):
         principal = self.require(principal, 'view')
         with self._db() as db:
-            db.execute('BEGIN IMMEDIATE'); self._link(db, principal, subject)
+            db.execute('BEGIN IMMEDIATE')
+            self.require(principal, 'view'); self._link(db, principal, subject)
 
     def unlink_subject(self, principal, subject):
         principal = self.require(principal, 'view'); user = self._user(principal['user_id'])
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
+            self.require(principal, 'view')
             if self._subject_owner(subject, db) != principal['user_id']: raise AccountError('identity access denied')
             others = [s for s in user.get('hf_subjects', []) if s != subject and self._subject_owner(s, db) == user['user_id']]
             others += [r[0] for r in db.execute('SELECT subject FROM learning_identities WHERE user_id=? AND active=1 AND subject!=?', (user['user_id'], subject))]
@@ -311,13 +313,15 @@ class Accounts:
         self.require(principal, 'manage' if sharing == 'project' else 'import')
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
+            self.require(principal, 'manage' if sharing == 'project' else 'import')
             cid = self._save_connection(db, principal, subject, username, token, sharing=sharing, resources=resources)
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
     def connect_oauth(self, principal, subject, username, token, expires):
         principal = self.require(principal, 'import')
         with self._db() as db:
-            db.execute('BEGIN IMMEDIATE'); self._link(db, principal, subject)
+            db.execute('BEGIN IMMEDIATE')
+            self.require(principal, 'import'); self._link(db, principal, subject)
             cid = self._save_connection(db, principal, subject, username, token, sharing='personal', resources=[], expires=expires)
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
@@ -341,7 +345,10 @@ class Accounts:
             row = db.execute('SELECT * FROM learning_connections WHERE id=? AND project_id=?', (connection_id, self.project_id)).fetchone()
         if not row or not row['active'] or (row['sharing'] == 'personal' and row['owner'] != principal['user_id']):
             raise AccountError('connection access denied')
-        self._user(row['owner'])
+        owner = self._user(row['owner'])
+        owner_capabilities = owner['memberships'][self.project_id]
+        if 'import' not in owner_capabilities or (row['sharing'] == 'project' and 'manage' not in owner_capabilities):
+            raise AccountError('connection owner permission revoked')
         if generation is not None and generation != row['generation']: raise AccountError('connection generation changed')
         if row['expires'] is not None and row['expires'] <= self.clock(): raise AccountError('connection expired; reconnect')
         if resource is not None and row['sharing'] == 'project' and resource not in json.loads(row['resources']):
@@ -361,6 +368,7 @@ class Accounts:
         principal = self.require(principal, 'view')
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
+            self.require(principal, 'view')
             row = db.execute('SELECT * FROM learning_connections WHERE id=? AND project_id=?', (connection_id, self.project_id)).fetchone()
             if not row: raise AccountError('connection access denied')
             if row['sharing'] == 'project': self.require(principal, 'manage')

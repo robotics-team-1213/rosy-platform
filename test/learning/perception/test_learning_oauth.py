@@ -88,3 +88,25 @@ def test_oidc_signature_is_checked(accounts):
     oauth.transport = transport
     with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
 
+
+def test_explicit_oauth_link_retains_independent_login_and_expires_connection(accounts):
+    session, alice = accounts.login('alice', 'alice-password')
+    oauth, provider, query, binding = setup_flow(accounts, 'link', session)
+    provider.claims['sub'] = 'another-hf-account'
+    new_session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
+    assert new_session is None
+    assert connection['subject'] == 'another-hf-account'
+    assert accounts.credential(alice, connection['connection_id'])['token'] == 'oauth-private'
+    assert accounts.login_subject('another-hf-account')[1]['user_id'] == 'alice'
+    now = accounts.clock(); accounts.clock = lambda: now + 3601
+    with pytest.raises(AccountError, match='expired'): accounts.credential(alice, connection['connection_id'])
+    # Repository token expiry does not remove the verified ROSY login identity.
+    assert accounts.login_subject('another-hf-account')[1]['user_id'] == 'alice'
+
+
+def test_expired_oauth_state_makes_no_provider_request(accounts):
+    oauth, provider, query, binding = setup_flow(accounts)
+    now = accounts.clock(); accounts.clock = lambda: now + 601
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+    assert provider.calls == []
+

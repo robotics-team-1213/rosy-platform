@@ -1,4 +1,5 @@
-import '/common/components.js';
+import '/common/ui.js';
+import '/commands.js';
 const $ = id => document.getElementById(id);
 let token, active = false, pending = false;
 const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 · 검수 대기',failed:'실패',
@@ -62,10 +63,10 @@ async function jobs() {
     const row=document.createElement('article'); root.append(row);
     line(row,`${job.repo_id} · ${states[job.status] || job.status}`);
     line(row,`버전 ${job.revision} · 요청자 ${job.requester_id || job.requester || ''}`);
-    if(job.error) line(row,job.error);
+    if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':job.error);
     if(job.reason) line(row,job.reason);
     if(job.status==='completed') line(row,'원본 검증·라벨 검수 후 학습 자료로 준비하세요.');
-    if(['failed','interrupted','queued'].includes(job.status)) button(row,'같은 버전 재시도',async()=>{
+    if(['failed','interrupted','queued','cancelled','blocked'].includes(job.status)) button(row,'같은 버전 재시도',async()=>{
       await api('/api/learning/imports/retry',{id:job.id}); await jobs();
     });
     if(['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
@@ -90,7 +91,8 @@ $('import-form').addEventListener('submit',event=>{event.preventDefault();perfor
   await api('/api/learning/imports/create',{connection_id:$('connection').value,repo_type:$('repo-type').value,
     repo_id:$('repo-id').value.trim(),revision:$('revision').value.trim(),
     files:$('files').value.split('\n').map(x=>x.trim()).filter(Boolean),
-    rights:{license:$('license').value.trim(),evidence:$('rights-evidence').value.trim(),internal_use:$('internal-use').checked}});
+    rights:{license:$('license').value.trim(),evidence:$('rights-evidence').value.trim(),internal_use:$('internal-use').checked,
+      gated_team_use:$('gated-team-use').checked,team_use_evidence:$('team-use-evidence').value.trim()}});
   await jobs();
 });});
 $('reload').addEventListener('click',()=>perform(refresh));

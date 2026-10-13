@@ -448,8 +448,6 @@ def update(store, index, body, conflict, *, actor=None):
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
             require_inside_lane_boundaries(image, binding)
             unknown_count = int(np.count_nonzero(image == 255))
-            if actor:
-                approval['reviewer'] = actor
             if unknown_count:
                 kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
                 if not kind or kind[0] != 'evaluation':
@@ -485,6 +483,8 @@ def update(store, index, body, conflict, *, actor=None):
                    (index, version, status, path, digest, complete, background,
                     json.dumps(approval) if approval else None))
         previous = {key: review[key] for key in ('path', 'sha256', 'version')}
+        if actor:
+            previous['actor'] = actor
         previous['saved_version'] = version
         if action == 'undo':
             previous['restored_version'] = prior['version']
