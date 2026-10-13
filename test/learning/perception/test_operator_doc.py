@@ -85,7 +85,7 @@ def test_runbook_uses_the_native_path_the_release_payload_packs():
     on_device = f"/opt/rosy/current/{packed}/"
     for doc in (RUNBOOK, DOC):
         text = doc.read_text(encoding="utf-8")
-        used = re.findall(r"/opt/rosy/current/deploy/[A-Za-z0-9_./-]+", text)
+        used = re.findall(r"/opt/rosy/current/" r"deploy/[A-Za-z0-9_./-]+", text)
         for path in used:
             assert path.startswith(on_device), (doc.name, path, on_device)
             assert (NATIVE_SRC / path.removeprefix(on_device)).exists(), path

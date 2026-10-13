@@ -22,8 +22,10 @@ SHARED = {
     "poll-gate.js",
     "development-auth.js",
     "password-login.js",
+    "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
+    "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
@@ -32,7 +34,10 @@ SHARED = {
 
 OWN = {
     "console.js": {
+        "work-view.js",  # D-664: common read view; execution stays with each owner
+        "channel-request-view.js",  # D-680: named review and existing navigation submission
         "inbox.js",  # D-632: console notification and context view owner
+        "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
         "formation.js",
         "map-view.js",
@@ -40,16 +45,17 @@ OWN = {
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
+        "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
         "trail-view.js",
         "site-path.js",
-        "site-layer.js",
         "confirmed-action.js",
         "camera-warp.js",
         "camera-backdrop.js",
+        "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",
@@ -75,6 +81,9 @@ OWN = {
     },
     "site-map.js": {
         "site-map-teach.js",
+        "site-map-survey.js",
+        "site-map-camera.js",
+        "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
     },
 }
 

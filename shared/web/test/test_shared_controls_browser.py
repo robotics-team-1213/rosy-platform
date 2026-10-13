@@ -22,7 +22,7 @@ COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
 FLEET = SRC.parent / "operations" / "ui" / "console"
 HOST = "http://rosy.test"
-TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
+TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html", ".svg": "image/svg+xml"}
 BUTTON_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="stylesheet" href="/common/tokens.css">
 <link rel="stylesheet" href="/common/components.css">
@@ -381,3 +381,25 @@ def test_a_disabled_unchecked_box_does_not_look_like_an_enabled_one(page, theme)
     assert style["off"]["border"] == "dashed" and style["held"]["border"] == "dashed"
     assert style["off"]["opacity"] == "1"
     assert page.locator("#off").screenshot() != page.locator("#free").screenshot()
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_platform_mark_uses_the_wordmark_colour_and_shared_asset(page, theme):
+    page.goto(f"{HOST}/tracking")
+    page.evaluate("theme => document.documentElement.setAttribute('data-theme', theme)", theme)
+    mark = page.locator("ui-brand b")
+    style = mark.evaluate("""node => {
+      const text = getComputedStyle(node), symbol = getComputedStyle(node, '::before');
+      return {name: node.textContent, colour: text.color, symbolColour: symbol.backgroundColor,
+        width: parseFloat(symbol.width), size: parseFloat(text.fontSize), mask: symbol.maskImage,
+        content: symbol.content};
+    }""")
+    assert style["name"] == "ROSY" and style["colour"] == style["symbolColour"]
+    assert style["width"] == style["size"] and "brand/mark.svg" in style["mask"]
+    assert style["content"] == '\"\"'
+    asset = page.evaluate("""async () => {
+      const response = await fetch('/common/brand/mark.svg');
+      const image = new Image(); image.src = '/common/brand/platform.svg'; await image.decode();
+      return {status: response.status, type: response.headers.get('content-type'), decoded: image.naturalWidth > 0};
+    }""")
+    assert asset == {"status": 200, "type": "image/svg+xml", "decoded": True}

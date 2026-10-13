@@ -7,13 +7,16 @@ import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
-  PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
+  PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView,
   soccerProfileMap,
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
-  planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
+  planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
+import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
+import {createSurveyPanel} from '/console/assets/site-map-survey.js';
+import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
@@ -26,13 +29,25 @@ const W = 800, H = 480;
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, open: [], guide: null, band: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null};
 const ROBOT_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
+  map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
+const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,
+  render: () => render(),
+  reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
+  begin: () => { clearPlane(); $('trip-pick').checked = false; state.band = null; },
+  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
+    clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
+
+const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(),
+  context: () => [state.working, state.sessionEpoch],
+  draft: () => state.draft, dirty: () => state.dirty, notice,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -59,6 +74,7 @@ function el(name, attrs, parent) {
 }
 
 function render() {
+  survey.sync();
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
@@ -106,6 +122,7 @@ function render() {
     const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
       class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
     el('title', {}, path).textContent = `${edge.id} · ${edge.direction === 'two_way' ? '양방' : '일방'} · ${edge.speed_cap_mps} m/s`;
+    if (edge.evidence?.status === 'inferred') path.classList.add('inferred');
     for (const mark of arrowMarks(edge)) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
@@ -117,7 +134,7 @@ function render() {
   }
   if ($('map-source').value !== 'profile')
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
-  for (const place of map.places) {
+  for (const [index, place] of map.places.entries()) {
     const [px, py] = view.toPx(place.x, place.y);
     const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
       class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
@@ -126,8 +143,19 @@ function render() {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
+    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = index + 1;
   }
+  for (const facility of map.facilities || []) {
+    const points = facility.geometry.map(([x, y]) => view.toPx(x, y));
+    const mark = facility.kind === 'exclusion'
+      ? el('polygon', {points: points.map(p => p.join(',')).join(' '), class: 'facility exclusion'}, svg)
+      : facility.kind === 'stop_line'
+        ? el('polyline', {points: points.map(p => p.join(',')).join(' '), class: 'facility stop-line'}, svg)
+        : el('circle', {cx: points[0][0], cy: points[0][1], r: 6, class: `facility ${facility.kind}`}, svg);
+    el('title', {}, mark).textContent = facility.name;
+  }
+  if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
+  svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
     const [px, py] = view.toPx(state.point.x, state.point.y);
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
@@ -215,6 +243,8 @@ function select(selection) {
 }
 
 function syncButtons() {
+  cameraMap.sync();
+  survey.sync();
   const reason = operatorReason();
   gate('profile-new', reason);
   gate('profile-copy', reason || (!shown() ? '복사할 지도가 없습니다' : ''));
@@ -224,7 +254,6 @@ function syncButtons() {
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
-  gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
   gate('map-view-turn', reason || ($('map-source').value === 'profile' ? '지도 설정을 초안으로 불러오세요' : '') || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   const crosswalk = state.selected?.crosswalk;
@@ -251,7 +280,9 @@ function syncButtons() {
     : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
   const target = $('trip-pick').checked ? state.point : $('trip-place').value;
   const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
-  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
+  const poseReason = state.guideUnavailable ? '현장 지도 위치 확인 불가' : tripPoseReason(state.guide, tripRobot.value,
+    state.active, robotMapPose(state.robots.find(robot => robot.robot_id === tripRobot.value)));
+  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || poseReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
   teach.sync();
 }
@@ -266,8 +297,10 @@ async function pollRobots() {
     } catch (error) {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
     }
-    try { state.guide = await request('/api/fleet/guide'); } catch { state.guide = null; }  // an older Fleet has no /guide
+    try { state.guide = await request('/api/fleet/guide'); state.guideUnavailable = false; }
+    catch (error) { state.guide = null; state.guideUnavailable = error.status !== 404; }
     drawRobots();
+    syncButtons();
   }
   setTimeout(pollRobots, ROBOT_POLL_MS);
 }
@@ -288,6 +321,7 @@ async function load() {
     state.robotsError = true;
   }
   state.active = active;
+  state.robots = robots;
   state.draft = draft;
   state.working = draft.map ? draft.map
     : (active ? JSON.parse(JSON.stringify(active.map)) : null);
@@ -320,6 +354,12 @@ async function guarded(work) {
 }
 
 $('token-save').addEventListener('click', async () => {
+  const localEdit = state.dirty || state.band !== null || state.selected ? {working: state.working,
+    draft: state.draft, selected: state.selected, band: state.band, dirty: state.dirty} : null;
+  const editFields = [...document.querySelectorAll(
+    '[aria-labelledby="edit-heading"] input:not([type="file"]), [aria-labelledby="edit-heading"] select, '
+    + '[aria-labelledby="edit-heading"] textarea')].map(field => ({field, value: field.value, checked: field.checked}));
+  state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   planeEpoch += 1; plane = null; calibrations = [];
   $('plane-pick').checked = false;
   $('plane-source').replaceChildren();
@@ -329,11 +369,6 @@ $('token-save').addEventListener('click', async () => {
   state.role = null;
   profiles = [];
   $('map-profile').replaceChildren();
-  for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).value = '';
-  $('profile-kind').value = 'lane_course';
-  $('profile-description').value = '';
-  $('profile-soccer').hidden = true;
-  $('profile-file').value = '';
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;
@@ -355,20 +390,29 @@ $('token-save').addEventListener('click', async () => {
     loginForm.refresh(false);
     syncButtons();
     await load();
-    notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
-      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
+    if (localEdit) {
+      // Keep the original revision: a changed server draft must fail CAS, never overwrite unseen edits.
+      Object.assign(state, localEdit);
+      render(); select(state.selected); syncButtons();
+    }
+    notice(localEdit ? '재접속 확인 · 편집 중인 초안을 보존했습니다. 저장 전 최신 서버 초안과 비교하세요.'
+      : state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
+      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 만들기에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
+    if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
     if (error.status === 401 || error.status === 403) {
       state.role = null;
       showSignedOut();
     }
-    if (error.status === 401) loginForm.refresh(true);
+    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') loginForm.refresh(true);
     render();
+    if (localEdit) select(state.selected);
     syncButtons();
     notice(siteMapErrorText(error));
   } finally {
+    for (const {field, value, checked} of editFields) { field.value = value; field.checked = checked; }
     clearInterval(ticker);
     gate('token-save', '');
   }
@@ -429,11 +473,7 @@ $('profile-new').addEventListener('click', () => guarded(async () => {
     $('profile-rules').closest('details').open = true;
     return;
   }
-  profileInputs({schema: 'rosy.site_map/1', map_id: id,
-    places: [{id: 'A', name: '시작', kind: 'park', x: 0, y: 0},
-      {id: 'B', name: '끝', kind: 'park', x: 2, y: 0}],
-    edges: info.kind === 'general' ? [] : [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [2, 0]],
-      direction: 'two_way', drive_mode: 'lane', width_m: 0.2, speed_cap_mps: 0.2}]}, id, '새 지도', info);
+  profileInputs({schema: 'rosy.site_map/1', map_id: id, places: [], edges: []}, id, '새 지도', info);
   $('profile-rules').closest('details').open = true;
 }));
 $('profile-file').addEventListener('change', () => guarded(async () => {
@@ -463,7 +503,7 @@ $('profile-save').addEventListener('click', () => guarded(async () => {
 $('profile-draft').addEventListener('click', () => guarded(async () => {
   if (operatorReason() || !selectedProfile() || selectedProfile().kind === 'soccer') return;
   if (state.dirty || state.draft?.revision) {
-    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 지도 설정로 바꿀까요?',
+    const allowed = await confirmIrreversible({message: '기존 초안을 선택한 지도 설정으로 바꿀까요?',
       action: '지도 설정을 초안으로', opener: $('profile-draft')});
     if (!allowed) return;
   }
@@ -559,6 +599,7 @@ function clearPlan() {
 }
 
 $('site-map-svg').addEventListener('click', event => {
+  if (survey.pick(event)) return;
   if ($('plane-pick').checked) {
     if (plane?.mapId !== shown()?.map_id) return;
     const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
@@ -632,29 +673,6 @@ $('trip-pick').addEventListener('change', () => {
 $('trip-place').addEventListener('change', clearPlan);
 $('trip-robot').addEventListener('change', clearPlan);
 
-$('camera-map-file').addEventListener('change', syncButtons);
-$('import-camera-map').addEventListener('click', () => guarded(async () => {
-  if (operatorReason()) return;
-  const file = $('camera-map-file').files[0];
-  if (!file) return;
-  if (file.size > 2 * 1024 * 1024 - 1024) throw new Error('지도 초안 파일은 2 MiB보다 작아야 합니다.');
-  const map = JSON.parse(await file.text());
-  if (map?.schema !== 'rosy.site_map/1') throw new Error('rosy.site_map/1 지도 초안 파일이 필요합니다.');
-  const revision = state.draft?.revision || null;
-  if (state.dirty || revision) {
-    const allowed = await confirmIrreversible({message: '기존 초안을 카메라 지도 초안으로 바꿀까요? 활성 지도는 바뀌지 않습니다.',
-      action: '카메라 초안 가져오기', opener: $('import-camera-map')});
-    if (!allowed) return;
-  }
-  // The existing bounded, named-operator endpoint validates every coordinate and reference.
-  await request('/api/fleet/site-map/draft', {method: 'PUT', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({map, expected_revision: revision})});
-  await load();
-  $('map-source').value = 'draft';
-  clearPlan();
-  notice('카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
-}));
-
 // D-513 7: one orientation for every Fleet map and camera view; saved and activated like any edit.
 $('map-view-turn').addEventListener('change', () => guarded(async () => {
   state.working = editViewTurn(state.working, $('map-view-turn').value);
@@ -699,6 +717,8 @@ $('activate').addEventListener('click', () => guarded(async () => {
 }));
 
 $('trip-plan').addEventListener('click', () => guarded(async () => {
+  syncButtons();
+  if ($('trip-plan').disabled) return;
   const epoch = ++state.planEpoch;
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;

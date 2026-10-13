@@ -23,6 +23,20 @@ def _command(mode=Mode.NAVIGATION):
     return command, modes, safety
 
 
+@pytest.mark.parametrize("linear,angular,max_l,max_a,expected", [
+    (.08, .4, .02, .8, (.02, .1)),
+    (.08, .4, .1, .1, (.02, .1)),
+    (-.08, -.4, .02, .8, (-.02, -.1)),
+    (0., .4, .02, .1, (0., .1)),
+    (.08, .4, 0., .8, (0., 0.)),
+])
+def test_static_line_caps_preserve_the_candidate_curve(linear, angular, max_l, max_a, expected):
+    command, _, safety = _command()
+    safety.limits.max_linear = max_l
+    safety.limits.max_angular = max_a
+    assert command.clip_line_candidate(linear, angular) == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("mode,setter", [(Mode.NAVIGATION, "set_nav_twist"),
                                         (Mode.DOCKING, "set_docking_twist")])
 def test_mode_round_trip_requires_a_new_candidate(mode, setter):

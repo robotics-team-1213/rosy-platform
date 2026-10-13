@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("source,package,modules,entrypoints,config", [
-    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power"],
+    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power",
+                                         "core_common.protocol.native", "core_common.protocol.native.operation",
+                                         "core_common.protocol.native.receipts", "core_features.navigation"],
      {"core": "core.main:main"}, None),
     ("middleware/core/api", "core_api_web", ["core_api_web"], {}, None),
     ("middleware/devices/pinky/bringup", "bringup", ["bringup"],
@@ -30,10 +32,13 @@ def test_source_holder_builds_and_installs_the_original_package(
     sources = [copied]
     if package == "core":
         for dependency in ("contracts/foundation", "middleware/core/events", "middleware/core/services"):
-            target = tmp_path / Path(dependency).name
+            target = tmp_path / 'dependencies' / dependency
             shutil.copytree(ROOT / dependency, target,
                             ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
             sources.append(target)
+        shutil.copytree(ROOT / 'middleware/control/drive/behaviors',
+                        tmp_path / 'dependencies/middleware/control/drive/behaviors',
+                        ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache'))
     for operation in ("wheel", "install"):
         args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), *map(str, sources)]
                 if operation == "wheel" else
@@ -55,6 +60,13 @@ assert Path(dist.locate_file('')).resolve() == Path(target).resolve()
 for name in json.loads(modules):
     loaded = importlib.import_module(name)
     assert Path(loaded.__file__).resolve().is_relative_to(Path(target).resolve())
+if package == 'core':
+    from core_common.protocol.native.operation import NativeOperation
+    from core_common.protocol.native_operation import NativeOperation as LegacyNativeOperation
+    from core_common.protocol.native.receipts import NativeReceipts
+    from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
+    assert NativeOperation is LegacyNativeOperation
+    assert NativeReceipts is LegacyNativeReceipts
 print(json.dumps({e.name: e.value for e in dist.entry_points if e.group == 'console_scripts'}))
 """, str(installed), package, json.dumps(modules)], cwd=tmp_path,
         capture_output=True, text=True, timeout=30)

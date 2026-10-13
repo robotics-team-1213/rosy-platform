@@ -40,7 +40,7 @@ import_rules:
     forbidden_external: [lerobot, torch]   # training stack; devices ship onnxruntime only (D-356)
   operations:
     allow: [contracts, shared_web]
-    integrations: [models, storage]
+    integrations: [models, storage, messaging]
   learning:
     allow: [contracts]
     integrations: [models, policies/lerobot_training, simulation, storage]
@@ -133,6 +133,29 @@ roots:
     wave: "4d"
     import_prefix: [core]
     concern: control
+  - path: middleware/control/drive/behaviors
+    part: middleware
+    d427_target: middleware/control/drive/behaviors
+    wave: none
+    concern: control
+    import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
+    source_packages:
+      line_follow: core_features.line_follow
+      docking: core_features.docking
+      navigation: core_features.navigation
+      localization: core_features.localization
+      swarm: core_features.swarm
+      road_behaviour: core_features.road_behaviour
+      traffic_policy: core_features.traffic_policy
+    note: D-649 Base behavior implementation installed by core_features; no final writer.
+  - path: middleware/control/drive/runtime
+    part: middleware
+    d427_target: middleware/control/drive/runtime
+    wave: none
+    concern: control
+    import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
+    source_packages: {"": control}
+    note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
   - path: middleware/core/services
     part: middleware
     d427_target: middleware/core/services
@@ -347,6 +370,7 @@ roots:
     legacy: modules/execution/src/rosy/execution/site
     wave: "3a"
     import_prefix: [rosy.execution.site]
+    note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
   - path: middleware/ui/robot
     part: middleware
@@ -427,6 +451,14 @@ roots:
     wave: "3c"
     import_prefix: [fleet]
     concern: decision
+  - path: operations/fleet/fleet/observe
+    part: operations
+    d427_target: operations/fleet/fleet/observe
+    wave: none
+    import_prefix: [fleet.observe]
+    source_packages: {"": fleet.observe}
+    concern: other
+    note: D-699 credential-free CORE event/observation journals in the same Fleet distribution; server aliases and SQLite policy stay compatible.
   - path: operations/decision
     part: operations
     d427_target: operations/decision
@@ -434,7 +466,7 @@ roots:
     wave: "3c"
     import_prefix: [rosy.decision]
     source_packages: {src/rosy/decision: rosy.decision}
-    note: D-637 canonical Decision source; installed by the existing Fleet distribution.
+    note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
   - path: operations/ui/console
     part: operations
@@ -480,7 +512,9 @@ roots:
     import_prefix: [rosy_situation]
     concern: other
     note: >-
-      D-577 3 AI PC situation service; reads Fleet and posts facts only (shadow), no robot or command path.
+      D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
+      D-652 pure necessity assessment is shared with Fleet through three static holder files;
+      new consumers are internal shadow only, no robot or command authority.
   - path: operations/vision
     part: operations
     d427_target: operations/vision
@@ -529,6 +563,12 @@ roots:
     legacy: tools/perception/road_replay.py
     wave: "1"
     concern: learning
+  - path: learning/evaluation/decision
+    part: learning
+    d427_target: learning/evaluation/decision
+    wave: none
+    concern: learning
+    note: D-697 host-only independent operational evidence comparison; no runtime imports or admission.
   - path: tools/perception
     part: tools
     d427_target: tools/perception
@@ -567,6 +607,15 @@ roots:
     concern: learning
 
   # --- integrations ---------------------------------------------------------
+  - path: integrations/messaging/discord
+    part: integrations
+    integration: messaging
+    d427_target: integrations/messaging/discord
+    wave: none
+    import_prefix: [rosy_discord]
+    source_packages: {rosy_discord: rosy_discord}
+    note: D-671 pure mention envelope and signature transport, installed by Fleet; no runtime service or device authority.
+    concern: other
   - path: integrations/robots/omx
     part: integrations
     integration: robots
@@ -626,6 +675,12 @@ roots:
     wave: none
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
     concern: other
+  - path: tools/packaging
+    part: tools
+    d427_target: tools/packaging
+    wave: none
+    concern: other
+    note: D-652 build-time Fleet source composition and self-contained sdist support; excluded from runtime wheels and images.
   - path: tools/validation
     part: tools
     d427_target: tools/validation
@@ -735,10 +790,10 @@ safety_modules:
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
   - middleware/core/services/core_features/command/arbitration.py
-  - middleware/core/services/core_features/docking/charging.py
-  - middleware/core/services/core_features/line_follow/body_stop.py
-  - middleware/core/services/core_features/line_follow/clearance.py
-  - middleware/core/services/core_features/localization/rotate_to.py  # D-603 bounded in-place turn
+  - middleware/control/drive/behaviors/docking/charging.py
+  - middleware/control/drive/behaviors/line_follow/body_stop.py
+  - middleware/control/drive/behaviors/line_follow/clearance.py
+  - middleware/control/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py

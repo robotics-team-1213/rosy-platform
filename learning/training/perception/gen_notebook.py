@@ -195,7 +195,7 @@ print(f"ignore_index: {IGNORE_INDEX}")
 if not len(train_ds) or not len(val_ds):
     raise RuntimeError("train 또는 val split이 비었습니다. 데이터셋을 확인하세요.")
 
-EXPORT_CLASSES = [(c["name"], c["role"]) for c in ds_classes]
+EXPORT_CLASSES = ds_classes
 if CLASSES.strip():
     _form = [tuple(s.strip() for s in item.split(":")) for item in CLASSES.split(",") if item.strip()]
     if any(len(t) != 2 for t in _form):

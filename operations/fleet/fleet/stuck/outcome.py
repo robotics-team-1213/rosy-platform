@@ -79,6 +79,8 @@ class Outcomes:
         if (state.get("safety") or {}).get("estop"):
             return "superseded", item.decision in MOVING
         ended = now - item.opened_at >= WINDOW_S[item.kind]
+        if not row.get("online", True):
+            return ("unresolved", False) if ended else None
         if item.kind == "stuck":
             current = _stuck_id(row)
             if current is not None and current != item.problem_id:

@@ -26,13 +26,26 @@ def test_header_ids_and_one_sheet():
     for name in DOCS:
         page, header = _header(name)
         for element_id in ("console-token", "token-save", "user-role", "password-login", "token-access",
-                           "theme-choice", "development-badge", "online-pill", "clock", "topbar-more", "estop"):
+                           "theme-choice", "development-badge", "online-pill", "topbar-more", "estop"):
             assert f'id="{element_id}"' in header, (name, element_id)
         # The old site-map/Cell identity row is gone; one id names one thing on every document.
         for retired in ('id="session"', 'id="credential"', 'id="connect"', "site-access", "cell-access"):
             assert retired not in page, (name, retired)
         assert page.count('id="estop"') == 1, name
+        assert 'class="fleet-shell"' in page and 'class="fleet-workspace"' in page, name
+        assert re.search(r'<footer[^>]*class="fleet-footer".*?id="clock"', page, re.S), name
+        assert 'id="clock"' not in header, name
         assert '/console/assets/fleet-header.css' in page, name
+
+
+def test_header_regions_keep_identity_status_actions_and_safety_separate():
+    _, header = _header("index.html")
+    assert re.findall(r'data-header-region="([^"]+)"', header) == [
+        "identity", "status", "actions", "safety"]
+    assert 'id="fleet-header-actions"' in header
+    assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
+    controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
+    assert '$("fleet-header-actions").prepend(inbox)' in controller
 
 
 def test_estop_is_live_in_markup_and_one_module_gates_it():

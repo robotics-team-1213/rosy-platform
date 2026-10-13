@@ -5,6 +5,12 @@ ui-section { display: grid; gap: var(--space-3); }
 .map-workflow > [aria-labelledby="run-heading"] { grid-area: run; }
 .map-workflow > [aria-labelledby="edit-heading"] { grid-area: edit; }
 .plane-tools { min-width: 0; }
+.survey-form { margin-block: var(--space-3); }
+.survey-elements { max-height: 16rem; overflow-y: auto; padding-inline-start: var(--space-5); }
+#site-map-svg .facility { fill: var(--surface-raised); stroke: var(--series-goal); stroke-width: 3px; }
+#site-map-svg .facility.exclusion { fill: var(--status-crit); fill-opacity: .12; stroke: var(--status-crit); stroke-dasharray: 5 3; }
+#site-map-svg .facility.stop-line { fill: none; stroke: var(--status-warn); stroke-width: 5px; }
+#site-map-svg .edge.inferred { stroke-dasharray: 2 6; }
 .plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }

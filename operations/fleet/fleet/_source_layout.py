@@ -9,14 +9,19 @@ SOURCE_ROOTS = {
     name: (PACKAGE_ROOT / '_source_roots' / name
            if (PACKAGE_ROOT / '_source_roots' / name).is_dir()
            else PACKAGE_ROOT.parent / relative)
-    for name, relative in (('decision', 'decision'), ('console', 'ui/console'))
+    for name, relative in (('decision', 'decision'), ('console', 'ui/console'), ('assessment', 'situation'), ('execution', 'execution'))
 }
+SOURCE_ROOTS['discord'] = (PACKAGE_ROOT / '_source_roots/discord'
+                          if (PACKAGE_ROOT / '_source_roots/discord').is_dir()
+                          else PACKAGE_ROOT.parents[1] / 'integrations/messaging/discord')
 
 
-def bootstrap_decision():
-    root = str(SOURCE_ROOTS['decision'] / 'src')
-    if root not in sys.path:
-        sys.path.insert(0, root)
+def bootstrap_sources():
+    for folder in (SOURCE_ROOTS['decision'] / 'src', SOURCE_ROOTS['assessment'],
+                   SOURCE_ROOTS['execution'] / 'src', SOURCE_ROOTS['discord']):
+        root = str(folder)
+        if root not in sys.path:
+            sys.path.insert(0, root)
 
 
 def console_root():

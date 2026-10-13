@@ -108,27 +108,58 @@ def _login(playwright, origin):
     page.on("request", lambda req: posts.append((urlparse(req.url).path, req.post_data))
             if req.method == "POST" and "/api/" in req.url else None)
     page.goto(origin + "/console")
-    more = page.locator("#topbar-more")
-    if more.is_visible() and more.get_attribute("aria-expanded") != "true":
-        more.click()
+    page.locator('#fleet-login').click()
+    page.locator("#password-login").wait_for(state="visible")
     page.locator("#password-login [data-login=login]").fill("kim")
     page.locator("#password-login [data-login=password]").fill("pw-1234")
     page.locator("#password-login [data-login=submit]").click()
-    page.locator("#user-role").filter(has_text="kim").wait_for(timeout=15000)
-    if more.get_attribute("aria-expanded") == "true":
+    page.locator('#user-role[title^="kim"]').wait_for(timeout=15000)
+    more = page.locator('#topbar-more')
+    if more.get_attribute('aria-expanded') == 'true':
         more.click()
     return browser, page, errors, posts
 
 
 def _card(page, robot_id):
-    card = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
-    if card.get_attribute("data-collapsed") is not None:
-        card.locator(".robot-line").first.click()
-    return card
+    page.locator('[data-context-tab="status"]').click()
+    page.locator("#robot-choice").select_option(robot_id)
+    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
 
 
 def _raw_words(page):
     return sorted(set(RAW.findall(page.locator("main").inner_text())))
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_selected_robot_links_to_recording_and_formation_without_commands(fleet_site, width):
+    from playwright.sync_api import expect, sync_playwright
+
+    origin, _ = fleet_site
+    with sync_playwright() as playwright:
+        browser, page, errors, posts = _login(playwright, origin)
+        try:
+            page.set_viewport_size({'width': width, 'height': 1000})
+            before = list(posts)
+            card = _card(page, 'rosy_02')
+            expect(card.locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_02#teach-heading')
+            card.locator('[data-trip-open]').click()
+            expect(card.locator('.card-trip')).to_have_count(1)
+            leader = page.locator('#formation-leader').input_value()
+            card.locator('[data-open-formation]').click()
+            expect(page.locator('#context-tools')).to_be_visible()
+            expect(page.locator('#formation-form-summary')).to_be_visible()
+            assert page.locator('#formation-leader').input_value() == leader
+            assert page.locator('#formation-heading').evaluate('node => node === document.activeElement')
+            expect(_card(page, 'rosy_02').locator('.card-trip')).to_have_count(0)
+            expect(_card(page, 'rosy_03').locator('[data-map-recording]')).to_have_attribute('href', '/console/site-map?robot=rosy_03#teach-heading')
+            assert posts == before and errors == []
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#robot-workspace [data-map-recording]').click()
+            expect(page.locator('#teach-robot')).to_have_value('rosy_03')
+            expect(page.locator('#teach-target')).to_contain_text('rosy_03')
+            assert posts == before and errors == []
+        finally:
+            browser.close()
 
 
 def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_site):
@@ -141,7 +172,13 @@ def test_camera_coordinate_table_stays_visible_when_observations_expire(fleet_si
     with sync_playwright() as playwright:
         browser, page, errors, _ = _login(playwright, origin)
         try:
+            with page.expect_response(lambda response:
+                    urlparse(response.url).path == "/api/fleet/tracking" and response.status == 404):
+                page.reload()
             page.route("**/api/fleet/tracking", lambda route: route.fulfill(json=body))
+            # Recreate the view after installing the route; an earlier 404 stays unavailable.
+            page.reload()
+            page.locator("#map-readouts > summary").click()
             table = page.locator("#tracking-positions")
             expect(table).to_be_visible()
             expect(table).to_contain_text("1.25")
@@ -190,7 +227,13 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         expect(_card(page, "rosy_02").locator('[data-formation-role="leader"]')).to_have_text("대형 리더")
         expect(_card(page, "rosy_01").locator('[data-formation-role="follower"]')).to_have_text("대형 팔로워")
         assert _card(page, "rosy_03").locator("[data-formation-role]").count() == 0
+        follower = _card(page, "rosy_01")
+        expect(follower.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('팔로워.*리더'))
+        expect(follower.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
+        leader = _card(page, "rosy_02")
+        expect(leader.locator('ui-button[data-trip-open]')).to_have_attribute('reason', re.compile('대형.*해제'))
         # 대형 변경 sends the shape on screen: the form stays reachable while the formation runs.
+        page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#formation-shape")).to_be_enabled()
         expect(page.locator("#formation-leader")).to_be_disabled()
         page.locator("#formation-shape").select_option("LINE")
@@ -202,6 +245,8 @@ def test_formation_appoints_a_leader_and_its_followers(fleet_site):
         page.locator("#formation-stop").click()
         expect(page.locator("#formation-state")).to_have_text("해제됨")
         assert page.locator("[data-formation-role]").count() == 0
+        expect(_card(page, "rosy_01").locator('ui-button[data-trip-open]')).to_be_enabled()
+        assert not [path for path, _body in posts if path.endswith('/goal') or path == '/api/fleet/trips']
         assert not errors
         browser.close()
 
@@ -217,12 +262,14 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
         page.get_by_role("tab", name="운영 도구").click()
         page.locator(".convoy-form-wrap > summary").click()
         expect(page.locator("#convoy-go")).to_have_attribute("reason", re.compile("^반복 운행 중인 리더가 없습니다"))
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         lead = _card(page, "rosy_01")
         lead.locator('ui-button[data-trip-open="rosy_01"]').click()
-        lead.locator(".card-trip select").nth(1).select_option("start_n")
+        lead.get_by_role("combobox", name="작업 종류", exact=True).select_option("repeat")
+        lead.get_by_role("combobox", name="반복 출발 자리", exact=True).select_option("start_n")
         lead.locator('ui-button[data-trip-repeat="rosy_01"]').click()
         expect(lead.locator(".trip-line")).to_contain_text("반복 운행", timeout=10000)
+        expect(lead.locator('ui-button[data-goal-robot-id]')).to_have_attribute('reason', re.compile('운행.*취소'))
         page.get_by_role("tab", name="운영 도구").click()
         expect(page.locator("#convoy-leader")).to_have_value("rosy_01", timeout=5000)
         assert page.locator("#convoy-follower option").all_inner_texts() == ["rosy_02", "rosy_03"]
@@ -238,7 +285,7 @@ def test_convoy_picks_the_leader_first_and_both_cards_name_their_role(fleet_site
                 break
             page.wait_for_timeout(100)
         assert body == {"to": "start_n", "via": ["start_s"], "repeat": True, "convoy": {"leader": "rosy_01"}}
-        page.get_by_role("tab", name="로봇 상태").click()
+        page.get_by_role("tab", name="로봇·작업").click()
         expect(_card(page, "rosy_02").locator(".trip-line")).to_contain_text("대열 · rosy_01", timeout=10000)
         expect(_card(page, "rosy_01").locator(".trip-line")).to_contain_text("대열 리더 · rosy_02 따라옴")
         assert _raw_words(page) == []
@@ -278,7 +325,7 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
 
 def test_a_hundred_robots_stay_usable(tmp_path):
     """The robot count must not matter: 100 fake COREs (5 stuck, 10 offline). Exceptions lead the queue and the
-    cards, nominal cards fold to one line, no horizontal overflow at 1440x900 and 1024x768, no long main-thread
+    summaries, one selected workspace, no horizontal overflow at 1440x900 and 1024x768, no long main-thread
     task over 250 ms across polls, and the robot finder narrows the 99 follower boxes."""
     from playwright.sync_api import sync_playwright
     from test_server_gather_source import _health
@@ -318,8 +365,8 @@ def test_a_hundred_robots_stay_usable(tmp_path):
         assert server.started
         with sync_playwright() as playwright:
             browser, page, errors, _posts = _login(playwright, origin)
-            # The first gathers fill power evidence; nominal cards fold once it is fresh.
-            page.wait_for_function("() => document.querySelectorAll('#roster article[data-collapsed]').length >= 80",
+            # All robot summaries render; only the chosen robot gets command controls.
+            page.wait_for_function("() => document.querySelectorAll('#roster .robot-summary').length === 100",
                                    timeout=30000)
             page.evaluate("""() => { window.__lt = []; new PerformanceObserver((list) =>
               window.__lt.push(...list.getEntries().map((e) => e.duration))).observe({type: 'longtask'}); }""")
@@ -329,6 +376,9 @@ def test_a_hundred_robots_stay_usable(tmp_path):
             assert page.evaluate("document.getElementsByTagName('*').length") < 12000
             cards = page.locator("#roster article")
             assert cards.count() == 100
+            assert page.locator("#roster [data-goal-robot-id]").count() == 0
+            _card(page, "rosy_001")
+            assert page.locator("#robot-workspace article").count() == 1
             first = [cards.nth(i).get_attribute("data-robot-id") for i in range(15)]
             exceptions = {robot_id for i, robot_id in enumerate(ids) if i % 20 == 7 or i % 10 == 9}
             assert set(first) == exceptions, first  # the 15 exception cards come first, open
@@ -416,6 +466,10 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             shared = [label for label in labels if label in {"001", "002", "003", "004", "005"}]
             assert len(shared) <= 2, labels                     # one spot: the rest hide instead of stacking
             assert page.evaluate("window.__mapChipsHidden") >= 3
+            page.select_option("#map-display-mode", "camera")
+            expect(page.locator("#map-canvas")).not_to_be_visible()
+            assert page.evaluate("(window.__mapChips || []).every(c => Number.isFinite(c.x) && Number.isFinite(c.y))")
+            page.select_option("#map-display-mode", "coordinates")
             assert not errors
             browser.close()
     finally:
