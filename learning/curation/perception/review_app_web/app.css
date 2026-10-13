@@ -259,6 +259,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 #pixel-content > .ui-workspace-bar, #pixel-content > .review-flow, #pixel-content > .pixel-frame-strip { margin-top: var(--space-4); }
 .pixel-editor-column .pixel-ribbon-nav { display: flex; gap: var(--space-2); margin-bottom: var(--space-1); }
 .pixel-editor-column .pixel-ribbon-nav ui-button { flex: 1; min-width: 0; }
+@media (width >= 64rem) {
+  .pixel-editor-column .pixel-ribbon-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pixel-ribbon-nav #pixel-undo { grid-column: 1 / -1; }
+}
 .frame-navigation ui-button > small[data-reason], .pixel-ribbon-nav ui-button > small[data-reason] { display: none; }
 .pixel-editor-column .review-view-bar { margin-bottom: var(--space-2); }
 #pixel-view-status { margin-bottom: 0; }
