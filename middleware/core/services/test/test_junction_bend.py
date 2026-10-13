@@ -199,12 +199,12 @@ def test_next_junction_seen_after_the_arc_ends_the_pass():
     assert status.junction.state == 'idle' and status.junction.seq == 1
 
 
-def sight(rig, ahead):
+def sight(rig, ahead, reason='junction_transverse'):
     """The keeper's junction HOLD with its measured cross line, in the next rig tick's frame."""
-    rig.m.observe_junction('junction_transverse', round(rig.now+.05, 6), ahead_m=ahead, ahead_v=1)
+    rig.m.observe_junction(reason, round(rig.now+.05, 6), ahead_m=ahead, ahead_v=1)
 
 
-def bend_sighting_line_ahead(rig, ahead=.4):
+def bend_sighting_line_ahead(rig, ahead=.4, **kind):
     """Drive into the arc, sight the next junction's line once mid-arc (lap SIM A: 0.39-0.45 m
     ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
     until(rig, 'bending')
@@ -213,7 +213,7 @@ def bend_sighting_line_ahead(rig, ahead=.4):
         if abs(math.remainder(rig.yaw-entry, math.tau)) > math.radians(35.):
             break
         site_step(rig, move=True)
-    sight(rig, ahead)
+    sight(rig, ahead, **kind)
     site_step(rig, move=True)
     trail = rig.m._return_evidence.trail
     return trail.odometer + ahead  # the line, on the odometer
@@ -295,10 +295,26 @@ def test_the_map_keeps_a_mid_arc_line_where_its_next_junction_is():
         until(rig, state)
 
 
+def test_a_fork_sighting_measures_the_place_short_of_the_maps_line():
+    """Review: junction_fork measures the place point, up to 0.30 m before the painted line; a
+    transverse sighting that far short is not that line. A refresh carries the map's new distance."""
+    probe = armed_rig()
+    bend_sighting_line_ahead(probe)
+    out = _line_out(probe, .4)
+    for kind, state in ((dict(reason='junction_fork'), 'waiting'), ({}, 'idle')):
+        rig = armed_rig(next_line_in_m=out+.25)
+        bend_sighting_line_ahead(rig, **kind)
+        until(rig, state)
+    rig = armed_rig(next_line_in_m=1.)
+    assert send(rig, next_line_in_m=.5) == (True, 1, 'armed') and rig.m._junction['next_line'] == .5
+
+
 def test_the_map_judges_a_line_read_on_the_entry_heading_too():
     """D-754: a line read before the arc goes by the map's distance as well: dropped when the next
     junction is far (a shallow bend too), handed over where the map has a line, inside note 9's reach."""
     for fields, past, state in ((dict(next_line_in_m=1.), .1, 'idle'),
+                                # review: note 9's shape still drops it under a wide placement tolerance
+                                (dict(next_line_in_m=.35, bend_tol_m=.2), .1, 'idle'),
                                 (dict(next_line_in_m=1., turn=40.), .1, 'idle'),
                                 ({}, .2, 'idle'),         # 0.2 cos 60 = 0.10 along the exit: note 9
                                 (dict(next_line_in_m=.1), .2, 'waiting')):

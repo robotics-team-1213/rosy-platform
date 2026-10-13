@@ -19,7 +19,8 @@ from __future__ import annotations
 import math
 
 from core_features.line_follow.recovery.junction.approach import (
-    CORRIDOR_HALF_M, MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
+    CORRIDOR_HALF_M, MAX_AHEAD_M, MAX_PIVOT_PAST_LINE_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S,
+    STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
 BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
@@ -208,15 +209,18 @@ class JunctionBendMixin:
         next junction's line along the exit (Gazebo lap run55: W3's own line read mid-arc, 0.164 m
         out, the next place over 1 m on). Without it, D-507 note 9: the line point lies past the
         vertex on the entry axis and no further along the exit than the lane's own outer line
-        reaches there (run53: 0.097 m past W2's vertex); only from 60 deg, where the two separate."""
-        past, out = self._bend_line(j)
-        if j.get('next_line') is not None:
-            # the vertex's placement + the keeper's range error + an oblique ray's skew (half a lane)
-            error = self._config.crosswalk_range_error_fraction*self._junction_anchor['ahead']
-            return abs(out-j['next_line']) > j['tol']+error+CORRIDOR_HALF_M
-        turn = abs(math.radians(j['turn_deg']))
-        return (turn >= OWN_LINE_MIN_TURN_RAD and past > 0
-                and out <= CORRIDOR_HALF_M*(1+1/math.tan(turn)))
+        reaches there (run53: 0.097 m past W2's vertex); only from 60 deg, where the two separate.
+        That shape still drops it when the map's line is beyond that reach (review)."""
+        (past, out), a, turn = self._bend_line(j), self._junction_anchor, abs(math.radians(j['turn_deg']))
+        reach = CORRIDOR_HALF_M*(1+1/math.tan(turn)) if turn >= OWN_LINE_MIN_TURN_RAD else 0.
+        own, line = past > 0 and out <= reach, j.get('next_line')
+        if line is None:
+            return own
+        # the vertex's placement + the keeper's range error + its spread on one line (half a lane);
+        # a fork sighting measures the place, up to MAX_PIVOT_PAST_LINE_M short of the line (review)
+        tol = j['tol']+self._config.crosswalk_range_error_fraction*a['ahead']+CORRIDOR_HALF_M
+        short = MAX_PIVOT_PAST_LINE_M if a['reason'] == 'junction_fork' else 0.
+        return (own and line > reach) or not -(tol+short) <= out-line <= tol
 
     def _bend_blocked(self, now, twist):
         """The D-422 swept body gap of this twist is at or under its restart gap."""

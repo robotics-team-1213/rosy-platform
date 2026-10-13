@@ -206,6 +206,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
                     action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
                 j['expires_at'] = current+float(expires_s)  # a refresh keeps the measured travel
+                j['next_line'] = expect.get('next_line_in_m')  # D-754: a replan may move the next place
                 return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
