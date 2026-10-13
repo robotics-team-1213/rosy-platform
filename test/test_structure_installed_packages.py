@@ -36,8 +36,8 @@ def test_source_holder_builds_and_installs_the_original_package(
             shutil.copytree(ROOT / dependency, target,
                             ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
             sources.append(target)
-        shutil.copytree(ROOT / 'middleware/control/drive/behaviors',
-                        tmp_path / 'dependencies/middleware/control/drive/behaviors',
+        shutil.copytree(ROOT / 'middleware/drive/behaviors',
+                        tmp_path / 'dependencies/middleware/drive/behaviors',
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache'))
     for operation in ("wheel", "install"):
         args = (["wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(wheels), *map(str, sources)]

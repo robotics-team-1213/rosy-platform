@@ -247,7 +247,7 @@ def test_a_stated_systematic_is_added_to_a_grid_fit_too():
     assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS, "systematic": "x"}) is None
 
 def test_receiver_extrapolation_is_mirrored():
-    text = (REPO / "middleware/control/drive/behaviors/line_follow" /
+    text = (REPO / "middleware/drive/behaviors/line_follow" /
             "recovery" / "lane_return_evidence.py").read_text(encoding="utf-8")
     assert float(re.search(r"^\s+MAX_EXTRAPOLATION_M = ([0-9.]+)", text, re.M).group(1)) == RECEIVER_EXTRAPOLATION_M
 

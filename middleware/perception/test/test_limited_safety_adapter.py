@@ -8,7 +8,7 @@ from control.control.calibration_profile import ProfileLease, make_profile
 
 class LimitedSafetyTest(unittest.TestCase):
     def gate(self, lease, fresh, now=10.):
-        path = Path(__file__).parents[2] / 'control/drive/safety/adapter/evidence.py'
+        path = Path(__file__).parents[2] / 'drive/safety/adapter/evidence.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'required_observation_failure')

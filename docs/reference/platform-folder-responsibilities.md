@@ -1,5 +1,7 @@
 # ROSY Platform 현재 폴더 책임
 
+2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
+
 2026-10-11 local main `d4988bffba`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
 
 구조 결정은 Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md), [D-637](../adr/D-637-remaining-decision-console-learning-folders.md)에 따른다. CORE 세부 책임은 [CORE·Drive 안내](core-drive-responsibilities.md), 소유권·import 규칙은 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이 기준이다. 과거 `d427_target`은 소유권 식별자이고 현재 경로는 `path`와 필요한 `layout_target`으로 읽는다.
@@ -14,8 +16,8 @@
 |---|---|---|
 | 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/ui` |
 | 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
-| 3 | Drive 동작 | `middleware/control/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
-| 4 | Drive 근거 | `middleware/control/drive/{safety,tracking,planning,recovery,calibration}` |
+| 3 | Drive 동작 | `middleware/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
+| 4 | Drive 근거 | `middleware/drive/{safety,tracking,planning,recovery,calibration}` |
 | 5 | 인지 구현 | `middleware/perception/sensors/sensing`, `middleware/perception/vision/perception` |
 | 6 | 인지 노드 | `middleware/perception/control`. ROS 패키지 이름은 `control`. 다섯 호환 초기화 폴더는 설치 이름만 잇고, 노드·어댑터 파일이 이 집의 본체다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
@@ -32,11 +34,11 @@
 | 단어 | 의미 | 집 | 현재 경로 |
 |---|---|---|---|
 | control | 센서·카메라 노드 조립 | 6 | `middleware/perception`. ROS 패키지 `control` |
-| control | Drive 알고리즘 | 3, 4 | `middleware/control/drive` |
+| control | Drive 알고리즘 | 3, 4 | `middleware/drive` |
 | decision | 장치 로컬 허용 동작 | 2 | `core_features.decision` |
 | decision | 현장 후보·모델 제안 | 10 | `operations/decision`. 설치는 Fleet 배포 |
 | safety | 공통 E-stop·배터리·Fleet 상실 | 2 | `core_features.safety` |
-| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/control/drive/safety` |
+| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/safety` |
 | execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/execution/local` |
 | execution | 현장 목표·진척 | 10 | `operations/execution` |
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/vision` |
@@ -46,13 +48,13 @@
 
 ## 폴더 이름과 묶음
 
-[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표는 현재 경로다. 아래 목표 폴더는 아직 만들지 않았다.
+[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표는 현재 경로다. S1의 현재 경로는 D-743을 따르며 S2~S10은 이동 전이다.
 
 규칙은 여섯 가지다. 디렉터리의 마지막 이름은 권한 하나다. import와 ROS 패키지 이름은 유지한다. 같은 입력과 같은 출력은 한 기능 폴더에 둔다. 사실, 명령, 원장, 임대, 후보 검사는 나눈다. 경로는 실행 PC가 아니다. 한 커밋에 한 단계만 착지한다.
 
 | 단계 | 목표 | 이 문서가 기록한 시점 |
 |---|---|---|
-| 1 | `middleware/control`을 `middleware/drive`로 | 이동 전 |
+| 1 | `middleware/control/drive`를 `middleware/drive`로 승격 | D-743 구현, 원격 검사·착지 결과는 검증 기록 참조 |
 | 2–3 | 인지 노드의 순수 판단을 그 기능 폴더로 모으고, 남는 조립 폴더를 `middleware/perception/nodes`로 | 이동 전 |
 | 4 | `robot_execution`, `site_execution` | 이동 전 |
 | 5 | `robot_ui`, `site_ui` | 이동 전 |
@@ -68,7 +70,7 @@
 
 **후속 구조 제안:** 현재 배치는 아래 표 그대로이며, 공통 상황평가·작업 규칙·Fleet 어댑터의 추가 책임 분리는 [D-648](../adr/D-648-shared-judgment-target-structure.md)의 [목표 설계](../plans/2026-10-11-shared-judgment-structure-design.md)와 [단계별 계획](../plans/2026-10-11-shared-judgment-structure.md)을 검토한다. Proposed 목표를 이미 이동·설치된 현재 상태로 집계하지 않는다.
 
-의미 폴더 깊이는 저장소 아래 책임 분류를 최대 5단계로 세는 기준이다. `middleware/control/drive/planning/nav2`는 5단계이다. `src/rosy/world`, `core_features`, `rosy_situation` 같은 언어 namespace와 ament의 `test/resource/config`는 패키지 내부 배치다. 이를 책임 분류 단계로 합산하여 기존 import를 억지로 바꾸지 않는다. 아래는 현재 존재하는 폴더만 보여 주며, 패키지 내부 경로는 괄호로 표시한다.
+의미 폴더 깊이는 저장소 아래 책임 분류를 최대 5단계로 세는 기준이다. `middleware/drive/planning/nav2`는 4단계이다. `src/rosy/world`, `core_features`, `rosy_situation` 같은 언어 namespace와 ament의 `test/resource/config`는 패키지 내부 배치다. 이를 책임 분류 단계로 합산하여 기존 import를 억지로 바꾸지 않는다. 아래는 현재 존재하는 폴더만 보여 주며, 패키지 내부 경로는 괄호로 표시한다.
 
 ```text
 rosy-platform/
@@ -78,7 +80,7 @@ rosy-platform/
 │  │  ├─ services/ (core_features: command, safety, line_follow, navigation 등)
 │  │  ├─ api/ (core_api_web)
 │  │  └─ events/ (core_events)
-│  ├─ control/drive/
+│  ├─ drive/
 │  │  ├─ planning/{nav2,grid}
 │  │  ├─ tracking/wander
 │  │  ├─ recovery/
@@ -142,10 +144,10 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `middleware/core/services/core_features/decision` | `core_features.decision` | 유지 — 장치 local lane/router/allowed-action 규칙. Fleet의 deliberative decision과 구분 |
 | `middleware/core/events` | ROS `core_events`; `core_events` | 유지 — CORE/Fleet의 event bus·audit 형식과 연결 |
 | `middleware/core/api` | ROS `core_api_web`; `core_api_web` | 이전 완료 — 기존 api_web 배포/import명 유지, API·WebSocket·UI 제공 소스 holder만 간소화 |
-| `middleware/control/drive/planning/nav2` | ROS `navigation`; `navigation` | 이전 완료 — Nav2 launch/config/backend. CORE goal facade·취소 세대·최종 command 경계 유지 |
+| `middleware/drive/planning/nav2` | ROS `navigation`; `navigation` | 이전 완료 — Nav2 launch/config/backend. CORE goal facade·취소 세대·최종 command 경계 유지 |
 | `middleware/perception` | ROS `control`; `control`, `control.sensing`, `control.sensing.perception` | 분리 완료 — sensors/vision 소스와 node 조립·recorder·map resource. Drive 구현은 별도 holder; 하나의 기존 배포 패키지로 설치 |
-| `middleware/control/drive` | 기존 ROS `control` 배포의 `control.control`, `control.planning`, `control.wander` | 분리 완료 — tracking/recovery/calibration과 grid planning. node/provider 소비자와 기존 relative import·monkeypatch identity 유지 |
-| `middleware/control/drive/safety` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
+| `middleware/drive` | 기존 ROS `control` 배포의 `control.control`, `control.planning`, `control.wander` | 분리 완료 — tracking/recovery/calibration과 grid planning. node/provider 소비자와 기존 relative import·monkeypatch identity 유지 |
+| `middleware/drive/safety` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
 | `middleware/drivers/imu_bno055` | ROS `imu_bno055` | 유지 — IMU I/O. 장치 bringup이 소비; 지각 판단이나 작업 dispatch를 소유하지 않음 |
 | `middleware/drivers/pinky_adc` | ROS `sensor_adc` | 유지 — Pinky ADC I/O. IR 등 센서 소비자 연결 |
 | `middleware/drivers/pinky_lamp` | ROS `lamp_control` | 유지 — Pinky lamp I/O. 장치 UI/bringup 소비 |
@@ -249,7 +251,7 @@ D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1�
 
 후속 책임·권한·결과 확인 계약은 Accepted [D-656](../adr/D-656-responsibility-authority-and-orchestration-boundaries.md)과 [실행 계획](../plans/2026-10-11-responsibility-authority-orchestration.md)을 따른다. 수용 범위는 논리 경계와 이행 순서이며 위 표의 현재 소스 배치와 D-652 내부 shadow 외의 구현/운영 수용을 뜻하지 않는다.
 
-`middleware/control/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/control/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
+`middleware/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
 
 반복 이름은 세 종류다: 설치 패키지 이름(`core`, `control`, `fleet`, `rosy` namespace), 서로 다른 권한(장치-local execution/현장 execution, 관측 safety adapter/CORE Safety), 실제 혼재했던 행동 구현(이번 Drive 이동). 호환 initializer에는 알고리즘을 추가하지 않는다. 일반 캘리브레이션 lease와 카메라 장애 복구 자격 판정은 CORE 공통 admission이며 Drive 탈출 운동 구현과 다르다. Perception localization 노드는 상태/관측 근거를 소유한다.
 

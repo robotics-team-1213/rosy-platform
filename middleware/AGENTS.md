@@ -12,7 +12,7 @@ On-robot middleware. CORE (the external API and the only final `/cmd_vel` publis
 | Directory | Purpose |
 |-----------|---------|
 | `core/` | Gateway, events, services and web API (see `core/AGENTS.md`) |
-| `control/` | Drive planning/tracking/recovery/calibration/safety source holders, including Nav2; existing `control.*` and `navigation` package identities (see `control/AGENTS.md`, D-630) |
+| `drive/` | Drive planning/tracking/recovery/calibration/safety source holders, including Nav2; existing `control.*` and `navigation` package identities (see `drive/AGENTS.md`, D-630) |
 | `devices/` | Pinky and OMX hardware-family assembly, profiles and adapters (see `devices/AGENTS.md`, D-626) |
 | `drivers/` | Board drivers: IMU, ADC, lamp, LED (see `drivers/AGENTS.md`) |
 | `perception/` | ROS `control` distribution: sensors/vision implementations, node composition and thin import facades; no second operational final command publisher (see `perception/AGENTS.md`) |
