@@ -105,7 +105,7 @@ export function createStore(api, deps = {}) {
     socket = live;
     live.addEventListener("open", () => {
       if (live !== socket || !session?.token) return;
-      live.send(JSON.stringify({ type: "auth", token: session.token }));
+      if (session.token) live.send(JSON.stringify({ type: "auth", token: session.token }));
     });
     live.addEventListener("message", (event) => {
       if (live !== socket) return;

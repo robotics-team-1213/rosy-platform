@@ -1,5 +1,6 @@
 """D-757 shared Robot/Pilot browser session endpoints."""
 import asyncio
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlsplit
 
@@ -25,7 +26,7 @@ def account_context(claims):
     role = next((role for role, cap in [('administrator', 'robot.admin'), ('operator', 'robot.operate'),
                                        ('viewer', 'robot.read')] if claims.permits(claims.aud, cap)), 'viewer')
     return AuthContext('account:' + claims.sid, role, source='account', principal_ref=claims.sub,
-                       account=claims)
+                       expires_at=datetime.fromtimestamp(claims.exp, timezone.utc).isoformat(), account=claims)
 
 
 def authenticate_account(connection, authorization=None):

@@ -3,6 +3,24 @@
 // 않는다. 토큰을 URL·쿠키·콘솔에 남기지 않는다.
 
 const KEY = "rosy.pilot.token";
+export let account = null;
+export const authenticated = () => Boolean(account?.authenticated || token());
+
+export async function restoreAccount() {
+  if (inPilotApp()) return null;
+  try {
+    const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+    account = response.ok ? await response.json() : null;
+    if (account?.authenticated) sessionStorage.removeItem(KEY);
+  } catch { account = null; }
+  return account;
+}
+
+export async function accountLogout() {
+  const response = await fetch('/api/account/logout', {method:'POST'});
+  clearToken();
+  if (!response.ok) throw new Error('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.');
+}
 
 export function token() {
   return sessionStorage.getItem(KEY) ?? "";
@@ -15,11 +33,13 @@ export function inPilotApp() {
 }
 
 export function setToken(value) {
+  account = null;
   sessionStorage.setItem(KEY, String(value ?? "").trim());
 }
 
 export function clearToken() {
   sessionStorage.removeItem(KEY);
+  account = null;
 }
 
 export function prepareConsoleSession() {

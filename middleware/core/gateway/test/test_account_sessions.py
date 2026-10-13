@@ -21,7 +21,7 @@ def account_robot(core_client):
 def test_cookie_reads_but_does_not_inherit_operator_or_admin(account_robot):
     client, claims = account_robot
     assert client.get('/api/v1/auth/whoami').status_code == 200
-    assert client.post('/api/v1/safety/estop', headers={'Origin':'http://testserver'}).status_code == 403
+    assert client.post('/api/v1/teleop', json={'linear':0, 'angular':0}, headers={'Origin':'https://testserver'}).status_code == 403
     claims.permits = lambda resource, capability: capability == 'robot.admin'
     assert client.get('/api/v1/auth/whoami').status_code == 403
 
@@ -29,11 +29,11 @@ def test_cookie_reads_but_does_not_inherit_operator_or_admin(account_robot):
 def test_cookie_writes_require_same_origin_and_cannot_mint_legacy_tokens(account_robot):
     client, claims = account_robot
     claims.permits = lambda resource, capability: True
-    assert client.post('/api/v1/safety/estop', headers={'Origin':'https://evil.test'}).status_code == 403
+    assert client.post('/api/v1/safety/stop', headers={'Origin':'https://evil.test'}).status_code == 403
     assert client.post('/api/v1/system/tokens', json={'role':'administrator'},
-                       headers={'Origin':'http://testserver'}).status_code == 403
+                       headers={'Origin':'https://testserver'}).status_code == 403
     assert client.post('/api/v1/auth/enrollment-codes', json={},
-                       headers={'Origin':'http://testserver'}).status_code == 403
+                       headers={'Origin':'https://testserver'}).status_code == 403
 
 
 def test_cookie_websocket_does_not_wait_for_token_and_rejects_foreign_origin(account_robot):
