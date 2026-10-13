@@ -156,22 +156,22 @@ def test_a_pinned_surface_ignores_the_preference(browser):
 def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     page = _open(browser, "/console")
     page.wait_for_function("customElements.get('ui-button') !== undefined")
-    assert page.locator('[data-theme-choice="dark"]').get_attribute("aria-pressed") == "true"
-    # D-359 §6.4 — 1366px(90rem 미만)에서 테마 선택은 머리의 '설정' 뒤에 접힌다. 이 고정물은
-    # 세션이 없어 잠기므로(토큰 칸이 저절로 열린다) 닫혀 있을 때만 연다.
-    if page.locator("#theme-choice").is_hidden():
-        page.get_by_role("button", name="설정", exact=True).click()
-    page.locator("#theme-choice").get_by_text("밝게", exact=True).click()
+    button = page.locator("#fleet-theme")
+    assert "어둡게" in button.get_attribute("aria-label")
+    button.click()
     page.wait_for_function("document.documentElement.dataset.theme === 'light'")
     state = _state(page)
     light = PALETTES["light"]["ground"]
     assert state["body"] == _rgb(light) and state["meta"] == light
     assert state["events"] == [{"theme": "light", "preference": "light"}]
-    assert page.locator('[data-theme-choice="light"]').get_attribute("aria-pressed") == "true"
-    assert page.locator('[data-theme-choice="dark"]').get_attribute("aria-pressed") == "false"
+    assert "밝게" in button.get_attribute("aria-label")
     assert page.evaluate("localStorage.getItem('rosy.theme')") == "light"
     page.reload(wait_until="domcontentloaded")
     assert _state(page)["theme"] == "light"
+    button.click()
+    assert page.evaluate("RosyTheme.get()") == "system"
+    button.click()
+    assert page.evaluate("RosyTheme.get()") == "dark"
 
 
 def test_the_device_display_panel_switches_the_theme_live(browser):

@@ -1,6 +1,5 @@
 # D-510: ADR numbers absent from the ADR Log on purpose, one per line: D-nnn reason.
 # Append only (merge=union). Remove a line once the ADR lands. Duplicates are harmless.
-D-668 reserved by a peer session and absent from this branch; remove once its ADR lands
 D-29 unused; the vision accelerator shield design only proposed the number
 D-35 reserved for the swarm formation HOLD decision pending the sim bench
 D-204 reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md; the ADR is written on branch feat/role-surfaces-s1 and merges separately; remove once it lands
@@ -23,7 +22,9 @@ D-571 ADR reserved on branch feat/rosy-cam-map-plane (971523db2), not yet on mai
 D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-621 reserved by another active session; ADR not yet landed in this branch
-D-622 reserved by another active session; ADR not yet landed in this branch
+
+
+
 
 
 
@@ -48,3 +49,4 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
+D-740 feat/sdk-forward-arc-sweep에서 진행 중인 ADR이다. 그 브랜치가 착지할 때 이 줄을 지운다 (lint가 "declared gap now exists"로 알려 준다)
