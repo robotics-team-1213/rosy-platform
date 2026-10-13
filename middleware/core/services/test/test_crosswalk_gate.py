@@ -382,8 +382,9 @@ def test_wall_bases_read_as_the_lane_edges_do_not_hold_an_empty_crosswalk():
 
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
     """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
-    body's own 0.077 m) still stops the crossing; someone 0.115 m out, against the wall, is no
-    longer judged (the documented loss; D-422 keeps the body's own path)."""
+    body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no
+    longer judged (the documented loss; D-422 keeps the body's own path). A change that sees that
+    person again is welcome: update the second half then."""
     s = Sim(edges=(0.120, -0.122))
     s.objects = [(0.42, 0.09, 0.008)]
     s.to_stop()
@@ -400,6 +401,9 @@ def test_lane_edges_caps_raw_edges_only_and_pads_stay_outside():
     from core_features.line_follow.crosswalk_gate import lane_edges, zone_of
     assert lane_edges(0.120, -0.122) == pytest.approx((0.099, -0.101))
     assert lane_edges(0.109, -0.049) == (0.109, -0.049)        # 3 cm off-centre, a real lane
+    # review: one far misread edge (the next lane's line) must not slide the lane off the body
+    left, right = lane_edges(0.109, -0.29, body_half=0.0765)
+    assert left >= 0.0765 and right <= -0.0765 and left - right == pytest.approx(0.20)
     assert lane_edges(None, -0.122) == (None, -0.122) and lane_edges(0.14, None) == (0.14, None)
     anchor = SimpleNamespace(x=0.0, y=0.0, yaw=0.0, frame="odom")
     z = zone_of(dict(anchor=anchor, epoch=0, near=0.3, far=0.45, uncertainty=0.09, left=0.120, right=-0.122), 0.05)
