@@ -215,7 +215,7 @@ roots:
     import_prefix: [control]
     source_packages:
       sensors/sensing: control.sensing
-      vision/perception: control.sensing.perception
+      front_camera/perception: control.sensing.perception
     note: >-
       D-630 sensing and vision source holders; control remains the ROS distribution/import identity.
       Node composition, recorder compatibility and map assets stay in this package.
@@ -444,7 +444,8 @@ roots:
     wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
-  - path: operations/vision/signal_observer
+  - path: operations/signal_observation
+    layout_target: operations/signal_observation
     part: operations
     d427_target: operations/vision/signal_observer
     legacy: firmware/signal/observer
@@ -527,7 +528,8 @@ roots:
       D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
       D-652 pure necessity assessment is shared with Fleet through three static holder files;
       new consumers are internal shadow only, no robot or command authority.
-  - path: operations/vision
+  - path: operations/overhead
+    layout_target: operations/overhead
     part: operations
     d427_target: operations/vision
     legacy: src/site/vision

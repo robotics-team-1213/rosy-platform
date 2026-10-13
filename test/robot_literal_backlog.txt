@@ -29,8 +29,8 @@ middleware/perception/sensors/sensing/ir_adc.py
 middleware/perception/sensors/sensing/lidar.py
 middleware/perception/sensors/sensing/loc_objects.py
 middleware/perception/sensors/sensing/odometry_fit.py
-middleware/perception/vision/perception/camera_controls.py
-middleware/perception/vision/perception/camera_ground.py
+middleware/perception/front_camera/perception/camera_controls.py
+middleware/perception/front_camera/perception/camera_ground.py
 middleware/drive/tracking/wander/navigator.py
 middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world

@@ -36,7 +36,7 @@
 
 ## 시험
 
-- `operations/vision/test`
+- `operations/overhead/test`
 
 ## 최근 기록
 

@@ -19,3 +19,9 @@
 로봇 Dashboard/Pilot/Face와 현장 Console/Cam holder를 robot_ui/site_ui로 구분했다. App/serving/import identity, assets and backend authority remain unchanged; packaging/deploy/source consumers use the new paths.
 
 파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S5-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S6
+
+D-748에 따라 천장 패키지는 operations/overhead, lamp 사실은 operations/signal_observation, 로봇 앞 카메라는 middleware/perception/front_camera로 구분했다. 기존 ROS/import/wire identity와 지도 계보는 유지하고 image/서명/source 소비자를 맞춘다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S6-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.

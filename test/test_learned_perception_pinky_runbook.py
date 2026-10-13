@@ -65,7 +65,7 @@ def test_topics_and_commands_match_the_code():
     text = _text()
     trigger = (ROOT / "middleware/perception/snapshots/capture_trigger_node.py").read_text(encoding="utf-8")
     shadow = (ROOT / "middleware/perception/nodes/learned_lane_node.py").read_text(encoding="utf-8")
-    status = (ROOT / "middleware/perception/vision/perception/learned/status.py").read_text(
+    status = (ROOT / "middleware/perception/front_camera/perception/learned/status.py").read_text(
         encoding="utf-8")
     assert "'capture/request'" in trigger
     assert re.search(r'ros2 topic pub --once "\$NS/capture/request" std_msgs/msg/String', text)

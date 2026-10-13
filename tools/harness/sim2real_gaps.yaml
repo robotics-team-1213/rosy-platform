@@ -27,7 +27,7 @@ gaps:
     gap: white walls, carpet, glare, low light, paint wear are absent from Gazebo
     evidence:
       - docs/solutions/workflow-issues/measure-the-real-camera-from-recorded-video-before-tuning-sim-perception-2026-09-24.md
-      - middleware/perception/vision/perception/camera_visibility.py:15-25
+      - middleware/perception/front_camera/perception/camera_visibility.py:15-25
       - learning/evaluation/perception/road_replay.py
       - D-378
     tier: [R, M]
@@ -161,9 +161,9 @@ gaps:
   - id: G-15
     gap: device lane projection uncertainty 17-37 mm vs D-468 cap 15 mm; GAZEBO ground 4.3 mm; 260919 lane play 23.45 mm per side (STL nominal, unmeasured) < achievable device uncertainty at 320x240
     evidence:
-      - middleware/perception/vision/perception/lane_containment.py
+      - middleware/perception/front_camera/perception/lane_containment.py
       - middleware/drive/behaviors/line_follow/recovery/lane_return_evidence.py
-      - middleware/perception/vision/perception/camera_extrinsic.py
+      - middleware/perception/front_camera/perception/camera_extrinsic.py
       - D-468
       - D-480
     tier: [R, M]
@@ -176,8 +176,8 @@ gaps:
     evidence:
       - docs/validation/d476-gazebo-rev1-2026-10-07/result.md
       - docs/validation/d476-gazebo-model-pc-2026-10-06/result.md:202-216
-      - middleware/perception/vision/perception/lane_keep_lines.py
-      - middleware/perception/vision/perception/lane_containment.py
+      - middleware/perception/front_camera/perception/lane_keep_lines.py
+      - middleware/perception/front_camera/perception/lane_containment.py
       - middleware/drive/behaviors/line_follow/recovery/lane_return_evidence.py
       - middleware/perception/test/test_lane_slope_g16.py
       - D-468

@@ -14,7 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CAMERA_APP = ROOT / "operations/site_ui/cam/app/src/main/java"
-VISION = ROOT / "operations/vision/rosy_vision"
+VISION = ROOT / "operations/overhead/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
 # 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 and D-456 v2 pairing only.

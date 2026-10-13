@@ -9,7 +9,7 @@ REPO = Path(__file__).resolve().parents[3]
 SRC = REPO / "src"
 TEST = Path(__file__).resolve().parent
 for path in (
-    REPO / "operations" / "vision",
+    REPO / 'operations' / 'overhead',
     SRC.parent / "operations" / "fleet",
     SRC.parent / "middleware" / "core" / "services",
     SRC.parent / "contracts" / "foundation",
