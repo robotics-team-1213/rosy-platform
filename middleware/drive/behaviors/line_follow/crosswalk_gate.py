@@ -210,24 +210,11 @@ class CrosswalkGate:
         c, s = math.cos(zone.yaw), math.sin(zone.yaw)
         return c * (px - zone.x) + s * (py - zone.y), -s * (px - zone.x) + c * (py - zone.y)
 
-    @staticmethod
-    def _lane_edges(z: Zone, geo: Geometry):
-        """The zone's seen lane edges, no wider than a lane. Edges further apart than the lane model
-        are not the lane's (Gazebo lap 2026-10-14: the camera read the wall bases 0.120 and 0.122 m
-        either side as its edges, A's edge lay on the wall and its returns held 'person' for good):
-        the lane width is kept about their middle; a lone edge is capped at the lane half."""
-        half = geo.lane_half_m
-        left, right = half if z.left is None else z.left, -half if z.right is None else z.right
-        if z.left is not None and z.right is not None and left - right > 2 * half:
-            return (left + right) / 2 + half, (left + right) / 2 - half
-        return min(left, half), max(right, -half)
-
     def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0):
         """side: the body's lateral offset in the anchor frame now (the same odom as the scan)."""
         near, far, m = z.near - z.margin, z.far + z.margin, z.margin
-        seen_left, seen_right = self._lane_edges(z, geo)
-        left = max(seen_left, geo.body_half_m) + z.lateral
-        right = min(seen_right, -geo.body_half_m) - z.lateral
+        left = max(geo.lane_half_m if z.left is None else z.left, geo.body_half_m) + z.lateral
+        right = min(-geo.lane_half_m if z.right is None else z.right, -geo.body_half_m) - z.lateral
         if self._state != CROSSING or front < near:
             return ((near, far, right - geo.strip_m, left + geo.strip_m), (far, far + geo.exit_m + m, right, left))
         # The body front is in the zone: only the zone still ahead of it and the exit count; a
@@ -238,7 +225,8 @@ class CrosswalkGate:
         # The rest of the zone ahead: the seen lane width centred on the body, which follows that
         # lane, again in the scan's own odom frame (the drift since the zone's image only moves the
         # zone's lane edges relative to the anchor, not the lane relative to the body).
-        half = max((seen_left - seen_right) / 2, geo.body_half_m)
+        half = max(((geo.lane_half_m if z.left is None else z.left)
+                    - (-geo.lane_half_m if z.right is None else z.right)) / 2, geo.body_half_m)
         exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m, side + geo.body_half_m)
         return (((front, far, side - half, side + half), exit_box) if front < far else (exit_box,))
 
@@ -277,6 +265,7 @@ class CrosswalkGate:
             # the evidence's lateral bound, drift since that image, and the edges' slope over A
             # from the heading difference between that image and the zone anchor.
             cpose, cleft, cright, unc = corridor
+            cleft, cright = lane_edges(cleft, cright, geo.lane_half_m)
             offset = self._local(z, cpose, 0.0)[1]
             turn = abs(math.sin(cpose.yaw - z.yaw)) * (z.far + z.margin + geo.exit_m)
             pad = unc + odom_error_fraction * math.hypot(pose.x - cpose.x, pose.y - cpose.y) + turn
@@ -419,15 +408,26 @@ class CrosswalkGate:
 
 
 
+def lane_edges(left, right, half: float = CORRIDOR_HALF_M):
+    """Seen lane edges, no wider than a lane (D-573 개정 4). Two edges further apart than the lane
+    model are not the lane's (Gazebo lap 2026-10-14: the camera gave the wall bases 0.120 and 0.122 m
+    either side, A's edge lay on the wall and its returns held 'person' for good): the lane width is
+    kept about their middle. Raw edges only: uncertainty, drift and slope pads go on outside this."""
+    if left is not None and right is not None and left - right > 2 * half:
+        middle = (left + right) / 2
+        return middle + half, middle - half
+    return left, right
+
+
 def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None) -> Zone:
     """A D-491 zone record with a resolved anchor as a Zone. Along the road the frame's crosswalk
     bound (D-573 6 개정), else along_default, else the lane's lateral bound (D-491 as before)."""
     a = z["anchor"]
     along = z.get("along")
     along = along if along is not None else along_default if along_default is not None else z["uncertainty"]
+    left, right = lane_edges(z.get("left"), z.get("right"))
     return Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"], far=z["far"],
-                margin=along + range_error_fraction * z["far"],
-                left=z.get("left"), right=z.get("right"), lateral=z["uncertainty"])
+                margin=along + range_error_fraction * z["far"], left=left, right=right, lateral=z["uncertainty"])
 
 
 class CrosswalkGateMixin:
