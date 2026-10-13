@@ -325,12 +325,12 @@ class TripRunner(TripAdmission, TripProgress):
         live.view.update(plan=hold["plan"], map_version=hold["map_version"], segment_index=0, hold=None)
         live.graph = active[2]
         live.route_rev += 1
+        live.bends_done.clear()  # the plan is renumbered (review); D-507 addendum: a new lap drives its bends again
         if "lap_route" in hold:  # D-517 2: the operator took the changed lap
             live.lap_route = hold["lap_route"]
             live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
                                   for edge, forward, _s in hold["lap_route"])
             live.view["lap"] += 1
-            live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
         live.view["detail"]["replan_confirmed_by"] = principal_id
         sent = live.sent
         live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None

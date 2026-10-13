@@ -544,7 +544,7 @@ class LiveTrip:
         self.at_stamp: Optional[float] = None
         self.authority: Optional[dict] = None
         #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
-        self.bends_done: set = set()  # (segment index, place id): a lap may pass one bend on two segments
+        self.bends_done: set[tuple[int, str]] = set()  # (segment index, place id): a lap may pass one bend on two segments
         self.dismissed = 0  # keeper sightings without a map place, answered ``straight``
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
