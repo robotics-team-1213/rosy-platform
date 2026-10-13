@@ -108,3 +108,33 @@ def test_revision_change_and_family_logout_invalidate_access(authority):
     tokens = json.loads(exchange(instance, get_code(instance, context))[1])
     families['family-1']['revision'] = 2
     assert instance.introspect(tokens['access_token']) == {'active': False}
+
+
+def test_removed_client_resource_stops_pending_exchange_and_refresh(authority):
+    instance, context, _ = authority
+    tokens = json.loads(exchange(instance, get_code(instance, context))[1])
+    code = get_code(instance, context)
+    instance.clients['robot-app']['resources'] = []
+    assert exchange(instance, code)[2] == 400
+    assert instance.token(urlencode({'grant_type': 'refresh_token', 'client_id': 'robot-app',
+                                    'refresh_token': tokens['refresh_token']}))[2] == 400
+    assert instance.introspect(tokens['access_token']) == {'active': False}
+
+
+def test_same_second_exchange_keeps_distinct_access_credentials(authority):
+    instance, context, _ = authority
+    first = json.loads(exchange(instance, get_code(instance, context))[1])
+    second = json.loads(exchange(instance, get_code(instance, context))[1])
+    assert first['access_token'] != second['access_token']
+
+
+def test_signing_key_rotation_preserves_trusted_overlap(authority):
+    instance, context, _ = authority
+    tokens = json.loads(exchange(instance, get_code(instance, context))[1])
+    private = Ed25519PrivateKey.generate().private_bytes(serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    rotated = AccountAuthority(instance.path, issuer=ISSUER, private_key=private, key_id='key-2',
+        clients=instance.clients, resolve_family=instance.resolve_family,
+        revoke_family=instance.revoke_family, clock=instance.clock,
+        trusted_public_keys=instance.public_keys)
+    assert rotated.introspect(tokens['access_token'])['active'] is True
