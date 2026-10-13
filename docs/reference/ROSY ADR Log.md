@@ -734,7 +734,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 
-| D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted | 2026-10-13 |
+| D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
