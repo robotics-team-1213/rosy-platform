@@ -1,5 +1,7 @@
 # CORE·Drive·Arm의 현재 책임 구조
 
+2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
+
 2026-10-11 local main `7f391fa2d`에 반영한 소스 배치. Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md)에 따른다. [전체 폴더 안내](platform-folder-responsibilities.md)는 현재 manifest의 모든 root를 기록한다. [검증·착지 기록](../validation/d630-platform-holders-2026-10-11/result.md)에서 source와 remote 시험 결과를 배포·장치 수용과 구분한다.
 
 ```text
