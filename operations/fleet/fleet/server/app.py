@@ -493,8 +493,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     account_login = bool(site_logins) or accounts_bootstrap is not None or (
         task_service is not None and PasswordSessions.accounts_active(task_service.store.path))
     principals = {} if account_login and not site_users else parse_site_principals(site_users, console)
-    password_sessions = (PasswordSessions(task_service.store.path, site_logins or {},
-                                         accounts_bootstrap=accounts_bootstrap) if account_login else None)
+    password_sessions = None
+    if account_login:
+        password_sessions = PasswordSessions(task_service.store.path, site_logins or {}, accounts_bootstrap=accounts_bootstrap)
     app.state.password_sessions = password_sessions
     app.state.account_authority = authority
     if authority is not None:
