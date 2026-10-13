@@ -736,6 +736,7 @@
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
 
 | D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
+| D-745 | 학습 관리 센터의 소유 실행기 수동 제어 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1090,3 +1091,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 **Status:** Accepted (2026-10-13, 사용자 요청. 구현은 조각마다 따로 착지하며 CI·화면 검증·설치·실물 수용은 별도다)
 
 앱 바, 탐색 레일, 하위 탐색, 본문, 오른쪽 칸의 다섯 자리를 모든 앱이 같이 쓰고, 푸터를 없애며, Fleet의 시키는 일을 작업 영역 하나로 모은다. D-658·D-668·D-683·D-466·D-359·D-641·D-201·D-540의 일부 항을 바꾼다. 전문은 [D-741](../adr/D-741-unified-app-shell-seats.md).
+
+## D-745 학습 관리 센터의 소유 실행기 수동 제어
+
+- start는 자동 timer와 소유 서비스를 시작한다. stop은 timer를 끄고 소유 service의 control group만 중지한다. retry는 중지 상태의 소유 서비스를 한 번 실행한다. 상태는 다시 읽으며 명령 접수를 학습 완료로 표시하지 않는다.
+
+Details: docs/adr/D-745-learning-center-owner-controls.md.
