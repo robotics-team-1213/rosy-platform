@@ -60,6 +60,24 @@ import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
  * confirms, so a stray link cannot silently redirect frames to another host.
  */
 class MainActivity : ComponentActivity() {
+    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private val accountReady = mutableStateOf(false)
+    private val accountMessage = mutableStateOf("??? ?? ???? ??????")
+    private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
+    private fun handleAccountIntent(incoming: Intent?): Boolean {
+        if (!accountConfigured || account?.isCallback(incoming) != true) return false
+        val callback = incoming?.dataString ?: return true
+        incoming.data = null
+        lifecycleScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
+                val resource = account!!.session.complete(callback)
+                account!!.session.permits(resource, "camera.manage")
+            }.getOrDefault(false) }
+            accountReady.value = ok; accountMessage.value = if (ok) "????" else "??? ?? ??? ?? ??? ?????"
+        }
+        return true
+    }
     private val pendingPairing = mutableStateOf<PairingUri?>(null)
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
@@ -74,7 +92,7 @@ class MainActivity : ComponentActivity() {
         screenPower = ScreenPower(this)
         settings = SettingsStore(applicationContext)
         if (savedInstanceState == null) {
-            handlePairingIntent(intent)
+            if (!handleAccountIntent(intent)) handlePairingIntent(intent)
         } else {
             restorePendingPairing(savedInstanceState)
         }
@@ -105,7 +123,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePairingIntent(intent)
+        if (!handleAccountIntent(intent)) handlePairingIntent(intent)
     }
     override fun onStop() {
         if (!isChangingConfigurations) cameraPeerModel.close()
@@ -143,6 +161,33 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun OverheadApp() {
+        if (!accountConfigured) { CameraContent(); return }
+        LaunchedEffect(Unit) {
+            while (true) {
+                accountReady.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
+                }
+                kotlinx.coroutines.delay(10000)
+            }
+        }
+        Column {
+            if (accountReady.value) {
+                TextButton(onClick = {
+                    accountReady.value = false; pairingModel.close(); cameraPeerModel.close(); pendingPairing.value = null
+                    lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
+                        accountMessage.value = if (ok) "?????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????" }
+                }) { Text("Rosy Account ? ???? / ?? ??") }
+                CameraContent()
+            } else {
+                Text(accountMessage.value)
+                Text("?? ?? ??? ??? ?????. ?? ??? ??? ?????.")
+                TextButton(onClick = { account!!.launch(this@MainActivity, accountResource()) }) { Text("Rosy Account ???") }
+                TextButton(onClick = { StreamService.stop(this@MainActivity) }) { Text("?? ??") }
+            }
+        }
+    }
+    @Composable
+    private fun CameraContent() {
         val state by StreamService.state.collectAsStateWithLifecycle()
         LaunchedEffect(state.health, state.running) {
             if (state.running && screenCooling.requestSleep(state.health)) sleepScreen(false)

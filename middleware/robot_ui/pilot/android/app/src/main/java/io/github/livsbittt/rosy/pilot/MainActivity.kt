@@ -24,6 +24,34 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 
 /** Discover, select, join. A code appears only when the selected server requires pairing. */
 class MainActivity : Activity() {
+    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private class NeedsAccount(val resource: String) : Exception()
+    private fun accountConnection(candidate: Candidate, store: CandidateStore): LobbySession {
+        val auth = requireNotNull(account)
+        val row = auth.config.robots.single { it.getString("robot_id") == candidate.robotId && it.getString("host") == candidate.host && it.getInt("port") == candidate.port }
+        require(candidate.secure) { "account requires trusted robot HTTPS" }
+        val resource = "robot:${candidate.robotId}"
+        if (auth.session.access(resource) == null) throw NeedsAccount(resource)
+        require(auth.session.permits(resource, "robot.read")) { "robot read permission required" }
+        return LobbySession(RobotTarget(candidate.robotId, candidate.host, candidate.port, ""), true,
+            java.time.Instant.MAX, candidate, store, row.getString("ca_pem"), account = auth.session)
+    }
+    private fun launchAccount(resource: String) {
+        endSession { account!!.launch(this, resource) }
+    }
+    private fun handleAccountIntent(incoming: android.content.Intent?) {
+        if (!accountConfigured || account?.isCallback(incoming) != true) return
+        val callback = incoming?.dataString ?: return
+        incoming.data = null
+        io.execute {
+            val ok = runCatching { account!!.session.complete(callback) }.isSuccess
+            main.post { returnToLobby(); status.text = if (ok) "???? ? ??? ?????" else "???? ???? ?????. ?? ?????." }
+        }
+    }
+    override fun onNewIntent(incoming: android.content.Intent) {
+        super.onNewIntent(incoming); setIntent(incoming); handleAccountIntent(incoming)
+    }
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val vault by lazy { PairingVault(this) }
@@ -69,7 +97,7 @@ class MainActivity : Activity() {
         override fun run() { if (!foreground) return; refresh(); if (foreground) main.postDelayed(this, 5000) }
     }
     override fun onCreate(state: Bundle?) {
-        super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE); showLobby()
+        super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE); showLobby(); handleAccountIntent(intent)
         if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(
             android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { backToLobbyOrExit() }
     }
@@ -109,6 +137,11 @@ class MainActivity : Activity() {
         header.addView(label(if (compact) "Pilot · 로봇 선택" else "로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
+        if (accountConfigured) list.addView(button("Rosy Account ? ???? / ?? ??") {
+            endSession { io.execute { val ok = account!!.session.logout(); main.post {
+                status.text = if (ok) "????? ? ??? ???? ??????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????"
+            } } }
+        })
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
         groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
         list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space4.toInt()) })
@@ -177,10 +210,10 @@ class MainActivity : Activity() {
         io.execute {
             if (attempt != version) return@execute
             try {
-                val direct = if (candidate.secure) peerUi.connect(candidate, store,
+                val direct = if (accountConfigured) accountConnection(candidate, store) else if (candidate.secure) peerUi.connect(candidate, store,
                     { version == attempt && foreground }, { if (version == attempt) returnToLobby() }) else null
                 if (version != attempt) return@execute
-                val offer = direct?.let { LobbyOffer("paired", it.target.id) } ?: LobbyPairing.offer(candidate)
+                val offer = direct?.let { LobbyOffer(if (it.managed) "account" else "paired", it.target.id) } ?: LobbyPairing.offer(candidate)
                 val remembered = if (direct != null) SavedLogin(SavedLoginStatus.READY, direct)
                     else if (offer.mode == "paired") vault.inspect(candidate, offer, store) else SavedLogin(SavedLoginStatus.NONE)
                 val saved = remembered.session
@@ -191,6 +224,8 @@ class MainActivity : Activity() {
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
+            } catch (needed: NeedsAccount) {
+                main.post { if (version == attempt) launchAccount(needed.resource) }
             } catch (error: Exception) {
                 if (LinkStatus.reason(error) in setOf(LinkReason.APPROVAL_EXPIRED, LinkReason.APPROVAL_REVOKED))
                     main.post { if (version == attempt && foreground) reapprove(candidate, LinkStatus.reason(error)) }
@@ -231,7 +266,7 @@ class MainActivity : Activity() {
                     { message -> main.post { if (version == attempt) { status.text = "${candidate.name} · 연결 끊김 · $message"; groupDrive?.disarm("첫 번째 로봇 연결 끊김 · 두 로봇 정지 요청") } } },
                     { main.post { if (version == attempt) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
-                if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
+                if (!approved.managed && offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
                 val ready = relay
                 main.post {
                     if (version != attempt || !foreground || web != null) { io.execute { ready.stop() }; return@post }
@@ -320,7 +355,7 @@ class MainActivity : Activity() {
         io.execute {
             var relay: PilotProxy? = null
             try {
-                val approved = if (candidate.secure) peerUi.connect(candidate, candidates,
+                val approved = if (accountConfigured) accountConnection(candidate, candidates) else if (candidate.secure) peerUi.connect(candidate, candidates,
                     { version == secondaryVersion && foreground && web != null }, {}) else run {
                     val offer = LobbyPairing.offer(candidate)
                     val saved = if (offer.mode == "paired") vault.inspect(candidate, offer, candidates).session else null
@@ -358,6 +393,8 @@ class MainActivity : Activity() {
                     loadRobotView(view, ready) { secondaryProxy === ready && secondaryWeb === view }
                     connectedLabel?.let { status.text = it }
                 }
+            } catch (needed: NeedsAccount) {
+                relay?.stop(); main.post { if (version == secondaryVersion) launchAccount(needed.resource) }
             } catch (error: Exception) {
                 relay?.stop()
                 main.post {

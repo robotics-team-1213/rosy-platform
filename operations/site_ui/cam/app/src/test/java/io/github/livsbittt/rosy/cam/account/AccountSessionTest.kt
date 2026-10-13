@@ -2,8 +2,48 @@ package io.github.livsbittt.rosy.cam.account
 
 import org.junit.Assert.*
 import org.junit.Test
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class AccountSessionTest {
+    private val privateKey = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(java.security.SecureRandom())
+    private fun encoded(bytes: ByteArray) = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+    private fun signed(now: Long, resource: String = "site:test", subject: String = "alice"): String {
+        val header = encoded("""{"alg":"EdDSA","kid":"key"}""".toByteArray())
+        val payload = encoded("""{"iss":"https://account.example.test","aud":"$resource","sub":"$subject","sid":"family","rev":1,"iat":$now,"exp":${now+300},"grants":[{"resource":"$resource","capabilities":["camera.manage"]}]}""".toByteArray())
+        val bytes = "$header.$payload".toByteArray()
+        val signer = org.bouncycastle.crypto.signers.Ed25519Signer(); signer.init(true, privateKey); signer.update(bytes, 0, bytes.size)
+        return "$header.$payload.${encoded(signer.generateSignature())}"
+    }
+    private fun trusted() = AccountConfig.parse("""{"issuer":"https://account.example.test","client_id":"native-cam","redirect_uri":"https://apps.example.test/cam/callback","resources":["site:test"],"trusted_keys":{"key":"${encoded(privateKey.generatePublicKey().encoded)}"}}""")
+    private fun callback(begin: String): String {
+        val state = begin.toHttpUrl().queryParameter("state")
+        return "https://apps.example.test/cam/callback?code=code&state=$state"
+    }
+    @Test fun signedExchangeRefreshAndRevokeUseCurrentIdentity() {
+        var now = 1000L; var refreshes = 0; var active = true; val store = MemoryStore()
+        val session = AccountSession(trusted(), store, { endpoint, form ->
+            when(endpoint) {
+                "token" -> { if (form["grant_type"] == "refresh_token") refreshes++
+                    org.json.JSONObject().put("token_type", "Bearer").put("access_token", signed(now)).put("refresh_token", "a".repeat(40)) }
+                "introspect" -> org.json.JSONObject().put("active", active).put("sub", "alice").put("aud", "site:test")
+                else -> org.json.JSONObject()
+            }
+        }, { now })
+        val cb = callback(session.begin("site:test")); session.complete(cb)
+        assertThrows(IllegalArgumentException::class.java) { session.complete(cb) }
+        assertTrue(session.permits("site:test", "camera.manage"))
+        assertFalse(session.permits("site:test", "accounts.manage"))
+        now += 280; assertNotNull(session.access("site:test")); assertEquals(1, refreshes)
+        active = false; now += 16; assertNull(session.access("site:test"))
+        assertTrue(session.logout()); assertNull(store.read())
+    }
+    @Test fun badSignatureNeverProducesSession() {
+        val session = AccountSession(trusted(), MemoryStore(), { _, _ ->
+            org.json.JSONObject().put("token_type", "Bearer").put("access_token", signed(1000) + "bad").put("refresh_token", "a".repeat(40))
+        }, {1000})
+        assertThrows(IllegalArgumentException::class.java) { session.complete(callback(session.begin("site:test"))) }
+        assertNull(session.access("site:test"))
+    }
     private fun config() = AccountConfig.parse("""{"issuer":"https://account.example.test","client_id":"native-cam","redirect_uri":"https://apps.example.test/cam/callback","resources":["site:test"],"trusted_keys":{"key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}""")
     @Test fun rejectsInsecureIssuerAndWildcardResource() {
         val text = config().issuer
