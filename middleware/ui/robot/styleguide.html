@@ -8,6 +8,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/styleguide/assets/styleguide.js"></script>
@@ -340,6 +341,32 @@
       <section id="task-readback"><ui-empty>이 견본은 장치 요청을 보내지 않습니다.</ui-empty></section>
       <p class="rule">확인(D-371)·Fleet 예외 행·좁은 콘솔(D-359)은 공용 어휘로 조립한다. LCD의 intent는 얼굴이 소유한다(D-385).</p>
       <p class="rule">쓰이지 않는 컴포넌트는 결함을 숨긴다(D-92 §5). 둘 이상의 웹 표면이 필요한 로직은 headless로 공유한다(D-130.2).</p>
+    </section>
+
+    <section class="entry" id="app-shell-seats">
+      <h2>앱 셸의 자리 (D-741)</h2>
+      <p>탐색 레일, 하위 탐색, 경로 줄, 본문, 오른쪽 칸. 이 갤러리의 글 칸은 720px라 여기서는 접힌 모습만 보인다. 넓은 배치는 표면이 이 자리를 쓰기 시작하면 그 화면에서 본다.</p>
+      <div class="ui-app-shell">
+        <div class="ui-app-body">
+          <div class="ui-rail"><nav class="ui-rail-nav" aria-label="견본 영역">
+            <a class="ui-rail-item" href="#app-shell-seats" aria-current="page"><span>견본 가</span></a>
+            <a class="ui-rail-item" href="#app-shell-seats"><span>견본 나</span></a>
+          </nav></div>
+          <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="견본 화면">
+            <div class="ui-subnav-head">진행</div>
+            <a class="ui-subnav-item" href="#app-shell-seats" aria-current="page">전체 작업</a>
+            <a class="ui-subnav-item" href="#app-shell-seats">승인 대기</a>
+          </nav></div>
+          <div class="ui-app-main">
+            <div class="ui-pathbar"><nav class="ui-crumbs" aria-label="경로"><a href="#app-shell-seats">작업</a></nav><strong>전체 작업</strong></div>
+            <div class="ui-stage-grid">
+              <div class="ui-pane" data-pane="stage">본문</div>
+              <div class="ui-pane" data-pane="now">지금 상태</div>
+              <div class="ui-pane" data-pane="more">입력과 근거</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </body>

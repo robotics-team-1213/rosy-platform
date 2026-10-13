@@ -45,18 +45,23 @@ def validate_rule(value):
         text(evidence['subject_id']); text(evidence['source']); text(evidence['reference'], empty=True)
         text(evidence['case_id'], nullable=True); finite(evidence['observed_at'], nullable=True)
     selection = value['selection']
-    fields(selection, 'kind rule decision reason yield_m yield_turn_rad')
+    # D-622: only a REALIGN answer carries the digest of its manoeuvre body; other shapes are unchanged.
+    realign = type(selection) is dict and 'realign_sha256' in selection
+    fields(selection, 'kind rule decision reason yield_m yield_turn_rad' + ' realign_sha256' * realign)
     kind = selection['kind']
     if kind not in ('NONE', 'ANSWER', 'HOLD', 'HANDOFF'):
         raise ValueError('INVALID_RULE_SELECTION_KIND')
     for name in ('rule', 'decision', 'reason'): text(selection[name], nullable=True)
     for name in ('yield_m', 'yield_turn_rad'): finite(selection[name], nullable=True)
     if kind == 'ANSWER':
-        if selection['rule'] is None or selection['decision'] not in ('WAIT', 'BACK_AND_RETRY', 'YIELD', 'RESUME'):
+        if selection['rule'] is None or selection['decision'] not in ('WAIT', 'BACK_AND_RETRY', 'YIELD', 'RESUME', 'REALIGN'):
             raise ValueError('INVALID_RULE_ANSWER')
+        if (selection['decision'] == 'REALIGN') != realign or realign and (
+                type(selection['realign_sha256']) is not str or not re.fullmatch('[0-9a-f]{64}', selection['realign_sha256'])):
+            raise ValueError('UNBOUND_RULE_REALIGN')
         if selection['decision'] != 'YIELD' and any(selection[n] is not None for n in ('yield_m', 'yield_turn_rad')):
             raise ValueError('UNBOUND_RULE_YIELD')
-    elif any(selection[n] is not None for n in ('rule', 'decision', 'yield_m', 'yield_turn_rad')) or (
+    elif realign or any(selection[n] is not None for n in ('rule', 'decision', 'yield_m', 'yield_turn_rad')) or (
             (kind == 'NONE') != (selection['reason'] is None)):
         raise ValueError('INVALID_RULE_HOLD_OR_HANDOFF')
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)

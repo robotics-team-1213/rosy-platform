@@ -49,3 +49,4 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
+D-740 feat/sdk-forward-arc-sweep에서 진행 중인 ADR이다. 그 브랜치가 착지할 때 이 줄을 지운다 (lint가 "declared gap now exists"로 알려 준다)
