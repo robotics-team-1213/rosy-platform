@@ -1,5 +1,7 @@
 # ROSY Platform 현재 폴더 책임
 
+2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
+
 2026-10-11 local main `d4988bffba`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
 
 구조 결정은 Accepted [D-625](../adr/D-625-semantic-structure-and-staged-migration.md), [D-626](../adr/D-626-d625-holder-migration-execution.md), [D-627](../adr/D-627-core-drive-composition-seam.md), [D-628](../adr/D-628-core-drive-output-and-recovery-boundaries.md), [D-630](../adr/D-630-remaining-platform-semantic-holders.md), [D-637](../adr/D-637-remaining-decision-console-learning-folders.md)에 따른다. CORE 세부 책임은 [CORE·Drive 안내](core-drive-responsibilities.md), 소유권·import 규칙은 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이 기준이다. 과거 `d427_target`은 소유권 식별자이고 현재 경로는 `path`와 필요한 `layout_target`으로 읽는다.
@@ -68,7 +70,7 @@
 
 **후속 구조 제안:** 현재 배치는 아래 표 그대로이며, 공통 상황평가·작업 규칙·Fleet 어댑터의 추가 책임 분리는 [D-648](../adr/D-648-shared-judgment-target-structure.md)의 [목표 설계](../plans/2026-10-11-shared-judgment-structure-design.md)와 [단계별 계획](../plans/2026-10-11-shared-judgment-structure.md)을 검토한다. Proposed 목표를 이미 이동·설치된 현재 상태로 집계하지 않는다.
 
-의미 폴더 깊이는 저장소 아래 책임 분류를 최대 5단계로 세는 기준이다. `middleware/drive/planning/nav2`는 5단계이다. `src/rosy/world`, `core_features`, `rosy_situation` 같은 언어 namespace와 ament의 `test/resource/config`는 패키지 내부 배치다. 이를 책임 분류 단계로 합산하여 기존 import를 억지로 바꾸지 않는다. 아래는 현재 존재하는 폴더만 보여 주며, 패키지 내부 경로는 괄호로 표시한다.
+의미 폴더 깊이는 저장소 아래 책임 분류를 최대 5단계로 세는 기준이다. `middleware/drive/planning/nav2`는 4단계이다. `src/rosy/world`, `core_features`, `rosy_situation` 같은 언어 namespace와 ament의 `test/resource/config`는 패키지 내부 배치다. 이를 책임 분류 단계로 합산하여 기존 import를 억지로 바꾸지 않는다. 아래는 현재 존재하는 폴더만 보여 주며, 패키지 내부 경로는 괄호로 표시한다.
 
 ```text
 rosy-platform/

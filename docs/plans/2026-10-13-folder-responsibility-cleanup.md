@@ -8,7 +8,7 @@
 
 **Tech Stack:** Git worktree, Python/setuptools·ament, ROS 2 Jazzy, 기존 원격 pytest/harness, PowerShell workspace 관리 도구.
 
-**상태:** P0 안내 적용 · P1 분류/부분 이관 · 나머지 PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
+**상태:** P0 안내 적용 · P1 분류/부분 이관 · S1 source·원격 검사 PASS, S2~S10·P2·P3 PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
 
 **P0 실행 기록 (2026-10-13, `docs/folder-guidance-p0`):** 현재 Control/Fleet/UI 안내와 root Docker source 설명을 정정하고 관리 도구로 `.worktrees` 안내를 설치했다. 우산 README·archive의 현재 소스 안내는 제품 Git 밖에서 수정하며 X: 세션 `folder-guidance-p0`에 전후 근거를 보존한다. 원격 시험과 local main 착지 결과는 Git 및 해당 세션 로그로 확인한다. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 근거가 없어 HOLD로 보존한다. P1·S1~S10·P2·P3는 아직 PLANNED다.
 
