@@ -53,7 +53,9 @@ def test_agents_md_records_the_shared_checkout_commands():
     section = _agents_section(AGENTS.read_text(encoding="utf-8"))
 
     assert WORKTREE in section
-    assert "python tools/worktrees.py prune --snapshot --idle-hours 72 --apply" in section
+    assert "python tools/worktrees.py prune --apply" in section
+    assert "`prune --snapshot`" in section and "사람이나 디스패처만 돌린다" in section
+    assert "--snapshot --" not in section  # no ready-to-paste snapshot command for every session
     assert "git worktree lock" in section
     assert "git add -A" in section
     assert "git diff --cached --name-only" in section

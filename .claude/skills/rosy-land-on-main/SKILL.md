@@ -23,10 +23,11 @@ python tools/worktrees.py new <short-name> <type>/<topic>     # not a bare `git 
 python tools/worktrees.py status                              # every worktree with a verdict
 ```
 
-- `new` (D-761) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`), sweeps finished worktrees
-  (clean, merged into `main`, not locked, idle 12 h), then refuses at 40 worktrees and prints
-  `python tools/worktrees.py prune --snapshot --idle-hours 72 --apply`. `--snapshot` tags uncommitted
-  work as `archive/<date>/wip/<name>` before removing and keeps unmerged branches.
+- `new` (D-761, Proposed) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`) and removes nothing:
+  it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (clean,
+  merged into `main`, not locked, no ignored data, idle 72 h); `new --prune` applies that first. It
+  refuses at 40 worktrees. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
+  removes dirty or unmerged worktrees too: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
 - `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `X:\DevTemp`.
@@ -110,9 +111,9 @@ digraph land {
    and try `--ff-only` again. There is no `--no-ff` landing.
 3. If git refuses because a peer's uncommitted file would be overwritten: leave that file.
    Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
-4. `tools/land.py` sweeps finished worktrees when it starts (`--no-prune` skips it). A landed worktree
-   goes with its branch at the next `land` or `new` once it has been idle 12 h; to remove it now, in the
-   main checkout: `git worktree remove .worktrees/<short-name>` then `git branch -d <branch>`. A branch
+4. `tools/land.py` only reports finished worktrees when it starts (`--prune` removes them, `--no-prune`
+   is silent). Remove a landed worktree after leaving it, in the main checkout:
+   `git worktree remove .worktrees/<short-name>`, then `git branch -d <branch>`. A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
 5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
    Local main ahead of `origin/main` has no CI evidence.
