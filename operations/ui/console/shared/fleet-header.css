@@ -59,7 +59,7 @@ ui-topbar {
 #clock { flex: none; white-space: nowrap; }
 #development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { min-width: 0; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* D-741 3: 알림, 로그인, 나(계정 단추). 폭이 모자라면 계정 단추의 역할 이름이 먼저 줄고 정지는 밀리지 않는다. */
+/* D-741 3: 알림, 로그인, 나(계정 단추). 30rem 아래에서 계정 단추는 아이콘만 남고 정지는 밀리지 않는다. */
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .fleet-header-actions [hidden], .topbar-extra [hidden] { display: none; }
 #fleet-inbox { flex: none; }
@@ -101,6 +101,8 @@ ui-topbar {
   /* R 심볼만 남긴다. 링크의 접근 이름(Rosy Fleet 관제 홈)은 그대로다. */
   .fleet-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #fleet-login .ui-icon { display: none; }
+  /* 역할 글은 접는다. 계정 단추의 접근 이름(계정과 접속 · 역할)과 툴팁이 역할을 말한다. */
+  #user-role { display: none; }
   /* 로그인 전에는 읽을 알림이 없다. 로그인 글과 계정 단추가 그 폭을 쓴다. */
   .fleet-header-actions:has(#fleet-login:not([hidden])) #fleet-inbox { display: none; }
   #fleet-inbox { gap: var(--space-1); }

@@ -89,7 +89,12 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     page.set_viewport_size({"width": width, "height": 900})
                     # D-741 3: the account button carries the role; the development warning stays
                     # visible inside the closed account button at every width (D-473).
-                    expect(page.locator(identity)).to_be_visible()
+                    expect(page.locator("#topbar-more")).to_have_attribute("aria-label", re.compile("운영자"))
+                    if width > 480:
+                        expect(page.locator(identity)).to_be_visible()
+                    elif width < 480:  # below 30rem the role text folds into the accessible name
+                        expect(page.locator(identity)).to_be_hidden()
+                    # exactly 30rem: a page scrollbar decides which side of the container query this is
                     expect(page.locator("#topbar-more #development-badge")).to_be_visible()
                     badge = page.locator("#development-badge").bounding_box()
                     stop = page.locator("#estop").bounding_box()
