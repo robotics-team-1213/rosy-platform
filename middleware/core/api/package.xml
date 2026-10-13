@@ -2,12 +2,12 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>core_api_web</name>
-  <version>0.0.0</version>
+  <version>0.0.1</version>
   <description>Core API and Web</description>
   <maintainer email="dev@rosy.com">Dev</maintainer>
   <license>Proprietary</license>
 
-  <depend>core_common</depend>
+  <depend version_gte="0.0.2">core_common</depend>
   <depend>core_features</depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>web_common</exec_depend>

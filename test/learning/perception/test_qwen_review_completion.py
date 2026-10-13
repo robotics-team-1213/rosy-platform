@@ -14,6 +14,23 @@ BINDING = {'classes': [{'name': 'background', 'index': 0},
                        {'name': 'drivable', 'index': 5}]}
 
 
+def test_completion_refuses_whole_road_before_network_or_output(tmp_path, monkeypatch):
+    binding = {'classes': [dict(c, semantic='road_surface/1', role='drivable')
+                           if c['name'] == 'drivable' else dict(c) for c in BINDING['classes']]}
+    monkeypatch.setattr(completion, 'snapshot', lambda *args: ({}, binding, []))
+    out = tmp_path / 'out'
+    monkeypatch.setattr(sys, 'argv', ['completion', '--state', str(tmp_path),
+                                    '--checkpoint', str(tmp_path / 'model.pt'), '--out', str(out)])
+    def network(*args, **kwargs):
+        pytest.fail('whole-road candidate reached own-road model prompt')
+    monkeypatch.setattr(completion.urllib.request, 'urlopen', network)
+    with pytest.raises(SystemExit) as error:
+        completion.main()
+    assert error.value.code == 2 and not out.exists()
+    with pytest.raises(ValueError, match='road_surface'):
+        completion.compose(np.full((1, 2), 255, np.uint8), {}, binding)
+
+
 def test_qwen_points_only_inside_unknown_and_human_pixels_survive():
     human = np.array([[0, 255, 255, 5], [0, 255, 255, 5]], dtype=np.uint8)
     predicted = completion.points({'background': [[3, 0], [0, 0]],

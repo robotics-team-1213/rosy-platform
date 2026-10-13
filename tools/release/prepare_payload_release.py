@@ -3,7 +3,7 @@
 One command for the hand steps between "the runner built the payload" and the push
 (skill rosy-release-push, steps 3-5):
 
-    python tools/release/prepare_payload_release.py --run 36865620181 --robot 192.168.1.202
+    python tools/release/prepare_payload_release.py --run 36865620181 --robot <robot-ip>
     python tools/release/prepare_payload_release.py --artifact-dir X:/DevTemp/a --release-id 2026.10.01-021 --skip-abi
 
 1. download: the run's `rosy-native-payload-unsigned-<id>-<sha>` artifact through

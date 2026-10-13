@@ -660,6 +660,119 @@ def test_sweep_uses_the_safety_clipped_twist():
     assert _step(m, post, error=-0.3)[1].reason == "obstacle_ahead"
 
 
+def _core_curve_manager(*, max_l=.1, max_a=.8, **overrides):
+    from types import SimpleNamespace
+    from core.drive.line_follow import bind_motion_envelope
+    from core_features.traffic_policy import TrafficPolicyMode
+
+    m = _manager(**overrides)
+    traffic = SimpleNamespace(mode=TrafficPolicyMode.ENFORCED,
+                              configuration=lambda: {"active": {"proceed_speed_scale": 0.5}})
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=max_l, max_angular=max_a))
+    bind_motion_envelope(m, safety=safety, traffic_policy=traffic)
+    return m
+
+
+def test_core_normal_camera_checks_its_curve_but_other_mode_gap_keeps_legacy_family():
+    post = [(0.017, 0.07)]
+    m = _core_curve_manager()
+    decision, status = _step(m, post, error=-.3)
+    assert status.state == "TRACKING" and decision.linear > 0.
+    gap, stop, _ = m.obstacle_gap(decision.linear, decision.angular, now=T)
+    assert gap is not None and gap < stop
+
+
+def test_leg10_critical_beam_does_not_stop_an_unblocked_normal_camera_curve():
+    # Leg10 sim55.4 beam591; sensor-origin point, mount translation is applied once by CORE.
+    point = [(0.07126481320667923 + .017, -0.04552029150062982)]
+    m = _core_curve_manager(cruise_speed=.1, max_linear=.1, steering_gain=2.,
+                            obstacle_path_horizon_m=.4, obstacle_latency_s=0.,
+                            obstacle_blind_floor=False)
+    decision, status = _step(m, point, error=-.059712345293685666, confidence=.6)
+    assert decision.linear == pytest.approx(.036968729829196315)
+    assert status.state == "TRACKING" and status.body_gap_m > status.stop_gap_m
+
+
+def test_core_curve_scope_still_stops_an_actual_body_collision():
+    m = _core_curve_manager(obstacle_blind_floor=False)
+    decision, status = _step(m, _wall(.07), error=-.3)
+    assert decision.linear == 0. and status.reason == "obstacle_ahead"
+
+
+@pytest.mark.parametrize("linear_scale,angular_scale", [(1., 2.), (2., 2.)])
+def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch, linear_scale, angular_scale):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_apply_recovery",
+                        lambda now, decision: replace(decision, linear=decision.linear * linear_scale,
+                                                       angular=decision.angular * angular_scale))
+    decision, status = _step(m, [], error=-.3)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason) == ("HOLD", "motion_unconfirmed")
+
+
+@pytest.mark.parametrize("max_l,max_a", [(.005, .8), (.1, .05), (0., .8)])
+def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monkeypatch, max_l, max_a):
+    m = _core_curve_manager(max_l=max_l, max_a=max_a)
+    cap = [max_l, max_a]
+    m._motion_envelope_provider = lambda: (*cap, .15)
+
+    def raise_cap(now, decision):
+        cap[:] = [.1, .8]
+        return decision
+
+    monkeypatch.setattr(m, "_apply_recovery", raise_cap)
+    decision, status = _step(m, [], error=-.3)
+    scale = min(1., max_l / .0322, max_a / .24)
+    assert (decision.linear, decision.angular) == pytest.approx((.0322 * scale, .24 * scale))
+    assert status.linear == pytest.approx(.0322 * scale)
+
+
+def test_core_curve_scope_accepts_common_slowdown_and_does_not_reuse_the_previous_tick(monkeypatch):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_crosswalk_gate", lambda now, decision: replace(
+        decision, linear=decision.linear * .5, angular=decision.angular * .5))
+    first, _ = _step(m, [], error=-.3)
+    second, _ = _step(m, [], error=.2, t=T + .1)
+    assert (first.linear, first.angular) == pytest.approx((.0161, .12))
+    assert (second.linear, second.angular) == pytest.approx((.0174, -.08))
+    stale = m.tick(T + 1.)
+    assert (stale.linear, stale.angular) == (0., 0.)
+
+
+@pytest.mark.parametrize("confidence", [.35, .350000001])
+def test_core_curve_scope_never_turns_zero_or_tiny_intent_into_cruise(confidence):
+    m = _core_curve_manager()
+    decision, _ = _step(m, [], error=0., confidence=confidence)
+    assert decision.linear == pytest.approx(.04 * (confidence - .35) / .65, abs=1e-15)
+    assert decision.angular == 0.
+
+
+def test_core_curve_scope_accepts_lane_return_tracking_passthrough(monkeypatch):
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_apply_lane_return", lambda now, decision: decision)
+    decision, status = _step(m, [], error=-.3)
+    assert (decision.linear, decision.angular) == pytest.approx((.0322, .24))
+    assert status.state == "TRACKING"
+
+
+@pytest.mark.parametrize("direction", [1., -1.])
+def test_core_nontracking_sweep_covers_the_static_common_clip_curve(direction):
+    m = _core_curve_manager(max_a=.01)
+    point = [(direction * .052 + .017, direction * .078)]
+    m.observe_body_points(point, range_min=.05, received_at=T)
+    m.observe_scan_points(point, received_at=T)
+    # A LINE manoeuvre (.08, .8) becomes (.001, .01), rather than (.08, .01).
+    actual_gap = body_path_gap([(.052, .078)], linear=.001, angular=.01,
+                               min_travel_m=.08, **BODY)
+    assert actual_gap is not None and actual_gap < .08
+    with m._lock:
+        assert not m._sweep_clear(T, direction * .08, .8)
+
+
 def test_an_unreadable_motion_envelope_fails_closed():
     m = _manager()
 

@@ -301,3 +301,14 @@
 - 변경: 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
 - 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 413 passed, 0 failed. X:/DevTemp/ui-role-devices/cam-gradle-2.txt 및 X-only 재실행 cam-gradle-3.txt. 실제 폰 수용은 별도다.
 - gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
+
+- 변경: 인증된 미리보기 읽기가 있으면 센서를 열고 JPEG를 보낸다. 마지막 읽기 뒤 30초가 지나면 demand.wanted가 false가 되고, 소켓과 wake lock은 둔 채 센서와 송출을 멈춘다. 앱 화면이 열려 있으면 맞추기용 미리보기만 하고 보내지 않는다. demand를 모르는 이전 앱과 demand를 보내지 않는 이전 Vision은 지금처럼 계속 보낸다.
+- 증거: Windows Gradle testDebugUnitTest 418 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-unit.txt). 원격 AI PC에서 d780942b9 Vision·버전 핀 294 passed, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt).
+- gate 변화: SOURCE/JVM. 대기 전류와 요청 뒤 첫 프레임 시간은 측정하지 않았다. APK를 설치하지 않았다. DEVICE/FIELD는 PARKED.
+## 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
+
+- 변경: D-691에 안전 예외를 더했다. PowerManager 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청과 미리보기보다 먼저 센서와 JPEG를 멈춘다. 화면 끄기와 같은 기준이고, LIGHT 이하 또는 배터리 41°C 이하로 식으면 다시 따른다. 소켓과 wake lock은 유지한다. 36°C대 충전 온도로는 멈추지 않는다.
+- 증거: Gradle testDebugUnitTest 421 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-heat.txt). 2026-10-12 S21 디버그 APK 설치 후 Fleet lease JPEG 1280x720, 순번 1285에서 1289, 화면을 끈 뒤 1434. 그때 배터리는 36.2°C라 발열 정지는 기기에서 확인하지 않았다. 현장 Vision은 demand를 보내지 않아 약 2초 유예 송출이었다.
+- gate 변화: SOURCE/JVM. 송출 DEVICE는 유예 경로로 확인. 30초 대기와 발열 정지의 DEVICE/FIELD는 PARKED.

@@ -11,6 +11,7 @@ import math
 
 from core_common.robot_body import RobotBody
 from core_features.line_follow.clearance import body_envelope_gap, body_path_gap
+from core_features.safety.velocity import limit_velocity
 
 #: IR guard verdicts (manager._ir_guard) each kind may move on; 'stale' never. Bridge: D-476
 #: rev 1 and the bend pass (its blind arc, the same fence); approach/turn/advance: D-498 (not on
@@ -89,6 +90,9 @@ class MotionAdmitMixin:
         if envelope is None or self._odometry_hold or self._range_min is None:
             return False
         max_linear, max_angular, floor = envelope
+        common_curve = (limit_velocity(speed, angular, max_linear, max_angular,
+                                       preserve_curvature=True)
+                        if self._curve_preserving_envelope else (0., 0.))
         speed, angular = min(speed, max_linear), max(-max_angular, min(max_angular, angular))
         back = c.body_lidar_x_m - c.body_rear_x_m
         if c.obstacle_override:
@@ -114,6 +118,9 @@ class MotionAdmitMixin:
                     half_width_m=c.body_half_width_m, rotation_radius_m=c.body_rotation_radius_m)
         gaps = [body_path_gap(points, linear=speed, angular=angular, min_travel_m=resume,
                               horizon_m=c.obstacle_path_horizon_m, **body)]
+        if common_curve[0] > 0.:
+            gaps.append(body_path_gap(points, linear=common_curve[0], angular=common_curve[1],
+                                      min_travel_m=resume, horizon_m=c.obstacle_path_horizon_m, **body))
         if floor < 1. and abs(angular) > 1e-6:
             gaps.append(body_envelope_gap(points, linear=speed, angular=angular,
                                           scale_floor=floor, horizon_m=resume, **body))

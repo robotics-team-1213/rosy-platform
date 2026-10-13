@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-  previewFresh, headingText, fleetAnswerText, stuckSummary,
+  previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText,
 } = await import("../../../ui/console/line-stuck.js");
 
 const STUCK = {
@@ -16,7 +16,20 @@ const STUCK = {
   attempts: 0, max_attempts: 2, local_enabled: true, robot_online: true,
   front_clearance_m: 0.123, rear_clearance_m: 0.31, turn_clearance_m: null, preview_seq: 812,
 };
+
+test("autonomous hold remains observation in operator display", () => {
+  assert.match(resolverText({ escalated: "auto_hold:rule_budget" }), /자동 대기.*상태 관측/);
+});
 const byDecision = (buttons) => Object.fromEntries(buttons.map((b) => [b.decision, b]));
+
+test('judgment display refuses stale or other-case receipts', () => {
+  const receipt = {necessity: 'INTERVENE', request: {case_id: 's'}, evaluated_at: 99, valid_until: 103};
+  assert.match(judgmentText(receipt, 's', 100), /개입 필요.*실행 승인은 별도/);
+  assert.match(judgmentText(receipt, 's', 104), /보류.*갱신/);
+  assert.match(judgmentText(receipt, 'other', 100), /보류.*갱신/);
+  assert.match(judgmentText({...receipt, necessity: 'DO_NOT_INTERVENE'}, 's', 100), /개입 불필요/);
+  assert.match(judgmentText({...receipt, necessity: 'ABSTAIN'}, 's', 100), /보류/);
+});
 
 test("operator summary separates proposal, transmission, receipt and completion", () => {
   assert.match(stuckSummary(STUCK), /멈춰 판단을 요청.*조치를 선택/);
@@ -142,6 +155,9 @@ test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /차선 추종을 중단했습니다/);
   assert.doesNotMatch(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
   assert.match(outcomeText("rosy_01", "MANUAL", {}), /CORE가 받았습니다/);
+  for (const [decision, outcome] of [['RESUME', 'resume'], ['BACK_AND_RETRY', 'back']]) {
+    assert.match(outcomeText('rosy_01', decision, {outcome}), /CORE.*수락.*로봇 상태.*확인/);
+  }
 });
 
 test("resolverText says what the Fleet resolver did, or why a human is needed", () => {

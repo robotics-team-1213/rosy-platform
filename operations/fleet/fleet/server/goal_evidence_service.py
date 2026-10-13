@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
-from .goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
 from .goal_evidence_registry import GoalEvidenceProducer, GoalEvidenceRegistry
 from .goal_evidence_store import GoalEvidenceConflict, GoalEvidenceStore
 from .mission_service import MissionService

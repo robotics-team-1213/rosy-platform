@@ -79,6 +79,20 @@ def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg"
 REPORT = ("e" * 64, "intake_report.json")
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
+def test_incompatible_road_meaning_is_refused_before_ssh(tmp_path, semantic):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+    path = models / rev / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "road", "role": "drivable",
+                                       "semantic": semantic})
+    path.write_text(json.dumps(doc))
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner) == 2
+    assert runner.calls == []
+
+
 def _push_script(**kw):
     return deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")],
                                  report=REPORT, stage=f"{STAGE}/{REV}", **kw)

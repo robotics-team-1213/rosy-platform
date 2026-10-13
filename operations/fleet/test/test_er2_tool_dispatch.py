@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from core_common.protocol.schemas import MissionFeedbackContext, MissionFeedbackTurnScope
 from rosy.decision.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
 from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
-from rosy.decision.tool_dispatch import MissionFeedbackToolDispatcher
+from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
 from test_mission_api import _client, _create, _resolve
 
 
