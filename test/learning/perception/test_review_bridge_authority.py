@@ -3,6 +3,7 @@ import hashlib
 import contextlib
 import io
 import json
+import pytest
 
 
 def test_local_transport_delivers_real_sealed_bundle_and_persists_highwater(tmp_path):
