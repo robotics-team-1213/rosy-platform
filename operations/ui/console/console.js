@@ -183,20 +183,20 @@ let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
 
 const log = inbox.log;
 
-const fleetClient = createFleetClient({ credential: () => auth.token });
+const fleetApi = createFleetClient({ credential: () => auth.token });
+// D-741 3 — any answer keeps the link word live. Only the state poll may call it down: Fleet answers
+// 502/503 for a refusing robot or a feature that is off.
+const fleetClient = (path, options) => fleetApi(path, options).then(body => { noteLink(); return body; }, error => {
+  if (path === "/api/fleet/state" || error.status < 500) noteLink(error);
+  throw error;
+});
 
 async function call(path, options = {}) {
   const task = pageScope.capture();
   task.check();
   const cameraPreview = path === "/api/fleet/vision/sources" || path === "/api/fleet/vision/lease";
   try {
-    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]}).catch(error => {
-      // Any answer keeps the link word live. Only the state poll may call it down: Fleet answers 502/503
-      // for a refusing robot or a feature that is off.
-      if (path === "/api/fleet/state" || error.status < 500) noteLink(error);
-      throw error;
-    });
-    noteLink();
+    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
     task.check();
     if (auth.locked && path !== "/api/fleet/session" && !cameraPreview) throw new DOMException("Authentication changed", "AbortError");
     if (path === "/api/fleet/session") markUnlocked();
@@ -395,7 +395,7 @@ async function refreshState() {
   const life = pageScope.capture();
   life.check();
   // A signed-out console still asks Fleet's open endpoint, so the link word does not drift to 지연.
-  if (auth.locked) return void fleetClient("/api/fleet/auth/connection", {signals: [life.signal]}).then(() => noteLink(), noteLink);
+  if (auth.locked) return void fleetApi("/api/fleet/auth/connection", {signals: [life.signal]}).then(() => noteLink(), noteLink);
   if (statePollInFlight) return;
   statePollInFlight = true;
   let fleetAnswered = false;
