@@ -14,6 +14,8 @@
 
 **P1 실행 기록 (2026-10-13, `docs/folder-artifacts-p1`):** 19곳을 분류하고 Graphify 생성물 4곳/418파일/33.22 MiB를 X:로 이관했다. 전체 hash·크기, source 부재, CLI 읽기 동등성을 확인했다. [처리 결과](../validation/folder-artifacts-p1-2026-10-13/result.md)와 [출력 안내](../reference/analysis-artifact-locations.md)에 보존/복구/후속 설정을 기록했다. 나머지 15곳은 actor·참조 미확정 또는 별도 overlay 범위로 HOLD다. S1~S10·P2·P3는 PLANNED다. HOLD를 제거 완료로 집계하지 않는다.
 
+**P1 HOLD 재확인 (2026-10-13, `docs/artifact-hold-review`):** 사용자 지정 15곳을 재조사하여 비활성 orphan bytecode/cache/시험 자료 1,847개·40.54 MiB를 X:로 이관했다. [검증 기록](../validation/artifact-hold-review-2026-10-13/result.md)의 결과는 8곳 정리/2곳 부분 정리/5곳 유지다. 남은 협업 상태·lock·미확정 기록, 자격/producer 미확정 `pidA/wsA.json`, 참조되는 build/install/log는 보존한다. 15곳 전체 제거로 집계하지 않는다. S1~S10·P2·P3는 계속 PLANNED다.
+
 근거: [조사 보고서](../assessments/2026-10-13-folder-responsibility-audit.md), Accepted [D-738](../adr/D-738-folder-one-authority.md), [현재 폴더 책임](../reference/platform-folder-responsibilities.md), [platform_parts.yaml](../../tools/harness/platform_parts.yaml). 조사 SHA `a967ab11a`는 과거 스냅샷이다. 각 작업 시작 시 최신 main에서 현재 경로와 이미 완료된 단계를 다시 확인한다. 다른 세션이 완료한 이동을 다시 실행하지 않는다.
 
 ## 범위·책임·순서

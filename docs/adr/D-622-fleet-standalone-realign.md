@@ -17,4 +17,10 @@
 
 원격 TDD로 selector→Answer→loop→HTTP payload를 검증한다. 기본 꺼짐, 지도/표본 불일치, stale/NaN, trip, 동료 미확인, 경계 침범, 후진 미확인, ±90도 초과, 응답 유실을 확인한다. 소스 통과는 설치·실제 탈출·한 바퀴 완주 증거가 아니다.
 
-**Related:** D-607, D-453, D-620, D-517, D-430.
+### 개정 (2026-10-13): REALIGN 보류는 사람에게 넘기고 선택은 digest로 기록한다
+
+- `realign_hold:*`는 그 막힘 id의 resolver chain 안에서 종결이다. 이 기록은 메모리의 chain에만 있어 Fleet 재시작이나 로봇 행이 snapshot에서 빠지면 다른 인계와 마찬가지로 사라진다. 그 안에서는 보류 사유가 나중에 풀려도 Fleet은 그 막힘에 REALIGN을 다시 고르지 않고 사람에게 넘긴다. `autonomous_robots`에도 들어 있는 로봇도 같다. 자율 재관측(`Hold`)으로 남기지 않고 비자율 로봇과 같은 사람 인계로 기록한다. CORE가 정지 답을 거절했거나 다른 보류를 재관측하던 중에 나온 REALIGN 보류도 사람에게 간다. 한쪽 목록에만 있는 로봇의 동작은 그대로다.
+- REALIGN 규칙 선택은 D-700 원장에 `selection.realign_sha256`으로 남긴다. 값은 보낸 조작 본문 정렬 JSON의 SHA-256이며 자세·좌표 원문은 복사하지 않는다(D-700). 이 키는 REALIGN 선택에만 있고 `rosy.incident.rule_selection/1` id는 그대로다. 읽는 쪽은 `rosy-contracts-learning` 0.1.12 이상이어야 한다.
+- 규칙 선택 설정 digest는 `realign_robots`와 복구 영역을 포함한다.
+
+**Related:** D-607, D-453, D-620, D-517, D-430, D-700.
