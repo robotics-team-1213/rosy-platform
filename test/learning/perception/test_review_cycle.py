@@ -494,6 +494,11 @@ def test_unparsable_classes_file_is_a_plain_400(tmp_path, broken):
     classes.write_bytes(broken)
     with pytest.raises(ValueError, match='클래스 파일'):
         review_ingest.import_frames(store, {'path': str(folder)})
+    secret = tmp_path / 'not-yaml.txt'   # the path is caller-chosen: a parse refusal must not quote the file
+    secret.write_bytes(b'key: [unclosed hunter2-value\n')
+    with pytest.raises(ValueError, match='클래스 파일을 해석할 수 없습니다') as quoted:
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(secret)})
+    assert 'hunter2' not in str(quoted.value)
     server = make_server(store, 0)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
