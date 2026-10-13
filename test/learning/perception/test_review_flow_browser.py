@@ -561,7 +561,7 @@ def test_owner_hold_stays_visible_after_timer_report_changes(browser_workspace, 
     held['timer_cycle'] = 2
     (report / 'summary.json').write_text(json.dumps(held))
     page.locator('#refresh').click()
-    expect(page.locator('#jobs .ui-task-status')).to_contain_text('승인·입력 조건 대기')
+    expect(page.locator('#jobs ui-tag')).to_contain_text('승인·입력 조건 대기')
     expect(page.locator('#jobs .job-reason')).to_have_count(1)
 
 
