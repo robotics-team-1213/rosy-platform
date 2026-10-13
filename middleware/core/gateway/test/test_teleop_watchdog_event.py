@@ -112,7 +112,7 @@ def test_the_stop_reaches_the_wheels_before_the_announcement():
 
     cycle(command, 101.0, log=order)
 
-    assert order == ["wheels", "event:safety.watchdog"], order
+    assert order == ["wheels", "event:native.operation.terminal", "event:safety.watchdog"], order
 
 
 def test_it_is_announced_once_not_once_per_cycle():
@@ -341,7 +341,12 @@ def test_a_tick_inside_teleop_does_not_resend_the_lapsed_command():
             seen.append(cycle(command, 101.5))
 
     watchdog.refresh = refresh_then_tick
-    command.teleop(0.0, 0.0)
+    from threading import Thread
+
+    worker = Thread(target=lambda: command.teleop(0.0, 0.0), daemon=True)
+    worker.start()
+    worker.join(timeout=2.0)
+    assert not worker.is_alive(), "mode epoch readback deadlocked inside watchdog renewal"
     watchdog.refresh = real_refresh
 
     assert seen == [Twist(0.0, 0.0)]

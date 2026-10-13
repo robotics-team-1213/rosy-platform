@@ -15,6 +15,18 @@ BODY = dict(body_front_x_m=0.04205, body_rear_x_m=-0.076, body_half_width_m=0.05
             body_rotation_radius_m=0.08257, body_lidar_x_m=LIDAR_X)
 
 
+def test_direct_realign_refuses_back_only_precondition_before_starting():
+    rig = Rig()
+    request = {"kind": "PIVOT", "angle_rad": 1.2, "pose_stamp": WALL + rig.fed,
+               "attempt": 1, "turn_spot": True}
+    before = rig.m.status().stuck
+    with pytest.raises(AnswerRefused, match="expected_stuck belongs to BACK_AND_RETRY"):
+        rig.m.stuck_decision(before.stuck_id, "REALIGN", by="operator", realign=request,
+                             expected_stuck={"phase": "ASKING", "attempts": 9})
+    assert rig.m.status().stuck == before
+    assert rig.realign() == "realign"
+
+
 class _Events:
     def __init__(self):
         self.seen = []
@@ -71,7 +83,8 @@ class Rig:
         self.y += linear * math.sin(self.yaw) * dt
         self.t += dt
         self.feed()
-        d = self.m.tick(self.t + 0.01)
+        # Evidence, the manager tick, and an immediate answer share the rig's monotonic clock.
+        d = self.m.tick(self.t)
         self.twist = (d.linear, d.angular)
         return d
 
@@ -96,6 +109,25 @@ def _refused(rig, why, **body):
     with pytest.raises(AnswerRefused) as caught:
         rig.realign(**body)
     assert caught.value.code == "STUCK_DECISION_REFUSED" and why in str(caught.value), str(caught.value)
+
+
+def test_kturn_refuses_side_obstacle_outside_straight_rear_strip():
+    rig = Rig()
+    # A bounded deterministic witness search verifies the side point meets both premises.
+    inp = None
+    for x in (-.07, -.08, -.09, -.10):
+        for y in (-.077, -.08, -.083, -.086):
+            rig.extra = ((x, y),)
+            rig.feed()
+            candidate = rig.m._stuck_input(rig.t)
+            if (rig.m._recovery._back_refusal(candidate) is None
+                    and not rig.m._rear_sweep_clear(rig.t, .04, .3)):
+                inp = candidate
+                break
+        if inp is not None:
+            break
+    assert inp is not None, "the side obstacle must miss the strip and intersect the curved body"
+    assert rig.m._realign_why(rig.t, inp, "KTURN", -.04, .3) is not None
 
 
 def test_pivot_at_a_turn_spot_turns_on_odom_through_the_ir_centre_and_closes_on_lane_evidence():

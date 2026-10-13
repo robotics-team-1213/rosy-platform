@@ -12,6 +12,22 @@ from rosy_situation import service
 from rosy_situation.service import Situation
 
 
+def test_fleet_timeout_identifies_route_without_leaking_credentials(monkeypatch, caplog):
+    import pytest
+
+    error = TimeoutError("private-network-detail")
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(service.urllib.request, "urlopen", fail)
+    with pytest.raises(TimeoutError) as caught:
+        service.Fleet("http://site", "private-bearer").call("/api/fleet/events?after_id=private-cursor")
+    assert caught.value is error
+    assert "GET /api/fleet/events" in caplog.text and "TimeoutError" in caplog.text
+    assert all(value not in caplog.text for value in ("private-bearer", "private-cursor", "private-network-detail"))
+
+
 class FakeFleet:
     def __init__(self, events=None):
         self.calls = []

@@ -126,9 +126,9 @@ def test_scene_context_does_not_change_gating_outcomes():
     with_context = road_evidence(payload(context=CONTEXT))
     traffic.observe(with_context, received_at=now[0],
                     source_now=with_context.stamp)
-    command = SimpleNamespace(applied=[])
+    command = SimpleNamespace(applied=[], clip_line_candidate=lambda linear, angular: (linear, angular))
     command.set_nav_twist = (
-        lambda twist, now=None: command.applied.append(twist))
+        lambda twist, now=None, preserve_curvature=False: command.applied.append(twist))
 
     assert apply_line_candidate(
         line, traffic, command, line.tick(), now[0]) is True
@@ -165,9 +165,9 @@ def test_red_or_yellow_gates_line_candidate_to_zero(colour):
     line, traffic = managers(now)
     sample = road_evidence(payload(colour=colour))
     traffic.observe(sample, received_at=now[0], source_now=sample.stamp)
-    command = SimpleNamespace(applied=[])
+    command = SimpleNamespace(applied=[], clip_line_candidate=lambda linear, angular: (linear, angular))
     command.set_nav_twist = (
-        lambda twist, now=None: command.applied.append(twist))
+        lambda twist, now=None, preserve_curvature=False: command.applied.append(twist))
 
     assert apply_line_candidate(
         line, traffic, command, line.tick(), now[0]) is True
@@ -189,9 +189,9 @@ def test_stale_road_evidence_gates_line_candidate_to_zero():
         error=0.0,
         confidence=1.0,
     ), received_at=now[0], source_now=10.41)
-    command = SimpleNamespace(applied=[])
+    command = SimpleNamespace(applied=[], clip_line_candidate=lambda linear, angular: (linear, angular))
     command.set_nav_twist = (
-        lambda twist, now=None: command.applied.append(twist))
+        lambda twist, now=None, preserve_curvature=False: command.applied.append(twist))
 
     apply_line_candidate(line, traffic, command, line.tick(), now[0])
 
@@ -211,3 +211,35 @@ def test_new_road_evidence_invalidates_precomputed_policy_decision():
 
     assert traffic.apply_if_current(decision, applied.append) is False
     assert applied == []
+
+
+def test_atomic_bridge_keeps_checked_curve_through_traffic_and_actual_command_sdk(monkeypatch):
+    from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
+    from core_features.command.manager import CommandManager
+    from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
+
+    now = [100.]
+    line, traffic = managers(now)
+    line.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=10., visible=True,
+        error=-.08, confidence=1.), received_at=100., source_now=10.)
+    sample = road_evidence(payload(distance=.20))
+    traffic.observe(sample, received_at=100., source_now=10.)
+    modes = ModeMachine()
+    safety = SafetyManager(SpeedLimits(max_linear=.02), BatteryPolicy())
+    safety.set_session_speed(.01)
+    command = CommandManager(SourceRegistry(), modes, safety)
+    assert modes.transition(Mode.NAVIGATION)[0]
+    issued = []
+    original = line.note_issued
+    def record(*args, **kwargs):
+        issued.append(args)
+        original(*args, **kwargs)
+    monkeypatch.setattr(line, 'note_issued', record)
+    candidate = line.tick()
+    assert candidate.linear > .01 and candidate.angular != 0.
+    checked = command.clip_line_candidate(candidate.linear, candidate.angular)
+    assert apply_line_candidate(line, traffic, command, candidate, 100., command_now=100.)
+    output = command.select_output(now=100.)
+    assert 0. < output.linear < .01
+    assert output.angular / output.linear == pytest.approx(checked[1] / checked[0])
+    assert issued[-1][:2] == pytest.approx((output.linear, output.angular))

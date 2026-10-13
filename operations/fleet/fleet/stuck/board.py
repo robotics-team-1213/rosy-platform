@@ -15,11 +15,15 @@ import logging
 import sqlite3
 import time
 from collections import deque
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, Iterable, Optional
 
 from .lane_lost import peer_ahead
 from .resolver import ResolverConfig
+from rosy_situation.assessment import assess
+from rosy_situation.snapshot_assessment import POLICY, robot_input
+from core_common.protocol.schemas import FleetJudgmentReceipt
 
 if TYPE_CHECKING:
     from .reports import LineStuckAnswerLog
@@ -46,6 +50,8 @@ class LineStuckBoard:
         self._clock = clock
         self._wall = wall
         self._open: dict[str, dict] = {}
+        self._assessment_inputs = {}
+        self._handoff_pending: set[tuple[str, str]] = set()
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
@@ -56,6 +62,7 @@ class LineStuckBoard:
         self.trip_busy: Optional[Callable[[str], bool]] = None
         self.ai_view: Optional[Callable[[str, str], dict]] = None   # D-577 8: AI chip, facts, proposal
         self.map_pose: Optional[Callable[[str], object]] = None
+        self.heading_review: Optional[Callable[[str], dict]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
         # Episode writes queued by observe(), in order; flush() runs them (off the event loop).
@@ -74,6 +81,7 @@ class LineStuckBoard:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
+        self._handoff_pending = {key for key in self._handoff_pending if key[0] != robot_id or key[1] == keep}
         for notes in (self._resolver, self._previews):
             for key in [k for k in notes if k[0] == robot_id and k[1] != keep]:
                 del notes[key]
@@ -113,6 +121,14 @@ class LineStuckBoard:
         now = self._observed_at = self._clock()
         seen = set()
         robots = list(robots)
+        wall = self._wall()
+        self._assessment_inputs = {}
+        for row in robots:
+            source = dict(row)
+            received = source.get('_state_mono')
+            if type(received) in (int, float):
+                source['state_age_s'] = now - received
+            self._assessment_inputs[row['robot_id']] = robot_input(source, now=wall, sampled_at=wall)
         for row in robots:
             robot_id = row["robot_id"]
             seen.add(robot_id)
@@ -137,19 +153,45 @@ class LineStuckBoard:
                 self._open_episode(row, stuck, robots)
             self._peak(robot_id, stuck)
             entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
+            if isinstance(stuck.get("inquiry"), dict):
+                entry["inquiry"] = stuck["inquiry"]
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:
             del self._open[robot_id]   # left the roster
             self._drop_notes(robot_id)
             self._close_episode(robot_id, "left_roster")
+        if self._log is not None:
+            for robot_id in self._assessment_inputs:
+                receipt = self.judgment_view(robot_id)
+                self._pending.append(lambda r=receipt: self._log.record_judgment(r))
+
+    def intervention_assessment(self, robot_id: str):
+        """Internal shadow read; recheck age without refreshing the original evidence."""
+        request = self._assessment_inputs.get(robot_id)
+        return assess(request, now=self._wall(), policy=POLICY) if request is not None else None
+
+    def judgment_view(self, robot_id: str) -> Optional[dict]:
+        assessment = self.intervention_assessment(robot_id)
+        return (FleetJudgmentReceipt(**asdict(assessment)).model_dump(mode="json")
+                if assessment is not None else None)
+
+    async def deliberate(self, robot_id, journal, supervisor, providers, *, baseline=None, current_baseline=None):
+        """Explicit shadow caller; never forwards a stuck answer or activates a provider."""
+        from ..server.incident_deliberation import run_line_judgment
+        return await run_line_judgment(self.intervention_assessment(robot_id), journal,
+            supervisor, providers, current=lambda: self.intervention_assessment(robot_id),
+            baseline=baseline, current_baseline=current_baseline)
+
+    def judgments(self, limit: int = 100) -> list[dict]:
+        return self._log.judgments(limit) if self._log is not None else []
 
     # ---- episode log: one write per open / close transition, never per poll -------------
 
     def episodes(self, limit: int = 100) -> list[dict]:
         return self._log.episodes(limit) if self._log is not None else []
 
-    def reports(self, limit: int = 100) -> list[dict]:
-        return self._log.reports(limit) if self._log is not None else []
+    def reports(self, limit: int = 100, **filters) -> list[dict]:
+        return self._log.reports(limit, **filters) if self._log is not None else []
 
     def traffic_reports(self, limit: int = 100) -> list[dict]:
         return self._log.traffic_reports(limit) if self._log is not None else []
@@ -254,6 +296,11 @@ class LineStuckBoard:
                      if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]
                      and a["decision"] != "ESCALATE"), None)
         shown["fleet_answer"] = last
+        if self.heading_review is not None:
+            try:
+                shown["heading_review"] = self.heading_review(robot_id)
+            except Exception:  # noqa: BLE001 - a direction observer must not hide the stuck
+                shown["heading_review"] = {"status": "observer_unavailable"}
         note = self._resolver.get((robot_id, entry["stuck_id"]))
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {
@@ -279,25 +326,32 @@ class LineStuckBoard:
                accepted: Optional[bool], outcome: Optional[str] = None,
                code: Optional[str] = None, message: Optional[str] = None,
                audit_id: Optional[str] = None, tier: Optional[str] = None,
-               rule: Optional[str] = None, escalated: Optional[str] = None) -> dict:
+               rule: Optional[str] = None, escalated: Optional[str] = None, durable: bool = False, connection=None) -> dict:
         """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
 
         D-438 §8: ``tier`` (human / rule) and ``rule`` say who decided; a resolver hand-off to
         a human is its own row with decision ``ESCALATE`` and the reason in ``escalated``.
         The row also goes to the durable log next to the API audit row (``audit_id``). The
         robot has already been asked, so a log failure is logged, never turned into an error."""
+        if durable and self._log is None:
+            raise OSError("durable stuck journal is not configured")
         row = {"robot_id": robot_id, "stuck_id": stuck_id, "decision": decision,
                "principal_id": principal_id, "accepted": accepted, "outcome": outcome,
                "code": code, "message": message, "audit_id": audit_id,
                "tier": tier, "rule": rule, "escalated": escalated,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
-        self._answers.append(row)
-        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
-                  robot_id, stuck_id, decision, principal_id, accepted, code)
+        if connection is None: self._publish_answer(row)
         if self._log is not None:
             try:
-                self._log.append(row)
+                self._log.append(row, connection=connection) if connection is not None else self._log.append(row)
             except (OSError, sqlite3.Error):
+                if durable:
+                    raise
                 _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
                                robot_id, stuck_id)
         return row
+
+    def _publish_answer(self, row):
+        self._answers.append(row)
+        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
+                  row['robot_id'], row['stuck_id'], row['decision'], row['principal_id'], row['accepted'], row['code'])

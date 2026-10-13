@@ -184,7 +184,7 @@ def test_all_goal_payload_kinds_are_goal_shaped_and_immutable():
 def test_existing_omx_command_every_field_roundtrips_without_backend_import_in_contract(source, priority):
     from pathlib import Path
     import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "middleware/apps/device/omx/adapter"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"))
     from omx_adapter.command_owner import TrajectoryCommand
     from omx_adapter.manipulation_plan import JointTrajectoryPoint
     m = motion()

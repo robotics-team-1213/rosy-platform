@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, launch_options, safe_listener
+from browser_harness import browser_tests_enabled, launch_options, open_token_access, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -25,7 +25,7 @@ from fleet.swarm.robots import RobotEndpoint
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 ROOT = Path(__file__).resolve().parents[3]
-SIZES = [(1920, 1080), (1280, 800), (390, 844), (320, 568)]
+SIZES = [(1920, 1080), (1366, 768), (390, 844), (320, 568)]
 
 PLACES = [{"id": "j_sw", "name": "남서", "x": 0, "y": 0, "kind": "junction"},
           {"id": "j_se", "name": "남동", "x": 2, "y": 0, "kind": "junction"},
@@ -93,6 +93,7 @@ API = {
                                       "sources": [{"source_id": "cam-1"}]}]},
     "/api/fleet/site-map/active": ACTIVE,
     "/api/fleet/site-map/draft": {"map": None, "revision": None},
+    "/api/fleet/site-map/profiles": {"profiles": []},
     "/api/fleet/calibrations": {"calibrations": []},
     "/api/fleet/traffic": TRAFFIC,
     "/api/fleet/trips": {"running": OPEN[1], "trips": OPEN, "open": OPEN},
@@ -183,8 +184,10 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console", posts)
         try:
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)  # the first 1 s traffic poll
+            expect(page.locator("#traffic-toggle")).to_be_hidden()
+            page.locator("#map-options > summary").click()
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
             assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2, "convoys": 0, "signals": 0}
@@ -202,8 +205,10 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             expect(page.locator("#site-path-list")).to_be_visible()
             expect(page.locator("#site-path-list")).to_contain_text("프록시")
             page.locator("#site-path summary").click()
+            page.locator("#map-options > summary").click()
             _shots(page, "console-traffic", fits=True)
             page.set_viewport_size({"width": 1920, "height": 1080})
+            page.locator("#map-options > summary").click()
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
             page.locator("#traffic-toggle").click()
             expect(page.locator("#traffic-toggle")).to_have_attribute("aria-pressed", "false")
@@ -212,6 +217,98 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             assert page.locator("#map-canvas").evaluate("c => c.toDataURL()") != before
             page.locator("#traffic-toggle").click()
             expect(page.locator("#legend-traffic")).to_be_visible()
+            assert not posts, posts
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+def test_map_context_keeps_place_names_off_the_floor(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, "/console", [])
+        try:
+            expect(page.locator("#map-places li")).to_have_count(len(PLACES))
+            expect(page.locator("#map-places")).to_be_hidden()
+            assert page.locator("#map-readouts").get_attribute("open") is None
+            if out := os.environ.get("ROSY_SHOT_DIR"):
+                for width, height in [(1440, 1000), (1200, 800), (390, 844)]:
+                    page.set_viewport_size({"width": width, "height": height})
+                    page.clock.run_for(1500)
+                    page.screenshot(path=str(Path(out) / f"console-map-closed-{width}.png"), full_page=True)
+            page.locator("#map-readouts > summary").focus()
+            page.keyboard.press("Enter")
+            expect(page.locator("#map-places")).to_be_visible()
+            expect(page.locator("#map-places li").first).to_have_text("남서 · 0.00, 0.00 m")
+            if out := os.environ.get("ROSY_SHOT_DIR"):
+                for width, height in [(1440, 1000), (1200, 800), (390, 844)]:
+                    page.set_viewport_size({"width": width, "height": height})
+                    page.clock.run_for(1500)
+                    page.screenshot(path=str(Path(out) / f"console-map-open-{width}.png"), full_page=True)
+            page.evaluate("""() => {
+                window.__floorWords = [];
+                const original = CanvasRenderingContext2D.prototype.fillText;
+                CanvasRenderingContext2D.prototype.fillText = function(text, ...args) {
+                    if (this.canvas.id === 'map-canvas') window.__floorWords.push(String(text));
+                    return original.call(this, text, ...args);
+                };
+            }""")
+            for width, height in SIZES:
+                page.set_viewport_size({"width": width, "height": height})
+                page.select_option("#map-display-mode", "coordinates")
+                page.clock.run_for(1500)
+                plane = page.locator("#map-stage").bounding_box()
+                context = page.locator("#map-readouts").bounding_box()
+                assert context["y"] >= plane["y"] + plane["height"] - 1, (width, height, plane, context)
+                content_width = page.locator('[aria-labelledby="map-heading"]').evaluate("""node => {
+                    const style = getComputedStyle(node);
+                    return node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+                }""")
+                assert plane["width"] >= content_width - 2
+                assert plane["height"] >= 180
+                expect(page.locator("#map-traffic-status")).to_be_visible()
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            words = page.evaluate("window.__floorWords")
+            assert words and not any(place["name"] in word for place in PLACES for word in words), words
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_map_coordinate_disclosure_clears_expired_observations_without_shrinking_stage(site, monkeypatch, width, height):
+    from playwright.sync_api import expect, sync_playwright
+
+    tracking = {"lease_s": 1, "sources": [{"source_id": "cam-1", "map_id": "demo", "status": "OK",
+                 "age_ms": 50, "fps": 3}], "robots": [{"robot_id": "rosy_01", "status": "MARKER",
+                 "camera": {"x": 1.25, "y": 0.75}}], "unknown": []}
+    monkeypatch.setitem(API, "/api/fleet/tracking", tracking)
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, "/console", posts)
+        try:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1500)
+            page.locator("#map-readouts > summary").click()
+            expect(page.locator("#tracking-positions")).to_be_visible()
+            expect(page.locator("#tracking-position-rows tr")).to_have_count(1)
+            expect(page.locator("#tracking-position-rows td")).to_have_text(
+                ["rosy_01", "1.25", "0.75", "마커 관측"])
+            page.locator("#map-readouts > summary").click()
+            before = page.locator("#map-stage").bounding_box()
+            page.select_option("#map-display-mode", "overlay")
+            page.select_option("#map-display-mode", "coordinates")
+            tracking["sources"][0]["age_ms"] = 2000
+            page.clock.run_for(1500)
+            after = page.locator("#map-stage").bounding_box()
+            assert after["width"] == pytest.approx(before["width"], abs=1)
+            assert after["height"] == pytest.approx(before["height"], abs=1)
+            page.locator("#map-readouts > summary").click()
+            expect(page.locator("#tracking-position-rows td")).to_have_text(
+                ["관측 대기", "—", "—", "현재 유효한 좌표 없음"])
+            expect(page.locator("#tracking-positions")).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not posts, posts
             assert not errors, errors
         finally:
@@ -248,9 +345,10 @@ def test_site_map_draws_robots_read_only_and_sends_trips_to_the_console(site, mo
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console/site-map", posts)
         try:
+            open_token_access(page)
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
-            expect(page.locator("#user-role")).to_contain_text("bob")
+            expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
             page.clock.run_for(1500)
             expect(page.locator("#site-map-svg [data-robot]")).to_have_count(2)
             expect(page.locator('#site-map-svg [data-robot="rosy_02"]')).to_have_class("robot c2 degraded")
@@ -322,6 +420,7 @@ def test_site_map_fit_stays_fixed_while_robots_move(site, monkeypatch, turn):
         browser, page, errors = _open(playwright, site, "/console/site-map", [])
         try:
             page.set_viewport_size({"width": 1440, "height": 900})
+            open_token_access(page)
             page.locator("#console-token").fill("operator-token")
             page.locator("#token-save").click()
             for _ in range(30):  # timers on the fake clock, answers on the real network

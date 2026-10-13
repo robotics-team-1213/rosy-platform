@@ -77,7 +77,11 @@ def test_core_build_copies_its_declared_package_closure():
         if line.startswith(tuple(f"COPY {root}/" for root in COLCON_ROOTS))
         and line.split()[2].startswith("/opt/rosy_ws/src/")
     }
-    assert ros_copied == {packages[name][0] for name in required}
+    layout = runpy.run_path(str(ROOT / "middleware/core/services/core_features/_source_layout.py"))
+    holder = layout["BEHAVIOR_ROOT"]
+    assert ros_copied == {packages[name][0] for name in required} | {holder}
+    assert (f"COPY {holder.relative_to(ROOT).as_posix()} "
+            "/opt/rosy_ws/src/runtime/services/_source_roots/behaviors") in build
     assert copied - ros_copied == wheel_sources
     for source in wheel_sources:
         assert (source / "COLCON_IGNORE").is_file()

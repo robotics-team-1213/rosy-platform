@@ -21,6 +21,17 @@ import rosy_harness as harness
 ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
+
+def test_external_drive_holders_select_their_installing_distribution():
+    repo = affected.Repo.load(ROOT)
+    behavior = 'middleware/control/drive/behaviors/line_follow/manager.py'
+    assert repo.module_for(behavior)['name'] == 'core_features'
+    assert repo.module_for('middleware/control/drive/runtime/goal_node.py')['name'] == 'control'
+    assert repo.module_for('middleware/control/drive/planning/nav2/package.xml')['name'] == 'navigation'
+    selection = affected.select(repo, [behavior])
+    assert 'middleware/core/services/test' in selection.reasons
+    assert 'middleware/core/gateway/test' in selection.reasons
+
 HARNESS_YAML = """\
 modules:
   - name: core
@@ -33,8 +44,8 @@ modules:
     path: contracts/foundation
     tests: [contracts/foundation/test]
   - name: core_api_web
-    path: middleware/core/api_web
-    tests: [middleware/core/api_web/test]
+    path: middleware/core/api
+    tests: [middleware/core/api/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -52,7 +63,7 @@ roots:
     import_prefix: [core]
   - path: middleware/perception
     import_prefix: [control]
-  - path: middleware/core/api_web
+  - path: middleware/core/api
     import_prefix: [core_api_web]
   - path: tools
   - path: docs
@@ -68,8 +79,8 @@ FILES = {
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
     "middleware/core/gateway/test/test_battery.py": "import core\n",
     "middleware/core/gateway/test/conftest.py": "",
-    "middleware/core/api_web/core_api_web/app.py": "import core\n",
-    "middleware/core/api_web/test/test_app.py": "import core_api_web\n",
+    "middleware/core/api/core_api_web/app.py": "import core\n",
+    "middleware/core/api/test/test_app.py": "import core_api_web\n",
     "deploy/robot/run.sh": "echo run\n",
     "deploy/robot/pinky_pro/udev/99-rosy.rules": "# pinky\n",
     "deploy/robot/omx/udev/99-rosy.rules": "# omx\n",

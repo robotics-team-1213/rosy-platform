@@ -1,6 +1,7 @@
 """Atomic maintenance for the site Fleet user registry (site-users.yaml).
 
-The file holds only per-principal SHA-256 token digests (D-276). Raw tokens are
+The file holds per-principal SHA-256 token digests (D-276) and password hashes
+(D-519). Raw tokens are
 provisioned out of band; this tool reads one from stdin only, never from argv,
 so it cannot leak through ``ps`` or shell history. Writes are atomic (temp file
 + ``os.replace``) and verified by re-parsing the published bytes with the same
@@ -11,6 +12,7 @@ Fleet would reject is never left in place.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -25,9 +27,26 @@ import yaml
 # File-level contract mirrors fleet/server/site_users.py (D-276). `service`
 # rows exist for non-operator automation (Cell workspace proposals) and are
 # managed by that flow, not provisioned by hand here.
-FILE_ROLES = frozenset({"viewer", "operator", "policy-admin", "service"})
+FILE_ROLES = frozenset({"viewer", "operator", "policy-admin", "service", "ai_observer"})
 CLI_ROLES = frozenset({"viewer", "operator", "policy-admin"})
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_LOGIN = re.compile(r"[a-z0-9._-]{1,32}\Z")
+
+
+def _validate_password_hash(encoded: object) -> None:
+    # Mirror D-519's bounded parser without installing Fleet on the site host.
+    parts = encoded.split("$") if isinstance(encoded, str) else []
+    try:
+        if len(parts) != 6 or parts[0] != "scrypt":
+            raise ValueError
+        n, r, p = (int(part) for part in parts[1:4])
+        salt = base64.b64decode(parts[4], validate=True)
+        digest = base64.b64decode(parts[5], validate=True)
+        if (n < 2 ** 14 or n > 2 ** 20 or n & (n - 1) or not 1 <= r <= 16
+                or not 1 <= p <= 4 or len(salt) < 16 or len(digest) != 32):
+            raise ValueError
+    except ValueError:
+        raise SiteUsersError("invalid D-519 password_scrypt hash") from None
 
 # Fleet reads the mounted config after secret_exec.py drops to UID/GID 10001
 # (Dockerfile.fleet), so the published file is root:10001 mode 0440 (README,
@@ -55,30 +74,42 @@ def validate_users_document(document: object) -> list[dict[str, str]]:
     users: list[dict[str, str]] = []
     principals: set[str] = set()
     digests: set[str] = set()
+    logins: set[str] = set()
     for entry in entries:
-        if not isinstance(entry, Mapping) or set(entry) != {
-            "principal_id", "role", "token_sha256"
-        }:
-            raise SiteUsersError("each site user requires principal_id, role, and token_sha256")
+        keys = set(entry) if isinstance(entry, Mapping) else set()
+        if (not {"principal_id", "role"} <= keys
+                or not keys <= {"principal_id", "role", "token_sha256", "login", "password_scrypt"}
+                or ("login" in keys) != ("password_scrypt" in keys)
+                or not keys & {"token_sha256", "login"}):
+            raise SiteUsersError("each site user requires principal_id, role, and a token or login")
         principal_id = entry["principal_id"]
         role = entry["role"]
-        digest = entry["token_sha256"]
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise SiteUsersError("site principal_id must be non-empty")
         if not isinstance(role, str):
             raise SiteUsersError("site user role must be a string")
         if role not in FILE_ROLES:
             raise SiteUsersError("site user role is unknown")
-        if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
-            raise SiteUsersError("site user token_sha256 must be a lowercase SHA-256 digest")
         principal_id = principal_id.strip()
         if principal_id in principals:
             raise SiteUsersError("site principal_id values must be unique")
-        if digest in digests:
-            raise SiteUsersError("site user token digests must be unique")
+        if "token_sha256" in keys:
+            digest = entry["token_sha256"]
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise SiteUsersError("site user token_sha256 must be a lowercase SHA-256 digest")
+            if digest in digests:
+                raise SiteUsersError("site user token digests must be unique")
+            digests.add(digest)
+        if "login" in keys:
+            login = entry["login"]
+            if role not in CLI_ROLES:
+                raise SiteUsersError("machine principals cannot have a console login")
+            if not isinstance(login, str) or not _LOGIN.fullmatch(login) or login in logins:
+                raise SiteUsersError("site user login must be valid and unique")
+            _validate_password_hash(entry["password_scrypt"])
+            logins.add(login)
         principals.add(principal_id)
-        digests.add(digest)
-        users.append({"principal_id": principal_id, "role": role, "token_sha256": digest})
+        users.append({**entry, "principal_id": principal_id})
     return users
 
 
@@ -97,8 +128,9 @@ def read_valid_users(path: Path | str) -> tuple[str, list[dict[str, str]]]:
 
 
 def list_users(path: Path | str) -> list[dict[str, str]]:
-    """Return the registered principals (digests only; no raw tokens exist here)."""
-    return read_valid_users(path)[1]
+    """Return registered principals without password hashes or raw credentials."""
+    return [{key: value for key, value in entry.items() if key != "password_scrypt"}
+            for entry in read_valid_users(path)[1]]
 
 
 def _publish(path: Path, text: str) -> None:
@@ -109,9 +141,11 @@ def _publish(path: Path, text: str) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
             stream.flush()
+            if os.name == "posix":
+                if os.geteuid() == 0:
+                    os.fchown(stream.fileno(), 0, FLEET_GID)
+                os.fchmod(stream.fileno(), FILE_MODE)
             os.fsync(stream.fileno())
-        if os.name == "posix":
-            os.chmod(temporary, FILE_MODE)
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -165,7 +199,7 @@ def add_user(path: Path | str, principal: str, role: str, token: str,
     original_text, users = read_valid_users(path)
     if any(user["principal_id"] == principal for user in users):
         raise SiteUsersError(f"principal {principal} already exists; remove it first")
-    if any(user["token_sha256"] == digest for user in users):
+    if any(user.get("token_sha256") == digest for user in users):
         raise SiteUsersError("token already belongs to another principal; provision a fresh one")
     entry = {"principal_id": principal, "role": role, "token_sha256": digest}
     if dry_run:
@@ -173,6 +207,23 @@ def add_user(path: Path | str, principal: str, role: str, token: str,
         return {"dry_run": True, "action": "add", "entry": entry}
     _write_users(path, original_text, {"users": [*users, entry]})
     return {"action": "add", "entry": entry}
+
+
+def add_login(path: Path | str, principal: str, role: str, login: str, password_hash: str,
+              *, dry_run: bool = False) -> dict[str, object]:
+    path = Path(path)
+    original_text, users = read_valid_users(path)
+    principal = principal.strip()
+    if any(user["principal_id"] == principal for user in users):
+        raise SiteUsersError("principal already exists; existing accounts are never overwritten")
+    entry = {"principal_id": principal, "role": role, "login": login,
+             "password_scrypt": password_hash}
+    document = {"users": [*users, entry]}
+    validate_users_document(document)
+    if not dry_run:
+        _write_users(path, original_text, document)
+    return {"dry_run": dry_run, "action": "add-login",
+            "entry": {key: value for key, value in entry.items() if key != "password_scrypt"}}
 
 
 def remove_user(path: Path | str, principal: str, *, dry_run: bool = False) -> dict[str, object]:
@@ -231,6 +282,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     adding.add_argument("--token-stdin", action="store_true", required=True,
                         help="read the raw bearer token from stdin (never argv)")
     adding.add_argument("--dry-run", action="store_true")
+    login_adding = commands.add_parser("add-login", help="register a D-519 password login")
+    login_adding.add_argument("file", type=Path)
+    login_adding.add_argument("--principal", required=True)
+    login_adding.add_argument("--role", required=True, choices=sorted(CLI_ROLES))
+    login_adding.add_argument("--login", required=True)
+    login_adding.add_argument("--password-hash-stdin", action="store_true", required=True)
+    login_adding.add_argument("--dry-run", action="store_true")
     removing = commands.add_parser("remove", help="remove a principal's digest")
     removing.add_argument("file", type=Path)
     removing.add_argument("--principal", required=True)
@@ -247,7 +305,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "validate":
             print(json.dumps(validate_file(args.file, expected_gid=args.gid)))
             return 0
-        if args.command == "add":
+        if args.command == "add-login":
+            result = add_login(args.file, args.principal, args.role, args.login,
+                               _read_token(sys.stdin), dry_run=args.dry_run)
+        elif args.command == "add":
             result = add_user(args.file, args.principal, args.role, _read_token(sys.stdin),
                               dry_run=args.dry_run)
         else:

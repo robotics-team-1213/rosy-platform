@@ -144,6 +144,11 @@ class MapPoseService:
         tracker = self._tracker(robot_id)
         return tracker.odom_to_map() if tracker is not None else None
 
+    def survey_odom(self, robot_id: str):
+        """D-655 relative survey evidence; never creates an operational map pose or pin."""
+        tracker = self._tracker(robot_id)
+        return tracker.survey_odom(self._wall()) if tracker is not None else None
+
     async def pin(self, robot_id: str, pose: tuple[float, float, float]
                   ) -> tuple[Optional[str], Optional[MapPose]]:
         """D-593: anchor the robot's map pose on an operator pin at its newest odom.
