@@ -173,14 +173,8 @@ _URL = re.compile(r"\b(?:https?|ftp|git|ssh)://\S+")
 _PUBLIC_PATH_TOKEN = re.compile(
     r"(?i)^[a-z][a-z0-9_.-]*(?:/[a-z][a-z0-9_.-]*)+/?$"
 )
+_PATH_WORD = r"[A-Za-z0-9_./-]*"
 
-
-def _is_public_path_reference(line: str, token: re.Match) -> bool:
-    # The entropy matcher can start inside a path containing '_' or '-'.
-    for word in re.finditer(r"\S+", line):
-        if word.start() <= token.start() and token.end() <= word.end():
-            return bool(_PUBLIC_PATH_TOKEN.fullmatch(word[0].strip("'\"`,;()[]")))
-    return False
 
 # The absorption inventory intentionally records source and destination
 # SHA-256 values. They are public provenance fields, not device credentials.
@@ -645,7 +639,18 @@ def scan_text(path: str, text: str, *,
             # credential, PSK and QR checks remain active even on the same line.
             if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:
                 continue
-            if _PUBLIC_PATH_TOKEN.fullmatch(value) or _is_public_path_reference(entropy_line, match):
+            if _PUBLIC_PATH_TOKEN.fullmatch(value):
+                continue
+            # The base64 class has no "_", "." or "-", so it cuts a path such as
+            # middleware/robot_ui/pilot/... at the underscore and resumes at the
+            # next "/". Judge the whole path word the fragment sits in. A path
+            # head never excuses a token: a piece of 32+ characters that holds a
+            # digit or is all hex (robot_ui/<revision>, auth/v1/<JWT>) reports.
+            head = re.search(_PATH_WORD + "$", entropy_line[:match.start("value")]).group(0)
+            word = head + value + re.match(_PATH_WORD, entropy_line[match.end("value"):]).group(0)
+            if _PUBLIC_PATH_TOKEN.fullmatch(word) and not any(
+                    len(piece) >= 32 and (not piece.isalpha() or _HEX_ONLY.fullmatch(piece))
+                    for piece in re.split(r"[/_.-]", word)):
                 continue
             if _is_ed25519_public_key_body(value):
                 continue
