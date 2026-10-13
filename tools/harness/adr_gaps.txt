@@ -2,7 +2,6 @@
 # Append only (merge=union). Remove a line once the ADR lands. Duplicates are harmless.
 D-29 unused; the vision accelerator shield design only proposed the number
 D-35 reserved for the swarm formation HOLD decision pending the sim bench
-D-204 reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md; the ADR is written on branch feat/role-surfaces-s1 and merges separately; remove once it lands
 D-223 skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)
 D-234 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
 D-235 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
@@ -48,4 +47,5 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
+D-740 reserved by a separate ongoing branch; not included in the D-742 review pipeline landing; remove once its ADR lands
 D-740 feat/sdk-forward-arc-sweep에서 진행 중인 ADR이다. 그 브랜치가 착지할 때 이 줄을 지운다 (lint가 "declared gap now exists"로 알려 준다)
