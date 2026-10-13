@@ -1,0 +1,7 @@
+[Unit]
+Description=Build and train explicitly approved indexed review data
+After=rosy-review-bridge.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sg rosy-model-watch -c "%h/rosy-ml/.venv/bin/python -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json exec training/review_pipeline.py %h/.config/rosy/review-pipeline/pipeline.json --out %h/rosy-ml/review-pipeline/cycle-state --once"
