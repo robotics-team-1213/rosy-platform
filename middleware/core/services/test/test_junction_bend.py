@@ -243,16 +243,17 @@ def _sight_past_the_vertex(rig, past):
 def test_a_line_just_past_the_bends_vertex_is_the_bends_own_outer_line():
     """Gazebo lap run53: the keeper read the corner's outer line as a cross line 0.097 m past the
     vertex before the arc; the map's lane turns at the vertex, so the pass ends in 'idle'."""
-    rig = armed_rig()
-    _sight_past_the_vertex(rig, .1)
-    decision, status = until(rig, 'idle')
-    assert decision.linear > 0 and rig.m._junction_held is False
+    for turn in (60., 90.):                               # 90: the measured corner
+        rig = armed_rig(turn=turn)
+        _sight_past_the_vertex(rig, .1)
+        decision, status = until(rig, 'idle')
+        assert decision.linear > 0 and rig.m._junction_held is False, turn
 
 
 def test_a_line_far_along_the_exit_or_on_a_shallow_bend_is_still_handed_over():
     """Review: beyond the outer line's reach along the exit (60 deg: 0.158 m), and on any bend
     under 60 deg, the sighting may be the next junction's, so the pass ends in 'waiting'."""
-    for fields, past in (({}, .4), ({'turn': 40.}, .1)):
+    for fields, past in (({}, .4), ({}, .34), ({'turn': 40.}, .1)):  # 0.34 cos 60 = 0.17: just beyond
         rig = armed_rig(**fields)
         _sight_past_the_vertex(rig, past)
         until(rig, 'waiting')
