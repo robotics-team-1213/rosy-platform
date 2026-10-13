@@ -241,13 +241,22 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         posts = []
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
-            # D-741 7: 끝난 작업·승인 대기는 같은 조회 결과를 상태로 거른다. 두 건 모두 진행 중이라 빈 목록이다.
-            page.goto(site + "/console?view=work&show=done")
-            page.clock.run_for(2000)
-            page.wait_for_function("() => document.getElementById('work-state').textContent.includes('0건')")
-            assert page.locator("#work-list ui-button").count() == 0 and page.locator("#work-empty").is_visible()
-            assert page.get_by_role("navigation", name="작업 화면", exact=True).locator(
-                'a[aria-current="page"]').all_inner_texts() == ["끝난 작업"]
+            # D-741 7: 끝난 작업·승인 대기는 같은 조회 결과를 상태로 거른다. 걸러진 줄은 있고 나머지는 없어야 한다.
+            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09"},
+                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait"}]
+            api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
+            for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
+                page.goto(site + "/console?view=work&show=" + show)
+                page.clock.run_for(2000)
+                page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count", arg=1 if device else 4)
+                if device:
+                    assert device in page.locator("#work-list ui-button").inner_text()
+                    assert "최근 4건 중 1건" in page.locator("#work-state").inner_text()
+                else:
+                    assert "건 중" not in page.locator("#work-state").inner_text()
+                assert page.get_by_role("navigation", name="작업 화면", exact=True).locator(
+                    'a[aria-current="page"]').all_inner_texts() == [label]
+            api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows, "truncated_sources": []}
             page.goto(site + "/console?view=work")
             page.clock.run_for(2000)
             page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 2")

@@ -162,8 +162,10 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
     done = [{"root_cause": "obstacle", "note": "상자", "principal_id": "bob"}]
     reports = [report("open-new", None, []), report("closed-new", "2026-10-10T05:10:00+00:00", []),
                report("closed-done", "2026-10-10T05:10:00+00:00", done)]
+    # Enough unreviewed rows on the one robot that, below 64rem, the judgment seat starts off-screen.
+    reports += [report(f"more-{index}", "2026-10-10T05:10:00+00:00", []) for index in range(12)]
     api = {**API, "/api/fleet/incidents": {"reports": reports, "traffic_reports": [fact]}}
-    answers = {"/api/fleet/incidents/rosy_01/open-new/review": (200, {"reviewed": True})}
+    answers = {f"/api/fleet/incidents/rosy_01/{stuck}/review": (200, {"reviewed": True}) for stuck in ("open-new", "closed-new")}
     posts = []
 
     def screen(show):
@@ -176,7 +178,8 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
         try:
             nav = screen("")
             rows = page.locator("#incident-list > li")
-            expect(rows).to_have_count(2)  # 검토할 사건: 검토 기록이 없는 둘
+            expect(rows).to_have_count(14)  # 검토할 사건: 검토 기록이 없는 것만
+            expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 14건")
             assert nav.locator("a").all_inner_texts() == ["검토할 사건", "열린 사건", "닫힌 사건", "AI 상황 사실", "관제 기록"]
             assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["검토할 사건"]
             assert [text.strip() for text in page.locator('.doc-tabs a[aria-current="page"]').all_inner_texts()] == ["기록"]
@@ -200,26 +203,55 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             expect(side).to_contain_text("사람 검토: 아직 없음")
             expect(side.locator(".hint")).to_be_hidden()
             assert first.locator("form").count() == 0 and "사람 검토" not in first.inner_text()
-            rows.nth(1).locator(":scope > details > summary").click()  # 한 번에 한 건
+            heading = page.locator("#incident-judgment h3")
+            expect(heading).to_contain_text("rosy_01")
+            expect(heading).to_contain_text("사건 기록 · 종료 미확인")  # A: the open incident
+            expect(heading).to_contain_text("시작 ")
+            seat = page.locator("#incident-judgment")
+            if size[0] < 1024:  # the form sits under the whole list: opening a fold brings it into view
+                expect(seat).to_be_in_viewport()
+            # ArrowDown on the fold's summary is not roster navigation: the review form stays in front.
+            first.locator(":scope > details > summary").press("ArrowDown")
+            expect(page.locator("#context-evidence")).to_be_visible()
+            expect(page.get_by_role("tab", name="기록·근거")).to_have_attribute("aria-selected", "true")
+            # Two incidents of one robot, without <details name>: script closes A, the seat names B, the review posts B.
+            assert page.locator("details[name]").count() == 0
+            rows.nth(1).locator(":scope > details > summary").click()
             expect(first.locator(":scope > details")).not_to_have_attribute("open", "")
-            expect(side.locator("form")).to_have_count(1)
-            first.locator(":scope > details > summary").click()
-            expect(rows.nth(1).locator(":scope > details")).not_to_have_attribute("open", "")
-            # The seat follows the fold's toggle event: wait until it holds this incident's judgment, not the last one's.
-            expect(page.locator('#incident-judgment > [data-report-key="rosy_01|open-new"]')).to_have_count(1)
+            expect(page.locator(".incident-row > details[open]")).to_have_count(1)
+            expect(page.locator('#incident-judgment > [data-report-key="rosy_01|closed-new"]')).to_have_count(1)
+            expect(heading).to_have_count(1)
+            expect(heading).to_contain_text("과거 · 종료 기록 있음")  # B: the closed incident
+            if size[0] < 1024:
+                expect(seat).to_be_in_viewport()
+            # A repaint keeps the seat on B and returns focus to B's control: both incidents' controls share one label.
+            side.locator("select").focus()
+            page.evaluate("""() => { window.oldSeat = document.querySelector('#incident-judgment > div');
+                document.getElementById('incident-refresh').dispatchEvent(new Event('click')); }""")
+            page.wait_for_function("""() => document.querySelector('#incident-judgment > div') !== window.oldSeat
+                && document.activeElement.matches('#incident-judgment > [data-report-key="rosy_01|closed-new"] select')""")
             side.locator("select").select_option("obstacle")
             side.locator("input").fill("현장 상자 확인")
             side.locator("ui-button[type=submit]").click()
-            assert posts[-1][0] == "/api/fleet/incidents/rosy_01/open-new/review"
+            assert posts[-1][0] == "/api/fleet/incidents/rosy_01/closed-new/review"
             assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= size[1]
             _shot(page, f"records-review-{size[0]}.png", full_page=True)
-            for show, count in (("open", 1), ("closed", 2)):
+            for show, count in (("open", 1), ("closed", 14)):
                 nav = screen(show)
                 expect(page.locator("#incident-list > li")).to_have_count(count)
                 assert len(nav.locator('a[aria-current="page"]').all_inner_texts()) == 1
+            nav = screen("nonsense")  # an unknown screen falls back to the default list and marks it
+            expect(page.locator("#incident-list > li")).to_have_count(14)
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["검토할 사건"]
+            # The filter runs over a capped fetch: a full answer says so in the count line.
+            api["/api/fleet/incidents"] = {"reports": [report(f"cap-{index}", None, done if index else []) for index in range(100)],
+                                           "traffic_reports": []}
+            screen("")
+            expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 100건 중 1건")
+            api["/api/fleet/incidents"] = {"reports": reports, "traffic_reports": [fact]}
             nav = screen("facts")
             expect(page.locator("#incident-traffic-list > li")).to_have_count(1)
             expect(page.locator("#incident-list")).to_be_hidden()
