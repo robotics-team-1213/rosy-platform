@@ -205,6 +205,8 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             expect(side.locator("form")).to_have_count(1)
             first.locator(":scope > details > summary").click()
             expect(rows.nth(1).locator(":scope > details")).not_to_have_attribute("open", "")
+            # The seat follows the fold's toggle event: wait until it holds this incident's judgment, not the last one's.
+            expect(page.locator('#incident-judgment > [data-report-key="rosy_01|open-new"]')).to_have_count(1)
             side.locator("select").select_option("obstacle")
             side.locator("input").fill("현장 상자 확인")
             side.locator("ui-button[type=submit]").click()
