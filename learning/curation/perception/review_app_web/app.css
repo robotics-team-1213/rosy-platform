@@ -142,7 +142,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .pixel-editor-column { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: var(--space-3); align-items: start; }
 .pixel-editor-column > section { min-width: 0; }
 .pixel-review-column { border-left: 1px solid var(--surface-line); padding-left: var(--space-5); }
-.pixel-quick-tools { display: grid; min-width: 0; gap: var(--space-2); position: sticky; top: var(--space-3); max-height: 70vh; overflow: auto; padding-right: var(--space-1); }
+.pixel-quick-tools { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: var(--space-2); position: sticky; top: var(--space-3); max-height: 70vh; overflow: auto; padding-right: var(--space-1); }
 .pixel-ribbon-nav { display: grid; grid-template-columns: 1fr; }
 .pixel-quick-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
 .pixel-quick-actions ui-button { min-width: 0; }
@@ -167,7 +167,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .pixel-quick-tools > label { width: fit-content; }
 .pixel-quick-classes { display: grid; grid-template-columns: 1fr; gap: var(--space-2); padding-bottom: var(--space-1); }
 .pixel-quick-actions { gap: var(--space-2); align-items: center; }
-.pixel-quick-tools .ui-workspace-bar { display: grid; margin: 0; padding: var(--space-2); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
+.pixel-quick-tools .ui-workspace-bar { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin: 0; padding: var(--space-2); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
 .pixel-quick-tools .ui-workspace-bar > label { min-width: 0; }
 .pixel-quick-tools .ui-workspace-bar .ui-field { width: 100%; min-width: 0; }
 .review-class-chip { display: inline-flex; align-items: center; flex: none; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--surface-line); border-radius: var(--radius-control); cursor: pointer; }
