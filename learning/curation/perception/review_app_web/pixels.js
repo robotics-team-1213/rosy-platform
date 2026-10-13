@@ -28,6 +28,14 @@ document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pi
 $('pixel-view-status').before($('pixel-coverage'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
 pixelResultNote.after($('pixel-quick-classes'));
+const pixelTools=document.querySelector('.pixel-quick-tools');
+const compactTools=matchMedia('(width < 64rem)');
+function placePixelTools(){
+ if(compactTools.matches)$('pixel-quick-classes').after(pixelTools);
+ else document.querySelector('.pixel-editor-column').append(pixelTools);
+}
+compactTools.addEventListener('change',placePixelTools);
+placePixelTools();
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
 for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}

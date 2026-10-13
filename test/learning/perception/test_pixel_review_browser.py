@@ -29,6 +29,8 @@ def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, 
     open_pixels(page, store, expect)
     page.locator('#pixel-quick-classes button').nth(1).click()
     actions = page.locator('.pixel-quick-actions')
+    if width >= 1024:
+        assert page.locator('.pixel-quick-tools').evaluate('el => el.scrollWidth <= el.clientWidth')
     for button in actions.locator('ui-button').all():
         expect(button.locator('span:not(.ui-icon)')).to_be_visible()
         button.scroll_into_view_if_needed()
