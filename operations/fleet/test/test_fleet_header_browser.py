@@ -192,11 +192,19 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     expect(page.locator("#link-state")).to_be_hidden()
                 expect(page.get_by_role("banner")).to_have_count(1)
                 assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                labels = []
                 for link in page.locator(".doc-tabs a").all():
                     box = link.bounding_box()
-                    assert box["width"] == box["height"] == 48, (name, width, box)
-                    assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
-                    expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
+                    assert box["width"] == box["height"] == 56, (name, width, box)
+                    label, icon = link.locator(".ui-icon-label"), link.locator(".ui-icon").bounding_box()
+                    expect(label).to_be_visible()
+                    assert label.bounding_box()["y"] >= icon["y"] + icon["height"] - 1, (name, width)
+                    assert link.get_attribute("data-ui-tooltip") is None, (name, width)
+                    labels.append(label.text_content().strip())
+                assert labels == ["관제", "설치", "지도", "작업", "Cell"], (name, width)
+                rail = page.locator(".doc-tabs")
+                expect(rail.get_by_role("link", name="설치·보정", exact=True)).to_have_count(1)
+                expect(rail.get_by_role("link", name="현장 지도", exact=True)).to_have_count(1)
                 expect(page.locator("#fleet-inbox")).to_be_visible()
                 inbox_text = page.locator("#fleet-inbox").text_content().strip()
                 assert not inbox_text or inbox_text.isdecimal(), inbox_text
