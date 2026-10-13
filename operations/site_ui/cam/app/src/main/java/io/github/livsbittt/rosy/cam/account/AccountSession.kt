@@ -43,7 +43,21 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     private var data = store.read()?.let { JSONObject(it) } ?: JSONObject()
     @Volatile private var stopSnapshot: Map<String, String> = emptyMap()
     private val checked = mutableMapOf<String, Long>()
-    private fun save() { store.write(data.toString()) }
+    private fun save() { store.write(if (data.length() == 0) null else data.toString()) }
+    private var nextRetry = 0L
+    private fun queueRevocation(token: String) {
+        val out = data.optJSONArray("revocations") ?: org.json.JSONArray().also { data.put("revocations", it) }
+        if ((0 until out.length()).none { out.getString(it) == token }) out.put(token)
+        save()
+    }
+    @Synchronized fun retryRevocations(): Boolean {
+        val out = data.optJSONArray("revocations") ?: return true
+        if (clock() < nextRetry) return false
+        nextRetry = clock() + 15
+        if (out.length() > 0 && runCatching { request("revoke", mapOf("token" to out.getString(0))) }.isSuccess) out.remove(0)
+        if (out.length() == 0) data.remove("revocations")
+        save(); return out.length() == 0
+    }
     private fun random() = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) })
     @Synchronized fun begin(resource: String): String {
         require(resource in config.resources)
@@ -75,14 +89,31 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         require(token.length <= 16384)
         val parts = token.split('.'); require(parts.size == 3)
         val header = JSONObject(String(Base64.getUrlDecoder().decode(parts[0]), Charsets.UTF_8))
-        require(header.getString("alg") == "EdDSA" && !header.has("crit"))
+        require(header.keys().asSequence().toSet() == setOf("alg", "typ", "kid"))
+        require(header.getString("alg") == "Ed25519" && header.getString("typ") == "at+jwt")
         val key = config.keys[header.getString("kid")] ?: throw IllegalArgumentException("untrusted account key")
         val signer = Ed25519Signer(); signer.init(false, Ed25519PublicKeyParameters(key, 0))
         val signed = "${parts[0]}.${parts[1]}".toByteArray(Charsets.US_ASCII); signer.update(signed, 0, signed.size)
         require(signer.verifySignature(Base64.getUrlDecoder().decode(parts[2])))
         val c = JSONObject(String(Base64.getUrlDecoder().decode(parts[1]), Charsets.UTF_8)); val now = clock()
+        require(c.keys().asSequence().toSet() == setOf("iss", "aud", "sub", "sid", "jti", "rev", "iat", "exp", "grants"))
+        for (name in listOf("iss", "aud", "sub", "sid", "jti")) require(c.get(name) is String)
+        for (name in listOf("rev", "iat", "exp")) require(c.get(name) is Int || c.get(name) is Long)
+        require(c.getString("sub").matches(Regex("[A-Za-z0-9._-]{1,128}")) && c.getString("sid").matches(Regex("[A-Za-z0-9._-]{1,128}")))
+        require(c.getString("jti").matches(Regex("[A-Za-z0-9._-]{16,128}")))
+        require(c.getLong("iat") >= 0 && c.getLong("exp") > c.getLong("iat"))
+        val grants = c.getJSONArray("grants"); require(grants.length() in 1..16)
+        val allowed = if (resource.startsWith("site:")) setOf("accounts.manage", "fleet.read", "fleet.operate", "fleet.policy", "camera.manage", "games.operate")
+            else setOf("robot.read", "robot.operate", "robot.admin")
+        for (i in 0 until grants.length()) {
+            val grant = grants.getJSONObject(i)
+            require(grant.keys().asSequence().toSet() == setOf("resource", "capabilities") && grant.get("resource") == resource)
+            val caps = grant.getJSONArray("capabilities"); require(caps.length() in 1..16)
+            val names = (0 until caps.length()).map { require(caps.get(it) is String); caps.getString(it) }
+            require(names.toSet().size == names.size && names.all { it in allowed })
+        }
         require(c.getString("iss") == config.issuer && c.getString("aud") == resource)
-        require(c.getLong("exp") > now && c.getLong("iat") <= now + 10 && c.getLong("exp") - c.getLong("iat") <= 300)
+        require(c.getLong("exp") > now && c.getLong("iat") <= now && c.getLong("exp") - c.getLong("iat") <= 300)
         require(c.getString("sub").isNotBlank() && c.getString("sid").isNotBlank() && c.getLong("rev") >= 1)
         return c
     }
@@ -94,8 +125,9 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         if (previous.isNotEmpty() && previous != c.getString("sub")) {
             require(switching) { "refresh changed identity" }
             val old = data.optJSONObject("tokens")
+            old?.keys()?.forEach { r -> queueRevocation(old.getJSONObject(r).getString("refresh_token")) }
             data.remove("tokens"); stopSnapshot = emptyMap(); checked.clear(); save()
-            old?.keys()?.forEach { r -> runCatching { request("revoke", mapOf("token" to old.getJSONObject(r).getString("refresh_token"))) } }
+            retryRevocations()
         }
         data.put("subject", c.getString("sub"))
         val tokens = data.optJSONObject("tokens") ?: JSONObject().also { data.put("tokens", it) }
@@ -103,6 +135,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     }
     @Synchronized fun access(resource: String): String? {
         require(resource in config.resources)
+        retryRevocations()
         val tokens = data.optJSONObject("tokens") ?: return null
         var result = tokens.optJSONObject(resource) ?: return null
         try {
@@ -122,14 +155,14 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             return token
         } catch (e: Exception) {
             // Fail closed and never replay a possibly consumed rotating refresh credential.
-            tokens.remove(resource); stopSnapshot = stopSnapshot - resource; checked.remove(resource); save(); return null
+            queueRevocation(result.getString("refresh_token")); tokens.remove(resource); stopSnapshot = stopSnapshot - resource; checked.remove(resource); save(); return null
         }
     }
     fun cachedAccess(resource: String): String? = runCatching {
         stopSnapshot[resource]?.also { claims(it, resource) }
     }.getOrNull()
-    @Synchronized fun identity(resource: String): String? = runCatching {
-        val token = data.getJSONObject("tokens").getJSONObject(resource).getString("access_token")
+    fun identity(resource: String): String? = runCatching {
+        val token = stopSnapshot[resource] ?: return null
         val c = claims(token, resource); "${c.getString("sub")}:${c.getString("sid")}:${c.getLong("rev")}"
     }.getOrNull()
     @Synchronized fun context(resource: String): JSONObject? = access(resource)?.let {
@@ -149,9 +182,13 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             g.getString("resource") == resource && g.getJSONArray("capabilities").let { a -> (0 until a.length()).any { a.getString(it) == capability } } }
     }
     @Synchronized fun logout(): Boolean {
-        val old = data.optJSONObject("tokens"); data = JSONObject(); stopSnapshot = emptyMap(); checked.clear(); store.write(null)
-        var complete = true
-        old?.keys()?.forEach { r -> if (runCatching { request("revoke", mapOf("token" to old.getJSONObject(r).getString("refresh_token"))) }.isFailure) complete = false }
-        return complete
+        val old = data.optJSONObject("tokens")
+        val pending = data.optJSONArray("revocations")
+        val out = pending ?: org.json.JSONArray()
+        old?.keys()?.forEach { r -> val token = old.getJSONObject(r).getString("refresh_token")
+            if ((0 until out.length()).none { out.getString(it) == token }) out.put(token) }
+        data = JSONObject(); if (out.length() > 0) data.put("revocations", out)
+        stopSnapshot = emptyMap(); checked.clear(); save()
+        nextRetry = 0; return retryRevocations()
     }
 }
