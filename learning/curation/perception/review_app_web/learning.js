@@ -1,4 +1,5 @@
 import { taskRow } from '/common/workspace.js';
+import '/commands.js';
 const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
