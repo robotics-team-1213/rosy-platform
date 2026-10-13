@@ -749,8 +749,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             scan_received_at=row.received,
             scan_source_at=row.received - row.source_age,
             points=tuple(points),
-            # Every beam returned. The pivot verdict (lidar_rotation_reason) is not coverage: it is
-            # set exactly when the pivot circle refuses, which is when this evidence is asked.
+            # Every beam returned; the pivot verdict is not coverage (it is set when this is asked).
             observed=getattr(self, 'lidar_rotation_observed', False) is True,
             body=BODY,
             limits=(self.profile.max_linear, self.profile.max_angular),
