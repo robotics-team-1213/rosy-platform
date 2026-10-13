@@ -11,6 +11,8 @@ from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
 from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEvidence
+from core_features.safety.decision import (PolicyObservationUnavailable, SafetyDecision, SafetyRequest,
+                                           check_decision, decision_valid)
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 
@@ -63,60 +65,6 @@ class BatteryPolicy:
     warning_percent: float = 20.0
     critical_percent: float = 10.0
     critical_action: str = "RETURN_HOME"
-
-
-@dataclass(frozen=True)
-class SafetyRequest:
-    command_id: int
-    source: str
-    calibration_revision: str
-    now: float
-    linear: float
-    angular: float
-
-
-@dataclass(frozen=True)
-class SafetyDecision:
-    command_id: int
-    source: str
-    calibration_revision: str
-    observed_at: float
-    expires_at: float
-    linear_limit: float
-    angular_limit: float
-    disposition: str = 'allow'
-    reason: str = ''
-
-
-_DISPOSITIONS = ('allow', 'limit', 'stop')
-
-
-def decision_valid(decision: object, request: SafetyRequest, elapsed: float) -> bool:
-    """True when ``decision`` is a well-formed, current answer to ``request`` (any disposition)."""
-    return not (not isinstance(decision, SafetyDecision) or not math.isfinite(elapsed) or not 0 <= elapsed <= .01
-                or type(decision.command_id) is not int or decision.command_id != request.command_id
-                or not isinstance(decision.source, str) or decision.source != request.source
-                or not isinstance(decision.calibration_revision, str)
-                or decision.calibration_revision != request.calibration_revision
-                or not finite_velocity(decision.observed_at, decision.expires_at)
-                or not decision.observed_at <= request.now <= request.now + elapsed <= decision.expires_at
-                or not 0 < decision.expires_at - decision.observed_at <= .5
-                or not finite_velocity(decision.linear_limit, decision.angular_limit)
-                or min(decision.linear_limit, decision.angular_limit) < 0
-                or not isinstance(decision.disposition, str) or decision.disposition not in _DISPOSITIONS
-                or not isinstance(decision.reason, str) or len(decision.reason) > 128)
-
-
-def check_decision(decision: object, request: SafetyRequest, elapsed: float) -> str:
-    """'' when ``decision`` is a valid, current answer to ``request`` that permits motion;
-    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-400).
-    A stop returns the policy's own reason (or 'policy_stop'); any validation failure returns
-    'policy_invalid'. Callers that must tell stop from invalid read decision.disposition, not this string."""
-    if not decision_valid(decision, request, elapsed):
-        return 'policy_invalid'
-    if decision.disposition == 'stop':
-        return decision.reason or 'policy_stop'
-    return ''
 
 
 @dataclass(frozen=True)
@@ -347,7 +295,7 @@ class SafetyManager:
             output = evaluate(request.linear, request.angular, request.now, allow_bounded_sweep=bounded)
             if output is None:
                 detail = getattr(policy, '_take_unavailable_detail', lambda: None)()
-                raise ValueError(f'Control observation unavailable: {detail!r}')
+                raise PolicyObservationUnavailable(f'Control observation unavailable: {detail!r}')
             snapshot, result = output
             disposition = ('limit' if result.reason in ('allow', 'motion_limited', 'trajectory_changed',
                            'adaptive_speed_limit', 'obstacle_replan', 'obstacle_wait',
