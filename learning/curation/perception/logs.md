@@ -27,6 +27,18 @@
 
 2026-10-12: D-681 source `c7afe628ca`는 선택적 model feedback export를 기존 녹화 사건에 정확한 robot/case·content hash로 연결한다. 기존 bind/schema1과 검수 정답은 유지하며 모델 근거는 UNREVIEWED다. 실제 export→binder·CLI·한글 해시·비용/종결 무결성·크기/폴더 경계의 관련 원격 87 passed, exit 0, NEW 0. 경로는 `docs/plans/2026-10-12-model-improvement-feedback.md`; 실제 현장 데이터·학습·품질·승격은 수행하지 않았다.
 
+## 2026-10-13 · uncommitted · feat(learning): 학습 검수 앱 바와 탐색 레일 (D-741 조각 12)
+
+- 변경: 학습 검수 네 문서의 머리를 앱 바(R 심볼 `Learning`, 화면 표시 선택)로 줄이고, 네 화면 탭을 공용 탐색 레일(`/common/app-shell.css`, `data-seats="rail"`, 짧은 이름 목록·객체·픽셀·자료, 전체 이름은 `aria-label`)로, 쪽 제목 `<h1>`을 본문 위 경로 줄로 옮겼다. `app.css`의 머리 탭 배치 규칙은 지웠고 사진 띠·캔버스·inspector 배치는 그대로다.
+- 증거: 소스 시험 `test_review_app.py::test_four_documents_share_the_app_bar_and_the_screen_rail`을 더했고 `test_review_flow_browser.py`의 머리 위치 단언 셋을 새 자리로 고쳤다. 원격 결과는 착지 보고에 적는다.
+- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기이고, 화면 렌더·G2·G3는 없다. 브랜치 `feat/review-app-bar`.
+
+## 2026-10-13 · f59f1b209 · test(web): 학습 검수 앱 바 소스 시험의 자리와 원격 결과 (D-741 조각 12)
+
+- 변경: 위 항목의 소스 시험을 `shared/web/test/test_app_shell_seats.py::test_review_documents_share_the_app_bar_and_the_screen_rail`로 옮겼다. `test/learning/perception`은 main(10581c1ce)에서도 원격 수집이 `control.sensing.perception` import로 멈춘다.
+- 증거: 원격 `shared/web/test` 286 passed, 49 skipped, NEW 0 (`X:/DevTemp/review-app-bar/shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
+- gate 변화: 없음. `test_review_app.py`와 브라우저 시험은 확인 못 함.
+
 ## 2026-10-14 · 27b3b81da6 · feat: 공동 학습 계정과 HF 가져오기
 
 - 변경: D-755 사용자·프로젝트 권한, 암호화된 복수 HF 연결, PKCE/OIDC 로그인, 고정 commit 자료 가져오기·취소·재시도와 계정 UI를 연결했다. 인증된 검수자 이력을 남기며 기존 승인 wire를 유지한다.
@@ -44,15 +56,3 @@
 - 변경: accounts.html의 내부 이용·팀 이용 확인에 ui-field와 label.ui-check를 적용했다. 입력 ID·required·이벤트 의미는 유지한다.
 - 증거: CI 38435850880 core-domain에서 test_product_fields_carry_the_shared_field_class 실패를 확인했다. 기존 공용 필드 계약 시험으로 재검증한다.
 - gate 변화: 없음. 실제 HF 계정·실물 활성화는 별도다.
-
-## 2026-10-13 · uncommitted · feat(learning): 학습 검수 앱 바와 탐색 레일 (D-741 조각 12)
-
-- 변경: 학습 검수 네 문서의 머리를 앱 바(R 심볼 `Learning`, 화면 표시 선택)로 줄이고, 네 화면 탭을 공용 탐색 레일(`/common/app-shell.css`, `data-seats="rail"`, 짧은 이름 목록·객체·픽셀·자료, 전체 이름은 `aria-label`)로, 쪽 제목 `<h1>`을 본문 위 경로 줄로 옮겼다. `app.css`의 머리 탭 배치 규칙은 지웠고 사진 띠·캔버스·inspector 배치는 그대로다.
-- 증거: 소스 시험 `test_review_app.py::test_four_documents_share_the_app_bar_and_the_screen_rail`을 더했고 `test_review_flow_browser.py`의 머리 위치 단언 셋을 새 자리로 고쳤다. 원격 결과는 착지 보고에 적는다.
-- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기이고, 화면 렌더·G2·G3는 없다. 브랜치 `feat/review-app-bar`.
-
-## 2026-10-13 · f59f1b209 · test(web): 학습 검수 앱 바 소스 시험의 자리와 원격 결과 (D-741 조각 12)
-
-- 변경: 위 항목의 소스 시험을 `shared/web/test/test_app_shell_seats.py::test_review_documents_share_the_app_bar_and_the_screen_rail`로 옮겼다. `test/learning/perception`은 main(10581c1ce)에서도 원격 수집이 `control.sensing.perception` import로 멈춘다.
-- 증거: 원격 `shared/web/test` 286 passed, 49 skipped, NEW 0 (`X:/DevTemp/review-app-bar/shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
-- gate 변화: 없음. `test_review_app.py`와 브라우저 시험은 확인 못 함.
