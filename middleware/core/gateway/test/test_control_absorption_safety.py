@@ -234,6 +234,7 @@ def test_unavailable_completion_clock_cannot_extend_hold(duration):
     command, safety, modes, _ = setup_hold(unavailable, clock=clock)
     assert ask(command, 10.) == Twist()
     assert safety.estop and not safety.policy_hold
+    assert safety.policy_holds == 0
 
 
 @pytest.mark.parametrize('unavailable', [False, True])
