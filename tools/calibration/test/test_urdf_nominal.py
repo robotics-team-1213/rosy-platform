@@ -151,7 +151,7 @@ def test_lidar_mount_consumers():
     store = _module_constants(SRC.parent / "contracts" / "foundation" / "core_common" / "calibration_store.py",
                               "LIDAR_NOMINAL_DEG")
     assert store["LIDAR_NOMINAL_DEG"] == forward
-    assert _number(SENSING / "control" / "road_state_node.py",
+    assert _number(SENSING / 'nodes' / 'road_state_node.py',
                    r"declare_parameter\('lidar_yaw_offset_deg', ([0-9.]+)\)") == forward
     perception = _module_constants(REPO / "learning" / "curation" / "perception" / "geometry.py",
                                    "LIDAR_FORWARD_DEG", "LIDAR_HEIGHT_M", "LIDAR_X_OFFSET_M")
@@ -253,7 +253,7 @@ def test_body_and_ir_consumers():
         assert radius == pytest.approx(circumradius, abs=1e-9), config
     model = SENSING / "vision" / "perception" / "road_state_model.py"
     assert _number(model, r"ir_x_m: float = ([0-9.]+)") == G["ir"]["mid"]["x_m"]
-    node = SENSING / "control" / "road_state_node.py"
+    node = SENSING / 'nodes' / 'road_state_node.py'
     assert _number(node, r"declare_parameter\('ir_half_span_m', ([0-9.]+)\)") == G["ir"]["half_span_m"]
     replay = _module_constants(REPO / "learning" / "evaluation" / "perception" / "road_replay.py", "IR_HALF_SPAN_M")
     assert replay["IR_HALF_SPAN_M"] == G["ir"]["half_span_m"]

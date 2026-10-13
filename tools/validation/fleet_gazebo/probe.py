@@ -12,7 +12,7 @@ Fleet/CORE 프로세스 사이의 관측은 ROS-SIM 회차(T6)가 만든다.
 - HELLO 거부 코드: PAIRING_INVALID · PROTOCOL_UNSUPPORTED · DUPLICATE_IDENTITY ·
   IDENTITY_DRIFT (fleet/hub/hub.py)
 - CORE 이벤트: nav.started · nav.completed · nav.failed · nav.canceled, correlation_id
-  == Fleet attempt_id (fleet/server/task_results.py)
+  == Fleet attempt_id (fleet/server/ledger/task_results.py)
 - Task 종단: COMPLETED · FAILED · HOLD (UNKNOWN은 종단이 아니다)
 """
 

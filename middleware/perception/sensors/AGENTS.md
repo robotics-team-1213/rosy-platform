@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Holder for sensor evidence that the `control` distribution installs as `control.sensing`. The implementation is `sensing/`. This folder does not publish `/cmd_vel`. Camera and lane evidence live in `../vision/perception`.
+Holder for sensor evidence that the `control` distribution installs as `control.sensing`. The implementation is `sensing/`. This folder does not publish `/cmd_vel`. Camera and lane evidence live in `../front_camera/perception`.
 
 ## Subdirectories
 

@@ -5,7 +5,7 @@ import math
 
 from fleet.localization.lane_compliance import (OFF_LANE, OFF_MAP, ON_LANE, ON_LINE, UNSEEN, WRONG_WAY,
                                                 LaneComplianceConfig, ReturnTracker, classify)
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.graph import build_graph
 from fleet.server.lane_compliance_service import LaneComplianceMonitor
 

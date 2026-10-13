@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from tools.gz.track_map_audit import measure, measure_point_reachable
+from tools.sim.gazebo.track_map_audit import measure, measure_point_reachable
 
 
 class ReachableAuditTests(unittest.TestCase):

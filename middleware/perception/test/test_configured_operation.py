@@ -10,7 +10,7 @@ from control.control.configured_operation import configured_waiting_reasons, con
 
 
 def node_method(name, **bindings):
-    path = Path(__file__).parents[1] / 'control/startup_calibration_node.py'
+    path = Path(__file__).parents[1] / 'nodes/startup_calibration_node.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
@@ -167,7 +167,7 @@ class ConfiguredAdapterTests(unittest.TestCase):
             self.assertEqual(calls, ['publish'])
 
     def test_actual_safety_directional_gate_still_blocks_forward_and_checks_rear(self):
-        source = Path(__file__).parents[2] / 'drive/safety/adapter/node.py'
+        source = Path(__file__).parents[2] / 'drive/motion_limits/adapter/node.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
         tick = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'tick')

@@ -27,6 +27,9 @@ setup(
         'cell/*.html', 'cell/*.css', 'cell/*.js',
     ]},
     include_package_data=True,
+    exclude_package_data={'fleet.server': [
+        name + '/*.py' for name in packaging['layout']['SERVER_HOLDERS']
+    ]},
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),

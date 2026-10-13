@@ -81,7 +81,7 @@ def test_node_publishes_status_and_counts_busy_frames_as_skipped():
     """Source contract: the node wires the builder, a 1 Hz timer and the busy-skip count."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(
         encoding="utf-8")
     assert "STATUS_TOPIC" in src and "create_timer(1.0" in src
     assert "frame_skipped()" in src and "frame_inferred(" in src
@@ -96,7 +96,7 @@ def test_node_camera_subscription_is_best_effort_depth_one():
     import ast
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(
         encoding="utf-8")
     calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
              and getattr(n.func, "attr", "") == "create_subscription"
@@ -161,7 +161,7 @@ def test_status_is_latched_and_published_at_start():
     import ast
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(
         encoding="utf-8")
     tree = ast.parse(src)
     pub = next(n for n in ast.walk(tree) if isinstance(n, ast.Call)
@@ -203,7 +203,7 @@ def test_rate_limited_frames_are_not_overload_skips():
 
 def test_node_declares_rate_and_threads_and_passes_threads_to_the_model():
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(encoding="utf-8")
     assert "declare_parameter('max_rate_hz', 3.0)" in src
     assert "declare_parameter('threads', 2)" in src
     assert "LaneSegModel.open(folder, threads=threads)" in src

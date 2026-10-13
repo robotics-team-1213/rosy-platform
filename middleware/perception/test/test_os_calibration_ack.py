@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 
 def adapter():
-    path = Path(__file__).parents[1] / 'control/calib_node.py'
+    path = Path(__file__).parents[1] / 'nodes/calib_node.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CalibNode')
     methods = [m for m in cls.body if isinstance(m, ast.FunctionDef)

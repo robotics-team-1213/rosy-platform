@@ -9,7 +9,7 @@ from omx_adapter.pilot_sim_api import create_pilot_sim_app
 
 
 ROOT = Path(__file__).resolve().parents[5]
-PILOT = ROOT / "middleware" / "ui" / "pilot"
+PILOT = ROOT / 'middleware' / 'robot_ui' / "pilot"
 COMMON = ROOT / "shared" / "web"
 PREFIX = "/api/v1/sim/omx"
 

@@ -101,7 +101,7 @@ def test_native_missing_law_cannot_reuse_pixel_tracker_output():
     import ast
     from pathlib import Path
     from types import SimpleNamespace
-    source = Path(__file__).resolve().parents[1] / 'control/line_observer_node.py'
+    source = Path(__file__).resolve().parents[1] / 'sensors/line_observation/line_observer_node.py'
     tree = ast.parse(source.read_text(encoding='utf-8'))
     guard = next(n for n in ast.walk(tree) if isinstance(n, ast.If)
                  and ast.unparse(n.test) == 'self._drivable_required and self._drivable_steer is None')
@@ -117,7 +117,7 @@ def test_waiting_for_native_law_still_subscribes_scan_and_route_prior():
     import ast
     from pathlib import Path
     from types import SimpleNamespace
-    source = Path(__file__).resolve().parents[1] / 'control/line_observer_node.py'
+    source = Path(__file__).resolve().parents[1] / 'sensors/line_observation/line_observer_node.py'
     tree = ast.parse(source.read_text(encoding='utf-8'))
     guard = next(n for n in ast.walk(tree) if isinstance(n, ast.If)
                  and n.body and isinstance(n.body[0], ast.Expr)
