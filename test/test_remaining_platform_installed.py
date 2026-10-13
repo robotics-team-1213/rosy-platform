@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import zipfile
 
 import pytest
 from setuptools.command.develop import develop
@@ -80,6 +81,14 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
+    with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
+        names = wheel.namelist()
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger'):
+            for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
+                target = 'fleet/server/' + source.name
+                assert names.count(target) == 1
+                assert wheel.read(target) == source.read_bytes()
+            assert not any(name.startswith('fleet/server/' + holder + '/') for name in names)
     installed = tmp_path / 'installed'
     run(['-m', 'pip', '--disable-pip-version-check', 'install', '--no-deps', '--no-index',
          '--target', str(installed), *map(str, wheels.glob('*.whl'))], tmp_path)

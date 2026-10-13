@@ -303,7 +303,7 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md; same DB, no resolver or device authority. "
         "Measured at 360 after unchanged relocation; +150 remains, re-judge before separate responsibility growth.",
     ),
-    "fleet/fleet/server/trip_runner.py": (
+    "fleet/fleet/server/ledger/trip_runner.py": (
         751,
         "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
         "no behaviour change): the start checks are in server/trip_admission.py and the progress predicates in "
@@ -1115,7 +1115,7 @@ SIZE_VERDICTS = {
         802,
         "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
-    "fleet/fleet/server/cell_job_store.py": (
+    "fleet/fleet/server/cell/cell_job_store.py": (
         824,
         "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
         "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
@@ -1137,7 +1137,7 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
-    "fleet/fleet/server/enrollment.py": (
+    "fleet/fleet/server/auth/enrollment.py": (
         956,
         "accept: re-judged 2026-10-09 at 956 (independent re-judge, critic agent; was 932 author's record) when "
         "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
@@ -1166,7 +1166,7 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "fleet/fleet/server/mission_store.py": (
+    "fleet/fleet/server/ledger/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
@@ -1265,7 +1265,7 @@ SIZE_VERDICTS = {
         "and normal150 regrowth allowance; see docs/validation/"
         "d456-main-start-point-integration-2026-10-05/README.md",
     ),
-    "fleet/fleet/server/task_store.py": (
+    "fleet/fleet/server/ledger/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
         "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
@@ -1285,7 +1285,7 @@ SIZE_VERDICTS = {
         "regressions are host-testable. Retain the normal +150 allowance and every threshold; "
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
-    "fleet/fleet/server/console.py": (
+    "fleet/fleet/server/console/console.py": (
         1325,
         "accept: independently re-judged on 2026-10-12 by pipeline_review at 1325 for D-678: "
         "goal/bay admission, queue and post-send traffic share the existing mutable Console state. "

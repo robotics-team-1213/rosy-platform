@@ -749,6 +749,8 @@
 
 | D-749 | 동작 규칙·공통 안전·미리보기·후보 제한 source 이름 구분 | Accepted |
 
+| D-750 | Fleet 서버 source 책임 폴더 구분 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

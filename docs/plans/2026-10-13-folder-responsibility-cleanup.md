@@ -88,7 +88,7 @@
 
 ## P2: 동일 proof 코드의 최소 유지보수 조치
 
-**기존 파일:** `middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py`, `operations/fleet/fleet/server/camera_peer_crypto.py`.
+**기존 파일:** `middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py`, `operations/fleet/fleet/server/peer/camera_peer_crypto.py`.
 
 **기존 시험/소비자:** `middleware/core/api/test/test_peer_pairing.py`, `operations/fleet/test/test_camera_peer_vectors.py`, `operations/fleet/test/test_camera_peer_service.py`; CORE `receiver_service.py`, Fleet `camera_peer_service.py`, `camera_peer_store.py`, `camera_peer_routes.py`.
 

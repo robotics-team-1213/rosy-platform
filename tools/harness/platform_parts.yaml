@@ -827,9 +827,9 @@ safety_modules:
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
-  - operations/fleet/fleet/server/task_dispatch_routes.py
-  - operations/fleet/fleet/server/owner_recovery_routes.py
-  - operations/fleet/fleet/server/console.py
+  - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
+  - operations/fleet/fleet/server/auth/owner_recovery_routes.py
+  - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 

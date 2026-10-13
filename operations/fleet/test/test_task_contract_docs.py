@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    task_dispatch = (ROOT / "operations/fleet/fleet/server/task_dispatch_routes.py").read_text(
+    task_dispatch = (ROOT / "operations/fleet/fleet/server/ledger/task_dispatch_routes.py").read_text(
         encoding="utf-8")
     intent = (ROOT / "operations/fleet/fleet/server/intent_routes.py").read_text(
         encoding="utf-8")
@@ -76,7 +76,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
 
 
 def test_task_path_does_not_enable_automatic_policy_dispatch_by_default():
-    source = (ROOT / "operations/fleet/fleet/server/task_service.py").read_text(encoding="utf-8")
+    source = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(encoding="utf-8")
     plan = (ROOT / "docs/plans/2026-09-26-middleware-device-server-contract-integration.md").read_text(
         encoding="utf-8")
 
@@ -131,9 +131,9 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
 def test_site_estop_audit_failure_boundary_is_documented():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    site_auth = (ROOT / "operations/fleet/fleet/server/site_auth.py").read_text(
+    site_auth = (ROOT / "operations/fleet/fleet/server/auth/site_auth.py").read_text(
         encoding="utf-8")
-    task_dispatch = (ROOT / "operations/fleet/fleet/server/task_dispatch_routes.py").read_text(
+    task_dispatch = (ROOT / "operations/fleet/fleet/server/ledger/task_dispatch_routes.py").read_text(
         encoding="utf-8")
 
     assert "still sends the stop fanout if the audit store" in reference
@@ -165,7 +165,7 @@ def test_policy_evidence_contract_is_governed_together():
         encoding="utf-8")
     schema = (ROOT / "contracts/foundation/core_common/protocol/policy_evidence.py").read_text(
         encoding="utf-8")
-    task_service = (ROOT / "operations/fleet/fleet/server/task_service.py").read_text(
+    task_service = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(
         encoding="utf-8")
     store = (ROOT / "operations/fleet/fleet/server/policy_evidence.py").read_text(
         encoding="utf-8")
