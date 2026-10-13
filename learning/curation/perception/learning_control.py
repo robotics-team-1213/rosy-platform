@@ -105,6 +105,8 @@ class Control:
             cycles = ledger.get('cycles', {})
             pipeline = ledger.get('review_autobuild', {})
             keys = pipeline.get('cycle_keys')
+            if keys is not None and (not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys)):
+                raise ValueError('invalid current cycle references')
             rows = [cycles.get(key, {'status': 'pending', 'attempts': 0}) for key in keys] if keys else list(cycles.values())
             retry = pipeline.get('status') == 'held' or not rows or any(row.get('status') in ('pending', 'retry', 'running')
                 and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in rows)
