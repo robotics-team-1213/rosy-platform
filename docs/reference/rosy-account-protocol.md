@@ -3,6 +3,48 @@
 이 계약은 D-757 구현의 additive API다. 설치·활성화·실제 사용자 수용은 별도 기록한다.
 기존 Fleet 로그인/프로필 endpoint는 유지한다. 별도 인증 서버 프로세스를 만들지 않는다.
 
+## 명시적 배포와 최초 전환
+
+`fleet console --tasks-db <persistent-db> --users-file <existing-users> --account-config <protected-json>`으로 연다.
+Account 설정이 없으면 OAuth endpoint를 열지 않는다. 최초 전환 전 기존 사람 계정과 기계 principal,
+SQLite의 변경 비밀번호·프로필을 재고 조사하고 동일 시점의 DB/설정을 보호된 위치에 백업한다.
+사람 계정의 기존 로그인 ID를 `bootstrap_admin_login`으로 명시한다. 첫 사용자 선택이나 새 관리자 생성은 없다.
+기존 operator도 이 명시적 선택으로 계정 관리자가 될 수 있다. 기계/복구 principal 설정은 보존한다.
+
+설정 예시의 값은 현장에서 승인한 정확한 값으로 채운다. 아래 주소와 계정은 예시이며 배포 기본값이 아니다.
+
+```json
+{
+  "issuer": "https://account.example.test",
+  "site_id": "example-site",
+  "key_id": "account-key-1",
+  "private_key_file": "/run/rosy-secrets/account-signing.pem",
+  "bootstrap_admin_login": "existing-login",
+  "clients": {
+    "robot-app": {
+      "redirect_uris": ["https://robot.example.test/account/callback"],
+      "resources": ["robot:example-robot"]
+    }
+  }
+}
+```
+
+설정과 Ed25519 private PEM은 저장소 밖 보호 파일로 제공한다. Linux에서는 서비스 사용자 소유,
+group/other 권한 없는 일반 파일이어야 한다. Windows 배포는 운영자가 해당 사용자만 읽는 ACL을 별도 검증한다.
+키 원문을 명령행·YAML 사용자 계정·로그에 넣지 않는다. issuer는 실제 HTTPS 이름과 인증서를 확인한 뒤 지정한다.
+수신 앱에는 같은 issuer와 등록 client ID, 정확한 callback·resource, 신뢰할 공개 키를 배포한다.
+authorize/token/introspect/key endpoint는 issuer의 `/api/fleet/auth/` 아래다. 별도의 기계 자격을 사람 로그인으로 재사용하지 않는다.
+
+최초 전환은 변경 비밀번호/프로필을 보존하고 불변 account_id를 발급한다. 기존 역할은 이 시점에만 명시적인
+site 읽기/조작/정책 grant로 옮긴다. 동일 login이 다른 principal로 바뀐 불명확한 비밀번호 이관은 중단한다.
+활성화 뒤 DB가 사람 계정의 정본이며 YAML 수정으로 되돌리지 않는다. 이관된 사람의 기존 YAML bearer는 거절하고,
+이관되지 않은 기계 principal만 기존 계약을 유지한다. 재시작에서는 `bootstrap_admin_login`을 제거해도 되며
+동일 site_id와 persistent DB를 유지해야 한다. 서비스 중 백업 전 DB로 롤백하면 권한 회수가 되살아날 수 있으므로 금지한다.
+
+관리자는 계정 메뉴의 **계정 관리**(`/console/accounts`)에서 발급·권한 변경·정지/재개·초기화·전체 세션 회수를 처리한다.
+UI 표시 조건은 동일 site의 `accounts.manage`이며 서버가 매 요청 다시 검사한다. 권한 revision 충돌은 409로 거절한다.
+수용 검사는 로그인→앱 업무→결과 조회→권한 회수→기존 앱/쿠키 거절을 실제 배포본에서 별도로 확인한다.
+
 ## 신원과 자원 권한
 
 Account identity는 불변 opaque `account_id`다. login/email은 identity가 아니다.

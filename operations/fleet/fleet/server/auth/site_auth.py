@@ -144,6 +144,13 @@ def build_authorize(console_token: Optional[str],
             for token_digest, principal in principals.items():
                 if hmac.compare_digest(supplied_digest, token_digest):
                     matched = principal
+            if matched is not None and password_sessions is not None:
+                from fleet.server.password_session import SessionStorageUnavailable, _storage_unavailable
+                try:
+                    if password_sessions.migrated_principal(matched.principal_id):
+                        matched = None
+                except SessionStorageUnavailable:
+                    raise _storage_unavailable() from None
             if matched is None:
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
