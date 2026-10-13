@@ -98,7 +98,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
         detailVersion++;
         el("work-evidence").textContent = "작업 상태가 갱신됐습니다. 작업을 다시 선택해 결과 근거를 확인하세요.";
       }
-      el("work-state").textContent = `${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
+      el("work-state").textContent = `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
       el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);

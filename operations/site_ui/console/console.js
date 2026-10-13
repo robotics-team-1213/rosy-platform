@@ -41,9 +41,10 @@ const area = new URLSearchParams(location.search);
 const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
 if (areaNav) {
   areaNav.hidden = false;
+  const show = [...areaNav.querySelectorAll("a")].some(link => link.href.endsWith(`show=${area.get("show")}`)) ? area.get("show") : null;
   for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
     const to = new URL(link.href).searchParams;
-    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === area.get("show"))) link.setAttribute("aria-current", "page");
+    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === show)) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
 }
@@ -64,7 +65,11 @@ const raised = area.get("view") !== "records" ? el("work-overview") : area.get("
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
-if (raised.id !== "work-overview") { layoutPanels[MAP_PANEL].hidden = true; el("incident-side").hidden = false; if (inbox.choice !== "inbox") inbox.select("evidence"); }
+if (raised.id !== "work-overview") {
+  layoutPanels[MAP_PANEL].hidden = true;
+  el("incident-side").hidden = false;
+  if (inbox.choice !== "inbox") inbox.select("evidence");
+}
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
@@ -621,7 +626,7 @@ async function refreshAuthorization() {
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
 pageScope.listen(document, "keydown", (event) => {
-  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
+  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas, summary")) return;
   const cards = [...document.querySelectorAll("#roster article")];
   if (!cards.length) return;
   const active = document.activeElement;

@@ -91,7 +91,8 @@ def test_records_area_screens_and_the_judgment_seat():
     assert evidence.index('class="panel incident-panel"') < evidence.index('id="incident-side"') < evidence.index('id="incident-judgment"')
     view = (WEB / "incident-view.js").read_text(encoding="utf-8")
     assert "/api/fleet/incidents?limit=${records ? 100 : 10}" in view, "the records area reads the same incident API"
-    assert 'detail.name = "incident"' in view and 'el("incident-judgment")' in view
+    assert "details name" not in view and "detail.name" not in view, "one open fold is kept in script, not by <details name>"
+    assert 'querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;' in view
 
 
 def test_no_back_link_sentences_remain():

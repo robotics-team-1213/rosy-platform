@@ -10,7 +10,6 @@ const DELIVERY_LABEL = {PENDING: '전송 대기', SENDING: '전송 중 · 결과
   EXPIRED: '통지 기한 종료', SUPERSEDED: '현재 사건·담당·목적지 변경으로 취소'};
 
 export function createIncidentView({scope, el, view, call, log, auth, onReports}) {
-let incidentReports = [], incidentTrafficReports = [];
 const linked = new URLSearchParams(location.search);
 const linkedRobot = linked.get('robot'), linkedIncident = linked.get('incident');
 let linkedFocused = false;
@@ -30,15 +29,25 @@ function incidentRow(key, openReports) {
   raw.dataset.reportKey = `${key}|diagnostics`;
   detail.open = openReports.has(key);
   raw.open = openReports.has(raw.dataset.reportKey);
-  detail.append(summary); raw.append(rawTitle); item.append(detail);
+  detail.append(summary);
+  raw.append(rawTitle);
+  item.append(detail);
   if (!records) return {item, detail, summary, raw, side: detail};
   const side = document.createElement("div"), seat = el("incident-judgment");
-  const place = () => { if (!detail.open) side.remove(); else if (seat.firstChild !== side) seat.replaceChildren(side); };
-  side.className = "incident-row"; side.dataset.reportKey = key; detail.name = "incident";
-  detail.addEventListener("toggle", place); place();
+  side.className = "incident-row";
+  side.dataset.reportKey = key;
+  // One fold at a time, closed here in script: the seat must never hold another incident than the open fold.
+  const place = event => {
+    if (!detail.open) return side.remove();
+    for (const other of document.querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;
+    if (seat.firstChild !== side) seat.replaceChildren(side);
+    if (event) seat.scrollIntoView({block: "nearest"});
+  };
+  detail.addEventListener("toggle", place);
+  place();
   return {item, detail, summary, raw, side};
 }
-function incidentSummary(summary, report, title) {
+function incidentSummary(summary, report, title, side) {
   const name = document.createElement("span");
   name.textContent = title;
   const time = document.createElement("time");
@@ -47,6 +56,7 @@ function incidentSummary(summary, report, title) {
     ? `시작 ${opened.toLocaleString("ko-KR")}` : "시각 미확인";
   if (opened && Number.isFinite(opened.getTime())) time.dateTime = opened.toISOString();
   summary.append(name, time);
+  if (side !== summary.parentNode) side.prepend(Object.assign(document.createElement("h3"), {textContent: `${title} · ${time.textContent}`}));
 }
 function incidentLine(parent, value) {
   const line = document.createElement("p");
@@ -104,10 +114,11 @@ async function refreshIncidents() {
     const filter = linkedRobot && linkedIncident
       ? `&robot_id=${encodeURIComponent(linkedRobot)}&stuck_id=${encodeURIComponent(linkedIncident)}` : '';
     const payload = await call(`/api/fleet/incidents?limit=${records ? 100 : 10}${filter}`);
-    incidentReports = (payload.reports || []).filter(kept);
-    onReports(payload.reports || []);
-    incidentTrafficReports = payload.traffic_reports || [];
-    status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
+    const fetched = payload.reports || [];
+    const incidentReports = fetched.filter(kept);
+    onReports(fetched);
+    const incidentTrafficReports = payload.traffic_reports || [];
+    status.textContent = `최근 라인 정지 ${records && fetched.length >= 100 ? "100건 중 " : ""}${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
     el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
     if (el("incident-export").disabled) el("incident-export").setAttribute("reason", "내보낼 사건이 없습니다");
     else el("incident-export").removeAttribute("reason");
@@ -121,7 +132,7 @@ async function refreshIncidents() {
       const {item, detail, summary, raw, side} = incidentRow(`${report.robot_ids.join("|")}|${report.stuck_id}`, openReports);
       const core = report.evidence.core, fleet = report.evidence.fleet;
       const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
-      incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName} · ${report.closed_at ? "과거 · 종료 기록 있음" : "사건 기록 · 종료 미확인"} · ${report.reviews.length ? "검토 기록 있음" : "검토 필요"}`);
+      incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName} · ${report.closed_at ? "과거 · 종료 기록 있음" : "사건 기록 · 종료 미확인"} · ${report.reviews.length ? "검토 기록 있음" : "검토 필요"}`, side);
       incidentLine(detail, `상태: 라인 정지 · ${report.closed_at ? "종료 기록 있음" : "종료 기록 없음"} · 교착 여부는 별도 판정합니다.`);
       incidentLine(detail, `로봇 관측: 정지 ${core.held_s_max ?? "미확인"}초 · 재시도 ${core.attempts_max ?? "미확인"}`);
       incidentLine(detail, `관제 관측: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"} · 관측 나이 ${fleet.pose_age_s ?? "미확인"}초`);
@@ -173,11 +184,10 @@ async function refreshIncidents() {
                 body: JSON.stringify({stuck_id: report.stuck_id, judgment_revision: report.judgment_revision}),
               });
               log('담당 인수를 기록했습니다. 조치와 해소는 별도 확인합니다.', 'good');
-              await refreshIncidents();
             } catch (error) {
               log(`담당 인수 미확인: ${error.message} · 현재 기록을 다시 확인하세요.`, 'bad');
-              await refreshIncidents();
             }
+            await refreshIncidents();
           }));
           side.append(claim);
         }
@@ -203,7 +213,7 @@ async function refreshIncidents() {
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || "상황 분류 미확인";
-      incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`);
+      incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`, side);
       incidentLine(detail, `AI 분석 참고 · 신뢰도 ${Math.round(ai.confidence * 100)}% · 조치 명령과 별도입니다.`);
       incidentLine(raw, `AI ${ai.source} · ${ai.stage} · 분류 ${report.classification}`);
       incidentLine(raw, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
@@ -218,8 +228,8 @@ async function refreshIncidents() {
       trafficList.append(item);
     }
     if (focusedReport) {
-      const fold = [...document.querySelectorAll('.incident-panel details[data-report-key]')].find(node => node.dataset.reportKey === focusedReport);
-      const target = fold && ([...fold.querySelectorAll('[aria-label]'), ...el("incident-judgment").querySelectorAll('[aria-label]')].find(node => node.getAttribute("aria-label") === focusedLabel) || fold.querySelector("summary"));
+      const folds = [...document.querySelectorAll('.incident-panel details[data-report-key], #incident-judgment > [data-report-key]')].filter(node => node.dataset.reportKey === focusedReport);
+      const target = folds.flatMap(node => [...node.querySelectorAll('[aria-label]')]).find(node => node.getAttribute("aria-label") === focusedLabel) || folds[0]?.querySelector("summary");
       target?.focus({preventScroll: true});
     }
     if (!incidentTrafficReports.length) {
@@ -250,8 +260,6 @@ scope.listen(el("incident-export"), "click", async () => {
 
 function reset() {
   onReports([]);
-  incidentReports = [];
-  incidentTrafficReports = [];
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
   el("incident-judgment").replaceChildren();
