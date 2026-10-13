@@ -11,7 +11,8 @@ import yaml
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.lane_route import STEP_M, LaneRouteError, next_step, route_lines
+from fleet.lane_route import (BODY_CLEAR_M, MIN_STEP_M, STEP_M, LaneRouteError, chord_off_m, next_step,
+                              route_lines)
 from site_map_fixture import painted_track
 from fleet.server.app import GoalRequest, create_app
 from fleet.server.console import FleetConsole
@@ -113,11 +114,12 @@ def test_a_finished_lap_is_the_end_and_a_fresh_lap_is_the_start():
 
 def test_the_lane_step_sits_outside_the_device_goal_ball():
     """RPP does not drive to a point it already counts as arrived."""
-    params = ROOT / "middleware/core/navigation/params/nav2_params.yaml"
+    params = ROOT / "middleware/control/drive/planning/nav2/params/nav2_params.yaml"
     data = yaml.safe_load(params.read_text(encoding="utf-8"))
     tolerance = data["controller_server"]["ros__parameters"]["general_goal_checker"][
         "xy_goal_tolerance"]
     assert STEP_M > tolerance
+    assert MIN_STEP_M > tolerance
 
 
 def test_the_ring_centre_and_the_route_end_do_not_dispatch():
@@ -142,6 +144,12 @@ def test_a_localized_map_pose_sends_only_the_short_point():
     assert math.dist((goals[0][1], goals[0][2]), (expect[0], expect[1])) < 1e-6
     assert math.dist((response.json()["goal"]["x"], response.json()["goal"]["y"]),
                      (expect[0], expect[1])) < 1e-6
+    context = response.json()["context"]
+    assert context["role"] == "fact" and context["planner"] == "lane_step"
+    assert context["supplied"] == {"edges": ["ring_s", "ring_e"]}
+    assert context["holds"]["complete"] is False and context["holds"]["body_inside"] is True
+    assert context["planners"][2]["id"] == "nav2" and context["planners"][2]["live"] is False
+    assert "command" not in context and "decision" not in context
     assert set(GoalRequest.model_fields) == {"x", "y", "yaw"}
 
 
@@ -175,6 +183,8 @@ def test_following_the_ring_to_its_close_does_not_start_another_lap():
     assert done.status_code == 200, done.text
     assert done.json()["reason"] == "ROUTE_COMPLETE"
     assert done.json()["goal"] is None
+    assert done.json()["context"]["holds"]["complete"] is True
+    assert done.json()["context"]["planner"] == "lane_step"
     assert len(_goals(robot)) == 1
 
 
@@ -242,9 +252,25 @@ def test_durable_task_records_the_short_point(tmp_path):
         (_goals(robot)[0][1], _goals(robot)[0][2]), (expect[0], expect[1])) < 1e-6
 
 
+def test_a_bend_whose_chord_leaves_the_lane_uses_a_shorter_step():
+    """The ring sag stays inside the body. The long east and west bends do not."""
+    painted = painted_track()
+    for edge, at in (("west", 0.84), ("east", 3.56)):
+        line = painted.line(edge)
+        pose = line.point_at(at)
+        lines = route_lines((edge,), painted)
+        assert chord_off_m(lines, at, at + STEP_M) > BODY_CLEAR_M
+        step = next_step(lines, pose[0], pose[1])
+        assert step is not None
+        span = step.s_m - step.at_m
+        assert MIN_STEP_M <= span < STEP_M
+        assert chord_off_m(lines, step.at_m, step.s_m) <= BODY_CLEAR_M + 1e-9
+
+
 def test_route_contract_is_in_the_api_reference_and_goal_stays_a_point():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
-    assert "**Version:** v1.167" in reference
+    assert "**Version:** v1.220" in reference
     assert "`/api/fleet/robots/{robot_id}/route`" in reference
     assert "ROUTE_POSE_UNTRUSTED" in reference
     assert "D-463" in reference
+    assert "D-726" in reference and "body_inside" in reference and "TRIP_UNKNOWN_EDGE" in reference

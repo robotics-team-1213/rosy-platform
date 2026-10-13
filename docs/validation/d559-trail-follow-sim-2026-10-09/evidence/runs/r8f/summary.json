@@ -1,0 +1,79 @@
+{
+ "samples": 2611,
+ "leader_path_m": 8.177,
+ "deviation_m": {
+  "max": 0.0317,
+  "rms": 0.0184,
+  "p95": 0.0277,
+  "max_while_moving": 0.0317
+ },
+ "min_centre_gap_m": 0.552,
+ "min_path_gap_m": 0.6,
+ "contact_proxy": false,
+ "leader_stop": {
+  "follower_max_speed_mps": 0.0,
+  "path_gap_m": [
+   0.611,
+   0.611
+  ]
+ },
+ "stream_cut": {
+  "holding_after_s": null,
+  "follower_stopped_after_s": 1.09,
+  "moving_again_after_resume_s": null,
+  "max_speed_after_hold_mps": null
+ },
+ "hold_reasons": [
+  [
+   0.0,
+   null
+  ]
+ ],
+ "worst_deviation_at_s": 29.4,
+ "phases_s": [
+  [
+   "straight_e",
+   0.0
+  ],
+  [
+   "arc_left_r0.4",
+   16.8
+  ],
+  [
+   "straight_n",
+   22.0
+  ],
+  [
+   "s_left_r0.5",
+   28.7
+  ],
+  [
+   "s_right_r0.5",
+   35.3
+  ],
+  [
+   "straight_n2",
+   41.8
+  ],
+  [
+   "stop_10s",
+   46.9
+  ],
+  [
+   "pivot_right",
+   57.0
+  ],
+  [
+   "straight_e2",
+   60.2
+  ],
+  [
+   "stop_end",
+   76.9
+  ],
+  [
+   "done",
+   89.0
+  ]
+ ]
+}

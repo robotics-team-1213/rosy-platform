@@ -27,6 +27,8 @@ import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.camera.LensPick
 import io.github.livsbittt.rosy.cam.camera.LensProbe
 import io.github.livsbittt.rosy.cam.camera.LensSelector
+import io.github.livsbittt.rosy.cam.camera.TuningStatus
+import io.github.livsbittt.rosy.cam.health.CaptureCoolingPolicy
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.DeviceHealthMonitor
 import io.github.livsbittt.rosy.cam.health.HealthText
@@ -85,6 +87,12 @@ data class StreamState(
     val route: SiteRoute? = null,
     val lighting: LightingStatus = LightingStatus(),
     val exposure: ExposureStatus = ExposureStatus(),
+    /** D-589: who sets the camera now (Vision, local, off, heat hold) and what it runs with. */
+    val tuning: TuningStatus = TuningStatus(),
+    /** JPEG is leaving the phone. False while waiting for a Rosy to ask (D-691). */
+    val transmitting: Boolean = false,
+    /** Severe heat stopped the sensor. A Rosy request does not override this (D-691). */
+    val thermalPause: Boolean = false,
     val photoSaving: Boolean = false,
     val photoName: String? = null,
     val photoFailed: Boolean = false,
@@ -243,21 +251,34 @@ class StreamService : LifecycleService() {
                 },
                 onLighting = { status -> if (sessionActive) _state.update { it.copy(lighting = status) } },
                 onExposure = { status -> if (sessionActive) _state.update { it.copy(exposure = status) } },
+                onTuning = { status -> if (sessionActive) _state.update { it.copy(tuning = status) } },
             )
             link = newLink
             camera = newCamera
             launch {
                 monitor.health.collect { health ->
+                    newCamera.setThermalStatus(health?.thermalStatus ?: DeviceHealth.THERMAL_UNKNOWN)
                     newCamera.setThermalBlocked(
                         (health?.thermalStatus ?: -1) >= 3 ||
                             (health?.temperatureC ?: 0.0) >= DeviceHealth.HOT_BATTERY_C,
                     )
                 }
             }
+            val cooling = CaptureCoolingPolicy()
+            val opening = CaptureGate.decide(
+                paired = plan.sendFrames,
+                wanted = null,
+                previewVisible = previewSurface.value != null,
+                legacyStream = false,
+                thermalPause = cooling.paused(monitor.health.value),
+            )
+            newCamera.setCapture(opening.cameraOn, opening.sendFrames)
             _state.update {
                 it.copy(
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
                     previewOnly = !plan.sendFrames,
+                    transmitting = opening.sendFrames,
+                    thermalPause = cooling.paused(monitor.health.value),
                     lens = pick,
                     wideAvailable = LensSelector.hasWide(backCameras),
                 )
@@ -268,6 +289,7 @@ class StreamService : LifecycleService() {
             newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT, pick?.camera?.id)
             newCamera.setExposureAssist(store.autoExposure.first())
+            launch { store.recognitionExposure.distinctUntilChanged().collect { newCamera.setRecognitionTuning(it) } }
 
             // Lens changes from the settings screen apply live: rebind, then a fresh hello.
             launch {
@@ -293,7 +315,56 @@ class StreamService : LifecycleService() {
             }
 
             launch { previewSurface.collect { newCamera.setPreviewSurface(it) } }
+            if (newLink == null) {
+                launch {
+                    combine(previewSurface.map { it != null }, monitor.health) { preview, health ->
+                        val pause = cooling.paused(health)
+                        CaptureGate.decide(false, null, preview, false, pause) to pause
+                    }.distinctUntilChanged().collect { (gate, pause) ->
+                        newCamera.setCapture(gate.cameraOn, gate.sendFrames)
+                        _state.update { it.copy(transmitting = false, thermalPause = pause) }
+                        refreshNotification()
+                    }
+                }
+            }
             newLink?.let { activeLink ->
+                val legacyStream = MutableStateFlow(false)
+                var legacyJob: Job? = null
+                launch {
+                    activeLink.status.map { it.state to it.wanted }.distinctUntilChanged()
+                        .collect { (linkState, wanted) ->
+                            legacyJob?.cancel()
+                            if (linkState == LinkState.STREAMING && wanted == null) {
+                                legacyJob = launch {
+                                    delay(CaptureGate.LEGACY_GRACE_MS)
+                                    legacyStream.value = true
+                                }
+                            } else {
+                                legacyStream.value = false
+                            }
+                        }
+                }
+                launch {
+                    combine(
+                        activeLink.status.map { it.wanted },
+                        activeLink.status.map { it.state },
+                        previewSurface.map { it != null },
+                        legacyStream,
+                        monitor.health,
+                    ) { wanted, linkState, preview, legacy, health ->
+                        val pause = cooling.paused(health)
+                        val gate = if (linkState != LinkState.STREAMING && wanted == null) {
+                            CaptureGate.decide(true, null, preview, false, pause)
+                        } else {
+                            CaptureGate.decide(true, wanted, preview, legacy, pause)
+                        }
+                        gate to pause
+                    }.distinctUntilChanged().collect { (gate, pause) ->
+                        newCamera.setCapture(gate.cameraOn, gate.sendFrames)
+                        _state.update { it.copy(transmitting = gate.sendFrames, thermalPause = pause) }
+                        refreshNotification()
+                    }
+                }
                 launch {
                     activeLink.status.map { it.config }.distinctUntilChanged().collect { newCamera.applyConfig(it) }
                 }
@@ -336,8 +407,8 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
-                photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(),
+            current.copy(running = false, previewOnly = false, transmitting = false, thermalPause = false, health = null, lens = null, lensSwitchFailed = false,
+                photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(), tuning = TuningStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
     }
@@ -381,10 +452,13 @@ class StreamService : LifecycleService() {
             Intent(this, StreamService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = if (previewOnly) R.string.state_preview_only else when (linkState) {
-            LinkState.STREAMING -> R.string.state_streaming
-            LinkState.CONNECTING -> R.string.state_connecting
-            LinkState.DISCONNECTED -> R.string.state_disconnected
+        val text = when {
+            _state.value.thermalPause -> R.string.state_thermal_pause
+            previewOnly -> R.string.state_preview_only
+            linkState == LinkState.STREAMING && !_state.value.transmitting -> R.string.state_standby
+            linkState == LinkState.STREAMING -> R.string.state_streaming
+            linkState == LinkState.CONNECTING -> R.string.state_connecting
+            else -> R.string.state_disconnected
         }
         // Warnings first: the collapsed notification shows one line.
         val lines = buildList {

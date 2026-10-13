@@ -8,6 +8,7 @@ session is refused and unlocks with the shared token.
 
 import copy
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -31,7 +32,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = [("console", "/console"), ("install", "/console/install"),
         ("site-map", "/console/site-map"), ("cell", "/console/cell")]
-SIZES = [(1920, 1080), (1440, 900), (1024, 768), (390, 844), (320, 700)]
+SIZES = [(1920, 1080), (1366, 768), (1440, 900), (1024, 768), (390, 844), (320, 568)]
 STUCK = {"stuck_id": "stuck-abc", "cause": "obstacle_ahead", "phase": "ASKING", "held_s": 41.0,
          "attempts": 1, "max_attempts": 2, "local_enabled": True, "ask_remaining_s": 9.0,
          "last_answer": None, "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
@@ -52,7 +53,8 @@ PROBE = """() => {
     overflow: document.documentElement.scrollWidth - innerWidth,
     overflowNodes: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
       .slice(0, 8).map(node => [node.tagName, node.id, node.textContent.slice(0, 30), Math.round(node.getBoundingClientRect().right)]),
-    ids: [...document.querySelectorAll('ui-topbar [id]')].map(node => node.id)};
+    // UiButton's generated reason descriptions vary with each document's current state.
+    ids: [...document.querySelectorAll('ui-topbar [id]:not([data-reason])')].map(node => node.id)};
 }"""
 
 
@@ -128,27 +130,88 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             role = page.locator("#user-role")
             expect(role).to_have_text("운영자", timeout=15000)  # D-540 2: Korean role, principal id in title
             expect(page.locator("#development-badge")).to_be_visible()
-            expect(page.locator("#online-pill")).to_have_text("2/3 연결", timeout=15000)
+            expect(page.locator("#online-pill")).to_have_text("2/3", timeout=15000)
             expect(page.locator("#estop")).to_be_enabled()
             expect(page.locator("#clock")).not_to_have_text("--:--:--")
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(400)
                 fact = page.evaluate(PROBE)
+                assert page.locator('ui-topbar [data-header-region]').count() == 4
+                for region in ("identity", "status", "actions", "safety"):
+                    expect(page.locator(f'[data-header-region="{region}"]')).to_be_visible()
+                assert page.locator('[data-header-region="actions"] #fleet-theme').count() == 1
+                assert page.locator('#topbar-more ui-button').count() == 0
+                expect(page.locator('#topbar-more #development-badge')).to_have_text("개발")
+                expect(page.locator('#topbar-more')).to_have_attribute("aria-label", re.compile("상태 센터.*2/3"))
+                for value in page.locator('#topbar-more ui-tag').all():
+                    expect(value).to_have_css("border-width", "0px")
+                    expect(value).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+                assert page.locator('[data-header-region="safety"] #estop').count() == 1
+                expect(page.locator('#topbar-extra')).not_to_be_visible()
+                theme = page.locator("#fleet-theme")
+                expect(theme).to_be_enabled()
+                preference = page.evaluate("RosyTheme.get()")
+                for _ in range(3):
+                    theme.click()
+                assert page.evaluate("RosyTheme.get()") == preference
+
                 measured[(name, width)] = fact
+                nav = page.locator(".doc-tabs").bounding_box()
+                main = page.locator("main").bounding_box()
+                footer = page.get_by_role("contentinfo")
+                expect(footer.locator("#clock")).not_to_have_text("--:--:--")
+                expect(page.get_by_role("banner")).to_have_count(1)
+                assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                for link in page.locator(".doc-tabs a").all():
+                    box = link.bounding_box()
+                    assert box["width"] == box["height"] == 48, (name, width, box)
+                    assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
+                more = page.locator("#fleet-theme")
+                if more.is_visible():
+                    assert more.locator(".ui-icon-label").count() == 0
+                    expect(more).to_have_attribute("data-ui-tooltip", re.compile("테마:"))
+                inbox_text = page.locator("#fleet-inbox").text_content().strip()
+                assert not inbox_text or inbox_text.isdecimal(), inbox_text
+                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                for tab in page.locator(".context-tabs [role=tab]").all():
+                    assert tab.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    assert tab.bounding_box()["height"] == 48
+                    expect(tab).to_have_attribute("data-ui-tooltip", tab.text_content().strip())
+                if width >= 1024:
+                    assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
+                else:
+                    assert nav["y"] + nav["height"] <= main["y"] + 1, (name, width, nav, main)
+                assert footer.bounding_box()["y"] >= main["y"] + main["height"] - 1
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
+                assert page.locator("#development-badge").evaluate(
+                    "node => node.scrollWidth <= node.clientWidth + 1"), (name, width)
+                inbox = page.locator("#fleet-theme").bounding_box()
+                assert inbox and inbox["height"] >= 48 and inbox["y"] + inbox["height"] <= height
+                assert h == inbox["height"] == 48 and w >= 48, (name, width, fact)
+                assert page.locator("#estop").evaluate("""node => {
+                  const style = getComputedStyle(node);
+                  return style.fontSize === '14px' && style.paddingLeft === '12px' &&
+                    style.paddingRight === '12px' &&
+                    [...node.querySelectorAll('span:not(.sr-only)')].every(
+                      label => getComputedStyle(label).fontSize === '14px');
+                }"""), (name, width)
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
-                    more = page.get_by_role("button", name="접속과 화면 표시")
+                    assert abs(inbox["x"] + inbox["width"] - (x + w)) <= 1
+                    more = page.locator("#topbar-more")
                     expect(more).to_be_visible()
-                    if width == 390:
-                        expect(more).to_contain_text("접속")
                     more.click()
-                    expect(page.locator("#theme-choice-label")).to_be_visible()
+                    expect(more).to_have_attribute("aria-expanded", "true")
+                    expect(page.locator("#fleet-inbox")).to_be_visible()
                     assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)
-                    more.click()
+                    page.locator("#fleet-inbox").focus()
+                    page.keyboard.press("Escape")
+                    expect(more).to_be_focused()
+                    expect(more).to_have_attribute("aria-expanded", "false")
                 if width >= 1440:
                     assert fact["rows"] == 1, (name, width, fact)
                 elif width >= 1024:
@@ -157,6 +220,10 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert fact["header"] <= 0.2 * height, (name, width, fact)
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
+            page.locator("#topbar-more").click()
+            page.locator("#fleet-inbox").click()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:

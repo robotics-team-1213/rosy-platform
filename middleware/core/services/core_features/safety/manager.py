@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 import math
 import os
+import logging
+from threading import Lock
 from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
@@ -12,9 +14,7 @@ from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEviden
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 
-def finite_velocity(linear: float, angular: float) -> bool:
-    return all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-               for value in (linear, angular))
+from core_features.safety.velocity import finite_velocity, limit_velocity, same_curve
 
 
 class TeleopWatchdog:
@@ -200,7 +200,9 @@ def person_advisory_from(evidence: DetectionEvidence, now: float, *,
                          label: str = "person", min_confidence: float = 0.5,
                          max_age_s: float = 1.0,
                          registry: Optional[ModelRegistry] = None) -> Optional[PersonAdvisory]:
-    """D-137 T2→SAF-006 주입 고리. 신선한 라벨 검출만 자문이 된다.
+    """D-137 T2→SAF-006 주입 고리. 신선한 person 검출만 자문이 된다.
+
+    D-602: 라벨은 person이다. person_feet는 클래스가 아니므로 자문이 되지 않는다.
 
     stale evidence·빈 detections·낮은 confidence는 전부 None이다 — 자문 없음이
     곧 프로필 복귀다. `registry`가 있으면 아는 revision+입력 제원만 통과한다.
@@ -287,6 +289,8 @@ class SafetyManager:
         self._policy_revision = ''
         self._policy_clock = time.monotonic
         self.policy_reason = ''
+        self._pending_policy_failure = None
+        self._policy_failure_lock = Lock()
         self._actuation = None
         self._actuation_required = False
         self._simulation_clock_enabled = None
@@ -342,7 +346,8 @@ class SafetyManager:
                        self._actuation.revision == request.calibration_revision and self._simulation_actuation_enabled())
             output = evaluate(request.linear, request.angular, request.now, allow_bounded_sweep=bounded)
             if output is None:
-                raise ValueError('Control observation unavailable')
+                detail = getattr(policy, '_take_unavailable_detail', lambda: None)()
+                raise ValueError(f'Control observation unavailable: {detail!r}')
             snapshot, result = output
             disposition = ('limit' if result.reason in ('allow', 'motion_limited', 'trajectory_changed',
                            'adaptive_speed_limit', 'obstacle_replan', 'obstacle_wait',
@@ -432,8 +437,11 @@ class SafetyManager:
         try:
             decision = evaluator(request)
             elapsed = self._policy_clock() - started
-        except Exception:
+        except Exception as exc:
             self.policy_reason = 'policy_failed'
+            with self._policy_failure_lock:
+                if self._pending_policy_failure is None:
+                    self._pending_policy_failure = request, (type(exc), exc, exc.__traceback__)
             return None
         self.policy_reason = 'policy_invalid'
         if evaluator is not self._policy or revision != self._policy_revision:
@@ -443,8 +451,8 @@ class SafetyManager:
             self.policy_reason = why
             return None
         self.policy_reason = ''
-        limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
-                   max(-decision.angular_limit, min(decision.angular_limit, angular)))
+        limited = limit_velocity(linear, angular, decision.linear_limit, decision.angular_limit,
+                                 preserve_curvature=scope == 'line')
         if not self._actuation_required or limited == (0., 0.):
             return limited
         self.policy_reason = 'actuation_unavailable'
@@ -452,14 +460,16 @@ class SafetyManager:
         try:
             if calibration is None or calibration.revision != revision or not self._simulation_actuation_enabled():
                 return None
-            caps = self.clip(self.limits.max_linear, self.limits.max_angular, scope)
+            caps_scope = 'nav' if scope == 'line' else scope
+            caps = self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope)
             self.policy_reason = 'actuation_invalid'
             prepared = calibration.prepare(*limited, angular, now, caps)
             if (not finite_velocity(prepared.motor_linear, prepared.angular) or
                     not finite_velocity(prepared.linear, prepared.angular) or
                     abs(prepared.motor_linear) != abs(prepared.linear) or
                     abs(prepared.linear) > min(.014, caps[0]) or abs(prepared.angular) > min(.1, caps[1]) or
-                    caps != self.clip(self.limits.max_linear, self.limits.max_angular, scope) or
+                    (scope == 'line' and not same_curve(limited, (prepared.motor_linear, prepared.angular))) or
+                    caps != self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope) or
                     not self._simulation_actuation_enabled()):
                 return None
             elapsed = self._policy_clock() - started
@@ -472,6 +482,16 @@ class SafetyManager:
             return None
         self.policy_reason = ''
         return prepared.motor_linear, prepared.angular
+
+    def announce_policy_failure(self) -> None:
+        with self._policy_failure_lock:
+            pending, self._pending_policy_failure = self._pending_policy_failure, None
+        if pending is not None:
+            request, exc_info = pending
+            logging.getLogger(__name__).error(
+                'Control policy failed command=%s source=%s revision=%s now=%s candidate=(%s,%s)',
+                request.command_id, request.source, request.calibration_revision,
+                request.now, request.linear, request.angular, exc_info=exc_info)
 
     def _emit(self, type_: str, severity: str, source: str, data: dict | None = None) -> None:
         if self._events is not None:
@@ -550,9 +570,7 @@ class SafetyManager:
                 # SAF-006: 사람이 있으면 기어가기. 못 보면 이 줄이 없고,
                 # 사라지면 자문이 떼어져서 프로필로 돌아간다.
                 max_l = min(max_l, self.person_linear_cap)
-        l = max(-max_l, min(max_l, linear))
-        a = max(-max_a, min(max_a, angular))
-        return l, a
+        return limit_velocity(linear, angular, max_l, max_a, preserve_curvature=scope == 'line')
 
     def on_battery_percent(self, percent: float) -> Optional[str]:
         """SAF-005: 임계 통과 시 정책 반환. None|'warn'|'critical'."""

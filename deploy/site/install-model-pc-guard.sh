@@ -43,7 +43,24 @@ put() {  # put <path> <mode> <content>
 # 1. hardware watchdog
 for module in iTCO_wdt wdat_wdt; do
   if run modprobe "$module" 2>/dev/null && { [ "$DRY" = 1 ] || [ -e /dev/watchdog0 ]; }; then
-    put /etc/modules-load.d/rosy-watchdog.conf 0644 "$module"
+    # Ubuntu kmod deny-lists the watchdog modules, so modules-load.d skips them at boot
+    # (D-530 6a); an explicit modprobe from a sysinit unit is what loads them.
+    put /etc/systemd/system/rosy-watchdog-load.service 0644 "[Unit]
+Description=Load the $module hardware watchdog (kmod deny-lists it; modules-load.d cannot) (D-530)
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe $module
+
+[Install]
+WantedBy=sysinit.target"
+    run rm -f /etc/modules-load.d/rosy-watchdog.conf
+    run systemctl daemon-reload
+    run systemctl enable rosy-watchdog-load.service
     put /etc/systemd/system.conf.d/rosy-watchdog.conf 0644 "[Manager]
 RuntimeWatchdogSec=30s
 RebootWatchdogSec=2min"

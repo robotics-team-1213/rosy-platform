@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
-- 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
-- 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
-- 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
-- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+- 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
+- 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)

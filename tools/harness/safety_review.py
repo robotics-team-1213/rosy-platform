@@ -41,6 +41,94 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "d02a45c9ed426977960f33419aad1a13e281c0c0":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "sensor-only worker naming and explicit CORE clock retain the single final publisher. "
+        "Runtime law/readiness followups remain required. See docs/validation/"
+        "gazebo-drive-safety-review-2026-10-13/result.md; no standalone/device acceptance.",
+    "f6731953a263da5564fdef8534d2693fb13d6647":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "D-735 joint traffic slowdown preserves curvature; full candidate coherence requires "
+        "D-737 c8286b9bf and c20c8095f followups. See docs/validation/"
+        "gazebo-drive-safety-review-2026-10-13/result.md; no standalone/device acceptance.",
+    "9926a21c51a6cc47ab7e339adee17079cb84b3fc":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "documentation-stripped AST identical to parent in both affected files. "
+        "See docs/validation/gazebo-drive-safety-review-2026-10-13/result.md; no device acceptance.",
+    "3a7fd7323806d95458c5d74dec129d6a28668898":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "deferred failure diagnostics and LINE common clip require c8286b9bf checked-pair/final-curve "
+        "and c20c8095f forward/reverse union; historical legacy envelope is not standalone approved. "
+        "See docs/validation/gazebo-drive-safety-review-2026-10-13/result.md; no device acceptance.",
+    "68e6f973f958ca4dccc58ed2669524644acfcf83":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "ownership rechecks and explicit acceptance receipts require later stop/continuation fences. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "6dd8a3365b92b428105ec68e140c40518ae44bc5":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "pending goals and stop generations require subsequent admission/continuation and cancel-error fixes. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "0f1962e904595d60b189f49d8d529a4a0a5d7f35":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "serialized admission, final policy checks and trip/follower fencing require traffic-await fences. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "8f602794d4d14314130b86b8ceccf621c2f4cf13":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "stop-token checks after traffic awaits require later unknown bay-receipt compensation. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "25c036ae82aa3075b6085284a958f34c76eb6173":  # git commit revision
+        "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
+        "abandoned bay cancellation requires final accepted-mover uncertainty and compensation-failure fixes. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "1b556107d1d5239bf77e491ef44113ebc347877a":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "standalone has missing RobotApiError import and incomplete continuation protection. "
+        "Requires f1dfada7f and 38f51c4c2 together; see docs/validation/"
+        "fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "f1dfada7feea49f100de0d6bee707ab2a140ef5b":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "imports the existing transport error type; full continuation protection still requires 38f51c4c2. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "38f51c4c2adbdda938a1236881b05cca2588a5ea":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "post-acceptance owner refusals remain UNKNOWN without retry; compensation failure requires 5f3f033a8. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "cd42d880a72d9453ead9129df3281a07f7559010":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "cancel-all overlap preserves UNKNOWN and async cancellation; requires 5f3f033a8 compensation fix. "
+        "See docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "5f3f033a842ea3c18b9a5a0b440bd277f4e23b1d":  # git commit revision
+        "Independent /root/native_games_ui retrospective review, 2026-10-12: history-only; "
+        "late accepted-goal compensation failure keeps NavigationStopped/UNKNOWN, pending finally cleanup "
+        "and CancelledError; see docs/validation/fleet-continuation-safety-review-2026-10-12/result.md; no device acceptance.",
+    "d5db5db69a90672d1ff12377d7ef178861a82cad":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "Pinky .10/gain2 profile reviewed together with the required angular saturation curvature fix; "
+        "standalone historical state is not approved. Both changes land together. "
+        "See docs/validation/today-worktree-integration-2026-10-10/result.md; no device acceptance.",
+    "ee632904548088c28c15ed16d75c21e539eb4ed6":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact commit requires explicit LOCALIZED map evidence and never restores trust by timeout. "
+        "See docs/validation/today-worktree-integration-2026-10-10/result.md; no device acceptance.",
+    "83b6b4b4440571cf25769b8d937d950757106657":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact commit rereads localization immediately before goal admission and rechecks client identity. "
+        "See docs/validation/today-worktree-integration-2026-10-10/result.md; no device acceptance.",
+    "8ff5c68d36c83fe9c6916a992a567420f013a949":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "safety manager docstring only, identical execution; D-602 advisory class contract and person_feet "
+        "rejection regressions agree. See docs/validation/today-worktree-integration-2026-10-10/result.md.",
+    "1168199f168a9eec93747b45ee91c91670da9d1c":  # git commit revision
+        "Retrospective independent safety review by snapshot-review /root/snapshot_review on 2026-10-10: "
+        "exact followup snapshot diff approved; known-kind nominal body selection rejects unknown kinds "
+        "and route pose freshness stays conservative. See docs/validation/"
+        "today-worktree-integration-2026-10-10/result.md; no device acceptance.",
+    "dc4ef1a90f3f8c28db9eccbf7b9288980eb297fe":  # git commit revision
+        "Independent lap_review retrospective source review on 2026-10-10: safety.py AST identical "
+        "to first parent ff1f70b3c (already carries independent Safety-Review APPROVE WITH NOTES); "
+        "merge resolution only updates comment API version v1.195 to v1.196. Admin-only latch "
+        "release and docking cancellation unchanged. See docs/validation/one-lap-route-review-"
+        "2026-10-10/result.md; no device acceptance.",
     "f14e20e2fc52ff0fb9e8d7267dbeb0f7e6596d70":  # git commit revision
         "Independently reviewed on 2026-10-09: D-526 follow-up moves the TRUSTED map-pose check verbatim "
         "into tether_routes so the safety-tagged tether_watch imports no decision module; still fail-closed "
@@ -259,6 +347,91 @@ EXEMPT: dict[str, str] = {
         "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
         "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
         "display-only. Exemption approved by livsbittt.",
+    "b64ce7a4f3413eee968066ca2efa3386c7507c1a":  # git commit revision
+        "Independent D-581 review, 2026-10-10: history-only exemption, NOT approval of this commit "
+        "alone. Its missing anchor_hold and odom-epoch guard were repaired by 1c362f141, "
+        "efba0585f and ee79d749a before the first remote main candidate containing D-581. "
+        "Only the integrated ae08cac387 source was host-tested (24 passed); TRAIL driving remains "
+        "HOLD. See docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "198986fef42452854bbca127246f9435358e7306":  # git commit revision
+        "Independent D-581 review, 2026-10-10: formation status reads an anchor from a relay "
+        "double; read-only projection, no stop, rearm or command authority change. Historical "
+        "exemption applies to the integrated ae08cac387 source only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "93ec99d5ba4b16934d5e6f01e5cfb4347488b09a":  # git commit revision
+        "Independent D-581 review, 2026-10-10: moves the anchored relay factory into swarm/anchor; "
+        "the TRAIL condition and per-session anchor construction remain. Historical exemption "
+        "applies to integrated ae08cac387 only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "8754cc2b5ed904a000733ae2a92e83a3509e7225":  # git commit revision
+        "Independent D-581 review, 2026-10-10: moves relay kwargs and status into the anchor "
+        "helper; provided factory wins and missing poses keep the default relay/status None. "
+        "Historical exemption applies to integrated ae08cac387 only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "03d530eab93e4ce911be5a6e442c27f99d55a214":  # git commit revision
+        "Independent review by the integrating agent, 2026-10-10: app composition injects the "
+        "same D-581 anchored relay factory; console removes a forbidden safety-to-decision "
+        "import and retains provided-factory priority, default relay and read-only anchor "
+        "status. Remote model-PC formation/CORE/D-430 tests 55 passed, 0 new failures. See "
+        "docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md; driving HOLD.",
+    "74b87f13b62890a5595a4c66914ac4aec9e5c1e6":  # git commit revision
+        "Independent D-581 follow-up review, 2026-10-10: console.py only condenses the same "
+        "app-injected relay selection and anchor status read to its existing 1251-line verdict. "
+        "No stop, rearm, command, authority or D-430 import boundary changes; 16 focused "
+        "remote tests passed with 0 new failures. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md; TRAIL driving remains HOLD.",
+    "4c2b14ec8ec8d3a370f6bd008ea474d56650a180":  # git commit revision
+        "Independent D-430 review, 2026-10-10: merge first-parent diff in safety-tagged "
+        "body_stop.py changes only a robot-name comment. D-591 blind-floor behavior came from "
+        "94a6aa65a, which has a Safety-Review trailer; no new executable stop logic in this merge. "
+        "Remote AI/model-PC tests on follow-up af2933291f passed with 0 new failures. See "
+        "docs/validation/d591-merge-safety-review-2026-10-10/result.md; device acceptance separate.",
+    "d83cf43a18976c591c32134547c3190a83192fd1":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "origin/attempt admission requires 4ff29b07e and owner/worker fences require aae232f11, "
+        "8d4d752ee, ba3645264. See docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "4ff29b07e3f49ef162185f5afd9ffa3860efd68f":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "origin/withdrawal fences additionally require aae232f11, 8d4d752ee, ba3645264 for exact "
+        "owner acknowledgements and competing workers. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "1b75148cedace28685439b5f14427079921c8ce7":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "native docking admission requires 84331745a, cleanup/undock/stale-callback correction "
+        "675aa7bc6 and dock safety-stop classification 93100165b. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md and spec-note-2026-10-13.md; "
+        "no standalone or device acceptance.",
+    "1d709ffe22875d764dc3589d5763c3b4f772d0f0":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "consumer closure requires db0037481, 0a4f7d41c, 041d567e6 and the unsent, injection, boot "
+        "and stop fixes listed in docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "db0037481ec3ddd7843f5a1868b32db8bc09901f":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "proof/event/stop fencing still requires 0a4f7d41c, 041d567e6, b9dae83e3, 80f54e300 and "
+        "b5efedabe. See docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; "
+        "no standalone or device acceptance.",
+    "b9dae83e323952c8cea43a9fc41ba4ecbfd73c38":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "exact unsent-marker cleanup and row CAS require 80f54e300 safety/decision injection and "
+        "b5efedabe boot/cancel evidence. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "80f54e3003ece34777aa928fc2d6573f63775fbd":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "injected preparation removes decision imports from the safety lease owner; later boot "
+        "and stop closure remain required. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "b5efedabe147638a092ce307acd7ea77b0c5ac74":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "exact cancellation/boot acknowledgement requires 3a8d211af, 1dbea2742, CORE producer "
+        "fixes through 36c74cfaa and idle closure 080eb36a7. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "ed761a9577dfc226898dd6e486d773c49b1821d3":  # git commit revision
+        "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; "
+        "live selected-run checks and final epoch binding require 7b0855fa2 for known-unsent "
+        "context rejection and orphan-marker cleanup. See docs/validation/"
+        "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

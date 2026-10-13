@@ -28,9 +28,9 @@ import yaml
 
 MANIFEST_NAME = "run.json"
 RUN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{5,63}$")
-#: run_fleet_sim.sh randomizes domains 20..119 and real robots take 40+N (D-4);
-#: validation runs take a disjoint deterministic slice.
-DOMAIN_RANGE = (120, 199)
+#: Keep validation inside CORE's 0..101 guard and outside the legacy sim's 20..79.
+#: Real robot identities (40+N) still require localhost isolation and collision checks.
+DOMAIN_RANGE = (80, 99)
 API_PORT_RANGE = (31000, 31999)
 CONSOLE_PORT_RANGE = (32000, 32099)
 

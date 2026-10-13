@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import itertools
 import json
 import logging
 import re
@@ -47,7 +48,8 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import MapPlane, map_plane_jpeg, rectify_jpeg
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.stream_demand import StreamDemand
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -182,6 +184,12 @@ class _Source:
     # D-341: SHA-256 of a paired phone's bearer (never the bearer) and its credential id.
     credential_digest: bytes | None = None
     credential_id: str | None = None
+    # D-589: this connection's number (a reconnect gets a new one) and the phone's last
+    # valid camera_state; None until the phone reports one (older apps never do).
+    link: int = 0
+    camera_state: protocol.CameraState | None = None
+    # D-691: last demand.wanted sent on this connection. None until the first send.
+    demand_sent: bool | None = None
 
 
 class IngestServer:
@@ -233,6 +241,10 @@ class IngestServer:
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
+        self._links = itertools.count(1)
+        # D-691: authorized preview reads keep the phone sending for a hold.
+        self._demand = StreamDemand()
+        self._demand_tasks: set[asyncio.Task] = set()
 
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
         return await serve(
@@ -266,6 +278,23 @@ class IngestServer:
     def source_lens(self, source: str) -> dict | None:
         """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
         return getattr(self._sources.get(source), "lens", None)
+
+    def camera_link(self, source: str) -> tuple[int | None, protocol.CameraState | None]:
+        """D-589: (connection number, last valid camera_state) of ``source``; (None, None) when
+        it is not connected."""
+        src = self._sources.get(source)
+        return (None, None) if src is None else (src.link, src.camera_state)
+
+    async def send_camera(self, source: str, message: dict) -> bool:
+        """D-589: send a downlink ``camera`` text message on ``source``'s connection."""
+        src = self._sources.get(source)
+        if src is None:
+            return False
+        try:
+            await src.connection.send(json.dumps(message, separators=(",", ":")))
+        except websockets.exceptions.ConnectionClosed:
+            return False
+        return True
 
     def report_markers(self, source: str, corners_seen, robots_seen) -> None:
         """Record which configured marker ids the worker saw on ``source``'s latest frame."""
@@ -348,6 +377,8 @@ class IngestServer:
             lease = self.preview_signer.verify(bearer, source_id=source)
         except VisionLeaseError:
             return _http_response(401, b"unauthorized\n")
+        # A missing, stale, or rate-limited frame is still a request (D-691).
+        self._note_stream_request(source)
         if view == "map-proposal" and self.map_paint is None:
             return _http_response(404, b"site map paint not configured\n")
         if view == "frame":
@@ -373,7 +404,7 @@ class IngestServer:
             try:
                 settings = PreviewRectification.from_mapping(lease["rectification"])
                 if settings.mode == "map":
-                    return await self._map_plane_response(source, frame, age)
+                    return await self._map_plane_response(source, frame, age, lease)
                 if settings.mode == "auto":
                     # D-484: swap the lease's corners for the calibration's accepted quad.
                     field = self._field_corners(source)
@@ -414,7 +445,8 @@ class IngestServer:
             **_lens_header(self.source_lens(source)),
         })
 
-    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float) -> Response:
+    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
+                                  lease: Mapping | None = None) -> Response:
         """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
 
         The warp runs off the event loop, once per (frame, record revision) for all readers.
@@ -424,6 +456,10 @@ class IngestServer:
             return _plane_unavailable()
         record, map_id = reported
         revision = str(record.get("calibration_revision"))
+        crop_map = lease.get("crop_map") if lease else None
+        if crop_map is not None and (lease.get("crop_map_id") != map_id
+                                     or lease.get("crop_revision") != revision):
+            return _plane_unavailable()
         cached = self._plane_cache.get(source)
         if cached is None or cached[0] is not frame or cached[1] != revision:
             task = asyncio.ensure_future(asyncio.to_thread(
@@ -436,18 +472,26 @@ class IngestServer:
         plane: MapPlane | None = await asyncio.shield(cached[2])
         if plane is None:
             return _plane_unavailable()
-        min_x, min_y, max_x, max_y = plane.bounds_m
-        return _http_response(200, plane.jpeg, extra={
+        jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
+        if crop_map is not None:
+            cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
+            if cropped is None:
+                return _plane_unavailable()
+            jpeg, size, bounds = cropped
+            rectified = "map-crop"
+        min_x, min_y, max_x, max_y = bounds
+        return _http_response(200, jpeg, extra={
             "Content-Type": "image/jpeg", "Cache-Control": "no-store",
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
             "X-Frame-Captured-At": str(frame.captured_at),
-            "X-Frame-Width": str(plane.size[0]),
-            "X-Frame-Height": str(plane.size[1]),
+            "X-Frame-Width": str(size[0]),
+            "X-Frame-Height": str(size[1]),
             "X-Frame-Rotation-Deg": "0",
-            "X-Frame-Rectified": "map",
+            "X-Frame-Rectified": rectified,
             "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
             "X-Frame-Calibration": plane.revision,
+            "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
             **_lens_header(self.source_lens(source)),
         })
 
@@ -616,7 +660,8 @@ class IngestServer:
                 return
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello),
-                      credential_digest=credential_digest, credential_id=credential_id)
+                      credential_digest=credential_digest, credential_id=credential_id,
+                      link=next(self._links))
         sensor = hello["sensor"]
         # app_version/device are free text from the phone: repr and cap them in the log.
         logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s credential=%s",
@@ -638,6 +683,7 @@ class IngestServer:
 
         try:
             await connection.send(json.dumps(protocol.make_config(**self.config)))
+            await self._send_demand(src, force=True)
         except websockets.exceptions.ConnectionClosed:
             self._drop_if_current(source_name, connection)
             return
@@ -647,6 +693,8 @@ class IngestServer:
             async for message in connection:
                 if isinstance(message, (bytes, bytearray)):
                     self._handle_frame(src, bytes(message))
+                else:
+                    self._handle_text(src, message)
         except websockets.exceptions.ConnectionClosed:
             pass
         finally:
@@ -712,8 +760,48 @@ class IngestServer:
             }
             try:
                 await src.connection.send(json.dumps(status))
+                await self._send_demand(src)
             except websockets.exceptions.ConnectionClosed:
                 return
+
+    def _note_stream_request(self, source: str) -> None:
+        """An authorized preview read asks ``source`` to send (D-691)."""
+        if not self._demand.note(source):
+            return
+        src = self._sources.get(source)
+        if getattr(src, "connection", None) is None:
+            return
+        task = asyncio.create_task(self._send_demand(src))
+        self._demand_tasks.add(task)
+        task.add_done_callback(self._demand_tasks.discard)
+
+    async def _send_demand(self, src: _Source, *, force: bool = False) -> None:
+        wanted = self._demand.wanted(src.name)
+        if not force and src.demand_sent is wanted:
+            return
+        try:
+            await src.connection.send(json.dumps(protocol.make_demand(wanted)))
+        except websockets.exceptions.ConnectionClosed:
+            return
+        src.demand_sent = wanted
+
+    def _handle_text(self, src: _Source, message: str) -> None:
+        """D-589: keep a valid ``camera_state``; any other or malformed text is ignored."""
+        if src.credential_digest is not None and self._paired_verdict(src) != "ok":
+            return
+        if len(message) > protocol.MAX_TEXT_CHARS:
+            return
+        try:
+            state = protocol.parse_camera_state(json.loads(message))
+        except (ValueError, protocol.CameraMessageError) as exc:
+            logger.debug("source %s text message ignored reason=%s", src.name,
+                         getattr(exc, "reason", "json"))
+            return
+        previous = src.camera_state
+        if previous is None or (previous.applied, previous.mode) != (state.applied, state.mode):
+            logger.info("source %s camera applied %s mode=%s seq=%d thermal=%d", src.name,
+                        state.applied.fingerprint(), state.mode, state.seq, state.thermal)
+        src.camera_state = state
 
     def _handle_frame(self, src: _Source, message: bytes) -> None:
         if src.credential_digest is not None and self._paired_verdict(src) != "ok":

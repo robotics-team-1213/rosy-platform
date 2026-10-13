@@ -4,6 +4,7 @@ Each goal source renews only while its reason to move holds (Safety-Review 2026-
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from fleet.server.goal_lease import goal_lease_supported
 from fleet.server.trip_guard import install_trip_guard
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
+from fleet.hub.hub import HubError
 
 LEASE_CAPS = {"navigation": {"goal_navigation": True},
               "controls": {"schema": "rosy.controls/1", "items": [
@@ -77,6 +79,233 @@ def test_off_by_default_sends_no_lease_and_shows_nothing():
     assert _sent(robot) == [("navigation_goal", 1.0, 0.0, 0.0, None, None)]
     run(console.goal_leases.renew())
     assert robot.renewals == [] and _goal(console) == {"x": 1.0, "y": 0.0, "yaw": 0.0}
+
+
+@pytest.mark.parametrize("stage", ["yielded", "untrusted", "route", "observe", "map", "bay_map", "bay_calc", "bay_cap", "bay_receipt", "bay_timeout", "bay_malformed", "traffic_cancel"])
+@pytest.mark.parametrize("stop_all", [False, True])
+def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch):
+    async def main():
+        robot, other = LeaseRobot("rosy_01"), LeaseRobot("rosy_02")
+        console = _console(robot, other)
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def pause(value):
+            entered.set()
+            await release.wait()
+            return value
+
+        if stage == "yielded":
+            async def yielded():
+                caps = await pause(LEASE_CAPS)
+                console._yielding["rosy_01"] = {"for": "rosy_02"}
+                return caps
+
+            robot.capabilities = yielded
+        elif stage == "untrusted":
+            console._gather_state = lambda _rid: pause(({}, "rest"))
+        elif stage == "route":
+            console._route_of = lambda _rid: pause([(0.0, 0.0), (1.0, 0.0)])
+            console._claims["rosy_02"] = [(0.0, 0.0), (1.0, 0.0)]
+        elif stage == "observe":
+            console._observe = lambda: pause(None)
+        elif stage == "map":
+            console.map = lambda: pause(None)
+        elif stage == "traffic_cancel":
+            robot._path = [(0.0, 0.0), (1.0, 0.0)]
+            console._claims["rosy_02"] = list(robot._path)
+            cancels = 0
+
+            async def canceled():
+                nonlocal cancels
+                cancels += 1
+                return await pause({"canceled": True}) if cancels == 1 else {"canceled": True}
+
+            robot.navigation_cancel = canceled
+        else:
+            console._standing_in_the_way = lambda *_args: ["rosy_02"]
+            console._pose_of = lambda _rid: (0.0, 0.0)
+            from fleet.server import console as console_module
+            monkeypatch.setattr(console_module.bays, "best_bay", lambda *_args, **_kw: (1.0, 1.0))
+            if stage == "bay_map":
+                calls = 0
+
+                async def mapped():
+                    nonlocal calls
+                    calls += 1
+                    return await pause(None) if calls == 2 else None
+
+                console.map = mapped
+            elif stage == "bay_cap":
+                other.capabilities = lambda: pause(LEASE_CAPS)
+            elif stage == "bay_calc":
+                monkeypatch.setattr(console_module.asyncio, "to_thread", lambda *_args, **_kw: pause((1.0, 1.0)))
+            else:
+                async def bay_reply(*_args, **_kw):
+                    await pause(None)
+                    if stage == "bay_timeout":
+                        raise TimeoutError("receipt lost")
+                    return {} if stage == "bay_malformed" else {"accepted": True}
+
+                other.navigation_goal = bay_reply
+        goal = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
+        await entered.wait()
+        try:
+            await (console.estop_all() if stop_all else console.cancel("rosy_01"))
+        finally:
+            release.set()
+        with pytest.raises((HubError, RuntimeError, TimeoutError)):
+            await goal
+        assert "rosy_01" not in console._queued
+        assert "rosy_01" not in console._claims
+        assert "rosy_01" not in console._goals
+        assert not _sent(other)
+        assert "rosy_02" not in console._yielding
+        if stage in {"bay_receipt", "bay_timeout", "bay_malformed"}:
+            assert ("navigation_cancel",) in other.calls
+
+    run(main())
+
+
+def test_formation_cannot_arm_a_follower_with_a_goal_in_flight():
+    async def main():
+        from fakes import FakeRelay
+
+        leader, follower = LeaseRobot("rosy_01"), LeaseRobot("rosy_02")
+        console = _console(leader, follower)
+        console._relay_factory = lambda *_args, **_kw: FakeRelay()
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = follower.navigation_goal
+
+        async def sending(*args, **kw):
+            entered.set()
+            await release.wait()
+            return await original(*args, **kw)
+
+        follower.navigation_goal = sending
+        goal = asyncio.create_task(console.goal("rosy_02", 1.0, 0.0))
+        await entered.wait()
+        try:
+            with pytest.raises(HubError):
+                await console.formation_start("rosy_01")
+            assert not any(call[0] == "follow" for call in follower.calls)
+            assert console._formation is None
+        finally:
+            release.set()
+            await goal
+
+    run(main())
+
+
+@pytest.mark.parametrize("ttl,leased", [(0.0, False), (4.0, False), (4.0, True)])
+@pytest.mark.parametrize("receipt", [{"accepted": False}, {}, {"accepted": "true"}])
+def test_only_an_explicit_acceptance_records_goal_or_lease(ttl, leased, receipt):
+    robot = LeaseRobot("rosy_01", lease=leased)
+    console = _console(robot, ttl=ttl)
+
+    async def refuse(*args, **kwargs):
+        return receipt
+
+    robot.navigation_goal = refuse
+    if receipt.get("accepted") is False:
+        assert run(console.goal("rosy_01", 1.0, 0.0)) == receipt
+    else:
+        with pytest.raises(RuntimeError):
+            run(console.goal("rosy_01", 1.0, 0.0))
+    assert "rosy_01" not in console._goals
+    assert "rosy_01" not in console.goal_leases
+    assert "rosy_01" not in console._claims
+
+
+def test_rejected_bay_goal_does_not_claim_a_successful_yield():
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+
+    async def refuse(*args, **kwargs):
+        return {"accepted": False}
+
+    robot.navigation_goal = refuse
+    with pytest.raises(RuntimeError):
+        run(console._send_to_bay("rosy_01", (1.0, 1.0), "rosy_02"))
+    assert "rosy_01" not in console._yielding
+    assert "rosy_01" not in console.goal_leases
+
+
+@pytest.mark.parametrize("stop", ["cancel", "estop"])
+def test_a_receipt_after_a_stop_cannot_recreate_a_goal_or_renew_its_lease(stop):
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+    console.goal_leases.operator_present()
+
+    async def late_accept(*args, **kwargs):
+        if stop == "cancel":
+            await console.cancel("rosy_01")
+        else:
+            await console.estop_all()
+        return {"accepted": True}
+
+    robot.navigation_goal = late_accept
+    with pytest.raises(RuntimeError):
+        run(console.goal("rosy_01", 1.0, 0.0))
+    assert "rosy_01" not in console._goals
+    assert "rosy_01" not in console.goal_leases
+    assert [call for call in robot.calls if call[0] == "navigation_cancel"]
+    run(console.goal_leases.renew())
+    assert robot.renewals == []
+
+
+@pytest.mark.parametrize("stop", ["cancel", "estop"])
+@pytest.mark.parametrize("phase", ["capabilities", "state", "bay"])
+def test_stop_during_admission_prevents_any_later_goal_send(stop, phase):
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+    method = "capabilities" if phase == "bay" else phase
+    original = getattr(robot, method)
+
+    async def interrupted():
+        result = await original()
+        if stop == "cancel":
+            await console.cancel("rosy_01")
+        else:
+            await console.estop_all()
+        return result
+
+    setattr(robot, method, interrupted)
+    with pytest.raises(HubError):
+        if phase == "bay":
+            run(console._send_to_bay("rosy_01", (1.0, 1.0), "rosy_02"))
+        else:
+            run(console.goal("rosy_01", 1.0, 0.0))
+    assert _sent(robot) == []
+    assert "rosy_01" not in console.goal_leases
+
+
+def test_concurrent_goal_is_refused_until_the_first_goal_pipeline_finishes():
+    robot = LeaseRobot("rosy_01")
+    console = _console(robot, ttl=4.0)
+
+    async def main():
+        entered, release = asyncio.Event(), asyncio.Event()
+        original = robot.navigation_goal
+
+        async def blocked(*args, **kwargs):
+            if args[0] == 1.0:
+                entered.set()
+                await release.wait()
+            return await original(*args, **kwargs)
+
+        robot.navigation_goal = blocked
+        first = asyncio.create_task(console.goal("rosy_01", 1.0, 0.0))
+        await entered.wait()
+        try:
+            with pytest.raises(HubError):
+                await console.goal("rosy_01", 2.0, 0.0)
+        finally:
+            release.set()
+            await first
+        assert console._goals["rosy_01"]["x"] == 1.0
+        assert len(_sent(robot)) == 1
+
+    run(main())
 
 
 def test_operator_goal_is_leased_and_renewed_while_an_operator_is_present():

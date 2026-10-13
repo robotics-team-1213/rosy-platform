@@ -1,6 +1,6 @@
 ## D-524 Service Control. 관제는 사이트·AI·모델 Ubuntu의 재부팅과 허용된 서비스만 제어한다
 
-**Status:** Proposed (2026-10-08, 사용자 지시 — 재부팅과 서비스 오류 복구는 관제 안의 관리 API. 이 브랜치에 구현. 2026-10-09 보안 검토 반영. 현장 설치와 실제 재부팅은 아직 하지 않음)
+**Status:** Proposed (2026-10-08, 사용자 지시 — 재부팅과 서비스 오류 복구는 관제 안의 관리 API. 이 브랜치에 구현. 2026-10-09 보안 검토 반영. 현장 설치와 실제 재부팅은 아직 하지 않음. 2026-10-10: 설치·보정 작업 「호스트 서비스」가 이 API만 부른다. 수락은 아직 아니다.)
 
 **이름:** Service Control. 화면의 한국어 이름은 서비스 제어. Rosy Fleet 안의 기능이고, 새 앱이 아니다.
 
@@ -27,14 +27,15 @@
 9. **설치 도구는 호스트마다 하나다.** `sudo deploy/site/install-host-control.sh --role site|ai|model [--fleet-key "<공개키>" --from "<사이트 PC 주소>,<Docker 브리지 대역>"] [--units-user <계정>] [--make-fleet-key] [--dry-run]`이 도우미, 강제 명령, 역할 파일, sudoers, `authorized_keys` 줄을 넣는다(`install-model-pc-guard.sh`와 같은 모양). `--make-fleet-key`는 사이트 PC에서 Fleet 키를 만든다. 대상 목록과 known_hosts는 사이트 운영자가 쓴다.
 10. **한계.** Fleet 프로세스나 그 키를 빼앗은 쪽은 이 닫힌 집합 전부를 쓸 수 있다. 세 PC를 10분 예약 재부팅으로 되풀이해 다시 켤 수 있고(예약 중에는 한 번만), 사이트의 Docker를 재시작해 Fleet과 Vision을 잠시 멈출 수 있고, AI PC의 Pinky 유닛을 세울 수 있다. 임의 명령, 다른 유닛, 방화벽 정지, 셸은 얻지 못한다. 키 회수는 각 호스트의 `authorized_keys` 한 줄 삭제다.
 11. **Vision은 Fleet의 비밀을 볼 수 없다(보안 검토).** `/etc/rosy/site` 전체를 Vision(uid 10001, 휴대폰 프레임을 받는 서비스)에 마운트하면 그 안의 `secrets/`(`robot_credential_key`, `registry_token`, `discovery_token`, `site.key`)가 root:10001 0440이라 읽힌다. 고친 것: (a) 비밀 디렉터리를 설정 디렉터리 밖 `/etc/rosy/site-secrets`로 옮긴다. (b) Vision은 설정 디렉터리에서 `site-cameras.yaml` 한 파일만 읽기 전용으로 마운트한다. (c) 서비스마다 Compose `secrets:`를 자기 몫만 준다(Fleet 8개, Vision 6개, proxy 3개; `registry_token`, `discovery_token`, `robot_credential_key`는 Fleet 전용). `site.key`는 TLS를 끝내는 Vision과 proxy가 쓴다. 기존 사이트는 `deploy/site/migrate-site-secrets.sh`로 옮기고 옛 경로에 심볼릭 링크를 남긴다. Vision이 그 디렉터리를 마운트하지 않으므로 링크가 비밀을 다시 드러내지 않는다. 계약 시험 `test_vision_cannot_reach_fleet_secrets`.
+12. **사이트 설정 설치(2026-10-10 개정).** 사용자: "너가 키가 다 있을텐데? 없으면 이번에 만들고 교훈기록해", 선택 "설정 설치 전용 도우미". 도우미에 `install-site-config <이름>`을 더한다. 사이트 역할에서만, 이름은 `fleet-site.yaml`·`site-cameras.yaml` 둘만(`robots.yaml`은 로봇 토큰이 있어 뺀다) 받는다. 원본은 `~SUDO_USER/.rosy/site-incoming/<이름>`이고 그 계정 권한으로 읽는다(심볼릭 링크로 root만 읽는 파일을 끌어오지 못한다). 64 KiB 상한, YAML 검사를 통과해야 `/etc/rosy/site/<이름>`(root, 0644)으로 바꿔 끼우고, 이전 파일은 `/var/lib/rosy-host-control/backup/`에 남긴다. Fleet 키의 강제 명령은 이 동작을 거절한다. 로그인한 운영자(또는 그 계정의 에이전트)만 쓴다. 적용은 Fleet 재시작이 필요하며 그건 기존 `docker` 권한으로 한다.
 
 ## 범위 밖
 
-- 관제 화면 버튼. API가 먼저다.
+- 관제 첫 화면의 위험 채움과 프로세스 종료 버튼. 재부팅·유닛 버튼은 설치·보정 작업 `호스트 서비스` 하나에만 둔다(D-540 5항). 이 작업은 D-524가 Proposed인 동안에도 운영자 요청으로 있다. 그 화면에도 프로세스 종료와 로봇 재부팅은 없다.
 - 세 PC에 실제로 설치하는 일. 이 브랜치는 설치 도구만 싣는다.
 - 로봇 재부팅, Docker 컨테이너 이름, 임의 프로세스 종료.
 - 모델 PC의 학습 프로세스를 멈추는 일.
-- 호스트 감시 결과(`guard`, `drift`) 같은 읽기 필드. D-530이 더한다.
+- 호스트 감시의 쓰기. `guard`와 `drift`는 `GET /api/fleet/hosts`의 읽기 전용 필드다(D-530). 없거나 객체가 아니면 null이다.
 
 ## 검토한 대안
 

@@ -91,13 +91,31 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="D-555: public site CA PEM robots pin for the hub (pair with --hub-link-hostname)")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
+    console.add_argument("--vision-url", default=None,
+                         help="server-side Vision ingest origin (e.g. https://vision:8095) for the "
+                              "periodic calibration-drift watch; needs --vision-preview-secret-env")
+    console.add_argument("--calibration-drift-interval-s", type=float, default=60.0, metavar="SECONDS",
+                         help="cadence of the approved-vs-proposed calibration comparison per "
+                              "source (0 disables; default 60)")
     console.add_argument("--lan-camera-proxy", action="store_true",
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
+    console.add_argument('--conversation-config-optional',default=None,type=Path,
+                         help='optional independently admitted natural conversation broker config')
+    console.add_argument('--deliberation-config-optional',default=None,type=Path,
+                         help='optional private D-720 fixed read-only status broker config')
+    discord = console.add_mutually_exclusive_group()
+    discord.add_argument("--discord-intake-config", default=None, type=Path,
+                         help="D-671 private named Discord intake configuration; absent disables intake")
+    discord.add_argument("--discord-intake-config-optional", default=None, type=Path,
+                         help="D-675 private intake configuration; missing file disables intake")
     console.add_argument("--stuck-resolver", action="store_true",
-                         help="D-438: answer lane stucks with rules for robots that have a "
-                              "resolver_token in robots.yaml; others go to the console")
+                         help="D-577 2: accepted for compatibility; the resolver is on by default")
+    console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
+                         help="D-438/D-577 2: turn off the Fleet stuck resolver (on by default; it "
+                              "answers only robots with a resolver_token in robots.yaml, others go "
+                              "to the console)")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
     console.add_argument("--tls-key", default=None, type=Path,
@@ -149,6 +167,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "recompile Cell Job proposals with palletizing at this stack tolerance; needs --mission-api"))
     console.add_argument("--goal-evidence-config", default=None, type=Path,
                          help="optional scoped goal-evidence producer registry YAML")
+    console.add_argument('--notifications-config', default=None, type=Path,
+                         help='explicit team notification YAML (requires --tasks-db; endpoints stay in env)')
     console.add_argument("--pairing-ca", default=None, type=Path,
                          help="site CA PEM (never a leaf) handed to paired cameras; enables the "
                               "D-341 pairing routes, needs --tls-cert and --tasks-db")
@@ -360,7 +380,9 @@ def _resolve_optional_site_config(args) -> None:
 
 def _hub_link(args) -> dict | None:
     """D-555: what robots receive with a hub credential, or None when not configured."""
-    hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
+    hostname, ca = getattr(args, "hub_link_hostname", None) or None, getattr(args, "hub_link_ca", None)
+    if ca is not None and str(ca) in ("", "."):
+        ca = None                      # compose passes "" when the site leaves the hub link unset
     if hostname is None and ca is None:
         return None
     from core_common.protocol.discovery_txt import HOSTNAME
@@ -498,6 +520,12 @@ def run_console(args: argparse.Namespace) -> None:
     tracking_service = None
     identity_config = None
     vision_sources = ()
+    vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
+    vision_preview_secret = (os.environ.get(vision_preview_secret_env)
+                             if vision_preview_secret_env else None)
+    if vision_preview_secret_env and not vision_preview_secret:
+        sys.exit("vision preview secret environment variable is required")
+    calibration_drift_watch = None
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_sighting_sources
@@ -517,12 +545,40 @@ def run_console(args: argparse.Namespace) -> None:
             sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
             if enrollment_store is not None else console.robot_ids, store=store,
         )
+        if enrollment_store is None:
+            sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
+        from fleet.server.tracking_drift import CalibrationDriftWatch, VisionMapProposalReader
 
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
+        calibration_store = TrackingCalibrationStore(sightings_db)
+        drift_provider = None
+        vision_url = getattr(args, "vision_url", None)
+        drift_interval_s = getattr(args, "calibration_drift_interval_s", 60.0)
+        if vision_url and drift_interval_s:
+            # The watch reads Vision's existing D-375 map-proposal endpoint with a preview
+            # lease signed here; without the secret it could not talk to Vision at all.
+            if vision_preview_secret is None:
+                sys.exit("--vision-url requires --vision-preview-secret-env to sign Vision leases")
+            from core_common.protocol.vision_preview import VisionLeaseSigner
+
+            calibration_drift_watch = CalibrationDriftWatch(
+                sources=sources, calibrations=calibration_store,
+                fetch_proposal=VisionMapProposalReader(
+                    base_url=vision_url, signer=VisionLeaseSigner(vision_preview_secret)),
+                interval_s=drift_interval_s)
+            drift_provider = calibration_drift_watch.verdicts
+        elif vision_url:
+            print("warning: --calibration-drift-interval-s is 0; the calibration drift "
+                  "watch is disabled", file=sys.stderr, flush=True)
         tracking_service = TrackingService(
-            sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+            sighting_service.sources, calibrations=calibration_store,
+            drift_provider=drift_provider)
+        sighting_service.approved_revision = tracking_service.approved_revision
+    if getattr(args, "vision_url", None) and tracking_service is None:
+        print("warning: --vision-url set but no --sightings-config; the calibration drift "
+              "watch is not started", file=sys.stderr, flush=True)
     hub_link = _hub_link(args)
     # D-555: enrolled robots pair at runtime, so the route is up whenever that can happen.
     enrolled_hub = (enrollment_store is not None and event_store is not None and bool(console_token)
@@ -552,7 +608,7 @@ def run_console(args: argparse.Namespace) -> None:
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
             discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
-            hub_link=hub_link if enrolled_hub else None)
+            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -565,11 +621,6 @@ def run_console(args: argparse.Namespace) -> None:
               "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
     site_maps, routing_config = _build_site_map(args, tasks_db)
     map_pose_config = _map_pose_config(args)
-    vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
-    vision_preview_secret = (os.environ.get(vision_preview_secret_env)
-                             if vision_preview_secret_env else None)
-    if vision_preview_secret_env and not vision_preview_secret:
-        sys.exit("vision preview secret environment variable is required")
     pairing_service, pairing_sync_token = _build_pairing(
         args, tls_cert=tls_cert, tasks_db=tasks_db, sighting_service=sighting_service,
         site_name=console.fleet_name)
@@ -581,13 +632,19 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
-    if getattr(args, "stuck_resolver", False):
+    stuck_resolver_enrolled = _stuck_resolver_enrolled(args)
+    if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
             for ep in endpoints if ep.resolver_token}
-        if not stuck_resolver_clients:
-            print("warning: --stuck-resolver set but no robot has a resolver_token; "
-                  "every stuck will be escalated", file=sys.stderr)
+        if stuck_resolver_enrolled:
+            print("stuck resolver answers enrolled robots with Fleet's credential: "
+                  + ", ".join(sorted(stuck_resolver_enrolled)), file=sys.stderr)
+        if not stuck_resolver_clients and not stuck_resolver_enrolled:
+            print("note: stuck resolver on, but no robot has a resolver_token; "
+                  "every stuck goes to the console (no_resolver_token)", file=sys.stderr)
+        else:
+            print("stuck resolver answers: " + ", ".join(sorted(stuck_resolver_clients)), file=sys.stderr)
     central_registry = None
     if getattr(args, "central", False):
         # D-454 1단계: 중앙 프로파일 — 등록 로스터가 정본이므로 등록 저장소가 필요하다.
@@ -597,8 +654,28 @@ def run_console(args: argparse.Namespace) -> None:
         from fleet.server.central_registry import CentralRegistry
 
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
+    notification_config = None
+    channel_config = None
+    if getattr(args, 'discord_intake_config', None) is not None:
+        from fleet.server.channel_requests import ChannelConfig
+        channel_config = ChannelConfig.load(args.discord_intake_config)
+    elif getattr(args, 'discord_intake_config_optional', None) is not None:
+        from fleet.server.channel_requests import ChannelConfig
+        channel_config = ChannelConfig.load(args.discord_intake_config_optional, optional=True)
+    model_config=None
+    conversation_config=None
+    if getattr(args,'conversation_config_optional',None) is not None:
+        from fleet.server.channel.conversation.runtime import ConversationConfig
+        conversation_config=ConversationConfig.load(args.conversation_config_optional,optional=True)
+    if getattr(args,'deliberation_config_optional',None) is not None:
+        from fleet.server.channel_model_runtime import BrokerConfig
+        model_config=BrokerConfig.load(args.deliberation_config_optional,optional=True)
+    if getattr(args, 'notifications_config', None) is not None:
+        from fleet.incidents.notifications import NotificationConfig
+        notification_config = NotificationConfig.load(args.notifications_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
-                     hub=hub, sightings=sighting_service, tracking=tracking_service, task_service=task_service,
+                     hub=hub, sightings=sighting_service, tracking=tracking_service,
+                     calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
                      cell_job_compiler=cell_job_compiler,
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),
@@ -615,6 +692,11 @@ def run_console(args: argparse.Namespace) -> None:
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
+                     stuck_resolver_enrolled=stuck_resolver_enrolled,
+                     realign_config=_realign_config(args),
+                     ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
+                     ai_first=_ai_first(args),
+                     autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -623,7 +705,9 @@ def run_console(args: argparse.Namespace) -> None:
                      traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
                      trip_lease=_trip_lease(args),
                      identity_config=identity_config,
-                     lane_compliance_config=_lane_compliance_config(args))
+                     lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
+                     channel_config=channel_config,channel_model_config=model_config,
+                     conversation_config=conversation_config)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -653,6 +737,52 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
+
+
+def _ai_first(args):
+    """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
+    import yaml
+
+    from fleet.stuck.ai_first import AiFirst
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        return AiFirst.from_config((site_config.get("fleet") or {}).get("ai_first"))
+    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
+        sys.exit(f"ai_first config: {exc}")
+
+
+def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
+    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
+    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
+    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
+        ids = section.get(key) or []
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"stuck resolver config: {exc}")
+    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
+        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
+    return frozenset(ids)
+
+
+def _realign_config(args):
+    """D-622 opt-in standalone recovery; empty areas and robot list by default."""
+    import yaml
+    from fleet.stuck.realign import RealignConfig
+    try:
+        site = (yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+                if getattr(args, "site_config", None) else {})
+        return RealignConfig.from_mapping((site.get("fleet") or {}).get("stuck_resolver"))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"realign config: {exc}")
 
 
 def _trip_config(args):
@@ -688,6 +818,7 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
+            site_maps.import_source = Path(source)
             # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
             # report; the default "site" would filter every sighting (map pose UNKNOWN).
             site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
@@ -740,6 +871,9 @@ def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
 
     kept = []
     for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
         unknown = set(source.robot_ids) - known
         if unknown - retired:
             sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")

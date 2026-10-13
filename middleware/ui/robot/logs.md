@@ -1234,3 +1234,39 @@
 - 변경: 기체 ID의 일회성 몸체 대조를 위해 기존 CORE host/hardware/test 램프 자가 시험을 설치·정비 패널에 연결했다. 관리자와 장치 상태를 확인한 뒤 요청 ID가 같은 장치 결과만 표시하고, 완료를 물리 신원 확인으로 표현하지 않는다.
 - 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
 - gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.
+
+## 2026-10-10 · uncommitted · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
+
+- 변경: Console 차선 추종 패널이 `GET /api/v1/line-follow`의 `advice`(D-525/D-551)를 "가상" 주황 점선 칩으로 보인다. 등 점과 함께 글자로 녹색/황색/적색, 남은 초·녹색까지 초(정확하지 않으면 ≥), 정지선까지 거리, "통과 허가는 관제 authority(통행권)" 문구를 쓴다. CORE가 준 `expires_in_s`가 지나거나 상태 읽기가 실패하면 "신호 정보 없음"이고 지난 녹색을 남기지 않는다. API 변화 없음.
+- 증거: `test/test_line_signal_advice_browser.py`(문구·점선 테두리·만료·읽기 실패·모르는 등).
+- gate 변화: SOURCE 표시만(J3). 로봇 얼굴/LCD 한 줄은 face-inputs 전달이 필요해 이번에 하지 않았다. 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
+
+- Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
+- Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
+- Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+
+- 변경: 공용 버튼 inset 소비와 갤러리 제목/접힘 행을 연결하고 의미 기반 readout·현재 절차 fixture를 정리했다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 통합 32860ffe1의 원격 토큰/규격/반응형 104 passed, X:/DevTemp/ui-role-static-final/run-1.txt. Robot 최종 browser는 통합 검증에 연결한다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+
+- 변경: 접속 권한의 주어를 명시하고 일시적인 화면 구성 읽기 실패에 키보드 재시도를 제공한다. 기존 패널과 비상 정지 권한을 유지한다.
+- 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
+- gate 변화: SOURCE 변경만 있으며 브라우저 캡처·실제 설치 화면·DEVICE·FIELD는 확인하지 못했다. 착지·push·배포하지 않았다.
+
+## 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+
+- 변경: 기존 공용 신선도 판정과 글자 크기 소비로 상태 근거와 좁은 머리의 읽힘을 보완했다. 오래된 토큰 정리는 잘못된 최근 접속 자료에도 유지한다.
+- 증거: 원격 Chromium 결합 회귀 039bbbffa 176 passed, 신선도·최근 접속 후속 e01abed51 27 passed, 전체 Robot 캡처 ab2f331a4 3 passed, 겹침·잘림 회귀 432e39895 8 passed, 입구 권한 한 줄 회귀 855e5b46a 3 passed. 각 종료 로그의 known_failures는 0 new/0 known이다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/logs/ 아래 browser, captures, robot-captures, visual-final, entry-final에 있다.
+- 검토: 원격 대역 CORE의 Pilot 목록 없음/읽기 실패 4뷰포트 8장과 Robot 입구·운용·작업 준비·설치 정비 320/390 캡처 8장을 받았다. Pilot 320 실패/2000 빈 상태와 Robot 네 화면 320을 직접 검토했다. 권한 글자 잘림과 상태·설명 혼합을 발견해 수정하고 다시 캡처했다.
+- gate 변화: SOURCE와 원격 Chromium 근거만 추가했다. 노트북 pytest·로컬 browser·착지·push·배포·실제 설치 화면 확인은 하지 않았다. DEVICE/FIELD와 실제 전체 UI 수용은 이 증거로 승격하지 않는다.

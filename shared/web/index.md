@@ -26,6 +26,7 @@
 | D-329 | 표면은 등록으로 계약을 받고, 육안 기준은 저장소에 남는다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
+| D-654 | ROSY 플랫폼 경로 R 심볼과 공용 브랜드 자산 |
 
 ## 계획·결과 문서
 
@@ -46,8 +47,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · 93c606cbb · D-487 관제 표면 표시 이름 Rosy Fleet
-- 2026-10-06 · uncommitted · uiux(web-common): readout 임시 빈 상태 규칙 제거
-- 2026-10-06 · uncommitted · uiux(web-common): readout 빈 상태 전폭
-- 2026-10-06 · uncommitted · uiux(pinky-review): 자료 등록 폼의 칸 폭 선언
-- 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
+- 2026-10-13 · 039a9efe8 · feat(web): shared app shell seats (D-741)
+- 2026-10-12 · 80a12948c · fix(ui): 원래 예외 보존과 복구 안내
+- 2026-10-12 · 7a0725de4 · fix(ui): 현장 복구 목표와 공용 실패 안내
+- 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
+- 2026-10-12 · 65a7982a7 · test(ui): 실제 호출자의 아이콘 전용 속성 보존

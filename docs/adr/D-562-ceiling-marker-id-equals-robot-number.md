@@ -49,8 +49,8 @@
 - 로봇 `runtime.env`의 세 키(`ROSY_ROBOT_NUMBER`, `ROS_DOMAIN_ID`, `ROSY_NAMESPACE`)
 - `/var/lib/rosy/provisioning/complete.json`의 `dds` 블록
 - Fleet 등록 해제 후 다시 등록. `robot_id`가 등록 키이고 토큰 AAD에 들어간다(D-361)
-- TLS 묶음 지도(`--enrolled-tls-bindings-file`)
-- 현장 `robots.yaml`, `site-cameras.yaml`의 `robot_ids`·`robot_markers`, `site-sightings.yaml`
+- TLS 묶음 지도(`--enrolled-tls-bindings-file`) — 등록되었던 binding이면 D-580 뒤로는 고치지 않는다
+- 현장 `robots.yaml`, `site-cameras.yaml`의 `robot_ids`·`robot_markers`, `site-sightings.yaml` — `robot_ids: enrolled`이면 D-580 뒤로는 고치지 않는다
 - G4 매핑 승인 다시 발급(묶음이 `robot_number`에 묶인다)
 - 옛 이름 아래의 녹화·토픽
 

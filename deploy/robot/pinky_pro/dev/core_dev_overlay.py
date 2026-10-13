@@ -411,8 +411,12 @@ def pack_repo(repo: Path, output: Path) -> None:
         "python/core_common": repo / "contracts" / "foundation" / "core_common",
         "python/core_events": repo / "middleware" / "core" / "events" / "core_events",
         "python/core_features": repo / "middleware" / "core" / "services" / "core_features",
-        "python/core_api_web": repo / "middleware" / "core" / "api_web" / "core_api_web",
+        "python/core_api_web": repo / "middleware" / "core" / "api" / "core_api_web",
     }
+    behavior_root = repo / 'middleware/control/drive/behaviors'
+    for name in ('line_follow', 'docking', 'navigation', 'localization', 'swarm',
+                 'road_behaviour', 'traffic_policy'):
+        mapping['python/core_features/' + name] = behavior_root / name
     output.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(output, "w:gz") as tar:
         for arc_root, source in mapping.items():

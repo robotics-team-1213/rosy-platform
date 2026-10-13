@@ -75,6 +75,8 @@ class BaseVelocityControl(_Wire):
     line_follow_advice: bool | None = None  # D-525: POST /line-follow/advice is shown (display only)
     trip_lease: bool | None = None  # D-541 1: CORE takes PUT/DELETE /trip-lease and /trip-lease/takeover
     goal_lease: bool | None = None  # D-550 10: navigation/goal takes lease_ttl_s and /navigation/goal/lease
+    # D-607 8: the REALIGN kinds the stuck decision takes (line_follow.stuck_realign_enabled); absent = none.
+    stuck_realign: tuple[Literal["PIVOT", "KTURN"], ...] | None = None
 
 
 class JointRange(_Wire):
@@ -169,7 +171,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
                    line_follow_advice: bool | None = None,
-                   trip_lease: bool | None = None, goal_lease: bool | None = None) -> dict:
+                   trip_lease: bool | None = None, goal_lease: bool | None = None,
+                   stuck_realign: tuple[Literal["PIVOT", "KTURN"], ...] | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
     `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
@@ -188,5 +191,6 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required,
                                          line_follow_advice=line_follow_advice,
-                                         trip_lease=trip_lease, goal_lease=goal_lease))
+                                         trip_lease=trip_lease, goal_lease=goal_lease,
+                                         stuck_realign=stuck_realign))
     return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)

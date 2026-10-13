@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosy-app-gateway"
-version = "0.1.0"
+version = "0.1.2"
 description = "ROSY site gateway application composition"
 requires-python = ">=3.12"
-dependencies = ["PyYAML>=6", "rosy-palletizing==0.1.0", "rosy-execution==0.1.0"]
+dependencies = ["PyYAML>=6", "rosy-palletizing==0.1.2", "rosy-execution==0.1.2"]
 
 [project.scripts]
 rosy-site-gateway = "rosy_gateway.compose:main"

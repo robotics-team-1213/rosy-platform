@@ -1,5 +1,7 @@
 # Decision 모델 파이프라인과 실행 구조
 
+**현행 source 배치 (D-637):** 기존 ER2/VLM·candidate/tool 구현은 `operations/decision/src/rosy/decision` (`rosy.decision`)으로 이동했고 Fleet가 같은 배포에 설치한다. 원장·admission·dispatch는 Fleet, 최종 Base 출력은 CORE, Arm 출력은 OMX에 남는다. 이 이동은 아래 후속 Laya/Kev·Mission/Task 모델 파이프라인의 활성화나 독립 평가 완료를 뜻하지 않는다.
+
 **상태:** D-516·D-527 Accepted의 구현 설계. 이 문서는 배포 또는 현장 활성화 기록이 아니다.
 
 ## 한 장 구조

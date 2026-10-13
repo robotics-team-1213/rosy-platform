@@ -322,3 +322,10 @@ S2(4대, `docs/plans/2026-10-02-d395-s2-bench-results.md`)는 끝내지 못했�
 - 천장 카메라 자세로 위치 요청에 답하는 길은 `--pose-request-overhead`(기본 켜짐)로 끄고 켠다. `--localization-overhead-cue`(중재기·감시 단서)는 기본 꺼짐 그대로다. 장치 기본값 꺼짐은 그대로다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).
+
+
+### 개정 2026-10-10 — 위치 미보고 신뢰 예외 제거
+
+사용자 결정: `legacy=true`로 위치를 신뢰하지 않는다. 3항의 D-395 이전 로봇 예외와 S2의 30 s 뒤 이전 로봇 복귀를 폐기한다. CORE `localization`이 누락·null·잘못된 형식이면 `UNKNOWN`, `trusted:false`, 호환 응답 필드 `legacy:false`다. 교통·bays·교착 해결기는 명시적인 `LOCALIZED` + `map` 자세만 사용한다. null 30 s 뒤 마지막 신뢰 좌표는 만료하며 위치 미확인 상태는 유지한다. `map_id`만으로 화면에 로봇의 원시 자세를 지도 좌표로 그리지 않는다.
+
+Fleet MapPose(D-494)의 보정된 카메라 sighting·운영자 핀·odom 이음은 CORE 위치 상태와 별도 출처로 유지한다. LED 신원 확인(D-596)은 영상 대상의 신원을 확인할 뿐 지도 방향이나 CORE 위치 신뢰를 확정하지 않는다(D-598). 이 개정은 자동 위치 결정이나 운행 권한을 추가하지 않는다.

@@ -106,11 +106,16 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     answer = ssh(target, "health")
     if answer is None:
         entry["state"] = "unreachable"
+        entry["resources"] = None  # a missed reply must not keep the previous headroom
         print(f"{name}: unreachable (watchdog's job if it froze)", flush=True)
         return
     fields = answer.split()  # a malformed reply raises here, before any counter changes
     avail, swap, load, cores, uptime = int(fields[0]), int(fields[1]), float(fields[2]), int(fields[3]), int(fields[4])
     down = [] if len(fields) < 6 or fields[5] == "-" else fields[5].split(",")
+    entry["resources"] = {
+        "avail_pct": avail, "swap_pct": swap, "load": load,
+        "cores": cores, "uptime_s": uptime, "down": down,
+    }
     reasons = []
     if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
         reasons.append(f"memory avail {avail}% swap {swap}%")
@@ -182,6 +187,7 @@ def main() -> int:
                 continue
         except Exception as exc:  # one bad line or reply must not stop the other hosts
             entry["state"] = "error"
+            entry["resources"] = None
             print(f"{line[0]}: check failed: {exc!r}", flush=True)
         entry["time"] = int(time.time())
     tmp = status_file.with_suffix(".tmp")

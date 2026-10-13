@@ -4,6 +4,8 @@
 (additive). hub 경로의 상태는 heartbeat(PRT-003, 1 Hz)가 실어 온 것과 바이트가 같다.
 """
 
+import asyncio
+
 from fakes import FakeClock, FakeRobot, run
 from test_hub import _ep, _hello
 from fastapi.testclient import TestClient
@@ -58,6 +60,33 @@ def test_power_health_is_bounded_and_one_failure_does_not_hide_another_robot():
     assert _state_rows(client)[0]["power_health"] is None
 
 
+def test_power_health_timeout_keeps_the_last_good_body_with_its_age_up_to_five_seconds():
+    # Field check 2026-10-10: the robot said 70 % fresh, the card said 확인 불가 — a read that
+    # missed the request's short wait became null. A timeout keeps the last good body (aging).
+    import httpx
+
+    clock = FakeClock()
+    robot = FakeRobot("rosy_01")
+    robot.power_health_value = _health(clock)
+    client = TestClient(create_app(_console(robot, clock=clock), console_token="viewer",
+                                   start_task_dispatcher=False))
+    assert _state_rows(client)[0]["power_health_age_s"] == 0.0
+    robot.power_health_error = httpx.ReadTimeout("slow robot")
+    clock.advance(3)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    row = _state_rows(client)[0]
+    assert row["power_health"]["battery"]["charging_state"] == "confirmed"
+    assert row["power_health_age_s"] == 3.0
+    assert robot.calls.count(("power_health",)) == 2
+    clock.advance(3)
+    row = _state_rows(client)[0]
+    assert row["power_health"] is None and row["power_health_age_s"] is None
+    robot.power_health_error = None
+    clock.advance(1)
+    _state_rows(client)
+    assert _state_rows(client)[0]["power_health_age_s"] is not None
+
+
 def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
     clock = FakeClock()
     first = FakeRobot("rosy_01")
@@ -72,6 +101,22 @@ def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
     row = _state_rows(client)[0]
     assert row["power_health"] is None and row["power_health_age_s"] is None
     assert replacement.calls.count(("power_health",)) == 1
+
+
+def test_power_health_refresh_waits_for_a_normal_lan_read():
+    clock = FakeClock()
+    robot = FakeRobot("rosy_01")
+
+    async def delayed_health():
+        await asyncio.sleep(0.08)
+        return _health(clock)
+
+    robot.power_health = delayed_health
+    client = TestClient(create_app(_console(robot, clock=clock), console_token="viewer",
+                                   start_task_dispatcher=False))
+    assert _state_rows(client)[0]["power_health"] is not None
+    clock.advance(6)
+    assert _state_rows(client)[0]["power_health"] is not None
 
 
 def test_fresh_hub_snapshot_answers_and_rest_get_is_skipped():

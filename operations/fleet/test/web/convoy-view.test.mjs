@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   convoyLeaders, repeatTripBody, trafficCardLine, trafficDrawing, tripErrorText,
-} from '../../fleet/server/web/shared/site-map-model.js';
+} from '../../../ui/console/shared/site-map-model.js';
 
 const ACTIVE = {version: 7, map: {edges: [{id: 'east', polyline: [[0, 0], [4, 0]]}],
   places: [{id: 'start_n', kind: 'start'}, {id: 'start_s', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
@@ -27,7 +27,7 @@ test('one thin line from the robot ahead (else the leader) to each follower', ()
 test('a follower card says whom it follows and how far behind', () => {
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_02'), '반복 운행 1바퀴째 · 대열 · rosy_01 뒤 0.6 m');
   assert.equal(trafficCardLine(TRAFFIC, 'rosy_03'), '반복 운행 1바퀴째 · 대열 · rosy_01 위치 모름 · 고정 블록 · 앞 블록 대기 · rosy_02');
-  assert.equal(trafficCardLine(TRAFFIC, 'rosy_01'), '반복 운행 2바퀴째');
+  assert.equal(trafficCardLine(TRAFFIC, 'rosy_01'), '반복 운행 2바퀴째 · 대열 리더 · rosy_02, rosy_03 따라옴');
 });
 
 test('the leader choice lists open repeat trips that follow nobody, and the body carries it', () => {

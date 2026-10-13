@@ -7,6 +7,8 @@ set -f
 # shellcheck disable=SC2086  # split on purpose; globbing is off
 set -- ${SSH_ORIGINAL_COMMAND:-}
 [ $# -ge 1 ] && [ $# -le 2 ] || { echo "refused" >&2; exit 2; }
+# Config installs come from a logged-in operator only, never from the Fleet key.
+[ "$1" != install-site-config ] || { echo "refused" >&2; exit 2; }
 for word in "$@"; do
   case "$word" in
     *[!a-z0-9.@-]*|-*) echo "refused" >&2; exit 2 ;;

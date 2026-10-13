@@ -15,6 +15,17 @@ import surface_registry as registry
 
 REPO = registry.REPO
 
+
+def test_duplicate_registry_keys_cannot_silently_replace_a_contract(tmp_path):
+    import yaml
+
+    target = tmp_path / registry.REGISTRY
+    target.parent.mkdir(parents=True)
+    target.write_text("surfaces:\n  - id: robot\n    contracts: [shared_controls]\n"
+                      "    contracts: []\n", encoding="utf-8")
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key: contracts"):
+        registry.raw_rows(tmp_path)
+
 #: D-329 계약 시험은 이 셋에서 표면 목록을 읽는다. 여기가 손으로 적힌 자리다.
 CONSUMERS = {
     "shared_controls": Path("shared/web/test/test_shared_controls.py"),

@@ -38,6 +38,8 @@ def open_token_access(page) -> None:
     except Exception as error:  # playwright TimeoutError, imported lazily like the rest of the harness
         if type(error).__name__ != "TimeoutError":
             raise
+    # Reconnect publishes selections before finishing; open after its controls settle.
+    page.wait_for_function("() => !document.getElementById('token-save')?.disabled")
     # D-540 2: below 90rem the token sits in the header fold behind 설정.
     toggle = page.locator("#topbar-more")
     if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":

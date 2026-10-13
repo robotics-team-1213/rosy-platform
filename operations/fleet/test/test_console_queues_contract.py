@@ -11,7 +11,7 @@ D-159(관리는 예외로)의 Fleet 번역: 정상 로봇은 큐에 없다. 큐�
 
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 CONSOLE = WEB / "console.js"
 ROSTER = WEB / "roster.js"
 QUEUES = WEB / "queues.js"
@@ -55,18 +55,18 @@ def test_the_queues_panel_heads_the_rail():
     2026-10-02 회차의 교훈(큐가 지도 아래 963px)은 그대로다: 큐는 지도 밑으로 가지 않는다."""
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
-    assert "main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);" in styles
+    assert "main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);" in styles
     assert ".console-primary { grid-column: 1; }" in styles
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 2;" in shell
+    assert "const MAP_PANEL = 1;" in shell
 
 
 def test_queue_and_roster_attention_share_one_rule():
     """D-493 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
     roster, queues = ROSTER.read_text(encoding="utf-8"), QUEUES.read_text(encoding="utf-8")
     assert "function attentionItems(robot)" in queues
-    assert "const { attentionItems, attentionKey, fillQueues } = createQueues(" in roster
-    assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in roster
+    assert "const { attentionItems, fillQueues } = createQueues(" in roster
+    assert "return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;" in roster
     assert "for (const item of attentionItems(r))" in queues
 
 
@@ -103,3 +103,15 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     assert "dataset.decisionSlot = row.key;" in roster
     assert 'decision: "stuck"' in roster and 'decision: "replan"' in roster
     assert "export function mustExpand(robot)" in roster
+
+
+def test_d577_lane_lost_hold_rows_name_the_reason_and_rise_after_the_deadline():
+    """D-577 8: R5 holds the robot and asks a human. The row names why; with no human answer
+    30 s after the escalation it says so and moves to the top. Console only (no phone/messenger)."""
+    stuck_js = (WEB / "line-stuck.js").read_text(encoding="utf-8")
+    for reason in ("peer_behind", "attempts", "local_disabled", "crosswalk", "pose", "refused", "rule_budget"):
+        assert f'"lane_lost_hold:{reason}"' in stuck_js
+    queues = QUEUES.read_text(encoding="utf-8")
+    assert "HUMAN_DEADLINE_S = 30" in queues
+    assert "30초 넘게 답 없음" in queues
+    assert "overdue" in queues

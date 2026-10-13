@@ -15,24 +15,27 @@ playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 
 
 ROOT = Path(__file__).resolve().parents[4]
 ANDROID = ROOT / "middleware" / "ui" / "pilot" / "android"
-GRADLEW = ROOT / "operations" / "ui" / "cam" / "gradlew.bat"
-PROBE = Path(r"X:\DevTemp\pilot-app-connect\page-probe")
+GRADLEW = ROOT / "operations" / "ui" / "cam" / ("gradlew.bat" if os.name == "nt" else "gradlew")
 
 
 def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
     env = os.environ.copy()
-    env["JAVA_HOME"] = r"X:\java\jdk-21.0.8"
-    env["GRADLE_USER_HOME"] = r"X:\DevCaches\gradle"
+    if os.name == "nt":
+        env.setdefault("JAVA_HOME", r"X:\java\jdk-21.0.8")
+        env.setdefault("GRADLE_USER_HOME", r"X:\DevCaches\gradle")
     command = [
         str(GRADLEW), "-p", ".",
-        "--project-cache-dir", r"X:\DevTemp\pilot-app-connect\project-cache",
-        "-Prosy.buildRoot=X:/DevTemp/pilot-app-connect/build",
+        "--project-cache-dir", str(probe.parent / "project-cache"),
+        f"-Prosy.buildRoot={(probe.parent / 'build').as_posix()}",
+        f"-Pkotlin.project.persistent.dir={(probe.parent / 'kotlin-state').as_posix()}",
         "-Prosy.pilot.page.probe=1",
         f"-Prosy.pilot.page.dir={probe.as_posix()}",
         ":app:testDebugUnitTest",
         "--tests", "io.github.livsbittt.rosy.pilot.ShellPageProbe",
-        "--offline",
+        "--offline", "--no-daemon",
     ]
+    if os.name != "nt":
+        command.insert(0, "bash")
     handle = log.open("w", encoding="utf-8")
     process = subprocess.Popen(
         command, cwd=ANDROID, env=env, text=True,
@@ -42,16 +45,14 @@ def _gradle(probe: Path, log: Path) -> tuple[subprocess.Popen[str], object]:
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_bundled_page_uses_the_app_proxy():
+def test_bundled_page_uses_the_app_proxy(tmp_path):
     """Chromium loads the assets and session the Pilot app proxy actually serves."""
-    if PROBE.exists():
-        for child in PROBE.iterdir():
-            child.unlink()
-    else:
-        PROBE.mkdir(parents=True)
+    # The selected test host supplies Java/SDK and a warmed Gradle dependency cache.
+    PROBE = tmp_path / "page-probe"
+    PROBE.mkdir()
     gradle_log = PROBE / "gradle.txt"
     gradle, gradle_handle = _gradle(PROBE, gradle_log)
-    origin = capability = ""
+    origin = capability = cookie_name = ""
     try:
         deadline = time.monotonic() + 180
         address = PROBE / "address.txt"
@@ -59,8 +60,8 @@ def test_bundled_page_uses_the_app_proxy():
             if gradle.poll() is not None:
                 raise AssertionError(
                     f"proxy exited {gradle.returncode} before the page was ready\n{gradle_log.read_text(encoding='utf-8')}")
-            if address.is_file() and len(address.read_text(encoding="utf-8").splitlines()) >= 2:
-                origin, capability = address.read_text(encoding="utf-8").splitlines()[:2]
+            if address.is_file() and len(address.read_text(encoding="utf-8").splitlines()) >= 3:
+                origin, capability, cookie_name = address.read_text(encoding="utf-8").splitlines()[:3]
                 break
             time.sleep(0.2)
         else:
@@ -70,7 +71,7 @@ def test_bundled_page_uses_the_app_proxy():
             try:
                 context = browser.new_context(viewport={"width": 1200, "height": 800})
                 context.add_cookies([{
-                    "name": "rosy-shell", "value": capability, "domain": "127.0.0.1",
+                    "name": cookie_name, "value": capability, "domain": "127.0.0.1",
                     "path": "/", "httpOnly": True, "sameSite": "Strict",
                 }])
                 page = context.new_page()

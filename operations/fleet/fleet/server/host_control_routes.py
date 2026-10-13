@@ -7,11 +7,16 @@ log lines below add the action and unit.
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
-from fleet.host_control import HostControlError, catalogue, decide
+from fleet.host_control import HostControlError, catalogue, decide, read_json_object
+
+# D-530. The site guard and the site's own drift check write these. Fleet only reads them.
+GUARD_STATUS = Path("/var/lib/rosy-host-guard/status.json")
+DRIFT_STATUS = Path("/var/lib/rosy-host-state/status.json")
 
 _LOG = logging.getLogger(__name__)
 
@@ -50,6 +55,8 @@ def install_host_control_routes(app, *, require_operator, require_named_operator
     @app.get("/api/fleet/hosts", tags=["fleet"])
     def host_catalogue(principal=Depends(require_operator)):
         body = catalogue()
+        body["guard"] = read_json_object(GUARD_STATUS)
+        body["drift"] = read_json_object(DRIFT_STATUS)
         body["requested_by"] = principal.principal_id
         return body
 

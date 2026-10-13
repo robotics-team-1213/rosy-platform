@@ -92,9 +92,12 @@ def test_vision_writes_detections_and_reads_only_its_own_config(tmp_path):
         assert accepted.status_code == 200, accepted.text
         assert accepted.json() == {"accepted": True, "source_id": "ceiling_north", "seq": 41, "status": "OK"}
         config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN))
-        assert config.json() == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                 "calibration": None, "relearn_seq": 0,
-                                 "identity_challenge": None}  # D-472: no open LED request
+        occupied = config.json().pop("occupied")
+        assert [(row["x"], row["basis"]) for row in occupied] == [(1.2345, "blob"), (2.5, "blob")]  # D-600
+        assert {**config.json(), "occupied": None} == {
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration": None, "relearn_seq": 0,
+            "robot_markers": {}, "identity_challenge": None,  # D-472: no open LED request
+            "identity_challenges": [], "occupied": None}  # D-596, D-600
         assert client.get("/api/fleet/detections/config").status_code == 401
         assert client.get("/api/fleet/tracking", headers=_auth(SOURCE_TOKEN)).status_code == 401
         assert client.post("/api/fleet/calibrations", json=APPROVAL,
@@ -200,7 +203,8 @@ def test_relearn_is_an_operator_action(tmp_path, caplog):
         assert client.post("/api/fleet/tracking/relearn", json=body,
                            headers=_auth(VIEWER_TOKEN)).status_code == 403
         response = client.post("/api/fleet/tracking/relearn", json=body, headers=_auth(OPERATOR_TOKEN))
-        assert response.json() == {"source_id": "ceiling_north", "relearn_seq": 1}
+        assert response.json() == {"source_id": "ceiling_north", "relearn_seq": 1,
+                                   "occupied": 0, "unlocated": ["rosy_01"]}  # D-600
         assert client.post("/api/fleet/tracking/relearn", json={"source_id": "nope"},
                            headers=_auth(OPERATOR_TOKEN)).status_code == 404
         assert client.get("/api/fleet/detections/config",

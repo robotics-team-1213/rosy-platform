@@ -17,6 +17,7 @@ Recorded lidar scans, maps, and localization snapshots used by the ROS-free Cont
 | `execution_escape_dropout_20260910.json` | Escape-path dropout trace |
 | `b9_real_label_frames_main.json` | main 6945440e5 keep-keeper decision per real label frame (434, corner turning on); `test_lane_keep_bend.py` checks the gate-off keeper against it when `data/perception/labels` is present |
 | `gazebo_localization_corner.npz` | Corner localization snapshot |
+| `v13c_corner_reacquire_20261010.npz` | 17 Gazebo frames (run L, 63.0-65.0 s) of v13c learned paint masks (bit-packed) and the camera ground; `test_lane_keep_corner_seed.py` replays the corner re-approach |
 | `mapping_corner_scan.json` | Mapping corner scan |
 | `map_offcenter_start_20260910.json.gz` | Off-center map start |
 | `registration_endpoint_v14_20260909.json.gz` | Registration endpoint v14 |

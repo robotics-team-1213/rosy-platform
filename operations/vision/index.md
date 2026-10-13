@@ -18,6 +18,8 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 
 ## 계획·결과 문서
 
@@ -25,6 +27,8 @@
 - [2026-09-26-overhead-camera-android-app-design.md](../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
 - [2026-09-28-site-camera-preview-rectification.md](../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-30-app-identity-rename-plan.md](../../docs/plans/2026-09-30-app-identity-rename-plan.md)
+- [2026-10-11-compact-camera-calibration.md](../../docs/plans/2026-10-11-compact-camera-calibration.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 
 ## 교훈 (docs/solutions)
 
@@ -36,8 +40,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167
-- 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
-- 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
-- 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
-- 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
+- 2026-10-12 · d780942b9 · feat(vision): D-691 미리보기 읽기 뒤 30초 유지
+- 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
+- 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
+- 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
+- 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정

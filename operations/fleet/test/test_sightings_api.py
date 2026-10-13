@@ -109,6 +109,67 @@ def test_field_payload_on_a_marker_source_is_a_calibration_mismatch():
             rejected.json()["detail"]["code"]) == (409, "CALIBRATION_MISMATCH")
 
 
+def _approved_service(approved, clock):
+    source = SightingSource(source_id="ceiling-east", token=SOURCE_TOKEN, robot_ids=("rosy_01",),
+                            map_id="lane-map:sha256:abc", calibration_revision="ceiling-1-v2",
+                            corner_marker_ids=None,
+                            corner_world_m=((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)),
+                            calibration_source="field_boundary")
+    seen = []
+
+    def revision(asked):
+        seen.append(asked.source_id)
+        return approved
+
+    service = SightingService([source], known_robot_ids=["rosy_01"], clock=clock,
+                              approved_revision=revision)
+    return service, seen
+
+
+def _approved_payload(**changes):
+    body = _payload(corner_marker_ids=None, calibration_source="approved_record",
+                    calibration_revision="paint-7b220d432c2a")
+    body.update(changes)
+    return body
+
+
+def test_approved_record_sighting_passes_only_with_the_current_approved_revision():
+    """D-587 2: an identified marker projected through the approved record is a sighting
+    when its revision is the source's approved record now; otherwise CALIBRATION_MISMATCH."""
+    from core_common.protocol.sightings import SiteSightingPayload
+    auth = f"Bearer {SOURCE_TOKEN}"
+    service, seen = _approved_service("paint-7b220d432c2a", _Clock())
+    row = service.accept(auth, SiteSightingPayload(**_approved_payload()))
+    assert (row["calibration_source"], row["source_id"], seen) == (
+        "approved_record", "ceiling-east", ["ceiling-east"])
+
+    for approved, body in (("paint-000000000000", _approved_payload(captured_at=NOW - 0.05)),
+                           (None, _approved_payload(captured_at=NOW - 0.05))):
+        service, _ = _approved_service(approved, _Clock())
+        with pytest.raises(Exception) as error:
+            service.accept(auth, SiteSightingPayload(**body))
+        assert (error.value.status_code, error.value.code) == (409, "CALIBRATION_MISMATCH")
+
+    # No approved-revision provider wired: never accepted.
+    plain = SightingService(service.sources, known_robot_ids=["rosy_01"], clock=_Clock())
+    with pytest.raises(Exception) as error:
+        plain.accept(auth, SiteSightingPayload(**_approved_payload()))
+    assert error.value.code == "CALIBRATION_MISMATCH"
+
+
+def test_approved_record_payload_carries_no_corner_ids_and_keeps_the_static_check():
+    from pydantic import ValidationError
+    from core_common.protocol.sightings import SiteSightingPayload
+    with pytest.raises(ValidationError, match="approved_record sighting carries no corner"):
+        SiteSightingPayload(**_approved_payload(corner_marker_ids=[30, 31, 32, 33]))
+    # The static revision is not an approved-record revision.
+    service, _ = _approved_service("paint-7b220d432c2a", _Clock())
+    with pytest.raises(Exception) as error:
+        service.accept(f"Bearer {SOURCE_TOKEN}",
+                       SiteSightingPayload(**_approved_payload(calibration_revision="ceiling-1-v2")))
+    assert error.value.code == "CALIBRATION_MISMATCH"
+
+
 def test_field_sources_must_not_carry_corner_ids_and_need_the_world_rectangle():
     def _service(source):
         return SightingService([source], known_robot_ids=["rosy_01"])

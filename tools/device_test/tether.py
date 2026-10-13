@@ -217,7 +217,8 @@ def tether_check(robot, args):
                          f"{pts['robot']}")
     try:      # the drawn robot must be the target: its lamp blinks there (D-512 amendment 2)
         t["identity"] = identify.identify(robot, pts["robot"], identify.radius_px(
-            rec["map_to_image"], draw_pose[:2], _project), path.parent)
+            rec["map_to_image"], draw_pose[:2], _project), path.parent,
+            identify.floor_polygon(rec["map_to_image"], rec.get("track_bounds_m"), _project))
     except identify.Refused as exc:     # the refusal and its frames go into the verdict as evidence
         t.update(identity=exc.evidence, visual_check_ok=False)
         path.write_text(json.dumps(v, indent=2), encoding="utf-8")
@@ -257,13 +258,28 @@ class Guard:
     def _pose(self, st):
         return pose_of(st.get("pose") if isinstance(st, dict) else None)
 
-    def _start(self, x, y, yaw):
-        """The charger from the pose the image check used; the first driving pose must still be it."""
+    def _near_capture(self, x, y, yaw, what):
         cx, cy, cyaw = self.capture
         moved, turned = math.hypot(x - cx, y - cy), abs(math.degrees(wrap(yaw - cyaw)))
         if moved > START_MAX_MOVE_M or turned > START_MAX_TURN_DEG:
-            raise Abort(f"tether: first driving pose is {moved:.3f} m / {turned:.1f} deg from the checked capture "
+            raise Abort(f"tether: {what} is {moved:.3f} m / {turned:.1f} deg from the checked capture "
                         f"pose (max {START_MAX_MOVE_M} m / {START_MAX_TURN_DEG} deg); preflight again")
+
+    def rebase(self, before, after):
+        """A CORE restart (the overlay) starts odometry again at zero. The robot must still be at the
+        capture pose just before the restart; the pose after it is then the reference, and the charger,
+        kept in the robot frame, moves with it (2026-10-10: a capture pose left by an earlier drive
+        aborted every run as 0.41 m / 69 deg away though the robot had not moved)."""
+        if not self.t:
+            return
+        if before is None or after is None:
+            raise Abort("tether: pose unknown around the CORE restart; the tether limits cannot be enforced")
+        self._near_capture(*before, "the pose just before the CORE restart")
+        self.capture = after
+
+    def _start(self, x, y, yaw):
+        """The charger from the pose the image check used; the first driving pose must still be it."""
+        self._near_capture(x, y, yaw, "first driving pose")
         self.anchor = place(self.capture, self.t["charger_robot_frame"])
 
     def _update(self, x, y, yaw, phase="drive"):

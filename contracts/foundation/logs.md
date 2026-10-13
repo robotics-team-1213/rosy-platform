@@ -582,3 +582,69 @@
 - 변경: foundation 계약 시험 파일을 	est_route_context_contract.py로 바꿔 core services의 동명 시험과 pytest 수집 충돌을 해소했다.
 - 증거: GitHub CI 37914451689 core-domain의 import file mismatch; 시험 본문 5125 passed, 수집 1 error.
 - gate 변화: CI 동일 묶음 재검증 대기.
+## 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
+- 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
+- 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
+- gate 변화: 없음.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 표시
+- 변경: `drive_signal`과 램프 다섯 번째 인자. 화면은 `?`, `Left`, `Right`. 복구가 질문보다 위다. 차선 유지 문장만 질문이 대신한다.
+- 증거: foundation 화면·램프 시험. 장치 점등 없음.
+- gate 변화: SOURCE. DEVICE는 열림.
+- 결정: D-583
+
+
+## 2026-10-10 · uncommitted · fix: nominal body selection
+
+- 변경: nominal_body_for(kind)는 알려진 기종의 공칭 차체만 반환하고 알 수 없는 기종은 None으로 거절한다. Fleet 출발 검사가 이를 공유한다.
+- 증거: 원격 회귀시험에서 선택 함수 부재를 재현했다. 수정 후 원격 재검증 대기.
+- gate 변화: 없음. 실기기 차체 이탈 방지 증거가 아니다.
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-10 · uncommitted · feat: shared situation direction (D-619)
+
+- Change: Shared situation-v1 validates mobility/manipulation observations bound to caller-owned frames; model verification remains unverified.
+- Evidence: remote focused contracts 115 passed, 0 NEW before final context additions; final validation follows.
+- Gate: SOURCE; live Fleet image and physical acceptance remain separate.
+
+## 2026-10-10 · 181b569b5 · fix(discovery): 빈 검색 캐시 재사용
+
+- 변경: 최초 광고 수집 이후에는 빈 캐시도 바로 반환해 저장된 TLS 호스트의 LAN 조회로 넘어간다. 매 요청의 3초 대기를 제거하며 최초 경쟁 광고 수집, 충돌 거절과 TLS 신원 검증은 유지한다.
+- 증거: 현장 Fleet 두 호스트의 주소 해석 3.007초를 재현했다. 원격 RED에서 빈 warm cache 시험이 3초 지연으로 실패했고, 수정 후 발견·TLS 역할·Fleet transport·등록 TLS 시험 77건이 통과했다. known_failures 신규 실패 0건.
+- gate 변화: SOURCE. 현장 새 payload 적용과 연속주행은 아직 확인하지 않았다.
+
+## 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder
+
+- 변경: 읽기 판단·관측 종료 DTO를 protocol/fleet_judgment.py로 옮기고 schemas.py의 정식 export를 유지했다. 크기 제한·예외·wire 필드는 변경하지 않았다.
+- 증거: 통합 원격 크기 검사에서 초과를 재현했다. 책임 분리 후 수정 HEAD의 구조/설치 재검증 대기.
+- gate 변화: SOURCE 책임 분리. 실제 설치·배포·현장 수용은 별도다.
+
+## 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+
+- 변경: 두 사람 승인 정답과 별도 관측 입력·모델·학습 출처를 고정 버전으로 결속하고, 로봇 설정 없이 HOLD 보고서를 생성한다. 공통 관측 계약과 World 기존 import는 같은 객체를 사용한다. 새 계약 파일을 구분하는 패키지 버전·의존 pin·서명 코드 묶음의 필수 파일을 정리했다.
+- 증거: 재생 20개 합성 시험 terminal exit 0, NEW0. 승인 hash/짝 영상 검사를 제거한 2개 실패를 확인하고 복구했다. 공통 계약 이전 후 World 설치·아키텍처·학습 관련 시험 terminal exit 0, NEW0. 독립 소스 검토의 패키지 버전 문제를 수정했다. 최신 버전의 설치/전체 회귀·착지 증거는 후속 기록이다.
+- gate 변화: 없음. 실제 독립 정답·보정·물체 성능·수용 profile·장치 관측 전달과 지연/손실, 실물/시뮬레이션 성능은 HOLD다. 기존 20261010 검수 데이터의 의미와 운영 선택을 유지한다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
+
+- 변경: 얼굴 입력 `line_note`는 `crosswalk`, `lane_edge`, `yield`만 받는다. 내비게이션과 수동에서 막힘·계획·도착 다음에 `Crosswalk`, `Lane edge`, `Yielding`을 말한다. 대기와 모르는 값은 기존 줄을 유지한다.
+- 증거: `test_face_screen.py`에 노트 줄과 모르는 값 시험을 넣었다. 이 브랜치는 커밋 전이라 원격 pytest는 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
+
+## 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
+
+- 변경: 기존 NativeReceipts에 실제 owner 잠금을 nonblocking으로 얻어 immutable receipt만 반환하는 capture를 추가한다. 경합은 명시적 실패이며 unlocked lookup이나 transport 조회가 없다.
+- 증거: 실제 owner 잠금 경합 RED 5건 후 safety/native owner·구조·설치 패키지 원격 exit 0/NEW 0. native 크기 단위 117로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. 배포·장치·현장 수용은 수행하지 않았다.

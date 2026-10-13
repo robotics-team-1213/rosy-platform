@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+extra["rosyTokenSource"] = "../../../../shared/web/tokens.css"
+extra["rosyTokenPackage"] = "io.github.livsbittt.rosy.cam.ui"
+
 android {
     namespace = "io.github.livsbittt.rosy.cam"
     compileSdk = 35
@@ -70,6 +73,8 @@ android {
         }
     }
 }
+
+apply(from = "../../../../shared/web/native-tokens.gradle")
 
 dependencies {
     implementation(libs.androidx.core.ktx)

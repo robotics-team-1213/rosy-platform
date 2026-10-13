@@ -48,6 +48,14 @@ def test_valid_manifest_loads(tmp_path):
     assert m.onnx_file().name == "model.onnx"
 
 
+@pytest.mark.parametrize("semantic", [None, "road_suface/1", "road_surface/1"])
+def test_road_semantic_on_a_non_road_class_is_refused(tmp_path, semantic):
+    doc = _manifest()
+    doc["output"]["classes"][0]["semantic"] = semantic
+    with pytest.raises(ManifestError, match="semantic"):
+        load_manifest(_write(tmp_path, doc))
+
+
 @pytest.mark.parametrize("patch", [
     {"schema": "rosy.perception.model/2"},
     {"task": "detection"},

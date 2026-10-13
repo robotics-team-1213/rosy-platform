@@ -19,8 +19,8 @@ PATTERN = re.compile(r"pinky", re.IGNORECASE)
 SUFFIXES = {".py", ".yaml", ".yml", ".xml", ".xacro", ".urdf", ".sdf", ".world", ".cpp", ".hpp", ".json"}
 SKIP_PARTS = {"test", "tests", "build", "install", "log", "__pycache__"}
 #: D-427: repo-relative Pinky source family after wave 4c.
-HOME_PREFIXES = ("middleware/apps/device/pinky/bringup/",
-                 "middleware/apps/device/pinky/profile/", "middleware/drivers/pinky_adc/",
+HOME_PREFIXES = ("middleware/devices/pinky/bringup/",
+                 "middleware/devices/pinky/profile/", "middleware/drivers/pinky_adc/",
                  "middleware/drivers/pinky_lamp/", "middleware/drivers/pinky_led/")
 #: Existing production literal policy excludes the learning/tooling trees.
 PRODUCTION_PARTS = {"operations", "middleware", "contracts", "shared_web", "integrations"}

@@ -252,7 +252,12 @@ def test_route_needs_a_named_operator():
     assert refused.status_code == 403
 
 
-def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path):
+def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    # The route reads absolute host paths. A test PC may already have them.
+    monkeypatch.setattr(routes, "GUARD_STATUS", tmp_path / "missing-guard.json")
+    monkeypatch.setattr(routes, "DRIFT_STATUS", tmp_path / "missing-drift.json")
     client = _client(helper_from_config(tmp_path))
     missing = client.post("/api/fleet/hosts/site/control", json={
         "action": "reboot", "operator_confirmed": True})
@@ -261,6 +266,35 @@ def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path):
     listed = client.get("/api/fleet/hosts")
     assert listed.status_code == 200
     assert {row["host"] for row in listed.json()["hosts"]} == {"site", "ai", "model"}
+    assert listed.json()["guard"] is None and listed.json()["drift"] is None
+
+
+def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    guard = tmp_path / "guard.json"
+    guard.write_text('{"model": {"state": "ok", "resources": {"avail_pct": 41, "load": 1.5, "cores": 8}}}',
+                     encoding="utf-8")
+    (tmp_path / "drift.json").write_text("[1]", encoding="utf-8")
+    monkeypatch.setattr(routes, "GUARD_STATUS", guard)
+    monkeypatch.setattr(routes, "DRIFT_STATUS", tmp_path / "drift.json")
+    body = _client(UnavailableHostHelper()).get("/api/fleet/hosts").json()
+    assert body["guard"]["model"]["resources"]["avail_pct"] == 41
+    assert body["drift"] is None
+
+
+def test_install_task_shows_host_headroom_and_has_no_process_kill():
+    web = Path(__file__).resolve().parents[2] / "ui" / "console"
+    page = (web / "install.html").read_text(encoding="utf-8")
+    script = (web / "host-services.js").read_text(encoding="utf-8")
+    install = (web / "install.js").read_text(encoding="utf-8")
+    backend = Path(__file__).resolve().parents[1] / "fleet" / "server"
+    assets = (backend / "static_routes.py").read_text(encoding="utf-8")
+    assert 'id="host-services"' in page and "호스트 서비스" in page
+    assert "pkill" not in script and "kill" not in script
+    assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
+    assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
+    assert '"host-services.js"' in assets
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):
@@ -345,3 +379,61 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("restart-unit a b") == 2
     assert remote("") == 2
     assert remote("reboot *") == 2
+
+
+def _install_copy(tmp_path):
+    """The helper with root paths under tmp_path; runuser/getent/chown stubbed (no root here)."""
+    helper = _helper_copy(tmp_path, "site")  # writes conf/, state stubs; we rewrite one more path
+    del helper
+    stub = tmp_path / "bin"
+    home = tmp_path / "home"
+    (home / ".rosy" / "site-incoming").mkdir(parents=True)
+    (stub / "runuser").write_text('#!/bin/sh\n[ "$1" = -u ] && shift 2; [ "$1" = -- ] && shift; exec "$@"\n')
+    (stub / "getent").write_text(f'#!/bin/sh\necho "op:x:1000:1000::{home}:/bin/sh"\n')
+    (stub / "chown").write_text("#!/bin/sh\nexit 0\n")
+    for name in ("runuser", "getent", "chown"):
+        (stub / name).chmod(0o755)
+    site, backup = tmp_path / "site", tmp_path / "backup"
+    site.mkdir()
+    copy = tmp_path / "helper"
+    text = copy.read_text()
+    for old, new in (("SITE_CONF=/etc/rosy/site", f"SITE_CONF={site}"),
+                     ("BACKUP=/var/lib/rosy-host-control/backup", f"BACKUP={backup}")):
+        assert old in text
+        text = text.replace(old, new)
+    copy.write_text(text)
+
+    def run(name, user="op"):
+        env = {**os.environ, "SUDO_USER": user}
+        return subprocess.run(["bash", str(copy), "install-site-config", name], env=env,
+                              capture_output=True, text=True, timeout=20).returncode
+    return run, home / ".rosy" / "site-incoming", site, backup
+
+
+@posix
+def test_site_config_install_copies_checks_and_backs_up(tmp_path):
+    run, incoming, site, backup = _install_copy(tmp_path)
+    (incoming / "fleet-site.yaml").write_text("fleet: {traffic: {}}\n")
+    assert run("fleet-site.yaml") == 0
+    assert (site / "fleet-site.yaml").read_text() == "fleet: {traffic: {}}\n"
+    assert oct((site / "fleet-site.yaml").stat().st_mode & 0o777) == "0o644"
+    (incoming / "fleet-site.yaml").write_text("fleet: {traffic: {zones: {}}}\n")
+    assert run("fleet-site.yaml") == 0
+    assert [p.read_text() for p in backup.iterdir()] == ["fleet: {traffic: {}}\n"]
+    # Refusals leave the installed file alone and no temp file behind.
+    (incoming / "fleet-site.yaml").write_text("fleet: [unclosed\n")
+    assert run("fleet-site.yaml") == 2
+    (incoming / "fleet-site.yaml").write_text("a: " + "x" * 70000 + "\n")
+    assert run("fleet-site.yaml") == 2
+    assert run("robots.yaml") == 2                 # not allowlisted (holds robot tokens)
+    assert run("../site-cameras.yaml") == 2
+    assert run("site-cameras.yaml") == 2           # nothing staged
+    assert run("fleet-site.yaml", user="root") == 2
+    assert (site / "fleet-site.yaml").read_text() == "fleet: {traffic: {zones: {}}}\n"
+    assert sorted(p.name for p in site.iterdir()) == ["fleet-site.yaml"]
+
+
+@posix
+def test_fleet_key_cannot_install_site_config():
+    env = {**os.environ, "SSH_ORIGINAL_COMMAND": "install-site-config fleet-site.yaml"}
+    assert subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, timeout=10).returncode == 2
