@@ -151,6 +151,20 @@ class PairingClientTest {
         return pairing.poll() as PairingState.ConfirmFingerprint
     }
 
+    @Test fun revokedManagerCannotFinishDelayedPairingConfirmation() {
+        val fake = FakeSite(); var allowed = true
+        val transport = object : PairingTransport by fake {
+            override fun confirm(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray {
+                val reply = fake.confirm(site, requestId, pollKey, body); allowed = false; return reply
+            }
+        }
+        val pairing = PairingClient(transport, "test", "1", store, now = { clock }, authorized = { allowed })
+        toFingerprint(fake, pairing)
+        assertEquals(PairingState.Rejected("confirm_management_revoked", fake.credentialId), pairing.answerFingerprint(true))
+        assertNull(store.saved)
+        assertEquals(listOf("save", "discard"), store.events)
+    }
+
     @Test
     fun happyPathStoresAValidSiteLinkAfterConfirm() {
         val fake = FakeSite()
