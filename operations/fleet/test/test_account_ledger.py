@@ -1,0 +1,121 @@
+"""D-757 durable human accounts and live revocation, without robot commands."""
+import sqlite3
+
+import pytest
+
+from fleet.server.password_session import PasswordSessions, StalePasswordCheck
+from test_password_session import _accounts, _app, _client, _login, HASH, TYPED, ORIGIN
+
+
+def activated(tmp_path):
+    sessions = PasswordSessions(tmp_path / "accounts.sqlite3", _accounts())
+    sessions.bootstrap_accounts("alice", "test-site")
+    return sessions
+
+
+def cookie(sessions, login="alice", password=TYPED):
+    verified = sessions.check("local", login, password)
+    assert verified is not None
+    return sessions.issue(login, remember=False, verified=verified)
+
+
+def test_activation_preserves_effective_password_profile_and_identity(tmp_path):
+    path = tmp_path / "accounts.sqlite3"
+    original = PasswordSessions(path, _accounts())
+    value = cookie(original)
+    original.profile(value, "Alice Example")
+    value, _ = original.change_password(value, "my changed secret", current_password=TYPED)
+    # Activate before stale YAML can reconcile away the effective password.
+    active = PasswordSessions(path, _accounts(role="viewer"), accounts_bootstrap=("alice", "test-site"))
+    assert active.check("a", "alice", TYPED) is None
+    value = cookie(active, password="my changed secret")
+    context = active.account_context(value)
+    assert context["account_id"] and context["session_family"] != value
+    assert context["grants"] == [{"resource": "site:test-site", "capabilities": ["accounts.manage"]}]
+    assert active.profile(value)["display_name"] == "Alice Example"
+    restarted = PasswordSessions(path, {})
+    assert restarted.account_context(value)["account_id"] == context["account_id"]
+
+
+def test_bootstrap_requires_explicit_existing_login_and_is_one_time(tmp_path):
+    sessions = PasswordSessions(tmp_path / "accounts.sqlite3", _accounts())
+    with pytest.raises(ValueError):
+        sessions.bootstrap_accounts("missing", "test-site")
+    sessions.bootstrap_accounts("alice", "test-site")
+    with pytest.raises(ValueError):
+        sessions.bootstrap_accounts("alice", "other-site")
+
+
+def test_account_mutations_are_cas_audited_and_revoke_across_processes(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    new = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
+                                  password="temporary secret", grants=[])
+    second = PasswordSessions(sessions.path, {})
+    bob = cookie(second, "bob", "temporary secret")
+    assert second.principal(bob)[0].password_change_required
+    bob, _ = second.change_password(bob, "a permanent secret")
+    current = sessions.list_accounts(manager)
+    new = next(row for row in current if row["account_id"] == new["account_id"])
+    verified = second.check("b", "bob", "a permanent secret")
+    changed = sessions.update_account(manager, new["account_id"], revision=new["revision"], enabled=False)
+    assert changed["revision"] == new["revision"] + 1
+    assert second.principal(bob) is None
+    with pytest.raises(StalePasswordCheck):
+        second.issue("bob", remember=False, verified=verified)
+    with pytest.raises(ValueError, match="revision"):
+        sessions.update_account(manager, new["account_id"], revision=new["revision"], enabled=True)
+    with sqlite3.connect(sessions.path) as db:
+        event = db.execute("SELECT actor_account_id, target_account_id, previous_revision, next_revision "
+                           "FROM rosy_account_audit ORDER BY rowid DESC LIMIT 1").fetchone()
+    assert event == (sessions.account_context(manager)["account_id"], new["account_id"],
+                     new["revision"], changed["revision"])
+
+
+def test_last_manager_and_operator_cannot_manage_accounts(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    me = sessions.account_context(manager)
+    for changes in ({"enabled": False}, {"grants": []}):
+        with pytest.raises(ValueError, match="last"):
+            sessions.update_account(manager, me["account_id"], revision=me["revision"], **changes)
+    other = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
+                                    password="temporary secret", grants=[])
+    bob, _ = sessions.change_password(cookie(sessions, "bob", "temporary secret"), "permanent secret")
+    with pytest.raises(PermissionError):
+        sessions.list_accounts(bob)
+    assert "password_scrypt" not in other
+
+
+def test_admin_reset_and_revoke_sessions(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                                  password="temporary secret", grants=[])
+    bob = cookie(sessions, "bob", "temporary secret")
+    updated = sessions.reset_account_password(manager, row["account_id"], revision=row["revision"],
+                                               password="another temporary secret")
+    assert sessions.principal(bob) is None
+    bob = cookie(sessions, "bob", "another temporary secret")
+    sessions.revoke_account_sessions(manager, row["account_id"], revision=updated["revision"])
+    assert sessions.principal(bob) is None
+
+
+def test_account_api_cookie_origin_capability_and_strict_bodies(tmp_path):
+    app, _ = _app(tmp_path)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    client = _client(app)
+    assert _login(client).status_code == 204
+    path = "/api/fleet/auth/accounts"
+    assert client.get(path, headers=ORIGIN).status_code == 200
+    assert client.get(path).status_code == 403
+    body = {"login": "bob", "principal_id": "bob", "role": "viewer",
+            "password": "temporary secret", "grants": []}
+    assert client.post(path, headers=ORIGIN, json={**body, "admin": True}).status_code == 422
+    created = client.post(path, headers=ORIGIN, json=body)
+    assert created.status_code == 201
+    row = created.json()
+    response = client.patch(path + "/" + row["account_id"], headers=ORIGIN,
+                            json={"revision": row["revision"], "enabled": False})
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
