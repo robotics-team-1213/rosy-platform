@@ -2,7 +2,7 @@
   "project_id": "example-project",
   "public_origin": "https://review.example.invalid",
   "accounts_db": "/private/learning/accounts.sqlite3",
-  "key_file": "/private/learning/credentials.key",
+  "key_file": "/private/learning/learning-accounts.key",
   "imports_root": "/private/learning/imports",
   "oauth": null,
   "users": [
