@@ -144,3 +144,11 @@ D-637 후속: 이전에 보류했던 Decision/Console은 기존 Fleet 배포를 
 34d73ae77에서 기존 구조 검사의 계산식을 그대로 독립 재검산했다. 테스트 실행·pytest import 없이 측정한 잔류 control은 중복 없는 234개 production 파일·35025줄이다. Nav2와 등록 vision unit 66파일·13431줄은 기존대로 제외했다. 기존 34855보다 170줄 증가했으며 observer 법칙 reader/조립 87, node 4, facade/setup 14, map generator 45, 같은 CommandPolicy의 진단 20줄로 설명된다. runtime의 네 노드는 기존 perception 노드에서 그대로 이동한 것으로 중복·증가가 아니다.
 
 drive_review는 기존 SPLIT 의무를 유지한 재판정을 승인했다. 실제 Drive holder는 runtime을 포함한 여섯 곳이며 배포는 기존 단일 control이다. 개별 파일 예산·등록 unit·+150 재검토 기준·control_sensing/provider/control_safety 배포 분리 의무를 유지한다. 다음 +150 초과 또는 새 owner 도입 때 다시 판정하며 이번 기록을 분리 완료·새 설치 실행·지도 완주 증거로 세지 않는다. 파일별 줄수·SHA inventory는 세션 X evidence의 structure-count-da1.json에 보관했다.
+
+## 2026-10-13 · D-747 S2 source 구조 재심사
+
+후보 f380d7b971에서 authority_review가 pytest import/실행 없이 기존 검사 AST의 production filter, 여섯 Drive holder 및 innermost SIZE_UNITS 제외를 독립 재계산했다. 잔류 control은 중복 없는 234파일·35183줄, 제외하는 등록 vision은 66파일·13431줄, 전체는 300파일·48614줄이다. 중복은 0개이고 Nav2는 기존처럼 control holder 범위 밖이다.
+
+기존 35025 대비 증가 158줄은 같은 safety kernel/admission wiring 150(footprint_sweep 69, command_gate 21, safety adapter node 27, lidar_guard 32, policy_handoff 1)과 S2 source mapping/setup/Gazebo provenance 목록 8(3/2/3)로 설명된다. 이동 14파일은 bytes가 같고 프로세스·dependency·writer·owner가 늘지 않는다. 독립 구조 재심사는 기존 SPLIT 의무를 유지한 baseline 35183 갱신을 승인했다. 파일 600/800 예산, 1000 hard tier, +150 재검토 기준, SIZE_UNITS 및 control_sensing/provider/control_safety 배포분리 의무를 바꾸지 않는다.
+
+이 승인은 D-740 동작 안전, source 설치, runtime 또는 현장 수용이 아니다. S2 첫 원격 실행은 새 실패 3건(동적 source 경로 시험 2, 구조 재심사 기준 초과 1)으로 착지하지 않았다. 경로 시험은 기존 source_path 지도를 사용하도록 고치고 새 후보를 원격 재검증한다. 최종 결과는 [S2 기록](../validation/perception-judgment-s2-2026-10-13/result.md)에 남긴다.

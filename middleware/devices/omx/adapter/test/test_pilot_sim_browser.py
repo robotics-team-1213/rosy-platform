@@ -123,7 +123,7 @@ class Runtime:
 
 @contextlib.contextmanager
 def _paired_page(runtime):
-    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/ui/pilot",
+    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/robot_ui/pilot",
                                common_root=ROOT / "shared/web", pairing_code="ABCD-EFGH")
     listener = safe_listener()
     port = listener.getsockname()[1]

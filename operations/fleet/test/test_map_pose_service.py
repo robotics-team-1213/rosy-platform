@@ -7,7 +7,7 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.localization.map_pose import BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig
+from rosy.world.state.projections.map_pose import BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.map_pose_service import MapPoseService

@@ -24,7 +24,7 @@ def test_native_export_tracks_canonical_tokens_and_rejects_non_scalar_roles(tmp_
         "ext.android = [sourceSets: [getByName: { name -> [java: [srcDir: { path -> }]] }]]\n"
         "tasks.register('preBuild')\n"
         f"apply from: '{exporter.as_posix()}'\n", encoding="utf-8")
-    command = ["bash", str(ROOT / "operations/ui/cam/gradlew"), "--project-dir", str(tmp_path),
+    command = ["bash", str(ROOT / "operations/site_ui/cam/gradlew"), "--project-dir", str(tmp_path),
                "generateNativeTokens", "--no-daemon", "--console=plain"]
 
     def run():

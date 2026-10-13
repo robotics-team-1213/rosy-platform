@@ -29,7 +29,7 @@ Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the proces
 | `system/` | Host probe, ROS graph (see `system/AGENTS.md`) |
 | `drive/` | CORE Drive composition: line-follow binding and docking/swarm assembly; no new runtime or writer (D-627) |
 
-Feature managers, protocol schemas, config/identity/profile, and the API no longer live here: see `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, and `../../api/core_api_web/AGENTS.md`. Operator screens are `middleware/ui/robot`.
+Feature managers, protocol schemas, config/identity/profile, and the API no longer live here: see `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, and `../../api/core_api_web/AGENTS.md`. Operator screens are `middleware/robot_ui/robot`.
 
 ## For AI Agents
 

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 FLEET = Path(__file__).resolve().parents[1] / "fleet"
-MODEL = Path(__file__).resolve().parents[2] / "ui/console/shared/site-map-model.js"
+MODEL = Path(__file__).resolve().parents[2] / "site_ui/console/shared/site-map-model.js"
 
 
 def test_every_trip_code_has_console_text():

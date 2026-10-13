@@ -9,7 +9,7 @@ from control.control.sensor_tiers import partial_plan
 
 
 def node_method(name, **bindings):
-    path = Path(__file__).parents[1] / 'control/startup_calibration_node.py'
+    path = Path(__file__).parents[1] / 'nodes/startup_calibration_node.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)

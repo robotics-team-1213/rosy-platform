@@ -1,0 +1,51 @@
+# 남은 폴더 정리
+
+기준 main 3cf2aecde. 사용자가 요청한 local merge 범위로 처리하며 push하지 않는다. 원격 시험 PC 주소/VPN 변경으로 pytest 재검증은 NOT RUN이다. 폴더 이동은 실행 권한·설치 identity·CORE 최종 명령을 바꾸지 않는다. 단계별 static 검사와 local Git 착지를 원격/장치 수용과 구분한다.
+
+## S3
+
+35개 조립 파일을 perception/control에서 perception/nodes로 옮겼다. 기존 CONTROL_ROOTS/build_py/source inventory를 재사용한다. control에는 다섯 facade와 source mapping을 유지하고 S2 기능 holder는 다시 옮기지 않는다. 서명 source closure는 이동한 35개 파일을 요구한다. 독립 source/Safety/closure 리뷰 PASS, 단독 sdist → wheel 생성에서 35개 flat 모듈 각각 한 번 설치·bytes 동일 PASS. 실행 코드가 같으며 web_http의 경로 설명 주석만 변경됐다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S3-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S4
+
+로봇 local policy/receipt는 middleware/robot_execution, 현장 PlanBundle/progress는 operations/site_execution. Existing rosy.execution.local and rosy.execution imports/wheels remain unchanged. Source install, CI, Docker, test and current guide paths move together; immutable d427_target retained.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S4-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S5
+
+로봇 Dashboard/Pilot/Face와 현장 Console/Cam holder를 robot_ui/site_ui로 구분했다. App/serving/import identity, assets and backend authority remain unchanged; packaging/deploy/source consumers use the new paths.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S5-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S6
+
+D-748에 따라 천장 패키지는 operations/overhead, lamp 사실은 operations/signal_observation, 로봇 앞 카메라는 middleware/perception/front_camera로 구분했다. 기존 ROS/import/wire identity와 지도 계보는 유지하고 image/서명/source 소비자를 맞춘다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S6-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S7
+
+D-749: generic 제품 action rules는 action_rules, 공통 안전은 safety_gate, 관측 저장은 preview, Drive 후보 제한은 motion_limits. 기존 core_features.decision/safety/vision 및 control.control/control.safety 설치 identity와 CORE 최종 명령을 유지한다. 실제 구현은 하나이고 옛 package에는 source facade만 둔다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S7-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S8
+
+D-750: 60개 Fleet server 모듈을 peer/cell/auth/console/ledger source holder로 구분했다. 기존 channel과 app 조립, DB/거래/import identity는 유지한다. source와 wheel 모두 fleet.server.*를 사용한다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S8-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S9
+
+D-751: Gazebo rigs→tools/sim/gazebo, calibration migration→tools/calibration, static ROS audit→tools/validation. 로봇 hotpath/IR 측정 2개는 기존 device holder에 남긴다. map/calibration 입력은 바꾸지 않고 package root/CWD를 명시한다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S9-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S10
+
+D-752: 모든 현행 Fleet/sim/test MapPose import를 rosy.world.state.projections.map_pose로 전환하고 Fleet identity alias를 제거했다. 구현은 World 하나, 기존 rosy-world==0.1.1 dependency와 현재상태 의미·Fleet 거래 owner는 유지한다. 외부 미등록 옛 alias 소비는 canonical import로 갱신해야 한다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S10-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.

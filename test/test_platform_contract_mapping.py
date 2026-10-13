@@ -41,7 +41,7 @@ def test_platform_api_packages_have_declared_build_metadata():
         ROOT / "operations/world/pyproject.toml",
         ROOT / "middleware/skills/api/pyproject.toml",
         ROOT / "middleware/skills/manipulation/pyproject.toml",
-        ROOT / "operations/execution/pyproject.toml",
+        ROOT / "operations/site_execution/pyproject.toml",
     )
     assert all(path.is_file() for path in package_files)
 

@@ -191,12 +191,10 @@ def test_decision_has_no_command_fields():
 
 def test_capture_trigger_node_main_shuts_down_like_line_observer():
     import ast
-    from pathlib import Path
-
-    control = Path(__file__).resolve().parents[1] / "control"
+    from test.control_sources import source_path
 
     def main_src(name):
-        tree = ast.parse((control / name).read_text(encoding="utf-8"))
+        tree = ast.parse(source_path(name).read_text(encoding="utf-8"))
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
         return (ast.unparse(fn).replace("LineObserverNode", "Node")
                 .replace("CaptureTriggerNode", "Node"))
@@ -207,7 +205,7 @@ def test_capture_trigger_node_main_shuts_down_like_line_observer():
 def test_capture_trigger_node_is_evidence_only():
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "capture_trigger_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / "snapshots" / "capture_trigger_node.py").read_text(
         encoding="utf-8")
     assert "create_publisher" not in src
     assert "rosbag2_interfaces.srv import Snapshot" in src
@@ -242,7 +240,7 @@ def test_capture_trigger_node_times_out_a_hung_snapshot_call():
     """A call that never answers must not leave its request file to pair with the next dump."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "capture_trigger_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / "snapshots" / "capture_trigger_node.py").read_text(
         encoding="utf-8")
     assert "SNAPSHOT_CALL_TIMEOUT_S = 10.0" in src
     assert "remove_pending_request(future)" in src
@@ -253,6 +251,6 @@ def test_capture_trigger_node_times_out_a_hung_snapshot_call():
 def test_capture_trigger_node_derives_the_recorder_service_from_its_namespace():
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "capture_trigger_node.py").read_text(
+    src = (Path(__file__).resolve().parents[1] / "snapshots" / "capture_trigger_node.py").read_text(
         encoding="utf-8")
     assert "snapshot_node_name(self.get_namespace())" in src

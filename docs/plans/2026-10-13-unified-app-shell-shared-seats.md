@@ -294,7 +294,7 @@ Expected: 새 시험 5개 실패. `FileNotFoundError: ... app-shell.css` 또는 
 ```bash
 git add shared/web/app-shell.css shared/web/shared-assets.json shared/web/CMakeLists.txt shared/web/surfaces.yaml shared/web/test/test_design_scope_gates.py
 git commit -m "feat(web): add the shared app shell sheet (D-741)"
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/shell-seats -- shared/web/test test/architecture middleware/ui/pilot/test/test_shell_assets.py
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/shell-seats -- shared/web/test test/architecture middleware/robot_ui/pilot/test/test_shell_assets.py
 python test/known_failures.py X:/DevTemp/shell-seats/run-4.txt
 ```
 
@@ -313,7 +313,7 @@ Expected: `test_app_shell_seats.py` 8 passed, `NEW` 0. 같이 봐야 하는 기�
 ### Task 3: 견본과 문서
 
 **Files:**
-- Modify: `shared/web/template.html`, `middleware/ui/robot/styleguide.html`, `DESIGN.md`, `shared/web/logs.md`
+- Modify: `shared/web/template.html`, `middleware/robot_ui/robot/styleguide.html`, `DESIGN.md`, `shared/web/logs.md`
 
 - [ ] **Step 1: 견본 틀에 자리를 넣는다**
 
@@ -345,7 +345,7 @@ Expected: `test_app_shell_seats.py` 8 passed, `NEW` 0. 같이 봐야 하는 기�
 
 - [ ] **Step 2: 스타일 갤러리에 자리 견본을 넣는다**
 
-`middleware/ui/robot/styleguide.html`의 `<head>`에 `<link rel="stylesheet" href="/common/app-shell.css">`를 더하고, `id="task-choice"` 구획 다음에:
+`middleware/robot_ui/robot/styleguide.html`의 `<head>`에 `<link rel="stylesheet" href="/common/app-shell.css">`를 더하고, `id="task-choice"` 구획 다음에:
 
 ```html
   <section class="entry" id="app-shell-seats">
@@ -407,9 +407,9 @@ Expected: `test_app_shell_seats.py` 8 passed, `NEW` 0. 같이 봐야 하는 기�
 ```
 
 ```bash
-git add shared/web/template.html middleware/ui/robot/styleguide.html DESIGN.md shared/web/logs.md
+git add shared/web/template.html middleware/robot_ui/robot/styleguide.html DESIGN.md shared/web/logs.md
 git commit -m "docs(web): show the app shell seats in the template and style gallery (D-741)"
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/shell-seats -- shared/web/test middleware/ui/robot/test middleware/core/api/test/test_ui_route.py test/architecture
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/shell-seats -- shared/web/test middleware/robot_ui/robot/test middleware/core/api/test/test_ui_route.py test/architecture
 python test/known_failures.py X:/DevTemp/shell-seats/run-5.txt
 python tools/harness/rosy_harness.py lint
 ```

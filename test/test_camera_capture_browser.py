@@ -9,7 +9,7 @@ import pytest
 from browser_harness import browser_tests_enabled, open_page
 
 
-CAPTURE_JS = Path(__file__).resolve().parents[1] / "middleware/ui/robot/camera-capture.js"
+CAPTURE_JS = Path(__file__).resolve().parents[1] / "middleware/robot_ui/robot/camera-capture.js"
 # D-359 §4: 캔버스 색·글꼴은 ui.js(window.RosyPalette)가 푼다 — 실제 화면처럼 먼저 싣는다.
 COMMON = Path(__file__).resolve().parents[1] / "shared/web"
 pytestmark = pytest.mark.skipif(

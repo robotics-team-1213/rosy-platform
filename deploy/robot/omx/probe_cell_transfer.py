@@ -38,7 +38,7 @@ REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 # Appended, not prepended: every other import would otherwise stat the (slow) bind mount first.
 for _part in ("contracts/foundation", "middleware/devices/omx/adapter",
               "operations/processes/cell", "operations/processes/palletizing/src",
-              "middleware/execution/local/src", "contracts/skill/src",
+              "middleware/robot_execution/local/src", "contracts/skill/src",
               "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))
 

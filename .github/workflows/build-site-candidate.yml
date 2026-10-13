@@ -28,13 +28,13 @@ on:
       - operations/fleet/**
       - integrations/messaging/discord/**
       - operations/decision/**
-      - operations/ui/console/**
+      - operations/site_ui/console/**
       - operations/world/src/**
-      - operations/execution/src/**
+      - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
       - operations/situation/rosy_situation/assessment.py
       - operations/situation/rosy_situation/snapshot_assessment.py
-      - operations/vision/**
+      - operations/overhead/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
       - contracts/learning/src/**

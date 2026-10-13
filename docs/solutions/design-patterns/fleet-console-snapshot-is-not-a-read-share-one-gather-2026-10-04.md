@@ -18,7 +18,7 @@ tags: [fleet, console-snapshot, side-effects, shared-gather, d-438, polling, tra
 ## Context
 The D-438 phase-1 stuck resolver (D-438 branch, not yet on main) first polled `console.snapshot()` every 1 s from its own loop, next to the console's `GET /api/fleet/state` poll. Every per-task review passed. The final branch review found what each task review missed:
 
-- `FleetConsole.snapshot()` GETs `/api/v1/robot/state` on every robot, then runs `_handoff_dead_leader`, `_run_traffic` and `_manage_swarm_speed` (`src/site/fleet/fleet/server/console.py`, inside `snapshot`). A second poller therefore doubles the HTTP load on the Pis and runs traffic release and leader hand-off twice, with overlapping timing.
+- `FleetConsole.snapshot()` GETs `/api/v1/robot/state` on every robot, then runs `_handoff_dead_leader`, `_run_traffic` and `_manage_swarm_speed` (`src/site/fleet/fleet/server/console/console.py`, inside `snapshot`). A second poller therefore doubles the HTTP load on the Pis and runs traffic release and leader hand-off twice, with overlapping timing.
 - Two overlapping `board.observe(...)` calls could finish out of order, letting an older snapshot overwrite a newer one.
 
 ## Guidance

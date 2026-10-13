@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from core_api_web.api.app import create_app
 
-WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
+WEB_ROOT = Path(__file__).resolve().parents[4] / 'middleware' / 'robot_ui' / "robot"
 TOKENS = Path(__file__).resolve().parents[4] / "shared" / "web" / "tokens.css"
 
 #: D-92 어휘 표의 열 이름 — 갤러리가 이 목록과 어긋나면 표와 갤러리가 두 개의
@@ -127,7 +127,7 @@ def test_setup_pose_evidence_dependency_is_served():
 def test_each_base_surface_has_its_role_panel_mounts():
     from core_api_web.api.ui_registry import load_registry
 
-    root = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
+    root = Path(__file__).resolve().parents[4] / 'middleware' / 'robot_ui' / "robot"
     registry = load_registry(root / "panels.yaml", root)
     assert {panel.surface for panel in registry.panels} == {"console", "setup", "device"}
     assert {panel.id for panel in registry.panels} == {

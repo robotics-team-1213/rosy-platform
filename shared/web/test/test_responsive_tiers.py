@@ -17,8 +17,8 @@ import surface_registry as registry
 
 REPO = registry.REPO
 COMPONENTS = REPO / "shared" / "web" / "components.css"
-PANELS = REPO / "middleware" / "ui" / "robot" / "panels" / "surface-panels.css"
-SHELL = REPO / "middleware" / "ui" / "robot" / "shell" / "shell.css"
+PANELS = REPO / 'middleware' / 'robot_ui' / "robot" / "panels" / "surface-panels.css"
+SHELL = REPO / 'middleware' / 'robot_ui' / "robot" / "shell" / "shell.css"
 
 
 def _web_rows() -> list[dict]:

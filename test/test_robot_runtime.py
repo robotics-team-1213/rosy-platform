@@ -365,7 +365,7 @@ def test_systemd_unit_delegates_to_runtime_mode_wrapper():
 
 
 def test_teleop_watchdog_lives_in_safety_manager_not_a_stub():
-    safety = ROOT / "middleware" / "core" / "services" / "core_features" / "safety"
+    safety = ROOT / 'middleware' / 'core' / 'services' / 'core_features' / 'safety_gate'
     assert not (safety / "watchdog.py").is_file()
     assert "class TeleopWatchdog" in (safety / "manager.py").read_text(encoding="utf-8")
 

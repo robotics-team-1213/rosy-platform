@@ -7,7 +7,7 @@ import pytest
 from core_api_web.api.app import create_app
 
 
-WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
+WEB_ROOT = Path(__file__).resolve().parents[4] / 'middleware' / 'robot_ui' / "robot"
 COMMON_ROOT = Path(__file__).resolve().parents[4] / "shared" / "web"
 
 

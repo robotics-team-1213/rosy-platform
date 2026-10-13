@@ -3,8 +3,8 @@ import unittest
 
 import numpy as np
 
-from tools.gz.save_map import map_pixels
-from tools.gz.check_map import measure
+from tools.sim.gazebo.save_map import map_pixels
+from tools.sim.gazebo.check_map import measure
 
 
 class MapExportTest(unittest.TestCase):

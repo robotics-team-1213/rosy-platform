@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 for package_root in (
     ROOT / "contracts/skill/src",
     ROOT / "middleware/skills/api/src",
-    ROOT / "operations/execution/src",
-    ROOT / "middleware/execution/local/src",
+    ROOT / "operations/site_execution/src",
+    ROOT / "middleware/robot_execution/local/src",
     ROOT / "middleware/skills/manipulation/src",
 ):
     if str(package_root) not in sys.path:

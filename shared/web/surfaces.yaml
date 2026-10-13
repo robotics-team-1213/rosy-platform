@@ -61,7 +61,7 @@ surfaces:
     app_name_en: Rosy Robot
     short_name: Rosy Robot
     icon: shared/web/icons/robot.svg
-    path: middleware/ui/robot
+    path: middleware/robot_ui/robot
     themes: [dark, light]
     surface: robot
     medium: web
@@ -88,7 +88,7 @@ surfaces:
     app_name_en: Rosy Fleet
     short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
-    path: operations/ui/console
+    path: operations/site_ui/console
     themes: [dark, light]
     surface: site
     medium: web
@@ -160,7 +160,7 @@ surfaces:
     app_name_en: Rosy Pilot
     short_name: Rosy Pilot
     icon: shared/web/icons/pilot.svg
-    path: middleware/ui/pilot
+    path: middleware/robot_ui/pilot
     themes: [dark]
     theme_reason: >
       운전석 영상 위에 조종을 겹치는 PWA라 바탕이 곧 영상이다 — 영상 대비와 현장 눈부심을 지키려
@@ -238,7 +238,7 @@ surfaces:
 
   - id: robot-face
     api_owners: []
-    path: middleware/ui/face
+    path: middleware/robot_ui/face
     themes: [dark]
     surface: robot
     medium: lcd
@@ -246,7 +246,7 @@ surfaces:
     role: 로봇 LCD — 부팅 단계·이름·로그인 코드 표시만, 입력과 명령이 없다 (D-370 1항)
     owns: []
     contracts: [token_parity]
-    token_copy: middleware/ui/face/emotion/info_screen.py
+    token_copy: middleware/robot_ui/face/emotion/info_screen.py
     baseline_reason: >
       LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
@@ -254,7 +254,7 @@ surfaces:
   - id: pilot-shell
     parent_app: pilot
     api_owners: [CORE]
-    path: middleware/ui/pilot/android
+    path: middleware/robot_ui/pilot/android
     themes: [dark]
     surface: robot
     medium: native
@@ -264,8 +264,8 @@ surfaces:
     owns: [pilot-device-lobby]
     contracts: [token_parity]
     token_source: shared/web/tokens.css
-    token_generator: middleware/ui/pilot/android/app/build.gradle.kts
-    token_verification: middleware/ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
+    token_generator: middleware/robot_ui/pilot/android/app/build.gradle.kts
+    token_verification: middleware/robot_ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
     baseline_reason: 태블릿 발견·연결·GroupDrive는 native 장치 검증이 필요하다. PWA 기준선은 웹 조종에만 적용하며 native 두 CORE 제어의 실기 수용을 대신하지 않는다.
 
   - id: cam
@@ -274,19 +274,19 @@ surfaces:
     app_name_en: Rosy Cam
     short_name: Rosy Cam
     icon: shared/web/icons/cam.svg
-    path: operations/ui/cam
+    path: operations/site_ui/cam
     themes: [dark]
     surface: site
     medium: native
     ports:
-      - {port: 8095, source: operations/vision/rosy_vision/cli.py}
+      - {port: 8095, source: operations/overhead/rosy_vision/cli.py}
     audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
     token_source: shared/web/tokens.css
     token_generator: shared/web/native-tokens.gradle
-    token_verification: operations/ui/cam/app/src/test/java/io/github/livsbittt/rosy/cam/ui/RosyColorSchemeTest.kt
+    token_verification: operations/site_ui/cam/app/src/test/java/io/github/livsbittt/rosy/cam/ui/RosyColorSchemeTest.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

@@ -72,14 +72,14 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
                 offenders.append(f"{_rel(path)}:{line}")
     assert offenders == [], f"정지 컨트롤에 data-always-live가 없다(대화상자가 열리면 막힌다): {offenders}"
     names = {_rel(path) for path, _ in pages}
-    for page in ("middleware/ui/robot/surface.html", "middleware/ui/robot/index.html", "operations/ui/console/index.html"):
+    for page in ("middleware/robot_ui/robot/surface.html", "middleware/robot_ui/robot/index.html", "operations/site_ui/console/index.html"):
         assert page in names, f"스캔이 {page}를 놓쳤다"
     assert stops >= 6, "셸·옛 대시보드·Fleet·게임·진단 정지를 모두 센다"
 
 
 def test_the_scan_fires_when_the_attribute_is_removed():
     """Mutation proof on the real shell markup."""
-    shell = (REPO / "middleware" / "ui" / "robot" / "surface.html").read_text(encoding="utf-8")
+    shell = (REPO / 'middleware' / 'robot_ui' / "robot" / "surface.html").read_text(encoding="utf-8")
     assert stops_in(shell) == [(25, True)]
     stripped = shell.replace(" data-always-live", "")
     assert stops_in(stripped) == [(25, False)]
@@ -91,10 +91,10 @@ def test_the_scan_fires_when_the_attribute_is_removed():
 # (2026-09-30 US-010, 2026-10-01 Fleet 등록 대화상자). 대화상자는 ui.js openLiveDialog로 연다.
 SHOW_MODAL = re.compile(r"""\.\s*showModal\s*\(|\[\s*["']showModal["']\s*\]""")
 WEB_SCRIPT_ROOTS = (
-    REPO / "middleware" / "ui" / "robot",
+    REPO / 'middleware' / 'robot_ui' / "robot",
     REPO / "shared" / "web",
-    REPO / "middleware" / "ui" / "pilot",
-    REPO / "operations" / "ui" / "console",
+    REPO / 'middleware' / 'robot_ui' / "pilot",
+    REPO / 'operations' / 'site_ui' / "console",
     REPO / "operations" / "apps" / "games" / "games" / "web",
 )
 
@@ -116,9 +116,9 @@ def test_no_surface_script_opens_a_modal_dialog():
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
     names = {_rel(path) for path in scripts}
-    for script in ("operations/ui/console/enrollment.js", "operations/ui/console/camera-pairing.js",
-                   "shared/web/ui.js", "middleware/ui/pilot/app.js",
-                   "middleware/ui/robot/settings.js", "operations/apps/games/games/web/board.js"):
+    for script in ("operations/site_ui/console/enrollment.js", "operations/site_ui/console/camera-pairing.js",
+                   "shared/web/ui.js", "middleware/robot_ui/pilot/app.js",
+                   "middleware/robot_ui/robot/settings.js", "operations/apps/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"
 
 

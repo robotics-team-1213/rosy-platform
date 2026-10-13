@@ -65,9 +65,9 @@ COPY middleware/core/services /opt/rosy_ws/src/runtime/services
 COPY middleware/drive/behaviors /opt/rosy_ws/src/runtime/services/_source_roots/behaviors
 COPY middleware/core/api /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
-COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
+COPY middleware/robot_ui/robot /opt/rosy_ws/src/hmi/dashboard
 # D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).
-COPY middleware/ui/pilot /opt/rosy_ws/src/hmi/pilot
+COPY middleware/robot_ui/pilot /opt/rosy_ws/src/hmi/pilot
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
@@ -143,7 +143,7 @@ COPY middleware/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
-COPY middleware/drive/safety /opt/rosy_ws/src/runtime/drive/safety
+COPY middleware/drive/motion_limits /opt/rosy_ws/src/runtime/drive/motion_limits
 COPY middleware/drive/recovery /opt/rosy_ws/src/runtime/drive/recovery
 COPY middleware/drive/tracking /opt/rosy_ws/src/runtime/drive/tracking
 COPY middleware/drive/calibration /opt/rosy_ws/src/runtime/drive/calibration
