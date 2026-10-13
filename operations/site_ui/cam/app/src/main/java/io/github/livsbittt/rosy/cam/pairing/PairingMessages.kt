@@ -15,7 +15,7 @@ import org.json.JSONTokener
  * `rosy-pair/1` JSON shapes (D-341 2, 3, 8). The request, reveal and result rules are the vector's
  * (`pairing.v1.json` `request_cases`, `reveal_cases`, `result_cases`) in pairing.py's check order. The create,
  * poll and confirm replies are not in the vector; their shapes follow rosy-00's S2 server (a83653e3,
- * `fleet/server/pairing.py`) and stay provisional until that lands on main.
+ * `fleet/server/auth/pairing.py`) and stay provisional until that lands on main.
  *
  * Phone-sent bodies ([PairingRequest], [PairingReveal]) reject unknown fields like the server (`extra=forbid`);
  * server replies accept and ignore unknown fields.

@@ -106,7 +106,7 @@ def test_only_cell_compiler_imports_the_palletizing_process_in_fleet():
                      else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
             if any(name.startswith("rosy.processes") for name in names):
                 importers.append(path.relative_to(fleet).as_posix())
-    assert sorted(set(importers)) == ["server/cell_compiler.py"]
+    assert sorted(set(importers)) == ["server/cell/cell_compiler.py"]
 
 
 def test_item_geometry_comes_from_the_validated_recipe():

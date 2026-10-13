@@ -45,8 +45,8 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 
 - Read DESIGN.md color-role laws and shared component catalog before UI changes (D-624). Paint belongs to shared/web tokens and components; surfaces own placement and actions. Keep gallery and responsive/accessibility checks aligned.
 
-- CSP is `style-src 'self'; script-src 'self'` (`operations/fleet/fleet/server/static_routes.py` `CONSOLE_CSP`): no inline scripts, no `style=` attributes, no `el.style.x =`. Express colour and layout with classes.
-- A new asset must be added to the allowlist in `operations/fleet/fleet/server/static_routes.py`; unlisted files are not served.
+- CSP is `style-src 'self'; script-src 'self'` (`operations/fleet/fleet/server/console/static_routes.py` `CONSOLE_CSP`): no inline scripts, no `style=` attributes, no `el.style.x =`. Express colour and layout with classes.
+- A new asset must be added to the allowlist in `operations/fleet/fleet/server/console/static_routes.py`; unlisted files are not served.
 - Robot pose is in the shared `map` frame (TF `map` to `<ns>base_footprint`); never introduce per-robot map frames in the drawing code.
 - Keep DOM-free logic in pure functions (the `*-view` / `createXPanel` files wire the DOM) so node tests cover it. Sightings and proposals are display-only: never feed them into goals or `cmd_vel`.
 - Do not call CORE directly or hold robot tokens in the browser.
@@ -68,7 +68,7 @@ Factory functions (`createMapView`, `createFormation`, ...) return handlers the 
 
 ### Internal
 
-- `operations/fleet/fleet/server/static_routes.py` (allowlist, CSP), `operations/fleet/fleet/server/app.py`, `shared/web` (`/common/` assets)
+- `operations/fleet/fleet/server/console/static_routes.py` (allowlist, CSP), `operations/fleet/fleet/server/app.py`, `shared/web` (`/common/` assets)
 
 ### External
 

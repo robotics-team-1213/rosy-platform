@@ -28,3 +28,6 @@ def console_root():
     if (PACKAGE_ROOT / 'package.xml').is_file():
         return SOURCE_ROOTS['console']
     return PACKAGE_ROOT / 'fleet/server/web'
+
+
+SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger')
