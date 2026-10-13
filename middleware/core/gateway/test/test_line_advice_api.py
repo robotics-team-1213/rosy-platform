@@ -9,7 +9,7 @@ OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 URL = "/api/v1/line-follow/advice"
 ROOT = Path(__file__).resolve().parents[4]
 FEATURES = ROOT / "middleware/core/services/core_features"
-BEHAVIORS = ROOT / 'middleware/control/drive/behaviors'
+BEHAVIORS = ROOT / 'middleware/drive/behaviors'
 
 
 def _body(**fields):

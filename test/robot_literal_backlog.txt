@@ -10,8 +10,8 @@ middleware/ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
 middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
 middleware/core/api/core_api_web/api/app.py
-middleware/control/drive/planning/nav2/launch/hardware.launch.py
-middleware/control/drive/planning/nav2/params/nav2_params.yaml
+middleware/drive/planning/nav2/launch/hardware.launch.py
+middleware/drive/planning/nav2/params/nav2_params.yaml
 middleware/perception/config/line_follow.yaml
 middleware/perception/config/robot.yaml
 middleware/perception/control/calibration_relocation.py
@@ -22,7 +22,7 @@ middleware/perception/control/goal_escape.py
 middleware/perception/control/ir_adc_node.py
 middleware/perception/control/line_observer_node.py
 middleware/perception/control/loc_assist_node.py
-middleware/control/drive/safety/adapter/node.py
+middleware/drive/safety/adapter/node.py
 middleware/perception/sensors/sensing/body.py
 middleware/perception/sensors/sensing/dock_tag.py
 middleware/perception/sensors/sensing/ir_adc.py
@@ -31,7 +31,7 @@ middleware/perception/sensors/sensing/loc_objects.py
 middleware/perception/sensors/sensing/odometry_fit.py
 middleware/perception/vision/perception/camera_controls.py
 middleware/perception/vision/perception/camera_ground.py
-middleware/control/drive/tracking/wander/navigator.py
+middleware/drive/tracking/wander/navigator.py
 middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world
 middleware/perception/tools/device/hotpath_measure.py
@@ -59,7 +59,7 @@ middleware/perception/tools/gz/rig_rate.py
 middleware/perception/tools/gz/rig_reload_navigation.py
 middleware/perception/tools/gz/run_calibration_spaces.py
 middleware/perception/tools/gz/track_run_monitor.py
-middleware/control/drive/behaviors/line_follow/clearance.py
+middleware/drive/behaviors/line_follow/clearance.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml
 integrations/simulation/gazebo/config/worlds.yaml
 integrations/simulation/gazebo/launch/gz_multi.launch.py
@@ -86,11 +86,11 @@ contracts/foundation/core_common/robot_body.py
 # (a) imports pinky_controls (D-411) for the capabilities announce; drops out when the controls profile moves to the product profile (see controls.py).
 middleware/core/api/core_api_web/api/v1/system.py
 # (a) comment-only: Pinky LiDAR example numbers in a docstring (D-424); safety-tagged, left unedited pending safety review.
-middleware/control/drive/safety/lidar_guard.py
+middleware/drive/safety/lidar_guard.py
 # (a) comment-only: Pinky LiDAR floor note (D-424); safety-tagged, left unedited pending safety review.
-middleware/control/drive/safety/safety_profile.py
+middleware/drive/safety/safety_profile.py
 # (a) comment-only: Pinky example distances in a docstring (D-424); the values already come from config/URDF body, reword when the Pinky profile owns them.
-middleware/control/drive/behaviors/localization/mission.py
+middleware/drive/behaviors/localization/mission.py
 # D-449: exact Episode/PolicyArtifact profile discriminants and owner kind; contract identity, no actuator defaults. Move to registered product profiles when that registry is accepted.
 contracts/learning/src/rosy/contracts/learning/artifacts.py
 # D-449: preserved recording schema and Episode body validator; binds Pinky provenance only, grants no command authority. Product-profile registration remains the eventual owner.

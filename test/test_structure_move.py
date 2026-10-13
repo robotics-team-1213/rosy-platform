@@ -10,7 +10,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/harness/structure_move.py"
 SOURCE = "middleware/core/navigation"
-TARGET = "middleware/control/drive/planning/nav2"
+TARGET = "middleware/drive/planning/nav2"
 
 
 def git(root, *args):
@@ -117,7 +117,7 @@ def test_rejection_leaves_files_and_index_untouched(repo, kind):
         if os.name == "nt":
             pytest.skip("Windows symlink privilege is not required by this fixture")
         (work / "external").mkdir()
-        (work / "middleware/control").symlink_to(work / "external", target_is_directory=True)
+        (work / "middleware/drive").symlink_to(work / "external", target_is_directory=True)
     files = {str(p.relative_to(work)): p.read_bytes() for p in work.rglob("*") if p.is_file()}
     status = git(work, "status", "--porcelain")
     result = apply(work, head)

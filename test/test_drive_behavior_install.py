@@ -24,7 +24,7 @@ def test_source_imports_resolve_to_one_canonical_drive_implementation():
     for name in NAMES:
         module = importlib.import_module('core_features.' + name)
         assert Path(module.__file__).resolve() == (
-            ROOT / 'middleware/control/drive/behaviors' / name / '__init__.py').resolve()
+            ROOT / 'middleware/drive/behaviors' / name / '__init__.py').resolve()
         assert not (ROOT / 'middleware/core/services/core_features' / name).exists()
 
 
@@ -32,8 +32,8 @@ def test_sdist_alone_builds_independent_wheel_with_original_imports(tmp_path):
     copied = tmp_path / 'source/middleware/core/services'
     ignore = shutil.ignore_patterns('__pycache__', '*.egg-info', 'build', 'dist')
     shutil.copytree(ROOT / 'middleware/core/services', copied, ignore=ignore)
-    shutil.copytree(ROOT / 'middleware/control/drive/behaviors',
-                    tmp_path / 'source/middleware/control/drive/behaviors', ignore=ignore)
+    shutil.copytree(ROOT / 'middleware/drive/behaviors',
+                    tmp_path / 'source/middleware/drive/behaviors', ignore=ignore)
     dist = tmp_path / 'dist'
     run('setup.py', 'sdist', '--dist-dir', str(dist), cwd=copied)
     with tarfile.open(next(dist.glob('*.tar.gz'))) as archive:

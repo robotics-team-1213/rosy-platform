@@ -43,7 +43,7 @@ def test_actual_node_publishes_the_prepared_sign_even_if_later_state_changes():
     import ast
     from pathlib import Path
     from types import SimpleNamespace as NS
-    source = Path(__file__).parents[2] / 'control/drive/safety/adapter/node.py'
+    source = Path(__file__).parents[2] / 'drive/safety/adapter/node.py'
     node = next(n for n in ast.parse(source.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
     tick = next(n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == 'tick')
     start = next(i for i, n in enumerate(tick.body) if isinstance(n, ast.Assign)

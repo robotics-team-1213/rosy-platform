@@ -34,7 +34,7 @@ ROS-free modules. One subject per file.
 ### Internal
 
 - Installed by `middleware/perception/setup.py` as `control.sensing`.
-- Drive consumers are `middleware/control/drive/`.
+- Drive consumers are `middleware/drive/`.
 
 ### External
 

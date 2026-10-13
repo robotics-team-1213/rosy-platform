@@ -167,7 +167,7 @@ class ConfiguredAdapterTests(unittest.TestCase):
             self.assertEqual(calls, ['publish'])
 
     def test_actual_safety_directional_gate_still_blocks_forward_and_checks_rear(self):
-        source = Path(__file__).parents[2] / 'control/drive/safety/adapter/node.py'
+        source = Path(__file__).parents[2] / 'drive/safety/adapter/node.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
         tick = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'tick')
