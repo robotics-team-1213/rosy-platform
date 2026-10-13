@@ -37,3 +37,29 @@ def test_block_from_a_real_shadow_log_validates_as_the_published_status():
     status = SafetyPolicyStatus.model_validate(block)
 
     assert status.mode == "shadow" and status.shadow is not None
+
+
+def test_enforce_block_reports_held_sensor_gaps_and_other_modes_do_not():
+    safety = SimpleNamespace(policy_holds=3, policy_hold_reason="policy_failed")
+    enforce = SimpleNamespace(config=SimpleNamespace(mode="enforce"), mode_error="")
+    shadow = SimpleNamespace(config=SimpleNamespace(mode="shadow"), mode_error="")
+
+    block = safety_policy_block("enforce", enforce, None, shadow=None, safety=safety)
+
+    assert block["hold"] == {"count": 3, "reason": "policy_failed"}
+    assert "hold" not in safety_policy_block("shadow", shadow, None, shadow=None, safety=safety)
+    assert "hold" not in safety_policy_block("enforce", enforce, None, shadow=None)
+
+
+def test_enforce_block_from_a_real_safety_manager_validates_as_the_published_status():
+    from core_common.protocol.schemas import SafetyPolicyStatus
+    from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
+
+    adapter = SimpleNamespace(config=SimpleNamespace(mode="enforce"), mode_error="")
+    block = safety_policy_block("enforce", adapter, None, shadow=None,
+                                safety=SafetyManager(SpeedLimits(), BatteryPolicy()))
+
+    status = SafetyPolicyStatus.model_validate(block)
+
+    assert (status.hold.count, status.hold.reason) == (0, "")
+    assert SafetyPolicyStatus.model_validate({"mode": "off", "mode_effective": "off"}).hold is None

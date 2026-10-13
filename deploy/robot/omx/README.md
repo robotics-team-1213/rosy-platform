@@ -265,3 +265,7 @@ Owner initialization still leaves the local stop closed. A named operator must r
 the existing Fleet API, with unresolved Actions reconciled first. Live ROS/UDS fault
 acceptance, seat exclusion and the full two-layer/two-pallet recipe remain open;
 host HTTP tests are not Gazebo or physical acceptance.
+
+## 실물 모방학습 준비
+
+녹화 설정 검사, native 검토·분할, ACT, private Hub 동기화는 [실행 안내](../../../learning/curation/omx/README.md)를 따른다. 실행 PC와 HF 조직은 미정이며 Pilot 실물 활성화는 별도다.

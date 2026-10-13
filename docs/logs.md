@@ -8268,9 +8268,53 @@ osy-d395-s1d\`.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
 - 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
 
+## 2026-10-13 · uncommitted · docs: 묵은 브랜치 일괄 착지와 정리 기록
+
+- 변경: main에 없던 브랜치를 한 세션에서 모았다. 착지 도구로 들어간 것, 충돌·lint·크기 가드를 풀어 들어간 것, 옛 브랜치에서 지금 구조로 옮겨 들어간 것을 합쳐 이 기록 시점에 38개다. main에 이미 같은 내용이 있던 브랜치는 `archive/2026-10-13/<브랜치>` 태그를 달고 지웠고, main의 조상인 브랜치와 깨끗한 워크트리도 지웠다. 미커밋 파일이 있는 워크트리, 오늘 다른 세션이 쓰는 브랜치, 판단이 남은 브랜치는 그대로 두었다. 교훈은 `docs/solutions/workflow-issues/check-supersession-before-resolving-stale-branch-conflicts-2026-10-13.md`에 적었다.
+- 증거: 브랜치별 착지 로그와 분류표는 `X:/DevTemp/land-recent/`(summary.txt, summary2.txt, classify.txt, plan.tsv, cleanup-log.txt)에 있다. 착지마다 `tools/land.py --tests auto`의 원격 영향 시험과 lint를 통과했다. 브라우저 시험은 착지 도구가 돌리지 않아 모델 PC에서 따로 돌린 것만 확인됐다.
+- gate 변화: 없음. SOURCE와 원격 시험 증거뿐이며 장치·현장 상태는 그대로다. D-622 REALIGN과 D-571 시뮬레이션 실행기는 켜지 않았고, 실행기는 실제 PC에서 돌린 적이 없다.
+- 결정: D-556 odom 차선 보류 포팅은 착지하지 않고 `fix/lane-odom-cross-veto-port`에 둔다. 판정이 몸체가 아니라 앞쪽 선을 보고, 걸린 로봇이 Fleet에 막힘을 올리지 않기 때문이다. push는 하지 않았다.
+
+## 2026-10-13 · uncommitted · docs(design): 좁은 머리 규칙을 D-668 테마 버튼과 맞춘다
+
+- 변경: DESIGN.md 허용 목록 예를 Fleet `48rem`(D-658)으로, Header Budget Rule에서 테마를 접는 부가 항목에서 뺐다. Fleet 헤더 버튼 하나(D-668)이고 로봇 대시보드는 시스템 화면 설정, Pilot·games는 어둡게 고정이라 접는 표면이 없다.
+- 증거: surfaces.yaml에 Fleet 90rem 등록이 없고 console 헤더 html 4곳이 `data-theme-cycle` 버튼을 둔다.
+- gate 변화: 없음. 문서 문구만 바뀐다.
+
+## 2026-10-13 · uncommitted · test: ACT 결과 테스트 이식 (ported from 7d84fa446, 373e71482)
+
+- 변경: 낡은 feat/act-native-chain(2026-10-05)의 커밋된 테스트·설계 문서만 현재 main에 이식했다. 원본 결과 공급자(parent attempt 결속 뒤, 실행 직렬화 밖)를 쓰는 `act_cpu_fixture.py`, `test_act_native_chain.py`, `test_act_parent_chain.py`, ROS 부분 설정 실패 격리 `test_native_setup_cleanup.py`, `test_policy_runtime_ros.py` 재작업(main의 경로 수정 유지), 설계 `docs/plans/2026-10-05-act-native-chain-design.md`. 제품 코드는 바꾸지 않았다. 원본 로그의 인코딩 보존 커밋과 index 행 커밋은 이 이식에서 필요 없어 옮기지 않았다.
+- 증거: 원격 pytest 27 PASS / 4 SKIP, 새 실패 0(`test/known_failures.py`). SKIP은 rclpy·torch·lerobot과 domain199 localhost가 없는 시험 PC 때문이며 실행 근거가 아니다. 원본 브랜치 실행 기록(X:/DevTemp/act-native-chain/)은 이식에서 다시 돌리지 않았다.
+- gate 변화: 없음. SOURCE/HOST 시험만이고 네이티브 CPU ROS 실행은 의존성 설치 전까지 수용되지 않는다. 제품 활성화, 물리 동작, push 없음.
+
 ## 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
 
 - 변경: 원본·라벨·시계·profile·용도별 적격성, HF 로그인/복수 계정 연결, 프로젝트 권한과 공동 검수, 고정 revision 가져오기 및 LeRobot 검증 설계를 결정했다.
 - 증거: 기존 학습 계약/OMX exporter와 공식 HF 문서를 대조했다. 문서 검사 결과는 작업 세션에 기록한다.
 - gate 변화: 설계 Accepted. OAuth·협업 UI·데이터 migration·외부 전송·학습/장치 수용은 미구현/미검증이다.
 - 결정: 기존 wire·원본을 소급 변경하지 않고 단계별 구현한다.
+
+## 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
+
+- 변경: `docs/omx-imitation-preparation`에서 [설계](plans/2026-10-14-omx-imitation-preparation-design.md)와 [실행 준비 목록](plans/2026-10-14-omx-imitation-preparation.md)을 작성했다. 리더 교시·로컬 녹화·episode 검토를 우선하고 native/SIM 단위 분리, Pilot 실물 조작 후속, private Hub revision 왕복, Spaces 읽기 전용 검토를 명시했다.
+- 증거: 기준 소스 b0f7a1896과 공식 LeRobot 0.4.4 recorder/config 및 Hugging Face 문서를 읽었다. 문서 검사 결과는 X: omx-imitation 세션에 기록한다.
+- gate 변화: 없음. 준비 문서는 구현·녹화·학습·Hub 연동·실물 수용의 증거가 아니다.
+- 결정: 새 API/ADR 승인, runtime 활성화, 자동 업로드, 외부 저장소 생성, 착지·push·배포를 수행하지 않는다.
+
+## 2026-10-14 · uncommitted · OMX native imitation preparation tools
+
+- 변경: feat/omx-imitation-tools에 녹화 설정 검사, native reader 검토·분할, ACT 설정, private Hub 왕복 도구를 추가했다.
+- 증거: 원격 기본 70개와 별도 LeRobot 영상·분할·ACT backward/save/reload 1개 통과, NEW 0. tuple shape·leader 옵션·split backend 호환성을 수정했다.
+- gate 변화: 없음. 실물 녹화·Pilot 제어·실제 HF 업로드·Spaces 접근은 미확인이다. 실행 PC와 HF 조직은 미정이다.
+
+## 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
+
+- 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
+- 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
+- gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
+
+## 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
+
+- 변경: 공유 main 공개 검증에서 발견한 계정 체크박스 계약과 HOLD 시계 결함을 수정했다. 이력 재작성 없이 독립 리뷰와 수정 후손을 묶어 safety-review 예외를 기록했다.
+- 증거: CI 38435850880 계정 화면 실패 재현 뒤 UI 31 passed; HOLD 원격 RED 7건 뒤 322 passed, NEW 0. 검토와 한계는 validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. 실제 장치·HF 계정·Spaces 연결 수용은 D-756에 남아 있다.

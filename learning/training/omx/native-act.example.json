@@ -1,0 +1,32 @@
+{
+  "dataset": {
+    "repo_id": "",
+    "root": "",
+    "video_backend": "pyav"
+  },
+  "policy": {
+    "type": "act",
+    "device": "cpu",
+    "push_to_hub": false,
+    "pretrained_backbone_weights": null,
+    "chunk_size": 4,
+    "n_action_steps": 1,
+    "dim_model": 64,
+    "n_heads": 4,
+    "dim_feedforward": 128,
+    "n_encoder_layers": 1,
+    "n_decoder_layers": 1,
+    "use_vae": false
+  },
+  "output_dir": "",
+  "job_name": "omx-native-act-smoke",
+  "seed": 42750,
+  "num_workers": 0,
+  "batch_size": 8,
+  "steps": 100,
+  "save_freq": 100,
+  "log_freq": 10,
+  "eval_freq": 0,
+  "resume": false,
+  "wandb": {"enable": false}
+}
