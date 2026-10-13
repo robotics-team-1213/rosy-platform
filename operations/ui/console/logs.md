@@ -191,3 +191,9 @@
 - 변경: 공용 테마 순환과 접속·알림 진입점을 구현했다. 권한 예외와 요약 열기/읽음의 구별을 유지하고 Escape 포커스를 제공한다.
 - 검증: 첫 구현의 원격 정적·권한·토큰·Node·구조 검사 103건과 Chromium 25건이 통과했으나, 사용자 검토에서 상태 표지의 의미와 묶음이 불명확해 거절됐다. 스킬 기반 의미·배치 평가 후 상태 센터의 한 누름 영역으로 재구성한다. 첫 구현의 통과를 최종 디자인 수용으로 보지 않는다.
 - gate 변화: 기존 게이트는 유지한다. 수정된 디자인의 원격 회귀·CI·서명 설치는 별도 검증하며 장치 명령은 시험하지 않았다.
+
+## 2026-10-13 · cfeced643 · main 브라우저 회귀 수정 (D-683/D-493/D-519)
+
+- 변경: 세션이 있으면 헤더 `로그인` 링크를 숨긴다(`#fleet-login`의 ID 규칙이 `[hidden]`을 이겼다, D-683 1). 지도 칸이 천장 프레임을 나눠 보이는 동안 오른쪽 열 썸네일을 접는다(D-493 3). 점유 격자의 원점 글자를 겹침 선 뒤에 칠한다(US-009). 세션 시험은 첫 토큰 입력 전에 `토큰으로 접속` 접힘을 연다(D-519 6, D-658 6). DESIGN.md의 Fleet 헤더 문구를 D-668·D-683에 맞췄다.
+- 증거: main 5feb00b2e를 모델 PC Chromium으로 돌려 Fleet 21개 파일 382 passed 6 failed, 그 밖 36개 파일 659 passed 2 failed(`X:/DevTemp/land-recent/browser/1/`). 이 브랜치의 재실행은 하지 못했다. 15:00부터 노트북 Tailscale이 다른 tailnet 계정으로 바뀌어 모델 PC·현장 PC에 닿지 않았다. `node --check map-view.js` 통과, harness lint 0 error.
+- gate 변화: 없음. 수정 4건은 원격 Chromium 확인 전이라 착지 근거가 아니다. Learning `test_learning_summary_separates_review_from_training`과 Games `test_compact_board_recovery…[320-568]` 실패는 원인 확인 전이다.
