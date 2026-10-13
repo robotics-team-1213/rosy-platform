@@ -8,7 +8,7 @@ Camera and lane evidence live in perception/ and are not imported here.
 from pathlib import Path
 
 # Source vision has its own holder; installed control.sensing already contains it.
-_vision = Path(__file__).resolve().parents[2] / "vision"
+_vision = Path(__file__).resolve().parents[2] / "front_camera"
 if _vision.is_dir():
     __path__.append(str(_vision))
 
