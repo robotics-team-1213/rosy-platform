@@ -533,13 +533,13 @@ PROGRAM_SOURCES = {
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
-                            "middleware/perception/control/camera_detect_node.py",
-                            "middleware/perception/control/road_observer_node.py",
+                            "middleware/perception/nodes/camera_detect_node.py",
+                            "middleware/perception/nodes/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
                             "middleware/perception/sensors/line_observation/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
-                            "middleware/perception/control/pilot_recorder_node.py",
-                            "middleware/perception/control/pilot_recording.py"],
+                            "middleware/perception/nodes/pilot_recorder_node.py",
+                            "middleware/perception/nodes/pilot_recording.py"],
     "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
@@ -1066,8 +1066,8 @@ def test_core_program_scan_follows_imports_into_the_control_package():
     assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
                 for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
-    assert "middleware/perception/control/sensor_provider.py" in resolved
-    assert "middleware/perception/control/calibration_storage.py" in resolved
+    assert "middleware/perception/nodes/sensor_provider.py" in resolved
+    assert "middleware/perception/nodes/calibration_storage.py" in resolved
 
 
 # D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.

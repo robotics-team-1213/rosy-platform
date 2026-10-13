@@ -56,7 +56,7 @@ if str(_DATASET) not in sys.path:
 
 import stuck_markers  # noqa: E402
 
-# session.json keys, as written by control/recording.py (not imported: keep
+# session.json keys, as written by nodes/recording.py (not imported: keep
 # this tool usable without the sensing tree on sys.path).
 ENDED_KEY = "ended_at"
 HARVESTED_KEY = "harvested"

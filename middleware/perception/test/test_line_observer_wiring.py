@@ -164,7 +164,7 @@ def test_package_and_launch_expose_the_line_observer():
 
 
 def test_camera_capture_has_a_v4l2_fallback_for_the_device_image():
-    source = (ROOT / "control/camera_detect_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "nodes/camera_detect_node.py").read_text(encoding="utf-8")
     assert "camera_backend" in source
     assert "cv2.VideoCapture" in source
     assert "freeze_controls" in source

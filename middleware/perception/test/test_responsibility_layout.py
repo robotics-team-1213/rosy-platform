@@ -14,6 +14,9 @@ import xml.etree.ElementTree as ET
 PACKAGE = Path(__file__).resolve().parents[1]
 MIDDLEWARE = PACKAGE.parent
 SOURCE_MODULES = {
+    "nodes/sensor_provider.py": "control.sensor_provider",
+    "nodes/recording.py": "control.recording",
+    "nodes/camera_detect_node.py": "control.camera_detect_node",
     "localization/loc_assist.py": "control.loc_assist",
     "localization/loc_assist_node.py": "control.loc_assist_node",
     "localization/localization_node.py": "control.localization_node",
@@ -103,6 +106,9 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
             assert names.count(module.replace(".", "/") + ".py") == 1
         for relative, module in SOURCE_MODULES.items():
             assert wheel.read(module.replace('.', '/') + '.py') == (PACKAGE / relative).read_bytes()
+        for source in (PACKAGE / 'nodes').glob('*.py'):
+            assert names.count('control/' + source.name) == 1
+            assert wheel.read('control/' + source.name) == source.read_bytes()
         for name in ('control_node', 'goal_node', 'wander_node', 'safety_node'):
             assert names.count('control/' + name + '.py') == 1
             assert not (PACKAGE / 'control' / (name + '.py')).exists()
