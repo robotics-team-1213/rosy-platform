@@ -129,6 +129,8 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             stop = "async () => (await fetch('/stop', {method:'POST'})).status"
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-login').click()
+            page.wait_for_timeout(1000)
+            assert page.url.rstrip('/') == origin, (page.url, page.locator('body').inner_text())
             page.locator('#account-logout').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
             assert page.evaluate(stop) == 403 and not board.stop
