@@ -172,7 +172,6 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
         ROOT.parents[2]
         # D-427 wave 4c: navigation lives at middleware/drive/planning/nav2.
         / "middleware"
-        / "control"
         / "drive"
         / "planning"
         / "nav2"
