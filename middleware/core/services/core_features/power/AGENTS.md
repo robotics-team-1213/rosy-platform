@@ -16,6 +16,7 @@ PWR-001–004 duty cycling and SAF-005 battery integrity. Policy only: no GPIO, 
 |------|-------------|
 | `__init__.py` | Package marker |
 | `manager.py` | `PowerManager`, `PowerConfig`, `PresenceConfig`, `LidarPolicy`; wake reasons |
+| `presence.py` | `PresenceConfig`, `PresenceDetector` (PWR-002): consecutive valid near samples plus `min_presence_s`; re-exported by `manager.py` |
 | `devices.py` | Per-device power policy: `DeviceLevel`, `DevicePolicy`, `DevicePolicyConfig` (bench switch), `DevicePowerPort`, `parse_device_policy` |
 | `battery.py` | `BatteryCurve`, `BatteryMonitor`, hysteresis, LED intent, shutdown sentinel |
 
