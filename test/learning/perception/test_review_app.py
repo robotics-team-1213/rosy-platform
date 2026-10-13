@@ -4,6 +4,33 @@ import hashlib
 
 import pytest
 
+
+def test_loopback_decisions_server_is_read_only_and_matches_app_snapshot(tmp_path):
+    import threading
+    import urllib.error
+    import urllib.request
+    from review_app import make_decisions_server
+    import review_evidence
+    store = open_store(tmp_path)
+    server = make_decisions_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with urllib.request.urlopen(url + '/api/decisions') as response:
+            assert json.load(response) == review_evidence.decisions(store)
+            assert response.headers['Cache-Control'] == 'no-store'
+        for path, method, host, code in [('/api/workspace', 'GET', None, 404),
+                                        ('/api/decisions', 'POST', None, 405),
+                                        ('/api/decisions', 'GET', 'untrusted.example', 403)]:
+            request = urllib.request.Request(url + path, method=method,
+                                            headers={} if host is None else {'Host': host})
+            with pytest.raises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(request)
+            assert error.value.code == code
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
 from test_review_return import fixture_inputs
 import class_sets
 from review_app import ReviewStore, Conflict

@@ -247,7 +247,9 @@ class ReviewPipeline:
 def main():
     """Explicit trusted-owner entrypoint, separate from the default cycle CLI."""
     import argparse
+    import contextlib
     from learning_cycle import run_once
+    from review_pipeline import ReviewPipeline as OwnerPipeline
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config',type=Path)
     parser.add_argument('--out',required=True)
@@ -260,9 +262,10 @@ def main():
     required={'source_proof_files','staging_parent','dataset_name'}
     if not required <= set(settings) or set(settings)-required-{'eval_companion_files','authority_max_age_s'}:
         raise JobError('explicit owner source/staging/name settings required')
-    owner=ReviewPipeline(**settings)
+    owner=OwnerPipeline(**settings)
     while True:
-        state=run_once(config['cycle'],args.out,review_pipeline=owner)
+        with contextlib.redirect_stdout(_source_sys.stderr):
+            state=run_once(config['cycle'],args.out,review_pipeline=owner)
         print(json.dumps({'review_autobuild':state.get('review_autobuild'),
                           'cycles':{k:v['status'] for k,v in state.get('cycles',{}).items()}}),flush=True)
         if args.once:return

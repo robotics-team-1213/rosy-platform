@@ -547,6 +547,25 @@ def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path,
     expect(age).to_contain_text('방금 확인')
 
 
+def test_owner_hold_stays_visible_after_timer_report_changes(browser_workspace, tmp_path):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'owner-result'; report.mkdir()
+    held = {'review_autobuild': {'status': 'held', 'blockers': ['no_approved_masks']}}
+    for name in ['state.json', 'summary.json']:
+        (report / name).write_text(json.dumps(held))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('자동 학습')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    expect(page.locator('#jobs')).to_contain_text('승인·입력 조건 대기')
+    held['timer_cycle'] = 2
+    (report / 'summary.json').write_text(json.dumps(held))
+    page.locator('#refresh').click()
+    expect(page.locator('#jobs ui-tag')).to_contain_text('승인·입력 조건 대기')
+    expect(page.locator('#jobs .job-reason')).to_have_count(1)
+
+
 @pytest.mark.parametrize('width', [1440, 390])
 def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width):
     page, _, expect = browser_workspace
