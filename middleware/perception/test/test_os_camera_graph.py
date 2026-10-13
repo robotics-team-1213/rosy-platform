@@ -40,6 +40,9 @@ class CameraGraphTests(unittest.TestCase):
             try:
                 node = constructor()
                 topics = {p.topic_name for p in node.publishers} - {'/rosout', '/parameter_events'}
+                # D-440: the camera reports readiness after a power-policy wake on its own topic.
+                self.assertIn('/' + namespace + '/power/device_ready', topics)
+                topics -= {'/' + namespace + '/power/device_ready'}
                 # + camera/controls and camera/calibration/status; compressed stays off
                 self.assertEqual(len(topics), 9, topics)
                 self.assertNotIn('/' + namespace + '/camera/front/compressed', topics)
