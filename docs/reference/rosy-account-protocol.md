@@ -1,0 +1,94 @@
+# Rosy Account protocol (D-757)
+
+이 계약은 D-757 구현의 additive API다. 설치·활성화·실제 사용자 수용은 별도 기록한다.
+기존 Fleet 로그인/프로필 endpoint는 유지한다. 별도 인증 서버 프로세스를 만들지 않는다.
+
+## 신원과 자원 권한
+
+Account identity는 불변 opaque `account_id`다. login/email은 identity가 아니다.
+권한은 `{resource, capabilities}` 목록이다. resource는 `site:<id>`, `robot:<id>`,
+`project:<id>` 중 하나이며 wildcard가 없다. id는 영숫자·점·밑줄·하이픈 1~96자다.
+
+| 자원 | 허용 capability |
+|---|---|
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate |
+| robot | robot.read, robot.operate, robot.admin |
+| project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
+
+capability는 서로 상속하지 않는다. UI는 관련 읽기 권한도 함께 부여하도록 안내하고,
+서버는 요청에 필요한 정확한 권한을 검사한다. 기존 기계/복구 자격의 역할 계약은 유지한다.
+
+## 중앙 계정 관리
+
+모든 경로는 유효한 변경 완료 사람 쿠키와 해당 site의 `accounts.manage`를 요구한다.
+unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail `{code,message}`를 쓴다.
+
+| 경로 | 동작 |
+|---|---|
+| GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
+| POST /api/fleet/auth/accounts | login, principal_id, role, password, grants로 계정 발급 |
+| PATCH /api/fleet/auth/accounts/{account_id} | revision과 active/role/grants 중 변경값; 미지 필드 거부 |
+| POST /api/fleet/auth/accounts/{account_id}/reset-password | revision, password; 첫 변경 요구 및 이전 세션 회수 |
+| POST /api/fleet/auth/accounts/{account_id}/revoke-sessions | revision; 모든 세션 회수 |
+
+원장 revision이 다르면 409, 권한 부족은 403, 잘못된 본문은 400/422,
+저장 불가는 503이다. 마지막 활성 계정 관리자를 없애는 변경은 거부한다.
+현재 사용자의 자가 권한 변경으로 관리 권한을 획득할 수 없다. 응답에 비밀번호 해시를 넣지 않는다.
+
+## 앱 연결: authorization code + S256 PKCE
+
+등록된 first-party client만 사용한다. 각 client에는 고정 client_id, 정확한 HTTPS
+redirect URI, 대상 resource 목록이 있다. 앱이 보낸 임의 URL을 trust에 추가하지 않는다.
+authorization server는 oauthlib의 code grant와 PKCE 검증을 사용하고 S256만 받는다.
+implicit/password grant, 동적 client 등록, wildcard redirect를 제공하지 않는다.
+
+| 경로 | 동작 |
+|---|---|
+| GET /api/fleet/auth/authorize | response_type=code, client_id, redirect_uri, scope(정확한 resource), state, code_challenge, code_challenge_method=S256 |
+| POST /api/fleet/auth/token | form-encoded authorization_code 또는 refresh_token grant; public client는 client_id 사용 |
+| POST /api/fleet/auth/introspect | form token; 중앙 최신 session family/account revision 검증 |
+| POST /api/fleet/auth/revoke | form token; 해당 family 회수, 토큰 원문 비기록 |
+| GET /api/fleet/auth/keys | 공개 서명 키만 반환; private key 금지 |
+
+로그인이 필요하면 안전한 로컬 Account 로그인 복귀로 연결한다. authorize code는
+60초, 단일 사용이며 client·redirect·PKCE·scope·session family·account revision에 결속한다.
+토큰 교환은 transaction으로 code 소비와 발급을 함께 기록한다. state는 client가
+브라우저에 결속하여 확인하고, 각 앱은 nonce cookie/PKCE verifier를 서버 또는 native
+보안 저장소에 보관한다. 교환 결과는 서버의 HttpOnly/Secure 쿠키 세션으로 옮기며
+브라우저 URL에는 access/refresh token을 싣지 않는다. callback 이후 code URL을 지운다.
+
+refresh token은 256비트 이상 난수, DB에는 해시만 저장한다. 매 갱신 시 회전하고
+이전 token 재사용은 family를 회수한다. family의 중앙 세션 만료/회수/첫 변경 제한을
+넘어 자격을 연장하지 않는다. 동시 refresh는 앱에서 합치며 서버는 원자적으로 한 번만 허용한다.
+
+## 대상 접근 토큰
+
+JWT JWS를 joserfc로 처리한다. algorithm은 EdDSA의 Ed25519, header는
+`alg`, `typ=at+jwt`, 고정 등록 key의 `kid`다. 원격 jwk/jku/x5u header는 받지 않는다.
+claim은 `iss`, `aud`, `sub`, `sid`, `rev`, `iat`, `exp`, `grants`만 허용한다.
+`aud`는 단일 resource이고 모든 grants는 같은 resource만 가리킨다. `sub`는 account_id,
+`sid`는 비밀이 아닌 session family, `rev`는 양의 정수다. `iat`/`exp`는 정수 epoch이며
+미래 발급·만료·0 이하 수명·300초 초과 수명을 거부한다. role rank로 권한을 확대하지 않는다.
+
+issuer/키/클라이언트 등록은 운영자가 보호된 구성으로 제공한다. signer는 서버 시작마다
+키를 재생성하지 않는다. verifier는 배포된 trusted key 목록만 읽고 토큰이 지정한 URL을
+fetch하지 않는다. 회전 시 새 공개키 배포→새 서명→구 token 만료→옛 키 제거 순서를 지킨다.
+
+대상 verifier는 최대 20초마다 중앙 introspection을 재확인하여 연결 중 회수 30초
+상한을 맞춘다. inactive가 확인되면 즉시 캐시를 지운다. 중앙 장애 때 마지막 검증된
+token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 않는다. WS도 반복 검사한다.
+로그아웃/정지/초기화 이후 모든 앱의 갱신과 새 권한 발급은 거부한다.
+
+## 운영 활성화와 검증
+
+중앙 ledger bootstrap은 지정한 기존 admin login과 site_id를 명시해야 한다.
+운영 계정을 자동 선택하지 않는다. authority URL·키·client callback·기존 identity와
+learning user의 명시적 매핑이 준비되기 전에는 통합 설치 완료라고 표시하지 않는다.
+매핑은 email/name 일치로 생성하지 않는다. 단독 로봇 복구와 서비스/카메라 machine
+pairing은 사람 SSO와 분리한다.
+
+검증 표는 원격 API/브라우저/native·CI·설치·실계정 수용을 나눠 기록한다.
+상세 구현 결과가 없는 endpoint를 활성화됐다고 간주하지 않는다.
+
+참고: [OAuthlib 서버](https://oauthlib.readthedocs.io/en/latest/oauth2/server.html),
+[joserfc JWT](https://jose.authlib.org/en/guide/jwt/).
