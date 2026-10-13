@@ -189,6 +189,9 @@ def test_core_node_owns_adapter_before_bridge_and_closes_it_with_executor():
     positions = [init_source.index(token, init_source.index("local_overlay")) for token in order]
     assert positions == sorted(positions)
     assert "adapter_parameters=" not in path.read_text(encoding="utf-8")
+    assert "'use_sim_time': use_sim_time" in init_source or '"use_sim_time": use_sim_time' in init_source
+    # Restart preserves /run/rosy; publish the new process law before exposing its API.
+    assert init_source.index('self._write_status_inputs()') < init_source.index('self._start_api()')
     assert "self.control_adapter.attach(executor)" in run_source
     assert "self.control_adapter.detach(executor)" in run_source
     assert "self.control_adapter.close()" in shutdown_source

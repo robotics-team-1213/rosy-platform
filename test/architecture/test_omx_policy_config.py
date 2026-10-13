@@ -49,7 +49,7 @@ def test_no_production_config_allows_learned_policy():
     paths = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
     seen, problems = 0, []
     for name in paths:
-        if not (name.startswith("middleware/apps/device/omx/") or name.startswith("deploy/robot/omx/")):
+        if not (name.startswith("middleware/devices/omx/") or name.startswith("deploy/robot/omx/")):
             continue
         if any(part in {"test", "tests"} for part in Path(name).parts):
             continue

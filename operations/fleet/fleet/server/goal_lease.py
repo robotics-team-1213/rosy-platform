@@ -18,14 +18,20 @@ E-stop, or CORE's 409. Fleet stopping stops it all: CORE cancels each goal withi
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
+from contextlib import nullcontext
 from typing import Callable, Optional
 
 logger = logging.getLogger("fleet.goal_lease")
 
 SOURCES = ("operator", "dispatch", "yield", "trip")
+
+
+class NavigationStopped(RuntimeError):
+    """A changed stop token invalidated this navigation continuation."""
 
 
 def goal_lease_supported(caps: Optional[dict]) -> bool:
@@ -48,11 +54,26 @@ class GoalLeases(dict):
         #: ``(task_id, attempt_id) -> bool``: the D-316 attempt is still open. Set by app.py when
         #: there is a task store; without one a dispatch lease is never renewed (it expires).
         self.attempt_open: Optional[Callable[[str, str], bool]] = None
+        self.admit_attempt: Optional[Callable[[str, str], None]] = None
+        self.bind_native_receipt = None
+        self.native_required = None
+        self.prepare_send = None
+        self.selected_context = None
         self._present_at: Optional[float] = None
+        self.pending: dict[str, int] = {}
+        self._stop_epoch = 0
+        self._stop_generation: dict[str, int] = {}
 
     def operator_present(self) -> None:
         """A named operator's console is open (``POST /api/fleet/goal-lease/presence``)."""
         self._present_at = self._clock()
+
+    def stop_token(self, robot_id: str) -> tuple[int, int]:
+        return self._stop_epoch, self._stop_generation.get(robot_id, 0)
+
+    def check_stop(self, robot_id: str, token: tuple[int, int]) -> None:
+        if token != self.stop_token(robot_id):
+            raise NavigationStopped("navigation pipeline overlapped a stop; result remains unknown")
 
     def view(self, robot_id: str, goal: Optional[dict]) -> Optional[dict]:
         """The console goal record with today's lease state (``goal_lease``); as is when none."""
@@ -68,24 +89,62 @@ class GoalLeases(dict):
         source = source or ("dispatch" if correlation_id is not None else "operator")
         if source not in SOURCES:
             raise ValueError(f"unknown goal lease source {source!r}")
+        stop = self.stop_token(robot_id)
         self.pop(robot_id, None)
+        options = {}
+        lease = {"state": "unbounded"}
         if self.ttl_s > 0 and goal_lease_supported(caps):
             correlation_id = correlation_id or f"fleet-lease-{uuid.uuid4().hex}"
-            result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id,
-                                                  lease_ttl_s=self.ttl_s)
-            self[robot_id] = {"state": "leased", "correlation_id": correlation_id,
-                              "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
-            return result
-        if correlation_id is None:
-            result = await client.navigation_goal(x, y, yaw)
-        else:
-            result = await client.navigation_goal(x, y, yaw, correlation_id=correlation_id)
-        if self.ttl_s > 0:
-            self[robot_id] = {"state": "unbounded"}
+            options["lease_ttl_s"] = self.ttl_s
+            lease = {"state": "leased", "correlation_id": correlation_id,
+                     "ttl_s": self.ttl_s, "source": source, "task_id": task_id}
+        if correlation_id is not None:
+            options["correlation_id"] = correlation_id
+        guard = nullcontext()
+        if self.prepare_send is not None:
+            guard = await self.prepare_send(task_id, correlation_id, robot_id, client, options, stop)
+        elif task_id is not None and self.admit_attempt is not None:
+            self.admit_attempt(task_id, correlation_id)
+        self.pending[robot_id] = self.pending.get(robot_id, 0) + 1
+        try:
+            try:
+                with guard:
+                    result = await client.navigation_goal(x, y, yaw, **options)
+                    if task_id is not None and self.bind_native_receipt is not None:
+                        self.bind_native_receipt(task_id, correlation_id, robot_id, result,
+                                                 expected_boot_id=options.get('expected_boot_id'))
+            except (Exception, asyncio.CancelledError):
+                if stop != self.stop_token(robot_id):
+                    try:
+                        await client.navigation_cancel()
+                    except Exception:
+                        logger.exception("late goal cancel for %s failed", robot_id)
+                raise
+            if (stop != self.stop_token(robot_id)
+                    and not (isinstance(result, dict) and result.get("accepted") is False)):
+                try:
+                    await client.navigation_cancel()
+                except Exception:
+                    logger.exception("late accepted goal cancel for %s failed", robot_id)
+                raise NavigationStopped("navigation goal overlapped a stop; result remains unknown")
+        finally:
+            self.pending[robot_id] -= 1
+            if not self.pending[robot_id]:
+                del self.pending[robot_id]
+        if not isinstance(result, dict) or type(result.get("accepted")) is not bool:
+            raise RuntimeError("missing navigation goal acknowledgement")
+        if result["accepted"] and self.ttl_s > 0:
+            self[robot_id] = lease
         return result
+
+    def clear(self) -> None:
+        self._stop_epoch += 1
+        self._stop_generation.clear()
+        super().clear()
 
     async def cancel(self, robot_id: str, client) -> dict:
         """``navigation_cancel`` for the console: the lease stops first, whether the cancel lands or not."""
+        self._stop_generation[robot_id] = self._stop_generation.get(robot_id, 0) + 1
         self.pop(robot_id, None)
         return await client.navigation_cancel()
 

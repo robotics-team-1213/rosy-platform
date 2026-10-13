@@ -2,14 +2,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createPlaneFeed, mapToPlane, parsePlaneHeader, planeCalibration, planeFitsImage, planeToMap,
-} from "../../fleet/server/web/shared/vision-view.js";
-import { planeAffine } from "../../fleet/server/web/camera-backdrop.js";
-import { fitTransform, project, quarterTurn } from "../../fleet/server/web/site-layer.js";
-import { planeView } from "../../fleet/server/web/shared/site-map-model.js";
+  createPlaneFeed, mapToPlane, parsePlaneHeader, parseObservedFraction, planeCalibration, planeFitsImage, planeToMap,
+} from "../../../ui/console/shared/vision-view.js";
+import { planeAffine } from "../../../ui/console/camera-backdrop.js";
+import { fitTransform, project, quarterTurn } from "../../../ui/console/site-layer.js";
+import { planeView } from "../../../ui/console/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
+
+test("observed fraction keeps unknown separate from zero observed pixels", () => {
+  assert.equal(parseObservedFraction("0"), 0);
+  assert.equal(parseObservedFraction("0.5"), .5);
+  assert.equal(parseObservedFraction("1"), 1);
+  for (const value of [null, undefined, "", " ", "nan", "-0.1", "1.1"]) assert.equal(parseObservedFraction(value), null);
+});
 
 test("X-Frame-Plane parses five finite numbers with min < max and px_per_m > 0, nothing else", () => {
   assert.deepEqual(parsePlaneHeader("-0.15,-0.15,6.55,3.75,400"), PLANE);
@@ -142,5 +149,36 @@ test("the plane feed rejects a picture that does not match its rectangle", async
   t.after(() => { globalThis.Image = OldImage; });
   const h = feedHarness([live()]);
   await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
+});
+
+test("download and decode time cannot make an expired map plane look fresh", async (t) => {
+  const OldImage = globalThis.Image;
+  const h = feedHarness([live(), live({ ageMs: NaN })]);
+  globalThis.Image = class {
+    constructor() { this.naturalWidth = 200; this.naturalHeight = 100; }
+    async decode() { h.advance(2100); }
+  };
+  t.after(() => { globalThis.Image = OldImage; });
+  await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
+  await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
+});
+
+test("a delayed decode cannot restore a plane after its view is disabled", async (t) => {
+  const OldImage = globalThis.Image;
+  let decode;
+  globalThis.Image = class {
+    constructor() { this.naturalWidth = 200; this.naturalHeight = 100; }
+    decode() { return new Promise((resolve) => { decode = resolve; }); }
+  };
+  t.after(() => { globalThis.Image = OldImage; });
+  const h = feedHarness([live()]);
+  const pending = h.feed.refresh();
+  await Promise.resolve();
+  await h.feed.refresh(false);
+  decode();
+  await pending;
   assert.equal(h.feed.current(), null);
 });

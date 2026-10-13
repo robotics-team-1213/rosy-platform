@@ -7,7 +7,7 @@ PROFILE = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "simulati
 TREES = (
     ROOT / "middleware" / "core" / "services" / "core_features" / "safety",
     ROOT / "middleware" / "core" / "gateway" / "core" / "bridge",
-    ROOT / "middleware" / "core" / "navigation",
+    ROOT / "middleware" / "control" / "drive" / "planning" / "nav2",
 )
 FORBIDDEN = ("pinky_calmap227", "'227'", '"227"')
 

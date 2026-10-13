@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 import yaml
+from test.control_sources import control_sources
 
 
 PACKAGE = Path(__file__).parents[1]
@@ -17,7 +18,7 @@ def endpoint_parameter(name):
 class EndpointDefaultsTests(unittest.TestCase):
     def test_node_endpoint_literals_and_parameter_defaults_are_relative(self):
         failures = []
-        for path in (PACKAGE / 'control').rglob('*.py'):
+        for relative, path in control_sources():
             for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
                 if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                     continue
@@ -30,7 +31,7 @@ class EndpointDefaultsTests(unittest.TestCase):
                     and endpoint_parameter(name.value))
                 if selected and isinstance(value, ast.Constant) and isinstance(value.value, str):
                     if value.value.startswith('/'):
-                        failures.append(f'{path.name}:{node.lineno}: {value.value}')
+                        failures.append(f'{relative}:{node.lineno}: {value.value}')
         self.assertEqual(failures, [])
 
     def test_config_cannot_restore_absolute_endpoint_defaults(self):

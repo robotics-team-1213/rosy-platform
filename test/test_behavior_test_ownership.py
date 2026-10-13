@@ -19,6 +19,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_control_absorption_safety.py",
     "middleware/core/gateway/test/test_control_policy_link.py",
     "middleware/core/gateway/test/test_control_sensor_adapter.py",
+    # D-628 gateway admission/Safety integration; pure feature decisions stay in services/test.
+    "middleware/core/gateway/test/test_drive_output_boundaries.py",
     "middleware/core/gateway/test/test_crosswalk_gate_wiring.py",
     "middleware/core/gateway/test/test_core_logic.py",
     "middleware/core/gateway/test/test_domain_model.py",
@@ -28,6 +30,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
+    # 2026-10-12: the steering-law commit added this file and missed this list.
+    # It drives LineFollowManager through the loaded drivable steer.
+    "middleware/core/gateway/test/test_line_follow_drivable_law.py",
     # D-507 9 CORE config seam: line_follow.site_floor_map_id parsing in gateway wiring
     # (_line_follow_config, check_bridge_floor_basis) against the core_features config.
     "middleware/core/gateway/test/test_site_floor_declaration.py",
@@ -65,6 +70,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-607 integration exercises the gateway traffic seam and feature progress watcher together.
     "middleware/core/gateway/test/test_line_follow_stuck_no_progress.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
+    # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
+    "middleware/core/gateway/test/test_native_owner_receipts.py",
+    "middleware/core/gateway/test/test_safety_stop_contention.py",
+    "middleware/core/gateway/test/test_safety_stop_receipts.py",
     "middleware/core/gateway/test/test_operational_journey.py",
     "middleware/core/gateway/test/test_power.py",
     "middleware/core/gateway/test/test_slam_reset.py",
@@ -78,6 +87,18 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "test/test_footprint_profiles.py",
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",
+    # D-637: existing shared learning corpus moved into test/learning/perception.
+    # Export/intake/signing validate artifacts with the runtime manifest/signature;
+    # object/training/replay tests bind runtime classes, runners and recorded topics.
+    # Keep these eight exact integration paths; scanner and set equality stay intact.
+    "test/learning/perception/test_model_convert.py",
+    "test/learning/perception/test_model_intake.py",
+    "test/learning/perception/test_model_intake_tasks.py",
+    "test/learning/perception/test_model_ncnn_intake.py",
+    "test/learning/perception/test_model_sign.py",
+    "test/learning/perception/test_object_boxes.py",
+    "test/learning/perception/test_road_replay.py",
+    "test/learning/perception/test_training_contract.py",
     # feat/lane-network-junctions, written 2026-09-23..24 alongside D-184's
     # acceptance and brought in by the main merge. They drive CORE's own
     # docking/mode wiring (core.bridge.docking_mode, services.take_docking_mode,
@@ -100,6 +121,16 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # the sensing node's pure core (control.loc_assist), CORE's relay and app, and
     # Fleet's client against each other, so it belongs to no single package.
     "middleware/core/gateway/test/test_localization_cross_lane.py",
+    # D-637 moved the existing learning workflow suite here; these exercise the
+    # model intake/signing/replay seams with the unchanged perception contracts.
+    "test/learning/perception/test_model_convert.py",
+    "test/learning/perception/test_model_intake.py",
+    "test/learning/perception/test_model_intake_tasks.py",
+    "test/learning/perception/test_model_ncnn_intake.py",
+    "test/learning/perception/test_model_sign.py",
+    "test/learning/perception/test_object_boxes.py",
+    "test/learning/perception/test_road_replay.py",
+    "test/learning/perception/test_training_contract.py",
 })
 
 

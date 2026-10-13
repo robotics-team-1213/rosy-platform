@@ -8,7 +8,7 @@ from test_safety_separation import CMD_VEL_SCOPE_EXCLUDED, ROOT, _is_test_file, 
 
 
 ALLOWED_GUARD = {("middleware/core/gateway/core/bridge/cmd_vel.py", "cmd_vel_cycle"),
-                 ("middleware/apps/device/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner.submit")}
+                 ("middleware/devices/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner.submit")}
 ALLOWED_BINDING = {("middleware/core/gateway/core/bridge/cmd_vel.py", "cmd_vel_cycle")}
 
 

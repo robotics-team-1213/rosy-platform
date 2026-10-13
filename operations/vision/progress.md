@@ -20,12 +20,14 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497]
+adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655]
 plans:
   - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-26-middleware-device-server-contract-integration.md
   - docs/plans/2026-09-28-site-camera-preview-rectification.md
+  - docs/plans/2026-10-11-compact-camera-calibration.md
+  - docs/plans/2026-10-11-mapless-fleet-control.md
 ---
 ## 현재 상태 (2026-09-27)
 
@@ -42,3 +44,10 @@ plans:
 3. 현장 camera 위치와 map calibration을 검토하고 지연·가림·marker 누락·stale 입력에서 sighting 생성이 차단되는지 확인한다.
 4. Vision이 `status`의 `corners_seen`·`robots_seen`을 실제 검출 값으로 채운다. 지금은 빈 목록이라 앱 설치 안내가 늘 0/4다. 휴대폰 배터리·온도를 현장 PC에 보내려면 프로토콜에 클라이언트 상태 메시지를 먼저 정의해야 한다.
 5. RTX 5080 GPU inference가 필요하면 별도 구현/성능 비교를 진행한다. 현재 검증한 Vision image는 CPU ArUco다. 로봇암/Pinky onboard camera는 별도 계약과 장치 수용 gate를 둔다.
+
+## 2026-10-11 측정 교정 후보
+
+D-636의 소형 AprilGrid 렌즈·바닥 측정 워크숍, 유효 픽셀 mask와 bounded AI 검토 형식을 구현했다.
+사용 절차는 [compact-camera-calibration.md](docs/compact-camera-calibration.md), 검증 범위는
+[result.md](../../docs/validation/compact-camera-calibration-2026-10-11/result.md)에 기록한다.
+운영 교정 자동 교체·모델 자동 호출·현장 오차 수용은 포함하지 않는다. 기존 DEVICE/FIELD gate는 유지한다.

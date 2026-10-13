@@ -322,6 +322,9 @@ class TrafficService(SignalService):
                                     pending, self._unknown_since, now, ai_pick=ai_pick)
         decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
         for robot_id, row in decisions.items():
+            if row["decision"] == "human" and robot_id in getattr(self, "autonomous_robots", ()):
+                row["decision"], row["reason"] = "wait", "auto_hold:" + row["trigger"]
+        for robot_id, row in decisions.items():
             if row["decision"] == "replan":
                 self._tried[robot_id] = (route[robot_id], row["blocked_edges"])
             if robot_id in trips:

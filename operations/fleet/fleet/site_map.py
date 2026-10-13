@@ -21,10 +21,39 @@ from typing import Annotated, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from core_common.protocol.site_survey import RoadEvidence, SiteFacility, SurveyReference
 
 from fleet.routing.graph import pinned, polyline_length
 
 SCHEMA = "rosy.site_map/1"
+
+
+class SoccerFieldProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    length_m: float = Field(gt=0, allow_inf_nan=False)
+    width_m: float = Field(gt=0, allow_inf_nan=False)
+    goal_width_m: float = Field(gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _goal_width(self) -> "SoccerFieldProfile":
+        if self.goal_width_m > self.width_m:
+            raise ValueError("goal width must not exceed field width")
+        return self
+
+
+class MapProfileInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["lane_course", "soccer", "general"] = "lane_course"
+    description: str = Field(default="", max_length=1000)
+    soccer_field: Optional[SoccerFieldProfile] = None
+
+    @model_validator(mode="after")
+    def _purpose(self) -> "MapProfileInfo":
+        if (self.kind == "soccer") != (self.soccer_field is not None):
+            raise ValueError("soccer_field is required only for soccer profiles")
+        return self
+
+
 #: A polyline end may sit this far from its place (generated graphs end exactly on the node).
 ENDPOINT_TOL_M = 0.05
 MAX_PLACES = 500
@@ -101,6 +130,7 @@ class SiteEdge(BaseModel):
     drive_mode: Literal["lane", "free"] = "lane"
     robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
         default=None, max_length=16)
+    evidence: Optional[RoadEvidence] = None
 
     @model_validator(mode="after")
     def _finite(self) -> "SiteEdge":
@@ -206,6 +236,8 @@ class SiteMap(BaseModel):
     view_turn_deg: Literal[0, 90, 180, 270] = 0
     #: D-573 1: crosswalk areas (polygon from lane_graph.yaml, waiting bands from the editor).
     crosswalks: list[SiteCrosswalk] = Field(default_factory=list, max_length=MAX_CROSSWALKS)
+    survey: Optional[SurveyReference] = None
+    facilities: list[SiteFacility] = Field(default_factory=list, max_length=500)
 
     @model_validator(mode="after")
     def _references(self) -> "SiteMap":
@@ -240,6 +272,21 @@ class SiteMap(BaseModel):
                 raise ValueError("turn ban names an unknown place or edge")
             if ban.at not in (into.from_, into.to) or ban.at not in (out.from_, out.to):
                 raise ValueError(f"turn ban edges do not meet at {ban.at}")
+        if len({facility.id for facility in self.facilities}) != len(self.facilities):
+            raise ValueError("facility ids must be unique")
+        for facility in self.facilities:
+            for approach in facility.approaches:
+                edge = edges.get(approach.edge_id)
+                if edge is None:
+                    raise ValueError(f"facility {facility.id} names an unknown lane")
+                if not approach.forward and edge.direction == "one_way":
+                    raise ValueError(f"facility {facility.id} names a reverse one-way approach")
+                if approach.stop_s_m is not None and approach.stop_s_m > polyline_length(edge.polyline):
+                    raise ValueError(f"facility {facility.id} stop distance exceeds lane length")
+        if self.survey is not None:
+            for edge in self.edges:
+                if edge.evidence is not None and edge.evidence.reference_revision != self.survey.revision:
+                    raise ValueError(f"edge {edge.id} evidence names a different survey revision")
         self._crosswalks()
         return self
 
@@ -276,6 +323,13 @@ class SiteMap(BaseModel):
             del body["view_turn_deg"]
         if not body["crosswalks"]:  # D-573: a map without crosswalks stays byte-equal
             del body["crosswalks"]
+        if body["survey"] is None:
+            del body["survey"]
+        if not body["facilities"]:
+            del body["facilities"]
+        for edge in body["edges"]:
+            if edge["evidence"] is None:
+                del edge["evidence"]
         return body
 
 
@@ -298,7 +352,8 @@ def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:
             polyline=[(float(p[0]), float(p[1])) for p in segment["points"]],
             direction="two_way" if "reverse" in (segment.get("directions") or []) else "one_way",
             width_m=IMPORT_WIDTH_M, speed_cap_mps=IMPORT_SPEED_CAP_MPS, drive_mode="lane"))
-    return SiteMap(map_id=map_id, places=places, edges=edges, crosswalks=crosswalks_from_lane_graph(path))
+    return SiteMap(map_id=map_id, places=places, edges=edges, crosswalks=crosswalks_from_lane_graph(path),
+                   turn_bans=graph.get("turn_bans", []))
 
 
 def crosswalks_from_lane_graph(path: Path | str) -> list[SiteCrosswalk]:
