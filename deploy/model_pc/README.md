@@ -75,7 +75,7 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
 
 private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.json`에 둔다. pipeline.json은 기존 ReviewPipeline의 `cycle`/`review` 구조다. cycle의 trainer에는 기존 store·품질 gate·replay_root·intake_out·camera_profile, recipes에는 명시 연구 recipe를 둔다. requests_dir와 reviews_dir는 새 pipeline 전용 경로, authority.path는 해당 reviews의 `.authority/current.json`, max_age_s는 90 이하이다. review에는 실제 source_proof_files, staging_parent, dataset_name과 필요한 eval_companion_files를 지정한다. 그룹·정답·카메라 수용을 임의로 true로 만들지 않는다.
 
-서비스 템플릿 4개(`rosy-review-bridge.service/.timer`, `rosy-review-pipeline.service/.timer`)를 사용자 systemd에 설치한다. bridge는 승인된 불변 검수 코드에서 짧게 실행하며 GPU 잠금을 잡지 않는다. 학습 owner는 D-446 실행기로 source/environment와 GPU 작업 잠금을 유지한다. 따라서 긴 학습 중에도 현재 결정의 TTL·철회가 갱신된다. 기존 다른 learning-cycle 서비스와 state를 덮어쓰거나 중복 실행하지 않는다.
+서비스 템플릿 4개(`rosy-review-bridge.service/.timer`, `rosy-review-pipeline.service/.timer`)를 사용자 systemd에 설치한다. 사용자 manager의 supplementary group에 기존 Store 쓰기 그룹이 포함되어 있어야 한다. 실행 중 primary group을 바꾸면 D-446의 같은 사용자 프로세스 조회가 거절될 수 있으므로 `sg`로 감싸지 않는다. bridge는 승인된 불변 검수 코드에서 짧게 실행하며 GPU 잠금을 잡지 않는다. 학습 owner는 D-446 실행기로 source/environment와 GPU 작업 잠금을 유지한다. 따라서 긴 학습 중에도 현재 결정의 TTL·철회가 갱신된다. 기존 다른 learning-cycle 서비스와 state를 덮어쓰거나 중복 실행하지 않는다.
 
 먼저 bridge와 pipeline 서비스를 한 번 실행하고 수신 current.json의 workspace/revision, bridge-state/state.json, cycle-state/state.json의 review_autobuild를 확인한 뒤 타이머를 활성화한다. 사람이 승인한 mask가 없으면 `held / no_approved_masks`이며 학습 요청·GPU 작업을 만들지 않는다. 자료가 준비되면 모든 실제 eval version 및 source pixels를 재검사하고 기존 owner admission으로 처리한다. 학습 화면에는 cycle-state를 Perception 결과로 연결하며 승인 대기 사유를 표시한다.
 
