@@ -80,6 +80,7 @@ STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
+umask 022  # the checkout keeps git modes; 0002 would leave 0664 files for mode-asserting tests
 mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
