@@ -135,7 +135,8 @@ def test_real_sql_logout_reset_block_pending_code_and_refresh(tmp_path, action):
                                      "refresh_token": token["refresh_token"]}))[2] == 400
 
 
-def test_successful_browser_account_switch_revokes_old_app_family(tmp_path):
+@pytest.mark.parametrize("same_account", [False, True])
+def test_successful_browser_account_switch_revokes_old_app_family(tmp_path, same_account):
     path, _, _ = config(tmp_path)
     base, tasks = _app(tmp_path)
     app = create_app(base.state.console, task_service=tasks, site_logins=_accounts(), account_config=path)
@@ -153,7 +154,8 @@ def test_successful_browser_account_switch_revokes_old_app_family(tmp_path):
     tokens = json.loads(exchange(authority, get_code(authority, sessions.account_context(old)))[1])
     assert _login(client, login="bob", password="wrong").status_code == 401
     assert authority.introspect(tokens["access_token"])["active"] is True
-    assert _login(client, login="bob", password="temporary secret").status_code == 204
+    replacement = _login(client) if same_account else _login(client, login="bob", password="temporary secret")
+    assert replacement.status_code == 204
     assert authority.introspect(tokens["access_token"]) == {"active": False}
     assert sessions.principal(old) is None
-    assert sessions.principal(client.cookies[COOKIE])[0].principal_id == "bob"
+    assert sessions.principal(client.cookies[COOKIE])[0].principal_id == ("alice" if same_account else "bob")
