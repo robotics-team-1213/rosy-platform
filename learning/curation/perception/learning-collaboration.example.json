@@ -1,0 +1,30 @@
+{
+  "project_id": "example-project",
+  "public_origin": "https://review.example.invalid",
+  "accounts_db": "/private/learning/accounts.sqlite3",
+  "key_file": "/private/learning/credentials.key",
+  "imports_root": "/private/learning/imports",
+  "oauth": null,
+  "users": [
+    {
+      "user_id": "example-admin",
+      "username": "example-admin",
+      "display_name": "Example administrator",
+      "password_hash": "REPLACE_WITH_HASH_PASSWORD_OUTPUT",
+      "hf_subjects": [],
+      "memberships": {
+        "example-project": ["view", "edit", "approve", "import", "manage"]
+      }
+    },
+    {
+      "user_id": "example-reviewer",
+      "username": "example-reviewer",
+      "display_name": "Example reviewer",
+      "password_hash": "REPLACE_WITH_HASH_PASSWORD_OUTPUT",
+      "hf_subjects": [],
+      "memberships": {
+        "example-project": ["view", "edit", "approve"]
+      }
+    }
+  ]
+}

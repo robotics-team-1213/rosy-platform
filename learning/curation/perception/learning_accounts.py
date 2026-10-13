@@ -281,7 +281,9 @@ class Accounts:
             db.execute('DELETE FROM learning_sessions WHERE user_id=? AND subject=?', (user['user_id'], subject))
             self._audit(db, user['user_id'], 'identity_unlink', subject)
 
-    def _save_connection(self, db, principal, subject, username, token, *, sharing, resources, expires=None):
+    def _save_connection(self, db, principal, subject, username, token, *, subject_kind, sharing, resources, expires=None):
+        # whoami IDs and OIDC subjects are different identity namespaces, even when their text matches.
+        subject = subject_kind + ':' + subject
         row = db.execute('SELECT * FROM learning_connections WHERE project_id=? AND owner=? AND subject=? AND sharing=?',
                          (self.project_id, principal['user_id'], subject, sharing)).fetchone()
         connection_id = row['id'] if row else secrets.token_hex(16)
@@ -314,7 +316,7 @@ class Accounts:
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
             self.require(principal, 'manage' if sharing == 'project' else 'import')
-            cid = self._save_connection(db, principal, subject, username, token, sharing=sharing, resources=resources)
+            cid = self._save_connection(db, principal, subject, username, token, subject_kind='pat', sharing=sharing, resources=resources)
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
     def connect_oauth(self, principal, subject, username, token, expires):
@@ -322,13 +324,16 @@ class Accounts:
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
             self.require(principal, 'import'); self._link(db, principal, subject)
-            cid = self._save_connection(db, principal, subject, username, token, sharing='personal', resources=[], expires=expires)
+            cid = self._save_connection(db, principal, subject, username, token, subject_kind='oidc', sharing='personal', resources=[], expires=expires)
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
     @staticmethod
     def _connection_public(row):
+        kind, separator, subject = row['subject'].partition(':')
+        if not separator or kind not in ('pat', 'oidc') or not subject:
+            raise AccountError('connection identity namespace unavailable; reconnect')
         return {'connection_id': row['id'], 'provider': 'huggingface', 'owner_id': row['owner'],
-                'subject': row['subject'], 'username': row['username'], 'sharing': row['sharing'],
+                'subject': subject, 'subject_kind': kind, 'username': row['username'], 'sharing': row['sharing'],
                 'resources': json.loads(row['resources']), 'generation': row['generation'],
                 'expires_at': row['expires'], 'active': bool(row['active'])}
 

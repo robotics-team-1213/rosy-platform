@@ -54,7 +54,7 @@ class Collaboration:
         return principal
 
     def get(self, handler, path, token):
-        if path in ('/accounts', '/accounts.js') or path.startswith('/common/') or path == '/app.css':
+        if path in ('/accounts', '/accounts.js', '/commands.js', '/app.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
