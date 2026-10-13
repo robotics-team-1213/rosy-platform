@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-execution` 0.1.1. ROS-free PlanBundle and existing authority projections. Import roots `rosy.execution.api` and `rosy.execution.site`. Depends on `rosy-contracts-skill` and the existing `core_common` wire schemas; workflow helpers import without either Fleet or the wire schema package. This is not `middleware/execution/local/` (`rosy-execution-local`), which checks an installed policy and does not project a plan.
+Wheel `rosy-execution` 0.1.1. ROS-free PlanBundle and existing authority projections. Import roots `rosy.execution.api` and `rosy.execution.site`. Depends on `rosy-contracts-skill` and the existing `core_common` wire schemas; workflow helpers import without either Fleet or the wire schema package. This is not `middleware/robot_execution/local/` (`rosy-execution-local`), which checks an installed policy and does not project a plan.
 
 ## Key Files
 

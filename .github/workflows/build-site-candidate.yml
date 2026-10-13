@@ -30,7 +30,7 @@ on:
       - operations/decision/**
       - operations/ui/console/**
       - operations/world/src/**
-      - operations/execution/src/**
+      - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
       - operations/situation/rosy_situation/assessment.py
       - operations/situation/rosy_situation/snapshot_assessment.py

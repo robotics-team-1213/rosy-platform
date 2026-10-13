@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Local execution evidence on the middleware side. This is the `rosy-execution-local` wheel, not the `rosy-execution` wheel in `operations/execution/`.
+Local execution evidence on the middleware side. This is the `rosy-execution-local` wheel, not the `rosy-execution` wheel in `operations/site_execution/`.
 
 ## Subdirectories
 
@@ -22,7 +22,7 @@ Local execution evidence on the middleware side. This is the `rosy-execution-loc
 
 ### Testing Requirements
 
-`python -m pytest middleware/execution/local/test -q`
+`python -m pytest middleware/robot_execution/local/test -q`
 
 ### Common Patterns
 

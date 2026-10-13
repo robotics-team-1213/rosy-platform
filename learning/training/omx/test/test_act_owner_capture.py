@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx',
-    'learning/training/omx/test', 'middleware/execution/local/test')]
+    'learning/training/omx/test', 'middleware/robot_execution/local/test')]
 from test_omx_policy_session import setup_session, CameraSnapshot
 from test_act_inference import artifact
 from act_inference import ACTInference

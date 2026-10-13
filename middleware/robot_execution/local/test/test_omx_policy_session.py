@@ -10,7 +10,7 @@ from datetime import datetime,timezone
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT/'middleware/execution/local/src'),str(ROOT/'contracts/learning/src'),
+sys.path[:0] = [str(ROOT/'middleware/robot_execution/local/src'),str(ROOT/'contracts/learning/src'),
                str(ROOT/'contracts/skill/src'),str(ROOT/'middleware/devices/omx/adapter'),
                str(ROOT/'middleware/devices/omx/adapter/test'),str(ROOT/'contracts/foundation'),str(ROOT/'test')]
 from rosy.execution.local.omx_policy import PolicyLease, PolicyCandidate, CameraSnapshot, OwnerPolicySession, owner_binding

@@ -124,7 +124,7 @@ def preflight(run, *, sdk):
         "rosy.decision.model_tool_contract": "operations/decision/src",
         "rosy.world.state.projections.map_pose": "operations/world/src",
         "rosy.processes.palletizing.compiler": "operations/processes/palletizing/src",
-        "rosy.execution.site.item_pose": "operations/execution/src",
+        "rosy.execution.site.item_pose": "operations/site_execution/src",
         "rosy.integrations.robots.omx.transfer_provider": "integrations/robots/omx/src",
         "omx_adapter.pose_plan": "middleware/devices/omx/adapter",
         "rosy_agent.omx_cell_owner": "middleware/devices/omx/agent/src",
