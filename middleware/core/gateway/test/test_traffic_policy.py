@@ -121,8 +121,32 @@ def test_approach_distance_adaptively_reduces_linear_speed(rig):
     decision = manager.gate(0.08, 0.1)
 
     assert 0.0 < decision.linear < 0.08
-    assert decision.angular == pytest.approx(0.1)
+    assert decision.angular / decision.linear == pytest.approx(0.1 / 0.08)
     assert manager.status().state == "APPROACH"
+
+
+@pytest.mark.parametrize('unknown', [False, True])
+def test_detector_nearest_stop_edge_reaches_existing_core_gate(rig, unknown):
+    import numpy as np
+    from control.sensing.perception.camera_ground import simulation_ground_plane
+    from control.sensing.perception.road import detect_road_observation, road_observation_payload
+    from core.bridge.translate import road_evidence
+
+    ground = simulation_ground_plane(source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=320, height_px=240, height_m=.06343, pitch_rad=.13962634015954636,
+        hfov_rad=1.0334, max_range_m=.6)
+    frame = np.full((240, 320, 3), 35, dtype=np.uint8)
+    frame[81:84 if unknown else 230, 55:265] = 245
+    if not unknown:
+        frame[:140] = 35
+    observation = detect_road_observation(frame, ground=ground)
+    sample = road_evidence(road_observation_payload('CAMERA_ROAD', 10.,
+        'map_260905_update_v2', 'road-scene-v1', observation))
+    now, manager = rig
+    observe(manager, now, sample)
+    assert manager.gate(.08, .1).linear == 0.
+    assert manager.status().state == ('HOLD' if unknown else 'STOP_REQUIRED')
+    assert manager.status().reason == ('stop_distance_unavailable' if unknown else 'stop_dwell')
 
 
 def test_green_at_stop_line_requires_complete_stop_and_dwell(rig):
@@ -191,7 +215,7 @@ def test_unsignalized_rule_proceeds_after_stop_and_dwell():
     decision = manager.gate(0.06, -0.05)
 
     assert decision.linear == pytest.approx(0.06 * 0.5)
-    assert decision.angular == pytest.approx(-0.05)
+    assert decision.angular == pytest.approx(-0.05 * 0.5)
     assert manager.status().state == "PROCEED"
     assert manager.status().reason == "unsignalized_proceed"
 
@@ -468,6 +492,21 @@ def test_signal_observer_is_absent_without_binding(core_client):
     assert services.signal_observer is None
 
 
+@pytest.mark.parametrize("mode", ["DISABLED", "MONITOR_ONLY", "ENFORCED"])
+def test_idle_boot_snapshot_matches_active_traffic_policy_without_observations(core_client, mode):
+    client, services = core_client(config_overrides={
+        "traffic_policy": {"mode": mode, "map_id": "map_v2_fleet",
+                           "scene_revision": "road-scene-v1"},
+    })
+    response = client.get("/api/v1/traffic", headers={"Authorization": "Bearer rosy-dev-viewer"})
+    assert response.status_code == 200
+    status = response.json()["status"]
+    assert status == services.state.snapshot().traffic_policy.model_dump(mode="json")
+    assert status["mode"] == mode
+    assert status["state"] == ("DISABLED" if mode == "DISABLED" else "HOLD")
+    assert status["reason"] == ("policy_disabled" if mode == "DISABLED" else "no_road_evidence")
+
+
 def test_signal_observer_binds_and_starts_when_configured(core_client):
     _client, services = core_client(config_overrides={
         "traffic_policy": {
@@ -522,6 +561,34 @@ def test_conflicting_or_unbound_evidence_holds(rig, sample, reason):
     assert manager.gate(0.08, 0.0).linear == 0.0
     assert manager.status().state == "HOLD"
     assert manager.status().reason == reason
+
+
+@pytest.mark.parametrize('mode', list(TrafficPolicyMode))
+@pytest.mark.parametrize('phase', ['FOLLOW', 'APPROACH', 'PROCEED', 'HOLD'])
+@pytest.mark.parametrize('linear,angular', [(.08, .2), (-.08, .2), (.08, 0.), (0., .2), (0., 0.)])
+def test_traffic_scaling_preserves_moving_curve_and_stationary_turn(rig, mode, phase, linear, angular):
+    now, manager = rig
+    manager.set_mode(mode)
+    sample = evidence(stop_visible=phase != 'FOLLOW',
+        stop_distance_m={'FOLLOW': None, 'APPROACH': .20, 'PROCEED': .08, 'HOLD': None}[phase],
+        stop_confidence=.9, signal_colour='GREEN', signal_confidence=.9)
+    observe(manager, now, sample)
+    if phase == 'PROCEED':
+        manager.gate(.06, .1)
+        now[0] += .51
+        observe(manager, now, sample)
+    decision = manager.gate(linear, angular)
+    if mode is not TrafficPolicyMode.ENFORCED:
+        assert (decision.linear, decision.angular) == pytest.approx((linear, angular))
+    elif phase == 'HOLD':
+        assert (decision.linear, decision.angular) == (0., 0.)
+    else:
+        scale = manager.status().linear_scale
+        assert decision.linear == pytest.approx(linear * scale)
+        if linear:
+            assert decision.angular / decision.linear == pytest.approx(angular / linear)
+        else:
+            assert decision.angular == angular
 
 
 def test_stale_evidence_holds(rig):

@@ -92,6 +92,7 @@ flowchart LR
 | 결정 | [ADR Log](docs/reference/ROSY%20ADR%20Log.md) · [개별 ADR](docs/adr/) |
 | 설계 | [목표 아키텍처](docs/architecture/) · [인지와 판단](#인지와-판단) · [Decision 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md) |
 | 현재 구조 | [전체 폴더 책임](docs/reference/platform-folder-responsibilities.md) · [CORE·Drive 책임](docs/reference/core-drive-responsibilities.md) |
+| 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
 | 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
 
@@ -114,6 +115,8 @@ flowchart LR
   `package.xml`로 확인한다.
 - **공개 저장소 경계** — 이 저장소는 공개다. 실제 장치 주소·계정·채워진 장치 설정은
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
+  시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
+  `tools/remote/hosts.example.json`을 복사한다.
   날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
   `docs/` 하나에 둔다.
 

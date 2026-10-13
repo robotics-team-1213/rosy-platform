@@ -87,6 +87,88 @@ def _settle(page, posts, path, count=1):
             return
 
 
+def test_unknown_site_pose_blocks_plan_without_hiding_inspection(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    api = {**API, "/api/fleet/guide": {"map_version": 4, "robots": [{"robot_id": "rosy_02", "online": True, "body_radius_m": 0.085, "pose": None}]}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        form = _open_form(page, "rosy_02")
+        preview = form.get_by_role("button", name="경로 보기", exact=True)
+        assert preview.evaluate("node => node.disabled")
+        assert "위치" in preview.get_attribute("reason")
+        api["/api/fleet/guide"]["robots"][0]["pose"] = {
+            "state": "LOCALIZED", "x": 0, "y": 0, "yaw": 0, "u_m": 0.12, "source": "operator_pin"}
+        page.locator("#context-status").click()
+        page.clock.run_for(1500)
+        expect(form.get_by_role("button", name="경로 보기", exact=True)).to_be_enabled()
+        assert not posts and not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("change", ["expired", "estop", "pose"])
+def test_retained_trip_button_rechecks_current_evidence_before_start(site, change):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts = []
+    plan_path, start_path = "/api/fleet/robots/rosy_02/trip", "/api/fleet/trips/p2/start"
+    api = {**API, "/api/fleet/guide": {"map_version": 4, "robots": [{"robot_id": "rosy_02", "online": True, "body_radius_m": 0.085, "pose": {
+        "state": "LOCALIZED", "x": 0, "y": 0, "yaw": 0, "u_m": 0.12, "source": "operator_pin"}}]}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, {plan_path: (200, {
+            **PLAN, "plan_id": "p2", "expires_at": time.time() + 30})})
+        form = _open_form(page, "rosy_02")
+        form.get_by_role("button", name="경로 보기", exact=True).click()
+        _settle(page, posts, plan_path)
+        go = form.locator('[data-trip-start="rosy_02"]')
+        expect(go).to_be_enabled()
+        form.get_by_role("combobox", name="목적지", exact=True).focus()
+        if change == "estop":
+            rows = [json.loads(json.dumps(row)) for row in API["/api/fleet/state"]["robots"]]
+            next(row for row in rows if row["robot_id"] == "rosy_02")["state"]["safety"]["estop"] = True
+            api["/api/fleet/state"] = {**API["/api/fleet/state"], "robots": rows}
+        elif change == "pose":
+            api["/api/fleet/guide"]["robots"][0]["pose"] = None
+        page.clock.run_for(31000 if change == "expired" else 1500)
+        # The focused picker preserves the old DOM; dispatch without changing focus first.
+        go.evaluate("node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+        page.clock.run_for(500)
+        assert not any(path == start_path for path, _ in posts)
+        expect(form).to_contain_text("운행 거절")
+        assert not errors
+        browser.close()
+
+
+def test_delayed_plan_for_previous_destination_is_not_adopted(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts, pending = [], []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, posts)
+        path = "/api/fleet/robots/rosy_02/trip"
+        page.route("**" + path, lambda route: pending.append(route))
+        form = _open_form(page, "rosy_02")
+        destination = form.get_by_role("combobox", name="목적지", exact=True)
+        destination.select_option("A")
+        form.get_by_role("button", name="경로 보기", exact=True).click()
+        page.wait_for_function("document.querySelector('.card-trip') !== null")
+        for _ in range(50):
+            page.clock.run_for(100)
+            if pending:
+                break
+        assert len(pending) == 1
+        destination.select_option("B")
+        pending[0].fulfill(json={**PLAN, "plan_id": "previous-A"})
+        page.clock.run_for(500)
+        go = form.locator('[data-trip-start="rosy_02"]')
+        expect(go).to_be_disabled()
+        assert destination.input_value() == "B"
+        assert not any(path.endswith("/start") for path, _ in posts)
+        assert not errors
+        browser.close()
+
+
 @pytest.mark.parametrize("role", ["operator", "viewer"])
 def test_robot_selection_only_inspects_and_all_offline_safety_evidence_stays_visible(site, role):
     """Inspection is open to viewers too, sends no POST and never arms the map; offline movement stays off."""

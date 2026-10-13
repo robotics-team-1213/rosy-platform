@@ -44,6 +44,31 @@ def _follows(robot):
     return [c[1] for c in robot.calls if c[0] == "follow"]
 
 
+def test_stop_during_the_last_follow_reply_cannot_resurrect_a_formation():
+    async def main():
+        leader, followers, log = _robots(1)
+        session = _session(leader, followers, log=log)
+        gate = asyncio.Event()
+        followers[0].follow_gate = gate
+        starting = asyncio.create_task(session.start())
+        await settle()
+        await session.stop()
+        reason = session.reason
+        canceled_before_reply = sum(call[0] == "swarm_cancel" for call in followers[0].calls)
+        gate.set()
+        try:
+            with pytest.raises(SessionError):
+                await starting
+            assert session.state is SessionState.STOPPED
+            assert session.reason == reason
+            assert session._watchers == []
+            assert sum(call[0] == "swarm_cancel" for call in followers[0].calls) > canceled_before_reply
+        finally:
+            await session.stop()
+
+    run(main())
+
+
 def test_start_opens_the_streams_and_then_arms_every_follower_with_its_slot():
     """D-132 — 무장은 스트림이 연 뒤에 한다. follow 의 1 s 시계를 릴레이와 경주시키지 않는다."""
     async def main():
