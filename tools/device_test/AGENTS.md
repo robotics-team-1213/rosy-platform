@@ -3,6 +3,9 @@
 
 # device_test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-12
+
 ## Purpose
 
 D-512: an agent session runs a supervised device test on a real Pinky by itself. The tool does the checks, the temporary CORE overlay, the drive, the evidence and the undo; the agent does the peer check (`ListAgents`) and judges the camera frames. Operator PC only; never installed on a robot.

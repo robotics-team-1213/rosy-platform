@@ -51,7 +51,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                 hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in (ROOT / 'operations/ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert len(expected) == 78  # D-680 request review, D-683/D-689 account assets, device-watch.js and device-watch.css.
+    assert len(expected) == 79  # D-680 request review, D-683/D-689 account assets, device-watch.js, device-watch.css, map-datum.js.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'site-map-survey.js', 'site-map-camera.js', 'shared/site-map-edit.js',
@@ -162,7 +162,7 @@ assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
-assert ('rosy-contracts-learning', '>=0.1.11', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-contracts-learning', '>=0.1.12', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
 from rosy.contracts.learning import incident_operation

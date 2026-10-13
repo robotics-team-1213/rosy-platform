@@ -8,7 +8,13 @@
 
 **Tech Stack:** Git worktree, Python/setuptools·ament, ROS 2 Jazzy, 기존 원격 pytest/harness, PowerShell workspace 관리 도구.
 
-**상태:** PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
+**상태:** P0 안내 적용 · P1 분류/부분 이관 · 나머지 PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
+
+**P0 실행 기록 (2026-10-13, `docs/folder-guidance-p0`):** 현재 Control/Fleet/UI 안내와 root Docker source 설명을 정정하고 관리 도구로 `.worktrees` 안내를 설치했다. 우산 README·archive의 현재 소스 안내는 제품 Git 밖에서 수정하며 X: 세션 `folder-guidance-p0`에 전후 근거를 보존한다. 원격 시험과 local main 착지 결과는 Git 및 해당 세션 로그로 확인한다. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 근거가 없어 HOLD로 보존한다. P1·S1~S10·P2·P3는 아직 PLANNED다.
+
+**P1 실행 기록 (2026-10-13, `docs/folder-artifacts-p1`):** 19곳을 분류하고 Graphify 생성물 4곳/418파일/33.22 MiB를 X:로 이관했다. 전체 hash·크기, source 부재, CLI 읽기 동등성을 확인했다. [처리 결과](../validation/folder-artifacts-p1-2026-10-13/result.md)와 [출력 안내](../reference/analysis-artifact-locations.md)에 보존/복구/후속 설정을 기록했다. 나머지 15곳은 actor·참조 미확정 또는 별도 overlay 범위로 HOLD다. S1~S10·P2·P3는 PLANNED다. HOLD를 제거 완료로 집계하지 않는다.
+
+**P1 HOLD 재확인 (2026-10-13, `docs/artifact-hold-review`):** 사용자 지정 15곳을 재조사하여 비활성 orphan bytecode/cache/시험 자료 1,847개·40.54 MiB를 X:로 이관했다. [검증 기록](../validation/artifact-hold-review-2026-10-13/result.md)의 결과는 8곳 정리/2곳 부분 정리/5곳 유지다. 남은 협업 상태·lock·미확정 기록, 자격/producer 미확정 `pidA/wsA.json`, 참조되는 build/install/log는 보존한다. 15곳 전체 제거로 집계하지 않는다. S1~S10·P2·P3는 계속 PLANNED다.
 
 근거: [조사 보고서](../assessments/2026-10-13-folder-responsibility-audit.md), Accepted [D-738](../adr/D-738-folder-one-authority.md), [현재 폴더 책임](../reference/platform-folder-responsibilities.md), [platform_parts.yaml](../../tools/harness/platform_parts.yaml). 조사 SHA `a967ab11a`는 과거 스냅샷이다. 각 작업 시작 시 최신 main에서 현재 경로와 이미 완료된 단계를 다시 확인한다. 다른 세션이 완료한 이동을 다시 실행하지 않는다.
 
@@ -22,7 +28,7 @@
 | P2 proof 중복 | CORE peer/Fleet camera 유지보수자 | P0 이후 별도 주제 | 동등성 검사와 복제 이유, runtime 경계 보존 |
 | P3 worktree | 작업 소유 세션/checkout 관리자 | 마지막에 별도 최신 조사 | 안전 조건을 통과한 명시적 후보와 제거 readback |
 
-일정은 작업 슬롯과 시험 PC 가용성에 따라 잡는다. 첫 실행 묶음은 **P0만** 한다. 이 계획의 착지는 파일 이동·삭제, 장치 재시작·주행 또는 실물 수용 승인이 아니다.
+일정은 작업 슬롯과 시험 PC 가용성에 따라 잡는다. 첫 실행 묶음은 P0로 진행했으며, 후속은 사용자 요청에 따라 한 묶음씩 처리한다. 이 계획의 착지는 파일 이동·삭제, 장치 재시작·주행 또는 실물 수용 승인이 아니다.
 
 ## P0: 현재 작업 입구 정정
 

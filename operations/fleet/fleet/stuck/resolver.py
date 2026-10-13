@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Optional, Union
 
@@ -53,6 +54,7 @@ class Answer:
     yield_turn_rad: Optional[float] = None
     # D-577 1: R5 sends this WAIT and hands the stuck to a human in the same pass.
     escalate: Optional[str] = None
+    realign: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ class _Chain:
     stuck_id: Optional[str] = None
     closed_at: Optional[float] = None
     rule_answers: int = 0
+    realign_attempts: int = 0
     # Phase 2 (model tier) only: phase-1 rules never answer RESUME, so this stays None.
     resume_id: Optional[str] = None                  # stuck id the resolver answered RESUME
     retired: set = field(default_factory=set)
@@ -138,9 +141,12 @@ class _YieldPlan:
 
 
 class StuckResolver:
-    def __init__(self, config: ResolverConfig, *, painted: Optional[Callable[[], object]] = None) -> None:
+    def __init__(self, config: ResolverConfig, *, painted: Optional[Callable[[], object]] = None,
+                 realign=None, wall: Callable[[], float] = time.time) -> None:
         """``painted()`` is the active site map's ``Painted`` (D-488) or None: no meet rules."""
         self.config = config
+        from fleet.stuck.realign import RealignConfig
+        self.realign, self._wall = realign or RealignConfig(), wall
         self._painted = painted or (lambda: None)
         self._warned_no_map = False
         self._chains: dict[str, _Chain] = {}
@@ -169,6 +175,8 @@ class StuckResolver:
         if chain is None:
             chain = self._chains[answer.robot_id] = _Chain(started_at=now, mode="")
         chain.answered.add(answer.stuck_id)
+        if answer.decision == "REALIGN":
+            chain.realign_attempts += 1
         if answer.rule == "R5":
             chain.held[answer.stuck_id] = answer.escalate
         if answer.decision == "YIELD" and answer.yield_m is not None:
@@ -207,7 +215,8 @@ class StuckResolver:
                 chain.retries[answer.stuck_id] = 1    # WAIT stops; resending it once is safe
                 chain.answered.discard(answer.stuck_id)
                 return None
-            reason = f"core:{code}" if answer.robot_id in self.autonomous_robots and code else answer.escalate
+            reason = (f"core:{code}" if answer.robot_id in self.autonomous_robots and code
+                      and not answer.escalate.startswith("realign_hold:") else answer.escalate)
             return self._escalate(chain, answer.robot_id, answer.stuck_id, reason)
         if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
             return None                               # late reply from an older chain
@@ -218,6 +227,8 @@ class StuckResolver:
             chain.retired.add(answer.rule)
             chain.answered.discard(answer.stuck_id)
             return None
+        if code in TRANSPORT and answer.decision == "REALIGN":
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
         if code == "STUCK_DECISION_OUTCOME_UNKNOWN" and answer.decision == "YIELD":
             # CORE may already have completed this segment. A replay can restart motion.
             return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
@@ -321,8 +332,8 @@ class StuckResolver:
         return None
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
-        if rid in self.autonomous_robots and not reason.startswith("human_class:") and reason not in (
-                "ai_manual", "no_resolver_token"):
+        if rid in self.autonomous_robots and not reason.startswith(("human_class:", "realign_hold:")) and (
+                reason not in ("ai_manual", "no_resolver_token")):   # D-622: a REALIGN hold goes to a human
             if chain.observing == reason:
                 return None
             chain.observing = reason

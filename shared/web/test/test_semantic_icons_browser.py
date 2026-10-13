@@ -186,31 +186,28 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
     page.goto(f"{HOST}/styleguide")
     page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
     source = (ROOT / "operations/ui/console/index.html").read_text(encoding="utf-8")
-    # 실제 호출자의 마크업을 재사용한다. title뿐인 테마·새로고침과 좁은 접속 조작이다.
+    # 실제 단독 아이콘 조작의 마크업을 재사용한다. 상태 센터는 별도 구성 조작이다.
     snippets = [re.search(rf'<ui-button\b[^>]*\b{attribute}="{value}"[^>]*>.*?</ui-button>', source, re.S).group()
-                for attribute, value in [("data-theme-choice", "dark"), ("id", "vision-refresh"), ("id", "topbar-more")]]
+                for attribute, value in [("id", "fleet-theme"), ("id", "vision-refresh")]]
     page.evaluate("""async markup => {
       const {actionIcon} = await import('/common/ui.js');
       const stage = document.createElement('div'); stage.id = 'existing-icons';
       stage.innerHTML = markup.join(''); document.body.append(stage);
       for (const button of stage.querySelectorAll('ui-button')) actionIcon(button, button.dataset.actionIcon);
-      // 화면 배치가 라벨을 숨겨도 helper가 보존한 title 설명은 그대로 사용한다.
-      stage.querySelector('#topbar-more .ui-icon-label').hidden = true;
     }""", snippets)
     tooltip = page.get_by_role("tooltip")
     for snippet, (name, target) in zip(snippets, [
-        ("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
-        ("접속과 화면 표시", "#topbar-more")], strict=True):
+            ("테마 변경", "#fleet-theme"), ("영상 새로고침", "#vision-refresh")], strict=True):
         control = page.locator(f"#existing-icons {target}")
         assert control.get_attribute("data-ui-tooltip") == name
-        assert control.get_attribute("title") == name
+        assert page.get_by_role("button", name=name, exact=True).count() == 1
         control.focus()
         tooltip.wait_for(state="visible")
         assert tooltip.inner_text() == name
         assert control.get_attribute("aria-describedby") == "rosy-shared-tooltip"
         assert control.get_attribute("data-icon-only") == ("" if 'data-icon-only=""' in snippet else None)
         assert control.evaluate("node => getComputedStyle(node).minHeight") == "48px"
-    assert page.locator("#existing-icons [data-theme-choice]").get_attribute("aria-pressed") == "true"
+    assert page.locator("#existing-icons #fleet-theme").get_attribute("aria-pressed") is None
     fallback = page.evaluate("""async () => {
       const {actionIcon} = await import('/common/ui.js');
       const button = document.createElement('button'); button.setAttribute('aria-label', '접속 확인');

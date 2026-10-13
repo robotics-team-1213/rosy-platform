@@ -97,3 +97,12 @@ def bind_native_receipt(store, task_id, attempt_id, robot_id, receipt, *, unsent
                      (json.dumps(old | {'accepted': True, 'operation': operation}), task_id, attempt_id))
     return True
 
+
+def bind_native_task_result(self, task_id, attempt_id, robot_id, receipt, *, unsent=False, expected_boot_id=None):
+    """Bind the first receipt, then backfill the Task's exact audited events."""
+    if bind_native_receipt(self.store, task_id, attempt_id, robot_id, receipt, unsent=unsent,
+                           expected_boot_id=expected_boot_id) and self.core_events is not None:
+        operation = receipt['operation']
+        for event in self.core_events.native_events(robot_id, operation['boot_id'], operation['run_id']):
+            self.project_core_event(event)
+

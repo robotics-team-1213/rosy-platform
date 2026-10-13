@@ -27,14 +27,15 @@
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     </div>
-    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결과 권한">
-      <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
-      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
-      <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-      <ui-tag id="development-badge" status="warn" hidden data-action-icon="connect" aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="관제 상태">
+      <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="상태 센터: 연결·권한·메시지 확인">
+        <span class="header-status-item"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
+        <span class="header-status-item"><span data-action-icon="notification" data-icon-only="" aria-label="미확인 메시지"></span><span id="header-unread" aria-hidden="true">—</span></span>
+        <!-- D-473/D-668 — 개발 접속 경고는 닫힌 상태 센터에서도 보인다. -->
+        <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+      </ui-button>
     </div>
-    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 접속">
-    <ui-button kind="quiet" id="topbar-more" data-icon-only="" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="화면 표시와 고급 접속" title="화면 표시와 고급 접속" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마와 계정">
     <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <details id="fleet-account" hidden>
       <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
@@ -44,11 +45,13 @@
         <div id="password-login" class="password-login" hidden></div>
       </div>
     </details>
+    <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
     </div>
     <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
     </div>
-    <div id="topbar-extra" class="topbar-extra" data-open="false">
+    <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="접속과 알림">
+      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <!-- D-519 — paired 화면은 아이디·비밀번호로 로그인한다. 토큰은 접힘 안에 남는다. -->
 
       <details id="token-access" class="token-access">
@@ -57,12 +60,6 @@
                autocomplete="off" aria-label="관제 토큰">
         <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       </details>
-      <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
-        <ui-text id="theme-choice-label" scale="label">화면 표시</ui-text>
-        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게" data-action-icon="theme-dark"><span class="sr-only">어둡게</span></ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
-      </div>
     </div>
   </ui-topbar>
   </header>
