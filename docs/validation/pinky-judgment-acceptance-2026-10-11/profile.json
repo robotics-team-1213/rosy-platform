@@ -1,0 +1,27 @@
+{
+  "schema": "rosy.pinky.judgment.acceptance/1",
+  "responsible_party": "team",
+  "approved_by": null,
+  "review_receipt": null,
+  "label_sha256": null,
+  "training_sha256": null,
+  "policy_revision": null,
+  "minimum_counts": {
+    "normal": null,
+    "authorized_wait": null,
+    "blocked": null,
+    "insufficient": null,
+    "conflict": null,
+    "natural_clearance": null
+  },
+  "minimum_resolution_cases": null,
+  "limits": {
+    "miss_rate": null,
+    "unnecessary_rate": null,
+    "abstain_rate": null,
+    "abstain_required_error_rate": null,
+    "p95_judgment_ms": null,
+    "p95_notification_ms": null,
+    "resolution_rate_min": null
+  }
+}

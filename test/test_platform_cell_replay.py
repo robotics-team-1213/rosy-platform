@@ -8,7 +8,7 @@ import pytest
 
 from core_common.protocol.schemas import FleetActionGrant
 from fleet.server.mission_dispatcher import MissionDispatcher
-from fleet.server.goal_evidence import GoalEvidenceError
+from rosy.execution.site.goal_evidence import GoalEvidenceError
 from fleet.server.goal_evidence_registry import GoalEvidenceProducer, GoalEvidenceRegistry
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.goal_evidence_store import GoalEvidenceStore
@@ -19,7 +19,7 @@ from fleet.server.task_store import FleetTaskStore, InvalidTaskTransition
 
 FIXTURES = Path(__file__).parent / "fixtures" / "platform_cell_replay"
 ROOT = Path(__file__).resolve().parents[1]
-OMX_ADAPTER = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
+OMX_ADAPTER = ROOT / "middleware" / "devices" / "omx" / "adapter"
 if str(OMX_ADAPTER) not in sys.path:
     sys.path.insert(0, str(OMX_ADAPTER))
 

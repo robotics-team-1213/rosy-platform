@@ -1,10 +1,10 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-25 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-12 -->
 
 # reference
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-12
 
 ## Purpose
 
@@ -15,17 +15,29 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | File | Description |
 |------|-------------|
 | `ROSY API & Protocol Reference.md` | ROSY-API-REF-001 — only shared robot/fleet/SDK interface; `/api/v1`, envelope, events |
-| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-247 (D-19 superseded by D-26, D-6 by D-33, D-22 by D-161; D-161/D-197 qualified by D-246; gaps D-29, D-35, D-204, D-223, D-234–D-240, D-244) |
+| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only index of every ADR. Do not rewrite an old row. The file is the list |
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
 | `team-guide.md` | 새 팀원 안내: 첫날 설정(클론·작성자·venv·훅), 공유 범위, 이슈에서 머지까지의 명령, 작업 영역, 막혔을 때. 규칙 원본은 README·AGENTS·ADR |
-| `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md`
+| `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md` |
 | `developer-guide.md` | 구조, 빌드·시뮬, 테스트 단계(affected/quick/full), 관제 배치, Pi 5 런타임, 로드맵 — README에서 옮김 |
 | `sim2real-gaps.md` | GENERATED from `tools/harness/sim2real_gaps.yaml` by `rosy_harness.py generate`; edit the YAML, not this table |
+| `perception-gaps.md` | GENERATED from `tools/harness/perception_gaps.yaml`. Do not hand-edit |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
+| `platform-folder-responsibilities.md` | Current semantic tree (D-625, D-626, D-627, D-628, D-630, D-637). Ownership stays in `tools/harness/platform_parts.yaml` |
+| `core-drive-responsibilities.md` | CORE, Drive, and Arm responsibility map (D-625 through D-630) |
+| `fleet-rulebook.md` | Fleet rule pipeline index (D-674, D-678). `FL-*` and `FR-*` are search ids, not API fields |
+| `site-lan-discovery-profile.md` | mDNS/DNS-SD discovery contract. Tests and `deploy/site` read this path (D-341, D-361, D-370, D-382) |
+| `team-discord-incidents.md` | Operator procedure for the team Discord incident channel. Webhook URL, channel id, and receipts stay out of the public repo |
+| `ROSY_Platform_Architecture_Design_v0.2.md` | Architecture design v0.2. Accepted ADRs, including D-413, name this path |
+| `OMX_AI_ROS2_Camera_Report_2026-09-26.md` | Camera report dated 2026-09-26. D-273 and D-299 name this path |
+| `isaac-sim-integration-research.md` | Isaac Sim integration notes. D-322 names this path |
+| `jev-local-decision-alternatives-2026-10-08.md` | Local decision-model notes dated 2026-10-08. D-516 names this path |
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `legacy-tools/` | Frozen WSL scripts named by D-637 (`legacy-tools/wsl`). Not an operational path. `test/architecture/test_colcon_roots.py` pins that directory |
 
 ## For AI Agents
 
@@ -48,7 +60,7 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 ### Internal
 
 - `contracts/foundation/core_common/protocol/schemas.py`
-- `middleware/core/api_web/core_api_web/api/`
+- `middleware/core/api/core_api_web/api/`
 - `deploy/robot/pinky_pro/release/host_agent.py`
 
 ### External

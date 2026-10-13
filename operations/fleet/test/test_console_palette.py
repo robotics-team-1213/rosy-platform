@@ -23,7 +23,7 @@ import re
 
 import pytest
 
-WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 #: D-129 — 단일 L1 파일. 사본은 없다.
 CANON = (Path(__file__).resolve().parents[3] / "shared") / "web" / "tokens.css"
 
@@ -102,7 +102,7 @@ def test_the_console_palette_is_read_per_theme():
 
 
 def surfaces() -> list[Path]:
-    return [WEB / "shared" / "styles.css", WEB / "console.js"]
+    return [WEB / "shared" / "styles.css", WEB / "console.js", WEB / "device-watch.css"]
 
 
 @pytest.mark.parametrize("path", surfaces(), ids=lambda p: p.name)

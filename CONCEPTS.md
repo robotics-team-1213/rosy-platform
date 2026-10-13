@@ -20,7 +20,11 @@ The site mission coordinator and durable task ledger. It selects and sequences a
 
 ### Fleet Mission, Mission Step, Device Action, Local Transaction
 
-A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. These are target terms; the current Fleet `/api/fleet/tasks/*` tracks durable navigation requests, not a general Mission engine (D-298).
+A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. General cross-device sequencing remains a target. The current `/api/fleet/tasks/*` tracks navigation requests and the current Mission ledger supports fixed-workcell `PICK_PLACE`. D-664's common read view preserves these two source identities and states; it does not connect them into a multi-device execution.
+
+### Workcell, Process and Rosy Cell
+
+A Workcell is a configured work space and shared-resource context: frames, calibration, equipment and access regions. It is not the arm Device. A Process describes work such as palletizing; its Recipe/compiler produces a proposed plan, not device authority. The current Rosy Cell app and `rosy_cell.cell/2` configuration are specialized palletizing interfaces and are not a general Workcell registry. A mobile base and a fixed arm can participate in one future site Mission; an arm mounted on a base additionally needs the separately accepted D-55 local composite transaction (D-664).
 
 ### Action identity and message identity
 
@@ -109,7 +113,7 @@ The computer that runs CORE — hostname, architecture, OS, software version, ru
 *Avoid:* rclpy node. ROS nodes stay an implementation detail inside the CORE process (D-1).
 
 ### Device
-The physical robot CORE manages. Its `device_id` is the ROS namespace derived from the Robot number.
+An independently assigned local execution/control and stop boundary. The current mobile implementation is the physical robot CORE manages, whose `device_id` is the ROS namespace derived from the Robot number. This domain role does not make the current mobile Device API a generic arm or workcell API.
 
 *Code:* `Device`
 

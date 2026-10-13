@@ -12,6 +12,6 @@
 .hardware-device-bus { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 .hardware-device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: var(--leading-copy); overflow-wrap: anywhere; }
 .hardware-device-state { align-self: start; }
-.hardware-facts[data-stale="true"] ~ .hardware-device-list { color: var(--ink-quiet); }
+.hardware-facts[data-stale="true"] ~ .hardware-device-list { color: var(--text-secondary); }
 .hardware-refresh, .hardware-lamp-test { align-self: flex-start; }
 .hardware-action-note { margin: 0; color: var(--nominal-quiet); line-height: var(--leading-copy); }
