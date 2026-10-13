@@ -228,6 +228,19 @@ def test_a_line_sighted_during_the_pass_is_handed_to_the_junction_and_waits():
     assert (decision.linear, decision.angular) == (0., 0.) and status.reason == 'junction_waiting'
 
 
+def test_a_line_past_the_bends_vertex_on_the_entry_heading_is_the_bends_own():
+    """Gazebo lap run53: the keeper read the corner's outer line as a cross line 0.097 m past the
+    vertex before the arc; the map's lane turns at the vertex, so the pass ends in 'idle'."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    x, y, yaw, travel = rig.m._junction['anchor']
+    j = rig.m._junction
+    vertex = j['bend_in']-travel+j['radius']*math.tan(math.radians(abs(j['turn_deg']))/2)
+    sight(rig, vertex-math.hypot(rig.x-x, rig.y-y)+.1)
+    decision, status = until(rig, 'idle')
+    assert decision.linear > 0 and rig.m._junction_held is False
+
+
 def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
     """No fresh sighting after the pass (the keeper reads the line as a corner): the instruction
     still finds its junction in the window and stops to turn instead of following the keeper."""
