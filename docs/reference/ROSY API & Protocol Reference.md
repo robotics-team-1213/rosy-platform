@@ -1950,6 +1950,16 @@ D-535 (v1.155) adds optional `link_reason {code, message, action, retry}` to a r
 gather failed: the D-535 reason (transport failure classified by the Fleet, or the robot's
 `error.code`/HTTP status). Message and action come from Fleet's own table, never the robot's text.
 
+Fleet `GET /api/fleet/state` robot rows also carry `rule_m` (D-550 8, D-760 3 stage 1; display only,
+nothing is refused): `{state: bounded|unbounded|idle, motion: lane_trip|goal|follow|null, reason}`.
+It is Fleet's verdict on the motion Fleet itself started for that robot. `reason` is null unless
+`state` is `unbounded`: `hold_back` (lane trip without CORE traffic authority or a held trip lease),
+`rest_only` (unleased goal, robot not gathered over the hub), `policy_continue` / `policy_unknown`
+(unleased goal on a hub robot whose SAF-003 `fleet_loss_policy` is `CONTINUE` or was not read) and
+`leg_unknown`. For hub-gathered robots Fleet reads `fleet_loss_policy` from the Viewer
+`GET /api/v1/safety/state` at most once per 30 s. Line follow opened outside a trip is not judged.
+An older Fleet omits the field.
+
 Fleet `GET /api/fleet/state` robot rows also carry optional D-509 display fields
 `power_health` and `power_health_age_s`. `power_health` is the existing shared
 `core_common.protocol.power_health.PowerHealthResponse` (the authenticated
