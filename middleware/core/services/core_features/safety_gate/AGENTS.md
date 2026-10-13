@@ -16,6 +16,7 @@ SAF-001–005: e-stop, teleop timeout, speed limits, battery policy hooks. ROS-f
 |------|-------------|
 | `__init__.py` | Package marker |
 | `manager.py` | `SafetyManager`, `TeleopWatchdog`, `SpeedLimits`, `BatteryPolicy` |
+| `decision.py` | D-400 정책 답 계약: `SafetyRequest`, `SafetyDecision`, 답 시간 상한, `decision_fault`(timing/malformed 구분)·`decision_valid`·`check_decision`, `PolicyObservationUnavailable`. `manager.py` 크기 예산 때문에 따로 두고 `manager.py`가 이름을 다시 내보낸다 |
 | `fleet_loss.py` | SAF-003 `FleetLossMonitor` (D-419): FleetAgent 링크 상실 판정과 STOP/HOLD/RETURN_HOME/CONTINUE 적용. 모든 의존은 주입, `manager.py` 크기 예산 때문에 따로 둔다. 배선은 `core/fleet_loss_wiring.py`, tick 은 ros_bridge 5 Hz |
 | `shadow.py` | D-400 그림자 기록: `ShadowVerdict`, `ShadowLog`(카운터·전이 이벤트·1 Hz 묶음·eval_ms). 정책이 아니라 기록이라 `manager.py`와 나눈다 |
 

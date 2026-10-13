@@ -190,7 +190,7 @@ def test_shadow_on_a_required_manager_is_refused():
 
 def test_over_budget_evaluation_is_unavailable():
     safety, _ = _safety(FakePolicy())
-    ticks = iter([1.0, 1.02])                   # 20 ms
+    ticks = iter([1.0, 1.03])                   # 30 ms, over the one-tick (20 ms) answer budget
     safety._policy_clock = lambda: next(ticks)
 
     safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
@@ -198,7 +198,7 @@ def test_over_budget_evaluation_is_unavailable():
     snap = safety.shadow.snapshot()
     assert snap["counts"]["unavailable"] == 1
     assert snap["last_unavailable"]["reason"] == "policy_invalid"
-    assert snap["eval_ms"]["p50"] == pytest.approx(20.0)
+    assert snap["eval_ms"]["p50"] == pytest.approx(30.0)
 
 
 def test_without_a_shadow_binding_nothing_is_recorded():
