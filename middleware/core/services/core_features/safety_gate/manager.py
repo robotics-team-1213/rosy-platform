@@ -394,6 +394,9 @@ class SafetyManager:
         longer than the evidence lease (review: a stand-still between two stalls is two gaps)."""
         if not self._policy_hold_s:
             return False
+        if self._policy_gap_since is not None and at < self._policy_gap_last:
+            self._policy_holding = False
+            return False
         if self._policy_gap_since is None or at - self._policy_gap_last > GAP_LINK_S:
             self._policy_gap_since = at
             self.policy_holds += 1
