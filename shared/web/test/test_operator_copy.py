@@ -45,12 +45,12 @@ def _rel(path: Path) -> str:
 
 
 SURFACES = (
-    ("middleware/ui/robot", "*.js"),
-    ("middleware/ui/robot/panels", "**/*.js"),
-    ("middleware/ui/robot", "index.html"),
-    ("middleware/ui/robot", "surface.html"),
-    ("operations/ui/console", "*.js"),
-    ("operations/ui/console", "*.html"),
+    ("middleware/robot_ui/robot", "*.js"),
+    ("middleware/robot_ui/robot/panels", "**/*.js"),
+    ("middleware/robot_ui/robot", "index.html"),
+    ("middleware/robot_ui/robot", "surface.html"),
+    ("operations/site_ui/console", "*.js"),
+    ("operations/site_ui/console", "*.html"),
     ("operations/apps/games/games/web", "*.js"),
     ("operations/apps/games/games/web", "*.html"),
 )
@@ -370,12 +370,12 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("operations/ui/console/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
-    ("middleware/ui/robot/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
-    ("middleware/ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
-    ("middleware/ui/robot/panels/console/line-follow.js",
+    ("operations/site_ui/console/roster.js", '!robot.online ? "오프라인"', '!robot.online ? "OFFLINE"'),
+    ("middleware/robot_ui/robot/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
+    ("middleware/robot_ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
+    ("middleware/robot_ui/robot/panels/console/line-follow.js",
      '`차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}`', '`차선 추종 ${current.mode || "OFF"}`'),
-    ("operations/ui/console/signals.js",
+    ("operations/site_ui/console/signals.js",
      "${signalIntentLabel(row.intent?.mode)}", '${row.intent?.mode || "없음"}'),
 ])
 def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
@@ -388,13 +388,13 @@ def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
 
 #: (path relative to src/, exact flagged hole or literal) -> reason. Stale entries fail.
 ENUM_TEXT_ALLOWLIST: dict[tuple[str, str], str] = {
-    ("middleware/ui/robot/panels/console/teleop.js", "${readErrors.state}"):
+    ("middleware/robot_ui/robot/panels/console/teleop.js", "${readErrors.state}"):
         "an error message keyed by the state endpoint, not a state value",
-    ("middleware/ui/robot/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
+    ("middleware/robot_ui/robot/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
-    ("middleware/ui/robot/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
+    ("middleware/robot_ui/robot/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
-    ("middleware/ui/robot/panels/host/operations.js", '${data.state || "상태 미확인"}'):
+    ("middleware/robot_ui/robot/panels/host/operations.js", '${data.state || "상태 미확인"}'):
         "Host Agent release state is shown as received; no sanctioned Korean map exists yet",
 }
 
@@ -420,8 +420,8 @@ def test_every_enum_text_allowlist_entry_still_matches():
 
 def test_the_lint_sees_every_surface():
     rels = {_rel(path) for path in surface_files()}
-    for expected in ("middleware/ui/robot/panels/console/mode.js", "middleware/ui/robot/app.js",
-                     "operations/ui/console/roster.js", "operations/ui/console/index.html",
+    for expected in ("middleware/robot_ui/robot/panels/console/mode.js", "middleware/robot_ui/robot/app.js",
+                     "operations/site_ui/console/roster.js", "operations/site_ui/console/index.html",
                      "operations/apps/games/games/web/board.js", "operations/apps/games/games/web/index.html"):
         assert expected in rels
 
@@ -456,11 +456,11 @@ def test_the_lint_catches_what_it_is_meant_to_catch():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("middleware/ui/robot/panels/console/mode.js", '"내비게이션 기능을 쓸 수 있습니다."', '"Navigation 기능을 사용할 수 있습니다."'),
-    ("middleware/ui/robot/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
-    ("middleware/ui/robot/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
-    ("middleware/ui/robot/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
-    ("operations/ui/console/formation.js", "대형 재개는 대형이 멈췄을 때만", "대형 재개는 HOLDING일 때만"),
+    ("middleware/robot_ui/robot/panels/console/mode.js", '"내비게이션 기능을 쓸 수 있습니다."', '"Navigation 기능을 사용할 수 있습니다."'),
+    ("middleware/robot_ui/robot/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
+    ("middleware/robot_ui/robot/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
+    ("middleware/robot_ui/robot/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
+    ("operations/site_ui/console/formation.js", "대형 재개는 대형이 멈췄을 때만", "대형 재개는 HOLDING일 때만"),
 ])
 def test_reverting_a_fixed_string_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one US-009 fix and the lint sees it."""

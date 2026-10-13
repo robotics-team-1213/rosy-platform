@@ -34,9 +34,9 @@ ROSE_FILES = {
     "shared/web/tokens.css",                 # 팔레트 원본(정의)
     "shared/web/components.css",             # ui-brand 워드마크
     "shared/web/app-shell.css",              # 레일의 현재 위치 표식(D-741, D-277 역할 메뉴)
-    "middleware/ui/robot/styles.css",                  # 레거시 셸 워드마크(.brand b)
-    "middleware/ui/robot/shell/shell.css",             # 역할 메뉴 위치 표식(팔레트 게이트 핀)
-    "middleware/ui/robot/panels/surface-panels.css",   # 표면 링크(위치 표식 가족)
+    "middleware/robot_ui/robot/styles.css",                  # 레거시 셸 워드마크(.brand b)
+    "middleware/robot_ui/robot/shell/shell.css",             # 역할 메뉴 위치 표식(팔레트 게이트 핀)
+    "middleware/robot_ui/robot/panels/surface-panels.css",   # 표면 링크(위치 표식 가족)
 }
 
 #: D-359 §1.3 — 역할 토큰이 이미 존재하는 팔레트 이름. 이 표를 늘리는 것은

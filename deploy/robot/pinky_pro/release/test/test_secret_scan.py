@@ -117,7 +117,7 @@ def test_public_peer_vectors_are_bound_to_exact_path_field_and_value():
 
 
 def test_camera_public_vectors_keep_other_fields_and_paths_protected():
-    path = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+    path = 'operations/site_ui/cam/app/src/test/resources/camera-peer-transcripts.json'
     nonce = '01' * 32
     signature = ('MEQCIB8WKmontsmONrEJCGMhZ+'
                  'ioZLoH4cDiBfq6s6FlP99GAiB'

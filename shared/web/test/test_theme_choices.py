@@ -7,8 +7,8 @@ import re
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 THEME_JS = SRC.parent / "shared" / "web" / "theme.js"
-DISPLAY_JS = SRC.parent / "middleware" / "ui" / "robot" / "panels" / "system" / "display.js"
-FLEET_HTML = SRC.parent / "operations" / "ui" / "console" / "index.html"
+DISPLAY_JS = SRC.parent / 'middleware' / 'robot_ui' / "robot" / "panels" / "system" / "display.js"
+FLEET_HTML = SRC.parent / 'operations' / 'site_ui' / "console" / "index.html"
 
 CHOICE = re.compile(
     r"""\{\s*value:\s*"([\w-]+)",\s*label:\s*"([^"]+)"(?:,\s*icon:\s*(?:ICONS\.\w+|"[^"]+"))?\s*\}"""

@@ -79,7 +79,7 @@ The model PC runs `--model-repo` (default `rosy-ml/repo`), a checkout that must 
 
 ### Internal
 
-- `learning/registry/perception/store.py`, `../../../tools/perception/operator_ssh.py`, `middleware/perception/vision/perception/learned/` (manifest contract), `middleware/devices/pinky/description` (URDF geometry)
+- `learning/registry/perception/store.py`, `../../../tools/perception/operator_ssh.py`, `middleware/perception/front_camera/perception/learned/` (manifest contract), `middleware/devices/pinky/description` (URDF geometry)
 
 ### External
 

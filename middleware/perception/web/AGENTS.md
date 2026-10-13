@@ -6,7 +6,7 @@
 **Updated:** 2026-10-07
 
 ## Purpose
-Control-stack diagnostic page served by `control/web_node.py` (installed to
+Control-stack diagnostic page served by `nodes/web_node.py` (installed to
 `share/control/web/`). This is **not** the operator console (D-77: that is
 CORE `/dashboard`). D-150 keeps it a debug surface: no operational launch or
 deploy includes it, and its ports (28181/28182) plus the `web_node` executable
@@ -85,7 +85,7 @@ One HTML file, one IIFE, `data-post` / `data-hold` / `data-view`. No build step.
 
 ### Internal
 
-- `control/web_node.py` (serves this file; `/state.json`, `/map.png`, POST verbs)
+- `nodes/web_node.py` (serves this file; `/state.json`, `/map.png`, POST verbs)
 - Limits from `config/robot.yaml` via `web_node.read_limits`
 
 ### External

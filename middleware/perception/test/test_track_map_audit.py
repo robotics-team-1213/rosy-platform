@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from tools.gz.track_map_audit import measure, measure_robot_reachable
+from tools.sim.gazebo.track_map_audit import measure, measure_robot_reachable
 
 
 WALLS = [([0, -1, 0, 0, 0, 0], [2, .02, .2]),
@@ -39,8 +39,8 @@ def test_complete_raster_passes_and_phantom_obstacle_fails():
 def test_exact_world_has_a_sealed_triangle_outside_spawn_component():
     from pathlib import Path
     import xml.etree.ElementTree as ET
-    from tools.gz.prepare_track_world import boxes
-    from tools.gz.track_map_audit import topology
+    from tools.sim.gazebo.prepare_track_world import boxes
+    from tools.sim.gazebo.track_map_audit import topology
     walls = boxes(ET.parse(Path(__file__).resolve().parents[1]/'map/map_260905.world'))
     result = topology(walls, [-.2, .27])
     assert result['free_components'] == 2
@@ -49,7 +49,7 @@ def test_exact_world_has_a_sealed_triangle_outside_spawn_component():
 
 
 def test_robot_reachable_audit_excludes_a_bay_narrower_than_the_body():
-    from tools.gz.track_map_audit import measure_point_reachable
+    from tools.sim.gazebo.track_map_audit import measure_point_reachable
 
     # Split the room with a 180 mm throat.  A point passes, but the 172 mm
     # body plus 10 mm clearance on each side does not.

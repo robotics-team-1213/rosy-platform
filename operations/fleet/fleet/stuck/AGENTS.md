@@ -28,7 +28,7 @@ D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plan
 ### Working In This Directory
 
 - Rules, API and audit table names do not change with the move. No re-export shim under `server/`.
-- `server/app.py` and `server/console_routes.py` wire this package; `resolver.py` stays pure.
+- `server/app.py` and `server/console/console_routes.py` wire this package; `resolver.py` stays pure.
 
 ### Testing Requirements
 

@@ -29,7 +29,7 @@ ros2 launch move_control localized_robot.launch.py map:=/absolute/path/map.yaml
 ## Gazebo 검증
 
 ```bash
-bash tools/gz/run_localization.sh
+bash ../../tools/sim/gazebo/run_localization.sh
 ```
 
 ROS domain 228 / Gazebo partition `pinky_localization228`에 격리하며, 다른 실행이 같은 테스트 잠금을 사용 중이면 시작하지 않는다. 각 실행은 `/tmp/pinky-localization228/<시각>/`에 로그·측정값·소스 해시를 저장한다.

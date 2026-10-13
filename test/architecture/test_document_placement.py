@@ -60,7 +60,7 @@ MUST_TRACK = [
     "deploy/robot/pinky_pro/sd/provision.schema.json",
     "deploy/robot/pinky_pro/sd/tailscale-auth-key.template.txt",
     "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
-    "operations/vision/signal_observer/config.example.json",
+    "operations/signal_observation/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
     "tools/remote/hosts.example.json",
 ]

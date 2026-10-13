@@ -12,7 +12,7 @@ from control.sensing.perception.camera_visibility import visibility_reason
 
 @pytest.mark.parametrize('brightness,reason', [(20, 'low_light'), (255, 'overexposed')])
 def test_raw_pair_preserves_pixels_capture_identity_and_raw_quality(brightness, reason):
-    source = Path(__file__).parents[1] / 'control/road_observer_node.py'
+    source = Path(__file__).parents[1] / 'nodes/road_observer_node.py'
     tree = ast.parse(source.read_text(encoding='utf-8'))
     owner = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'RoadObserverNode')
     callback = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == '_publish_preview')

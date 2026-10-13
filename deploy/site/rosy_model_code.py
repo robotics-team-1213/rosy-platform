@@ -40,11 +40,11 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                      "learning/curation/perception/review_app_web/index.html",
                      "learning/curation/perception/review_app_web/pixels.html")
 CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
-CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
+CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
 #: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;
 #: aliases retain existing job names while resolving to exact signed canonical files.
-JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/vision/rosy_vision/lane_map.py"}
+JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/overhead/rosy_vision/lane_map.py"}
 JOB_ENTRY_POINTS.update({'dataset/' + name: 'learning/curation/perception/' + name
                          for name in ('autolabel.py', 'bag_to_video.py', 'build.py', 'catalog.py',
                              'ceiling_pose.py', 'class_sets.py', 'clip_lane_draft.py', 'edge_capture.py',
@@ -75,20 +75,73 @@ JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + n
                              'run_log.py', 'train_job.py',)})
 JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
-SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
+SPLIT_CODE_PREFIXES = ("middleware/perception/nodes/", "middleware/perception/localization/",
+                       "middleware/perception/graph_health/", "middleware/perception/snapshots/",
+                       "middleware/perception/sensors/", "middleware/perception/front_camera/",
                        "middleware/perception/package.xml",
                        *("middleware/drive/" + name + "/" for name in
-                         ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
-SPLIT_REQUIRED = ("middleware/perception/package.xml",
+                         ("motion_limits", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
+SPLIT_REQUIRED = (
+                  'middleware/perception/nodes/calib_node.py',
+                  'middleware/perception/nodes/calibrated_values.py',
+                  'middleware/perception/nodes/calibration_atomic.py',
+                  'middleware/perception/nodes/calibration_camera.py',
+                  'middleware/perception/nodes/calibration_lock.py',
+                  'middleware/perception/nodes/calibration_record.py',
+                  'middleware/perception/nodes/calibration_relocation.py',
+                  'middleware/perception/nodes/calibration_rotation.py',
+                  'middleware/perception/nodes/calibration_sequence.py',
+                  'middleware/perception/nodes/calibration_snapshot.py',
+                  'middleware/perception/nodes/calibration_storage.py',
+                  'middleware/perception/nodes/camera_detect_node.py',
+                  'middleware/perception/nodes/camera_lock.py',
+                  'middleware/perception/nodes/camera_region_range.py',
+                  'middleware/perception/nodes/dock_observer_node.py',
+                  'middleware/perception/nodes/executor_choice.py',
+                  'middleware/perception/nodes/goal_escape.py',
+                  'middleware/perception/nodes/ir_adc_node.py',
+                  'middleware/perception/nodes/learned_lane_node.py',
+                  'middleware/perception/nodes/line_observer_overrides.py',
+                  'middleware/perception/nodes/obstacle_observer_node.py',
+                  'middleware/perception/nodes/pilot_recorder_node.py',
+                  'middleware/perception/nodes/pilot_recording.py',
+                  'middleware/perception/nodes/record_session.py',
+                  'middleware/perception/nodes/recording.py',
+                  'middleware/perception/nodes/road_observer_node.py',
+                  'middleware/perception/nodes/road_state_node.py',
+                  'middleware/perception/nodes/sensor_provider.py',
+                  'middleware/perception/nodes/startup_calibration_node.py',
+                  'middleware/perception/nodes/tf_buffer.py',
+                  'middleware/perception/nodes/web_http.py',
+                  'middleware/perception/nodes/web_map_control.py',
+                  'middleware/perception/nodes/web_node.py',
+                  'middleware/perception/nodes/web_render.py',
+                  'middleware/perception/nodes/web_state.py',
+
+                  'middleware/perception/localization/loc_assist.py',
+                  'middleware/perception/localization/loc_assist_node.py',
+                  'middleware/perception/localization/localization_node.py',
+                  'middleware/perception/graph_health/watch.py',
+                  'middleware/perception/graph_health/watch_node.py',
+                  'middleware/perception/front_camera/object_observation/object_detector.py',
+                  'middleware/perception/front_camera/object_observation/object_detector_node.py',
+                  'middleware/perception/sensors/line_observation/ir_overlay.py',
+                  'middleware/perception/sensors/line_observation/core_law_input.py',
+                  'middleware/perception/sensors/line_observation/route_context_input.py',
+                  'middleware/perception/sensors/line_observation/route_followers.py',
+                  'middleware/perception/sensors/line_observation/line_observer_node.py',
+                  'middleware/perception/snapshots/capture_trigger.py',
+                  'middleware/perception/snapshots/capture_trigger_node.py',
+                  "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
-                  "middleware/perception/vision/perception/__init__.py",
-                  "middleware/drive/safety/command_gate.py",
+                  "middleware/perception/front_camera/perception/__init__.py",
+                  "middleware/drive/motion_limits/command_gate.py",
                   "middleware/drive/recovery/recover.py",
                   "middleware/drive/tracking/path_follow.py",
                   "middleware/drive/calibration/modes.py",
                   "middleware/drive/planning/grid/__init__.py",
                   "middleware/drive/runtime/control_node.py",
-                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/motion_limits/adapter/__init__.py",
                   "middleware/drive/tracking/wander/__init__.py")
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
@@ -100,7 +153,7 @@ CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sen
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "operations/vision",
+                "middleware/perception", "contracts/foundation", "operations/overhead",
                 *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"

@@ -61,7 +61,7 @@ def test_nav2_keeps_its_initial_pose_setting():
 
 
 def test_localization_node_no_longer_injects_or_scatters_amcl():
-    node = text(SENSING / 'control' / 'localization_node.py')
+    node = text(SENSING / 'localization' / 'localization_node.py')
     assert 'create_publisher(PoseWithCovarianceStamped' not in node
     assert "create_client(Empty, 'reinitialize_global_localization')" not in node
     assert "'localization/state'" in node
@@ -88,8 +88,8 @@ def test_launch_parameters_evaluate_to_typed_values():
 
 
 def test_the_gazebo_localization_rig_follows_d395_not_the_removed_global_recovery():
-    """tools/gz is not CI; this keeps the rig from silently testing what no longer exists."""
-    rig = text(SENSING / 'tools' / 'gz' / 'localization_rig.py')
+    """../../tools/sim/gazebo is not CI; this keeps the rig from silently testing what no longer exists."""
+    rig = text(SENSING / '..' / '..' / 'tools' / 'sim' / 'gazebo' / 'localization_rig.py')
     assert "'recoveries'" not in rig
     assert "component == 'loc_assist'" in rig
     assert "'localization/decision'" in rig and "'/localization/candidates'" in rig
