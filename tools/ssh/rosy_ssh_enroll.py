@@ -13,8 +13,10 @@
 5. alias: a managed `Host <hostname>` block in `~/.ssh/config` (replaced in place on a re-run).
 6. logout: the token is logged out in `finally`. It is never printed or written anywhere.
 
-The API is plain HTTP on the robot's LAN (--api-port, default 8080), like the dashboard. Standard library
-plus the OpenSSH client tools; runs on Windows, macOS and Linux. Contract:
+The API is HTTPS on the robot's LAN (--api-port, default 8080). Each robot serves its own certificate named
+rosy-pinky-<id>.local; --ca-file pins it (the robot's served certificate or its CA, PEM) and --insecure skips
+the check on a trusted bench LAN. The robot is reached by address, so the name is not checked. Standard
+library plus the OpenSSH client tools; runs on Windows, macOS and Linux. Contract:
 docs/plans/2026-10-02-d418-robot-ssh-access.md.
 """
 
@@ -26,7 +28,7 @@ import contextlib
 import datetime as dt
 import getpass
 import hashlib
-import json
+import importlib.util
 import os
 from pathlib import Path, PurePath
 import platform
@@ -36,8 +38,13 @@ import struct
 import subprocess
 import sys
 from typing import Callable, Iterator
-import urllib.error
-import urllib.request
+
+# Loaded by path like rosy_ssh_share.py loads this file: the tools run as standalone scripts, not a package.
+_spec = importlib.util.spec_from_file_location("rosy_ssh_core", Path(__file__).with_name("rosy_ssh_core.py"))
+_core = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_core)
+SshAccessError, CoreClient = _core.SshAccessError, _core.CoreClient
+tls_context, add_tls_arguments, DEFAULT_TIMEOUT_S = _core.tls_context, _core.add_tls_arguments, _core.DEFAULT_TIMEOUT_S
 
 API = "/api/v1/host/ssh"
 LABEL = re.compile(r"[a-z0-9][a-z0-9._:-]{0,47}")
@@ -51,8 +58,6 @@ CLIENT_KEY_TYPES = ("ssh-ed25519", "sk-ssh-ed25519@openssh.com",
 HOST_KEY_TYPES = ("ssh-ed25519", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521", "ssh-rsa")
 DEFAULT_DAYS = 90
 DEFAULT_API_PORT = 8080
-#: CORE waits up to 10 s for the root helper; this leaves room for that and a slow LAN.
-DEFAULT_TIMEOUT_S = 25
 PAIR_LABEL = "ssh-enroll"
 CODE_PROMPT = ("Administrator login code for {robot} (robot screen, or on the robot: "
                "sudo rosy-login-code --role administrator): ")
@@ -61,57 +66,11 @@ Runner = Callable[[list[str]], "tuple[int, str, str]"]
 Ask = Callable[[str], str]
 
 
-class SshAccessError(RuntimeError):
-    pass
-
-
 def home() -> Path:
     return Path.home()
 
 
 # --- CORE HTTP -----------------------------------------------------------------
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """A redirect is answered as an error: the token must never be sent anywhere but the robot asked."""
-
-    def redirect_request(self, *args, **kwargs):
-        return None
-
-
-class CoreClient:
-    """JSON over plain HTTP to one robot's CORE. Proxies from the environment are ignored (LAN only);
-    redirects are not followed."""
-
-    def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT_S):
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
-
-    def call(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, object]:
-        data = None if body is None else json.dumps(body).encode("utf-8")
-        request = urllib.request.Request(self.base_url + path, data=data, method=method)
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        if token is not None:
-            request.add_header("Authorization", "Bearer " + token)
-        try:
-            with self._opener.open(request, timeout=self.timeout) as response:
-                status, raw = response.status, response.read()
-        except urllib.error.HTTPError as error:
-            status, raw = error.code, error.read()
-        except (urllib.error.URLError, OSError) as error:
-            reason = getattr(error, "reason", error)
-            # urllib wraps connect/send failures in URLError; a bare timeout came while waiting for the answer.
-            if isinstance(error, TimeoutError) and not isinstance(error, urllib.error.URLError):
-                raise SshAccessError(f"{self.base_url} did not answer {method} {path} within {self.timeout:g} s; "
-                                     "the change may have been applied on the robot anyway, check with "
-                                     "rosy_ssh_share.py list before retrying") from None
-            raise SshAccessError(f"{self.base_url} is not reachable ({reason})") from None
-        try:
-            return status, (json.loads(raw) if raw else None)
-        except ValueError:
-            return status, None
-
 
 def api_error(what: str, status: int, body: object) -> SshAccessError:
     error = body.get("error") if isinstance(body, dict) else None
@@ -508,7 +467,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--key", type=Path, help="private key path (default ~/.ssh/rosy_dev_<name>)")
     parser.add_argument("--known-hosts", type=Path, help="default ~/.ssh/known_hosts_rosy")
     parser.add_argument("--ssh-config", type=Path, help="default ~/.ssh/config")
-    parser.add_argument("--api-port", type=api_port, default=DEFAULT_API_PORT, help="CORE HTTP port (default 8080)")
+    parser.add_argument("--api-port", type=api_port, default=DEFAULT_API_PORT, help="CORE HTTPS port (default 8080)")
+    add_tls_arguments(parser)
     parser.add_argument("--replace", action="store_true",
                         help="the alias already points at another address; point it at this one")
     parser.add_argument("--accept-new-host-keys", action="store_true",
@@ -544,8 +504,8 @@ def enroll(args, *, ask_code: Ask, ask_lock: Ask, keygen: Runner, client: CoreCl
             raise SshAccessError(
                 f"{hostname} now presents other host keys than {known_hosts}:\n"
                 f"  old: {_fingerprints(old_keys)}\n  new: {_fingerprints(host_keys)}\n"
-                "This is expected only after the card was re-flashed. These keys came over plain HTTP, so they are "
-                "only as trustworthy as this LAN. Compare them on the robot's screen or console "
+                "This is expected only after the card was re-flashed. These keys came from the CORE API, so they are "
+                "only as trustworthy as its TLS check (--insecure: this LAN). Compare them on the robot's screen or console "
                 "(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub), then run again with --accept-new-host-keys")
         block = host_block(hostname, args.robot, key, known_hosts)
         config_text = plan_ssh_config(config, hostname, block, args.robot, replace=args.replace)
@@ -572,8 +532,9 @@ def main(argv: list[str] | None = None, *, ask_code: Ask | None = None, ask_lock
          keygen: Runner | None = None, client_for: Callable[[str], CoreClient] | None = None,
          ssh: Runner | None = None) -> int:
     args = _parser().parse_args(argv)
-    client = (client_for or (lambda robot: CoreClient(f"http://{robot}:{args.api_port}")))(args.robot)
     try:
+        client = (client_for or (lambda robot: CoreClient(
+            f"https://{robot}:{args.api_port}", context=tls_context(args.ca_file, insecure=args.insecure))))(args.robot)
         return enroll(args, ask_code=ask_code or getpass.getpass, ask_lock=ask_lock or getpass.getpass,
                       keygen=keygen or run_tool, client=client, ssh=ssh or run_tool)
     except SshAccessError as error:
