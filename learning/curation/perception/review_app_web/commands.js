@@ -39,7 +39,7 @@ function name(el){
   return (el.querySelector('.ui-icon-label')?.textContent||el.textContent).trim();
 }
 function inventory(){
-  return [...document.querySelectorAll('ui-button,button,a[href],ui-brand[href],input:not([type=hidden]),select,textarea,summary,canvas[tabindex],section[aria-labelledby]')]
+  return [...document.querySelectorAll('ui-button,button,a[href],input:not([type=hidden]),select,textarea,summary,canvas[tabindex],section[aria-labelledby]')]
     .filter(reachable).map(el=>({el,label:name(el)})).filter(row=>row.label)
     .sort((a,b)=>Number(!!a.el.closest('#frames,#pixel-frames'))-Number(!!b.el.closest('#frames,#pixel-frames')));
 }
@@ -54,7 +54,7 @@ function execute({el}){
 function render(){
   const query=search.value.trim().toLocaleLowerCase(),rows=commands.filter(row=>row.label.toLocaleLowerCase().includes(query))
     .sort((a,b)=>Number(b.label.toLocaleLowerCase()===query)-Number(a.label.toLocaleLowerCase()===query));
-  results.replaceChildren();count.textContent=`${rows.length}개 기능${rows.length>30?' · 처음 30개 표시, 검색어를 더 입력하세요.':''}`;
+  results.replaceChildren();count.textContent=`${rows.length}개 항목${rows.length>30?' · 처음 30개 표시, 검색어를 더 입력하세요.':''}`;
   for(const command of rows.slice(0,30)){
     const item=document.createElement('li'),button=document.createElement('ui-button');button.setAttribute('kind','quiet');
     const keys=command.el.getAttribute('aria-keyshortcuts');
