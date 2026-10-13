@@ -256,6 +256,26 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             assert abs(fact["stop"][1] - first["stop"][1]) <= 1, (name, width, fact["stop"], first["stop"])
 
 
+def test_a_lost_link_is_readable_on_a_phone(tmp_path):
+    from playwright.sync_api import expect
+
+    # Fleet gone behind the proxy: every API answer is 502, the state poll included.
+    with _fleet(tmp_path, console_token="header-token") as (browser, origin):
+        for name, path in DOCS:
+            page = browser.new_page(viewport={"width": 320, "height": 568})
+            page.route("**/api/fleet/**", lambda route: route.fulfill(status=502, json={"detail": "bad gateway"}))
+            page.goto(origin + path)
+            word = page.locator("#link-state")
+            expect(word).to_have_text("연결 끊김", timeout=15000)
+            expect(word).to_be_visible()
+            box, stop = word.bounding_box(), page.locator("#estop").bounding_box()
+            assert box["x"] >= 0 and box["x"] + box["width"] <= 320, (name, box)
+            assert box["y"] >= stop["y"] + stop["height"] - 1, (name, box, stop)  # its own row under the bar
+            expect(page.locator("#estop")).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, name
+            page.close()
+
+
 def test_estop_locks_only_after_the_session_is_refused(tmp_path):
     from playwright.sync_api import expect
 
