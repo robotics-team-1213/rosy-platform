@@ -158,13 +158,10 @@ export function showFleet(fleet, robots = null) {
 // and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   async function read() {
-    try {
-      const state = await request("/api/fleet/state");
-      noteLink();
-      showFleet(state.fleet, state.robots);
-    } catch (error) {
-      noteLink(error);
-    }
+    let state;
+    try { state = await request("/api/fleet/state"); } catch (error) { return noteLink(error); }
+    noteLink();
+    try { showFleet(state.fleet, state.robots); } catch { /* a paint error after an answer is not a lost link */ }
   }
   read();
   return interval(read, every);
