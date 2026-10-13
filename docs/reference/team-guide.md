@@ -266,7 +266,7 @@ git push
 |---|---|---|---|---|
 | CORE (로봇 게이트웨이) | `middleware/core/` | 외부 API, 유일한 `cmd_vel` 발행, 서비스·이벤트 | 일부 | |
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
-| 내비게이션 | `middleware/control/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
+| 내비게이션 | `middleware/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
 | 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
 | Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
 | 현장 비전·앱 | `operations/vision/`, `operations/ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |

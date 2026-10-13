@@ -15,7 +15,7 @@ CORE process and the libraries it loads. One robot process: rclpy on the main th
 | `api/` | FastAPI routes served in-process; package `core_api_web` (see `api/AGENTS.md`) |
 | `events/` | Event catalogue and bus (see `events/AGENTS.md`) |
 | `services/` | Command, safety, power, docking, navigation facade, and the other managers (see `services/AGENTS.md`) |
-| `../control/drive/planning/nav2/` | Nav2 planning backend; CORE keeps its navigation facade and final command authority (D-626) |
+| `../drive/planning/nav2/` | Nav2 planning backend; CORE keeps its navigation facade and final command authority (D-626) |
 
 ## For AI Agents
 
