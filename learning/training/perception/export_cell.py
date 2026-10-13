@@ -17,6 +17,7 @@ INPUT_SHAPE = (1, 3, 240, 320)
 ONNX_NAME = "model.onnx"
 PRECISIONS = ("fp32", "int8")  # == control...learned.manifest.PRECISIONS
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # = manifest.ROLES
+ROAD_SEMANTICS = ("road_surface/1", "current_road_region/1", "trajectory_band/1")  # = manifest.ROAD_SEMANTICS
 COLORS = ("rgb", "bgr")
 EXPERIMENT_KEYS = {  # metrics.experiment, per tracker, nothing else
     "wandb": ("tracker", "run_id", "url", "project"),
@@ -29,7 +30,8 @@ def _class_entries(classes) -> list[dict]:
     out = []
     for index, c in enumerate(classes):
         name, role = (c["name"], c["role"]) if isinstance(c, dict) else c
-        out.append({"index": index, "name": name, "role": role})
+        out.append({"index": index, "name": name, "role": role,
+                    **({"semantic": c["semantic"]} if isinstance(c, dict) and "semantic" in c else {})})
     return out
 
 
@@ -41,6 +43,8 @@ def _validate(entries, color, mean, std, scale) -> None:
     if len(set(names)) != len(names):
         raise ValueError("classes: duplicate name")
     for e in entries:
+        if "semantic" in e and (e["role"] != "drivable" or e["semantic"] not in ROAD_SEMANTICS):
+            raise ValueError(f"class semantic: drivable needs one of {ROAD_SEMANTICS}")
         if e["role"] not in ROLES:
             raise ValueError(f"classes[{e['index']}].role must be one of {ROLES}")
     if not any(e["role"] == "lane_marking" for e in entries):
@@ -89,6 +93,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
     if revision_prefix == "v13-drivable" and sum(c["role"] == "drivable" for c in entries) != 1:
         raise ValueError("v13-drivable requires exactly one drivable class")
     if revision_prefix == "v13-drivable":
+        if any(c.get("semantic") not in (None, "current_road_region/1") for c in entries):
+            raise ValueError("v13-drivable semantic must be current_road_region/1")
         if entries[-1]["role"] != "drivable":
             raise ValueError("v13-drivable requires drivable as the last output class")
         if not isinstance(dataset_revision, str) or not re.fullmatch(r"[0-9a-f]{64}", dataset_revision):

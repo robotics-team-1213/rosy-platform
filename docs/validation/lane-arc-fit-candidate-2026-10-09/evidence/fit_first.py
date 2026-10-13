@@ -10,7 +10,7 @@ import numpy as np
 
 
 repo = Path(__file__).resolve().parents[4]
-module = repo / "middleware/core/services/core_features/line_follow/arc/lane_arc_fit.py"
+module = repo / "middleware/control/drive/behaviors/line_follow/arc/lane_arc_fit.py"
 spec = importlib.util.spec_from_file_location("lane_arc_fit", module)
 fit_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fit_module)

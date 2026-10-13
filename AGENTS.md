@@ -102,7 +102,7 @@ python test/known_failures.py X:/DevTemp/<name>/run-1.txt
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
 - Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
-- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
+- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. Lab SSH targets are `private/lab-hosts.json`, copied from `tools/remote/hosts.example.json`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
 - Hardware profile is YAML. In-tree Pinky full spec is `middleware/devices/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - ROS package discovery uses the manifest `colcon_roots` across `learning/`, `operations/`, `middleware/`, `contracts/`, `integrations/`, and `shared/`. Do not reintroduce `rosy_*` or `pinky_*` package names. The CORE launch file still carries its legacy filename `rosy_core.launch.py`.
 - Dashboard screens are static files in `middleware/ui/robot`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
@@ -184,7 +184,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 ### Internal
 
 - `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
-- `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
+- `deploy/robot/pinky_pro/Dockerfile` consumes source under `contracts/`, `middleware/`, and `shared/`. Its image-internal `/opt/rosy_ws/src/` destinations are build layout, not repository source holders; Docker/Compose are development/CI paths.
 - `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 
 ### External

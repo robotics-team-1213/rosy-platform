@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 COMMON = ROOT / "shared/web"
 GALLERY = ROOT / "middleware/ui/robot"
 HOST = "http://rosy.test"
-ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect"]
+ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect",
+         "login", "account", "logout"]
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "application/javascript"}
 
 
@@ -195,7 +196,8 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
       for (const button of stage.querySelectorAll('ui-button')) actionIcon(button, button.dataset.actionIcon);
     }""", snippets)
     tooltip = page.get_by_role("tooltip")
-    for name, target in [("테마 변경", "#fleet-theme"), ("영상 새로고침", "#vision-refresh")]:
+    for snippet, (name, target) in zip(snippets, [
+            ("테마 변경", "#fleet-theme"), ("영상 새로고침", "#vision-refresh")], strict=True):
         control = page.locator(f"#existing-icons {target}")
         assert control.get_attribute("data-ui-tooltip") == name
         assert page.get_by_role("button", name=name, exact=True).count() == 1
@@ -203,6 +205,7 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
         tooltip.wait_for(state="visible")
         assert tooltip.inner_text() == name
         assert control.get_attribute("aria-describedby") == "rosy-shared-tooltip"
+        assert control.get_attribute("data-icon-only") == ("" if 'data-icon-only=""' in snippet else None)
         assert control.evaluate("node => getComputedStyle(node).minHeight") == "48px"
     assert page.locator("#existing-icons #fleet-theme").get_attribute("aria-pressed") is None
     fallback = page.evaluate("""async () => {

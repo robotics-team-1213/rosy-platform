@@ -4,6 +4,8 @@ import re
 
 import numpy as np
 
+from control.sensing.perception.learned.manifest import road_delivery_error
+
 # D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
 V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
                    {"annotation_origin": "map_projected", "adr": "D-563"})
@@ -73,6 +75,16 @@ def compare_to_champion(ev: dict, champion: dict | None):
 
 
 def judge_eval(ev: dict, gate: dict) -> list[str]:
+    if ev.get("semantic_mismatches"):
+        return [f"eval: label semantic differs between model and evaluation: {ev['semantic_mismatches']}"]
+    if gate.get("require_label_semantics") and ev.get("unverified_semantics"):
+        return [f"eval: unverified drivable label semantics: {ev['unverified_semantics']}"]
+    if gate.get("require_label_semantics"):
+        if ev.get("training_content_verified") is not True:
+            return ["eval: training label semantics require a content-verified dataset"]
+        if ev.get("training_semantic_mismatches") or ev.get("training_unverified_semantics"):
+            return ["eval: training label semantic differs from model or is unverified: "
+                    f"{ev.get('training_semantic_mismatches')} {ev.get('training_unverified_semantics')}"]
     if gate.get("require_eval"):
         if ev.get("disjoint") is not True:
             return ["eval: deployment requires a verified training dataset disjoint from evaluation"]
@@ -107,6 +119,10 @@ def judge_eval(ev: dict, gate: dict) -> list[str]:
 
 
 def _eval_gate_error(gate: dict) -> str | None:
+    if not isinstance(gate.get("require_label_semantics", False), bool):
+        return "require_label_semantics must be a boolean"
+    if gate.get("require_label_semantics") and not gate.get("require_eval"):
+        return "require_label_semantics needs require_eval"
     required = gate.get("require_eval", False)
     if not isinstance(required, bool):
         return "require_eval must be a boolean"
@@ -120,3 +136,21 @@ def _eval_gate_error(gate: dict) -> str | None:
         if floor is not None and (not _number(floor) or not 0 < floor <= 1):
             return "min_eval_miou must be in (0, 1]"
     return None
+
+
+def evaluation_semantics(model_classes: list, eval_classes: list, matched: list) -> dict:
+    model = {c["name"]: c for c in model_classes}
+    truth = {c["name"]: c for c in eval_classes}
+    roads = {c["name"] for c in model_classes + eval_classes if c.get("role") == "drivable"}
+    declared, mismatches, unverified = {}, {}, []
+    for name in sorted(roads):
+        pair = {"model": model.get(name, {}).get("semantic"), "eval": truth.get(name, {}).get("semantic")}
+        if any(v is not None for v in pair.values()):
+            declared[name] = pair
+            if pair["model"] != pair["eval"]:
+                mismatches[name] = pair
+        if name not in matched or any(v is None for v in pair.values()):
+            unverified.append(name)
+    return {"label_semantics": declared, "semantic_mismatches": mismatches, "unverified_semantics": unverified}
+
+

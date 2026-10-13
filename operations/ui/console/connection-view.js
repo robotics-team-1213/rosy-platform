@@ -10,13 +10,7 @@ export function createConnectionView({scope, el}) {
   scope.listen(el("connection-guide-action"), "click", event => {
     openedForLock = false;
     event.preventDefault(); setTopbarOpen(true);
-    // D-519 — the 아이디 field when the login form shows, else the token field.
-    const form = document.getElementById("password-login");
-    if (form && !form.hidden) form.querySelector("[data-login=login]").focus();
-    else {
-      el("token-access").open = true;
-      el("console-token").focus();
-    }
+    el("fleet-login").click();
   });
 
   function show(reason, token) {

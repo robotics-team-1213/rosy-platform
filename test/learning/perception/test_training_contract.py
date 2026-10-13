@@ -54,6 +54,57 @@ def test_write_manifest_valid_and_revision(tmp_path):
     assert doc["trainer"] == "colab-x"
 
 
+@pytest.mark.parametrize("semantic", ["road_surface/1", "current_road_region/1", "trajectory_band/1"])
+def test_export_preserves_road_meaning(tmp_path, semantic):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": semantic}]
+    out, doc = _write(tmp_path, classes=classes)
+    assert doc["output"]["classes"][-1]["semantic"] == semantic
+    assert load_manifest(out).raw["output"]["classes"][-1]["semantic"] == semantic
+
+
+@pytest.mark.parametrize("semantic", ["road_surface/1", "current_road_region/1", "trajectory_band/1"])
+def test_export_cli_yaml_preserves_road_meaning_through_writer(tmp_path, semantic):
+    import yaml
+    import export_onnx
+    classes = [{"name": name, "role": role} for name, role in CLASSES]
+    classes[2]["semantic"] = semantic
+    path = tmp_path / "classes.yaml"
+    path.write_text(yaml.safe_dump({"classes": classes}))
+    out, doc = _write(tmp_path, classes=export_onnx.load_classes(path))
+    assert load_manifest(out).raw["output"]["classes"][2]["semantic"] == semantic
+    from intake_eval_gate import road_delivery_error
+    assert bool(road_delivery_error(doc)) is (semantic != "current_road_region/1")
+
+
+@pytest.mark.parametrize("semantic", [None, "road_suface/1", 1])
+def test_export_cli_yaml_keeps_invalid_semantics_visible_to_validation(tmp_path, semantic):
+    import yaml
+    import export_onnx
+    classes = [{"name": name, "role": role} for name, role in CLASSES]
+    classes[2]["semantic"] = semantic
+    path = tmp_path / "classes.yaml"
+    path.write_text(yaml.safe_dump({"classes": classes}))
+    with pytest.raises(ValueError, match="semantic"):
+        _write(tmp_path, classes=export_onnx.load_classes(path))
+    assert not (tmp_path / "out/model_manifest.json").exists()
+
+
+@pytest.mark.parametrize("semantic", [None, "", "road_suface/1", 1])
+def test_export_refuses_unknown_road_meaning(tmp_path, semantic):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": semantic}]
+    with pytest.raises(ValueError, match="semantic"):
+        _write(tmp_path, classes=classes)
+
+
+def test_whole_road_output_cannot_use_the_legacy_v13_revision(tmp_path):
+    classes = [{"name": "bg", "role": "background"}, {"name": "lane", "role": "lane_marking"},
+               {"name": "road", "role": "drivable", "semantic": "road_surface/1"}]
+    with pytest.raises(ValueError, match="v13.*semantic"):
+        _write(tmp_path, classes=classes, revision_prefix="v13-drivable")
+
+
 def test_v13_drivable_revision_is_separate_and_requires_class(tmp_path):
     lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
                "torchscript_sha256": "c" * 64}

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
+- 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
 - 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 - 2026-10-10 · uncommitted · fix(cam): D-589 S2 재리뷰 반영
 - 2026-10-10 · uncommitted · fix(cam): D-589 S2 독립 리뷰 반영
-- 2026-10-10 · uncommitted · feat(cam): D-589 S2 Vision 인식 자동 노출 적용
-- 2026-10-09 · uncommitted · feat(cam): D-544 노출 자동 보정 1단계 (기본 꺼짐)

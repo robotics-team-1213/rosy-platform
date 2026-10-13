@@ -49,10 +49,10 @@ SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져
 기본은 loopback이다. 검수자가 SSH 터널 없이 모델 PC의 앱을 Tailscale로 열어야 할 때만 `--host`로 그 주소를 지정한다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host 100.98.162.71
+python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host <model-pc>
 ```
 
-검수자는 `http://100.98.162.71:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
+검수자는 `http://<model-pc>:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
 
 위험: 사용자 인증이 없다. 그 주소에 닿는 누구나 사진을 보고 수정하고 승인할 수 있고, 검수자 신원은 증명되지 않는다. 신뢰한 tailnet/LAN에서 필요한 동안만 켠다. 쓰기 token과 Host/Origin 검사는 그대로다.
 

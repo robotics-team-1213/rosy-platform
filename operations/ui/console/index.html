@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
+  <link rel="stylesheet" href="/console/assets/device-watch.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
@@ -33,7 +34,16 @@
         <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
       </ui-button>
     </div>
-    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마">
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마와 계정">
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
+    <details id="fleet-account" hidden>
+      <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
+      <div class="fleet-account-panel">
+        <p id="fleet-account-identity"></p>
+        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
+        <div id="password-login" class="password-login" hidden></div>
+      </div>
+    </details>
     <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
     </div>
     <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
@@ -42,8 +52,8 @@
     <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="접속과 알림">
       <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <!-- D-519 — paired 화면은 아이디·비밀번호로 로그인한다. 토큰은 접힘 안에 남는다. -->
-      <div id="password-login" class="password-login" hidden></div>
-      <details id="token-access" class="token-access" open>
+
+      <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
         <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
                autocomplete="off" aria-label="관제 토큰">
@@ -67,7 +77,7 @@
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
     <div><h2 id="connection-guide-title">관제 접속 필요</h2>
       <p id="connection-guide-detail">아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
-    <a id="connection-guide-action" href="#console-token">관제 접속</a>
+    <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
 
 
@@ -87,6 +97,47 @@
       <p id="work-sources" class="hint"></p>
       <ul id="work-list" class="work-list" aria-label="조회 가능한 작업"></ul>
       <p id="work-empty" class="hint">현재 조회 범위에 작업이 없습니다.</p>
+      <h3 id="channel-requests-heading">내 대화 요청</h3>
+      <p id="channel-requests-state" class="hint" role="status">접속 후 조회합니다.</p>
+      <ul id="channel-requests" class="work-list" aria-labelledby="channel-requests-heading"></ul>
+      <section id="channel-review" aria-labelledby="channel-review-heading" hidden>
+        <h3 id="channel-review-heading">대화 요청 검토</h3>
+        <p id="channel-review-original"></p>
+        <p id="channel-review-state" class="hint" role="status"></p>
+        <span id="channel-review-cell-holder" hidden><a id="channel-review-cell">Cell 작업 준비·승인으로 연결</a></span>
+        <label for="channel-review-robot">이동할 로봇</label>
+        <select id="channel-review-robot" class="ui-field"><option value="">로봇 선택</option></select>
+        <label for="channel-review-x">공유 지도 X (m)</label>
+        <input id="channel-review-x" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-y">공유 지도 Y (m)</label>
+        <input id="channel-review-y" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-yaw">목표 방향 (rad)</label>
+        <input id="channel-review-yaw" class="ui-field" type="number" step="any" required value="0">
+        <label for="channel-review-reason">검토 사유</label>
+        <textarea id="channel-review-reason" class="ui-field" maxlength="256" required></textarea>
+        <label for="channel-review-incident">현재 열린 위험 사건</label>
+        <select id="channel-review-incident" class="ui-field"><option value="">사건 선택</option></select>
+        <div class="actions">
+          <ui-button id="channel-review-incident-claim" kind="irreversible" type="button">확인 후 사건 맡기</ui-button>
+          <span id="channel-review-incident-link-holder" hidden><a id="channel-review-incident-link">사건 기록·기존 조치 화면</a></span>
+        </div>
+        <label for="channel-review-mission">내 팔 작업의 실행 전 후보</label>
+        <select id="channel-review-mission" class="ui-field"><option value="">후보 선택</option></select>
+        <div class="actions">
+          <ui-button id="channel-review-mission-prepare" kind="quiet" type="button">선택한 후보로 팔 작업 준비</ui-button>
+          <span id="channel-review-mission-admit-holder" hidden>
+            <ui-button id="channel-review-mission-admit" kind="irreversible" type="button">팔 작업 실행 승인</ui-button>
+          </span>
+        </div>
+        <div class="actions">
+          <ui-button id="channel-review-hold" kind="quiet" type="button">보류</ui-button>
+          <ui-button id="channel-review-reject" kind="quiet" type="button">거절</ui-button>
+          <ui-button id="channel-review-ready" kind="quiet" type="button">이동 후보 저장</ui-button>
+          <span id="channel-review-submit-holder" hidden>
+            <ui-button id="channel-review-submit" kind="irreversible" type="button">확인 후 Fleet에 요청</ui-button>
+          </span>
+        </div>
+      </section>
     </section>
 
     <section class="panel" aria-labelledby="map-heading">
@@ -123,7 +174,7 @@
         </div>
       </details>
       <div class="map-board">
-      <div class="map-stage" id="map-stage" data-map-state="loading">
+      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="pip">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
@@ -134,6 +185,12 @@
         </div>
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
+        <figure id="watch-front" class="watch-front" hidden>
+          <img id="watch-front-image" alt="">
+        </figure>
+        <div id="device-watch" class="device-watch">
+          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="true" aria-controls="map-birdseye">천장</ui-button>
+        </div>
       </div>
       </div>
       <details id="map-readouts" class="map-readouts">
@@ -157,13 +214,13 @@
       </details>
       <p class="hint" id="map-calibration-status" role="status" hidden></p>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
-      <div class="legend" id="map-legend" hidden>
-        <span data-legend="grid"><i class="sw free"></i>자유</span>
-        <span data-legend="grid"><i class="sw uncertain"></i>불확실</span>
-        <span data-legend="grid"><i class="sw occupied"></i>점유</span>
-        <span data-legend="grid"><i class="sw unknown"></i>미지</span>
-        <span><i class="sw robot"></i>로봇</span>
-        <span><i class="sw goal"></i>목표</span>
+      <div class="legend ui-legend" id="map-legend" hidden>
+        <span data-legend="grid"><i data-swatch="free"></i>자유</span>
+        <span data-legend="grid"><i data-swatch="uncertain"></i>불확실</span>
+        <span data-legend="grid"><i data-swatch="occupied"></i>점유</span>
+        <span data-legend="grid"><i data-swatch="unknown"></i>미지</span>
+        <span><i data-swatch="robot"></i>로봇</span>
+        <span><i data-swatch="goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>

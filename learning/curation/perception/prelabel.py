@@ -42,7 +42,7 @@ DEFAULT_PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 
                    (245, 130, 48), (145, 30, 180), (70, 240, 240), (240, 50, 230))
 
 
-def resolve_classes(yaml_classes, model_classes) -> list[dict]:
+def resolve_classes(yaml_classes, model_classes, *, model_raw_classes=None) -> list[dict]:
     """classes.yaml must describe the model's classes; fill missing colours."""
     build.label_to_index([dict(c, color=None) for c in yaml_classes])  # closed roles, one background
     got = [(c["index"], c["name"], c["role"]) for c in yaml_classes]
@@ -50,6 +50,12 @@ def resolve_classes(yaml_classes, model_classes) -> list[dict]:
     if sorted(got) != sorted(want):
         raise build.BuildError(f"classes.yaml does not match the model manifest classes "
                                f"({sorted(got)} vs {sorted(want)})")
+    if model_raw_classes is not None and sorted(
+            (c['index'], c['name'], c['role']) for c in model_raw_classes) != sorted(want):
+        raise build.BuildError('raw model classes differ from the loaded model')
+    semantics = {c['index']: c.get('semantic') for c in model_raw_classes or ()}
+    if any(c.get('semantic') != semantics.get(c['index']) for c in yaml_classes):
+        raise build.BuildError('classes.yaml semantic does not match the model manifest semantic')
     out = []
     for c in sorted(yaml_classes, key=lambda c: c["index"]):
         color = c["color"]
@@ -165,7 +171,7 @@ def main(argv=None) -> int:
     model, session = _open_model(args.model)
     try:
         classes = resolve_classes(build.load_classes(args.classes, require_color=False),
-                                  model.manifest.classes)
+                                  model.manifest.classes, model_raw_classes=model.manifest.raw['output']['classes'])
     except build.BuildError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

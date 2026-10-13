@@ -15,8 +15,8 @@ Review fixes (2026-10-02):
   A point enters memory only from outside the URDF body outline (D-507 item 10; on the
   outline counts as outside). With a range_min inside the body (the C1 LiDAR's 0.05 m vs 0.0565 m to
   the nearest edge) every vanished point is inside on entry, so nothing is remembered.
-- The sweep covers the arcs the traffic gate (linear scaled by s in [floor, 1], angular kept)
-  and the safety clip can make of the intended twist (M1, re-review HIGH 2).
+- D-737 narrows only CORE-bound normal CAMERA tracking to its checked curve; other
+  clearance callers retain the legacy linear-only traffic arc family.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from core_common.robot_body import inside_body
 from core_features.line_follow.clearance import (
     body_envelope_gap, body_path_gap, rotation_gap, ultrasonic_points)
 from core_features.line_follow.model import _finite
+from core_features.safety.velocity import limit_velocity
 
 #: The wheels hold the last cmd_vel at most this long (CommandManager nav timeout, 0.5 s; the
 #: publisher runs at 50 Hz): a longer gap between published twists integrates no further.
@@ -50,6 +51,8 @@ class BodyStopMixin:
         self._ultrasonic: Optional[float] = None
         self._ultrasonic_at: Optional[float] = None
         self._motion_envelope_provider: Optional[Callable[[], tuple[float, float, float]]] = None
+        self._curve_preserving_envelope = False
+        self._checked_line_curve = None
         self._reset_body_stop()
 
     def _reset_body_stop(self) -> None:
@@ -85,13 +88,15 @@ class BodyStopMixin:
             self._ultrasonic = None if range_m is None or not _finite(range_m) else float(range_m)
             self._ultrasonic_at = float(now)
 
-    def bind_motion_envelope(self, provider: Callable[[], tuple[float, float, float]]) -> None:
-        """(max linear, max angular, smallest linear scale) the commanded twist can still get
-        after line follow: the nav safety clip per axis and the traffic gate's linear scale."""
+    def bind_motion_envelope(self, provider: Callable[[], tuple[float, float, float]],
+                             *, preserve_curvature: bool = False) -> None:
+        """Downstream caps and smallest traffic scale; default callers keep legacy arcs.
+        CORE binds curve preservation for its separately admitted normal CAMERA ticks."""
         if not callable(provider):
             raise ValueError("motion envelope provider must be callable")
         with self._lock:
             self._motion_envelope_provider = provider
+            self._curve_preserving_envelope = preserve_curvature is True
 
     # ---- near-point memory (odometry from the twist sent to the wheels) --------------------
 
@@ -193,7 +198,8 @@ class BodyStopMixin:
             return None                      # a gate that can scale linear to 0 has no arc
         return max(0.0, float(max_linear)), max(0.0, float(max_angular)), min(1.0, float(floor))
 
-    def _body_clearance(self, now: float) -> tuple[Optional[float], float, float, float]:
+    def _body_clearance(self, now: float, *, preserve_curvature: bool = False
+                        ) -> tuple[Optional[float], float, float, float]:
         """D-422: (body gap along the intended path, now, stop gap, resume gap). Locked.
 
         LiDAR points (current scan + remembered ones under range_min) move to base_footprint; a
@@ -217,10 +223,18 @@ class BodyStopMixin:
             return 0.0, now, c.obstacle_body_margin_m, c.obstacle_body_margin_m
         max_linear, max_angular, floor = envelope
         linear, angular = self._intended
-        if linear <= 1e-6 and abs(angular) <= 1e-6:
+        common_curve = (limit_velocity(linear, angular, max_linear, max_angular,
+                                       preserve_curvature=True)
+                        if self._curve_preserving_envelope and not preserve_curvature else (0., 0.))
+        if not preserve_curvature and linear <= 1e-6 and abs(angular) <= 1e-6:
             linear = c.cruise_speed          # no motion intended: judge the straight line
-        linear = min(linear, max_linear)
-        angular = max(-max_angular, min(max_angular, angular))
+        if preserve_curvature:
+            linear, angular = limit_velocity(linear, angular, max_linear, max_angular,
+                                             preserve_curvature=True)
+            self._checked_line_curve = ((linear, angular), self._generation, self._evidence_revision)
+        else:
+            linear = min(linear, max_linear)
+            angular = max(-max_angular, min(max_angular, angular))
         lidar = [(x + c.body_lidar_x_m, y) for x, y in self._scan_points or ()]
         echo = self._ultrasonic_echo(now)
         sonar = () if echo is None else ultrasonic_points(
@@ -249,13 +263,19 @@ class BodyStopMixin:
                 gap = body_path_gap(points, linear=linear, angular=angular,
                                     horizon_m=c.obstacle_path_horizon_m, min_travel_m=resume,
                                     **body)
-                if floor < 1.0 and abs(angular) > 1e-6:
-                    # The traffic gate scales linear only, by any s in [floor, 1]: every such
-                    # arc is tighter. Only contacts within the resume gap change the decision.
+                if not preserve_curvature and floor < 1.0 and abs(angular) > 1e-6:
+                    # Non-own callers still need the legacy linear-only scale family.
                     family = body_envelope_gap(points, linear=linear, angular=angular,
                                                scale_floor=floor, horizon_m=resume, **body)
                     if family is not None and (gap is None or family < gap):
                         gap = family
+                if common_curve[0] > 0.:
+                    # CORE also emits common static clipping for non-tracking LINE manoeuvres.
+                    common_gap = body_path_gap(points, linear=common_curve[0], angular=common_curve[1],
+                                               horizon_m=c.obstacle_path_horizon_m,
+                                               min_travel_m=resume, **body)
+                    if common_gap is not None and (gap is None or common_gap < gap):
+                        gap = common_gap
                 gaps.append(gap)
         gap, source = None, None
         for (name, _), found in zip(groups, gaps):

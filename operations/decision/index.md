@@ -11,6 +11,9 @@
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
 | D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 
 ## 계획·결과 문서
 
@@ -26,4 +29,8 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-10-12 · a5925d7ae · D-728 후속 대화 입력
+- 2026-10-12 · 1164d858e · D-728 independent natural conversation proposals
+- 2026-10-12 · 5941920df7 · D-720 읽기 전용 status 도메인
+- 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+- 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토

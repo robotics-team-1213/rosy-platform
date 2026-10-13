@@ -35,7 +35,16 @@
         <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
       </ui-button>
     </div>
-    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마">
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="화면 테마와 계정">
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
+    <details id="fleet-account" hidden>
+      <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
+      <div class="fleet-account-panel">
+        <p id="fleet-account-identity"></p>
+        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
+        <div id="password-login" class="password-login" hidden></div>
+      </div>
+    </details>
     <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
     </div>
     <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
@@ -44,8 +53,8 @@
     <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="접속과 알림">
       <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <!-- D-519 — paired 화면은 아이디·비밀번호로 로그인한다. 토큰은 접힘 안에 남는다. -->
-      <div id="password-login" class="password-login" hidden></div>
-      <details id="token-access" class="token-access" open>
+
+      <details id="token-access" class="token-access">
         <summary>토큰으로 접속</summary>
         <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
                autocomplete="off" aria-label="관제 토큰">

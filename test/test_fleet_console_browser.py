@@ -224,7 +224,8 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         choose.focus()
         page.keyboard.press('Enter')
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
-        assert card.locator('.robot-actions').is_visible()
+        assert card.locator('[data-goal-robot-id="rosy_01"]').is_visible()
+        assert card.locator('[data-map-recording]').is_visible()
         assert page.locator('#robot-choice').input_value() == 'rosy_01'
         page.wait_for_timeout(1500)
         assert card.is_visible()
@@ -551,7 +552,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         assert "로봇 위치 확인 불가" in page.locator("#map-tag").text_content()
         assert page.locator('#roster [data-localization]').inner_text() == "위치 미확인"
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
-        assert page.locator("#robot-workspace article ui-button").first.is_disabled()
+        assert page.locator("#robot-workspace article [data-goal-robot-id]").is_disabled()
         assert page.locator("#online-pill").evaluate("node => node.scrollWidth <= node.clientWidth")
         for state in ("lost", "recovered"):
             if state == "recovered":
@@ -1798,7 +1799,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
-        "/api/fleet/formation": FORMATION,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
         goal_path: {"accepted": True, "task": {"task_id": "keyboard-goal", "status": "ACCEPTED"}},
     }
     with sync_playwright() as playwright:
@@ -1809,8 +1810,8 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator('[data-context-tab="status"]').click()
         _open_cards(page, "rosy_02")
-        page.wait_for_function("() => !document.querySelector('#robot-workspace article ui-button')?.disabled")
-        aim = page.locator('#robot-workspace article[data-robot-id="rosy_02"] ui-button').first
+        page.wait_for_function("() => !document.querySelector('[data-goal-robot-id=rosy_02]')?.disabled")
+        aim = page.locator('[data-goal-robot-id="rosy_02"]')
         aim.click()
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"
@@ -1864,8 +1865,8 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
         page.wait_for_function("() => document.querySelectorAll('#robot-workspace article').length > 0")
-        page.wait_for_function("() => !document.querySelector('#robot-workspace article ui-button')?.disabled")
-        page.locator("#robot-workspace article").filter(has_text="rosy_01").locator("ui-button").first.click()
+        page.wait_for_function("() => !document.querySelector('[data-goal-robot-id=rosy_01]')?.disabled")
+        page.locator('[data-goal-robot-id="rosy_01"]').click()
         canvas_box = page.locator("#map-canvas").bounding_box()
         assert canvas_box
         page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
@@ -2460,7 +2461,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert page.locator('#robot-workspace article').count() == 0
         _open_cards(page, 'rosy_03')
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
-        actions = page.locator("#robot-workspace article .robot-actions")
+        actions = page.locator("#robot-workspace article .robot-actions:has([data-goal-robot-id])")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
             "buttons[0].parentElement.getBoundingClientRect().width]")
@@ -2557,7 +2558,7 @@ def test_formation_buttons_keep_their_reasons_readable(console_url, width):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
-    """접속·역할·테마는 '접속' 뒤에 접히고, 펼치면 보인다. 머리는 창 높이의 20% 이하다.
+    """접속 입력·현재 역할은 상태 센터 뒤로 접히고 테마 버튼 하나는 남는다(D-668). 머리는 창 높이의 20% 이하다.
 
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
     from playwright.sync_api import sync_playwright
@@ -2573,15 +2574,15 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             topbar: box('ui-topbar'), sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
             stop: box('#estop'), more: box('#topbar-more'),
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
-            token: shown('#console-token'), theme: shown('#theme-choice'), role: shown('#user-role'),
+            token: shown('#console-token'), theme: shown('#fleet-theme'), role: shown('#user-role'),
             status: shown('#online-pill'), clock: shown('#clock'),
             clockInFooter: !!document.querySelector('footer.fleet-footer #clock'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
-        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
+        page.locator("#topbar-more").click()
         opened = page.evaluate(probe)
-        page.get_by_role("button", name="접속과 화면 표시", exact=True).click()
+        page.locator("#topbar-more").click()
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         scrolled = page.evaluate(probe)
         save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
@@ -2593,7 +2594,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and not folded["role"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and folded["theme"] and not folded["role"], folded
     assert folded["status"] and folded["clock"] and folded["clockInFooter"], folded
     assert not folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
@@ -2604,8 +2605,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
 
 
 def test_wide_header_keeps_every_item_on_one_line(console_url):
-    """1920px은 모든 항목을 편 한 줄, 1366·1280px(90rem 미만)은 '접속'으로 접힌 한 줄이다.
-    어느 쪽이든 머리는 한 줄이고 비상 정지는 오른쪽 위이며 테마 이름표는 두 줄로 접히지 않는다."""
+    """D-658 넓은 화면도 접속·화면 표시 상세는 접힌다. 네 영역과 비상 정지는 상단에 남는다."""
     from playwright.sync_api import sync_playwright
 
     results = {}
@@ -2614,27 +2614,20 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
-            if page.locator('#topbar-more').is_visible():
-                page.locator('#topbar-more').click()
-                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
-                page.locator('#topbar-more').click()
-            else:
-                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
+            # D-668: 테마는 접히지 않는 버튼 하나다. 접속 상세는 상태 센터 뒤에 접혀 있다.
+            assert page.locator('#fleet-theme').is_visible()
+            assert page.locator('#topbar-extra').is_hidden()
             results[width] = page.evaluate("""() => {
-              const label = document.querySelector('#theme-choice-label');
-              const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
               const more = document.querySelector('#topbar-more');
-              return {labelLines: label.getClientRects().length ? Math.round(label.getBoundingClientRect().height / line) : 0,
-                moreShown: more.getClientRects().length > 0,
+              return {moreShown: more.getClientRects().length > 0,
                 topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
                 stop: document.querySelector('#estop').getBoundingClientRect().toJSON()};
             }""")
         browser.close()
 
     assert errors == []
-    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
-    for width in (1366, 1280):
-        assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
+    for width in (1920, 1366, 1280):
+        assert results[width]["moreShown"], results
     for width, result in results.items():
         assert result["topbar"] <= 100, results
         assert result["stop"]["top"] <= 30 and width - result["stop"]["right"] <= 32, results

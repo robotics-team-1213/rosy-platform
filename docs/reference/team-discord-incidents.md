@@ -1,8 +1,10 @@
 # 새 팀 Discord 채널과 Fleet 사건 인수
 
-첫 현장 대상은 Pinky 차선 정지·재관측이다. 사용자 선택에 따라 새 팀 서버/채널이 필요하다. 소스와 가짜 전송 시험을 먼저 준비하며 실제 서버/채널·webhook·수신 receipt는 아직 없다. 진행 계약은 [D-661](../adr/D-661-fleet-named-handoff-and-team-notification-outbox.md)이다.
+첫 현장 대상은 Pinky 차선 정지·재관측이다. 2026-10-12 사용자 계정의 지정 팀 채널에 `ROSY Fleet` incoming webhook을 만들고, 사용자 승인 연결 확인 메시지 1건의 HTTP 200·메시지 ID·채널 UI 수신을 확인했다. 이 연결 확인은 Fleet outbox나 실제 사건 인수·장치 결과의 수용이 아니다. URL과 채널 식별·receipt·화면은 비공개 X 세션에 보관하며 공개 문서에 넣지 않는다. 진행 계약은 [D-661](../adr/D-661-fleet-named-handoff-and-team-notification-outbox.md)이다.
 
-1. 팀 관리자의 Discord 계정에서 팀 서버를 만들고 텍스트 채널 `rosy-관제-알림`을 만든다. 담당 팀원이 채널을 볼 수 있도록 권한을 지정한다. Webhook 관리는 관리자가 담당한다.
+사용자 후속 방향은 Discord 대화로 작업 요청을 받고 일반 관리는 Fleet Console 규약, 위험 상황은 Discord 관리·대응이다. incoming webhook은 대화를 받지 못하므로 Bot 수신·기명 principal 연결·요청/결과 원장이 별도로 필요하다. [D-669 제안](../adr/D-669-discord-work-intake-and-fleet-response-boundaries.md)의 [설계 점검](../plans/2026-10-12-discord-fleet-pipeline-design.md)과 [구현 계획](../plans/2026-10-12-discord-fleet-pipeline.md)을 따른다. 아직 없는 Bot/실행 경로를 활성화된 기능으로 읽지 않는다.
+
+1. 팀 관리자의 Discord 계정에서 지정 팀 서버/텍스트 채널을 확인한다. 이미 준비한 채널을 사용하며 없는 경우에만 새로 만든다. 담당 팀원이 채널을 볼 수 있도록 권한을 지정한다. Webhook 관리는 관리자가 담당한다.
 2. 채널 설정 → 연동 → Webhook에서 Fleet용 incoming webhook을 만든다. URL은 비공개 현장 환경의 `ROSY_DISCORD_WEBHOOK`에만 넣고 채팅·문서·git에 적지 않는다. Discord의 공식 [webhook 설정 안내](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)를 따른다.
 3. [설정 예시](../../deploy/site/notifications.example.yaml)를 비공개 설정으로 복사하고 `console_url`을 팀원에게 실제로 열리는 인증된 HTTPS Console로 지정한다. 기존 Fleet 실행 명령에 `--notifications-config <비공개 YAML 경로>`를 추가하며 기존 `--tasks-db`, 로스터, 인증 설정을 유지한다. 이 옵션이 없으면 외부 전송은 꺼져 있다. 모델 PC provider 프로세스가 webhook을 소유하거나 목적지를 결정하지 않는다.
 4. 최초 연결은 별도 실제 발송 수용으로 기록한다. 열린 Pinky 사건의 알림 수신 시각/메시지 ID, Console 링크의 로그인과 사건 일치, 이름 있는 담당자의 ‘이 사건 맡기’, `/api/fleet/incidents?robot_id=<id>&stuck_id=<id>`의 인수 readback, 현장 재관측 결과와 종료 통지를 순서대로 확인한다. GET 링크만 열어서 담당자가 되지 않는다. 알림이 제공자에게 수락됐다는 기록은 실제 수신·담당 인수·해소를 대신하지 않는다.

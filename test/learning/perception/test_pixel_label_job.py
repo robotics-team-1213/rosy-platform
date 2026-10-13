@@ -199,6 +199,7 @@ def test_draft_preserves_original_size_ignore_and_verified_resume(tmp_path, monk
     manifest_file = tmp_path / "model_manifest.json"
     manifest_file.write_text("{}")
     model = SimpleNamespace(manifest=SimpleNamespace(classes=classes, input=spec,
+                                                      raw={'output': {'classes': [vars(c) for c in classes]}},
                                                       folder=tmp_path,
                                                       onnx_file=lambda: tmp_path / "model.onnx"),
                             model_revision="lane-test")
@@ -224,6 +225,28 @@ def test_draft_preserves_original_size_ignore_and_verified_resume(tmp_path, monk
     assert mod.main(["draft", "--config", str(cfg), "--out", str(out)]) == 1
     assert len(calls) == 1
     assert not (out / "READY").exists()
+
+
+def test_draft_refuses_model_road_retagging_before_inference_and_output(tmp_path, monkeypatch):
+    config, _, _ = inputs(tmp_path)
+    classes_path = Path(config['classes'])
+    classes_path.write_text(classes_path.read_text() +
+        '  - {index: 2, name: road, role: drivable, semantic: road_surface/1, color: [0, 255, 0]}\n')
+    config['classes_sha256'] = digest(classes_path)
+    mod = job_module()
+    monkeypatch.setattr(mod, '_active_code', lambda config: None)
+    monkeypatch.setattr(mod, 'probe_gpu', lambda: {'verdict': 'pass'})
+    monkeypatch.setattr(mod.train_job, 'gpu_lease', nullcontext)
+    raw = mod.build.load_classes(classes_path)
+    raw[-1]['semantic'] = 'current_road_region/1'
+    model = SimpleNamespace(manifest=SimpleNamespace(
+        classes=[SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in raw],
+        raw={'output': {'classes': raw}}, onnx_file=lambda: Path(config['checkpoint']['path'])))
+    monkeypatch.setattr(mod.prelabel, '_open_model', lambda *args, **kwargs: (model, None))
+    out = tmp_path / 'job'
+    with pytest.raises(mod.build.BuildError, match='semantic'):
+        mod.run_draft(config, out)
+    assert not out.exists()
 
 
 def test_model_only_drivable_is_unlabelled_and_bad_logits_fail():

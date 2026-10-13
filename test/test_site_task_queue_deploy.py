@@ -5,6 +5,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_discord_credentials_are_mounted_only_in_fleet_and_default_off():
+    compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
+    fleet = compose.split("  fleet:\n", 1)[1].split("  vision:\n", 1)[0]
+    vision = compose.split("  vision:\n", 1)[1].split("  proxy:\n", 1)[0]
+    assert "--discord-intake-config-optional\n      - /run/rosy-discord/intake.json" in fleet
+    assert "/etc/rosy/fleet-discord:/run/rosy-discord:ro" in fleet
+    assert "rosy-discord" not in vision
+
+
 def test_site_compose_persists_task_database_and_keeps_core_on_rest():
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
     fleet_dockerfile = (ROOT / "deploy/site/Dockerfile.fleet").read_text(encoding="utf-8")

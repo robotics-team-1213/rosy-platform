@@ -28,7 +28,7 @@
 ## 최근 기록
 
 - 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
-- 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
-- 2026-10-11 · a1b850f7d · D-655 selected recording and group workspace
-- 2026-10-11 · 962fa15277 · D-655 reviewed camera connections and pending writes
-- 2026-10-11 · ebf05b9811 · D-655 카메라 관측 누적과 근거 보존
+- 2026-10-12 · 5941920df7 · D-720 원문 요청의 숙고 상태 표시
+- 2026-10-12 · 438e6256a · 계정 전환 시험의 수명 조건 정정
+- 2026-10-12 · f3ba7590c · Discord 확인의 기명 계정 전환 경계
+- 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본

@@ -79,6 +79,113 @@
 - 근거 위치: X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/task5-command-final/run-1.txt; logs/task5-intervention/run-1.txt; logs/task5-node-final.txt. 독립 survey_feature_review가 shared guard·모든 UI 호출자·권한 보존을 수용했다.
 - gate 변화: Task 4/5 source·원격 범위 완료. main 폴더 이동 통합·전체 회귀·CI·서명 릴리스·배포·실제 사이트 확인은 Task 6이며 목표는 active다. 실제 로봇 주행·측량·대형 개입 수용은 미확인이다.
 
+## 2026-10-12 · 17758e2b29 · Console 운행 위치·계획 제출 재검사
+
+- 변경: 알려진 현장 지도 위치 불명·추정·좌표 누락·지도 버전 불일치를 계획/출발 조작에서 안내한다. CORE의 명시적 map LOCALIZED fallback, 구형 Fleet의 guide 미지원, operator_pin 출처, 서버 admission을 유지한다. guide 조회 실패는 이전 위치를 실행 근거로 재사용하지 않는다.
+- 변경: route·한 바퀴·반복·대열 모두 출발 POST 직전 현재 권한·안전·대형·위치·계획 버전·만료·진행 운행을 다시 검사한다. 목적지 또는 출발·경유지가 달라진 지연 미리보기는 채택하지 않는다. 포커스로 유지한 카드에서도 같은 로봇의 거절 안내만 갱신한다.
+- 증거: 85632eeade Node 305 PASS, 원격 서버/운행 계약 153 PASS/NEW 0. 원격 Chromium 108개 중 focused SELECT의 안내 누락 3 NEW를 재현했고 출발 POST는 0이었다. 17758e2b29에서 안내 갱신 후 card Chromium 19 PASS/NEW 0, Node 305 PASS. 독립 소스 검토는 두 커밋을 수용했다. 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-11--212133--wall-stop-cross-sim--126256/logs/console-browser-fixed/run-1.txt`와 같은 세션의 `console-contracts/run-1.txt`다.
+- gate 변화: 원격 브라우저는 실제 Fleet 정적 자산과 fake API를 사용한다. 배포된 Console, 실물 주행, 두 대 Fleet 또는 Isaac 카메라 강화학습 완주를 대신하지 않는다. main 통합 후 수용·원격 CI는 별도 확인한다.
+## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
+
+- 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
+- 증거: 원격 RED 모듈 없음1 NEW, manifest 누락1 NEW 및 구조 증가1 NEW를 각각 수정했다. 최신 focused44 PASS/NEW0; 실제 Chromium4 PASS/NEW0(처음4 skipped는 pass 제외). 독립 source/Safety 검토 수용, Fleet53396/app906 재측정, +150/파일 상한/기존 추출 의무 유지. 실제 기명 HTTPS cookie 로그인은 별도 후속 증거에 기록했다.
+- gate 변화: source 접수와 named Console 로그인 확인. Gateway/token/운영 identity mapping/실제 대화 수신 및 후보/승인/reply는 후속이다. Task/Mission/Job/claim/모델/장치 명령·push·image deploy는 없다. 근거: docs/validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md.
+
+## 2026-10-12 · b45e54d05a · D-680 요청 검토와 기존 Fleet 제출 화면
+
+- 변경: 별도 channel-request-view owner가 원문 확인, 기명 검토, 보류/거절/이동 후보 저장을 담당한다. 실행 요청은 기존 confirmedAction/current safety gate와 Fleet goal API의 고정 request key를 재사용하고 기존 Task에 연결한다. textContent, 권한 철회 시 지우기와 LINKED 재제출 숨김을 보존한다.
+- 증거: 실제 Chromium 320/1366과 viewer/operator 목록 6 PASS/NEW0. 취소 시 요청 없음, 저장 시 장치 요청 없음, 명시 확인 후 동일 request key/Task 연결을 검증했다. wheel/sdist 71개 자산 해시 readback과 allowlist 시험 통과. workflow-source.md 참조.
+- gate 변화: source와 fake API의 실제 브라우저 경로만 검증했다. 최신 main 착지·독립 검토·CI·서명 배포·실제 Discord 왕복·장치/FIELD 수용은 후속이다.
+
+## 2026-10-12 · 22b307c07 · fix(cell): 미구성 서비스의 다음 행동과 재접속 복구
+
+- 변경: Cell 서비스 미구성 응답을 받은 뒤 서버가 필요한 문서·미리보기·작업 조작을 비활성화하고 구성 확인 사유를 표시한다. 계정 접속·로컬 문서 입력·비상정지는 유지하고 성공한 재접속 문서 조회 뒤 기존 역할·문서·작업 조건으로 돌아간다.
+- 증거: 설치본 Cell이 미구성 안내와 활성 저장 조작을 함께 보이는 것을 확인했다. 회귀에 차단 이유·비상정지/접속 유지·재접속 복구를 추가했다. 첫 통합 회귀의 접힌 접속 조작 클릭 실패는 기존 공용 펼침 helper를 사용해 수정했으며 실패 목록에 추가하지 않았다. 적정 자원 최종 회귀와 설치본 증거는 별도 기록한다.
+- gate 변화: SOURCE 개선이며 새 커밋의 main 착지·push·CI·서명 설치·실제 Cell 작업 수용은 별도다.
+
+## 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
+
+- 변경: 기존 역할별 헤더와 본문 흐름을 검토하고 Cell 미구성 복구, Pilot 상태 근거와 연결 순서, Robot 재시도/권한 판독, Learning 작은 헤더, Android 함께 조종 안내를 통합했다.
+- 증거: 적정 자원 원격 통합 342 passed, 계약·문서 64 passed, 작은 헤더/Cell 캡처 9 passed, Robot/Pilot 단계별 176/27/3/8/3 passed, 각 known_failures NEW 0. Android 106 tests와 APK 빌드 통과. 변경 후 캡처와 기존 설치본 Fleet 8 화면 조합의 직접 검토를 docs/validation/all-ui-workflows-2026-10-12/result.md에 구분해 기록했다.
+- gate 변화: SOURCE·원격 회귀·변경 후 렌더링 근거다. 기존 설치본 확인은 새 변경의 배포 증거가 아니다. 새 main 착지·push·CI·서명 설치 및 실물 장치/현장 수용은 별도다.
+
+## 2026-10-12 · 7a0725de4 · fix(ui): 현장 복구 목표와 공용 실패 안내
+
+- 변경: 사용자가 현장 운용·오류 복구를 우선 선택해 대상→현재 근거→막힌 이유→가능 조작→실제 결과 재확인으로 목표를 정했다. impeccable context/audit/clarify와 frontend-ui-engineering으로 기존 역할·캡처·공용 계약을 평가했고, 서버/연결 실패에 현재 상태 재조회 안내를 공용 Fleet 요청 어댑터에서 제공한다.
+- 증거: Node 새 회귀 변경 전 3 FAIL, 변경 후 요청 계약 포함 33 PASS. detector 12건은 동적 이미지·계약된 탐색·누락된 경로 해석의 영향을 확인했다. docs/plans/2026-10-12-field-ui-recovery-brief.md에 평가 범위와 미확인 성능/실물 경계를 적었다. 관련 브라우저 회귀와 main 통합 재검사는 이어 실행한다.
+- gate 변화: SOURCE/Node 근거다. 사용자 main 착지·push·배포 확인 지시를 받았으며 적정 자원 시험·CI·서명 설치·실제 화면 증거를 따로 확인한다.
+
+## 2026-10-12 · 80a12948c · test(ui): 실제 조작 목적과 처리 완료를 관측
+
+- 변경: 최신 로봇 맥락 탐색 조작과 목표 지정 조작을 데이터 속성으로 구분한다. 헤더의 현재 역할은 접힌 접속 입력과 구분하며 D-658의 항상 접힌 화면 설정 상세를 검사한다. 지도 초안 재저장은 이전 저장 표시를 완료로 오인하지 않고 해당 PUT 응답을 기다린 뒤 원장을 확인한다. 연결 실패는 현재 상태 재조회 안내를 검사한다.
+- 증거: 적정 자원 원격 후보 80a12948c에서 15 NEW를 관측했다. 독립 검토의 공용 예외 보존 결함 때문에 첫 시험을 중단했고 exit 2이므로 통과로 계산하지 않는다. 후속 원격 묶음 249 passed는 정상 종료했지만 착지 도구는 첫 중단 때문에 착지하지 않았다. 실패를 기존 실패 목록에 추가하지 않았다.
+- gate 변화: 변경된 관측과 원격 재검사 준비다. Android proxy 회귀의 Windows 전용 실행 설정과 Linux SDK 부재는 별도로 해결한다.
+
+## 2026-10-12 · e775bdd6a · Fleet 계정 진입점과 로그인 복귀 구현
+
+- 변경: D-683을 선점하고 네 문서의 우측 로그인/계정과 전용 로그인 문서·허용 복귀 경로를 기존 쿠키 API에 연결했다. 로그인/로그아웃 readback, 중복 제출·비밀번호 초기화, Map/Cell 새 탭 로그인과 focus 재검증을 추가했다. 지도 재접속은 편집과 원래 revision을 보존하며 계획 권한을 다시 확인한다.
+- 증거: 복귀 allowlist/공용 요청 Node39 PASS, JS 구문 확인. 독립 검토의 Cell credential·세션 만료·적용 전 지도 입력 보존 지적을 반영했다. 원격 Chromium·계약·최종 독립 재검토는 실행 전이며 배포 증거가 아니다.
+- gate 변화: 소스 후보 단계. 기존 브랜치 G2/회귀는 새 인증 흐름 검증을 대신하지 않는다. 착지·push·배포·실물 수용 없음.
+
+## 2026-10-12 · cd42d880a · D-678 출발 준비 중 정지 안내
+
+- 변경: TRIP_START_CANCELED에 한국어 운행 안내를 연결한다. 원시 오류 코드 대신 상태 확인 뒤 재시작을 안내한다.
+- 증거: source 5f3f033a8의 원격 trip code label/취소/Task/goal 회귀 147 PASS, NEW 0; Node site-map 29 PASS. 서버와 물리 stop 권한은 바꾸지 않는다.
+- gate 변화: SOURCE/호스트 회귀만 추가한다. 배포된 UI와 실제 운행 수용은 미확인이다.
+
+## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완
+
+- 변경: 요청 검토 상태를 한국어로 표시하고 기존 workStatus를 재사용한다. 이동 후보 준비와 실행 준비를 구분하며 사건 인수·종료를 표시한다. 비활성 버튼·입력에는 기존 reason 및 aria-describedby 규약을 적용한다.
+- 증거: source28650439cb 통합 원격 검사에서 enum 노출과 사유 없는 비활성 NEW2를 재현했다. Chromium 시험은 표시 문구와 사건 잠금 사유를 검증하도록 갱신했다. 수정 HEAD의 재검증은 후속이다.
+- gate 변화: 실행·승인 권한 변화 없음. 배포·실제 Discord 왕복은 아직 미확인이다.
+
+## 2026-10-12 · 193d54401 · 대화 요청 상태·잠금 사유 재검증
+
+- 변경: 위 커밋된 제목 오류 기록을 보존하고 정식 후속 기록을 추가했다. 표시·접근성 보완은 기존 승인·안전 조건을 유지한다.
+- 증거: source193d54401 AI PC 자원 하한을 충족한 원격 Chromium·문구·disabled·버전·설치·구조 전체 선택군 terminal exit0/NEW0, Node work-view2 PASS. 표시 문구와 사건 잠금 사유를 검증했다.
+- gate 변화: source 회귀만 확인했다. 전체 영향 검사·착지·배포·실제 Discord 왕복은 미확인이다.
+## 2026-10-12 · d3dac3633 · D-683 로그인·계정과 업무 복귀
+
+- 변경: 네 문서 우측에 로그인/계정을 두고 `/console/login`에서 기존 쿠키 API로 인증한 뒤 서버 세션을 확인해 허용된 업무 주소로 복귀한다. 계정·화면 표시·고급 접속을 구분한다. 지도/Cell 새 탭 로그인, 로컬 편집 보존, 기존 revision 검사, 확인된 로그아웃/확인 불가를 구분한다.
+- 증거: Console Node 312 PASS, 독립 소스 검토 추가 blocker 없음. 원격 `440385e24` 95 PASS / 1 NEW의 CSP 대기 helper를 수정하고 `0d01b320c` 재접속/편집 보존/충돌 최종 5 PASS, NEW 0을 확인했다. `06ce50c4a` Android proxy 실제 번들 브라우저 1 PASS와 JVM/assemble을 확인했다. 실패한 전체 묶음은 통과로 합산하지 않는다. 상세는 `docs/validation/all-ui-workflows-2026-10-12/result.md`.
+- gate 변화: main 착지·push·CI·서명·설치·실물 수용 미확인. 시험 서버 캡처를 배포된 화면의 증거로 부르지 않는다.
+
+## 2026-10-12 · 83c2a49fd · D-686 첫 변경과 D-689 내 프로필
+
+- 변경: 초기 쿠키는 첫 비밀번호 변경에만 사용하고 네 운용 문서의 조작을 잠근다. 우상단 계정에서 본인 표시 이름/현재 비밀번호 확인 변경/읽기 전용 ID·이메일·권한을 관리한다. Map/Cell은 새 탭과 초안을 보존한다. 비밀번호/표시 이름 결과를 서버 재조회하며 만료·계정 전환은 비밀 삭제/제출 중단/명시적 재조회로 처리한다.
+- 증거: 서버 73b23b956 원격 선택 173 PASS와 70e970acb Unicode 수정 20 PASS, 각각 NEW 0. UI/권한/소스의 독립 검토에서 찾은 오류를 수정했고 현재 통합 브라우저 시험은 별도 진행 중이다. 상세는 전체 UI 검증 결과 문서에 SHA/범위별로 기록한다.
+- gate 변화: 최신 영향 gate·main 착지·push·CI·서명·설치·팀원 발급과 실제 첫 변경은 미확인이다. 기존 서비스 자격과 CORE 최종 명령 권한을 유지한다.
+
+
+## 2026-10-12 · d002c579d · D-689 계정 화면 용어 정렬
+
+- 변경: 기본 프로필 기능의 화면 이름과 우상단 링크를 내 계정으로 통일하여 운용 용어 규칙을 지킨다. URL과 본인 정보 관리 동작은 유지한다.
+- 증거: d002c579d 전체 영향 원격 첫 묶음 6921 PASS/800 SKIP/2 NEW, 둘째 묶음 537 PASS/309 SKIP/1 NEW를 확인했다. 용어·API 버전·합친 계획의 공개 commit 표기 문제를 재현했으며 각각 known_failures NEW 2/1이다. 수정 재검증 대기다.
+- gate 변화: 없음. 착지·배포·팀원 발급은 미확인이다.
+
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
+
+## 2026-10-12 · f3ba7590c · Discord 확인의 기명 계정 전환 경계
+
+- 변경: 같은 operator 역할의 principal이 바뀌어도 기존 확인과 대화 요청 선택을 초기화한다. 기존 확인 owner는 token·role·locked에 더해 principal도 확인한다. 초기 비밀번호·본인 프로필과 Cell 서비스 부재 계약을 함께 보존했다.
+- 증거: 원격 실제 Chromium의 기존 사건 확인 시험 두 화면에서 같은 역할의 bob→alice 전환 후 확인창이 남는 NEW2를 재현했다. 수정 버전의 GREEN·설치76개·구조 검증은 후속이다.
+- gate 변화: 실행 권한 확대 없음. CI·서명 배포·실제 Discord 왕복은 미확인이다.
+
+## 2026-10-12 · 438e6256a · 계정 전환 시험의 수명 조건 정정
+
+- 변경: Chromium 계정 전환 시험에 실제 pagehide→pageshow 순서를 적용했다. 이전 pageshow 단독 시험은 인증 재조회가 발생하지 않아 제품 결함 재현 증거로 사용할 수 없다. 기존 scope가 이전 응답을 차단하므로 추가 공통 호출 guard는 만들지 않았다.
+- 증거: 독립 검토가 실제 모든 refreshAuthorization 호출 경로의 기존 scope 무효화를 확인하고 앞선 blocker를 철회했다. 두 줄 principal 방어 보강은 source/Safety 승인했다. 기존 확인 owner의 pending principal 교체는 별도 Node 회귀로 검증한다.
+- gate 변화: 앞선 NEW2는 잘못된 lifecycle fixture의 실패로 정정한다. 원격 GREEN·설치·착지·운영 검증은 후속이다.
+
+## 2026-10-12 · 5941920df7 · D-720 원문 요청의 숙고 상태 표시
+- 변경: 기존 요청 검토 상태에 bound 모델 ID·숙고 상태·실행 승인 아님을 표시한다. owner 결과 조회 실패도 상태가 성공한 것으로 표시하지 않는다.
+- 증거: source scoped review 승인. 실제 브라우저/서명 배포·Discord 왕복은 별도 후속 검증이다.
+- gate 변화: source 연결. 접수·판단·장치 실행·목표 완료는 서로 다른 수용이다.
+
 ## 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
 
 - 변경: 공용 테마 순환과 접속·알림 진입점을 구현했다. 권한 예외와 요약 열기/읽음의 구별을 유지하고 Escape 포커스를 제공한다.
