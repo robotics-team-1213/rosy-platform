@@ -288,11 +288,11 @@ class Accounts:
                          (self.project_id, principal['user_id'], subject, sharing)).fetchone()
         connection_id = row['id'] if row else secrets.token_hex(16)
         generation = row['generation'] + 1 if row else 1
-        secret = self.cipher.encrypt(_json({'token': token, 'id': connection_id, 'project': self.project_id,
+        ciphertext = self.cipher.encrypt(_json({'token': token, 'id': connection_id, 'project': self.project_id,
                                            'owner': principal['user_id'], 'generation': generation}).encode()).decode()
         db.execute('INSERT OR REPLACE INTO learning_connections VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                    (connection_id, self.project_id, principal['user_id'], subject, username, sharing,
-                    _json(resources), secret, generation, 1, expires))
+                    _json(resources), ciphertext, generation, 1, expires))
         self._audit(db, principal['user_id'], 'connection_link', connection_id)
         return connection_id
 
@@ -389,9 +389,10 @@ if __name__ == '__main__':
     parser.add_argument('path', nargs='?')
     args = parser.parse_args()
     if args.command == 'hash-password':
-        password = getpass.getpass('Password: ')
-        if password != getpass.getpass('Repeat password: '): parser.error('passwords do not match')
-        print(hash_password(password))
+        entered = getpass.getpass('Password: ')
+        if entered != getpass.getpass('Repeat password: '):
+            parser.error('passwords do not match')
+        print(hash_password(entered))
     else:
         if not args.path: parser.error('key path required')
         fd = os.open(args.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

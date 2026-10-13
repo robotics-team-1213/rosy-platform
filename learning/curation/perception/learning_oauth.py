@@ -52,6 +52,11 @@ class OAuth:
         self.accounts = accounts
         self.transport = transport or request_json
 
+    def validate_origin(self, origin):
+        cfg = self._config()
+        if not origin or cfg['redirect_uri'] != origin + '/oauth/huggingface/callback':
+            raise AccountError('OAuth callback must match public_origin + /oauth/huggingface/callback')
+
     def _config(self):
         cfg = self.accounts.config().get('oauth', {})
         uri = cfg.get('redirect_uri', '')
@@ -140,10 +145,10 @@ class OAuth:
                 'redirect_uri': cfg['redirect_uri'], 'code_verifier': pending['verifier']}
         headers = {}
         if cfg.get('client_secret_file'):
-            try: secret = Path(cfg['client_secret_file']).read_text(encoding='utf-8').strip()
+            try: client_material = Path(cfg['client_secret_file']).read_text(encoding='utf-8').strip()
             except OSError: raise AccountError('OAuth client secret unavailable') from None
-            if not secret: raise AccountError('OAuth client secret unavailable')
-            headers['Authorization'] = 'Basic ' + base64.b64encode((cfg['client_id'] + ':' + secret).encode()).decode()
+            if not client_material: raise AccountError('OAuth client secret unavailable')
+            headers['Authorization'] = 'Basic ' + base64.b64encode((cfg['client_id'] + ':' + client_material).encode()).decode()
         try:
             response = self.transport('POST', TOKEN, data=data, headers=headers)
             token = response['access_token']
