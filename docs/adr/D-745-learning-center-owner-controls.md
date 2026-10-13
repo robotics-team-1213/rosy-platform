@@ -6,6 +6,7 @@
 
 - 기존 검수 서버의 선택 `--learning-control`은 호스트 운영자가 마련한 private binding만 읽는다. binding은 `rosy.learning.control/1`, workspace_id, service, config_path, out_path를 가진다. 서비스는 `rosy-review-pipeline[-<topic>].service`이며 timer는 같은 이름이다.
 - 같은 사용자 systemd의 해당 서비스·타이머만 제어한다. 단일 ExecStart는 D-446의 고정 실행기 `exec training/review_pipeline.py`와 binding의 config/out을 사용해야 한다. unit/config binding 변조, drop-in, 다른 workspace는 거절한다. HTTP 입력으로 unit, 경로, argv, PID를 받지 않는다.
+- 상태 version에는 실제 서비스 invocation을 포함한다. 다른 실행으로 바뀐 오래된 화면 요청은 거절하며 실행기 원장과 산출물을 초기화하지 않는다.
 - 기존 GET `/api/learning`의 선택 control은 실제 systemd 상태·현재 invocation·가능한 동작을 읽는다. POST `/api/learning/control`의 본문은 action(start/stop/retry)과 version만 받는다. 기존 Host/Origin/작업대 token 검사를 유지하고 상태 충돌은 409다. loopback 결정 조회에는 쓰기와 제어를 추가하지 않는다.
 - start는 자동 timer와 소유 서비스를 시작한다. stop은 timer를 끄고 소유 service의 control group만 중지한다. retry는 중지 상태의 소유 서비스를 한 번 실행한다. 상태는 다시 읽으며 명령 접수를 학습 완료로 표시하지 않는다.
 - 완료·품질 거절·시도 한도 소진 상태는 재시도로 초기화하지 않는다. 승인·source pixels·fixed eval·TTL·철회·서명 환경과 GPU 잠금은 기존 owner가 다시 검증한다. UI 수동 제어는 학습 데이터 수용이나 모델 승격 권한이 아니다.
