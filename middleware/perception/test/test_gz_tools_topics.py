@@ -1,4 +1,4 @@
-"""tools/gz 벤치 도구는 절대 토픽을 **발행**하지 않는다 (D-4).
+"""../../tools/sim/gazebo 벤치 도구는 절대 토픽을 **발행**하지 않는다 (D-4).
 
 namespace 없이 실행하면 상대 이름은 전역으로 풀려 지금과 동일하게 동작하고,
 네임스페이스 안에서 실행하면 로봇 네임스페이스로 바르게 풀린다 — 절대 이름은
@@ -11,7 +11,7 @@ rendered_camera_adapter 의 /pinky/rendered_camera, /tf)가 있어서다.
 import re
 from pathlib import Path
 
-TOOLS = Path(__file__).resolve().parents[1] / "tools" / "gz"
+TOOLS = Path(__file__).resolve().parents[1] / '..' / '..' / 'tools' / 'sim' / 'gazebo'
 
 #: `create_publisher(<Type>, '<topic>', ...)` 의 토픽이 '/' 로 시작하면 위반.
 PUB_ABS = re.compile(r"create_publisher\(\s*[\w.]+\s*,\s*['\"]/")

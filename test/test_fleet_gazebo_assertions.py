@@ -287,7 +287,7 @@ assert sys.modules['assertions'] is generic_assertions
 assert loaded['PoseSample'] is sys.modules[loaded['Recorder'].__module__].PoseSample
 assert hasattr(vision, 'ObserverConfig')
 """
-    vision = TOOLS.parents[2] / "operations/vision/signal_observer/observer.py"
+    vision = TOOLS.parents[2] / "operations/signal_observation/observer.py"
     result = subprocess.run([sys.executable, "-c", script, __file__, str(vision)],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE_PATHS = (
-    "contracts/foundation", "contracts/skill/src", "operations/execution/src",
+    "contracts/foundation", "contracts/skill/src", "operations/site_execution/src",
     "operations/processes/palletizing/src", "middleware/skills/api/src",
     "middleware/skills/manipulation/src", "middleware/devices/omx/adapter",
     "middleware/devices/omx/agent/src", "integrations/robots/omx/src",

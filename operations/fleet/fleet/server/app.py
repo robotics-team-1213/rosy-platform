@@ -559,7 +559,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
 
     # D-494 3: trip-only map pose from accepted sightings and robot odom_pose.
-    from fleet.localization.map_pose import MapPoseConfig
+    from rosy.world.state.projections.map_pose import MapPoseConfig
     from fleet.server.map_pose_service import MapPoseService, install_map_pose_routes
 
     async def _gather_state(robot_id: str):

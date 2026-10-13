@@ -59,7 +59,7 @@ flowchart LR
 
 | 층 | 자리 | 지금 |
 |---|---|---|
-| **Perception** | `middleware/perception` · `operations/vision`; 학습은 `learning/{curation,registry,training,evaluation}/perception`, 운영 CLI는 `tools/perception` | 동작. 학습 차선은 섀도 ([D-356](docs/adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
+| **Perception** | `middleware/perception` · `operations/overhead`; 학습은 `learning/{curation,registry,training,evaluation}/perception`, 운영 CLI는 `tools/perception` | 동작. 학습 차선은 섀도 ([D-356](docs/adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
 | **World State** | `operations/world/src/rosy/world/state/projections/map_pose.py`; Fleet `MapPose`는 identity alias | 관측·odom 기반 현재 상태 projection. Fleet service·trip·swarm 등이 소비 ([D-630](docs/adr/D-630-remaining-platform-semantic-holders.md)) |
 | **Decision** | `operations/decision/src/rosy/decision` (`rosy.decision`, Fleet 배포에 포함) | 기존 ER2/VLM·후보·도구 요청. 원장·admission·dispatch는 Fleet에 유지 (D-637) |
 | **Supervisor** | Fleet `stuck_resolver` | 규칙 · 사람 |

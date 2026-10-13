@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · D-440 카메라 전원 파일을 main의 새 폴더로 맞춤
+- 2026-10-13 · uncommitted · D-747 S2 functional judgment holders
 - 2026-10-13 · uncommitted · 카메라가 D-440 전원 보드를 따른다 (feat/device-power-policy에서 옮김)
 - 2026-10-13 · b6590448c · SDK 게이트가 전진 호를 그 호의 정지 궤적으로 검사한다 (D-740)
 - 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
-- 2026-10-12 · uncommitted · 카메라가 CORE 유효 조향 법칙을 역산한다
-- 2026-10-12 · 946cec53d · 가까운 경계 수정의 전체 관측 회귀

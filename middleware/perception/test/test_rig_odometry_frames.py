@@ -7,7 +7,7 @@ import pytest
 
 
 def normalizer():
-    source = Path(__file__).parents[1] / 'tools/gz/calibration_mapping_rig.py'
+    source = Path(__file__).parents[1] / '../../tools/sim/gazebo/calibration_mapping_rig.py'
     functions = [node for node in ast.parse(source.read_text()).body
                  if isinstance(node, ast.FunctionDef) and node.name == 'normalize_odometry']
     assert functions, 'Adapter must normalize frame identity before publishing odometry'

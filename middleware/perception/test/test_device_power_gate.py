@@ -8,7 +8,7 @@ import pytest
 
 from control.sensing.perception.power_gate import DevicePowerGate, ready_report
 
-NODE = Path(__file__).resolve().parents[1] / "control" / "camera_detect_node.py"
+NODE = Path(__file__).resolve().parents[1] / "nodes" / "camera_detect_node.py"
 
 
 def test_no_board_means_run_every_tick():

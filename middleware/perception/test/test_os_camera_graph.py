@@ -20,7 +20,7 @@ except ImportError:
 @unittest.skipIf(rclpy is None, 'Requires isolated ROS Jazzy graph')
 class CameraGraphTests(unittest.TestCase):
     def test_camera_topics_and_image_frame_are_robot_scoped(self):
-        path = Path(__file__).parents[1] / 'control/camera_detect_node.py'
+        path = Path(__file__).parents[1] / 'nodes/camera_detect_node.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CameraDetectNode')
         for namespace in ('rosy_01', 'rosy_02'):
@@ -60,7 +60,7 @@ class CameraGraphTests(unittest.TestCase):
                 rclpy.shutdown()
 
     def test_compressed_capture_stream_is_opt_in_and_shares_the_raw_stamp(self):
-        path = Path(__file__).parents[1] / 'control/camera_detect_node.py'
+        path = Path(__file__).parents[1] / 'nodes/camera_detect_node.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CameraDetectNode')
 

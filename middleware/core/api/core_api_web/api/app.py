@@ -97,7 +97,7 @@ def _dashboard_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "robot"
+    return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "robot"
 
 
 def _pilot_root() -> Path:
@@ -110,7 +110,7 @@ def _pilot_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "pilot"
+    return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "pilot"
 
 
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:

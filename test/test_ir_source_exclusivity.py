@@ -22,7 +22,7 @@ EXCLUSIVITY_MARKER = "ir_sensor/range single-publisher rule"
 
 LINE_FOLLOW = ROOT / "middleware" / "perception" / "launch" / "line_follow.launch.py"
 HARDWARE = ROOT / "middleware" / "drive" / "planning" / "nav2" / "launch" / "hardware.launch.py"
-CALIB_NODE = ROOT / "middleware" / "perception" / "control" / "calib_node.py"
+CALIB_NODE = ROOT / 'middleware' / 'perception' / 'nodes' / 'calib_node.py'
 
 
 def _launch_files():

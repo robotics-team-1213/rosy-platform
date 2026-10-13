@@ -29,7 +29,7 @@ dist/
 # Start from tools/deploy/deploy.env.example.
 tools/deploy/deploy.local.env
 
-# Simulation and mapping run output (tools/gz). Regenerated per run.
+# Simulation and mapping run output (../../tools/sim/gazebo). Regenerated per run.
 artifacts/
 
 # Agent tooling state, per-machine

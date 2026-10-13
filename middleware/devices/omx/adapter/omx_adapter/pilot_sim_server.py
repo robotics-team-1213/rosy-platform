@@ -107,7 +107,7 @@ def main() -> None:
         output.write(code)
     print("OMX Pilot pairing code is available via the local container CLI", flush=True)
     app = create_pilot_sim_app(
-        runtime=facade, pilot_root=repo / "middleware/ui/pilot",
+        runtime=facade, pilot_root=repo / "middleware/robot_ui/pilot",
         common_root=repo / "shared/web", pairing_code=code,
     )
     try:

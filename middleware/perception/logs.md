@@ -1562,3 +1562,14 @@
 - 변경: `vision/perception/power_gate.py`의 `DevicePowerGate`가 CORE의 latched `power/devices` 보드를 틱마다의 계획(off·skip·run)으로 바꾼다. `control/camera_power.py`의 `CameraPowerMixin`이 카메라를 멈추면 `camera/blocked`를 true로 내고, 다시 켜면 잠금과 워밍업을 새로 한 뒤 `power/device_ready`에 준비를 알린다. `camera_detect_node.py`는 584줄이다.
 - 증거: `test/test_device_power_gate.py`. ROS 그래프 시험(`test_os_camera_graph.py`)은 Jazzy가 있어야 돈다. 원격 pytest 결과는 착지 보고에 둔다.
 - gate 변화: 없음. 보드는 벤치 스위치가 켜진 CORE만 낸다. 실기에서 카메라를 멈추거나 다시 켠 증거는 없다.
+## 2026-10-13 · uncommitted · D-747 S2 functional judgment holders
+
+- 변경: 14 unchanged source files move to localization, graph_health, object_observation, line_observation and snapshots, with dedicated ROS adapters. Existing control.* identities and CORE command authority remain.
+- 증거: byte hashes and Git contents agree; independent source/Safety/deployment-closure review PASS. Remote verification and local landing are recorded separately in docs/validation/perception-judgment-s2-2026-10-13/result.md.
+- gate 변화: 없음. No device/ROS transport acceptance claimed.
+
+## 2026-10-13 · uncommitted · D-440 카메라 전원 파일을 main의 새 폴더로 맞춤
+
+- 변경: main의 S10 폴더 정리에 맞춰 `camera_power.py`는 `nodes/`, `power_gate.py`는 `front_camera/perception/`에 둔다. import 이름(`control.camera_power`, `control.sensing.perception.power_gate`)은 그대로다.
+- 증거: 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음.

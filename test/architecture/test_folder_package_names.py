@@ -20,8 +20,8 @@ SKIP_DIRS = {"build", "install", "log", ".worktrees", ".git", "node_modules", "_
 # -> ROS package name. Physical ownership is recorded in platform_parts.yaml.
 FOLDER_TO_PACKAGE = {
     "contracts/foundation": "core_common",
-    "middleware/ui/face": "emotion",
-    "middleware/ui/robot": "dashboard",
+    "middleware/robot_ui/face": "emotion",
+    "middleware/robot_ui/robot": "dashboard",
     "shared/web": "web_common",
     "middleware/devices/omx/adapter": "omx_adapter",
     "middleware/devices/omx/profile": "omx",
@@ -34,7 +34,7 @@ FOLDER_TO_PACKAGE = {
     "middleware/perception": "control",
     "middleware/core/services": "core_features",
     "middleware/drive/planning/nav2": "navigation",  # D-626 preserves ROS identity
-    "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
+    "operations/overhead": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",
     "learning/envs/isaac": "isaac_sim",
     "middleware/drivers/pinky_led": "led",

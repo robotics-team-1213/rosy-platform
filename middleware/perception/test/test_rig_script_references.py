@@ -1,6 +1,6 @@
 """Every script a Gazebo rig starts must exist in this tree (D-171).
 
-run_calibration_spaces.py launched tools/gz/run_track260905.sh for months
+run_calibration_spaces.py launched ../../tools/sim/gazebo/run_track260905.sh for months
 after the absorption left that script in the archived Rosy Control checkout,
 so the calibration ROS-SIM path could not run at all. The rigs are not host
 tests, but what they reference is plain text a host test can check.
@@ -9,10 +9,10 @@ import re
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1]
-GZ = PKG / 'tools' / 'gz'
+GZ = PKG / '..' / '..' / 'tools' / 'sim' / 'gazebo'
 
-PATH_REF = re.compile(r"tools/gz/([A-Za-z0-9_]+\.(?:py|sh|yaml|sdf))")
-MODULE_REF = re.compile(r"\btools\.gz\.([A-Za-z0-9_]+)")
+PATH_REF = re.compile(r"../../tools/sim/gazebo/([A-Za-z0-9_]+\.(?:py|sh|yaml|sdf))")
+MODULE_REF = re.compile(r"\btools\.sim\.gazebo\.([A-Za-z0-9_]+)")
 CONTROL_MODULE_REF = re.compile(r"python3 -m (control(?:\.[A-Za-z0-9_]+)+)")
 
 
@@ -31,10 +31,10 @@ def test_every_rig_reference_resolves():
         text = source.read_text(encoding='utf-8')
         for name in PATH_REF.findall(text):
             if not (GZ / name).is_file():
-                missing.append(f'{source.name} -> tools/gz/{name}')
+                missing.append(f'{source.name} -> ../../tools/sim/gazebo/{name}')
         for module in MODULE_REF.findall(text):
             if not (GZ / f'{module}.py').is_file():
-                missing.append(f'{source.name} -> tools.gz.{module}')
+                missing.append(f'{source.name} -> tools.sim.gazebo.{module}')
         for module in CONTROL_MODULE_REF.findall(text):
             if not (PKG / (module.replace('.', '/') + '.py')).is_file():
                 missing.append(f'{source.name} -> {module}')
