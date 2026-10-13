@@ -223,7 +223,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   last=None, held=False, turn_deg=turn_deg, advance_m=advance,
                                   window=window, map_id=(expect or {}).get('map_id'),
                                   pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment,
-                                  lane_turn=(expect or {}).get('lane_turn_deg'))
+                                  lane_turn=(expect or {}).get('lane_turn_deg'),
+                                  arc_anchor=self._place_map_anchor(exit_segment, current))  # D-744 3
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,

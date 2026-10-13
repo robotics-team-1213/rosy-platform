@@ -178,6 +178,7 @@ class TripRunner(TripAdmission, TripProgress):
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc,
+                             "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
                              "lane_bend": caps.lane_bend}
@@ -518,7 +519,7 @@ class TripRunner(TripAdmission, TripProgress):
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
-                await self._step_lane(live, index, remaining)
+                await self._step_lane(live, index, remaining, pose)
             else:
                 await self._step_free(live, index, s)
         except _JunctionAborted as exc:
@@ -553,7 +554,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- steps --------------------------------------------------------------------------
 
-    async def _step_lane(self, live: LiveTrip, index: int, remaining: float) -> None:
+    async def _step_lane(self, live: LiveTrip, index: int, remaining: float, pose=None) -> None:
         if (live.view["caps"] or {}).get("lane_arc") and "arc" not in live.junction:
             return  # D-520 2: no arc baseline read yet; an old CORE arc would pass as this trip's (bends too)
         arc, sent = live.junction.get("arc") or {}, live.sent
@@ -594,8 +595,13 @@ class TripRunner(TripAdmission, TripProgress):
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
         if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
+            # D-744 2: the map anchor only to a lane_arc_map_anchor robot, from the pose this step
+            # located it by and the odom stamp that pose was computed for
+            stamp = getattr(pose, "odom_stamp", None)
+            anchored = (live.view["caps"] or {}).get("lane_arc_map_anchor") and stamp is not None
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
-                               outer_line_offset_m=self.config.arc_outer_line_offset_m)
+                               outer_line_offset_m=self.config.arc_outer_line_offset_m,
+                               map_pose=(pose.x, pose.y, pose.yaw, stamp) if anchored else None)
         if arc is not None:
             expect = {**expect, "exit_segment": arc}
         # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg
