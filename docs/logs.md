@@ -8236,3 +8236,9 @@ osy-d395-s1d\`.
 - 증거: source serving/설치 mapping을 확인했다. 우산 파일 전후 복사·hash·링크 검사는 X: 세션 `2026-10-13--124414--folder-guidance-p0--4bdefe`에 보존하며 제품 변경은 브랜치 `docs/folder-guidance-p0`의 committed HEAD에서 원격 검사 후 ff-only 착지한다.
 - gate 변화: 문서 변경만. 공유 main `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 확인 근거가 없어 HOLD로 보존한다. 계획의 P1/S1~S10/P2/P3는 PLANNED다.
 - 결정: 역사 ADR/로그/payload 내부 안내는 소급 수정하지 않는다. 산출물·worktree 이동/삭제와 장치 작업·push는 이번 범위가 아니다.
+
+## 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
+- 변경: P1 결과와 분석 생성물 위치 안내를 추가하고 tools AGENTS/실행 계획을 갱신했다. 제품 Git 밖의 Graphify 생성물 4곳/418파일/34,837,896 bytes를 X: 세션 `2026-10-13--140927--folder-artifacts-p1--f5e4ef`의 export로 이관했다.
+- 증거: source 경계/reparse/tracked 상태, producer/process, exclusive-read open, 전체 source/destination hash·크기·파일 목록 안정성을 확인했다. source 부재와 CLI 조회 전후 동일성 PASS, 설치 `GRAPHIFY_OUT` X 경로 해석 PASS. 실제 bytes는 Git에 넣지 않는다.
+- gate 변화: P1 분류·확인된 Graphify 부분 이관. 나머지 15곳은 owner/참조 미확정 또는 overlay 범위로 HOLD다. user 요청에 따라 문서 commit/원격 gate/local main 착지는 이어서 실행하며 결과는 해당 X: landing 로그와 Git readback으로 확인한다.
+- 결정: `.omc`/lock/credential/overlay를 disposable cache로 확대 적용하지 않는다. source 이동·worktree 제거·push/배포/실물 수용은 미실행이다.
