@@ -13,7 +13,7 @@ import math
 from core_common.robot_body import NOMINAL_BODY
 
 from .drivable_preview import way_runs
-from ..learned.expected_path import ExpectedPath
+from ..learned.expected_path import ExpectedPath, _valid_pose
 
 #: The newest drivable way steers while its frame is at most this old (odometry moves its target;
 #: one inference every learned_paint_every_n frames at ~8 Hz plus ~0.3 s on a Pi).
@@ -54,7 +54,7 @@ def parse_guide(raw, now):
 def _path_of(steer, half):
     path = getattr(steer, "_expected_path", None)
     if path is None:
-        path = ExpectedPath(half)
+        path = ExpectedPath(half, error_for_target=steer.pursuit_error)
         steer._expected_path = path
     return path
 
@@ -75,6 +75,12 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
         steer.crosswalk(pose_at(stamp))
     latest = worker.latest_way(WAY_MAX_AGE_S)
     last.pop('junction_ahead_m', None)   # the way chose the branch: the tape keeper's junction HOLD does not apply
+    if (guide is not None and abs(stamp - guide[1]) <= CONTEXT_FRESH_S
+            and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M):
+        _remember_path(last, path.update(None, stamp, {}))
+        last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
+                    drivable_steer=dict(off_route_m=round(guide[4], 3)))
+        return None, True
     if latest is not None:
         way, way_stamp = latest
         extra = {} if wall is None or abs(stamp - wall[1]) >= WALL_MAX_AGE_S else dict(wall_ahead_m=wall[0], side_clear_m=wall[2])
@@ -87,18 +93,19 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
             last['context'] = dict(s=None if s is None else round(s, 3), age_s=round(age, 2),
                                    confidence=round(math.exp(-age / 2.0) * math.exp(-ds / 0.3), 3))
             extra.update(guide_s=s, guide_fresh=fresh)
-            if fresh and guide[4] is not None and guide[4] > OFF_ROUTE_HOLD_M:
-                # off the map's road: the camera's carpet is no lane, HOLD for Fleet (D-607 R7)
-                _remember_path(last, path.update(None, stamp, {}))
-                last.update(strategy='none', reason='off_route_hold', error=None, confidence=None, target_m=None,
-                            drivable_steer=dict(off_route_m=round(guide[4], 3)))
-                return None, True
             extra['guide_deg'], extra['guide_pivot_ok'], extra['guide_here_deg'] = guide[0], guide[2], guide[3]
         source = pose_at(way_stamp)
+        current = pose_at(stamp)
+        if not _valid_pose(source, way_stamp) or not _valid_pose(current, stamp):
+            _remember_path(last, path.update(None, stamp, {}))
+            last.update(strategy='none', reason='drivable_odometry_unavailable', error=None,
+                        confidence=None, target_m=None)
+            return None, True
         error, confidence, info = steer.update(way, way_stamp, ground, x_offset, half,
-                                               source, pose_at(stamp), **extra)
+                                               source, current, **extra)
         # Missing source odometry drops the hypothesis; cached inferences count once.
-        _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp))
+        _remember_path(last, path.update(source, stamp, info, observation_stamp=way_stamp,
+                                        current_pose=current))
         last.update(strategy=info['strategy'], drivable_steer=info, reason=info.get('reason'),
                     error=None if error is None else round(error, 3), confidence=confidence,
                     target_m=list(info.get('target_now_m') or info['target_m'] or []) or None)
@@ -117,10 +124,10 @@ def keep_step(steer, worker, last, ground, x_offset, half, pose_at, stamp, wall,
     # No fresh way. A committed straight corridor is republished from odometry.
     # Otherwise the tape keeper must not steer in between
     # (its corners and one-sided targets fought the way, 8kcn 20261009T234748Z).
-    held = path.hold(pose, stamp) if pose is not None else None
+    held = path.hold(pose, stamp)
+    _remember_path(last, held)
     steer.lost(stamp)
     if held is not None and held["error"] is not None:
-        _remember_path(last, held)
         target = held["target_m"]
         last.update(strategy='expected_path_held', reason=None,
                     error=round(held["error"], 3), confidence=held["confidence"],

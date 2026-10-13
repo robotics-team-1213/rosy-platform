@@ -213,6 +213,7 @@ class CoreServices:
                                 readiness=readiness)
         line_follow = build_line_follow(config, events=events, safety=safety)
         traffic_policy, signal_observer = build_traffic(config, events=events)
+        state.set_traffic_policy(traffic_policy.status())
         vision_cfg = config.get("vision", {}) or {}
         vision = VisionFrameStore(
             max_bytes=int(vision_cfg.get("preview_max_bytes", 512_000)),

@@ -168,8 +168,9 @@ class LaneSegModel:
         "drivable"), or the lane_marking mask (kind "lane_marking") when the model has no
         drivable class or too little of it is near; info says which and why. Rows above a
         cropped model's input (manifest input.crop) are never drivable. With a class named
-        `crosswalk`, info["crosswalk_mask"] is its mask at the frame's size (the D-491 crosswalk
-        extent, D-597 amendment); the paint worker takes it out of info."""
+        `crosswalk` or `speed_bump`, info["<name>_mask"] is its mask at the frame's size;
+        the paint worker takes these class observations out of info. The ignore role is
+        passable for lane geometry; it does not authorize crossing a traffic mark."""
         t0 = time.perf_counter()
         logits = self._logits(bgr)
         spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
@@ -180,10 +181,12 @@ class LaneSegModel:
                                           floor_gate=self.floor_gate), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
-        crosswalk = [c.index for c in self.manifest.classes if c.name == "crosswalk"]
-        if crosswalk:
-            info["crosswalk_mask"] = cv2.resize((logits[0].argmax(axis=0) == crosswalk[0]).astype(np.uint8),
-                                                size, interpolation=cv2.INTER_NEAREST)
+        labels = logits[0].argmax(axis=0)
+        for name in ('crosswalk', 'speed_bump'):
+            indexes = [c.index for c in self.manifest.classes if c.name == name]
+            if indexes:
+                info[name + '_mask'] = cv2.resize((labels == indexes[0]).astype(np.uint8),
+                                                 size, interpolation=cv2.INTER_NEAREST)
         return mask, kind, info, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:

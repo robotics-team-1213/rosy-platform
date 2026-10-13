@@ -175,11 +175,15 @@ def test_logs_accept_english_field_labels():
     assert harness.validate_log(english) == []
 
 
-def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema():
-    legacy = """## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
-- 변경: one concurrent branch version
-"""
+@pytest.mark.parametrize("heading", [
+    "## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership",
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
+])
+def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema(heading):
+    legacy = heading + "\n- 변경: one concurrent branch version\n"
     assert harness.validate_log(legacy) == []
+    assert harness.validate_log(legacy.replace(heading, heading + " altered"))
 
 
 def test_committed_role_g2_heading_is_preserved_as_legacy():

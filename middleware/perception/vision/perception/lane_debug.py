@@ -125,11 +125,11 @@ def _mark_expected_path(panel, view, points, size):
     if size < grid:
         size = grid
     try:
-        start = _bev_pixel(view, size, float(points[0][0]), float(points[0][1]))
-        end = _bev_pixel(view, size, float(points[1][0]), float(points[1][1]))
+        pixels = [_bev_pixel(view, size, float(point[0]), float(point[1])) for point in points]
     except (TypeError, ValueError, IndexError):
         return panel
-    cv2.line(panel, start, end, _YELLOW, 2, cv2.LINE_8)
+    for start, end in zip(pixels, pixels[1:]):
+        cv2.line(panel, start, end, _YELLOW, 2, cv2.LINE_8)
     return panel
 
 

@@ -117,6 +117,18 @@ def test_control_package_installs_the_map_v2_fleet_bundle():
     assert "map_v2_fleet" in setup_py
 
 
+def test_curved_fleet_world_uses_the_same_source_bundle_as_isaac():
+    mod = _mod()
+    profile = mod.profile_for('map_v2_fleet_curved.world')
+    share = ROOT.parents[2] / 'middleware' / 'perception'
+    world = mod.resolve_world_path(profile, ROOT, package_share=lambda name: share)
+    assert world == share / 'map/map_v2_fleet/training-curved/worlds/map_v2_fleet_real.world'
+    assert world.is_file()
+    assert profile.map == 'package://control/map/map_v2_fleet/maps/map_v2_fleet.yaml'
+    assert mod.resolve_asset_path(profile.map, ROOT, package_share=lambda name: share).is_file()
+    assert profile.spawn_spacing == 0.0  # multi-robot runs supply explicit separated spawn_poses
+
+
 def test_parse_spawn_poses_one_pose_per_robot_or_none():
     mod = _mod()
     assert mod.parse_spawn_poses("", 2) == []

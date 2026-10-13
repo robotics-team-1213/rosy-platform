@@ -16,6 +16,10 @@ const STUCK = {
   attempts: 0, max_attempts: 2, local_enabled: true, robot_online: true,
   front_clearance_m: 0.123, rear_clearance_m: 0.31, turn_clearance_m: null, preview_seq: 812,
 };
+
+test("autonomous hold remains observation in operator display", () => {
+  assert.match(resolverText({ escalated: "auto_hold:rule_budget" }), /자동 대기.*상태 관측/);
+});
 const byDecision = (buttons) => Object.fromEntries(buttons.map((b) => [b.decision, b]));
 
 test('judgment display refuses stale or other-case receipts', () => {

@@ -18,6 +18,7 @@ FLOOR_MAX_M = 0.05  # the IR emitters sit 0.013 m above the floor; a drop past 5
 # Published order = the device's: ir_adc_node.py sends [ch2, ch1, ch0] = robot left, centre,
 # right (sensing/perception/ir_calibration.py CHANNELS).
 CHANNELS = ('left', 'mid', 'right')
+RAY_PERIOD_NS = 50_000_000  # The three URDF rays run at 20 Hz.
 
 
 def ir_raw(ranges):
@@ -39,18 +40,36 @@ def main():
     rclpy.init()
     node = rclpy.create_node('sim_ir_floor')
     latest = {name: None for name in CHANNELS}
+    published_ns = -1
     pub = node.create_publisher(UInt16MultiArray, 'ir_sensor/range', qos_profile_sensor_data)
 
     def on_ray(name, msg):
-        latest[name] = min(msg.ranges) if msg.ranges else None
-        if name == 'mid':  # one ADC frame per mid ray, like the device's one read of all three
-            frame = ir_raw([latest[c] for c in CHANNELS])
-            if frame is not None:
-                pub.publish(UInt16MultiArray(data=frame))
+        stamp = msg.header.stamp
+        if stamp.sec < 0 or not 0 <= stamp.nanosec < 1_000_000_000:
+            latest[name] = None
+            return
+        latest[name] = (stamp.sec * 1_000_000_000 + stamp.nanosec,
+                        min(msg.ranges) if msg.ranges else None)
+
+    def publish_frame():
+        nonlocal published_ns
+        if any(latest[c] is None for c in CHANNELS):
+            return
+        samples = [latest[c] for c in CHANNELS]
+        stamp = samples[0][0]
+        # Wait for a complete physics frame and /clock; never refresh old ray evidence.
+        if (any(sample[0] != stamp for sample in samples) or stamp <= published_ns
+                or not 0 <= node.get_clock().now().nanoseconds - stamp <= RAY_PERIOD_NS):
+            return
+        frame = ir_raw([sample[1] for sample in samples])
+        if frame is not None:
+            pub.publish(UInt16MultiArray(data=frame))
+            published_ns = stamp
 
     for name in CHANNELS:
         node.create_subscription(LaserScan, f'ir_sim/{name}',
                                  lambda msg, name=name: on_ray(name, msg), qos_profile_sensor_data)
+    node.create_timer(RAY_PERIOD_NS / 1e9, publish_frame)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

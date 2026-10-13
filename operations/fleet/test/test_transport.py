@@ -34,6 +34,110 @@ def test_it_satisfies_the_protocol():
     assert isinstance(_client(lambda r: httpx.Response(200, json={})), RobotClient)
 
 
+def test_conditional_back_transport_preserves_predicate_and_legacy_body():
+    seen = []
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"stuck": {"conditional_back": True}})
+        assert request.url.path == "/api/v1/line-follow/stuck/decision"
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"outcome": "back"})
+    async def main():
+        client = _client(handler)
+        try:
+            await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                expected_stuck={"phase": "ASKING", "attempts": 0})
+            await client.line_stuck_decision("stuck-1", "WAIT")
+        finally:
+            await client.aclose()
+    run(main())
+    assert seen == [
+        {"stuck_id": "stuck-1", "decision": "BACK_AND_RETRY",
+         "expected_stuck": {"phase": "ASKING", "attempts": 0}},
+        {"stuck_id": "stuck-1", "decision": "WAIT"},
+    ]
+
+
+@pytest.mark.parametrize("support", [None, False, "true", 1])
+def test_conditional_back_does_not_post_to_unsupported_core(support):
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return httpx.Response(200, json={"stuck": {"conditional_back": support}})
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(RobotApiError, match="conditional back is unsupported"):
+                await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                    expected_stuck={"phase": "ASKING", "attempts": 0})
+        finally:
+            await client.aclose()
+    run(main())
+    assert methods == ["GET"]
+
+
+@pytest.mark.parametrize('result', [True, False, None, 1, 'true', 'error', 'cancel'])
+def test_conditional_back_rechecks_final_guard_after_capability_read(result):
+    events = []
+    async def handler(request):
+        events.append(request.method)
+        await asyncio.sleep(0)
+        return httpx.Response(200, json={'stuck': {'conditional_back': True}} if request.method == 'GET' else {'outcome': 'back'})
+    async def guard():
+        assert events == ['GET']
+        events.append('guard')
+        if result == 'error': raise ValueError('changed admission')
+        if result == 'cancel': raise asyncio.CancelledError
+        return result
+    async def main():
+        client = _client(handler)
+        try:
+            operation = client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=guard)
+            if result is True:
+                assert await operation == {'outcome': 'back'}
+            else:
+                error = asyncio.CancelledError if result == 'cancel' else ValueError if result == 'error' else RobotApiError
+                with pytest.raises(error): await operation
+        finally:
+            await client.aclose()
+    run(main())
+    assert events == (['GET', 'guard', 'POST'] if result is True else ['GET', 'guard'])
+
+
+def test_unsupported_conditional_core_never_invokes_submission_guard():
+    events = []
+    def handler(request):
+        events.append(request.method)
+        return httpx.Response(200, json={'stuck': {'conditional_back': False}})
+    async def guard():
+        pytest.fail('unsupported CORE must not consume a physical claim')
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(RobotApiError):
+                await client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                    expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=guard)
+        finally:
+            await client.aclose()
+    run(main())
+    assert events == ['GET']
+
+
+@pytest.mark.parametrize('expected,guard', [(None, lambda: True), ({'phase': 'ASKING', 'attempts': 0}, True)])
+def test_submission_guard_requires_conditional_request_and_explicit_port(expected, guard):
+    def handler(request): pytest.fail('invalid guard must not make a request')
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(ValueError):
+                await client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                    expected_stuck=expected, before_submit=guard)
+        finally:
+            await client.aclose()
+    run(main())
+
+
 def test_power_health_uses_authenticated_read_only_route():
     seen = {}
 

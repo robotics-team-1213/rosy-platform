@@ -20,6 +20,7 @@ from typing import Mapping, Optional
 
 from fleet.stuck.ai_first import problem_key
 from fleet.stuck.closed_loop import _awrite, context
+from fleet.stuck.pipeline import law_hold
 
 STALL_S, STILL_M = 20.0, 0.05
 WORDS = {"stalled": ("WAIT", "LINE_OFF", "STOP"), "pose_lost": ("WAIT", "IDENTIFY", "STOP")}
@@ -77,7 +78,7 @@ class ProblemWatch:
 
     async def _answer(self, loop, first, row: Mapping, problem: dict, now: float) -> None:
         rid, pid, kind = problem["robot_id"], problem["problem_id"], problem["kind"]
-        if ((row.get("state") or {}).get("safety") or {}).get("estop") or loop.ai_board is None:
+        if law_hold(row) is not None or loop.ai_board is None:
             return                                             # D-610 1: never an answer during an E-stop
         proposal = loop.ai_board.problem_proposal(pid)
         if proposal is None or proposal["robot_id"] != rid:
@@ -92,9 +93,25 @@ class ProblemWatch:
                    else first.evidence_invalid(proposal, rid) or first.limit(rid, pid, decision, now)
                    or ("trip" if row.get("trip") and decision != "WAIT" else None) or "forwarded")
         code = None
-        client = loop._clients().get(rid)
-        if verdict == "forwarded" and client is None:
-            verdict = "no_resolver_token"
+        if verdict == "forwarded":
+            current = await loop._admission_row(rid)
+            verdict = law_hold(current, decision=decision) or first.evidence_invalid(proposal, rid) or "forwarded"
+            if verdict == "forwarded" and loop.ai_board.problem_proposal(pid) != proposal:
+                verdict = "ai_proposal_changed"
+            if verdict == "forwarded":
+                key = problem_key(current, kind, None, loop._resolver.at_crosswalk(rid))
+                verdict = ("ai_disabled" if not first.on(rid) else f"human_class:{key}"
+                           if key in first.human_classes() else "forwarded")
+            if verdict == "forwarded":
+                active = self._lost(current) if kind == "pose_lost" else self._stalled(rid, current, now)
+                if not active:
+                    verdict = "problem_changed"
+                else:
+                    row = current
+        if verdict == "forwarded":
+            client = loop._clients().get(rid)
+            if client is None:
+                verdict = "no_resolver_token"
         if verdict == "forwarded":
             first.sent(rid, pid, decision, now)
             code = await self._send(client, decision)

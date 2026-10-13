@@ -269,6 +269,10 @@ def test_fixed_pair_replays_with_separate_truth_and_holds_acceptance(tmp_path, m
     assert report["summary"]["domains"]["real"]["frames"] == 1
     assert report["frames"][0]["road_surface"]["iou"] == 1
     assert report["frames"][0]["current_region"]["iou"] == 1
+    assert report["frames"][0]["capture_group"] == 'eval-g'
+    sources = report['source_uncertainty']['domains']['real']
+    assert sources['source_count'] == 1
+    assert sources['intervals']['road_surface']['iou']['reason'] == 'insufficient_sources'
     assert report["bindings"]["declared_training_disjoint"] is True
     assert "live_review_freshness_unverified" in report["hold_reasons"]
 

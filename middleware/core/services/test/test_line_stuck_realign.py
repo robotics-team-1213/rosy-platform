@@ -15,6 +15,18 @@ BODY = dict(body_front_x_m=0.04205, body_rear_x_m=-0.076, body_half_width_m=0.05
             body_rotation_radius_m=0.08257, body_lidar_x_m=LIDAR_X)
 
 
+def test_direct_realign_refuses_back_only_precondition_before_starting():
+    rig = Rig()
+    request = {"kind": "PIVOT", "angle_rad": 1.2, "pose_stamp": WALL + rig.fed,
+               "attempt": 1, "turn_spot": True}
+    before = rig.m.status().stuck
+    with pytest.raises(AnswerRefused, match="expected_stuck belongs to BACK_AND_RETRY"):
+        rig.m.stuck_decision(before.stuck_id, "REALIGN", by="operator", realign=request,
+                             expected_stuck={"phase": "ASKING", "attempts": 9})
+    assert rig.m.status().stuck == before
+    assert rig.realign() == "realign"
+
+
 class _Events:
     def __init__(self):
         self.seen = []

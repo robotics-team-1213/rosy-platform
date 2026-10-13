@@ -39,7 +39,7 @@ class LaneContainmentEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
     stamp: float = Field(ge=0)
     geometry_id: str = Field(min_length=1, max_length=128)
-    ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO"]
+    ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO", "ISAAC"]
     uncertainty_m: float | None = Field(default=None, ge=0, le=1)
     boundaries: list[LaneBoundaryEvidence] = Field(max_length=2)
     crosswalk: CrosswalkExtentEvidence | None = None
