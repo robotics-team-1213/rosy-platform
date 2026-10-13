@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-14 · 06ce5334b · safety_policy.hold와 stale_hold_s 주석 (D-400 4항, API v1.223)
 - 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
 - 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
 - 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
-- 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약

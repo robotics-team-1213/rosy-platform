@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
 - 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
 - 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
 - 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
-- 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source
