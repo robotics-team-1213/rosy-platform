@@ -991,7 +991,7 @@
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
 
-## 2026-10-14 · 거절된 한 틱은 교차로 기동을 버리지 않는다 (D-740 개정 3, API v1.222)
+## 2026-10-14 · 7c94fc4af · D-740 개정 3 거절된 한 틱은 교차로 기동을 버리지 않는다 (API v1.222)
 
 - 변경: `recovery/junction/gate.py::_unconfirmed`. 기동 중 `_return_probe`가 거절하면 그 틱은 HOLD `junction_motion_unconfirmed`(명령 0)이고 기동은 유지된다. 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 `motion_unconfirmed`로 중단한다. 굽이는 두 번째 물음(`motion_admitted`)까지 통과해야 승인으로 친다.
 - 증거: Gazebo run56·run58에서 한 틱의 거절(시계 경합, 순서가 뒤바뀐 스캔으로 비워진 몸 스캔 뷰)이 굽이를 중단시켜 주행이 끝났다. 원격 단위 테스트는 이 브랜치의 최종 보고에 적는다.
