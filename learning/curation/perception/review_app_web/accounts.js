@@ -5,6 +5,12 @@ const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false;
 const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 · 검수 대기',failed:'실패',
   interrupted:'중단됨',cancelled:'취소됨',rights_hold:'이용 권한 확인 필요',blocked:'접근 차단'};
+const failures = {insufficient_space:'저장 공간이 부족합니다. 여유 공간을 확보한 뒤 재시도하세요.',
+  storage_unavailable:'저장 공간을 확인할 수 없습니다. 저장소 연결을 확인하세요.',
+  verification_failed:'파일 크기 또는 해시가 일치하지 않습니다. 같은 버전으로 다시 받으세요.',
+  access_revoked:'계정 접근 권한이 철회됐습니다.', worker_interrupted:'실행기가 중단됐습니다. 같은 버전으로 재시도하세요.',
+  import_failed:'가져오기에 실패했습니다. 연결과 자료 접근을 확인한 뒤 재시도하세요.'};
+const size = n=>`${Number(n || 0).toLocaleString('ko-KR')} bytes`;
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
 function signedOut() {
   token=null; session=null; active=false;
@@ -81,13 +87,25 @@ async function refresh() {
 }
 async function jobs() {
   if(!active)return;
-  const result=await api('/api/learning/imports'), root=$('imports'); root.replaceChildren();
+  const identity=session;
+  const result=await api('/api/learning/imports'), root=$('imports');
+  if(!active||session!==identity)return;
+  const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
+  const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
+  const focusText=root.contains(focused)?focused.textContent:null;
+  root.replaceChildren();
   if(!result.jobs.length) line(root,'가져오기 작업이 없습니다.');
   for(const job of result.jobs) {
-    const row=document.createElement('article'); root.append(row);
+    const row=document.createElement('article'); row.dataset.job=job.id; root.append(row);
     line(row,`${job.repo_id} · ${states[job.status] || job.status}`);
     line(row,`버전 ${job.revision} · 요청자 ${job.requester_id || job.requester || ''}`);
-    if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':job.error);
+    if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':failures[job.error] || job.error);
+    const files=job.files || [], received=f=>f.downloaded_bytes ?? (job.status==='completed'?f.bytes:0);
+    line(row,`진행 ${size(files.reduce((n,f)=>n+received(f),0))} / ${size(files.reduce((n,f)=>n+f.bytes,0))} · 받은 양은 검수 완료와 별개입니다.`);
+    const details=document.createElement('details'), summary=document.createElement('summary');
+    details.dataset.job=job.id;details.open=opened.has(job.id);
+    summary.textContent=`파일별 진행 ${files.length}개`;details.append(summary);row.append(details);
+    for(const file of files)line(details,`${file.path} · ${size(received(file))} / ${size(file.bytes)} · ${file.sha256?'해시 검증 완료':'검증 대기'}`);
     if(job.reason) line(row,job.reason);
     if(job.status==='completed') line(row,'원본 검증·라벨 검수 후 학습 자료로 준비하세요.');
     const canControl=session.capabilities.includes('import') && job.requester_id===session.user_id;
@@ -97,6 +115,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
+    if(focusId===job.id) [...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
   }
 }
 $('login-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{

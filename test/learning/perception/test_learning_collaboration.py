@@ -65,6 +65,52 @@ def request(base, path, session=None, body=None, token=None):
         return error.code, json.load(error)
 
 
+def test_cancel_retry_waits_for_previous_worker_then_runs_via_http(tmp_path, accounts):
+    import time
+    from learning_imports import LearningImports
+    from test_learning_imports import Transport, RIGHTS
+    session, actor = accounts.login('alice', 'alice-password')
+    connection = accounts.connect_token(actor, 'hf_test', transport=lambda _: {'id': 'id', 'name': 'test', 'type': 'user'})
+    transport = Transport()
+    entered, release = threading.Event(), threading.Event()
+    original = transport.chunks
+    first = True
+    def pause_once(*args, **kwargs):
+        nonlocal first
+        if first:
+            first = False; entered.set()
+            assert release.wait(10)
+        yield from original(*args, **kwargs)
+    transport.chunks = pause_once
+    def credential(actor, project, connection_id, generation=None, resource=None):
+        return accounts.credential(actor, connection_id, generation, resource=resource)
+    # The fixture's metadata resolver checks this synthetic token only.
+    resolve = transport.resolve
+    transport.resolve = lambda *args: resolve(*args[:-1], 'selected-secret')
+    imports = LearningImports(tmp_path / 'imports', accounts.authorize, credential, transport=transport)
+    folder = tmp_path / 'review'; folder.mkdir()
+    server = make_server(open_store(folder), 0, accounts=accounts, imports=imports)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        _, state = request(url, '/api/accounts/session', session)
+        code, job = request(url, '/api/learning/imports/create', session,
+            dict(connection_id=connection['connection_id'], repo_type='dataset', repo_id='org/data',
+                 revision='main', files=['clip.mp4'], rights=RIGHTS), state['token'])
+        assert code == 200 and entered.wait(10)
+        for action in ('cancel', 'retry'):
+            assert request(url, '/api/learning/imports/' + action, session, {'id': job['id']}, state['token'])[0] == 200
+        release.set()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            _, result = request(url, '/api/learning/imports', session)
+            if result['jobs'][0]['status'] == 'completed': break
+            time.sleep(0.05)
+        assert result['jobs'][0]['status'] == 'completed'
+    finally:
+        release.set(); server.shutdown(); server.server_close(); thread.join(5)
+
+
 @pytest.mark.parametrize('path', ['/api/workspace', '/api/learning', '/api/catalog',
                                   '/api/images/0', '/api/history/0', '/api/decisions'])
 def test_all_existing_data_routes_require_identity(tmp_path, path):
