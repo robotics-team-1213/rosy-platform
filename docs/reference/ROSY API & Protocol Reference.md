@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.222
+**Version:** v1.223
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,14 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.223 집행 정책의 짧은 센서 끊김은 HOLD다 (D-400 4항)
+
+안전 정책 모드가 `enforce`일 때의 동작과 상태 필드 하나가 바뀐다. `off`와 `shadow`의 출력은 그대로다.
+
+- 동작: 0이 아닌 명령에 대해 정책의 근거나 답이 제때 없으면(평가기가 아직 묶이지 않음, 정책에 지금 쓸 관측이 없음, 형식이 맞는 판정이 늦었거나 근거 lease 밖) CORE는 그 틱에 명령 0을 내보내고 E-stop을 걸지 않으며 모드도 바꾸지 않는다. 유효한 판정이 다시 오면 스스로 재개한다. 끊김이 `control.sensor_adapter.stale_hold_s`(기본 2 s, (0, 5])에 닿으면 전과 같이 `safety.estop` `source: "control:<사유>"`로 래치한다. `stop` 판정, 형식이 틀리거나 요청과 맞지 않는 판정, 평가기의 다른 예외는 전과 같이 바로 래치한다.
+- 답 시간 상한: 정책 답은 `/cmd_vel` 타이머 한 주기(50 Hz, 20 ms) 안에 와야 한다. 전에는 10 ms였다. 근거의 나이 조건(`observed_at ≤ now ≤ expires_at`, lease 폭 ≤ 0.5 s)은 그대로다.
+- 필드: `safety_policy.hold` `{count, reason}`. `enforce`에서만 실린다(아니면 `null`). `count`는 CORE 시작 뒤 HOLD로 답한 끊김의 수, `reason`은 가장 최근 HOLD 틱의 정책 사유(`policy_failed` \| `policy_invalid`, 없었으면 빈 문자열)다. 평가기가 묶이기 전의 `policy_unavailable`은 HOLD가 되지 않는다. 지금 HOLD 중인지를 뜻하지 않는다.
 
 ### v1.222 거절된 한 틱은 교차로 기동을 버리지 않는다 (D-740 개정 3)
 
@@ -840,6 +848,7 @@ v1.70 추가 경로(모두 Bearer 인증):
 - `mode`: `off` \| `shadow` \| `enforce`. `mode_effective`: 실제로 도는 모드(그림자 워커가 못 뜨면 `off`). `mode_error`: 그림자 워커가 시작하지 못한 이유(예외 종류: 메시지), 없으면 빈 문자열. 설정 오류는 CORE 시작을 막으므로 여기 나타나지 않는다.
 - `revision`: 워커 파라미터 해시 16자. `sources`: 키별 값의 출처.
 - `shadow`: `{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}, dropped_events, suppressed_events, record_errors}`. `shadow` 가 없으면 `null`. `last_stop`·`last_unavailable` 은 `{t, reason, source}` 또는 `null`, 기록이 없으면 `eval_ms.p50`·`p99` 는 `null`.
+- `hold`: v1.223 additive (D-400 4항). `enforce` 에서만 `{count, reason}`, 그 밖에는 `null`. `count` 는 CORE 시작 뒤 HOLD(명령 0, 래치 없음)로 답한 센서 끊김의 수, `reason` 은 가장 최근 HOLD 틱의 정책 사유(`policy_unavailable` \| `policy_failed` \| `policy_invalid`)이고 없었으면 빈 문자열이다. 끊김이 `stale_hold_s` 에 닿아 래치하면 `safety.estop` 의 `source` 가 `control:<사유>` 다.
 - 시각 `t` 는 CORE monotonic 초이며 벽시계가 아니다.
 
 `activity` 는 v1.68 additive 다(D-321 부록). 보정 세션 lease 가 살아 있는
@@ -2939,6 +2948,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.223 | 2026-10-14 | Behavior + Additive (D-400 4항 구현): `enforce` 에서 `stale_hold_s` 미만의 센서 끊김은 HOLD(명령 0, E-stop 래치 없음, 자동 재개)이고 그 이상은 전과 같이 `control:<사유>` 래치다. 정책 답 시간 상한 10 ms → `/cmd_vel` 한 주기 20 ms. state `safety_policy.hold` `{count, reason}`(`enforce` 에서만). `off`·`shadow` 출력 변화 없음. |
 | v1.222 | 2026-10-14 | Behavior (D-740 개정 3): 교차로 기동 중 운동 증명이 거절된 틱은 HOLD `junction_motion_unconfirmed`(명령 0, 기동 유지)이고, 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 전과 같이 `aborted`·`motion_unconfirmed`다. 필드 변화 없음. |
 | v1.221 | 2026-10-13 | Additive (D-744): `POST /api/v1/line-follow/junction` 선택 객체 `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`(400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_arc_map_anchor`, `line_follow.arc.map_anchor_used`·`map_anchor_reason`. 풀지 못한 고정점은 거절이 아니라 v1.220의 자세 기준 원이다. Fleet `/api/fleet/*` 변경 없음. |
 | v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
@@ -3441,3 +3451,10 @@ New channel native commands carry the paired current CORE boot/owner-generation 
 Read-only closure preserves immutable original-request linkage after expiry/withdrawal;
 current authorization still controls delivery and access. A revoked recipient's reply
 intent may be SUPERSEDED while result evidence remains in the existing Fleet database.
+
+
+### D-755 검수 앱 협업 HTTP 경계
+
+검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.
+
+`/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.

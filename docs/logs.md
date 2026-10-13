@@ -8274,3 +8274,22 @@ osy-d395-s1d\`.
 - 증거: 기존 학습 계약/OMX exporter와 공식 HF 문서를 대조했다. 문서 검사 결과는 작업 세션에 기록한다.
 - gate 변화: 설계 Accepted. OAuth·협업 UI·데이터 migration·외부 전송·학습/장치 수용은 미구현/미검증이다.
 - 결정: 기존 wire·원본을 소급 변경하지 않고 단계별 구현한다.
+
+## 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
+
+- 변경: `docs/omx-imitation-preparation`에서 [설계](plans/2026-10-14-omx-imitation-preparation-design.md)와 [실행 준비 목록](plans/2026-10-14-omx-imitation-preparation.md)을 작성했다. 리더 교시·로컬 녹화·episode 검토를 우선하고 native/SIM 단위 분리, Pilot 실물 조작 후속, private Hub revision 왕복, Spaces 읽기 전용 검토를 명시했다.
+- 증거: 기준 소스 b0f7a1896과 공식 LeRobot 0.4.4 recorder/config 및 Hugging Face 문서를 읽었다. 문서 검사 결과는 X: omx-imitation 세션에 기록한다.
+- gate 변화: 없음. 준비 문서는 구현·녹화·학습·Hub 연동·실물 수용의 증거가 아니다.
+- 결정: 새 API/ADR 승인, runtime 활성화, 자동 업로드, 외부 저장소 생성, 착지·push·배포를 수행하지 않는다.
+
+## 2026-10-14 · uncommitted · OMX native imitation preparation tools
+
+- 변경: feat/omx-imitation-tools에 녹화 설정 검사, native reader 검토·분할, ACT 설정, private Hub 왕복 도구를 추가했다.
+- 증거: 원격 기본 70개와 별도 LeRobot 영상·분할·ACT backward/save/reload 1개 통과, NEW 0. tuple shape·leader 옵션·split backend 호환성을 수정했다.
+- gate 변화: 없음. 실물 녹화·Pilot 제어·실제 HF 업로드·Spaces 접근은 미확인이다. 실행 PC와 HF 조직은 미정이다.
+
+## 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
+
+- 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
+- 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
+- gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
