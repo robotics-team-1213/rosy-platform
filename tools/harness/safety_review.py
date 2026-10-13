@@ -41,26 +41,11 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
-    "c9983d2fe4f1488459c3b214a93eafb591a891c6":  # git commit revision
-        "Independent /root/review_release_safety history-only SOURCE review, 2026-10-14: "
-        "answer-contract extraction retains identity/finite/lease checks; requires corrected descendant 3f6c69245. "
-        "See docs/validation/omx-release-safety-review-2026-10-14.md; no standalone or device acceptance.",
-    "1e8acc5dd81b90b28447f491cc894c5bd846cd41":  # git commit revision
-        "Independent /root/review_release_safety history-only SOURCE review, 2026-10-14: "
-        "zero-only HOLD retains command fences and stop/malformed/actuation latches; requires clock fix 3f6c69245. "
-        "See docs/validation/omx-release-safety-review-2026-10-14.md; no standalone or device acceptance.",
-    "ed8f61fbf2af21f993b91d7da184d0ef46e9492f":  # git commit revision
-        "Independent /root/review_release_safety history-only SOURCE review, 2026-10-14: "
-        "D-400 names the 20ms reply budget; evidence lease and separate actuation budget remain; descendant 3f6c69245 reviewed. "
-        "See docs/validation/omx-release-safety-review-2026-10-14.md; no standalone or device acceptance.",
-    "a23efed1f8f9d93b26a7be2ee277983ffa4278db":  # git commit revision
-        "Independent /root/review_release_safety history-only SOURCE review, 2026-10-14: "
-        "read-only HOLD property changes no output authority; descendant 3f6c69245 reviewed. "
-        "See docs/validation/omx-release-safety-review-2026-10-14.md; no standalone or device acceptance.",
-    "6a10113618809c02d39b8ccc683c72ea42e8329b":  # git commit revision
-        "Independent /root/review_release_safety history-only SOURCE review, 2026-10-14: "
-        "idle-gap reset requires completion-aware expiry and rollback correction 3f6c69245. "
-        "See docs/validation/omx-release-safety-review-2026-10-14.md; no standalone or device acceptance.",
+    "c9983d2fe4f1488459c3b214a93eafb591a891c6": "Independent /root/review_release_safety: contract extraction; history only, requires 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md",  # git commit revision
+    "1e8acc5dd81b90b28447f491cc894c5bd846cd41": "Independent /root/review_release_safety: zero-only HOLD and command fences; history only, requires clock fix 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md",  # git commit revision
+    "ed8f61fbf2af21f993b91d7da184d0ef46e9492f": "Independent /root/review_release_safety: D-400 reply budget, lease unchanged; history only, requires 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md",  # git commit revision
+    "a23efed1f8f9d93b26a7be2ee277983ffa4278db": "Independent /root/review_release_safety: read-only HOLD property; history only, requires 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md",  # git commit revision
+    "6a10113618809c02d39b8ccc683c72ea42e8329b": "Independent /root/review_release_safety: idle reset; history only, requires completion/rollback fix 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md",  # git commit revision
     "a1d29a9f994ef1db7822274c146a0f9727107722":  # git commit revision
         "Independent /root/delivery_review retrospective history-only SOURCE provenance review, 2026-10-14: "
         "candidate dbf2f51e4; Document-only parent links; CORE final authority and calibration boundaries remain. "
