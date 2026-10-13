@@ -540,7 +540,7 @@ PROGRAM_SOURCES = {
                             # D-411: the Pilot recorder and its session state machine.
                             "middleware/perception/control/pilot_recorder_node.py",
                             "middleware/perception/control/pilot_recording.py"],
-    "rosy-navigation.service": ["middleware/control/drive/planning/nav2", "middleware/devices/pinky/bringup"],
+    "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           # D-260: the rule table it imports from the release.

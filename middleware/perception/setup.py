@@ -56,7 +56,7 @@ class HolderSource(sdist):
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'control.egg-info/SOURCES.txt'
         text = manifest.read_text(encoding='utf-8').replace(
-            '../control/drive/', '_source_roots/drive/')
+            '../drive/', '_source_roots/drive/')
         manifest.unlink()  # The release tree may hard-link its source manifest.
         manifest.write_text(text, encoding='utf-8')
 

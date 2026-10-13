@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · b3687f8dec · docs: record S1 source gate and bounded closing checks
+- 2026-10-13 · uncommitted · refactor: promote Drive source holder
 - 2026-10-13 · 33d76482f · docs: verify and process P1 held artifacts
 - 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
 - 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
-- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
-- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
