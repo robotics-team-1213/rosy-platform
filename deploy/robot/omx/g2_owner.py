@@ -73,7 +73,7 @@ def main():
     def http_app_factory(runtime):
         pilot = PilotSimRuntime(runtime)
         holder["pilot"] = pilot
-        return create_pilot_sim_app(runtime=pilot, pilot_root=ROOT / "middleware/ui/pilot",
+        return create_pilot_sim_app(runtime=pilot, pilot_root=ROOT / "middleware/robot_ui/pilot",
                                     common_root=ROOT / "shared/web", pairing_code=secrets.token_urlsafe(12))
 
     def on_goal_event(event):

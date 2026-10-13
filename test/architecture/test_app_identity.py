@@ -29,8 +29,8 @@ WORD = re.compile(r"^[a-z]+$")
 
 #: Rows not yet moved, keyed by registry id (plan 2026-09-30-app-identity-rename-plan.md §3).
 PENDING = {
-    "robot": "D-374 stage 3: middleware/ui/robot -> src/hmi/robot, package rosy_robot (D-362 gate)",
-    "console": "D-637 source moved to operations/ui/console; D-377 display/icon/package naming debt remains, same Fleet distribution",
+    "robot": "D-374 stage 3: middleware/robot_ui/robot -> src/hmi/robot, package rosy_robot (D-362 gate)",
+    "console": "D-637 source moved to operations/site_ui/console; D-377 display/icon/package naming debt remains, same Fleet distribution",
 }
 
 #: Packages kept by the D-377 decision table ("unchanged"), keyed by id.
@@ -122,13 +122,13 @@ def test_android_app_is_not_a_colcon_package():
 
 
 def test_rule_catches_each_mismatch(tmp_path):
-    app = tmp_path / "operations/ui/cam"
+    app = tmp_path / "operations/site_ui/cam"
     (app / "app").mkdir(parents=True)
     (app / "app/build.gradle.kts").write_text(
         'namespace = "io.github.livsbittt.rosy.cam"\n'
         'applicationId = "io.github.livsbittt.rosy.ceilingcamera"\n', encoding="utf-8")
     (app / "settings.gradle.kts").write_text('rootProject.name = "rosy-ceiling-camera"\n', encoding="utf-8")
-    row = {"id": "cam", "path": "operations/ui/cam", "app_name": "Rosy 천장 카메라",
+    row = {"id": "cam", "path": "operations/site_ui/cam", "app_name": "Rosy 천장 카메라",
            "icon": "shared/web/icons/ceiling-camera.svg"}
     problems = identity_problems(row, tmp_path)
     assert len(problems) == 4, problems

@@ -6,18 +6,18 @@ import browser_scope
 
 
 def test_fleet_web_change_selects_fleet_browser_tests():
-    found = browser_scope.targets(["operations/ui/console/site-map.js"])
+    found = browser_scope.targets(["operations/site_ui/console/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found
     assert "operations/fleet/test/test_start_point_browser.py" in found
     assert "operations/fleet/test/test_site_map_browser.py" in found
     assert "operations/fleet/test/test_cell_app_browser.py" in found
-    assert not any(t.startswith("middleware/ui/pilot/") for t in found)
+    assert not any(t.startswith("middleware/robot_ui/pilot/") for t in found)
 
 
 def test_shared_web_change_reaches_every_surface_family():
     found = browser_scope.targets(["shared/web/components.css"])
     for expected in ("shared/web/test/test_theme_browser.py", "test/test_dashboard_browser.py",
-                     "test/test_fleet_console_browser.py", "middleware/ui/pilot/test/test_pilot_browser.py"):
+                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py"):
         assert expected in found
 
 
@@ -28,7 +28,7 @@ def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothin
 
 def test_windows_separators_are_accepted():
     assert browser_scope.targets(["middleware\\ui\\pilot\\styles.css"]) == browser_scope.targets(
-        ["middleware/ui/pilot/styles.css"])
+        ["middleware/robot_ui/pilot/styles.css"])
 
 
 def test_every_scope_target_exists():

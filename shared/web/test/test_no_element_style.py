@@ -10,8 +10,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 ROOTS = (
-    REPO / "middleware" / "ui" / "robot",
-    REPO / "middleware" / "ui" / "pilot",
+    REPO / 'middleware' / 'robot_ui' / "robot",
+    REPO / 'middleware' / 'robot_ui' / "pilot",
     REPO / "shared" / "web",
 )
 
@@ -29,8 +29,8 @@ def test_product_scripts_do_not_write_element_style():
 
 
 def test_measured_geometry_is_declared_with_typed_attr():
-    pilot = (REPO / "middleware" / "ui" / "pilot" / "styles.css").read_text(encoding="utf-8")
-    robot = (REPO / "middleware" / "ui" / "robot" / "console-detail.css").read_text(encoding="utf-8")
+    pilot = (REPO / 'middleware' / 'robot_ui' / "pilot" / "styles.css").read_text(encoding="utf-8")
+    robot = (REPO / 'middleware' / 'robot_ui' / "robot" / "console-detail.css").read_text(encoding="utf-8")
     shared = (REPO / "shared" / "web" / "components.css").read_text(encoding="utf-8")
     assert "attr(data-knob-x type(<length>), 0px)" in pilot
     assert "attr(data-band type(<length>), 0px)" in pilot

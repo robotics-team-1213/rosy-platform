@@ -3,7 +3,7 @@
 !integrations/messaging/discord/rosy_discord/**
 !operations/decision/**
 !operations/site_execution/src/**
-!operations/ui/console/**
+!operations/site_ui/console/**
 !operations/situation/rosy_situation/__init__.py
 !operations/situation/rosy_situation/assessment.py
 !operations/situation/rosy_situation/snapshot_assessment.py

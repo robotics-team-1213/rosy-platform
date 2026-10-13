@@ -48,7 +48,7 @@ modules:
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
   - name: console_source
-    path: operations/ui/console
+    path: operations/site_ui/console
     tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
@@ -100,7 +100,7 @@ modules:
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam
-    path: operations/ui/cam
+    path: operations/site_ui/cam
     tests: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
     functional_kind: host-contract
     functional: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
@@ -120,10 +120,10 @@ modules:
     functional_kind: pytest
     functional: [middleware/devices/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: middleware/ui/face
-    tests: [middleware/ui/face/test/test_info_screen.py, middleware/ui/face/test/test_info_screen_boot.py, middleware/ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
+    path: middleware/robot_ui/face
+    tests: [middleware/robot_ui/face/test/test_info_screen.py, middleware/robot_ui/face/test/test_info_screen_boot.py, middleware/robot_ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [middleware/ui/face/test/test_info_screen.py]
+    functional: [middleware/robot_ui/face/test/test_info_screen.py]
   - name: led
     path: middleware/drivers/pinky_led
     tests: [middleware/drivers/pinky_led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
@@ -171,15 +171,15 @@ modules:
     functional_kind: host-contract
     functional: [shared/web/test/test_ui_token_contracts.py]
   - name: dashboard
-    path: middleware/ui/robot
-    tests: [middleware/ui/robot/test]
+    path: middleware/robot_ui/robot
+    tests: [middleware/robot_ui/robot/test]
     functional_kind: host-contract
-    functional: [middleware/ui/robot/test/test_dashboard_package.py]
+    functional: [middleware/robot_ui/robot/test/test_dashboard_package.py]
   - name: pilot
-    path: middleware/ui/pilot
-    tests: [middleware/ui/pilot/test]
+    path: middleware/robot_ui/pilot
+    tests: [middleware/robot_ui/pilot/test]
     functional_kind: host-contract
-    functional: [middleware/ui/pilot/test/test_stick.py]
+    functional: [middleware/robot_ui/pilot/test/test_stick.py]
   - name: omx_adapter
     path: middleware/devices/omx/adapter
     tests: [middleware/devices/omx/adapter/test]

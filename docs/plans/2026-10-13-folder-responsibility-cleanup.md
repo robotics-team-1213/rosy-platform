@@ -41,7 +41,7 @@
 **수정 경로:** 우산 `F:\Dev\Control\Robot\Rosy\README.md`, `archive/AGENTS.md`의 현재 소스 안내, 제품 `middleware/core/api/core_api_web/api/AGENTS.md`, `operations/fleet/fleet/server/AGENTS.md`. 필요하면 root `AGENTS.md`의 현재 의존 경로를 함께 정정한다. 우산 파일은 제품 Git에 포함되지 않으므로 제품 commit과 별도 변경 기록을 남긴다.
 
 1. `src/runtime/sensing`, `src/site/fleet`, 기존 UI `web` 안내를 찾고 실제 source mapping/serving 소비자를 읽는다. 역사 ADR·날짜 로그·payload 내부 안내는 수정하지 않는다.
-2. 현재 Control은 `middleware/perception`, Fleet은 `operations/fleet`, UI 원본은 `middleware/ui/robot`, `operations/ui/console`으로 안내한다. 오래된 계획 링크는 역사로 표시하고 현재 작업 입구는 현행 책임 안내로 연결한다.
+2. 현재 Control은 `middleware/perception`, Fleet은 `operations/fleet`, UI 원본은 `middleware/robot_ui/robot`, `operations/site_ui/console`으로 안내한다. 오래된 계획 링크는 역사로 표시하고 현재 작업 입구는 현행 책임 안내로 연결한다.
 3. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 소유 세션의 의도를 확인한다. 무단 restore나 가짜 zip/holder 생성으로 링크를 맞추지 않는다.
 4. `.worktrees/AGENTS.md`, `.worktrees/README.md`가 여전히 없으면 관리 도구 `InitWorktrees`로 안내를 설치한다. tool state와 task checkout 내부 안내를 일괄 갱신하지 않는다.
 5. 수정한 현재 안내의 로컬 링크를 검사하고 아래 문서 시험·lint를 실행한다. 제품 문서만 정확한 파일 목록으로 커밋한다. 우산 변경은 파일 목록·전후 근거를 X:에 기록한다.
@@ -69,7 +69,7 @@
 | S2 | `middleware/perception/control/loc_assist.py`, `watch.py` 및 나머지 순수 판단을 출력별 기능 holder로 판정 | facts/lease/command/graph 판단을 구분; 이미 이전된 Drive runtime은 다시 옮기지 않음 | `middleware/perception/test/`의 해당 adapter·순수 판단 시험 |
 | S3 | S2 뒤 남은 `middleware/perception/control` 조립 → `middleware/perception/nodes` | `control` ROS package와 다섯 호환 설치 initializer | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_colcon_roots.py` |
 | S4 | `middleware/robot_execution` → `middleware/robot_execution`; `operations/site_execution` → `operations/site_execution` | local policy/receipt와 site goal/progress, `rosy.execution.*` | `middleware/robot_execution/local/test/`, `test/test_judgment_extraction.py`, gateway/palletizing 소비 시험; 이동 뒤 시험 경로로 실행 |
-| S5 | `middleware/ui` → `middleware/robot_ui`; `operations/ui` → `operations/site_ui` | 기존 dashboard/Pilot/Face 및 Fleet Console/Cam serving, CSP, 앱 identity | `test/architecture/test_app_roles.py`, `test/architecture/test_app_identity.py`, 이동된 UI 시험과 Fleet console 시험 |
+| S5 | `middleware/robot_ui` → `middleware/robot_ui`; `operations/site_ui` → `operations/site_ui` | 기존 dashboard/Pilot/Face 및 Fleet Console/Cam serving, CSP, 앱 identity | `test/architecture/test_app_roles.py`, `test/architecture/test_app_identity.py`, 이동된 UI 시험과 Fleet console 시험 |
 | S6 | `operations/vision` → `operations/overhead`; `middleware/perception/vision` → `middleware/perception/front_camera` | display-only ceiling 관측과 로봇 앞 카메라 evidence, `rosy_vision`, wire 이름 | 현재 `operations/vision/test/`, `middleware/perception/test/` 해당 perception 시험; 이동된 경로로 실행 |
 | S7 | 로컬 decision/safety/preview/Drive 후보 제한 구현 → `lane_rules`, `safety_gate`, `preview`, `motion_limits` | `core_features.decision/safety/vision`, `control.safety` 옛 import를 유지; CORE 최종 `/cmd_vel` | `middleware/core/services/test/`, `test/architecture/test_safety_separation.py`, `test/architecture/test_cmd_vel_publisher_identity.py` |
 | S8 | `operations/fleet/fleet/server` → 원장/채널/셀 어댑터/콘솔 조립/peer 책임 하위 폴더 | 한 SQLite·한 프로세스·기존 auth/claim/admission 거래; `app.py`는 조립 | `operations/fleet/test/`, `test/test_judgment_extraction.py`, source image/외부 설치 검사 |

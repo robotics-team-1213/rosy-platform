@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception", "devices", "drive"}
+           "foundation", "ros_idl", "perception", "devices", "drive", "robot_ui", "site_ui"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -387,7 +387,7 @@ SIZE_VERDICTS = {
         "no new size unit or budget change. Next growth separates ai_facts HTTP routes from its journal "
         "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
-    "ui/console/map-view.js": (
+    "site_ui/console/map-view.js": (
         984,
         "split: independently re-judged at 984 on 2026-10-11 by design_consistency_review: D-641 "
         "keeps camera-backdrop and traffic-view in their existing owners. Compact-map robot labels "
@@ -415,7 +415,7 @@ SIZE_VERDICTS = {
         "Splitting loading and deployment is a separate task. The 600-line ceiling and growth "
         "allowance remain unchanged; re-judge when another component family expands this file",
     ),
-    "ui/pilot/styles.css": (
+    "robot_ui/pilot/styles.css": (
         811,
         "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
         "D-447 concurrent baseline work restores the existing 44px target floor on narrow screens. "
@@ -1089,7 +1089,7 @@ SIZE_VERDICTS = {
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
     ),
-    "ui/face/emotion/info_screen.py": (
+    "robot_ui/face/emotion/info_screen.py": (
         602,
         "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
         "driving battery alert contrast fix added 4 lines. It keeps one role, payload to panel image, "
@@ -1097,7 +1097,7 @@ SIZE_VERDICTS = {
         "Follow-up split: move the boot/AP-QR renderers (boot_lines, ap_qr, _draw_qr, render_boot) into "
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
-    "ui/console/console.js": (
+    "site_ui/console/console.js": (
         1_175,
         "split: reviewed on 2026-10-11 by parent reviewer after D-632 inbox ownership extraction: "
         "console.js is 1170, below the existing 1175 ceiling; no allowance increase. Notification "
@@ -1111,7 +1111,7 @@ SIZE_VERDICTS = {
         "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
     ),
-    "ui/console/shared/styles.css": (
+    "site_ui/console/shared/styles.css": (
         802,
         "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
@@ -1840,7 +1840,7 @@ SIZE_VERDICTS = {
         "the profile loader out if MoveIt (D-402 follow-up) adds a second planner. Re-judged at 714 "
         "after the review's accepted-recipe item check, release rejection and fingertip overhang",
     ),
-    "ui/robot/app.js": (
+    "robot_ui/robot/app.js": (
         803,
         "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
         "tracking, the mode bindings and the formation cell wiring grew with D-383/D-385/D-396 "
@@ -1937,8 +1937,8 @@ ROLE_DIR = {
     "interfaces": ("ros_idl",),
     "control": ("perception",),  # middleware/perception (D-427 wave 4e)
     "web_common": ("web",),  # shared/web (D-427 wave 4b)
-    "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
-    "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
+    "emotion": ("robot_ui", "face"),  # middleware/robot_ui/face (D-427 wave 4b)
+    "dashboard": ("robot_ui", "robot"),  # middleware/robot_ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
     "pinky_pro": ("devices", "pinky", "profile"),
     "bringup": ("devices", "pinky", "bringup"),
@@ -1983,7 +1983,7 @@ def _files(name: str, suffixes):
     if name == 'core_features':
         holders = (ROOT / 'middleware/drive/behaviors',)
     if name == "fleet":
-        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console",
+        holders = (ROOT / "operations/decision", ROOT / "operations/site_ui/console",
                    ROOT / "integrations/messaging/discord")
     for directory in (PACKAGES[name]["dir"], *holders):
         for path in directory.rglob("*"):

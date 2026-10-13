@@ -28,7 +28,7 @@ on:
       - operations/fleet/**
       - integrations/messaging/discord/**
       - operations/decision/**
-      - operations/ui/console/**
+      - operations/site_ui/console/**
       - operations/world/src/**
       - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
