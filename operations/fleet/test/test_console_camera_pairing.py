@@ -23,7 +23,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from pairing_fixtures import LEAF_SHA256, SITE_CA_PEM, TLS_HOST, FakeClock, Phone
 
-WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 BASE = "/api/fleet/pairing/v1"
 OPERATOR = "op-" + "secret-2"
 VIEWER = "view-" + "secret-2"
