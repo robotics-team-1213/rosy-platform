@@ -262,7 +262,7 @@ service.run(sys.argv[2], 'alice')
     assert service.get('alice', 'alpha', job['id'])['status'] == 'completed'
 
 
-def test_large_import_over_8gib_has_bounded_memory_and_resumes(tmp_path):
+def test_large_import_over_8gib_has_bounded_memory_and_resumes(tmp_path, request):
     import os
     import time
     if os.environ.get('ROSY_RUN_LARGE_IMPORT_TESTS') != '1':
@@ -287,6 +287,10 @@ def test_large_import_over_8gib_has_bounded_memory_and_resumes(tmp_path):
     service = LearningImports(service.root, service.authorize, service.credential, transport=transport, limits=limits)
     before, started = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, time.monotonic()
     job = create(service, repo_type='model', files=['weights.bin'])
+    def remove_test_payload():
+        for location in ('.partial', 'artifacts'):
+            (service.root / location / job['id'] / 'files/weights.bin').unlink(missing_ok=True)
+    request.addfinalizer(remove_test_payload)
     service.run(job['id'], 'alice')
     restarted = LearningImports(service.root, service.authorize, service.credential, transport=transport, limits=limits)
     restarted.retry('alice', 'alpha', job['id']); restarted.run(job['id'], 'alice')
