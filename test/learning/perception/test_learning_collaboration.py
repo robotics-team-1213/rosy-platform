@@ -87,7 +87,7 @@ def test_viewer_cannot_write_and_revocation_blocks_open_session(tmp_path):
 def test_editor_cannot_approve_and_reviewer_identity_is_server_owned(tmp_path):
     with running(tmp_path) as (url, _, store):
         _, workspace = request(url, '/api/workspace', 'editor')
-        body = {'version': 1, 'action': 'approve', 'reviewer': 'spoofed'}
+        body = {'version': 1, 'action': 'approve', 'reviewer': 'spoofed', 'complete_frame_review': True}
         assert request(url, '/api/frames/0', 'editor', body, workspace['token'])[0] == 403
         status, result = request(url, '/api/frames/0', 'reviewer', body, workspace['token'])
         assert status == 200

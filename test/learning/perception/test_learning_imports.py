@@ -1,6 +1,7 @@
 ﻿"""Immutable, permission-bound HF downloads; no external accounts or scripts."""
 import hashlib
 import json
+import sqlite3
 
 import pytest
 
@@ -116,4 +117,61 @@ def test_cancel_and_missing_rights(tmp_path):
     service.run(job['id'], 'alice')
     assert service.get('alice', 'alpha', job['id'])['status'] == 'cancelled'
     assert not transport.downloads
+
+
+def test_permission_is_checked_between_chunks(tmp_path):
+    service, transport, authority = make(tmp_path)
+    job = create(service)
+    original = transport.chunks
+    def revoked(*args):
+        for chunk in original(*args):
+            yield chunk
+            authority['generation'] = 2
+    transport.chunks = revoked
+    service.run(job['id'], 'alice')
+    assert service.get('alice', 'alpha', job['id'])['status'] == 'blocked'
+    assert not list((tmp_path / 'imports').rglob('manifest.json'))
+
+
+def test_declared_size_and_gated_team_evidence(tmp_path):
+    service, transport, _ = make(tmp_path)
+    transport.gated = True
+    job = create(service, rights={**RIGHTS, 'gated_team_use': True})
+    assert job['status'] == 'rights_hold'
+    other = create(service, rights={**RIGHTS, 'gated_team_use': True,
+                                   'team_use_evidence': 'licensor authorized project alpha'})
+    transport.data['clip.mp4'] += b'excess'
+    service.run(other['id'], 'alice')
+    assert service.get('alice', 'alpha', other['id'])['status'] == 'failed'
+
+
+def test_transport_rejects_redirect_to_private_or_unapproved_host():
+    from learning_imports import HFTransport
+    for url in ['http://huggingface.co/file', 'https://127.0.0.1/file',
+                'https://huggingface.co.evil.org/file', 'https://user@huggingface.co/file',
+                'https://huggingface.co:444/file']:
+        with pytest.raises(ValueError):
+            HFTransport.check_url(url)
+
+
+def test_restart_after_atomic_publish_recovers_same_artifact(tmp_path):
+    service, transport, _ = make(tmp_path)
+    job = create(service)
+    service.run(job['id'], 'alice')
+    with sqlite3.connect(service.db_path) as db:
+        doc = service.get('alice', 'alpha', job['id'])
+        doc['status'] = 'running'
+        db.execute('UPDATE jobs SET document=? WHERE id=?', (json.dumps(doc), job['id']))
+    restarted = LearningImports(service.root, service.authorize, service.credential, transport=transport)
+    assert restarted.get('alice', 'alpha', job['id'])['status'] == 'interrupted'
+    restarted.retry('alice', 'alpha', job['id'])
+    restarted.run(job['id'], 'alice')
+    assert restarted.get('alice', 'alpha', job['id'])['status'] == 'completed'
+
+
+def test_repeat_completed_request_is_idempotent(tmp_path):
+    service, _, _ = make(tmp_path)
+    job = create(service)
+    service.run(job['id'], 'alice')
+    assert create(service)['id'] == job['id']
 
