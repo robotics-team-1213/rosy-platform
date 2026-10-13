@@ -102,6 +102,17 @@ def test_sim_time_floor_proof_holds_against_a_real_policy_window():
     assert line.provider(40.0,.02,.1) is True
 
 
+def test_a_snapshot_published_after_the_clock_read_is_asked_once_more():
+    # Gazebo lap run56: the policy clock was read 0.034 s before the worker's snapshot; the one
+    # refusal aborted the bend. A second read is inside the window; two stale reads stay refused.
+    a=real_policy_adapter()  # window [1.0, 1.3] on the policy clock
+    line=SimpleNamespace(return_body_clear=lambda *args:True,
+                         bind_return_motion=lambda provider,**kw:setattr(line,'provider',provider))
+    for reads,allowed in (([.97,1.1],True),([.97,.98,1.1],False),([1.4,1.5],False)):
+        bind_lane_return_motion(line,a,policy_clock=iter(reads).__next__)
+        assert line.provider(40.0,.02,.1) is allowed, reads
+
+
 def test_bridge_is_told_whether_the_worker_floor_proof_is_live():
     # D-476 rev 2026-10-07: the proof exists only in enforce; off/shadow means "not live".
     bound={}
