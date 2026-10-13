@@ -2,7 +2,7 @@
 
 상태: 로컬 준비 도구와 원격 합성 데이터·ACT smoke 검증 구현. 실물 연결·실데이터 학습, Hugging Face 저장소 생성·업로드, Spaces 배포는 미실행이다.
 사용자 요구: OMX-L 교시·녹화 후 모방학습이 우선이며, Pilot의 OMX-F 수동 조작과 LeRobot/Hugging Face 연동도 필요하다.
-기준 소스: `b0f7a1896a7f205cf97a695e403dcaf299180fb6`, 작업 브랜치 `docs/omx-imitation-preparation`.
+기준 소스: commit `b0f7a1896a7f`, 작업 브랜치 `docs/omx-imitation-preparation`.
 
 ## 1. 첫 사용 경험
 
