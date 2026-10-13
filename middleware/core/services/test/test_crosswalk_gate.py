@@ -405,7 +405,7 @@ def test_lane_edges_caps_raw_edges_only_and_pads_stay_outside():
     assert lane_edges(0.109, -0.049) == (0.109, -0.049)        # 3 cm off-centre, a real lane
     # review: one far misread edge (the next lane's line) must not slide the lane off the body
     left, right = lane_edges(0.109, -0.29, body_half=0.0765)
-    assert left == pytest.approx(0.1025) and right == pytest.approx(-0.0555)   # about the body's lane
+    assert (left, right) == pytest.approx((0.0555, -0.1025))   # the lane stays about the body (0 inside)
     assert lane_edges(None, -0.122) == (None, -0.122) and lane_edges(0.14, None) == (0.14, None)
     anchor = SimpleNamespace(x=0.0, y=0.0, yaw=0.0, frame="odom")
     z = zone_of(dict(anchor=anchor, epoch=0, near=0.3, far=0.45, uncertainty=0.09, left=0.120, right=-0.122), 0.05)
