@@ -187,7 +187,7 @@ test("only the request feeds the link word: a paint error after an answer is not
 
 test("the console counts every Fleet answer and keeps asking while signed out", async () => {
   const {readFile} = await import("node:fs/promises");
-  const source = await readFile(new URL("../../../ui/console/console.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../../site_ui/console/console.js", import.meta.url), "utf8");
   const wrapper = source.slice(source.indexOf("const fleetClient ="), source.indexOf("async function call("));
   assert.match(wrapper, /fleetApi\(path, options\)\.then\(body => \{ noteLink\(\);/);  // every answer, 401/403 included
   assert.match(wrapper, /path === "\/api\/fleet\/state" \|\| error\.status < 500\) noteLink\(error\)/);
