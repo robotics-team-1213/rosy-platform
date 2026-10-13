@@ -10,6 +10,8 @@
 
 **상태:** PLANNED · **날짜:** 2026-10-13 · **작성 브랜치:** `docs/folder-responsibility-audit`.
 
+**P0 실행 기록 (2026-10-13, `docs/folder-guidance-p0`):** 현재 Control/Fleet/UI 안내와 root Docker source 설명을 정정하고 관리 도구로 `.worktrees` 안내를 설치했다. 우산 README·archive의 현재 소스 안내는 제품 Git 밖에서 수정하며 X: 세션 `folder-guidance-p0`에 전후 근거를 보존한다. 원격 시험과 local main 착지 결과는 Git 및 해당 세션 로그로 확인한다. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 근거가 없어 HOLD로 보존한다. P1·S1~S10·P2·P3는 아직 PLANNED다.
+
 근거: [조사 보고서](../assessments/2026-10-13-folder-responsibility-audit.md), Accepted [D-738](../adr/D-738-folder-one-authority.md), [현재 폴더 책임](../reference/platform-folder-responsibilities.md), [platform_parts.yaml](../../tools/harness/platform_parts.yaml). 조사 SHA `a967ab11a`는 과거 스냅샷이다. 각 작업 시작 시 최신 main에서 현재 경로와 이미 완료된 단계를 다시 확인한다. 다른 세션이 완료한 이동을 다시 실행하지 않는다.
 
 ## 범위·책임·순서
