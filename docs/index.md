@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
 - 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
 - 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
 - 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정
 - 2026-10-13 · uncommitted · Gazebo drive 역사 안전 검토 기록
-- 2026-10-13 · uncommitted · docs: D-738 폴더 이름과 묶음 규칙

@@ -1,6 +1,6 @@
 # Rosy 폴더 중복·책임 경계 조사
 
-**조사일:** 2026-10-13 · **제품 소스 기준:** `a967ab11a5a1a41ec488f32fb8ef37aedb7fc465` · **브랜치:** `docs/folder-responsibility-audit`
+**조사일:** 2026-10-13 · **제품 소스 기준:** commit `a967ab11a5a1a41ec488f32fb8ef37aedb7fc465` · **브랜치:** `docs/folder-responsibility-audit`
 
 Rosy 우산 폴더는 제품 저장소, 동결 보관본, 릴리스 증거를 담는다. 실제 제품은 `rosy-platform` 하나이며 CORE가 로봇 최종 명령, Fleet이 현장 작업 원장을 소유한다. 여러 개발 세션이 같은 PC와 공유 main을 사용하는 상황을 기준으로 조사했다.
 
@@ -9,7 +9,7 @@ Rosy 우산 폴더는 제품 저장소, 동결 보관본, 릴리스 증거를 �
 ## 범위와 조사 방법
 
 - 우산 `F:\Dev\Control\Robot\Rosy`와 제품 저장소를 조사했다. `archive`·`artifacts`는 역할 안내와 최상위 배치만 확인했으며, 보관된 모든 바이트를 대조하지 않았다.
-- 제품 분석은 독립 worktree의 위 SHA에 고정했다. 공유 main은 조사 도중 전진했다. 물리 잔여 폴더 조사에서 관측한 main은 `413ef5aed14156c689bcfb2341f44c4051c47d13`, 관리 도구의 worktree 인벤토리는 2026-10-13 12:01:48 KST의 별도 스냅샷이다. 서로 다른 시점의 수치를 한 SHA의 상태로 합치지 않았다.
+- 제품 분석은 독립 worktree의 위 SHA에 고정했다. 공유 main은 조사 도중 전진했다. 물리 잔여 폴더 조사에서 관측한 main은 commit `413ef5aed14156c689bcfb2341f44c4051c47d13`, 관리 도구의 worktree 인벤토리는 2026-10-13 12:01:48 KST의 별도 스냅샷이다. 서로 다른 시점의 수치를 한 SHA의 상태로 합치지 않았다.
 - `git ls-files`, `git worktree list --porcelain`, 관리 도구 `workspace.ps1 -Action Worktrees`, 소유권 manifest, 실제 `setup.py`·source layout·호출자·시험 파일을 읽었다. 물리 폴더 조사에서는 junction/reparse 하위 경로를 따라가지 않았다.
 - 파일 동일성은 여섯 제품 part의 `.py`, `.js`, `.mjs`, `.html`, `.css`, `.sh`, `.cpp`, `.hpp` 중 120바이트 이상을 SHA-256으로 비교했다. 의미가 비슷한 다른 구현, Kotlin·헤더의 다른 확장자, 짧은 초기화 파일까지 동일성 검사를 했다는 뜻은 아니다.
 - 제품 코드, 기존 폴더, 동료 변경은 수정·이동·삭제하지 않았다. 이 보고서와 문서 작업 기록만 독립 worktree에 작성했다. 착지·push·배포는 수행하지 않았다.
