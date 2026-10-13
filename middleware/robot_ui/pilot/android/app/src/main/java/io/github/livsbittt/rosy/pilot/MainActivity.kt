@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.pilot
 
+import io.github.livsbittt.rosy.cam.account.AndroidAccount
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
@@ -24,8 +25,8 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 
 /** Discover, select, join. A code appears only when the selected server requires pairing. */
 class MainActivity : Activity() {
-    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
-    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private val accountConfigured by lazy { AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) AndroidAccount(this) else null }
     private class NeedsAccount(val resource: String) : Exception()
     private fun accountConnection(candidate: Candidate, store: CandidateStore): LobbySession {
         val auth = requireNotNull(account)
