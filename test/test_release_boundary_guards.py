@@ -406,11 +406,20 @@ def test_scanner_ignores_public_provenance_paths_and_absorption_hashes():
     # "/pilot/android/..." of this path. The whole path word is what is judged.
     tail = "pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt"
     assert not scan_text("shared/web/surfaces.yaml", f"    token_verification: middleware/robot_ui/{tail}")
+    cam = "cam/app/src/test/java/io/github/livsbittt/rosy/cam/ui/RosyColorSchemeTest.kt"
+    assert not scan_text("shared/web/surfaces.yaml", f"    token_verification: operations/site_ui/{cam}")
     # The same key and the same path head do not excuse a token: a digit-led
-    # segment, a "+", or no path at all is still reported.
+    # segment, a "+", no path at all, or a token-sized piece (a revision or a
+    # base64 run after robot_ui/, a JWT after auth/v1/) is still reported.
+    import base64
     blob = "".join(("Zm9vYmFyYmF6cXV4", "MDEyMzQ1Njc4OWFi", "Y2RlZmdoaWprbG1u", "b3BxcnN0dXZ3eHl6"))
+    jwt = ".".join(base64.urlsafe_b64encode(part).decode().rstrip("=") for part in (
+        b'{"alg":"HS256","typ":"JWT"}', b'{"sub":"1234567890","name":"Rosy Operator","iat":1516239022}',
+        bytes(range(7, 39))))
     for value in (blob, f"middleware/robot_ui/{blob[:30]}/9{blob[30:]}",
-                  f"middleware/robot_ui/{blob[:30]}+{blob[30:]}", f"robot_ui/{tail}/" + "0f" * 20):
+                  f"middleware/robot_ui/{blob[:30]}+{blob[30:]}", f"robot_ui/{tail}/" + "0f" * 20,
+                  "middleware/robot_ui/" + "af" * 20, "middleware/robot_ui/" + "a1b2c3d4e5" * 4,
+                  f"middleware/robot_ui/{blob}", f"auth/v1/{jwt}"):
         found = scan_text("shared/web/surfaces.yaml", f"    token_verification: {value}")
         assert [f.kind for f in found] == ["high-entropy-token"], value
 

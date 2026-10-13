@@ -642,11 +642,14 @@ def scan_text(path: str, text: str, *,
                 continue
             # The base64 class has no "_", "." or "-", so it cuts a path such as
             # middleware/robot_ui/pilot/... at the underscore and resumes at the
-            # next "/". Judge the whole path word the fragment sits in; a word
-            # with a digit-led segment or a "+" still fails the path shape.
+            # next "/". Judge the whole path word the fragment sits in. A path
+            # head never excuses a token: a piece of 32+ characters that holds a
+            # digit or is all hex (robot_ui/<revision>, auth/v1/<JWT>) reports.
             head = re.search(_PATH_WORD + "$", entropy_line[:match.start("value")]).group(0)
-            tail = re.match(_PATH_WORD, entropy_line[match.end("value"):]).group(0)
-            if _PUBLIC_PATH_TOKEN.fullmatch(head + value + tail):
+            word = head + value + re.match(_PATH_WORD, entropy_line[match.end("value"):]).group(0)
+            if _PUBLIC_PATH_TOKEN.fullmatch(word) and not any(
+                    len(piece) >= 32 and (not piece.isalpha() or _HEX_ONLY.fullmatch(piece))
+                    for piece in re.split(r"[/_.-]", word)):
                 continue
             if _is_ed25519_public_key_body(value):
                 continue
