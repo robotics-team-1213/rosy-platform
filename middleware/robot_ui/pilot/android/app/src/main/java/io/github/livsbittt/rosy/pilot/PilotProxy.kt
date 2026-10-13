@@ -46,12 +46,21 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         })
     }
     override fun serve(session: IHTTPSession): Response {
-        val requiresApproval = session.uri.startsWith("/api/v1/") || session.uri.startsWith("/ws/") || session.uri == "/pilot/bootstrap.js"
+        val requiresApproval = session.uri.startsWith("/api/") || session.uri.startsWith("/ws/") || session.uri == "/pilot/bootstrap.js"
         if ((requiresApproval && !connection.authorized()) || !ProxyGuard("127.0.0.1:$listeningPort", capability, cookieName).permits(session.headers) ||
             !ProxyGuard.allowedPath(session.uri)) return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Connection unavailable")
         return super.serve(session)
     }
     override fun serveHttp(session: IHTTPSession): Response {
+        if (connection.managed && session.uri == "/api/account/session") return reply(200, "application/json",
+            (connection.accountContext() ?: JSONObject().put("enabled", true).put("authenticated", false)).toString().toByteArray())
+        if (connection.managed && session.uri == "/api/account/logout") {
+            if (session.method != Method.POST || session.headers["origin"] != origin) return reply(403, "text/plain", ByteArray(0))
+            val ok = connection.logoutAccount(); sockets.toList().forEach { it.disconnect() }
+            return reply(if (ok) 204 else 503, "text/plain", ByteArray(0))
+        }
+        if (connection.managed && session.uri == "/pilot/bootstrap.js") return reply(200, "application/javascript",
+            "document.documentElement.dataset.pilotShell='android';document.documentElement.dataset.pilotAccount='managed';sessionStorage.removeItem('rosy.pilot.token');".toByteArray())
         if (session.uri == "/pilot/bootstrap.js") return reply(200, "application/javascript", "document.documentElement.dataset.pilotShell='android';sessionStorage.setItem('rosy.pilot.token',${JSONObject.quote(target.credential)});".toByteArray())
         if (session.uri.endsWith("/sw.js")) return reply(404, "text/plain", ByteArray(0))
         val asset = BundledPath.asset(session.uri)
@@ -79,14 +88,15 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             // Browser tokens, cookies and headers cannot choose or authorize a different endpoint.
             val request = Request.Builder().url("$scheme://${target.host}:${target.port}${session.uri}$query")
                 .method(method, body).apply {
-                    if (session.uri.startsWith("/api/v1/")) session.headers["authorization"]?.let { header("Authorization", it) }
+                    if (connection.managed) header("Authorization", "Bearer ${connection.bearer()}")
+                    else session.headers["authorization"]?.let { header("Authorization", it) }
                     session.headers["range"]?.let { header("Range", it) }
                 }.build()
             val response = client.newCall(request).execute()
             var streaming = false
             try {
                 if (failureReported) { failureReported = false; recovery() }
-                if ((response.code == 401 && session.headers["authorization"] == "Bearer ${target.credential}") ||
+                if ((response.code == 401 && session.headers["authorization"] == "Bearer ${connection.bearer()}") ||
                     (response.isSuccessful && session.uri == "/api/v1/auth/logout")) connection.invalidateCredential()
                 if (response.isRedirect) return reply(502, "text/plain", "Redirect refused".toByteArray())
                 val mime = response.header("Content-Type") ?: "application/octet-stream"
@@ -154,7 +164,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     fun verifyIdentity() {
         check(connection.authorized()) { "session expired" }
         client.newCall(Request.Builder().url("$scheme://${target.host}:${target.port}/api/v1/system/info")
-            .header("Authorization", "Bearer ${target.credential}").build()).execute().use { response ->
+            .header("Authorization", "Bearer ${connection.bearer()}").build()).execute().use { response ->
             check(response.isSuccessful) { "identity unavailable" }
             val bytes = response.body?.byteStream()?.let { MainActivity.readLimited(it, 65536) } ?: error("identity unavailable")
             check(JSONObject(bytes.toString(Charsets.UTF_8)).optString("robot_id") == target.id) { "robot identity mismatch" }
@@ -167,7 +177,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         if (identityVerified) runCatching {
             client.newBuilder().callTimeout(400, TimeUnit.MILLISECONDS).retryOnConnectionFailure(false).build()
                 .newCall(Request.Builder().url("$scheme://${target.host}:${target.port}/api/v1/teleop")
-                    .header("Authorization", "Bearer ${target.credential}")
+                    .header("Authorization", "Bearer ${connection.bearer()}")
                     .post("{\"linear\":0,\"angular\":0}".toRequestBody("application/json".toMediaTypeOrNull())).build())
                 .execute().close()
         }
@@ -183,7 +193,9 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         override fun onOpen() {
             if (sockets.size > 4 || !handshakeRequest.uri.startsWith("/ws/")) { disconnect(); return }
             val url = "${if (connection.secure) "wss" else "ws"}://${target.host}:${target.port}${handshakeRequest.uri}"
-            upstream = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            upstream = client.newWebSocket(Request.Builder().url(url).apply {
+                if (connection.managed) header("Authorization", "Bearer ${connection.bearer()}")
+            }.build(), object : WebSocketListener() {
                 override fun onOpen(socket: okhttp3.WebSocket, response: okhttp3.Response) { synchronized(this@Relay) {
                     if (!connection.authorized()) { disconnect(); return }
                     ready = true
