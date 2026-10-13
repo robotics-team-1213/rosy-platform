@@ -303,6 +303,10 @@ def test_rapid_calibration_return_starts_new_owner_and_old_lease_cannot_paint(co
         choose(page, '카메라 설치·보정')
         expect(page.locator('#camera-calibration')).to_be_visible()
         page.wait_for_function('leaseRequests===2')
+        for _ in range(100):  # the page counts its fetch before Playwright hands the route to this handler
+            if len(held) == 2:
+                break
+            page.wait_for_timeout(50)
         assert len(held) == 2
         def lease(kind):
             return {'source_id': 'fixture-camera', 'lease': f'{kind}-lease',

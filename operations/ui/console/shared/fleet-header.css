@@ -63,7 +63,7 @@ ui-topbar {
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .fleet-header-actions [hidden], .topbar-extra [hidden] { display: none; }
 #fleet-inbox { flex: none; }
-#fleet-login { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+#fleet-login:not([hidden]) { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 /* 계정 정보는 계정 단추 아래 펼침 칸의 한 묶음이다. 떠 있는 패널이 아니라 흐름 안에 있다. */
 .fleet-account-panel { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
 .fleet-account-panel .password-login-who { flex-wrap: wrap; }

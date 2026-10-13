@@ -224,7 +224,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 - 테마는 `tokens.css`의 `[data-theme="이름"]` 팔레트 블록 **하나**다. 기본(어둡게)은 `:root, [data-theme="dark"]`, 밝게는 `[data-theme="light"]`다.
 - 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
-- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
+- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그리고, Fleet 헤더의 순환 버튼 하나도 같은 목록을 돈다(D-668, `test_theme_choices.py`).
 - 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
 - `python -m pytest shared/web/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
 - 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
@@ -239,7 +239,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 - [`theme.js`](shared/web/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
 - 선호는 `localStorage` `rosy.theme` = `dark|light|system`. 없거나 읽기 실패면 `dark`. `system`은 `prefers-color-scheme`을 따른다.
 - API: `window.RosyTheme.get()`·`set(pref)`·`resolved()`. 바뀌면 `document`에 `rosy:theme` 이벤트(`{theme, preference}`)가 난다.
-- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널과 Fleet `설정` 안에 있다.
+- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널에 있다. Fleet은 헤더의 순환 버튼 하나(`data-theme-cycle`)가 같은 선택지를 돈다(D-668).
 - 고정 표면: `surfaces.yaml`에 `themes: [dark]`인 웹 표면(games 보드, Pilot, `lane_live_view`, `diagnostic.html`)은 `<html data-theme-pin="dark">`이고, 왜 테마를 따르지 않는지 `theme_reason`에 적는다(없으면 레지스트리 시험이 막는다). 네이티브·LCD 사본도 어둡게 고정이다.
 - 캔버스는 CSS 변수를 못 읽는다. `window.RosyPalette`(`readColour`·`readPalette`·`cssColor`·`canvasFont`)로 어떤 CSS 색이든 RGBA로 풀고, `rosy:theme`에서 캐시가 비워진다. 다시 그리는 일은 각 캔버스가 한다.
 
@@ -444,7 +444,7 @@ D-741(Proposed)이 정한, 모든 웹 표면이 같이 쓸 자리다. 아직 이
 - 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `quiet`로 선다(위험 채움은 비상 정지 하나). 로봇 카드 `운행 취소`와 큐 펼침 `중단`도 `quiet`이고, 멈추는 동작이라 확인 없이 바로 나간다([D-540](docs/adr/D-540-fleet-console-structure-v2.md) 6항).
 
 ### 테마 선택
-- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
+- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널이다. Fleet은 이 묶음 대신 헤더의 순환 버튼 하나를 쓴다(D-668).
 
 ## 작업 화면의 기본 원칙 (D-461)
 
