@@ -9,7 +9,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = ROOT / 'operations/execution/src/rosy/execution/site'
+SITE = ROOT / 'operations/site_execution/src/rosy/execution/site'
 
 
 def test_decision_no_longer_owns_fleet_store_dispatch():
@@ -41,7 +41,7 @@ assert GoalPredicate.from_mapping(dict(predicate_id='p', condition='object_in_de
     object_id='o', destination_id='d', evidence_source='camera_observation')).object_id == 'o'
 '''
     result = subprocess.run([sys.executable, '-I', '-c', probe,
-                             str(ROOT / 'operations/execution/src')],
+                             str(ROOT / 'operations/site_execution/src')],
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -52,7 +52,7 @@ assert GoalPredicate.from_mapping(dict(predicate_id='p', condition='object_in_de
     ('HOLD', 'HOLD'), ('CANCELED', 'CANCELED'), ('unrecognized', 'UNKNOWN'),
 ])
 def test_workflow_never_confuses_action_acceptance_with_goal_success(status, expected):
-    sys.path.insert(0, str(ROOT / 'operations/execution/src'))
+    sys.path.insert(0, str(ROOT / 'operations/site_execution/src'))
     try:
         from rosy.execution.site.workflow import mission_step_state
         assert mission_step_state(status) == expected
@@ -61,7 +61,7 @@ def test_workflow_never_confuses_action_acceptance_with_goal_success(status, exp
 
 
 def test_progress_freshness_keeps_existing_boundary_and_invalid_time_rules():
-    sys.path.insert(0, str(ROOT / 'operations/execution/src'))
+    sys.path.insert(0, str(ROOT / 'operations/site_execution/src'))
     try:
         from rosy.execution.site.workflow import _freshness, _timestamp
         now = datetime.fromtimestamp(100, timezone.utc)

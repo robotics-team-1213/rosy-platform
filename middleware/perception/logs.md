@@ -1556,3 +1556,9 @@
 - 증거: 원격 pytest(모델 PC) `test_command_gate.py test_os_parameter_graph.py test_lidar_guard.py test_policy_handoff.py test_forward_stopping_sweep.py` 74 passed, 9 skipped, `known_failures` NEW 0. 건너뛴 9건은 rclpy가 필요한 `test_os_parameter_graph.py`이고 새 생산자 시험이 그 안에 있다. 구현 전 같은 게이트 시험 6건은 ImportError로 실패했다.
 - gate 변화: 없음. SOURCE 단위 회귀만이다. 프로필 상한이 (0.10, 0.70)이면 지연 여유가 약 41 mm라서 벽 96 mm인 원래 Gazebo 정지 사례가 풀린다는 증거는 없다. ROS 생산자 시험, Gazebo 반복, 실물 수용은 하지 않았다.
 - 결정: D-740 Proposed
+
+## 2026-10-13 · uncommitted · D-747 S2 functional judgment holders
+
+- 변경: 14 unchanged source files move to localization, graph_health, object_observation, line_observation and snapshots, with dedicated ROS adapters. Existing control.* identities and CORE command authority remain.
+- 증거: byte hashes and Git contents agree; independent source/Safety/deployment-closure review PASS. Remote verification and local landing are recorded separately in docs/validation/perception-judgment-s2-2026-10-13/result.md.
+- gate 변화: 없음. No device/ROS transport acceptance claimed.

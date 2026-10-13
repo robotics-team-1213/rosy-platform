@@ -1,7 +1,7 @@
 """The verdict layer, tested where the node and the Gazebo adapter used to disagree.
 
 Before this module existed, camera_detect_node.tick counted `hits` from a
-parameter behind a `warmup_frames` gate, while tools/gz/rendered_camera_adapter
+parameter behind a `warmup_frames` gate, while ../../tools/sim/gazebo/rendered_camera_adapter
 hardcoded hits >= 2 with no warmup and no cliff hysteresis at all. Both drove the
 same topics, so a green sim run said nothing about the robot.
 """

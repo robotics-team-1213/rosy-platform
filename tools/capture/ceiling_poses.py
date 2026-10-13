@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-for _p in (REPO / "operations" / "vision", REPO / "contracts" / "foundation", REPO / "operations" / "apps" / "games",
+for _p in (REPO / 'operations' / 'overhead', REPO / "contracts" / "foundation", REPO / "operations" / "apps" / "games",
            REPO / "learning" / "curation" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))

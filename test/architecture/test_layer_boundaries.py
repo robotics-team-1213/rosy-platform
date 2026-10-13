@@ -4,8 +4,8 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PERCEPTION = ROOT / "middleware/perception/vision/perception"
-DECISION = ROOT / "middleware/core/services/core_features/decision"
+PERCEPTION = ROOT / "middleware/perception/front_camera/perception"
+DECISION = ROOT / "middleware/core/services/core_features/action_rules"
 LINE = ROOT / "middleware/drive/behaviors/line_follow"
 SENSING = ROOT / "middleware/perception/sensors/sensing"
 

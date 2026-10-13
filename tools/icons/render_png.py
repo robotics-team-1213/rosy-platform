@@ -5,9 +5,9 @@ The icons in ``shared/web/icons/`` use ``<path>`` elements only, with absolute
 M/L/H/V/A/Z commands, and either a fill or a round-capped stroke. That subset is what
 this renderer reads; anything else raises. Output PNGs are generally not kept in the
 repository: write them under X:\\DevTemp (or another scratch folder) when a listing or doc
-needs one. Exception: the Rosy Pilot PWA icons (middleware/ui/pilot/icons/icon-192.png,
+needs one. Exception: the Rosy Pilot PWA icons (middleware/robot_ui/pilot/icons/icon-192.png,
 icon-512.png, icon-192-maskable.png) are committed renders of pilot.svg because the
-manifest serves them; middleware/ui/pilot/test/test_pwa_icons.py keeps them equal to this output.
+manifest serves them; middleware/robot_ui/pilot/test/test_pwa_icons.py keeps them equal to this output.
 
     python tools/icons/render_png.py shared/web/icons/pilot.svg X:/DevTemp/pilot.png
     python tools/icons/render_png.py <svg> <png> --size 48 --mono

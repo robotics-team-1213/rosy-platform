@@ -1,6 +1,7 @@
 """D-411 A: pilot_recorder_node stays thin; the camera publishes JPEG only while recording."""
 
 from pathlib import Path
+from test.control_sources import source_path
 import ast
 import json
 import types
@@ -15,7 +16,7 @@ SETUP = Path(__file__).resolve().parents[1] / "setup.py"
 
 
 def _src(name):
-    return (CONTROL / name).read_text(encoding="utf-8")
+    return source_path(name).read_text(encoding="utf-8")
 
 
 def test_node_wraps_the_ros_free_recorder_and_never_drives():

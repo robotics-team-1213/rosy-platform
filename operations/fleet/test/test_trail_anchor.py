@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 from core_common.protocol.schemas import PoseSample
-from fleet.localization.map_pose import (DEGRADED, LOCALIZED, UNKNOWN, MapPose, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (DEGRADED, LOCALIZED, UNKNOWN, MapPose, MapPoseTracker,
                                          OdomSample, Sighting, compose, relative)
 from fleet.server.map_pose_service import MapPoseService
 from fleet.swarm import anchor as anchor_mod

@@ -13,9 +13,10 @@ def control_sources():
     root = PACKAGE_ROOT / "control"
     sources = {path.relative_to(root).as_posix(): path
                for path in root.rglob("*.py")}
-    for path in _layout['RUNTIME_ROOT'].glob('*.py'):
-        assert path.name not in sources, path.name
-        sources[path.name] = path
+    for folder in _layout['CONTROL_ROOTS']:
+        for path in folder.glob('*.py'):
+            assert path.name not in sources, path.name
+            sources[path.name] = path
     for namespace, folder in PACKAGE_DIRS.items():
         prefix = namespace.removeprefix("control.").replace(".", "/")
         for path in folder.rglob("*.py"):

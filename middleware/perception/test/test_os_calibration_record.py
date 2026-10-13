@@ -4,7 +4,7 @@ import yaml
 from control.calibration_storage import merge_calibration
 from control.calibration_record import decode_record
 from control.calibration_storage import single_calibration_path
-from tools.migrate_calibration import migrate
+from tools.calibration.migrate_calibration import migrate
 
 
 CONTEXT = dict(robot_id='rosy_01', hardware_model='Pinky Pro', geometry_revision='geometry-1',

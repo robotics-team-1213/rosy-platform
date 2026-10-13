@@ -15,7 +15,7 @@ import math
 import random
 
 from core_features.swarm.trail import Trail, trail_twist
-from fleet.localization.map_pose import compose, relative
+from rosy.world.state.projections.map_pose import compose, relative
 from fleet.server.map_pose_service import MapPoseService
 from fleet.swarm.anchor import TrailAnchor
 

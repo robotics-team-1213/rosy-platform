@@ -324,7 +324,7 @@ def test_geometry_identity_changes_with_the_paint_half_width():
 
 
 def test_node_paint_half_width_is_read_only_and_validated_at_startup():
-    source = (REPO / "middleware" / "perception" / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    source = (REPO / "middleware" / "perception" / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)" in source
     startup = source.split("def __init__", 1)[1].split("\n    def ", 1)[0]
     assert "paint_half_width(self.get_parameter('lane_paint_half_width_m').value)" in startup

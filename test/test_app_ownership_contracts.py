@@ -176,10 +176,10 @@ def test_console_documents_have_one_api_and_session_owner(fleet):
 
 
 @pytest.mark.parametrize("surface,source,function,path", [
-    ("robot", "middleware/ui/robot/client.js", "api", "/api/v1/auth/whoami"),
-    ("pilot", "middleware/ui/pilot/client.js", "api", "/api/v1/auth/whoami"),
-    ("console", "operations/ui/console/console.js", "call", "/api/fleet/state"),
-    ("console", "operations/ui/console/install.js", "call", "/api/fleet/discovery"),
+    ("robot", "middleware/robot_ui/robot/client.js", "api", "/api/v1/auth/whoami"),
+    ("pilot", "middleware/robot_ui/pilot/client.js", "api", "/api/v1/auth/whoami"),
+    ("console", "operations/site_ui/console/console.js", "call", "/api/fleet/state"),
+    ("console", "operations/site_ui/console/install.js", "call", "/api/fleet/discovery"),
 ])
 def test_existing_client_request_reaches_its_declared_plane(surface, source, function, path):
     """Run the exact request function; isolate its DOM/session hooks, not its fetch path."""
