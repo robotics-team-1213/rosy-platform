@@ -3533,3 +3533,9 @@
 - 증거: `test_rule_selection.py`(R9 기록과 같은 poll의 다른 로봇 기록 유지, realign 설정 변경 시 baseline 거절), `test_stuck_realign.py`(이중 등록 로봇의 사람 인계와 재선택 없음, 한쪽 목록 로봇은 그대로). 원격 시험 로그는 X: `land-recent/realign-fu` 세션이다.
 - 이행: REALIGN 행은 0.1.11 독자가 거절한다. 어느 현장이든 `realign_robots`를 켜기 전에 현장 Fleet과 모델 PC wheel이 `rosy-contracts-learning` 0.1.12여야 한다.
 - gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.
+
+## 2026-10-13 · 9e2d4ef0c · test(fleet): app bar and rail contracts follow D-741
+
+- 변경: `test_fleet_header.py`, `test_doc_tabs.py`, `test_site_map_api.py`, `web/fleet-header.test.mjs`와 브라우저 시험 다섯 파일(`test_fleet_header_browser.py`, `test_development_console_browser.py`, `test_password_login_browser.py`, `test_fleet_account_browser.py`, `test_site_map_browser.py`)이 새 앱 바를 고정한다. 서버 코드와 API는 바뀌지 않았다.
+- 증거: 원격 소스 시험 통과. 브라우저 시험은 CI 대기.
+- gate 변화: 없음.

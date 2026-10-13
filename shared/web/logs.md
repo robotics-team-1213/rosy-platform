@@ -759,3 +759,9 @@
 - 변경: 자리 토큰과 `app-shell.css`를 더하고 견본 틀·스타일 갤러리·DESIGN.md에 자리를 넣었다. 어떤 제품 표면도 아직 이 자리를 쓰지 않는다.
 - 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0. 브라우저 시험과 화면 캡처는 없다.
 - gate 변화: 없음.
+
+## 2026-10-13 · 9e2d4ef0c · feat(fleet): console app bar registers a 48rem container breakpoint (D-741)
+
+- 변경: `surfaces.yaml`의 `console`에서 `@media` 48rem 등재를 지우고 `container_breakpoints` 48rem을 올렸다. `test_chrome_layout.py`, `test_action_icon_contract.py`, `test_theme_browser.py`가 Fleet 앱 바의 새 배치를 따른다. 공용 시트와 토큰은 바뀌지 않았다.
+- 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0.
+- gate 변화: 없음.
