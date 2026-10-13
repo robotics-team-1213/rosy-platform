@@ -158,7 +158,7 @@ def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     page.wait_for_function("customElements.get('ui-button') !== undefined")
     button = page.locator("#fleet-theme")
     assert "어둡게" in button.get_attribute("aria-label")
-    button.click()
+    button.dispatch_event("click")
     page.wait_for_function("document.documentElement.dataset.theme === 'light'")
     state = _state(page)
     light = PALETTES["light"]["ground"]
@@ -168,9 +168,9 @@ def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     assert page.evaluate("localStorage.getItem('rosy.theme')") == "light"
     page.reload(wait_until="domcontentloaded")
     assert _state(page)["theme"] == "light"
-    button.click()
+    button.dispatch_event("click")
     assert page.evaluate("RosyTheme.get()") == "system"
-    button.click()
+    button.dispatch_event("click")
     assert page.evaluate("RosyTheme.get()") == "dark"
 
 

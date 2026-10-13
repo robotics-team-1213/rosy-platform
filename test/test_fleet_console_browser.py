@@ -2494,7 +2494,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          inbox: document.querySelector('#fleet-theme').getBoundingClientRect().toJSON(),
+          inbox: document.querySelector('#fleet-inbox').getBoundingClientRect().toJSON(),
           stopScopeHidden: (() => {
             const small = document.querySelector('#estop small');
             return !!small && getComputedStyle(small).display === 'none';
@@ -2592,7 +2592,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and folded["theme"] and not folded["role"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and folded["role"], folded
     assert folded["status"] and not folded["clock"] and not folded["footer"], folded
     assert folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
@@ -2612,8 +2612,8 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
-            # D-668: 테마는 접히지 않는 버튼 하나다. 접속 상세는 상태 센터 뒤에 접혀 있다.
-            assert page.locator('#fleet-theme').is_visible()
+            # D-741 3: 화면 표시와 접속 상세는 계정 단추 아래에 접혀 있다.
+            assert page.locator('#fleet-theme').is_hidden()
             assert page.locator('#topbar-extra').is_hidden()
             results[width] = page.evaluate("""() => {
               const more = document.querySelector('#topbar-more');

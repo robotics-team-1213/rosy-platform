@@ -56,18 +56,19 @@ ui-topbar {
 .fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
 #clock { flex: none; white-space: nowrap; }
 #development-badge { flex: none; min-width: max-content; overflow: visible; }
-#user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
-/* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
-.fleet-header-actions { grid-area: actions; position: relative; display: flex; align-items: center; gap: var(--space-1); }
-.fleet-header-actions [hidden] { display: none; }
-#fleet-login,
-#fleet-account > summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
-.fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
+#user-role { min-width: 0; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D-741 3: 알림, 로그인, 나(계정 단추). 폭이 모자라면 계정 단추의 역할 이름이 먼저 줄고 정지는 밀리지 않는다. */
+.fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.fleet-header-actions [hidden], .topbar-extra [hidden] { display: none; }
+#fleet-inbox { flex: none; }
+#fleet-login { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+/* 계정 정보는 계정 단추 아래 펼침 칸의 한 묶음이다. 떠 있는 패널이 아니라 흐름 안에 있다. */
+.fleet-account-panel { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
 .fleet-account-panel .password-login-who { flex-wrap: wrap; }
 .fleet-account-panel [data-login="principal"] { display: none; }
 .fleet-header-safety { grid-area: safety; justify-self: end; }
-#topbar-more { display: inline-flex; max-width: 100%; }
-.header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+#topbar-more { display: inline-flex; flex: 0 1 auto; min-width: var(--target-secondary); max-width: 100%; }
+.header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .topbar-extra {
   display: none;
   grid-column: 1 / -1;

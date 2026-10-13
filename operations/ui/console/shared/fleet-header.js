@@ -1,6 +1,6 @@
-// D-540 2 — the one Rosy Fleet header. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar> markup
-// (test_fleet_header.py pins it) and drive it only through this module: role words, development badge,
-// connection count, clock, the settings fold and the one E-stop rule. Each page keeps its own session probe.
+// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
+// markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
+// count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import {actionIcon} from "/common/ui.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 
@@ -33,33 +33,17 @@ export function noteLink(error = null, now = Date.now()) {
   paintLink(now);
 }
 
-// Every Fleet document has one inbox entry; only the console owns its local unread state.
-function inboxButton() {
-  if ($("fleet-inbox")) return $("fleet-inbox");
-  const inbox = document.createElement("ui-button");
-  inbox.id = "fleet-inbox";
-  inbox.setAttribute("kind", "quiet");
-  inbox.setAttribute("type", "button");
-  inbox.setAttribute("aria-label", "알림 창");
-  inbox.setAttribute("data-ui-tooltip", "알림 창");
-  inbox.setAttribute("data-action-icon", "notification");
-  actionIcon(inbox, "notification");
-  $("topbar-extra").prepend(inbox);
-  inbox.addEventListener("click", () => {
-    const request = new CustomEvent("rosy:inbox", {cancelable: true});
-    if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
-  });
-  return inbox;
+// The alerts button is static markup on every Fleet document; only the console owns the unread count.
+function openInbox() {
+  const request = new CustomEvent("rosy:inbox", {cancelable: true});
+  if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
 }
 export function showInboxCount(count) {
-  const inbox = inboxButton();
-  inbox.textContent = count ? String(count) : "";
+  const inbox = $("fleet-inbox"), unread = $("header-unread");
+  unread.textContent = count ? String(count) : "";
+  unread.hidden = !count;
   inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
   inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
-  const entry = $("topbar-more");
-  $("header-unread").textContent = String(count);
-  $("header-unread").hidden = !count;
-  actionIcon(inbox, "notification");
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
 
@@ -105,16 +89,14 @@ export function setTopbarOpen(open) {
   $("topbar-extra").dataset.open = String(open);
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
-  inboxButton();
+  listen($("fleet-inbox"), "click", openInbox);
   bindThemeCycle(listen);
   const entry = $("topbar-more");
   function summarize() {
-    const count = $("header-unread").textContent;
-    const messages = count === "—" ? "미확인 메시지 수는 관제에서 확인" : `미확인 메시지 ${count}개`;
     const development = $("development-badge").hidden ? "" : " · 개발 연결 모드";
-    const label = `상태 센터 · ${messages}${development}`;
+    const label = `계정과 접속 · ${$("user-role").textContent}${development}`;
     entry.setAttribute("aria-label", label);
-    entry.setAttribute("data-ui-tooltip", `${label} · 연결·권한·메시지 확인`);
+    entry.setAttribute("data-ui-tooltip", `${label} · 계정·화면 표시·토큰 접속`);
   }
   new MutationObserver(summarize).observe(entry, {subtree: true, childList: true,
     attributes: true, attributeFilter: ["hidden", "status"]});
@@ -149,7 +131,6 @@ export function showSession(identity) {
 // the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
 export function showSignedOut({fold = true, refused = true} = {}) {
   $('fleet-account').hidden = true;
-  $('fleet-account').open = false;
   $('fleet-login').hidden = false;
   const tag = $("user-role");
   tag.textContent = "인증 필요";
