@@ -87,6 +87,9 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       }
       return false;
     }
+    if (session.account_id) {
+      try { localStorage.setItem('rosy.fleet.account.identity', `${session.account_id}:${session.session_family}:${session.revision}`); } catch {}
+    }
     onChange(true);
     return true;
   }
@@ -240,6 +243,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         }
         sessionStorage.removeItem('rosy-console-token');
         cookie = false; cookiePrincipal = cookieRole = null;
+        try { localStorage.setItem('rosy.fleet.account.identity', ''); } catch {}
         host.hidden = true;
         document.getElementById('fleet-account').open = false;
         onChange(false);

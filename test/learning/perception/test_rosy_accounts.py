@@ -6,12 +6,15 @@ from test_learning_accounts import accounts
 
 
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
+    old_cookie, _ = accounts.login('alice','alice-password')
     record = SimpleNamespace(sub='central-alice', aud='project:one',
         permits=lambda resource, capability: capability in {'learning.view','learning.import'})
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record)
     config = accounts.config()
     config['account_subjects'] = {'central-alice':'alice'}
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    with pytest.raises(AccountError): accounts.authenticate(old_cookie)
+    with pytest.raises(AccountError): accounts.login('alice','alice-password')
     actor = managed.authenticate('browser-session')
     assert actor['user_id'] == 'alice'
     assert actor['capabilities'] == ['import', 'view']

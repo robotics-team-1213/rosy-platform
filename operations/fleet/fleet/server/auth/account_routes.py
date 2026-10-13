@@ -15,6 +15,14 @@ def install_account_routes(app, *, sessions, authorize):
         if getattr(request.state, "site_auth_via", None) != "cookie" or not (local_read or same_origin(request)):
             raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED",
                                              "message": "same-origin account manager cookie required"})
+        expected = request.headers.get('x-rosy-session')
+        if expected is not None:
+            try:
+                current = sessions.account_context(request.cookies[COOKIE])
+            except SessionStorageUnavailable:
+                raise _storage_unavailable() from None
+            if not current or current['session_family'] != expected:
+                raise HTTPException(403, detail={'code':'ACCOUNT_CHANGED', 'message':'browser account changed'})
         return request.cookies[COOKIE]
 
     def call(operation, *args, status=200, **kwargs):
