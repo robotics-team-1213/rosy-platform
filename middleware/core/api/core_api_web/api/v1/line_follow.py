@@ -272,6 +272,9 @@ class LineJunctionRequest(BaseModel):
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     bend_radius_m: Optional[float] = Field(default=None, gt=0, le=0.5)
+    # D-754: a bend's lane distance from its vertex to the next junction's cross line (2 = that far
+    # or further), sent only to a robot announcing lane_bend_next_line.
+    next_line_in_m: Optional[float] = Field(default=None, ge=0, le=2.0, allow_inf_nan=False)
 
 
 def _expect(body: LineJunctionRequest):
@@ -279,7 +282,7 @@ def _expect(body: LineJunctionRequest):
     fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
                   pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
                   bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m,
-                  lane_turn_deg=body.lane_turn_deg)
+                  lane_turn_deg=body.lane_turn_deg, next_line_in_m=body.next_line_in_m)
     return fields if any(v is not None for v in fields.values()) else None
 
 
@@ -302,8 +305,9 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
             or body.pivot_past_line_m is not None or body.advance_m is not None):
         raise ApiError("VALIDATION_ERROR", 400, "bend needs turn_deg (0 < |turn_deg| <= 90), map_id, "
                        "bend_in_m, bend_tol_m and bend_radius_m, and no window, pivot or advance")
-    if body.action != "bend" and any(v is not None for v in bend):
-        raise ApiError("VALIDATION_ERROR", 400, "bend_in_m, bend_tol_m and bend_radius_m belong to bend")
+    if body.action != "bend" and any(v is not None for v in (*bend, body.next_line_in_m)):
+        raise ApiError("VALIDATION_ERROR", 400,
+                       "bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     if (body.expect_in_m is None) != (body.expect_tol_m is None):

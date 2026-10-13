@@ -19,10 +19,11 @@ from __future__ import annotations
 import math
 
 from core_features.line_follow.recovery.junction.approach import (
-    CORRIDOR_HALF_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
+    CORRIDOR_HALF_M, MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
 BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
+NEXT_LINE = 'next_line_in_m'  # D-754, optional: the vertex to the next junction's line, [0, MAX_AHEAD_M]
 #: ponytail: the 260919 camera/keeper sees a 63 deg bend's new lines ~0.22 m before the arc
 #: start (B8 misread onset 0.22 m, B9 gate-on HOLD 0.21 m); a plausibility value, SIM-tuned.
 BEND_LEAD_M = .25
@@ -43,10 +44,12 @@ def check_bend(action, turn_deg, expect):
     """The bend fields belong to 'bend' and 'bend' needs all of them (the API answers 400 first)."""
     e = expect or {}
     if action != 'bend':
-        if any(e.get(k) is not None for k in BEND_FIELDS):
-            raise ValueError('bend_in_m, bend_tol_m and bend_radius_m belong to bend')
+        if any(e.get(k) is not None for k in (*BEND_FIELDS, NEXT_LINE)):
+            raise ValueError('bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend')
         return
     b_in, tol, radius = (e.get(k) for k in BEND_FIELDS)
+    if e.get(NEXT_LINE) is not None and not 0 <= e[NEXT_LINE] <= MAX_AHEAD_M:  # nan fails too
+        raise ValueError('next_line_in_m must be in [0, 2]')
     if (turn_deg is None or not math.isfinite(turn_deg) or not 0 < abs(turn_deg) <= MAX_BEND_DEG
             or e.get('map_id') is None or None in (b_in, tol, radius)
             or not (0 < b_in <= MAX_BEND_IN_M and 0 < tol <= MAX_BEND_TOL_M
@@ -87,6 +90,11 @@ class JunctionBendMixin:
             c = self._config
             return (c.site_floor_map_id is not None and c.ir_guard_enabled
                     and c.obstacle_mode == 'path' and c.body_stop_known)
+
+    @property
+    def supports_lane_bend_next_line(self):
+        """Capability lane_bend_next_line (D-754): a bend's next_line_in_m is taken, with lane_bend."""
+        return self.supports_lane_bend
 
     def _bend_armed(self, j, now, seen, decision):
         """Follow and measure until the lead window, then take over. Locked."""
