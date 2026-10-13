@@ -67,6 +67,20 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
 
 설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
 
+## 검수에서 학습 owner로 연결 (D-742)
+
+검수 설치기는 기존 화면 port+10000에 loopback GET `/api/decisions`만 연다. 8774 화면은 18774의 현재 결정 조회와 연결된다. 사설 화면 바인딩·쓰기 token·원본 DB는 유지한다.
+
+같은 PC의 bridge 설정은 기존 설정에 `transport: local`과 pinned `authority`를 사용한다. `source`는 검수 state의 exports, `remote_reviews`는 별도 pipeline reviews 경로, `peer`는 `local`, `interval_s`는 10, `max_attempts`는 3이다. authority.endpoint는 `http://127.0.0.1:18774/api/decisions`, workspace_id는 실제 화면에서 읽은 ID다. SSH 기본 전달 설정은 바뀌지 않는다. 같은 receiver에는 bridge writer 하나만 구성한다.
+
+private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.json`에 둔다. pipeline.json은 기존 ReviewPipeline의 `cycle`/`review` 구조다. cycle의 trainer에는 기존 store·품질 gate·replay_root·intake_out·camera_profile, recipes에는 명시 연구 recipe를 둔다. requests_dir와 reviews_dir는 새 pipeline 전용 경로, authority.path는 해당 reviews의 `.authority/current.json`, max_age_s는 90 이하이다. review에는 실제 source_proof_files, staging_parent, dataset_name과 필요한 eval_companion_files를 지정한다. 그룹·정답·카메라 수용을 임의로 true로 만들지 않는다.
+
+서비스 템플릿 4개(`rosy-review-bridge.service/.timer`, `rosy-review-pipeline.service/.timer`)를 사용자 systemd에 설치한다. 사용자 manager의 supplementary group에 기존 Store 쓰기 그룹이 포함되어 있어야 한다. 실행 중 primary group을 바꾸면 D-446의 같은 사용자 프로세스 조회가 거절될 수 있으므로 `sg`로 감싸지 않는다. bridge는 승인된 불변 검수 코드에서 짧게 실행하며 GPU 잠금을 잡지 않는다. 학습 owner는 D-446 실행기로 source/environment와 GPU 작업 잠금을 유지한다. 따라서 긴 학습 중에도 현재 결정의 TTL·철회가 갱신된다. 기존 다른 learning-cycle 서비스와 state를 덮어쓰거나 중복 실행하지 않는다.
+
+먼저 bridge와 pipeline 서비스를 한 번 실행하고 수신 current.json의 workspace/revision, bridge-state/state.json, cycle-state/state.json의 review_autobuild를 확인한 뒤 타이머를 활성화한다. 사람이 승인한 mask가 없으면 `held / no_approved_masks`이며 학습 요청·GPU 작업을 만들지 않는다. 자료가 준비되면 모든 실제 eval version 및 source pixels를 재검사하고 기존 owner admission으로 처리한다. 학습 화면에는 cycle-state를 Perception 결과로 연결하며 승인 대기 사유를 표시한다.
+
+서명 코드 승인·검수 DB 백업·릴리스 전환·원격 시험·실제 서비스 읽기 증거는 각각 기록한다. 테스트용 승인 fixture를 운영 정답이나 운영 모델로 승격하지 않는다. 새 camera/gate/proof 설정은 기존 원장에 덮어쓰지 않고 명시 새 cycle로 검증한다.
+
 ## 헤드리스 Gazebo 준비 (D-571)
 
 모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.
