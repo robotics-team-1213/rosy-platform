@@ -289,7 +289,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 앱 셸의 자리 (D-741)
 
-D-741(Proposed)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Robot의 `/console`·`/setup`·`/device`가 탐색 레일(화면 전환)과 하위 탐색(작업 목록) 자리를 쓴다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
+D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet 콘솔이 탐색 레일(다섯 영역)과 하위 탐색을, Rosy Robot의 `/console`·`/setup`·`/device`가 탐색 레일(화면 전환)과 하위 탐색(작업 목록) 자리를, 학습 검수의 네 화면이 탐색 레일과 경로 줄을 쓴다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
 
 | 자리 | 토큰 | 담는 것 |
 |---|---|---|
