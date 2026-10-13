@@ -49,8 +49,7 @@ class AndroidAccountStore(context: Context) : AccountStore {
 class AndroidAccount(context: Context) {
     val config = context.assets.open("account-config.json").bufferedReader().use { AccountConfig.parse(it.readText()) }
     // Public Account HTTPS trust uses the platform CA store, never pairing TOFU or site CA trust.
-    private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
-        .connectTimeout(2, TimeUnit.SECONDS).readTimeout(2, TimeUnit.SECONDS).callTimeout(3, TimeUnit.SECONDS).build()
+    private val client = accountHttpClient()
     val session = AccountSession(config, AndroidAccountStore(context), request = { endpoint, form ->
         val body = FormBody.Builder().apply { form.forEach { (k, v) -> add(k, v) } }.build()
         client.newCall(Request.Builder().url(config.issuer + "/api/fleet/auth/" + endpoint).post(body).build()).execute().use { response ->
@@ -75,3 +74,6 @@ private fun java.io.InputStream.readBytesLimited(limit: Int): ByteArray {
     while (true) { val n = read(buffer); if (n < 0) break; require(out.size() + n <= limit); out.write(buffer, 0, n) }
     return out.toByteArray()
 }
+
+internal fun accountHttpClient(): OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+    .connectTimeout(2, TimeUnit.SECONDS).readTimeout(2, TimeUnit.SECONDS).callTimeout(3, TimeUnit.SECONDS).build()
