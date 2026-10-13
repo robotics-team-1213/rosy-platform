@@ -1,7 +1,7 @@
 """Ground-plane geometry, checked against values worked out by hand.
 
 The calibration below is the simulated rig's, so the numbers are traceable:
-tools/gz/obstacle_camera.py mounts the sensor at pose '.055 0 .08 0 .25 0' --
+../../tools/sim/gazebo/obstacle_camera.py mounts the sensor at pose '.055 0 .08 0 .25 0' --
 0.08 m up, pitched 0.25 rad down -- and renders 320x240 with a 1.2 rad
 horizontal FOV.
 """

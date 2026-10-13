@@ -6,7 +6,7 @@ routinely refuses late joiners after long runs (the monitor's proven QoS
 works). Writes the same trinary pgm+yaml contract as map_saver: occ<0.65
 -> 254 free, p>0.65 -> 0 occupied, else 205 unknown.
 
-Usage: python3 tools/gz/save_map.py [out_prefix] [wait_s]
+Usage: python3 ../../tools/sim/gazebo/save_map.py [out_prefix] [wait_s]
 """
 import math
 import re

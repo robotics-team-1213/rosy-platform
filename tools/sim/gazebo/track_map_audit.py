@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 
-from tools.gz.prepare_track_world import clearance
+from tools.sim.gazebo.prepare_track_world import clearance
 
 
 def wall_edges(wall, step=.01):

@@ -66,7 +66,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    package = Path(__file__).resolve().parents[1]
+    package = Path(__file__).resolve().parents[2] / 'middleware/perception'
     layout = runpy.run_path(str(package / 'control/_source_layout.py'))
     roots = [package / 'control', *layout['PACKAGE_DIRS'].values(), *layout['FLAT_ROOTS'], *layout['CONTROL_ROOTS']]
     roots = [root for root in roots if not any(root != other and root.is_relative_to(other)

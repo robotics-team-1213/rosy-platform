@@ -11,7 +11,8 @@ from pathlib import Path
 import sys
 import time
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
 if os.environ.get('ROS_DOMAIN_ID') != '227' or os.environ.get('GZ_PARTITION') != 'pinky_calmap227':
     raise RuntimeError('This rig is restricted to its isolated simulation domain')
 
@@ -24,8 +25,8 @@ from sensor_msgs.msg import LaserScan, Range, Imu, Image
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, String, UInt16MultiArray
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
-from tools.gz.inertial import body_gravity
-from tools.gz.c1_lidar import EVIDENCE_SCOPE, scan_tf_quaternion
+from tools.sim.gazebo.inertial import body_gravity
+from tools.sim.gazebo.c1_lidar import EVIDENCE_SCOPE, scan_tf_quaternion
 
 
 def normalize_odometry(msg):

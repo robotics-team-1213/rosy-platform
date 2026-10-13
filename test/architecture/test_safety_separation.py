@@ -310,7 +310,7 @@ def test_decision_and_learning_use_only_safety_public_api():
 #: new exception cannot appear silently. ``test``/``tests`` folders are out as well:
 #: they build fake graphs (e.g. gateway test_absorption_output_graph.py).
 CMD_VEL_SCOPE_EXCLUDED = {
-    "middleware/perception/tools/gz/": "Gazebo bench driver; drives the sim robot, never a device run path",
+    "tools/sim/gazebo/": "Gazebo bench driver; drives the sim robot, never a device run path",
 }
 CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).

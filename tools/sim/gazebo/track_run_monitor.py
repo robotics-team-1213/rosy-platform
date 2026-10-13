@@ -6,7 +6,8 @@ from pathlib import Path
 import sys
 import time
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
 import numpy as np
 import rclpy
 from rclpy.parameter import Parameter
@@ -14,9 +15,9 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist
-from tools.gz.prepare_track_world import clearance
-from tools.gz.save_map import map_pixels
-from tools.gz.track_map_audit import measure
+from tools.sim.gazebo.prepare_track_world import clearance
+from tools.sim.gazebo.save_map import map_pixels
+from tools.sim.gazebo.track_map_audit import measure
 
 
 def main():

@@ -7,10 +7,11 @@ pinky_maze.sdf next to this script.
 """
 import os
 import sys
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))  # tools/gz -> repo root: tools.explore_sim
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))  # ../../tools/sim/gazebo -> repo root: tools.explore_sim
 from tools.explore_sim import MAZE
 
 CELL = 0.30   # m per maze cell in gz (2x the planner's 5 cm grid)

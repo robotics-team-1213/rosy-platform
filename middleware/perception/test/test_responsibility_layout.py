@@ -71,7 +71,7 @@ def test_sensor_and_drive_sources_have_distinct_semantic_holders():
 
 def test_ros_source_audit_includes_moved_adapter_once(tmp_path):
     output = tmp_path / "endpoints.csv"
-    _run(str(PACKAGE / "tools/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
+    _run(str(PACKAGE / "../../tools/validation/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
     with output.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
     assert any(row["source"] == "middleware/drive/motion_limits/adapter/node.py"

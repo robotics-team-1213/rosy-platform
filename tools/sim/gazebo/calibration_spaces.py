@@ -6,7 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import numpy as np
-from tools.gz.prepare_track_world import collision_circumradius, clearance
+from tools.sim.gazebo.prepare_track_world import collision_circumradius, clearance
 
 CASES=('open','front_wall','rear_wall','corridor_exit','trapped')
 

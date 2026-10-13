@@ -8,10 +8,11 @@ sim needs (odom->base_link from /odom, base_link->lidar static republished
 """
 import math
 import sys
+from pathlib import Path
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))  # tools/gz -> repo root
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))  # ../../tools/sim/gazebo -> repo root
 
 import rclpy
 # Sim box: rclpy removed RcutilsLogger.warn (the robot's build still has

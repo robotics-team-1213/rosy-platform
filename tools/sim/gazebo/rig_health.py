@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Health check for the gz rig: scans flow, base follows /cmd_vel.
 
-Usage: python3 tools/gz/rig_health.py [speed_test_seconds]
+Usage: python3 ../../tools/sim/gazebo/rig_health.py [speed_test_seconds]
 Exit 0 = healthy (scans + motion), 1 = sensor/boot flake (relaunch).
 """
 import math

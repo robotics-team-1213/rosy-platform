@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dump /odom poses to JSONL + /map snapshots to .npz (offline diagnosis).
 
-  python3 tools/gz/pose_logger.py /tmp/gztest14/poses.jsonl
+  python3 ../../tools/sim/gazebo/pose_logger.py /tmp/gztest14/poses.jsonl
 """
 import json
 import sys

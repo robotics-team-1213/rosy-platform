@@ -5,7 +5,7 @@ The monitor renders trail=red(0,0,255) BGR, occupied=black, free=white,
 unknown=gray. This computes the L2 distance transform from occupied cells
 and reports clearance stats for the trail: the wall-hug verdict metric.
 
-  python3 tools/gz/trail_clearance.py /tmp/gztest14/monitor/map_live.png
+  python3 ../../tools/sim/gazebo/trail_clearance.py /tmp/gztest14/monitor/map_live.png
 
 Pixels are 5 cm cells; the sim robot is 18 cm wide (9.6 cm circumradius
 with wheels, ROBOT_RADIUS below), so the corridor centerline is ~6 cm from

@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-from tools.gz.clock_relay import MIN_HZ_PER_RTF, relay_rate, to_ros_clock
+from tools.sim.gazebo.clock_relay import MIN_HZ_PER_RTF, relay_rate, to_ros_clock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,7 +38,7 @@ def test_relay_rate_keeps_the_sim_time_step_at_most_20_ms():
 
 
 def test_check_mode_validates_without_ros_so_the_script_fails_before_the_locks():
-    run = lambda *args: subprocess.run([sys.executable, str(ROOT/'tools/gz/clock_relay.py'), '--check', *args],
+    run = lambda *args: subprocess.run([sys.executable, str(ROOT/'../../tools/sim/gazebo/clock_relay.py'), '--check', *args],
                                        capture_output=True, text=True)
     assert run('100', '1.0').returncode == 0
     bad = run('fast', '1.0')
@@ -55,7 +55,7 @@ def test_gazebo_sim_time_maps_to_ros_clock_exactly():
 
 
 def test_rig_script_swaps_the_bridge_clock_for_the_relay_only_when_asked():
-    script = (ROOT/'tools/gz/run_track260905.sh').read_text()
+    script = (ROOT/'../../tools/sim/gazebo/run_track260905.sh').read_text()
     # Default: the bridge keeps the legacy four topics in order; the per-step /clock is
     # appended only inside the unset branch, and the relay starts only in the other one.
     swap = re.search(r'\nbridged=\((.*?)\)\n.*?\nif \[\[ -z "\$\{RIG_CLOCK_HZ:-\}" \]\]; then\n(.*?)\nelse\n(.*?)\nfi\n',

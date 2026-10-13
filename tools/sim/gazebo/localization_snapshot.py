@@ -2,7 +2,8 @@
 import os
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
 from localization_rig import isolation
 isolation()
 import rclpy

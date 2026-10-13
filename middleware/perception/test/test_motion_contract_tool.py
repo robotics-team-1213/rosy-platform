@@ -8,7 +8,7 @@ import pytest
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
-TOOL = PACKAGE / "tools" / "gz" / "measure_motion_contract.py"
+TOOL = PACKAGE / '..' / '..' / 'tools' / 'sim' / 'gazebo' / "measure_motion_contract.py"
 
 
 def _load_tool():

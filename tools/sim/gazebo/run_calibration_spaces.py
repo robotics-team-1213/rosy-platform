@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--after', choices=['stay','return_origin'], default='stay')
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
+    root = (Path(__file__).resolve().parents[3] / 'middleware/perception')
     output = args.output or Path('/tmp/pinky-calibration-matrix')/datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     output.mkdir(parents=True, exist_ok=True)
     results = []
@@ -42,7 +42,7 @@ def main():
                    RIG_GZ_LOCK_WAIT=os.environ.get('RIG_GZ_LOCK_WAIT', '30'))  # well inside the 750 s wait
         print('Running calibration case: '+case, flush=True)
         with (target/'runner.log').open('w') as log:
-            proc = subprocess.Popen(['bash',str(root/'tools/gz/run_track260905.sh')], cwd=root,
+            proc = subprocess.Popen(['bash',str(root/'../../tools/sim/gazebo/run_track260905.sh')], cwd=root,
                                     env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 code = proc.wait(timeout=750)

@@ -7,7 +7,7 @@ memory, so it lives here instead of being recomputed by every caller.
 
 It was recomputed by every caller, and they disagreed: camera_detect_node.tick
 counted `hits` from a parameter and gated on `warmup_frames`, while
-tools/gz/rendered_camera_adapter.on_image hardcoded hits >= 2, had no warmup, and
+../../tools/sim/gazebo/rendered_camera_adapter.on_image hardcoded hits >= 2, had no warmup, and
 applied no hysteresis to cliff at all. A green Gazebo run therefore said nothing
 about the node that drives the robot. One implementation, both callers.
 """
