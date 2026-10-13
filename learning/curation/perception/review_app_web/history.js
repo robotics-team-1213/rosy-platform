@@ -18,7 +18,9 @@ export function showHistory(value) {
     }
     for (const event of events) {
       const item = document.createElement('li');
-      item.textContent = `${label} v${event.version} · ${actions[event.action] || event.action} · ${event.ts} UTC`;
+      let action=actions[event.action] || event.action;
+      if(event.actor) action=action.replace(' · 담당자 미기록', '');
+      item.textContent = `${label} v${event.version} · ${action}${event.actor ? ` · ${event.actor}` : ''} · ${event.ts} UTC`;
       list.append(item);
     }
   }

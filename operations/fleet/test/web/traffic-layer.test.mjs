@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   loopCapacityText, occupancyLampText, repeatTripBody, routePoint, signalAheadText, signalText, tripErrorText, tripStartReason,
   trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
-} from '../../../ui/console/shared/site-map-model.js';
+} from '../../../site_ui/console/shared/site-map-model.js';
 
 // A square loop: east (0,0)->(2,0) cut in 3 blocks, ring (2,0)->(2,1) one zone, west (2,1)->(0,1)->(0,0).
 const ACTIVE = {version: 7, map: {edges: [

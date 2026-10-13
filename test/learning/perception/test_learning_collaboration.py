@@ -1,0 +1,240 @@
+"""The existing review routes enforce project identity when collaboration is enabled."""
+import json
+import threading
+import urllib.error
+import urllib.request
+from contextlib import contextmanager
+
+import pytest
+from test_review_app import open_store
+from review_app import make_server
+from test_learning_accounts import accounts
+
+
+class Accounts:
+    project_id = 'alpha'
+    public_origin = None
+
+    def __init__(self):
+        self.active = True
+
+    def authenticate(self, session):
+        if session not in ('reader', 'editor', 'reviewer') or not self.active:
+            raise PermissionError('login required')
+        caps = ['view'] + ([] if session == 'reader' else ['edit'])
+        if session == 'reviewer':
+            caps += ['approve', 'manage', 'import']
+        return dict(user_id=session, project_id='alpha', capabilities=caps)
+
+    def require(self, principal, capability):
+        if not self.active or capability not in principal['capabilities']:
+            raise PermissionError('project permission required')
+
+    def connections(self, principal):
+        self.require(principal, 'view')
+        return []
+
+
+@contextmanager
+def running(tmp_path):
+    accounts = Accounts()
+    store = open_store(tmp_path)
+    server = make_server(store, 0, accounts=accounts)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}', accounts, store
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def request(base, path, session=None, body=None, token=None):
+    headers = {'Origin': base}
+    if session:
+        headers['Cookie'] = 'rosy_learning_session=' + session
+    if token:
+        headers['X-Pinky-Token'] = token
+    raw = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(base + path, data=raw, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        return error.code, json.load(error)
+
+
+@pytest.mark.parametrize('path', ['/api/workspace', '/api/learning', '/api/catalog',
+                                  '/api/images/0', '/api/history/0', '/api/decisions'])
+def test_all_existing_data_routes_require_identity(tmp_path, path):
+    with running(tmp_path) as (url, _, store):
+        assert request(url, path)[0] == 401
+        assert request(url, '/api/workspace', 'reader')[0] == 200
+        assert store.get(0)['version'] == 1
+
+
+def test_viewer_cannot_write_and_revocation_blocks_open_session(tmp_path):
+    with running(tmp_path) as (url, accounts, store):
+        _, workspace = request(url, '/api/workspace', 'reader')
+        before = store.get(0)
+        assert request(url, '/api/frames/0', 'reader',
+                       {'version': 1, 'action': 'exclude'}, workspace['token'])[0] == 403
+        assert store.get(0) == before
+        accounts.active = False
+        assert request(url, '/api/workspace', 'reader')[0] == 401
+
+
+def test_editor_cannot_approve_and_reviewer_identity_is_server_owned(tmp_path):
+    with running(tmp_path) as (url, _, store):
+        _, workspace = request(url, '/api/workspace', 'editor')
+        body = {'version': 1, 'action': 'approve', 'reviewer': 'spoofed', 'complete_frame_review': True}
+        assert request(url, '/api/frames/0', 'editor', body, workspace['token'])[0] == 403
+        status, result = request(url, '/api/frames/0', 'reviewer', body, workspace['token'])
+        assert status == 200
+        assert result['review']['reviewer'] == 'reviewer'
+        assert store.history(0)['events']['object'][0]['actor'] == 'reviewer'
+        assert request(url, '/api/frames/0', 'reviewer', body, workspace['token'])[0] == 409
+
+
+def test_collaboration_rejects_missing_origin(tmp_path):
+    with running(tmp_path) as (url, _, store):
+        _, workspace = request(url, '/api/workspace', 'reviewer')
+        req = urllib.request.Request(url + '/api/frames/0',
+            data=json.dumps({'version': 1, 'action': 'exclude'}).encode(),
+            headers={'Cookie': 'rosy_learning_session=reviewer', 'X-Pinky-Token': workspace['token']})
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(req)
+        assert error.value.code == 403
+        assert store.get(0)['version'] == 1
+
+
+def test_project_manager_cannot_register_other_project_server_paths(tmp_path):
+    with running(tmp_path) as (url, _, store):
+        _, workspace = request(url, '/api/workspace', 'reviewer')
+        for path in ('/api/import', '/api/cad', '/api/learning/register'):
+            assert request(url, path, 'reviewer', {'path': str(tmp_path / 'another-project')},
+                           workspace['token'])[0] == 403
+
+
+def test_collaboration_binding_cannot_be_reopened_without_auth(tmp_path):
+    with running(tmp_path) as (_, _, store):
+        pass
+    with pytest.raises(ValueError, match='account configuration'):
+        make_server(store, 0)
+
+
+def test_pixel_actor_and_approval_are_preserved(tmp_path):
+    import review_masks
+    from review_app import Conflict
+    store = open_store(tmp_path)
+    import review_ingest
+    from test_review_cycle import catalog
+    folder, classes, _ = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    review = review_masks.get(store, 0)
+    # Fixtures have a full existing class binding; use the established fill path.
+    value = review_masks.update(store, 0, {'version': review['version'], 'action': 'fill',
+        'label': review['classes']['classes'][0]['index']}, Conflict, actor='alice')
+    approved = review_masks.update(store, 0, {'version': value['version'], 'action': 'approve',
+        'complete_frame_review': True, 'background_reviewed': True}, Conflict, actor='bob')
+    assert approved['status'] == 'approved'
+    import review_evidence
+    review_evidence.decisions(store)
+    store.prepare()
+    with store.connect() as db:
+        events = [json.loads(row[0]) for row in db.execute('SELECT review FROM pixel_events ORDER BY id')]
+    assert events[0]['actor'] == 'alice'
+    assert events[-1]['actor'] == 'bob'
+
+
+def test_configured_https_origin_secure_cookie_and_live_logout(tmp_path, accounts):
+    config = json.loads(accounts.config_path.read_text())
+    config['public_origin'] = 'https://learning.example'
+    accounts.config_path.write_text(json.dumps(config))
+    folder = tmp_path / 'review'; folder.mkdir()
+    server = make_server(open_store(folder), 0, accounts=accounts)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    headers = {'Host': 'learning.example', 'Origin': 'https://learning.example'}
+    try:
+        req = urllib.request.Request(base + '/api/accounts/login',
+            data=json.dumps({'username': 'alice', 'password': 'alice-password'}).encode(), headers=headers)
+        with urllib.request.urlopen(req) as response:
+            session_cookie = response.headers['Set-Cookie']
+            assert '; Secure' in session_cookie and '; HttpOnly' in session_cookie
+        headers['Cookie'] = session_cookie.split(';')[0]
+        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/session', headers=headers)) as response:
+            principal = json.load(response)
+            assert principal['project_id'] == 'one'
+            assert not any(key.startswith('_') for key in principal)
+        headers['X-Pinky-Token'] = principal['token']
+        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/logout', data=b'{}', headers=headers)):
+            pass
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(urllib.request.Request(base + '/api/workspace', headers=headers))
+        assert error.value.code == 401
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+def test_oauth_roundtrip_through_http_uses_signed_identity(tmp_path, accounts):
+    import time
+    from urllib.parse import parse_qs, urlsplit
+    from learning_oauth import OAuth
+    from test_learning_oauth import Provider
+    cfg = json.loads(accounts.config_path.read_text())
+    cfg.update(public_origin='https://learning.example', oauth={
+        'client_id': 'client', 'redirect_uri': 'https://learning.example/oauth/huggingface/callback'})
+    accounts.config_path.write_text(json.dumps(cfg))
+    provider = Provider(); oauth = OAuth(accounts, transport=provider)
+    folder = tmp_path / 'review'; folder.mkdir()
+    server = make_server(open_store(folder), 0, accounts=accounts, oauth=oauth)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    headers = {'Host': 'learning.example', 'Origin': 'https://learning.example'}
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args):
+            return None
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/oauth',
+            data=b'{"purpose":"login"}', headers=headers)) as response:
+            binding = response.headers['Set-Cookie'].split(';')[0]
+            query = parse_qs(urlsplit(json.load(response)['url']).query)
+        provider.claims = {'iss': 'https://huggingface.co', 'aud': 'client', 'sub': 'invited-alice',
+            'exp': int(time.time()) + 300, 'iat': int(time.time()), 'nonce': query['nonce'][0]}
+        callback = base + '/oauth/huggingface/callback?state=' + query['state'][0] + '&code=test'
+        with pytest.raises(urllib.error.HTTPError) as redirect:
+            urllib.request.build_opener(NoRedirect()).open(urllib.request.Request(callback,
+                headers={**headers, 'Cookie': binding}))
+        assert redirect.value.code == 303
+        cookies = redirect.value.headers.get_all('Set-Cookie')
+        session = next(value.split(';')[0] for value in cookies if value.startswith('rosy_learning_session='))
+        with urllib.request.urlopen(urllib.request.Request(base + '/api/accounts/session',
+            headers={**headers, 'Cookie': session})) as response:
+            assert json.load(response)['user_id'] == 'alice'
+        with pytest.raises(urllib.error.HTTPError) as replay:
+            urllib.request.urlopen(urllib.request.Request(callback, headers={**headers, 'Cookie': binding}))
+        assert replay.value.code == 403
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('origin,callback', [
+    (None, 'https://learning.example/oauth/huggingface/callback'),
+    ('https://learning.example', 'https://other.example/oauth/huggingface/callback'),
+    ('https://learning.example', 'https://learning.example/wrong-path'),
+    ('https://learning.example', 'http://learning.example/oauth/huggingface/callback'),
+])
+def test_oauth_setup_rejected_before_workspace_binding(tmp_path, accounts, origin, callback):
+    from learning_collaboration import Collaboration
+    from learning_oauth import OAuth
+    cfg = json.loads(accounts.config_path.read_text())
+    cfg.update(public_origin=origin, oauth={'client_id': 'client', 'redirect_uri': callback})
+    accounts.config_path.write_text(json.dumps(cfg))
+    folder = tmp_path / 'review'; folder.mkdir()
+    store = open_store(folder)
+    with pytest.raises((ValueError, PermissionError)):
+        Collaboration(accounts, store, oauth=OAuth(accounts))
+    with store.connect() as db:
+        assert db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone() is None
