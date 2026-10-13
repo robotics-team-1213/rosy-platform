@@ -145,10 +145,17 @@ class StuckRecoveryMixin:
 
     @property
     def wants_return_scan(self) -> bool:
-        """Keep full scan evidence current throughout local lane reacquisition."""
+        """Keep full scan evidence current throughout local lane reacquisition, and while a
+        junction or bend instruction is held under the live D-400 proof: D-507 6 asks the same
+        probe for its twist, and return_body_clear refuses without this view."""
         with self._lock:
-            return (self._mode is LineFollowMode.CAMERA_LINE
-                    and self._config.recovery_local_enabled
+            if self._mode is not LineFollowMode.CAMERA_LINE:
+                return False
+            # ponytail: any held instruction, also a finished or aborted one, until the next
+            # instruction or mode change; narrow to moving states if the scan view costs CPU.
+            if self._junction is not None and self._proof_live():
+                return True
+            return (self._config.recovery_local_enabled
                     and self._return_controller is not None
                     and self._return_controller.phase != "tracking")
 
