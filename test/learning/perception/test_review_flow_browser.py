@@ -478,8 +478,9 @@ def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page.set_viewport_size({'width': width, 'height': 844})
     workspace = page.locator('.workspace')
     assert workspace.bounding_box()['width'] == min(width, workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
-    topbar = page.locator('ui-topbar').bounding_box()
-    assert page.locator('.workspace').bounding_box()['y'] == topbar['y'] + topbar['height']
+    # D-741: the path row (page heading) sits between the app bar and the work area.
+    pathbar = page.locator('.ui-pathbar').bounding_box()
+    assert page.locator('.workspace').bounding_box()['y'] == pathbar['y'] + pathbar['height']
     page.locator('#filter').select_option('pending')
     expect(page.locator('#empty-review')).to_be_visible()
     expect(page.locator('#review-content')).to_be_hidden()
@@ -501,8 +502,11 @@ def test_learning_pages_start_below_topbar(browser_workspace, route, main, width
     page, _, _ = browser_workspace
     page.set_viewport_size({'width': width, 'height': 1000})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    # D-741: app bar, then the seats (rail + path row), then the page; no gap between them.
     topbar = page.locator('ui-topbar').bounding_box()
-    assert page.locator(main).bounding_box()['y'] == topbar['y'] + topbar['height']
+    assert page.locator('.ui-app-body').bounding_box()['y'] == topbar['y'] + topbar['height']
+    pathbar = page.locator('.ui-pathbar').bounding_box()
+    assert page.locator(main).bounding_box()['y'] == pathbar['y'] + pathbar['height']
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
@@ -682,12 +686,20 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
-    title = page.locator('ui-topbar h1').bounding_box()
+    # D-741: the app bar is one row (app, theme); the heading and the four screens left it.
+    assert page.locator('ui-topbar h1, ui-topbar nav').count() == 0
+    brand = page.locator('ui-topbar ui-brand').bounding_box()
     theme = page.locator('ui-topbar .theme-label select').bounding_box()
-    assert title['x'] + title['width'] <= theme['x'], (route, title, theme)
+    assert brand['x'] + brand['width'] <= theme['x'], (route, brand, theme)
+    rail = page.locator('.ui-rail').bounding_box()
+    assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)
+    assert page.locator('.workspace-tabs a').count() == 4
+    assert page.locator('.workspace-tabs a[aria-current="page"]').count() == 1
     for link in page.locator('.workspace-tabs a').all():
         bounds = link.bounding_box()
-        assert bounds['height'] >= 44 and bounds['y'] + bounds['height'] <= topbar['height'], (route, bounds)
+        assert bounds['height'] >= 44 and bounds['y'] + bounds['height'] <= rail['y'] + rail['height'], (route, bounds)
+    title = page.locator('.ui-pathbar h1').bounding_box()
+    assert title['y'] + title['height'] <= height, (route, title)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path

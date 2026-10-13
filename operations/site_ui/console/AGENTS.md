@@ -24,8 +24,8 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
-| `work-view.js` | D-664 source-scoped Task/Mission read view at `/console?view=work`; owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
-| `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; session, polling cadence and command authority remain in `console.js` |
+| `work-view.js` | D-664 source-scoped Task/Mission read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser); owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
+| `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; at `/console?view=records` (D-741 8) the sub-nav's `show` filters the same answer and the opened incident's handoff and review stand in `#incident-judgment`; session, polling cadence and command authority remain in `console.js` |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |
 | `site-layer.js` | Ceiling-camera sightings layer (pure; display and cross-check only) |
@@ -35,8 +35,8 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
 | `shared/address-drift.js`, `state-age.js`, `localization-badge.js`, `shared/poll-gate.js`, `shared/authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
-| `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-519 인증 API·HttpOnly 쿠키를 유지하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 토큰/테마는 고급 접속·화면 표시 펼침에 둔다 |
-| `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 공통 머리 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 역할 글·개발 배지·연결 수·시계·설정 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 문서 시트는 머리를 칠하지 않는다 |
+| `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-519 인증 API·HttpOnly 쿠키를 유지하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 토큰 접속과 화면 표시는 계정 단추 아래에 둔다(D-741) |
+| `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 / D-741 3 공통 앱 바 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 연결 글(`실시간`·`지연`·`연결 끊김`)·시계·알림 수·계정 단추의 역할 글·개발 배지·계정 칸 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 한 줄이고 셸 칸(`.fleet-shell`)의 폭으로 접힌다. 로봇 연결 수는 관제 문서의 지도 머리에 있다. 문서 시트는 머리를 칠하지 않는다 |
 | `package.json` | `{"type": "module"}` so node can run the tests |
 
 ## For AI Agents
