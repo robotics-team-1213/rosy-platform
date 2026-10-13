@@ -38,7 +38,7 @@ def test_cookie_writes_require_same_origin_and_cannot_mint_legacy_tokens(account
 
 def test_cookie_websocket_does_not_wait_for_token_and_rejects_foreign_origin(account_robot):
     client, _ = account_robot
-    with client.websocket_connect('/ws/state', headers={'Origin':'http://testserver'}) as ws:
+    with client.websocket_connect('/ws/state', headers={'Origin':'https://testserver'}) as ws:
         assert 'robot_id' in ws.receive_json()
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect('/ws/state', headers={'Origin':'https://evil.test'}) as ws:
