@@ -27,6 +27,8 @@ class SitePrincipal:
     role: str
     password_change_required: bool = False
     password_fingerprint: str = field(default="", compare=False, repr=False)
+    account_id: Optional[str] = None
+    grants: tuple = ()
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
