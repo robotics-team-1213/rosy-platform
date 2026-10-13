@@ -3,7 +3,7 @@ import sqlite3
 
 import pytest
 
-from fleet.server.password_session import PasswordSessions, StalePasswordCheck
+from fleet.server.password_session import PasswordSessions, SessionStorageUnavailable, StalePasswordCheck
 from test_password_session import _accounts, _app, _client, _login, TYPED, ORIGIN
 
 
@@ -163,3 +163,54 @@ def test_account_api_rejects_non_string_role(tmp_path):
     assert client.post("/api/fleet/auth/accounts", headers=ORIGIN,
                        json={"login": "bob", "principal_id": "bob", "role": [],
                              "password": "temporary secret", "grants": []}).status_code == 422
+
+
+def test_revision_change_fences_previously_verified_password(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                                  password="temporary secret", grants=[])
+    old = sessions.check("b", "bob", "temporary secret")
+    sessions.revoke_account_sessions(manager, row["account_id"], revision=row["revision"])
+    with pytest.raises(StalePasswordCheck):
+        sessions.issue("bob", remember=False, verified=old)
+
+
+def test_account_db_failure_only_allows_cached_estop(tmp_path, monkeypatch):
+    sessions = activated(tmp_path)
+    value = cookie(sessions)
+    assert sessions.principal(value)
+    def unavailable(**kwargs):
+        raise sqlite3.OperationalError("locked")
+    monkeypatch.setattr(sessions, "_connect", unavailable)
+    with pytest.raises(SessionStorageUnavailable):
+        sessions.principal(value)
+    assert sessions.principal(value, allow_stale=True)
+
+
+def test_revoked_family_cannot_fallback_to_own_cached_estop(tmp_path, monkeypatch):
+    sessions = activated(tmp_path)
+    value = cookie(sessions)
+    family = sessions.account_context(value)["session_family"]
+    assert sessions.principal(value)
+    sessions.revoke_family(family)
+    def unavailable(**kwargs):
+        raise sqlite3.OperationalError("locked")
+    monkeypatch.setattr(sessions, "_connect", unavailable)
+    with pytest.raises(SessionStorageUnavailable):
+        sessions.principal(value, allow_stale=True)
+
+
+def test_disabled_sessions_cannot_change_profile_or_password_across_instances(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                                  password="temporary secret", grants=[])
+    other = PasswordSessions(sessions.path, {})
+    value, _ = other.change_password(cookie(other, "bob", "temporary secret"), "permanent secret")
+    row = next(r for r in sessions.list_accounts(manager) if r["account_id"] == row["account_id"])
+    sessions.update_account(manager, row["account_id"], revision=row["revision"], enabled=False)
+    with pytest.raises(StalePasswordCheck):
+        other.profile(value, "stale edit")
+    with pytest.raises(StalePasswordCheck):
+        other.change_password(value, "another secret", current_password="permanent secret")
