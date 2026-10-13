@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from core_features.line_follow.recovery.junction.approach import (
-    REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
+    CORRIDOR_HALF_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
 BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
@@ -181,17 +181,20 @@ class JunctionBendMixin:
         return out
 
     def _bend_own_line(self, j):
-        """The anchored sighting was read on the entry heading and its line lies past the bend's
-        vertex on the entry axis. By the map the lane turns there, so that line is the bend's own
-        outer line (Gazebo lap run53: 0.097 m past W2), not the next junction's. Locked."""
+        """The anchored sighting's line point lies past the bend's vertex on the entry axis and no
+        further along the exit line than the lane's own outer line reaches there: the bend's own
+        outer line (Gazebo lap run53: 0.097 m past W2's vertex), not the next junction's. Only
+        from 60 deg, where the two separate; a shallower bend keeps the hand-over (review). Locked."""
         a, (x, y, yaw, travel) = self._junction_anchor, j['anchor']
         pose, turn = a['pose'], math.radians(j['turn_deg'])
-        if abs(math.remainder(pose.yaw-yaw, math.tau)) > REACQUIRE_HEADING_RAD:
+        if abs(turn) < 2*REACQUIRE_HEADING_RAD:
             return False
         vertex = max(0., j['bend_in']-travel)+j['radius']*math.tan(abs(turn)/2)
-        along = ((pose.x-x)*math.cos(yaw)+(pose.y-y)*math.sin(yaw)
-                 + a['ahead']*math.cos(pose.yaw-yaw))
-        return along > vertex
+        px = pose.x+a['ahead']*math.cos(pose.yaw)-x-vertex*math.cos(yaw)  # line point from the vertex
+        py = pose.y+a['ahead']*math.sin(pose.yaw)-y-vertex*math.sin(yaw)
+        past = px*math.cos(yaw)+py*math.sin(yaw)
+        out = px*math.cos(j['target'])+py*math.sin(j['target'])
+        return past > 0 and out <= CORRIDOR_HALF_M*(1+1/math.tan(abs(turn)))
 
     def _bend_blocked(self, now, twist):
         """The D-422 swept body gap of this twist is at or under its restart gap."""

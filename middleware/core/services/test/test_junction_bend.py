@@ -209,7 +209,9 @@ def bend_sighting_line_ahead(rig, ahead=.4):
     ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
     until(rig, 'bending')
     entry = rig.m._junction['anchor'][2]
-    while abs(math.remainder(rig.yaw-entry, math.tau)) <= math.radians(35.):  # turned: not the bend's own line
+    for _ in range(400):                                  # turned: the line is along the exit
+        if abs(math.remainder(rig.yaw-entry, math.tau)) > math.radians(35.):
+            break
         site_step(rig, move=True)
     sight(rig, ahead)
     site_step(rig, move=True)
@@ -229,17 +231,31 @@ def test_a_line_sighted_during_the_pass_is_handed_to_the_junction_and_waits():
     assert (decision.linear, decision.angular) == (0., 0.) and status.reason == 'junction_waiting'
 
 
-def test_a_line_past_the_bends_vertex_on_the_entry_heading_is_the_bends_own():
+def _sight_past_the_vertex(rig, past):
+    """On the lead-in straight, sight a line `past` m beyond the bend's vertex on the entry axis."""
+    until(rig, 'bending')
+    j = rig.m._junction
+    x, y, _, travel = j['anchor']
+    vertex = j['bend_in']-travel+j['radius']*math.tan(math.radians(abs(j['turn_deg']))/2)
+    sight(rig, vertex-math.hypot(rig.x-x, rig.y-y)+past)
+
+
+def test_a_line_just_past_the_bends_vertex_is_the_bends_own_outer_line():
     """Gazebo lap run53: the keeper read the corner's outer line as a cross line 0.097 m past the
     vertex before the arc; the map's lane turns at the vertex, so the pass ends in 'idle'."""
     rig = armed_rig()
-    until(rig, 'bending')
-    x, y, yaw, travel = rig.m._junction['anchor']
-    j = rig.m._junction
-    vertex = j['bend_in']-travel+j['radius']*math.tan(math.radians(abs(j['turn_deg']))/2)
-    sight(rig, vertex-math.hypot(rig.x-x, rig.y-y)+.1)
+    _sight_past_the_vertex(rig, .1)
     decision, status = until(rig, 'idle')
     assert decision.linear > 0 and rig.m._junction_held is False
+
+
+def test_a_line_far_along_the_exit_or_on_a_shallow_bend_is_still_handed_over():
+    """Review: beyond the outer line's reach along the exit (60 deg: 0.158 m), and on any bend
+    under 60 deg, the sighting may be the next junction's, so the pass ends in 'waiting'."""
+    for fields, past in (({}, .4), ({'turn': 40.}, .1)):
+        rig = armed_rig(**fields)
+        _sight_past_the_vertex(rig, past)
+        until(rig, 'waiting')
 
 
 def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
