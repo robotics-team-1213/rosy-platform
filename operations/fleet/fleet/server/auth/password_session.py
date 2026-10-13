@@ -97,6 +97,8 @@ class PasswordSessions:
         self._revoked: dict[str, float] = {}
         # Unknown logins still pay one scrypt so the 401 does not reveal which accounts exist.
         self._dummy_hash = hash_password(secrets.token_urlsafe(16))
+        from fleet.server.account_ledger import AccountLedger
+        self._ledger = AccountLedger(self)
         with closing(self._connect(timeout=10)) as db, db:
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_sessions (
                 session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL,
@@ -106,14 +108,11 @@ class PasswordSessions:
                 login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_profiles (
                 login TEXT PRIMARY KEY, principal_id TEXT NOT NULL, display_name TEXT NOT NULL)""")
-        from fleet.server.account_ledger import AccountLedger
-        self._ledger = AccountLedger(self)
-        if accounts_bootstrap is not None and not self._ledger.active:
-            self.bootstrap_accounts(*accounts_bootstrap)
-        if self._ledger.active:
-            self._required = {}
-            return
-        with closing(self._connect(timeout=10)) as db, db:
+            if accounts_bootstrap is not None and not self._ledger.active:
+                self.bootstrap_accounts(*accounts_bootstrap)
+            if self._ledger.active:
+                self._required = {}
+                return
             for row in db.execute("SELECT * FROM fleet_console_passwords").fetchall():
                 if self._sources.get(row["login"]) == row["source_sha256"]:
                     self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
@@ -130,11 +129,23 @@ class PasswordSessions:
     def account_context(self, value: str):
         return self._ledger.context(value) if self._ledger.active else None
 
-    def context_by_family(self, family: str):
-        return self._ledger.context(family=family) if self._ledger.active else None
+    def context_by_family(self, family: str, *, db=None):
+        return self._ledger.context(family=family, db=db) if self._ledger.active else None
 
-    def revoke_family(self, family: str) -> None:
-        self._ledger.revoke_family(family)
+    def revoke_family(self, family: str, *, db=None) -> None:
+        self._ledger.revoke_family(family, db=db)
+
+    @staticmethod
+    def accounts_active(path) -> bool:
+        if not Path(path).is_file():
+            return False
+        try:
+            with closing(sqlite3.connect(path, timeout=_AUTH_DB_TIMEOUT_S)) as db:
+                if not db.execute("SELECT 1 FROM sqlite_master WHERE name='rosy_account_authority'").fetchone():
+                    return False
+                return db.execute("SELECT 1 FROM rosy_account_authority WHERE singleton=1").fetchone() is not None
+        except sqlite3.Error:
+            raise SessionStorageUnavailable() from None
 
     def list_accounts(self, value: str):
         return self._ledger.list_accounts(value)

@@ -5,15 +5,14 @@ import json
 import re
 import secrets
 import sqlite3
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
+
+from core_common.protocol.account_access import AccountGrant, RESOURCE_PATTERN
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_users import _LOGIN, hash_password, verify_password
 
-CAPABILITIES = frozenset({"accounts.manage", "fleet.read", "fleet.operate", "fleet.policy",
-    "robot.read", "robot.operate", "robot.admin", "learning.view", "learning.edit", "learning.approve",
-    "learning.manage", "learning.import", "learning.publish", "camera.manage", "games.operate"})
-_RESOURCE = re.compile(r"(?:site|robot|project):[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\Z")
+_RESOURCE = re.compile(RESOURCE_PATTERN)
 
 
 def validate_grants(grants):
@@ -21,13 +20,9 @@ def validate_grants(grants):
         raise ValueError("invalid grants")
     resources = set()
     for grant in grants:
-        if (not isinstance(grant, dict) or set(grant) != {"resource", "capabilities"}
-                or not isinstance(grant["resource"], str) or not _RESOURCE.fullmatch(grant["resource"])
-                or grant["resource"] in resources or not isinstance(grant["capabilities"], list)
-                or any(not isinstance(c, str) or c not in CAPABILITIES for c in grant["capabilities"])
-                or len(set(grant["capabilities"])) != len(grant["capabilities"])
-                or ("accounts.manage" in grant["capabilities"] and not grant["resource"].startswith("site:"))):
-            raise ValueError("invalid grants")
+        AccountGrant.model_validate(grant)
+        if grant["resource"] in resources:
+            raise ValueError("duplicate resource grant")
         resources.add(grant["resource"])
     return json.dumps(grants, separators=(",", ":"))
 
@@ -171,9 +166,9 @@ class AccountLedger:
         self.sessions._remember(key, row, now)
         return self.principal_for(row), _iso(row["expires"])
 
-    def context(self, value=None, *, family=None):
+    def context(self, value=None, *, family=None, db=None):
         from fleet.server.password_session import _digest
-        with self.db() as db:
+        with nullcontext(db) if db is not None else self.db() as db:
             key = _digest(value) if value else None
             if family is not None:
                 found = db.execute("SELECT session_sha256 FROM rosy_account_sessions WHERE session_family=?",
@@ -184,8 +179,8 @@ class AccountLedger:
                 return None
             return {**public(row), "session_family": row["session_family"]}
 
-    def revoke_family(self, family):
-        with self.db(write=True) as db:
+    def revoke_family(self, family, db=None):
+        with nullcontext(db) if db is not None else self.db(write=True) as db:
             db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 IN "
                        "(SELECT session_sha256 FROM rosy_account_sessions WHERE session_family=?)", (family,))
             db.execute("DELETE FROM rosy_account_sessions WHERE session_family=?", (family,))
@@ -212,7 +207,7 @@ class AccountLedger:
         if (not isinstance(login, str) or not _LOGIN.fullmatch(login)
                 or not isinstance(principal_id, str) or not 1 <= len(principal_id) <= 96
                 or principal_id != principal_id.strip() or any(ord(c) < 32 for c in principal_id)
-                or role not in {"viewer", "operator", "policy-admin"}):
+                or not isinstance(role, str) or role not in {"viewer", "operator", "policy-admin"}):
             raise ValueError("invalid account")
         encoded_grants = validate_grants(grants)
         with self.db() as db:
@@ -243,7 +238,8 @@ class AccountLedger:
                 or set(changes) - {"role", "grants", "enabled", "password_scrypt", "change_required"}):
             raise ValueError("invalid changes or revision")
         changes = dict(changes)
-        if "role" in changes and changes["role"] not in {"viewer", "operator", "policy-admin"}:
+        if "role" in changes and (not isinstance(changes["role"], str)
+                                  or changes["role"] not in {"viewer", "operator", "policy-admin"}):
             raise ValueError("invalid role")
         if "enabled" in changes and type(changes["enabled"]) is not bool:
             raise ValueError("invalid enabled")
