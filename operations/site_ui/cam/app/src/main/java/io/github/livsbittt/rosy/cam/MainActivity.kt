@@ -171,14 +171,17 @@ class MainActivity : ComponentActivity() {
                 val ready = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
                 }
-                if (version == accountVersion) accountReady.value = ready
+                if (version == accountVersion) {
+                    if (!ready) { pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null }
+                    accountReady.value = ready
+                }
                 kotlinx.coroutines.delay(10000)
             }
         }
         Column {
             if (accountReady.value) {
                 TextButton(onClick = {
-                    accountVersion++; accountReady.value = false; pairingModel.close(); cameraPeerModel.close(); pendingPairing.value = null
+                    accountVersion++; accountReady.value = false; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
                     lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
                         accountMessage.value = if (ok) "?????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????" }
                 }) { Text("Rosy Account ? ???? / ?? ??") }

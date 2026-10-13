@@ -63,7 +63,8 @@ class MainActivity : Activity() {
                 accountChecking = true
                 accountWorker.execute { try {
                     account!!.session.retryRevocations()
-                    account!!.config.resources.forEach { account!!.session.access(it) }
+                    listOfNotNull(session?.target?.id, secondarySession?.target?.id).distinct().take(2)
+                        .forEach { account!!.session.access("robot:$it") }
                 } finally { accountChecking = false } }
             }
             main.postDelayed(this, 10000)
