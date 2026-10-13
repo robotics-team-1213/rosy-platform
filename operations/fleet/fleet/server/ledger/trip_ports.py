@@ -409,13 +409,10 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
                <= MAX_WINDOW_BEND_DEG for k in range(steps + 1))
 
 
-def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig) -> Optional[dict]:
-    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
-    and ``bend_radius_m``; None on another map version, when the arc start is not 0-2 m ahead or
-    while the lane before it still turns (``straight_approach``)."""
-    # The pose is latency seconds old and the robot drove on meanwhile: a bend_in_m measured from
-    # it starts the arc late and the exit runs outside the lane (Gazebo lap 2026-10-13: 2 cm late,
-    # 1.8 cm toward the wall after a 64 deg bend). Leading by the trip speed errs to the inside.
+def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig, located=None) -> Optional[dict]:
+    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``, ``bend_radius_m`` and
+    D-759 1 ``map_entry``; None on another map version, an arc start not 0-2 m ahead or a lane still turning before it."""
+    # Lead by trip speed x pose latency: unled, the arc began 2 cm late, 1.8 cm to the wall (Gazebo 2026-10-13). Errs inside.
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0
     if age is not None and live.pose_read_at is not None:
@@ -425,8 +422,11 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
             or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
         return None
+    stamp = getattr(located, "odom_stamp", None) if caps.get("lane_bend_map_entry") else None  # D-759 2
     return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
-            "bend_radius_m": bend["radius_m"]}
+            "bend_radius_m": bend["radius_m"], **({} if stamp is None else {"map_entry": {  # lane heading at the arc start
+                "yaw_rad": round(live.arc(live.view["segment_index"]).point_at(bend["s_start"])[2], 4),
+                "pose_yaw_rad": located.yaw, "odom_stamp_s": stamp}})}
 
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
