@@ -733,7 +733,6 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
-| D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Proposed |
 | D-744 | 차로 호(D-520)의 원을 지도에 고정: `exit_segment.map_anchor`, 능력 `lane_arc_map_anchor` | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
 
