@@ -142,3 +142,18 @@ def test_cli_default_and_opt_in_configuration(tmp_path):
     path.write_text("fleet:\n  stuck_resolver:\n    realign_robots: [r1]\n", encoding="utf-8")
     args.site_config = path
     assert _realign_config(args).robots == frozenset({"r1"})
+
+
+def test_autonomous_robot_does_not_reopen_a_held_realignment_on_the_same_stuck():
+    r = row()
+    r["state"]["line_follow"]["stuck"]["phase"] = "ASKING"
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    resolver.autonomous_robots = frozenset({"r1"})
+    held = resolver.step(1., [r])[0]
+    assert (held.decision, held.escalate) == ("WAIT", "realign_hold:clearance_stale")
+    resolver.sent(held, 1.)
+    assert resolver.result(held, code=None).reason == "realign_hold:clearance_stale"
+    r["clearance_evidence"]["inquiry_observed_at"] = 10.
+    assert select(r, [r], config(), now=10.1, attempt=1)[0] is not None
+    assert resolver.step(2., [r]) == [] and resolver.step(3., [r]) == []
