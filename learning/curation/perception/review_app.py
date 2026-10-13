@@ -29,6 +29,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 from review_decisions import make_decisions_server, serve_review
+from learning_control import Control, ControlConflict
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
@@ -339,7 +340,7 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1'):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None):
     check_bind_host(host)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
@@ -415,6 +416,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path.startswith('/api/object-drafts/'):
                     return self.send({'drafts': store.object_drafts(int(path.rsplit('/', 1)[1]))})
+                if path == '/api/learning/control':
+                    return self.send(control.status() if control else {'available': False})
                 if path == '/api/learning':
                     frames = store.list_frames()
                     pixel_reviews = [review_masks.get(store, f['index']) for f in frames
@@ -443,6 +446,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                        authority.get('decision_sha256') == current['decision_sha256']}
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
                                       'preparation': preparation,
+                                      'control': control.status() if control else None,
                                       'counts': {state: sum(f['status'] == state for f in frames)
                                                  for state in ('approved', 'pending', 'excluded')},
                                       'object_drafts': len(object_draft_indices),
@@ -538,17 +542,12 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                       'selected_pixels': count, 'tolerance': tolerance})
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict))
-                if path == '/api/learning/register':
-                    return self.send(learning.register(body))
-                if path == '/api/learning/remove':
-                    try:
-                        return self.send(learning.remove(body))
-                    except ValueError as exc:
-                        raise Conflict(str(exc)) from exc
+                if path in ('/api/learning/register', '/api/learning/remove', '/api/learning/control'):
+                    return self.send(learning.action(path, body, control, Conflict))
                 if path.startswith('/api/frames/'):
                     return self.send(store.update(int(path.rsplit('/', 1)[1]), body))
                 self.send({'error': 'not found'}, 404)
-            except Conflict as exc:
+            except (Conflict, ControlConflict) as exc:
                 self.send({'error': str(exc)}, 409)
             except (ValueError, KeyError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)
@@ -568,6 +567,7 @@ def main():
                         help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
+    parser.add_argument('--learning-control', type=Path, help='private binding for owned signed pipeline controls')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path,
@@ -588,7 +588,8 @@ def main():
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
-    server = make_server(store, args.port, args.host)
+    control = Control(args.learning_control, review_evidence.metadata(store, 'workspace_id')) if args.learning_control else None
+    server = make_server(store, args.port, args.host, control=control)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

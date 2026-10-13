@@ -126,6 +126,18 @@ class Workspace:
             rows = conn.execute('SELECT * FROM learning_links ORDER BY rowid DESC').fetchall()
         return [self.inspect(row) for row in rows]
 
+    def action(self, path, body, control, conflict):
+        if path == '/api/learning/register':
+            return self.register(body)
+        if path == '/api/learning/remove':
+            try:
+                return self.remove(body)
+            except ValueError as exc:
+                raise conflict(str(exc)) from exc
+        if path == '/api/learning/control' and control is not None:
+            return control.action(body)
+        raise ValueError('이 작업대에는 수동 학습 제어가 연결되어 있지 않습니다.')
+
     def image(self, identifier, name):
         with sqlite3.connect(self.db) as conn:
             row = conn.execute('SELECT * FROM learning_links WHERE id=?', (identifier,)).fetchone()
