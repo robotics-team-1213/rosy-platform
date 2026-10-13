@@ -46,9 +46,10 @@ main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
 .fleet-body { display: grid; grid-template-columns: var(--rail-track) minmax(0, 1fr); min-width: 0; min-height: 0; }
 .fleet-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .fleet-workspace > main { box-sizing: border-box; width: 100%; min-width: 0; }
-/* D-741 2·6 — 탐색 레일: 아이콘 아래에 짧은 이름. 치수는 공용 자리 토큰(--rail-track 72px)을 쓴다. */
+/* D-741 2·6 — 탐색 레일: 아이콘 아래에 짧은 이름. 치수는 공용 자리 토큰(--rail-track 72px)을 쓴다.
+   72px 자리에서 안쪽 여백과 오른쪽 선을 뺀 칸은 55px이라, 세로 레일의 항목은 그 칸 폭까지만 넓다. */
 .fleet-body > .doc-tabs { flex-direction: column; align-items: center; gap: var(--gap-rail); overflow-x: visible; padding: var(--inset-rail); border-bottom: 0; border-right: 1px solid var(--border-subtle); }
-.fleet-body > .doc-tabs a { flex-direction: column; gap: var(--gap-rail); inline-size: 3.5rem; min-block-size: 3.5rem; padding: 0; border-bottom: 0; border-inline-start: 2px solid transparent; font-size: var(--text-micro); }
+.fleet-body > .doc-tabs a { flex-direction: column; gap: var(--gap-rail); inline-size: 3.5rem; max-inline-size: 100%; min-block-size: 3.5rem; padding: 0; border-bottom: 0; border-inline-start: 2px solid transparent; font-size: var(--text-micro); }
 .fleet-body > .doc-tabs a[aria-current="page"] { border-inline-start-color: var(--ink); background: var(--surface-raised); }
 @media (width >= 64rem) and (height >= 40rem) {
   .fleet-shell:has(#fleet-main) { height: 100dvh; }

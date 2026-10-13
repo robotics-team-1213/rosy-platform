@@ -200,7 +200,9 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 labels = []
                 for link in page.locator(".doc-tabs a").all():
                     box = link.bounding_box()
-                    assert box["width"] == box["height"] == 56, (name, width, box)
+                    assert box["height"] == 56 and 55 <= box["width"] <= 56, (name, width, box)
+                    if width >= 1024:  # the vertical rail: inside the track's padding (8 + 8) and 1px rule
+                        assert box["width"] <= nav["width"] - 17, (name, width, box, nav)
                     label, icon = link.locator(".ui-icon-label"), link.locator(".ui-icon").bounding_box()
                     expect(label).to_be_visible()
                     assert label.bounding_box()["y"] >= icon["y"] + icon["height"] - 1, (name, width)
