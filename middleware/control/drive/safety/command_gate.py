@@ -169,6 +169,16 @@ class CommandPolicy:
             current_sequence=self._sequence)
 
     def evaluate(self, linear, angular, now, *, allow_bounded_sweep=False):
+        """One decision on one snapshot. A snapshot replaced during the evaluation is judged once
+        more on the newer one (the sweep makes an evaluation longer than a producer period);
+        replaced again, the candidate is refused."""
+        output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
+        detail = getattr(self._evaluation, 'unavailable', None)
+        if output is None and detail is not None and detail['reason'] == 'snapshot_changed':
+            output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
+        return output
+
+    def _evaluate_once(self, linear, angular, now, allow_bounded_sweep):
         self._evaluation.unavailable = None
         with self._lock:
             snapshot = self._snapshot
