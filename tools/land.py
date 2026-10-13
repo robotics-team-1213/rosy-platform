@@ -35,7 +35,7 @@ import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site P
 sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import worktrees  # noqa: E402  (ADRNUM: every landing sweeps finished worktrees)
+import worktrees  # noqa: E402  (D-761: every landing sweeps finished worktrees)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands

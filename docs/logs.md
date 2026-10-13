@@ -8318,3 +8318,10 @@ osy-d395-s1d\`.
 - 변경: 공유 main 공개 검증에서 발견한 계정 체크박스 계약과 HOLD 시계 결함을 수정했다. 이력 재작성 없이 독립 리뷰와 수정 후손을 묶어 safety-review 예외를 기록했다.
 - 증거: CI 38435850880 계정 화면 실패 재현 뒤 UI 31 passed; HOLD 원격 RED 7건 뒤 322 passed, NEW 0. 검토와 한계는 validation/omx-release-safety-review-2026-10-14.md.
 - gate 변화: SOURCE/원격 회귀만. 실제 장치·HF 계정·Spaces 연결 수용은 D-756에 남아 있다.
+
+## 2026-10-14 · e1b6c97fe · 워크트리 관문 도구와 손실 없는 청소 (D-761 Proposed)
+
+- 변경: `tools/worktrees.py`(`status`, `prune`, `new`)를 추가했다. `tools/land.py`는 착지를 시작할 때 손실 없는 청소를 돌리고(`--no-prune`), harness lint는 상한 40이나 치울 워크트리가 있으면 경고한다. `AGENTS.md` 「같이 하는 깃」 1·6번, `docs/reference/shared-checkout.md`, `rosy-land-on-main` 스킬을 이 도구로 바꿨다.
+- 증거: e1b6c97fe 원격 `test/test_worktrees_tool.py test/test_land.py` 55 passed, NEW 0. 변이 커밋 c3b446996(gitignore 판정, 임시 인덱스 `add -A`, 실행 중 워크트리 보호 제거)에서 해당 시험 4개 실패를 확인했다.
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소의 워크트리에 `prune`을 실행한 적은 없다.
+- 결정: D-761은 Proposed다. 착지와 push는 디스패처의 독립 리뷰 뒤에 한다.
