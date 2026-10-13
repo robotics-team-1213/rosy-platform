@@ -259,6 +259,54 @@ def test_a_line_far_along_the_exit_or_on_a_shallow_bend_is_still_handed_over():
         until(rig, 'waiting')
 
 
+def _line_out(rig, ahead, turn=60.):
+    """Where the line `ahead` of the rig lies along the exit line from the bend's vertex."""
+    exit_yaw = math.radians(turn)
+    vertex = BEND['bend_in_m']+BEND['bend_radius_m']*math.tan(exit_yaw/2)
+    px, py = rig.x+ahead*math.cos(rig.yaw)-vertex, rig.y+ahead*math.sin(rig.yaw)
+    return px*math.cos(exit_yaw)+py*math.sin(exit_yaw)
+
+
+def test_the_map_drops_a_mid_arc_line_where_it_has_no_junction():
+    """D-754, Gazebo lap run55: W3 (90 deg) read its own line mid-arc 0.17 m ahead, beyond the
+    note 9 reach, so it was handed over; the map's next junction is over 1 m on, so it is not."""
+    rig = armed_rig(turn=90.)
+    bend_sighting_line_ahead(rig, ahead=.17)
+    assert _line_out(rig, .17, 90.) > .10                 # beyond the own line's reach at 90 deg
+    until(rig, 'waiting')                                 # without the field: as before
+    for fields, ahead in ((dict(turn=90.), .17), ({}, .4)):
+        rig = armed_rig(next_line_in_m=1., **fields)
+        bend_sighting_line_ahead(rig, ahead=ahead)
+        decision, status = until(rig, 'idle')
+        assert decision.linear > 0 and rig.m._junction_held is False, fields
+        assert rig.m._junction_anchor is None, fields    # the sighting is cleared
+
+
+def test_the_map_keeps_a_mid_arc_line_where_its_next_junction_is():
+    """D-754: W1's next junction shortly after it; within the tolerance (0.05 placement +
+    0.05 x 0.4 range + 0.10 half lane = 0.17 m) either side, and not beyond it."""
+    probe = armed_rig()
+    bend_sighting_line_ahead(probe)
+    out = _line_out(probe, .4)
+    assert .25 < out < .5
+    for off, state in ((0., 'waiting'), (-.12, 'waiting'), (.12, 'waiting'), (.22, 'idle'), (-.22, 'idle')):
+        rig = armed_rig(next_line_in_m=out+off)
+        bend_sighting_line_ahead(rig)
+        until(rig, state)
+
+
+def test_the_map_judges_a_line_read_on_the_entry_heading_too():
+    """D-754: a line read before the arc goes by the map's distance as well: dropped when the next
+    junction is far (a shallow bend too), handed over where the map has a line, inside note 9's reach."""
+    for fields, past, state in ((dict(next_line_in_m=1.), .1, 'idle'),
+                                (dict(next_line_in_m=1., turn=40.), .1, 'idle'),
+                                ({}, .2, 'idle'),         # 0.2 cos 60 = 0.10 along the exit: note 9
+                                (dict(next_line_in_m=.1), .2, 'waiting')):
+        rig = armed_rig(**fields)
+        _sight_past_the_vertex(rig, past)
+        until(rig, state)
+
+
 def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
     """No fresh sighting after the pass (the keeper reads the line as a corner): the instruction
     still finds its junction in the window and stops to turn instead of following the keeper."""
