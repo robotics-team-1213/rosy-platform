@@ -235,6 +235,17 @@ def test_curvature_sign_is_left_positive():
         assert exit_segment(graph, trip, 0, **ARC_ARGS)["curvature_1pm"] == pytest.approx(sign * 4.0, abs=0.01)
 
 
+def test_d744_map_pose_adds_the_map_anchor_with_the_fitted_centre():
+    for clockwise, cy in ((False, 0.25), (True, -0.25)):
+        graph, trip = _circle_map(clockwise)
+        assert "map_anchor" not in exit_segment(graph, trip, 0, **ARC_ARGS)
+        found = exit_segment(graph, trip, 0, **ARC_ARGS, map_pose=(0.9, 0.01, -0.05, 1790000000.25))
+        assert found["map_anchor"] == {
+            "centre_x_m": pytest.approx(1.0, abs=1e-3), "centre_y_m": pytest.approx(cy, abs=1e-3),
+            "pose_x_m": 0.9, "pose_y_m": 0.01, "pose_yaw_rad": -0.05, "odom_stamp_s": 1790000000.25}
+        assert {k: v for k, v in found.items() if k != "map_anchor"} == exit_segment(graph, trip, 0, **ARC_ARGS)
+
+
 def test_straight_and_bent_lanes_get_no_exit_segment():
     graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
     spoke = [{"edge_id": "ring_w", "forward": True, "s_from": 0.0, "s_to": 0.374},
