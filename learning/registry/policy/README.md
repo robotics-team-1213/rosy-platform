@@ -111,3 +111,17 @@ validator를 호출하고 원본 receipt 전체와 다른 watermark/state/goal/j
 정책 revision을 결과에 보존하지만 metadata-only 관측은 demonstration이나 training
 GT가 아니다. DatasetStore/승격 호환 매핑은 확대하지 않는다. 파일 해시 검증은
 Fleet 수신 원장·receipt 인증·실제 추론/task/physical 결과를 증명하지 않는다.
+
+For a read-only audit of an existing registry, use `Registry(root, read_only=True)`
+or `python learning/registry/policy/registry.py --root <root> --read-only history`
+(`show <revision>` is also supported). `DatasetStore(root, read_only=True)` permits
+`require`/`require_policy` with the same file and Episode closure validation.
+Missing databases or schemas fail instead of creating directories/tables. These
+objects reject registration, assessment recording, and promotion before processing
+inputs. The existing default remains writable for callers that publish records.
+
+Read-only connections use SQLite `mode=ro` and ordinary read transactions, so an
+audit keeps a consistent ledger snapshot and includes committed WAL records; it
+does not use `immutable=1` or reserve a writer lock. SQLite may use the database's
+WAL/shared-memory sidecars for coordination. Artifact files are still validated
+from their preserved snapshots; this is an integrity audit, not operating approval.
