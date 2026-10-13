@@ -49,3 +49,5 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
+D-740 reserved by a separate ongoing branch; not included in the D-742 review pipeline landing; remove once its ADR lands
+D-741 reserved by a separate ongoing branch; not included in the D-742 review pipeline landing; remove once its ADR lands
