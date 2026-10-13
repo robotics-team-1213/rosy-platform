@@ -203,3 +203,9 @@
 - 변경: 세션이 있으면 헤더 `로그인` 링크를 숨긴다(`#fleet-login`의 ID 규칙이 `[hidden]`을 이겼다, D-683 1). 지도 칸이 천장 프레임을 나눠 보이는 동안 오른쪽 열 썸네일을 접는다(D-493 3). 점유 격자의 원점 글자를 겹침 선 뒤에 칠한다(US-009). 세션 시험은 첫 토큰 입력 전에 `토큰으로 접속` 접힘을 연다(D-519 6, D-658 6). 시험 경합 세 곳을 고쳤다: 지워진 툴팁 주인 옆 버튼의 설명, lease route 수, 다시 그려지는 로봇 카드 스크롤. DESIGN.md의 Fleet 헤더 문구를 D-668·D-683에 맞췄다.
 - 증거: 모델 PC Chromium. 고치기 전 main 5feb00b2e는 Fleet 21개 파일 382 passed 6 failed, 그 밖 36개 파일 659 passed 2 failed. 이 브랜치는 Fleet 388 passed(7f40561e6), 그 밖 683 passed(3f32f2888, 이후 커밋은 Fleet 시험 두 파일만 바꿨다), skip 0. 원격 pytest(8cae1dece): `operations/fleet/test`, `shared/web/test`, harness·구조 가드 모두 exit 0, known_failures NEW 0. harness lint 0 error. 로그 `X:/DevTemp/land-recent/browser/`.
 - gate 변화: 없음. 소스 브라우저 회귀만 확인했다. 착지·push·CI·설치본·실물은 별도다. Games `test_compact_board_recovery…[320-568]`은 첫 전체 실행에서 한 번 실패한 뒤 단독 10회와 전체 2회에서 통과했고 원인은 찾지 못했다.
+
+## 2026-10-13 · 1438d53d1 · feat(web): control line (D-741), Cell 묶음 선 유지
+
+- 변경: `cell/cell.css`의 `.document-group` 테두리를 `--field-line`에서 `--border-default`로 옮겼다. `--field-line`이 조작 경계(잉크 50%)가 되어도 폼 묶음 선은 면 구분으로 남는다. `.file-picker-button`은 조작이라 `--field-line`을 그대로 쓴다.
+- 증거: 원격 소스 시험 통과. 화면 확인 없음.
+- gate 변화: 없음.

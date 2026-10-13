@@ -114,7 +114,7 @@ def test_a_finished_lap_is_the_end_and_a_fresh_lap_is_the_start():
 
 def test_the_lane_step_sits_outside_the_device_goal_ball():
     """RPP does not drive to a point it already counts as arrived."""
-    params = ROOT / "middleware/control/drive/planning/nav2/params/nav2_params.yaml"
+    params = ROOT / "middleware/drive/planning/nav2/params/nav2_params.yaml"
     data = yaml.safe_load(params.read_text(encoding="utf-8"))
     tolerance = data["controller_server"]["ros__parameters"]["general_goal_checker"][
         "xy_goal_tolerance"]

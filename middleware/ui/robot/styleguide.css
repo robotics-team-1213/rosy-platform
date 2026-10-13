@@ -41,6 +41,7 @@ h1 {
 .sample-subtle { border-color: var(--border-subtle); }
 .sample-default { border-color: var(--border-default); }
 .sample-strong { border-color: var(--border-strong); }
+.sample-control { border-color: var(--control-line); }
 .sample-danger { background: var(--status-crit); color: var(--text-on-danger); }
 
 main {

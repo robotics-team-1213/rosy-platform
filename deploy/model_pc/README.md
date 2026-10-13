@@ -100,3 +100,19 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 먼저 기존 pipeline service/timer를 설치하고 daemon-reload한다. 서비스는 템플릿의 단일 서명 ExecStart, `KillMode=control-group`을 사용하며 추가 실행 명령이나 drop-in은 허용하지 않는다. UI는 적재된 unit과 private binding/config 원본을 재확인한다. 설정이 바뀌면 운영자가 명시적으로 다시 연결한다.
 
 Perception 결과로 out_path를 연결하면 시작·중지·재시도 버튼이 나타난다. Ctrl+K에서 같은 이름으로 실행할 수 있다. 시작은 자동 확인을 켜고, 중지는 해당 실행기의 자식 프로세스까지 중지하며, 재시도는 자동 확인을 켜지 않고 한 번 실행한다. 완료·품질 거절·시도 한도 원장은 초기화하지 않는다. 원장 읽기 오류가 있어도 검증된 실행기의 중지는 가능하다. 화면은 실제 서비스 상태와 현재 학습 결과를 다시 읽으며 요청 접수를 완료로 표시하지 않는다.
+
+## 헤드리스 Gazebo 준비 (D-571)
+
+모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.
+
+```bash
+python3 deploy/hosts/common/rosy-host-state install model --dry-run      # root 없이 차이만
+sudo python3 deploy/hosts/common/rosy-host-state install model --approve sim
+```
+
+네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 실행기가 이 PC를 고르지 않는다. 실행과 점검 명령은 개발 PC에서 내고, Gazebo는 고른 PC에서만 돈다(D-584). `--host model`은 `ROSY_SIM_HOSTS`나 `private/lab-hosts.json`의 `sim_hosts`에 `=model` 역할이 적혀 있어야 한다.
+
+```bash
+python tools/remote/remote_sim.py --check
+python tools/remote/remote_sim.py --host model swarm_bench -- --scenario follow --duration 90
+```

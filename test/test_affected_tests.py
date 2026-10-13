@@ -24,10 +24,10 @@ GUARDS = set(affected.GUARD_SET)
 
 def test_external_drive_holders_select_their_installing_distribution():
     repo = affected.Repo.load(ROOT)
-    behavior = 'middleware/control/drive/behaviors/line_follow/manager.py'
+    behavior = 'middleware/drive/behaviors/line_follow/manager.py'
     assert repo.module_for(behavior)['name'] == 'core_features'
-    assert repo.module_for('middleware/control/drive/runtime/goal_node.py')['name'] == 'control'
-    assert repo.module_for('middleware/control/drive/planning/nav2/package.xml')['name'] == 'navigation'
+    assert repo.module_for('middleware/drive/runtime/goal_node.py')['name'] == 'control'
+    assert repo.module_for('middleware/drive/planning/nav2/package.xml')['name'] == 'navigation'
     selection = affected.select(repo, [behavior])
     assert 'middleware/core/services/test' in selection.reasons
     assert 'middleware/core/gateway/test' in selection.reasons
