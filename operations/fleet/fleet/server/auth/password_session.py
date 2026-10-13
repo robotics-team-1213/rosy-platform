@@ -167,6 +167,13 @@ class PasswordSessions:
     def list_account_audit(self, value: str):
         return self._ledger.list_audit(value)
 
+    def migrated_principal(self, principal_id: str) -> bool:
+        self._refresh_authority()
+        if not self._ledger.active:
+            return False
+        with self._ledger.db() as db:
+            return db.execute("SELECT 1 FROM rosy_accounts WHERE principal_id=?", (principal_id,)).fetchone() is not None
+
     def create_account(self, value: str, **fields):
         return self._ledger.create(value, **fields)
 
