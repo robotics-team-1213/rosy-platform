@@ -8267,3 +8267,9 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest와 브라우저 결과는 이 브랜치의 착지 보고에 둔다.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
 - 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
+
+## 2026-10-13 · feat/act-native-chain-port · test: ACT same-result owner evidence (ported from 7d84fa446)
+
+- Change: ported from stale feat/act-native-chain (2026-10-05); it adds an explicit test-only original-result supplier after parent attempt binding, outside execution serializers. Original camera/source timestamps, final guards and Episode UNKNOWN semantics are unchanged.
+- Evidence (original branch run, not re-run for the port): X:/DevTemp/act-native-chain/final-cpu.txt 4 PASS (synthetic CPU/fixed HOST clock); broad.txt 114 PASS/4 missing-dependency SKIP/NEW0; staged architecture.txt 18 PASS/NEW0. Original failures remain in red/CPU logs; exact SOURCE independent review act-native-final-source-independent-review.md.
+- Gate: native CPU ROS execution pending isolated dependency setup, not accepted by HOST or SKIP. No production scheduler/issuer, runtime activation, physical move or push.

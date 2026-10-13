@@ -12,7 +12,7 @@ import pytest
 
 from test_omx_policy_session import setup_session, candidate, ROOT
 from rosy.execution.local.policy_journal import PolicyExecutionJournal
-from omx_adapter.command_owner import JointStateSnapshot, CommandDecision
+from omx_adapter.command_owner import JointStateSnapshot, CommandDecision, TrajectoryCommand
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
 
@@ -25,7 +25,7 @@ def runtime_methods(session, client):
              '_dispatch_goal_event', '_on_joint_state', '_watchdog_tick', 'submit', '_submit_policy'}
     cls.body = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in names]
     scope = dict(RosGoalEvent=RosGoalEvent, Callable=Callable, JointStateSnapshot=JointStateSnapshot,
-                 CommandDecision=CommandDecision, JointState=Any)
+                 CommandDecision=CommandDecision, TrajectoryCommand=TrajectoryCommand, JointState=Any, Any=Any)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(file), 'exec',
                  flags=__future__.annotations.compiler_flag, dont_inherit=True), scope)
     runtime = scope['RosArmCommandRuntime'].__new__(scope['RosArmCommandRuntime'])
