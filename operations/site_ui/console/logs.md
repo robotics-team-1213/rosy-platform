@@ -215,3 +215,9 @@
 - 변경: 네 문서의 머리가 맥락 | 연결 | 알림·나 | 정지의 한 줄 앱 바가 됐다. 시계와 연결 글(`실시간`·`지연`·`연결 끊김`)이 머리로 오고 푸터와 그 안의 `관제 알림` 링크가 없어졌다. 알림 단추는 정적 마크업이다. 계정 단추(`#topbar-more`)가 역할 이름을 달고 그 아래에 계정·화면 표시·토큰 접속이 있다. 로봇 연결 수(`#online-pill`)는 관제 문서의 지도 머리로 갔고 다른 세 문서에는 없다. 레일 아이콘 아래에 `관제·설치·지도·작업·Cell`을 적었다. 접힘은 `.fleet-shell` 칸 질의(64rem, 48rem, 30rem)다.
 - 증거: 원격 소스 시험과 node 단위 시험 통과, `known_failures` NEW 0. `*_browser.py`는 원격에서 돌지 않았다. `operations/fleet/test`의 브라우저 시험은 푸시 뒤 CI가 증거이고, `test/test_fleet_console_browser.py`와 `shared/web/test/test_theme_browser.py`는 어디서도 저절로 돌지 않는다.
 - gate 변화: 없음. D-153 G2 캡처와 G3 사람 검토는 `docs/validation/fleet-app-bar-2026-10-13.md`에 적은 대로 아직 없다.
+
+## 2026-10-14 · 669a7f35e, 030c5a789, 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
+
+- 변경: 네 문서의 레일이 `관제·작업·기록·지도·설치` 다섯 영역이 됐다. 현장 지도와 Cell의 가로 앵커 줄(`.task-nav`)이 공용 하위 탐색 자리(`/common/app-shell.css`의 `.ui-subnav`)로 갔다. `/console?view=work`는 `전체 작업·승인 대기·끝난 작업·새 작업`을, `/console?view=records`는 `검토할 사건·열린 사건·닫힌 사건·AI 상황 사실·관제 기록`을 하위 탐색에 둔다. 화면은 `show`로 고르고 기존 `GET /api/fleet/work`, `GET /api/fleet/incidents` 답을 브라우저에서 거른다. `/console/cell`은 주소를 유지하고 `작업` 영역의 `새 작업`이다. 기록 영역에서는 사건 패널(또는 관제 기록)이 본문으로 올라가고 연 사건의 담당 인수·사람 검토·검토 폼이 오른쪽 칸 `원인과 조치`에 선다. 관제의 `기록·근거` 탭은 그대로다.
+- 증거: 원격 소스 시험 통과(`known_failures` NEW 0). 브라우저 시험은 시험 PC에서 조각마다 돌렸고 결과는 착지 보고에 있다. 화면을 사람이 본 적은 없다.
+- gate 변화: 없음. Fleet 크기 단위는 55451/55452다(D-168). D-153 G2 캡처와 G3 사람 검토는 없다.
