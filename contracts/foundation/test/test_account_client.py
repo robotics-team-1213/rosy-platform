@@ -86,3 +86,31 @@ def test_expired_flow_and_external_return_are_refused(receiver):
     clock[0] += 601
     with pytest.raises(AccountDenied):
         client.finish(flow, 'state', 'code')
+
+
+def test_renewal_is_saved_before_introspection_timeout(receiver):
+    client, clock, calls, active = receiver
+    cookie = session(client)
+    clock[0] += 270
+    active[0] = 'offline'
+    assert client.resolve(cookie)
+    refresh_count = sum(path == 'token' for path, _ in calls)
+    assert client.resolve(cookie) is None
+    assert sum(path == 'token' for path, _ in calls) == refresh_count
+    active[0] = True
+    assert client.resolve(cookie)
+
+
+def test_logout_retries_revocation_after_outage(receiver):
+    client, _, calls, _ = receiver
+    cookie = session(client)
+    original = client.post
+    def offline(path, fields):
+        raise AccountUnavailable()
+    client.post = offline
+    with pytest.raises(AccountUnavailable):
+        client.logout(cookie)
+    assert client.resolve(cookie) is None
+    client.post = original
+    client.retry_revocations()
+    assert calls[-1][0] == 'revoke'
