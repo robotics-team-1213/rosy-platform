@@ -23,7 +23,9 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from core_api_web.api.deps import ROLE_RANK, authenticate, token_alive
+from core_api_web.api.deps import authenticate, token_alive
+from core_api_web.api.account_sessions import authenticate_account
+from starlette.concurrency import run_in_threadpool
 from core_features.swarm import ReferencePose
 from core_common.protocol.schemas import Envelope, EnvelopeType, Pose, PoseSample
 
@@ -39,6 +41,7 @@ MAX_PENDING_FIRST_MESSAGE = 64
 _pending_by_ip: collections.Counter[str] = collections.Counter()
 #: D-193 보안 리뷰 L2: 열린 소켓의 토큰을 이 주기로 다시 본다. 회수·만료·로그아웃이면 4401.
 REVALIDATE_S = 30.0
+ACCOUNT_REVALIDATE_S = 5.0
 
 
 def _guarded(handler):
@@ -58,10 +61,20 @@ async def _watch_token(websocket: WebSocket, svc, token_id: str) -> None:
     """Close with 4401 once the session's token is revoked, logged out or expired."""
     try:
         while True:
-            await asyncio.sleep(REVALIDATE_S)
+            account = getattr(websocket.state, 'account_auth', None)
+            await asyncio.sleep(ACCOUNT_REVALIDATE_S if account else REVALIDATE_S)
             if websocket.application_state == WebSocketState.DISCONNECTED:
                 return
-            if not token_alive(svc.config, token_id):
+            if account:
+                try:
+                    auth = await asyncio.wait_for(run_in_threadpool(authenticate_account, websocket,
+                                                  getattr(websocket.state, 'account_bearer', None)), timeout=8)
+                    alive = auth is not None and auth.token_id == token_id and auth.allows_role(websocket.state.min_role)
+                except Exception:
+                    alive = False
+            else:
+                alive = token_alive(svc.config, token_id)
+            if not alive:
                 await websocket.close(code=4401)
                 return
     except asyncio.CancelledError:
@@ -156,8 +169,16 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
     메시지를 기다린다.
     """
     svc = websocket.app.state.core
+    try:
+        account_auth = await run_in_threadpool(authenticate_account, websocket, websocket.headers.get('authorization'))
+    except Exception:
+        await websocket.close(code=4401)
+        return None
     query_token = websocket.query_params.get("token")
-    if query_token is None:
+    if account_auth:
+        auth = account_auth
+        await websocket.accept()
+    elif query_token is None:
         host = websocket.client.host if websocket.client else ""
         if (_pending_by_ip[host] >= MAX_PENDING_PER_IP
                 or sum(_pending_by_ip.values()) >= MAX_PENDING_FIRST_MESSAGE):
@@ -173,12 +194,13 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
                 del _pending_by_ip[host]
     else:
         token = query_token
-    try:
-        auth = authenticate(svc.config, None, token)
-    except Exception:
-        await websocket.close(code=4401)
-        return None
-    if auth.rank < ROLE_RANK[min_role]:
+    if not account_auth:
+        try:
+            auth = authenticate(svc.config, None, token)
+        except Exception:
+            await websocket.close(code=4401)
+            return None
+    if not auth.allows_role(min_role):
         await websocket.close(code=4403)
         return None
     if capability and not svc.capability.supports(capability):
@@ -186,9 +208,13 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
         # 다시 거짓말이 된다 — D-31 이 없애려던 바로 그 어긋남이다.
         await websocket.close(code=4403)
         return None
-    if query_token is not None:
+    if query_token is not None and not account_auth:
         await websocket.accept()
     websocket.state.token_id = auth.token_id
+    websocket.state.account_auth = account_auth
+    authorization_header = 'authorization'
+    websocket.state.account_bearer = websocket.headers.get(authorization_header, None) if account_auth else None
+    websocket.state.min_role = min_role
     websocket.state.token_guard = asyncio.create_task(_watch_token(websocket, svc, auth.token_id))
     return svc
 

@@ -1,6 +1,6 @@
 ## D-549 사람 인증은 현장 하나의 Rosy Auth가 발급한 계정(아이디·비밀번호)으로 하고, 로봇은 그 서명을 검증만 한다
 
-**Status:** Proposed (2026-10-09, 사용자 방향 "추후 auth service로 인증 도입, 발급된 사람이 id·비번으로 간단히 로그인". 구현 전 사용자 결정 필요 항목은 아래 열린 질문)
+**Status:** Superseded by D-757 (2026-10-14, Rosy Account 단일 신원과 전 앱 자동 세션 계약; 아래는 기존 제안 기록)
 
 잇는 결정: [D-193](D-193-login-code-and-credential-lifecycle.md)(로봇 로그인 코드) · [D-276](D-276-site-fleet-per-principal-api-authorization.md)(Fleet principal별 권한) · [D-302](D-302-site-registry-credential-separation.md)(사용자 자격과 등록 자격 분리) · [D-361](D-361-site-console-enrolls-robot-by-screen-code.md)(화면 코드 등록) · [D-519](D-519-fleet-console-password-login-session-cookie.md)(Fleet 아이디·비밀번호 로그인) · D-548(장치 개발 모드 표식).
 

@@ -13,7 +13,7 @@ setup(
         ('share/' + package_name + '/config',
             ['config/rosy_default.yaml', 'config/rosy_dev_auth.yaml']),
     ],
-    install_requires=['setuptools', 'pydantic>=2.0'],
+    install_requires=['setuptools', 'pydantic>=2.0', 'joserfc==1.7.5'],
     zip_safe=True,
     maintainer='Dev',
     maintainer_email='dev@rosy.com',

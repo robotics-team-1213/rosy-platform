@@ -43,7 +43,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
     const jitter = Math.round(delay * 0.2 * Math.random());
     session.reconnectTimer = setTimeout(() => {
       session.reconnectTimer = null;
-      if (session.token && !session.socket) connect();
+      if (session.authenticated && !session.socket) connect();
     }, delay + jitter);
   }
 
@@ -51,8 +51,8 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
   // first message came too late. Ask REST which: 401 there ends the session,
   // anything else is retried with backoff.
   async function verifyAfterSocketRefusal() {
-    const owner = verificationLifetime, token = session.token;
-    const current = () => owner === verificationLifetime && !owner.signal.aborted && token === session.token;
+    const owner = verificationLifetime, identity = session.authKey;
+    const current = () => owner === verificationLifetime && !owner.signal.aborted && identity === session.authKey;
     try {
       await api("/api/v1/auth/whoami", {signal: owner.signal});
     } catch (error) {
@@ -61,7 +61,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
         return;
       }
     }
-    if (current() && session.token) scheduleReconnect();
+    if (current() && session.authenticated) scheduleReconnect();
   }
 
   function connect() {
@@ -69,14 +69,14 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = null;
     closeStateSocket();
-    if (!session.token) return;
+    if (!session.authenticated) return;
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
     // D-193 10: the token goes in the first message, never in the URL.
     const socket = new WebSocket(`${scheme}://${window.location.host}/ws/state`);
     session.socket = socket;
     socket.addEventListener("open", () => {
-      if (socket !== session.socket || !session.token) return;
-      socket.send(JSON.stringify({ type: "auth", token: session.token }));
+      if (socket !== session.socket || !session.authenticated) return;
+      if (session.token) socket.send(JSON.stringify({ type: "auth", token: session.token }));
     });
     socket.addEventListener("message", (event) => {
       if (socket !== session.socket) return;
@@ -97,7 +97,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
       session.socketLive = false;
       clearTimeout(session.stableTimer);
       session.stableTimer = null;
-      if (!session.token) return;
+      if (!session.authenticated) return;
       startRestFallback();
       if (event.code === 4401) {
         verifyAfterSocketRefusal();

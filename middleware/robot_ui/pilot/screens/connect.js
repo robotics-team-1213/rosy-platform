@@ -30,6 +30,7 @@ function removeRecentEntry(host) {
 }
 
 import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
+import {account, authenticated, restoreAccount, accountLogout} from '../client.js';
 import {driverFor} from "../drivers/registry.js";
 import {createVisionPreview} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
@@ -405,7 +406,7 @@ async function check(root, onReady, onEnter) {
   }
 
   const caps = await fetchCapabilities();
-  const verdict = gate.assessGate({role: me.body?.role, capabilities: caps.body ?? {}});
+  const verdict = gate.assessGate({role: account?.authenticated && !account.capabilities.includes('robot.operate') ? 'viewer' : me.body?.role, capabilities: caps.body ?? {}});
   if (!verdict.allowed) {
     setTag("차단");
     notice("진입이 차단되었습니다");
@@ -469,12 +470,21 @@ async function check(root, onReady, onEnter) {
     actions,
   );
   // 연동 코드는 브라우저 접속의 두 번째 연결이다. 앱은 자기 세션만 쓴다.
-  if (!inPilotApp()) {
+  if (!inPilotApp() && !account?.authenticated) {
     mountShowCode(root, () => {
       clearToken();
       renderTokenForm(root, () => check(root, onReady, onEnter),
         "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
     });
+  }
+  if (account?.authenticated) {
+    const exit = el('ui-button', '로그아웃', {type:'button'});
+    exit.setAttribute('kind', 'quiet');
+    exit.addEventListener('click', async () => {
+      try { await accountLogout(); window.location.assign('/pilot'); }
+      catch (error) { notice(error.message); }
+    });
+    actions.append(exit);
   }
   onReady?.({role: me.body?.role});
 }
@@ -534,21 +544,26 @@ function showCamera(root, onBack) {
   preview.start();
 }
 
-export function mountConnect(root, {onReady, onEnter} = {}) {
+export async function mountConnect(root, {onReady, onEnter} = {}) {
   root.__pilotPreviewClose?.();
   root.__enrollDispose?.();
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
   root.__pilotForm = () => (inPilotApp() ? renderAppSession(root) : renderTokenForm(root, run));
+  await restoreAccount();
   if (inPilotApp()) {
-    if (!token()) {
+    if (!authenticated()) {
       renderAppSession(root);
       return;
     }
     run();
     return;
   }
-  if (!token()) {
+  if (account?.enabled && !account.authenticated) {
+    window.location.assign('/api/account/login?return=/pilot');
+    return;
+  }
+  if (!authenticated()) {
     renderTokenForm(root, run);
     return;
   }

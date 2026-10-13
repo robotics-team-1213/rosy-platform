@@ -60,6 +60,27 @@ import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
  * confirms, so a stray link cannot silently redirect frames to another host.
  */
 class MainActivity : ComponentActivity() {
+    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private var accountVersion = 0L
+    private val accountReady = mutableStateOf(false)
+    private val accountMessage = mutableStateOf("Rosy Account로 로그인하세요")
+    private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
+    private fun handleAccountIntent(incoming: Intent?): Boolean {
+        if (!accountConfigured || account?.isCallback(incoming) != true) return false
+        val callback = incoming?.dataString ?: return true
+        incoming.data = null
+        val version = ++accountVersion
+        lifecycleScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
+                val resource = account!!.session.complete(callback)
+                account!!.session.permits(resource, "camera.manage")
+            }.getOrDefault(false) }
+            if (version != accountVersion) return@launch
+            accountReady.value = ok; accountMessage.value = if (ok) "로그인됨" else "로그인 상태와 카메라 관리 권한을 확인하세요"
+        }
+        return true
+    }
     private val pendingPairing = mutableStateOf<PairingUri?>(null)
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
@@ -74,7 +95,7 @@ class MainActivity : ComponentActivity() {
         screenPower = ScreenPower(this)
         settings = SettingsStore(applicationContext)
         if (savedInstanceState == null) {
-            handlePairingIntent(intent)
+            if (!handleAccountIntent(intent)) handlePairingIntent(intent)
         } else {
             restorePendingPairing(savedInstanceState)
         }
@@ -105,7 +126,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handlePairingIntent(intent)
+        if (!handleAccountIntent(intent)) handlePairingIntent(intent)
     }
     override fun onStop() {
         if (!isChangingConfigurations) cameraPeerModel.close()
@@ -143,6 +164,38 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun OverheadApp() {
+        if (!accountConfigured) { CameraContent(); return }
+        LaunchedEffect(Unit) {
+            while (true) {
+                val version = accountVersion
+                val ready = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
+                }
+                if (version == accountVersion) {
+                    if (!ready) { pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null }
+                    accountReady.value = ready
+                }
+                kotlinx.coroutines.delay(10000)
+            }
+        }
+        Column {
+            if (accountReady.value) {
+                TextButton(onClick = {
+                    accountVersion++; accountReady.value = false; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
+                    lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
+                        accountMessage.value = if (ok) "로그아웃됨" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다" }
+                }) { Text("Rosy Account 로그아웃 / 계정 변경") }
+                CameraContent()
+            } else {
+                Text(accountMessage.value)
+                Text("카메라 관리에는 계정 권한이 필요합니다. 기존 기계 전송은 유지됩니다.")
+                TextButton(onClick = { account!!.launch(this@MainActivity, accountResource()) }) { Text("Rosy Account 로그인") }
+                TextButton(onClick = { StreamService.stop(this@MainActivity) }) { Text("전송 정지") }
+            }
+        }
+    }
+    @Composable
+    private fun CameraContent() {
         val state by StreamService.state.collectAsStateWithLifecycle()
         LaunchedEffect(state.health, state.running) {
             if (state.running && screenCooling.requestSleep(state.health)) sleepScreen(false)

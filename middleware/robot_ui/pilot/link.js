@@ -61,7 +61,7 @@ export function createDeviceSession({
     setState("CONNECTING");
     socket = openSocket(url);
     socket.onopen = () => {
-      socket?.send(JSON.stringify({type: "auth", token}));
+      if (token) socket?.send(JSON.stringify({type: "auth", token}));
     };
     socket.onmessage = (event) => {
       let frame = null;

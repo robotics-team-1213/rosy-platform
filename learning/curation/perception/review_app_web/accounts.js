@@ -1,3 +1,4 @@
+import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
@@ -19,7 +20,7 @@ function signedOut() {
   for(const id of ['login-form','connect-form','import-form']) $(id).reset();
 }
 async function api(path, body) {
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
+  const response=await accountFetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
     headers:body===undefined?{}:{'Content-Type':'application/json','X-Pinky-Token':token || ''},
     body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json();
@@ -43,6 +44,7 @@ async function perform(action) {
 async function refresh() {
   const options=await api('/api/accounts/options');
   $('hf-login').hidden=!options.oauth;
+  if(options.rosy_account) $('hf-login').hidden=true;
   if(!options.enabled) {
     signedOut();
     $('account-status').textContent='협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.';
@@ -50,8 +52,16 @@ async function refresh() {
   }
   try { session=await api('/api/accounts/session'); }
   catch(e) {
-    if(e.status===401)return;
-    throw e;
+    if (e.status !== 401 && e.status !== 403) {
+      throw e;
+    }
+    if(options.rosy_account) {
+      $('login-panel').hidden=true; $('signed-in').hidden=true;
+      $('account-status').textContent='Rosy Account로 연결 중…';
+      window.location.assign('/api/account/login?return=/accounts'); return;
+    }
+    token=null; active=false; $('login-panel').hidden=false; $('signed-in').hidden=true;
+    $('account-status').textContent='프로젝트에 로그인하세요.'; return;
   }
   token=session.token; active=true; $('login-panel').hidden=true; $('signed-in').hidden=false;
   $('account-status').textContent='로그인됨';
@@ -112,7 +122,12 @@ $('login-form').addEventListener('submit',event=>{event.preventDefault();perform
   const password=$('password').value; $('password').value='';
   await api('/api/accounts/login',{username:$('username').value,password}); await refresh();
 });});
-$('logout').addEventListener('click',()=>perform(async()=>{await api('/api/accounts/logout',{});signedOut();}));
+$('logout').addEventListener('click',()=>perform(async()=>{
+  active=false; $('signed-in').hidden=true;
+  for(const id of ['connections','imports','connection']) $(id).replaceChildren();
+  try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
+  await refresh();
+}));
 for(const [id,purpose] of [['hf-login','login'],['hf-link','link']]) $(id).addEventListener('click',()=>perform(async()=>{
   const result=await api('/api/accounts/oauth',{purpose}); window.location.assign(result.url);
 }));

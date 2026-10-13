@@ -1001,7 +1001,12 @@ Fleet 접속 주소, 토큰, 단절 정책(SAF-003)을 설정할 수 있어야 �
 | Operator | Navigation, Teleoperation, Stop |
 | Administrator | 시스템/ROS/네트워크/Robot ID/Software Update 설정 |
 
-인증은 정적 API 토큰(`Authorization: Bearer`, WS는 쿼리 토큰)을 기본으로 하며, 상세는 API Ref를 따른다.
+사람의 공통 인증은 D-757 Rosy Account를 따른다. 등록한 HTTPS issuer의 서명 자격을
+대상 robot audience와 `robot.read`·`robot.operate`·`robot.admin`별로 검사하며
+관리 권한이 조작 권한을 포함하지 않는다. 웹은 보호된 앱 쿠키, native는 Authorization
+Bearer로 REST/WS에 연결한다. WS URL에는 자격을 넣지 않는다. 온라인 회수는 30초,
+이미 검증한 오프라인 접근 자격은 발급 후 최대 5분이다. 기계 자격과 명시적 로컬
+복구는 별도로 유지한다. 상세는 API Ref와 `rosy-account-protocol.md`를 따른다.
 
 ### SEC-102 전송 보안
 
