@@ -182,7 +182,7 @@ class TripRunner(TripAdmission, TripProgress):
                 graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
-                             "lane_arc": caps.lane_arc,
+                             "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
                              "lane_bend": caps.lane_bend}
@@ -525,7 +525,7 @@ class TripRunner(TripAdmission, TripProgress):
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
-                await self._step_lane(live, index, remaining)
+                await self._step_lane(live, index, remaining, pose)
             else:
                 await self._step_free(live, index, s)
         except _JunctionAborted as exc:
@@ -560,19 +560,14 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- steps --------------------------------------------------------------------------
 
-    async def _step_lane(self, live: LiveTrip, index: int, remaining: float) -> None:
+    async def _step_lane(self, live: LiveTrip, index: int, remaining: float, pose=None) -> None:
         if (live.view["caps"] or {}).get("lane_arc") and "arc" not in live.junction:
             return  # D-520 2: no arc baseline read yet; an old CORE arc would pass as this trip's (bends too)
-        arc, sent = live.junction.get("arc") or {}, live.sent
+        arc, sent, j = live.junction.get("arc") or {}, live.sent, live.junction
         if (live.view["hold"] is None and arc.get("state") == "running" and sent is not None
-                and arc.get("end_place_id") == sent["place"]
-                and sent["place"] != live.place(index)
-                and live.junction.get("state") == "armed"
-                and live.junction.get("place_id") == sent["place"]
-                and live.junction.get("seq") == sent["seq"]):
-            # Map pose can cross the segment boundary before CORE odom finishes its arc.
-            # Keep the armed end-place instruction until CORE consumes it at that arc end.
-            return
+                and arc.get("end_place_id") == sent["place"] != live.place(index)
+                and (j.get("state"), j.get("place_id"), j.get("seq")) == ("armed", sent["place"], sent["seq"])):
+            return  # map pose can cross the boundary before CORE odom ends its arc: keep the armed end-place instruction
         if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining):
             return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
@@ -601,8 +596,11 @@ class TripRunner(TripAdmission, TripProgress):
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
         if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
+            # D-744 2: the map anchor only to a lane_arc_map_anchor robot, from this step's pose and its odom stamp
+            stamp = getattr(pose, "odom_stamp", None) if live.view["caps"].get("lane_arc_map_anchor") else None
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
-                               outer_line_offset_m=self.config.arc_outer_line_offset_m)
+                               outer_line_offset_m=self.config.arc_outer_line_offset_m,
+                               map_pose=None if stamp is None else (pose.x, pose.y, pose.yaw, stamp))
         if arc is not None:
             expect = {**expect, "exit_segment": arc}
         # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg
