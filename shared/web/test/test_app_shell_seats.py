@@ -77,8 +77,7 @@ def test_sheet_takes_sizes_and_paint_from_tokens():
 
 def test_seats_with_padding_keep_their_token_size():
     css = SHEET.read_text(encoding="utf-8")
-    rule = re.search(r"(?m)^([^{}
-]+)\{ box-sizing: border-box; \}", css)
+    rule = re.search(r"(?m)^([^{}]+)\{ box-sizing: border-box; \}$", css)
     assert rule, "자리의 높이 토큰은 여백을 포함한 값이다"
     for seat in (".ui-rail-item", ".ui-subnav-item", ".ui-pathbar", ".ui-pane"):
         assert seat in rule.group(1), f"{seat}에 box-sizing이 없다"
@@ -86,10 +85,8 @@ def test_seats_with_padding_keep_their_token_size():
 
 def test_collapsed_seats_do_not_stretch_or_overflow():
     css = SHEET.read_text(encoding="utf-8")
-    medium = css.split("@container (width < 64rem) {", 1)[1].split("
-}", 1)[0]
-    compact = css.split("@container (width < 48rem) {", 1)[1].split("
-}", 1)[0]
+    medium = css.split("@container (width < 64rem) {", 1)[1].split("@container", 1)[0]
+    compact = css.split("@container (width < 48rem) {", 1)[1]
     assert "flex-direction: column" in medium, "접힌 셸은 탐색 줄이 남는 높이를 나눠 갖지 않는다"
     assert ".ui-rail-nav { flex-direction: row; overflow-x: auto; }" in medium
     assert "align-content: start" in compact, "쌓인 본문 격자는 빈 칸을 늘리지 않는다"
