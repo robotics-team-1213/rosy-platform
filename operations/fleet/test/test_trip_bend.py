@@ -140,6 +140,15 @@ def test_without_the_capability_or_an_odom_stamp_the_bend_is_todays():
         assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}, (caps, stamp)
 
 
+def test_bend_fields_without_a_located_pose_carry_no_map_entry(monkeypatch):
+    """Review 6: the capability alone is not enough; no pose passed in, no object."""
+    from fleet.server import trip_runner
+    real = trip_runner.bend_fields
+    monkeypatch.setattr(trip_runner, "bend_fields", lambda live, *args: real(live, *args[:4]))
+    fields = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))[2].expects[0]
+    assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
+
+
 def test_a_bend_done_on_one_segment_goes_out_again_on_another():
     """Gazebo lap run54/55/57: with the lap end 0.4 m after a bend, that bend was done right after
     one lap change and stayed done until the next change, 2 cm before its arc: no_anchor."""
