@@ -8325,3 +8325,10 @@ osy-d395-s1d\`.
 - 증거: e1b6c97fe 원격 `test/test_worktrees_tool.py test/test_land.py` 55 passed, NEW 0. 변이 커밋 c3b446996(gitignore 판정, 임시 인덱스 `add -A`, 실행 중 워크트리 보호 제거)에서 해당 시험 4개 실패를 확인했다.
 - gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소의 워크트리에 `prune`을 실행한 적은 없다.
 - 결정: D-761은 Proposed다. 착지와 push는 디스패처의 독립 리뷰 뒤에 한다.
+
+## 2026-10-14 · 103375895 · 워크트리 관문 도구 리뷰 반영 (D-761 Proposed)
+
+- 변경: `land.py`와 `new`는 치울 수 있는 워크트리를 알리기만 하고 `--prune`일 때만 지운다. 기본 쉰 시간 72시간, `logs/HEAD` 없으면 활동 중, 지우기 직전 재확인, sha로 브랜치 삭제, `.omc`와 깊은 `build`·`install`·`log`·`dist`는 캐시가 아님, orphan 디렉터리, 스냅샷은 `refs/wip`, 중첩 저장소·진행 중 작업 거절, 청소 잠금, 소유자 기록. D-761과 절차 문서 세 곳을 같이 고쳤다.
+- 증거: 원격 `test/test_worktrees_tool.py test/test_land.py` 69 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\3`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 독립 리뷰의 17개 항목을 반영했다. 착지와 push는 디스패처가 한다.
