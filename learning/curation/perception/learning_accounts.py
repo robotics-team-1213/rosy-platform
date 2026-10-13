@@ -390,7 +390,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.command == 'hash-password':
         entered = getpass.getpass('Password: ')
-        if entered != getpass.getpass('Repeat password: '): parser.error('passwords do not match')
+        if entered != getpass.getpass('Repeat password: '):
+            parser.error('passwords do not match')
         print(hash_password(entered))
     else:
         if not args.path: parser.error('key path required')
