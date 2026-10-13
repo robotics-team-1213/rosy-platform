@@ -97,3 +97,27 @@ def test_network_failure_never_writes_success_receipt(module, bundle):
         module.upload_bundle(bundle, api=FakeHub(), operation=SimpleNamespace, downloader=failed)
     assert not (bundle / 'receipt.json').exists()
     assert (bundle / 'payload/meta/info.json').is_file()
+
+
+def test_interrupted_readback_retries_same_commit_and_rejects_corruption(module, bundle):
+    hub = FakeHub()
+
+    def interrupted(**kwargs):
+        raise ConnectionError('offline')
+
+    with pytest.raises(ConnectionError):
+        module.upload_bundle(bundle, api=hub, operation=SimpleNamespace, downloader=interrupted)
+
+    def download(corrupt=False, **kwargs):
+        assert kwargs['revision'] == 'b' * 40
+        for name, payload in hub.files.items():
+            path = Path(kwargs['local_dir']) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'corrupt' if corrupt else payload)
+
+    with pytest.raises(ValueError, match='hash'):
+        module.upload_bundle(bundle, api=hub, operation=SimpleNamespace,
+                             downloader=lambda **kwargs: download(corrupt=True, **kwargs))
+    assert not (bundle / 'receipt.json').exists()
+    receipt = module.upload_bundle(bundle, api=hub, operation=SimpleNamespace, downloader=download)
+    assert receipt['bytes_verified'] and hub.uploads == 1
