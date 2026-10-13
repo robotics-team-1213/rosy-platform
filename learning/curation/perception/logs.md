@@ -26,3 +26,9 @@
 2026-10-12: e15b44f5d는 영상이 확인되면 raw가 이미 없는 `.compact`도 `--apply`로 지운다. `test_reclaim.py`와 `test_media_pipeline.py` 21 passed (`X:\DevTemp\reclaim-compact\run-1.txt`). 같은 경로 영수증은 sessions 0, applied true, compact_state removed 2(8kcn, 9dfk)다. 2026-09-28 upright 검증 영상 두 개(640×480)는 그대로 두었다.
 
 2026-10-12: D-681 source `c7afe628ca`는 선택적 model feedback export를 기존 녹화 사건에 정확한 robot/case·content hash로 연결한다. 기존 bind/schema1과 검수 정답은 유지하며 모델 근거는 UNREVIEWED다. 실제 export→binder·CLI·한글 해시·비용/종결 무결성·크기/폴더 경계의 관련 원격 87 passed, exit 0, NEW 0. 경로는 `docs/plans/2026-10-12-model-improvement-feedback.md`; 실제 현장 데이터·학습·품질·승격은 수행하지 않았다.
+
+## 2026-10-13 · uncommitted · feat(learning): 학습 검수 앱 바와 탐색 레일 (D-741 조각 12)
+
+- 변경: 학습 검수 네 문서의 머리를 앱 바(R 심볼 `Learning`, 화면 표시 선택)로 줄이고, 네 화면 탭을 공용 탐색 레일(`/common/app-shell.css`, `data-seats="rail"`, 짧은 이름 목록·객체·픽셀·자료, 전체 이름은 `aria-label`)로, 쪽 제목 `<h1>`을 본문 위 경로 줄로 옮겼다. `app.css`의 머리 탭 배치 규칙은 지웠고 사진 띠·캔버스·inspector 배치는 그대로다.
+- 증거: 소스 시험 `test_review_app.py::test_four_documents_share_the_app_bar_and_the_screen_rail`을 더했고 `test_review_flow_browser.py`의 머리 위치 단언 셋을 새 자리로 고쳤다. 원격 결과는 착지 보고에 적는다.
+- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기이고, 화면 렌더·G2·G3는 없다. 브랜치 `feat/review-app-bar`.

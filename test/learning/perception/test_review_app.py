@@ -476,3 +476,36 @@ def test_source_box_without_bbox_is_a_usage_error_naming_the_field(tmp_path, mon
     code, err = run_main(monkeypatch, capsys, '--state', tmp_path / 'state', '--source', source,
                          '--human', human, '--images', images)
     assert code == 2 and 'Traceback' not in err and 'bbox_xyxy' in err
+
+
+def test_four_documents_share_the_app_bar_and_the_screen_rail():
+    """D-741 3, 6: app and theme in the app bar, the four screens in the shared rail, the heading in the path row."""
+    import re
+    from pathlib import Path
+    web = Path(__file__).resolve().parents[3] / 'learning/curation/perception/review_app_web'
+    rails = set()
+    for name, here in [('learning.html', '/learning'), ('index.html', '/'),
+                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog')]:
+        html = (web / name).read_text(encoding='utf-8')
+        assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
+        assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
+        bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
+        assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
+        assert '<h1' not in bar and '<nav' not in bar and 'class="theme-label"' in bar
+        assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
+        body = html.split('</ui-topbar>', 1)[1]
+        rail = re.search(r'<div class="ui-app-body" data-seats="rail"><div class="ui-rail">'
+                         r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
+        items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
+                           r'( aria-current="page")?>([^<]+)</a>', rail)
+        assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
+            ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
+            ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료')]
+        assert [href for _, href, _, current, _ in items if current] == [here]
+        assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
+        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
+        assert html.count('<h1') == 1
+        rails.add(re.sub(r' aria-current="page"', '', rail))
+    assert len(rails) == 1, 'the rail is the same in the four documents'
+    css = (web / 'app.css').read_text(encoding='utf-8')
+    assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'
