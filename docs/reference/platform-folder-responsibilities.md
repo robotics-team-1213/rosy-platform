@@ -8,6 +8,8 @@
 
 `middleware`는 장치 실행과 권한, `operations`는 관측 사실과 작업 조정, `learning`은 경험·학습·평가·아티팩트 관리를 맡는다. `contracts`는 교환 형식, `integrations`는 외부 기술 접점, `shared/web`은 여러 UI가 실제로 공유하는 기반이다. 같은 concern이 같은 실행 권한을 뜻하지 않는다.
 
+D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph 건강은 `graph_health`, snapshot 판단은 `snapshots`, 차선 관측은 `sensors/line_observation`, advisory object 관측은 `vision/object_observation`에 전용 ROS adapter와 같이 둔다. `control`에는 잔여 보정·기록·provider/executor/TF/web 조립과 설치 초기화가 남는다. 기존 control.* 설치 이름은 유지한다.
+
 ## 편집 집
 
 세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 2026-10-11 소스 배치 스냅샷은 그대로다.
@@ -18,7 +20,7 @@
 | 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
 | 3 | Drive 동작 | `middleware/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
 | 4 | Drive 근거 | `middleware/drive/{safety,tracking,planning,recovery,calibration}` |
-| 5 | 인지 구현 | `middleware/perception/sensors/sensing`, `middleware/perception/vision/perception` |
+| 5 | 인지 구현 | `middleware/perception/sensors/{sensing,line_observation}`, `middleware/perception/vision/{perception,object_observation}`, `middleware/perception/{localization,graph_health,snapshots}` |
 | 6 | 인지 노드 | `middleware/perception/control`. ROS 패키지 이름은 `control`. 다섯 호환 초기화 폴더는 설치 이름만 잇고, 노드·어댑터 파일이 이 집의 본체다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
 | 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |

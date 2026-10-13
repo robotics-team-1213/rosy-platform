@@ -75,11 +75,28 @@ JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + n
                              'run_log.py', 'train_job.py',)})
 JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
-SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
+SPLIT_CODE_PREFIXES = ("middleware/perception/localization/",
+                       "middleware/perception/graph_health/", "middleware/perception/snapshots/",
+                       "middleware/perception/sensors/", "middleware/perception/vision/",
                        "middleware/perception/package.xml",
                        *("middleware/drive/" + name + "/" for name in
                          ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
-SPLIT_REQUIRED = ("middleware/perception/package.xml",
+SPLIT_REQUIRED = (
+                  'middleware/perception/localization/loc_assist.py',
+                  'middleware/perception/localization/loc_assist_node.py',
+                  'middleware/perception/localization/localization_node.py',
+                  'middleware/perception/graph_health/watch.py',
+                  'middleware/perception/graph_health/watch_node.py',
+                  'middleware/perception/vision/object_observation/object_detector.py',
+                  'middleware/perception/vision/object_observation/object_detector_node.py',
+                  'middleware/perception/sensors/line_observation/ir_overlay.py',
+                  'middleware/perception/sensors/line_observation/core_law_input.py',
+                  'middleware/perception/sensors/line_observation/route_context_input.py',
+                  'middleware/perception/sensors/line_observation/route_followers.py',
+                  'middleware/perception/sensors/line_observation/line_observer_node.py',
+                  'middleware/perception/snapshots/capture_trigger.py',
+                  'middleware/perception/snapshots/capture_trigger_node.py',
+                  "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/vision/perception/__init__.py",
                   "middleware/drive/safety/command_gate.py",

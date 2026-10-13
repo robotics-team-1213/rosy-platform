@@ -44,9 +44,9 @@ spots:
     spot: "9dfk는 카메라 횡단보도 구역을 내지 않는다. crosswalk_uncertainty_enabled 기본이 꺼져 있고, pitch·height override에 override_bounds가 없으면 geometry_error가 없어 가로·세로 불확실성이 비어 구역이 거절된다."
     born: "device:2026-10-10"
     evidence:
-      - middleware/perception/control/line_observer_node.py:134
-      - middleware/perception/control/line_observer_node.py:530
-      - middleware/perception/control/line_observer_node.py:635
+      - middleware/perception/sensors/line_observation/line_observer_node.py:134
+      - middleware/perception/sensors/line_observation/line_observer_node.py:530
+      - middleware/perception/sensors/line_observation/line_observer_node.py:635
       - middleware/perception/vision/perception/lane_containment.py:72-74
       - middleware/drive/behaviors/line_follow/crosswalk_zone.py:45-48
     replay: unbuilt

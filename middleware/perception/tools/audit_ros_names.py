@@ -68,7 +68,7 @@ def main():
     args = parser.parse_args()
     package = Path(__file__).resolve().parents[1]
     layout = runpy.run_path(str(package / 'control/_source_layout.py'))
-    roots = [package / 'control', *layout['PACKAGE_DIRS'].values(), *layout['FLAT_ROOTS'], layout['RUNTIME_ROOT']]
+    roots = [package / 'control', *layout['PACKAGE_DIRS'].values(), *layout['FLAT_ROOTS'], *layout['CONTROL_ROOTS']]
     roots = [root for root in roots if not any(root != other and root.is_relative_to(other)
                                                for other in roots)]
     rows = [row for root in roots for row in inventory(root, source_root=package.parents[1])]

@@ -61,7 +61,7 @@ def test_nav2_keeps_its_initial_pose_setting():
 
 
 def test_localization_node_no_longer_injects_or_scatters_amcl():
-    node = text(SENSING / 'control' / 'localization_node.py')
+    node = text(SENSING / 'localization' / 'localization_node.py')
     assert 'create_publisher(PoseWithCovarianceStamped' not in node
     assert "create_client(Empty, 'reinitialize_global_localization')" not in node
     assert "'localization/state'" in node

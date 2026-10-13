@@ -48,5 +48,5 @@ def test_launch_and_node_defaults_are_the_slot_paths():
     launch = _defaults(PKG / 'launch' / 'camera_preview.launch.py')
     assert launch['object_det_pointer'] == slot_pointer('object_det', 'active')
     assert launch['shadow_pointer'] == slot_pointer('lane_seg', 'shadow')
-    node = (PKG / 'control' / 'object_detector_node.py').read_text(encoding='utf-8')
+    node = (PKG / 'vision/object_observation' / 'object_detector_node.py').read_text(encoding='utf-8')
     assert "slot_pointer('object_det', 'active')" in node

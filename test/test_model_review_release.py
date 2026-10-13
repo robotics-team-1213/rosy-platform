@@ -145,3 +145,20 @@ def test_generated_unit_uses_exact_canonical_runtime_holders(tmp_path):
         "learning/registry/perception", "learning/curation/perception", "learning/training/perception",
     )]
     assert len(paths) == len(set(paths))
+
+@pytest.mark.parametrize("missing", [
+    "middleware/perception/localization/loc_assist.py",
+    "middleware/perception/graph_health/watch.py",
+    "middleware/perception/snapshots/capture_trigger.py",
+])
+def test_functional_holder_cannot_be_omitted_from_review_source(tmp_path, missing):
+    assert missing in release.SPLIT_REQUIRED
+    source = tmp_path / "source"
+    source_tree(source)
+    for name in ("middleware/perception/control/_source_layout.py", *release.SPLIT_REQUIRED):
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"source\n")
+    (source / missing).unlink()
+    with pytest.raises(ValueError, match="missing"):
+        release.check_source(source, tmp_path / "root", tmp_path / "state")

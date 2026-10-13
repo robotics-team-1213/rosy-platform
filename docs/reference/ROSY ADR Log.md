@@ -738,6 +738,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-743 | Drive holder를 한 층 올리고 설치·배포 identity를 유지한다 | Accepted |
+| D-747 | Perception 판단을 출력별 기능 holder에 둔다 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
 
 | D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |

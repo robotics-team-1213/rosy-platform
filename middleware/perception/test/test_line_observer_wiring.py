@@ -30,7 +30,7 @@ def _arm_paint_latch(node):
 @pytest.mark.parametrize('brightness,reason', [(30, 'low_light'), (255, 'overexposed')])
 def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(brightness, reason):
     from control.sensing.perception.camera_visibility import visibility_reason
-    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_on_camera')
     namespace = dict(Image=object, image_msg_to_frame=lambda _: np.full((16, 16, 3), brightness, np.uint8),
                      visibility_reason=visibility_reason)
@@ -52,7 +52,7 @@ def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(b
 @pytest.mark.parametrize('geometry', ['NOMINAL', 'GAZEBO', 'HOMOGRAPHY'])
 def test_camera_geometry_source_keeps_the_motion_observation_wire_contract(geometry):
     from control.sensing.perception.lane import LaneObservation, line_observation_payload
-    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_ground_label')
     namespace = {}
     exec(compile(ast.Module(body=[method], type_ignores=[]), '<ground-label>', 'exec'), namespace)
@@ -65,7 +65,7 @@ def test_camera_geometry_source_keeps_the_motion_observation_wire_contract(geome
 
 
 def test_line_observer_has_both_inputs_and_one_normalized_output():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "UInt16MultiArray, 'ir_sensor/range'" in source
     assert "Image, 'camera/front'" in source
     assert "String, 'camera/controls'" in source
@@ -74,7 +74,7 @@ def test_line_observer_has_both_inputs_and_one_normalized_output():
 
 
 def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "String, 'line/route_context', self._on_route_context" in source
     assert "route_context_seq=route_context_seq" in source
     assert "route_context_seq=route_context.seq if route_context is not None else None" in source
@@ -89,7 +89,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     from control.core_law_input import refresh_drivable_law
     from control.sensing.perception.lane import LaneObservation, line_observation_payload
 
-    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     names = ('_on_camera', '_publish')
     methods = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name in names]
     observed, debug, bend_inputs = [], [], []
@@ -172,7 +172,7 @@ def test_camera_capture_has_a_v4l2_fallback_for_the_device_image():
 
 
 def test_camera_line_evidence_uses_the_original_image_header_stamp():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "msg.header.stamp" in source
     assert "stamp=source_stamp" in source
 
@@ -192,7 +192,7 @@ def test_camera_lane_mode_defaults_to_single_line_and_fails_closed():
 
 
 def test_lane_mode_uses_the_guarded_simulation_ground():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "detect_lane_centre" in source
     assert "simulation_ground_plane" in source
     assert "'camera_ground_source'" in source
@@ -204,12 +204,12 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     params = config["/**/line_observer_node"]["ros__parameters"]
     assert params["lane_corner_turning"] is True  # D-495: junction HOLD on robots
     # D-495: keep_debug carries the flag; it is how CORE learns junction_turn support.
-    keep = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    keep = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in keep
     nominal = yaml.safe_load((ROOT.parent / "devices/pinky/profile/config/camera_nominal.yaml")
                              .read_text(encoding="utf-8"))
     assert params["camera_x_offset_m"] == nominal["x_offset_m"]  # URDF nominal, not 0.0
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "Odometry, 'odom'" in source
     assert "LaneCornerTracker" in source
     assert "self._corner_tracker.update(" in source
@@ -220,7 +220,7 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
 
 
 def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
@@ -231,7 +231,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
 
 
 def test_edge_left_drops_odometry_whose_stamp_is_stale():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "msg.header.stamp" in source.split("def _on_odom", 1)[1]
     assert "pose_if_fresh(" in source
     assert "self._odom_stamp" in source
@@ -240,7 +240,7 @@ def test_edge_left_drops_odometry_whose_stamp_is_stale():
 def test_modes_fixed_at_startup_are_read_only_parameters():
     """The edge follower and the odom subscription are built at startup, so
     switching mode later would silently run the wrong pipeline."""
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "from rcl_interfaces.msg import ParameterDescriptor" in source
     assert ("self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)" in source)
     assert ("self.declare_parameter('lane_corner_turning', False, _READ_ONLY)" in source)
@@ -249,13 +249,13 @@ def test_modes_fixed_at_startup_are_read_only_parameters():
 
 def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
     assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
 
 
 def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     assert "LaneBoundaryTracker" in source
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
     assert "self._centre_tracker.update(" in source
@@ -263,7 +263,7 @@ def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
 
 
 def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
     assert params["debug_overlay"] is False
@@ -277,7 +277,7 @@ def test_debug_overlay_failures_never_stop_line_observation():
     debug_lane_graph at startup, must not lose line/observation (D-143):
     rclpy re-raises an uncaught callback exception out of spin, and main()
     only catches KeyboardInterrupt."""
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     publish_debug = source.split("def _publish_debug", 1)[1].split("\n    def _on_odom", 1)[0]
     assert "try:" in publish_debug
     assert "except Exception" in publish_debug
@@ -288,13 +288,13 @@ def test_debug_overlay_failures_never_stop_line_observation():
 
 
 def test_route_modes_need_a_graph_and_a_route():
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
     assert params["lane_graph_path"] == ""
     assert params["route"] == []
     assert params["route_start"] == []
-    builder = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
+    builder = (ROOT / "sensors/line_observation/route_followers.py").read_text(encoding="utf-8")
     assert "build_route_follower(mode, graph_path, route, route_start," in source
     assert "RouteCameraFollower" in builder and "RouteMapFollower" in builder
     assert "RouteHybridFollower" in builder
@@ -306,8 +306,8 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     """route_ab is built like route_b: the paint map is loaded from the
     lane_graph_path directory (the map_v2_fleet bundle), and the overlay
     maps route_ab to the route follower."""
-    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
-    build = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
+    source = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
+    build = (ROOT / "sensors/line_observation/route_followers.py").read_text(encoding="utf-8")
     assert "PaintMap.from_bundle(os.path.dirname(graph_path))" in build
     assert "RouteHybridFollower if mode == 'route_ab'" in build
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
@@ -324,7 +324,7 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
 ])
 def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time, admitted):
     """Execute the ROS wrapper method without ROS so alternate configs cannot open route mode."""
-    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
                   and n.name == '_build_route_follower')
     built, warnings = object(), []
@@ -346,7 +346,7 @@ def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time
 
 def test_route_prototype_latches_invisible_after_simulation_context_changes():
     """A once-admitted route must not keep its old follower under new ground geometry."""
-    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'sensors/line_observation/line_observer_node.py').read_text(encoding='utf-8'))
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
                   and n.name == '_on_camera')
     target, calls, publications, qualities, warnings = object(), [], [], [], []

@@ -13,6 +13,8 @@ Five compatibility package directories preserve `control.control`, `control.sens
 
 D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. Its five initializer directories contain no algorithm copies.
 
+D-747 moves location assist/status to `../localization`, graph health to `../graph_health`, snapshot triggers to `../snapshots`, line observation to `../sensors/line_observation`, and object evidence to `../vision/object_observation`. Dedicated adapters live with their judgments. The filenames below describe preserved installed identities; they are not all source files in this folder. Calibration command/storage, recording process/file IO, provider/executor/TF/web composition remain here until S3.
+
 ## Key Files
 | File | Description |
 |------|-------------|
@@ -52,7 +54,7 @@ D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` a
 - Shutdown behavior remains with the actual adapter (`middleware/drive/tracking/wander/node.py:stop_motors`). CORE remains the operational final `/cmd_vel` authority; the legacy writer is not activated by this folder layout.
 
 ### Testing Requirements
-- ROS-free adapter characterization, executor/QoS scans and pure composition modules such as `watch.py` are covered by `../test/`; ROS transport behavior needs separate Jazzy evidence.
+- ROS-free adapter characterization, executor/QoS scans and pure composition modules such as `../graph_health/watch.py` are covered by `../test/`; ROS transport behavior needs separate Jazzy evidence.
 - `../test/test_responsibility_layout.py` checks source holders, isolated sdist/wheel installation, provider identity, unique module copies and map bytes. Run pytest through the committed-HEAD remote runner from the repository root (D-584).
 
 ### Common Patterns

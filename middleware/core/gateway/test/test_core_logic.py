@@ -408,12 +408,12 @@ class TestD137SequenceContract:
     def test_vision_detections_has_one_publisher(self):
         """(4) 단일 발행자 고정(D-137 §Consequences, D-423): 발행자는 하나.
 
-        토픽 글자는 `control/object_detector.py` 한 파일에만 있다. 이후의
+        토픽 글자는 `vision/object_observation/object_detector.py` 한 파일에만 있다. 이후의
         Hailo/rosy-vision 경로는 별도 발행자가 아니라 object_detector_node 의
         백엔드다(D-209, D-423 결정 2026-10-03). CORE 는 이 토픽을 발행하지 않는다.
         """
         allowed = {    # 상대 경로 -> 사유.
-            str(Path("middleware/perception/control/object_detector.py")):
+            str(Path("middleware/perception/vision/object_observation/object_detector.py")):
                 "D-423 object_detector_node: the single advisory publisher (Pi CPU int8 ONNX)",
         }
         offenders = {}
@@ -451,7 +451,7 @@ class TestD137SequenceContract:
                     named = isinstance(topic, ast.Name) and topic.id in names
                     if literal or named:
                         publishers.add(Path(os.path.relpath(path, REPO_ROOT)).as_posix())
-        assert publishers == {"middleware/perception/control/object_detector_node.py"}, publishers
+        assert publishers == {"middleware/perception/vision/object_observation/object_detector_node.py"}, publishers
 
 
 def _function_body(text: str, name: str) -> str:

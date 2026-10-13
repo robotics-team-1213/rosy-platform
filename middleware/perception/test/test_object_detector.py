@@ -179,7 +179,7 @@ def test_node_ranger_needs_the_same_two_opt_ins_as_camera_detect(node_module, tm
 
 def test_node_opens_models_through_the_signature_check():
     """D-423 §3.4: unsigned object_det bundles are refused unless allow_unsigned_models (dev)."""
-    source = (Path(__file__).resolve().parents[1] / 'control' / 'object_detector_node.py').read_text(
+    source = (Path(__file__).resolve().parents[1] / 'vision/object_observation' / 'object_detector_node.py').read_text(
         encoding='utf-8')
     assert "checked_opener(" in source
     # The dev override is read once from the environment, never a ROS parameter (2026-10-03).

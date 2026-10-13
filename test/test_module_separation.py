@@ -89,7 +89,7 @@ PILOT_RECORDING_TOPICS = (
 #: observer SUBSCRIBES to the final command read-only (it publishes no Twist; pinned in
 #: test_line_observer_wiring). Same pin rule.
 LINE_OBSERVER_COMMAND_READ = (
-    "middleware/perception/control/line_observer_node.py",
+    "middleware/perception/sensors/line_observation/line_observer_node.py",
     "self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)",
 )
 

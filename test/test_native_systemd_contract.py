@@ -536,7 +536,7 @@ PROGRAM_SOURCES = {
                             "middleware/perception/control/camera_detect_node.py",
                             "middleware/perception/control/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
-                            "middleware/perception/control/ir_overlay.py",
+                            "middleware/perception/sensors/line_observation/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
                             "middleware/perception/control/pilot_recorder_node.py",
                             "middleware/perception/control/pilot_recording.py"],
