@@ -61,6 +61,7 @@ CONSOLE_ASSETS = {
     "map-fit.js": ("shared/map-fit.js", "application/javascript"),
     "map-fit-view.js": ("map-fit-view.js", "application/javascript"),
     "map-view.js": ("map-view.js", "application/javascript"),
+    "map-datum.js": ("map-datum.js", "application/javascript"),
     "poll-gate.js": ("shared/poll-gate.js", "application/javascript"),
     "roster.js": ("roster.js", "application/javascript"),
     "queues.js": ("queues.js", "application/javascript"),
