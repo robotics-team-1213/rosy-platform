@@ -319,7 +319,8 @@ def test_field_view_review_fixes_are_served():
     assert ".fleet-header-actions { grid-area: actions;" in styles
     # D-741 6: the rail shows the name under the icon.
     import re
-    assert re.findall(r'<a href="/console/cell" data-action-icon="cell">(.*?)</a>', page) == ["Cell"]
+    rail = re.search(r'<nav class="doc-tabs".*?</nav>', page, re.S).group(0)
+    assert re.findall(r'<a href="/console/cell" data-action-icon="cell">(.*?)</a>', rail) == ["Cell"]
     assert ".fleet-header-safety { grid-area: safety; justify-self: end; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
