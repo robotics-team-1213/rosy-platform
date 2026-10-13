@@ -410,23 +410,27 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
 
 
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig) -> Optional[dict]:
-    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
-    and ``bend_radius_m``; None on another map version, when the arc start is not 0-2 m ahead or
-    while the lane before it still turns (``straight_approach``)."""
-    # The pose is latency seconds old and the robot drove on meanwhile: a bend_in_m measured from
-    # it starts the arc late and the exit runs outside the lane (Gazebo lap 2026-10-13: 2 cm late,
-    # 1.8 cm toward the wall after a 64 deg bend). Leading by the trip speed errs to the inside.
+    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``, ``bend_radius_m``;
+    None on another map version, an arc start not 0-2 m ahead or a lane still turning before it (``straight_approach``)."""
+    # The pose is latency seconds old and the robot drove on meanwhile: a bend_in_m measured from it starts the arc
+    # late, the exit outside the lane (Gazebo lap 2026-10-13: 2 cm late, 1.8 cm to the wall). The lead errs inside.
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0
     if age is not None and live.pose_read_at is not None:
         lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
-    ahead = bend["s_start"] - s
+    ahead, index, segs = bend["s_start"] - s, live.view["segment_index"], live.segments
     bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
-            or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
+            or not straight_approach(live.arc(index), s, bend["s_start"])):
         return None
-    return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
-            "bend_radius_m": bend["radius_m"]}
+    fields = {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
+              "bend_radius_m": bend["radius_m"]}
+    k = next((k for k in range(index, len(segs)) if ends_at_place(live.graph, segs[k])), None)
+    if caps.get("lane_bend_next_line") and k is not None:  # D-754: vertex -> arc end -> that place -> its painted line
+        line = bend["radius_m"] * math.tan(math.radians(abs(bend["turn_deg"])) / 2) - live.progress(index, bend["s_end"])
+        line += live.progress(k, segs[k]["s_to"]) + (line_past(live.graph, *live.arc(k).point_at(segs[k]["s_to"])) or 0.0)
+        fields["next_line_in_m"] = round(max(0.0, min(line, MAX_EXPECT_IN_M)), 3)  # 2 = that far or further
+    return fields
 
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
