@@ -54,6 +54,18 @@ def test_explicit_configuration_wires_authority_and_survives_yaml_removal(tmp_pa
     assert _login(_client(restarted)).status_code == 204
 
 
+def test_managed_session_exports_capabilities_and_serves_admin_document(tmp_path):
+    app, _ = _app(tmp_path)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    client = _client(app)
+    assert _login(client).status_code == 204
+    identity = client.get("/api/fleet/auth/session").json()
+    assert identity["site_resource"] == "site:test-site"
+    assert "accounts.manage" in identity["grants"][0]["capabilities"]
+    assert client.get("/console/accounts").status_code == 200
+    assert client.get("/console/assets/account-page.js").status_code == 200
+
+
 def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
     from fleet.server.account_config import load_account_config
     path, data, _ = config(tmp_path)
