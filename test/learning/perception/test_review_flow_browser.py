@@ -74,6 +74,16 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
             expect(page.locator('#owner-control-status')).to_contain_text(
                 '실행기 처리 중' if action != '학습 중지' else '자동 확인 중지됨')
         assert runner.active and not runner.automatic
+        page.keyboard.press('Control+k')
+        runner.active = False
+        runner.invocation = 'd' * 32
+        (out / 'state.json').write_text(json.dumps({'review_autobuild': {
+            'status': 'request_published', 'cycle_keys': ['current']},
+            'cycles': {'current': {'status': 'candidate', 'attempts': 1}}}))
+        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨')
+        expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
+        page.keyboard.press('Escape')
+        expect(page.get_by_text('학습 후보 저장됨', exact=True)).to_be_visible(timeout=8000)
         assert review_evidence.decisions(store) == before
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
