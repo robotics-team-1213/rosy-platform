@@ -21,7 +21,7 @@ SOURCE_ROOTS = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_
 EXCLUSIVITY_MARKER = "ir_sensor/range single-publisher rule"
 
 LINE_FOLLOW = ROOT / "middleware" / "perception" / "launch" / "line_follow.launch.py"
-HARDWARE = ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "launch" / "hardware.launch.py"
+HARDWARE = ROOT / "middleware" / "drive" / "planning" / "nav2" / "launch" / "hardware.launch.py"
 CALIB_NODE = ROOT / "middleware" / "perception" / "control" / "calib_node.py"
 
 
