@@ -2574,6 +2574,8 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             stop: box('#estop'), more: box('#topbar-more'),
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
             token: shown('#console-token'), theme: shown('#fleet-theme'), role: shown('#user-role'),
+            roleText: document.querySelector('#user-role').textContent.trim(),
+            moreName: document.querySelector('#topbar-more').getAttribute('aria-label'),
             status: shown('#online-pill'), clock: shown('#clock'),
             footer: !!document.querySelector('footer'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
@@ -2593,11 +2595,16 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and folded["role"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"], folded
+    # D-741 3: below 30rem the role text folds (fleet-header.css); the account button's name says the role.
+    role_text_shown = width >= 480
+    for state in (folded, opened):
+        assert state["role"] == role_text_shown, state
+        assert state["roleText"] and state["moreName"].startswith(f"계정과 접속 · {state['roleText']}"), state
     assert folded["status"] and not folded["clock"] and not folded["footer"], folded
     assert folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
-    assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
+    assert opened["expanded"] == "true" and opened["token"] and opened["theme"], opened
     assert opened["overflow"] <= 0, opened
     assert scrolled["expanded"] == "false", scrolled
     assert 0 <= scrolled["stop"]["top"] and scrolled["stop"]["bottom"] <= height, scrolled
@@ -2892,7 +2899,7 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
                   nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null,
                   wordWidth: document.querySelector('.fleet-wordmark').getBoundingClientRect().width,
                   brandWidth: document.querySelector('ui-brand').getBoundingClientRect().width,
-                  name: document.querySelector('ui-brand').getAttribute('aria-label')};
+                  name: document.querySelector('ui-brand a').getAttribute('aria-label')};
         }""")
         browser.close()
 
