@@ -56,6 +56,34 @@ def test_explicit_configuration_wires_authority_and_survives_yaml_removal(tmp_pa
     assert _login(_client(restarted)).status_code == 204
 
 
+def test_authority_configuration_accepts_public_rotation_overlap(tmp_path):
+    from fleet.server.account_config import load_account_config
+    path, data, private = config(tmp_path)
+    public = tmp_path/'old-public.pem'
+    public.write_bytes(serialization.load_pem_private_key(private, password=None).public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    public.chmod(0o600)
+    data['public_key_files'] = {'old-key':str(public)}
+    path.write_text(json.dumps(data))
+    loaded = load_account_config(path)
+    assert loaded['trusted_public_keys']['old-key'] == public.read_bytes()
+    base, tasks = _app(tmp_path)
+    app = create_app(base.state.console, task_service=tasks, site_logins=_accounts(), account_config=path)
+    assert {key['kid'] for key in _client(app).get('/api/fleet/auth/keys').json()['keys']} == {'old-key','key-1'}
+
+
+def test_account_management_rejects_previous_browser_family_marker(tmp_path):
+    app, _ = _app(tmp_path)
+    sessions = app.state.password_sessions
+    sessions.bootstrap_accounts('alice', 'test-site')
+    client = _client(app)
+    assert _login(client).status_code == 204
+    marker = client.get('/api/fleet/auth/session').json()['session_family']
+    assert _login(client).status_code == 204
+    response = client.get('/api/fleet/auth/accounts', headers={'Origin':'https://fleet.test', 'X-Rosy-Session':marker})
+    assert response.status_code == 403
+
+
 def test_managed_session_exports_capabilities_and_serves_admin_document(tmp_path):
     app, _ = _app(tmp_path)
     app.state.password_sessions.bootstrap_accounts("alice", "test-site")
