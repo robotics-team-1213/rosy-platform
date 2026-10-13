@@ -11,7 +11,7 @@ D-159(관리는 예외로)의 Fleet 번역: 정상 로봇은 큐에 없다. 큐�
 
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / "site_ui" / "console"
 CONSOLE = WEB / "console.js"
 ROSTER = WEB / "roster.js"
 QUEUES = WEB / "queues.js"
