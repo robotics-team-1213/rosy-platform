@@ -116,3 +116,68 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accounts):
+    playwright = pytest.importorskip('playwright.sync_api')
+    cfg = json.loads(accounts.config_path.read_text())
+    cfg['users'].append({'user_id': 'viewer', 'username': 'viewer',
+        'password_hash': cfg['users'][1]['password_hash'], 'memberships': {'one': ['view']}})
+    accounts.config_path.write_text(json.dumps(cfg))
+    _, alice = accounts.login('alice', 'alice-password')
+    accounts.connect_token(alice, 'hf_team', transport=lambda _: {'id': 'team', 'name': 'team', 'type': 'user'},
+        sharing='project', resources=['dataset:org/data'])
+    folder = tmp_path / 'review'; folder.mkdir()
+    server = make_server(open_store(folder), free_port(), accounts=accounts)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, 320, 900, url=url)
+            try:
+                expect = playwright.expect
+                page.goto(url + '/accounts', wait_until='networkidle')
+                def login(name):
+                    page.locator('#username').fill(name)
+                    page.locator('#password').fill('bob-password')
+                    page.locator('#login-form button[type=submit]').click()
+                    expect(page.locator('#identity')).to_contain_text('작업자 ' + name)
+                login('viewer')
+                expect(page.locator('#import-panel')).to_be_hidden()
+                expect(page.locator('summary', has_text='읽기 토큰으로 연결')).to_be_hidden()
+                expect(page.locator('#connections button')).to_have_count(0)
+                page.locator('#logout').click()
+                expect(page.locator('#login-panel')).to_be_visible()
+                expect(page.locator('#identity')).to_have_text('')
+                expect(page.locator('#connections')).to_have_text('')
+                login('bob')
+                page.get_by_text('읽기 토큰으로 연결', exact=True).click()
+                expect(page.locator('#sharing option[value=project]')).to_be_disabled()
+                expect(page.locator('#connections button')).to_have_count(0)
+                # An unavailable backend must not masquerade as a logged-out session.
+                page.route('**/api/accounts/session', lambda route: route.fulfill(
+                    status=503, content_type='application/json', body='{"error":"temporarily unavailable"}'))
+                page.locator('#reload').click()
+                expect(page.locator('#account-error')).to_contain_text('temporarily unavailable')
+                expect(page.locator('#login-panel')).to_be_hidden()
+                page.unroute('**/api/accounts/session')
+                page.locator('#reload').click()
+                expect(page.locator('#account-error')).to_be_hidden()
+                page.locator('#provider-token').fill('hf_unsent_secret')
+                page.locator('#rights-evidence').fill('private draft')
+                session = next(item['value'] for item in page.context.cookies()
+                               if item['name'] == 'rosy_learning_session')
+                accounts.logout(session)
+                expect(page.locator('#login-panel')).to_be_visible(timeout=12000)
+                expect(page.locator('#signed-in')).to_be_hidden()
+                expect(page.locator('#identity')).to_have_text('')
+                expect(page.locator('#imports')).to_have_text('')
+                expect(page.locator('#provider-token')).to_have_value('')
+                expect(page.locator('#rights-evidence')).to_have_value('')
+                login('bob')
+                expect(page.locator('#import-panel')).to_be_visible()
+                assert not errors
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)
