@@ -219,14 +219,16 @@ python test/known_failures.py X:/DevTemp/projects/rosy-platform/<session>/logs/a
 
 검증 묶음: CORE web/account 관련 141개, Fleet·learning 연결 61개,
 owner/client 재검증 32개, Games 114개가 각각 원격 통과했다(중복 포함, 합산하지 않음).
-`3788d7696`의 통합 묶음 10개는 HTTPS 로그인 UI→Dashboard→Pilot SSO,
+`ebbaee602c`에서 다시 실행한 통합 묶음 10개는 HTTPS 로그인 UI→Dashboard→Pilot SSO,
 갱신→원장 회수→WS 15초 이내 종료, Fleet 관리자 UI, learning 계정·권한·장애 복구를
 검증했다. 기존 공유 학습 연결은 소유자의 재연결로 현재 중앙 승인 session에 결속한다.
 
-Native 최종 소스 `57243be29`는 Cam 431개, Pilot 107개 JVM 시험과 설정 포함 APK 빌드가 통과했다.
+Native 소스는 Cam `6b775c98e`, Pilot `f7281b6a4`에서 각각 431개, 107개 JVM 시험과 설정 포함 APK 빌드가 통과했다.
 APK 공개 설정과 정확한 HTTPS callback/autoVerify manifest를 읽어 확인했다. 검증 로그는
 X: `account-native--1143d2/logs`에 보관하며 원격 shell assets 4개도 통과했다.
 배포 설정 회귀 31개와 실제 Caddy 설정 검증은 통과했으나 서비스 reload는 하지 않았다.
+공유 앱 헤더를 합친 `ebbaee602c`에서 Node 330개와 비밀/배포 경계 회귀 97개가 통과했다.
+이 결과는 범위가 겹치므로 하나의 최종 SHA 전체 시험 수로 합산하지 않는다.
 
 실계정 변경은 하지 않았다. 기존 계정 목록·사이트 TLS 이름·tailnet 이름을 읽기 전용으로
 확인했으며 실제 주소/계정/인증서는 공개 저장소에 기록하지 않는다. 기존 LAN 인증서는
