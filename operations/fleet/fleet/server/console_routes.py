@@ -73,6 +73,11 @@ class IdentifyLampRequest(BaseModel):
     color: Optional[Literal["blue", "amber"]] = None  # None: the robot's configured colour
 
 
+class PowerActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    action: Literal["sleep", "wake"]
+
+
 def transport_failure(exc: BaseException) -> tuple[str, str]:
     """A connect failure never reached CORE; anything later may have been applied."""
     if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
@@ -253,6 +258,19 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                 detail={"code": exc.code, "message": str(exc)}) from exc
         except (RobotApiError, OSError, httpx.HTTPError) as exc:
             raise http_error(exc) from exc
+
+    @app.post("/api/fleet/robots/{robot_id}/power", dependencies=named_guard, tags=["fleet"])
+    async def robot_power(robot_id: str, body: PowerActionRequest,
+                          principal: SitePrincipal = Depends(require_operator)) -> dict:
+        """D-440 6: forwards to CORE's power API. CORE decides (a robot that is not IDLE stays ACTIVE)."""
+        client = console.clients().get(robot_id)
+        if client is None:
+            raise HTTPException(status_code=404, detail={"code": "UNKNOWN_ROBOT"})
+        try:
+            result = await client.power(body.action)
+        except (HubError, RobotApiError, OSError, httpx.HTTPError) as exc:
+            raise http_error(exc) from exc
+        return {"robot_id": robot_id, "actor_id": getattr(principal, "principal_id", None), "result": result}
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:

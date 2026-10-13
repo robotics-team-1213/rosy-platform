@@ -263,7 +263,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online) {
       const powerMode = state.power?.mode;
       if (powerMode) {
-        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode), "");
+        // D-440: after a wake the wheels stay at zero until the LiDAR confirms (motion_ready false).
+        const waking = state.power.motion_ready === false && powerMode === "ACTIVE";
+        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode) + (waking ? " · 준비 중" : ""), "");
         powerTag.title = String(powerMode);
         powerTag.dataset.power = String(powerMode);
         head.appendChild(powerTag);
@@ -652,7 +654,34 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    actions.append(aim, pin, trip.toggle(robot), cancel, identify);
+    // D-440 6: sleep / wake is CORE's own power API. CORE keeps a robot that is not IDLE awake.
+    const asleep = ["STANDBY", "IDLE"].includes(state.power?.mode);
+    const powerName = asleep ? "깨우기" : "절전";
+    const power = document.createElement("ui-button");
+    power.setAttribute("kind", "quiet");
+    power.type = "button";
+    power.dataset.powerAction = asleep ? "wake" : "sleep";
+    power.textContent = powerName;
+    blockWith(power, !isOperator() ? "운영자 권한이 필요합니다"
+      : namedReason() ? namedReason()
+      : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
+        : !asleep && state.mode !== "IDLE" ? "일하는 로봇은 절전할 수 없습니다" : "");
+    power.addEventListener("click", scope.guard(async () => {
+      try {
+        const answer = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/power`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: power.dataset.powerAction }),
+        });
+        const got = answer.result?.mode;
+        // CORE answers with the mode it is in now: a refused sleep comes back ACTIVE.
+        const done = got ? (asleep ? got === "ACTIVE" : got !== "ACTIVE") : null;
+        log(`${robot.robot_id} ${powerName} · ${done === false ? "로봇이 받아들이지 않았습니다" : enumLabel(POWER_MODE_LABEL, got, "CORE 응답 확인")}`,
+          done === false ? "bad" : "good");
+      } catch (error) {
+        if (error.name !== "AbortError") log(`${robot.robot_id} ${powerName} 실패 · ${error.message}`, "bad");
+      }
+    }));
+    actions.append(aim, pin, trip.toggle(robot), cancel, identify, power);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");

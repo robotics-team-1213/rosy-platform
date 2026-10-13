@@ -33,6 +33,7 @@
 | 취소·전체 취소 | `POST .../cancel`, `POST /api/fleet/cancel-all` | 로봇 취소, 전체 취소 |
 | 비상 정지 | `POST /api/fleet/estop` | `fleet-header.js`의 `bindEstop` 하나. 401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름(로딩·Fleet 끊김)은 눌린 채다 |
 | LED 확인 | `POST /api/fleet/robots/{id}/identify` | `color`는 없거나 `blue`·`amber`. 이름 있는 운영자다 |
+| 절전·깨우기 | `POST /api/fleet/robots/{id}/power` `{action}` | `sleep`·`wake`만(D-440 6). 이름 있는 운영자다. 로봇이 `IDLE`이 아니면 절전 버튼은 `일하는 로봇은 절전할 수 없습니다`로 잠기고, 보내더라도 CORE가 `ACTIVE`로 답한다 |
 | 막힘 | `POST .../line-stuck/claim`, `POST .../line-stuck/decision` | 운영자 값은 `WAIT`, `RESUME`, `BACK_AND_RETRY`, `MANUAL`, `ABORT`. 다섯 답은 예외 큐 행 펼침에 있다(D-540 3). `WAIT`·`ABORT`·claim은 열린 멈춤이고, 나머지 답은 이름 있는 운영자다 |
 | 대형 | `GET /api/fleet/formation`, `POST .../start`·`/reform`·`/resume`·`/stop` | 시작 본문은 `{leader, formation, spacing}`, 일부만 고르면 `members`. `max_speed`는 생략하고 서버 기본을 쓴다. start·reform·resume은 이름 있는 운영자, stop은 열린 멈춤이다. 따라가기는 `session.py`가 `POST /api/v1/swarm/follow` |
 | 물리 신호 | `POST /api/fleet/signals/presence`, `POST /api/fleet/signals/{id}/command` | `{mode, lamps}`. `flash_red`·`all_red`는 열린 멈춤이고 나머지 명령은 이름 있는 운영자다. 감독은 [signals.md](signals.md) |
@@ -57,6 +58,7 @@
 |---|---|
 | `GET /api/v1/robot/state` | `POST /api/v1/navigation/goal`, `/navigation/cancel` |
 | `GET /api/v1/power/health` | `POST /api/v1/safety/stop` |
+| | `POST /api/v1/power/mode` (`STANDBY`만), `POST /api/v1/power/wake` |
 | `GET /api/v1/system/capabilities` | `POST /api/v1/swarm/follow`, `/swarm/cancel` |
 | `GET /api/v1/map`, `/navigation/path`, `/swarm/state` | `PUT /api/v1/line-follow/mode` (`IR_LINE`·`OFF`만) |
 | `GET /api/v1/line-follow` | `POST /api/v1/line-follow/junction`, `/authority`, `/advice`, `/stuck/decision` |
