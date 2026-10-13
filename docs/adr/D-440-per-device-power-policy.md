@@ -15,7 +15,7 @@
 
 ### Decision
 
-1. **제품이 기기를 선언한다.** 로봇 패키지 `core.yaml`의 `power.device_policy.devices.<기기>`에 `idle`·`standby`(각 `on`·`reduced`·`off`), `wake_ready_s`, `required_for_motion`을 적는다. 선언되지 않은 기기는 모든 모드에서 켜져 있다. Pinky Pro(`middleware/devices/pinky/profile/config/core.yaml`)는 `lidar`(STANDBY off, 2.0 s, 주행 필수)·`camera`(STANDBY off, 3.0 s)·`perception`(IDLE reduced, STANDBY off, 0.5 s)을 선언한다. OMX는 아무것도 선언하지 않는다. `reduced` 인식은 네 틱에 한 번 분류한다(`front_camera/perception/power_gate.py`의 `REDUCED_EVERY`, 틱의 주인인 노드 쪽 값이다). 2.0 s는 PWR-005의 추정값이고 3.0 s는 `camera_settle_seconds` 2.5 s에 첫 프레임을 더한 값이다. 둘 다 벤치 §8에서 실측으로 고친다.
+1. **제품이 기기를 선언한다.** 로봇 패키지 `core.yaml`의 `power.device_policy.devices.<기기>`에 `idle`·`standby`(각 `on`·`reduced`·`off`), `wake_ready_s`, `required_for_motion`을 적는다. 선언되지 않은 기기는 모든 모드에서 켜져 있다. Pinky Pro(`middleware/devices/pinky/profile/config/core.yaml`)는 `lidar`(STANDBY off, 2.0 s, 주행 필수)·`camera`(STANDBY off, 3.0 s)·`perception`(IDLE reduced, STANDBY off, 0.5 s)을 선언한다. OMX는 아무것도 선언하지 않는다. `reduced` 인식은 네 틱에 한 번 분류한다(`perception/nodes/camera_power_gate.py`의 `REDUCED_EVERY`, 틱의 주인인 노드 쪽 값이다). 2.0 s는 PWR-005의 추정값이고 3.0 s는 `camera_settle_seconds` 2.5 s에 첫 프레임을 더한 값이다. 둘 다 벤치 §8에서 실측으로 고친다.
 2. **한 벤치 스위치.** `power.device_policy.enabled`(기본 false)가 꺼져 있으면 모든 기기는 켜진 채이고 아무 명령도 나가지 않는다. 기기 항목의 `enabled: true|false`가 그 기기에 한해 스위치를 덮는다(로봇별 오버레이에서 한 기기만 시험할 때). 두 스위치는 YAML 불리언만 받는다. 옛 `power.lidar.standby_stop: true`는 lidar 항목의 기기별 스위치로 읽는다. 블록이 잘못 적혀 있으면 CORE는 오류를 남기고 정책을 끈 채(모든 기기 켜짐) 뜬다. 절전 옵션의 오타로 API·E-Stop·배터리 감시가 내려가면 안 되기 때문이다.
 3. **시간은 프로필 하나, 로봇별 덮어쓰기.** `idle_after_s`·`standby_after_s`·`wake_ready_s`는 기본값(`rosy_default.yaml`)과 로봇 패키지가 정하고, 로봇 한 대는 CORE 오버레이(`~/.rosy/rosy.yaml`, 로봇에서는 `/var/lib/rosy/core/.rosy/rosy.yaml`)로 덮는다. 새 설정 층을 만들지 않는다.
 4. **정책과 적용을 나눈다.** `core_features.power`(ROS 무의존)는 기기별 수준과 준비와 `motion_ready`를 낸다. 적용은 기기마다 `DevicePowerPort` 하나다(`middleware/core/gateway/core/bridge/device_power.py`). LiDAR는 `start_motor`/`stop_motor` 서비스, 카메라·인식은 latched `power/devices` JSON 보드를 `camera_detect_node`(`CameraPowerMixin`)가 따른다. 수준이 바뀔 때만 보내고, 닿지 않으면 latch 없이 다음 틱에 다시 보낸다.
@@ -32,7 +32,7 @@
 
 | ADR | 관계 |
 |---|---|
-| D-427 (이동 규칙) | 새 최상위 폴더 없음. 새 파일은 기존 패키지 안(`core_features/power`, `core/bridge`, `core_api_web/api`, `perception/nodes`, `perception/front_camera/perception`, `fleet/server`)에만 둔다 |
+| D-427 (이동 규칙) | 새 최상위 폴더 없음. 새 파일은 기존 패키지 안(`core_features/power`, `core/bridge`, `core_api_web/api`, `perception/nodes`, `fleet/server`)에만 둔다 |
 | D-429·D-442 (DeviceControlPort) | 다른 포트다. DeviceControlPort(`PinkyTwistPort`)는 단일 writer의 **동작 출력** 포트이고, DevicePowerPort는 센서 기기의 **전원 수준** 포트다. 전원 포트는 동작 출력을 쓰지 않으며 cmd_vel writer가 될 수 없다. 전원 정책이 바퀴에 닿는 길은 `motion_ready` 하나이고 0으로 누르기만 한다 |
 | D-430 (safety 분리) | `core_features.power`는 command·safety를 import하지 않는다(시험이 확인). safety 태그 파일 `core/bridge/cmd_vel.py`와 `core/system/power.py`의 변경은 독립 리뷰와 `Safety-Review:` trailer를 받았다. `power/manager.py`·`power/devices.py`·`bridge/device_power.py`를 safety 태그에 넣을지는 열려 있다(후속 4) |
 | D-400 (안전 정책) | 바뀌지 않는다. 꺼진 LiDAR는 스캔을 내지 않고 꺼진 카메라는 `camera/blocked`를 true로 낸다. 낡은 스캔·프레임을 "비어 있음"으로 읽는 경로를 더하지 않는다 |

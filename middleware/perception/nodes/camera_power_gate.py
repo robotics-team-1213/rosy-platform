@@ -1,4 +1,4 @@
-"""Camera / perception side of the per-device power policy (D-440). ROS-free.
+"""Subject: camera and perception tick plan under the per-device power policy (D-440). ROS-free.
 
 CORE publishes a latched JSON board on `power/devices`, for example
 `{"camera": "off", "perception": "reduced"}`, and only while the bench switch

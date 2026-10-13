@@ -82,6 +82,14 @@ def test_yaml_on_off_booleans_parse_as_levels():
     assert cfg.enabled is False                      # the bench switch defaults off
 
 
+@pytest.mark.parametrize("block", [True, {"devices": ["lidar"]}, {"devices": {"lidar": "off"}},
+                                   {"enabled": "false"}, {"devices": {"lidar": {"enabled": "off"}}},
+                                   {"devices": {"lidar": {"wake_ready_s": float("nan")}}}])
+def test_a_malformed_block_is_refused_by_the_parser(block):
+    with pytest.raises(ValueError):
+        parse_device_policy(block)
+
+
 @pytest.mark.parametrize("spec", [{"idle": "sleepy"}, {"wake_ready_s": -1}])
 def test_bad_device_declaration_is_refused(spec):
     with pytest.raises(ValueError):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from control.sensing.perception.power_gate import DevicePowerGate, ready_report
+from control.camera_power_gate import DevicePowerGate, ready_report
 
 NODE = Path(__file__).resolve().parents[1] / "nodes" / "camera_detect_node.py"
 

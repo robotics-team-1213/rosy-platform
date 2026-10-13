@@ -9,7 +9,7 @@ gate always says "run" and the node behaves as before.
 """
 from std_msgs.msg import Bool, String
 
-from .sensing.perception.power_gate import DevicePowerGate, ready_report
+from .camera_power_gate import DevicePowerGate, ready_report
 
 
 class CameraPowerMixin:

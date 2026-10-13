@@ -1573,3 +1573,9 @@
 - 변경: main의 S10 폴더 정리에 맞춰 `camera_power.py`는 `nodes/`, `power_gate.py`는 `front_camera/perception/`에 둔다. import 이름(`control.camera_power`, `control.sensing.perception.power_gate`)은 그대로다.
 - 증거: 원격 pytest 결과는 착지 보고에 둔다.
 - gate 변화: 없음.
+
+## 2026-10-13 · uncommitted · 전원 게이트를 노드 옆으로 옮김
+
+- 변경: `power_gate.py`를 `nodes/camera_power_gate.py`로 옮겼다(import `control.camera_power_gate`). 카메라 인식 크기 단위(`front_camera/perception`, 9934+150)를 64줄 넘기던 것을 되돌린다. 인식 코드가 아니라 노드의 틱 계획이라 자리도 맞다.
+- 증거: 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음.

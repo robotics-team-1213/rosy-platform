@@ -16,9 +16,7 @@ import yaml
 from core.bridge import device_power
 from core.system.power import _power_config
 from core_common.config import load_config
-from core_features.power.devices import DeviceLevel, parse_device_policy
-
-ON, REDUCED, OFF = DeviceLevel.ON, DeviceLevel.REDUCED, DeviceLevel.OFF
+ON, REDUCED, OFF = device_power.DeviceLevel.ON, device_power.DeviceLevel.REDUCED, device_power.DeviceLevel.OFF
 
 ROOT = Path(__file__).resolve().parents[4]
 CONFIG_DIR = ROOT / "contracts" / "foundation" / "config"
@@ -42,9 +40,7 @@ def test_an_unknown_applied_level_is_sent_once_and_counts_as_a_restart():
 @pytest.mark.parametrize("block", [True, {"devices": ["lidar"]}, {"devices": {"lidar": "off"}},
                                    {"enabled": "false"}, {"devices": {"lidar": {"enabled": "off"}}},
                                    {"devices": {"lidar": {"wake_ready_s": float("nan")}}}])
-def test_a_malformed_block_is_refused_by_the_parser_and_leaves_the_policy_off(block):
-    with pytest.raises(ValueError):
-        parse_device_policy(block)
+def test_a_malformed_block_leaves_the_policy_off_instead_of_stopping_core(block):
     cfg = _power_config({"device_policy": block})
     assert cfg.device_policy.enabled is False and cfg.device_policy.devices == {}
 
