@@ -24,6 +24,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     match.add_argument("--observer", choices=tuple(sorted(OBSERVERS)), default="hold")
     match.add_argument("--preview", action="store_true")
     match.add_argument("--preview-port", type=int, default=8765)
+    match.add_argument("--preview-account-config", type=Path)
     match.add_argument(
         "--stair",
         type=int,
@@ -61,7 +62,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     from games.host.preview import PreviewBoard, PreviewServer
 
     board = PreviewBoard() if args.preview else None
-    server = PreviewServer(board, port=args.preview_port) if board is not None else None
+    account = None
+    if args.preview_account_config:
+        from core_common.protocol.account_client import load_account_client
+        account = load_account_client(args.preview_account_config, destinations=('/',))
+    server = PreviewServer(board, port=args.preview_port, account=account) if board is not None else None
     clients = [HttpPlayerClient(endpoint) for endpoint in setup.robots]
     observer = make_observer(args.observer, setup)
     drive_ids = _motion(args, setup)
