@@ -330,7 +330,7 @@ OAuth 사용 시 `public_origin`과 `redirect_uri`의 `/oauth/huggingface/callba
 
 학습 화면의 `수집·저장 공간`은 등록한 프로젝트 폴더를 읽고 공간을 추정한다. 설정이 없으면 미설정으로 표시한다. `learning-storage.example.json`을 Git 밖의 private `learning-storage.json`으로 복사해 `--storage-config <private-json>`을 기존 시작 명령에 추가한다. 협업 모드는 project_id, 단독 모드는 해당 workspace metadata의 workspace_id를 쓴다. 관리자는 이 프로젝트가 소유한 데이터 디렉터리만 등록한다. 경로·project 변경은 재시작 후 적용한다.
 
-root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. history DB가 있는 폴더·중첩 root·심볼릭 링크 root는 거부한다. Linux/POSIX 모델 PC에서 디렉터리 descriptor와 no-follow로 부모부터 탐색한다. 지원하지 않는 호스트나 읽을 수 없는 폴더는 미확인으로 표시한다. 한 스캔은 5초·100000항목·깊이64로 제한하고 60초 캐시한다. 상한 초과, 내부 링크·특수 파일, 읽기 오류가 있으면 전체 합계를 null로 남긴다. 사용자에게 실제 경로·파일명을 반환하지 않는다.
+root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. history DB가 있는 폴더·중첩 root·심볼릭 링크 root는 거부한다. Linux/POSIX 모델 PC에서 디렉터리 descriptor와 no-follow로 부모부터 탐색한다. 지원하지 않는 호스트나 읽을 수 없는 폴더는 미확인으로 표시한다. 한 스캔은 항목 사이에 경과 5초·100000항목·깊이64를 검사하고 60초 캐시한다. 이미 대기 중인 네트워크 파일시스템 호출 자체를 중단하는 시간 제한은 아니다. 상한 초과, 내부 링크·특수 파일, 읽기 오류가 있으면 전체 합계를 null로 남긴다. 사용자에게 실제 경로·파일명을 반환하지 않는다.
 
 논리 bytes는 파일 이름별 크기 합, file_bytes는 root 안의 inode 중복을 제외한 크기, allocated_bytes는 해당 파일들의 할당 블록 합이다. 재인코딩·동일 내용 복사·reflink를 내용 해시 중복 제거한 수치가 아니다. root 간 하드링크와 공유 볼륨의 여유 공간을 합산하지 않는다. `.part`, `.partial`, `.tmp` 이름의 파일과 `.partial` 디렉터리 안의 파일을 미완료로 별도 집계한다. 이것은 recorder 종료나 영상 품질의 증명이 아니다. pending 용도는 관리자가 완료된 전송 대기 자료만 놓는 폴더이며, 미완료 이름의 파일을 제외한다. pending root가 없으면 전송 대기량은 미확인이다.
 
