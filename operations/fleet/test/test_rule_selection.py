@@ -177,3 +177,48 @@ def test_rule_configuration_change_refuses_the_previous_comparison_baseline(tmp_
     assert loop.rule_baseline(assessment).choice == 'reobserve'
     loop._resolver.config = replace(loop._resolver.config, rule_budget=0)
     assert loop.rule_baseline(assessment) is None
+
+
+def test_realign_configuration_change_refuses_the_previous_comparison_baseline(tmp_path):
+    from fleet.stuck.realign import RealignConfig
+    loop, _ = make_loop(tmp_path, autonomous=True)
+    asyncio.run(loop.run_once())
+    assessment = loop._board.intervention_assessment('pinky')
+    area = {'map_revision': 'rev1', 'polygon': [[-1, -1], [1, -1], [1, 1], [-1, 1]]}
+    for raw in ({'realign_robots': ['other']}, {'realign_areas': [area]}):
+        assert loop.rule_baseline(assessment).choice == 'reobserve'
+        loop._resolver.realign = RealignConfig.from_mapping(raw)
+        assert loop.rule_baseline(assessment) is None
+        loop._resolver.realign = RealignConfig()
+
+
+def test_realign_selection_is_recorded_and_keeps_the_other_robots_records(tmp_path):
+    from rosy.contracts.learning.incident_rule import baseline_choice, validate_rule
+    loop, source = make_loop(tmp_path, autonomous=True)
+    peer = row(100, stuck_id='case-2')
+    peer['robot_id'] = 'peer'
+    peer['state']['line_follow']['stuck']['cause'] = 'unsupported-cause'
+    loop._resolver.autonomous_robots = frozenset({'pinky', 'peer'})
+    async def snapshot():
+        loop._board.observe([source, peer])
+        return {'robots': [source, peer]}
+    loop._snapshot = snapshot
+    original, sent = loop._resolver.step, []
+    realign = {'kind': 'PIVOT', 'angle_rad': -.5, 'pose_stamp': 100., 'attempt': 1, 'turn_spot': True}
+    def select(now, rows):
+        return [Answer('pinky', 'case-1', 'REALIGN', 'R9', realign=realign) if action.robot_id == 'pinky'
+                else action for action in original(now, rows)]
+    async def answer(action, now, **_): sent.append(action.decision)
+    loop._resolver.step, loop._answer = select, answer
+    asyncio.run(loop.run_once())
+    records = {r['receipt']['assessment']['request']['subject_id']: r['receipt'] for r in loop.rule_selections.read()}
+    assert sent == ['REALIGN'] and set(records) == set(loop._rule_selections) == {'pinky', 'peer'}
+    selection = records['pinky']['selection']
+    assert (selection['kind'], selection['rule'], selection['decision']) == ('ANSWER', 'R9', 'REALIGN')
+    assert len(selection['realign_sha256']) == 64 and 'pose_stamp' not in str(records['pinky'])
+    assert baseline_choice(records['pinky']) is None and records['peer']['selection']['kind'] == 'HOLD'
+    assert loop.rule_baseline(loop._board.intervention_assessment('peer')).choice == 'reobserve'
+    for changed in ({**selection, 'realign_sha256': None}, {**selection, 'decision': 'WAIT'},
+                    {k: v for k, v in selection.items() if k != 'realign_sha256'},
+                    {**records['peer']['selection'], 'realign_sha256': 'a' * 64}):
+        with pytest.raises(ValueError): validate_rule({**records['pinky'], 'selection': changed})
