@@ -8,11 +8,12 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/template.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <script type="module" src="/common/ui.js"></script>
 </head>
 <body class="ui-template">
   <!-- grammar: spatial 콘솔 · exception 관제 · focal 경기 · procedure 점검 -->
-  <ui-shell grammar="spatial">
+  <ui-shell grammar="spatial" class="ui-app-shell">
     <ui-topbar>
       <ui-brand>
         <b>화면 이름</b>
@@ -26,22 +27,36 @@
       <ui-button kind="primary" type="button">주 동작</ui-button>
       <ui-button kind="irreversible" type="button" data-always-live>정지</ui-button>
     </ui-topbar>
-    <main>
-      <ui-section aria-labelledby="sample-heading">
-        <ui-head>
-          <ui-text id="sample-heading" scale="label">구역</ui-text>
-          <ui-text scale="value">값</ui-text>
-        </ui-head>
-        <ui-grid columns="3">
-          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
-          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
-          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
-        </ui-grid>
-        <ui-empty>아직 표시할 내용이 없습니다.</ui-empty>
-        <ui-evidence state="fresh">최신</ui-evidence>
-        <ui-field placeholder="입력" aria-label="입력 예"></ui-field>
-      </ui-section>
-    </main>
+    <div class="ui-app-body" data-seats="rail">
+      <div class="ui-rail">
+        <nav class="ui-rail-nav" aria-label="영역 이동">
+          <a class="ui-rail-item" href="#" aria-current="page" data-action-icon="list"><span>화면</span></a>
+        </nav>
+      </div>
+      <main class="ui-app-main">
+        <div class="ui-pathbar"><h1 class="ui-page-heading">화면 제목</h1></div>
+        <div class="ui-stage-grid">
+          <section class="ui-pane" data-pane="stage">
+            <ui-section aria-labelledby="sample-heading">
+              <ui-head>
+                <ui-text id="sample-heading" scale="label">구역</ui-text>
+                <ui-text scale="value">값</ui-text>
+              </ui-head>
+              <ui-grid columns="3">
+                <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+                <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+                <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+              </ui-grid>
+              <ui-empty>아직 표시할 내용이 없습니다.</ui-empty>
+              <ui-evidence state="fresh">최신</ui-evidence>
+              <ui-field placeholder="입력" aria-label="입력 예"></ui-field>
+            </ui-section>
+          </section>
+          <aside class="ui-pane" data-pane="now" aria-label="지금 상태"></aside>
+          <aside class="ui-pane" data-pane="more" aria-label="입력과 근거"></aside>
+        </div>
+      </main>
+    </div>
   </ui-shell>
 </body>
 </html>
