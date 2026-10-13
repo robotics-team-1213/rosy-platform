@@ -37,6 +37,7 @@
 .ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] {
   color: var(--text-secondary);
   border-style: dashed;
+  border-color: var(--surface-line);
   cursor: not-allowed;
 }
 .ui-disclosure-name {
