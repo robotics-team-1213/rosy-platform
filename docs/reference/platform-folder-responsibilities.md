@@ -1,5 +1,7 @@
 # ROSY Platform 현재 폴더 책임
 
+2026-10-13 S1~S10 source 정리 및 local main 착지 완료. 원격 재검증·CI·배포·장치는 별도 NOT RUN. [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이 현재 배치 기준이다.
+
 2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
 
 2026-10-11 local main `d4988bffba`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
@@ -8,26 +10,28 @@
 
 `middleware`는 장치 실행과 권한, `operations`는 관측 사실과 작업 조정, `learning`은 경험·학습·평가·아티팩트 관리를 맡는다. `contracts`는 교환 형식, `integrations`는 외부 기술 접점, `shared/web`은 여러 UI가 실제로 공유하는 기반이다. 같은 concern이 같은 실행 권한을 뜻하지 않는다.
 
+D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph 건강은 `graph_health`, snapshot 판단은 `snapshots`, 차선 관측은 `sensors/line_observation`, advisory object 관측은 `front_camera/object_observation`에 전용 ROS adapter와 같이 둔다. `nodes`에는 잔여 보정·기록·provider/executor/TF/web 조립, `control`에는 설치/source 호환 초기화만 남는다. 기존 control.* 설치 이름은 유지한다.
+
 ## 편집 집
 
-세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 2026-10-11 소스 배치 스냅샷은 그대로다.
+세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 아래 현재 경로는 2026-10-13 후속 착지 기준이며 과거 검증 스냅샷과 구분한다.
 
 | 집 | 이름 | 현재 경로 |
 |---|---|---|
-| 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/ui` |
+| 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/robot_ui` |
 | 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
 | 3 | Drive 동작 | `middleware/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
-| 4 | Drive 근거 | `middleware/drive/{safety,tracking,planning,recovery,calibration}` |
-| 5 | 인지 구현 | `middleware/perception/sensors/sensing`, `middleware/perception/vision/perception` |
-| 6 | 인지 노드 | `middleware/perception/control`. ROS 패키지 이름은 `control`. 다섯 호환 초기화 폴더는 설치 이름만 잇고, 노드·어댑터 파일이 이 집의 본체다 |
+| 4 | Drive 근거 | `middleware/drive/{motion_limits,tracking,planning,recovery,calibration}` |
+| 5 | 인지 구현 | `middleware/perception/sensors/{sensing,line_observation}`, `middleware/perception/front_camera/{perception,object_observation}`, `middleware/perception/{localization,graph_health,snapshots}` |
+| 6 | 인지 노드 | `middleware/perception/nodes`. ROS 패키지 이름은 `control`; `control/`의 다섯 호환 초기화는 설치 이름만 잇는다. 기능별 전용 adapter는 해당 판단 holder에 둔다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
-| 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |
+| 8 | Fleet 원장 | `operations/fleet/fleet/server/{ledger,auth,cell,console,peer}`와 기존 `server/channel`. app.py는 조립하고 기존 fleet.server.* 설치 이름을 유지한다 |
 | 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
-| 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/execution` |
-| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/ui/{console,cam}`, `operations/apps`, `operations/vision` |
+| 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
+| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
-집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World의 `predicted`는 odom dead reckoning이다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sightings/odom의 현재 상태를 투영하며 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
 
 같은 영어 단어는 집을 나눈다.
 
@@ -38,13 +42,13 @@
 | decision | 장치 로컬 허용 동작 | 2 | `core_features.decision` |
 | decision | 현장 후보·모델 제안 | 10 | `operations/decision`. 설치는 Fleet 배포 |
 | safety | 공통 E-stop·배터리·Fleet 상실 | 2 | `core_features.safety` |
-| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/safety` |
-| execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/execution/local` |
-| execution | 현장 목표·진척 | 10 | `operations/execution` |
-| vision | 앞 카메라 구현 | 5 | `middleware/perception/vision` |
-| vision | 천장 관측 | 11 | `operations/vision` |
+| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/motion_limits` |
+| execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/robot_execution/local` |
+| execution | 현장 목표·진척 | 10 | `operations/site_execution` |
+| vision | 앞 카메라 구현 | 5 | `middleware/perception/front_camera` |
+| vision | 천장 관측 | 11 | `operations/overhead`, `operations/signal_observation` |
 
-`middleware/skills`와 `middleware/execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
+`middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
 
 ## 폴더 이름과 묶음
 
@@ -140,14 +144,14 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `contracts/motion` | wheel `rosy-contracts-motion`; `rosy.contracts.motion` | 유지 — Motion Intent·DeviceControlPort 형식. Pinky writer binding 소비; 전 producer admission 완료로 해석하지 않음 |
 | `middleware/core/gateway` | ROS `core`; `core` | 분리 완료 — CORE 조립·ROS bridge. 내부 `drive`와 `system/power`로 기존 조립 추출; 외부 attribute·기존 service listener 상대 순서 유지 |
 | `middleware/core/services` | ROS `core_features`; `core_features` | 유지 — 기존 feature manager·알고리즘. Drive 기능은 line_follow/navigation/localization/docking/swarm의 실제 owner에 남음 |
-| `middleware/core/services/core_features/safety` | `core_features.safety` | 유지 — CORE 공통 E-stop·person·battery·fleet-loss 보호. Drive 전용 sweep proof와 구분 |
-| `middleware/core/services/core_features/decision` | `core_features.decision` | 유지 — 장치 local lane/router/allowed-action 규칙. Fleet의 deliberative decision과 구분 |
+| `middleware/core/services/core_features/safety_gate` | `core_features.safety` | 유지 — CORE 공통 E-stop·person·battery·fleet-loss 보호. Drive 전용 sweep proof와 구분 |
+| `middleware/core/services/core_features/action_rules` | `core_features.decision` | 유지 — 장치 local lane/router/allowed-action 규칙. Fleet의 deliberative decision과 구분 |
 | `middleware/core/events` | ROS `core_events`; `core_events` | 유지 — CORE/Fleet의 event bus·audit 형식과 연결 |
 | `middleware/core/api` | ROS `core_api_web`; `core_api_web` | 이전 완료 — 기존 api_web 배포/import명 유지, API·WebSocket·UI 제공 소스 holder만 간소화 |
 | `middleware/drive/planning/nav2` | ROS `navigation`; `navigation` | 이전 완료 — Nav2 launch/config/backend. CORE goal facade·취소 세대·최종 command 경계 유지 |
 | `middleware/perception` | ROS `control`; `control`, `control.sensing`, `control.sensing.perception` | 분리 완료 — sensors/vision 소스와 node 조립·recorder·map resource. Drive 구현은 별도 holder; 하나의 기존 배포 패키지로 설치 |
 | `middleware/drive` | 기존 ROS `control` 배포의 `control.control`, `control.planning`, `control.wander` | 분리 완료 — tracking/recovery/calibration과 grid planning. node/provider 소비자와 기존 relative import·monkeypatch identity 유지 |
-| `middleware/drive/safety` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
+| `middleware/drive/motion_limits` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
 | `middleware/drivers/imu_bno055` | ROS `imu_bno055` | 유지 — IMU I/O. 장치 bringup이 소비; 지각 판단이나 작업 dispatch를 소유하지 않음 |
 | `middleware/drivers/pinky_adc` | ROS `sensor_adc` | 유지 — Pinky ADC I/O. IR 등 센서 소비자 연결 |
 | `middleware/drivers/pinky_lamp` | ROS `lamp_control` | 유지 — Pinky lamp I/O. 장치 UI/bringup 소비 |
@@ -160,30 +164,30 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `middleware/devices/omx/agent` | wheel `rosy-app-agent`; `rosy_agent` | 이전 완료 — cell local Action 조립. site gateway/process와 통신하고 Arm owner 경계 유지 |
 | `middleware/skills/api` | wheel `rosy-skill-api`; `rosy.skills.api` | 유지 — skill API root. contracts identity를 재사용하고 robot I/O나 site scheduling을 소유하지 않음 |
 | `middleware/skills/manipulation` | wheel `rosy-skill-manipulation`; `rosy.skills.manipulation` | 유지 — manipulation skill 정의/수행 접점. Arm 장치 제어와 site process 구분 |
-| `operations/execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
-| `middleware/execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
-| `operations/execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
-| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
-| `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
-| `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
-| `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
-| `middleware/ui/face` | ROS `emotion`; `emotion` | 유지 — robot face/display. 제어 정책과 구분 |
+| `operations/site_execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
+| `middleware/robot_execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
+| `operations/site_execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
+| `operations/site_execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
+| `middleware/robot_ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
+| `middleware/robot_ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
+| `middleware/robot_ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
+| `middleware/robot_ui/face` | ROS `emotion`; `emotion` | 유지 — robot face/display. 제어 정책과 구분 |
 | `operations/site_devices/dock` | dock contract·firmware 소스 | 유지 — 현장 dock 소유. robot docking manager의 직접 `/status` polling은 그대로 |
 | `operations/site_devices/dock/firmware` | dock MCU firmware | 유지 — limit-switch interlock·0 V boot. CORE/Arm Safety와 별도 현장 보호 대상 |
 | `operations/site_devices/signal` | signal contract·driver library | 유지 — Fleet 소비 signal 장치. Fleet가 sequence·command owner를 유지 |
 | `operations/site_devices/signal/firmware` | signal MCU firmware | 유지 — boot·supervision-loss failsafe. 관측용 signal observer와 구분 |
-| `operations/vision/signal_observer` | measured-light 관측 서비스·소스 | 유지 — read-only light evidence. CORE traffic observer 소비; 실행 host 결정이나 signal command 권한 추가 없음 |
+| `operations/signal_observation` | measured-light 관측 서비스·소스 | 유지 — read-only light evidence. CORE traffic observer 소비; 실행 host 결정이나 signal command 권한 추가 없음 |
 | `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose는 World, 순수 목표/진척 규칙은 execution 소비. D-657 `server/model_feedback_dispatch` 원장 어댑터와 admission·claim·dispatch·producer 인증·MapPoseService 조립·trip consumer는 Fleet 소유 |
 | `operations/fleet/fleet/incidents` | `fleet.incidents.handoff`, `fleet.incidents.notifications` | 분리 완료 — D-661 이름 있는 담당자의 사건 인수와 기존 Fleet DB의 알림 outbox·고정 채널 worker·receipt. 판단·resolver는 `fleet/stuck`, 인증·라우트·worker 생명주기는 `fleet/server`에 유지. 실제 운영 수용은 HOLD |
 | `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
-| `operations/ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
+| `operations/site_ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |
-| `operations/vision` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
-| `operations/ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
+| `operations/overhead`, `operations/signal_observation` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
+| `operations/site_ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
 | `operations/apps/games` | ROS `games`; `games` | 유지 — overhead camera를 쓰는 game host. 범용 process/control backend가 아님 |
 | `learning/training/perception` | trainer Python CLI·library | 분리 완료 — 학습 job·trainer·COLAB docs. 인식 runtime은 middleware vision 소유 |
 | `learning/curation/perception` | dataset/review Python CLI·app | 분리 완료 — 기록·정답·dataset provenance·review source. 서명 closure와 source mismatch 거절 유지 |
@@ -223,9 +227,9 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 
 ## source holder와 기존 package identity
 
-`control` ROS 배포는 유지된다. `control.sensing`의 실제 구현은 `middleware/perception/sensors/sensing`, `control.sensing.perception`은 `middleware/perception/vision/perception`에 있다. `control.control`의 평탄한 module identity는 Drive의 `safety/recovery/tracking/calibration` holder에서 설치하고 `control.planning`, `control.wander`, `control.safety`도 기존 이름으로 설치한다. `control` 아래 compatibility 진입점은 source 조회의 좁은 path 연결과 기존 export를 맡는다. 설치된 배포가 checkout의 sibling 경로를 필요로 하는 구조로 해석하지 않는다. build는 정적 source mapping을 사용하고 sdist는 실제 source snapshot을 포함한다.
+`control` ROS 배포는 유지된다. `control.sensing`의 실제 구현은 `middleware/perception/sensors/sensing`, `control.sensing.perception`은 `middleware/perception/front_camera/perception`에 있다. `control.control`의 평탄한 module identity는 Drive의 `safety/recovery/tracking/calibration` holder에서 설치하고 `control.planning`, `control.wander`, `control.safety`도 기존 이름으로 설치한다. `control` 아래 compatibility 진입점은 source 조회의 좁은 path 연결과 기존 export를 맡는다. 설치된 배포가 checkout의 sibling 경로를 필요로 하는 구조로 해석하지 않는다. build는 정적 source mapping을 사용하고 sdist는 실제 source snapshot을 포함한다.
 
-Fleet의 `fleet.localization.map_pose`는 World 구현 module의 명시적인 identity alias다. MapPose 알고리즘은 World에 있고 HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
+Fleet의 `rosy.world.state.projections.map_pose`는 World 구현 module의 명시적인 identity alias다. MapPose 알고리즘은 World에 있고 HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
 
 Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 실제 ROS 배포명은 `gz_sim`이다. launch가 장치 pipeline을 시작한다는 이유만으로 resource/install owner를 다른 패키지로 분리하지 않았다. robot description·map/STL lineage·기존 share resource를 그 패키지 소비자와 함께 유지한다.
 

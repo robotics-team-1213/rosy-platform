@@ -164,8 +164,14 @@ roots:
     legacy: src/runtime/services
     wave: "4d"
     import_prefix: [core_features]
+    source_packages:
+      core_features: core_features
+      core_features/action_rules: core_features.decision
+      core_features/safety_gate: core_features.safety
+      core_features/preview: core_features.vision
     concern: control
-  - path: middleware/core/services/core_features/safety
+  - path: middleware/core/services/core_features/safety_gate
+    layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
     d427_target: middleware/core/services/core_features/safety
     legacy: src/runtime/services/core_features/safety
@@ -173,7 +179,8 @@ roots:
     import_prefix: [core_features.safety]
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
-  - path: middleware/core/services/core_features/decision
+  - path: middleware/core/services/core_features/action_rules
+    layout_target: middleware/core/services/core_features/action_rules
     part: middleware
     d427_target: middleware/core/services/core_features/decision
     legacy: src/runtime/services/core_features/decision
@@ -215,7 +222,7 @@ roots:
     import_prefix: [control]
     source_packages:
       sensors/sensing: control.sensing
-      vision/perception: control.sensing.perception
+      front_camera/perception: control.sensing.perception
     note: >-
       D-630 sensing and vision source holders; control remains the ROS distribution/import identity.
       Node composition, recorder compatibility and map assets stay in this package.
@@ -227,17 +234,17 @@ roots:
     wave: none
     import_prefix: [control.control, control.planning, control.wander]
     source_packages:
-      safety: control.control
+      motion_limits: control.control
       recovery: control.control
       tracking: control.control
       calibration: control.control
       planning/grid: control.planning
-      safety/adapter: control.safety
+      motion_limits/adapter: control.safety
       tracking/wander: control.wander
     concern: control
     note: D-630 Drive algorithms; installed by the existing control distribution.
-  - path: middleware/drive/safety
-    layout_target: middleware/drive/safety
+  - path: middleware/drive/motion_limits
+    layout_target: middleware/drive/motion_limits
     part: middleware
     d427_target: middleware/control/drive/safety
     wave: none
@@ -338,7 +345,8 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control
-  - path: operations/execution
+  - path: operations/site_execution
+    layout_target: operations/site_execution
     part: operations
     d427_target: operations/execution
     legacy: modules/execution
@@ -347,7 +355,8 @@ roots:
       Package metadata only; the api and site source subtrees below are mapped on
       their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
     concern: other
-  - path: middleware/execution/local
+  - path: middleware/robot_execution/local
+    layout_target: middleware/robot_execution/local
     part: middleware
     d427_target: middleware/execution/local
     legacy: modules/execution/src/rosy/execution/local
@@ -357,7 +366,8 @@ roots:
       Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
       unchanged. rosy-execution no longer packages it.
     concern: control
-  - path: operations/execution/src/rosy/execution/api
+  - path: operations/site_execution/src/rosy/execution/api
+    layout_target: operations/site_execution/src/rosy/execution/api
     part: operations
     d427_target: operations/execution/src/rosy/execution/api
     legacy: modules/execution/src/rosy/execution/api
@@ -367,7 +377,8 @@ roots:
       PlanBundle API is internal to the execution module (D-413 §3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
-  - path: operations/execution/src/rosy/execution/site
+  - path: operations/site_execution/src/rosy/execution/site
+    layout_target: operations/site_execution/src/rosy/execution/site
     part: operations
     d427_target: operations/execution/src/rosy/execution/site
     legacy: modules/execution/src/rosy/execution/site
@@ -375,27 +386,31 @@ roots:
     import_prefix: [rosy.execution.site]
     note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
-  - path: middleware/ui/robot
+  - path: middleware/robot_ui/robot
+    layout_target: middleware/robot_ui/robot
     part: middleware
     d427_target: middleware/ui/robot
     legacy: src/hmi/dashboard
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
-  - path: middleware/ui/pilot
+  - path: middleware/robot_ui/pilot
+    layout_target: middleware/robot_ui/pilot
     part: middleware
     d427_target: middleware/ui/pilot
     legacy: src/hmi/pilot
     wave: "4b"
     concern: other
-  - path: middleware/ui/pilot/android
+  - path: middleware/robot_ui/pilot/android
+    layout_target: middleware/robot_ui/pilot/android
     part: middleware
     d427_target: middleware/ui/pilot/android
     legacy: apps/pilot
     wave: "4b"
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
     concern: other
-  - path: middleware/ui/face
+  - path: middleware/robot_ui/face
+    layout_target: middleware/robot_ui/face
     part: middleware
     d427_target: middleware/ui/face
     legacy: src/hmi/face
@@ -436,7 +451,8 @@ roots:
     wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
-  - path: operations/vision/signal_observer
+  - path: operations/signal_observation
+    layout_target: operations/signal_observation
     part: operations
     d427_target: operations/vision/signal_observer
     legacy: firmware/signal/observer
@@ -453,6 +469,12 @@ roots:
     legacy: src/site/fleet
     wave: "3c"
     import_prefix: [fleet]
+    source_packages:
+      fleet/server/peer: fleet.server
+      fleet/server/cell: fleet.server
+      fleet/server/auth: fleet.server
+      fleet/server/console: fleet.server
+      fleet/server/ledger: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations
@@ -471,7 +493,8 @@ roots:
     source_packages: {src/rosy/decision: rosy.decision}
     note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
-  - path: operations/ui/console
+  - path: operations/site_ui/console
+    layout_target: operations/site_ui/console
     part: operations
     d427_target: operations/ui/console
     legacy: src/site/fleet/fleet/server/web
@@ -518,14 +541,16 @@ roots:
       D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
       D-652 pure necessity assessment is shared with Fleet through three static holder files;
       new consumers are internal shadow only, no robot or command authority.
-  - path: operations/vision
+  - path: operations/overhead
+    layout_target: operations/overhead
     part: operations
     d427_target: operations/vision
     legacy: src/site/vision
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other
-  - path: operations/ui/cam
+  - path: operations/site_ui/cam
+    layout_target: operations/site_ui/cam
     part: operations
     d427_target: operations/ui/cam
     legacy: src/site/cam
@@ -788,7 +813,7 @@ safety_modules:
   - middleware/core/gateway/core/system/power.py  # D-628 battery shutdown configuration
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
-  - middleware/execution/local/src/rosy/execution/local/omx_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
@@ -808,9 +833,9 @@ safety_modules:
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
-  - operations/fleet/fleet/server/task_dispatch_routes.py
-  - operations/fleet/fleet/server/owner_recovery_routes.py
-  - operations/fleet/fleet/server/console.py
+  - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
+  - operations/fleet/fleet/server/auth/owner_recovery_routes.py
+  - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 

@@ -220,8 +220,8 @@ class RotationEnvelopeTest(unittest.TestCase):
             self.assertIsNone(pivot_clearance(points,center,radius))
 
     def test_real_gazebo_collision_projection_is_accepted(self):
-        from tools.gz.prepare_track_world import collision_circumradius
-        model=ET.parse(Path(__file__).parents[1]/'tools/gz/pinky_maze.sdf').find(".//model[@name='pinky']")
+        from tools.sim.gazebo.prepare_track_world import collision_circumradius
+        model=ET.parse(Path(__file__).parents[1]/'../../tools/sim/gazebo/pinky_maze.sdf').find(".//model[@name='pinky']")
         geometry=collision_circumradius(model)
         self.assertEqual(len(geometry['footprint_xy']),32)
         est=RotationEnvelope(geometry['radius_m'],geometry['footprint_xy'])

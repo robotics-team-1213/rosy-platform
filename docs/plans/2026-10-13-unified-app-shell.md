@@ -60,8 +60,8 @@ Pilot Android의 자기 줄은 이 계획에 없다(D-741 "하지 않는 것").
 - 제품 파일은 `rosy-platform/.worktrees/<짧은이름>`에서만 고친다. 조각마다 주제에 맞는 브랜치를 새로 딴다.
 - 시험은 커밋한 뒤 원격에서 돌린다: `python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- <경로>` 그리고 `python test/known_failures.py X:/DevTemp/<이름>/run-1.txt`.
 - 브라우저 시험(`*_browser.py`)은 원격 시험 PC에 Chromium이 없어 돌지 않는다. 푸시 뒤의 CI 결과가 증거다. 착지 보고에 "브라우저 시험은 CI 대기"라고 적는다.
-- 고친 모듈의 `logs.md`에 한 줄을 더하고, 관문이 움직였으면 `progress.md`를 고친다. 대상: `shared/web`, `operations/fleet`, `operations/ui/console`, `middleware/ui/robot`, `middleware/ui/pilot`, `operations/apps/games`, `learning/curation/perception`, `operations/ui/cam`.
-- 줄 수 예산(D-168)이 걸린 파일: `shared/web/ui.js`, `shared/web/components.css`, `middleware/ui/pilot/styles.css`, `operations/ui/console/console.js`(지금 1035줄, 상한 1175), `operations/ui/console/shared/styles.css`. 넘으면 `test/architecture/test_module_structure.py`의 판정을 다시 적는다.
+- 고친 모듈의 `logs.md`에 한 줄을 더하고, 관문이 움직였으면 `progress.md`를 고친다. 대상: `shared/web`, `operations/fleet`, `operations/site_ui/console`, `middleware/robot_ui/robot`, `middleware/robot_ui/pilot`, `operations/apps/games`, `learning/curation/perception`, `operations/site_ui/cam`.
+- 줄 수 예산(D-168)이 걸린 파일: `shared/web/ui.js`, `shared/web/components.css`, `middleware/robot_ui/pilot/styles.css`, `operations/site_ui/console/console.js`(지금 1035줄, 상한 1175), `operations/site_ui/console/shared/styles.css`. 넘으면 `test/architecture/test_module_structure.py`의 판정을 다시 적는다.
 - 폭 320, 390, 768, 1024, 1366, 1920에서 정지의 위치, 가로 넘침, 앱 바 높이(D-359 머리 예산 20%)를 브라우저 시험이 잰다.
 - 소스 시험, CI, 설치본, 실물 화면 수용은 서로 다른 증거로 적는다. D-153의 G2 캡처와 G3 사람 검토는 표면마다 따로 남긴다.
 

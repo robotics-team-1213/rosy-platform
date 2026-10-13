@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fleet.localization.map_pose import (BRIDGED, DEGRADED, LOCALIZED, SIGHTING, UNKNOWN,
+from rosy.world.state.projections.map_pose import (BRIDGED, DEGRADED, LOCALIZED, SIGHTING, UNKNOWN,
                                          MapPoseConfig, MapPoseTracker, OdomSample, Sighting,
                                          odom_from_snapshot, sighting_from_row)
 

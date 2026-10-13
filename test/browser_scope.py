@@ -33,20 +33,21 @@ ROBOT = [
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
     "test/test_surface_device_browser.py",
+    "test/test_surface_shell_browser.py",
     "test/test_camera_capture_browser.py",
-    "middleware/ui/robot/test/*_browser.py",
-    "middleware/ui/robot/test/test_surface_bridge.py",
-    "middleware/ui/robot/test/test_surface_home_link.py",
+    "middleware/robot_ui/robot/test/*_browser.py",
+    "middleware/robot_ui/robot/test/test_surface_bridge.py",
+    "middleware/robot_ui/robot/test/test_surface_home_link.py",
 ]
 API_WEB = [
     "middleware/core/api/test/test_d283_console_browser.py",
-    "middleware/ui/robot/test/test_role_g2_browser.py",
-    "middleware/ui/robot/test/test_calibration_chip_browser.py",
-    "middleware/ui/robot/test/test_surface_viewport_budget_browser.py",
-    "middleware/ui/robot/test/test_dashboard_entry_browser.py",
+    "middleware/robot_ui/robot/test/test_role_g2_browser.py",
+    "middleware/robot_ui/robot/test/test_calibration_chip_browser.py",
+    "middleware/robot_ui/robot/test/test_surface_viewport_budget_browser.py",
+    "middleware/robot_ui/robot/test/test_dashboard_entry_browser.py",
 ]
 PILOT = [
-    "middleware/ui/pilot/test/test_pilot_browser.py",
+    "middleware/robot_ui/pilot/test/test_pilot_browser.py",
     "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py",
 ]
 GAMES = ["test/test_games_board_browser.py"]
@@ -61,10 +62,10 @@ EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
 
 SCOPE: dict[str, list[str]] = {
     "operations/fleet/fleet/server/": FLEET,
-    "operations/ui/console/": FLEET,
-    "middleware/ui/robot/": ROBOT,
+    "operations/site_ui/console/": FLEET,
+    "middleware/robot_ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
-    "middleware/ui/pilot/": PILOT,
+    "middleware/robot_ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": PILOT[1:],
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,

@@ -27,7 +27,7 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 ROOT = Path(__file__).resolve().parents[1]
-PILOT = ROOT / "middleware" / "ui" / "pilot"
+PILOT = ROOT / 'middleware' / 'robot_ui' / "pilot"
 COMMON = ROOT / "shared" / "web"
 TYPES = {".js": "application/javascript", ".css": "text/css", ".html": "text/html",
          ".webmanifest": "application/manifest+json", ".png": "image/png", ".json": "application/json"}

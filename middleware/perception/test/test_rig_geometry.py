@@ -4,12 +4,12 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 
-from tools.gz.prepare_track_world import collision_circumradius
+from tools.sim.gazebo.prepare_track_world import collision_circumradius
 
 
 class RigGeometryTests(unittest.TestCase):
     def test_wheels_define_full_robot_envelope(self):
-        model = ET.parse(Path(__file__).parents[1] / 'tools/gz/pinky_maze.sdf').find(
+        model = ET.parse(Path(__file__).parents[1] / '../../tools/sim/gazebo/pinky_maze.sdf').find(
             ".//model[@name='pinky']")
         result = collision_circumradius(model)
         self.assertGreaterEqual(result['radius_m'], math.hypot(.068, .092))

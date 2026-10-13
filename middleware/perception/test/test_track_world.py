@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from tools.gz.prepare_track_world import boxes, clearance
+from tools.sim.gazebo.prepare_track_world import boxes, clearance
 
 
 def test_exact_track_includes_both_diagonal_collision_walls():
@@ -22,7 +22,7 @@ def test_diagonal_distance_uses_oriented_box_not_bounding_rectangle():
 
 
 def test_wheel_hinges_follow_the_cylinder_axles_in_child_frames():
-    root = ET.parse(Path(__file__).resolve().parents[1]/'tools/gz/pinky_maze.sdf')
+    root = ET.parse(Path(__file__).resolve().parents[1]/'../../tools/sim/gazebo/pinky_maze.sdf')
     for joint in root.findall('.//joint'):
         # The joint inherits its rolled child wheel frame, whose cylinder
         # axle is local Z. Local Y would command a nearly vertical hinge.

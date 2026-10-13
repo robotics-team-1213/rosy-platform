@@ -1,0 +1,589 @@
+"""core.safety — SAF-001~005 (P1-6, P1-20). ROS 무의존."""
+
+from __future__ import annotations
+
+import time
+import math
+import os
+import logging
+from threading import Lock
+from dataclasses import dataclass, replace
+from typing import Callable, Optional
+
+from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEvidence
+from core_features.safety.decision import (PolicyObservationUnavailable, SafetyDecision, SafetyRequest,
+                                           check_decision, decision_fault, decision_valid)
+from core_features.safety.shadow import ShadowLog, ShadowVerdict
+
+
+from core_features.safety.velocity import finite_velocity, limit_velocity, same_curve
+
+
+class TeleopWatchdog:
+    """SAF-002: 마지막 teleop 명령 시각 추적, timeout 경과 시 만료."""
+
+    def __init__(self, timeout_ms: int = 500) -> None:
+        self.timeout_ms = timeout_ms
+        self._last_refresh: float = 0.0
+
+    def refresh(self, now: Optional[float] = None) -> None:
+        self._last_refresh = now if now is not None else time.monotonic()
+
+    def expired(self, now: Optional[float] = None) -> bool:
+        current = now if now is not None else time.monotonic()
+        return (current - self._last_refresh) * 1000.0 > self.timeout_ms
+
+
+@dataclass
+class SpeedLimits:
+    max_linear: float = 0.20
+    max_angular: float = 0.80
+    manual_linear: float = 0.15
+    manual_angular: float = 0.60
+    fleet_linear: float = 0.20
+    fleet_angular: float = 0.80
+
+    @classmethod
+    def from_config(cls, *, profile, nav_cfg: dict, safety_cfg: dict) -> "SpeedLimits":
+        """프로필이 있으면 그걸 쓰고, 없으면 rosy.yaml navigation/safety 폴백."""
+        nav_cfg = nav_cfg or {}
+        safety_cfg = safety_cfg or {}
+        max_linear = float(profile.max_linear_velocity or nav_cfg.get("max_linear_velocity") or cls.max_linear)
+        max_angular = float(profile.max_angular_velocity or nav_cfg.get("max_angular_velocity") or cls.max_angular)
+        return cls(
+            max_linear=max_linear,
+            max_angular=max_angular,
+            manual_linear=float(safety_cfg.get("manual_linear", cls.manual_linear)),
+            manual_angular=float(safety_cfg.get("manual_angular", cls.manual_angular)),
+            fleet_linear=float(safety_cfg.get("fleet_linear", max_linear)),
+            fleet_angular=float(safety_cfg.get("fleet_angular", max_angular)),
+        )
+
+
+@dataclass
+class BatteryPolicy:
+    warning_percent: float = 20.0
+    critical_percent: float = 10.0
+    critical_action: str = "RETURN_HOME"
+
+
+@dataclass(frozen=True)
+class PersonAdvisory:
+    """SAF-006: YOLO `person` 분류 자문. metric 정지의 확대 사유이며 단독
+    정지 사유가 아니다 — 못 보면 기존 정지가 그대로고, 사라지면 해제된다."""
+
+    present: bool
+    confidence: float
+    observed_at: float
+    max_age_s: float = 1.0
+
+    def __post_init__(self) -> None:
+        if type(self.present) is not bool:
+            raise ValueError("person present must be a boolean")
+        if (not isinstance(self.confidence, (int, float))
+                or isinstance(self.confidence, bool)
+                or not 0.0 <= self.confidence <= 1.0):
+            raise ValueError("person confidence must be in [0, 1]")
+        if not isinstance(self.observed_at, (int, float)) or not math.isfinite(self.observed_at):
+            raise ValueError("person observed_at must be finite")
+        if (not isinstance(self.max_age_s, (int, float))
+                or isinstance(self.max_age_s, bool)
+                or not math.isfinite(self.max_age_s) or not self.max_age_s > 0):
+            raise ValueError("person max_age_s must be positive")
+
+    def fresh(self, now: float) -> bool:
+        return bool(self.present) and self.observed_at <= now <= self.observed_at + self.max_age_s
+
+
+#: SAF-006 사람 감속 상한. 사람이 있으면 전진 속도를 기어가기로 묶는다.
+#: 선회율은 손대지 않는다 — 위험은 접근 속도지 제자리 회전이 아니다.
+PERSON_LINEAR_CAP_M_S = 0.05
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Known model revision: weights identity plus the input geometry the
+    revision was commissioned with. A revision names the whole contract —
+    weights alone do not (D-47 pattern)."""
+
+    revision: str
+    input_width: int
+    input_height: int
+    input_fps: float
+
+
+class ModelRegistry:
+    """D-137 T3: 아는 revision만 통과시키는 명부. 비어 있으면 아무것도 모른다 —
+    fail-closed가 기본값이다. 누가 등록하는지는 vision 슬라이스 몫이며, 이
+    명부는 판단만 한다."""
+
+    def __init__(self) -> None:
+        self._known: dict[str, ModelSpec] = {}
+
+    def register(self, revision: str, *, input_width: int,
+                 input_height: int, input_fps: float) -> ModelSpec:
+        if not revision or not revision.strip():
+            raise ValueError("model revision required")
+        for name, value in (("input_width", input_width),
+                            ("input_height", input_height),
+                            ("input_fps", input_fps)):
+            if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                    or not math.isfinite(value) or not value > 0):
+                raise ValueError(f"model {name} must be positive")
+        spec = ModelSpec(revision=revision, input_width=int(input_width),
+                         input_height=int(input_height), input_fps=float(input_fps))
+        self._known[revision] = spec
+        return spec
+
+    def is_known(self, evidence: DetectionEvidence) -> bool:
+        spec = self._known.get(evidence.model_revision)
+        if spec is None:
+            return False
+        return (evidence.input_width == spec.input_width
+                and evidence.input_height == spec.input_height
+                and evidence.input_fps == spec.input_fps)
+
+
+def person_advisory_from(evidence: DetectionEvidence, now: float, *,
+                         label: str = "person", min_confidence: float = 0.5,
+                         max_age_s: float = 1.0,
+                         registry: Optional[ModelRegistry] = None) -> Optional[PersonAdvisory]:
+    """D-137 T2→SAF-006 주입 고리. 신선한 person 검출만 자문이 된다.
+
+    D-602: 라벨은 person이다. person_feet는 클래스가 아니므로 자문이 되지 않는다.
+
+    stale evidence·빈 detections·낮은 confidence는 전부 None이다 — 자문 없음이
+    곧 프로필 복귀다. `registry`가 있으면 아는 revision+입력 제원만 통과한다.
+    revision 게이트를 거는 주체는 vision 슬라이스이며, 여기서는 판단만 한다."""
+    if registry is not None and not registry.is_known(evidence):
+        return None
+    persons = evidence.of_label(label, min_confidence)
+    if not persons or not evidence.fresh(now, DETECTION_MAX_AGE_S):
+        return None
+    best = max(persons, key=lambda candidate: candidate.confidence)
+    return PersonAdvisory(present=True, confidence=best.confidence,
+                          observed_at=evidence.observed_at, max_age_s=max_age_s)
+
+
+class PersonAdvisoryFeed:
+    """와이어 패킷 → 자문 좌석의 유일한 유입점. D-137 T4 주입 시임.
+
+    ROS 구독자(rosy-vision 착지 시 core.bridge가 연결)는 와이어 JSON을 이
+    피드에만 넣는다. 검증 실패·stale·seq 점프("못 본 것")·자문 없음은 전부
+    자문 해제로 끝난다 — 못 본 것으로 상한을 유지하는 쪽이 자문의 방향이
+    아니다(상한은 낮춤일 뿐이고, metric 정지는 여기와 무관하다). e-stop은
+    절대 건드리지 않는다(D-137 §5)."""
+
+    def __init__(self, safety: SafetyManager, registry: Optional[ModelRegistry] = None,
+                 clock: Optional[Callable[[], float]] = None,
+                 seat_clock: Optional[Callable[[], float]] = None) -> None:
+        if not isinstance(safety, SafetyManager):
+            raise ValueError("advisory feed requires a SafetyManager")
+        if registry is not None and not isinstance(registry, ModelRegistry):
+            raise ValueError("registry must be a ModelRegistry or None")
+        self._safety = safety
+        self._registry = registry
+        #: 패킷 시계 — ROS 구독자는 노드 시계(epoch)를 꽂는다.
+        self._clock = clock if clock is not None else time.monotonic
+        #: 자문 좌석의 시계 — SafetyManager.clip이 판정에 쓰는 기준(monotonic).
+        self._seat_clock = seat_clock if seat_clock is not None else time.monotonic
+
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """패킷 타임스탬프와 같은 시간 기준으로 시계를 맞춘다.
+
+        ROS 구독자는 노드 시계(epoch)를 꽂는다 — monotonic 기준과 섞이면
+        observed_at의 기준이 어긋나 모든 패킷이 영원히 stale이 된다."""
+        if not callable(clock):
+            raise ValueError("advisory feed clock must be callable")
+        self._clock = clock
+
+    def ingest(self, packet: dict) -> dict:
+        """One wire packet in, one advisory verdict out: {'advisory': bool, 'reason': str}."""
+        if not isinstance(packet, dict):
+            return self._clear('invalid_packet')
+        try:
+            evidence = DetectionEvidence.model_validate(packet)
+            packet_now = self._clock()
+            advisory = person_advisory_from(evidence, packet_now,
+                                            registry=self._registry)
+        except Exception:
+            # 검증 텍스트에는 경로·시크릿이 섞일 수 있다 — 밖으로는 사유만.
+            # 구독자 콜백이 죽으면 그 뒤의 metric 경로까지 같이 흔들린다.
+            return self._clear('invalid_packet')
+        if advisory is None:
+            return self._clear('no_fresh_advisory')
+        # TrackedEvidence 패턴: 패킷 시계 기준의 나이만 좌석 시계로 옮긴다.
+        # stamp를 그대로 두면 clip의 monotonic now와 기준이 어긋나 자문이 한
+        # 번도 살지 못한다 — WSL 그래프 시험이 잡은 실결함이다.
+        age = max(0.0, packet_now - evidence.observed_at)
+        advisory = replace(advisory, observed_at=self._seat_clock() - age)
+        self._safety.set_person_advisory(advisory)
+        return {'advisory': True, 'reason': 'person_advisory_set'}
+
+    def _clear(self, reason: str) -> dict:
+        self._safety.set_person_advisory(None)
+        return {'advisory': False, 'reason': reason}
+
+
+#: D-400 4: gap ticks further apart than the evidence lease (decision_valid: 0.5 s) are separate gaps.
+GAP_LINK_S = .5
+
+
+class SafetyManager:
+    """E-Stop(SAF-001)·속도 제한(SAF-004)·배터리 정책(SAF-005)·Fleet 단절 정책(SAF-003)."""
+
+    def __init__(self, limits: SpeedLimits, battery: BatteryPolicy,
+                 fleet_loss_policy: str = "STOP", events=None, policy_required: bool = False) -> None:
+        if type(policy_required) is not bool:
+            raise ValueError('control_policy_required must be a boolean')
+        self.policy_required = policy_required
+        self._policy = None
+        self._policy_revision = ''
+        self._policy_clock = time.monotonic
+        self.policy_reason = ''
+        #: D-400 4: a sensor gap younger than _policy_hold_s is HOLD (zero output, no latch).
+        #: 0 keeps every None a latch.
+        self._policy_hold_s = 0.0
+        self._policy_gap_since: Optional[float] = None
+        self._policy_gap_last = 0.0
+        self._policy_holding = False
+        self.policy_holds = 0          # gaps answered with HOLD since start
+        self.policy_hold_reason = ''   # policy_reason of the latest held tick
+        self._pending_policy_failure = None
+        self._policy_failure_lock = Lock()
+        self._actuation = None
+        self._actuation_required = False
+        self._simulation_clock_enabled = None
+        self.limits = limits
+        self.battery_policy = battery
+        self.fleet_loss_policy = fleet_loss_policy
+        self._events = events
+        self.estop: bool = False
+        self.estop_source: str = ""
+        self._battery_state: str = "ok"
+        self.battery_return_suppressed = False  # D-502: any e-stop sets; battery_policy clears at level OK
+        #: 한 활동이 자기 구간 동안만 더 낮춰 쓰는 상한 (SWM-002 max_speed).
+        #: 프로필 상한을 넘겨 올릴 수는 없다 — clip 이 둘 중 작은 값을 쓴다.
+        self._session_linear: Optional[float] = None
+        #: SAF-006 사람 자문. None 이면 사람이 없다는 뜻이 아니라 자문이 없다는
+        #: 뜻이다 — metric 정지는 그대로고 상한만 프로필로 돌아간다.
+        self._person: Optional[PersonAdvisory] = None
+        #: 사람 감속 상한. 낮추기만 하는 값이라 올리는 세터는 없다.
+        self.person_linear_cap: float = PERSON_LINEAR_CAP_M_S
+        #: E-Stop 이 실제로 걸릴 때 한 번 불린다. API·배터리·어느 경로로
+        #: 들어오든 같은 자리를 지나므로, 중단해야 할 활동은 여기에 붙는다.
+        self.estop_listeners: list = []
+        self.policy_listeners: list = []
+        #: D-400: 'off' | 'shadow' | 'enforce'. Set by the binding, never by config here.
+        self.policy_mode: str = 'enforce' if policy_required else 'off'
+        self.shadow: Optional[ShadowLog] = None
+        self.shadow_record_errors = 0
+        self._shadow_policy = None
+        self._shadow_revision = ''
+
+    def bind_policy(self, evaluator, calibration_revision: str, stale_hold_s: float = 0.0) -> None:
+        """Bind a bounded, synchronous in-process evaluator; no ROS transport.
+        ``stale_hold_s`` > 0 turns a sensor gap younger than that into HOLD (D-400 4); 0 latches at once."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
+        if not callable(evaluator) or not isinstance(calibration_revision, str) or not calibration_revision:
+            raise ValueError('A policy evaluator and calibration revision are required')
+        if type(stale_hold_s) not in (int, float) or not 0 <= stale_hold_s <= 5:
+            raise ValueError('stale_hold_s must be in [0, 5]')
+        self._policy_hold_s = float(stale_hold_s)
+        self._policy = evaluator
+        self._policy_revision = calibration_revision
+        self._actuation = None
+        self.policy_required = True
+        self.policy_mode = 'enforce'
+        for listener in list(self.policy_listeners):
+            listener()
+
+    def _control_evaluator(self, policy):
+        evaluate = getattr(policy, "evaluate", None)
+        revision = getattr(policy, "revision", None)
+        if not callable(evaluate) or not isinstance(revision, str) or not revision:
+            raise ValueError('A Control CommandPolicy is required')
+
+        def _evaluate(request):
+            bounded = (self._actuation_required and self._actuation is not None and
+                       self._actuation.revision == request.calibration_revision and self._simulation_actuation_enabled())
+            output = evaluate(request.linear, request.angular, request.now, allow_bounded_sweep=bounded)
+            if output is None:
+                detail = getattr(policy, '_take_unavailable_detail', lambda: None)()
+                raise PolicyObservationUnavailable(f'Control observation unavailable: {detail!r}')
+            snapshot, result = output
+            disposition = ('limit' if result.reason in ('allow', 'motion_limited', 'trajectory_changed',
+                           'adaptive_speed_limit', 'obstacle_replan', 'obstacle_wait',
+                           'camera_obstacle_unranged', 'camera_observation_unavailable')   # D-424: camera limits only
+                           else 'stop')
+            return SafetyDecision(request.command_id, request.source, snapshot.calibration_revision,
+                                  snapshot.observed_at, snapshot.expires_at,
+                                  abs(result.linear), abs(result.angular), disposition, result.reason)
+
+        return _evaluate, revision
+
+    def bind_control_policy(self, policy, stale_hold_s: float = 0.0) -> None:
+        """Consume absorbed Control decisions without importing ROS or publishing."""
+        self.bind_policy(*self._control_evaluator(policy), stale_hold_s)
+
+    def bind_shadow_control_policy(self, policy) -> None:
+        """D-400 shadow: judge every candidate, record it, never change the output."""
+        if self.shadow is not None or self.policy_required or self._policy is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
+        self._shadow_policy, self._shadow_revision = self._control_evaluator(policy)
+        self.shadow = ShadowLog()
+        self.policy_mode = 'shadow'
+
+    def _simulation_actuation_enabled(self):
+        # The partition name and domain number live in the sim profile (D-182).
+        return (os.environ.get('ROSY_SIMULATION_ACTUATION') == '1' and
+                self._simulation_clock_enabled is not None and self._simulation_clock_enabled() is True)
+
+    def bind_simulation_actuation(self, calibration, *, simulation_clock_enabled):
+        """Opt-in only when the sim profile has enabled actuation, never hardware."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
+        revision = getattr(calibration, "revision", None)
+        if (revision != self._policy_revision or not callable(simulation_clock_enabled)):
+            raise ValueError('Actuation requires the bound policy revision and simulation clock')
+        if os.environ.get('ROSY_SIMULATION_ACTUATION') != '1' or simulation_clock_enabled() is not True:
+            raise ValueError('Actuation is restricted to the commissioned simulation domain')
+        self._simulation_clock_enabled = simulation_clock_enabled
+        self._actuation = calibration
+        self._actuation_required = True
+        self.policy_required = True
+        for listener in list(self.policy_listeners):
+            listener()
+
+    def shadow_evaluate(self, command_id: int, source: str, linear: float, angular: float,
+                        now: float, output: tuple[float, float]) -> None:
+        """Record what enforce would have done. Touches no e-stop, mode or policy_reason (D-400)."""
+        if self.shadow is None:
+            return
+        decision, elapsed, valid = None, 0.0, None   # elapsed stays 0.0 if the clock itself fails (nan would skew percentiles)
+        try:
+            request = SafetyRequest(command_id, source, self._shadow_revision, now, linear, angular)
+            started = self._policy_clock()
+            decision = self._shadow_policy(request)
+            elapsed = self._policy_clock() - started
+            valid = decision_valid(decision, request, elapsed)
+        except Exception:  # noqa: BLE001 - policy failure is a verdict, never an exception (D-400)
+            valid = None
+        try:
+            if valid is None:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_failed'
+            elif not valid:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_invalid'
+            elif decision.disposition == 'stop':
+                verdict, limited, reason = 'stop', (0., 0.), decision.reason or 'policy_stop'
+            else:
+                verdict = 'allow' if (decision.linear_limit >= abs(linear) and
+                                      decision.angular_limit >= abs(angular)) else 'limit'
+                limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
+                           max(-decision.angular_limit, min(decision.angular_limit, angular)))
+                reason = decision.reason
+            self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
+                                             reason, elapsed * 1000.0))
+        except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
+            self.shadow_record_errors += 1
+
+    def _policy_gap(self, at: float) -> bool:
+        """D-400 4: one tick of a sensor gap at policy-clock time ``at``. True (HOLD) while the gap
+        is younger than stale_hold_s. A valid decision ends a gap; so does not being asked for
+        longer than the evidence lease (review: a stand-still between two stalls is two gaps)."""
+        if not self._policy_hold_s:
+            return False
+        if self._policy_gap_since is None or at - self._policy_gap_last > GAP_LINK_S:
+            self._policy_gap_since = at
+            self.policy_holds += 1
+        self._policy_gap_last = at
+        self._policy_holding = 0 <= at - self._policy_gap_since < self._policy_hold_s
+        if self._policy_holding:
+            self.policy_hold_reason = self.policy_reason
+        return self._policy_holding
+
+    @property
+    def policy_hold(self) -> bool:
+        """True when the last evaluate_candidate None was a HOLD, not a latch (D-400 4)."""
+        return self._policy_holding
+
+    def evaluate_candidate(self, command_id: int, source: str, linear: float,
+                           angular: float, now: float, scope: str = 'nav') -> Optional[tuple[float, float]]:
+        """The limited command, or None: the caller latches the e-stop unless ``policy_hold`` is set."""
+        if not self.policy_required:
+            return linear, angular
+        self._policy_holding = False
+        self.policy_reason = 'policy_unavailable'
+        evaluator, revision = self._policy, self._policy_revision
+        if evaluator is None:
+            if self._policy_hold_s:   # before the first verdict
+                self._policy_gap(self._policy_clock())
+            return None
+        request = SafetyRequest(command_id, source, revision, now, linear, angular)
+        started = self._policy_clock()
+        try:
+            decision = evaluator(request)
+            elapsed = self._policy_clock() - started
+        except Exception as exc:
+            self.policy_reason = 'policy_failed'
+            opened = self._policy_gap_since is None
+            held = isinstance(exc, PolicyObservationUnavailable) and self._policy_gap(started)
+            if opened or not held:   # one diagnostic when a gap opens and one when it latches, not 50 Hz
+                with self._policy_failure_lock:
+                    if self._pending_policy_failure is None:
+                        self._pending_policy_failure = request, (type(exc), exc, exc.__traceback__)
+            return None
+        self.policy_reason = 'policy_invalid'
+        if evaluator is not self._policy or revision != self._policy_revision:
+            return None
+        why = check_decision(decision, request, elapsed)
+        if why:
+            self.policy_reason = why
+            # Late or out of lease is a gap; a stop, however late, and a malformed answer are not.
+            if decision_fault(decision, request, elapsed) == 'timing' and decision.disposition != 'stop':
+                self._policy_gap(started)
+            return None
+        self._policy_gap_since = None
+        self.policy_reason = ''
+        limited = limit_velocity(linear, angular, decision.linear_limit, decision.angular_limit,
+                                 preserve_curvature=scope == 'line')
+        if not self._actuation_required or limited == (0., 0.):
+            return limited
+        self.policy_reason = 'actuation_unavailable'
+        calibration = self._actuation
+        try:
+            if calibration is None or calibration.revision != revision or not self._simulation_actuation_enabled():
+                return None
+            caps_scope = 'nav' if scope == 'line' else scope
+            caps = self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope)
+            self.policy_reason = 'actuation_invalid'
+            prepared = calibration.prepare(*limited, angular, now, caps)
+            if (not finite_velocity(prepared.motor_linear, prepared.angular) or
+                    not finite_velocity(prepared.linear, prepared.angular) or
+                    abs(prepared.motor_linear) != abs(prepared.linear) or
+                    abs(prepared.linear) > min(.014, caps[0]) or abs(prepared.angular) > min(.1, caps[1]) or
+                    (scope == 'line' and not same_curve(limited, (prepared.motor_linear, prepared.angular))) or
+                    caps != self.clip(self.limits.max_linear, self.limits.max_angular, caps_scope) or
+                    not self._simulation_actuation_enabled()):
+                return None
+            elapsed = self._policy_clock() - started
+            self.policy_reason = 'actuation_stale_or_over_budget'
+            if (calibration is not self._actuation or evaluator is not self._policy or
+                    not 0 <= elapsed <= .01 or now + elapsed > min(calibration.expires_at, decision.expires_at,
+                        calibration.scan_received_at + .2, calibration.scan_source_at + .2)):
+                return None
+        except Exception:
+            return None
+        self.policy_reason = ''
+        return prepared.motor_linear, prepared.angular
+
+    def announce_policy_failure(self) -> None:
+        with self._policy_failure_lock:
+            pending, self._pending_policy_failure = self._pending_policy_failure, None
+        if pending is not None:
+            request, exc_info = pending
+            logging.getLogger(__name__).error(
+                'Control policy failed command=%s source=%s revision=%s now=%s candidate=(%s,%s)',
+                request.command_id, request.source, request.calibration_revision,
+                request.now, request.linear, request.angular, exc_info=exc_info)
+
+    def _emit(self, type_: str, severity: str, source: str, data: dict | None = None) -> None:
+        if self._events is not None:
+            self._events.publish(type_, severity=severity, source=source, data=data or {})
+
+    def trigger_estop(self, source: str) -> bool:
+        if self.estop:
+            return False
+        self.estop = True
+        self.estop_source = source
+        self.battery_return_suppressed = True
+        self._emit("safety.estop", "critical", source, {"source": source})
+        for listener in list(self.estop_listeners):
+            try:
+                listener()
+            except Exception:
+                # 한 구독자의 실패가 E-Stop 경로를 막으면 안 된다.
+                pass
+        return True
+
+    def release(self, by: str) -> bool:
+        if not self.estop:
+            return False
+        self.estop = False
+        self.estop_source = ""
+        self._emit("safety.estop_released", "warning", "safety_manager", {"by": by})
+        return True
+
+    def set_session_speed(self, max_linear: Optional[float]) -> None:
+        """활동 구간용 추가 상한. `None` 이면 해제하고 프로필 상한으로 돌아간다.
+
+        SWM-002 의 `max_speed` 가 여기로 들어온다. 검증만 하고 흘려보내면
+        계약이 거짓이 되고, Nav2 파라미터로 내려보내려면 CORE 에 없는 파라미터
+        클라이언트가 필요하다. cmd_vel 이 어차피 전부 `clip` 을 지나므로
+        (D-2), 실제로 바퀴에 닿는 값을 여기서 줄인다.
+        """
+        value = None if max_linear is None else float(max_linear)
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError('Session speed limit must be finite and nonnegative')
+        self._session_linear = value
+
+    @property
+    def session_linear(self) -> Optional[float]:
+        return self._session_linear
+
+    def set_person_advisory(self, advisory: Optional[PersonAdvisory]) -> None:
+        """SAF-006: 사람 자문을 건다/뗀다. 뗀다고 정지가 풀리는 게 아니라
+        상한이 프로필로 돌아갈 뿐이다 — metric 정지는 이 함수가 모른다."""
+        if advisory is not None and not isinstance(advisory, PersonAdvisory):
+            raise ValueError("person advisory must be a PersonAdvisory or None")
+        self._person = advisory
+
+    def clip(self, linear: float, angular: float, scope: str = "nav",
+             now: Optional[float] = None) -> tuple[float, float]:
+        if not finite_velocity(linear, angular):
+            return 0.0, 0.0
+        if scope == "manual":
+            max_l, max_a = self.limits.manual_linear, self.limits.manual_angular
+        elif scope == "fleet":
+            max_l, max_a = self.limits.fleet_linear, self.limits.fleet_angular
+        else:
+            max_l, max_a = self.limits.max_linear, self.limits.max_angular
+        if (not finite_velocity(max_l, max_a)
+                or not finite_velocity(self.limits.max_linear, self.limits.max_angular)
+                or min(max_l, max_a, self.limits.max_linear, self.limits.max_angular) < 0):
+            return 0.0, 0.0
+        max_l = min(max_l, self.limits.max_linear)
+        max_a = min(max_a, self.limits.max_angular)
+        if self._session_linear is not None:
+            # 낮추기만 한다. 활동이 프로필 상한을 넘겨 달릴 수는 없다.
+            max_l = min(max_l, self._session_linear)
+        person = self._person
+        if person is not None:
+            current = now if now is not None else time.monotonic()
+            if person.fresh(current):
+                # SAF-006: 사람이 있으면 기어가기. 못 보면 이 줄이 없고,
+                # 사라지면 자문이 떼어져서 프로필로 돌아간다.
+                max_l = min(max_l, self.person_linear_cap)
+        return limit_velocity(linear, angular, max_l, max_a, preserve_curvature=scope == 'line')
+
+    def on_battery_percent(self, percent: float) -> Optional[str]:
+        """SAF-005: 임계 통과 시 정책 반환. None|'warn'|'critical'."""
+        policy = self.battery_policy
+        if percent <= policy.critical_percent:
+            state = "critical"
+            action = policy.critical_action
+        elif percent <= policy.warning_percent:
+            state = "warn"
+            action = "warn"
+        else:
+            state, action = "ok", None
+        crossed = state != self._battery_state and state != "ok"
+        self._battery_state = state
+        if crossed:
+            if state == "critical":
+                self._emit("battery.critical", "critical", "safety_manager",
+                           {"percent": percent, "policy": action})
+            else:
+                self._emit("battery.low", "warning", "safety_manager", {"percent": percent})
+        return action if crossed else None

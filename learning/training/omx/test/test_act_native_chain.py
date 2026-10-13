@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT/'middleware/execution/local/test'),
+sys.path[:0] = [str(ROOT/'middleware/robot_execution/local/test'),
                str(ROOT/'middleware/devices/omx/adapter/test')]
 pytest.importorskip('rclpy', reason='isolated Jazzy ROS transport required')
 pytest.importorskip('torch', reason='actual CPU numerical model required')

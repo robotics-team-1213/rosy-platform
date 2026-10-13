@@ -28,7 +28,7 @@ to main before CI ran on it; the failures surfaced one at a time over three fix-
 
 ## Symptoms
 - `src/core/core/test/test_core_main_shutdown.py`, test `test_only_main_shuts_rclpy_down_in_core_production_code` —
-  35 `rclpy.shutdown()` calls: 33 inside control node `main()` functions, 2 in `src/core/control/tools/gz/*.py`.
+  35 `rclpy.shutdown()` calls: 33 inside control node `main()` functions, 2 in `src/core/control/../../tools/sim/gazebo/*.py`.
 - `test/test_native_systemd_contract.py` — `rosy-core.service: program names /root/pinky-dynamic-tracks.json`
   (a gz rig script), then `/etc/machine-id` (`startup_calibration_node.py`, its own process).
 

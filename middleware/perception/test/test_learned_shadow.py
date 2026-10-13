@@ -42,12 +42,10 @@ def test_payload_has_no_command_fields():
 def test_learned_lane_node_main_shuts_down_like_line_observer():
     """Ctrl-C is not an error, and a context already shut down is not shut down twice."""
     import ast
-    from pathlib import Path
-
-    control = Path(__file__).resolve().parents[1] / "control"
+    from test.control_sources import source_path
 
     def main_src(name):
-        tree = ast.parse((control / name).read_text(encoding="utf-8"))
+        tree = ast.parse(source_path(name).read_text(encoding="utf-8"))
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
         return ast.unparse(fn).replace("LineObserverNode", "Node").replace("LearnedLaneNode", "Node")
 
@@ -111,7 +109,7 @@ def test_the_node_latches_visible_per_stream_before_publishing():
     the published evidence is the latched one, and a model swap starts a fresh latch."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(encoding="utf-8")
     assert "VisibleHysteresis()" in src
     camera = src[src.index("def _on_camera"):src.index("def main")]
     assert camera.index("self._visible.update(") < camera.index("shadow_payload(")
@@ -122,6 +120,6 @@ def test_the_node_latches_visible_per_stream_before_publishing():
 def test_the_node_logs_the_d558_model_version_beside_the_revision():
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(encoding="utf-8")
     swap = src[src.index("if model.model_revision != self._logged_revision"):src.index("self._busy = True")]
     assert "'model_version'" in swap and "f' ({version})' if version" in swap

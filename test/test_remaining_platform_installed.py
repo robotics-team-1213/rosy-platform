@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import zipfile
 
 import pytest
 from setuptools.command.develop import develop
@@ -26,7 +27,7 @@ def run(args, cwd):
 def test_offline_installers_use_the_current_learning_contract_wheel():
     import tomllib
     version = tomllib.loads((ROOT / 'contracts/learning/pyproject.toml').read_text())['project']['version']
-    for path in ('.github/workflows/ci.yml', 'middleware/execution/local/pyproject.toml'):
+    for path in ('.github/workflows/ci.yml', 'middleware/robot_execution/local/pyproject.toml'):
         assert f'rosy-contracts-learning=={version}' in (ROOT / path).read_text()
 
 
@@ -38,18 +39,18 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     support.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
-    for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
+    for relative in ('operations/fleet', 'operations/decision', 'operations/site_ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
+                     'operations/site_execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation',
+        if relative not in ('operations/decision', 'operations/site_ui/console', 'operations/situation',
                             'integrations/messaging/discord'):
             sources.append(copied)
-    expected = {p.relative_to(ROOT / 'operations/ui/console').as_posix():
+    expected = {p.relative_to(ROOT / 'operations/site_ui/console').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in (ROOT / 'operations/ui/console').rglob('*')
+                for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
     assert len(expected) == 79  # D-680 request review, D-683/D-689 account assets, device-watch.js, device-watch.css, map-datum.js.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
@@ -73,13 +74,21 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
-        shutil.rmtree(staging / 'operations/ui/console')
+        shutil.rmtree(staging / 'operations/site_ui/console')
         shutil.rmtree(staging / 'operations/situation')
         shutil.rmtree(staging / 'integrations/messaging/discord')
         shutil.rmtree(staging / 'tools')
     wheels = tmp_path / 'wheels'
     run(['-m', 'pip', '--disable-pip-version-check', 'wheel', '--no-deps',
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
+    with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
+        names = wheel.namelist()
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger'):
+            for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
+                target = 'fleet/server/' + source.name
+                assert names.count(target) == 1
+                assert wheel.read(target) == source.read_bytes()
+            assert not any(name.startswith('fleet/server/' + holder + '/') for name in names)
     installed = tmp_path / 'installed'
     run(['-m', 'pip', '--disable-pip-version-check', 'install', '--no-deps', '--no-index',
          '--target', str(installed), *map(str, wheels.glob('*.whl'))], tmp_path)

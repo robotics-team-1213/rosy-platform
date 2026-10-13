@@ -128,7 +128,7 @@ class RosyCoreNode(Node):
                                f"{params.revision if params else '-'}")
         self.core.state.set_safety_policy_provider(lambda: safety_policy_block(
             configured_mode, self.control_adapter, params, self.core.safety.shadow,
-            self.core.safety.shadow_record_errors))
+            self.core.safety.shadow_record_errors, self.core.safety))
 
         from core.system.ros_graph import RosGraphMonitor
         self.ros_graph_monitor = RosGraphMonitor(self)

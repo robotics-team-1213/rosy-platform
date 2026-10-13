@@ -72,8 +72,8 @@ def test_module_is_available():
 def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_path, keys):
     m = module()
     repo = SCRIPT.parents[2]
-    files = {"operations/vision/rosy_vision/" + name:
-             (repo / "operations/vision/rosy_vision" / name).read_bytes()
+    files = {"operations/overhead/rosy_vision/" + name:
+             (repo / "operations/overhead/rosy_vision" / name).read_bytes()
              for name in ("__init__.py", "lane_map.py", "map_register.py")}
     files[m.PREFIX + "probe.py"] = b"import pathlib,rosy_vision; print(pathlib.Path(rosy_vision.__file__).resolve())\n"
     folder = candidate(m, tmp_path, keys, extra_files=files)
@@ -84,7 +84,7 @@ def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_pa
         assert (release / name).read_bytes() == data
     result = subprocess.run(m.bootstrap_command(sys.executable, release, release / m.PREFIX / "probe.py", []),
                             capture_output=True, text=True, check=True)
-    assert Path(result.stdout.strip()) == (release / "operations/vision/rosy_vision/__init__.py").resolve()
+    assert Path(result.stdout.strip()) == (release / "operations/overhead/rosy_vision/__init__.py").resolve()
 
 
 def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
@@ -319,8 +319,8 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
                                       ("middleware/devices/pinky/profile/config/camera_nominal.yaml.extra", False),
-                                      ("operations/vision/rosy_vision/cli.py", False),
-                                      ("operations/vision/rosy_vision/lane_map.py.extra", False)])
+                                      ("operations/overhead/rosy_vision/cli.py", False),
+                                      ("operations/overhead/rosy_vision/lane_map.py.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
     m = module()
     p = tmp_path / "bad.tar"
@@ -847,3 +847,17 @@ def test_hidden_untracked_files_still_block_signed_code(tmp_path, guard):
         signed.mkdir()
         assert "differs" in m.checkout_script_conflict(signed, repo, script.relative_to(repo).as_posix())
     assert script.read_bytes() == b"local edit\n"
+
+@pytest.mark.parametrize("missing", [
+    "middleware/perception/localization/loc_assist.py",
+    "middleware/perception/graph_health/watch.py",
+    "middleware/perception/snapshots/capture_trigger.py",
+])
+def test_functional_holder_cannot_be_omitted_from_signed_release(tmp_path, keys, missing):
+    m = module()
+    assert missing in m.SPLIT_REQUIRED
+    helper = {"middleware/perception/control/_source_layout.py": b"pass\n"}
+    helper.update({name: b"source\n" for name in m.SPLIT_REQUIRED if name != missing})
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="source-holder dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")

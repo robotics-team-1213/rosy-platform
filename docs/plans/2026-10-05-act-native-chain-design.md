@@ -1,4 +1,4 @@
-> Restored from stale branch feat/act-native-chain on 2026-10-13 (paths updated to the current layout, OMX adapter at middleware/devices/omx); no later plan or ADR on main supersedes it, but the native CPU run was never accepted (dependencies missing).
+> Restored from stale branch feat/act-native-chain on 2026-10-13 (paths updated to the current layout: OMX adapter at middleware/devices/omx, local execution at middleware/robot_execution); no later plan or ADR on main supersedes it, but the native CPU run was never accepted (dependencies missing).
 
 # ACT result to the same isolated native execution
 

@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.server import teach_service
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole

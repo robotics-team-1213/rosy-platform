@@ -18,7 +18,7 @@ COMMON = Path(__file__).parent.parent
 COMPONENTS = COMMON / "components.css"
 UI = COMMON / "ui.js"
 TOKENS = COMMON / "tokens.css"
-FACE = ROOT / "middleware" / "ui" / "face" / "emotion" / "info_screen.py"
+FACE = ROOT / 'middleware' / 'robot_ui' / "face" / "emotion" / "info_screen.py"
 PITCH = ROOT / "operations" / "apps" / "games" / "games" / "web" / "styles.css"
 
 # 표면 목록은 shared/web/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
@@ -85,7 +85,7 @@ def test_shared_controls_are_the_only_painted_components():
 
 
 def test_component_gallery_covers_shared_variants_and_compositions():
-    gallery = (registry.REPO / "middleware/ui/robot/styleguide.html").read_text(encoding="utf-8")
+    gallery = (registry.REPO / "middleware/robot_ui/robot/styleguide.html").read_text(encoding="utf-8")
     assert set(re.findall(r'<ui-button\b[^>]*kind="([a-z]+)"', gallery)) == _kinds()
     for name in ("ui-workspace-bar", "ui-task-row", "ui-readback"):
         assert f'class="{name}"' in gallery
@@ -111,14 +111,14 @@ def test_shared_status_component_owns_accessibility_and_palette_states():
 
 
 def test_role_recovery_panels_use_shared_status_component():
-    console_map = (ROOT / "middleware" / "ui" / "robot" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
-    host_operations = (ROOT / "middleware" / "ui" / "robot" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
+    console_map = (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    host_operations = (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
     assert 'el("ui-status"' in console_map
     assert 'el("ui-status"' in host_operations
 
 
 def test_role_live_announcements_use_shared_status_component():
-    panels = ROOT / "middleware" / "ui" / "robot" / "panels"
+    panels = ROOT / 'middleware' / 'robot_ui' / "robot" / "panels"
     owners = (
         "console/camera.js", "console/docking.js", "console/line-follow.js",
         "console/mode.js", "console/teleop.js", "host/system.js",
@@ -133,7 +133,7 @@ def test_role_live_announcements_use_shared_status_component():
 
 def test_selected_action_tabs_use_shared_segment_palette():
     css = COMPONENTS.read_text(encoding="utf-8")
-    shell_css = (ROOT / "middleware" / "ui" / "robot" / "shell" / "shell.css").read_text(encoding="utf-8")
+    shell_css = (ROOT / 'middleware' / 'robot_ui' / "robot" / "shell" / "shell.css").read_text(encoding="utf-8")
     assert 'ui-button[kind="segment"][aria-selected="true"]' in css
     assert ".action-group-tabs ui-button[aria-selected" not in shell_css
 
@@ -148,7 +148,7 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
         assert f"min-height: var(--{token})" in css
     assert "ui-actions" in script and "ui-actions" in css
     assert "gap: var(--gap-actions)" in css[css.index("ui-actions {"):]
-    dashboard = ROOT / "middleware" / "ui" / "robot" / "panels"
+    dashboard = ROOT / 'middleware' / 'robot_ui' / "robot" / "panels"
     owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
     for owner in owners:
         source = (dashboard / owner).read_text(encoding="utf-8")
@@ -162,7 +162,7 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
 
 def test_role_forms_use_shared_responsive_layout_and_field_labels():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "middleware" / "ui" / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     layout = re.search(r"\.ui-form\s*\{([^}]*)\}", css)
     field = re.search(r"\.ui-field-label\s*\{([^}]*)\}", css)
     assert layout and "display: flex" in layout.group(1)
@@ -176,7 +176,7 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
     assert ".surface-inline-form" not in panel_css
     assert ".surface-field" not in panel_css
 
-    panels = ROOT / "middleware" / "ui" / "robot" / "panels"
+    panels = ROOT / 'middleware' / 'robot_ui' / "robot" / "panels"
     sources = [path.read_text(encoding="utf-8") for path in panels.rglob("*.js")]
     role_forms = "\n".join(sources)
     assert 'el("form", "ui-form")' in role_forms
@@ -188,7 +188,7 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
 
 def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "middleware" / "ui" / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     readout = re.search(r"\.ui-readout\s*\{([^}]*)\}", css)
     assert readout and "display: grid" in readout.group(1)
     assert "grid-template-columns: minmax(7rem, 1fr) 2fr" in readout.group(1)
@@ -198,13 +198,13 @@ def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     assert ".surface-readout" not in panel_css
     assert ".surface-readout" not in "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (ROOT / "middleware" / "ui" / "robot" / "panels").rglob("*.js")
+        for path in (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels").rglob("*.js")
     )
 
 
 def test_role_readback_sections_use_shared_layout_primitives():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "middleware" / "ui" / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
     assert section and "min-width: 0" in section.group(1)
     assert "display: grid" in section.group(1)
@@ -216,7 +216,7 @@ def test_role_readback_sections_use_shared_layout_primitives():
     assert ".surface-readback" not in panel_css
     panel_source = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (ROOT / "middleware" / "ui" / "robot" / "panels").rglob("*.js")
+        for path in (ROOT / 'middleware' / 'robot_ui' / "robot" / "panels").rglob("*.js")
     )
     assert ".surface-readback" not in panel_source
     assert 'el("section", "ui-readback")' in panel_source
@@ -639,8 +639,8 @@ DISABLE_SITE = re.compile(
 REASON_WRITE = re.compile(r"""(?:set|remove)Attribute\(\s*["']reason["']""")
 REASON_HELPER = re.compile(r"\b(setOff|setEnabled)\(")
 DISABLE_ROOTS = (
-    ROOT / "middleware" / "ui" / "robot",
-    ROOT / "operations" / "ui" / "console",
+    ROOT / 'middleware' / 'robot_ui' / "robot",
+    ROOT / 'operations' / 'site_ui' / "console",
 )
 # D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (src/ 기준 경로, 줄 조각) → 이유. 새 항목은 이유를 적는다.
 # 키는 경로로 파일을 가리키고(같은 이름 파일이 여러 폴더에 있다), 조각 하나는 한 곳만 덮는다(DISABLED_SITE_COUNT).
@@ -649,53 +649,53 @@ INITIAL = "첫 readback 전 초기값 — 같은 파일의 sync 함수가 첫 �
 NATIVE = "네이티브 option/select/fieldset/checkbox — 사유를 그릴 자리가 없고, 곁의 상태 문구·태그가 까닭을 말한다"
 NOTE = "공용 보이는 안내(ui-status/p)가 aria-describedby로 이 버튼들에 이어져 사유를 말한다"
 DISABLED_WITHOUT_REASON = {
-    ("middleware/ui/robot/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
-    ("middleware/ui/robot/app.js", 'clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;'):
+    ("middleware/robot_ui/robot/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
+    ("middleware/robot_ui/robot/app.js", 'clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;'):
         TRANSIENT + " (자격·페이지 수명 취소 뒤 잠금 복구)",
-    ("middleware/ui/robot/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
-    ("middleware/ui/robot/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
-    ("middleware/ui/robot/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
-    ("middleware/ui/robot/app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
-    ("middleware/ui/robot/app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
-    ("middleware/ui/robot/panels/console/camera.js", "button.disabled = true;"): TRANSIENT,
-    ("middleware/ui/robot/panels/console/camera.js", "finally { button.disabled = false; }"): TRANSIENT,
-    ("middleware/ui/robot/panels/console/camera.js", "option.disabled = true;"): NATIVE,
-    ("middleware/ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
-    ("middleware/ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
-    ("middleware/ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("middleware/ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
-    ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
-    ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
-    ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
-    ("middleware/ui/robot/panels/host/hardware.js", "refresh.disabled = true;"): TRANSIENT,
-    ("middleware/ui/robot/panels/host/operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
-    ("middleware/ui/robot/panels/host/system.js", "identitySave.disabled = true;"): TRANSIENT,
-    ("middleware/ui/robot/panels/host/system.js", "identityInput.disabled = true;"): TRANSIENT,
-    ("middleware/ui/robot/panels/host/system.js", "identitySave.disabled = false;"): TRANSIENT,
-    ("middleware/ui/robot/panels/host/system.js", "identityInput.disabled = false;"): TRANSIENT,
-    ("middleware/ui/robot/panels/setup/dock-admin.js", "add.disabled = true;"): INITIAL,
-    ("middleware/ui/robot/panels/setup/dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
-    ("middleware/ui/robot/panels/setup/dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
-    ("middleware/ui/robot/panels/setup/waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
-    ("middleware/ui/robot/panels/system/security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
-    ("middleware/ui/robot/panels/system/security.js", "control.disabled = safetyPending;"): TRANSIENT,
-    ("middleware/ui/robot/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
-    ("middleware/ui/robot/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
-    ("middleware/ui/robot/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("operations/ui/console/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
-    ("operations/ui/console/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
+    ("middleware/robot_ui/robot/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
+    ("middleware/robot_ui/robot/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
+    ("middleware/robot_ui/robot/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
+    ("middleware/robot_ui/robot/app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
+    ("middleware/robot_ui/robot/app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
+    ("middleware/robot_ui/robot/panels/console/camera.js", "button.disabled = true;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/console/camera.js", "finally { button.disabled = false; }"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/console/camera.js", "option.disabled = true;"): NATIVE,
+    ("middleware/robot_ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
+    ("middleware/robot_ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
+    ("middleware/robot_ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
+    ("middleware/robot_ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
+    ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
+    ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
+    ("middleware/robot_ui/robot/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
+    ("middleware/robot_ui/robot/panels/host/hardware.js", "refresh.disabled = true;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/host/operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
+    ("middleware/robot_ui/robot/panels/host/system.js", "identitySave.disabled = true;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/host/system.js", "identityInput.disabled = true;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/host/system.js", "identitySave.disabled = false;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/host/system.js", "identityInput.disabled = false;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/setup/dock-admin.js", "add.disabled = true;"): INITIAL,
+    ("middleware/robot_ui/robot/panels/setup/dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
+    ("middleware/robot_ui/robot/panels/setup/dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
+    ("middleware/robot_ui/robot/panels/setup/waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
+    ("middleware/robot_ui/robot/panels/system/security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
+    ("middleware/robot_ui/robot/panels/system/security.js", "control.disabled = safetyPending;"): TRANSIENT,
+    ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
+    ("middleware/robot_ui/robot/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
+    ("middleware/robot_ui/robot/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
+    ("operations/site_ui/console/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("operations/site_ui/console/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("operations/ui/console/formation.js", 'el("formation-leader").disabled = status.active;'):
+    ("operations/site_ui/console/formation.js", 'el("formation-leader").disabled = status.active;'):
         NATIVE + " (대형 상태 태그 — 리더는 해제 뒤 바꾼다)",
-    ("operations/ui/console/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("operations/ui/console/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("operations/ui/console/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("operations/site_ui/console/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("operations/site_ui/console/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("operations/site_ui/console/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.
 DISABLED_SITE_COUNT = {
-    ("middleware/ui/robot/app.js", 'elements["code-submit"].disabled = false;'): 2,  # 성공·실패 두 갈래의 복구
-    ("middleware/ui/robot/panels/setup/waypoints.js", "save.disabled = true;"): 2,  # 초기값과 요청 중 잠금
+    ("middleware/robot_ui/robot/app.js", 'elements["code-submit"].disabled = false;'): 2,  # 성공·실패 두 갈래의 복구
+    ("middleware/robot_ui/robot/panels/setup/waypoints.js", "save.disabled = true;"): 2,  # 초기값과 요청 중 잠금
 }
 
 
@@ -764,7 +764,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
     missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
-    fleet = ROOT / "operations" / "ui" / "console"
+    fleet = ROOT / 'operations' / 'site_ui' / "console"
     lock = (fleet / "shared" / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
@@ -791,13 +791,13 @@ def test_disabled_scan_distinguishes_explicit_enable_from_disable():
 def test_a_copied_disabled_line_needs_its_own_entry():
     """Mutation proof (P2-4 review): an identical unexplained line elsewhere no longer rides an old key."""
     scripts = dict(disabled_scripts())
-    rel = "middleware/ui/robot/panels/host/hardware.js"
+    rel = "middleware/robot_ui/robot/panels/host/hardware.js"
     assert "refresh.disabled = true;" in scripts[rel]
     assert scan_disabled([(rel, scripts[rel])])[2] == {}
     copied = scripts[rel] + "\nfunction later(refresh) {\n  refresh.disabled = true;\n}\n"
     assert scan_disabled([(rel, copied)])[2] == {(rel, "refresh.disabled = true;"): 2}
     # same file name in another folder does not borrow the key either
-    other = "middleware/ui/robot/panels/setup/hardware.js"
+    other = "middleware/robot_ui/robot/panels/setup/hardware.js"
     assert scan_disabled([(other, "refresh.disabled = true;\n")])[0] == ["hardware.js:1 refresh.disabled = true;"]
 
 
