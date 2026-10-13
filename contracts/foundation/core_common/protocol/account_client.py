@@ -1,14 +1,17 @@
 """D-757 browser receiver: bound PKCE, encrypted credentials, online revocation."""
 from base64 import urlsafe_b64encode
 from contextlib import contextmanager
+from collections import OrderedDict
 from hashlib import sha256
 import hmac
 import json
+import os
 from pathlib import Path
 import re
 import secrets
 import sqlite3
 import time
+import threading
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -52,6 +55,8 @@ class AccountClient:
         self.public_keys, self.clock = public_keys, clock
         self.cipher, self.post = Fernet(encryption_key), post or self._post
         self.destinations = frozenset(destinations)
+        self._verified = OrderedDict()
+        self._verify_lock = threading.Lock()
         with self.transaction() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS app_account_flows (
@@ -153,6 +158,26 @@ class AccountClient:
         if self.post('introspect', {'token': token}).get('active') is not True:
             raise AccountDenied('Account session revoked')
 
+    def verify_bearer(self, token):
+        claims = self._claims(token)
+        key = _digest(token)
+        with self._verify_lock:
+            checked = self._verified.get(key)
+            if checked is None or self.clock() - checked >= 20:
+                try:
+                    self._active(token)
+                    self._verified[key] = self.clock()
+                    self._verified.move_to_end(key)
+                    while len(self._verified) > 1024:
+                        self._verified.popitem(last=False)
+                except AccountUnavailable:
+                    if checked is None:
+                        raise
+                except ValueError:
+                    self._verified.pop(key, None)
+                    raise
+        return self._claims(token)
+
     def resolve(self, cookie):
         if not isinstance(cookie, str) or not 1 <= len(cookie) <= 128:
             return None
@@ -221,3 +246,26 @@ class AccountClient:
                 raise AccountDenied('Invalid local session') from None
             with self.transaction() as db:
                 db.execute('DELETE FROM app_account_revocations WHERE id=?', (row['id'],))
+
+
+def load_account_client(filename, *, destinations=('/pilot', '/dashboard', '/')):
+    def read(path, secret=False):
+        path = Path(path)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('Account configuration must be a regular file')
+        if os.name == 'posix' and path.stat().st_mode & (0o077 if secret else 0o022):
+            raise ValueError('Account configuration permissions are too broad')
+        if path.stat().st_size > 65536:
+            raise ValueError('Account configuration too large')
+        return path.read_bytes()
+    settings = json.loads(read(filename))
+    required = {'issuer', 'client_id', 'resource', 'callback', 'public_key_files', 'encryption_key_file', 'session_db'}
+    if not isinstance(settings, dict) or set(settings) != required:
+        raise ValueError('Invalid Account receiver configuration')
+    base = Path(filename).resolve().parent
+    def file(value):
+        return base / value
+    return AccountClient(file(settings['session_db']), issuer=settings['issuer'],
+        client_id=settings['client_id'], resource=settings['resource'], callback=settings['callback'],
+        public_keys={kid: read(file(path)) for kid, path in settings['public_key_files'].items()},
+        encryption_key=read(file(settings['encryption_key_file']), secret=True).strip(), destinations=destinations)

@@ -35,6 +35,8 @@ ROLE_GRANTS: dict[str, frozenset[str]] = {
 
 
 def grants(auth: AuthContext) -> frozenset[str]:
+    if auth.account is not None:
+        return ROLE_GRANTS['operator'] if auth.allows_role('operator') else frozenset()
     return ROLE_GRANTS.get(auth.role, frozenset())
 
 
