@@ -129,6 +129,14 @@ class TripRunner(TripAdmission, TripProgress):
         live = self._live.get(robot_id)
         return live is not None and live.open
 
+    def leg_mode(self, robot_id: str) -> Optional[str]:
+        """Drive mode (``lane``/``free``) of the open trip's current segment; None when it cannot be told."""
+        live = self._live.get(robot_id)
+        try:
+            return live.arc(live.view["segment_index"]).drive_mode if live is not None and live.open else None
+        except (KeyError, IndexError, TypeError):
+            return None
+
     def convoy_refusal(self, robot_id: str, leader: str, **cycle) -> Optional[tuple]:
         return convoy_refusal(self._live, robot_id, leader, **cycle)
 
