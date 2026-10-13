@@ -991,9 +991,23 @@
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
 
+## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
+
+- 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.
+- 증거: 단독 실행 ModuleNotFoundError 원인은 services conftest 에 gateway 경로가 없던 것. 단독·CI 모양 원격 실행 결과는 커밋 메시지 참조.
+- gate 변화: 없음. 테스트 경로 설정만 바뀐다. 제품 코드 무변경.
+
 ## 2026-10-14 · 7c94fc4af · D-740 개정 3 거절된 한 틱은 교차로 기동을 버리지 않는다 (API v1.222)
 
 - 변경: `recovery/junction/gate.py::_unconfirmed`. 기동 중 `_return_probe`가 거절하면 그 틱은 HOLD `junction_motion_unconfirmed`(명령 0)이고 기동은 유지된다. 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 `motion_unconfirmed`로 중단한다. 굽이는 두 번째 물음(`motion_admitted`)까지 통과해야 승인으로 친다.
 - 증거: Gazebo run56·run58에서 한 틱의 거절(시계 경합, 순서가 뒤바뀐 스캔으로 비워진 몸 스캔 뷰)이 굽이를 중단시켜 주행이 끝났다. 원격 단위 테스트는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
 - 교훈: 최종 명령 경로는 다르다. 안전 관리자의 `decision_valid`는 판정이 0.01 s를 넘기면 `policy_invalid`로 E-stop을 건다(D-400). run59는 부하가 걸린 PC에서 그렇게 끝났다. 이 개정은 거기에 닿지 않는다.
+
+## 2026-10-14 · 1e8acc5dd · D-400 4항 집행 HOLD와 정책 답 시간 상한 (API v1.223)
+
+- 변경: `safety_gate/manager.py` — `bind_policy`·`bind_control_policy`가 `stale_hold_s`(기본 0 = 전과 같음)를 받고, `evaluate_candidate`가 끊김(평가기 없음, `PolicyObservationUnavailable`, 시간 조건만 어긴 판정)을 `_policy_gap`으로 세어 `stale_hold_s` 미만이면 `policy_hold`를 세운다. `command/manager.py::_policy_output`은 `policy_hold`면 래치 없이 0을 낸다. 판정 계약(`SafetyRequest`, `SafetyDecision`, `decision_valid`, `check_decision`)은 새 `decision_fault`·`POLICY_ANSWER_BUDGET_S = 1/50`과 함께 `safety_gate/decision.py`로 옮겼다(`manager.py`가 594/600줄이었다. 지금 582줄). `manager.py`가 이름을 다시 내보낸다.
+- 증거: Gazebo run59가 부하가 걸린 PC에서 `control:policy_invalid`로 끝났다(D-740 개정 3 기록의 교훈). 원격 단위 시험 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.

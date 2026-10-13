@@ -2,18 +2,25 @@ import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
-let token, active = false, pending = false;
+let token, session, active = false, pending = false;
 const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 · 검수 대기',failed:'실패',
   interrupted:'중단됨',cancelled:'취소됨',rights_hold:'이용 권한 확인 필요',blocked:'접근 차단'};
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
+function signedOut() {
+  token=null; session=null; active=false;
+  $('login-panel').hidden=false; $('signed-in').hidden=true;
+  $('account-status').textContent='프로젝트에 로그인하세요.';
+  for(const id of ['identity','connections','connection','imports']) $(id).replaceChildren();
+  for(const id of ['login-form','connect-form','import-form']) $(id).reset();
+}
 async function api(path, body) {
   const response=await accountFetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
     headers:body===undefined?{}:{'Content-Type':'application/json','X-Pinky-Token':token || ''},
     body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json();
   if (!response.ok) {
-    const failure = new Error(data.error || '요청을 처리하지 못했습니다.');
-    failure.status = response.status; throw failure;
+    if(response.status===401) signedOut();
+    throw Object.assign(new Error(data.error || '요청을 처리하지 못했습니다.'), {status:response.status});
   }
   return data;
 }
@@ -30,13 +37,13 @@ async function perform(action) {
 }
 async function refresh() {
   const options=await api('/api/accounts/options');
-  $('hf-login').hidden=$('hf-link').hidden=!options.oauth;
+  $('hf-login').hidden=!options.oauth;
   if(options.rosy_account) $('hf-login').hidden=true;
   if(!options.enabled) {
+    signedOut();
     $('account-status').textContent='협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.';
     $('login-panel').hidden=$('signed-in').hidden=true; active=false; return;
   }
-  let session;
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status !== 401 && e.status !== 403) {
@@ -55,11 +62,15 @@ async function refresh() {
   $('account-status').textContent='로그인됨';
   $('identity').textContent=`프로젝트 ${session.project_id} · 작업자 ${session.user_id} · 권한 ${session.capabilities.join(', ')}`;
   $('import-panel').hidden=!session.capabilities.includes('import');
+  $('connect-panel').hidden=!session.capabilities.includes('import');
+  $('hf-link').hidden=!options.oauth || !session.capabilities.includes('import');
+  $('sharing').querySelector('[value=project]').disabled=!session.capabilities.includes('manage');
+  if(!session.capabilities.includes('manage')) $('sharing').value='personal';
   const list=$('connections'), select=$('connection'); list.replaceChildren(); select.replaceChildren();
   for(const account of session.connections) {
     const row=document.createElement('article'); list.append(row);
     line(row,`${account.username || account.subject} · ${account.sharing==='project'?'프로젝트 연결':'개인 연결'}`);
-    button(row,'연결 해제',async()=>{
+    if(account.sharing==='project' ? session.capabilities.includes('manage') : account.owner_id===session.user_id) button(row,'연결 해제',async()=>{
       if(!confirm('연결을 해제하면 이 계정을 사용하는 새 가져오기가 중단됩니다. 해제할까요?'))return;
       await api('/api/accounts/disconnect',{connection_id:account.connection_id}); await refresh();
     });
@@ -80,10 +91,11 @@ async function jobs() {
     if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':job.error);
     if(job.reason) line(row,job.reason);
     if(job.status==='completed') line(row,'원본 검증·라벨 검수 후 학습 자료로 준비하세요.');
-    if(['failed','interrupted','queued','cancelled','blocked'].includes(job.status)) button(row,'같은 버전 재시도',async()=>{
+    const canControl=session.capabilities.includes('import') && job.requester_id===session.user_id;
+    if(canControl && ['failed','interrupted','queued','cancelled','blocked'].includes(job.status)) button(row,'같은 버전 재시도',async()=>{
       await api('/api/learning/imports/retry',{id:job.id}); await jobs();
     });
-    if(['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
+    if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
   }
@@ -95,7 +107,7 @@ $('login-form').addEventListener('submit',event=>{event.preventDefault();perform
 $('logout').addEventListener('click',()=>perform(async()=>{
   active=false; $('signed-in').hidden=true;
   for(const id of ['connections','imports','connection']) $(id).replaceChildren();
-  try { await api('/api/accounts/logout',{}); } finally { token=null; }
+  try { await api('/api/accounts/logout',{}); } finally { signedOut(); }
   await refresh();
 }));
 for(const [id,purpose] of [['hf-login','login'],['hf-link','link']]) $(id).addEventListener('click',()=>perform(async()=>{

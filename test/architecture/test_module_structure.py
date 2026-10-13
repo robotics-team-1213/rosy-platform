@@ -1708,6 +1708,16 @@ SIZE_VERDICTS = {
         "byte-identical (golden test in test/learning/perception/test_model_deliver.py). "
         "Split the remote_script builders out if it grows again",
     ),
+    "learning/curation/perception/review_app.py": (
+        666,
+        "accept: independently measured and reviewed on 2026-10-14 by /root/minimal_review. "
+        "ReviewStore and the local HTTP composition keep one request boundary; account domain "
+        "logic lives in learning_accounts/learning_oauth/learning_imports and account dispatch "
+        "in learning_collaboration. Host/Origin/token, bounded JSON, status errors and audit actor "
+        "stay together. This is training review/control wiring, not robot motion admission. "
+        "Keep the 600-line threshold and existing regrowth guard; re-judge before further "
+        "endpoint growth and extract handlers through the existing domain helpers then",
+    ),
     "learning/curation/perception/lane_derived_drivable.py": (
         678,
         "accept: recorded at 678 on 2026-10-10 (independent re-judge 2026-10-10, critic: accept kept for training tooling; the file holds derive, union and review-sheet jobs - next growth moves sheets/_tile/_corrupt/_check_canar*/import_verdicts/_only_cleared/finalize to dataset/lane_derived_review.py) after "
