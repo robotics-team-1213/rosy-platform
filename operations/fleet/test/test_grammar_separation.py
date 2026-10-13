@@ -35,7 +35,8 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-501: doc-tabs.css is Fleet's own tab-row sheet, shared by its four documents.
         # D-519: password-login.css is Fleet's own login-form sheet, shared the same way.
         # D-540: fleet-header.css is the one header sheet of the four documents.
-        "index.html": [*shared_sheets, "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+        # D-741 6: app-shell.css is the shared seat sheet; Fleet uses its sub-nav seat.
+        "index.html": [*shared_sheets, "/common/app-shell.css", "/console/assets/styles.css", "/console/assets/doc-tabs.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css"],
         "install.html": [*shared_sheets, "/common/task-chooser.css",

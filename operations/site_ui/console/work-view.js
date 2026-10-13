@@ -8,14 +8,13 @@ export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
 
 export function createWorkView({scope, call, el, channelRequestView}) {
-  const active = new URLSearchParams(location.search).get("view") === "work";
+  const query = new URLSearchParams(location.search), active = query.get("view") === "work";
+  // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
+  const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]}[query.get("show")];
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
   el("work-overview").hidden = !active;
   if (active) {
-    const link = document.querySelector('.doc-tabs a[href="/console?view=work"]');
-    link.closest("nav").querySelectorAll('[aria-current="page"]').forEach(item => item.removeAttribute("aria-current"));
-    link.setAttribute("aria-current", "page");
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
     el("work-context").hidden = false;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
@@ -92,8 +91,8 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     try {
       const result = await call("/api/fleet/work"); life.check();
       const previous = rows.find(row => workKey(row) === selected);
-      rows = result.rows;
-      channelRequestView.setSources(rows);
+      rows = shown ? result.rows.filter(row => shown.includes(row.status)) : result.rows;
+      channelRequestView.setSources(result.rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;
