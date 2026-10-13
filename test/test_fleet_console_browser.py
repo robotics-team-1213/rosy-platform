@@ -2494,7 +2494,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          inbox: document.querySelector('#fleet-inbox').getBoundingClientRect().toJSON(),
+          inbox: document.querySelector('#fleet-theme').getBoundingClientRect().toJSON(),
           stopScopeHidden: (() => {
             const small = document.querySelector('#estop small');
             return !!small && getComputedStyle(small).display === 'none';
@@ -2515,7 +2515,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-641: compact header keeps status/inbox; the visible clock belongs to the flow footer.
+        # D-641/D-668: compact header keeps the status center and theme on one row; the clock belongs to the flow footer.
         status, inbox = layout["status"], layout["inbox"]
         assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
         assert layout["clock"]["height"] > 0, layout
@@ -3796,7 +3796,8 @@ def test_development_mode_console_gets_a_session_and_shows_the_badge(console_url
 
         assert page.is_visible("#development-badge")
         assert page.inner_text("#development-badge").strip() == "개발"
-        assert page.locator("#development-badge").get_attribute("data-action-icon") == "connect"
+        # D-668 5: the development warning does not reuse the connection glyph.
+        assert page.locator("#development-badge").get_attribute("data-action-icon") is None
         assert page.locator("#development-badge").get_attribute("aria-label") == (
             "개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공")
         assert page.evaluate("() => sessionStorage.getItem('rosy-console-token')") == "dev-token-1"
