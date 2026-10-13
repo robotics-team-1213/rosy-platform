@@ -160,11 +160,11 @@ export function mount(root, ctx) {
   network.wrap.insertBefore(networkActions, network.readout);
   let networkPending = false;
   function networkEnabled(enabled) {
-    for (const control of [profile, ssid, field]) setOff(control, networkPending, "");
+    for (const control of [profile, ssid, field]) setOff(control, !enabled || networkPending, "");
     const blocked = !enabled && !networkPending;
-    for (const button of [sta, relay, applyProfile, connect]) {
-      setOff(button, !enabled || networkPending, networkPending ? "" : SEE_ABOVE);
-      pointAt(button, networkNote, blocked);
+    for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) {
+      if (control.tagName === "UI-BUTTON") setOff(control, !enabled || networkPending, networkPending ? "" : SEE_ABOVE);
+      pointAt(control, networkNote, blocked);
     }
     if (blocked) {
       networkNote.textContent = agentBlock(network.wrap, "네트워크");
@@ -215,13 +215,13 @@ export function mount(root, ctx) {
       const relOff = release.wrap.dataset.available !== "true" && !releasePending;
       networkNote.hidden = !netOff && !networkPending;
       releaseNote.hidden = !relOff && !releasePending;
-      for (const button of [sta, relay, applyProfile, connect]) { pointAt(button, groupNote, false); pointAt(button, networkNote, netOff); }
+      for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { pointAt(control, groupNote, false); pointAt(control, networkNote, netOff); }
       for (const button of [rollback, clearHold]) { pointAt(button, groupNote, false); pointAt(button, releaseNote, relOff); }
       return;
     }
     groupNote.textContent = agentBlock(network.wrap, "네트워크·릴리스");
     networkNote.hidden = true; releaseNote.hidden = true;
-    for (const button of [sta, relay, applyProfile, connect]) { pointAt(button, networkNote, false); pointAt(button, groupNote, true); }
+    for (const control of [profile, ssid, field, sta, relay, applyProfile, connect]) { pointAt(control, networkNote, false); pointAt(control, groupNote, true); }
     for (const button of [rollback, clearHold]) { pointAt(button, releaseNote, false); pointAt(button, groupNote, true); }
   };
   release.onUpdate(syncReleaseActions);
