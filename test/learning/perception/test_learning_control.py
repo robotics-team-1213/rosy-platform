@@ -17,6 +17,7 @@ class Systemd:
         self.dropins = ''
         self.command_override = None
         self.kill_mode = 'control-group'
+        self.extra_command = ''
 
     def __call__(self, argv, **kwargs):
         assert argv[:2] == ['systemctl', '--user']
@@ -30,7 +31,7 @@ class Systemd:
                 Triggers=self.service if timer else '', KillMode=self.kill_mode, ExecStop='', ExecStopPost='',
                 ExecStartPre='', ExecStartPost='')
             command = next(line.partition('=')[2] for line in (self.home / '.config/systemd/user' / self.service).read_text().splitlines() if line.startswith('ExecStart='))
-            values['ExecStart'] = '{ argv[]=' + (self.command_override or command) + ' ; ignore_errors=no ; }'
+            values['ExecStart'] = '{ argv[]=' + (self.command_override or command) + ' ; ignore_errors=no ; }' + self.extra_command
             return SimpleNamespace(returncode=0, stdout='\n'.join(f'{k}={v}' for k, v in values.items()))
         if args[0] == 'enable': self.automatic = True
         elif args[0] == 'disable': self.automatic = False
@@ -110,7 +111,7 @@ def test_stale_invocation_and_arbitrary_action_inputs_are_refused(tmp_path):
     assert not [args for args in runner.commands if args[0] != 'show']
 
 
-@pytest.mark.parametrize('change', ['config', 'binding', 'unit', 'dropin', 'loaded', 'kill_mode'])
+@pytest.mark.parametrize('change', ['config', 'binding', 'unit', 'dropin', 'loaded', 'kill_mode', 'extra_command'])
 def test_binding_drift_disables_actions(tmp_path, change):
     target, runner, _, config, file = control(tmp_path)
     version = target.status()['version']
@@ -119,7 +120,8 @@ def test_binding_drift_disables_actions(tmp_path, change):
     elif change == 'unit': (runner.home / '.config/systemd/user' / runner.service).write_text('ExecStart=/bin/false')
     elif change == 'dropin': runner.dropins = '/tmp/changed.conf'
     elif change == 'loaded': runner.command_override = '/bin/sleep 99'
-    else: runner.kill_mode = 'process'
+    elif change == 'kill_mode': runner.kill_mode = 'process'
+    else: runner.extra_command = '{ argv[]=/bin/false ; ignore_errors=no ; }'
     assert target.status()['available'] is False
     with pytest.raises(ValueError): target.action({'action': 'start', 'version': version})
     assert not [args for args in runner.commands if args[0] != 'show']
@@ -130,3 +132,15 @@ def test_other_workspace_is_not_an_owner_binding(tmp_path):
     file, home, _, _, runner = binding(tmp_path)
     with pytest.raises(ValueError): Control(file, 'a' * 32, home=home, runner=runner)
     assert not runner.commands
+
+
+def test_unreadable_ledger_still_allows_stopping_the_validated_owner(tmp_path):
+    target, runner, out, _, _ = control(tmp_path)
+    runner.active = runner.automatic = True
+    path = out / 'state.json'; path.write_text('not JSON')
+    value = target.status()
+    assert value['available'] and value['can_stop']
+    assert not value['can_start'] and not value['can_retry']
+    stopped = target.action({'action': 'stop', 'version': value['version']})
+    assert not stopped['active'] and not stopped['automatic']
+    assert path.read_text() == 'not JSON'
