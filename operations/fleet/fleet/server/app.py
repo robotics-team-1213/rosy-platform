@@ -116,6 +116,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                site_logins: Optional[Mapping[str, Mapping[str, str]]] = None,
+               accounts_bootstrap: Optional[tuple[str, str]] = None,
                discovery=None, discovery_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
@@ -204,7 +205,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if cell_job_compiler is not None:
         from fleet.server.cell_goal_evidence import make_cell_job_resolver
         cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
-    if (site_users is not None or site_logins) and task_service is None:
+    if (site_users is not None or site_logins or accounts_bootstrap is not None) and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
         raise ValueError("discovery and its dedicated credential must be configured together")
@@ -471,8 +472,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  or tuple(tracking.sources) != tuple(sightings.sources)):
         raise ValueError("overhead tracking must use the configured sighting sources")
     # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
-    principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
-    password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
+    account_login = bool(site_logins) or accounts_bootstrap is not None or (
+        task_service is not None and PasswordSessions.accounts_active(task_service.store.path))
+    principals = {} if account_login and not site_users else parse_site_principals(site_users, console)
+    password_sessions = (PasswordSessions(task_service.store.path, site_logins or {},
+                                         accounts_bootstrap=accounts_bootstrap) if account_login else None)
     app.state.password_sessions = password_sessions
     other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if cell_goal_evidence_service is not None:
