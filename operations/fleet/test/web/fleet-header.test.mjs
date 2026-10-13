@@ -2,14 +2,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
+import { OPERATOR_REASON } from "../../../site_ui/console/shared/authorization.js";
 // Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
   LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
   showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
-} = await import("../../../ui/console/shared/fleet-header.js");
+} = await import("../../../site_ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
   const attributes = new Map();

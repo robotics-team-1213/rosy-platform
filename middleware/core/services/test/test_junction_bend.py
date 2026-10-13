@@ -208,7 +208,10 @@ def bend_sighting_line_ahead(rig, ahead=.4):
     """Drive into the arc, sight the next junction's line once mid-arc (lap SIM A: 0.39-0.45 m
     ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
     until(rig, 'bending')
-    for _ in range(3):
+    entry = rig.m._junction['anchor'][2]
+    for _ in range(400):                                  # turned: the line is along the exit
+        if abs(math.remainder(rig.yaw-entry, math.tau)) > math.radians(35.):
+            break
         site_step(rig, move=True)
     sight(rig, ahead)
     site_step(rig, move=True)
@@ -226,6 +229,34 @@ def test_a_line_sighted_during_the_pass_is_handed_to_the_junction_and_waits():
             break
     assert (status.junction.state, status.junction.seq) == ('waiting', 1)
     assert (decision.linear, decision.angular) == (0., 0.) and status.reason == 'junction_waiting'
+
+
+def _sight_past_the_vertex(rig, past):
+    """On the lead-in straight, sight a line `past` m beyond the bend's vertex on the entry axis."""
+    until(rig, 'bending')
+    j = rig.m._junction
+    x, y, _, travel = j['anchor']
+    vertex = j['bend_in']-travel+j['radius']*math.tan(math.radians(abs(j['turn_deg']))/2)
+    sight(rig, vertex-math.hypot(rig.x-x, rig.y-y)+past)
+
+
+def test_a_line_just_past_the_bends_vertex_is_the_bends_own_outer_line():
+    """Gazebo lap run53: the keeper read the corner's outer line as a cross line 0.097 m past the
+    vertex before the arc; the map's lane turns at the vertex, so the pass ends in 'idle'."""
+    for turn in (60., 90.):                               # 90: the measured corner
+        rig = armed_rig(turn=turn)
+        _sight_past_the_vertex(rig, .1)
+        decision, status = until(rig, 'idle')
+        assert decision.linear > 0 and rig.m._junction_held is False, turn
+
+
+def test_a_line_far_along_the_exit_or_on_a_shallow_bend_is_still_handed_over():
+    """Review: beyond the outer line's reach along the exit (60 deg: 0.158 m), and on any bend
+    under 60 deg, the sighting may be the next junction's, so the pass ends in 'waiting'."""
+    for fields, past in (({}, .4), ({}, .34), ({'turn': 40.}, .1)):  # 0.34 cos 60 = 0.17: just beyond
+        rig = armed_rig(**fields)
+        _sight_past_the_vertex(rig, past)
+        until(rig, 'waiting')
 
 
 def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
@@ -369,17 +400,59 @@ def test_off_the_path_sideways_aborts():
     assert decision.linear == 0.
 
 
-def test_enforce_basis_refusing_the_twist_aborts():
+def _bending_under_the_proof():
     rig = Rig(**BODY, obstacle_mode='path')               # D-400 enforce proof bound and configured
     rig.step(points=[(1.5, 1.5)])
     rig.m.set_junction('bend', 'B1', 10., None, 60., None, expect=BEND)
     for _ in range(200):
         decision, status = rig.step(move=True, points=[(1.5, 1.5)])
         if status.junction.state == 'bending':
-            break
+            return rig
+    raise AssertionError('never bending')
+
+
+def test_enforce_basis_refusing_the_twist_holds_then_aborts():
+    """Gazebo lap run56/58: one refused tick is not a lost basis. The pass stands still and is
+    kept; a proof that stays refused past UNCONFIRMED_HOLD_S aborts it as before."""
+    rig = _bending_under_the_proof()
+    allowed = rig.m._return_motion
     rig.m.bind_return_motion(lambda now, v, w: False, proof_configured=lambda: True)  # proof refuses
     decision, status = rig.step(move=True, points=[(1.5, 1.5)])
-    assert status.junction.state == 'aborted' and decision.linear == 0.
+    assert (status.junction.state, status.reason) == ('bending', 'junction_motion_unconfirmed')
+    assert (decision.linear, decision.angular) == (0., 0.)
+    rig.m.bind_return_motion(allowed, proof_configured=lambda: True)                  # one tick only
+    decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+    assert status.junction.state == 'bending' and decision.linear > 0
+    rig.m.bind_return_motion(lambda now, v, w: False, proof_configured=lambda: True)
+    start = rig.now
+    for _ in range(40):
+        decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+        assert (decision.linear, decision.angular) == (0., 0.)
+        if status.junction.state == 'aborted':
+            break
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'motion_unconfirmed')
+    assert .5 < rig.now-start <= .75
+
+
+def test_a_refusal_whose_second_ask_passes_still_aborts_in_time_and_a_blocked_hold_does_not_count():
+    """Review: the bend asks the proof twice a tick; refused then allowed is still a refused tick.
+    A long D-422 blocked hold before the first refusal does not use up the hold."""
+    rig = _bending_under_the_proof()
+    allowed, asks = rig.m._return_motion, []
+    rig.m.bind_return_motion(lambda now, v, w: asks.append(now) is not None and asks.count(now) > 1,
+                             proof_configured=lambda: True)
+    start = rig.now
+    for _ in range(40):
+        decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+        assert (decision.linear, decision.angular) == (0., 0.)
+        if status.junction.state == 'aborted':
+            break
+    assert status.junction.reason == 'motion_unconfirmed' and .5 < rig.now-start <= .75
+    rig = _bending_under_the_proof()
+    rig.m._junction['phase_at'] -= 1.                      # as after a blocked hold over 0.5 s
+    rig.m.bind_return_motion(lambda now, v, w: False, proof_configured=lambda: True)
+    decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+    assert (status.junction.state, status.reason) == ('bending', 'junction_motion_unconfirmed')
 
 
 def test_lane_bend_capability_needs_a_basis():
