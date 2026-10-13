@@ -389,9 +389,9 @@ if __name__ == '__main__':
     parser.add_argument('path', nargs='?')
     args = parser.parse_args()
     if args.command == 'hash-password':
-        entered_password = getpass.getpass('Password: ')
-        if entered_password != getpass.getpass('Repeat password: '): parser.error('passwords do not match')
-        print(hash_password(entered_password))
+        entered = getpass.getpass('Password: ')
+        if entered != getpass.getpass('Repeat password: '): parser.error('passwords do not match')
+        print(hash_password(entered))
     else:
         if not args.path: parser.error('key path required')
         fd = os.open(args.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
