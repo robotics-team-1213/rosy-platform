@@ -58,3 +58,16 @@ def test_the_gate_is_not_vacuous():
     """잉크 40%는 밝게 테마에서 모자란다. 계산이 늘 통과하는 식이 아님을 고정한다."""
     light = resolve("light")
     assert contrast(over(light["ink"], 40, light["ground"]), light["ground"]) < MIN_CONTROL_CONTRAST
+
+
+COMPONENTS = (WEB / "components.css").read_text(encoding="utf-8")
+
+
+def test_controls_take_the_control_line_and_dividers_keep_theirs():
+    assert _decl("--field-line") == "var(--control-line)"
+    for selector in ("ui-button", 'ui-button[kind="quiet"],\na.docs-link', ".ui-disclosure-row"):
+        block = COMPONENTS.split(f"\n{selector} {{", 1)[1].split("}", 1)[0]
+        assert "border: 1px solid var(--control-line);" in block, selector
+    for divider in ("--surface-line", "--flag-line"):
+        assert _decl(divider) == "var(--border-default)", divider
+    assert _decl("--border-default") == "var(--line-14)"
