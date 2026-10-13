@@ -77,6 +77,8 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 
 서비스 템플릿 4개(`rosy-review-bridge.service/.timer`, `rosy-review-pipeline.service/.timer`)를 사용자 systemd에 설치한다. 사용자 manager의 supplementary group에 기존 Store 쓰기 그룹이 포함되어 있어야 한다. 실행 중 primary group을 바꾸면 D-446의 같은 사용자 프로세스 조회가 거절될 수 있으므로 `sg`로 감싸지 않는다. bridge는 승인된 불변 검수 코드에서 짧게 실행하며 GPU 잠금을 잡지 않는다. 학습 owner는 D-446 실행기로 source/environment와 GPU 작업 잠금을 유지한다. 따라서 긴 학습 중에도 현재 결정의 TTL·철회가 갱신된다. 기존 다른 learning-cycle 서비스와 state를 덮어쓰거나 중복 실행하지 않는다.
 
+서비스를 시작하기 전에 `mkdir -p ~/rosy-ml/review-pipeline/cycle-state`로 결과 폴더를 만든다. systemd가 여기에 controller의 stdout을 `summary.json`으로 기록한다. 학습 진행 로그는 journal의 stderr로 남으며 GPU 자원 대기도 실제 summary에 표시한다.
+
 먼저 bridge와 pipeline 서비스를 한 번 실행하고 수신 current.json의 workspace/revision, bridge-state/state.json, cycle-state/state.json의 review_autobuild를 확인한 뒤 타이머를 활성화한다. 사람이 승인한 mask가 없으면 `held / no_approved_masks`이며 학습 요청·GPU 작업을 만들지 않는다. 자료가 준비되면 모든 실제 eval version 및 source pixels를 재검사하고 기존 owner admission으로 처리한다. 학습 화면에는 cycle-state를 Perception 결과로 연결하며 승인 대기 사유를 표시한다.
 
 서명 코드 승인·검수 DB 백업·릴리스 전환·원격 시험·실제 서비스 읽기 증거는 각각 기록한다. 테스트용 승인 fixture를 운영 정답이나 운영 모델로 승격하지 않는다. 새 camera/gate/proof 설정은 기존 원장에 덮어쓰지 않고 명시 새 cycle로 검증한다.
