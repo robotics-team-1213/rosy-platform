@@ -142,3 +142,81 @@ def test_cli_default_and_opt_in_configuration(tmp_path):
     path.write_text("fleet:\n  stuck_resolver:\n    realign_robots: [r1]\n", encoding="utf-8")
     args.site_config = path
     assert _realign_config(args).robots == frozenset({"r1"})
+
+
+def test_dual_enrolled_realign_hold_is_a_human_handoff_and_never_reopens():
+    r = row()
+    r["state"]["line_follow"]["stuck"]["phase"] = "ASKING"
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    resolver.autonomous_robots = frozenset({"r1"})
+    held = resolver.step(1., [r])[0]
+    assert (held.decision, held.escalate) == ("WAIT", "realign_hold:clearance_stale")
+    sent = []
+    class Client:
+        async def line_stuck_decision(self, stuck_id, decision, **extra):
+            sent.append(decision); return {"outcome": "wait"}
+    async def snapshot(): return {"robots": [r]}
+    board = LineStuckBoard(clock=lambda: 1.)
+    board.observe([r])
+    loop = StuckResolverLoop(snapshot, board, resolver, clients=lambda: {"r1":Client()})
+    asyncio.run(loop._answer(held, 1.))
+    note = board.resolver_note("r1", "s1")
+    assert sent == ["WAIT"] and (note["tier"], note["escalated"]) == ("human", "realign_hold:clearance_stale")
+    assert "s1" in resolver._chains["r1"].escalated and resolver._chains["r1"].observing is None
+    r["clearance_evidence"]["inquiry_observed_at"] = 10.
+    assert select(r, [r], config(), now=10.1, attempt=1)[0] is not None
+    assert resolver.step(2., [r]) == [] and resolver.step(3., [r]) == []
+
+
+def test_dual_enrolled_realign_hold_during_reobservation_goes_to_a_human():
+    from fleet.stuck.resolver import Escalate, Hold
+    r = row()
+    r["state"]["line_follow"]["stuck"]["phase"] = "ASKING"
+    r["state"]["safety"]["estop"] = True
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    resolver.autonomous_robots = frozenset({"r1"})
+    assert isinstance(resolver.step(1., [r])[0], Hold)
+    r["state"]["safety"]["estop"] = False
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    action = resolver.step(2., [r])[0]
+    assert type(action) is Escalate and action.reason == "realign_hold:clearance_stale"
+    r["clearance_evidence"]["inquiry_observed_at"] = 10.
+    assert resolver.step(3., [r]) == []
+
+
+def test_realign_only_and_autonomous_only_robots_keep_their_handoff():
+    from fleet.stuck.resolver import Escalate, Hold, _Chain
+    r = row()
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    held = resolver.step(1., [r])[0]
+    resolver.sent(held, 1.)
+    assert type(resolver.result(held, code=None)) is Escalate
+    resolver = StuckResolver(ResolverConfig())
+    resolver.autonomous_robots = frozenset({"r1"})
+    assert type(resolver._escalate(_Chain(0., ""), "r1", "s1", "lane_lost_hold:pose_unknown")) is Hold
+
+
+@pytest.mark.parametrize("code", ["STUCK_DECISION_REFUSED", "ROBOT_UNREACHABLE"])
+def test_dual_enrolled_realign_hold_survives_a_refused_or_lost_wait(code):
+    from fleet.stuck.resolver import Escalate, Hold
+    r = row()
+    r["state"]["line_follow"]["stuck"]["phase"] = "ASKING"
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    resolver.autonomous_robots = frozenset({"r1"})
+    held = resolver.step(1., [r])[0]
+    resolver.sent(held, 1.)
+    action = resolver.result(held, code=code)
+    if code == "ROBOT_UNREACHABLE":               # one resend is due; an e-stop hold arrives first
+        assert action is None
+        r["state"]["safety"]["estop"] = True
+        assert type(resolver.step(2., [r])[0]) is Hold
+        r["state"]["safety"]["estop"] = False
+        r["clearance_evidence"]["inquiry_observed_at"] = 10.
+        assert select(r, [r], config(), now=10.1, attempt=1)[0] is not None
+        action = resolver.step(3., [r])[0]
+    assert type(action) is Escalate and action.reason == "realign_hold:clearance_stale"
+    r["clearance_evidence"]["inquiry_observed_at"] = 10.
+    assert resolver.step(4., [r]) == []

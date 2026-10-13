@@ -113,7 +113,7 @@ class StuckResolverLoop:
                 if len(raw) > 1024 * 1024: raise ValueError('RULE_SELECTION_SOURCE_LIMIT')
                 return hashlib.sha256(raw).hexdigest()
             source = digest(robots)
-            config = digest(dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots)))
+            config = digest(self._rule_config())
             selected = {action.robot_id: action for action in actions}
             active_ai = sorted(r['robot_id'] for r in robots if self._resolver.ai_first is not None
                                and self._resolver.ai_first.on(r['robot_id']))
@@ -125,6 +125,10 @@ class StuckResolverLoop:
             self._rule_selections = {r['assessment']['request']['subject_id']: r for r in records}
         except (ValueError, TypeError, KeyError, OSError, sqlite3.Error):
             log.warning('rule selection journal unavailable; no current model baseline')
+
+    def _rule_config(self):                            # D-622: the REALIGN opt-in changes the selection
+        return dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots),
+                    realign=dict(robots=sorted(self._resolver.realign.robots), areas=self._resolver.realign.areas))
 
     def rule_baseline(self, assessment):
         from rosy.contracts.learning.incident_rule import baseline_choice
@@ -138,8 +142,7 @@ class StuckResolverLoop:
                 or record['assessment']['policy_revision'] != assessment.policy_revision
                 or not record['assessment']['evaluated_at'] <= self._board._wall() < record['assessment']['valid_until']):
             return None
-        current_config = dict(config=asdict(self._resolver.config), autonomous=sorted(self._resolver.autonomous_robots))
-        config_sha = hashlib.sha256(json.dumps(current_config, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+        config_sha = hashlib.sha256(json.dumps(self._rule_config(), sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
         if record['config_sha256'] != config_sha: return None
         choice = baseline_choice(record)
         return FleetBaseline.from_assessment(assessment, choice) if choice is not None else None
