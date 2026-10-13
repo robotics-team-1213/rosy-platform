@@ -12,6 +12,7 @@ from fleet.server.app import create_app
 from test_account_ledger import activated, cookie
 from test_account_authority import ISSUER, CALLBACK, get_code, exchange
 from test_password_session import _app, _accounts, _client, _login
+from fleet.server.password_session import COOKIE
 
 
 def config(tmp_path):
@@ -132,3 +133,27 @@ def test_real_sql_logout_reset_block_pending_code_and_refresh(tmp_path, action):
     assert exchange(authority, pending)[2] == 400
     assert authority.token(urlencode({"grant_type": "refresh_token", "client_id": "robot-app",
                                      "refresh_token": token["refresh_token"]}))[2] == 400
+
+
+def test_successful_browser_account_switch_revokes_old_app_family(tmp_path):
+    path, _, _ = config(tmp_path)
+    base, tasks = _app(tmp_path)
+    app = create_app(base.state.console, task_service=tasks, site_logins=_accounts(), account_config=path)
+    client, sessions, authority = _client(app), app.state.password_sessions, app.state.account_authority
+    assert _login(client).status_code == 204
+    value = client.cookies[COOKIE]
+    context = sessions.account_context(value)
+    sessions.create_account(value, login="bob", principal_id="bob", role="viewer",
+                            password="temporary secret", grants=[])
+    sessions.update_account(value, context["account_id"], revision=context["revision"], grants=[
+        {"resource": "site:test-site", "capabilities": ["accounts.manage"]},
+        {"resource": "robot:r1", "capabilities": ["robot.read"]}])
+    assert _login(client).status_code == 204
+    old = client.cookies[COOKIE]
+    tokens = json.loads(exchange(authority, get_code(authority, sessions.account_context(old)))[1])
+    assert _login(client, login="bob", password="wrong").status_code == 401
+    assert authority.introspect(tokens["access_token"])["active"] is True
+    assert _login(client, login="bob", password="temporary secret").status_code == 204
+    assert authority.introspect(tokens["access_token"]) == {"active": False}
+    assert sessions.principal(old) is None
+    assert sessions.principal(client.cookies[COOKIE])[0].principal_id == "bob"
