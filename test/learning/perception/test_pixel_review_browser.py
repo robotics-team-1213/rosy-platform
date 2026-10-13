@@ -33,6 +33,7 @@ def test_keyboard_pixel_cursor_samples_without_changing_photo(browser_workspace)
     page.keyboard.press('Space')
     expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
     assert review_masks.get(store, 0)['version'] == 0
+    expect(page.locator('#pixel-sample-apply')).to_be_enabled()
     page.keyboard.press('Enter')
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     assert np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 1)
@@ -76,6 +77,35 @@ def test_keyboard_pixel_polygon_uses_same_apply_and_undo(browser_workspace):
     page.keyboard.press('Control+z')
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     assert np.all(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
+
+
+def test_keyboard_pixel_cursor_is_bounded_and_pan_never_paints(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    canvas = page.locator('#pixel-canvas'); canvas.focus()
+    for _ in range(5):
+        page.keyboard.press('Alt+Shift+ArrowRight'); page.keyboard.press('Alt+Shift+ArrowDown')
+    expect(page.locator('#pixel-keyboard-position')).to_contain_text('31, 23')
+    page.keyboard.press('h')
+    page.keyboard.press('Alt+ArrowLeft'); page.keyboard.press('Space')
+    expect(page.locator('#pixel-draft')).to_contain_text('먼저 픽셀 클래스')
+    assert review_masks.get(store, 0)['version'] == 0
+
+
+def test_command_search_preserves_fill_confirmation_and_reaches_ai_notes(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('1')
+    page.keyboard.press('Control+k')
+    page.get_by_role('textbox', name='기능 검색어').fill('선택 클래스로 전체 채우기')
+    page.once('dialog', lambda dialog: dialog.dismiss())
+    page.keyboard.press('Enter')
+    assert review_masks.get(store, 0)['version'] == 0
+    page.keyboard.press('Control+k')
+    page.get_by_role('textbox', name='기능 검색어').fill('AI 마스크 확인')
+    page.keyboard.press('Enter')
+    expect(page.locator('.pixel-vlm-feedback')).to_be_focused()
+    assert review_masks.get(store, 0)['version'] == 0
 
 
 @pytest.mark.parametrize('width', [1440, 1262, 390, 320])

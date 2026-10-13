@@ -52,7 +52,8 @@ function execute({el}){
   if(!el.matches('textarea,select,canvas,section,input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])'))el.click();
 }
 function render(){
-  const query=search.value.trim().toLocaleLowerCase(),rows=commands.filter(row=>row.label.toLocaleLowerCase().includes(query));
+  const query=search.value.trim().toLocaleLowerCase(),rows=commands.filter(row=>row.label.toLocaleLowerCase().includes(query))
+    .sort((a,b)=>Number(b.label.toLocaleLowerCase()===query)-Number(a.label.toLocaleLowerCase()===query));
   results.replaceChildren();count.textContent=`${rows.length}개 기능${rows.length>30?' · 처음 30개 표시, 검색어를 더 입력하세요.':''}`;
   for(const command of rows.slice(0,30)){
     const item=document.createElement('li'),button=document.createElement('ui-button');button.setAttribute('kind','quiet');
