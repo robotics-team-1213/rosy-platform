@@ -154,6 +154,8 @@ class Collaboration:
             capability = 'approve' if body.get('action') == 'approve' else 'edit'
         elif path == '/api/prepare':
             capability = 'approve'
+        elif path == '/api/learning/storage/preflight':
+            capability = 'view'
         elif path.startswith('/api/learning/imports/'):
             capability = 'import'
         elif path.startswith('/api/accounts/'):

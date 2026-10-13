@@ -3461,3 +3461,11 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.
 
 `/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.
+
+### 학습 저장 현황과 공간 사전 점검 (D-755 후속)
+
+검수 앱 로컬 경로이며 CORE API가 아니다. 관리자가 private `--storage-config` JSON에 프로젝트와 root ID·표시 이름·용도·절대 경로를 등록한다. 협업 프로젝트와 설정의 project_id는 일치해야 한다. 협업 사용자의 view 권한을 모든 요청에서 검사하며 실제 경로·파일명은 응답하지 않는다.
+
+- `GET /api/learning/storage`: 설정 상태, 측정 시각, root별 파일 수·논리 bytes·하드링크 중복 제외 file_bytes·할당 bytes·미완료 파일 bytes·파일시스템 잔여 bytes, 일 증가량·추정 잔여 일수, 등록된 pending root의 bytes를 반환한다. 60초 캐시를 사용한다. 부분 스캔·오류·근거 부족은 null/partial/unavailable로 표시한다.
+- `POST /api/learning/storage/preflight`: 기존 Origin·X-Pinky-Token 검사와 view 권한을 요구한다. 정확한 입력은 destination_id, download_bytes, staging_bytes, transform_bytes, upload_bytes이며 bytes는 0..9000000000000000 정수다. 알려진 root ID만 허용한다. 로컬 요구량은 세 로컬 항목과 관리자 reserve_bytes의 합이며 현재 같은 목적지 파일시스템 여유와 비교한다. 원격 업로드 요구량은 관리자 제공 quota의 잔여량·출처·측정 시각·유효기간과 비교한다. ready/hold/blocked는 순간 공간 추정이며 예약·전송·자료 품질 승인이 아니다.
+- 미설정 GET은 not_configured, 미설정 사전 점검은 400이다. 잘못된 root/입력은 400, 세션·프로젝트 접근 거부는 기존 401/403 규칙을 따른다. 공개 wire는 파일 경로·삭제·업로드·유료 증설 입력을 받지 않는다.
