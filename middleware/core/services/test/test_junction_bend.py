@@ -720,16 +720,17 @@ def test_a_wrong_fleet_yaw_turns_the_entry_line_of_an_aligned_body(wrong_deg):
 
 
 def test_a_lateral_offset_is_kept_through_the_pass_not_closed():
-    """D-759 limit 1: heading only. A body 5 cm inside the lane (Gazebo W3) keeps an offset of that
-    order beside the lane's exit line: the path is parallel to the lane, through the body."""
-    rig = _wall_rig(y=.05)
+    """D-759 limit 1: heading only. A body 5 cm inside the lane at the take-over (Gazebo W3) stays
+    beside the lane's exit line by that offset seen along the exit (cos 60): the path is parallel
+    to the lane, through the body."""
+    rig = _wall_rig(y=.085)                                # the steering drifts it 3.4 cm back toward the centre
     send(rig, map_entry=_entry(rig))
     _steered_take_over(rig)
     beside = rig.m._junction['anchor'][1]                  # the body's offset at the take-over
     offset, yaw = _pass_end(rig)
-    assert .02 < beside < .05 and yaw == pytest.approx(60., abs=3.)
+    assert beside == pytest.approx(.05, abs=.01) and yaw == pytest.approx(60., abs=3.)
     assert offset == pytest.approx(beside*math.cos(math.radians(60.)), abs=.02), (offset, beside)
-    assert 0. < offset < .05
+    assert offset > 0.
 
 
 def test_a_resend_places_a_heading_the_first_receipt_could_not():
