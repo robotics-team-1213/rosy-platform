@@ -664,3 +664,11 @@
 - gate 변화: 없음.
 - 결정: D-759(Proposed).
 - 교훈: 없음.
+
+## 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 기본값과 설명 (D-759 검토 반영, API v1.224)
+
+- 변경: `rosy_default.yaml`의 `line_follow.bend_map_entry_enabled: false`와 그 설명. `controls.py`·`schemas.py`의 주석이 설정과 까닭 `disabled`를 적는다.
+- 증거: `test_line_junction_api.py`(기본 꺼짐, 켜짐, 따옴표 친 값 거절). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759(Proposed).
+- 교훈: 없음.
