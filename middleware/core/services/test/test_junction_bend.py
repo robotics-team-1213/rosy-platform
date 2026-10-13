@@ -185,21 +185,30 @@ def test_arc_time_bound():
     assert decision.linear == 0.
 
 
-def test_time_under_a_crosswalk_look_is_not_the_bends():
-    """Gazebo lap m4: a bend pass that took over before a crosswalk stood through the 6 s look and
-    ended 'timeout'. While the crosswalk gate looks the phase clock stands; after it, it runs on."""
+def _seconds_until_timeout(look):
+    """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`."""
     rig = armed_rig()
     until(rig, 'bending')
-    rig.m._xwalk.status = lambda now: {'state': 'looking'}
-    for _ in range(400):                                  # commanded but not moving, as under a look
-        decision, status = site_step(rig)
-    assert status.junction.state == 'bending'
-    rig.m._xwalk.status = lambda now: None
-    for _ in range(400):
+    rig.m._xwalk.status = lambda now: {'state': look} if look else None
+    start = rig.now
+    for _ in range(3000):
         decision, status = site_step(rig)
         if status.junction.state != 'bending':
-            break
-    assert (status.junction.state, status.junction.reason) == ('aborted', 'timeout')
+            assert (status.junction.state, status.junction.reason) == ('aborted', 'timeout')
+            return rig.now-start
+    raise AssertionError('never timed out')
+
+
+def test_time_under_a_crosswalk_look_is_not_the_bends():
+    """Gazebo lap m4: a bend pass that took over before a crosswalk stood through the 6 s look and
+    ended 'timeout'. Looking or waiting stops the phase clock, at most crosswalk_report_s +
+    crosswalk_clear_s (15 s) in all; a crossing takes only its slower share (review)."""
+    plain = _seconds_until_timeout(None)
+    assert _seconds_until_timeout('looking') == pytest.approx(plain+15., abs=.3)
+    assert _seconds_until_timeout('waiting') == pytest.approx(plain+15., abs=.3)
+    crossing = _seconds_until_timeout('crossing')         # 0.04 against the bend's speed
+    assert plain <= crossing < plain+15.
+    assert _seconds_until_timeout('armed') == pytest.approx(plain, abs=.01)
 
 
 def test_lane_not_found_after_the_arc_is_unresolved_and_holds():
