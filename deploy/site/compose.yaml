@@ -207,6 +207,8 @@ services:
       - "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}:${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Public Android app-link statements only; never mount authority signing keys here.
+      - /etc/rosy/account-public:/run/rosy-account-public:ro
     secrets:
       - site_cert
       - site_key

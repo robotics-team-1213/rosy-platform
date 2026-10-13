@@ -12,6 +12,12 @@
 	@camera path /overhead/v1/frames
 	@vision_preview path /api/vision/sources/*
 	route {
+		handle /.well-known/assetlinks.json {
+			root * /run/rosy-account-public
+			rewrite * /assetlinks.json
+			header Content-Type application/json
+			file_server
+		}
 		reverse_proxy @lan_camera https://fleet:{$ROSY_FLEET_PORT} {
 			header_up X-Rosy-Lan-Camera 1
 			transport http {
