@@ -12,7 +12,7 @@ from typing import Callable, Optional
 
 from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEvidence
 from core_features.safety.decision import (PolicyObservationUnavailable, SafetyDecision, SafetyRequest,
-                                           check_decision, decision_valid)
+                                           check_decision, decision_fault, decision_valid)
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 
@@ -237,6 +237,13 @@ class SafetyManager:
         self._policy_revision = ''
         self._policy_clock = time.monotonic
         self.policy_reason = ''
+        #: D-400 4: a sensor gap younger than _policy_hold_s is HOLD (zero output, no latch).
+        #: policy_hold says whether the last evaluate_candidate None was one; 0 keeps every None a latch.
+        self._policy_hold_s = 0.0
+        self._policy_gap_since: Optional[float] = None
+        self.policy_hold = False
+        self.policy_holds = 0          # gaps answered with HOLD since start
+        self.policy_hold_reason = ''   # policy_reason of the latest held tick
         self._pending_policy_failure = None
         self._policy_failure_lock = Lock()
         self._actuation = None
@@ -269,12 +276,16 @@ class SafetyManager:
         self._shadow_policy = None
         self._shadow_revision = ''
 
-    def bind_policy(self, evaluator, calibration_revision: str) -> None:
-        """Bind a bounded, synchronous in-process evaluator; no ROS transport."""
+    def bind_policy(self, evaluator, calibration_revision: str, stale_hold_s: float = 0.0) -> None:
+        """Bind a bounded, synchronous in-process evaluator; no ROS transport.
+        ``stale_hold_s`` > 0 turns a sensor gap younger than that into HOLD (D-400 4); 0 latches at once."""
         if self.shadow is not None:
             raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         if not callable(evaluator) or not isinstance(calibration_revision, str) or not calibration_revision:
             raise ValueError('A policy evaluator and calibration revision are required')
+        if type(stale_hold_s) not in (int, float) or not 0 <= stale_hold_s <= 5:
+            raise ValueError('stale_hold_s must be in [0, 5]')
+        self._policy_hold_s = float(stale_hold_s)
         self._policy = evaluator
         self._policy_revision = calibration_revision
         self._actuation = None
@@ -307,9 +318,9 @@ class SafetyManager:
 
         return _evaluate, revision
 
-    def bind_control_policy(self, policy) -> None:
+    def bind_control_policy(self, policy, stale_hold_s: float = 0.0) -> None:
         """Consume absorbed Control decisions without importing ROS or publishing."""
-        self.bind_policy(*self._control_evaluator(policy))
+        self.bind_policy(*self._control_evaluator(policy), stale_hold_s)
 
     def bind_shadow_control_policy(self, policy) -> None:
         """D-400 shadow: judge every candidate, record it, never change the output."""
@@ -372,13 +383,30 @@ class SafetyManager:
         except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
             self.shadow_record_errors += 1
 
+    def _policy_gap(self, at: float) -> bool:
+        """D-400 4: one tick of a sensor gap at policy-clock time ``at``. True (HOLD) while the gap
+        is younger than stale_hold_s. Only a valid decision ends a gap; a zero command never asks."""
+        if not self._policy_hold_s:
+            return False
+        if self._policy_gap_since is None:
+            self._policy_gap_since = at
+            self.policy_holds += 1
+        self.policy_hold = 0 <= at - self._policy_gap_since < self._policy_hold_s
+        if self.policy_hold:
+            self.policy_hold_reason = self.policy_reason
+        return self.policy_hold
+
     def evaluate_candidate(self, command_id: int, source: str, linear: float,
                            angular: float, now: float, scope: str = 'nav') -> Optional[tuple[float, float]]:
+        """The limited command, or None: the caller latches the e-stop unless ``policy_hold`` is set."""
         if not self.policy_required:
             return linear, angular
+        self.policy_hold = False
         self.policy_reason = 'policy_unavailable'
         evaluator, revision = self._policy, self._policy_revision
         if evaluator is None:
+            if self._policy_hold_s:   # before the first verdict
+                self._policy_gap(self._policy_clock())
             return None
         request = SafetyRequest(command_id, source, revision, now, linear, angular)
         started = self._policy_clock()
@@ -387,9 +415,12 @@ class SafetyManager:
             elapsed = self._policy_clock() - started
         except Exception as exc:
             self.policy_reason = 'policy_failed'
-            with self._policy_failure_lock:
-                if self._pending_policy_failure is None:
-                    self._pending_policy_failure = request, (type(exc), exc, exc.__traceback__)
+            opened = self._policy_gap_since is None
+            held = isinstance(exc, PolicyObservationUnavailable) and self._policy_gap(started)
+            if opened or not held:   # one diagnostic when a gap opens and one when it latches, not 50 Hz
+                with self._policy_failure_lock:
+                    if self._pending_policy_failure is None:
+                        self._pending_policy_failure = request, (type(exc), exc, exc.__traceback__)
             return None
         self.policy_reason = 'policy_invalid'
         if evaluator is not self._policy or revision != self._policy_revision:
@@ -397,7 +428,11 @@ class SafetyManager:
         why = check_decision(decision, request, elapsed)
         if why:
             self.policy_reason = why
+            # Late or out of lease is a gap; a stop, however late, and a malformed answer are not.
+            if decision_fault(decision, request, elapsed) == 'timing' and decision.disposition != 'stop':
+                self._policy_gap(started)
             return None
+        self._policy_gap_since = None
         self.policy_reason = ''
         limited = limit_velocity(linear, angular, decision.linear_limit, decision.angular_limit,
                                  preserve_curvature=scope == 'line')

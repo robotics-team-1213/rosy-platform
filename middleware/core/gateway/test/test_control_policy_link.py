@@ -357,3 +357,66 @@ def test_hazard_or_unintegrated_actuation_mode_stops(linked, changes):
     command.set_nav_twist(Twist(.1, 0.), now=10.)
     assert command.select_output(now=10.01) == Twist()
     assert safety.estop
+
+
+# D-400 4: the real CommandPolicy's missing / future / expired observation is a sensor gap.
+
+def hold_two_seconds(linked):
+    command, safety, modes, policy, snapshot = linked
+    clock = [100.]
+    safety._policy_clock = lambda: clock[0]
+    safety.bind_control_policy(policy, 2.)
+    return clock
+
+
+def drive(command, now):
+    command.set_nav_twist(Twist(.1, 0.), now=now)
+    return command.select_output(now=now + .01)
+
+
+@pytest.mark.parametrize('gap', ['snapshot_expired', 'snapshot_future', 'snapshot_missing'])
+def test_observation_gap_holds_resumes_and_latches_after_the_hold(linked, gap):
+    command, safety, modes, policy, snapshot = linked
+    clock = hold_two_seconds(linked)
+    if gap == 'snapshot_missing':
+        policy.invalidate()
+    assert drive(command, 9.9 if gap == 'snapshot_future' else 10.21) == Twist()
+    assert not safety.estop and modes.mode is Mode.NAVIGATION
+    assert safety.policy_hold and safety.policy_reason == 'policy_failed'
+    assert policy.update(replace(snapshot, sequence=2, observed_at=10.3, expires_at=10.5))
+    clock[0] = 100.1
+    assert drive(command, 10.31) == Twist(.1, 0.)
+    assert not safety.policy_hold and not safety.estop
+    clock[0] = 101.
+    assert drive(command, 10.6) == Twist() and not safety.estop      # a new gap: expired again
+    clock[0] = 103.
+    assert drive(command, 10.7) == Twist()
+    assert safety.estop and safety.estop_source == 'control:policy_failed'
+    assert modes.mode is Mode.EMERGENCY
+
+
+def test_held_gap_is_logged_when_it_opens_and_when_it_latches(linked, caplog):
+    command, safety, modes, policy, snapshot = linked
+    clock = hold_two_seconds(linked)
+    with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
+        for step in range(3):
+            clock[0] = 100. + step * .02
+            assert drive(command, 10.21 + step * .02) == Twist()
+            command.announce_pending()
+        assert len(caplog.records) == 1 and 'snapshot_expired' in caplog.text
+        assert not safety.estop
+        clock[0] = 102.
+        assert drive(command, 10.3) == Twist()
+        command.announce_pending()
+    assert safety.estop and len(caplog.records) == 2
+
+
+def test_genuine_exception_latches_at_once_even_with_a_hold(linked, monkeypatch):
+    command, safety, modes, policy, snapshot = linked
+    def broken(*args, **kwargs):
+        raise RuntimeError('diagnostic-test-failure')
+    monkeypatch.setattr(policy, 'evaluate', broken)
+    hold_two_seconds(linked)
+    assert drive(command, 10.) == Twist()
+    assert safety.estop and safety.estop_source == 'control:policy_failed'
+    assert not safety.policy_hold
