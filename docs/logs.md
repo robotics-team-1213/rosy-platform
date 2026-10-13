@@ -8313,6 +8313,12 @@ osy-d395-s1d\`.
 - 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
 - gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
 
+## 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
+
+- 변경: 공유 main 공개 검증에서 발견한 계정 체크박스 계약과 HOLD 시계 결함을 수정했다. 이력 재작성 없이 독립 리뷰와 수정 후손을 묶어 safety-review 예외를 기록했다.
+- 증거: CI 38435850880 계정 화면 실패 재현 뒤 UI 31 passed; HOLD 원격 RED 7건 뒤 322 passed, NEW 0. 검토와 한계는 validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. 실제 장치·HF 계정·Spaces 연결 수용은 D-756에 남아 있다.
+
 ## 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
 - 변경: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
 - 증거: 기준 62fbb5a13d의 인증 131개 원격 통과와 현재 계약·표면 목록을 읽고 계획했다.
