@@ -80,3 +80,36 @@ def test_identity_link_conflict_not_email_and_login_throttling(accounts):
         with pytest.raises(AccountError): accounts.login('nobody', 'wrong', address='same')
     with pytest.raises(AccountError, match='rate'): accounts.login('bob', 'bob-password', address='same')
 
+
+def test_expired_session_and_replaced_credential_are_fenced(accounts):
+    token, alice = accounts.login('alice', 'alice-password')
+    conn = accounts.connect_token(alice, 'hf_private_x', transport=identity)
+    old_generation = conn['generation']
+    replaced = accounts.connect_token(alice, 'hf_new_x', transport=identity)
+    assert replaced['connection_id'] == conn['connection_id']
+    assert replaced['generation'] == old_generation + 1
+    with pytest.raises(AccountError): accounts.credential(alice, conn['connection_id'], old_generation)
+    now = accounts.clock(); accounts.clock = lambda: now + 13 * 3600
+    with pytest.raises(AccountError): accounts.authenticate(token)
+
+
+def test_ciphertext_cannot_be_transplanted_between_connections(accounts):
+    _, alice = accounts.login('alice', 'alice-password')
+    first = accounts.connect_token(alice, 'hf_a', transport=identity)
+    second = accounts.connect_token(alice, 'hf_b', transport=identity)
+    with accounts._db() as db:
+        db.execute('UPDATE learning_connections SET secret=(SELECT secret FROM learning_connections WHERE id=?) WHERE id=?',
+                   (first['connection_id'], second['connection_id']))
+    with pytest.raises(AccountError): accounts.credential(alice, second['connection_id'])
+
+
+def test_shared_database_keeps_project_sessions_and_connections_separate(accounts):
+    cfg = json.loads(accounts.config_path.read_text()); cfg['project_id'] = 'two'
+    other = Accounts(accounts.db_path, accounts.key_path, cfg)
+    token, bob = accounts.login('bob', 'bob-password')
+    conn = accounts.connect_token(bob, 'hf_b', transport=identity)
+    with pytest.raises(AccountError): other.authenticate(token)
+    _, other_bob = other.login('bob', 'bob-password')
+    assert other.connections(other_bob) == []
+    with pytest.raises(AccountError): other.credential(other_bob, conn['connection_id'])
+
