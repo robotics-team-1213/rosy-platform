@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 
 import pytest
 
@@ -56,14 +57,16 @@ def test_without_lane_arc_the_instruction_is_todays():
     assert ports.advances == [0.10]
 
 
-def _on_ring_s(caps=ARC, to="NE"):
-    """On ``ring_s`` 0.2 m before SE (inside arm_distance_m), going on to ``to``; one tick."""
+def _on_ring_s(caps=ARC, to="NE", stamp=None):
+    """On ``ring_s`` 0.2 m before SE (inside arm_distance_m), going on to ``to``; one tick.
+    ``stamp`` is the located pose's ``odom_stamp`` (D-744)."""
     runner, store, ports = _setup(caps=caps)
     _with_arc(ports)
     ring = _arc(store, "ring_s:fwd")
     _plan(store, ports, "ring_s:fwd", 0.05, to)
     run(runner.start("p1", "bob"))
     ports.at(ring, ring.length_m - 0.2)
+    ports.pose = dataclasses.replace(ports.pose, odom_stamp=stamp)
     _ticks(runner, ports)
     return runner, store, ports
 
@@ -79,6 +82,36 @@ def test_no_map_id_means_no_exit_segment():
     """A lane_arc robot without junction_pivot gets no map_id, so no exit_segment (CORE would 400)."""
     runner, store, ports = _on_ring_s(caps=dataclasses.replace(ARC, junction_pivot=False))
     assert ports.sent[0][:2] == ("straight", "SE") and ports.expects == [None]
+
+
+ANCHORED = dataclasses.replace(ARC, lane_arc_map_anchor=True)
+
+
+def test_caps_read_lane_arc_map_anchor():
+    assert trip_caps(_caps(lane_arc=True)).lane_arc_map_anchor is False
+    assert trip_caps(_caps(lane_arc=True, lane_arc_map_anchor=True)).lane_arc_map_anchor is True
+    assert trip_caps(_caps(lane_arc_map_anchor="true")).lane_arc_map_anchor is False
+
+
+def test_a_map_anchor_robot_gets_the_circle_centre_and_the_located_pose_pair():
+    _, store, ports = _on_ring_s(ANCHORED, stamp=1790000000.25)
+    segment = ports.expects[0]["exit_segment"]
+    anchor, pose, lane = segment["map_anchor"], ports.pose, _arc(store, "ring_e:fwd")
+    assert (segment["end_place_id"], set(segment)) == ("NE", {
+        "curvature_1pm", "length_m", "outer_line_offset_m", "end_place_id", "map_anchor"})
+    assert set(anchor) == {"centre_x_m", "centre_y_m", "pose_x_m", "pose_y_m", "pose_yaw_rad", "odom_stamp_s"}
+    assert (anchor["pose_x_m"], anchor["pose_y_m"], anchor["pose_yaw_rad"], anchor["odom_stamp_s"]) == (
+        pose.x, pose.y, pose.yaw, 1790000000.25)
+    # the centre is the next lane's circle in the map frame: every lane point lies one radius away
+    centre = (anchor["centre_x_m"], anchor["centre_y_m"])
+    assert all(math.dist(centre, p) == pytest.approx(0.2514, abs=0.006) for p in lane.polyline)
+
+
+def test_without_the_capability_or_an_odom_stamp_the_segment_is_todays():
+    for caps, stamp in ((ARC, 1790000000.25), (ANCHORED, None)):
+        ports = _on_ring_s(caps, stamp=stamp)[2]
+        assert set(ports.expects[0]["exit_segment"]) == {
+            "curvature_1pm", "length_m", "outer_line_offset_m", "end_place_id"}, (caps, stamp)
 
 
 # ---- 2: the arc handshake --------------------------------------------------------------------
