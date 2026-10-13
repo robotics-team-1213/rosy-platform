@@ -123,7 +123,7 @@ _BARE_TOKEN = re.compile(r"\b(?P<value>[A-Fa-f0-9]{40,}|[A-Za-z0-9+/]{50,}={0,2}
 
 # Public cross-language transcript fixtures. This excuses only the exact
 # entropy token on its exact JSON field/path, never a credential or PEM finding.
-_PEER_VECTOR_PATH = 'middleware/ui/pilot/android/app/src/test/resources/peer-transcripts.json'
+_PEER_VECTOR_PATH = 'middleware/robot_ui/pilot/android/app/src/test/resources/peer-transcripts.json'
 _PEER_PUBLIC_VECTOR_VALUES = {
     'nonce': frozenset({'01' * 32, '02' * 32}),
     'public_key': frozenset({
@@ -131,7 +131,7 @@ _PEER_PUBLIC_VECTOR_VALUES = {
     'signature': frozenset({
         'MEUCIGj28eNNnlw4zwNwo3EYK4npeSZkJQrymIxZ+E3drcBkAiEA92Meq6XZCsVLfodbqnmAqBSxvaMR2WJsFLXEN4HvX8w'}),
 }
-_CAMERA_PEER_VECTOR_PATH = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+_CAMERA_PEER_VECTOR_PATH = 'operations/site_ui/cam/app/src/test/resources/camera-peer-transcripts.json'
 _CAMERA_PEER_PUBLIC_VECTOR_VALUES = {
     'nonce': frozenset({'01' * 32, '02' * 32}),
     'signature': frozenset({
@@ -173,6 +173,14 @@ _URL = re.compile(r"\b(?:https?|ftp|git|ssh)://\S+")
 _PUBLIC_PATH_TOKEN = re.compile(
     r"(?i)^[a-z][a-z0-9_.-]*(?:/[a-z][a-z0-9_.-]*)+/?$"
 )
+
+
+def _is_public_path_reference(line: str, token: re.Match) -> bool:
+    # The entropy matcher can start inside a path containing '_' or '-'.
+    for word in re.finditer(r"\S+", line):
+        if word.start() <= token.start() and token.end() <= word.end():
+            return bool(_PUBLIC_PATH_TOKEN.fullmatch(word[0].strip("'\"`,;()[]")))
+    return False
 
 # The absorption inventory intentionally records source and destination
 # SHA-256 values. They are public provenance fields, not device credentials.
@@ -637,7 +645,7 @@ def scan_text(path: str, text: str, *,
             # credential, PSK and QR checks remain active even on the same line.
             if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:
                 continue
-            if _PUBLIC_PATH_TOKEN.fullmatch(value):
+            if _PUBLIC_PATH_TOKEN.fullmatch(value) or _is_public_path_reference(entropy_line, match):
                 continue
             if _is_ed25519_public_key_body(value):
                 continue

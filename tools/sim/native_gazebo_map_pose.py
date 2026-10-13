@@ -15,7 +15,7 @@ import time
 from collections import deque
 from dataclasses import asdict, dataclass
 
-from fleet.localization.map_pose import MapPose, MapPoseConfig, odom_from_snapshot
+from rosy.world.state.projections.map_pose import MapPose, MapPoseConfig, odom_from_snapshot
 
 
 @dataclass(frozen=True)

@@ -53,7 +53,7 @@ class HolderSource(sdist):
         super().make_release_tree(base_dir, [name for name in files
             if (root / name).resolve().is_relative_to(root)])
         snapshot = Path(base_dir) / '_source_roots/drive'
-        for relative in ('safety', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
+        for relative in ('motion_limits', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
             shutil.copytree(layout['DRIVE_ROOT'] / relative, snapshot / relative,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'control.egg-info/SOURCES.txt'

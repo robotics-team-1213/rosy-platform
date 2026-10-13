@@ -33,7 +33,7 @@ components:
     path: middleware/skills/api/src/rosy/skills/api
     import_prefix: rosy.skills.api
   - name: execution_api
-    path: operations/execution/src/rosy/execution/api
+    path: operations/site_execution/src/rosy/execution/api
     import_prefix: rosy.execution.api
   - name: omx_transfer_integration
     path: integrations/robots/omx/src/rosy/integrations/robots/omx

@@ -1,6 +1,6 @@
 """D-494 5 / D-495 3: what a stored plan asks of a robot at each place, and whether it can.
 
-Pure like the rest of ``fleet.routing``: the trip loop (``server/trip_runner.py``) calls these
+Pure like the rest of ``fleet.routing``: the trip loop (``server/ledger/trip_runner.py``) calls these
 with the active graph and the robot's capability fields.
 """
 

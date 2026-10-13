@@ -9,9 +9,9 @@ evidence it leaves the pass/fail verdict alone.
 import json
 from pathlib import Path
 
-from tools.gz import rig_environment
-from tools.gz.rig_environment import judge, judge_run, sample
-from tools.gz.run_calibration_spaces import outcome
+from tools.sim.gazebo import rig_environment
+from tools.sim.gazebo.rig_environment import judge, judge_run, sample
+from tools.sim.gazebo.run_calibration_spaces import outcome
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,7 +136,7 @@ def test_record_stops_when_its_parent_is_gone(tmp_path, monkeypatch):
 
 
 def test_rig_script_wiring():
-    script = (ROOT/'tools/gz/run_track260905.sh').read_text()
+    script = (ROOT/'../../tools/sim/gazebo/run_track260905.sh').read_text()
     start, gz = script.index('rig_start=$(date'), script.index('setsid gz sim')
     recorder = next(line for line in script.splitlines() if 'rig_environment.py record' in line)
     wait = script.index('wait "${pids[$monitor_index]}"')
@@ -153,5 +153,5 @@ def test_matrix_runner_does_not_count_environment_invalid_runs():
     assert outcome(3, False) == 'environment_invalid'
     assert outcome(4, False) == 'lock_busy'
     assert outcome(0, True) == 'pass' and outcome(1, False) == 'fail' and outcome(0, False) == 'fail'
-    names = (ROOT/'tools/gz/run_calibration_spaces.py').read_text()
+    names = (ROOT/'../../tools/sim/gazebo/run_calibration_spaces.py').read_text()
     assert "'environment.json'" in names

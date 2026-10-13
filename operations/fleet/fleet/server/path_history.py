@@ -28,7 +28,7 @@ from typing import Awaitable, Callable, Iterable, Mapping, Optional
 
 from fastapi import HTTPException, Query
 
-from fleet.localization.map_pose import DEGRADED, LOCALIZED
+from rosy.world.state.projections.map_pose import DEGRADED, LOCALIZED
 from fleet.localization.trust import trusted_xy
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 

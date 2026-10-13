@@ -745,6 +745,18 @@
 | D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
 | D-745 | 학습 관리 센터의 소유 실행기 수동 제어 | Accepted |
 
+| D-748 | 앞 카메라·천장 관측·신호등 관측 source holder 구분 | Accepted |
+
+| D-749 | 동작 규칙·공통 안전·미리보기·후보 제한 source 이름 구분 | Accepted |
+
+| D-750 | Fleet 서버 source 책임 폴더 구분 | Accepted |
+
+| D-751 | 호스트 도구와 로봇 측정 source 구분 | Accepted |
+
+| D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
+
+| D-753 | Fleet holder 설치 namespace·구조 증가 검사 보완 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

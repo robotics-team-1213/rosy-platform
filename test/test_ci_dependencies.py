@@ -15,7 +15,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_ci_local_execution_wheel_pin_matches_package_metadata():
-    project = tomllib.loads((ROOT / 'middleware/execution/local/pyproject.toml').read_text(encoding='utf8'))
+    project = tomllib.loads((ROOT / 'middleware/robot_execution/local/pyproject.toml').read_text(encoding='utf8'))
     assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
 
 

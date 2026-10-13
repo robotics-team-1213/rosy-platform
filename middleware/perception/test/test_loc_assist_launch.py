@@ -88,8 +88,8 @@ def test_launch_parameters_evaluate_to_typed_values():
 
 
 def test_the_gazebo_localization_rig_follows_d395_not_the_removed_global_recovery():
-    """tools/gz is not CI; this keeps the rig from silently testing what no longer exists."""
-    rig = text(SENSING / 'tools' / 'gz' / 'localization_rig.py')
+    """../../tools/sim/gazebo is not CI; this keeps the rig from silently testing what no longer exists."""
+    rig = text(SENSING / '..' / '..' / 'tools' / 'sim' / 'gazebo' / 'localization_rig.py')
     assert "'recoveries'" not in rig
     assert "component == 'loc_assist'" in rig
     assert "'localization/decision'" in rig and "'/localization/candidates'" in rig

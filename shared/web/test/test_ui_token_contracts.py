@@ -12,7 +12,7 @@ import pytest
 
 import surface_registry as registry
 
-WEB_ROOT = (Path(__file__).resolve().parents[3] / "middleware" / "ui") / "robot"
+WEB_ROOT = (Path(__file__).resolve().parents[3] / 'middleware' / 'robot_ui') / "robot"
 TOKENS = (Path(__file__).parents[3] / "shared") / "web" / "tokens.css"
 
 DECLARATION = re.compile(r"^\s*(--[a-z0-9-]+)\s*:", re.MULTILINE)
@@ -82,12 +82,12 @@ def test_the_raw_colour_scan_reads_every_web_file():
         for row in _web_rows() for path, _ in registry.colour_sources(registry.REPO, row)
     }
     for expected in (
-        "middleware/ui/robot/styles.css", "middleware/ui/robot/app.js", "middleware/ui/robot/index.html",
-        "middleware/ui/robot/shell/shell.css", "middleware/ui/robot/shell/shell.js",
-        "middleware/ui/robot/panels/surface-panels.css", "middleware/ui/robot/panels/setup/waypoints.js",
+        "middleware/robot_ui/robot/styles.css", "middleware/robot_ui/robot/app.js", "middleware/robot_ui/robot/index.html",
+        "middleware/robot_ui/robot/shell/shell.css", "middleware/robot_ui/robot/shell/shell.js",
+        "middleware/robot_ui/robot/panels/surface-panels.css", "middleware/robot_ui/robot/panels/setup/waypoints.js",
         "shared/web/components.css", "shared/web/ui.js", "shared/web/tokens.css",
-        "operations/ui/console/shared/styles.css", "operations/ui/console/map-view.js",
-        "operations/ui/console/index.html",
+        "operations/site_ui/console/shared/styles.css", "operations/site_ui/console/map-view.js",
+        "operations/site_ui/console/index.html",
         "operations/apps/games/games/web/styles.css", "operations/apps/games/games/web/board.js",
         "operations/apps/games/games/web/index.html",
     ):

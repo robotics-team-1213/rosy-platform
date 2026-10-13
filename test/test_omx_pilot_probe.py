@@ -153,7 +153,7 @@ def _server(arm):
         return decision
 
     arm.cancel = cancel
-    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/ui/pilot",
+    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/robot_ui/pilot",
                                common_root=ROOT / "shared/web", pairing_code="ABCD-EFGH")
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))

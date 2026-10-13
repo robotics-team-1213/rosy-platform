@@ -87,7 +87,7 @@ def test_the_observer_refuses_a_bad_contract():
 
 
 def test_the_node_publishes_evidence_only_and_fails_closed_off_gazebo():
-    source = (ROOT / "control" / "dock_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / 'nodes' / 'dock_observer_node.py').read_text(encoding="utf-8")
     assert "create_publisher(String, 'dock/observation', 10)" in source
     assert "cmd_vel" not in source.replace("``cmd_vel``", "")
     assert "Twist" not in source

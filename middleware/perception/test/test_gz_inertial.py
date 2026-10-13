@@ -1,6 +1,6 @@
 import math
 import pytest
-from tools.gz.inertial import body_gravity
+from tools.sim.gazebo.inertial import body_gravity
 
 
 def test_tilted_simulated_body_does_not_publish_level_gravity():

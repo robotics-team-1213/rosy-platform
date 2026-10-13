@@ -22,7 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from fleet.localization.map_pose import (MapPose, MapPoseConfig, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 

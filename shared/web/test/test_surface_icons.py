@@ -142,12 +142,12 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
-        "operations/ui/console/index.html": "console",
-        "operations/ui/console/install.html": "console",
-        "operations/ui/console/cell/cell.html": "console",
-        "middleware/ui/robot/index.html": "robot",
-        "middleware/ui/robot/surface.html": "robot",
-        "middleware/ui/pilot/index.html": "pilot",
+        "operations/site_ui/console/index.html": "console",
+        "operations/site_ui/console/install.html": "console",
+        "operations/site_ui/console/cell/cell.html": "console",
+        "middleware/robot_ui/robot/index.html": "robot",
+        "middleware/robot_ui/robot/surface.html": "robot",
+        "middleware/robot_ui/pilot/index.html": "pilot",
     }
     for page, ident in pages.items():
         text = (registry.REPO / page).read_text(encoding="utf-8")
@@ -156,7 +156,7 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
 
 
 def test_android_launcher_label_is_the_registered_app_name():
-    strings = (registry.REPO / "operations/ui/cam/app/src/main/res/values/strings.xml"
+    strings = (registry.REPO / "operations/site_ui/cam/app/src/main/res/values/strings.xml"
                ).read_text(encoding="utf-8")
     label = re.search(r'<string name="app_name">([^<]*)</string>', strings).group(1)
     camera = next(row for row in registry.load() if row["id"] == "cam")

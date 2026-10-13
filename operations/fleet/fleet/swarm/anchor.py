@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Iterable, Optional
 
-from fleet.localization.map_pose import LOCALIZED, UNKNOWN, Pose, compose, relative
+from rosy.world.state.projections.map_pose import LOCALIZED, UNKNOWN, Pose, compose, relative
 from fleet.swarm.relay import Relay
 
 log = logging.getLogger(__name__)

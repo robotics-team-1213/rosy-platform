@@ -32,7 +32,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
 | `model_feedback_dispatch.py` | D-657 원장 결속 모델 도구 어댑터. 기존 scope·journal·stop/fence 재검사를 보존하며 Decision 계약/후보를 소비 |
 | `goal_evidence_service.py`, `mission_service.py`, `mission_progress.py` | producer 인증·새 post-action frame/attempt·원장/clock 소비는 Fleet 소유. 순수 목표 검증과 전체 progress 계산은 `rosy.execution.site.{goal_evidence,workflow}` 소비 |
-| `operations/ui/console` | 관제 UI 원본 ([안내](../../../ui/console/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
+| `operations/site_ui/console` | 관제 UI 원본 ([안내](../../../site_ui/console/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
 
 ## For AI Agents
 
@@ -69,3 +69,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 
 `operations/fleet/test/test_server_console.py`, `test_server_app.py`, `test_server_traffic.py`, `test_server_formation.py` — 가짜 로봇만 쓰고
 네트워크는 없다. `test_server_app.py` 는 `fastapi.testclient` 를 쓰므로 fastapi 가 필요하다.
+
+## Source responsibility holders (D-750)
+
+`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts. These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.

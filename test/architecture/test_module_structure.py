@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception", "devices", "drive"}
+           "foundation", "ros_idl", "perception", "devices", "drive", "robot_ui", "site_ui", "overhead", "signal_observation"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -119,9 +119,9 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
               "decision/src/rosy/decision/deliberation/evaluation",
-              "perception/vision/perception",
-              "perception/vision/perception/learned",
-              "perception/vision/perception/drivable")
+              "perception/front_camera/perception",
+              "perception/front_camera/perception/learned",
+              "perception/front_camera/perception/drivable")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -303,7 +303,7 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md; same DB, no resolver or device authority. "
         "Measured at 360 after unchanged relocation; +150 remains, re-judge before separate responsibility growth.",
     ),
-    "fleet/fleet/server/trip_runner.py": (
+    "fleet/fleet/server/ledger/trip_runner.py": (
         751,
         "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
         "no behaviour change): the start checks are in server/trip_admission.py and the progress predicates in "
@@ -387,7 +387,7 @@ SIZE_VERDICTS = {
         "no new size unit or budget change. Next growth separates ai_facts HTTP routes from its journal "
         "if that owner expands; re-judge after +150 lines. Previous verdict: 1781, next growth owed reports seam",
     ),
-    "ui/console/map-view.js": (
+    "site_ui/console/map-view.js": (
         984,
         "split: independently re-judged at 984 on 2026-10-11 by design_consistency_review: D-641 "
         "keeps camera-backdrop and traffic-view in their existing owners. Compact-map robot labels "
@@ -415,7 +415,7 @@ SIZE_VERDICTS = {
         "Splitting loading and deployment is a separate task. The 600-line ceiling and growth "
         "allowance remain unchanged; re-judge when another component family expands this file",
     ),
-    "ui/pilot/styles.css": (
+    "robot_ui/pilot/styles.css": (
         811,
         "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
         "D-447 concurrent baseline work restores the existing 44px target floor on narrow screens. "
@@ -467,7 +467,14 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "fleet": (
-        55_286,
+        55_302,
+        "split: independently measured by delivery_review on 2026-10-14 (D-753). "
+        "Baseline55302 is the previous55286 plus exactly16 source-only lines: "
+        "server/__init__7, _source_layout3, setup3, proof-copy explanation3. "
+        "Current55452 equals55302+150; no functional-growth allowance was added. "
+        "All production sources remain scanned; non-package holders are not size-unit exclusions. "
+        "Preserve every nested/zero/file/hard ceiling and previous split obligation. "
+        "Previous55286 verdict: "
         "split: independently derived by pipeline_review on 2026-10-12 after integrating "
         "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Accepted main56077 "
         "minus six moved legacy owners827 plus six required identity facades36 gives55286; "
@@ -1089,7 +1096,7 @@ SIZE_VERDICTS = {
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
     ),
-    "ui/face/emotion/info_screen.py": (
+    "robot_ui/face/emotion/info_screen.py": (
         602,
         "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
         "driving battery alert contrast fix added 4 lines. It keeps one role, payload to panel image, "
@@ -1097,7 +1104,7 @@ SIZE_VERDICTS = {
         "Follow-up split: move the boot/AP-QR renderers (boot_lines, ap_qr, _draw_qr, render_boot) into "
         "their own module when the file next grows. Budgets and allowance unchanged",
     ),
-    "ui/console/console.js": (
+    "site_ui/console/console.js": (
         1_175,
         "split: reviewed on 2026-10-11 by parent reviewer after D-632 inbox ownership extraction: "
         "console.js is 1170, below the existing 1175 ceiling; no allowance increase. Notification "
@@ -1111,11 +1118,11 @@ SIZE_VERDICTS = {
         "installed-resource parity. Previously "
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
     ),
-    "ui/console/shared/styles.css": (
+    "site_ui/console/shared/styles.css": (
         802,
         "accept: D-608 adds the incident rail styling to the existing Fleet shared stylesheet; split panel styling into a separate asset before further growth",
     ),
-    "fleet/fleet/server/cell_job_store.py": (
+    "fleet/fleet/server/cell/cell_job_store.py": (
         824,
         "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
         "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
@@ -1137,7 +1144,7 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
-    "fleet/fleet/server/enrollment.py": (
+    "fleet/fleet/server/auth/enrollment.py": (
         956,
         "accept: re-judged 2026-10-09 at 956 (independent re-judge, critic agent; was 932 author's record) when "
         "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
@@ -1147,14 +1154,14 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
-    "vision/rosy_vision/track/background_blob.py": (
+    "overhead/rosy_vision/track/background_blob.py": (
         605,
         "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
         "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
         "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
         "D-600 (584) merged, plus the hold-stops-fill guard. (independent re-judge 2026-10-10, critic: agree - 5 over on one MOG2 owner; next growth first moves BackgroundStore to track/background_store.py with a re-export, then suspect/ghost healing). ROS-free, host-testable (X5)",
     ),
-    "vision/rosy_vision/ingest.py": (
+    "overhead/rosy_vision/ingest.py": (
         825,
         "accept: re-judged 2026-10-10 at 825 (author's record, D-589 S1) when the camera/camera_state "
         "text messages joined: they ride the same per-source connection and are kept per connection "
@@ -1166,7 +1173,7 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "fleet/fleet/server/mission_store.py": (
+    "fleet/fleet/server/ledger/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
@@ -1265,7 +1272,7 @@ SIZE_VERDICTS = {
         "and normal150 regrowth allowance; see docs/validation/"
         "d456-main-start-point-integration-2026-10-05/README.md",
     ),
-    "fleet/fleet/server/task_store.py": (
+    "fleet/fleet/server/ledger/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
         "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
@@ -1273,7 +1280,7 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "drive/safety/adapter/node.py": (
+    "drive/motion_limits/adapter/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -1285,7 +1292,7 @@ SIZE_VERDICTS = {
         "regressions are host-testable. Retain the normal +150 allowance and every threshold; "
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
-    "fleet/fleet/server/console.py": (
+    "fleet/fleet/server/console/console.py": (
         1325,
         "accept: independently re-judged on 2026-10-12 by pipeline_review at 1325 for D-678: "
         "goal/bay admission, queue and post-send traffic share the existing mutable Console state. "
@@ -1344,7 +1351,7 @@ SIZE_VERDICTS = {
         "LOCALIZED check feeding the lane route); verdict unchanged. "
         "The zero-growth allowance remains unchanged.",
     ),
-    "perception/vision/perception/lane.py": (
+    "perception/front_camera/perception/lane.py": (
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
@@ -1358,7 +1365,7 @@ SIZE_VERDICTS = {
         "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
         "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
-    "perception/vision/perception/lane_bev.py": (
+    "perception/front_camera/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
@@ -1487,7 +1494,7 @@ SIZE_VERDICTS = {
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
-    "perception/vision/perception/drivable": (
+    "perception/front_camera/perception/drivable": (
         810,
         "accept: keep steering from the learned drivable way (drivable_steer.py moved from learned/, "
         "drivable_keep.py, drivable_preview.py) is its own size unit inside the P1a perception unit, by the "
@@ -1505,7 +1512,7 @@ SIZE_VERDICTS = {
         "_lane_cue_spot_running, reads _cue_latch and _cue_spot_turning, interprets the plan tuple "
         "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
-    "perception/vision/perception/learned": (
+    "perception/front_camera/perception/learned": (
         2435,
         "accept: independently re-judged at 2435 on 2026-10-12 by review_fixed_fitness at a34e14dde6 "
         "(docs/plans/2026-10-12-road-observation-primitive.md): the 16 files remain model validation, "
@@ -1520,7 +1527,7 @@ SIZE_VERDICTS = {
         "Re-judged at 1982 on 2026-10-10: drivable_steer.py (548) left for the drivable unit "
         "(drivable addendum), learned had reached 2520. Re-judge on growth past +150.",
     ),
-    "perception/vision/perception": (
+    "perception/front_camera/perception": (
         9_934,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
@@ -1582,7 +1589,7 @@ SIZE_VERDICTS = {
         "re-judged 2026-09-30 at 36859 on the D-373 branch after it added capture trigger/snapshot recorder/"
         "compressed camera/learned status, and 2026-10-01 at 37725 after its first main merge — verdict "
         "unchanged; re-judged 2026-10-01 at 38673 when main (37732) merged into the D-373 branch again: the "
-        "D-373 pieces (control/capture_trigger*, the snapshot half of control/recording.py, the learned "
+        "D-373 pieces (control/capture_trigger*, the snapshot half of nodes/recording.py, the learned "
         "status/rate cap and wall role in sensing/perception/learned) stay in the same package and move "
         "with the P1a split — verdict unchanged; re-judged again at 38903 on main when "
         "feat/d384-road-state-and-behaviour merged the D-384 ROS-free road-state estimator "
@@ -1615,11 +1622,11 @@ SIZE_VERDICTS = {
         "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
         "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
         "verdict unchanged; re-judged 2026-10-02 at 42225 when D-411 A added the ROS-free Pilot "
-        "recording session (control/pilot_recording.py) beside control/recording.py — evidence only, "
+        "recording session (nodes/pilot_recording.py) beside nodes/recording.py — evidence only, "
         "it moves with the P1a sensing split, verdict unchanged; re-judged 2026-10-02 at 42346 with its "
-        "thin node (control/pilot_recorder_node.py) and the camera's on-demand JPEG switch — same "
+        "thin node (nodes/pilot_recorder_node.py) and the camera's on-demand JPEG switch — same "
         "subjects, verdict unchanged; re-judged 2026-10-02 at 42540 after the D-411 A review hardening "
-        "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
+        "(orphan-writer recovery, off-timer hashing, reserve and disk floor in nodes/pilot_recording.py, "
         "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
         "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
         "drop, learned lane component filter) — same subjects, verdict unchanged;"
@@ -1635,7 +1642,7 @@ SIZE_VERDICTS = {
         "node (control/object_detector*.py) and the overlay pairing in follow_preview -- advisory evidence "
         "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged; "
         "re-judged 2026-10-03 at 44301 for the D-344 §12 addendum: the operator override overlay validator "
-        "beside the IR one (control/ir_overlay.py) and its root-run bench CLI (control/line_observer_overrides.py) "
+        "beside the IR one (control/ir_overlay.py) and its root-run bench CLI (nodes/line_observer_overrides.py) "
         "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged). "
         "Re-judged 2026-10-04 at 44469 for shared raw road-ROI visibility, invalid camera "
         "evidence/reset and optional raw/annotated recording: observation-only subjects stay "
@@ -1840,7 +1847,7 @@ SIZE_VERDICTS = {
         "the profile loader out if MoveIt (D-402 follow-up) adds a second planner. Re-judged at 714 "
         "after the review's accepted-recipe item check, release rejection and fingertip overhang",
     ),
-    "ui/robot/app.js": (
+    "robot_ui/robot/app.js": (
         803,
         "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
         "tracking, the mode bindings and the formation cell wiring grew with D-383/D-385/D-396 "
@@ -1937,8 +1944,8 @@ ROLE_DIR = {
     "interfaces": ("ros_idl",),
     "control": ("perception",),  # middleware/perception (D-427 wave 4e)
     "web_common": ("web",),  # shared/web (D-427 wave 4b)
-    "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
-    "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
+    "emotion": ("robot_ui", "face"),  # middleware/robot_ui/face (D-427 wave 4b)
+    "dashboard": ("robot_ui", "robot"),  # middleware/robot_ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
     "pinky_pro": ("devices", "pinky", "profile"),
     "bringup": ("devices", "pinky", "bringup"),
@@ -1952,7 +1959,7 @@ ROLE_DIR = {
     "navigation": ("drive", "planning", "nav2"),
     "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
-    "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
+    "rosy_vision": ("overhead",),  # operations/overhead (D-427 wave 3b)
     "fleet": ("fleet",),  # operations/fleet (D-427 wave 3c)
 }
 
@@ -1979,11 +1986,11 @@ def _declared(name: str) -> set:
 
 def _files(name: str, suffixes):
     holders = (ROOT / "middleware/drive" / holder for holder in
-               ("calibration", "recovery", "safety", "tracking", "planning/grid", "runtime")) if name == "control" else ()
+               ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")) if name == "control" else ()
     if name == 'core_features':
         holders = (ROOT / 'middleware/drive/behaviors',)
     if name == "fleet":
-        holders = (ROOT / "operations/decision", ROOT / "operations/ui/console",
+        holders = (ROOT / "operations/decision", ROOT / "operations/site_ui/console",
                    ROOT / "integrations/messaging/discord")
     for directory in (PACKAGES[name]["dir"], *holders):
         for path in directory.rglob("*"):
