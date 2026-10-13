@@ -284,6 +284,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
   /* 전화 폭: 경로 줄은 화면 이름 한 줄뿐이라 얇게 둔다. 사진이 첫 화면 안에 남는다. */
   .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); }
   #editor, #pixel-main { padding: var(--space-3); }
+  #pixel-main { padding-block-start: var(--space-1); }
   #pixel-reload { position: static; display: flex; width: 100%; margin-bottom: var(--space-2); }
   #frame-progress { margin-top: 0; }
   .frame-navigation { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); margin-block: 0 var(--space-1); }
@@ -298,7 +299,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
   .review-viewport-controls { margin-inline-start: 0; }
   .review-result { margin-block: var(--space-2); }
   .image-stage, .pixel-stage { padding: var(--space-2); }
-  #pixel-main > h2 { margin-bottom: var(--space-2); }
+  #pixel-main > h2 { margin-bottom: var(--space-1); }
   .pixel-editor-column .pixel-ribbon-nav, .pixel-editor-column .review-view-bar { margin-bottom: var(--space-1); }
 }
 @media (width < 23rem) {
