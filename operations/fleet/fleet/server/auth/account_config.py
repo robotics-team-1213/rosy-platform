@@ -42,4 +42,8 @@ def load_account_config(path):
     if key.stat().st_size > 8192:
         raise ValueError("Account signing key too large")
     data["private_key"] = key.read_bytes()
+    from joserfc.jwk import OKPKey
+    signing = OKPKey.import_key(data["private_key"])
+    if not signing.is_private or signing.curve_name != "Ed25519":
+        raise ValueError("Account signing requires an Ed25519 private key")
     return data

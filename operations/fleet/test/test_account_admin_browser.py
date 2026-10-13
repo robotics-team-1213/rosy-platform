@@ -5,7 +5,9 @@ import time
 import pytest
 import uvicorn
 from browser_harness import browser_tests_enabled, safe_listener
-from test_password_session import _app
+from test_password_session import _app, _accounts
+from fleet.server.app import create_app
+from fleet.cli import default_web_common
 
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium account scenario")
@@ -13,7 +15,9 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 
 def test_account_administration_uses_real_ledger(tmp_path):
     from playwright.sync_api import expect, sync_playwright
-    app, _ = _app(tmp_path)
+    base, tasks = _app(tmp_path)
+    app = create_app(base.state.console, task_service=tasks, site_users={}, site_logins=_accounts(),
+                     web_common=default_web_common(), start_task_dispatcher=False)
     sessions = app.state.password_sessions
     sessions.bootstrap_accounts("alice", "test-site")
     listener = safe_listener()

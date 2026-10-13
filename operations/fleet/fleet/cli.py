@@ -464,9 +464,9 @@ def run_console(args: argparse.Namespace) -> None:
             print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
                   file=sys.stderr)
     # D-548: a development session is a named operator (D-473 3), so it stands in for site-users.
-    if mission_api and site_users is None and development_sessions is None:
+    if mission_api and site_users is None and development_sessions is None and account_config is None:
         sys.exit("--users-file is required with --mission-api for named operator authorization")
-    if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None):
+    if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None or account_config is not None):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
