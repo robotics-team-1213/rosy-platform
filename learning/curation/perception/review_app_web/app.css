@@ -281,6 +281,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
   .pixel-quick-actions, .pixel-quick-tools .ui-workspace-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (width < 40rem) {
+  /* 전화 폭: 경로 줄은 화면 이름 한 줄뿐이라 얇게 둔다. 사진이 첫 화면 안에 남는다. */
+  .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); }
   #editor, #pixel-main { padding: var(--space-3); }
   #pixel-reload { position: static; display: flex; width: 100%; margin-bottom: var(--space-2); }
   #frame-progress { margin-top: 0; }
