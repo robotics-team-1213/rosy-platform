@@ -10,26 +10,6 @@ body {
   background: var(--surface-canvas);
   font: var(--weight-regular) var(--text-body)/var(--leading-copy) var(--body);
 }
-.surface-switch { display: flex; gap: var(--space-3); }
-.surface-switch a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-button);
-  color: var(--nominal-quiet);
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.surface-switch a:hover { color: var(--text-primary); background: var(--surface-flat); }
-.surface-switch a[aria-current="page"] {
-  color: var(--brand-rose);
-  border-color: var(--brand-rose);
-  background: var(--brand-rose-wash);
-}
-.surface-switch a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-auth-link {
   display: inline-flex;
   min-height: var(--target-secondary);
@@ -69,6 +49,9 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }
+/* D-741 6 — 작업 목록은 공용 하위 탐색 자리에 선다. 자리의 배치는 app-shell.css가 갖고
+   여기서는 그 안의 여백만 준다. */
+.ui-subnav > .ui-task-chooser { padding: var(--space-3); }
 body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] {
   align-items: start;
   gap: var(--space-4);
@@ -114,6 +97,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     min-height: 0;
   }
   body[data-surface="console"] ui-topbar { flex: none; }
+  body[data-surface="console"] .ui-app-body { grid-template-rows: minmax(0, 1fr); }
   body[data-surface="console"] .surface-main {
     flex: 1;
     grid-template-rows: auto auto minmax(0, 1fr);
@@ -192,11 +176,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     min-width: 0;
     white-space: nowrap;
   }
-  body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"].procedure-tasks {
-    display: grid;
-    grid-template-columns: var(--sidebar-track) minmax(0, 1fr);
-    gap: var(--space-5);
-  }
+  .ui-subnav > .ui-task-chooser { padding: var(--inset-subnav); }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
@@ -215,10 +195,10 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] > .traffic-policy-simulation { grid-column: 1; grid-row: 3; }
 }
 
-/* D-466 — 머리 자리는 brand | cluster | estop. D-359 §6.4의 두 줄 접기다.
-   이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
-   화면 전환은 cluster이지 사이드바가 아니다. 붙박이 머리는 창 높이의 20% 이하다.
-   알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
+/* D-741 5·6 — 머리는 한 줄이다: brand | role | estop. 화면 전환은 머리 아래 탐색 레일이고
+   64rem 미만에서 가로 한 줄이 된다(app-shell.css). 비상 정지는 늘 오른쪽 위에 보인다.
+   붙박이 머리는 창 높이의 20% 이하다(D-359 §6.4).
+   알림은 글이 있을 때만 둘째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
   body[data-surface="console"] .surface-main {
     grid-template-areas: "status" "banner" "observe" "act" "sense";
@@ -231,14 +211,14 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: "brand role estop" "nav nav estop";
+    grid-template-areas: "brand role estop";
     align-items: center;
     gap: var(--space-1) var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    min-height: var(--appbar-height);
+    padding: var(--space-1) var(--space-3);
   }
   ui-brand { grid-area: brand; }
-  #surface-switch { grid-area: nav; gap: var(--space-1); min-width: 0; }
-  #shell-notice { grid-column: 1 / -1; grid-row: 3; min-width: 0; }
+  #shell-notice { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
   #shell-notice:empty { display: none; }
   #shell-role { grid-area: role; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   #shell-estop { grid-area: estop; align-self: stretch; }
@@ -246,10 +226,11 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
 }
 
 @media (width < 30rem) {
-  ui-topbar { padding: var(--space-2); }
+  ui-topbar { padding: var(--space-1) var(--space-2); }
   ui-brand small { display: none; }
-  /* 320px에서 화면 전환 세 링크와 비상 정지가 한 줄에 선다 — 안쪽 여백만 줄인다. */
-  .surface-switch a { padding-inline: var(--inset-button); }
+  /* 320×568에서 머리 64px + 레일 줄 49px = 113px로 창 높이의 20%(113.6px) 안이다. */
+  #surface-switch { padding-block: 0; }
+  #surface-switch .ui-rail-item:focus-visible { outline-offset: calc(0px - var(--focus-ring-width)); }
   #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); padding: var(--space-3); }
   .surface-actions:is(.map-click-actions, .map-layer-actions) { flex-direction: row; width: 100%; }
@@ -266,6 +247,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
 
 @media (30rem <= width < 64rem) {
   .surface-main { padding: var(--space-4); }
+  .ui-subnav > .ui-task-chooser { padding-inline: var(--space-4); }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;

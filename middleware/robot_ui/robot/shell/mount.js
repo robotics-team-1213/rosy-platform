@@ -49,11 +49,12 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   let closed = false;
   const procedurePanels = panels.filter(panel => panel.slot === "main");
   const procedureSlot = root.querySelector('[data-slot="main"]');
+  // D-741 6 — 작업 목록은 공용 하위 탐색 자리(.ui-subnav)에 선다. 작업이 없는 화면은 그 자리를 접는다.
+  const subnav = root.querySelector(".ui-subnav");
   const procedureContainers = new Map();
   let taskChooser = null;
   if (procedureSlot && procedurePanels.length) {
     linkStyle("/common/task-chooser.css");
-    procedureSlot.classList.add("procedure-tasks");
     const content = createNode("div", "procedure-content");
     for (const panel of procedurePanels) {
       const container = createNode("div", "procedure-panel");
@@ -69,7 +70,10 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
         return handle?.beforeHide ? await handle.beforeHide() : true;
       },
     });
-    procedureSlot.append(taskChooser.element, content);
+    subnav.append(taskChooser.element);
+    subnav.hidden = false;
+    subnav.parentElement.removeAttribute("data-seats");
+    procedureSlot.append(content);
   }
   const actionGroupElements = [];
   const actionPanels = panels.filter((panel) => panel.slot === "act" && panel.action_group);
@@ -272,6 +276,8 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
         throw error;
       }
       taskChooser.destroy();
+      subnav.hidden = true;
+      subnav.parentElement.dataset.seats = "rail";
     }
     for (const { container, ctx, unmount } of handles) {
       try {
@@ -283,7 +289,6 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
       container.remove();
     }
     procedureSlot?.querySelector(".procedure-content")?.remove();
-    procedureSlot?.classList.remove("procedure-tasks");
     for (const element of actionGroupElements) element.remove();
     closed = true;
   }
