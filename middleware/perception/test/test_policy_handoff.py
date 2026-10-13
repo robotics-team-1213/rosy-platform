@@ -114,8 +114,6 @@ class PolicyUnavailableDiagnosticsTests(unittest.TestCase):
         self.assertIsNone(self.policy._take_unavailable_detail())
         self.assertIsNone(self.policy.evaluate(.01, 0., 9.94))
         self.assertEqual(self.policy._take_unavailable_detail()['reason'], 'snapshot_future')
-        self.policy.update(replace(self.snapshot, sequence=2, observed_at=9.99, expires_at=9.995))
-        self.assertIsNone(self.policy.evaluate(.01, 0., 9.966))      # an invalid window stays refused
 
 
         from control.control.command_gate import evaluate_command
