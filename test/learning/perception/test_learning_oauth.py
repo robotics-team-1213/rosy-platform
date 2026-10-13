@@ -1,0 +1,90 @@
+"""Signed OIDC responses and one-time browser-bound callbacks."""
+import base64
+import json
+import time
+from urllib.parse import parse_qs, urlsplit
+import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes
+from learning_oauth import OAuth
+from learning_accounts import AccountError
+from test_learning_accounts import accounts
+
+
+def b64(value): return base64.urlsafe_b64encode(value).rstrip(b'=').decode()
+
+
+class Provider:
+    def __init__(self):
+        self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.claims = {}; self.calls = []
+
+    def __call__(self, method, url, *, data=None, headers=None):
+        self.calls.append((method, url, data))
+        if url.endswith('/jwks'):
+            n = self.key.public_key().public_numbers()
+            return {'keys': [{'kty': 'RSA', 'kid': 'test', 'alg': 'RS256', 'use': 'sig',
+                'n': b64(n.n.to_bytes(256, 'big')), 'e': b64(n.e.to_bytes(3, 'big'))}]}
+        if url.endswith('/token'):
+            header = b64(json.dumps({'alg': 'RS256', 'kid': 'test'}).encode())
+            payload = b64(json.dumps(self.claims).encode()); message = (header + '.' + payload).encode()
+            signature = self.key.sign(message, padding.PKCS1v15(), hashes.SHA256())
+            return {'access_token': 'oauth-private', 'token_type': 'Bearer', 'scope': 'openid profile read-repos',
+                    'expires_in': 3600, 'id_token': message.decode() + '.' + b64(signature)}
+        if url.endswith('/userinfo'): return {'sub': self.claims['sub'], 'preferred_username': 'Alice'}
+        raise AssertionError(url)
+
+
+def setup_flow(accounts, purpose='login', session=None):
+    cfg = json.loads(accounts.config_path.read_text())
+    cfg['oauth'] = {'client_id': 'client', 'redirect_uri': 'https://review.example/oauth/callback'}
+    accounts.config_path.write_text(json.dumps(cfg))
+    provider = Provider(); oauth = OAuth(accounts, transport=provider)
+    url, binding = oauth.begin(purpose, session=session)
+    query = parse_qs(urlsplit(url).query)
+    provider.claims = {'iss': 'https://huggingface.co', 'aud': 'client', 'sub': 'invited-alice',
+                       'exp': int(time.time()) + 300, 'iat': int(time.time()), 'nonce': query['nonce'][0]}
+    return oauth, provider, query, binding
+
+
+def test_pkce_login_callback_replay_and_browser_binding(accounts):
+    oauth, provider, query, binding = setup_flow(accounts)
+    assert query['code_challenge_method'] == ['S256']
+    assert query['scope'] == ['openid profile']
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, 'wrong')
+    # Wrong browser must not destroy the legitimate browser's pending flow.
+    session, principal = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+    assert principal['user_id'] == 'alice'
+    assert accounts.authenticate(session)['user_id'] == 'alice'
+    token_call = next(call for call in provider.calls if call[1].endswith('/token'))
+    assert token_call[2]['code_verifier']
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+
+
+@pytest.mark.parametrize('field,value', [('nonce', 'wrong'), ('iss', 'https://evil.example'),
+    ('aud', 'other'), ('exp', 0), ('sub', 'uninvited')])
+def test_invalid_claims_never_login(accounts, field, value):
+    oauth, provider, query, binding = setup_flow(accounts)
+    provider.claims[field] = value
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+
+
+def test_explicit_link_is_session_bound(accounts):
+    session, _ = accounts.login('alice', 'alice-password')
+    oauth, provider, query, binding = setup_flow(accounts, 'link', session)
+    provider.claims['sub'] = 'second-subject'
+    assert 'read-repos' in query['scope'][0]
+    accounts.logout(session)
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
+
+
+def test_oidc_signature_is_checked(accounts):
+    oauth, provider, query, binding = setup_flow(accounts)
+    old = provider.key
+    def transport(method, url, **kwargs):
+        result = provider(method, url, **kwargs)
+        if url.endswith('/token'): provider.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        return result
+    oauth.transport = transport
+    with pytest.raises(AccountError): oauth.complete({'state': query['state'][0], 'code': 'x'}, binding)
+
