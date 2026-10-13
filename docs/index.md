@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · docs(design): 좁은 머리 규칙을 D-668 테마 버튼과 맞춘다
 - 2026-10-13 · uncommitted · fix(review): port the D-485 acceptance defect fixes onto the restructured tree
 - 2026-10-13 · b3687f8dec · docs: record S1 source gate and bounded closing checks
 - 2026-10-13 · uncommitted · refactor: promote Drive source holder
 - 2026-10-13 · 33d76482f · docs: verify and process P1 held artifacts
-- 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
