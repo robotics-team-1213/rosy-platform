@@ -208,8 +208,13 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         for line in (unit_text if unit_text is not None else text).splitlines(keepends=True):
             if line.startswith('ExecStart='):
                 line = re.sub(r' --learning-control [^\s]+', '', line)
+                line = re.sub(r' --decisions-port [^\s]+', '', line)
+                cli = app.read_text(encoding='utf-8')
+                port_arg = re.search(r' --port ([0-9]+)', line)
+                if port_arg and '--decisions-port' in cli:
+                    line = line.rstrip('\n') + f' --decisions-port {int(port_arg[1]) + 10000}\n'
                 state_arg = re.search(r' --state ([^\s]+)', line)
-                if state_arg and '--learning-control' in app.read_text(encoding='utf-8'):
+                if state_arg and '--learning-control' in cli:
                     binding = Path(state_arg[1]) / 'learning-control.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
             lines.append(line)
