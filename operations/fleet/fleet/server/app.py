@@ -3,9 +3,8 @@
 경로는 로봇 계약(`/api/v1/...`)과 일부러 다르다. 관제 API 는 사이트 것이고, 로봇 것을
 흉내 내면 둘 중 어느 쪽에 말하고 있는지 화면에서도 코드에서도 흐려진다.
 
-인증: 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 즉 이 포트에 닿는 사람은 현장의
-모든 로봇을 움직일 수 있다. 그래서 기본은 루프백이고, 루프백 밖으로 열려면 콘솔 토큰을
-반드시 받는다(`serve()` 가 강제한다).
+인증: 기본 바인드는 루프백이며 외부 접속은 설정된 Fleet 자격과 역할 검사를 거친다.
+등록 자격·기명 운영자·장치 자격은 서로 다른 권한이다.
 
 구조 (D-362 P0-1): 이 파일은 구성 검증·lifespan·감사 미들웨어·비전 임대만 남고, 경로는
 소유자 모듈이 단다 — mission_routes, task_dispatch_routes, intent_routes, console_routes,
@@ -48,6 +47,7 @@ from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.stuck.resolver import ResolverConfig, StuckResolver
 from fleet.stuck.loop import StuckResolverLoop
+from fleet.incidents.automation.runtime import install_incident_runtime
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -135,6 +135,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                stuck_resolver_enrolled: frozenset = frozenset(),
                ai_facts_acting: frozenset = frozenset(),
+               autonomous_robots: frozenset = frozenset(),
                ai_first=None,   # D-610 3: fleet.stuck.ai_first.AiFirst (site config fleet.ai_first), None = empty list
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
@@ -145,11 +146,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
+               trip_caps_port=None, map_pose_port=None, simulation_pose_binding=None,
+               lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
                traffic_signal_advice=False, trip_lease=None,
-               identity_config=None, lane_compliance_config=None) -> FastAPI:
+               identity_config=None, lane_compliance_config=None,
+               notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
+               conversation_config=None) -> FastAPI:
+    if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
+        raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
+    if notification_config is not None and task_service is None:
+        raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
+    simulation_pose = bool(getattr(map_pose_port, 'simulation_only', False))
+    if simulation_pose:
+        if deployment_profile != 'simulation' or simulation_pose_binding is None:
+            raise ValueError('native SIM pose requires simulation deployment and explicit runner binding')
+        if not callable(getattr(map_pose_port, 'validate_simulation_binding', None)):
+            raise ValueError('native SIM pose requires a validated runner binding')
+        map_pose_port.validate_simulation_binding(simulation_pose_binding)
+    elif simulation_pose_binding is not None:
+        raise ValueError('runner SIM binding requires an explicit native SIM pose port')
     if development_sessions is not None and task_service is None:
         # D-473 3: every development session issue and POST is in the durable API audit.
         raise ValueError("development connection mode requires the durable API audit (task_service)")
@@ -335,6 +352,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         localization_task = None
         signal_task = None
         calibration_drift_task = None
+        notification_http = None
+        notification_task = None
+        if notification_config is not None:
+            import httpx
+            from fleet.incidents.notifications import NotificationWorker
+            notification_http = httpx.AsyncClient(trust_env=False)
+            notification_task = asyncio.create_task(NotificationWorker(
+                app.state.line_stuck._log.notifications, notification_config, notification_http,
+                board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
@@ -384,13 +410,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task):
+                               lease_task, path_task, calibration_drift_task, notification_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            if notification_http is not None:
+                await notification_http.aclose()
             if calibration_drift_watch is not None:
                 await calibration_drift_watch.aclose()
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
@@ -445,10 +473,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
     password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
     app.state.password_sessions = password_sessions
+    other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
-        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
         if goal_evidence_service is not None:
             other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
         assert_cell_producer_credentials_isolated(
@@ -553,6 +581,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                               (sightings.sources if sightings is not None else ())],
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
+    execution_pose = map_pose_port if simulation_pose else map_pose
+    if simulation_pose:
+        def _execution_active_map():
+            active = site_maps.active()
+            return (active[1].map_id, active[0]) if active is not None else (None, None)
+        execution_pose.bind_active_map(_execution_active_map)
+    app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
     identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
@@ -566,12 +601,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
                           read_guard=read_guard, map_pose=map_pose)
-    install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
+    install_map_pose_routes(app, service=execution_pose, read_guard=read_guard)
     # D-511 M0: lane compliance from the same map pose; observe and notify only.
     from fleet.localization.lane_compliance import LaneComplianceConfig
     from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
     app.state.lane_compliance = LaneComplianceMonitor(
-        lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
+        lambda: console.robot_ids, poses=execution_pose, site_maps=site_maps,
         config=lane_compliance_config or LaneComplianceConfig(), identity=identity,
         clients=console.clients,   # D-511 rev 1: the return cue
         # An open CORE stuck owns the robot (D-577 REALIGN); the board is built further down.
@@ -586,6 +621,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
+    if app.state.line_stuck._log is not None:
+        app.state.line_stuck._log.notifications.config = notification_config
     from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
                                            db_path=task_service.store.path if task_service else None,
@@ -614,6 +651,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),
                                       painted=lambda: (site_maps.active() or (None,) * 4)[3])
+        resolver_core.autonomous_robots = frozenset(autonomous_robots)
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
@@ -622,13 +660,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             clients=lambda: {**{rid: client for rid, client in console.clients().items()
                                 if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        app.state.stuck_resolver.events_since = console.hub.registry.events_since
         app.state.stuck_resolver.heading_review = app.state.lane_compliance.stuck_heading
+        app.state.line_stuck.heading_review = app.state.lane_compliance.stuck_heading
         resolver_core.at_crosswalk = app.state.lane_compliance.at_crosswalk   # D-573 개정 2026-10-10
         app.state.stuck_resolver.ai_facts = app.state.ai_facts.acting_facts   # D-577 7, configured robots only
         app.state.stuck_resolver.ai_board = app.state.ai_facts   # D-577 개정: AI PC proposals, Fleet validates
         from fleet.stuck.problems import ProblemWatch
         resolver_core.ai_first = app.state.ai_first               # D-610: AI-first robots, closed loop, P2 kinds
         app.state.stuck_resolver.episodes, app.state.stuck_resolver.problems = app.state.ai_episodes, ProblemWatch()
+    install_incident_runtime(app, incident_model_config)
     from fleet.stuck.ai_routes import install_ai_first_routes, rosy_cam_lease
     install_ai_first_routes(app, first=app.state.ai_first, line_stuck=app.state.line_stuck,
                             loop=getattr(app.state, "stuck_resolver", None), episodes=app.state.ai_episodes,
@@ -700,9 +741,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    trip_runner.autonomous_robots = frozenset(autonomous_robots)
+    trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:
         from fleet.server.junction_signal import signal_for
-        hub.junction_signal = partial(signal_for, traffic=trip_runner.traffic, poses=map_pose,
+        hub.junction_signal = partial(signal_for, traffic=trip_runner.traffic, poses=execution_pose,
                                       site_maps=site_maps)
     from fleet.stuck.deadlock import AiReplan   # D-610 7: the AI PC picks a wait cycle's replan, Fleet checks it
     trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
@@ -711,6 +754,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
+        console.goal_leases.admit_attempt = task_service.admit_attempt
+        console.goal_leases.bind_native_receipt = task_service.bind_native_receipt
+        console.goal_leases.native_required = task_service.native_required
+        from fleet.server.channel.execution.outcomes.task_receipt import prepare_send
+        console.goal_leases.prepare_send = partial(prepare_send, console.goal_leases)
+        task_service.core_events = hub.event_store if hub is not None else None
 
     @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
     def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
@@ -720,11 +769,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
-    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
+    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None
+                            or console.formation_status()["active"] or app.state.teach.view()["recording"] is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
     marker_sources = sightings is not None and any(s.place_markers for s in sightings.sources)  # D-564
-    install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
+    install_teach_routes(app, service=TeachService(poses=map_pose if simulation_pose else map_pose_port or map_pose, site_maps=site_maps,
                                                    roster=lambda: console.robot_ids,
                                                    place_markers=sightings.fresh_place_marker
                                                    if marker_sources else None),
@@ -750,9 +800,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    zones=trip_runner.traffic.zone_edges)
     install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
-    proposal_create = proposal_resolve = None
+    proposal_create = proposal_resolve = mission_admit = None
     if mission_service is not None:
-        proposal_create, proposal_resolve = install_mission_routes(
+        proposal_create, proposal_resolve, mission_admit = install_mission_routes(
             app, mission_service=mission_service, proposal_store=proposal_store,
             cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
             goal_evidence_service=goal_evidence_service, mission_progress=mission_progress,
@@ -765,20 +815,39 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 require_named_operator=require_named_operator,
                                 operator_guard=operator_guard, read_guard=read_guard)
 
+    from fleet.server.work_routes import install_work_routes
+    from fleet.server.channel_requests import install_channel_feature
+    install_work_routes(app, task_service=task_service, mission_service=mission_service,
+                        require_viewer=require_viewer, read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
-    install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
-                            service_id=cell_app_service_id, principals=principals,
-                            proposal_create=proposal_create, proposal_resolve=proposal_resolve,
-                            require_viewer=require_viewer, require_named_operator=require_named_operator)
-
-    install_intent_routes(app, console=console, task_service=task_service,
-                          require_operator=require_operator,
+    cell_prepare = install_cell_app_routes(
+        app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,
+        principals=principals, proposal_create=proposal_create, proposal_resolve=proposal_resolve,
+        require_viewer=require_viewer, require_named_operator=require_named_operator)
+    install_channel_feature(
+        app, config=channel_config, task_service=task_service, principals=principals, site_logins=site_logins,
+        require_operator=require_operator, read_guard=read_guard, console=console, existing_tokens=other_tokens,
+        secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
+        proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
+    from .channel_model_runtime import install_channel_models
+    install_channel_models(app,channel_model_config)
+    from .channel.conversation.runtime import install_conversation
+    if channel_model_config is not None or conversation_config is not None:
+        from core_common.protocol.channel_requests import ChannelModelResult
+        @app.get('/api/fleet/channel-requests/{request_id}/deliberation',dependencies=read_guard,
+                 response_model=ChannelModelResult,tags=['fleet-work'])
+        def channel_model_result(request_id:str,principal=Depends(require_operator)):
+            jobs = (app.state.channel_conversation_jobs if conversation_config is not None
+                    else app.state.channel_model_jobs)
+            return jobs.read(request_id,principal.principal_id)
+    install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
+    install_conversation(app,conversation_config,site_maps,task_service=task_service)
 
     @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
     def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
@@ -809,7 +878,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 else UnavailableHostHelper()))
 
     install_static_routes(app)
-
     return app
 
 
@@ -819,6 +887,8 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
     while True:
         try:
             task_service.scheduler.expire_queued()
+            from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
+            await reconcile_tasks(task_service, console)
             snapshot = await console.snapshot()
             console.prune_task_queue_entries(task_service.store.queued_task_ids())
             available = {

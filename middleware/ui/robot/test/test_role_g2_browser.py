@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[4]
-for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+for package in ("middleware/core/api", "middleware/core/gateway", "middleware/core/events",
                 "middleware/core/services", "contracts/foundation"):
     sys.path.insert(0, str(ROOT / package))
 
@@ -1310,7 +1310,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
             assert result["clicksBottom"] <= result["canvasTop"], result
             assert len(result["clickButtons"]) == 2 and result["clickButtons"][0]["top"] == result["clickButtons"][1]["top"], result
-            assert all(button["height"] >= 44 for button in result["clickButtons"]), result
+            assert all(button["height"] >= 48 for button in result["clickButtons"]), result
             assert result["layersTop"] >= result["canvasTop"] + result["canvasHeight"], result
             if viewport[0] < 1024:
                 assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
@@ -1334,8 +1334,9 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')")
                 assert "계획 경로 · 주행 상태 확인 필요" in stage.inner_text()
                 page.wait_for_function("""expected => {
-                  const values = document.querySelectorAll('[data-panel="console.overview"] .ui-readout dd');
-                  return values[1]?.textContent.includes(expected) && values[2]?.textContent.includes(expected);
+                  const row = label => [...document.querySelectorAll('[data-panel="console.overview"] dt')]
+                    .find(node => node.textContent === label)?.nextElementSibling;
+                  return row('내비게이션')?.textContent.includes(expected) && row('현재 위치')?.textContent.includes(expected);
                 }""", arg=label)
                 image = f"operator-console-navigation-{scenario}-{viewport[0]}x{viewport[1]}.png"
                 assert page.locator("#map-status").get_attribute("state") == "ready"
@@ -1391,10 +1392,12 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
                 assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
                 assert page.evaluate(blue_pixels) == 0
-                overview_values = page.locator('[data-panel="console.overview"] .ui-readout dd')
+                overview = page.locator('[data-panel="console.overview"] .ui-readout')
+                overview_navigation = overview.locator('dt', has_text='내비게이션').locator('+ dd')
+                overview_pose = overview.locator('dt', has_text='현재 위치').locator('+ dd')
                 page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('위치 확인 필요')""")
-                assert "위치 확인 필요" in overview_values.nth(1).inner_text()
-                assert overview_values.nth(2).inner_text() == "지도 위치 확인 불가"
+                assert "위치 확인 필요" in overview_navigation.inner_text()
+                assert overview_pose.inner_text() == "지도 위치 확인 불가"
                 page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-390x844.png"), full_page=True)
                 location.update(state="LOCALIZED", frame="odom")
                 page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('지도 좌표 미확인')")

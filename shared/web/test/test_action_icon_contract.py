@@ -8,14 +8,15 @@ the top-bar icons.
 from pathlib import Path
 
 UI = Path(__file__).resolve().parents[1] / "ui.js"
-FLEET = Path(__file__).resolve().parents[3] / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = Path(__file__).resolve().parents[3] / "operations" / "ui" / "console"
 
 CHROME = ("settings:", '"theme-dark":', '"theme-light":', '"theme-system":', "estop:")
+SESSION = ("login:", "account:", "logout:")
 
 
 def test_action_icon_names_cover_fleet_chrome_and_keep_screen_reader_text():
     body = UI.read_text(encoding="utf-8").split("export function actionIcon", 1)[1]
-    for name in CHROME:
+    for name in (*CHROME, *SESSION):
         assert name in body, name
     assert "sr-only" in body
     assert 'tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6"' in body

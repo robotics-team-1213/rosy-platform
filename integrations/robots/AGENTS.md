@@ -32,7 +32,7 @@ See `omx/AGENTS.md`. CI installs this wheel next to the manipulation Skill wheel
 
 ### Internal
 
-- `middleware/skills/manipulation/` and `middleware/apps/device/omx/adapter/`.
+- `middleware/skills/manipulation/` and `middleware/devices/omx/adapter/`.
 
 ### External
 

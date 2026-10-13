@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cardExpanded, createRoster, mustExpand } = await import("../../fleet/server/web/roster.js");
-const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../fleet/server/web/queues.js");
-const { deadlockView, replanView } = await import("../../fleet/server/web/trip-replan.js");
+const { createRoster, mustExpand } = await import("../../../ui/console/roster.js");
+const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../../ui/console/queues.js");
+const { deadlockView, replanView } = await import("../../../ui/console/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
 
@@ -21,19 +21,12 @@ test("the four must-expand states: offline, E-stop latched, safety not nominal, 
   assert.equal(mustExpand(nominal({ calibration: { label: "카메라 보정", holder: "kim" } })), true);
 });
 
-test("a must-expand card stays open even after the operator folds it", () => {
-  const folded = { open: false, attention: ": 비상 정지 걸림" };
-  assert.equal(cardExpanded({ must: true, selected: false, attention: ": 비상 정지 걸림", choice: folded }), true);
-});
-
-test("nominal folds, exception opens, the operator's fold holds until the exceptions change", () => {
-  assert.equal(cardExpanded({ must: false, selected: false, attention: "", choice: undefined }), false);
-  assert.equal(cardExpanded({ must: false, selected: true, attention: "", choice: { open: false, attention: "" } }), true);
-  assert.equal(cardExpanded({ must: false, selected: false, attention: ": 교통 대기", choice: undefined }), true);
-  const folded = { open: false, attention: ": 교통 대기" };
-  assert.equal(cardExpanded({ must: false, selected: false, attention: ": 교통 대기", choice: folded }), false);
-  assert.equal(cardExpanded({ must: false, selected: false, attention: ": 교통 대기|: 목표 실패", choice: folded }), true);
-  assert.equal(cardExpanded({ must: false, selected: false, attention: "", choice: { open: true, attention: "" } }), true);
+test("all four safety exceptions stay ahead of nominal robots even without a queue row", () => {
+  const { needsAttention } = createRoster({ view: { stateUnavailable: false, trafficTrips: [], endedTrips: [] }, streamEvidence: () => null });
+  assert.equal(needsAttention(nominal()), false);
+  for (const row of [nominal({ online: false }), nominal({ state: null }),
+    nominal({ state: { safety: { estop: true } } }), nominal({ state: { safety: {} } }),
+    nominal({ calibration: { holder: "kim" } })]) assert.equal(needsAttention(row), true);
 });
 
 test("one queue row is open: the operator's pick while it lives, else the most urgent decision", () => {

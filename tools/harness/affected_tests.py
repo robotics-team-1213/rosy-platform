@@ -94,21 +94,22 @@ CI_FULL_MATRIX = (
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
-        "middleware/apps/device/pinky/profile/test", "middleware/apps/device/omx/profile/test"]], "ros": "none"},
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
         ["operations/vision/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
+        ["operations/world/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
          "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
     {"name": "gz-sim", "invocations": [["integrations/simulation/gazebo/test"]], "ros": "overlay"},
     {"name": "hardware-safety", "invocations": [[
-        "middleware/apps/device/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
+        "middleware/devices/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
         "middleware/perception/test/test_ir_adc_lock.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_flake8.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_pep257.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
 )
 
 # A module whose `tests` is the whole root suite is too broad to select by
@@ -210,9 +211,11 @@ class Repo:
 
     def module_for(self, path: str) -> dict | None:
         best = None
+        best_length = -1
         for module in self.modules:
-            if _under(path, module["path"]) and (best is None or len(module["path"]) > len(best["path"])):
-                best = module
+            for source in (module['path'], *module.get('source_paths', ())):
+                if _under(path, source) and len(source) > best_length:
+                    best, best_length = module, len(source)
         return best
 
     def prefixes_under(self, path: str) -> tuple[str, ...]:

@@ -24,7 +24,7 @@ CORE_SRC = {
     "core_common": ROOT / "contracts/foundation",
     "core_events": ROOT / "middleware/core/events",
     "core_features": ROOT / "middleware/core/services",
-    "core_api_web": ROOT / "middleware/core/api_web",
+    "core_api_web": ROOT / "middleware/core/api",
 }
 BOOT_ID = "0b1f5d2e-8c3a-4f6e-9d7b-1a2b3c4d5e6f"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="POSIX modes, groups, symlinks and FIFOs")

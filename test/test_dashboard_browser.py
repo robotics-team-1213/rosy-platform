@@ -1258,7 +1258,7 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         page.wait_for_function("document.querySelector('[data-mode=IDLE]').disabled===false")
         page.locator('[data-line-mode=IR_LINE]').click()
         page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
-        page.locator('#emergency-stop').click(position={'x':62,'y':60}, timeout=3_000)
+        page.locator('#emergency-stop').click(timeout=3_000)
         expect(dialog).to_have_count(0)
         page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length===2")
         page.locator('[data-line-mode=IR_LINE]').click()
@@ -2317,7 +2317,8 @@ def test_an_expired_remembered_token_is_dropped_on_load():
         page.wait_for_timeout(300)
         assert _storage(page) == {"session": None, "local": None}
         assert "open" in page.locator("#auth-drawer").get_attribute("class")
-        assert not page.evaluate("window.__apiCalls")
+        assert page.evaluate("window.__apiCalls.map(({method,path})=>({method,path}))") == [
+            {"method": "GET", "path": "/api/v1/auth/connection"}]
         browser.close()
 
 

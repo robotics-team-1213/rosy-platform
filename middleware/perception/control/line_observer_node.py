@@ -21,6 +21,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
 
+from .core_law_input import configure_drivable_law, refresh_drivable_law
 from . import executor_choice
 from .route_context_input import RouteContextInput, bend_expected
 from .calibrated_values import calibrated
@@ -45,7 +46,6 @@ from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denois
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.drivable.drivable_keep import keep_step, parse_guide, scan_summary
-from .sensing.perception.drivable.drivable_steer import DrivableSteer
 from .sensing.perception.evidence_mode import EvidenceModes
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
@@ -178,8 +178,7 @@ class LineObserverNode(Node):
         self._paint_worker = self._build_paint_worker()
         self._evidence_modes = EvidenceModes()
         # D-597 amendment 2: with the drivable target, keep steers from the way itself.
-        self._drivable_steer = (DrivableSteer() if self._paint_worker is not None
-                                and self._paint_worker.target == 'drivable' else None)
+        configure_drivable_law(self, _READ_ONLY)
         self._wall_ahead = self._lane_guide = None
         self._odom_history = OdomHistory()
         self._route_follower = None
@@ -231,7 +230,7 @@ class LineObserverNode(Node):
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
-            if self._drivable_steer is not None:   # D-597 amendment 2: a wall beyond the model's view
+            if self._drivable_required:   # D-597 amendment 2: a wall beyond the model's view
                 self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
                 self.create_subscription(String, 'line/lane_guide', lambda m: setattr(   # route prior (D-511 rev 2)
                     self, '_lane_guide', parse_guide(m.data, self._stamp())), 10)
@@ -522,6 +521,7 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode == 'keep':
+                refresh_drivable_law(self)
                 # A camera gap (or the first keep frame of this node) starts the keeper afresh: sides and steering
                 # from before the gap may belong to another place. So does a commanded spin in place (D-507: its
                 # swept view latched the flip hold).
@@ -551,7 +551,11 @@ class LineObserverNode(Node):
                                     if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     bend_expected=bend_rules)
-                if self._drivable_steer is not None:   # D-597 amendments 2-3
+                if self._drivable_required and self._drivable_steer is None:
+                    # A missing authoritative law cannot fall through to another steering law.
+                    observation = None
+                    self._lane_keeper.last.update(strategy='none', reason='core_steering_law_unavailable')
+                elif self._drivable_steer is not None:   # D-597 amendments 2-3
                     try:
                         step, decided = keep_step(
                             self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,

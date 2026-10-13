@@ -3,10 +3,11 @@
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 DOCS = {"index.html": "/console", "install.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console/cell"}
-ORDER = ["/console", "/console/install", "/console/site-map", "/console/cell"]
+ORDER = ["/console", "/console/install", "/console/site-map", "/console?view=work", "/console/cell"]
+ICONS = ["fleet", "install", "map", "history", "cell"]
 
 
 def _page(name):
@@ -21,14 +22,18 @@ def _tabs(name):
     page = _page(name).read_text(encoding="utf-8")
     match = re.search(r'<nav class="doc-tabs" aria-label="Rosy Fleet 문서">(.*?)</nav>', page, re.S)
     assert match, f"{name} has no doc-tabs row"
-    return page, re.findall(r'<a href="([^"]+)"( aria-current="page")?>', match.group(1))
+    links = [dict(re.findall(r'([\w-]+)="([^"]*)"', attributes))
+             for attributes in re.findall(r'<a\b([^>]*)>', match.group(1))]
+    return page, links
 
 
 def test_every_document_has_the_same_tabs_and_marks_itself():
     for name, current in DOCS.items():
         page, links = _tabs(name)
-        assert [href for href, _ in links] == ORDER, name
-        assert [href for href, cur in links if cur] == [current], name
+        assert [link["href"] for link in links] == ORDER, name
+        assert [link["href"] for link in links if link.get("aria-current") == "page"] == [current], name
+        assert [link.get("data-action-icon") for link in links] == ICONS, name
+        assert all("data-icon-only" in link for link in links), name
         assert '/console/assets/doc-tabs.css' in page, name
 
 

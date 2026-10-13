@@ -1,9 +1,9 @@
-"""Camera and lane evidence live under sensing/perception. Lidar and dock tags do not."""
+"""Camera and lane evidence have a separate holder from sensor geometry."""
 
 from pathlib import Path
 
-SENSING = Path(__file__).resolve().parents[1] / "control" / "sensing"
-PERCEPTION = SENSING / "perception"
+SENSING = Path(__file__).resolve().parents[1] / "sensors" / "sensing"
+PERCEPTION = Path(__file__).resolve().parents[1] / "vision" / "perception"
 
 
 def test_image_modules_moved_and_geometry_stayed():

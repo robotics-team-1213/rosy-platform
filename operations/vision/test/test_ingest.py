@@ -169,6 +169,7 @@ async def test_config_is_sent_right_after_a_valid_hello():
         await conn.send(json.dumps(_hello()))
         reply = json.loads(await conn.recv())
         assert reply == protocol.make_config()
+        assert json.loads(await conn.recv()) == protocol.make_demand(False)
 
 
 @run_async
@@ -177,10 +178,12 @@ async def test_same_source_reconnect_replaces_and_closes_the_old_one_4409():
         old = await h.connect()
         await old.send(json.dumps(_hello()))
         await old.recv()  # config
+        await old.recv()  # demand
 
         new = await h.connect()
         await new.send(json.dumps(_hello()))
         await new.recv()  # config
+        await new.recv()  # demand
 
         with pytest.raises(ConnectionClosed):
             await old.recv()
