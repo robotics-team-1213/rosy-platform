@@ -185,6 +185,8 @@ def split_reviewed(root, report, decisions, output):
     dataset = load_dataset(root, report['repo_id'])
     produced = split_dataset(dataset, splits, output_dir=output)
     for name, child in produced.items():
+        # Upstream split_dataset does not preserve the source video backend.
+        child = load_dataset(output / name, child.repo_id)
         inspect_frames(child.meta.info, (child[i] for i in range(len(child))))
     write_json(output / 'split-receipt.json', dict(source=report, decisions=decisions, splits=splits,
                                                  reader_verified=True, uploaded=False))
