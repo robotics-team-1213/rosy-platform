@@ -180,7 +180,8 @@ class JunctionBendMixin:
         if j['state'] == 'aborted':
             return out
         if not self.motion_admitted(now, *twist, 'bend', j['map_id']):
-            return self._abort(j, 'motion_unconfirmed', decision)
+            return self._unconfirmed(j, now, decision)
+        j['confirmed_at'] = now
         return out
 
     def _bend_own_line(self, j):
