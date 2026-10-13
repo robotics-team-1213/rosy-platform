@@ -59,8 +59,9 @@ function summary(item) {
   if(!reports.length) return {label:'파일 확인 필요',attention:true};
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
-  if(reports.some(row=>row.status==='changed')) return {label:'결과 변경',attention:true};
+  if(reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
   if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
+  if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
   return {label:states[status]||'보고서 확인',attention:false};
 }
@@ -115,8 +116,8 @@ function render() {
         }
       }
     }
+    for(const reason of new Set(item.reports.flatMap(report=>report.reasons||[]))) text(card,'p',reasons[reason]||reason,'job-reason');
     for(const report of item.reports) {
-      for(const reason of report.reasons||[]) text(card,'p',reasons[reason]||reason,'job-reason');
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
       if(report.error) text(card,'p',report.error,'job-reason');
     }
