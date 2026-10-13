@@ -12,7 +12,7 @@ def install_account_routes(app, *, sessions, authorize):
     def manager(request: Request, principal: SitePrincipal = Depends(authorize)):
         if getattr(request.state, "site_auth_via", None) != "cookie" or not same_origin(request):
             raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED",
-                                            "message": "same-origin account manager cookie required"})
+                                             "message": "same-origin account manager cookie required"})
         return request.cookies[COOKIE]
 
     def call(operation, *args, status=200, **kwargs):
