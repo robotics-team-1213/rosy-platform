@@ -632,7 +632,7 @@ class TripRunner(TripAdmission, TripProgress):
         # CORE idle, or waiting at the next junction it sighted to end the pass (lap SIM D), same seq
         finished = ours and (sent.get("done") or (sent.get("carried") and (state in ("idle", "waiting") or newer)))
         if finished or (not ours and s >= bend["s_start"]):
-            live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
+            live.bends_done.add((index, bend["place_id"]))  # finished, or passed without one: never again on this segment
             return await self._step_bend(live, index, s)
         if live.view["hold"] is not None or self.traffic.holds(live, index):
             # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
