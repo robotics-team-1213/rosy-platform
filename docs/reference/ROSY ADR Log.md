@@ -759,6 +759,7 @@
 | D-755 | 공통 학습 데이터와 다중 계정 협업 연동 | Accepted |
 
 | D-756 | OMX 모방학습 준비의 미완료 항목과 재개 조건 | Accepted |
+| D-759 | 굽이 통과(D-507 보충)의 진입 직선을 지도의 차로 방향에 놓는다: `bend`의 `map_entry`, 능력 `lane_bend_map_entry` | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

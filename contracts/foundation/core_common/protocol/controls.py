@@ -51,6 +51,8 @@ class BaseVelocityControl(_Wire):
     sends it only then.
     ``lane_bend`` (D-507 addendum) is true when CORE takes the junction instruction's action
     ``bend`` (``bend_in_m``, ``bend_tol_m``, ``bend_radius_m``); Fleet sends bends only then.
+    ``lane_bend_map_entry`` (D-759 2) is true when CORE takes the bend's ``map_entry``
+    (``line_follow.bend_map_entry_enabled``, off by default, with ``lane_bend``); Fleet sends it only then.
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """
@@ -71,6 +73,7 @@ class BaseVelocityControl(_Wire):
     lane_arc: bool | None = None
     lane_arc_map_anchor: bool | None = None
     lane_bend: bool | None = None
+    lane_bend_map_entry: bool | None = None
     route_context: bool | None = None
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
@@ -171,6 +174,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    junction_pivot: bool | None = None, lane_bend: bool | None = None,
                    lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    lane_arc_map_anchor: bool | None = None,
+                   lane_bend_map_entry: bool | None = None,
                    route_context: bool | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
@@ -191,6 +195,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          junction_turn=junction_turn, junction_pivot=junction_pivot,
                                          lane_bend=lane_bend, lane_arc=lane_arc,
                                          lane_arc_map_anchor=lane_arc_map_anchor,
+                                         lane_bend_map_entry=lane_bend_map_entry,
                                          route_context=route_context,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,

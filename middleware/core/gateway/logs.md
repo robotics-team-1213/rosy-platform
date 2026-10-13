@@ -1085,3 +1085,11 @@
 - Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
 - Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
 - gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
+## 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 설정 읽기 (D-759 검토 반영, API v1.224)
+
+- 변경: `core/drive/line_follow.py::_line_follow_config`가 `bend_map_entry_enabled`를 YAML boolean으로만 읽는다(`_flag`).
+- 증거: `test_line_junction_api.py`(기본 `false`, `true`, `"true"`는 `ValueError`), `test_capabilities_controls.py`(설정이 꺼지면 `lane_bend`가 참이어도 `lane_bend_map_entry`는 거짓). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-759(Proposed).
+- 교훈: 없음.

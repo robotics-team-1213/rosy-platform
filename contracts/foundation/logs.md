@@ -656,3 +656,19 @@
 - gate 변화: 없음.
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 없음.
+
+## 2026-10-14 · a9901c702 · 능력 lane_bend_map_entry와 junction.map_entry_used·map_entry_reason (D-759, API v1.224)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_bend_map_entry`(없으면 wire에서 빠진다). `schemas.py`의 `LineJunctionStatus`에 `map_entry_used: bool = False`, `map_entry_reason: Optional[str] = None`.
+- 증거: `test_line_junction.py`의 idle dump, `test_line_junction_api.py`의 스냅숏 dict가 두 필드를 본다. `schemas.py`는 1348줄에서 1353줄이다. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759(Proposed).
+- 교훈: 없음.
+
+## 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 기본값과 설명 (D-759 검토 반영, API v1.224)
+
+- 변경: `rosy_default.yaml`의 `line_follow.bend_map_entry_enabled: false`와 그 설명. `controls.py`·`schemas.py`의 주석이 설정과 까닭 `disabled`를 적는다.
+- 증거: `test_line_junction_api.py`(기본 꺼짐, 켜짐, 따옴표 친 값 거절). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759(Proposed).
+- 교훈: 없음.

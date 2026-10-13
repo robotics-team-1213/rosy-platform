@@ -3553,3 +3553,13 @@
 - 변경: `test_fleet_header.py`, `test_doc_tabs.py`, `test_site_map_api.py`, `web/fleet-header.test.mjs`와 브라우저 시험 다섯 파일(`test_fleet_header_browser.py`, `test_development_console_browser.py`, `test_password_login_browser.py`, `test_fleet_account_browser.py`, `test_site_map_browser.py`)이 새 앱 바를 고정한다. 서버 코드와 API는 바뀌지 않았다.
 - 증거: 원격 소스 시험 통과. 브라우저 시험은 CI 대기.
 - gate 변화: 없음.
+
+## 2026-10-14 · 848a9b764 · feat: D-759 굽이 지시에 map_entry를 싣는다 (API v1.224)
+- 변경: `server/ledger/trip_ports.py::bend_fields`가 `lane_bend_map_entry` 로봇에게, 이번 단계에서 로봇을 찾은 자세에 `odom_stamp`가 있을 때 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 굽이 호 시작점의 차로 방향이다. `trip_runner._step_lane`이 그 자세를 `_step_bend`로 넘긴다. `console_view.TripCaps.lane_bend_map_entry`.
+- 증거: `test_trip_bend.py`(능력과 stamp가 있을 때만 실음, 값, 그 밖의 필드는 오늘과 같음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 0 증가다(`trip_ports.py` 600줄 그대로). 그 대가로 `bend_fields`의 주석 세 줄을 한 줄로, `TripCaps`의 주석 두 줄을 필드 옆으로 옮겼다.
+
+## 2026-10-14 · 9ee82e94d · refactor: D-759 bend_fields의 map_entry 가지를 if 문으로 (검토 반영)
+- 변경: `server/ledger/trip_ports.py::bend_fields`의 중첩 `**({} if ...)`를 `fields` dict와 `if` 한 가지로 바꿨다. 보내는 값은 같다. `console_view.TripCaps`의 두 주석을 줄였다.
+- 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
