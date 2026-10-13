@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-app-gateway` 0.1.0. Site gateway application composition. Console script `rosy-site-gateway` calls `rosy_gateway.compose:main`. Depends on `rosy-palletizing` and `rosy-execution`. This is not the Fleet server package in `operations/fleet/`.
+Wheel `rosy-app-gateway` 0.1.1. Site gateway application composition. Console script `rosy-site-gateway` calls `rosy_gateway.compose:main`. Depends on `rosy-palletizing` and `rosy-execution`. This is not the Fleet server package in `operations/fleet/`.
 
 ## Key Files
 

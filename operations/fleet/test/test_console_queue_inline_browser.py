@@ -104,9 +104,20 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         browser, page, errors = _open(playwright, site, api, posts, answers)
         item = page.locator("#incident-list li")
         expect(item).to_have_count(1)
-        expect(item.locator("summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
-        expect(item.locator("summary")).to_contain_text("앞 물체로 멈춤")
-        item.locator("summary").click()
+        records = page.locator(".incident-panel")
+        expect(records).not_to_be_visible()
+        page.get_by_role("tab", name="기록·근거").click()
+        expect(page.locator("#incident-status")).to_contain_text("최근 라인 정지 1건")
+        expect(records).to_be_visible()
+        expect(item.locator(":scope > details > summary")).to_contain_text("rosy-pinky-demo (rosy_01)")
+        expect(item.locator(":scope > details > summary")).to_contain_text("앞 물체로 멈춤")
+        expect(item.locator("time")).to_have_attribute("datetime", "2026-10-10T05:00:00.000Z")
+        assert item.evaluate("node => getComputedStyle(node).borderLeftWidth") == "0px"
+        assert records.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
+        item.locator(":scope > details > summary").click()
+        assert "interpreted_front_image" not in item.inner_text()
+        expect(item.locator("details details")).not_to_have_attribute("open", "")
+        item.locator("details details > summary").click()
         expect(item).to_contain_text("Rosy Cam: ceiling_north")
         expect(item).to_contain_text("AI PC 원인 초안: 전방 장애물")
         expect(item).to_contain_text("interpreted_front_image")
@@ -114,15 +125,16 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         expect(item).to_contain_text("이미지는 보존되지 않음")
         item.locator("select").select_option("obstacle")
         item.locator("input").fill("현장 상자 확인")
-        item.locator("button[type=submit]").click()
+        item.locator("ui-button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/rosy_01/stuck-abc/review"
         assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
         expect(page.locator("#incident-traffic-list li")).to_have_count(2)
         fact = page.locator("#incident-traffic-list li").first
-        fact.locator("summary").click()
+        fact.locator(":scope > details > summary").click()
+        assert "fleet_wait_cycle" not in fact.inner_text()
         expect(fact).to_contain_text("AI 단독 대기 순환 판단")
         fact.locator("select").select_option("traffic_wait")
-        fact.locator("button[type=submit]").click()
+        fact.locator("ui-button[type=submit]").click()
         assert posts[-1][0] == "/api/fleet/incidents/facts/17/review"
         with page.expect_download() as download_info:
             page.locator("#incident-export").click()
@@ -137,6 +149,148 @@ SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
   const y = getComputedStyle(node).overflowY;
   return (y === 'auto' || y === 'scroll') && node.scrollHeight > node.clientHeight + 1;
 }).map((node) => node.id || node.className)"""
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, [])
+        page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+        for width, height in [(1920, 1080), (1366, 768), (390, 844), (320, 568)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1100)
+            status = page.get_by_role("tab", name="로봇·작업")
+            status.click()
+            map_before = page.locator("#map-stage").bounding_box()
+            expect(page.locator("#context-status")).to_be_visible()
+            expect(page.locator("#context-evidence")).not_to_be_visible()
+            page.evaluate("scrollTo(0, 0)")
+            _shot(page, f"context-status-{theme}-{width}x{height}.png")
+            status.focus()
+            status.press("ArrowRight")
+            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
+            expect(page.locator("#context-inbox")).to_be_visible()
+            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
+            expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
+            expect(page.locator("#context-evidence")).to_be_visible()
+            expect(page.locator("#context-status")).not_to_be_visible()
+            page.evaluate("scrollTo(0, 0)")
+            _shot(page, f"context-evidence-{theme}-{width}x{height}.png")
+            page.get_by_role("tab", name="기록·근거").press("End")
+            expect(page.locator("#context-tools")).to_be_visible()
+            assert page.locator("#context-tools .signals").evaluate("node => getComputedStyle(node).gridColumnStart") == "1"
+            page.get_by_role("tab", name="운영 도구").press("Home")
+            expect(status).to_be_focused()
+            expect(page.locator("#context-status")).to_be_visible()
+            map_after = page.locator("#map-stage").bounding_box()
+            assert map_after["width"] == pytest.approx(map_before["width"], abs=1)
+            assert map_after["height"] == pytest.approx(map_before["height"], abs=1)
+            assert page.locator(".queues-panel").evaluate("node => !node.closest('[role=tabpanel]')")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= height
+            if width >= 1024:
+                left = page.locator(".console-primary").bounding_box()
+                right = page.locator(".console-secondary").bounding_box()
+                assert left["width"] / right["width"] == pytest.approx(2, abs=0.05)
+                assert page.locator("#roster-heading").evaluate("node => getComputedStyle(node).fontSize") == "16px"
+                assert page.locator("#map-heading").evaluate("node => getComputedStyle(node).fontSize") == "20px"
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("width", [320, 390, 1366])
+def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site, width):
+    from playwright.sync_api import expect, sync_playwright
+
+    stuck = {**STUCK, "ai": {"state": "present"}, "ai_facts": [{"kind": "new_fact_kind", "source": "analyzer:test", "confidence": 0.8,
+                                       "evidence": {"wire_marker": "source_preserved"}}]}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [_robot("rosy_01", line_stuck=stuck)]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        page.set_viewport_size({"width": width, "height": 844 if width < 1000 else 768})
+        item = page.locator('.stuck-item[data-robot-id="rosy_01"]')
+        expect(item).to_be_visible()
+        assert "wire_marker" not in item.inner_text()
+        expect(item.locator('ui-button[data-decision="RESUME"]')).to_be_visible()
+        title = item.locator('[data-focus-key="evidence-summary"]')
+        title.focus()
+        title.press("Enter")
+        expect(item.locator('[data-focus-key="evidence"]')).to_have_attribute("open", "")
+        assert "wire_marker" not in item.inner_text()
+        diagnostic = item.locator('[data-focus-key="diagnostics-summary"]')
+        diagnostic.focus()
+        diagnostic.press("Enter")
+        assert "wire_marker" in item.inner_text()
+        stuck["attempts"] = 1  # A changed state rebuilds the current row.
+        page.clock.run_for(3500)
+        expect(item.locator('[data-focus-key="evidence"]')).to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics"]')).to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics-summary"]')).to_be_focused()
+        stuck["stuck_id"] = "replacement-stuck"
+        page.clock.run_for(3500)
+        expect(item.locator('[data-focus-key="evidence"]')).not_to_have_attribute("open", "")
+        expect(item.locator('[data-focus-key="diagnostics"]')).not_to_have_attribute("open", "")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert not posts and not errors
+        browser.close()
+
+
+def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    stuck = {**STUCK, "inquiry": {"version": "situation-inquiry-v1", "problem_id": STUCK["stuck_id"],
+        "observations": {"cause": "obstacle_ahead"}},
+        "ai_proposal": {"decision": "WAIT", "class": "accepted", "verdict": "forwarded", "outcome": "hold"},
+        "fleet_answer": {"decision": "WAIT", "tier": "ai", "accepted": True, "outcome": "hold"}}
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [
+        _robot("rosy_01", line_stuck=stuck), OFFLINE]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        button = page.locator("#fleet-inbox")
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(page.locator("#context-inbox")).to_be_visible()
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        messages = page.locator("#inbox-messages")
+        expect(messages).to_contain_text("로봇 문의 (CORE)")
+        expect(messages).to_contain_text("AI 제안 대기")
+        expect(messages).to_contain_text("CORE 수락 · 복구 완료는 별도 확인")
+        expect(messages.locator("pre")).not_to_be_visible()
+        assert "situation-inquiry-v1" not in messages.inner_text()
+        messages.locator("li > details > summary").click()
+        expect(messages.locator("pre")).not_to_be_visible()
+        messages.locator("details details > summary").click()
+        expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
+        page.get_by_role("tab", name="로봇·작업").click()
+        page.clock.run_for(6000)
+        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
+        page.clock.run_for(3000)
+        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        button.click()
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        assert messages.locator("li > details").get_attribute("open") is not None
+        assert messages.locator("details details").get_attribute("open") is not None
+        assert page.locator("#critical-list").inner_text()
+        snapshot = api.pop("/api/fleet/state")
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("상태 갱신 실패")
+        expect(messages.locator("pre")).to_have_count(0)
+        api["/api/fleet/state"] = snapshot
+        page.clock.run_for(4000)
+        expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
+        stuck["fleet_answer"] = None
+        stuck["ai_proposal"] = {"decision": "RESUME", "class": "held", "verdict": "crosswalk_unknown"}
+        page.clock.run_for(4000)
+        expect(messages.locator("dd").nth(3)).to_have_text("CORE 전달·응답 기록 없음 · 실행 완료 미확인")
+        assert not posts and not errors
+        _shot(page, "context-inbox-message-stages.png")
+        browser.close()
 
 
 @pytest.fixture
@@ -188,9 +342,14 @@ def _open(playwright, origin, api, posts, answers=None, size=(1440, 900)):
     return browser, page, errors
 
 
-def _shot(page, name):
+def _shot(page, name, *, full_page=False):
     if out := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(out) / name))
+        if full_page:
+            page.evaluate("document.activeElement?.blur(); window.scrollTo(0, 0)")
+            page.evaluate("document.fonts.ready")
+            page.clock.run_for(100)
+            assert page.evaluate("window.scrollY") == 0
+        page.screenshot(path=str(Path(out) / name), full_page=full_page)
 
 
 def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scroll(site):
@@ -264,10 +423,9 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         browser.close()
 
 
-def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site):
-    """D-540 3: a nominal card is one line (name, trip line, battery) and opens on click; offline, latched
-    E-stop, safety not nominal and calibration in progress stay open with no fold control."""
-    from playwright.sync_api import sync_playwright
+def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_workspace(site):
+    """D-651: selecting another robot never hides offline, E-stop, unknown safety or calibration evidence."""
+    from playwright.sync_api import expect, sync_playwright
 
     api = {**API, "/api/fleet/trips": {"running": None, "trips": [], "open": []},
            "/api/fleet/state": {"fleet": {"name": "site", "online": 4, "total": 5}, "ts": 0.0, "robots": [
@@ -276,41 +434,57 @@ def test_cards_fold_when_nominal_and_the_four_must_expand_states_stay_open(site)
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
         card = page.locator('#roster article[data-robot-id="nominal"]')
-        assert card.get_attribute("data-collapsed") == ""
         assert "80%" in card.inner_text()
-        for robot_id in ("rosy_04", "latched", "unknown", "calib"):
+        for robot_id, evidence in (("rosy_04", "접속 실패"), ("latched", "비상 정지"),
+                                   ("unknown", "안전 확인 불가"), ("calib", "보정 진행 중 · 카메라 보정 · kim")):
             must = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
-            assert must.get_attribute("data-collapsed") is None, robot_id
+            expect(must).to_contain_text(evidence)
             assert must.locator(".robot-fold").count() == 0, robot_id
-        card.locator(".robot-line").click()
+        card.locator("[data-select-robot-id]").click()
         page.clock.run_for(1500)
-        assert card.get_attribute("data-collapsed") is None
-        card.locator(".robot-fold").click()
-        assert card.get_attribute("data-collapsed") == ""
+        expect(page.locator('#robot-workspace article[data-robot-id="nominal"]')).to_have_count(1)
+        expect(page.locator('#roster article[data-robot-id="calib"]')).to_contain_text("kim")
         _shot(page, "console-cards-1440x900.png")
         assert not errors
         browser.close()
 
 
 def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
-    """D-577 8: the stuck row carries the one camera picture Fleet holds for that stuck, with its frame and
-    age; the five answers stay on screen at rail scroll 0 (D-540 7) because the picture sits below them."""
+    """D-623/D-641: fresh evidence opens below the answers; historical/expired frames disappear."""
     from playwright.sync_api import sync_playwright
 
     preview = {"robot_id": "rosy_01", "stuck_id": "stuck-abc", "sequence": 812, "source": "front",
-               "media_type": "image/jpeg", "age_s": 0.4, "jpeg_base64": "/9j/2Q=="}
-    api = {**API, "/api/fleet/robots/rosy_01/line-stuck/evidence": preview}
+               "media_type": "image/jpeg", "age_s": 0.4, "live": True}
+    api = {**API}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [], size=(1024, 768))
+        preview["jpeg_base64"] = page.evaluate("""() => {
+          const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
+          return canvas.toDataURL('image/jpeg').split(',')[1];
+        }""")
+        api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = preview
+        page.reload()
         page.clock.run_for(1500)
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
         image = slot.locator(".stuck-evidence img")
+        page.wait_for_function("""() => {
+          const img = document.querySelector('.stuck-evidence img'); return img?.complete && img.naturalWidth > 0;
+        }""")
         assert image.get_attribute("src").startswith("data:image/jpeg;base64,")
+        slot.locator('[data-focus-key="evidence-summary"]').click()
         assert "앞 카메라 #812" in slot.locator(".stuck-evidence figcaption").inner_text()
         for decision in DECISIONS:
             box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
             assert box and box["y"] + box["height"] <= 768, (decision, box)
         _shot(page, "console-stuck-evidence-1024x768.png")
+        preview["age_s"] = 4
+        page.clock.run_for(3000)
+        from playwright.sync_api import expect
+        expect(image).to_have_count(0)
+        expect(slot.locator(".stuck-evidence figcaption")).to_contain_text("현재 영상 만료")
+        preview.update(live=False, age_s=0.4)
+        page.clock.run_for(3000)
+        expect(image).to_have_count(0)
         assert not errors
         browser.close()
 
@@ -357,9 +531,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
                 break
         assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
 
-        card = page.locator('#roster article[data-robot-id="rosy_03"]')
-        card.locator(".robot-fold").click()
-        assert card.get_attribute("data-collapsed") == ""
+        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 0
         slot = slot_of("rosy_03")
         assert slot.locator('ui-button[data-replan="confirm"]').get_attribute("reason") == "확인할 바뀐 경로가 없습니다"
         slot.locator('ui-button[data-replan="cancel"]').click()
@@ -371,7 +543,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
         before = list(posts)
         page.locator('[data-decision-slot="rosy_03|deadlock"] ui-button[data-replan="card"]').click()
         page.clock.run_for(300)
-        assert card.get_attribute("data-collapsed") is None
+        assert page.locator('#robot-workspace article[data-robot-id="rosy_03"]').count() == 1
         assert posts == before
         assert {path for path, _ in posts} <= {"/api/fleet/trips/t-rosy_02/confirm-replan",
                                                 "/api/fleet/trips/t-rosy_03/cancel"}

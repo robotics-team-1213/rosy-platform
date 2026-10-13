@@ -126,7 +126,7 @@ if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream o
     echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; no suite owed"
   else
     echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; fast suites not in them:"
-    mapfile -t OWED_SUITES <<< "$OWED"
+    mapfile -t OWED_SUITES < <(printf '%s\n' "$OWED" | tr -d '\r')
     "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" -- "${OWED_SUITES[@]}"
   fi
   echo "[pre-push] fast gate green (land records reused)"

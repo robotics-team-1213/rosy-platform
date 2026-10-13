@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosy-execution"
-version = "0.1.0"
+version = "0.1.2"
 description = "ROS-free ROSY PlanBundle and existing authority projections"
 requires-python = ">=3.12"
-dependencies = ["rosy-contracts-skill==0.1.0"]
+dependencies = ["rosy-contracts-skill==0.1.0", "core_common==0.0.2"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

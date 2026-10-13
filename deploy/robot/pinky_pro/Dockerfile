@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY middleware/apps/device/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -62,7 +62,8 @@ RUN apt-get -o Acquire::Retries=5 update \
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/core/events /opt/rosy_ws/src/runtime/events
 COPY middleware/core/services /opt/rosy_ws/src/runtime/services
-COPY middleware/core/api_web /opt/rosy_ws/src/runtime/api_web
+COPY middleware/control/drive/behaviors /opt/rosy_ws/src/runtime/services/_source_roots/behaviors
+COPY middleware/core/api /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
 # D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).
@@ -73,7 +74,7 @@ WORKDIR /opt/rosy_ws
 COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY middleware/core/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
+COPY middleware/devices/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
@@ -136,12 +137,18 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && rm -rf .git
 COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
-COPY middleware/apps/device/pinky/description /opt/rosy_ws/src/sim/description
-COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
-COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
-COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
-COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
+COPY middleware/devices/pinky/description /opt/rosy_ws/src/sim/description
+COPY middleware/devices/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
+COPY middleware/control/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
+COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
+COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
+COPY middleware/control/drive/safety /opt/rosy_ws/src/runtime/control/drive/safety
+COPY middleware/control/drive/recovery /opt/rosy_ws/src/runtime/control/drive/recovery
+COPY middleware/control/drive/tracking /opt/rosy_ws/src/runtime/control/drive/tracking
+COPY middleware/control/drive/calibration /opt/rosy_ws/src/runtime/control/drive/calibration
+COPY middleware/control/drive/planning/grid /opt/rosy_ws/src/runtime/control/drive/planning/grid
+COPY middleware/control/drive/runtime /opt/rosy_ws/src/runtime/control/drive/runtime
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \

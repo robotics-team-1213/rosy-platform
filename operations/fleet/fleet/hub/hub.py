@@ -15,6 +15,7 @@ from core_common.protocol.schemas import (
     EnvelopeType,
     EventMessage,
     HeartbeatPayload,
+    JunctionSignalAnswer,
     HelloPayload,
     PROTOCOL_VERSION,
     SwarmFollowParams,
@@ -80,6 +81,7 @@ class SiteHub:
         self._fleet_name = fleet_name
         self.event_store = event_store
         self.event_callback = event_callback
+        self.junction_signal = None  # D-620: synchronous cached signal lookup, no robot control
         self._event_projection_cursor = 0
 
     def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
@@ -244,7 +246,18 @@ class SiteHub:
         row.snapshot = payload.state_snapshot
         # D-447: gather freshness reads this stamp — heartbeat arrival, hub-side clock.
         row.last_heartbeat_monotonic = time.monotonic()
-        return Envelope(type=EnvelopeType.HEARTBEAT, payload={})
+        reply = {}
+        if payload.junction_signal_request is not None:
+            try:
+                signal = self.junction_signal(robot_id) if self.junction_signal is not None else None
+                answer = JunctionSignalAnswer(request_id=payload.junction_signal_request,
+                    **(signal or dict(lamp='unknown', may_enter=False, reason='signal_unavailable')))
+            except Exception:  # A lookup failure is an explicit unknown, never silent permission.
+                _LOGGER.exception("junction signal lookup failed for %s", robot_id)
+                answer = JunctionSignalAnswer(request_id=payload.junction_signal_request,
+                                              lamp='unknown', may_enter=False, reason='signal_lookup_failed')
+            reply['junction_signal'] = answer.model_dump()
+        return Envelope(type=EnvelopeType.HEARTBEAT, payload=reply)
 
     def _event(self, envelope: Envelope, session: HubSession | None) -> Envelope:
         try:

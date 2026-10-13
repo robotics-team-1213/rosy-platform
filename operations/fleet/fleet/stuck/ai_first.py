@@ -28,7 +28,7 @@ STUCK_WORDS = frozenset({"WAIT", "BACK_AND_RETRY", "RESUME", "ABORT", "YIELD", "
 GATE_STATES = frozenset({"armed", "approaching", "looking", "waiting"})
 MAX_AGE_S = {"rosy_cam": 2.0, "front": 3.0}           # D-610 5
 PER_PROBLEM, PER_HOUR = 3, 6                          # D-610 2
-VLM_WAIT_S = 8.0                                      # D-610 8: with a model loaded
+VLM_WAIT_S = 12.0                                     # D-619: 10 s inference plus delivery.
 OPPOSITE = {"BACK_AND_RETRY": "RESUME", "RESUME": "BACK_AND_RETRY"}
 
 
@@ -159,17 +159,19 @@ def _counted(first: AiFirst, rid: str, problem, answer, now: float):
     return answer
 
 
-def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, notes):
+def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, notes, *, counted=False):
     """(verdict, Answer or None). None = the rules answer; an escalating WAIT = a human."""
     rid, sid, decision = str(row["robot_id"]), str(stuck["stuck_id"]), proposal["decision"]
     if decision not in STUCK_WORDS:
         return "word_not_allowed", None
+    if rid in resolver.autonomous_robots and decision in chain.unresolved:
+        return "candidate_unresolved", None
     missing = first.evidence_invalid(proposal, rid)
     if missing is not None:
         return missing, None
     if (rid, problem, decision) in first._refused:
         return "core_refused_before", None
-    limit = first.limit(rid, problem, decision, now)
+    limit = None if counted else first.limit(rid, problem, decision, now)  # Admission already spent this budget.
     if limit is not None:
         return limit, Answer(rid, sid, "WAIT", "ai", escalate=limit)
     if decision == "MANUAL":

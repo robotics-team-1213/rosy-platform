@@ -12,7 +12,7 @@ from site_map_fixture import painted_track
 from test_stuck_resolver import _row, _stuck
 from fleet.stuck.ai_first import AiFirst, problem_key
 from fleet.stuck.ai_routes import rosy_cam_lease
-from fleet.stuck.closed_loop import reopen
+from fleet.stuck.closed_loop import context, reopen
 from fleet.stuck.episodes import ProblemLog
 from fleet.stuck.outcome import Outcomes
 from fleet.stuck.problems import ProblemWatch
@@ -245,6 +245,9 @@ class _Loop:
     def _clients(self):
         return {"rosy_01": self._robot}
 
+    async def _admission_row(self, robot_id):
+        return self.row
+
 
 def test_stalled_line_off_and_pose_lost_identify_are_sent_and_watched():
     from fakes import FakeRobot
@@ -256,6 +259,7 @@ def test_stalled_line_off_and_pose_lost_identify_are_sent_and_watched():
     loop = _Loop(first, {stalled["stuck_id"]: stalled, lost["stuck_id"]: lost}, robot)
     watch = ProblemWatch()
     row = _row()
+    loop.row = row
     row["state"]["line_follow"].update(state="HOLD", linear=0.0, angular=0.0)
     asyncio.run(watch.run(loop, 0.0, [row]))
     assert watch.open == {}
@@ -275,11 +279,135 @@ def test_stalled_on_a_trip_robot_is_wait_only():
     stalled = _vlm("STOP", stuck_id=f"stalled:rosy_01:{int(WALL)}", reason="dark_hold")
     loop = _Loop(_first(), {stalled["stuck_id"]: stalled}, robot)
     watch, row = ProblemWatch(), _row()
+    loop.row = row
     row["state"]["line_follow"].update(state="HOLD", linear=0.0, angular=0.0)
     row["trip"] = True
     asyncio.run(watch.run(loop, 0.0, [row]))
     asyncio.run(watch.run(loop, 20.0, [row]))
     assert loop.ai_board.verdicts[-1]["verdict"] == "trip" and robot.calls == []
+
+
+def test_other_problem_obeys_calibration_law_before_ai():
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    row["state"]["activity"] = {"kind": "calibration"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("estop", "estop"), ("calibration", "calibration"),
+    ("trip", "trip"), ("resolved", "problem_changed"), ("offline", "offline"),
+])
+def test_other_problem_rechecks_law_and_condition_before_dispatch(change, reason):
+    from copy import deepcopy
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+    latest = deepcopy(row)
+    if change == "estop":
+        latest["state"]["safety"]["estop"] = True
+    elif change == "calibration":
+        latest["state"]["activity"] = {"kind": "calibration"}
+    elif change == "trip":
+        latest["trip"] = True
+    elif change == "offline":
+        latest["online"] = False
+    else:
+        latest["map_pose"] = {"state": "LOCALIZED"}
+    loop.row = latest
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == reason
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("disabled", "ai_disabled"), ("human", "human_class:pose_lost:none:lane"),
+    ("client", "no_resolver_token"),
+])
+def test_other_problem_rechecks_ai_permission_after_await(change, reason):
+    from fakes import FakeRobot
+
+    robot, row, first = FakeRobot("rosy_01"), _row(), _first()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(first, {proposal["stuck_id"]: proposal}, robot)
+
+    async def refresh(rid):
+        if change == "disabled":
+            first.enabled = False
+        elif change == "human":
+            first.human_classes = lambda: {problem_key(row, "pose_lost", None, False)}
+        else:
+            loop._robot = None
+        return row
+
+    loop._admission_row = refresh
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == reason
+
+
+@pytest.mark.parametrize("replace", [False, True])
+def test_other_problem_binds_original_proposal_after_await(replace):
+    from fakes import FakeRobot
+
+    robot, row = FakeRobot("rosy_01"), _row()
+    row["map_pose"] = {"state": "UNKNOWN"}
+    proposal = _vlm("IDENTIFY", stuck_id=f"pose_lost:rosy_01:{int(WALL)}")
+    loop = _Loop(_first(), {proposal["stuck_id"]: proposal}, robot)
+
+    async def refresh(rid):
+        if replace:
+            loop.ai_board.proposals[proposal["stuck_id"]] = {**proposal, "reason": "replacement"}
+        else:
+            loop.ai_board.proposals.clear()
+        return row
+
+    loop._admission_row = refresh
+    asyncio.run(ProblemWatch().run(loop, 0.0, [row]))
+    assert robot.calls == []
+    assert loop.ai_board.verdicts[-1]["verdict"] == "ai_proposal_changed"
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("disabled", "ai_disabled"), ("human", "human_class:stuck:obstacle_ahead:lane"),
+    ("expired", "evidence_stale:rosy_cam"), ("replaced", "ai_proposal_changed"),
+])
+def test_stuck_ai_admission_binds_original_candidate_and_current_permission(change, reason):
+    from copy import deepcopy
+    from fleet.stuck.pipeline import ai_hold
+
+    first, row = _first(), _row(stuck=_stuck())
+    resolver, proposal = _resolver(first), _vlm()
+    row["ai_proposal"] = proposal
+    current = deepcopy(row)
+    if change == "disabled":
+        first.enabled = False
+    elif change == "human":
+        first.human_classes = lambda: {problem_key(current, "stuck", "obstacle_ahead", False)}
+    elif change == "expired":
+        first.wall = lambda: WALL + 4
+    else:
+        current["ai_proposal"]["reason"] = "new-observation"
+    answer = Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")
+    assert ai_hold(resolver, answer, row, current, [current]) == reason
+
+
+def test_offline_readback_cannot_close_an_accepted_answer_as_resolved():
+    outcomes, row = Outcomes(), _row()
+    outcomes.answered("stuck", "rosy_01", "stuck-1", "BACK_AND_RETRY", None, 0.0)
+    row["online"] = False
+    row["state"]["line_follow"]["stuck"] = None
+    assert outcomes.check(1.0, [row]) == []
+    assert outcomes.check(20.0, [row])[0]["outcome"] == "unresolved"
 
 
 def test_judged_at_is_wall_clock_on_the_d577_path_too():
@@ -289,3 +417,13 @@ def test_judged_at_is_wall_clock_on_the_d577_path_too():
                 "ttl_s": 6.0}
     r.step(0.0, [_with(_row(stuck=_stuck()), proposal)])
     assert abs(r.ai_verdicts[-1]["judged_at"] - time.time()) < 60
+
+
+def test_case_context_carries_task_safety_and_unknown_measurements():
+    value = context({'state_age_s': 0.7, 'state': {'mode': 'EMERGENCY',
+                    'line_follow': {'mode': 'OFF', 'stuck': {'cause': 'lane_lost'}}}})
+    assert value['current_mode'] == 'EMERGENCY'
+    assert value['task_intent']['task'] == 'lane_follow_recovery'
+    assert value['task_intent']['trip_active'] is False
+    assert value['state_age_s'] == 0.7
+    assert value['clearance_at_open_m']['front_clearance_m'] is None

@@ -393,12 +393,13 @@ def test_the_primary_command_is_an_ink_fill(palette):
     """주 명령은 테마와 무관하게 ink 채움이고 그 위 글자는 바탕이다(D-359 §2.2)."""
     derived = token_themes.derived_body(TEXT)
     assert re.search(r"--button-primary-bg:\s*var\(--ink\);", derived)
-    assert re.search(r"--button-primary-ink:\s*var\(--ground\);", derived)
+    assert re.search(r"--button-primary-ink:\s*var\(--surface-canvas\);", derived)
+    assert re.search(r"--surface-canvas:\s*var\(--ground\);", derived)
     assert contrast(palette["ground"], palette["ink"]) >= 7.0
 
 
 #: 위험 채움 위 글자에 허용되는 토큰. `--ink`는 밝게에서 짙은 글자라 짙은 적색 위에서 사라진다.
-ON_DANGER_INK = ("--ink-on-crit", "--flag-danger-ink", "--button-irreversible-ink")
+ON_DANGER_INK = ("--ink-on-crit", "--text-on-danger", "--flag-danger-ink", "--button-irreversible-ink")
 _DANGER_FILL = re.compile(r"background(?:-color)?:\s*var\(--(?:status-crit|flag-danger-bg|button-irreversible-bg)\)")
 _TEXT_COLOUR = re.compile(r"(?<![-\w])color:\s*var\((--[a-z0-9-]+)\)")
 

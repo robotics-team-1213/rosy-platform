@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Mapping, Optional
 
 from fleet.stuck.ai_first import problem_key
@@ -24,8 +25,21 @@ def context(row: Mapping, stuck: Optional[Mapping] = None) -> dict:
     state = row.get("state") or {}
     line_follow = state.get("line_follow") or {}
     stuck = stuck if stuck is not None else line_follow.get("stuck") or {}
+    observed = row.get("_state_mono")
+    age = row.get("state_age_s") if observed is None else round(max(0.0, time.monotonic() - observed), 3)
     return {"cause": stuck.get("cause"), "detail": stuck.get("detail"), "phase": stuck.get("phase"),
             "attempts": stuck.get("attempts"), "rear_state": stuck.get("rear_state"),
+            "state_age_s": age,
+            "robot_inquiry": stuck.get("inquiry"),
+            "inquiry_observed_at": stuck.get("inquiry_observed_at"),
+            "current_mode": state.get("mode"),
+            "route_context": line_follow.get("route_context"),
+            "heading_review": row.get("heading_review"),
+            "route_context_published_at_s": line_follow.get("route_context_published_at_s"),
+            "task_intent": {"task": "lane_follow_recovery", "trip_active": bool(row.get("trip")),
+                            "goal": "recover the intended lane direction without overriding CORE safety"},
+            "clearance_at_open_m": {k: stuck.get(k) for k in ("front_clearance_m", "rear_clearance_m",
+                                                       "turn_clearance_m", "rear_blind_m")},
             "line_follow": {k: line_follow.get(k) for k in ("mode", "state", "reason")},
             "crosswalk": line_follow.get("crosswalk"), "map_pose": row.get("map_pose"),
             "localization": state.get("localization"), "trip": bool(row.get("trip")),
@@ -79,7 +93,7 @@ async def answered(loop, answer, code: Optional[str], now: float) -> None:
                "decision", "reason", "confidence", "source", "evidence")},
            verdict=None if verdict is None else verdict.get("verdict"),
            floor=() if verdict is None else verdict.get("floor") or (), core_code=code)
-    if answer.escalate is not None:
+    if answer.escalate is not None and rid not in loop._resolver.autonomous_robots:
         return                                    # WAIT + a person: nothing to confirm
     out = loop.outcomes.answered("stuck", rid, sid, answer.decision, code, now, row)
     if out is not None:
@@ -92,8 +106,21 @@ async def check(loop, now: float, robots) -> None:
     for out in loop.outcomes.check(now, robots, stalled=stalled):
         log.info("problem %s on %s after %s: %s", out["problem_id"], out["robot_id"], out["decision"], out["outcome"])
         await _awrite(loop, "outcome", out)
-        if out["outcome"] == "unresolved" and out["kind"] == "stuck" and first is not None and first.on(out["robot_id"]):
-            reopen(loop._resolver, out["robot_id"], out["problem_id"], now)
+        if out["outcome"] == "unresolved" and out["kind"] == "stuck":
+            rid, sid = out["robot_id"], out["problem_id"]
+            if rid in loop._resolver.autonomous_robots:
+                chain = loop._resolver._chains.get(rid)
+                if chain and chain.stuck_id == sid and chain.observing is None:
+                    # Keep the previous candidate retired; a different admissible candidate may recover.
+                    note = loop._board.resolver_note(rid, sid) or {}
+                    if note.get("rule"):
+                        chain.retired.add(note["rule"])
+                    chain.unresolved.add(out["decision"])
+                    action = loop._resolver._escalate(chain, rid, sid, "unresolved:" + out["decision"])
+                    if action is not None:
+                        loop._escalated(action)
+            elif first is not None and first.on(rid):
+                reopen(loop._resolver, out["robot_id"], out["problem_id"], now)
 
 
 def reopen(resolver, robot_id: str, stuck_id: str, now: float) -> None:

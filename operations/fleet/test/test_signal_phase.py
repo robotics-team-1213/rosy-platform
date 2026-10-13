@@ -40,15 +40,39 @@ def test_demo_roundabout_entrances_and_check():
 
 
 def test_the_live_two_way_map_has_four_roundabout_entrances():
-    """The site's active map (2026-10-09, version 2) keeps east/west two-way as in lane_graph.yaml: four
-    entrances, so a demo two-entrance plan is refused there until the lanes are made one-way (D-517)."""
-    graph = build_graph(SiteMap.model_validate(from_lane_graph(LANE_GRAPH, map_id="map_v2_fleet").body()))
+    """The historical map without turn bans has four entrances and refuses a two-entrance plan."""
+    legacy = from_lane_graph(LANE_GRAPH, map_id="map_v2_fleet").model_copy(update={'turn_bans': []})
+    graph = build_graph(SiteMap.model_validate(legacy.body()))
     layout = build_layout(graph, DEMO, {"roundabout": (RING, 1)})
     entries = sorted(entering_arcs(graph, layout, "roundabout"))
     assert entries == ["east:fwd", "east:rev", "west:fwd", "west:rev"]
     two = SignalPlan("sig", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0)))
     assert check(two, graph, layout) == ["sig: approaches without a phase: east:rev, west:rev"]
     assert check(SignalPlan("sig", "roundabout", tuple((a, 8.0) for a in entries)), graph, layout) == []
+
+
+def test_shared_map_signals_only_gate_ne_sw_entries_and_preserve_exits():
+    from pathlib import Path
+    from fleet.traffic.config import _traffic_signals, _traffic_zones
+    from types import SimpleNamespace
+    root = Path(__file__).resolve().parents[3]
+    args = SimpleNamespace(site_config=root/'integrations/simulation/gazebo/config/fleet_sim_camera_site.yaml')
+    for path in (LANE_GRAPH, root/'middleware/perception/map/map_v2_fleet/training-curved/lane_graph.yaml'):
+        site = from_lane_graph(path, map_id='map_v2_fleet')
+        graph = build_graph(site)
+        layout = build_layout(graph, DEMO, _traffic_zones(args))
+        assert entering_arcs(graph, layout, 'roundabout') == {'east:rev', 'west:rev'}
+        assert {graph.arcs[a].end_place for a in entering_arcs(graph, layout, 'roundabout')} == {'NE', 'SW'}
+        plans = _traffic_signals(args)
+        assert len(plans) == 1 and check(plans[0], graph, layout) == []
+        assert layout.units['roundabout'].capacity == 1
+        successors = graph.successors('turn-ban-regression', lambda arc, nxt, kind: 0.)
+        assert 'ring_w:fwd' not in dict(successors['west:fwd'])
+        assert 'ring_e:fwd' not in dict(successors['east:fwd'])
+        assert 'ring_n:fwd' in dict(successors['east:rev'])
+        assert 'ring_s:fwd' in dict(successors['west:rev'])
+        assert 'west:rev' in dict(successors['ring_n:fwd'])
+        assert 'east:rev' in dict(successors['ring_s:fwd'])
 
 
 def _drive(state, plan, times, busy=lambda t: False):

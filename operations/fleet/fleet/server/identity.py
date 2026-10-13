@@ -169,7 +169,7 @@ class IdentityService:
                     raise IdentityError(409, "IDENTIFY_BUSY", "파랑 LED 확인이 진행 중입니다")
             started = self._clock()
             self._asked_at[robot_id] = started
-            self.triggers.asked(robot_id, auto=auto)
+            self.triggers.asked(robot_id)
             # D-596 7: automatic requests are silent (no call chirp); a payload before D-596 still chirps.
             result = await client.identify_lamp(color, quiet=auto)
             if not isinstance(result, Mapping):
@@ -220,7 +220,7 @@ class IdentityService:
         clients = self._clients()
         watched = {rid for s in self.tracking.sources for rid in s.robot_ids if rid in clients}
         skip = {rid for rid in watched
-                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s * self.triggers.backoff(rid)
+                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s
                 or self.confirmed_track_pose(rid)["state"] == "CONFIRMED"}
         skip |= {p.robot_id for p in self._open()}
         due = self.triggers.due(now, self.tracking.snapshot(),
@@ -287,7 +287,9 @@ class IdentityService:
         # D-596 amendment (a), user decision 2026-10-10: a blue blink names the robot anywhere on the
         # source, because a source has one blue request at a time and only an identify blinks blue on/off.
         # Amber (the caution lamp's pattern) and the weaker steady colour stay inside the expected place.
-        blink_anywhere = pending.color == "blue" and (body.get("evidence") or {}).get("mode") != "steady"
+        evidence = body.get("evidence") or {}
+        blink_anywhere = pending.color == "blue" and (
+            evidence.get("mode") != "steady" or evidence.get("off_on_off") is True)
         if (predicted is not None and not blink_anywhere
                 and math.hypot(x - predicted[0], y - predicted[1]) > predicted[2]):
             return self._unknown(robot_id, "far_from_robot", source.source_id)

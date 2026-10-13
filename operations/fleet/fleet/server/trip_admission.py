@@ -44,6 +44,13 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 
 
 class TripAdmission:
+    def _start_token(self, robot_id):
+        return self._stop_epoch, self._start_cancels.get(robot_id, 0)
+
+    def _check_start_token(self, robot_id, token):
+        if token != self._start_token(robot_id):
+            raise TripError(409, "TRIP_START_CANCELED")
+
     async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
         map_id = self._store.active()[1].map_id
@@ -105,19 +112,24 @@ class TripAdmission:
                 raise TripError(422, check["code"], check)
         return pose, enable
 
-    async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *, start_at=None, caps=None):
+    async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
+                          start_at=None, caps=None, start_token=None):
         """``_pose_checks(start=True)`` plus D-603: with ``fleet.trip.auto_align`` a TRIP_START_HEADING_MISMATCH
         (on the lane: off-lane is judged first) asks CORE to turn by the error, then checks again from a
         fresh sighting. ``(pose, enable, turns)``; a refused or aborted turn refuses the start."""
         turns: list = []
+        start_token = self._start_token(robot_id) if start_token is None else start_token
         for attempt in range(ALIGN_TURNS + 1):
             try:
-                return (*await self._pose_checks(robot_id, graph, segments, start=True,
-                                                 start_at=start_at, caps=caps), turns)
+                result = await self._pose_checks(robot_id, graph, segments, start=True,
+                                                 start_at=start_at, caps=caps)
+                self._check_start_token(robot_id, start_token)
+                return (*result, turns)
             except TripError as exc:
                 err = exc.detail.get("heading_err_deg") if exc.code == "TRIP_START_HEADING_MISMATCH" else None
                 if not self.config.auto_align or err is None or attempt == ALIGN_TURNS:
                     raise
+            self._check_start_token(robot_id, start_token)
             turns.append(await self._align(robot_id, round(-err, 1), operator_name))
 
     async def _align(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:

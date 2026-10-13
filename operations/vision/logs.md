@@ -469,3 +469,31 @@
 - 변경: main이 앞 번호를 먼저 가져가 D-589 S1은 v1.189다. 앞 항목들의 버전은 v1.189로 읽는다
 - 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.189
 - gate 변화: 없음
+
+## 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정
+- 변경: led-identity/4. 여러 blob 중 끊기지 않는 단일 트랙의 꺼짐-1초 이상 연속 켜짐-꺼짐을 판정한다. 다중 후보·짧은 반짝임·가림을 거절하고 기존 점멸/단일 blob 폴백은 유지한다.
+- 증거: 원격 회귀 테스트; 실제 천장 영상 수용은 미확인.
+- Gate: SOURCE, DEVICE/FIELD 미완료.
+
+## 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
+- Symptom: LED sampling inverted a height-corrected robot point as a floor point; edge-of-image samples were displaced.
+- 변경: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
+- 증거: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
+- gate 변화: SOURCE regression verified; live LED confirmation pending.
+
+## 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
+- 변경: AprilGrid 생성·부분 관측·일반/어안 렌즈 후보·독립 바닥 등록·단일 remap과 AI advisory 형식을 추가했다. map-plane horizon/시야 밖 mask와 같은 응답의 유효 원본 비율을 표시한다. 원격 시험은 기존 Vision OpenCV 배포 pin을 사용한다.
+- 증거: docs/validation/compact-camera-calibration-2026-10-11/result.md. 원격 관련 841·Node 286·Chromium 2 passed, NEW 0. 독립 리뷰의 바닥 검증 경계 3건을 수정했다.
+- gate 변화: SOURCE/원격 합성/브라우저 증거. 운영 교정 교체·자동 AI 호출·main 착지·push·배포·실물 정확도 수용은 별도다.
+
+## 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
+
+- 변경: 기존 차선 추출기를 재사용하며 각 간선에 camera/observed와 교정 SHA256, CLI 원본 프레임 SHA256을 남긴다. calibration의 선택 survey는 공통 계약으로 검증하고 생성 결과 검토를 초기화한다. Fleet 초안 누적·검토가 저장을 소유하고 Vision은 운행 명령이나 operational pose를 만들지 않는다.
+- 증거: 새 원격 RED 뒤 975de95358 추출/구조 7 PASS/NEW 0. ebf05b9811 최종 카메라·marker 재검토·desktop/mobile 저장/재편집·구조 12 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-review-final-retry/run-1.txt. AI PC 자원 기준 통과.
+- gate 변화: source/remote 합성. 실제 카메라 측정·모델 PC 설치·서명 배포·실물 정확도는 미확인이다. 일부 suite로 전체 last_verified를 승격하지 않는다.
+
+## 2026-10-12 · d780942b9 · feat(vision): D-691 미리보기 읽기 뒤 30초 유지
+
+- 변경: frame, field-proposal, map-proposal의 인증된 읽기가 source의 영상을 요청한다. 401과 잘못된 경로는 요청이 아니다. 프레임이 없거나 오래됐거나 429여도 요청이다. 마지막 읽기부터 30초 동안 demand.wanted를 true로 보내고, 그 시각을 포함하면 false다. 연결이 잠깐 끊겨도 유지는 남는다. Vision 내부 추적은 센서를 깨우지 않는다.
+- 증거: 원격 AI PC ai@100.108.76.123, 커밋 d780942b9, Vision·버전 핀 294 passed, exit 0, known_failures NEW 0. 로그 X:/DevTemp/cam-standby/pytest/run-1.txt.
+- gate 변화: SOURCE/원격. 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.

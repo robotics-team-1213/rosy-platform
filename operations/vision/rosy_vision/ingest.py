@@ -48,7 +48,8 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, rectify_jpeg
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.stream_demand import StreamDemand
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -187,6 +188,8 @@ class _Source:
     # valid camera_state; None until the phone reports one (older apps never do).
     link: int = 0
     camera_state: protocol.CameraState | None = None
+    # D-691: last demand.wanted sent on this connection. None until the first send.
+    demand_sent: bool | None = None
 
 
 class IngestServer:
@@ -239,6 +242,9 @@ class IngestServer:
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
         self._links = itertools.count(1)
+        # D-691: authorized preview reads keep the phone sending for a hold.
+        self._demand = StreamDemand()
+        self._demand_tasks: set[asyncio.Task] = set()
 
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
         return await serve(
@@ -371,6 +377,8 @@ class IngestServer:
             lease = self.preview_signer.verify(bearer, source_id=source)
         except VisionLeaseError:
             return _http_response(401, b"unauthorized\n")
+        # A missing, stale, or rate-limited frame is still a request (D-691).
+        self._note_stream_request(source)
         if view == "map-proposal" and self.map_paint is None:
             return _http_response(404, b"site map paint not configured\n")
         if view == "frame":
@@ -483,6 +491,7 @@ class IngestServer:
             "X-Frame-Rectified": rectified,
             "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
             "X-Frame-Calibration": plane.revision,
+            "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
             **_lens_header(self.source_lens(source)),
         })
 
@@ -674,6 +683,7 @@ class IngestServer:
 
         try:
             await connection.send(json.dumps(protocol.make_config(**self.config)))
+            await self._send_demand(src, force=True)
         except websockets.exceptions.ConnectionClosed:
             self._drop_if_current(source_name, connection)
             return
@@ -750,8 +760,30 @@ class IngestServer:
             }
             try:
                 await src.connection.send(json.dumps(status))
+                await self._send_demand(src)
             except websockets.exceptions.ConnectionClosed:
                 return
+
+    def _note_stream_request(self, source: str) -> None:
+        """An authorized preview read asks ``source`` to send (D-691)."""
+        if not self._demand.note(source):
+            return
+        src = self._sources.get(source)
+        if getattr(src, "connection", None) is None:
+            return
+        task = asyncio.create_task(self._send_demand(src))
+        self._demand_tasks.add(task)
+        task.add_done_callback(self._demand_tasks.discard)
+
+    async def _send_demand(self, src: _Source, *, force: bool = False) -> None:
+        wanted = self._demand.wanted(src.name)
+        if not force and src.demand_sent is wanted:
+            return
+        try:
+            await src.connection.send(json.dumps(protocol.make_demand(wanted)))
+        except websockets.exceptions.ConnectionClosed:
+            return
+        src.demand_sent = wanted
 
     def _handle_text(self, src: _Source, message: str) -> None:
         """D-589: keep a valid ``camera_state``; any other or malformed text is ignored."""

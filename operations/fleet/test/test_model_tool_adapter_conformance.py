@@ -5,8 +5,8 @@ import asyncio
 import pytest
 
 from core_common.protocol.schemas import ER2_TOOL_ARGUMENT_MAX_BYTES
-from fleet.ai.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass, provider_tool_schemas
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
+from rosy.decision.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass, provider_tool_schemas
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
 from test_er2_tool_dispatch import _dispatcher, _running_mission, _scope
 
 

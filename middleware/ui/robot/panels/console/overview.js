@@ -42,9 +42,16 @@ export function mount(el, ctx) {
     const mapPoseTrusted = new HeadlessState(state).isFresh("pose")
       && (state.localization == null || (state.localization.state === "LOCALIZED"
         && state.localization.pose_frame === "map"));
-    const percent = Number.isFinite(battery?.percent) ? `${Math.round(battery.percent)}%` : null;
+    const batteryStatus = state.battery_status;
+    const charging = batteryStatus?.charging;
+    const shown = Number.isFinite(batteryStatus?.shown_percent) ? batteryStatus.shown_percent : null;
+    const live = Number.isFinite(battery?.percent) ? battery.percent : null;
+    // D-688: while charging is confirmed, the row keeps the pre-charge estimate.
+    const held = charging === true && shown !== null ? shown : null;
+    const displayPercent = held !== null ? held : live;
+    const percent = displayPercent === null ? null : `${Math.round(displayPercent)}%`;
     const volts = Number.isFinite(battery?.voltage) ? `${battery.voltage.toFixed(2)} V` : null;
-    const charging = state.battery_status?.charging;
+    const levelWord = {warning: "주의", critical: "위험", deep: "심각"}[batteryStatus?.level];
     // D-359 US-009 — 모드는 CORE 자신의 값이라 채널이 없다: 이 응답이 곧 증거(부모 증거)다.
     // 전원 모드도 같은 스냅샷의 값이다. 도크·충전·배터리는 자기 채널이 있다.
     const values = {
@@ -55,14 +62,15 @@ export function mount(el, ctx) {
         state.docking?.state ? enumLabel(DOCK_STATE_LABEL, state.docking.state) : null),
         title: state.docking?.state},
       charging: readout(state, "battery", "충전",
-        charging === true ? "충전 확인" : charging === false ? "충전 미확인" : null),
+        charging === true ? (held !== null ? `충전 중 · ${Math.round(held)}%` : "충전 확인")
+          : charging === false ? "충전 미확인" : null),
       navigation: {...readout(state, "navigation", "내비게이션",
         state.mode === "SAFE_STOP" ? "안전 정지 적용" : state.navigation ? `${enumLabel(NAVIGATION_LABEL, state.navigation)}${["PLANNING", "NAVIGATING"].includes(state.navigation) && !mapPoseTrusted ? " · 위치 확인 필요" : ""}` : null), title: state.navigation},
       pose: readout(state, "pose", "위치",
         !mapPoseTrusted ? "지도 위치 확인 불가" : Number.isFinite(pose?.x) && Number.isFinite(pose?.y)
           ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : null),
       battery: readout(state, "battery", "배터리",
-        [percent, volts].filter(Boolean).join(" · ") || null),
+        [percent, volts, levelWord].filter(Boolean).join(" · ") || null),
     };
     for (const field of fields) {
       const label = createNode("dt", "", ({

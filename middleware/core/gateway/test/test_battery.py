@@ -835,3 +835,46 @@ class TestChargingSuppressesShutdown:
         """아무도 말해주지 않으면 충전 중이 아니다 — 억제는 명시적이어야 한다."""
         monitor = make_monitor(clock)
         assert monitor.status().charging is False
+
+
+class TestShownPercent:
+    """D-688: the screen holds the pre-charge estimate. Policy percent stays live."""
+
+    def test_a_confirmed_charge_does_not_paint_the_float_voltage_as_full(self, clock):
+        monitor = make_monitor(clock, filter_tau_s=0.0)
+        monitor.on_voltage(7.64)
+        clock.advance(1.0)
+        monitor.on_voltage(7.64)
+        monitor.set_charging(True)
+        clock.advance(1.0)
+        monitor.on_voltage(8.40)
+
+        assert monitor.percent == pytest.approx(100.0)
+        assert monitor.shown_percent == pytest.approx(50.0)
+        assert monitor.status().shown_percent == pytest.approx(50.0)
+        assert monitor.health()["percent"] == pytest.approx(100.0)
+        assert monitor.health()["shown_percent"] == pytest.approx(50.0)
+
+        monitor.set_charging(False)
+        clock.advance(1.0)
+        monitor.on_voltage(7.74)
+        assert monitor.percent == pytest.approx(60.0)
+        assert monitor.shown_percent == pytest.approx(60.0)
+
+    def test_the_hold_is_the_oldest_sample_inside_twelve_seconds(self, clock):
+        monitor = make_monitor(clock, filter_tau_s=0.0)
+        monitor.on_voltage(7.64)  # 50 %, then ages out of the window
+        clock.advance(13.0)
+        monitor.on_voltage(7.74)  # 60 %
+        clock.advance(11.0)
+        monitor.on_voltage(7.96)  # 80 %
+        monitor.set_charging(True)
+
+        assert monitor.shown_percent == pytest.approx(60.0)
+
+    def test_with_no_history_the_screen_stays_on_the_live_estimate(self, clock):
+        monitor = make_monitor(clock, filter_tau_s=0.0)
+        monitor.set_charging(True)
+        monitor.on_voltage(8.40)
+
+        assert monitor.shown_percent == pytest.approx(100.0)
