@@ -69,6 +69,18 @@ class AccountSessionTest {
         val retry = AccountSession(trusted(), store, transport, {1040})
         assertTrue(retry.retryRevocations()); assertNull(store.read())
     }
+    @Test fun stalledAuthorityCallHasBoundedDeadline() {
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+            server.start(); val client = accountHttpClient(); val began = System.nanoTime()
+            try {
+                assertEquals(3000, client.callTimeoutMillis)
+                assertThrows(java.io.IOException::class.java) { client.newCall(okhttp3.Request.Builder().url(server.url("/stall")).build()).execute().close() }
+                assertTrue(java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - began) < 10)
+                assertTrue(10_000 + (2 * 2 + 1) * client.callTimeoutMillis < 30_000)
+            } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
+        }
+    }
     private fun config() = AccountConfig.parse("""{"issuer":"https://account.example.test","client_id":"native-cam","redirect_uri":"https://apps.example.test/cam/callback","resources":["site:test"],"trusted_keys":{"key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}""")
     @Test fun rejectsInsecureIssuerAndWildcardResource() {
         val text = config().issuer
