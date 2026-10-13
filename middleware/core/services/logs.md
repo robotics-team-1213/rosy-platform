@@ -982,3 +982,11 @@
 - 결정: D-744. 지도 고정점은 받은 때 odom으로 옮긴다(자세 기록이 약 2 s라 호가 열릴 때는 표본이 없다).
 - 교훈: 요청 본문의 NaN은 pydantic이 거절하지만 공용 400 응답이 그 입력을 JSON으로 싣지 못해 500이 된다(기존 결함, 이 변경 범위 밖).
 
+## 2026-10-13 · 8ce598214 · D-744 독립 리뷰 후속 (방향 문, 열 때 한도, IR 사슬, 까닭 기록)
+
+- 변경: `authority.py::_map_anchor_circle`이 호를 열 때 까닭을 고른다. 방향이 접선에서 25° 넘게 어긋나면 `heading`(`ARC_ANCHOR_MAX_HEADING_RAD`), 원에서 0.045 m 넘게 떨어지면 `radial`(`ARC_ANCHOR_MAX_RADIAL_M`, 멈춤 한도 0.075 m 아래), 앞 호가 IR 보정을 쓴 사슬이면 `ir_chain`, 경로 길이(부호 없음, `_odom_log`) 1.5 m 초과면 `carry`. `_place_map_anchor`는 받은 때 `none_sent`·`malformed`·`stale`·`future`·`no_sample`·`epoch`를 남긴다. 호 기록에 `map_anchor_reason`.
+- 증거: 원격(모델 PC) 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다. `test_line_arc_api.py::test_snapshot_odom_stamp_pairs_with_the_odom_sample_core_logged`가 `_on_odom`의 두 호출(`observe_lane_return`, `set_odom_pose`)을 실제 서비스와 실제 벽시계로 지나 스냅숏 `odom_pose.stamp`로 고정점이 놓이는 것을 본다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. `line_follow/arc` 크기 단위는 460줄 그대로다.
+- 결정: D-744 5항·6항 개정(같은 ADR). 횡단보도 사전 검사와 시계 step은 ADR 한계 5·6으로 적었다.
+- 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
+
