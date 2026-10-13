@@ -34,3 +34,14 @@ D-737이 CORE 쪽 몸 검사와 최종 명령의 곡률을 맞췄고, 이 결정
 - 완전성은 기존 `rotation_scan_observed`(모든 빔이 범위 안에서 돌아옴)와 `rotation_reason is None`을 둘 다 요구한다. 열린 방향이 있거나 빔이 빠지는 실물 LiDAR에서는 증거가 자주 무효가 될 수 있다.
 - 생산자 시험(`test_os_parameter_graph.py`)은 rclpy가 필요하다. 원격 시험 PC에서는 건너뛰었으므로 CI의 ROS 단계에서 확인해야 한다.
 - Gazebo 같은 지도 반복과 실물 주행은 하지 않았다. 호스트 pytest 통과는 장치·현장 수용이 아니다.
+
+## 개정 1 (2026-10-13, 같은 날)
+
+사용자 결정(2026-10-13): Gazebo 차선 완주를 위해 SDK 여유를 줄여도 된다. 위 결정 3, 「바뀌지 않는 것」의 전방 `obstacle`, 한계의 coverage 조건을 다음으로 바꾼다. 나머지는 그대로다.
+
+1. `previous_limits`는 프로필 상한이 아니라 후보 자신의 `(v, |w|)`다. 직전 명령이 후보보다 빠르지 않았다고 가정한다. 감속 중에는 이 가정이 틀리며, 그만큼 패딩이 부족하다(프로필 상한에서 후보 `(0.05, 0.05)`로 줄일 때 약 2 cm). CORE가 실제로 낸 직전 명령의 상한을 넘기는 것이 후속 과제다.
+2. 호의 정지 궤적이 비어 있으면 직진 띠 기준의 LiDAR 전방 `obstacle`도 그 호에는 적용하지 않는다. 직진 띠는 그 호가 지나는 길이 아니기 때문이다. 초음파 전방 차단(`front_blocked_other`가 참이거나 모름), cliff, tilt, pickup, estop은 여전히 우선한다. 결과로 enforce에서 조향이 있는 차선 추종에는 `stop_distance`/`clear_distance`가 적용되지 않고 정지 궤적만 적용된다. 스캔을 정지 장면으로 보므로 움직이는 장애물에 대한 `stop_distance`의 여유는 없다.
+3. coverage는 모든 빔이 반환됐는지(`lidar_rotation_observed`)만 본다. `lidar_rotation_reason`은 제자리 회전 원이 막혔을 때 채워지므로 이 증거가 필요한 바로 그때 증거를 무효로 만들었다(Gazebo run17: 여유 1.2 mm인데 무효).
+4. 평가 중 snapshot이 교체되면 새 snapshot으로 한 번 더 판단한다. 두 번째에도 교체되면 기존처럼 거절한다. 이전에는 이 경우가 CORE의 `control:policy_failed` E-stop이 됐다(run19).
+
+확인하지 못한 것: 몸 윤곽 안의 반사를 지운 방위를 coverage가 관측으로 세는지, 여유 임계 0 근처에서 허용과 거절이 번갈아 나오는지, 정지 궤적 계산 시간이 `evaluation_budget_s` 0.01 s 안인지. 독립 리뷰(2026-10-13)가 짚은 항목이며 장치 payload에 싣기 전에 닫는다.

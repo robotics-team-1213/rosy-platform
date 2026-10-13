@@ -73,10 +73,15 @@ class ParameterGraphTests(unittest.TestCase):
             self.assertIs(forward.body, BODY)
             self.assertEqual(forward.limits, (node.profile.max_linear, node.profile.max_angular))
             self.assertEqual(forward.scan_received_at, received)
-            # An unknown azimuth is not swept space the arc may enter.
+            # The pivot verdict is not coverage: it is set exactly when this evidence is asked.
             node.lidar_rotation_reason = 'unknown band'
             node.tick()
+            self.assertIs(policy.evaluate(.01, 0., time.monotonic())[0].forward.observed, True)
+            # A beam without a return is an azimuth the arc may not enter.
+            node.lidar_rotation_observed = False
+            node.tick()
             self.assertIs(policy.evaluate(.01, 0., time.monotonic())[0].forward.observed, False)
+            node.lidar_rotation_observed = True
             # No base_footprint points (no mount TF): no evidence at all.
             node.lidar_rotation_points = None
             node.tick()
