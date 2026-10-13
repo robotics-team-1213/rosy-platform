@@ -158,7 +158,7 @@ IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server
                     "server/tracking.py", "server/tracking_routes.py", "server/sightings_config.py",
                     "server/lane_compliance_service.py"}
 #: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
-IDENTITY_NEVER = ("server/map_pose_service.py", "localization/map_pose.py", "server/ledger/trip_*.py",
+IDENTITY_NEVER = ("server/map_pose_service.py", "server/ledger/trip_*.py",
                   "routing/execute.py")
 
 

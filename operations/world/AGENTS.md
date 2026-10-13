@@ -17,7 +17,7 @@ D-667: observation types and pure input validity are implemented once in `core_c
 | `src/rosy/world/api/` | Immutable observation/evidence references |
 | `src/rosy/world/state/projections/map_pose.py` | Existing MapPose tracker: sightings, operator pins and odom bridging; stdlib only |
 | `src/rosy/world/state/projections/road_region.py` | D-665 camera-local region input validity: timestamps, frame, calibration, transform and evidence binding; offline evaluation consumer, no image geometry or driving |
-| `test/` | Fleet compatibility identity and independent wheel installation |
+| `test/` | Canonical Fleet consumers and independent wheel installation |
 | `COLCON_IGNORE` | Not a colcon package |
 
 ## Subdirectories
@@ -31,7 +31,7 @@ D-667: observation types and pure input validity are implemented once in `core_c
 - References describe evidence. They are not the JPEG path and not a Fleet policy decision.
 - Keep the package ROS-free.
 - MapPose projects received observations into current state. Its odom dead reckoning is not action-conditioned future prediction or goal-completion evidence.
-- Fleet keeps the service, transaction and admission owners. `fleet.localization.map_pose` aliases the implementation module and preserves object identity.
+- Fleet keeps the service, transaction and admission owners. Fleet consumers import `rosy.world.state.projections.map_pose` directly; the obsolete Fleet alias is removed (D-752).
 
 ### Testing Requirements
 

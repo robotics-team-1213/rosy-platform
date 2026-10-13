@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.cost import STOP
 from fleet.server.trip_laps import hold_back_m
 from fleet.server.trip_ports import LiveTrip

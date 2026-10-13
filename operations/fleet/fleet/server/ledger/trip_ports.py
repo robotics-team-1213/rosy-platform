@@ -1,7 +1,7 @@
 """D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and runtime state.
 
 ``TripCaps`` (``console_view``, from the robot's capabilities) and ``MapPose``
-(``fleet.localization.map_pose``) are the providers' own types; app.py injects the capability
+(``rosy.world.state.projections.map_pose``) are the providers' own types; app.py injects the capability
 closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's robot clients).
 """
 
@@ -15,7 +15,7 @@ from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.routing.cost import LEFT, RIGHT, STRAIGHT, wrap
 from fleet.routing.execute import arc_id, ends_at_place

@@ -227,7 +227,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 
 `control` ROS 배포는 유지된다. `control.sensing`의 실제 구현은 `middleware/perception/sensors/sensing`, `control.sensing.perception`은 `middleware/perception/front_camera/perception`에 있다. `control.control`의 평탄한 module identity는 Drive의 `safety/recovery/tracking/calibration` holder에서 설치하고 `control.planning`, `control.wander`, `control.safety`도 기존 이름으로 설치한다. `control` 아래 compatibility 진입점은 source 조회의 좁은 path 연결과 기존 export를 맡는다. 설치된 배포가 checkout의 sibling 경로를 필요로 하는 구조로 해석하지 않는다. build는 정적 source mapping을 사용하고 sdist는 실제 source snapshot을 포함한다.
 
-Fleet의 `fleet.localization.map_pose`는 World 구현 module의 명시적인 identity alias다. MapPose 알고리즘은 World에 있고 HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
+Fleet의 `rosy.world.state.projections.map_pose`는 World 구현 module의 명시적인 identity alias다. MapPose 알고리즘은 World에 있고 HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
 
 Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 실제 ROS 배포명은 `gz_sim`이다. launch가 장치 pipeline을 시작한다는 이유만으로 resource/install owner를 다른 패키지로 분리하지 않았다. robot description·map/STL lineage·기존 share resource를 그 패키지 소비자와 함께 유지한다.
 

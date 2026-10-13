@@ -7,7 +7,7 @@ import pytest
 from core_common.robot_body import PINKY_PRO
 from fleet.localization.lane_compliance import (ACT, OK, UNKNOWN, WARN, LaneComplianceConfig,
                                                 LaneComplianceTracker, sample)
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.graph import build_graph
 from fleet.site_map import SiteMap
 
