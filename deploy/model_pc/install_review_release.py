@@ -79,10 +79,11 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     for value in (current, state, python):
         if any(char.isspace() for char in str(value)):
             raise ValueError("systemd paths must not contain whitespace")
+    control = f" --learning-control {state / 'learning-control.json'}" if (state / 'learning-control.json').is_file() else ''
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
-            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host} --decisions-port {port + 10000}\n"
+            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host} --decisions-port {port + 10000}{control}\n"
             "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 
 
