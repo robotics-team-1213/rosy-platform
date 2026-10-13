@@ -110,3 +110,11 @@ def test_declared_jpg_opens_separately_and_refuses_changed_bytes(tmp_path):
     assert next(row for row in workspace.list()[0]['reports'] if row['name'] == 'summary.json')['status'] == 'invalid'
     with pytest.raises(ValueError, match='not declared'):
         workspace.image(item['id'], image.name)
+def test_signed_runner_resource_hold_is_visible(tmp_path):
+    from learning_workspace import read_report
+    (tmp_path / 'summary.json').write_text(json.dumps({'result': 'held', 'reason': 'work busy: GPU compute job'}))
+    report = read_report(tmp_path, 'summary.json')
+    assert report['declared']['status'] == 'held'
+    assert report['reasons'] == ['work busy: GPU compute job']
+
+
