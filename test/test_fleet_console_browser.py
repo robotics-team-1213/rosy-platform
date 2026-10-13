@@ -2515,9 +2515,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 2, layout  # 48rem 아래의 두 줄은 한 줄 접힘 Task에서 한 줄이 된다.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-741 3: the clock lives in the app bar and folds below 48rem; the status center and theme share a row.
-        status, inbox = layout["status"], layout["inbox"]
-        assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
+        # D-741 3: the clock lives in the app bar and folds below 48rem; the robot count sits in the map head.
+        assert layout["status"]["top"] >= layout["stop"]["bottom"], layout
         assert layout["clock"]["height"] == 0, layout
         assert layout["stopScopeHidden"], layout
         # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
