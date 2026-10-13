@@ -1005,3 +1005,9 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
+
+## 2026-10-14 · 3f6c69245 · fix: HOLD 공백 시간에 평가 실행 시간 포함
+
+- 변경: 시계 역행·비유한 완료 시각을 거절하고 평가 완료까지 HOLD 나이를 센다. idle은 이전 평가 완료부터 다음 시작까지다. 처음부터 래치한 평가를 HOLD 계수에 넣지 않는다.
+- 증거: 원격 재현 NEW 7 후 수정본 322 passed, NEW 0. 독립 Codex review_release_safety 소스 리뷰; docs/validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. E-stop reset·SIM·실물 활성화 없음.
