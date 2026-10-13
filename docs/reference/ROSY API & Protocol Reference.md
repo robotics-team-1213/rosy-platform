@@ -720,7 +720,11 @@ v1.70 추가 경로(모두 Bearer 인증):
     "last_wake_reason": null,
     "idle_seconds": 412.5,
     "lidar_spinning": false,
-    "lidar_ready": false
+    "lidar_ready": false,
+    "devices": [
+      { "name": "lidar", "level": "off", "ready": false, "managed": true, "required_for_motion": true }
+    ],
+    "motion_ready": false
   },
   "line_follow": {
     "mode": "CAMERA_LINE",
@@ -1244,10 +1248,11 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `slam.started` | info | 로봇 | `{by, reset}` — `reset` 은 재시작일 때만 (NAV-005) |
 | `slam.stopped` | info | 로봇 | `{by}` |
 | `power.mode_changed` | info | 로봇 | `{from, to, reason, sample_rate_hz}` (PWR-001) |
-| `power.wake` | info | 로봇 | `{reason}` — `proximity\|contact\|api\|battery` (PWR-004) |
+| `power.wake` | info | 로봇 | `{reason, source?}` — `proximity\|contact\|api\|battery\|command` (PWR-004). `command` 는 절전 중 받아들여진(2xx) 명령 REST 호출(D-24 개정 2026-10-04)이며 `source` 에 명령 출처(`teleop`·`mode`·`navigation`·`mission`·`docking`·`line_follow`·`fleet_task`·`intent`·`safety`)를 싣는다. GET·텔레메트리·WS 구독·`/power/*` 는 무명령 타이머를 리셋하지 않는다 |
 | `presence.detected` | info | 로봇 | `{state, range}` (PWR-002) |
 | `presence.cleared` | info | 로봇 | `{range}` |
 | `power.lidar_changed` | info | 로봇 | `{spinning, reason, spinup_s}` (PWR-005 STANDBY LiDAR 정지) |
+| `power.device_changed` | info | 로봇 | `{device, from, to, reason, wake_ready_s}` — 기기별 전원 정책(D-440)이 선언된 기기의 수준(`on`·`reduced`·`off`)을 바꿨다. 벤치 스위치 `power.device_policy.enabled`(기본 false)가 꺼진 로봇에서는 나오지 않는다 |
 | `map.saved` | info | 로봇 | `{map_id}` |
 | `localization.initialpose` | info | 로봇 | `{x, y, yaw, source}` — 운영자가 자세를 놓았다. `source` 는 결정 출처로 이 경로에서는 늘 `human`(v1.72). D-395 로봇에서는 `localization/decision` 으로 가 로봇의 3 s 검증을 거친다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
 | `localization.state` | info | 로봇 | `{state, previous, pose_frame, reason, request_id}` — D-395 상태가 바뀌었다(v1.72). `previous` 는 처음이면 `null`. 상태 토픽이 3 s 끊기면 `UNKNOWN`(`reason: state_stale`). `previous: LOCALIZED` 에서 벗어나면 CORE 가 자율 주행을 기존 정지 경로로 멈춘다: swarm follow 취소(`swarm.aborted`, `reason: localization`), 도킹 취소, line-follow OFF, Nav2 취소(`nav.canceled`), NAVIGATION → IDLE. MANUAL(teleop)은 그대로 |

@@ -246,6 +246,8 @@ EXPECTED_SUBSCRIPTIONS = [
     ("localization/result", "_on_loc_result", 10),
     # D-411 A: the camera unit's recorder status (latched; CORE's guard judges on it).
     ("pilot_recorder/status", "_on_pilot_recorder_status", "LATCHED"),
+    # Per-device power policy (2026-10-04): device nodes report readiness after a wake.
+    ("power/device_ready", "_on_device_ready", 10),
 ]
 
 #: `(topic, qos)` — `ros_bridge.py:78-80,128-131` (cmd_vel/initialpose first,
@@ -265,6 +267,8 @@ EXPECTED_PUBLISHERS = [
     ("teleop/intent", 10),
     # D-411 A: a recording left CORE in full; the recorder may then evict it under quota.
     ("pilot_recorder/fetched", 5),
+    # Per-device power policy (2026-10-04): latched level board for camera / perception.
+    ("power/devices", "LATCHED"),
 ]
 
 #: Five, not four. The fourth is behind the optional `slam_toolbox` import and
@@ -330,7 +334,9 @@ def test_the_three_latched_endpoints_stay_latched(registered):
     assert latched == {"map", "power/mode", "docking/collision_exemption", "motor/ready",
                        "localization/state", "localization/candidates", "pilot_recorder/status",
                        # D-423: model status (late joiners need the current model at once)
-                       "perception/learned/status", "perception/learned/object_det/status"}
+                       "perception/learned/status", "perception/learned/object_det/status",
+                       # per-device power policy: a node that starts late must get its level
+                       "power/devices"}
 
 
 def test_the_bridge_opens_the_same_service_clients(registered):

@@ -58,6 +58,30 @@ line_follow:
   ir_guard_min_linear: 0.01
   ir_guard_back_speed: 0.02
 
+power:
+  # Per-device power policy (D-440, D-24 amendment). Robot facts only: which Pinky
+  # Pro devices react to the power mode and how long each needs after waking.
+  # Whether the policy acts at all is the bench switch power.device_policy.enabled
+  # (rosy_default.yaml, false); a robot turns it, or one device's own `enabled`, on
+  # in its local overlay after the bench checklist passes
+  # (docs/deployment/power-bench-verification.md section 8).
+  # Wheels (motor driver torque) are deliberately absent: torque-off is a later ADR.
+  device_policy:
+    devices:
+      lidar:                       # RPLIDAR C1 motor via start_motor / stop_motor
+        idle: on
+        standby: off
+        wake_ready_s: 2.0          # spin-up before scans are trusted (PWR-005 estimate, bench section 4)
+        required_for_motion: true  # motion waits for scans after a wake
+      camera:                      # camera_detect_node capture (picamera2 / V4L2)
+        idle: on
+        standby: off
+        wake_ready_s: 3.0          # camera_settle_seconds 2.5 + first frames
+      perception:                  # camera_detect_node classification work
+        idle: reduced              # every 4th frame
+        standby: off
+        wake_ready_s: 0.5
+
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop
   # within 0.65 s; Pinky Pro needs ~0.1-0.2 s after the watchdog fires to bring the

@@ -42,7 +42,9 @@ class Clock:
 
 
 def _standby_manager(clock: Clock) -> PowerManager:
-    mgr = PowerManager(PowerConfig(presence=PresenceConfig()), clock=clock)
+    # Explicit dwell: main's defaults are 600 s / 1800 s; the cases only need "asleep".
+    mgr = PowerManager(PowerConfig(idle_after_s=60.0, standby_after_s=300.0,
+                                   presence=PresenceConfig()), clock=clock)
     clock.now += 400.0
     mgr.tick()
     assert mgr.mode == PowerMode.STANDBY

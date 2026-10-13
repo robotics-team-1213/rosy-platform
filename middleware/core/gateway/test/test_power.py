@@ -428,6 +428,7 @@ class TestLidarStandby:
     def test_wake_restarts_lidar_after_spinup(self, lidar_manager, clock):
         self._to_standby(lidar_manager, clock)
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)   # 스캔이 다시 들어온다
         assert lidar_manager.lidar_spinning is True
         assert lidar_manager.lidar_ready() is False        # 아직 스핀업 중
 
@@ -435,6 +436,14 @@ class TestLidarStandby:
         assert lidar_manager.lidar_ready() is False
         clock.advance(0.2)
         assert lidar_manager.lidar_ready() is True
+
+    def test_woken_lidar_without_a_scan_is_never_ready(self, lidar_manager, clock):
+        """D-440 fail safe: 깨우는 명령이 닿지 않았으면 스캔도 없다 — 시간만으로는 준비되지 않는다."""
+        self._to_standby(lidar_manager, clock)
+        lidar_manager.wake("api")
+        clock.advance(60.0)
+        assert lidar_manager.lidar_ready() is False
+        assert lidar_manager.motion_ready() is False
 
     def test_activity_restarts_lidar(self, lidar_manager, clock):
         self._to_standby(lidar_manager, clock)
@@ -461,16 +470,24 @@ class TestLidarStandby:
         """이미 회전 중이면 재기동 취급하지 않는다 — ready가 되돌아가지 않는다."""
         self._to_standby(lidar_manager, clock)
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)
         clock.advance(3.0)
         assert lidar_manager.lidar_ready() is True
 
         lidar_manager.on_activity("cmd_vel")
         assert lidar_manager.lidar_ready() is True
 
-    def test_startup_lidar_is_ready_without_spinup(self, lidar_manager):
-        """core 기동 시점에 드라이버는 이미 돌고 있다 — 스핀업 페널티 없음."""
+    def test_startup_lidar_waits_for_its_first_scan(self, lidar_manager, clock):
+        """D-440: CORE 가 절전 중에 다시 떴을 수 있다 — 정책이 움직이는 LiDAR 는 첫 스캔으로 확인한다."""
         assert lidar_manager.lidar_spinning is True
+        clock.advance(60.0)
+        assert lidar_manager.lidar_ready() is False
+        lidar_manager.report_device_ready("lidar", True)
         assert lidar_manager.lidar_ready() is True
+
+    def test_startup_lidar_without_the_policy_is_ready(self, manager):
+        """정책이 꺼진 로봇은 기동 시점에 이미 준비돼 있다 — 기존 동작."""
+        assert manager.lidar_ready() is True and manager.motion_ready() is True
 
     # --- 이벤트와 상태 ----------------------------------------------------
 
@@ -503,6 +520,7 @@ class TestLidarStandby:
         assert status.lidar_ready is False
 
         lidar_manager.wake("api")
+        lidar_manager.report_device_ready("lidar", True)
         clock.advance(2.5)
         status = lidar_manager.status()
         assert status.lidar_spinning is True

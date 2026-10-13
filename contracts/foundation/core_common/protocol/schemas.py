@@ -928,6 +928,16 @@ class PresenceState(str, enum.Enum):
     CONTACT = "contact"    # contact_m 이내 — 접촉으로 간주
 
 
+class DevicePowerState(BaseModel):
+    """기기별 전원 정책 상태 (D-24 개정 + 기기별 전원 정책 ADR, 2026-10-04)."""
+
+    name: str
+    level: str = "on"               # on | reduced | off
+    ready: bool = True              # 출력을 신뢰할 수 있는가 (wake_ready_s 경과 + 어댑터 보고)
+    managed: bool = False           # 정책이 실제로 이 기기를 움직이는가 (벤치 스위치)
+    required_for_motion: bool = False
+
+
 class PowerStatus(BaseModel):
     mode: PowerMode = PowerMode.ACTIVE
     presence: PresenceState = PresenceState.NONE
@@ -937,6 +947,8 @@ class PowerStatus(BaseModel):
     idle_seconds: float = 0.0
     lidar_spinning: bool = True     # PWR-005 LiDAR 모터 회전 의도
     lidar_ready: bool = True        # 스핀업 완료 — 스캔을 신뢰할 수 있는가
+    devices: list[DevicePowerState] = Field(default_factory=list)   # 선언된 기기만
+    motion_ready: bool = True       # required_for_motion 기기가 모두 준비됨 (아니면 cmd_vel 0)
 
 
 # --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
