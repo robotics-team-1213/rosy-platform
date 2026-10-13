@@ -185,6 +185,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 | 본문 / 보조 글 | `--text-primary` / `--text-secondary` | 중요도와 읽는 순서, 상태 의미를 대신하지 않는다 |
 | 위험 채움 위 글 | `--text-on-danger` | 위험 색 위에서 읽히는 글; 일반 본문에 쓰지 않는다 |
 | 경계선 | `--border-subtle` / `--border-default` / `--border-strong` | 행 구분 / 면 구분 / 강조 경계. 안전 신호를 대신하지 않는다 |
+| 조작 경계 | `--control-line` | 단추·입력·펼침 행의 테두리. 잉크 50%이고 두 테마의 다섯 바탕 위에서 3:1 이상이다(D-741 10항, `test_control_line_contrast.py`). 면을 가르는 선에는 쓰지 않는다 |
 | 명령 / 입력 / 포커스 | `--button-*` / `--field-*` / `--focus-ring` | 공용 컴포넌트가 소유한다 |
 | 위험 / 주의 / 정상 | `--status-crit` / `--status-warn` / `--nominal*` | 확인된 임계만 색으로 강조; 미확인은 정상으로 칠하지 않는다 |
 | 데이터 / 지도 / 브랜드 | `--series-*`, `--robot-*`, `--raster-*`, `--brand-rose*` | 데이터 정체성·지형·제품 식별을 상태 색과 섞지 않는다 |
