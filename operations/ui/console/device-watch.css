@@ -54,6 +54,11 @@
   border-radius: var(--radius-button);
 }
 
+/* D-493 3 — 천장 원본은 한 번에 한 곳에만 보인다. 지도 칸이 프레임을 나눠 보이는 동안 오른쪽 열 썸네일은 접는다. */
+#fleet-main:has(.map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]) > #map-birdseye:not([hidden])) .vision-preview > .vision-frame {
+  display: none;
+}
+
 #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > .device-watch {
   left: auto;
   right: var(--space-3);
