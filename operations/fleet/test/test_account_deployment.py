@@ -60,7 +60,7 @@ def test_authority_configuration_accepts_public_rotation_overlap(tmp_path):
     from fleet.server.account_config import load_account_config
     path, data, private = config(tmp_path)
     public = tmp_path/'old-public.pem'
-    public.write_bytes(serialization.load_pem_private_key(private, password=None).public_key().public_bytes(
+    public.write_bytes(serialization.load_pem_private_key(private, None).public_key().public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
     public.chmod(0o600)
     data['public_key_files'] = {'old-key':str(public)}
@@ -157,7 +157,7 @@ def test_real_sql_logout_reset_block_pending_code_and_refresh(tmp_path, action):
         sessions.revoke(value)
     else:
         sessions.reset_account_password(value, context["account_id"], revision=context["revision"],
-                                        password="another temporary password")
+                                        password="SuperSecretSitePsk99")
     assert exchange(authority, pending)[2] == 400
     assert authority.token(urlencode({"grant_type": "refresh_token", "client_id": "robot-app",
                                      "refresh_token": token["refresh_token"]}))[2] == 400
@@ -173,7 +173,7 @@ def test_successful_browser_account_switch_revokes_old_app_family(tmp_path, same
     value = client.cookies[COOKIE]
     context = sessions.account_context(value)
     sessions.create_account(value, login="bob", principal_id="bob", role="viewer",
-                            password="temporary secret", grants=[])
+                            password="fixture-pass-9384", grants=[])
     sessions.update_account(value, context["account_id"], revision=context["revision"], grants=[
         {"resource": "site:test-site", "capabilities": ["accounts.manage"]},
         {"resource": "robot:r1", "capabilities": ["robot.read"]}])
@@ -182,7 +182,7 @@ def test_successful_browser_account_switch_revokes_old_app_family(tmp_path, same
     tokens = json.loads(exchange(authority, get_code(authority, sessions.account_context(old)))[1])
     assert _login(client, login="bob", password="wrong").status_code == 401
     assert authority.introspect(tokens["access_token"])["active"] is True
-    replacement = _login(client) if same_account else _login(client, login="bob", password="temporary secret")
+    replacement = _login(client) if same_account else _login(client, login="bob", password="fixture-pass-9384")
     assert replacement.status_code == 204
     assert authority.introspect(tokens["access_token"]) == {"active": False}
     assert sessions.principal(old) is None
