@@ -340,7 +340,7 @@ def flood_region(store, index, review, seed, tolerance):
     return flood_region_photo(photo, seed, tolerance)
 
 
-def update(store, index, body, conflict):
+def update(store, index, body, conflict, *, actor=None):
     with store.lock, store.connect() as db:
         db.execute('BEGIN IMMEDIATE')
         frame, review = store.get(index), get(store, index)
@@ -448,6 +448,8 @@ def update(store, index, body, conflict):
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
             require_inside_lane_boundaries(image, binding)
             unknown_count = int(np.count_nonzero(image == 255))
+            if actor:
+                approval['reviewer'] = actor
             if unknown_count:
                 kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
                 if not kind or kind[0] != 'evaluation':
