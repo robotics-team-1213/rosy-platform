@@ -430,18 +430,29 @@ def test_unexpected_within_the_arm_distance_also_stops_at_once():
 def test_waiting_beyond_the_arm_distance_is_dismissed_by_the_map_then_stops():
     """Map vote: a keeper sighting with no place within arm_distance_m is answered ``straight``
     three times a trip; the fourth ends the trip at once as before (not after junction_wait_s)."""
-    runner, ports = _running_at(0.1)
+    runner, ports = _running_at(0.05)                     # 0.95 m before B: beyond arm + margin
     for n in (1, 2, 3):
         _core_shows(ports, "waiting")
         _ticks(runner, ports, 1)
         view = runner.view("p1")
         assert view["state"] == "running" and view["detail"]["sighting_dismissed"] == n
-        assert ports.sent[-1][:2] == ("straight", f"map-clear-{n}")
+        action, place = ports.sent[-1][:2]
+        assert action == "straight" and place.startswith("map-clear-") and place.endswith(f"-{n}")
     _core_shows(ports, "waiting")
     _ticks(runner, ports, 1)
     view = runner.view("p1")
     assert (view["state"], view["reason"]) == ("stopped", "junction_unexpected")
     assert view["detail"]["junction_state"] == "waiting"
+
+
+def test_a_sighting_inside_the_margin_of_a_place_is_not_dismissed():
+    """Review 2026-10-13: within arm_distance_m + 0.3 m of a place the sighting may be that place."""
+    runner, ports = _running_at(0.2)                      # 0.8 m before B
+    _core_shows(ports, "waiting")
+    _ticks(runner, ports, 1)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_unexpected")
+    assert "sighting_dismissed" not in view["detail"]
 
 
 def test_waiting_within_the_arm_distance_is_answered_as_before():

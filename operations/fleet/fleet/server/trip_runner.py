@@ -49,6 +49,9 @@ _LOG = logging.getLogger(__name__)
 ARC_END_UNARMED = "lane_arc_end_unarmed"
 #: Keeper sightings without a map place that one trip answers with ``straight`` before it ends.
 SIGHTING_DISMISSALS = 3
+#: The dismissal ``straight`` lives this long and needs this much lane beyond the arm distance.
+DISMISS_EXPIRES_S = 2.0
+DISMISS_MARGIN_M = 0.3
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
 #: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
@@ -475,7 +478,7 @@ class TripRunner(TripAdmission, TripProgress):
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
                 live.waiting_since = None
             failed = live.junction_end(self._clock(), remaining if lane else None, self.config)
-            if failed is not None and await self._dismiss_sighting(live, failed):
+            if failed is not None and await self._dismiss_sighting(live, index, remaining, failed):
                 failed = None
             if failed is not None:
                 await self._stop(live, "stopped", *failed)
@@ -654,22 +657,31 @@ class TripRunner(TripAdmission, TripProgress):
         state = live.junction.get("state")
         return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
 
-    async def _dismiss_sighting(self, live: LiveTrip, failed: tuple) -> bool:
+    async def _dismiss_sighting(self, live: LiveTrip, index: int, remaining: float, failed: tuple) -> bool:
         """Map vote (user 2026-10-13): CORE waits at a junction its keeper saw where the map has no
-        place within ``arm_distance_m``. One keeper frame is not a junction against the map, so the
-        answer is ``straight`` (the lane goes on), at most SIGHTING_DISMISSALS times a trip; after
-        that, or when CORE calls it ``unexpected`` itself, the trip ends as before (D-507 3)."""
+        place near. One keeper frame is not a junction against the map, so the answer is a
+        short-lived ``straight`` (the lane goes on), at most SIGHTING_DISMISSALS times a trip; after
+        that, or when CORE calls it ``unexpected`` itself, the trip ends as before (D-507 3).
+        Never while Fleet holds the robot (traffic, operator, replan): CORE's wait is then wanted.
+        The place must be beyond the arm distance by DISMISS_MARGIN_M (pose error, keeper look-ahead)
+        and the instruction dies in DISMISS_EXPIRES_S, so a real junction does not consume it."""
         reason, detail = failed
         if (reason != "junction_unexpected" or detail.get("junction_state") != "waiting"
-                or live.dismissed >= SIGHTING_DISMISSALS):
+                or live.dismissed >= SIGHTING_DISMISSALS or live.view["hold"] is not None
+                or self.traffic.holds(live, index)
+                or remaining <= self.config.arm_distance_m + DISMISS_MARGIN_M):
+            return False
+        place = f"map-clear-{str(live.view['trip_id'])[:8]}-{live.dismissed + 1}"
+        try:
+            reply = await self._call(self._junction.send_junction(
+                live.view["robot_id"], "straight", place, None, DISMISS_EXPIRES_S)) or {}
+        except RobotApiError as exc:
+            if exc.code != "JUNCTION_ALREADY_DONE":
+                return False
+            reply = {}
+        if reply.get("accepted") is False:
             return False
         live.dismissed += 1
-        try:
-            await self._call(self._junction.send_junction(
-                live.view["robot_id"], "straight", f"map-clear-{live.dismissed}", None,
-                self.config.junction_expires_s))
-        except RobotApiError:
-            return False
         live.waiting_since = None
         live.view["detail"]["sighting_dismissed"] = live.dismissed
         return True
