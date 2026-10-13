@@ -1,3 +1,4 @@
+import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
 const $ = id => document.getElementById(id);
@@ -6,7 +7,7 @@ const states = {queued:'대기',running:'가져오는 중',completed:'가져옴 
   interrupted:'중단됨',cancelled:'취소됨',rights_hold:'이용 권한 확인 필요',blocked:'접근 차단'};
 function error(message) { $('account-error').textContent=message || ''; $('account-error').hidden=!message; }
 async function api(path, body) {
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
+  const response=await accountFetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
     headers:body===undefined?{}:{'Content-Type':'application/json','X-Pinky-Token':token || ''},
     body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json();

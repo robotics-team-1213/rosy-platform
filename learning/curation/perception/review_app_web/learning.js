@@ -1,3 +1,4 @@
+import {accountFetch} from '/account-session.js';
 import { taskRow } from '/common/workspace.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
@@ -80,7 +81,7 @@ setInterval(async()=> {
   } finally {polling=false;}
 },2000);
 async function request(path,body) {
-  const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
+  const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
   if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 거부되었습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===403)showUnavailable(error);throw error;}return value;
 }
