@@ -191,6 +191,8 @@ class Collaboration:
             return True
 
     def _post(self, handler, path, body, token):
+        if self.receiver and path == '/api/accounts/oauth' and handler.headers.get('X-Pinky-Token') != self.csrf(handler, token):
+            raise PermissionError('Account session changed')
         if self.receiver and path == '/api/accounts/logout':
             self.set_cookie(handler, COOKIE, '', clear=True)
             self.accounts.logout(cookie(handler, COOKIE))

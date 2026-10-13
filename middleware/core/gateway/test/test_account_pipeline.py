@@ -40,7 +40,7 @@ def pipeline(tmp_path, core_client):
     console = FleetConsole([], [])
     fleet = create_app(console, task_service=FleetTaskService(FleetTaskStore(tmp_path/'fleet.db'), robot_ids=[]),
         site_logins={'alice':{'principal_id':'alice','role':'operator', 'password_scrypt':hash_password('test-password')}},
-        account_config=config, start_task_dispatcher=False)
+        account_config=config, web_common=ROOT/'shared/web', start_task_dispatcher=False)
     sessions = fleet.state.password_sessions
     def login():
         return sessions.issue('alice', remember=False, verified=sessions.check('test','alice','test-password'))
@@ -127,7 +127,11 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
+            failures = []
+            page.on('pageerror', lambda error: failures.append(str(error)))
             page.goto(robot+'/api/account/login?return=/dashboard')
+            assert '/console/login?' in page.url, (page.url, page.locator('body').inner_text())
+            assert not failures, failures
             page.locator('[data-login=login]').fill('alice')
             page.locator('[data-login=password]').fill('test-password')
             page.locator('[data-login=submit]').click()
