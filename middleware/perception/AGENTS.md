@@ -4,7 +4,7 @@
 # control (ROS distribution in ROSY Platform)
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-11
+**Updated:** 2026-10-12
 
 ## Purpose
 ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-maze robot (~11 cm; RPi, RPLidar C1, US-016, 3× IR cliff, BNO055 IMU, OV5647). D-630 puts sensing source in `sensors/sensing`, camera/OpenCV source in `vision/perception`, and Drive algorithm source in `../control/drive/{planning,tracking,recovery,calibration,safety}`. Existing import names, ROS node composition, entry points and share resources remain with this distribution. `core` owns the final external API and operational motor command path.
@@ -25,7 +25,7 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | Directory | Purpose |
 |-----------|---------|
 | `control/` | Existing ROS node composition and thin source-import compatibility entries (see `control/AGENTS.md`) |
-| `sensors/sensing/` | Pure sensor evidence, installed as `control.sensing` (see `sensors/sensing/AGENTS.md`) |
+| `sensors/` | Sensor-evidence holder. The installed package is `sensing/` (see `sensors/AGENTS.md`) |
 | `vision/perception/` | Camera/detector/learned evidence, installed as `control.sensing.perception` (see `vision/perception/AGENTS.md`) |
 | `../control/drive/` | Existing Drive algorithms installed by this distribution under `control.control`, `control.planning`, `control.wander`, `control.safety` (see `../control/drive/AGENTS.md`) |
 | `config/` | Shared and per-node ROS parameters (see `config/AGENTS.md`) |
