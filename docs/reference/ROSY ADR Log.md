@@ -615,6 +615,7 @@
 | D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 | Accepted (2026-10-10, 사용자 결정; SOURCE·원격 시험·ARTIFACT·DEVICE·FIELD 별도) |
 
 | D-619 | 공통 상황 판단과 장치별 처리 방향: 관찰을 영상 ID에 묶고 상황 유형·불확실성·처리 방향을 반환, 모델 검증은 unverified, 이동 로봇·로봇암 실행 권한은 장치별 기존 계약 유지 | Accepted (2026-10-10, 사용자 결정; 구현·원격 계약·현장 모델 증거는 별도) |
+| D-622 | Fleet 독립 주행 REALIGN은 실제 지도 revision에 묶인 명시적 볼록 복구 영역 안에서만 선택하고 기존 CORE PIVOT/KTURN 재확인으로 실행한다; 기본 빈 허용 목록·영역, 신선한 뒤 증거·동료·연속 몸체 sweep·시도 상한 유지, trip P5 범위 밖 | Accepted (2026-10-10, 사용자 병렬 구현 요청; SOURCE·원격 시험·설치·FIELD 별도) |
 | D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 | Accepted (2026-10-11, 사용자 결정; 구조 방향·계획·이전 도구 준비에 한정, 실제 이동·실행 권한 변경·장치 수용은 별도) |
 | D-623 | 최신 RAW 사건 영상과 지도 방향을 Fleet·AI·프론트에 전달하고 경계 기하 변화에서만 재문의한다; 프레임 캐시·신선도 수정, 수락과 완료 구분, 이동 권한 유지 | Accepted (2026-10-10; SOURCE·원격 시험·배포·현장 별도) |
 | D-624 | 색상 역할·공용 컴포넌트·디자인 법칙; 팔레트 값 보존, 전체 웹 CSS 역할 소비, 갤러리 통합, Fleet·로봇 레이아웃 개선 | Accepted (2026-10-11; SOURCE·원격 G1·G2·G3·장치 수용 별도) |
@@ -667,6 +668,7 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 | Accepted (2026-10-12, 계약; 운영 활성화·현장 수용 별도) |
 | D-670 | 정답과 주행 정책 없이 도로면·현재 구역 관측을 산출한다 | Accepted |
 | D-664 | 주행·고정 셀·이동식 로봇암의 공통 작업 개념과 책임 검토 | Accepted (2026-10-11; 개념 및 공통 읽기 첫 단위) |
+| D-668 | Fleet 단일 테마 버튼과 접속·알림 진입점 | Accepted (2026-10-12) |
 | D-669 | Discord 대화 작업 요청과 Fleet 대응 경계 | Proposed |
 | D-675 | Discord Gateway 수신과 기존 Fleet lifecycle | Accepted (source only, 2026-10-12) |
 | D-680 | Discord 요청의 Fleet 작업 연결과 결과 회신 | Accepted (source design only, 2026-10-12) |
@@ -774,6 +776,10 @@
 - 상태: Accepted (2026-10-11).
 - Contract: [ADR](../adr/D-658-fleet-header-regions.md), [plan](../plans/2026-10-11-fleet-header-regions.md).
 
+## D-668 Fleet theme and status entry
+
+- Status: Accepted (2026-10-12).
+- Contract: [ADR](../adr/D-668-fleet-theme-and-status-entry.md).
 ## D-667 — 오프라인 인지 평가의 공통 관측 계약
 
 - 상태: Accepted (2026-10-12).
