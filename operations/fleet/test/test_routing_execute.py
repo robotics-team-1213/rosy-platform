@@ -235,8 +235,7 @@ def test_curvature_sign_is_left_positive():
         assert exit_segment(graph, trip, 0, **ARC_ARGS)["curvature_1pm"] == pytest.approx(sign * 4.0, abs=0.01)
 
 
-def test_map_pose_adds_the_map_anchor_with_the_fitted_centre():
-    """D-744 1: the circle centre in the map frame and the pose pair, only when a pose is given."""
+def test_d744_map_pose_adds_the_map_anchor_with_the_fitted_centre():
     for clockwise, cy in ((False, 0.25), (True, -0.25)):
         graph, trip = _circle_map(clockwise)
         assert "map_anchor" not in exit_segment(graph, trip, 0, **ARC_ARGS)

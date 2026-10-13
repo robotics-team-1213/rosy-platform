@@ -137,8 +137,7 @@ class TripCaps:
     junction_pivot: bool = False
     #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
     lane_arc: bool = False
-    #: D-744 2: CORE takes ``exit_segment.map_anchor`` (the arc's circle in the map); absent means no.
-    lane_arc_map_anchor: bool = False
+    lane_arc_map_anchor: bool = False  #: D-744 2: CORE takes ``exit_segment.map_anchor``; absent = no
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False

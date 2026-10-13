@@ -602,8 +602,7 @@ class TripRunner(TripAdmission, TripProgress):
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
         if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
-            # D-744 2: the map anchor only to a lane_arc_map_anchor robot, from the pose this step
-            # located it by and the odom stamp that pose was computed for
+            # D-744 2: only to a lane_arc_map_anchor robot, from this step's pose and its odom stamp
             stamp = getattr(pose, "odom_stamp", None)
             anchored = (live.view["caps"] or {}).get("lane_arc_map_anchor") and stamp is not None
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,

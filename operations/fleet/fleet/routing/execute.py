@@ -83,10 +83,8 @@ def exit_segment(graph: Graph, segments: list, index: int, *, fit_tol_m: float,
     Only when the next segment is a whole ``lane`` arc to its place whose polyline lies within
     ``fit_tol_m`` of one circle (Kasa fit) of curvature and length in CORE's range. The sign is
     REP-103: + when the circle's centre is left of the lane (counter-clockwise).
-
-    D-744 1: with ``map_pose`` (the robot's map ``x, y, yaw`` and the odom stamp that pose was
-    computed for) the segment carries ``map_anchor``: the circle's centre in the map frame and
-    that pose pair, from which CORE places the circle in its odom frame.
+    D-744 1: ``map_pose`` (map ``x, y, yaw``, the odom stamp it was computed for) adds ``map_anchor``:
+    the circle's centre in the map frame and that pose pair, for CORE to place it in its odom frame.
     """
     if index + 1 >= len(segments):
         return None
