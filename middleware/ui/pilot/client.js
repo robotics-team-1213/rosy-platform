@@ -8,12 +8,23 @@ export function token() {
   return sessionStorage.getItem(KEY) ?? "";
 }
 
+// Rosy Pilot 앱이 이 화면을 연 경우. 로봇 선택과 세션은 앱이 소유한다.
+// 번들 화면은 그 세션만 쓰고, 개발 연결·코드·다른 표면으로 다시 나가지 않는다.
+export function inPilotApp() {
+  return document.documentElement.dataset.pilotShell === "android";
+}
+
 export function setToken(value) {
   sessionStorage.setItem(KEY, String(value ?? "").trim());
 }
 
 export function clearToken() {
   sessionStorage.removeItem(KEY);
+}
+
+export function prepareConsoleSession() {
+  const current = token();
+  if (current) sessionStorage.setItem("rosy.dashboard.token", current);
 }
 
 export function authHeaders() {

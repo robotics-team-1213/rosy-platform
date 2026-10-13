@@ -4,10 +4,10 @@ import { readFileSync } from "node:fs";
 
 import {
   RENUMBER_BANNER, addressMap, addressReason, movableRobots, renumberBanner,
-} from "../../fleet/server/web/shared/address-drift.js";
-import { MESSAGES, MOVE_CHECK, moveDoneLines } from "../../fleet/server/web/enrollment.js";
+} from "../../../ui/console/shared/address-drift.js";
+import { MESSAGES, MOVE_CHECK, moveDoneLines } from "../../../ui/console/enrollment.js";
 
-const WEB = new URL("../../fleet/server/web/", import.meta.url);
+const WEB = new URL("../../../ui/console/", import.meta.url);
 
 const entry = (over) => ({
   robot_id: "rosy_09", origin: "enrolled", pinned: "192.0.2.10:8080", pinned_is_name: false,

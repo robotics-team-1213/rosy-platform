@@ -1,6 +1,7 @@
 """Prepare ROSY's xacro model for Isaac Sim URDF import."""
 
 import argparse
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -8,8 +9,8 @@ import xml.etree.ElementTree as ET
 
 
 REPOSITORY = Path(__file__).resolve().parents[3]
-# The old sibling middleware/apps/device/pinky/description (D-427 wave 4c moves it to middleware).
-DESCRIPTION = REPOSITORY / "middleware" / "apps" / "device" / "pinky" / "description"
+# The old sibling middleware/devices/pinky/description (D-427 wave 4c moves it to middleware).
+DESCRIPTION = REPOSITORY / "middleware" / "devices" / "pinky" / "description"
 
 
 def validate_output_path(path: Path) -> Path:
@@ -39,6 +40,44 @@ def resolve_meshes(urdf: str, description: Path) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def promote_base_mass(root):
+    """Keep Pinky's footprint frame physical instead of importing a massless root actor."""
+    foot = root.find("./link[@name='base_footprint']")
+    body = root.find("./link[@name='base_link']")
+    joint = root.find("./joint[@name='base_link_fixed_joint']")
+    if (foot is None or body is None or joint is None or len(foot) or joint.get('type') != 'fixed'
+            or joint.find('parent').get('link') != 'base_footprint'
+            or joint.find('child').get('link') != 'base_link' or joint.find('origin') is None
+            or body.find('inertial/mass') is None):
+        raise ValueError('Empty footprint and physical fixed base link required')
+    origin = joint.find('origin')
+    offset = tuple(map(float, origin.get('xyz', '0 0 0').split()))
+    rotation = tuple(map(float, origin.get('rpy', '0 0 0').split()))
+    mass = float(body.find('inertial/mass').get('value'))
+    if (len(offset) != 3 or rotation != (0., 0., 0.) or not all(map(math.isfinite, (*offset, mass)))
+            or mass <= 0):
+        raise ValueError('Finite translation-only base reference and positive mass required')
+    parts = [item for item in body if item.tag in ('visual', 'collision', 'inertial')]
+    children = [j for j in root.findall('joint') if j.find('parent').get('link') == 'base_link']
+    shifted = []
+    for item in [*parts, *children]:
+        current = item.find('origin')
+        xyz = tuple(map(float, current.get('xyz', '0 0 0').split())) if current is not None else (0., 0., 0.)
+        if len(xyz) != 3 or not all(map(math.isfinite, xyz)):
+            raise ValueError('Finite body and joint origins required')
+        shifted.append((item, tuple(a + b for a, b in zip(xyz, offset))))
+    for item, xyz in shifted:
+        current = item.find('origin')
+        if current is None:
+            current = ET.SubElement(item, 'origin')
+        current.set('xyz', ' '.join(map(str, xyz)))
+    for item in parts:
+        body.remove(item)
+        foot.append(item)
+    for child in children:
+        child.find('parent').set('link', 'base_footprint')
+
+
 def prepare(output: Path, xacro_executable: str = "xacro") -> Path:
     source = DESCRIPTION / "urdf" / "robot.urdf.xacro"
     result = subprocess.run(
@@ -49,9 +88,10 @@ def prepare(output: Path, xacro_executable: str = "xacro") -> Path:
     root = ET.fromstring(urdf)
     if root.tag != "robot" or any(element.tag == "gazebo" for element in root.iter()):
         raise ValueError("Isaac URDF must contain a robot without Gazebo plugins")
+    promote_base_mass(root)
     output = validate_output_path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(urdf, encoding="utf-8")
+    output.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")
     return output
 
 

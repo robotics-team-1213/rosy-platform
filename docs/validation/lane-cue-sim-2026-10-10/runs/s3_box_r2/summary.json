@@ -1,0 +1,123 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "cue_turn_signs": {
+   "+": 24,
+   "-": 0
+  },
+  "cues_refused": [],
+  "pivot_started": true,
+  "obstacle_ahead_seen": true,
+  "turning_reason_seen": true,
+  "nonzero_angular_after_pivot_start": 135,
+  "yaw_change_deg": 31.51,
+  "body_gap_m": [
+   0.0,
+   0.0192,
+   0.0199
+  ],
+  "after": [
+   [
+    496.479,
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    496.991,
+    "TRACKING",
+    "fleet_wrong_way_turn"
+   ],
+   [
+    499.12,
+    "HOLD",
+    "junction_waiting"
+   ],
+   [
+    504.816,
+    "LOST",
+    "camera_reselection_required"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   481.512,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   485.672,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   485.796,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   487.582,
+   "HOLD",
+   "obstacle_ahead"
+  ],
+  [
+   492.675,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   495.339,
+   "HOLD",
+   "stuck_settling"
+  ],
+  [
+   496.363,
+   "HOLD",
+   "stuck_resumed"
+  ],
+  [
+   496.479,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   496.991,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   499.12,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   504.816,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s3",
+ "args": {
+  "scenario": "s3",
+  "out": "runs/s3_box_r2",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "exact180": true,
+  "box": true,
+  "seed": 36,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

@@ -44,9 +44,14 @@ def space_pressed() -> bool:
         key = msvcrt.getch()
         return key in (b" ", b"\x03")
     except ImportError:
+        import io
         import select
         import sys
 
-        if not select.select([sys.stdin], [], [], 0)[0]:
+        # A stdin without a file descriptor (pytest capture, a pipe closed early) has no key to read.
+        try:
+            if not select.select([sys.stdin], [], [], 0)[0]:
+                return False
+        except (io.UnsupportedOperation, OSError, ValueError):
             return False
         return sys.stdin.read(1) == " "

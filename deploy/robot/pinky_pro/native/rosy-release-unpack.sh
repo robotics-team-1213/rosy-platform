@@ -64,7 +64,7 @@ mkdir -p "$TMP"
 # line-oriented text `tar -t`/`tar -tv` print, so a name containing a
 # newline cannot split across two lines and slip past an absolute-path or
 # ".." check the way it could with a line-by-line text scan.
-python3 - "$TARBALL" <<'PY'
+DELTA="$(python3 - "$TARBALL" <<'PY'
 import re
 import sys
 import tarfile
@@ -95,9 +95,38 @@ with tarfile.open(sys.argv[1], "r:gz") as tar:
             reject(f"path traversal entry: {name}")
         if not (member.isreg() or member.isdir()):
             reject(f"{KIND.get(member.type, f'type {member.type!r}')} entry: {name}")
+        if name.removeprefix("./") == ".rosy-delta-base":
+            if not member.isreg() or member.size > 200:
+                reject("delta marker is not a small regular file")
+            print(tar.extractfile(member).read().decode("ascii", "replace"), end="")
 PY
+)"
+
+# D-553 addendum 3: a delta payload names its base release and the sha256 of
+# that base's SHA256SUMS. The full release is rebuilt here from a copy of the
+# base plus the delta; activation (native_release.py verify) then checks the
+# complete tree against the new signed SHA256SUMS, exactly as for a full one.
+if [[ -n "$DELTA" ]]; then
+  mapfile -t delta_lines <<< "$DELTA"
+  BASE_ID="${delta_lines[0]:-}"
+  BASE_SUMS="${delta_lines[1]:-}"
+  [[ "$BASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ && "$BASE_SUMS" =~ ^[0-9a-f]{64}$ ]] \
+    || { echo "DELTA_MARKER_INVALID: .rosy-delta-base is not <release id> + <sha256>" >&2; exit 1; }
+  BASE="$RELEASES_DIR/$BASE_ID"
+  [[ -d "$BASE" && ! -L "$BASE" && -f "$BASE/SHA256SUMS" ]] \
+    || { echo "DELTA_BASE_MISSING: base release $BASE_ID is not on this device; push a full release" >&2; exit 1; }
+  [[ "$(sha256sum "$BASE/SHA256SUMS" | awk '{print $1}')" == "$BASE_SUMS" ]] \
+    || { echo "DELTA_BASE_MISMATCH: $BASE_ID on this device is not the release the delta was built on" >&2; exit 1; }
+  # D-553 addendum 4: hard links, not a copy of the ~90 MB base (47 s on the SD
+  # card). Releases are never written in place: tar unlinks a path before it
+  # extracts the delta's file there, so the base keeps its own content, and
+  # the chown/chmod below are no-ops on the base's already-normalized inodes.
+  cp -al -- "$BASE/." "$TMP/"
+  rm -f -- "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig" "$TMP/manifest.json"
+fi
 
 tar --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
+rm -f -- "$TMP/.rosy-delta-base"
 
 # Reassert ownership/mode rather than trust either the tarball or
 # --no-same-owner's umask-derived result: this is what native_release.py's

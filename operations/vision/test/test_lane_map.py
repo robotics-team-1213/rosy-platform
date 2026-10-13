@@ -135,3 +135,32 @@ def test_camera_lane_map_and_rejection(tmp_path):
     attached = _graph(skeleton, (0, 1.6), 0.01, 0.2, "attached-ring")
     SiteMap.model_validate(attached)
     assert len(attached["edges"]) == 4
+
+
+def test_camera_edges_carry_observation_lineage_and_optional_survey_basis():
+    image = np.zeros((240, 400, 3), np.uint8)
+    cv2.line(image, (25, 90), (375, 90), (255, 255, 255), 5)
+    cv2.line(image, (25, 130), (375, 130), (255, 255, 255), 5)
+    calibration = {"image_size": [400, 240], "image_to_map":
+        [[0.005, 0, -1], [0, -0.005, 0.6], [0, 0, 1]],
+        "survey": {"revision": "s1", "origin": [0, 0], "heading_rad": 0,
+            "scale_source": "measured", "measured_distance_m": 2,
+            "description": "Measured floor frame", "reviewed": True, "review_note": "Earlier review"}}
+    draft, evidence = generate_map(image, calibration, lane_width_m=0.2, map_id="yard")
+    assert draft['survey']['reviewed'] is False and draft['survey']['review_note'] == ''
+    assert draft['edges'][0]['evidence']['source'] == 'camera'
+    assert draft['edges'][0]['evidence']['status'] == 'observed'
+    assert draft['edges'][0]['evidence']['reference_revision'] == 's1'
+    from fleet.server.site_map_store import SiteMapError, SiteMapStore
+    from fleet.site_map import SiteMap
+    store = SiteMapStore()
+    with pytest.raises(SiteMapError) as error:
+        store.import_if_empty(SiteMap.model_validate(draft), source='camera')
+    assert error.value.code == 'SITE_MAP_SURVEY_UNREVIEWED'
+    with pytest.raises(ValueError):
+        generate_map(image, {**calibration, 'survey': {**calibration['survey'], 'origin': [float('nan'), 0]}},
+            lane_width_m=0.2)
+    plain, _ = generate_map(image, {k: v for k, v in calibration.items() if k != 'survey'}, lane_width_m=0.2)
+    with pytest.raises(SiteMapError) as error:
+        store.import_if_empty(SiteMap.model_validate(plain), source='camera')
+    assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'

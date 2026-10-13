@@ -17,3 +17,36 @@ D-428 ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on mai
 D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
+D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
+D-571 ADR reserved on branch feat/rosy-cam-map-plane (971523db2), not yet on main; remove when it lands
+D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
+D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
+D-621 reserved by another active session; ADR not yet landed in this branch
+
+
+
+
+
+
+
+
+
+
+D-677 allocated outside this branch and absent from main; remove when its ADR lands
+
+
+D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
+
+
+
+
+
+
+
+
+
+
+
+
+
+D-740 feat/sdk-forward-arc-sweep에서 진행 중인 ADR이다. 그 브랜치가 착지할 때 이 줄을 지운다 (lint가 "declared gap now exists"로 알려 준다)

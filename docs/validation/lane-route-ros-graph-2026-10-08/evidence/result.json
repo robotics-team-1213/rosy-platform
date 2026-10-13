@@ -1,0 +1,98 @@
+{
+  "sent": 125,
+  "received": 125,
+  "missing_indices": [],
+  "bend": {
+    "188": {
+      "confidence": 0.6,
+      "error": -0.11217948717948703,
+      "source": "CAMERA_LINE",
+      "stamp": 65.125,
+      "visible": true
+    },
+    "189": {
+      "confidence": 0.6,
+      "error": -0.11217948717948703,
+      "source": "CAMERA_LINE",
+      "stamp": 65.25,
+      "visible": true
+    },
+    "190": {
+      "confidence": 0.6,
+      "error": -0.10775139359023303,
+      "source": "CAMERA_LINE",
+      "stamp": 65.375,
+      "visible": true
+    },
+    "191": {
+      "confidence": 0.6,
+      "error": -0.09995130150476676,
+      "source": "CAMERA_LINE",
+      "stamp": 65.5,
+      "visible": true
+    },
+    "192": {
+      "confidence": 0.6,
+      "error": -0.09848126674131484,
+      "source": "CAMERA_LINE",
+      "stamp": 65.625,
+      "visible": true
+    },
+    "193": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 65.75,
+      "visible": true
+    },
+    "194": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 65.875,
+      "visible": true
+    },
+    "195": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.0,
+      "visible": true
+    },
+    "196": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.125,
+      "visible": true
+    },
+    "197": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.25,
+      "visible": true
+    },
+    "198": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.375,
+      "visible": true
+    },
+    "199": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.5,
+      "visible": true
+    },
+    "200": {
+      "confidence": 0.6,
+      "error": -0.09553189372076816,
+      "source": "CAMERA_LINE",
+      "stamp": 66.625,
+      "visible": true
+    }
+  }
+}

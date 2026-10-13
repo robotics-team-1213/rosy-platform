@@ -10,6 +10,7 @@ install(FILES
   components.css
   template.html
   template.css
+  app-shell.css
   core_ui_logic.js
   hold-ticker.js
   ui.js
@@ -33,6 +34,12 @@ install(FILES
   icons/console.svg
   icons/robot.svg
   DESTINATION share/${PROJECT_NAME}/icons
+)
+
+install(FILES
+  brand/mark.svg
+  brand/platform.svg
+  DESTINATION share/${PROJECT_NAME}/brand
 )
 
 ament_package()

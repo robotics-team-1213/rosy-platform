@@ -17,6 +17,8 @@
 | D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-476 | 차선을 잃으면 곧바로 멈추지 않고, 알던 차로의 연장선을 짧게 잇는다(예상 도로 bridge) |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-735 | 이동 후보의 교통 감속 곡률 보존 |
 
 ## 계획·결과 문서
 
@@ -29,17 +31,13 @@
 
 ## 시험
 
-- `middleware/core/gateway/test/test_core_logic.py`
-- `middleware/core/services/test/test_docking.py`
-- `middleware/core/services/test/test_swarm.py`
-- `middleware/core/gateway/test/test_power.py`
-- `middleware/core/gateway/test/test_traffic_policy.py`
-- `middleware/core/services/test/test_teleop_intent.py`
+- `middleware/core/gateway/test`
+- `middleware/core/services/test`
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
-- 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
-- 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
-- 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
+- 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
+- 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
+- 2026-10-12 · d3bd5513c · 이동 교통 감속의 곡률 보존
+- 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)
+- 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분

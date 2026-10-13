@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.pilot
+﻿package io.github.livsbittt.rosy.pilot
 
 import java.io.File
 import okhttp3.OkHttpClient
@@ -31,11 +31,11 @@ class BundledAssetsTest {
         try {
             proxy.start(5000, false)
             for (path in listOf("/pilot", "/pilot/assets/app.js", "/common/tokens.css")) {
-                OkHttpClient().newCall(Request.Builder().url(proxy.origin + path).header("Cookie", "rosy-shell=${proxy.capability}").build())
+                OkHttpClient().newCall(Request.Builder().url(proxy.origin + path).header("Cookie", "${proxy.cookieName}=${proxy.capability}").build())
                     .execute().use { assertEquals(200, it.code); assertTrue(it.body!!.bytes().isNotEmpty()) }
             }
             assertEquals(0, dials.get())
-            OkHttpClient().newCall(Request.Builder().url(proxy.origin + "/api/v1/system/info").header("Cookie", "rosy-shell=${proxy.capability}").build())
+            OkHttpClient().newCall(Request.Builder().url(proxy.origin + "/api/v1/system/info").header("Cookie", "${proxy.cookieName}=${proxy.capability}").build())
                 .execute().use { assertEquals(403, it.code) }
         } finally { proxy.stop() }
     }

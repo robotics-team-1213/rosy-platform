@@ -65,7 +65,7 @@ ROSY OS uses six primary domain objects:
 | 15 | Ubuntu Modular Installation | Package/profile installation design |
 | 16 | Interface Design Principles | Human-facing surfaces: shared laws, per-surface grammar |
 
-## Current mapping (2026-09-17)
+## Current mapping (2026-09-17, rows 11–12 amended 2026-10-09)
 
 `docs/architecture` is the **target** distributed OS. v1 maps those terms onto the live Pinky CORE + D-62 slices stack (D-65). Contract documents win on API, modes, `cmd_vel`, and identity: [CORE SRS](../spec/ROSY%20CORE%20SRS.md) §1.3, [ADR log](../reference/ROSY%20ADR%20Log.md) (D-62, D-65, D-67–D-71), [alignment design](../plans/2026-09-16-concept-runtime-alignment-design.md), [concept ADR plan](../plans/2026-09-17-concept-folder-adr-plan.md). Live glossary: [CONCEPTS.md](../../CONCEPTS.md).
 
@@ -82,12 +82,26 @@ ROSY OS uses six primary domain objects:
 | 08 Task & workflow | `TaskKind` atomic REST; missions on Fleet | D-12, D-70 | live actions; workflow **not v1** |
 | 09 Composite robot | single-device Asset only | D-55, D-71 | **not v1** |
 | 10 Compute fabric | — | D-71 | **not v1** |
-| 11 AI & Physical AI | vision/ai catalog only | D-41, D-71 | **not v1** |
-| 12 Dataset & learning | — | D-71 | **not v1** |
+| 11 AI & Physical AI | D-71 registry/VLA/GPU target. Host boundary is the note below | D-71, D-516, D-527 | target; offline boundary accepted |
+| 12 Dataset & learning | record, review, shadow source (D-356). Teach-record-train-deploy stays D-71 | D-71, D-356 | partial source |
 | 13 Current-to-target | Phase 0–3 live; 4–5 = D-71 | D-65, D-71 | Phase 0–3 live |
 | 14 Verification | Device validation ARTIFACT/DEVICE/FIELD; ARTIFACT builder is native Pi; ROS-SIM needs colcon install; crossing is Fleet mediation | D-71, D-78–D-80, D-83–D-85, D-87–D-89, **D-93** | Device GO not claimed; D-35 waits on Task 14 |
 | 15 Ubuntu modular install | D-62 slices, not apt/`rosyctl` | D-62, D-69, D-71 | apt path **not v1** |
 | 16 Interface design principles | operator console is CORE `/dashboard`; L2 is a vocabulary table not a shared CSS file | D-23, D-68, D-71, D-72, D-75, D-77, **D-92** | L1 colour + evidence live; G4 DEVICE HOLD |
+
+Rows 00–10 and 13–16 keep the 2026-09-17 reading. Rows 11 and 12 point at the note below so the September "not v1" cells do not hide the later host boundary.
+
+## Perception, world, and decision (2026-10-09)
+
+The numbered chapters stay the target shape. The scan picture is the repository [README](../../README.md) section 「인지와 판단」.
+
+| Read | Status | Boundary |
+|---|---|---|
+| [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md) §6 | Accepted | Perception observes. AI keeps a versioned candidate. Fleet keeps the ledger. CORE commands |
+| [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md) | Proposed, docs only | Perception → World State → Supervisor → Skill → Planner/Control. Live fact shape is Fleet `MapPose` |
+| [v0.2 §3.1](../reference/ROSY_Platform_Architecture_Design_v0.2.md) | target design | `world` contrasts observations with confirmed events. A generative world model is outside this boundary |
+| [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), [D-527](../adr/D-527-decision-test-host-boundaries.md) | Accepted | model PC evaluates, AI PC infers an approved version, Fleet decides, CORE rechecks. Dotted lines are the target connection |
+| [Pipeline](../plans/2026-10-08-decision-model-pipeline-design.md), [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) | D-492 Proposed | VLM identity and text choice stay separate tasks |
 
 ## First Refactoring Priority
 

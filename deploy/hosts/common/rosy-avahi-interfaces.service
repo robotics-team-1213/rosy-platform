@@ -1,0 +1,12 @@
+[Unit]
+Description=Limit avahi to physical interfaces (D-530)
+Before=avahi-daemon.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/local/sbin/rosy-avahi-interfaces
+
+[Install]
+WantedBy=multi-user.target

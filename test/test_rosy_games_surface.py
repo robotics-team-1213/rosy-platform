@@ -49,6 +49,9 @@ def test_fleet_does_not_own_the_match_and_games_has_no_fleet_start():
         assert "rosy_games" not in text and "import games" not in text, path
     for path in fleet.rglob("*.html"):
         text = path.read_text(encoding="utf-8").lower()
+        # D-635 allows field geometry profiles, never Fleet match controls.
+        if path.name == "site-map.html":
+            text = text.replace('value="soccer"', "").replace('id="profile-soccer"', "")
         assert "soccer" not in text
         assert "games" not in text
     games_web = ROOT / "operations" / "apps" / "games" / "games" / "web" / "index.html"
@@ -107,7 +110,7 @@ def test_games_board_is_not_the_core_dashboard():
     core_html = (core_web / "index.html").read_text(encoding="utf-8")
     assert "soccer" not in core_html.lower()
     assert "골 20" not in core_html
-    app = (ROOT / "middleware" / "core" / "api_web" / "core_api_web" / "api" / "app.py").read_text(encoding="utf-8")
+    app = (ROOT / "middleware" / "core" / "api" / "core_api_web" / "api" / "app.py").read_text(encoding="utf-8")
     assert "board.js" not in app
     styles = (games_web / "styles.css").read_text(encoding="utf-8")
     assert "tokens.css" not in styles

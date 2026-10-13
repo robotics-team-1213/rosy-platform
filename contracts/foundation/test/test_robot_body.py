@@ -70,6 +70,13 @@ def test_rotation_needs_rho_plus_margin_in_base_frame():
     assert B.can_rotate(front.points, 0.02)
 
 
+def test_nominal_body_selection_refuses_unknown_robot_kinds():
+    from core_common.robot_body import nominal_body_for, NOMINAL_BODY
+
+    assert nominal_body_for("pinky_pro") is NOMINAL_BODY
+    assert nominal_body_for("unrecognized") is None
+
+
 def test_body_validation_refuses_a_rotation_radius_below_the_extent():
     with pytest.raises(ValueError):
         RobotBody(front_x_m=0.04, rear_x_m=-0.08, half_width_m=0.05, rotation_radius_m=0.07,

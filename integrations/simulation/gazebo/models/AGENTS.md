@@ -23,6 +23,9 @@ Gazebo model assets (robot mesh, shelf SDF, images). Binary/mesh children have n
 | `robot/` | `jetcobot.dae` (legacy mesh name) |
 | `shelf/` | `model.sdf`, `model.config`, meshes, thumbnails |
 | `img/` | `pinklab.jpg`, `pinklab_half.jpg` |
+| `crosswalk_pedestrian_legs/` | D-573 sim pedestrian: two 0.60 m leg cylinders, static (spawned by the crosswalk baseline runner) |
+| `crosswalk_figurine_150/` | D-573 sim figurine 0.15 m (field minimum, above the 0.125 m LiDAR plane) |
+| `crosswalk_figurine_100/` | D-573 sim figurine 0.10 m (below the LiDAR plane, blind case) |
 
 ## For AI Agents
 

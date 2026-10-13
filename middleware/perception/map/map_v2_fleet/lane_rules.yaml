@@ -6,6 +6,10 @@ roundabout:
   centre: [-0.3357, 0.0011]     # circle fit to the ring's ridge points
   radius: 0.2514
   direction: ccw                # one-way; roads are two-way (user, 2026-09-22)
+turn_bans:
+  # D-676: NE/SW enter the ring; NW/SE are exits, not additional entrances.
+  - {at: NW, from_edge: west, to_edge: ring_w}
+  - {at: SE, from_edge: east, to_edge: ring_e}
 roads:
   west:                         # SW spoke -> bottom-west -> left lane -> top-west -> NW spoke
     two_way: true
@@ -79,6 +83,20 @@ roads:
       - [-0.097, -0.419]
       - [-0.127, -0.339]
       - [-0.157, -0.263]
+caution_markers:
+  # D-525 rev.5: four real hatch marks; *_line denotes the OUTER end, not centre.
+  # D-525 rectified topdown-raw.png, 400 px/m; CAD-spoke projection < 1.7 cm.
+  # shortcut: approximate flat appearance, replace after physical tape/height measurement.
+  source: D-525 rev.5 topdown-raw.png (paint-7b220d432c2a); overhead-robot-moving-15s.mp4 confirms appearance
+  uncertainty_m: 0.03
+  size: [0.15, 0.04]             # across road / along road; image-derived, not surveyed
+  orange_colour: [0.90, 0.73, 0.17]  # observed yellow/orange; not segmentation mask colour
+  black_colour: [0.02, 0.02, 0.02]
+  placements:                   # width-axis yaw, degrees; original photo centre retained
+    - {id: NE, centre: [-0.1506, 0.2791], photo_centre: [-0.163, 0.284], yaw_deg: 158.50}
+    - {id: NW, centre: [-0.5673, 0.2600], photo_centre: [-0.582, 0.252], yaw_deg: 28.43}
+    - {id: SW, centre: [-0.5895, -0.3003], photo_centre: [-0.592, -0.299], yaw_deg: 152.81}
+    - {id: SE, centre: [-0.1372, -0.3131], photo_centre: [-0.132, -0.311], yaw_deg: 21.59}
 parking:                        # inside the west block, entered at right angles from the left lane
   road: west
   entry: [-1.2696, 0.000]

@@ -24,6 +24,8 @@ gates:
     state: N/A
 adrs: [D-4, D-33, D-49, D-79, D-114, D-115, D-117, D-118, D-120, D-151, D-152, D-199, D-205, D-306]
 plans:
+  - docs/plans/2026-10-12-gazebo-lane-lap.md
+  - docs/plans/2026-10-12-map-drive-diagnosis.md
   - docs/plans/2026-09-08-swarm-formation-slice-design.md
   - docs/plans/2026-09-08-swarm-formation-slice.md
   - docs/plans/2026-09-08-swarm-formation-slice-results.md

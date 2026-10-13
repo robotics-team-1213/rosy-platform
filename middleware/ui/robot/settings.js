@@ -329,7 +329,7 @@ for (const action of ["start", "stop", "save"]) elements[`slam-${action}`]?.addE
   settingsRequest({path: `/api/v1/slam/${action}`, body: action === "save" ? {name} : null, opener: elements[`slam-${action}`],
     message: action === "start" ? "맵핑 세션을 시작할까요? 세션 중에는 목표 주행이 거부됩니다." : action === "save" ? `${name} 이름으로 맵을 저장할까요?` : null,
     eligible: () => session.capabilities?.slam === true && (action !== "save" || name === (elements["slam-map-name"]?.value.trim() || "rosy_map")),
-    statusId: "slam-message", successText: action === "save" ? `${name} 맵을 저장했습니다.` : `맵핑을 ${action === "start" ? "시작" : "중지"}했습니다.`, readback: hooks.refreshRobotState});
+    statusId: "slam-message", successText: action === "save" ? `${name} 맵을 저장했습니다.` : action === "start" ? "맵핑 세션을 수락했습니다. 지도 갱신은 확인되지 않았습니다." : "맵핑 세션 중지를 수락했습니다.", readback: hooks.refreshRobotState});
 });
 
 elements["dock-register"]?.addEventListener("click", async () => {

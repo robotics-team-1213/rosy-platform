@@ -71,6 +71,8 @@ data class LinkStatus(
     val sentQuality: Int? = null,
     /** Last adapter `status` of the current connection; null until one arrives or after a drop. */
     val site: ServerMessage.Status? = null,
+    /** D-691. Null until this connection sends `demand`, and again after the link drops. */
+    val wanted: Boolean? = null,
 )
 
 /** Sensor facts reported in `hello`. Updated by the camera once it knows the real resolution. */
@@ -137,6 +139,14 @@ class OverheadLink(
 
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
+
+    /** D-589: called on the OkHttp thread for each well-formed `camera` message of the current connection. */
+    @Volatile
+    var onCamera: ((ServerMessage.Camera) -> Unit)? = null
+
+    /** Last `camera_state` published; sent now when connected and again after every hello. */
+    @Volatile
+    private var cameraState: String? = null
 
     // Guarded by lock.
     private var socket: WebSocket? = null
@@ -249,6 +259,17 @@ class OverheadLink(
         return true
     }
 
+    /** D-589 5: sends [json] (`camera_state`) if streaming and keeps it for the next connection's hello. */
+    fun publishCameraState(json: String) {
+        // Under the lock that onOpen also holds while it turns STREAMING and sends the cached state: each state goes
+        // out exactly once per connection, and never before hello.
+        synchronized(lock) {
+            cameraState = json
+            val ws = socket ?: return
+            if (_status.value.state == LinkState.STREAMING) ws.send(json)
+        }
+    }
+
     private fun connect() {
         val gen: Int
         synchronized(lock) {
@@ -314,7 +335,7 @@ class OverheadLink(
             }
         }
         Log.w(TAG, "link lost: $error fatal=$fatal")
-        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null) }
+        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null, wanted = null) }
     }
 
     private fun refreshCounters() {
@@ -339,7 +360,10 @@ class OverheadLink(
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             Log.i(TAG, "connected to ${pairing.wsUrl}")
-            _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+            synchronized(lock) {
+                _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+                cameraState?.let { webSocket.send(it) }
+            }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -359,6 +383,17 @@ class OverheadLink(
                     Log.w(TAG, "invalid server message (${msg.reason}): $text")
                     _status.update { it.copy(error = LinkError.InvalidConfig(msg.reason)) }
                 }
+                is ServerMessage.Camera -> {
+                    Log.i(TAG, "camera $msg")
+                    onCamera?.invoke(msg)
+                }
+                is ServerMessage.BadCamera -> Log.w(TAG, "ignored bad camera message (${msg.reason}): $text")
+                is ServerMessage.Demand -> {
+                    backoff.reset()
+                    Log.i(TAG, "demand wanted=${msg.wanted}")
+                    _status.update { it.copy(wanted = msg.wanted) }
+                }
+                is ServerMessage.BadDemand -> Log.w(TAG, "ignored bad demand message (${msg.reason}): $text")
                 is ServerMessage.Unknown -> Log.d(TAG, "ignored message type ${msg.type}")
             }
         }

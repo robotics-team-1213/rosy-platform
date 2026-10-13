@@ -30,12 +30,15 @@ from core_common.protocol.recording import (
     FETCHED_NAME, MANIFEST_NAME, MANIFEST_SCHEMA, MAX_DURATION_S, SESSION_NAME, STATUS_SCHEMA,
     TELEOP_INTENT_TOPIC, recording_id_ok)
 from control.recording import (
-    COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics,
-    _read_meta, _sessions, _total_bytes, _write_meta, new_session)
+    CAMERA_GROUND_STATUS_TOPIC, CAMERA_TELEMETRY_TOPIC, COMPRESSED_CAMERA_TOPIC,
+    IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC,
+    ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics, _read_meta, _sessions, _total_bytes,
+    _write_meta, new_session)
 
 # ir_sensor/range rides with the other evidence. us_sensor/range (ultrasonic) does not.
 PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",
-                TELEOP_INTENT_TOPIC, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC, "tf", "tf_static")
+                TELEOP_INTENT_TOPIC, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC, CAMERA_TELEMETRY_TOPIC,
+                CAMERA_GROUND_STATUS_TOPIC, "tf", "tf_static")
 # ROS TF may be published globally or remapped into the robot namespace.
 GLOBAL_TOPICS = ("/tf", "/tf_static")
 # Targets and selected boundaries are needed even when no annotated preview is requested.

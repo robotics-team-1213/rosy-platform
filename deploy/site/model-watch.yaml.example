@@ -1,6 +1,6 @@
 # /etc/rosy/model-watch.yaml (root:rosy-model-watch 0640). D-373 decisions 5 and 8.
 # No secrets here. HF is optional: only `backend: hf` reads a token, from
-# /etc/rosy/site/secrets/hf_token (HF_TOKEN_FILE).
+# /etc/rosy/site-secrets/hf_token (HF_TOKEN_FILE).
 backend: inbox
 # The store folder (source of truth for datasets and models). A local folder now;
 # later the mount point of a NAS share or a Google Drive for desktop folder with the

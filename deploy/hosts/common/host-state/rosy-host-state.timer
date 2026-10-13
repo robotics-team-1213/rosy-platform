@@ -1,0 +1,9 @@
+[Unit]
+Description=Rosy host drift check every 30 minutes (D-530)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

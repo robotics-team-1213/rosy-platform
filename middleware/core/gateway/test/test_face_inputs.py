@@ -24,17 +24,19 @@ NOW = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=False,
-              docking_state="UNDOCKED", line_mode="OFF", line_state="OFF", activity=None):
+              docking_state="UNDOCKED", line_mode="OFF", line_state="OFF", activity=None,
+              line_reason=""):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=55.55, voltage=7.81),
-        battery_status=SimpleNamespace(charging=charging),
+        battery_status=SimpleNamespace(charging=charging, shown_percent=None, level=None),
         robot_id="rosy_01",
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),
         velocity=SimpleNamespace(linear=0.123, angular=0.0),
         docking=SimpleNamespace(state=DockState(docking_state)),
         safety=SimpleNamespace(estop=estop),
-        line_follow=SimpleNamespace(mode=line_mode, state=line_state),
+        line_follow=SimpleNamespace(mode=line_mode, state=line_state, reason=line_reason,
+                                    angular=0.0, stuck=None, junction=None),
         hitl_requested=False,
         activity=None if activity is None else SimpleNamespace(kind=activity),
     )
@@ -53,9 +55,34 @@ def test_the_payload_is_what_the_reader_validates():
     assert (read["robot_mode"], read["face"], read["power_mode"]) == ("NAVIGATION", "happy", "active")
     assert read["drive"]["speed"] == 0.12 and "kind" not in read["drive"]
     assert read["battery_percent"] == 55.5
+    assert read["battery_voltage"] == 7.81 and read["battery_level"] is None
     # Every key the bridge writes is one the reader knows: nothing rides unread.
     assert set(payload) - {"schema", "written_at", "camera_quality_age_s"} == set(read) - {
         "written_ts", "camera_quality", "camera_quality_until"}
+
+
+def test_charging_hands_over_the_held_percent_not_the_live_one():
+    snap = _snapshot(mode="IDLE", navigation="IDLE", charging=True)
+    snap.battery_status = SimpleNamespace(charging=True, shown_percent=41.24, level="warning")
+    payload = _payload(snap, face="basic")
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+    answer = fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)
+
+    assert payload["battery_percent"] == 41.2
+    assert payload["battery_level"] == "warning"
+    assert answer["strip"] == "Charging · 41%  7.81V"
+
+
+def test_driving_keeps_the_live_percent_when_a_held_value_is_also_present():
+    snap = _snapshot()
+    snap.battery = SimpleNamespace(percent=18.44, voltage=40.0)
+    snap.battery_status = SimpleNamespace(charging=False, shown_percent=90.0, level="nope")
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["battery_percent"] == 18.4 and payload["battery_voltage"] is None
+    assert payload["battery_level"] is None
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Going"
 
 
 def test_idle_carries_no_drive_card():
@@ -109,6 +136,79 @@ def test_measurement_noise_waits_for_the_one_second_write():
     assert not display.face_inputs_due(jitter, first, 0.2, 0.0, 1.0)
     assert display.face_inputs_due(moved, first, 0.2, 0.0, 1.0)
     assert display.face_inputs_due(jitter, first, 1.0, 0.0, 1.0)
+
+
+def test_asking_fleet_hands_a_question_mark_to_the_face():
+    snap = _snapshot(line_mode="CAMERA", line_state="HOLD")
+    snap.line_follow = SimpleNamespace(mode="CAMERA", state="HOLD", reason="stuck_asking",
+                                        angular=0.0, stuck=SimpleNamespace(phase="ASKING"),
+                                        junction=None)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+    answer = fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)
+
+    assert payload["signal"] == "ask" and answer["strip"] == "?"
+
+
+def test_a_junction_turn_hands_that_side_to_the_lamp():
+    snap = _snapshot()
+    snap.line_follow = SimpleNamespace(
+        mode="CAMERA", state="TRACKING", reason="tracking", angular=0.1, stuck=None,
+        junction=SimpleNamespace(pending_action="right", state="armed", turn_deg=-90))
+
+    assert _payload(snap)["signal"] == "right"
+
+
+def test_lane_tracking_does_not_invent_a_blinker():
+    snap = _snapshot()
+    snap.line_follow = SimpleNamespace(mode="CAMERA", state="TRACKING", reason="lane_edge_left",
+                                        angular=-0.5, stuck=None, junction=None)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["signal"] is None and payload["line_note"] == "lane_edge"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Lane edge"
+
+
+@pytest.mark.parametrize("reason,note,strip", [
+    ("crosswalk_person_present", "crosswalk", "Crosswalk"),
+    ("ir_guard_crosswalk", "crosswalk", "Crosswalk"),
+    ("lane_departure", "lane_edge", "Lane edge"),
+    ("stuck_yield", "yield", "Yielding"),
+    ("tracking", None, "Following"),
+])
+def test_a_published_reason_names_the_strip(reason, note, strip):
+    state = "RECOVERING" if reason == "stuck_yield" else "TRACKING"
+    if reason in ("crosswalk_person_present", "lane_departure"):
+        state = "HOLD"
+    snap = _snapshot(line_mode="CAMERA", line_state=state, line_reason=reason)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["line_note"] == note
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == strip
+
+
+def test_a_yield_turn_stays_the_side_and_a_plain_hold_stays_a_caution():
+    turning = _snapshot(line_mode="CAMERA", line_state="RECOVERING", line_reason="stuck_yield")
+    turning.line_follow = SimpleNamespace(mode="CAMERA", state="RECOVERING", reason="stuck_yield",
+                                           angular=0.3, stuck=None, junction=None)
+    holding = _snapshot(line_mode="CAMERA", line_state="HOLD", line_reason="obstacle_ahead")
+    read = fs.validate_face_inputs(json.loads(json.dumps(_payload(turning))), NOW)
+
+    assert _payload(turning)["signal"] == "left" and _payload(turning)["line_note"] == "yield"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Left"
+    assert display.face_cautions(holding) == ["line_follow_hold"]
+
+
+def test_a_moving_return_keeps_recovery_while_the_question_is_also_named():
+    hold = _payload(_snapshot(line_mode="CAMERA", line_state="HOLD",
+                              line_reason="lane_return_fleet_required"))
+    moving = _payload(_snapshot(line_mode="CAMERA", line_state="RECOVERING",
+                                line_reason="lane_return_fleet_required"))
+
+    assert hold["signal"] == "ask" and hold["recovery"] is None
+    assert moving["signal"] == "ask" and moving["recovery"] == "return"
 
 
 def test_the_goal_rides_the_drive_card_while_navigating():
@@ -196,3 +296,20 @@ def test_a_wake_card_rides_the_handover():
 def test_bridge_cadence_is_the_shared_one():
     assert display.drive_due is fs.drive_due
     assert (display.DRIVE_EVERY_S, display.DRIVE_HOLD_S) == (fs.DRIVE_EVERY_S, fs.DRIVE_HOLD_S)
+
+
+@pytest.mark.parametrize("mode,state,reason,phase", [
+    ("CAMERA", "RECOVERING", "lane_return_measured_path_return", "retrace"),
+    ("CAMERA", "RECOVERING", "lane_return_lane_heading_align", "return"),
+    ("CAMERA", "RECOVERING", "lane_return_sensor_search", "return"),
+    ("CAMERA", "RECOVERING", "lane_bridge", "bridge"),
+    ("CAMERA", "HOLD", "lane_return_measured_path_return", None),  # not moving: no signal
+    ("CAMERA", "RECOVERING", "something_else", None),
+    ("OFF", "RECOVERING", "lane_bridge", None),
+    ("CAMERA", "TRACKING", "tracking", None),
+])
+def test_recovery_phase_rides_the_handover_only_while_moving(mode, state, reason, phase):
+    payload = _payload(_snapshot(line_mode=mode, line_state=state, line_reason=reason))
+
+    assert payload["recovery"] == phase and payload["schema"] == 1
+    assert fs.validate_face_inputs(payload, NOW)["recovery"] == phase

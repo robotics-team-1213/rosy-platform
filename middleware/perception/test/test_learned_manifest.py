@@ -48,6 +48,14 @@ def test_valid_manifest_loads(tmp_path):
     assert m.onnx_file().name == "model.onnx"
 
 
+@pytest.mark.parametrize("semantic", [None, "road_suface/1", "road_surface/1"])
+def test_road_semantic_on_a_non_road_class_is_refused(tmp_path, semantic):
+    doc = _manifest()
+    doc["output"]["classes"][0]["semantic"] = semantic
+    with pytest.raises(ManifestError, match="semantic"):
+        load_manifest(_write(tmp_path, doc))
+
+
 @pytest.mark.parametrize("patch", [
     {"schema": "rosy.perception.model/2"},
     {"task": "detection"},
@@ -159,3 +167,12 @@ def test_check_revision_is_the_shared_rule():
     assert check_revision("lane-seg-20260930-abcdef12") == "lane-seg-20260930-abcdef12"
     with pytest.raises(ManifestError):
         check_revision("a b")
+
+
+def test_model_version_is_optional_and_parsed(tmp_path):
+    """D-558: legacy manifests have none; a present one must be v<major>.<minor>.<NN>."""
+    assert load_manifest(_write(tmp_path, _manifest())).model_version is None
+    assert load_manifest(_write(tmp_path, _manifest(model_version="v13.1.00"))).model_version == "v13.1.00"
+    for bad in ("v13.1.0", "13.1.00", 13, "v13.1.00; x"):
+        with pytest.raises(ManifestError, match="model_version"):
+            load_manifest(_write(tmp_path, _manifest(model_version=bad)))

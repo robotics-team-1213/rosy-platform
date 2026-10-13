@@ -1,0 +1,143 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "cue_turn_signs": {
+   "+": 1,
+   "-": 39
+  },
+  "cues_refused": [
+   {
+    "accepted": false,
+    "reason": "pose_stale"
+   }
+  ],
+  "pivot_started": true,
+  "obstacle_ahead_seen": true,
+  "turning_reason_seen": false,
+  "nonzero_angular_after_pivot_start": 39,
+  "yaw_change_deg": 8.37,
+  "body_gap_m": [
+   0.0,
+   0.0002,
+   0.0003
+  ],
+  "after": [
+   [
+    462.245,
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    462.871,
+    "HOLD",
+    "obstacle_ahead"
+   ],
+   [
+    468.121,
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    468.239,
+    "HOLD",
+    "fleet_wrong_way"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   451.267,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   455.418,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   455.541,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   455.93,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   456.35,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   456.714,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   456.832,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   456.95,
+   "HOLD",
+   "obstacle_ahead"
+  ],
+  [
+   462.245,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   462.871,
+   "HOLD",
+   "obstacle_ahead"
+  ],
+  [
+   468.121,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   468.239,
+   "HOLD",
+   "fleet_wrong_way"
+  ]
+ ],
+ "scenario": "s3",
+ "args": {
+  "scenario": "s3",
+  "out": "runs/box_spot0",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.213,
+   0.221,
+   5.811946409141117
+  ],
+  "lane": 2.670353755551324,
+  "spot": 0,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": true,
+  "seed": 80,
+  "spot_xy": [
+   -0.213,
+   0.221
+  ],
+  "lane_deg": 153.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

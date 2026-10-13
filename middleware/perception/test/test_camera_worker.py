@@ -120,6 +120,7 @@ def test_telemetry_is_secret_free_and_json_ready():
     ).telemetry.as_dict()
 
     assert telemetry["frame_id"] == 2
+    assert telemetry["stamp"] == 100.0
     assert telemetry["image_size"] == [8, 8]
     assert "path" not in str(telemetry)
     assert "token" not in str(telemetry)

@@ -1,0 +1,7 @@
+# Copy into private site configuration. Leave the CLI option absent until channel acceptance.
+console_url: https://fleet.example/console
+channels:
+  - kind: discord
+    endpoint_env: ROSY_DISCORD_WEBHOOK
+# Other configured destinations use kind: slack / telegram, their own endpoint_env,
+# and a fixed numeric or @username chat_id for Telegram. Never commit endpoint values.

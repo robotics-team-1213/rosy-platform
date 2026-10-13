@@ -27,7 +27,8 @@ from urllib.parse import quote
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), also when loaded by path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
+import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
 from adr_gaps import (  # noqa: E402,F401
     ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
@@ -71,6 +72,13 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # 193d54401 omitted the commit field; retain history and append canonical evidence.
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
+    # 823847295 committed these two entries without the standard field labels; the
+    # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
+    "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
+    "## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)",
     # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
     "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
     "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",
@@ -563,6 +571,9 @@ def generated_targets(repo: Path) -> dict[Path, str]:
     targets[repo / config["status"]] = render_status(repo, config)
     if config.get("sim2real_gaps"):
         targets[repo / config["sim2real_table"]] = sim2real.render(sim2real.read(repo / config["sim2real_gaps"]))
+    if config.get("perception_gaps"):
+        targets[repo / config["perception_table"]] = perception_gaps.render(
+            perception_gaps.read(repo / config["perception_gaps"]))
     return targets
 
 
@@ -698,6 +709,10 @@ def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dic
     if owner is None:
         return None
     if owner["path"] == module_path:
+        if owner.get("layout_target") and owner.get("d427_target"):
+            committed = _git(repo, "show", f"{ref}:{owner['d427_target']}/logs.md")
+            if committed is not None:
+                return committed
         return _git(repo, "show", f"{ref}:{owner['legacy']}/logs.md")
     renamed = _git(repo, "log", "-1", "--follow", "-M", "--diff-filter=R", "--format=", "--name-status",
                    "HEAD", "--", rel) or ""
@@ -723,6 +738,12 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))
         errors += [f"sim2real: {e}" for e in gap_errors]
         warnings += [f"sim2real: {w}" for w in gap_warnings]
+    if config.get("perception_gaps"):
+        registry, problem = perception_gaps.load(repo / config["perception_gaps"])
+        spot_errors, spot_warnings = ([problem], []) if problem else perception_gaps.validate(
+            registry, repo, set(adr.index))
+        errors += [f"perception: {e}" for e in spot_errors]
+        warnings += [f"perception: {w}" for w in spot_warnings]
     governed = [(config["adr_log"], adr_text)]
     for module in config["modules"]:
         for name in ("progress.md", "logs.md"):
@@ -787,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
     parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
+    parser.add_argument("--head", help="affected: diff base...HEAD for this commit only, ignoring the"
+                                       " working tree (the pre-push hook's pushed sha)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--print", dest="action", action="store_const", const="print",
                         help="affected: print the selection (default)")
@@ -809,7 +832,8 @@ def main(argv: list[str] | None = None) -> int:
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
         return affected_tests.main(repo, args.base, args.action or "print", args.json,
-                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip),
+                                   head=args.head)
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0
