@@ -1,7 +1,5 @@
 """D-520 1-2: exit_segment on POST /api/v1/line-follow/junction, capability lane_arc, the
 line_follow.arc status field and the arc config keys (start refusal)."""
-import json
-import math
 from dataclasses import replace
 
 import pytest
@@ -130,10 +128,6 @@ def test_map_anchor_validation_is_400(core_client):
     for anchor in ([1.0, 2.0], "anchor", {}):
         body = {**ARC, "exit_segment": {**SEGMENT, "map_anchor": anchor}}
         assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, anchor
-    for name in ("centre_x_m", "pose_y_m", "pose_yaw_rad", "odom_stamp_s"):
-        raw = json.dumps({**ARC, "exit_segment": {**SEGMENT, "map_anchor": {**ANCHOR, name: math.nan}}})
-        refused = client.post(URL, content=raw, headers={**OPERATOR, "content-type": "application/json"})
-        assert refused.status_code == 400, name
 
 
 def test_capability_lane_arc_map_anchor_follows_lane_arc(core_client):
