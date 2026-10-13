@@ -3548,6 +3548,12 @@
 - 이행: REALIGN 행은 0.1.11 독자가 거절한다. 어느 현장이든 `realign_robots`를 켜기 전에 현장 Fleet과 모델 PC wheel이 `rosy-contracts-learning` 0.1.12여야 한다.
 - gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.
 
+## 2026-10-13 · 9e2d4ef0c · test(fleet): app bar and rail contracts follow D-741
+
+- 변경: `test_fleet_header.py`, `test_doc_tabs.py`, `test_site_map_api.py`, `web/fleet-header.test.mjs`와 브라우저 시험 다섯 파일(`test_fleet_header_browser.py`, `test_development_console_browser.py`, `test_password_login_browser.py`, `test_fleet_account_browser.py`, `test_site_map_browser.py`)이 새 앱 바를 고정한다. 서버 코드와 API는 바뀌지 않았다.
+- 증거: 원격 소스 시험 통과. 브라우저 시험은 CI 대기.
+- gate 변화: 없음.
+
 ## 2026-10-14 · 848a9b764 · feat: D-759 굽이 지시에 map_entry를 싣는다 (API v1.224)
 - 변경: `server/ledger/trip_ports.py::bend_fields`가 `lane_bend_map_entry` 로봇에게, 이번 단계에서 로봇을 찾은 자세에 `odom_stamp`가 있을 때 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 굽이 호 시작점의 차로 방향이다. `trip_runner._step_lane`이 그 자세를 `_step_bend`로 넘긴다. `console_view.TripCaps.lane_bend_map_entry`.
 - 증거: `test_trip_bend.py`(능력과 stamp가 있을 때만 실음, 값, 그 밖의 필드는 오늘과 같음). 원격 결과는 이 브랜치의 최종 보고에 적는다.

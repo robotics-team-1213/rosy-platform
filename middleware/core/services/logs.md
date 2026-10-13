@@ -1012,6 +1012,18 @@
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
 
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
+
+- Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
+- Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
+- gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
+## 2026-10-14 · 3f6c69245 · fix: HOLD 공백 시간에 평가 실행 시간 포함
+
+- 변경: 시계 역행·비유한 완료 시각을 거절하고 평가 완료까지 HOLD 나이를 센다. idle은 이전 평가 완료부터 다음 시작까지다. 처음부터 래치한 평가를 HOLD 계수에 넣지 않는다.
+- 증거: 원격 재현 NEW 7 후 수정본 322 passed, NEW 0. 독립 Codex review_release_safety 소스 리뷰; docs/validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. E-stop reset·SIM·실물 활성화 없음.
+
 ## 2026-10-14 · 6579182c7 · D-759 굽이 통과의 진입 직선을 지도의 차로 방향에 놓는다 (API v1.224)
 
 - 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 검사하고(유한한 세 값, `odom_stamp_s` > 0, `bend`에만), `_place_map_entry`가 받은 때 차로 방향을 odom으로 옮기며(`odom yaw + yaw_rad − pose_yaw_rad`), `_start_bend`가 `_map_entry_yaw`로 닻의 yaw를 그 방향으로 바꾼다(닻 yaw와 30° 안, 받은 뒤 경로 1.5 m 안). 닻의 위치는 그대로다. `authority.py`는 D-744의 odom 표본 조회를 `_odom_at_stamp`로 꺼내 `_place_map_anchor`와 같이 쓴다(동작 변화 없음). `gate.py`는 지시에 둔 방향과 까닭을 싣고 상태에 `map_entry_used`·`map_entry_reason`을 낸다.

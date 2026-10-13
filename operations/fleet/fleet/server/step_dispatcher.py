@@ -26,7 +26,6 @@ from .step_action_kinds import dispatch_open, open_kinds, rejection_reason, step
 from .task_store import FleetTaskStore
 
 _IN_FLIGHT = {"PREPARED", "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED"}
-_ACTOR = "mission-dispatcher"
 _LOG = logging.getLogger(__name__)
 # GetAction readback (1b A3). A transport failure is retried with backoff before the outcome is
 # called UNKNOWN. Basis: one UDS exchange is bounded at 0.25 s (D-336 client) and the grant TTL is

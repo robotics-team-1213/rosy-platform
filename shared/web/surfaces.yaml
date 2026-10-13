@@ -99,9 +99,10 @@ surfaces:
     owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
-    breakpoints:
+    container_breakpoints:
       - value: 48rem
-        reason: D-658의 네 헤더 영역을 제품·비상정지 첫 줄과 상태·조작 둘째 줄로 배치한다. 접속 상세는 화면 폭에 관계없이 별도 펼침 영역이다.
+        reason: 한 줄 앱 바가 시계와 평상 연결 글(실시간)을 접는 셸 칸 폭 — 그 아래에서는 맥락·알림·계정·비상 정지가 한 줄에 서려면 연결 자리가 비어야 한다. 공용 셸의 본문 접힘과 같은 값이다(D-741 5항)
+    breakpoints:
       - value: 110rem
         reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png

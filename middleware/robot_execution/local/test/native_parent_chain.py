@@ -36,7 +36,7 @@ class SessionSubmissionFence:
             return self.session.fence.run_if_open(**scope)
 
 
-def submit_parent(session,journal,root):
+def submit_parent(session,journal,root,*,candidate_factory=None):
     trace('parent_setup_begin')
     cfg=session.owner.config
     store=ActionStore(root/'owner.sqlite3')
@@ -52,12 +52,16 @@ def submit_parent(session,journal,root):
             begin=session._clock()
             stages=[dict(phase=phase,monotonic=begin)]
             try:
-                state,_=session.capture_observation()
-                phase='candidate'
-                stages.append(dict(phase=phase,monotonic=session._clock()))
-                action_candidate=candidate(session,sequence=state.sequence,
-                    observed_at_ns=int(state.received_at*1e9),
-                    produced_at_ns=int(session._clock()*1e9))
+                if candidate_factory is None:
+                    state,_=session.capture_observation()
+                    phase='candidate'
+                    stages.append(dict(phase=phase,monotonic=session._clock()))
+                    action_candidate=candidate(session,sequence=state.sequence,
+                        observed_at_ns=int(state.received_at*1e9),
+                        produced_at_ns=int(session._clock()*1e9))
+                else:
+                    # Prepared once outside serializers; never refresh its source.
+                    action_candidate=prepared_candidate
                 phase='session_submit'
                 stages.append(dict(phase=phase,monotonic=session._clock()))
                 result=session.submit(action_candidate)
@@ -91,6 +95,9 @@ def submit_parent(session,journal,root):
     names=('mission_id','step_id','action_id','attempt_id','workcell_id','instance_id',
            'request_digest','authority_epoch','dispatch_generation')
     session._lease=replace(session.lease,identity=AttemptIdentity(*(getattr(grant,name) for name in names)))
+    # The isolated caller may perform CPU inference after the original attempt
+    # identity is bound and before runner/stop/session submission locks are held.
+    prepared_candidate=candidate_factory() if candidate_factory is not None else None
     # Record the guard's own clock sample and accepted observation stamp. Never
     # refresh or redeliver a snapshot to make the native test pass.
     freshness=[]

@@ -101,6 +101,6 @@
 
 - 2026-10-14 · 9ee82e94d · refactor: D-759 bend_fields의 map_entry 가지를 if 문으로 (검토 반영)
 - 2026-10-14 · 848a9b764 · feat: D-759 굽이 지시에 map_entry를 싣는다 (API v1.224)
+- 2026-10-13 · 9e2d4ef0c · test(fleet): app bar and rail contracts follow D-741
 - 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
 - 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
-- 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속

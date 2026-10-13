@@ -81,7 +81,10 @@ def test_the_device_surface_mounts_the_events_panel(app_client):
             # only require that *some* event row shows the one we published (T9-a).
             types = page.locator(".event-type").all_text_contents()
             assert "system.test" in types
-            assert page.locator('#surface-switch a[aria-current="page"]').text_content() == "설치·정비"
+            # D-741 6: the rail writes the short name under the icon; the full name is the accessible name.
+            current = page.locator('#surface-switch a.ui-rail-item[aria-current="page"]')
+            assert current.get_attribute("aria-label") == "설치·정비"
+            assert current.text_content() == "설치"
             assert page.locator("#shell-role").text_content() == "관리자"
             assert not errors
         finally:

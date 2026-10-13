@@ -4,7 +4,9 @@ import pytest
 
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager, Twist
-from core_features.safety.manager import SafetyManager, SpeedLimits, BatteryPolicy, SafetyDecision
+from core_features.safety.manager import (
+    SafetyManager, SpeedLimits, BatteryPolicy, SafetyDecision, PolicyObservationUnavailable,
+)
 
 
 def decision(request, **changes):
@@ -204,13 +206,60 @@ def test_zero_command_does_not_end_a_gap_and_a_valid_answer_does():
     assert safety.estop and safety.estop_source == 'control:policy_invalid'
 
 
-def test_backward_policy_clock_is_not_held():
+@pytest.mark.parametrize('samples', [(100., 99.), (100., 100.4, 100.3)])
+@pytest.mark.parametrize('provider_kind', ['late', 'unbound', 'missing'])
+def test_backward_policy_clock_is_not_held(samples, provider_kind):
     delay, clock = [.03], [100.]
-    command, safety, modes, _ = setup_hold(late(clock, delay), clock=clock)
-    assert ask(command, 10.) == Twist() and not safety.estop
-    clock[0] = 99.
-    assert ask(command, 10.1) == Twist()
-    assert safety.estop
+    def missing(request):
+        raise PolicyObservationUnavailable('snapshot missing')
+    provider = {'late': late(clock, delay), 'unbound': None, 'missing': missing}[provider_kind]
+    command, safety, modes, _ = setup_hold(provider, clock=clock)
+    for index, at in enumerate(samples[:-1]):
+        clock[0] = at
+        assert ask(command, 10. + index * .1) == Twist()
+        assert safety.policy_hold and not safety.estop
+    clock[0] = samples[-1]
+    assert ask(command, 10. + len(samples) * .1) == Twist()
+    assert safety.estop and not safety.policy_hold
+    assert modes.mode is Mode.EMERGENCY
+
+
+def test_backward_clock_above_gap_start_is_not_held():
+    command, safety, modes, clock = setup_hold()
+    for tick in (100., 100.4):
+        clock[0] = tick
+        assert ask(command, tick) == Twist() and not safety.estop
+    clock[0] = 100.3
+    assert ask(command, 100.5) == Twist()
+    assert safety.estop and not safety.policy_hold
+
+
+@pytest.mark.parametrize('duration', [3., -.1, float('nan'), float('inf')])
+def test_unavailable_completion_clock_cannot_extend_hold(duration):
+    clock = [100.]
+    def unavailable(request):
+        clock[0] += duration
+        raise PolicyObservationUnavailable('snapshot_missing')
+    command, safety, modes, _ = setup_hold(unavailable, clock=clock)
+    assert ask(command, 10.) == Twist()
+    assert safety.estop and not safety.policy_hold
+    assert safety.policy_holds == 0
+
+
+@pytest.mark.parametrize('unavailable', [False, True])
+def test_evaluation_time_is_not_idle_time_between_gaps(unavailable):
+    clock = [100.]
+    def slow(request):
+        clock[0] += .6
+        if unavailable:
+            raise PolicyObservationUnavailable('snapshot_missing')
+        return decision(request)
+    command, safety, modes, _ = setup_hold(slow, clock=clock)
+    for index in range(3):
+        assert ask(command, 10. + index) == Twist() and not safety.estop
+        clock[0] += .02
+    assert ask(command, 14.) == Twist()
+    assert safety.estop and not safety.policy_hold
 
 
 def boom(request):
