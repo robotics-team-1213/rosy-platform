@@ -22,10 +22,10 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 
 
 @contextmanager
-def serve(store):
+def serve(store, control=None):
     playwright = pytest.importorskip('playwright.sync_api')
     # make_server takes only a port number, so this one keeps free_port().
-    server = make_server(store, free_port())
+    server = make_server(store, free_port(), control=control)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     with playwright.sync_playwright() as p:
@@ -49,6 +49,44 @@ def serve(store):
 def browser_workspace(tmp_path):
     with serve(open_store(tmp_path)) as value:
         yield value
+
+
+@pytest.mark.parametrize('width', [1440, 390, 320])
+def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
+    import review_evidence
+    from learning_workspace import Workspace
+    from learning_control import Control
+    from test_learning_control import binding
+    (tmp_path / 'review').mkdir()
+    store = open_store(tmp_path / 'review')
+    before = review_evidence.decisions(store)
+    file, home, out, _, runner = binding(tmp_path / 'owner', before['workspace_id'])
+    (out / 'state.json').write_text(json.dumps({'review_autobuild': {'status': 'held', 'blockers': ['no_approved_masks']}}))
+    target = Control(file, before['workspace_id'], home=home, runner=runner)
+    Workspace(store.db).register({'kind': 'perception', 'name': '자동 학습', 'path': str(out)})
+    with serve(store, target) as (page, _, expect):
+        page.set_viewport_size({'width': width, 'height': 844})
+        page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+        expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_enabled()
+        for action in ['학습 시작', '학습 중지', '학습 재시도']:
+            page.keyboard.press('Control+k')
+            page.get_by_role('textbox', name='기능 검색어').fill(action)
+            page.keyboard.press('Enter')
+            expect(page.locator('#owner-control-status')).to_contain_text(
+                '실행기 처리 중' if action != '학습 중지' else '자동 확인 중지됨')
+        assert runner.active and not runner.automatic
+        page.keyboard.press('Control+k')
+        runner.active = False
+        runner.invocation = 'd' * 32
+        (out / 'state.json').write_text(json.dumps({'review_autobuild': {
+            'status': 'request_published', 'cycle_keys': ['current']},
+            'cycles': {'current': {'status': 'candidate', 'attempts': 1}}}))
+        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨')
+        expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
+        page.keyboard.press('Escape')
+        expect(page.get_by_text('학습 후보 저장됨', exact=True)).to_be_visible(timeout=8000)
+        assert review_evidence.decisions(store) == before
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
 @pytest.mark.parametrize('route', ['/', '/pixels', '/learning', '/catalog'])
