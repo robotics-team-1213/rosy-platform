@@ -14,10 +14,17 @@ from core_common.protocol.line_authority import SHRINK_TOL_M, STAMP_TOL_S, Autho
 #: D-744 5: a map anchor's odom stamp may be this old at receipt. The pose trail keeps 2 s at 50 Hz
 #: (100 samples); Fleet's pose is one trip period (0.5 s) and the request old.
 ARC_ANCHOR_MAX_AGE_S = 2.
-#: D-744 5: odom travel from receipt to the arc opening over which the placed circle is kept (the
-#: bridge Fleet itself trusts between sightings, fleet.map_pose.max_dead_reckon_m; the instruction
-#: comes within arm_distance_m 0.6 m, or one lane <= 1 m, of the place).
+#: D-744 5: odom path length (unsigned) from receipt to the arc opening over which the placed circle
+#: is kept (the bridge Fleet itself trusts between sightings, fleet.map_pose.max_dead_reckon_m; the
+#: instruction comes within arm_distance_m 0.6 m, or one lane <= 1 m, of the place).
 ARC_ANCHOR_MAX_CARRY_M = 1.5
+#: D-744 5: the body may be this far from the placed circle at the opening. Below ARC_MAX_RADIAL_M
+#: (0.075 m, where the arc stops lane_arc_edge) by the transient of the pull-in (host rig: +0.009 m
+#: from 0.02 m / 10 deg), so an accepted anchor does not open an arc that stops at once.
+ARC_ANCHOR_MAX_RADIAL_M = .045
+#: D-744 5: the heading may be this far off the placed circle's tangent at the opening: above the
+#: 10 deg pivot error measured in Gazebo (2026-10-13); more is a wrong map yaw, not a pivot error.
+ARC_ANCHOR_MAX_HEADING_RAD = math.radians(25.)
 ARC_ANCHOR_FIELDS = ('centre_x_m', 'centre_y_m', 'pose_x_m', 'pose_y_m', 'pose_yaw_rad', 'odom_stamp_s')
 
 
@@ -107,32 +114,45 @@ class AuthorityMixin:
     def _place_map_anchor(self, segment, now):
         """D-744 3: at receipt, Fleet's map circle centre placed in odom through its pose pair (the
         map pose and CORE's odom pose at `odom_stamp_s`, CORE wall clock as snapshot
-        odom_pose.stamp): {centre, key, odometer}, or None for today's pose-derived circle."""
+        odom_pose.stamp): {centre, key, path}, or {reason} for today's pose-derived circle."""
+        anchor = (segment or {}).get('map_anchor')
+        if anchor is None:
+            return dict(reason='none_sent')
         try:
-            cx, cy, mx, my, myaw, stamp = values = [segment['map_anchor'][n] for n in ARC_ANCHOR_FIELDS]
+            cx, cy, mx, my, myaw, stamp = values = [anchor[n] for n in ARC_ANCHOR_FIELDS]
         except (KeyError, TypeError, ValueError):
-            return None
-        pose, ev = self._fresh_pose(now), self._return_evidence
-        if (pose is None or not all(type(v) in (int, float) and math.isfinite(v) for v in values)
-                or not -STAMP_TOL_S <= self._wall()-stamp <= ARC_ANCHOR_MAX_AGE_S):
-            return None
-        key = (ev.epoch, pose.frame)
+            return dict(reason='malformed')
+        if not all(type(v) in (int, float) and math.isfinite(v) for v in values):
+            return dict(reason='malformed')
+        age = self._wall()-stamp
+        if not -STAMP_TOL_S <= age <= ARC_ANCHOR_MAX_AGE_S:
+            return dict(reason='stale' if age > 0 else 'future')
+        pose, ev, log = self._fresh_pose(now), self._return_evidence, self._odom_log
         # the odom sample the map pose was computed for: the one logged at or just before the stamp
-        base = next((e for e in reversed(self._odom_log) if e[0] <= stamp), None)
-        if base is None or base[1] != key or stamp-base[0] > STAMP_TOL_S:
-            return None
+        base = next((e for e in reversed(log) if e[0] <= stamp), None)
+        if pose is None or base is None or stamp-base[0] > STAMP_TOL_S:
+            return dict(reason='no_sample')
+        key = (ev.epoch, pose.frame)
+        if base[1] != key:
+            return dict(reason='epoch')
         at = ev._image_pose(base[2])
         if at is None:
-            return None
+            return dict(reason='no_sample')
         c, n = math.cos(at.yaw-myaw), math.sin(at.yaw-myaw)  # map -> odom
-        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key,
-                    odometer=ev.trail.odometer)
+        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key, path=log[-1][3])
 
-    def _map_anchor_centre(self, anchor, pose, key, k, max_radial_m):
-        """D-744 4-5: the placed centre at the arc opening, or None: another odom run since receipt,
-        more travel than the carry bound, or the body further than max_radial_m from that circle."""
-        if (anchor is None or anchor['key'] != key
-                or abs(self._return_evidence.trail.odometer-anchor['odometer']) > ARC_ANCHOR_MAX_CARRY_M
-                or abs(math.hypot(pose.x-anchor['centre'][0], pose.y-anchor['centre'][1])-1/abs(k)) > max_radial_m):
-            return None
-        return anchor['centre']
+    def _map_anchor_circle(self, anchor, pose, key, k, centre, yaw0, ir_chain):
+        """D-744 4-5: (centre, yaw0, reason) at the arc opening: the placed map circle and its
+        tangent at the pose with reason None, else the given (today's) circle and why. ir_chain: a
+        chained straight whose previous arc used its IR correction keeps that paint-anchored circle."""
+        if anchor is None or 'reason' in anchor:
+            return centre, yaw0, (anchor or {}).get('reason', 'none_sent')
+        (cx, cy), log = anchor['centre'], self._odom_log
+        tangent = math.atan2(pose.y-cy, pose.x-cx) + math.copysign(math.pi/2, k)
+        off = math.atan2(math.sin(pose.yaw-tangent), math.cos(pose.yaw-tangent))
+        why = ('ir_chain' if ir_chain else
+               'epoch' if anchor['key'] != key or not log or log[-1][1] != key else
+               'carry' if log[-1][3]-anchor['path'] > ARC_ANCHOR_MAX_CARRY_M else
+               'radial' if abs(math.hypot(pose.x-cx, pose.y-cy)-1/abs(k)) > ARC_ANCHOR_MAX_RADIAL_M else
+               'heading' if abs(off) > ARC_ANCHOR_MAX_HEADING_RAD else None)
+        return (centre, yaw0, why) if why else ((cx, cy), tangent, None)

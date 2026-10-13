@@ -24,15 +24,16 @@
    `odom_stamp_s`는 CORE가 odom을 받은 때의 CORE 벽시계다. 스냅숏 `odom_pose.stamp`, D-517 4항 `pose_stamp`와 같은 값이다. 여섯 값은 모두 유한한 수여야 하고 `odom_stamp_s`는 0보다 크다. 어기면 400이다.
 2. **능력 `lane_arc_map_anchor`.** CORE는 `controls`의 `base_velocity`에 `lane_arc_map_anchor`를 알린다. 값은 `lane_arc`와 같다. Fleet은 이 능력이 참이고, 이번 주기에 로봇을 찾은 지도 자세가 LOCALIZED이며 `odom_stamp`가 있을 때만 `map_anchor`를 보낸다. 그 밖에는 지시가 오늘과 같다.
 3. **CORE는 받을 때 odom으로 옮긴다.** CORE는 지시를 받은 때 자기 odom 기록에서 `odom_stamp_s`의 표본을 찾는다. 찾은 odom 자세와 지도 자세 쌍으로 map→odom 강체 변환을 만들고, 원 중심을 odom으로 옮겨 지시와 함께 둔다. 받을 때 옮기는 이유는 CORE의 자세 기록이 짧기 때문이다(약 2 s). 지시는 장소 0.6 m 앞에서 오고 제자리 회전이 그 뒤에 있어, 호가 열릴 때는 그 표본이 기록에 없다.
-4. **호가 열릴 때 그 원을 쓴다.** `_open_arc`는 옮겨 둔 중심을 호의 `centre`로 쓰고, `yaw0`는 지금 자세에서 그 원의 접선으로 둔다. 그 뒤는 D-520 개정의 제어기 그대로다. 로봇이 원에서 벗어나 있으면 `e_r`·`e_th` 보정이 원 위로 당긴다. 이어지는 `straight`(앞 호의 원을 물려받는 가지)도 새 고정점이 있으면 그것을 쓰고, 없으면 오늘처럼 앞 원을 물려받는다. 물려받은 적분항은 그대로 둔다.
+4. **호가 열릴 때 그 원을 쓴다.** `_open_arc`는 옮겨 둔 중심을 호의 `centre`로 쓰고, `yaw0`는 지금 자세에서 그 원의 접선으로 둔다. 그 뒤는 D-520 개정의 제어기 그대로다. 로봇이 원에서 벗어나 있으면 `e_r`·`e_th` 보정이 원 위로 당긴다. 이어지는 `straight`(앞 호의 원을 물려받는 가지)도 새 고정점이 있으면 그것을 쓰고, 없으면 오늘처럼 앞 원을 물려받는다. 물려받은 적분항은 그대로 둔다. 다만 앞 호가 IR 한 번 보정을 썼으면 고정점이 있어도 앞 원을 물려받는다. 그 원은 칠한 선에 맞춰 옮긴 것이라 지도 자세보다 가깝다(`ir_chain`).
 5. **실패하면 오늘의 원이다.** 아래 가운데 하나라도 해당하면 자세로 놓는 오늘의 원을 그대로 쓴다. 지시는 거절하지 않는다.
-   - `map_anchor`가 없거나 값이 유한하지 않다.
+   - `map_anchor`가 없거나(`none_sent`) 값이 유한하지 않다(`malformed`).
    - 받은 때 `odom_stamp_s`가 2 s보다 오래됐거나 CORE 시계보다 0.05 s 넘게 앞선다(`ARC_ANCHOR_MAX_AGE_S`, D-517의 `STAMP_TOL_S`).
    - 그 시각의 odom 표본이 기록에 없거나, 그 표본의 odom epoch·frame이 지금과 다르다.
    - 받은 뒤 호가 열릴 때까지 odom epoch·frame이 바뀌었다.
-   - 받은 뒤 호가 열릴 때까지 odom 전진 거리가 1.5 m를 넘는다(`ARC_ANCHOR_MAX_CARRY_M`, Fleet이 sighting 사이를 odom으로 잇는 한도 `fleet.map_pose.max_dead_reckon_m`과 같은 값).
-   - 호가 열릴 때 로봇이 그 원에서 0.075 m 넘게 떨어져 있다(`ARC_MAX_RADIAL_M`, 호가 `lane_arc_edge`로 멈추는 같은 한도).
-6. **기록.** `GET /api/v1/line-follow`와 스냅숏의 `line_follow.arc`에 `map_anchor_used`(bool)를 더한다. 그 호가 지도 고정 원으로 열렸을 때만 참이다.
+   - 받은 뒤 호가 열릴 때까지 odom 경로 길이가 1.5 m를 넘는다(`carry`, `ARC_ANCHOR_MAX_CARRY_M`, Fleet이 sighting 사이를 odom으로 잇는 한도 `fleet.map_pose.max_dead_reckon_m`과 같은 값). 부호 없는 합이라 앞뒤로 오간 거리도 센다.
+   - 호가 열릴 때 로봇이 그 원에서 0.045 m 넘게 떨어져 있다(`radial`, `ARC_ANCHOR_MAX_RADIAL_M`). 호가 `lane_arc_edge`로 멈추는 0.075 m(`ARC_MAX_RADIAL_M`)보다 작게 둔다. 같은 값이면 받아들인 원에서 호가 곧바로 멈춘다.
+   - 호가 열릴 때 방향이 그 원의 접선에서 25° 넘게 어긋나 있다(`heading`, `ARC_ANCHOR_MAX_HEADING_RAD`). Gazebo에서 잰 회전 끝 오차 10°보다 크게 둔다. 그보다 크면 회전 오차가 아니라 지도 yaw가 틀린 것이다. 지도 yaw가 틀리면 원이 로봇 둘레로 돌아 거리 검사로는 잡히지 않는다.
+6. **기록.** `GET /api/v1/line-follow`와 스냅숏의 `line_follow.arc`에 `map_anchor_used`(bool)와 `map_anchor_reason`(string 또는 null)을 더한다. `map_anchor_used`는 그 호가 지도 고정 원으로 열렸을 때만 참이다. `map_anchor_reason`은 쓰지 않은 까닭 `none_sent`·`malformed`·`stale`·`future`·`no_sample`·`epoch`·`carry`·`radial`·`heading`·`ir_chain` 가운데 하나이고, 썼으면 null이다.
 
 ## 바뀌지 않는 것
 
@@ -48,6 +49,8 @@
 2. 받은 때부터 호가 열릴 때까지(접근 0.6 m 이내와 제자리 회전)는 CORE의 odom으로 잇는다. 제자리 회전에서 odom yaw가 틀리면 원 중심이 로봇 둘레로 `r·오차`만큼 돈다(D-520 Context 7). 오늘의 원도 odom의 목표각으로 놓으므로 같은 한계다. 줄지 않을 뿐 늘지 않는다.
 3. 2 s와 1.5 m는 근거 있는 시작값이다. SIM과 장치에서 다시 잰다.
 4. 호스트 시험은 운동학 고리다. Gazebo와 장치 수용은 이 ADR의 증거가 아니다.
+5. 호 시작의 횡단보도 검사(D-520 1항, `_arc_on_crosswalk`)는 고정점을 쓰기 전의 자세 기준 호로 한다. 지도 원으로 다시 검사하지 않는다.
+6. `odom_stamp_s`는 CORE 벽시계다. 받은 때와 그 표본 사이에 시계가 뛰면(NTP step) 표본을 찾지 못하거나 `stale`·`future`가 되어 오늘의 원으로 간다. 2 s 안에서 뛴 시계가 다른 표본을 가리키는 경우는 막지 않는다.
 
 ## 방향 (이 ADR이 정하지 않는다)
 

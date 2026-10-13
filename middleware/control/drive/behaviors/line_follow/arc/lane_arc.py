@@ -107,7 +107,7 @@ class ArcMixin:
             reason=a['reason'], ir_correction=dict(
                 side=c.get('side'), phase=c.get('phase'), away_m=round(c.get('away_m', 0.), 4),
                 level_m=round(c.get('level_m', 0.), 4), used=bool(c)),
-            map_anchor_used=a.get('anchored', False))
+            map_anchor_used=a.get('anchor_why', 0) is None, map_anchor_reason=a.get('anchor_why'))
 
     def _arc_speed(self):
         """The trip's lane speed: min(cruise_speed, max_linear, live manual linear limit); 0 unknown."""
@@ -171,11 +171,11 @@ class ArcMixin:
         else:
             yaw0 = j['target'] if j.get('target') is not None and j['action'] != 'straight' else pose.yaw
             centre, integral = (pose.x-math.sin(yaw0)/k, pose.y+math.cos(yaw0)/k), 0.
-        m = self._map_anchor_centre(j.get('arc_anchor'), pose, key, k, ARC_MAX_RADIAL_M)
-        if m is not None:  # D-744 4: the map's circle and its tangent here; e_r / e_th pull the robot on
-            centre, yaw0 = m, math.atan2(pose.y-m[1], pose.x-m[0]) + math.copysign(math.pi/2, k)
+        centre, yaw0, why = self._map_anchor_circle(  # D-744 4: the map's circle here, or why not
+            j.get('arc_anchor'), pose, key, k, centre, yaw0,
+            prev is not None and centre is prev['centre'] and bool(prev['corr']))
         a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre, integral=integral,
-                 anchored=m is not None)
+                 anchor_why=why)
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
         self._arc_quiet()
