@@ -40,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · d780942b9 · feat(vision): D-691 미리보기 읽기 뒤 30초 유지
 - 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
 - 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
 - 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
 - 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정
-- 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김

@@ -3,6 +3,10 @@
 recording_job.py config.json --out <job-dir> [--prepare-only]
 Uses completed MCAP sessions or bag_to_video MP4+sidecar, never prediction masks.
 No assume-idle, raw deletion, watcher invocation, or actuator command.
+
+When the recording is still a raw bag, run learning/curation/perception/media_pipeline.py
+first. Its receipt lists the checked video for each session. Pass those video
+paths here. This job still does not delete raw.
 """
 
 

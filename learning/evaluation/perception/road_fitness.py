@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 
 from control.sensing.perception.learned.road_region import observed_road_region, road_masks
-from control.sensing.perception.learned.lane_mask import preprocess
 from core_common.observation import road_region_input_errors
 
 
@@ -84,7 +83,7 @@ def evaluate_frame(labels, classes, image, anchor, seed_pixels, road_truth, regi
     road, _ = road_masks(labels, classes)
     errors = road_region_input_errors(image, anchor, now_ns=now_ns, max_age_ns=max_age_ns)
     region, reason = (None, "invalid_inputs") if errors else observed_road_region(labels, classes, seed_pixels)
-    surface_metrics = _metrics(None if any(e.startswith("image_") for e in errors) else road,
+    surface_metrics = _metrics(None if any(e in ("image_invalid", "image_stale", "image_future") for e in errors) else road,
                                road_truth, labels.shape)
     region_metrics = _metrics(region, region_truth, labels.shape)
     if ((region_truth == 1) & (road_truth == 0)).any():
@@ -128,13 +127,8 @@ def evaluate_model_frame(model, bgr, image, anchor, seed_pixels, road_truth, reg
         truth_masks.append(resized)
     if ((region_truth == 1) & (road_truth == 0)).any():
         raise ValueError("current region truth lies outside declared road truth")
-    logits = model._session.run(preprocess(bgr, spec))
+    labels, _ = model.infer_road_surface(bgr)
     classes = model.manifest.raw["output"]["classes"]
-    if logits.shape != (1, len(classes), spec.height, spec.width) or not np.isfinite(logits).all():
-        raise ValueError("model logits have invalid shape or non-finite values")
-    indices = np.array([c["index"] for c in classes], dtype=np.int64)
-    labels = np.full((height, spec.width), 255, dtype=np.int64)
-    labels[lo:hi] = indices[logits[0].argmax(axis=0)]
     seeds = [[int(np.floor((r + .5) * height / bgr.shape[0])),
               int(np.floor((c + .5) * spec.width / bgr.shape[1]))] for r, c in seed_pixels]
     report = evaluate_frame(labels, classes, image, anchor, seeds, *truth_masks, domain=domain,

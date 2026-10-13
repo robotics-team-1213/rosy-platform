@@ -6,11 +6,26 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
 from clip_lane_draft import clip_drivable, main
 
 
 CLASSES = (Path(__file__).resolve().parents[3] / 'learning/curation/perception/classes/lane_lr6_drivable.yaml').read_bytes()
+
+
+def test_lane_clipping_refuses_whole_road_before_writing(tmp_path, monkeypatch):
+    classes = tmp_path / 'classes.yaml'
+    classes.write_bytes(CLASSES.replace(b'role: drivable,', b'role: drivable, semantic: road_surface/1,'))
+    catalog = tmp_path / 'catalog.jsonl'
+    catalog.write_text('{}\n')
+    out = tmp_path / 'out'
+    monkeypatch.setattr(sys, 'argv', ['clip_lane_draft.py', '--catalog', str(catalog),
+                                    '--classes', str(classes), '--out', str(out)])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert not out.exists()
 
 
 def test_clip_drivable_preserves_lanes_and_marks_only_outside_as_unknown():

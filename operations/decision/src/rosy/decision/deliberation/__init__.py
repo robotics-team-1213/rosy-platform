@@ -8,7 +8,7 @@ import math
 import time
 from dataclasses import asdict, dataclass
 
-CHOICES = frozenset({'reobserve', 'human', 'map_correction', 'object_reacquire'})
+CHOICES = frozenset({'reobserve', 'human', 'map_correction', 'object_reacquire', 'back_and_retry'})
 OBJECTIONS = frozenset({'unsafe', 'insufficient_evidence', 'conflict'})
 
 
@@ -38,23 +38,37 @@ class Problem:
     necessity: str
     goal: str = 'inspect'
     facts_json: str = '{"state":"unknown"}'
+    fleet_choice: str | None = None
 
     def __post_init__(self):
         for value in (self.subject_id, self.case_id, self.generation):
             identifier(value)
         identifier(self.goal)
-        if self.domain not in {'door', 'arm_target'} or self.necessity not in {
-                'INTERVENE', 'DO_NOT_INTERVENE', 'ABSTAIN'}:
+        if (self.domain not in {'door', 'arm_target', 'line_follow', 'fleet_status'}
+                or self.necessity not in ({'READ_ONLY_QUERY'} if self.domain == 'fleet_status'
+                                        else {'INTERVENE', 'DO_NOT_INTERVENE', 'ABSTAIN'})):
             raise ValueError('invalid domain or necessity')
         if type(self.observed_at) not in (int, float) or not math.isfinite(self.observed_at):
             raise ValueError('invalid observation time')
         facts = json.loads(self.facts_json)
-        valid = ({'state': {'unknown', 'open', 'closed'}, 'door_state': {'unknown', 'open', 'closed'}}
+        recovery_choice = type(self.choices) in (tuple, list) and 'back_and_retry' in self.choices
+        if type(facts) is dict and 'recovery' in facts:
+            from .contracts.recovery import recovery_context
+            if (self.domain != 'line_follow' or self.necessity != 'INTERVENE'
+                    or set(facts) != {'state', 'recovery'} or facts['state'] != 'blocked'
+                    or not recovery_choice):
+                raise ValueError('INVALID_RECOVERY_PROBLEM')
+            recovery_context(facts['recovery'])
+        valid = ({'state': {'unknown', 'offline', 'online', 'mixed', 'empty'}} if self.domain == 'fleet_status' else
+                 {'state': {'unknown', 'blocked', 'normal'}} if self.domain == 'line_follow' else
+                 {'state': {'unknown', 'open', 'closed'}, 'door_state': {'unknown', 'open', 'closed'}}
                  if self.domain == 'door' else {'state': {'unknown', 'present', 'missing'},
                                               'target_state': {'unknown', 'present', 'missing'}})
         if (type(facts) is not dict or not facts or any(key not in valid or type(value) is not str
-                or value not in valid[key] for key, value in facts.items())):
+                or value not in valid[key] for key, value in facts.items() if key != 'recovery')):
             raise ValueError('invalid approved observation facts')
+        if recovery_choice and (self.domain != 'line_follow' or 'recovery' not in facts):
+            raise ValueError('INVALID_RECOVERY_PROBLEM')
         object.__setattr__(self, 'facts_json', canonical(facts))
         for name, allowed in (('evidence_ids', None), ('choices', CHOICES)):
             values = getattr(self, name)
@@ -66,11 +80,17 @@ class Problem:
                 if allowed is not None and value not in allowed:
                     raise ValueError('unsupported advisory choice')
             object.__setattr__(self, name, tuple(values))
+        if self.fleet_choice is not None and (type(self.fleet_choice) is not str
+                or self.fleet_choice not in self.choices):
+            raise ValueError('invalid Fleet advisory baseline')
         canonical(asdict(self))
 
     @property
     def digest(self):
-        return hashlib.sha256(canonical(asdict(self)).encode()).hexdigest()
+        fields = asdict(self)
+        if self.fleet_choice is None:
+            fields.pop('fleet_choice')
+        return hashlib.sha256(canonical(fields).encode()).hexdigest()
 
 
 def opinion(problem, payload):
@@ -166,3 +186,6 @@ class Supervisor:
             return finish('PROVIDER_UNKNOWN')
         finally:
             self._active.discard(key)
+
+
+from .conditional import ConditionalReview
