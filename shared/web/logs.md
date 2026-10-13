@@ -760,6 +760,12 @@
 - 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0. 브라우저 시험과 화면 캡처는 없다.
 - gate 변화: 없음.
 
+## 2026-10-13 · 1438d53d1 · feat(web): control line at ink 50% on buttons and fields (D-741)
+
+- 변경: `--line-40`을 `--line-50`으로 바꾸고 `--control-line`이 그것을 가리킨다. 공용 `ui-button`, `ui-button[kind="quiet"]`·`a.docs-link`, `.ui-disclosure-row`와 `--field-line`이 이 역할을 쓴다. `--border-default`·`--surface-line`·`--flag-line`은 그대로다.
+- 증거: 원격 `shared/web/test`, `test/architecture` 통과, `known_failures` NEW 0. `test_control_line_contrast.py`가 두 테마 × 다섯 바탕에서 3:1을 계산으로 확인한다. 브라우저 측정과 화면 캡처는 없다.
+- gate 변화: 없음. 모든 웹 표면의 조용한 단추·토글·입력 테두리가 진해지므로 D-153 G2 기준 캡처는 표면마다 다시 찍어야 한다.
+
 ## 2026-10-13 · 9e2d4ef0c · feat(fleet): console app bar registers a 48rem container breakpoint (D-741)
 
 - 변경: `surfaces.yaml`의 `console`에서 `@media` 48rem 등재를 지우고 `container_breakpoints` 48rem을 올렸다. `test_chrome_layout.py`, `test_action_icon_contract.py`, `test_theme_browser.py`가 Fleet 앱 바의 새 배치를 따른다. 공용 시트와 토큰은 바뀌지 않았다.

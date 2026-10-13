@@ -204,6 +204,12 @@
 - 증거: 모델 PC Chromium. 고치기 전 main 5feb00b2e는 Fleet 21개 파일 382 passed 6 failed, 그 밖 36개 파일 659 passed 2 failed. 이 브랜치는 Fleet 388 passed(7f40561e6), 그 밖 683 passed(3f32f2888, 이후 커밋은 Fleet 시험 두 파일만 바꿨다), skip 0. 원격 pytest(8cae1dece): `operations/fleet/test`, `shared/web/test`, harness·구조 가드 모두 exit 0, known_failures NEW 0. harness lint 0 error. 로그 `X:/DevTemp/land-recent/browser/`.
 - gate 변화: 없음. 소스 브라우저 회귀만 확인했다. 착지·push·CI·설치본·실물은 별도다. Games `test_compact_board_recovery…[320-568]`은 첫 전체 실행에서 한 번 실패한 뒤 단독 10회와 전체 2회에서 통과했고 원인은 찾지 못했다.
 
+## 2026-10-13 · 1438d53d1 · feat(web): control line (D-741), Cell 묶음 선 유지
+
+- 변경: `cell/cell.css`의 `.document-group` 테두리를 `--field-line`에서 `--border-default`로 옮겼다. `--field-line`이 조작 경계(잉크 50%)가 되어도 폼 묶음 선은 면 구분으로 남는다. `.file-picker-button`은 조작이라 `--field-line`을 그대로 쓴다.
+- 증거: 원격 소스 시험 통과. 화면 확인 없음.
+- gate 변화: 없음.
+
 ## 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
 
 - 변경: 네 문서의 머리가 맥락 | 연결 | 알림·나 | 정지의 한 줄 앱 바가 됐다. 시계와 연결 글(`실시간`·`지연`·`연결 끊김`)이 머리로 오고 푸터와 그 안의 `관제 알림` 링크가 없어졌다. 알림 단추는 정적 마크업이다. 계정 단추(`#topbar-more`)가 역할 이름을 달고 그 아래에 계정·화면 표시·토큰 접속이 있다. 로봇 연결 수(`#online-pill`)는 관제 문서의 지도 머리로 갔고 다른 세 문서에는 없다. 레일 아이콘 아래에 `관제·설치·지도·작업·Cell`을 적었다. 접힘은 `.fleet-shell` 칸 질의(64rem, 48rem, 30rem)다.
