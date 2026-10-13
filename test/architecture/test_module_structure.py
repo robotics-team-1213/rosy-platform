@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception", "devices", "control"}
+           "foundation", "ros_idl", "perception", "devices", "drive"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -88,17 +88,17 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
-SIZE_UNITS = ("control/drive/behaviors/line_follow",
+SIZE_UNITS = ("drive/behaviors/line_follow",
               "foundation/core_common/protocol/native",
-              "control/drive/behaviors/navigation",
-              "control/drive/behaviors/line_follow/recovery",
-              "control/drive/behaviors/line_follow/recovery/junction",
-              "control/drive/behaviors/line_follow/recovery/stuck",
-              "control/drive/behaviors/line_follow/recovery/stuck/realign",
-              "control/drive/behaviors/line_follow/arc",
-              "control/drive/behaviors/line_follow/cue",
-              "control/drive/behaviors/localization",
-              "control/drive/behaviors/swarm",
+              "drive/behaviors/navigation",
+              "drive/behaviors/line_follow/recovery",
+              "drive/behaviors/line_follow/recovery/junction",
+              "drive/behaviors/line_follow/recovery/stuck",
+              "drive/behaviors/line_follow/recovery/stuck/realign",
+              "drive/behaviors/line_follow/arc",
+              "drive/behaviors/line_follow/cue",
+              "drive/behaviors/localization",
+              "drive/behaviors/swarm",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
               "fleet/fleet/server/channel",
@@ -143,7 +143,7 @@ SIZE_VERDICTS = {
         "storage, dispatcher or authority. Keep +150 and all historical file/hard ceilings. "
         "See docs/plans/2026-10-12-core-native-outcome-ports.md.",
     ),
-    "control/drive/behaviors/navigation": (
+    "drive/behaviors/navigation": (
         773,
         "accept: D-732 actual navigation goal/readback owner was already an installed physical "
         "subpackage. Independent native-verify precheck on 2026-10-12 measured navigation773 "
@@ -1273,7 +1273,7 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "control/drive/safety/adapter/node.py": (
+    "drive/safety/adapter/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -1367,7 +1367,7 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by middleware/core/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "control/drive/behaviors/line_follow/manager.py": (
+    "drive/behaviors/line_follow/manager.py": (
         763,
         "accept: reviewed by adr_record on 2026-10-10 at 792, within the existing 763+150 allowance. "
         "D-620 adds one final-decision commit call after authority and crosswalk; episode state remains "
@@ -1383,14 +1383,14 @@ SIZE_VERDICTS = {
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",
     ),
-    "control/drive/behaviors/swarm/manager.py": (
+    "drive/behaviors/swarm/manager.py": (
         634,
         "accept: D-581 (2026-10-10, re-judged at 634 after the review fixes: anchor_withheld hold) adds the Fleet-anchored "
         "sample kind (_sample_kind, _own_pose, odom provider) to the one follower state machine; the "
         "trail geometry stays in swarm/trail.py and the anchoring in Fleet. One lock owner, ROS-free, "
         "covered by core_features test_swarm*.py. (independent re-judge 2026-10-10, critic: agree - one locked follower state machine; next growth moves status/state_payload/_formation_label (~43 lines) out)",
     ),
-    "control/drive/behaviors/docking/manager.py": (
+    "drive/behaviors/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -1398,7 +1398,7 @@ SIZE_VERDICTS = {
         "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
         "and core/test/test_docking_*.py (X5)",
     ),
-    "control/drive/behaviors/traffic_policy/manager.py": (
+    "drive/behaviors/traffic_policy/manager.py": (
         609,
         "accept: one owner (the TrafficPolicyManager verdict state machine with its evidence contracts "
         "RoadEvidence/SignalHeadEvidence/config/decision), ROS-free, host-testable via core/test/test_traffic_policy.py; "
@@ -1409,7 +1409,7 @@ SIZE_VERDICTS = {
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
-    "control/drive/behaviors/line_follow/recovery": (
+    "drive/behaviors/line_follow/recovery": (
         1_292,
         "split: re-judged at 1292 on 2026-10-10 (independent re-judge 2026-10-10, critic agent, read-only: AGREE WITH "
         "CONDITIONS, conditions applied) when D-407 stuck "
@@ -1420,14 +1420,14 @@ SIZE_VERDICTS = {
         "or publisher; CORE CommandManager stays the final cmd_vel publisher. The +150 allowance is measured "
         "from 1292.",
     ),
-    "control/drive/behaviors/line_follow/recovery/stuck/realign": (
+    "drive/behaviors/line_follow/recovery/stuck/realign": (
         289,
         "accept: independently judged at 289 on 2026-10-10 by snapshot_review: focused D-607 REALIGN "
         "subpackage under the same manager lock, no new publisher; reuses cue odom pivot and stuck "
         "clearance. Dated addendum: docs/plans/2026-10-07-line-follow-recovery-subpackage.md. "
         "Re-judge after +150.",
     ),
-    "control/drive/behaviors/line_follow/recovery/stuck": (
+    "drive/behaviors/line_follow/recovery/stuck": (
         1_031,
         "accept: registered at 1031 on 2026-10-10 when D-407 stuck code left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-10 section; independent re-judge "
@@ -1437,7 +1437,7 @@ SIZE_VERDICTS = {
         "CommandManager stays the final cmd_vel publisher. D-607 realign joins as its own sub-unit "
         "recovery/stuck/realign/ by its own dated addendum. Re-judge after +150.",
     ),
-    "control/drive/behaviors/line_follow/recovery/junction": (
+    "drive/behaviors/line_follow/recovery/junction": (
         1137,
         "split: independently reviewed by adr_record at 1137 on 2026-10-10: D-620 keeps the Fleet episode/correlation policy in signal.py (90), separate from gate.py (569), approach.py (263) and bend.py (213). The existing manager lock/generation, CORE admission and final publisher are unchanged; the new mixin has no transport, thread or motion writer. The docs/plans/2026-10-07-line-follow-recovery-subpackage.md junction split remains applied. Package +150 remains; before gate.py reaches 600 move the bounded turn state out of that file. Re-review at package +150 or a new owner. Previous verdict: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
@@ -1449,7 +1449,7 @@ SIZE_VERDICTS = {
         "may pass 600 (gate.py is 542): split gate.py by state (e.g. the turn/approach maneuver out of the "
         "gate) before that.",
     ),
-    "control/drive/behaviors/line_follow/arc": (
+    "drive/behaviors/line_follow/arc": (
         310,
         "accept: independently re-judged 2026-10-08 at 299 (lane_arc.py 298, read-only critic agent). "
         "D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
@@ -1460,7 +1460,7 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
-    "control/drive/behaviors/localization": (
+    "drive/behaviors/localization": (
         1080,
         "accept: independently re-judged at 1080 on 2026-10-10 by snapshot_review: D-603 rotate_to joins the existing localization mission lifecycle; clearance and final commands remain with their CORE owners. Re-judge after +150. Previous verdict: "
         "accept: independently re-judged at 922 on 2026-10-09 (read-only safety reviewer); "
@@ -1468,7 +1468,7 @@ SIZE_VERDICTS = {
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
         "publisher or command path. Re-judge after +150.",
     ),
-    "control/drive/behaviors/swarm": (
+    "drive/behaviors/swarm": (
         799,
         "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
         "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
@@ -1476,7 +1476,7 @@ SIZE_VERDICTS = {
         "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
-    "control/drive/behaviors/line_follow": (
+    "drive/behaviors/line_follow": (
         3_018,
         "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
         "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
@@ -1495,7 +1495,7 @@ SIZE_VERDICTS = {
         "Judged at 810 on 2026-10-10. New steering features (driving context, map corner arc) go here; "
         "drivable_steer.py splits before 600. Re-judge on growth past +150.",
     ),
-    "control/drive/behaviors/line_follow/cue": (
+    "drive/behaviors/line_follow/cue": (
         376,
         "split: judged at 376 on 2026-10-10 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
         "size-unit.md, cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS): lane_cue.py 320 (D-511 Fleet lane cue, a "
@@ -1943,7 +1943,7 @@ ROLE_DIR = {
     "omx": ("devices", "omx", "profile"),
     "omx_adapter": ("devices", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
-    "navigation": ("control", "drive", "planning", "nav2"),
+    "navigation": ("drive", "planning", "nav2"),
     "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
     "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
@@ -1972,10 +1972,10 @@ def _declared(name: str) -> set:
 
 
 def _files(name: str, suffixes):
-    holders = (ROOT / "middleware/control/drive" / holder for holder in
+    holders = (ROOT / "middleware/drive" / holder for holder in
                ("calibration", "recovery", "safety", "tracking", "planning/grid", "runtime")) if name == "control" else ()
     if name == 'core_features':
-        holders = (ROOT / 'middleware/control/drive/behaviors',)
+        holders = (ROOT / 'middleware/drive/behaviors',)
     if name == "fleet":
         holders = (ROOT / "operations/decision", ROOT / "operations/ui/console",
                    ROOT / "integrations/messaging/discord")
@@ -2265,7 +2265,8 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
         (("devices", "pinky", "profile"), "pinky_pro", True),
         (("apps", "device", "pinky", "bringup"), "bringup", False),
         (("devices", "omx", "adapter"), "omx_adapter", True),
-        (("control", "drive", "planning", "nav2"), "navigation", True),
+        (("drive", "planning", "nav2"), "navigation", True),
+        (("control", "drive", "planning", "nav2"), "navigation", False),
         (("core", "navigation"), "navigation", False),
         (("apps", "device", "omx", "adapter"), "omx_adapter", False),
         (("drivers", "imu_bno055"), "imu_bno055", True),

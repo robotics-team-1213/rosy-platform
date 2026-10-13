@@ -65,7 +65,7 @@ FINAL_CMD_VEL = re.compile(r"""['"]cmd_vel['"]""")
 #: safety_node as the legacy final publisher). Everything else in control
 #: must not name the final topic.
 LEGACY_FINAL_PUBLISHER = (
-    "middleware/control/drive/safety/adapter/node.py",
+    "middleware/drive/safety/adapter/node.py",
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 

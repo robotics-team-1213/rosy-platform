@@ -23,7 +23,8 @@ from ..sensing.lidar import NOSE_YAW, enable_simulation_scans
 from ..sensing.localization import lease_ready
 from ..sensing.pose import planar_pose
 from ..control.lidar_guard import (lidar_blocked, lidar_can_rotate,
-                                   translation_footprint_eligible, TranslationEvidence)
+                                   translation_footprint_eligible, TranslationEvidence,
+                                   ForwardEvidence)
 from ..control.command_gate import GateInputs, evaluate_command
 from ..control.floor_evidence import floor_observed
 from ..control.policy_handoff import ControlPolicyProducer
@@ -492,6 +493,12 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             can_rotate = False
         if translation_trial:
             can_rotate = False
+        # D-740: the forward-arc sweep judges the URDF body, so it is offered only while that
+        # body, not a learned envelope, a grown radius or a trial, decides the turn.
+        forward_nominal = (rotation_estimate is None and swept_radius is None and
+                           body_radius == BODY.rotation_radius_m and
+                           not rotation_trial and not translation_trial and
+                           not self.calibration_lease.rotation_estimate_required(time.monotonic()))
         relocation = None
         relocation_limits = None
         if (rotation_estimate is not None and not rotation_trial and lidar_ok and
@@ -607,6 +614,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             handoff_now = time.monotonic()
             translation_evidence = self._translation_policy_evidence(handoff_now)
             tracking_evidence = self._tracking_policy_evidence(handoff_now)
+            forward_evidence = self._forward_policy_evidence(handoff_now) if forward_nominal else None
             failure = self.required_observation_failure()
             if ((self.get_parameter('obstacle_tracking_enabled').value and
                  tracking_evidence is None) or
@@ -625,7 +633,8 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             if self._policy_producer is not None:
                 self.sensor_policy_published = self._policy_producer.publish(
                     self.sensor_state, now=handoff_now, translation=translation_evidence,
-                    tracking=tracking_evidence, linear_limit=self.profile.max_linear)
+                    tracking=tracking_evidence, linear_limit=self.profile.max_linear,
+                    forward=forward_evidence)
             return
 
         if self.estop:
@@ -727,6 +736,24 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             previous_front=bool(getattr(self, '_policy_previous_front', False)),
             previous_rear=bool(getattr(self, '_policy_previous_rear', False)),
             linear_gains=tuple(gains),
+        )
+
+    def _forward_policy_evidence(self, now):
+        """Freeze the scan the turn decision used, for the forward-arc stopping sweep."""
+        row = self.observations.rows.get('lidar')
+        points = getattr(self, 'lidar_rotation_points', None)
+        if (not self._sensor_only or points is None or row is None or row.received is None or
+                not self.observations.fresh('lidar', now)):
+            return None
+        return ForwardEvidence(
+            scan_received_at=row.received,
+            scan_source_at=row.received - row.source_age,
+            points=tuple(points),
+            # Every beam returned; the pivot verdict is not coverage (it is set when this is asked).
+            observed=getattr(self, 'lidar_rotation_observed', False) is True,
+            body=BODY,
+            limits=(self.profile.max_linear, self.profile.max_angular),
+            front_blocked_other=bool(self.us_blocked),
         )
 
     def _tracking_policy_evidence(self, now):

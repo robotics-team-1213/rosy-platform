@@ -6,7 +6,7 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 DRIVE_ROOT = (PACKAGE_ROOT / "_source_roots/drive"
               if (PACKAGE_ROOT / "_source_roots/drive").is_dir()
-              else PACKAGE_ROOT.parent / "control/drive")
+              else PACKAGE_ROOT.parent / "drive")
 PACKAGE_DIRS = {
     "control.sensing": PACKAGE_ROOT / "sensors/sensing",
     "control.sensing.perception": PACKAGE_ROOT / "vision/perception",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-NAV = Path(__file__).resolve().parents[4] / 'middleware/control/drive/behaviors/navigation'
+NAV = Path(__file__).resolve().parents[4] / 'middleware/drive/behaviors/navigation'
 
 
 def test_navigation_tree_has_no_swarm_module():
