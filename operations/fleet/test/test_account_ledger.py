@@ -288,3 +288,27 @@ def test_migration_rejects_reused_login_with_different_principal(tmp_path):
     with pytest.raises(ValueError, match="identity"):
         PasswordSessions(path, _accounts(principal_id="different-owner"),
                          accounts_bootstrap=("alice", "test-site"))
+
+
+def test_managed_cookie_supports_top_level_sso_without_cross_site_mutation(tmp_path):
+    app, _ = _app(tmp_path)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    client = _client(app)
+    response = _login(client)
+    assert "samesite=lax" in response.headers["set-cookie"].lower()
+    assert client.post("/api/fleet/estop", headers={"Origin": "https://other.example"}).status_code == 403
+
+
+def test_managed_policy_role_does_not_inflate_policy_permission(tmp_path):
+    app, _ = _app(tmp_path)
+    sessions = app.state.password_sessions
+    sessions.bootstrap_accounts("alice", "test-site")
+    manager = cookie(sessions)
+    sessions.create_account(manager, login="bob", principal_id="bob", role="policy-admin",
+                            password="temporary secret", grants=[])
+    client = _client(app)
+    assert _login(client, login="bob", password="temporary secret").status_code == 204
+    assert client.post("/api/fleet/auth/change-password", headers=ORIGIN,
+                       json={"password": "permanent secret"}).status_code == 204
+    response = client.delete("/api/fleet/ai/human-classes/missing?reason=test", headers=ORIGIN)
+    assert response.status_code == 403
