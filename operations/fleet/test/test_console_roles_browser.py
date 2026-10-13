@@ -113,7 +113,8 @@ def _login(playwright, origin):
     page.locator("#password-login [data-login=login]").fill("kim")
     page.locator("#password-login [data-login=password]").fill("pw-1234")
     page.locator("#password-login [data-login=submit]").click()
-    page.locator('#user-role[title^="kim"]').wait_for(timeout=15000)
+    # D-668: the role tag is detail behind the status center, so it is attached but folded.
+    page.locator('#user-role[title^="kim"]').wait_for(state="attached", timeout=15000)
     more = page.locator('#topbar-more')
     if more.get_attribute('aria-expanded') == 'true':
         more.click()
