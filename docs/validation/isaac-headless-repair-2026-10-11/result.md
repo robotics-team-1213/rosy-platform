@@ -1,6 +1,6 @@
 # Isaac 5.1 headless SDK 복구와 CORE 연결
 
-초기 bootstrap 소스는 `97973b01de9cf0b7c55130cc93d2ea6c506bcd51`, 최종 복구 소스는 `055fd333ceb6aa488f0f572564a10cdc407fbd1f`다. **센서 없는 Pinky 한 대의 헤드리스 기동·ROS 연결과 기존 CORE를 통한 전진·회전·입력 만료 뒤 실제 정지를 관찰했다. 목표 회전 속도 추종이 실패하므로 I1 주행 수용·두 대 Fleet·신호 준수 완주는 HOLD다.** 이전 [I1 주행 기록](../cell-isaac-2026-10-04/isaac-core-drive.md)을 이번 기동 결과만으로 닫지 않는다.
+초기 bootstrap 소스는 `97973b01de`, 최종 복구 소스는 `055fd333ce`다. **센서 없는 Pinky 한 대의 헤드리스 기동·ROS 연결과 기존 CORE를 통한 전진·회전·입력 만료 뒤 실제 정지를 관찰했다. 목표 회전 속도 추종이 실패하므로 I1 주행 수용·두 대 Fleet·신호 준수 완주는 HOLD다.** 이전 [I1 주행 기록](../cell-isaac-2026-10-04/isaac-core-drive.md)을 이번 기동 결과만으로 닫지 않는다.
 
 ## 범위와 환경
 
