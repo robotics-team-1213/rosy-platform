@@ -77,16 +77,23 @@ async function refresh() {
 }
 async function jobs() {
   if(!active)return;
-  const result=await api('/api/learning/imports'), root=$('imports'); root.replaceChildren();
+  const identity=session;
+  const result=await api('/api/learning/imports'), root=$('imports');
+  if(!active||session!==identity)return;
+  const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
+  const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
+  const focusText=root.contains(focused)?focused.textContent:null;
+  root.replaceChildren();
   if(!result.jobs.length) line(root,'가져오기 작업이 없습니다.');
   for(const job of result.jobs) {
-    const row=document.createElement('article'); root.append(row);
+    const row=document.createElement('article'); row.dataset.job=job.id; root.append(row);
     line(row,`${job.repo_id} · ${states[job.status] || job.status}`);
     line(row,`버전 ${job.revision} · 요청자 ${job.requester_id || job.requester || ''}`);
     if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':failures[job.error] || job.error);
     const files=job.files || [], received=f=>f.downloaded_bytes ?? (job.status==='completed'?f.bytes:0);
     line(row,`진행 ${size(files.reduce((n,f)=>n+received(f),0))} / ${size(files.reduce((n,f)=>n+f.bytes,0))} · 받은 양은 검수 완료와 별개입니다.`);
     const details=document.createElement('details'), summary=document.createElement('summary');
+    details.dataset.job=job.id;details.open=opened.has(job.id);
     summary.textContent=`파일별 진행 ${files.length}개`;details.append(summary);row.append(details);
     for(const file of files)line(details,`${file.path} · ${size(received(file))} / ${size(file.bytes)} · ${file.sha256?'해시 검증 완료':'검증 대기'}`);
     if(job.reason) line(row,job.reason);
@@ -98,6 +105,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
+    if(focusId===job.id) [...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
   }
 }
 $('login-form').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{

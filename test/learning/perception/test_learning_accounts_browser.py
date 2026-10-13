@@ -82,6 +82,13 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 expect(page.locator('#imports')).to_contain_text('실패', timeout=20000)
                 expect(page.locator('#imports')).to_contain_text('진행')
                 expect(page.locator('#imports')).to_contain_text('clip.mp4')
+                summary = page.locator('#imports summary')
+                summary.click()
+                summary.focus()
+                with page.expect_response('**/api/learning/imports', timeout=10000):
+                    pass
+                expect(page.locator('#imports details')).to_have_attribute('open', '')
+                expect(page.locator('#imports summary')).to_be_focused()
                 transport.fail = False
                 page.get_by_role('button', name='같은 버전 재시도').click()
                 expect(page.locator('#imports')).to_contain_text('가져옴 · 검수 대기', timeout=20000)
