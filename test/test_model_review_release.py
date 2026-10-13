@@ -86,7 +86,7 @@ def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
         path.write_bytes(b"source\n")
     release.check_source(source, tmp_path / "root", tmp_path / "state")
     before = release.digest_tree(source)
-    (source / "middleware/control/drive/safety/command_gate.py").write_bytes(b"changed\n")
+    (source / "middleware/drive/safety/command_gate.py").write_bytes(b"changed\n")
     assert release.digest_tree(source) != before
 
 

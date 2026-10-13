@@ -19,7 +19,7 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parents[1]
 REPO = PACKAGE.parents[3]
 LAUNCH = PACKAGE / "launch" / "bringup_robot.launch.py"
-HARDWARE_LAUNCH = REPO / "middleware/control/drive/planning/nav2/launch/hardware.launch.py"
+HARDWARE_LAUNCH = REPO / "middleware/drive/planning/nav2/launch/hardware.launch.py"
 IO_UNIT = REPO / "deploy/robot/pinky_pro/native/rosy-io.service"
 
 

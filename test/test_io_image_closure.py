@@ -67,9 +67,9 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
                layout["RUNTIME_ROOT"]}
     assert copied == {packages[name][0] for name in selected} | holders
     for source in holders:
-        relative = source.relative_to(ROOT / "middleware/control/drive").as_posix()
+        relative = source.relative_to(ROOT / "middleware/drive").as_posix()
         assert (f"COPY {source.relative_to(ROOT).as_posix()} "
-                f"/opt/rosy_ws/src/runtime/control/drive/{relative}") in build
+                f"/opt/rosy_ws/src/runtime/drive/{relative}") in build
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())
     for source in copied:
         assert source.is_dir(), source

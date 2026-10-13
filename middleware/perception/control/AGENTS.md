@@ -7,11 +7,11 @@
 **Updated:** 2026-10-11
 
 ## Purpose
-The existing `control` Python package composes ROS nodes, the sensor provider, calibration transport/storage, observation payloads and operator adapters. D-630 moved the sensor and vision implementations to `middleware/perception/sensors/sensing` and `middleware/perception/vision/perception`, and the Drive implementations to `middleware/control/drive/`.
+The existing `control` Python package composes ROS nodes, the sensor provider, calibration transport/storage, observation payloads and operator adapters. D-630 moved the sensor and vision implementations to `middleware/perception/sensors/sensing` and `middleware/perception/vision/perception`, and the Drive implementations to `middleware/drive/`.
 
 Five compatibility package directories preserve `control.control`, `control.sensing`, `control.planning`, `control.safety` and `control.wander`. Their initializers are active source import/build contracts. The 50 pure `control.control.*` modules have one canonical source across Drive safety (15), tracking (6), recovery (11) and calibration (18); their installed import names remain unchanged. See the [current platform folder guide](../../../docs/reference/platform-folder-responsibilities.md) and [distribution guide](../AGENTS.md).
 
-D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/control/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. Its five initializer directories contain no algorithm copies.
+D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. Its five initializer directories contain no algorithm copies.
 
 ## Key Files
 | File | Description |
@@ -37,10 +37,10 @@ D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` a
 | Directory | Purpose |
 |-----------|---------|
 | `control/` | Initializer and guide for the preserved `control.control` identity; pure modules live in Drive safety/tracking/recovery/calibration (see [control/AGENTS.md](control/AGENTS.md)) |
-| `planning/` | Source initializer facade for `middleware/control/drive/planning/grid`; installed as `control.planning` |
-| `safety/` | Source initializer facade for `middleware/control/drive/safety/adapter`; installed as `control.safety` |
+| `planning/` | Source initializer facade for `middleware/drive/planning/grid`; installed as `control.planning` |
+| `safety/` | Source initializer facade for `middleware/drive/safety/adapter`; installed as `control.safety` |
 | `sensing/` | Source initializer facade for `middleware/perception/sensors/sensing`; its `control.sensing.perception` child lives in `middleware/perception/vision/perception` |
-| `wander/` | Source initializer facade for `middleware/control/drive/tracking/wander`; installed as `control.wander` |
+| `wander/` | Source initializer facade for `middleware/drive/tracking/wander`; installed as `control.wander` |
 
 `../setup.py` uses ordinary `package_dir` mappings for the moved subpackages and a narrow build step for the flat `control.control` modules. It installs one copy under each existing identity. The self-contained sdist includes the declared Drive source snapshot; the wheel contains the installed packages and the unchanged `share/control` resources.
 
@@ -49,7 +49,7 @@ D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` a
 ### Working In This Directory
 - Sensor/provider/observation composition stays here; the four legacy Drive entry modules live in Drive runtime. New pure sensor, vision or Drive decisions belong in their canonical holder; preserve existing `control.*` imports and monkeypatch identity.
 - Keep the existing `setup.py` entry points, executor selector and `KeyboardInterrupt`-safe shutdown shape.
-- Shutdown behavior remains with the actual adapter (`middleware/control/drive/tracking/wander/node.py:stop_motors`). CORE remains the operational final `/cmd_vel` authority; the legacy writer is not activated by this folder layout.
+- Shutdown behavior remains with the actual adapter (`middleware/drive/tracking/wander/node.py:stop_motors`). CORE remains the operational final `/cmd_vel` authority; the legacy writer is not activated by this folder layout.
 
 ### Testing Requirements
 - ROS-free adapter characterization, executor/QoS scans and pure composition modules such as `watch.py` are covered by `../test/`; ROS transport behavior needs separate Jazzy evidence.
