@@ -25,7 +25,9 @@ def pipeline(tmp_path, core_client):
     from fleet.server.site_users import hash_password
     from fleet.server.task_service import FleetTaskService
     from fleet.server.task_store import FleetTaskStore
-    issuer, robot = 'https://account.test', 'https://robot.test'
+    from browser_harness import safe_listener
+    fleet_socket, robot_socket = safe_listener(), safe_listener()
+    issuer, robot = (f'https://localhost:{sock.getsockname()[1]}' for sock in (fleet_socket, robot_socket))
     private = Ed25519PrivateKey.generate()
     key = tmp_path/'signing.pem'
     key.write_bytes(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
@@ -60,8 +62,10 @@ def pipeline(tmp_path, core_client):
     core, _ = core_client(dev_auth=False)
     core.app.state.account_client = receiver
     core.base_url = robot
+    core.test_sockets = (fleet_socket, robot_socket)
     yield core, TestClient(fleet, base_url=issuer), sessions, login, receiver, clock
     core.close(); backchannel.close()
+    fleet_socket.close(); robot_socket.close()
 
 
 def test_login_callback_refresh_revoke_and_core_scope(pipeline):
@@ -78,7 +82,7 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     identity = core.get('/api/account/session').json()
     assert identity['authenticated'] and identity['capabilities'] == ['robot.read']
     assert core.get('/api/v1/auth/whoami').status_code == 200
-    assert core.post('/api/v1/teleop', json={'linear':0,'angular':0}, headers={'Origin':'https://robot.test'}).status_code == 403
+    assert core.post('/api/v1/teleop', json={'linear':0,'angular':0}, headers={'Origin':str(core.base_url).rstrip('/')}).status_code == 403
     clock[0] += 270
     assert core.get('/api/account/session').json()['session_family'] == identity['session_family']
     sessions.revoke(fleet.cookies[COOKIE])
@@ -87,33 +91,51 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     assert not core.get('/api/account/session').json()['authenticated']
 
 
-def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline):
+def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_path):
     from browser_harness import browser_tests_enabled, launch_options
     if not browser_tests_enabled(): pytest.skip('opt-in Chromium scenario')
     from playwright.sync_api import sync_playwright
+    import threading
+    import uvicorn
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives.asymmetric.rsa import generate_private_key
+    from cryptography.hazmat.primitives import hashes
     core, fleet, _, _, _, _ = pipeline
+    tls_key = generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'localhost')])
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(tls_key.public_key())
+        .serial_number(x509.random_serial_number()).not_valid_before(now-timedelta(minutes=1))
+        .not_valid_after(now+timedelta(days=1)).add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]),False)
+        .sign(tls_key,hashes.SHA256()))
+    cert_file, key_file = tmp_path/'tls.crt', tmp_path/'tls.key'
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(tls_key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+    servers, threads = [], []
+    for client, listener in zip((fleet,core),core.test_sockets):
+        server = uvicorn.Server(uvicorn.Config(client.app,log_level='error',ssl_keyfile=str(key_file),ssl_certfile=str(cert_file),timeout_graceful_shutdown=2))
+        worker = threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True)
+        servers.append(server); threads.append(worker); worker.start()
+    deadline=time.monotonic()+20
+    while not all(server.started for server in servers) and time.monotonic()<deadline: time.sleep(.02)
+    assert all(server.started for server in servers)
+    robot = str(core.base_url).rstrip('/')
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(**launch_options())
         try:
-            context = browser.new_context()
-            def forward(route):
-                request = route.request
-                client = fleet if urlsplit(request.url).hostname == 'account.test' else core
-                client.cookies.clear()
-                response = client.request(request.method, request.url, headers=request.all_headers(),
-                    content=request.post_data_buffer, follow_redirects=False)
-                route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.content)
-            context.route('https://**.test/**', forward)
+            context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
-            page.goto('https://robot.test/api/account/login?return=/dashboard')
+            page.goto(robot+'/api/account/login?return=/dashboard')
             page.locator('[data-login=login]').fill('alice')
             page.locator('[data-login=password]').fill('test-password')
             page.locator('[data-login=submit]').click()
-            page.wait_for_url('https://robot.test/dashboard')
+            page.wait_for_url(robot+'/dashboard')
             assert page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             # A second app entry reuses the authority cookie: no password/code prompt.
-            page.goto('https://robot.test/api/account/login?return=/pilot')
-            page.wait_for_url('https://robot.test/pilot')
+            page.goto(robot+'/api/account/login?return=/pilot')
+            page.wait_for_url(robot+'/pilot')
             assert page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             cookies = context.cookies()
             app = next(c for c in cookies if c['name'] == 'rosy_app_account')
@@ -121,3 +143,6 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline):
             assert all('refresh' not in c['name'] for c in cookies)
         finally:
             browser.close()
+            for server in servers: server.should_exit=True
+            for thread in threads: thread.join(timeout=10)
+            assert not any(thread.is_alive() for thread in threads)

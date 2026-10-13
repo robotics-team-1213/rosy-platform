@@ -72,6 +72,7 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         aud='project:one',permits=lambda *args:True) for name in ['alice','bob']}
     receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None)
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
+    (tmp_path/'workspace').mkdir()
     store = open_store(tmp_path/'workspace')
     server = make_server(store,0,accounts=managed)
     worker = threading.Thread(target=server.serve_forever,daemon=True); worker.start()
