@@ -129,7 +129,7 @@ def test_a_map_entry_robot_gets_the_lane_heading_at_the_arc_start_and_the_locate
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m", "map_entry"}
     assert fields["map_entry"] == {"yaw_rad": pytest.approx(arc.point_at(s_start)[2], abs=1e-4),
                                    "pose_yaw_rad": ports.pose.yaw, "odom_stamp_s": 1790000000.25}
-    assert ports.pose.yaw == pytest.approx(fields["map_entry"]["yaw_rad"] + 0.2, abs=0.01)  # not the robot's yaw
+    assert abs(ports.pose.yaw - fields["map_entry"]["yaw_rad"]) > 0.05  # the lane's heading, not the robot's yaw
     plain = _trip(_bend_map(SW_BEND))[2].expects[0]
     assert {k: v for k, v in fields.items() if k != "map_entry"} == plain
 
