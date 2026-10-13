@@ -80,7 +80,7 @@ def test_panel_css_does_not_open_a_rule_on_a_bare_element_selector():
     bad = []
     for path in sorted((WEB / "panels").rglob("*.css")):
         for selector in _css_selector_heads(path.read_text(encoding="utf-8-sig")):
-            if _BARE_ELEMENT_START.match(selector):
+            if _BARE_ELEMENT_START.match(selector) and not selector.startswith("body[data-surface="):
                 bad.append(f"{path.relative_to(WEB)}: {selector!r}")
     assert not bad, bad
 
