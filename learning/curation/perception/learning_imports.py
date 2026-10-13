@@ -303,6 +303,9 @@ class LearningImports:
 
     def list(self, actor, project_id):
         self.authorize(actor, project_id, 'view')
+        with self._lease() as owned:
+            if owned:
+                self._interrupt_orphans()
         with self._db() as db:
             rows = [json.loads(row[0]) for row in db.execute('SELECT document FROM jobs')]
         return sorted((row for row in rows if row['project_id'] == project_id),
@@ -312,6 +315,9 @@ class LearningImports:
         with self.lock:
             job = self.get(actor, project_id, job_id)
             self._credentials(actor, job)
+            with self._lease() as owned:
+                if owned:
+                    self._interrupt_orphans()
             with self._db() as db:
                 job = self._load(job_id, db)
                 if job['status'] not in ('queued', 'failed', 'interrupted', 'blocked', 'cancelled'):
@@ -355,7 +361,8 @@ class LearningImports:
         if free < remaining + self.limits['reserve_bytes'] + 1024 ** 2:
             raise ImportFailure('insufficient_space')
 
-    def _download(self, actor, job, entry, dest, remaining):
+    @contextmanager
+    def _partial(self, actor, job, entry, dest):
         self._safe(dest)
         dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
@@ -363,20 +370,31 @@ class LearningImports:
             info = os.fstat(output.fileno())
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise ValueError('regular private file required')
-            size, digest = info.st_size, hashlib.sha256()
+            size, digest = entry.get('downloaded_bytes', 0), hashlib.sha256()
             trusted = entry.get('sha256') or entry.get('partial_sha256')
-            if (size <= entry['bytes'] and entry.get('downloaded_bytes') == size and trusted
+            if (0 <= size <= min(info.st_size, entry['bytes']) and trusted
                     and (entry.get('sha256') or entry['expected_sha256'])):
-                for chunk in iter(lambda: output.read(1024 ** 2), b''):
+                unread = size
+                while unread:
+                    chunk = output.read(min(unread, 1024 ** 2))
+                    if not chunk: break
                     self._checkpoint(actor, job)
                     digest.update(chunk)
-                valid = digest.hexdigest() == trusted
+                    unread -= len(chunk)
+                valid = unread == 0 and digest.hexdigest() == trusted
             else:
                 valid = False
             if not valid:
                 output.seek(0); output.truncate()
                 size, digest = 0, hashlib.sha256()
                 entry.pop('sha256', None)
+            # A crash may leave an uncommitted tail after the durable checkpoint.
+            output.seek(size); output.truncate()
+            entry.update(downloaded_bytes=size, partial_sha256=digest.hexdigest())
+            yield output, size, digest
+
+    def _download(self, actor, job, entry, dest, remaining):
+        with self._partial(actor, job, entry, dest) as (output, size, digest):
             self._space(entry['bytes'] - size + remaining)
             job['reserved_bytes'] = entry['bytes'] - size + remaining
             self._progress(job)
@@ -517,11 +535,18 @@ class LearningImports:
                     return
                 self._safe(stage)
                 stage.mkdir(parents=True, exist_ok=True, mode=0o700)
-                remaining = sum(row['bytes'] for row in job['files'])
+                for entry in job['files']:
+                    dest = stage / 'files' / _filename(entry['path'])
+                    with self._partial(actor, job, entry, dest):
+                        pass
+                remaining = sum(row['bytes'] - row['downloaded_bytes'] for row in job['files'])
+                self._space(remaining)
+                job['reserved_bytes'] = remaining
+                self._progress(job)
                 for entry in job['files']:
                     self._checkpoint(actor, job)
                     dest = stage / 'files' / _filename(entry['path'])
-                    remaining -= entry['bytes']
+                    remaining -= entry['bytes'] - entry['downloaded_bytes']
                     self._download(actor, job, entry, dest, remaining)
                 self._checkpoint(actor, job)
                 self._media(stage, job)
