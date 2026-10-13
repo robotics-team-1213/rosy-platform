@@ -3,6 +3,9 @@
 
 # calibration
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values from the recording, and manage per-robot accepted calibration records. Runs on the PC, not on the robot. The store implementation is `core_common/calibration_store.py` (`contracts/foundation`); the PC mirror is `data/calibration/` (gitignored).
@@ -12,18 +15,20 @@ Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: driv
 | File | Description |
 |------|-------------|
 | `run_calibration.py` | One command, protocol v1: per robot (one thread each) pair with a login code, drive the protocol through CORE teleop at 10 Hz, record on the robot over SSH (`~/rosy_rec.sh`), pull the session, analyse, write candidate records, repeat while the repeat rule fails. `--dry-run` prints the protocol and touches nothing; `--offline SESSION_DIR...` only analyses existing sessions |
+| `core_client.py` | `run_calibration`'s CORE client: plain HTTP, or with `--ca` HTTPS pinned to the robot CA on one kept-alive, locked connection (TLS-required robots) |
 | `analyze_session.py` | Fits from D-356 recordings (`session.json` + `bag/*.mcap`): wheel radius/separation, per-wheel scale, gain per speed, LiDAR mount yaw check, camera pitch/roll/height (PC grid `PC_FINE_STEPS`: roll 0.1°, height 1 mm, ~170 s per run; the robot's startup step keeps the robot grid, but since 2026-10-07 it too bands height on the fine table and clips the fine height window to the search range); across runs the mean, spread and 95 % interval; the camera record's band is max(widest run score half-band, across-run ci95), height from the runs that fitted it only. Writes `candidate.json` and `report.md` per robot and candidate records into the store mirror. Never applies anything |
 | `student_t.py` | Two-sided 95 % Student t table (1–30 dof, then 1.96) for the across-run and across-placement intervals |
 | `store_cli.py` | Operator view of the store: `list`, `show`, `accept`, `reject`, `pin` (rollback/unpin), `sync` (merge another copy). `accept` refuses implausible values with the runtime's own check and needs `--actor` |
 | `camera_auto.py` / `camera_capture.py` | Read-only stationary camera/LiDAR auto fit over a pinned SSH alias (the wall-edge fitter runs on the robot, robot grid steps). No drive, mode change or candidate promotion. New local evidence JSON; exit 2 for rejected fit, 0 for a recommended candidate only |
 | `camera_board.py` | Offline checkerboard pose on the PC (refuses where `/opt/rosy/current` exists). Two-image mode: candidate JSON with printed square scale, original-pixel reprojection and a view gate of 2 mm / 0.15° / 0.3° (`VIEW_*_TOL`). `--store ROBOT`: five or more `--placement` images (robot static) plus optional `--reseat` images and a measured board elevation write one `camera_profile` candidate (`method camera_board/1`, bands max(across-placement ci95, half the re-seat spread), `fit_step` zero, `systematic` = \|board − truth\| + tolerance from the required independent check `--truth-height-mm/--truth-pitch-deg/--truth-roll-deg VALUE TOL`; lane_containment adds it to each band) into the PC mirror. Accepted truth: lens height by tape or caliper from the floor to the lens centre (TOL ≥ 1 mm); pitch/roll by a digital inclinometer on the camera housing or a flat reference of the mount (TOL ≥ 0.2° plus the mount error); never the wall-edge fit or anything through the same intrinsics (`TRUTH_MIN_TOL`). A first placement the detector misses is retried with guesses from `--camera-profile` (its pitch +0/+2/+4/−2°), recorded as `first_placement_guess`. Synthetic renders (2026-10-07): the board fit still reads 0.05–0.09° pitch and 0.4–0.7 mm height off truth, depending on the rectification seed, beyond its scatter bands; an unseeded first image of an oblique 9x6 board at 320x240 may not be detected at all. Board sessions are captured on the robot by the D-379 recorder and fitted here; never applies or accepts a result |
-| `urdf_nominal.py` | Evaluates the fixed-joint chain of `middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `middleware/apps/device/pinky/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
+| `ceiling_marker_yaw.py` | D-587 5: one straight forward drive; reads raw ceiling frames through a viewer lease, projects the robot's marker like the Vision sightings (`track.marker_sightings.marker_pose`) and prints its `marker_yaw_offset_deg` for `site-cameras.yaml` (travel direction vs raw marker yaw, never odom heading). Needs no sighting, so it bootstraps a robot that has no offset yet. Runs in the Vision container (`docker exec -i ... python3 - ... < ceiling_marker_yaw.py`) or with the repo's Vision paths on `PYTHONPATH`; writes nothing. Refuses under 5 samples, 0.25 m travel, 0.02 m off line or 5 deg yaw spread |
+| `urdf_nominal.py` | Evaluates the fixed-joint chain of `middleware/devices/pinky/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `middleware/devices/pinky/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `test/` | `test_run_calibration.py` (protocol limits, clearance guards, stop/zero behaviour, repeat rule), `test_store_cli.py` (accept plausibility, sync merge, no overwrite), `test_analyze_store.py` (NaN/inf tolerated), `test_urdf_nominal.py` (checked-in geometry matches the URDF; consumers of the nominal values) |
+| `test/` | `test_run_calibration.py` (protocol limits, clearance guards, stop/zero behaviour, repeat rule), `test_store_cli.py` (accept plausibility, sync merge, no overwrite), `test_analyze_store.py` (NaN/inf tolerated), `test_urdf_nominal.py` (checked-in geometry matches the URDF; consumers of the nominal values), `test_ceiling_marker_yaw.py` (D-587 travel-direction offset and refusals) |
 
 ## For AI Agents
 
@@ -46,14 +51,14 @@ Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for COR
 
 ### Common Patterns
 
-- Scripts put `contracts/foundation`, `middleware/perception` and `learning/training/perception/dataset` on `sys.path` instead of installing packages.
+- Scripts put `contracts/foundation`, `middleware/perception` and `learning/curation/perception` on `sys.path` instead of installing packages.
 - Candidate and record JSON go through `json_safe` so NaN/inf do not break the store.
 
 ## Dependencies
 
 ### Internal
 
-- `contracts/foundation/core_common/calibration_store.py`, `middleware/perception` (`odometry_fit`, `camera_extrinsic`), `learning/training/perception/dataset/autolabel.py`, `middleware/apps/device/pinky/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
+- `contracts/foundation/core_common/calibration_store.py`, `middleware/perception` (`odometry_fit`, `camera_extrinsic`), `learning/curation/perception/autolabel.py`, `middleware/devices/pinky/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
 
 ### External
 

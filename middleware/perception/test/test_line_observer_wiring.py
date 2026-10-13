@@ -13,6 +13,20 @@ import numpy as np
 ROOT = Path(__file__).parents[1]
 
 
+def _arm_paint_latch(node):
+    """Extracted _on_camera calls the D-611 latch the real node owns."""
+    from control.sensing.perception.evidence_mode import EvidenceModes
+
+    node._evidence_modes = EvidenceModes()
+
+    def drop():
+        if node._paint_worker is not None:
+            node._paint_worker.reset()
+        node._evidence_modes.reset()
+
+    node._drop_learned_paint = drop
+
+
 @pytest.mark.parametrize('brightness,reason', [(30, 'low_light'), (255, 'overexposed')])
 def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(brightness, reason):
     from control.sensing.perception.camera_visibility import visibility_reason
@@ -28,6 +42,7 @@ def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(b
         _paint_worker=SimpleNamespace(reset=lambda: resets.append('worker')),
         _keep_last_stamp=9., _publish=lambda *args, **kwargs: publications.append((args, kwargs)),
         _publish_debug=lambda *_: None)
+    _arm_paint_latch(node)
     msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=0)))
     namespace['_on_camera'](node, msg)
     assert resets == ['keeper', 'between', 'worker'] and node._keep_last_stamp is None
@@ -56,6 +71,75 @@ def test_line_observer_has_both_inputs_and_one_normalized_output():
     assert "String, 'camera/controls'" in source
     assert "String, 'line/observation'" in source
     assert "create_publisher(Twist" not in source
+
+
+def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "String, 'line/route_context', self._on_route_context" in source
+    assert "route_context_seq=route_context_seq" in source
+    assert "route_context_seq=route_context.seq if route_context is not None else None" in source
+
+
+@pytest.mark.parametrize('native_law_missing', [False, True])
+def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires(native_law_missing):
+    import json
+    import os
+
+    from control.route_context_input import RouteContextInput, bend_expected
+    from control.core_law_input import refresh_drivable_law
+    from control.sensing.perception.lane import LaneObservation, line_observation_payload
+
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    names = ('_on_camera', '_publish')
+    methods = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name in names]
+    observed, debug, bend_inputs = [], [], []
+    keeper = SimpleNamespace(last={}, _x_offset=0.0, reset=lambda: None)
+
+    def update(*_args, **kwargs):
+        bend_inputs.append(kwargs['bend_expected'])
+        keeper.last = {'strategy': 'both', 'target_m': [0.25, 0.0]}
+        return LaneObservation(0.0, 0.9)
+
+    keeper.update = update
+    namespace = dict(
+        Image=object, String=lambda **kw: SimpleNamespace(**kw), json=json,
+        refresh_drivable_law=refresh_drivable_law,
+        image_msg_to_frame=lambda _: np.ones((16, 16, 3), np.uint8),
+        visibility_reason=lambda _: 'usable', pose_if_fresh=lambda *_: None,
+        _spinning_in_place=lambda _: False, KEEP_MAX_FRAME_GAP_S=0.5,
+        KEEP_CMD_STALE_WARN_FRAMES=30, bend_expected=bend_expected,
+        keep_debug_payload=lambda _last, _ground, _offset, **meta: meta,
+        containment_payload=lambda *_args, **_kwargs: {'v': 1},
+        line_observation_payload=line_observation_payload)
+    exec(compile(ast.Module(body=methods, type_ignores=[]), '<camera-route-callback>', 'exec'), namespace)
+    params = dict(require_camera_controls_stable=False, camera_lane_mode='keep',
+                  lane_half_width_m=0.0925, paint_source='threshold',
+                  camera_ground_source='GAZEBO', lane_corner_turning=True, crosswalk_uncertainty_enabled=False)
+    inbox = RouteContextInput()
+    inbox.receive(json.dumps(dict(v=1, seq=7, place_id='bend-1', map_id='map-1',
+                                  stamp_s=10.0, valid_until_s=10.8, kind='bend',
+                                  ahead_m=[0.1, 0.4])))
+    node = SimpleNamespace(
+        get_parameter=lambda key: SimpleNamespace(value=params[key]),
+        _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None, _drivable_steer=None,
+        _native_core_law=(SimpleNamespace(read=lambda *_: None) if native_law_missing else None),
+        _drivable_required=native_law_missing,
+        _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
+        _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
+        _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,
+        _camera_mode_uses_ground=lambda: True, _stamp=lambda: 10.1,
+        _publish_debug=lambda *_: None,
+        observation_pub=SimpleNamespace(publish=lambda msg: observed.append(json.loads(msg.data))),
+        _keep_debug_pub=SimpleNamespace(publish=lambda msg: debug.append(json.loads(msg.data))))
+    _arm_paint_latch(node)
+    node._publish = lambda *args, **kw: namespace['_publish'](node, *args, **kw)
+    for stamp in (10.1, 10.6):
+        msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=int((stamp-10)*1e9))))
+        namespace['_on_camera'](node, msg)
+    assert bend_inputs == [True, False]
+    assert [row.get('route_context_seq') for row in observed] == [7, None]
+    assert [row['route_context_seq'] for row in debug] == [7, None]
+    assert [row['visible'] for row in observed] == [not native_law_missing] * 2
 
 
 def test_line_observer_detector_settings_are_operator_tunable():
@@ -122,7 +206,7 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     # D-495: keep_debug carries the flag; it is how CORE learns junction_turn support.
     keep = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in keep
-    nominal = yaml.safe_load((ROOT.parent / "apps/device/pinky/profile/config/camera_nominal.yaml")
+    nominal = yaml.safe_load((ROOT.parent / "devices/pinky/profile/config/camera_nominal.yaml")
                              .read_text(encoding="utf-8"))
     assert params["camera_x_offset_m"] == nominal["x_offset_m"]  # URDF nominal, not 0.0
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
@@ -130,9 +214,9 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     assert "LaneCornerTracker" in source
     assert "self._corner_tracker.update(" in source
     assert "self._odom_pose, frame, ground" not in source
-    # Turning is still evidence: no motion output from this node.
-    assert "Twist" not in source
-    assert "'cmd_vel'" not in source
+    # Turning is still evidence: no motion output from this node (keep reads CORE's cmd_vel, D-507 r4b).
+    assert "create_publisher(Twist" not in source
+    assert source.count("'cmd_vel'") == source.count("create_subscription(Twist, 'cmd_vel'") == 1
 
 
 def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
@@ -140,7 +224,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
-    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source   # odom subscription
+    assert "mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')" in source   # odom subscription (keep: D-507 pivot)
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
@@ -185,7 +269,7 @@ def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
     assert params["debug_overlay"] is False
     assert "CompressedImage, 'line/debug/compressed'" in source
     assert "render_debug(" in source
-    assert "Twist" not in source and "'cmd_vel'" not in source
+    assert "create_publisher(Twist" not in source
 
 
 def test_debug_overlay_failures_never_stop_line_observation():
@@ -210,8 +294,10 @@ def test_route_modes_need_a_graph_and_a_route():
     assert params["lane_graph_path"] == ""
     assert params["route"] == []
     assert params["route_start"] == []
-    assert "RouteCameraFollower" in source and "RouteMapFollower" in source
-    assert "RouteHybridFollower" in source
+    builder = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
+    assert "build_route_follower(mode, graph_path, route, route_start," in source
+    assert "RouteCameraFollower" in builder and "RouteMapFollower" in builder
+    assert "RouteHybridFollower" in builder
     assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
     assert "route modes need lane_graph_path, route and route_start" in source
 
@@ -221,9 +307,83 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     lane_graph_path directory (the map_v2_fleet bundle), and the overlay
     maps route_ab to the route follower."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
-    build = source.split("def _build_route_follower", 1)[1].split("\n    def _ground", 1)[0]
+    build = (ROOT / "control/route_followers.py").read_text(encoding="utf-8")
     assert "PaintMap.from_bundle(os.path.dirname(graph_path))" in build
-    assert "RouteHybridFollower(" in build
+    assert "RouteHybridFollower if mode == 'route_ab'" in build
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
     assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
     assert "'route_ab': self._route_follower," in source
+
+
+@pytest.mark.parametrize('source,enabled,sim_time,admitted', [
+    ('PINKY', False, False, False),
+    ('NOMINAL', True, True, False),
+    ('GAZEBO', False, True, False),
+    ('GAZEBO', True, False, False),
+    ('GAZEBO', True, True, True),
+])
+def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time, admitted):
+    """Execute the ROS wrapper method without ROS so alternate configs cannot open route mode."""
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                  and n.name == '_build_route_follower')
+    built, warnings = object(), []
+    params = {'camera_ground_source': source, 'allow_simulation_ground': enabled,
+              'use_sim_time': sim_time, 'lane_graph_path': str(ROOT / 'map/map_v2_fleet/lane_graph.yaml'),
+              'route': ['west:r', 'ring_s:f'], 'route_start': [-1.15, -0.511, 0.0],
+              'camera_x_offset_m': 0.03317}
+    node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
+                           get_logger=lambda: SimpleNamespace(warning=warnings.append))
+    namespace = {'simulation_ground_allowed': lambda **kw: (
+        kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time']),
+        'yaml': yaml, 'build_route_follower': lambda *a, **kw: built}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-admission>', 'exec'), namespace)
+    follower = namespace['_build_route_follower'](node, 'route_a')
+    assert (follower is built) is admitted
+    if not admitted:
+        assert warnings and 'simulation' in warnings[0].lower()
+
+
+def test_route_prototype_latches_invisible_after_simulation_context_changes():
+    """A once-admitted route must not keep its old follower under new ground geometry."""
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                  and n.name == '_on_camera')
+    target, calls, publications, qualities, warnings = object(), [], [], [], []
+    params = {'require_camera_controls_stable': False, 'camera_lane_mode': 'route_a',
+              'camera_ground_source': 'GAZEBO', 'allow_simulation_ground': True,
+              'use_sim_time': True, 'camera_bright_threshold': 180,
+              'lane_half_width_m': 0.0925, 'camera_roi_top_fraction': 0.4,
+              'camera_roi_bottom_fraction': 1.0, 'camera_washed_fraction': 0.4}
+    def ground(*_):
+        if params['camera_ground_source'] == 'NOMINAL':
+            raise ValueError('missing physical calibration')
+        return object()
+    follower = SimpleNamespace(update=lambda *a, **kw: calls.append(a) or target, last={})
+    node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
+                           get_logger=lambda: SimpleNamespace(warning=lambda *a, **kw: warnings.append(a)),
+                           _camera_controls_stable=True, _paint_worker=None, _route_follower=follower,
+                           _ground=ground, _odom_pose=(0., 0., 0.), _odom_stamp=1.,
+                           _publish=lambda _source, value, **kw: (publications.append(value),
+                                                                  qualities.append(kw.get('quality'))),
+                           _publish_debug=lambda *a: None)
+    _arm_paint_latch(node)
+    namespace = {'Image': object, 'image_msg_to_frame': lambda _: np.zeros((8, 8, 3), np.uint8),
+                 'visibility_reason': lambda _: 'usable', 'pose_if_fresh': lambda *a: (0., 0., 0.),
+                 'simulation_ground_allowed': lambda **kw: (
+                     kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time'])}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-frame>', 'exec'), namespace)
+    msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=1, nanosec=0)))
+    namespace['_on_camera'](node, msg)
+    assert publications == [target] and len(calls) == 1
+    follower.last['reason'] = 'washed'
+    namespace['_on_camera'](node, msg)
+    assert publications[-1] is None and qualities[-1] == dict(valid=False, reason='overexposed')
+    follower.last.clear()
+    params['camera_ground_source'] = 'NOMINAL'
+    namespace['_on_camera'](node, msg)
+    assert publications == [target, None, None] and len(calls) == 2
+    assert node._route_follower is None and warnings
+    params['camera_ground_source'] = 'GAZEBO'
+    namespace['_on_camera'](node, msg)
+    assert publications == [target, None, None, None] and len(calls) == 2

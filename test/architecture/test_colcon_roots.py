@@ -38,17 +38,19 @@ CONSUMERS = {
     ".github/workflows/ci.yml": r"--base-paths \$COLCON_ROOTS\b",
     ".github/workflows/arm64-rehearsal.yml": r"--base-paths \$COLCON_ROOTS\b",
     "tools/build_wsl.sh": r"--base-paths \$COLCON_ROOTS\b",
-    "tools/sync_api_restart.sh": r"--base-paths \$COLCON_ROOTS\b",
-    "tools/sync_rosy.sh": r"--base-paths \$COLCON_ROOTS\b",
-    "tools/sync_rosy_fast.sh": r"--base-paths \$COLCON_ROOTS\b",
     "deploy/robot/pinky_pro/image/build-native-payload.sh":
         r'(--base-paths "\$\{COLCON_ROOTS\[@\]\}"|--from-paths "\$\{ROSDEP_ROOTS\[@\]\}")',
+    # D-553 addendum 3: the payload-builder image preinstalls rosdep's apt set for the roots.
+    "deploy/robot/pinky_pro/image/payload-builder/make-builder-image.sh": r'--from-paths "\$\{roots\[@\]\}"',
     # The roots arrive from build-image.sh (--colcon-roots); rosdep runs over the resolver's
     # closure of them. test_image_customization_contract.py runs the copy block.
     "deploy/robot/pinky_pro/image/customize-rootfs.sh": r'--from-paths "\$\{ROSDEP_SOURCE_PATHS\[@\]\}"',
 }
 #: Files with an invocation-looking line that does not run over the repo's colcon roots.
 EXEMPT = {
+    "docs/reference/legacy-tools/wsl/sync_rosy_fast.sh": "D-637 frozen historical WSL script; no operational caller",
+    "docs/reference/legacy-tools/wsl/sync_rosy.sh": "D-637 frozen historical WSL script; no operational caller",
+    "docs/reference/legacy-tools/wsl/sync_api_restart.sh": "D-637 frozen historical WSL script; no operational caller",
     # Container workspaces built from per-package COPY lines; moves edit those COPY sources.
     "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",

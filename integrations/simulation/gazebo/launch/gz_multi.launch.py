@@ -210,6 +210,7 @@ def _launch_setup(context):
     world_name = LaunchConfiguration("world_name").perform(context)
     mode = LaunchConfiguration("mode").perform(context)
     headless = LaunchConfiguration("headless").perform(context).lower() in ("true", "1")
+    nominal_camera = context.launch_configurations.get("nominal_camera", "false").lower() == "true"
     core = LaunchConfiguration("core").perform(context).lower() in ("true", "1")
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
@@ -278,6 +279,8 @@ def _launch_setup(context):
 
     # Gazebo 서버 (1회) — headless 여부로 GUI 분기
     server_args = f"-r -s -v4 \"{world_path}\""
+    if headless and nominal_camera:
+        server_args = f"-r -s --headless-rendering -v4 \"{world_path}\""
     actions.append(
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -309,6 +312,10 @@ def _launch_setup(context):
                 launch_arguments={
                     "namespace": ns,
                     "is_sim": "True",
+                    **({"camera_width": "320", "camera_height": "240",
+                        "cam_tilt_deg": "8", "camera_hfov": "1.0334",
+                        "cam_mount_z": "0.0495", "camera_update_rate": "8"}
+                       if nominal_camera else {}),
                 }.items(),
             )
         )
@@ -519,6 +526,8 @@ def generate_launch_description():
                               description="로봇별 상위 스택. none=spawn만, nav=기존 맵 주행, "
                                           "slam=맵 작성만, slam_nav=맵을 만들면서 그 맵 위로 주행"),
         DeclareLaunchArgument("headless", default_value="false"),
+        DeclareLaunchArgument("nominal_camera", default_value="false",
+                              description="URDF nominal camera geometry; image transport belongs to a camera launch"),
         DeclareLaunchArgument("inflation_radius", default_value="",
                               description="비면 config/worlds.yaml. 숫자면 그 월드만 덮어쓴다"),
         DeclareLaunchArgument("spawn_x", default_value="",

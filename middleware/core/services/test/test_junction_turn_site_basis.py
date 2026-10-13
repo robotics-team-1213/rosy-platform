@@ -1,13 +1,22 @@
 """D-498: the junction turn's motion basis is the D-400 enforce proof or the site basis
-(fresh IR guard verdict, live D-422 body stop, junction_turn_site_accepted)."""
+(fresh IR guard verdict, live D-422 body stop, D-507 9 site_floor_map_id)."""
 import pytest
 
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 from test_line_junction import BODY, Rig
 
-SITE = dict(BODY, ir_guard_enabled=True, junction_turn_site_accepted=True)
+SITE = dict(BODY, ir_guard_enabled=True, obstacle_mode='path', site_floor_map_id='lab-a')
 CLEAR = [(1.5, 1.5)]
 IR = LineFollowMode.IR_LINE
+
+
+def site_rig(**config):
+    """Sensor adapter off (robot default): the D-400 floor proof is known not live, so the
+    site basis may hold (D-507 6: a live or unknown proof alone decides)."""
+    rig = Rig(proof=False, **config)
+    rig.m.bind_return_motion(lambda now, v, w: False, floor_proof_live=lambda: False,
+                             proof_configured=lambda: False)
+    return rig
 
 
 def site_step(rig, ir='clear', points=CLEAR, **kwargs):
@@ -31,7 +40,7 @@ def test_enforce_basis_alone_reports_junction_turn():
 
 
 def test_site_basis_alone_reports_junction_turn():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     site_step(rig)
     _corner(rig)
     assert rig.m.supports_junction_turn is True
@@ -41,9 +50,9 @@ def test_site_basis_alone_reports_junction_turn():
 def test_any_missing_site_piece_reports_no_junction_turn(missing):
     config = dict(SITE)
     if missing == 'accepted':
-        config['junction_turn_site_accepted'] = False
+        config['site_floor_map_id'] = None
     if missing == 'body':
-        config = {k: v for k, v in config.items() if k != 'body_front_x_m'}
+        config = {k: v for k, v in config.items() if k not in ('body_front_x_m', 'site_floor_map_id')}
     rig = Rig(proof=False, **config)
     site_step(rig, ir={'ir_stale': 'stale', 'ir_departure': 'centre'}.get(missing, 'clear'))
     if missing == 'scan_stale':
@@ -55,7 +64,7 @@ def test_any_missing_site_piece_reports_no_junction_turn(missing):
 
 
 def test_capability_is_recomputed_when_the_ir_verdict_ages():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     site_step(rig)
     _corner(rig)
     assert rig.m.supports_junction_turn is True
@@ -76,7 +85,7 @@ def _site_turning(rig):
 
 
 def test_site_basis_turns_without_a_motion_probe_and_completes():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     _site_turning(rig)
     for _ in range(200):
         decision, status = site_step(rig, seen=False, move=True)
@@ -87,7 +96,7 @@ def test_site_basis_turns_without_a_motion_probe_and_completes():
 
 @pytest.mark.parametrize('ir', ['stale', 'centre'])
 def test_losing_the_site_basis_mid_turn_aborts_turn_basis_lost(ir):
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     _site_turning(rig)
     rig.now += .3 if ir == 'stale' else 0.
     decision, status = site_step(rig, ir=ir, seen=False, move=True)
@@ -96,23 +105,16 @@ def test_losing_the_site_basis_mid_turn_aborts_turn_basis_lost(ir):
 
 
 def test_without_any_basis_the_turn_is_motion_unconfirmed():
-    rig = Rig(proof=False, **BODY)
+    rig = site_rig(**BODY)
     site_step(rig, ir='stale')
     rig.send('left', turn_deg=90.)
     decision, status = rig.step(junction=True, seen=False, points=CLEAR)
     assert (status.junction.state, status.junction.reason) == ('aborted', 'motion_unconfirmed')
 
 
-@pytest.mark.parametrize('bad', [dict(junction_turn_site_accepted=True),
-                                 dict(junction_turn_site_accepted='true', ir_guard_enabled=True)])
-def test_site_acceptance_needs_the_ir_guard_and_a_boolean(bad):
-    with pytest.raises(ValueError, match='junction_turn_site_accepted'):
-        LineFollowConfig(**bad)
-
-
 def test_default_is_off_and_reports_no_turn_without_enforce():
-    assert LineFollowConfig().junction_turn_site_accepted is False
-    rig = Rig(proof=False, **BODY)
+    assert LineFollowConfig().site_floor_map_id is None
+    rig = site_rig(**BODY)
     site_step(rig, ir='stale')
     _corner(rig)
     assert rig.m.supports_junction_turn is False

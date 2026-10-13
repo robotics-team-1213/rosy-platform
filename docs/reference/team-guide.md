@@ -229,7 +229,7 @@ python test/known_failures.py ../run.txt
 
 ### 3.4 ADR 쓰기
 
-1. 번호는 파일을 만들기 **직전에** 고른다. `docs/adr/`, [ADR Log](ROSY%20ADR%20Log.md)의 `| D-nnn |` 행, `tools/harness/harness.yaml`의 `adr_gaps`를 보고 가장 큰 번호의 다음.
+1. 번호는 파일을 만들기 **직전에** `python tools/harness/adr_reserve.py next "<주제>"`로 선점하고 찍힌 번호를 쓴다(D-510). 선점 ref는 로컬에만 있다. ADR이 브랜치와 같이 착지하지 않거나 버린 번호는 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄로 넣는다.
 2. `docs/adr/D-<번호>-<slug>.md`와 ADR Log 행을 **한 커밋**에.
 3. `python tools/harness/rosy_harness.py lint`
 
@@ -266,7 +266,7 @@ git push
 |---|---|---|---|---|
 | CORE (로봇 게이트웨이) | `middleware/core/` | 외부 API, 유일한 `cmd_vel` 발행, 서비스·이벤트 | 일부 | |
 | 인지·차선 | `middleware/perception/` | 카메라·LiDAR 차선/장애물 증거 | 일부 | |
-| 내비게이션 | `middleware/core/navigation/` | Nav2 / SLAM | 시뮬로 가능 | |
+| 내비게이션 | `middleware/control/drive/planning/nav2/` | Nav2 / SLAM | 시뮬로 가능 | |
 | 장치·드라이버 | `middleware/apps/device/`, `middleware/drivers/` | Pinky Pro bringup, LED·램프·IMU·ADC, OMX | **필요** | |
 | Fleet (현장 관제) | `operations/fleet/` | 미션 하달, 교통정리, 콘솔 | 불필요 | |
 | 현장 비전·앱 | `operations/vision/`, `operations/ui/cam/` | 천장 카메라, Rosy Cam 앱 | 일부 | |

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "middleware" / "ui" / "robot"
@@ -52,7 +51,7 @@ def _unmount_panel(page) -> None:
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -754,7 +753,7 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
         assert "fixture token list offline" in read_status.inner_text()
         assert "CORE" in token_status.inner_text()
 
-        safety_section = page.locator("main > section.ui-readback:not(:has([data-peer-list]))").nth(1)
+        safety_section = page.locator('main > section.ui-readback:has([name="manual_linear"])')
         safety_form = safety_section.locator("form")
         safety_read_status = safety_section.locator("ui-status").nth(0)
         safety_action_status = safety_section.locator("ui-status").nth(1)
@@ -841,7 +840,7 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
         _unmount_panel(page)
         assert set(page.evaluate("window.__stopped")) == {
-            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning",
+            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning", "/api/v1/navigation/state",
         }
         assert errors == []
         browser.close()
@@ -861,7 +860,7 @@ def test_console_map_actions_require_hardware_runtime():
         page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=map_source))
         page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
-        disabled = page.evaluate("""async () => {
+        page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/map.js');
           const root = document.createElement('main'); document.body.append(root);
           const callbacks = {};
@@ -870,14 +869,18 @@ def test_console_map_actions_require_hardware_runtime():
             ? {map_id:'map-a', width:2, height:2, resolution:1, origin:{x:0,y:0}, data:[0,0,0,0]}
             : {};
           window.__unmount = mount(root, {role:'operator', api, store});
+          callbacks['/api/v1/robot/state']({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},
+            localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
           callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
-          const button = root.querySelector('[data-map-click="goal"]');
-          const motor = button.disabled;
-          callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'});
-          return [motor, button.disabled];
+          window.__callbacks = callbacks;
         }""")
-        assert disabled == [True, False]
+        # Map fetch completes asynchronously; runtime authority is checked with a usable map.
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+        goal = page.locator('[data-map-click="goal"]')
+        assert goal.is_disabled()
+        page.evaluate("window.__callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'})")
+        assert goal.is_enabled()
         _unmount_panel(page)
         assert errors == []
         browser.close()
@@ -1292,7 +1295,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         readiness = panel.locator("#map-readiness-status")
         action = panel.locator("ui-status[role=status]").last
         initial_action = action.inner_text()
-        page.locator('[data-map-click="goal"]').click()
+        assert page.locator('[data-map-click="goal"]').is_disabled()
         page.locator("canvas").click(position={"x":30,"y":30})
         assert action.inner_text() and action.inner_text() != initial_action
         assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
@@ -1311,14 +1314,15 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
 
         page.evaluate("window.__setGrid(true); window.__intervals[10000]()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('fixture-map')")
-        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}})")
         page.locator('[data-map-click="goal"]').click()
-        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("canvas").press("Escape")
+        page.locator("canvas").press("Enter")
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
-        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
@@ -1330,7 +1334,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__failPost(true); window.__intervals[10000]()")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         page.locator('[data-map-click="goal"]').click()
-        page.locator("canvas").click(position={"x":45,"y":45})
+        page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")
         failed = action.inner_text()

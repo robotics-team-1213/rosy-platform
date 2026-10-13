@@ -1,7 +1,10 @@
-<!-- Parent: ../../src/hmi/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # web_common
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -27,6 +30,8 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 ## For AI Agents
 
 ### Working In This Directory
+
+- 색상·부품·레이아웃 변경 전 `DESIGN.md`의 필수 색상 법칙(D-624)과 Components를 읽는다. 역할 토큰 → 공용 부품 → 화면 배치 순서를 지키고, 로봇 `/styleguide`의 견본도 같은 변경에 맞춘다. 직접 팔레트 선언·원시 색·공용 부품 덧칠은 계약 시험이 거절한다.
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Do not copy tokens into consumers; link `/common/tokens.css`; `/ui/tokens.css` is a legacy alias (D-129 정정 2026-09-29, D-130.3). `/common` serves only what `shared-assets.json` lists.

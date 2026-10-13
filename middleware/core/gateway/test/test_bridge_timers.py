@@ -301,6 +301,24 @@ def test_every_publisher_keeps_its_topic_and_qos(registered):
     """`cmd_vel` first and once: D-2 says there is exactly one publisher."""
     assert registered.node.publishers == EXPECTED_PUBLISHERS
     assert [topic for topic, _ in registered.node.publishers].count("cmd_vel") == 1
+    assert "line/route_context" not in [topic for topic, _ in registered.node.publishers]
+
+
+def test_route_context_publisher_is_optional_and_volatile(registered):
+    from dataclasses import replace
+    from core.bridge.ros_bridge import RosBridge
+    from rclpy.qos import DurabilityPolicy, ReliabilityPolicy
+
+    registered.services.line_follow._config = replace(
+        registered.services.line_follow.config, route_context_enabled=True)
+    node = RecordingNode()
+    node.create_publisher = lambda msg_type, topic, qos: (
+        node.publishers.append((topic, qos)) or object())
+    RosBridge(node, registered.services)
+    qos = dict(node.publishers)["line/route_context"]
+    assert qos.depth == 1
+    assert qos.reliability is ReliabilityPolicy.RELIABLE
+    assert qos.durability is DurabilityPolicy.VOLATILE
 
 
 def test_the_three_latched_endpoints_stay_latched(registered):

@@ -1,7 +1,10 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-12 -->
 
 # docs
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-12
 
 ## Purpose
 
@@ -42,6 +45,7 @@ Content lives in the subdirectories below; at this root only the harness records
 - Changing API paths or envelope fields requires updating `reference/ROSY API & Protocol Reference.md` **and** `core_common/protocol/schemas.py` together (D-18).
 - ADRs are append-only: mark old ones `Superseded`, add a new ID. Do not silently rewrite D-n.
 - Dated files in `plans/` are the working design trail; `plans/ROSY Implementation Plan.md` is the (historical) WBS tracker.
+- Live device addresses are not written in docs. Copy `tools/remote/hosts.example.json` to gitignored `private/lab-hosts.json` on the main checkout. A linked worktree reads that same file. ADR bodies, dated plans, validation records, and `logs.md` keep the facts of the day they were written.
 
 ### Testing Requirements
 
@@ -61,7 +65,7 @@ python3 tools/harness/rosy_harness.py lint
 
 ### Internal
 
-- Implementation: `middleware/core/gateway`, `middleware/apps/device/pinky/bringup`, `deploy/`
+- Implementation: `middleware/core/gateway`, `middleware/devices/pinky/bringup`, `deploy/`
 - Traceability matrix in Implementation Plan §11
 
 ### External

@@ -360,3 +360,53 @@ def test_the_mode_lamp_names_are_the_helper_s_vocabulary():
     # D-381: MODE_LAMP stays the truth for the plain mode patterns even though
     # lamp_pattern() spells the priority out — pin the two together.
     assert all(rs.lamp_pattern(rs.READY, mode) == pattern for mode, pattern in rs.MODE_LAMP.items())
+
+
+@pytest.mark.parametrize("state,mode,recovery,pattern", [
+    ("ready", "NAVIGATION", "retrace", "recovering"),
+    ("ready", "IDLE", "return", "recovering"),
+    ("ready", "MANUAL", "bridge", "bridging"),
+    ("caution", "NAVIGATION", "retrace", "recovering"),  # D-546: recovering beats caution
+    ("ready", "EMERGENCY", "retrace", "emergency"),  # the e-stop always wins
+    ("failed", "NAVIGATION", "retrace", "failed"),
+    ("ready", "NAVIGATION", None, "navigating"),
+    ("ready", "NAVIGATION", "sideways", "navigating"),  # unknown = absent
+])
+def test_a_lane_recovery_phase_shows_the_amber_hazard_lamp(state, mode, recovery, pattern):
+    assert rs.lamp_pattern(state, mode, None, recovery) == pattern
+
+
+@pytest.mark.parametrize("phase,reason,angular,junction,signal", [
+    ("ASKING", "stuck_asking", 0, None, "ask"),
+    ("WAITING_CONSOLE", "lane_return_fleet_required", 0, None, "ask"),
+    ("BACKING", "stuck_back_off", 0, None, None),
+    (None, "lane_return_fleet_required", 0, None, "ask"),
+    (None, "stuck_yield", 0.3, None, "left"),
+    (None, "stuck_yield", -0.3, None, "right"),
+    (None, "stuck_yield", 0.0, None, None),
+    (None, "tracking", 0.4, None, None),
+    (None, "lane_edge_left", -0.5, None, None),
+    (None, "tracking", 0, {"pending_action": "left", "state": "armed", "turn_deg": 90}, "left"),
+    (None, "tracking", 0, {"pending_action": "right", "state": "turning", "turn_deg": -80}, "right"),
+    (None, "tracking", 0, {"pending_action": "left", "state": "advancing", "turn_deg": 90}, "left"),
+    (None, "tracking", 0, {"pending_action": "straight", "state": "armed"}, None),
+    (None, "tracking", 0, {"pending_action": "left", "state": "idle", "turn_deg": 90}, None),
+    (None, "tracking", 0, {"pending_action": "left", "state": "aborted"}, None),
+    ("ASKING", "stuck_asking", 0, {"pending_action": "left", "state": "armed", "turn_deg": 90}, "ask"),
+])
+def test_drive_signal_asks_or_blinks_only_a_committed_turn(phase, reason, angular, junction, signal):
+    assert rs.drive_signal(phase, reason, angular, junction) == signal
+
+
+def test_a_drive_signal_never_outranks_a_safety_lamp():
+    assert rs.lamp_pattern(rs.FAILED, "NAVIGATION", "BLOCKED", signal="ask") == "failed"
+    assert rs.lamp_pattern(rs.READY, "EMERGENCY", None, signal="left") == "emergency"
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", None, "retrace", "ask") == "recovering"
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", None, "return", "right") == "recovering"
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", None, "bridge", "left") == "bridging"
+    assert rs.lamp_pattern(rs.CAUTION, "NAVIGATION", None, signal="ask") == "caution"
+    assert rs.lamp_pattern(rs.BOOTING, "NAVIGATION", None, signal="right") == "booting"
+    assert rs.lamp_pattern(rs.READY, "DOCKING", None, signal="left") == "docking"
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", "BLOCKED", signal="ask") == "ask"
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", "NAVIGATING", signal="left") == "left"
+    assert rs.lamp_pattern(rs.READY, "IDLE", None, None) == "ready"

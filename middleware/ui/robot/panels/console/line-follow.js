@@ -16,6 +16,24 @@ function actualPaintText(config) {
   return `${source}${revision}${age}`;
 }
 
+// D-525/D-551 — Fleet의 가상 신호 참고는 표시만 한다(J3 "표시 먼저"). 통과 허가는 관제 통행권(authority)의
+// 몫이고 색이 허가가 아니다(D-337). 만료·응답 없음·모르는 등은 "신호 정보 없음"이지 녹색이 아니다.
+const LAMP_WORD = Object.freeze({ green: "녹색", yellow: "황색", red: "적색" });
+function seconds(value, exact) { return `${exact ? "" : "≥"}${Math.ceil(value)}초`; }
+function signalAdviceView(advice, deadline, now) {
+  const signal = advice?.signal;
+  if (!signal || !LAMP_WORD[signal.lamp] || !(now < deadline)) {
+    return { lamp: "unknown", name: "가상 신호", text: "신호 정보 없음", stop: "정지선 거리 모름" };
+  }
+  const time = signal.lamp === "red"
+    ? (Number.isFinite(signal.green_in_s) ? ` · 녹색까지 ${seconds(signal.green_in_s, signal.exact)}` : "")
+    : (Number.isFinite(signal.left_s) ? ` · ${seconds(signal.left_s, signal.exact)} 남음` : "");
+  const stop = !Number.isFinite(signal.stop_m) ? "정지선 거리 모름"
+    : signal.stop_m < 0 ? "정지선 안쪽" : `정지선까지 ${signal.stop_m.toFixed(2)} m`;
+  return { lamp: signal.lamp, name: `가상 신호 ${signal.signal_id} · ${signal.approach}`,
+    text: `${LAMP_WORD[signal.lamp]}${time}`, stop };
+}
+
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -39,7 +57,15 @@ export function mount(root, ctx) {
   label.append(select);
   const start = el("ui-button", "", "추종 시작"); start.setAttribute("kind", "primary"); start.type = "button";
   const stop = el("ui-button", "", "추종 중지"); stop.setAttribute("kind", "quiet"); stop.type = "button";
-  form.append(label, start, stop); root.append(head, modeStatus, capabilityStatus, actionStatus, facts, form);
+  const advice = el("section", "line-signal"); advice.setAttribute("aria-label", "가상 신호 참고");
+  const adviceKind = el("span", "line-signal-kind", "가상");
+  const adviceLamp = el("i", "line-signal-lamp"); adviceLamp.setAttribute("aria-hidden", "true");
+  const adviceName = el("span", "line-signal-name"); const adviceText = el("strong", "line-signal-text");
+  const adviceStop = el("span", "line-signal-stop");
+  const adviceNote = el("small", "line-signal-note", "참고 표시 · 통과 허가는 관제 authority(통행권)가 정합니다");
+  adviceText.setAttribute("role", "status");
+  advice.append(adviceKind, adviceLamp, adviceName, adviceText, adviceStop, adviceNote);
+  form.append(label, start, stop); root.append(head, modeStatus, capabilityStatus, actionStatus, advice, facts, form);
   const perceptionLabel = el("label", "ui-field-label", "차선 인식 방식");
   const perceptionSelect = el("select", "ui-field"); perceptionSelect.setAttribute("aria-label", "차선 인식 방식");
   for (const [value, text] of Object.entries(PAINT_LABEL)) {
@@ -58,9 +84,16 @@ export function mount(root, ctx) {
   let driveAvailable = false;
   let pending = false;
   let perception = null, robot = null, robotAt = 0, perceptionDirty = false;
+  let adviceDeadline = 0, adviceTimer = 0;
   perceptionSelect.addEventListener("change", () => { perceptionDirty = true; });
   function setStatus(target, text) { if (target.textContent !== text) target.textContent = text; }
+  function renderAdvice() {
+    const view = signalAdviceView(current?.advice, adviceDeadline, Date.now());
+    advice.dataset.lamp = view.lamp;
+    setStatus(adviceName, view.name); setStatus(adviceText, view.text); setStatus(adviceStop, view.stop);
+  }
   function render() {
+    renderAdvice();
     if (statusKnown && current) {
       const modeFact = el("dd", "", enumLabel(LINE_MODE_LABEL, current.mode || "OFF"));
       modeFact.title = current.mode || "OFF";
@@ -116,6 +149,11 @@ export function mount(root, ctx) {
   const stopState = ctx.store.poll("/api/v1/line-follow", 1_000, (data) => {
     current = data && typeof data === "object" ? data : null;
     statusKnown = typeof current?.mode === "string";
+    // CORE가 남은 수명(expires_in_s)을 준다. 다음 응답이 늦어도 그 시각에 "신호 정보 없음"으로 바뀐다.
+    const expiresIn = Number(current?.advice?.expires_in_s);
+    adviceDeadline = Number.isFinite(expiresIn) && expiresIn > 0 ? Date.now() + expiresIn * 1000 : 0;
+    clearTimeout(adviceTimer);
+    if (adviceDeadline) adviceTimer = setTimeout(() => { if (!disposed) renderAdvice(); }, expiresIn * 1000 + 50);
     modeStatus.setAttribute("state", statusKnown ? "ready" : "unavailable");
     setStatus(modeStatus, statusKnown ? `차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}` : "차선 추종 상태 응답이 불완전합니다. 다시 확인 중입니다."); render();
   }, (error) => {
@@ -167,6 +205,6 @@ export function mount(root, ctx) {
       if (current?.mode !== "OFF") return {message: "차선 추종을 중지한 뒤 조작 그룹을 바꾸세요."};
       return true;
     },
-    unmount() { disposed = true; lifetime.abort(); stopState(); stopCapabilities(); stopRobot(); stopPerception(); },
+    unmount() { disposed = true; clearTimeout(adviceTimer); lifetime.abort(); stopState(); stopCapabilities(); stopRobot(); stopPerception(); },
   };
 }

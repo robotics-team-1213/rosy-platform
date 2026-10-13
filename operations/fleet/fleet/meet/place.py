@@ -97,6 +97,7 @@ class Painted:
     lines: tuple[_Line, ...]
     rooms: tuple[Room, ...]
     doors: tuple[Door, ...]
+    crosswalks: tuple = ()   # D-573 1: site-map crosswalk polygons (map xy), the reference zones
 
     def line(self, edge_id: str) -> _Line:
         for item in self.lines:
@@ -132,7 +133,8 @@ def painted_from(site_map) -> Painted:
         _dist, s_m, _tangent = line.project(door_xy[0], door_xy[1])
         rooms.append(Room(room_id, hold, clearance))
         doors.append(Door(edge_id, s_m, room_id))
-    return Painted(tuple(lines), tuple(rooms), tuple(doors))
+    crosswalks = tuple(tuple((float(x), float(y)) for x, y in item.polygon) for item in site_map.crosswalks)
+    return Painted(tuple(lines), tuple(rooms), tuple(doors), crosswalks)
 
 
 def _heading(yaw: float, tangent: float) -> tuple[int, bool]:

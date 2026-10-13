@@ -1,0 +1,130 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "pivot_started": true,
+  "stuck": {
+   "stuck_id": "stuck-fa27b3af9fbe",
+   "cause": "obstacle_ahead",
+   "phase": "BACKING",
+   "held_s": 0.1,
+   "attempts": 1,
+   "max_attempts": 2,
+   "local_enabled": true,
+   "ask_remaining_s": null,
+   "last_answer": null,
+   "decisions": [
+    "WAIT",
+    "RESUME",
+    "BACK_AND_RETRY",
+    "MANUAL",
+    "ABORT",
+    "YIELD"
+   ],
+   "detail": null
+  },
+  "pivot_while_stuck": 0,
+  "latch_while_stuck": [],
+  "reasons_while_stuck": [
+   "stuck_back_off",
+   "stuck_settling"
+  ],
+  "cue_reason_while_stuck": [],
+  "stuck_open_rows": 30,
+  "side_cue_rows_while_stuck": 29,
+  "yaw_change_while_stuck_deg": 0.0,
+  "after_close": [
+   [
+    525.265,
+    "HOLD",
+    "stuck_settling"
+   ],
+   [
+    525.386,
+    "TRACKING",
+    "tracking"
+   ],
+   [
+    526.242,
+    "TRACKING",
+    "fleet_cue_left"
+   ]
+  ],
+  "events_pivot_latched": [
+   {
+    "action": "pivot",
+    "state": "WRONG_WAY",
+    "fleet_epoch": "sim-s4-1791610760",
+    "seq": 2,
+    "principal_ref": null,
+    "latch": null,
+    "angle_deg": 162.0
+   }
+  ]
+ },
+ "timeline": [
+  [
+   510.29,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   514.433,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   514.557,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   516.584,
+   "HOLD",
+   "obstacle_ahead"
+  ],
+  [
+   521.678,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   524.294,
+   "HOLD",
+   "stuck_settling"
+  ],
+  [
+   525.386,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   526.242,
+   "TRACKING",
+   "fleet_cue_left"
+  ]
+ ],
+ "scenario": "s4",
+ "args": {
+  "scenario": "s4",
+  "out": "runs/s4_r1",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "exact180": false,
+  "box": false,
+  "seed": 41,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

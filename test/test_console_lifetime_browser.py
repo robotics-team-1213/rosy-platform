@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
 from urllib.parse import urlparse
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401
-from test_fleet_console_browser import _camera_api
+from test_fleet_console_browser import _camera_api, _open_token_access
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium acceptance")
 
 
@@ -91,6 +90,8 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         asset = "console.js" if document == "index.html" else "install.js"
         assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
         if held.startswith("/api/vision/"):
+            page.locator('[data-context-tab="status"]').click()
+            assert page.locator("#context-status").is_visible()
             page.wait_for_function("document.querySelector('#vision-source').value === 'camera'")
             page.evaluate("() => { for (const tick of [...__polls.values()]) tick(); }")
         page.wait_for_function("window.__pending.length === 1")
@@ -111,8 +112,11 @@ def test_hidden_document_cancels_reads_and_commands_and_restores_only_reads(cons
         assert page.locator("main").inner_html() == before
 
         page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         assert page.evaluate("__requests.length") > count
+        if document == "index.html":
+            assert page.locator("#context-status").is_visible()
+            assert page.locator('[data-context-tab="status"]').get_attribute("aria-selected") == "true"
         assert page.evaluate("__polls.size") == polls
         assert page.evaluate("__observers.size") == observers
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
@@ -137,13 +141,14 @@ def test_old_401_cannot_lock_a_reauthenticated_document(console_url, document):
         page.wait_for_function("window.__pending.length === 1")
         if not page.locator("#console-token").is_visible():
             page.locator("#topbar-more").click()
+        _open_token_access(page)
         page.fill("#console-token", "fleet-lifetime-b")
         page.locator("#token-save").click()
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         assert page.evaluate("__pending[0].signal?.aborted === true")
         page.evaluate("__pending[0].release({detail: 'old token expired'}, 401)")
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
-        assert "fresh-role" in page.locator("#user-role").inner_text()
+        assert page.locator("#user-role").get_attribute("title") == "fresh-role · operator"
         assert page.locator("#console-token").get_attribute("aria-invalid") is None
         assert page.evaluate("__requests.every(row => row.method === 'GET')")
         assert not errors
@@ -173,7 +178,7 @@ def test_pending_confirmation_is_cancelled_and_cannot_submit_after_restore(conso
         page.evaluate("dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))")
         page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
         page.evaluate("dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
-        page.wait_for_function("document.querySelector('#user-role').textContent.includes('fresh-role')")
+        page.wait_for_function("document.querySelector('#user-role').title === 'fresh-role · operator'")
         page.evaluate("__oldConfirmation.dispatchEvent(new MouseEvent('click'))")
         page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
         assert page.evaluate("__requests.every(row => row.method === 'GET')")

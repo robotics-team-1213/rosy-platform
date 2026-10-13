@@ -11,6 +11,11 @@ import sys
 import pytest
 import yaml
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: the store requires root-owned paths (PATH_UNSAFE as non-root)")
+
 pytest.importorskip('fcntl', reason='Linux operator provisioner requires POSIX descriptor/flock checks')
 helper = Path(__file__).with_name('native_tls_provision.py')
 if not helper.is_file():
@@ -78,6 +83,7 @@ def apply(store, **kwargs):
                          stage_parent=store.root.parent, **kwargs)
 
 
+@REQUIRES_ROOT
 def test_release_metadata_size_does_not_expand_configuration_read_limit(store):
     # Native release 037 contains a 520894-byte manifest and 383685-byte sums.
     for name, size in [('manifest.json', 520894), ('SHA256SUMS', 383685)]:
@@ -91,6 +97,7 @@ def test_release_metadata_size_does_not_expand_configuration_read_limit(store):
         store.read(tls.CONFIG)
 
 
+@REQUIRES_ROOT
 def test_release_metadata_still_has_a_finite_read_boundary(store):
     path = store.root / 'manifest.json'
     path.write_bytes(b'x' * tls.RELEASE_METADATA_LIMIT)
@@ -104,6 +111,7 @@ def test_release_metadata_still_has_a_finite_read_boundary(store):
             store.read('manifest.json', max_bytes=invalid)
 
 
+@REQUIRES_ROOT
 def test_real_openssl_chain_hostname_keys_and_idempotent_ca(store):
     first = apply(store)
     assert first == {'ok': True, 'status': 'TLS_STAGED_RUNTIME_STOPPED', 'files': 6,
@@ -122,6 +130,7 @@ def test_real_openssl_chain_hostname_keys_and_idempotent_ca(store):
         tls.verify_trust(store.root / tls.TLS, 'different.local')
 
 
+@REQUIRES_ROOT
 @pytest.mark.parametrize('kind', ['partial', 'foreign_manifest', 'foreign_config', 'development'])
 def test_foreign_and_nonpaired_inputs_do_not_mutate_config(store, kind):
     if kind in ('partial', 'foreign_manifest'):
@@ -140,6 +149,7 @@ def test_foreign_and_nonpaired_inputs_do_not_mutate_config(store, kind):
     assert store.read(tls.CONFIG) == before
 
 
+@REQUIRES_ROOT
 @pytest.mark.parametrize('path', ['etc/rosy/tls/ca.pem', 'etc/rosy/tls/leaf.key', tls.CONFIG, tls.ENV])
 def test_partial_rename_then_fsync_failure_restores_original_set(store, monkeypatch, path):
     before_config, before_env = store.read(tls.CONFIG), store.read(tls.ENV)
@@ -162,6 +172,7 @@ def test_partial_rename_then_fsync_failure_restores_original_set(store, monkeypa
     assert all(store.read(tls.TLS + '/' + name) is None for name in tls.FILES)
 
 
+@REQUIRES_ROOT
 def test_failed_rollback_is_explicit_hold_no_restart(store, monkeypatch):
     atomic = store.atomic
 
@@ -208,6 +219,7 @@ def test_actual_cgroup_child_refuses_even_inactive_unit(store):
         tls.assert_quiescent(store, run)
 
 
+@REQUIRES_ROOT
 @pytest.mark.parametrize('kind', ['foreign', 'expired', 'boot'])
 def test_real_claim_metadata_refuses_foreign_stale_otherboot(store, kind):
     (store.root / 'proc/sys/kernel/random/boot_id').write_text('fixture-boot')
@@ -219,6 +231,7 @@ def test_real_claim_metadata_refuses_foreign_stale_otherboot(store, kind):
         tls.assert_claim(store, 'fixture')
 
 
+@REQUIRES_ROOT
 def test_real_nofollow_symlink_and_hardlink_refuse(store):
     target = store.root / tls.CONFIG
     target.rename(target.with_name('original'))
@@ -250,6 +263,7 @@ def test_default_cli_no_apply_no_key_generation(capsys):
     assert json.loads(capsys.readouterr().out)['status'] == 'NOT_APPLIED'
 
 
+@REQUIRES_ROOT
 def test_real_competing_process_flock_prevents_write(store):
     lock = store.root / 'run/contended.lock'
     child = subprocess.Popen([sys.executable, '-B', '-c',
@@ -274,6 +288,7 @@ def test_production_mode_guard_rejects_writable_path(store):
         tls.Store(store.root, os.getuid(), os.getgid()).check(unsafe.stat())
 
 
+@REQUIRES_ROOT
 def test_expired_managed_ca_is_not_regenerated(store):
     apply(store)
     ca_key = store.read(tls.TLS + '/ca.key')[0]
@@ -293,6 +308,7 @@ def test_expired_managed_ca_is_not_regenerated(store):
     assert store.read(tls.CONFIG)[0] == before
 
 
+@REQUIRES_ROOT
 def test_runtime_becomes_active_after_commit_no_unsafe_rollback(store, monkeypatch):
     before = store.read(tls.CONFIG)[0]
     atomic = store.atomic
@@ -342,6 +358,7 @@ def test_target_has_no_service_pid_properties(store):
     assert len(calls) == len(tls.UNITS)
 
 
+@REQUIRES_ROOT
 def test_linux_mode_permissions_positive_or_explicit_drvfs_skip(store):
     if store.drvfs_adapter:
         pytest.skip('DrvFS0777: genuine POSIX ownership/mode positive required in LinuxCI')

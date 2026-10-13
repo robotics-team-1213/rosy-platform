@@ -86,6 +86,19 @@ def test_ninth_session_evicts_the_oldest():
     assert all(sessions.principal(token) is not None for token in tokens[1:])
 
 
+def test_a_session_in_use_outlives_newer_idle_ones():
+    # Field check 2026-10-10: a console polling every second lost its token to eight newer
+    # page loads; eviction follows last use, not issue time.
+    sessions = DevelopmentSessions(clock=Clock())
+    tokens = [sessions.issue()[0] for _ in range(8)]
+    assert sessions.principal(tokens[0]) is not None
+    newer = sessions.issue()[0]
+
+    assert sessions.principal(tokens[0]) is not None
+    assert sessions.principal(tokens[1]) is None
+    assert sessions.principal(newer) is not None
+
+
 def test_six_requests_per_address_per_minute():
     clock = Clock()
     sessions = DevelopmentSessions(clock=clock)
@@ -150,7 +163,7 @@ def test_paired_console_reports_paired_and_refuses_sessions(tmp_path):
 
     response = client.get("/api/fleet/auth/connection")
     assert response.status_code == 200
-    assert response.json() == {"mode": "paired"}
+    assert response.json() == {"mode": "paired", "password_login": False}
     assert response.headers["cache-control"] == "no-store"
     refused = client.post(SESSION, headers=ORIGIN)
     assert refused.status_code == 403
@@ -161,7 +174,7 @@ def test_development_session_is_a_named_operator_and_is_audited(tmp_path):
     app, tasks = _app(tmp_path, sessions=DevelopmentSessions())
     client = _client(app)
 
-    assert client.get("/api/fleet/auth/connection").json() == {"mode": "development"}
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": "development", "password_login": False}
     issued = client.post(SESSION, headers=ORIGIN)
     assert issued.status_code == 201
     assert issued.headers["cache-control"] == "no-store"
@@ -264,7 +277,7 @@ def test_development_mode_requires_the_durable_api_audit():
 def test_api_reference_documents_the_development_session_routes():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.119" in reference
+    assert "**Version:** v1.220" in reference
     assert "| GET | `/api/fleet/auth/connection` |" in reference
     assert "| POST | `/api/fleet/auth/development-session` |" in reference
     assert "| v1.108 | 2026-10-06 | Additive (D-473)" in reference

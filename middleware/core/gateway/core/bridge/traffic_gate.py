@@ -35,16 +35,19 @@ def apply_line_candidate(line_follow, traffic_policy, command,
         return False
 
     def apply_line(current) -> None:
+        linear, angular = command.clip_line_candidate(current.linear, current.angular)
         traffic_decision = traffic_policy.gate(
-            current.linear, current.angular, now)
+            linear, angular, now)
 
         def apply_traffic(gated) -> None:
             command.set_nav_twist(
                 Twist(linear=gated.linear, angular=gated.angular),
                 now=stamp,
+                preserve_curvature=True,
             )
             # D-407: the issued twist is the forward trail the stuck back-off may reuse.
-            line_follow.note_issued(gated.linear, gated.angular, now)
+            line_follow.note_issued(gated.linear, gated.angular, now, traffic_held=(  # D-525 signal / M4 wait
+                not (gated.linear or gated.angular) and bool(current.linear or current.angular)))
             result["applied"] = True
 
         traffic_policy.apply_if_current(traffic_decision, apply_traffic)

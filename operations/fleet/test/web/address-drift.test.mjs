@@ -4,10 +4,10 @@ import { readFileSync } from "node:fs";
 
 import {
   RENUMBER_BANNER, addressMap, addressReason, movableRobots, renumberBanner,
-} from "../../fleet/server/web/address-drift.js";
-import { MESSAGES, MOVE_CHECK, moveDoneLines } from "../../fleet/server/web/enrollment.js";
+} from "../../../ui/console/shared/address-drift.js";
+import { MESSAGES, MOVE_CHECK, moveDoneLines } from "../../../ui/console/enrollment.js";
 
-const WEB = new URL("../../fleet/server/web/", import.meta.url);
+const WEB = new URL("../../../ui/console/", import.meta.url);
 
 const entry = (over) => ({
   robot_id: "rosy_09", origin: "enrolled", pinned: "192.0.2.10:8080", pinned_is_name: false,
@@ -70,7 +70,7 @@ test("the renumber hint follows all_outside unless a name-pinned robot is online
 });
 
 test("no console text shows a 192.168.1.x example address", () => {
-  for (const name of ["index.html", "enrollment.js", "address-drift.js", "console.js", "roster.js"]) {
+  for (const name of ["index.html", "enrollment.js", "shared/address-drift.js", "console.js", "roster.js"]) {
     const text = readFileSync(new URL(name, WEB), "utf8");
     assert.doesNotMatch(text, /192\.168\.1\.\d/, name);
   }
@@ -91,7 +91,7 @@ test("the banner lists only enrolled robots the server marked movable", () => {
 });
 
 test("there is no bulk move: every move asks for that robot's screen code", () => {
-  for (const name of ["index.html", "console.js", "address-drift.js", "enrollment.js"]) {
+  for (const name of ["index.html", "console.js", "shared/address-drift.js", "enrollment.js"]) {
     const text = readFileSync(new URL(name, WEB), "utf8");
     assert.doesNotMatch(text, /\(전체\)|runBulkMove|address-move-all/, name);
   }

@@ -9,6 +9,7 @@ Scope notes (honest holes, not oversights):
 
 import ast
 import re
+import runpy
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -22,7 +23,10 @@ from colcon_roots import colcon_roots  # noqa: E402
 CODE_ROOTS = tuple(ROOT / root for root in colcon_roots())
 
 CORE = SRC / "gateway"
-CONTROL_PKG = SRC.parent / "middleware" / "perception" / "control"
+CONTROL_PKG = ROOT / "middleware/perception"
+_control_layout = runpy.run_path(str(CONTROL_PKG / "control/_source_layout.py"))
+CONTROL_TREES = (CONTROL_PKG, *_control_layout["FLAT_ROOTS"],
+                 _control_layout["PACKAGE_DIRS"]["control.planning"])
 FLEET = SRC.parent / "operations" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
@@ -61,7 +65,7 @@ FINAL_CMD_VEL = re.compile(r"""['"]cmd_vel['"]""")
 #: safety_node as the legacy final publisher). Everything else in control
 #: must not name the final topic.
 LEGACY_FINAL_PUBLISHER = (
-    "middleware/perception/control/safety/node.py",
+    "middleware/control/drive/safety/adapter/node.py",
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 
@@ -71,7 +75,7 @@ LEGACY_FINAL_PUBLISHER = (
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
     "middleware/perception/control/recording.py",
-    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)',
+    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC,',
 )
 
 #: D-411 A: the Pilot recorder's rosbag2 topic list records the CORE final
@@ -81,7 +85,16 @@ PILOT_RECORDING_TOPICS = (
     'PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",',
 )
 
-FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC, PILOT_RECORDING_TOPICS)
+#: D-507 SIM r4b: keep mode judges "spin in place" on CORE's commanded twist, so the line
+#: observer SUBSCRIBES to the final command read-only (it publishes no Twist; pinned in
+#: test_line_observer_wiring). Same pin rule.
+LINE_OBSERVER_COMMAND_READ = (
+    "middleware/perception/control/line_observer_node.py",
+    "self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)",
+)
+
+FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC, PILOT_RECORDING_TOPICS,
+                          LINE_OBSERVER_COMMAND_READ)
 
 
 def _prod_py_files(tree: Path):
@@ -136,7 +149,7 @@ def test_control_has_no_final_cmd_vel():
         re.compile(r"['\"]/robot/intent/.*?['\"]"),
     ]
     violations = []
-    for path in _prod_py_files(CONTROL_PKG):
+    for path in (file for tree in CONTROL_TREES for file in _prod_py_files(tree)):
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
         for i, line in enumerate(text.splitlines(), 1):
@@ -172,7 +185,8 @@ def test_package_xml_covers_imports():
             own_name = ET.parse(package_xml).getroot().findtext("name")
         except ET.ParseError:
             continue
-        for path in _prod_py_files(pkg_dir):
+        package_trees = CONTROL_TREES if own_name == "control" else (pkg_dir,)
+        for path in (file for tree in package_trees for file in _prod_py_files(tree)):
             for top in _import_tops(path):
                 need = TOP_TO_PACKAGE.get(top)
                 if need and need != own_name and need not in declared:
@@ -244,13 +258,15 @@ def test_control_imports_no_core_code():
     ``core_common.calibration_store`` (calibration resolution shared with
     bringup and core, D-397), ``core_common.robot_body`` (the one URDF body
     every near/stop check shares with CORE and the calibration tools, D-424).
+    D-667/D-670 also permit the exact ``core_common.observation`` module:
+    immutable evidence references and pure validity checks.
     Runtime packages stay banned outright.
     """
     runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
     allowed_contracts = ("core_common.protocol", "core_common.calibration_store",
                          "core_common.robot_body")
     violations = []
-    for path in _prod_py_files(CONTROL_PKG.parent):
+    for path in (file for tree in CONTROL_TREES for file in _prod_py_files(tree)):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
@@ -267,7 +283,8 @@ def test_control_imports_no_core_code():
             if top in runtime_tops:
                 rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module}")
-            elif top == "core_common" and not module.startswith(allowed_contracts):
+            elif top == "core_common" and not (module.startswith(allowed_contracts)
+                                               or module == "core_common.observation"):
                 rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module} (contract surface only, D-155 refinement)")
     assert not violations, "control must not depend on core:\n" + "\n".join(violations)

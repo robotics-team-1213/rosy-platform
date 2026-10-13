@@ -3,6 +3,9 @@
 
 # swarm
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Robot endpoints, HTTP/WS transport, byte-for-byte pose relay, pure arming plans, and the FOR-004 formation session. This is where safety-after-await and liveness-decay rules apply.

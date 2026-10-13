@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
-- 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
-- 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
-- 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
-- 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동

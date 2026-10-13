@@ -13,8 +13,26 @@ const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
 const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
+const retry = createNode("ui-button", "", "화면 구성 다시 불러오기");
+retry.id = "surface-retry";
+retry.setAttribute("kind", "quiet");
+retry.setAttribute("type", "button");
 const safetyStatus = document.getElementById("safety-mode-status");
 const store = createStore(api, { session });
+if (surface === "console") {
+  const compact = window.matchMedia("(width < 64rem)");
+  const main = document.getElementById("surface-main");
+  function syncSlotOrder() {
+    const order = compact.matches ? ["observe", "act", "sense"] : ["sense", "observe", "act"];
+    const slots = [...main.querySelectorAll(":scope > .surface-slot:not([data-slot='banner'])")];
+    if (slots.every((slot, index) => slot.dataset.slot === order[index])) return;
+    const focused = main.contains(document.activeElement) ? document.activeElement : null;
+    for (const name of order) main.append(slots.find((slot) => slot.dataset.slot === name));
+    focused?.focus({preventScroll: true});
+  }
+  compact.addEventListener("change", syncSlotOrder);
+  syncSlotOrder();
+}
 let mounted = null;
 let revision = null;
 let inflight = null;
@@ -147,12 +165,18 @@ async function onManifestError(error) {
     return;
   }
   showStatus(`화면 구성을 받지 못했습니다: ${error.message}. 잠시 뒤 다시 시도합니다.`);
+  status.append(retry);
 }
 
 function refresh() {
   if (inflight) return;
   inflight = assemble().catch(onManifestError).finally(() => { inflight = null; });
 }
+
+retry.addEventListener("click", () => {
+  showStatus("화면 구성을 다시 확인하고 있습니다.");
+  refresh();
+});
 
 document.getElementById("shell-estop").addEventListener("click", async () => {
   window.dispatchEvent(new Event("rosy:stop-motion"));

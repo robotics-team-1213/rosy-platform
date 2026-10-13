@@ -47,6 +47,16 @@ ssh -t <alias> 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/ins
 왼쪽·오른쪽은 **로봇이 앞을 볼 때** 기준이다(카메라 쪽이 앞).
 한 단계만 다시 하려면: `python3 tools/device/ir_line_calibrate.py capture --phase left --session ~/rosy-ir/session.json` 뒤 `compute`.
 
+## 2b. 손으로 놓을 사람이 없을 때 (원격, 2026-10-07 9dfk)
+
+로봇을 몰아서 곧은 선을 비스듬히 넘기며 네 단계 표본을 얻는다. 자세한 근거와 수치는 `docs/solutions/workflow-issues/ir-line-calibration-by-guided-line-crossing-2026-10-07.md`.
+
+- 지도(STL 도색)에서 주변에 다른 도색이 없는 곧은 구간을 고른다(260919: 서쪽 블록 남쪽 선, x ≈ −0.76 서쪽). 횡단보도·모서리 옆은 쓰지 않는다.
+- 선과 약 25°, 선이 한쪽(예: 오른쪽)에서 오게 놓는다. 그러면 R → R+C → C → L+C → L 순서가 나오고 이것이 좌우 부호 확인이다.
+- 6 mm 전진·1.2 s 정지를 반복하고 로봇에서 IR·odom을 20 Hz로 기록한다. 멈춤과 방향 판단은 odom이 아니라 LiDAR-벽 자세로 한다(카펫 제자리 회전은 odom이 크게 틀린다).
+- 모든 이동 명령은 공유 `RobotBody` 여유 검사를 거친다(D-500). 움직이기 전에 로봇 식별과 케이블을 눈으로 확인한다.
+- 정지 구간 중 카펫·한 센서만 흰색인 구간으로 세션 JSON을 만들고 `compute`를 돌린다. 적용·확인은 5·6단계 그대로다.
+
 ## 3. 판정
 
 도구는 채널별 끝점(중앙값), 잡음(MAD), 각 단계가 어떻게 읽히는지를 보이고, 아래를 모두 통과할 때만 YAML 을 찍는다.

@@ -1,0 +1,138 @@
+﻿[
+  {
+    "session": "20261006T082612Z_rosy_26",
+    "bags_sha256": [
+      {
+        "bag": "bag_0.mcap",
+        "sha256": "9b70ff5f6d101cae1bedf7c46e099150ab106412e413baf58a110f8b5a855be3"
+      },
+      {
+        "bag": "bag_1.mcap",
+        "sha256": "82e1d2d525cecf7d06fd19403f0343bc7a681cbc87a0d45084a5e853a5364d62"
+      },
+      {
+        "bag": "bag_2.mcap",
+        "sha256": "b69b16aa103f57e55f460eb5ff50b4d62b8a766191e81ca07d16d15487f3fce2"
+      },
+      {
+        "bag": "bag_3.mcap",
+        "sha256": "f4e56cc954963deae7432c7cf8db14c5dba5f77ea2be42ef12c2f9fd22f03313"
+      },
+      {
+        "bag": "bag_4.mcap",
+        "sha256": "d6f36409fcb9d7d0326022b79c643c09d3504c00b100a0593fee15cf42259a70"
+      },
+      {
+        "bag": "bag_5.mcap",
+        "sha256": "abac5b6733a318e6a6e551609875cfd0e72c89f4d77fa9447fd1e151aeb7138b"
+      },
+      {
+        "bag": "bag_6.mcap",
+        "sha256": "78a46778203fd2140a9c1824a558e40405381fcc98d473974564bb655fca5fb6"
+      },
+      {
+        "bag": "bag_7.mcap",
+        "sha256": "09316dda98bf5d4e05e827afc0395c8df282bb08af5cdd87671e91eb502edac9"
+      },
+      {
+        "bag": "bag_8.mcap",
+        "sha256": "c054d637b791ed4f9ca886c1d60d62c4d14a811e353675e8547750cc02ad34e1"
+      },
+      {
+        "bag": "bag_9.mcap",
+        "sha256": "932699548d5f033bdb61699e26d0453cbe92027cf61d61bc46cabd2dd2f3905a"
+      },
+      {
+        "bag": "bag_10.mcap",
+        "sha256": "5c7e2b03a9150401bbb20d6d6eaae33f1d859c5b939d35256ba3d639791085d8"
+      }
+    ],
+    "camera": 2487,
+    "cmd_vel": 15456,
+    "odom": 9324,
+    "scan": 3159,
+    "eligible_windows": 2486,
+    "active_windows": 78,
+    "no_progress_proxy_windows": 0,
+    "min_active_translation_m": 2.892316642782945e-06,
+    "causal_pose_frames": 2486,
+    "max_camera_pose_step_m": 0.00650575312316361,
+    "camera_pose_jumps_gt_60mm": 0,
+    "max_header_log_skew_s": 0.10159778594970703,
+    "max_odom_gap_s": 0.0538945198059082
+  },
+  {
+    "session": "20261006T091340Z_rosy_26",
+    "bags_sha256": [
+      {
+        "bag": "bag_0.mcap",
+        "sha256": "ea477e2d9101c9670b5a90b1a72fbcfc99524b31142185919e105cc150d8e5c7"
+      },
+      {
+        "bag": "bag_1.mcap",
+        "sha256": "552a40afe8398f3525bd06b25d191734e9fbc3f97e0ff812b5b860c71fd88d68"
+      },
+      {
+        "bag": "bag_2.mcap",
+        "sha256": "6acfae5fa702444ae3c8e6d7c9f093607a523902be89807cdc5327fd63af0789"
+      }
+    ],
+    "camera": 642,
+    "cmd_vel": 3968,
+    "odom": 2405,
+    "scan": 812,
+    "eligible_windows": 641,
+    "active_windows": 109,
+    "no_progress_proxy_windows": 0,
+    "min_active_translation_m": 5.249780428080866e-06,
+    "causal_pose_frames": 642,
+    "max_camera_pose_step_m": 0.0065875864957819375,
+    "camera_pose_jumps_gt_60mm": 0,
+    "max_header_log_skew_s": 0.06719493865966797,
+    "max_odom_gap_s": 0.05153965950012207
+  },
+  {
+    "session": "20261007T143038Z_rosy_60",
+    "bags_sha256": [
+      {
+        "bag": "bag_0.mcap",
+        "sha256": "0d8b19042429368c12c8a76349873c7d83fc7dfafe62ee4a97ffbc87bd4b7f76"
+      }
+    ],
+    "camera": 124,
+    "cmd_vel": 774,
+    "odom": 461,
+    "scan": 170,
+    "eligible_windows": 124,
+    "active_windows": 106,
+    "no_progress_proxy_windows": 0,
+    "min_active_translation_m": 0.005497419404139463,
+    "causal_pose_frames": 123,
+    "max_camera_pose_step_m": 0.007817158833837783,
+    "camera_pose_jumps_gt_60mm": 0,
+    "max_header_log_skew_s": 0.0700521469116211,
+    "max_odom_gap_s": 0.10600042343139648
+  },
+  {
+    "session": "20261007T143211Z_rosy_60",
+    "bags_sha256": [
+      {
+        "bag": "bag_0.mcap",
+        "sha256": "287015247472833f8eae7c17e81cb33bd27c19fddc841d559804b10591c2d920"
+      }
+    ],
+    "camera": 83,
+    "cmd_vel": 517,
+    "odom": 293,
+    "scan": 113,
+    "eligible_windows": 82,
+    "active_windows": 71,
+    "no_progress_proxy_windows": 0,
+    "min_active_translation_m": 0.006120489463328427,
+    "causal_pose_frames": 83,
+    "max_camera_pose_step_m": 0.00652862124470637,
+    "camera_pose_jumps_gt_60mm": 0,
+    "max_header_log_skew_s": 0.04573631286621094,
+    "max_odom_gap_s": 0.1067192554473877
+  }
+]

@@ -2,15 +2,15 @@
 import ast
 import json
 import math
-from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 from control.planning import GoalBrain, OccupancyMap
+from test.control_sources import source_path
 
 
 def method(path, name):
-    tree = ast.parse((Path(__file__).parents[1] / 'control' / path).read_text(encoding='utf-8'))
+    tree = ast.parse(source_path(path).read_text(encoding='utf-8'))
     return next(n for cls in tree.body if isinstance(cls, ast.ClassDef)
                 for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
 

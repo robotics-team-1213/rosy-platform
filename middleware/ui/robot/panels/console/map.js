@@ -1,4 +1,5 @@
 import { createFieldMap } from "/assets/map.js";
+import { EVIDENCE_LABEL, HeadlessState, NAVIGATION_LABEL, enumLabel, evidenceAgeText } from "/common/core_ui_logic.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -11,7 +12,7 @@ export function mount(root, ctx) {
   for (const [id, label] of [["occupancy", "점유 지도"], ["costmap", "비용 지도"], ["path", "경로"]]) {
     const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapLayer = id; layers.append(button);
   }
-  const clicks = el("ui-actions", "surface-actions"); clicks.setAttribute("aria-label", "지도 작업");
+  const clicks = el("ui-actions", "surface-actions map-click-actions"); clicks.setAttribute("aria-label", "지도 작업");
   for (const [id, label] of [["pose", "초기 위치 설정"], ["goal", "주행 목표 설정"]]) {
     const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapClick = id; clicks.append(button);
   }
@@ -25,6 +26,7 @@ export function mount(root, ctx) {
   empty.hidden = true;
   const canvas = el("canvas", "surface-map-canvas"); canvas.setAttribute("aria-label", "점유 지도. 화살표 키로 십자선을 이동하고 Enter 키로 위치를 선택합니다.");
   const targetReadout = el("dl", "ui-readout surface-map-readout");
+  targetReadout.hidden = true;
   const targetLabel = el("dt", "", "선택 좌표");
   const targetValue = el("dd", "", "지도를 키보드로 선택하세요.");
   targetValue.setAttribute("role", "status");
@@ -42,15 +44,58 @@ export function mount(root, ctx) {
   const overlay = el("div", "surface-map-overlay");
   const retry = el("ui-button", "", "다시 시도"); retry.setAttribute("kind", "quiet"); retry.type = "button"; retry.hidden = true;
   overlay.append(empty, retry);
-  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, targetReadout);
-  root.append(head, status, readinessStatus, layers, clickReason, clicks, mapFrame, setupLink, mapStatus, action);
+  const stage = el("div", "surface-map-stage");
+  stage.setAttribute("role", "group");
+  stage.setAttribute("aria-label", "주행 관측");
+  const navStage = el("span", "", "주행 · 확인 중");
+  const pathStage = el("span", "surface-map-path-evidence", "계획 경로 · 확인 중");
+  const locationStage = el("span", "", "위치 추정 · 확인 중");
+  const slamStage = el("span", "", "SLAM · 확인 중");
+  stage.append(navStage, pathStage, locationStage, slamStage);
+  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, stage, targetReadout);
+  root.append(head, status, readinessStatus, clicks, mapFrame, clickReason, layers, setupLink, mapStatus, action);
 
   let state = null;
+  let mappingActive = null;
   let capabilities = null;
   let commissioning = null;
+  let mapIdMismatch = false;
   const readErrors = {state: null, capabilities: null, commissioning: null};
   function setText(target, text) { if (target.textContent !== text) target.textContent = text; }
+  function renderStage() {
+    const evidence = new HeadlessState(state);
+    const evidenceLabel = (channel) => {
+      const kind = evidence.evidenceOf(channel);
+      if (kind !== "delayed") return EVIDENCE_LABEL[kind];
+      const stamp = Date.parse(state?.evidence?.[channel]?.received_at || "");
+      const age = Number.isFinite(stamp) ? Math.max(0, Math.floor((Date.now() - stamp) / 1000)) : null;
+      return `${EVIDENCE_LABEL.delayed}${age === null ? " · 시각 확인 불가" : evidenceAgeText(age)}`;
+    };
+    const navigation = evidence.isFresh("navigation") ? state?.navigation : null;
+    setText(navStage, `주행 · ${state?.mode === "SAFE_STOP" ? "안전 정지"
+      : state && !evidence.isFresh("navigation") ? evidenceLabel("navigation")
+      : navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
+      ? `${enumLabel(NAVIGATION_LABEL, navigation)} 보고 · 위치 확인 필요`
+      : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
+    const location = !evidence.isFresh("pose") ? evidenceLabel("pose")
+      : mapIdMismatch ? "지도 ID 불일치"
+      : state?.localization?.state === "LOCALIZED"
+        ? state.localization.pose_frame === "map" ? "지도 좌표 확인" : "지도 좌표 미확인"
+        : state?.localization?.state === "CANDIDATES" ? "후보 확인 중"
+        : state?.localization?.state === "SUSPECT" ? "위치 확인 필요"
+        : state?.localization?.state === "UNKNOWN" ? "위치 미확인" : "상태 정보 없음";
+    setText(locationStage, `위치 추정 · ${location}`);
+    setText(slamStage, `SLAM · ${capabilities?.slam === false ? "미제공" : capabilities?.slam !== true ? "기능 확인 불가"
+      : mappingActive === true ? "세션 수락 · 지도 갱신 미확인" : mappingActive === false ? "세션 없음" : "세션 확인 불가"}`);
+  }
+  const baseMapAction = () => (ctx.role === "operator" || ctx.role === "administrator")
+    && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware";
+  const safeStopped = () => state?.mode === "SAFE_STOP";
+  const goalPoseReady = () => state && new HeadlessState(state).isFresh("pose")
+    && (state.localization == null || (state.localization.state === "LOCALIZED" && state.localization.pose_frame === "map"));
+  const canMapAction = (mode) => baseMapAction() && (mode !== "goal" || (!safeStopped() && goalPoseReady()));
   function renderReadiness() {
+    readinessStatus.hidden = false;
     const errors = [["로봇 상태", readErrors.state], ["내비게이션 기능", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
       .filter(([, reason]) => reason);
     if (errors.length) {
@@ -65,28 +110,28 @@ export function mount(root, ctx) {
     }
     readinessStatus.textContent = "로봇 상태·내비게이션 기능·실행 모드를 읽었습니다.";
     readinessStatus.setAttribute("state", "ready");
+    readinessStatus.hidden = true;
   }
   const syncMapActions = () => {
     const operator = ctx.role === "operator" || ctx.role === "administrator";
-    const supported = capabilities?.navigation?.goal_navigation === true;
     const hardware = commissioning?.runtime_mode === "hardware";
-    const enabled = operator && supported && hardware;
-    if (enabled) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
+    if (mapIdMismatch) clickReason.textContent = "로봇과 지도 ID가 달라 위치·주행 목표를 막았습니다. 지도 갱신을 기다리세요.";
+    else if (baseMapAction() && safeStopped()) clickReason.textContent = "안전 정지 중에는 주행 목표를 보낼 수 없습니다. 초기 위치 설정은 사용할 수 있습니다.";
+    else if (baseMapAction() && !goalPoseReady()) clickReason.textContent = "현재 위치 추정이 확인되지 않아 주행 목표를 막았습니다. 초기 위치 설정은 사용할 수 있습니다.";
+    else if (baseMapAction()) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
     else if (!operator) clickReason.textContent = "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
     else if (readErrors.capabilities) clickReason.textContent = `내비게이션 기능을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
     else if (readErrors.commissioning) clickReason.textContent = `장치 실행 모드를 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.commissioning}`;
     else if (!capabilities || !commissioning) clickReason.textContent = "내비게이션 기능과 장치 실행 모드를 확인하는 중입니다.";
-    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 하드웨어 실행 모드에서만 가능합니다. 현재 지도를 볼 수는 있습니다.";
+    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 하드웨어 실행 모드에서만 가능합니다. 지도가 들어오면 읽기 전용으로 볼 수 있습니다.";
     else clickReason.textContent = "이 로봇에는 위치·주행 목표 설정에 쓰는 내비게이션 기능이 없습니다.";
-    for (const button of clicks.querySelectorAll("[data-map-click]")) {
-      button.disabled = !enabled;
-    }
   };
   syncMapActions();
   const mayOpenSetup = ctx.role !== "viewer"
     && (ctx.surfaces || []).some((surface) => surface.id === "setup");
   const map = createFieldMap({
     canvas, empty, status: mapStatus, layerRoot: root, api: ctx.api,
+    onlyActivePath: true,
     emptyRecoveryLink: setupLink,
     mayOpenSetup,
     apiMaybe: async (path) => {
@@ -96,11 +141,20 @@ export function mount(root, ctx) {
         throw error;
       }
     },
+    getMapSources: () => capabilities?.runtime?.maps,
     getPose: () => state?.pose,
-    getNavigation: () => state?.navigation,
-    canGoal: () => ctx.role !== "viewer" && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware",
+    getCurrentMapId: () => state?.map_id,
+    onMapIdMismatch: (value) => { mapIdMismatch = value; renderStage(); syncMapActions(); },
+    onPathReadout: (evidence) => { setText(pathStage, `계획 경로 · ${evidence.label}`); },
+    getDisplayPose: () => new HeadlessState(state).isFresh("pose") && state?.localization?.state === "LOCALIZED"
+      && state.localization.pose_frame === "map" ? state.pose : null,
+    getNavigation: () => !safeStopped() && new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,
+    canGoal: canMapAction,
+    goalReason: (mode) => mode === "goal" && baseMapAction()
+      ? safeStopped() ? "안전 정지 중 주행 목표 불가" : !goalPoseReady() ? "위치 추정 확인 후 가능" : "" : "",
     setAction: (text) => { setText(action, text); },
     onTargetReadout: (target) => {
+      targetReadout.hidden = target.unavailable;
       targetValue.textContent = target.unavailable
         ? "지도 데이터가 없습니다."
         : target.inside
@@ -109,19 +163,23 @@ export function mount(root, ctx) {
     },
   });
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (payload) => {
-    state = payload; readErrors.state = null; renderReadiness(); map.setPose();
+    state = payload; readErrors.state = null; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   }, (error) => {
-    state = null; readErrors.state = error.message; renderReadiness(); map.setPose();
+    state = null; readErrors.state = error.message; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 10_000, (payload) => {
-    capabilities = payload; readErrors.capabilities = null; renderReadiness(); syncMapActions(); map.setPose();
+    capabilities = payload; readErrors.capabilities = null; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   }, (error) => {
-    capabilities = null; readErrors.capabilities = error.message; renderReadiness(); syncMapActions(); map.setPose();
+    capabilities = null; readErrors.capabilities = error.message; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   });
+  const stopMapping = ctx.store.poll("/api/v1/navigation/state", 1_000, (payload) => {
+    mappingActive = typeof payload?.mapping_active === "boolean" ? payload.mapping_active : null;
+    renderStage();
+  }, () => { mappingActive = null; renderStage(); });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (payload) => {
-    commissioning = payload; readErrors.commissioning = null; renderReadiness(); syncMapActions();
+    commissioning = payload; readErrors.commissioning = null; renderReadiness(); syncMapActions(); map.setPose();
   }, (error) => {
-    commissioning = null; readErrors.commissioning = error.message; renderReadiness(); syncMapActions();
+    commissioning = null; readErrors.commissioning = error.message; renderReadiness(); syncMapActions(); map.setPose();
   });
   let loading = false; let disposed = false;
   const refresh = async () => {
@@ -142,11 +200,11 @@ export function mount(root, ctx) {
       } else empty.removeAttribute("role");
       retry.hidden = !failed || map.mapState === "forbidden";
       // 선택 좌표는 지도가 쓸 수 있을 때만 뜻이 있다.
-      targetReadout.hidden = map.mapState !== "ready";
+      if (map.mapState !== "ready") targetReadout.hidden = true;
     }
   };
   retry.addEventListener("click", () => { refresh(); });
   refresh();
   const timer = setInterval(refresh, 10_000);
-  return () => { disposed = true; clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
+  return () => { disposed = true; clearInterval(timer); stopState(); stopCapabilities(); stopMapping(); stopCommissioning(); map.destroy(); };
 }

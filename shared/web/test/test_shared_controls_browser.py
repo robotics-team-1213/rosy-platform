@@ -6,22 +6,23 @@ API는 없으므로 페이지 스크립트의 네트워크 오류는 무시하�
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
+from fleet.server.static_routes import CONSOLE_ASSETS
+from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
 HOST = "http://rosy.test"
-TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
+TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html", ".svg": "image/svg+xml"}
 BUTTON_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="stylesheet" href="/common/tokens.css">
 <link rel="stylesheet" href="/common/components.css">
@@ -73,7 +74,10 @@ def _serve(route):
     if path.startswith("/common/"):
         target = COMMON / path.removeprefix("/common/")
     elif path.startswith("/console/assets/"):
-        target = FLEET / path.removeprefix("/console/assets/")
+        entry = CONSOLE_ASSETS.get(path.removeprefix("/console/assets/"))
+        if entry is None:
+            return route.fulfill(status=404, body="")
+        target = FLEET / entry[0]
     elif path.startswith("/dashboard/assets/"):
         target = DASHBOARD / path.removeprefix("/dashboard/assets/")
     elif path == "/console":
@@ -219,13 +223,68 @@ def test_every_product_field_clears_the_secondary_target(page, path):
     page.goto(f"{HOST}{path}")
     page.wait_for_function("() => customElements.get('ui-button')")
     probe = page.evaluate(FIELD_PROBE)
-    assert probe["floor"] == 44
+    assert probe["floor"] == 48
     assert probe["count"] > 0
     assert not probe["bad"], probe["bad"]
 
 
 def _spacing_px(value):
     return 0.0 if value == "normal" else float(value.removesuffix("px"))
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_all_controls_share_geometry_including_emergency_stop(page, theme):
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    sizes = page.evaluate("""theme => {
+      document.documentElement.dataset.theme = theme;
+      const result = {};
+      for (const kind of ['primary', 'quiet', 'segment', 'toggle', 'irreversible']) {
+        const button = document.createElement('ui-button');
+        button.setAttribute('kind', kind);
+        const label = document.createElement('span');label.textContent = 'Action';button.append(label);
+        document.body.append(button);
+        const box = button.getBoundingClientRect(), css = getComputedStyle(button);
+        result[kind] = {height:box.height, width:box.width, text:getComputedStyle(label).fontSize, inset:css.paddingLeft};
+      }
+      const field = document.createElement('input');field.className='ui-field';
+      document.body.append(field);result.field={height:field.getBoundingClientRect().height};
+      const long = document.createElement('ui-button');long.setAttribute('kind','quiet');
+      long.disabled=true;long.reason='A long explanation remains visible when a control is unavailable';
+      long.textContent='Unavailable';long.style.maxWidth='180px';document.body.append(long);
+      result.reason = {height:long.getBoundingClientRect().height, scroll:long.scrollWidth, width:long.clientWidth};
+      return result;
+    }""", theme)
+    normal = [sizes[kind] for kind in ("primary", "quiet", "segment", "toggle", "irreversible")]
+    assert {button["height"] for button in normal} == {48}
+    assert {button["text"] for button in normal} == {"14px"}
+    assert {button["inset"] for button in normal} == {"12px"}
+    assert all(button["width"] >= 48 for button in normal)
+    assert sizes["field"]["height"] == 48
+    assert sizes["reason"]["height"] >= 48
+    assert sizes["reason"]["scroll"] <= sizes["reason"]["width"]
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_native_disclosure_uses_shared_geometry_and_keeps_keyboard_semantics(page, theme):
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    got = page.evaluate("""theme => {
+      document.documentElement.dataset.theme = theme;
+      const details = document.createElement('details');
+      details.innerHTML = '<summary id="disclosure" class="ui-disclosure-row"><span class="ui-disclosure-name">rosy_01</span></summary><p>Current evidence</p>';
+      document.body.append(details);
+      const row=details.querySelector('summary'), css=getComputedStyle(row);
+      return {height:row.getBoundingClientRect().height, size:css.fontSize,
+        inset:css.paddingLeft, name:getComputedStyle(row.firstElementChild).fontSize,
+        display:css.display};
+    }""", theme)
+    assert got == {"height": 48, "size": "14px", "inset": "12px", "name": "16px", "display": "list-item"}
+    page.locator("#disclosure").focus()
+    page.keyboard.press("Enter")
+    assert page.locator("#disclosure").evaluate("el => el.parentElement.open")
+    page.keyboard.press("Enter")
+    assert not page.locator("#disclosure").evaluate("el => el.parentElement.open")
 
 
 def test_hangul_labels_drop_the_latin_tracking(page):
@@ -322,3 +381,25 @@ def test_a_disabled_unchecked_box_does_not_look_like_an_enabled_one(page, theme)
     assert style["off"]["border"] == "dashed" and style["held"]["border"] == "dashed"
     assert style["off"]["opacity"] == "1"
     assert page.locator("#off").screenshot() != page.locator("#free").screenshot()
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_platform_mark_uses_the_wordmark_colour_and_shared_asset(page, theme):
+    page.goto(f"{HOST}/tracking")
+    page.evaluate("theme => document.documentElement.setAttribute('data-theme', theme)", theme)
+    mark = page.locator("ui-brand b")
+    style = mark.evaluate("""node => {
+      const text = getComputedStyle(node), symbol = getComputedStyle(node, '::before');
+      return {name: node.textContent, colour: text.color, symbolColour: symbol.backgroundColor,
+        width: parseFloat(symbol.width), size: parseFloat(text.fontSize), mask: symbol.maskImage,
+        content: symbol.content};
+    }""")
+    assert style["name"] == "ROSY" and style["colour"] == style["symbolColour"]
+    assert style["width"] == style["size"] and "brand/mark.svg" in style["mask"]
+    assert style["content"] == '\"\"'
+    asset = page.evaluate("""async () => {
+      const response = await fetch('/common/brand/mark.svg');
+      const image = new Image(); image.src = '/common/brand/platform.svg'; await image.decode();
+      return {status: response.status, type: response.headers.get('content-type'), decoded: image.naturalWidth > 0};
+    }""")
+    assert asset == {"status": 200, "type": "image/svg+xml", "decoded": True}

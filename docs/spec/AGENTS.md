@@ -3,6 +3,9 @@
 
 # spec
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Approved software requirements. CORE is the robot/edge obligation; FLEET is the central server (not implemented in this repo).

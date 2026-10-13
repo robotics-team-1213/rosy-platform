@@ -3,6 +3,9 @@
 
 # assessments
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Dated, point-in-time evaluations of the whole tree: module coupling and communication protocols. They are measurements and rationale; the decisions they feed are ADRs (the scorecard criteria are D-178).

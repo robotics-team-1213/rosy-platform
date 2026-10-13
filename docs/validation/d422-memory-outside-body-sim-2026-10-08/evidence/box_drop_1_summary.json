@@ -1,0 +1,86 @@
+{
+ "scenario": "box",
+ "ahead": null,
+ "drop": 0.08,
+ "cmd_before_drop": [
+  0.0675,
+  -0.0036
+ ],
+ "box": {
+  "x": -1.27,
+  "y": -0.0732,
+  "sim_t": 1208.194,
+  "rep": "data: true"
+ },
+ "first_hold": {
+  "t": 15.489,
+  "sim_t": 1208.486,
+  "gt": [
+   -1.2698065263905671,
+   0.0322190461305326,
+   -1.5735942127796
+  ],
+  "odom": [
+   -1.2698065263905671,
+   0.0322190461305326,
+   -1.5735942127796,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "obstacle_ahead",
+  "keep": null,
+  "body_gap_m": 0.014,
+  "j": "idle",
+  "jr": null,
+  "box_gap_m": 0.0484
+ },
+ "min_box_gap_m": 0.0484,
+ "final": {
+  "t": 45.124,
+  "sim_t": 1237.169,
+  "gt": [
+   -1.2698065263905671,
+   0.0322190461305326,
+   -1.5735942127796
+  ],
+  "odom": [
+   -1.2698065263905671,
+   0.0322190461305326,
+   -1.5735942127796,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "obstacle_ahead",
+  "keep": null,
+  "body_gap_m": 0.0,
+  "j": "idle",
+  "jr": null,
+  "box_gap_m": 0.0484
+ },
+ "held_rows": 256,
+ "rows_after_box": 258,
+ "cmd_before_box": {
+  "sim_t": 1208.181,
+  "lin": 0.0676,
+  "ang": -0.0009
+ },
+ "first_zero_cmd_after_box": {
+  "sim_t": 1208.366,
+  "lin": 0.0,
+  "ang": 0.0
+ },
+ "zero_cmd_latency_s": 0.172,
+ "hold_events": [
+  {
+   "mode": "CAMERA_LINE",
+   "clearance_m": 0.001328565103979437,
+   "held_s": 5.05,
+   "body_gap_m": 0.0013,
+   "stop_gap_m": 0.0346,
+   "clearance_source": "lidar"
+  }
+ ],
+ "capability_at_end": true
+}

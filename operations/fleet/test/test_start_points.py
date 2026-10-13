@@ -64,8 +64,8 @@ def test_routes_require_operator_and_reject_boolean_or_nonfinite_pose(tmp_path):
              for token, role in [("read", "viewer"), ("write", "operator")]}
     principals = {digest: SitePrincipal(**details) for digest, details in users.items()}
     authorize = build_authorize(console_token=None, principals=principals, task_service=None)
-    viewer, operator, *_ = build_role_guards(authorize, principals)
-    install_start_point_routes(app, service=points, read_guard=[Depends(viewer)], require_operator=operator)
+    viewer, _operator, named, _ = build_role_guards(authorize, principals)
+    install_start_point_routes(app, service=points, read_guard=[Depends(viewer)], require_named_operator=named)
     with TestClient(app) as client:
         path = "/api/fleet/start-points/north"
         assert client.put(path, json=body(tracking)).status_code == 401
@@ -76,3 +76,20 @@ def test_routes_require_operator_and_reject_boolean_or_nonfinite_pose(tmp_path):
         assert saved.status_code == 200, saved.text
         assert client.get("/api/fleet/start-points", headers={"Authorization": "Bearer read"}).json()["start_points"][0]["x"] == 1
         assert client.delete(path+"?expected_revision=old", headers=auth).status_code == 409
+
+
+def test_start_point_write_refuses_the_unnamed_shared_token(tmp_path):
+    # D-540 9: a start-point write needs a named operator; the shared token is `site-console`.
+    from fastapi import Depends
+    points, tracking = service(tmp_path)
+    app = FastAPI()
+    authorize = build_authorize(console_token="shared", principals={}, task_service=None)
+    viewer, _operator, named, _ = build_role_guards(authorize, {})
+    install_start_point_routes(app, service=points, read_guard=[Depends(viewer)], require_named_operator=named)
+    with TestClient(app) as client:
+        denied = client.put("/api/fleet/start-points/north", json=body(tracking),
+                            headers={"Authorization": "Bearer shared"})
+        assert denied.status_code == 403
+        assert denied.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
+        assert client.delete("/api/fleet/start-points/north?expected_revision=r",
+                             headers={"Authorization": "Bearer shared"}).status_code == 403

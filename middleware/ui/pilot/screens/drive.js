@@ -26,6 +26,7 @@ import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/co
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
+const MODE_TIMEOUT_MS = 3000;
 // ponytail: 1 s detects transport silence at the default 10 Hz; use a negotiated rate if slower streams matter.
 const READBACK_GAP_MS = 2 * STATE_POLL_MS; // Server evidence still decides value freshness.
 const DEG = 180 / Math.PI;
@@ -43,6 +44,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   setFineAllowed(profile.fine);
   const element = {};
   let engaged = false;
+  let disposed = false;
+  let engagePromise = null;
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
   // IDLE 을 보내면 남(보정 주인)의 주행을 끊는다.
   let modeHeld = false;
@@ -71,7 +74,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
     go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
-    manual: "[data-drive-manual]", goal: "[data-drive-goal]",
+    manual: "[data-drive-manual]",
     intent: "[data-drive-intent]", intentTarget: "[data-intent-target]",
     intentSteer: "[data-intent-steer]", controls: "[data-drive-controls]",
     calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
@@ -391,9 +394,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     showBlocked(response?.status === 200 ? "정지 · 설정 중 — 다시 잡으면 수동 운전" : "정지 모드 확인 실패 — 상태를 확인하세요");
     perception.refresh();
   });
-  element.goal.addEventListener("click", () => {
-    if (!element.goal.disabled && !perceptionPending) teardown(() => location.assign("/console"));
-  });
   function takeover() {
     auto.takeover();
   }
@@ -513,10 +513,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const fresh = profileFromBaseVelocity(base);
       announced = {max_linear: fresh.max_linear, max_angular: fresh.max_angular};
     }
-    const goalReady = caps?.body?.navigation?.goal_navigation === true;
-    element.goal.disabled = !goalReady;
-    if (goalReady) element.goal.removeAttribute("reason");
-    else element.goal.setAttribute("reason", caps?.body?.navigation?.reason || "이 기기는 목표 내비게이션을 지원하지 않습니다");
     const limits = response?.status === 200 ? response.body?.limits : null;
     if (limits || base) setServerLimits(withProfileLimits(limits));
     renderCap();
@@ -665,7 +661,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   actionIcon(exit, "back");
   actions.append(fitButton, fillButton, toolsButton, exit);
   element.hud.append(recordingFact, actions);
-  const compactHud = window.matchMedia("(width < 22rem) and (height < 40rem)");
+  const compactHud = window.matchMedia("(width < 30rem)");
   const lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
   function placeCompactTools() {
     hideTools();
@@ -720,13 +716,15 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   async function engage() {
     if (perceptionPending) return;
     hideBlocked();
-    const response = await gate.engage(postJson).catch(() => null);
+    const response = await gate.engage((path, body) => postJson(path, body, {timeoutMs: MODE_TIMEOUT_MS})).catch(() => null);
     if (response?.status === 200) {
-      engaged = true;
       modeHeld = true;
+      if (disposed) return;
+      engaged = true;
       session.resume();
       return;
     }
+    if (disposed) return;
     engaged = false;
     const detail = response?.body?.detail;
     showBlocked(`수동 모드 전환 실패 — ${detail?.message ?? detail ?? response?.status ?? "연결 없음"}`);
@@ -738,10 +736,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   function hideBlocked() {
     element.blocked.hidden = true;
   }
-  element.retake.addEventListener("click", () => engage());
-  engage();
+  element.retake.addEventListener("click", () => { engagePromise = engage(); });
+  engagePromise = engage();
 
   function teardown(after) {
+    if (disposed) return;
+    disposed = true;
     engaged = false;
     auto.release("exit");
     clearInterval(loop);
@@ -750,12 +750,15 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (capture.state().recording) capture.stop();
     robotRecording.stopIfOwned().finally(() => robotRecording.dispose());
     releaseAll();
-    session.hidden();
+    const stopped = session.hidden();
     session.close?.();
     // D-321 부록: 잡은 적 없거나 남의 보정으로 잠긴 화면은 모드를 돌려놓지 않는다 — /mode IDLE 은
     // 누구에게나 열려 있어서, 그대로 보내면 보정 주인의 MANUAL 을 끊는다.
-    if (modeHeld && !calibrationLocked) gate.disengage(postJson).catch(() => {});
-    modeHeld = false;
+    const idle = Promise.resolve(engagePromise).then(() => {
+      if (!modeHeld || calibrationLocked) return null;
+      modeHeld = false;
+      return gate.disengage((path, body) => postJson(path, body, {timeoutMs: MODE_TIMEOUT_MS})).catch(() => null);
+    });
     clearTimeout(whoamiTimer);
     streamAlive = false;
     clearTimeout(retryTimer);
@@ -774,6 +777,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     wakeLock?.release().catch(() => {});
     wakeLock = null;
     onExit?.();
-    if (typeof after === "function") after();
+    if (typeof after === "function") Promise.allSettled([stopped, idle]).then(after);
   }
+  return teardown;
 }

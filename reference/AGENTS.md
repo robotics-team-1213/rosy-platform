@@ -3,6 +3,9 @@
 
 # reference
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Frozen upstream snapshot used as the implementation baseline (D-16). The zip is the as-is pinky_pro tree; ROSY does not merge upstream automatically.

@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from test_er2_candidate_fence import _candidate, _setup
 

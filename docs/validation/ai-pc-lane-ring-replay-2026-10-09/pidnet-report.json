@@ -1,0 +1,21 @@
+{
+  "source_sha256": "500138b371cdfb3e35843e4b8eafafb9bbcca593c33312f8434fced03bbb87d9",
+  "frames": 544,
+  "models": {
+    "pidnet": {
+      "checkpoint_sha256": "e8cc43824f0e59ead8f593a0d214023b49a3846f13feafb6020b75ad36716af4",
+      "elapsed_seconds": 0.867,
+      "lane_pixel_median": [
+        662.0,
+        2230.5
+      ],
+      "frames_both_visible": 360,
+      "frames_one_sided": 184,
+      "frames_both_missing": 0,
+      "longest_both_missing": 0,
+      "both_visibility_transitions": 33,
+      "threshold_pixels": 30,
+      "roi": "rows 110:240; raw argmax"
+    }
+  }
+}

@@ -3,6 +3,9 @@
 
 # gz
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Gazebo desk-maze rigs for Control: closed-loop drive, calibration/mapping, localization snapshots, obstacle tracks, and run monitors. Operator tools, not CI and not the robot runtime.

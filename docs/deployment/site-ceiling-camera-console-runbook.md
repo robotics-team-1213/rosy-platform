@@ -16,6 +16,11 @@ Rosy Cam --wss(사이트 CA 고정, tls_host 확인)--> 프록시 :8443 --> Visi
 - 연결하거나 다시 연결할 때마다 mDNS(`_rosy-overhead._tcp`)로 주소를 새로 찾는다. 그래서 현장 PC의 IP가 바뀌어도 다시 페어링하지 않는다 (D-391).
 - Fleet은 영상을 중계하지 않는다. 브라우저는 Vision에서 짧은 임대(lease)로 최신 프레임만 읽는다.
 
+G4/G5 원격 입회에서는 이 미리보기의 source·프레임 순서·나이와 실제 대상 로봇을
+계속 확인한다(D-521). 영상이 가려지거나 멈추면 새 명령을 중단하고 기존 정지 경로와
+CORE 속도·상태를 확인한다. 별도 현장 담당자는 필수가 아니다. 이 화면은 원시
+오도메트리 계측이나 정지 확인을 대체하지 않는다.
+
 ## 2. 현장 PC 스택
 
 1. 현장 PC를 로봇과 같은 공유기(AP)에 **먼저** 붙인 뒤 Docker를 켠다. Docker가 먼저 떠 있으면 컨테이너가 로봇 LAN에 닿지 못할 수 있다.
@@ -26,7 +31,7 @@ Rosy Cam --wss(사이트 CA 고정, tls_host 확인)--> 프록시 :8443 --> Visi
    ```
 
    인증서 SAN에는 `tls_host`(예: `site-pc.local`)가 있어야 한다. 폰·브라우저·발견 브리지는 이 이름으로 인증서를 확인하므로 IP SAN은 필요 없다. 수동 IP 링크(3항 2번)를 쓸 때만 그 IP SAN을 더한다.
-3. **LAN 공개는 IP가 아니라 인터페이스로 한다** (`deploy/site/README.md` "LAN access"). 사이트 망이 192.168.1.0/24에서 10.16.36.0/24로 바뀐 날(2026-10-01), 옛 IP에 묶인 프록시가 "cannot assign requested address"로 못 떠서 관제·카메라·로봇·발견이 한꺼번에 멈췄다.
+3. **LAN 공개는 IP가 아니라 인터페이스로 한다** (`deploy/site/README.md` "LAN access"). 사이트 망이 한 RFC1918 서브넷에서 다른 서브넷으로 바뀐 날(2026-10-01), 옛 IP에 묶인 프록시가 "cannot assign requested address"로 못 떠서 관제·카메라·로봇·발견이 한꺼번에 멈췄다.
    - 사이트 환경 파일(`/etc/rosy/site/site.env`): `ROSY_SITE_BIND_ADDRESS=0.0.0.0`, `ROSY_SITE_LAN_IFACE=<LAN 인터페이스, 예: wlan0>`. LAN IP를 적지 않는다. 이 PC만 쓸 때(SSH 터널)는 기본값 `127.0.0.1` 그대로 둔다.
    - `rosy-site-firewall.service`와 `rosy-site-firewall-check.timer`를 설치하고 켠다(README "LAN access"의 명령). Docker 공개 포트는 ufw를 거치지 않으므로, 이 유닛이 Docker보다 먼저 `mangle PREROUTING`에서 공개 포트를 `lo`와 `ROSY_SITE_LAN_IFACE`로 들어온 연결만 받고, 이 PC로 오는 나머지는 버린다. 인터페이스 이름으로만 거르므로 주소가 바뀌어도 고칠 것이 없다. 브리지된 LAN이면 브리지 이름(`br0`)을 쓴다. 적용이 실패하거나 5분 점검에서 필터가 없으면 프록시를 멈춘다(포트가 닫힌 채로 남는다). 미리 보기: `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --dry-run`.
    - 스택 유닛이 기동 전에 점검한다. 이 PC에 없는 IP나 허용하지 않은 리터럴 IP로 묶였거나, LAN 공개인데 인터페이스 필터가 없거나, 사이트 인증서가 `tls_host`에 대한 엄격 검증(README "Site certificate profile")을 통과하지 못하면 이유를 남기고 뜨지 않는다(`journalctl -u rosy-site-stack`). `site.env`는 `KEY=VALUE` 줄만 쓴다(`export` 금지).

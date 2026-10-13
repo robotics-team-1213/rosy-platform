@@ -151,6 +151,18 @@ def test_peer_approval_reader_is_strict(tmp_path):
         assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
 
+def test_peer_approval_reader_passes_only_a_well_formed_ca_digest(tmp_path):
+    # The LCD draws the CA digest a first-contact requester compares; anything else is dropped.
+    path = tmp_path / "approval.json"
+    for ca, kept in (("ab" * 32, True), ("AB" * 32, False), ("ab" * 31, False), (7, False)):
+        path.write_text(json.dumps({"requests": [_row()], "tls_ca_sha256": ca}), encoding="utf-8")
+        expected = dict(PEER, tls_ca_sha256=ca) if kept else PEER
+        assert fs.read_peer_approval(str(path), NOW) == expected, ca
+    # A digest alone shows no card.
+    path.write_text(json.dumps({"requests": [], "tls_ca_sha256": "ab" * 32}), encoding="utf-8")
+    assert fs.read_peer_approval(str(path), NOW) is None
+
+
 def test_burned_login_goes_to_the_face():
     assert fs.screen_for(**READY, core=core(), login="burned")["kind"] == fs.FACE
 
@@ -238,15 +250,17 @@ def test_wake_card_beats_the_drive_card_and_standby():
 def test_charging_at_rest_is_a_strip():
     answer = fs.screen_for(**READY, core=core(battery_charging=True, battery_percent=63.4))
 
-    assert answer["strip"] == "Charging 63%" and answer["strip_tone"] == "info"
+    assert answer["strip"] == "Charging · 63%" and answer["strip_tone"] == "info"
 
 
 @pytest.mark.parametrize("mode,nav,line", [
     ("IDLE", "IDLE", "Waiting"),
     ("MANUAL", "IDLE", "Manual"),
     ("NAVIGATION", "NAVIGATING", "Going"),
-    ("NAVIGATION", "BLOCKED", "Blocked"),
-    ("NAVIGATION", "FAILED", "Blocked"),
+    ("NAVIGATION", "PLANNING", "Planning"),
+    ("NAVIGATION", "ARRIVED", "Arrived"),
+    ("NAVIGATION", "BLOCKED", "Route blocked"),
+    ("NAVIGATION", "FAILED", "Navigation failed"),
     ("DOCKING", "IDLE", "Docking"),
 ])
 def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
@@ -255,6 +269,71 @@ def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
     assert answer["kind"] == fs.FACE
     assert answer["strip"] == line and answer["strip_tone"] == "info"
     assert answer["face"] == "happy"
+
+
+@pytest.mark.parametrize("note,line", [
+    ("crosswalk", "Crosswalk"),
+    ("lane_edge", "Lane edge"),
+    ("yield", "Yielding"),
+])
+def test_a_published_line_note_replaces_going(note, line):
+    answer = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="TRACKING",
+        line_note=note))
+    idle = fs.screen_for(**READY, core=core(line_note=note))
+    blocked = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="BLOCKED", line_note="crosswalk"))
+    turning = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", signal="left", line_note="yield"))
+
+    assert answer["strip"] == line and answer["strip_tone"] == "info"
+    assert idle["strip"] == "Waiting"
+    assert blocked["strip"] == "Route blocked"
+    assert turning["strip"] == "Left"
+
+
+def test_an_unknown_line_note_is_dropped():
+    result = fs.validate_face_inputs(handover(line_note="person"), NOW)
+
+    assert result["line_note"] is None
+
+
+def test_a_line_the_robot_is_on_replaces_going():
+    following = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="TRACKING"))
+    holding = fs.screen_for(**READY, core=core(
+        robot_mode="MANUAL", line_follow_state="HOLD"))
+    lost = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", line_follow_state="LOST"))
+    idle = fs.screen_for(**READY, core=core(line_follow_state="TRACKING"))
+
+    assert following["strip"] == "Following"
+    assert holding["strip"] == "Holding"
+    assert lost["strip"] == "Line lost"
+    assert idle["strip"] == "Waiting"
+
+
+def test_charging_shows_the_held_percent_and_the_voltage():
+    answer = fs.screen_for(**READY, core=core(
+        battery_charging=True, battery_percent=72.4, battery_voltage=8.4))
+
+    assert answer["strip"] == "Charging · 72%  8.40V"
+
+
+def test_a_low_pack_is_named_on_a_calm_line_and_not_on_the_charging_line():
+    low = fs.screen_for(**READY, core=core(
+        robot_mode="NAVIGATION", nav_state="NAVIGATING", battery_percent=18.2,
+        battery_level="warning"))
+    deep = fs.screen_for(**READY, core=core(battery_percent=4.2, battery_level="deep"))
+    charging = fs.screen_for(**READY, core=core(
+        battery_charging=True, battery_percent=40, battery_level="critical"))
+    caution = fs.screen_for(**READY, core=core(
+        caution=["dock_failed"], battery_percent=18, battery_level="warning"))
+
+    assert low["strip"] == "Going · Low 18%"
+    assert deep["strip"] == "Waiting · Deep 4%"
+    assert charging["strip"] == "Charging · 40%"
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
 
 
 def test_a_fleet_call_names_the_robot_and_wakes_a_sleeping_panel():
@@ -279,6 +358,45 @@ def test_caution_and_calibration_keep_their_strip_during_a_call():
 
     assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
     assert calibrating["strip"] == fs.CALIBRATING_STRIP
+
+
+def test_a_plain_line_hold_stays_a_caution_until_the_robot_asks_fleet():
+    hold = fs.screen_for(**READY, core=core(caution=["line_follow_hold"]))
+    asking = fs.screen_for(**READY, core=core(caution=["line_follow_hold"], signal="ask",
+                                               robot_mode="NAVIGATION", face="happy"))
+
+    assert hold["strip"] == fs.CAUTION_TEXT["line_follow_hold"] and hold["strip_tone"] == "caution"
+    assert asking["strip"] == "?" and asking["face"] == "happy"
+
+
+def test_asking_fleet_shows_a_question_mark_and_wakes_standby():
+    answer = fs.screen_for(**READY, core=core(power_mode="standby", signal="ask",
+                                               robot_mode="NAVIGATION", nav_state="BLOCKED",
+                                               face="happy"))
+
+    assert answer["kind"] == fs.FACE and answer["awake"] and answer["backlight"] == 100
+    assert answer["strip"] == "?" and answer["face"] == "happy"
+
+
+def test_a_committed_turn_names_the_side_under_the_face():
+    left = fs.screen_for(**READY, core=core(robot_mode="NAVIGATION", signal="left", face="happy"))
+    right = fs.screen_for(**READY, core=core(robot_mode="NAVIGATION", signal="right", face="happy"))
+
+    assert left["strip"] == "Left" and right["strip"] == "Right"
+    assert left["face"] == right["face"] == "happy"
+
+
+def test_caution_and_a_call_keep_their_strip_over_a_question():
+    caution = fs.screen_for(**READY, core=core(caution=["dock_failed"], signal="ask"))
+    call = fs.screen_for(**READY, core=core(signal="ask", robot_id="rosy_26"), test="identify_blue")
+    stopped = fs.screen_for(**READY, core=core(estop=True, signal="ask"))
+    recovery = fs.screen_for(**READY, core=core(recovery="retrace", signal="ask",
+                                                 caution=["line_follow_hold"]))
+
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
+    assert call["strip"] == "CALL rosy_26"
+    assert stopped["kind"] == fs.STOPPED
+    assert recovery["strip"] == fs.RECOVERY_TEXT["retrace"]
 
 
 def test_the_lcd_robot_id_pattern_matches_identity():
@@ -434,3 +552,29 @@ def test_module_is_standard_library_only():
                  if isinstance(node, ast.ImportFrom) and node.module}
 
     assert imported <= {"__future__", "datetime", "json", "math", "os", "re", "stat", "typing", "core_common"}
+
+
+# --- D-546: lane recovery ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("phase,text", [("retrace", "Recovering: reversing"),
+                                        ("return", "Recovering: returning to lane")])
+def test_a_moving_recovery_names_its_phase_and_beats_other_strips(phase, text):
+    answer = fs.screen_for(**READY, core=core(recovery=phase, caution=["line_follow_hold"]), test="lamp")
+
+    assert (answer["strip"], answer["strip_tone"]) == (text, "caution") and text.isascii()
+
+
+def test_the_bridge_has_no_lcd_line_and_an_estop_still_stops_the_screen():
+    assert fs.screen_for(**READY, core=core(recovery="bridge"))["strip"] == "Waiting"
+    assert fs.screen_for(**READY, core=core(recovery="retrace", estop=True))["kind"] == fs.STOPPED
+
+
+@pytest.mark.parametrize("value,expected", [("retrace", "retrace"), ("bridge", "bridge"), ("spin", None),
+                                            (3, None), (None, None)])
+def test_recovery_is_a_known_phase_or_nothing(value, expected):
+    assert fs.validate_face_inputs(handover(recovery=value), NOW)["recovery"] == expected
+
+
+def test_an_old_hand_over_without_recovery_reads_as_none():
+    assert fs.validate_face_inputs(handover(), NOW)["recovery"] is None

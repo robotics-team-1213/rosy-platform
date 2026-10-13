@@ -3,11 +3,17 @@
 
 import math
 import os
+import sys
 from typing import List
+
+_LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_parts import observer_steering_law
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -72,6 +78,58 @@ def generate_launch_description():
         # 1-2 run exactly as before.
         DeclareLaunchArgument("dock_observer", default_value="false"),
         simulation,
+        OpaqueFunction(function=_line_observer, kwargs={"line_config": line_config, "control_share": control_share}),
+        Node(
+            package="control",
+            executable="dock_observer_node",
+            name="dock_observer_node",
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("dock_observer")),
+            parameters=[{
+                "use_sim_time": True,
+                # Declared Gazebo camera: front_camera_link on base_footprint
+                # from the URDF chain, as gz sdf -p places the sensor
+                # (0.0284809, 0, 0.0601944): 0.020 + 0.015*cos(25 deg)
+                # - 0.0121*sin(25 deg) ahead, 0.028 + 0.0495
+                # - 0.015*sin(25 deg) - 0.0121*cos(25 deg) high.
+                "camera_geometry_source": "GAZEBO",
+                "camera_height_m": 0.060194,
+                "camera_pitch_rad": math.radians(25.0),
+                "camera_hfov_rad": 1.1519,
+                "camera_x_offset_m": 0.028481,
+                "tag_id": 7,
+                "tag_size_m": 0.05,
+            }],
+        ),
+        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
+        # Display JPEG only; no road/observation, so traffic_policy is untouched.
+        Node(
+            package="gz_sim",
+            executable="sim_jpeg_relay.py",
+            name="sim_jpeg_relay",
+            output="screen",
+            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
+            # subscription cost ~24% of a core against <1% without (2026-10-10).
+            remappings=[("camera/image_raw", "camera/front")],
+        ),
+        Node(
+            package="core",
+            executable="core",
+            name="core",
+            output="screen",
+            parameters=[{"use_sim_time": True}],
+            # D-193 7: the dev tokens below exist only with ROSY_DEV_AUTH=1.
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay"), "ROSY_DEV_AUTH": "1"},
+        ),
+        LogInfo(msg=(
+            "map_v2_fleet lane sim: http://127.0.0.1:8080/dashboard "
+            "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
+            "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
+    ])
+
+
+def _line_observer(context, *, line_config, control_share):
+    return [
         Node(
             package="control",
             executable="line_observer_node",
@@ -118,41 +176,6 @@ def generate_launch_description():
                 # ahead of base_link (D-397 URDF chain at cam_tilt_deg 25).
                 "lane_corner_turning": True,
                 "camera_x_offset_m": 0.028481,
-            }],
-        ),
-        Node(
-            package="control",
-            executable="dock_observer_node",
-            name="dock_observer_node",
-            output="screen",
-            condition=IfCondition(LaunchConfiguration("dock_observer")),
-            parameters=[{
-                "use_sim_time": True,
-                # Declared Gazebo camera: front_camera_link on base_footprint
-                # from the URDF chain, as gz sdf -p places the sensor
-                # (0.0284809, 0, 0.0601944): 0.020 + 0.015*cos(25 deg)
-                # - 0.0121*sin(25 deg) ahead, 0.028 + 0.0495
-                # - 0.015*sin(25 deg) - 0.0121*cos(25 deg) high.
-                "camera_geometry_source": "GAZEBO",
-                "camera_height_m": 0.060194,
-                "camera_pitch_rad": math.radians(25.0),
-                "camera_hfov_rad": 1.1519,
-                "camera_x_offset_m": 0.028481,
-                "tag_id": 7,
-                "tag_size_m": 0.05,
-            }],
-        ),
-        Node(
-            package="core",
-            executable="core",
-            name="core",
-            output="screen",
-            parameters=[{"use_sim_time": True}],
-            # D-193 7: the dev tokens below exist only with ROSY_DEV_AUTH=1.
-            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay"), "ROSY_DEV_AUTH": "1"},
-        ),
-        LogInfo(msg=(
-            "map_v2_fleet lane sim: http://127.0.0.1:8080/dashboard "
-            "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
-            "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
-    ])
+            }, observer_steering_law(LaunchConfiguration("core_overlay").perform(context))],
+        )
+    ]

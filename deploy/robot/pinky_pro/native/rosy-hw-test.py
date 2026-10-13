@@ -78,13 +78,17 @@ HANDOFF_POLL_S = 0.2
 HANDOFF_STATES = ("done", "unavailable", "failed")
 MAX_HANDOFF_BYTES = 1024
 MAX_DETAIL = 200
-ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
+ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber", "identify_blue_quiet", "identify_amber_quiet")
 REQUEST_KEYS = {"action", "request_id", "requested_at", "by"}
 MAX_REQUEST_BYTES = 1024
 MAX_BY = 128
 REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
+REASON = re.compile(r"[A-Z][A-Z_]{0,39}")
 #: A request older than this (a path unit started late, a leftover file) starts nothing.
 REQUEST_MAX_AGE_S = 60.0
+#: D-472 4: an identity blink must end within 6 s of the Fleet request. CORE's request may be
+#: this old here; rosy-face takes the hand-over within 1 s and stops the blink after 3.5 s.
+IDENTIFY_MAX_AGE_S = 1.5
 #: rosy-boot-display.py BUZZER_LINES / BUZZER_DEFAULT_LINE (board.yaml boot_display.buzzer).
 BUZZER_LINES = frozenset({4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26})
 BUZZER_DEFAULT_LINE = 4
@@ -136,7 +140,8 @@ def read_request(path: Path, now: Optional[float] = None) -> Optional[dict]:
     if requested.tzinfo is None:
         return None
     age = (now if now is not None else time.time()) - requested.timestamp()
-    if not -5.0 <= age <= REQUEST_MAX_AGE_S:
+    limit = IDENTIFY_MAX_AGE_S if data["action"].startswith("identify_") else REQUEST_MAX_AGE_S
+    if not -5.0 <= age <= limit:
         return None
     return data
 
@@ -160,8 +165,10 @@ def lamp_owned(text: str) -> bool:
     return rosy_display_env.flag(rosy_display_env.parse_env(text), rosy_display_env.LAMP_KEY)[0]
 
 
-def read_handoff_result(path: Path, request_id: str) -> Optional[tuple[str, str]]:
-    """The boot display's answer for ``request_id``, strictly, or None (not yet, or not trusted)."""
+def read_handoff_result(path: Path, request_id: str, *, with_reason: bool = False) -> Optional[tuple]:
+    """The boot display's answer for ``request_id``, strictly, or None (not yet, or not trusted).
+
+    ``with_reason`` adds rosy-face's identify refusal code (D-596 rev 2026-10-10), or None."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
         | getattr(os, "O_CLOEXEC", 0)
     try:
@@ -186,7 +193,10 @@ def read_handoff_result(path: Path, request_id: str) -> Optional[tuple[str, str]
     state, detail = data.get("state"), data.get("detail")
     if state not in HANDOFF_STATES or not isinstance(detail, str):
         return None
-    return state, detail[:MAX_DETAIL]
+    if not with_reason:
+        return state, detail[:MAX_DETAIL]
+    reason = data.get("reason")
+    return state, detail[:MAX_DETAIL], reason if isinstance(reason, str) and REASON.fullmatch(reason) else None
 
 
 class System:
@@ -338,7 +348,7 @@ def run_lamp(system: System, request_id: str) -> tuple[str, str]:
 
 def run_identify(system: System, request_id: str, action: str) -> tuple[str, str]:
     """Identity light is never driven behind rosy-face's safety/state owner."""
-    if not lamp_owned(_read_text(system.path(DISPLAY_ENV))) or not _display_takes_it(system):
+    if system.unit_state("rosy-face.service") != "active" or not _display_takes_it(system):
         return UNAVAILABLE, "rosy-face가 램프를 소유하지 않음 — 식별 점멸 거절"
     return system.handoff(action, request_id)
 
@@ -405,6 +415,11 @@ def main(argv: Optional[list[str]] = None, *, system: Optional[System] = None,
     result = {"schema": SCHEMA, "request_id": request["request_id"], "action": request["action"],
               "state": state, "detail": detail, "started_at": started,
               "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    if request["action"].startswith("identify_"):
+        # D-596 rev 2026-10-10: CORE hands rosy-face's refusal reason on to Fleet.
+        answer = read_handoff_result(system.path(HANDOFF_RESULT), request["request_id"], with_reason=True)
+        if answer is not None and answer[2] is not None:
+            result["reason"] = answer[2]
     write_atomic(args.root / RESULT, json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n",
                  0o640, group(CORE_GROUP))
     print(json.dumps({"hw_test": request["action"], "state": state}), flush=True)

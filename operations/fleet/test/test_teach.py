@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from hashlib import sha256
 
 import pytest
@@ -76,8 +77,7 @@ def test_record_stop_confirm_appends_a_draft_edge_and_audits():
         with pytest.raises(TeachError) as err:
             await service.start("rosy_60", "eve")
         assert err.value.code == "TEACH_BUSY" and err.value.status == 409
-        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.0, 0.5, "LOCALIZED", 0.6),
-                                      (1.5, 0.0, "DEGRADED", 0.3), (1.9, 0.0)])
+        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.9, 0.0)])
         assert [p[:2] for p in service.view()["recording"]["points"]] == [
             [0.02, 0.0], [0.5, 0.01], [1.0, 0.0], [1.9, 0.0]]
         return view, await service.stop("bob")
@@ -130,6 +130,23 @@ def test_confirm_keeps_the_draft_revision_rule():
                           drive_mode="free", speed_cap_mps=0.3, width_m=0.3, expected_revision=revision,
                           principal_id="bob")       # a refused confirm keeps the recording
     assert out["draft"]["saved_by"] == "bob" and len(out["draft"]["map"]["edges"]) == 2
+
+
+@pytest.mark.parametrize('state,bridge', [('DEGRADED', 0.3), ('UNKNOWN', 0), ('LOCALIZED', 0.6)])
+def test_lost_pose_stops_recording_without_bridging_the_unobserved_gap(state, bridge):
+    service, poses, store, _clock = _service()
+
+    async def go():
+        await service.start('rosy_60', 'bob')
+        await _drive(service, poses, [(0.5, 0), (1, 0), (1.5, 0, state, bridge), (1.9, 0)])
+
+    run(go())
+    view = service.view()
+    assert view['recording'] is None
+    assert view['pending'][0]['reason'] == 'pose_lost'
+    assert view['pending'][0]['polyline'] == [[0, 0], [1, 0]]
+    assert store.draft_view()['map'] is None
+    assert store.active()[0] == 1
 
 
 def test_stop_without_confirm_is_dropped_after_10_minutes_and_short_runs_are_refused():
@@ -199,6 +216,57 @@ def _app(tmp_path):
     poses = Poses()
     app = create_app(console, task_service=tasks, site_users=users, site_maps=store, map_pose_port=poses)
     return TestClient(app), tasks, store, poses
+
+
+@pytest.mark.parametrize('action', ['start', 'place'])
+def test_localized_writes_refuse_activation_during_localization_read(tmp_path, monkeypatch, action):
+    client, _tasks, store, poses = _app(tmp_path)
+    poses.at(1.0, 0.5)
+    entered, release = threading.Event(), asyncio.Event()
+
+    async def delayed_refresh(*args, **kwargs):
+        entered.set()
+        await release.wait()
+    monkeypatch.setattr(poses, 'refresh', delayed_refresh)
+    async def write():
+        if action == 'start':
+            return await client.app.state.teach.start('rosy_60', 'bob')
+        return await client.app.state.teach.place('rosy_60', name='old_pose', kind='stop',
+            expected_revision=None, principal_id='bob')
+    with client:
+        future = client.portal.start_task_soon(write)
+        try:
+            assert entered.wait(5)
+            draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
+            assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+                json={'expected_revision': draft['revision']}).status_code == 200
+        finally:
+            client.portal.call(release.set)
+        with pytest.raises(TeachError) as error:
+            future.result(timeout=5)
+        assert error.value.code == 'TEACH_MAP_CHANGED'
+        assert client.app.state.teach.view()['recording'] is None
+        assert store.draft_view()['map'] is None
+
+
+def test_activation_preserves_running_teach_and_allows_stopped_pending_records(tmp_path):
+    client, _tasks, store, poses = _app(tmp_path)
+    with client:
+        draft = store.save_draft(SiteMap.model_validate(MAP), expected_revision=None, principal_id='bob')
+        active = store.active_view()
+        started = client.post('/api/fleet/teach/start', headers=OPERATOR, json={'robot_id': 'rosy_60'})
+        assert started.status_code == 200
+        refused = client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+            json={'expected_revision': draft['revision']})
+        assert refused.status_code == 409 and refused.json()['detail']['code'] == 'SITE_MAP_ROUTE_ACTIVE'
+        assert store.active_view() == active and store.draft_view() == draft
+        assert client.get('/api/fleet/teach', headers=VIEWER).json()['recording']['teach_id'] == started.json()['recording']['teach_id']
+        poses.at(1, 0)
+        client.portal.call(client.app.state.teach.sample)
+        assert client.post('/api/fleet/teach/stop', headers=OPERATOR).status_code == 200
+        assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+            json={'expected_revision': draft['revision']}).status_code == 200
+        assert client.get('/api/fleet/teach', headers=VIEWER).json()['pending']
 
 
 def test_teach_api_needs_a_named_operator_and_is_audited(tmp_path):

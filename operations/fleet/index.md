@@ -50,10 +50,18 @@
 | D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 |
 | D-455 | 방에서 선으로 돌아오는 구간은 지도 자세가 정하고, 오도메트리 좌표는 차선에 올리지 않는다 |
 | D-456 | 같은 LAN에서 장비를 선택하고 상대 화면에서 승인한다 — 오프라인과 로그인 만료는 페어링 해제가 아니다 |
+| D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-488 | 관제(Fleet)가 현장 지도의 주소·방향 있는 길로 경로를 잡아 로봇을 보낸다 — 위치는 Rosy Cam이 주, 지도는 주행으로 가르치고 콘솔에서 확정한다 |
 | D-489 | 관제 경로 계획은 방향 있는 차로 그래프에서 "차로 단위 상태"로 시간 비용 A*를 푼다 — 전역 경로는 Fleet, 국소 추종은 로봇, 다중 로봇 교통은 별도 층 |
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
+| D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 
 ## 계획·결과 문서
 
@@ -78,6 +86,8 @@
 - [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
+- [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -89,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
-- 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
-- 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정
-- 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
-- 2026-10-07 · uncommitted · feat(fleet): 조감도 낡은 카메라 교정 감지 — 실영상 대신 미터 눈금과 경고
+- 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
+- 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
+- 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
+- 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source

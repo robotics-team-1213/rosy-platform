@@ -3,6 +3,9 @@
 
 # observer
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Host-side read-only observation service. Camera frames in, lamp-state readings out.
