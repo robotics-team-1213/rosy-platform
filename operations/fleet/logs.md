@@ -3527,3 +3527,8 @@
 - 변경: `fleet/server/AGENTS.md`의 옛 `web` 편집 안내를 `operations/ui/console` 정본과 설치 `fleet/server/web` mapping으로 정정했다.
 - 증거: `fleet._source_layout.console_root`, `static_routes.WEB_ROOT`와 실제 Console source holder를 읽었다. 링크/원격 검사·착지 결과는 X: `folder-guidance-p0` 세션과 Git으로 확인한다.
 - gate 변화: 없음. SQLite/auth/admission/serving은 수정하지 않았다.
+
+## 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
+- 변경: 규칙 선택 계약(`rosy-contracts-learning` 0.1.12)이 `REALIGN` ANSWER를 받고 `pipeline.selection_receipt`가 조작 본문을 `selection.realign_sha256`으로만 결속한다. R9 선택 하나가 그 poll 전체의 선택 원장과 모델 baseline을 버리던 결함을 고쳤다. `pipeline.candidate`는 같은 막힘에서 `realign_hold:*`를 보낸 뒤에는 보류 사유가 풀려도 REALIGN을 다시 고르지 않는다(자율 주행 로봇 포함). `loop._rule_config`가 `realign_robots`와 복구 영역을 설정 digest에 넣는다.
+- 증거: `test_rule_selection.py`(R9 기록과 같은 poll의 다른 로봇 기록 유지, realign 설정 변경 시 baseline 거절), `test_stuck_realign.py`(이중 등록 로봇의 보류 유지). 원격 시험 로그는 X: `land-recent/realign-fu` 세션이다.
+- gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.
