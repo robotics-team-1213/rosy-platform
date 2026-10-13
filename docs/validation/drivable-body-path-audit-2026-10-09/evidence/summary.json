@@ -1,0 +1,130 @@
+{
+  "prior_summary_sha256": "d91dcb0c033feb3c2caa7700bb1e7382b89fd261560048794c00ffc3f063dd54",
+  "rule": {
+    "angular_rps": 0,
+    "body_front_x_m": 0.04205,
+    "body_half_width_m": 0.05655,
+    "body_rear_x_m": -0.076,
+    "body_rotation_radius_m": 0.08257,
+    "lidar_forward_deg": 180,
+    "lidar_x_m": -0.017,
+    "linear_mps": 0.08,
+    "max_scan_age_s": 0.15,
+    "min_valid_front_beam_fraction": 0.7,
+    "path_horizon_m": 0.4,
+    "stop_gap_m": 0.038400000000000004
+  },
+  "scope": "hypothetical_straight_path_proxy_not_driving_or_ground_truth",
+  "sessions": {
+    "082612": {
+      "anchors": {
+        "2129": {
+          "beams": 80,
+          "path_gap_m": null,
+          "sector_m": 0.72998,
+          "valid_beams": 79
+        },
+        "884": {
+          "beams": 80,
+          "path_gap_m": 0.18155,
+          "sector_m": 0.22705,
+          "valid_beams": 79
+        }
+      },
+      "counts": {
+        "hypothetical_stop": 0,
+        "path_near_030m": 1390,
+        "path_near_broad_mask": 990,
+        "sector_near_030m": 1392,
+        "sector_near_broad_mask": 990,
+        "usable": 1968
+      },
+      "frames": 2487,
+      "min_observed_path_gap_m": 0.10403436968845195
+    },
+    "091340": {
+      "anchors": {
+        "448": {
+          "beams": 80,
+          "path_gap_m": 0.2314,
+          "sector_m": 0.2561,
+          "valid_beams": 58
+        },
+        "630": {
+          "beams": 80,
+          "path_gap_m": 0.235,
+          "sector_m": 0.27197,
+          "valid_beams": 79
+        }
+      },
+      "counts": {
+        "hypothetical_stop": 0,
+        "path_near_030m": 273,
+        "path_near_broad_mask": 273,
+        "sector_near_030m": 271,
+        "sector_near_broad_mask": 271,
+        "usable": 475
+      },
+      "frames": 642,
+      "min_observed_path_gap_m": 0.10357706554502591
+    },
+    "143038": {
+      "anchors": {
+        "55": {
+          "beams": 80,
+          "path_gap_m": null,
+          "sector_m": 0.65186,
+          "valid_beams": 57
+        },
+        "80": {
+          "beams": 80,
+          "path_gap_m": null,
+          "sector_m": 0.52686,
+          "valid_beams": 57
+        }
+      },
+      "counts": {
+        "hypothetical_stop": 0,
+        "path_near_030m": 0,
+        "path_near_broad_mask": 0,
+        "sector_near_030m": 0,
+        "sector_near_broad_mask": 0,
+        "usable": 95
+      },
+      "frames": 124,
+      "min_observed_path_gap_m": null
+    },
+    "143211": {
+      "anchors": {
+        "55": {
+          "beams": 80,
+          "path_gap_m": null,
+          "sector_m": 0.59619,
+          "valid_beams": 73
+        },
+        "63": {
+          "beams": 80,
+          "path_gap_m": 0.10263,
+          "sector_m": 0.17102,
+          "valid_beams": 69
+        },
+        "80": {
+          "beams": 80,
+          "path_gap_m": 0.05097,
+          "sector_m": 0.11603,
+          "valid_beams": 73
+        }
+      },
+      "counts": {
+        "hypothetical_stop": 0,
+        "path_near_030m": 20,
+        "path_near_broad_mask": 20,
+        "sector_near_030m": 19,
+        "sector_near_broad_mask": 19,
+        "usable": 83
+      },
+      "frames": 83,
+      "min_observed_path_gap_m": 0.04913592287186084
+    }
+  }
+}

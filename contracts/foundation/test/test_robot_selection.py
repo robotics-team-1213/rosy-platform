@@ -13,12 +13,12 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 
 @pytest.fixture(autouse=True)
 def _no_operator_overlay(monkeypatch):
-    for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE", "ROSY_DEVICE_NAME"):
+    for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE", "ROSY_DEVICE_NAME", "ROSY_DEVICE_UID"):
         monkeypatch.delenv(name, raising=False)
 
 
 def test_robot_config_dir_falls_back_to_the_source_tree(no_ament_share):
-    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def test_default_robot_is_pinky_pro():
@@ -51,7 +51,7 @@ def test_rosy_robot_env_must_be_a_package_name(monkeypatch, tmp_path, bad):
 
 
 def test_existing_robot_package_resolves_to_its_source_config(no_ament_share):
-    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def test_unknown_robot_names_the_package_and_how_to_fix_it(no_ament_share):
@@ -69,11 +69,11 @@ def test_unsourced_ament_falls_back_to_the_source_tree(fake_ament):
         raise OSError("AMENT_PREFIX_PATH unset")
 
     fake_ament(unset)
-    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def test_package_not_found_falls_back_to_the_source_tree(no_ament_share):
-    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+    assert robot_config_dir("pinky_pro") == SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def test_installed_share_wins_over_the_source_tree(fake_ament, tmp_path):

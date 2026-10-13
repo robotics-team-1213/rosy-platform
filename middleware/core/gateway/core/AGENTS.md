@@ -17,7 +17,9 @@ Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the proces
 | `__init__.py` | Package marker |
 | `main.py` | Entry (`core=core.main:main`): applies Cyclone RMW via `core_common.rmw`, then `rclpy.init` → `RosyCoreNode.run` → shutdown |
 | `node.py` | Assembles profile/capabilities/services (`SOFTWARE_VERSION` from `core_common.identity`), starts uvicorn thread |
+| `trip_lease.py` | D-541 `TripLeaseManager` (one lease, TTL on the monotonic clock, policy only) and `build_trip_lease` (ends it on leaving NAVIGATION / e-stop, `halt` to IDLE on expiry, takeover, non-owner stop) |
 | `services.py` | `CoreServices` DI: ModeMachine/CommandManager, Docking*, Navigation*, Swarm, Power*, SafetyManager, StateManager (`core_features`), EventBus/FileAuditLog (`core_events`), inventory/protocol/evidence (`core_common`); `SHUTDOWN_SENTINEL_NAME` |
+| `line_follow_wiring.py` | Compatibility exports; implementation is `drive/line_follow.py` (D-627) |
 
 ## Subdirectories
 
@@ -25,8 +27,9 @@ Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the proces
 |-----------|---------|
 | `bridge/` | All ROS I/O (see `bridge/AGENTS.md`) |
 | `system/` | Host probe, ROS graph (see `system/AGENTS.md`) |
+| `drive/` | CORE Drive composition: line-follow binding and docking/swarm assembly; no new runtime or writer (D-627) |
 
-Feature managers, protocol schemas, config/identity/profile, and the API no longer live here: see `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, and `../../api_web/core_api_web/AGENTS.md`. Operator screens are `middleware/ui/robot`.
+Feature managers, protocol schemas, config/identity/profile, and the API no longer live here: see `../../services/core_features/AGENTS.md`, `../../../../contracts/foundation/core_common/AGENTS.md`, `../../events/core_events/AGENTS.md`, and `../../api/core_api_web/AGENTS.md`. Operator screens are `middleware/ui/robot`.
 
 ## For AI Agents
 

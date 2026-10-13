@@ -192,6 +192,14 @@ python tools/ssh/rosy_ssh_share.py list --robot <robot-ip> [--name <팀이름>]
 - 관제 콘솔(브라우저)은 site 방화벽이 `tailscale0`을 허용 목록에 두면 tailnet에서 열린다.
   콘솔 계정·역할(D-276)은 그대로다.
 
+### 로봇 Tailscale 설치 상태 (2026-10-09, D-530 6)
+
+- 두 로봇(`rosy-pinky-9dfk`, `rosy-pinky-8kcn`)에 공식 설치 스크립트로 Tailscale을 설치하고 대화형으로 로그인했다.
+  `--ssh` 없이 올렸으므로 로봇 SSH는 이 문서의 키 경로뿐이다.
+- 열린 일: 아직 태그가 없고 사용자 계정 소유라 키 만료가 적용된다. 태그를 붙이고 만료를 끄기 전에는 만료 때 로봇이 tailnet에서 빠진다.
+- 이미지의 `rosy-tailscale-join`은 여전히 `/etc/rosy/tailscale-join.json`을 기다린다. 수동 설치와 이어지지 않으므로, 이미지 쪽 정리는 별도 브랜치의 일이다.
+- 주소는 저장소에 적지 않는다. MagicDNS 이름으로 접속한다.
+
 ## 보안 메모 (ADR D-418 Risks)
 
 - **R1. 임시 비밀번호가 켜진 동안의 유출과 무차별 대입.** 사설 대역, `MaxAuthTries 3`, 최대 60분,

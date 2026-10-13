@@ -192,6 +192,7 @@ export function mount(root, ctx) {
     setStatus(safetyReadStatus, `안전 정책을 읽지 못했습니다: ${error.message}`);
   });
   function markSafetyDirty() {
+    if (disposed || safetyPending) return;
     safetyDirty = true;
     setStatus(safetyActionStatus, "저장되지 않은 수정 사항이 있습니다.");
   }

@@ -222,10 +222,12 @@ class Run:
                            "\"$j\" | grep -ciE 'ConfigError|ValueError|refus') || echo 'errors=?'")
         return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
 
-    def restart_core(self):
+    def restart_core(self, rebase=False):
         """Restart CORE and show the new process reads overlay_path without a config error.
         CORE has no endpoint for effective line_follow config; the process env, its journal and
-        a steady PID are the readback (D-512 decision 6)."""
+        a steady PID are the readback (D-512 decision 6). With rebase the tether guard takes the
+        odometry pose after the restart as its reference (tether.Guard.rebase)."""
+        pose_before = self.pose_now() if rebase else None
         before = self.core_proc().get("pid")
         if self.sh("sudo -n systemctl restart rosy-core")[0] != 0:
             raise Abort("systemctl restart rosy-core failed")
@@ -249,6 +251,13 @@ class Run:
         if again.get("pid") != proc.get("pid") or again.get("active") != "active" or again.get("errors") != "0":
             raise Abort(f"CORE not steady after restart (pid {proc.get('pid')} -> {again.get('pid')}, "
                         f"config errors {again.get('errors')})")
+        if rebase and getattr(self, "tether", None) is not None:
+            self.tether.rebase(pose_before, self.pose_now())
+
+    def pose_now(self):
+        """The odometry pose from /robot/state, None when it cannot be read."""
+        s, b = self.r.core.call("GET", "/robot/state")
+        return tether.pose_of(b.get("pose")) if s == 200 and isinstance(b, dict) else None
 
     def overlay(self):
         if not self.plan["overlay"]:
@@ -268,7 +277,7 @@ class Run:
         data = yaml.safe_dump(new, sort_keys=True, allow_unicode=True).encode("utf-8")
         self.marker(applied_sha="sha256:" + hashlib.sha256(data).hexdigest())
         self.write_overlay(data)
-        self.restart_core()
+        self.restart_core(rebase=True)
         back = flatten(yaml.safe_load(self.read_overlay().decode("utf-8")) or {})
         wrong = {k: back.get(k) for k, v in flatten(self.plan["overlay"]).items() if back.get(k) != v}
         if wrong:
@@ -289,7 +298,7 @@ class Run:
         """CORE line-follow at 10 Hz with the hold deadman, events and pose every 0.5 s."""
         stop, seen = self.plan["stop"], {"states": {}, "reasons": {}, "events": {}}
         abort_reasons, abort_events = stop.get("abort_on_reasons", []), stop.get("abort_on_events", [])
-        ok_still = stop.get("ok_still_reasons", [])
+        ok_still, ok_events = stop.get("ok_still_reasons", []), stop.get("ok_events", [])
         _, ev = self.r.core.call("GET", "/events?limit=1")
         since = ev.get("last_seq") if isinstance(ev, dict) else None
         t0 = last_ok = self.r.now()
@@ -314,7 +323,7 @@ class Run:
                         since = max(since or 0, int(e.get("seq", 0)))
                         typ = str(e.get("type"))
                         seen["events"][typ] = seen["events"].get(typ, 0) + 1
-                        if any(fnmatch.fnmatch(typ, p) for p in abort_events):
+                        if typ not in ok_events and any(fnmatch.fnmatch(typ, p) for p in abort_events):
                             raise Abort(f"event {typ}: {json.dumps(e.get('data'))[:200]}")
                 ss, st = self.call("GET", "/robot/state")
                 st = st if ss == 200 and isinstance(st, dict) else None
@@ -572,7 +581,7 @@ def main(argv=None, robot=None):
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--camera-verdict")
     mode.add_argument("--restore", metavar="EVIDENCE_DIR", help=f"undo a run that died, from its {MARKER}")
-    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); no robot call")
+    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); lamp blink only")
     ap.add_argument("--evidence-dir")
     ap.add_argument("--summary-dir")
     ap.add_argument("--dry-run", action="store_true")

@@ -1,0 +1,10 @@
+{"t": 84.0, "kind": "lap", "robot": "a", "lap": 2}
+{"t": 100.0, "kind": "lap", "robot": "b", "lap": 2}
+{"t": 188.5, "kind": "lap", "robot": "a", "lap": 3}
+{"t": 204.5, "kind": "lap", "robot": "b", "lap": 3}
+{"t": 293.0, "kind": "lap", "robot": "a", "lap": 4}
+{"t": 309.0, "kind": "lap", "robot": "b", "lap": 4}
+{"t": 397.5, "kind": "lap", "robot": "a", "lap": 5}
+{"t": 413.5, "kind": "lap", "robot": "b", "lap": 5}
+{"t": 502.0, "kind": "lap", "robot": "a", "lap": 6}
+{"t": 518.0, "kind": "lap", "robot": "b", "lap": 6}

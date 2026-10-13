@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 from typing import Any
+from uuid import UUID
 
 
 class GoalTracker:
@@ -29,6 +30,10 @@ class GoalTracker:
         self._generation = 0
         self._live: dict[int, Any] = {}
         self._correlation_ids: dict[int, str | None] = {}
+        self._native_ids: dict[int, UUID] = {}
+        self._pending_generations: set[int] = set()
+        self._unresolved_overflow = False
+        self._transport_generation = 0
         self._cancelled_correlation_ids: dict[int, str] = {}
 
     @property
@@ -36,13 +41,30 @@ class GoalTracker:
         with self._lock:
             return len(self._live)
 
-    def opening(self, correlation_id: str | None = None) -> int:
+    def transport_snapshot(self) -> tuple[int, bool, bool]:
+        with self._lock:
+            return (self._transport_generation, bool(self._pending_generations) or self._unresolved_overflow,
+                    bool(self._live))
+
+    def opening(self, correlation_id: str | None = None,
+                native_run_id: UUID | None = None) -> int:
         """목표를 보내기 직전. 이 세대 번호를 콜백까지 들고 간다."""
         with self._lock:
             self._correlation_ids.clear()
             self._generation += 1
+            self._transport_generation += 1
+            self._pending_generations.add(self._generation)
+            if len(self._pending_generations) > self.MAX_CANCELLED_CORRELATIONS:
+                self._pending_generations.pop()
+                self._unresolved_overflow = True
             self._correlation_ids[self._generation] = correlation_id
+            if native_run_id is not None:
+                self._native_ids[self._generation] = native_run_id
             return self._generation
+
+    def native_run_id(self, generation: int) -> UUID | None:
+        with self._lock:
+            return self._native_ids.get(generation)
 
     def correlation_id(self, generation: int) -> str | None:
         with self._lock:
@@ -76,19 +98,27 @@ class GoalTracker:
                 self._correlation_ids.pop(generation, None)
                 return False
             self._live[generation] = handle
+            self._pending_generations.discard(generation)
+            self._transport_generation += 1
             return True
 
     def rejected(self, generation: int) -> bool:
         with self._lock:
             self._live.pop(generation, None)
+            self._pending_generations.discard(generation)
             self._correlation_ids.pop(generation, None)
+            self._native_ids.pop(generation, None)
+            self._transport_generation += 1
             return generation == self._generation
 
     def finished(self, generation: int) -> bool:
         """결과 도착. 현재 세대면 True, 선점된 목표의 뒤늦은 결과면 False."""
         with self._lock:
             self._live.pop(generation, None)
+            self._pending_generations.discard(generation)
             self._correlation_ids.pop(generation, None)
+            self._native_ids.pop(generation, None)
+            self._transport_generation += 1
             return generation == self._generation
 
     def cancel_all(self) -> list[Any]:
@@ -99,6 +129,9 @@ class GoalTracker:
         """
         with self._lock:
             handles = list(self._live.values())
+            self._pending_generations.update(self._live)
+            if len(self._pending_generations) > self.MAX_CANCELLED_CORRELATIONS:
+                self._unresolved_overflow = True
             active_correlations = self._correlation_ids.items()
             for gen, corr_id in active_correlations:
                 if corr_id is not None:
@@ -109,7 +142,11 @@ class GoalTracker:
                 self._cancelled_correlation_ids.pop(oldest)
             self._live.clear()
             self._correlation_ids.clear()
+            # Late callback identity remains tied to its original generation.
+            while len(self._native_ids) > self.MAX_CANCELLED_CORRELATIONS:
+                self._native_ids.pop(next(iter(self._native_ids)))
             self._generation += 1
+            self._transport_generation += 1
             return handles
 
 
@@ -120,12 +157,22 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
     rclpy 없이 전부 확인할 수 있도록 핸들은 불투명 객체다. `attach_result`
     (result future 를 이 세대에 묶는 일)만 브리지가 준다 — 그쪽이 ROS 다.
     """
-    goal_handle = future.result()
+    native_run_id = goals.native_run_id(generation)
+    try:
+        goal_handle = future.result()
+    except Exception:
+        if native_run_id is not None:
+            nav.on_backend_unknown(native_run_id)
+            return
+        raise
     if goal_handle is None or not goal_handle.accepted:
         correlation_id = goals.correlation_id(generation)
         was_cancelled = goals.is_cancelled(generation)
         if goals.rejected(generation):
-            if correlation_id is None:
+            if native_run_id is not None:
+                nav.on_result(False, "REJECTED", correlation_id=correlation_id,
+                              native_run_id=native_run_id)
+            elif correlation_id is None:
                 nav.on_result(False, "REJECTED")
             else:
                 nav.on_result(False, "REJECTED", correlation_id=correlation_id)
@@ -136,15 +183,15 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
         return
     if not goals.accepted(generation, goal_handle):
         # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
-        # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다.
+        # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다. 취소 뒤 결과까지
+        # 추적해야 pending generation 이 실제로 닫힌다 (CID 없는 goal 포함).
         goal_handle.cancel_goal_async()
-        is_correlated_cancel = (
-            goals.correlation_id(generation) is not None
-            and goals.is_cancelled(generation))
-        if is_correlated_cancel:
-            attach_result(goal_handle.get_result_async(), generation)
+        attach_result(goal_handle.get_result_async(), generation)
         return
-    nav.on_goal_accepted()
+    if native_run_id is None:
+        nav.on_goal_accepted()
+    else:
+        nav.on_goal_accepted(native_run_id=native_run_id)
     attach_result(goal_handle.get_result_async(), generation)
 
 
@@ -155,11 +202,19 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
     성공 여부가 아니라 상태 코드를 주므로 그 비교가 전부다.
     """
     correlation_id = goals.correlation_id(generation)
+    native_run_id = goals.native_run_id(generation)
+    result_error = None
+    try:
+        result = future.result()
+    except Exception as exc:
+        if native_run_id is not None:
+            nav.on_backend_unknown(native_run_id)
+            return  # keep the handle until explicit cancel; backend state is unknown
+        result_error = exc
+        result = None
     if not goals.finished(generation):
         if correlation_id is not None and goals.was_cancelled(generation):
-            try:
-                result = future.result()
-            except Exception:
+            if result is None:
                 return
             error = {5: "CANCELED", 6: "ABORTED"}.get(
                 result.status, "UNKNOWN")
@@ -171,13 +226,19 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
         # 이어지는 HOLD 의 취소가 통째로 무시된다.
         return
     try:
-        result = future.result()
-        if correlation_id is None:
+        if result is None:
+            raise result_error or RuntimeError("backend result unavailable")
+        if native_run_id is not None:
+            nav.on_result(result.status == 4, correlation_id=correlation_id,
+                          native_run_id=native_run_id)
+        elif correlation_id is None:
             nav.on_result(result.status == 4)
         else:
             nav.on_result(result.status == 4, correlation_id=correlation_id)
     except Exception as exc:
-        if correlation_id is None:
+        if native_run_id is not None:
+            nav.on_backend_unknown(native_run_id)
+        elif correlation_id is None:
             nav.on_result(False, str(exc))
         else:
             nav.on_result(False, str(exc), correlation_id=correlation_id)

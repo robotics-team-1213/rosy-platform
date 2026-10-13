@@ -43,7 +43,7 @@ function renderIdentity() {
   el("entry-role").hidden = !identity;
   el("entry-logout").hidden = !identity;
   el("auth-drawer").hidden = Boolean(identity);
-  el("dev-connect-row").hidden = Boolean(identity);
+  el("dev-connect-row").hidden = true;
   document.querySelector(".entry-heading h1").textContent = identity ? "작업을 선택하세요" : "로봇에 연결";
   document.querySelector(".entry-heading p").textContent = identity ? "로그인이 확인되었습니다. 필요한 작업 화면을 열 수 있습니다." : "로그인한 뒤 수행할 작업을 선택하세요.";
   if (!identity) {

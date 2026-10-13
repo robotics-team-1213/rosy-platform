@@ -301,7 +301,7 @@ def test_field_view_review_fixes_are_served():
     page = client.get("/console").text
     field_view = client.get("/console/assets/field-view.js").text
     vision_view = client.get("/console/assets/vision-view.js").text
-    styles = client.get("/console/assets/styles.css").text
+    styles = client.get("/console/assets/styles.css").text + client.get("/console/assets/fleet-header.css").text
 
     # Re-warp only when the frame, corners or size change; a hidden layer returns before warp.
     assert "if (warped?.key !== key)" in field_view
@@ -313,12 +313,14 @@ def test_field_view_review_fixes_are_served():
     assert '.map-stage[data-site-map="none"][data-map-state="unavailable"]' in styles
     assert ".map-stage:has(> .field-mismatch:not([hidden])) > .map-empty" not in styles
     # Tablet header (D-359 §6.4 supersedes the 40–70rem three-row grid): below the
-    # registered 90rem breakpoint the token, role and theme fold behind the 설정 toggle,
-    # so the token input never covers the wordmark and the stop keeps its own column.
-    assert "@media (width < 90rem)" in styles and '"brand pill clock more estop"' in styles
-    # D-501: the Cell link sits once in the shared document tab row.
-    assert '<a href="/console/cell">Cell</a>' in page
-    assert "#estop { grid-area: estop; }" in styles
+    # registered 90rem breakpoint token, role and theme fold behind the connection toggle.
+    # The inbox remains outside the fold and the shared 48px stop keeps its own column.
+    assert '.topbar-extra[data-open="true"]' in styles and '"identity status actions safety"' in styles
+    assert ".fleet-header-actions { grid-area: actions;" in styles
+    # D-501/D-641: the single Cell icon keeps its accessible label.
+    import re
+    assert re.findall(r'<a href="/console/cell" data-action-icon="cell" data-icon-only="">(.*?)</a>', page) == ["Cell"]
+    assert ".fleet-header-safety { grid-area: safety; justify-self: end; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
     # D-410 — 지도 레이어 안내는 운용 문서에, 보정 도구 문장은 설치 문서에 있다.

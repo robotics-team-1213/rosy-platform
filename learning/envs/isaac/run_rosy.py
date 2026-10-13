@@ -57,7 +57,11 @@ def main():
     from isaacsim import SimulationApp
 
     # Kit's default immediate exit(0) would hide exceptions raised below.
-    simulation_app = SimulationApp({"headless": args.headless, "fast_shutdown": False})
+    app_config = {"headless": args.headless, "fast_shutdown": False}
+    if args.headless:
+        app_config.update(width=640, height=480, anti_aliasing=0,
+                          extra_args=['--/app/extensions/excluded=["isaacsim.gui.menu"]'])
+    simulation_app = SimulationApp(app_config)
     guard = None
     wheel_drives = []
     watchdog_ready = False
@@ -260,7 +264,8 @@ def main():
                     force_zero_wheels(og.Controller, wheel_drives)
         finally:
             command_watchdog.ACTIVE_WATCHDOG = None
-            simulation_app.close()
+            from sdk_entrypoint import close_sdk
+            close_sdk(simulation_app, headless=args.headless)
 
 
 if __name__ == "__main__":

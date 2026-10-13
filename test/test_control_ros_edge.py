@@ -19,10 +19,11 @@ Honest holes, not oversights:
 
 import ast
 from pathlib import Path
+from runpy import run_path
 
 ROOT = Path(__file__).resolve().parents[1]
 PKG = ROOT / "middleware" / "perception"
-LIB = PKG / "control"
+control_sources = run_path(str(PKG / "test/control_sources.py"))["control_sources"]
 
 ROS_TOPS = {
     "rclpy", "std_msgs", "geometry_msgs", "nav_msgs", "sensor_msgs", "tf2_ros", "visualization_msgs",
@@ -57,12 +58,12 @@ KNOWN_ROS_LEAKS = {
 
 
 def _modules():
-    for path in sorted(LIB.rglob("*.py")):
+    for relative, path in control_sources():
         # Relative parts only: the checkout itself may live under a dot folder (.worktrees/).
-        if any(p.startswith(".") or p == "__pycache__" for p in path.relative_to(LIB).parts):
+        rel = Path(relative)
+        if any(p.startswith(".") or p == "__pycache__" for p in rel.parts):
             continue
-        rel = path.relative_to(PKG).with_suffix("")
-        parts = list(rel.parts)
+        parts = ["control", *rel.with_suffix("").parts]
         if parts[-1] == "__init__":
             parts = parts[:-1]
         yield ".".join(parts), path
@@ -97,6 +98,13 @@ def test_the_scan_sees_nodes_and_libraries():
     kinds = [_classify(path) for _, path in _modules()]
     assert sum(is_node for _, is_node in kinds) >= 10
     assert sum(not ros for ros, _ in kinds) >= 100
+
+
+def test_the_scan_includes_relocated_safety_and_tracking():
+    modules = dict(_modules())
+    drive = ROOT / "middleware/control/drive"
+    assert modules["control.safety.gate"] == drive / "safety/adapter/gate.py"
+    assert modules["control.wander.motion"] == drive / "tracking/wander/motion.py"
 
 
 def test_ros_types_stay_at_the_node_edge():

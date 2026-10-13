@@ -1,0 +1,181 @@
+{
+  "adr": "D-625",
+  "units": {
+    "core-api": {
+      "source": "middleware/core/api_web",
+      "target": "middleware/core/api",
+      "manual_safety": true,
+      "preserve": [
+        "core_api_web",
+        "HTTP/WebSocket contracts",
+        "ROS package and entry points"
+      ],
+      "consumers": [
+        "gateway composition",
+        "api/v1/safety.py and safety anchors",
+        "deploy image/Docker COPY",
+        "harness.yaml module registration",
+        "platform_parts.yaml current path",
+        "test sys.path and installed imports"
+      ]
+    },
+    "pinky-device": {
+      "source": "middleware/apps/device/pinky",
+      "target": "middleware/devices/pinky",
+      "manual_safety": false,
+      "preserve": [
+        "bringup, profile and description ROS packages",
+        "URDF and launch install paths"
+      ],
+      "consumers": [
+        "profiles and launch consumers",
+        "deploy robot image/native closure",
+        "harness.yaml three module roots",
+        "platform_parts.yaml three current paths",
+        "package-share/URDF installation",
+        "device stop/readback smoke"
+      ]
+    },
+    "omx-device": {
+      "source": "middleware/apps/device/omx",
+      "target": "middleware/devices/omx",
+      "manual_safety": true,
+      "preserve": [
+        "omx_adapter, agent and profile identities",
+        "ActionPort and arm command owner",
+        "cancel-to-HOLD and fresh-feedback recovery"
+      ],
+      "consumers": [
+        "Safety modules/anchors and independent review",
+        "local execution and manipulation imports",
+        "integration robot adapter consumers",
+        "profiles/deploy and entry points",
+        "harness.yaml and platform_parts.yaml nested roots",
+        "installed imports and stop/readback"
+      ]
+    },
+    "drive-nav2": {
+      "source": "middleware/core/navigation",
+      "target": "middleware/control/drive/planning/nav2",
+      "manual_safety": false,
+      "preserve": [
+        "navigation ROS package identity",
+        "CMake package-share installs",
+        "CORE final cmd_vel ownership"
+      ],
+      "consumers": [
+        "Pinky bringup launch",
+        "map/params/rviz and relative paths",
+        "CMake install and package.xml dependencies",
+        "deploy image/native closure",
+        "harness.yaml and platform_parts.yaml current path",
+        "navigation module and consumer tests"
+      ]
+    },
+    "drive-behavior-line-follow": {
+      "source": "middleware/core/services/core_features/line_follow",
+      "target": "middleware/control/drive/behaviors/line_follow",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.line_follow",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-docking": {
+      "source": "middleware/core/services/core_features/docking",
+      "target": "middleware/control/drive/behaviors/docking",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.docking",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-navigation": {
+      "source": "middleware/core/services/core_features/navigation",
+      "target": "middleware/control/drive/behaviors/navigation",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.navigation",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-localization": {
+      "source": "middleware/core/services/core_features/localization",
+      "target": "middleware/control/drive/behaviors/localization",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.localization",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-swarm": {
+      "source": "middleware/core/services/core_features/swarm",
+      "target": "middleware/control/drive/behaviors/swarm",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.swarm",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-road-behaviour": {
+      "source": "middleware/core/services/core_features/road_behaviour",
+      "target": "middleware/control/drive/behaviors/road_behaviour",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.road_behaviour",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    },
+    "drive-behavior-traffic-policy": {
+      "source": "middleware/core/services/core_features/traffic_policy",
+      "target": "middleware/control/drive/behaviors/traffic_policy",
+      "manual_safety": true,
+      "preserve": [
+        "core_features.traffic_policy",
+        "CORE final command authority"
+      ],
+      "consumers": [
+        "core_features source and sdist/wheel mapping",
+        "Safety tags and independent review",
+        "architecture import/size scans",
+        "native package closure"
+      ]
+    }
+  }
+}

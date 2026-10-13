@@ -1,0 +1,88 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "cue_turn_signs": {
+   "+": 40,
+   "-": 17
+  },
+  "cues_refused": [],
+  "pivot_started": true,
+  "pivot_cmd_count": 62,
+  "pivot_sign_changes": 0,
+  "pivot_duration_sim_s": 1.12,
+  "pivot_end_reason": "junction_waiting",
+  "latched": [
+   {
+    "action": "latched",
+    "state": "WRONG_WAY",
+    "fleet_epoch": "sim-s3-1791610624",
+    "seq": 4,
+    "principal_ref": null,
+    "latch": "fleet_turn_interrupted",
+    "angle_deg": null
+   }
+  ],
+  "odom_turned_deg": -22.0,
+  "yaw_err_odom_deg": -169.6,
+  "yaw_err_gt_deg": -170.3,
+  "start_err_gt_deg": -147.6,
+  "pivots_started": 1,
+  "halt_turned_deg": -14.5,
+  "all_reasons_after_first_pivot": [
+   [
+    "TRACKING",
+    "fleet_wrong_way_turn"
+   ],
+   [
+    "HOLD",
+    "junction_waiting"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   378.548,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   381.505,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   383.728,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   384.976,
+   "HOLD",
+   "junction_waiting"
+  ]
+ ],
+ "scenario": "s3",
+ "args": {
+  "scenario": "s3",
+  "out": "runs/s3_inner_exact180",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "exact180": true,
+  "box": false,
+  "seed": 33,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.98,
+ "capability_at_end": false
+}

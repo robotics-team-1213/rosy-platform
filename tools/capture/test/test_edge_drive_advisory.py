@@ -114,7 +114,8 @@ def test_drive_holds_inside_the_deadman_when_status_reads_are_slow(monkeypatch):
                 return 200, {"mode": body["mode"], "state": "WAITING", "reason": "no_observation"}
             return 200, {}
 
-    monkeypatch.setattr(edge_drive, "rec_start", lambda core: None)
+    monkeypatch.setattr(edge_drive, "rec_start", lambda core: "rec-1")
+    monkeypatch.setattr(edge_drive, "_recording_state", lambda core: {"id": "rec-1", "state": "recording"})
     monkeypatch.setattr(edge_drive, "rec_stop", lambda core: None)
     edge_drive.cmd_drive(SlowCore(), edge_drive.argparse.Namespace(max_s=1.5))
     gaps = [b - a for a, b in zip(holds, holds[1:])]
@@ -140,7 +141,8 @@ def test_drive_rearms_after_a_link_stall_release_then_gives_up(monkeypatch):
                 return 200, {"mode": body["mode"], "state": "WAITING", "reason": "no_observation"}
             return 200, {}
 
-    monkeypatch.setattr(edge_drive, "rec_start", lambda core: None)
+    monkeypatch.setattr(edge_drive, "rec_start", lambda core: "rec-1")
+    monkeypatch.setattr(edge_drive, "_recording_state", lambda core: {"id": "rec-1", "state": "recording"})
     monkeypatch.setattr(edge_drive, "rec_stop", lambda core: calls.append(("rec", "stop", None)))
     monkeypatch.setattr(edge_drive.time, "sleep", lambda s: None)
     edge_drive.cmd_drive(StallCore(), edge_drive.argparse.Namespace(max_s=5.0, rearm=2))

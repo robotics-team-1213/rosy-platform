@@ -271,3 +271,44 @@
 - 변경: 임시 연결 실패·요청 과다·일반 거절·자격 증명 없는 만료는 주의 글자·테두리로, 지문/인증서·형식 오류와 미정리 자격 증명은 기존 위험 채움으로 표시한다. Debug 전용 미리보기는 거절 사유를 받아 두 시각 범주를 재생한다.
 - 증거: 현재 debug APK JVM 367 passed, 빌드 성공; 320×640/글자 200%와 390×844/글자 130%의 첫 화면·합성 6상태 및 위험/주의 비교 원본은 `docs/validation/uiux-cam-pairing-severity-2026-10-07/result.md`에 기록했다.
 - gate 변화: LOCAL G2 부분 근거. 실제 폰·현장 수신기·설치자 G3는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(cam): D-544 노출 자동 보정 1단계 (기본 꺼짐)
+
+- 변경: 필드 영역(10 % 안쪽)의 clip/crush/mean을 재고(`LumaStats`), 순수 정책(`ExposureAssistPolicy`: 히스테리시스, dwell 3 s, 최소 간격 4 s, ±1.5 EV 한도)이 CameraX `setExposureCompensationIndex` 하나만 움직인다. 설정 `auto_exposure_assist`는 기본 꺼짐이고 스트림 화면의 버튼으로 켠다. 끄면 측정을 멈추고 지수를 0으로 되돌리며, 재바인딩·열 차단·손전등 점등 중에는 조정하지 않는다. 프레임 헤더·hello·배율·크롭·렌즈·해상도는 바꾸지 않는다.
+- 증거: `ExposureAssistPolicyTest` 9 passed, `assembleDebug` 성공. 전체 `testDebugUnitTest` 376 중 1 실패(`CameraPeerClientTest.approvedSourceSurvivesInterruptionAndDhcp`, `127.0.0.2` 소켓 타임아웃; 이 변경이 닿지 않는 페어링 시험, 같은 시험만 다시 돌려도 실패. 깨끗한 main 대조 안 함).
+- gate 변화: SOURCE 부분 근거(전체 GO 판정 보류). LOCAL 녹화 프레임, DEVICE(S21 강한 빛)는 대기다. 다른 세션이 장치를 점검 중이라 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · feat(cam): D-589 S2 Vision 인식 자동 노출 적용
+
+- 변경: 하향 `camera`를 엄격히 읽고(틀린 메시지는 기록만 하고 무시), 순수 정책 `RecognitionTuning`이 열 SEVERE(3) 유지 > 설정 스위치 꺼짐 > 60 s 안의 Vision 요청 > D-544 로컬 순으로 정한다. 허용 목록은 EV 지수(실제 −2.0…+1.0 EV를 기기 단계로 환산한 ceil/floor ∩ 기기 범위; 선로의 `ev`는 지수), AE·AWB 잠금, 노출 상한(AE 목표 fps 하한, 30 fps 이하 범위만), 60 Hz 안티밴딩이다. EV는 CameraX, 나머지는 Camera2 interop 캡처 옵션으로 재바인딩 없이 쓴다. EV를 바꾸면 잠금은 1 s 뒤에 건다. 카메라가 확인한 값과 지원 범위, 노출 시간·ISO·열 상태를 상향 `camera_state`로 알리고 hello 뒤에 다시 보낸다. 설정 화면에 "인식 자동 노출 (Vision)"(기본 켜짐), 스트림 화면에 한 줄 상태를 더했다. 기하(렌즈·배율·초점·해상도)는 바꾸지 않는다. 공유 벡터에 `camera_example`·`camera_state_example`을 더했다.
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 399 passed(새 `RecognitionTuningTest` 17, `CameraProtocolTest` 5, `OverheadLinkTest` +1). 로그 X: `DevTemp/cam-auto-tune-s2/`.
+- gate 변화: SOURCE 부분 근거. Python 쪽 벡터 시험(S1), S21 설치·현장(S4)은 대기다. 폰에 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · fix(cam): D-589 S2 독립 리뷰 반영
+
+- 변경: 쓴 값·확인된 값·진행 중 호출을 순수 클래스 `TuningWriter`로 옮겼다. 바인드마다 세대를 바꿔 이전 바인드의 응답을 버리고, CameraX가 카메라 id별로 남겨 두는 Camera2 interop 옵션을 지운다. 잠금은 노출 변화(EV·상한·안티밴딩)가 확인되고 1 s 지난 뒤, 확인이 없으면 3 s 뒤에 건다. 바인드 시각부터 잰다. 손전등이 켜지면 Vision 아래에서도 AE를 잠그지 않는다. 설정 스위치가 열 유지보다 먼저다(꺼짐이면 뜨거워도 `disabled`로 기본값). 노출 상한은 보고한 값을 그대로 돌려받으면 같은 범위를 고른다. 500 ms 안의 연속 요청은 버리되 seq는 돌려준다. 화면은 실제 EV(예: EV −1.0)를 보이고, Vision 중에는 D-544 줄을 숨긴다. 설정 줄 전체가 체크박스다. onOpen과 `publishCameraState`는 같은 잠금 안에서 STREAMING과 캐시 전송을 처리한다. 공유 벡터 `camera_example.max_exposure_us`를 33333으로 바꿨다(S1과 같은 변경).
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 409 passed(`RecognitionTuningTest` 22, 새 `TuningWriterTest` 5). 로그 X: `DevTemp/cam-auto-tune-s2/build-3.txt`.
+- gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · fix(cam): D-589 S2 재리뷰 반영
+
+- 변경: 손전등이 켜지거나 꺼지면 노출 변화로 보고(`TuningWriter.touch`) 잠금을 SETTLE_MS 동안, 그리고 그 뒤 촬영 결과가 한 장 올 때까지 풀어 둔다. 손전등 빛의 노출로 다시 잠그지 않는다. 열 유지 중에는 아무것도 바꾸지 않는다. 잠금은 마지막 변화 뒤의 촬영 결과가 있어야 걸리고, 바인드 뒤에는 첫 촬영 결과부터 시간을 잰다. 500 ms 안에 온 요청은 버리지 않고 기다렸다가(가장 새 것) 간격이 끝나면 적용하며, 기다리는 동안은 seq를 돌려주지 않는다. `step` KDoc에 fps·안티밴딩 "확인"은 적용이지 수렴이 아님을 적었다.
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 413 passed(`RecognitionTuningTest` 23, `TuningWriterTest` 8). 시험이 손전등 끔 직후 재잠금 결함(목표가 같으면 잠금을 풀지 않던 조기 반환)을 잡아 고쳤다. 로그 X: `DevTemp/cam-auto-tune-s2/build-5.txt`.
+- gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
+
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+
+- 변경: 공용 생성 palette/type/space/control을 RosyTheme와 기존 화면에서 소비한다. 일반 촬영 조작48dp/14sp/좌우12dp, 설치 역할과 통신 계약은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 413 passed, 0 failed. X:/DevTemp/ui-role-devices/cam-gradle-2.txt 및 X-only 재실행 cam-gradle-3.txt. 실제 폰 수용은 별도다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
+
+- 변경: 인증된 미리보기 읽기가 있으면 센서를 열고 JPEG를 보낸다. 마지막 읽기 뒤 30초가 지나면 demand.wanted가 false가 되고, 소켓과 wake lock은 둔 채 센서와 송출을 멈춘다. 앱 화면이 열려 있으면 맞추기용 미리보기만 하고 보내지 않는다. demand를 모르는 이전 앱과 demand를 보내지 않는 이전 Vision은 지금처럼 계속 보낸다.
+- 증거: Windows Gradle testDebugUnitTest 418 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-unit.txt). 원격 AI PC에서 d780942b9 Vision·버전 핀 294 passed, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt).
+- gate 변화: SOURCE/JVM. 대기 전류와 요청 뒤 첫 프레임 시간은 측정하지 않았다. APK를 설치하지 않았다. DEVICE/FIELD는 PARKED.
+## 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
+
+- 변경: D-691에 안전 예외를 더했다. PowerManager 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청과 미리보기보다 먼저 센서와 JPEG를 멈춘다. 화면 끄기와 같은 기준이고, LIGHT 이하 또는 배터리 41°C 이하로 식으면 다시 따른다. 소켓과 wake lock은 유지한다. 36°C대 충전 온도로는 멈추지 않는다.
+- 증거: Gradle testDebugUnitTest 421 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-heat.txt). 2026-10-12 S21 디버그 APK 설치 후 Fleet lease JPEG 1280x720, 순번 1285에서 1289, 화면을 끈 뒤 1434. 그때 배터리는 36.2°C라 발열 정지는 기기에서 확인하지 않았다. 현장 Vision은 demand를 보내지 않아 약 2초 유예 송출이었다.
+- gate 변화: SOURCE/JVM. 송출 DEVICE는 유예 경로로 확인. 30초 대기와 발열 정지의 DEVICE/FIELD는 PARKED.

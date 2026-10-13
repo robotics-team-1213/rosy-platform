@@ -136,3 +136,13 @@ def test_the_fake_robot_records_the_localization_calls():
     with pytest.raises(RobotApiError):
         run(robot.localization_mission("to_square", max_distance_m=0.5, max_time_s=1.0))
     assert robot.missions[-1][0] == "to_square"
+
+
+def test_pose_request_is_read_as_a_dict_and_404_is_none():
+    seen = []
+    request = {"request_id": "pose-1", "reason": "pose_stale", "age_s": 0.2, "ttl_s": 30.0}
+    assert run(_client(_recording(seen, body=request)).localization_request()) == request
+    assert seen == [{"method": "GET", "path": "/api/v1/localization/request",
+                     "auth": "Bearer op-token", "body": None}]
+    assert run(_client(_recording([], status=404, body={"error": {"code": "NO_REQUEST"}}))
+               .localization_request()) is None

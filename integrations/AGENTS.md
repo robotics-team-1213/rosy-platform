@@ -33,7 +33,7 @@ Wheels carry `COLCON_IGNORE`. ROS packages keep `package.xml` beside their own `
 
 ### Internal
 
-- Skill and execution contracts under `contracts/`. Device runtime under `middleware/apps/device/`.
+- Skill and execution contracts under `contracts/`. Hardware-family assembly and adapters under `middleware/devices/`.
 
 ### External
 

@@ -160,3 +160,79 @@ def test_operator_path_is_unchanged_by_the_binding_contract(tmp_path):
     ))
     assert task["status"] == "QUEUED"
     assert task["source"] == "operator"
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("stale", "EVIDENCE_STALE"), ("disabled", "POLICY_NOT_ACCEPTED"),
+])
+def test_policy_is_revalidated_when_queued_work_is_dispatched(tmp_path, change, reason):
+    store = _RegisteredStore([_source()], tmp_path / "pe.sqlite3", clock=lambda: _NOW)
+    store.submit(_evidence_payload(), token=_TOKEN, now=_NOW)
+    now = [_NOW]
+    service = _service(tmp_path, policy_evidence=store, max_evidence_age_s=30.0,
+                       clock=lambda: now[0])
+    service.POLICY_DISPATCH_ENABLED = True  # test-only admission; production stays disabled
+    task = _submit(service)
+    assert task["status"] == "QUEUED"
+    if change == "stale":
+        now[0] += 31.0
+    else:
+        service.POLICY_DISPATCH_ENABLED = False
+    sent = []
+
+    async def dispatch(attempt):
+        sent.append(attempt)
+        return {"accepted": True}
+
+    result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    assert result["status"] == "HOLD" and result["reason"] == reason
+    assert sent == []
+    assert service.store.resource_claims(resource_kind="robot", resource_id="rosy_01") == []
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("stale", "EVIDENCE_STALE"), ("disabled", "POLICY_NOT_ACCEPTED"),
+    ("stop", "STOP_GENERATION_CHANGED_BEFORE_SEND"),
+])
+def test_production_owner_send_rechecks_task_admission_after_localization(tmp_path, change, reason):
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.swarm.robots import RobotEndpoint
+
+    store = _RegisteredStore([_source()], tmp_path / "pe.sqlite3", clock=lambda: _NOW)
+    store.submit(_evidence_payload(), token=_TOKEN, now=_NOW)
+    now = [_NOW]
+    service = _service(tmp_path, policy_evidence=store, max_evidence_age_s=30.0,
+                       clock=lambda: now[0])
+    service.POLICY_DISPATCH_ENABLED = True
+    robot = FakeRobot("rosy_01")
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1", "t")], [robot])
+    create_app(console, task_service=service, start_task_dispatcher=False)
+    # create_app's startup wiring closes dispatch until an operator re-arms.
+    control = service.store.dispatch_control()
+    if not control["dispatch_enabled"]:
+        service.store.rearm_dispatch(expected_generation=control["generation"], actor_id="test-operator")
+    _submit(service)
+    state = robot.state
+
+    async def changed_state():
+        result = await state()
+        if change == "stale":
+            now[0] += 31.0
+        elif change == "disabled":
+            service.POLICY_DISPATCH_ENABLED = False
+        else:
+            service.store.trip_stop_latch(actor_id="test-operator")
+        return result
+
+    robot.state = changed_state
+
+    async def dispatch(attempt):
+        goal = attempt["request"]["goal"]
+        return await console.goal(attempt["robot_id"], **goal, task_id=attempt["task_id"],
+                                  attempt_id=attempt["attempt_id"], attempt_seq=attempt["attempt_seq"])
+
+    result = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    assert result["status"] == "HOLD" and result["reason"] == reason
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]

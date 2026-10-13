@@ -24,7 +24,7 @@ from typing import Awaitable, Callable, Optional, Sequence
 
 from core_common.protocol.schemas import RobotMode, SwarmFollowParams
 from fleet.formation.assignment import GreedyDistanceAssigner, SlotAssigner
-from fleet.formation.geometry import SlotOffset
+from fleet.formation.geometry import Formation, SlotOffset
 from fleet.swarm.arming import (
     ArmingFailed,
     FormationSpec,
@@ -143,10 +143,12 @@ class FormationSession:
             self.assignment = assignment
         except SessionError as exc:
             # 무장 거절 — 이미 흐르는 스트림을 끊고 팔로워를 푼다.
+            stopped = self.state is SessionState.STOPPED
             await self._stop_relay()
             await self._disarm(self._followers)
             self.state = SessionState.STOPPED
-            self.reason = (f"arming_failed:{exc}", getattr(exc, "robot_id", None))
+            if not stopped:
+                self.reason = (f"arming_failed:{exc}", getattr(exc, "robot_id", None))
             raise
         for robot in [self._leader, *self._followers]:
             self._watchers.append(asyncio.create_task(self._watch(robot)))
@@ -319,6 +321,8 @@ class FormationSession:
                     f"cannot resume: {follower.robot_id} is no longer following; "
                     "reform to re-arm or stop")
         await self._verify_resumable(seq)
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(path='/api/fleet/formation/resume')
         self.relay.resume()
         self.state = SessionState.RUNNING
         self.reason = None
@@ -432,10 +436,10 @@ class FormationSession:
                 target_robot_id=self._leader.robot_id,
                 distance=offset.distance, lateral=offset.lateral,
                 max_speed=spec.max_speed, stream_timeout_ms=spec.stream_timeout_ms,
-                members=order,
+                members=order, mode="trail" if spec.formation is Formation.TRAIL else "offset",
             )
             try:
-                await follower.follow(params)
+                reply = await follower.follow(params)
             except RobotApiError as exc:
                 # 거절이다 — 이 로봇은 무장되지 않았다.
                 await self._disarm(armed)
@@ -445,7 +449,15 @@ class FormationSession:
                 # 이 로봇도 함께 푼다 — 무장된 채 잊히는 것보다 두 번 푸는 것이 낫다.
                 await self._disarm([*armed, follower])
                 raise ArmingFailed(follower.robot_id, "TRANSPORT", str(exc)) from exc
+            if params.mode == "trail" and (reply or {}).get("mode") != "trail":
+                # D-559: an older CORE ignores the field and follows by offset. It is armed.
+                await self._disarm([*armed, follower])
+                raise ArmingFailed(follower.robot_id, "TRAIL_NOT_SUPPORTED",
+                                   "robot did not report trail follow")
             armed.append(follower)
+            if self.state is SessionState.STOPPED:
+                await self._disarm(armed)
+                raise SessionError("session stopped while arming")
 
     async def _disarm(self, armed: Sequence[RobotClient]) -> None:
         for follower in armed:

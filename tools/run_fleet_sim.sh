@@ -20,7 +20,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 # 재기동 사이클마다 SIGKILL 된 프로세스의 DDS 참가자 잔재가 도메인 0 인덱스를
 # 고갈시킨다("Failed to find a free participant index"). 실행마다 새 도메인으로
 # 격리한다 — fleet 콘솔은 HTTP 여서 영향이 없고, 시뮬 내부는 이 도메인을 공유한다.
-export ROS_DOMAIN_ID=$(( (RANDOM % 100) + 20 ))
+export ROS_DOMAIN_ID=$(( (RANDOM % 60) + 20 ))
 
 # Nav2 의 정적 점유 맵(map_server) — mode:=nav 는 map:= 인자를 요구한다.
 MAP_YAML="$PWD/middleware/perception/map/map_260905_update_v2/maps/map_260905.yaml"
@@ -75,7 +75,7 @@ done
 
 # 5. Start Fleet Server
 echo "[3/3] Starting Fleet Console..."
-export PYTHONPATH="$PYTHONPATH:$(pwd)/operations/fleet:$(pwd)/contracts/foundation:$(pwd)/middleware/core/services"
+export PYTHONPATH="$PYTHONPATH:$(pwd)/operations/fleet:$(pwd)/operations/world/src:$(pwd)/contracts/foundation:$(pwd)/middleware/core/services"
 
 echo ""
 echo "========================================================="
@@ -90,7 +90,8 @@ done
 echo "========================================================="
 echo "Press Ctrl+C to stop all processes."
 
-python3 operations/fleet/fleet/cli.py console --robots "$ROBOTS_YAML"
+python3 operations/fleet/fleet/cli.py console --robots "$ROBOTS_YAML" \
+    --site-config integrations/simulation/gazebo/config/fleet_sim_site.yaml
 
 # Cleanup on exit
 kill $(jobs -p) 2>/dev/null || true

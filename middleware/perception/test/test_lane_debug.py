@@ -1,10 +1,12 @@
 """Perception overlay renderer (spec §4.3): what the robot saw and chose."""
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from control.sensing.perception.lane_bev import BirdsEye
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
 from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, keep_debug_payload, next_publish_due, render_debug
 from lane_sim import CAM_X, GROUND, KW, lane
@@ -103,6 +105,28 @@ def test_malformed_graph_does_not_raise():
     for graph in bad_graphs:
         img = render_debug(frame, t, obs, mode="centre", pose=pose, graph=graph)
         assert img.shape == (2 * PANEL_H, 2 * PANEL_W, 3)
+
+
+def test_expected_path_is_yellow_on_the_bev_panel_without_paint():
+    frame = np.zeros((32, 32), np.uint8)
+    view = BirdsEye(GROUND, 320, 240, CAM_X)
+    segment = [[0.15, 0.0], [0.40, 0.0]]
+    drawn = render_debug(frame, SimpleNamespace(last={"expected_path_m": segment}, view=view),
+                         None, mode="keep")
+    blank = render_debug(frame, SimpleNamespace(last={}, view=view), None, mode="keep")
+    bev, empty = drawn[:PANEL_H, PANEL_W:], blank[:PANEL_H, PANEL_W:]
+    yellow = (bev[:, :, 1] > 180) & (bev[:, :, 2] > 180) & (bev[:, :, 0] < 80)
+    assert int(yellow.sum()) > 0
+    assert int(empty[yellow].sum()) == 0
+
+
+def test_expected_curve_draws_the_segments_after_the_first_pair():
+    frame = np.zeros((32, 32), np.uint8)
+    view = BirdsEye(GROUND, 320, 240, CAM_X)
+    points = [[.15, 0.], [.25, 0.], [.35, .04], [.4, .08]]
+    short = render_debug(frame, SimpleNamespace(last={'expected_path_m': points[:2]}, view=view), None, mode='keep')
+    whole = render_debug(frame, SimpleNamespace(last={'expected_path_m': points}, view=view), None, mode='keep')
+    assert np.count_nonzero(whole != short) > 0
 
 
 def test_rate_limiter_survives_float_jitter_at_a_matching_rate():

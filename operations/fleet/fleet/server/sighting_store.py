@@ -37,6 +37,8 @@ class SightingStore:
                     captured_at REAL NOT NULL,
                     received_at REAL NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS sighting_audit_robot_captured
+                    ON sighting_audit(robot_id, captured_at);
                 PRAGMA user_version=1;
                 """
             )

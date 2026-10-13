@@ -27,6 +27,8 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 - Navigation requires both hardware and navigation approval markers.
 - `/etc/rosy/runtime.env` is device-specific and secret-free. The checked-in
   `rosy-runtime.env` is a template, not a usable identity.
+- `/etc/rosy/dev-mode` (D-548) is a root-made bench marker: CORE then accepts the shared
+  `rosy-dev-*` tokens (never for SSH) and `rosy-face` shows DEV. No image, card or OTA step creates it.
 - `rosy-camera.service` also reads the optional `/etc/rosy/learned-perception.env`
   (D-373; template `learned-perception.env.example`, both off). The launch file parses
   `ROSY_LEARNED_SHADOW` / `ROSY_CAPTURE` strictly; keep the values off the `ExecStart` line.

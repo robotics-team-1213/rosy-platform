@@ -18,6 +18,34 @@ def ground():
         principal_x=160., principal_y=120., max_range_m=1.)
 
 
+def test_isaac_does_not_inherit_gazebo_detector_error():
+    from core_common.protocol.lane_containment import LaneContainmentEvidence
+    keeper = {'boundaries': [], 'crosswalk': (.1, .2)}
+    raw = containment_payload(keeper, ground(), stamp=1., source='ISAAC', camera_x=.033,
+                              crosswalk_uncertainty=True)
+    evidence = LaneContainmentEvidence.model_validate(raw)
+    assert evidence.ground_source == 'ISAAC'
+    assert evidence.stamp == 1. and evidence.crosswalk.near_m == .1
+    assert evidence.uncertainty_m is None and evidence.crosswalk_uncertainty_m is None
+    gazebo = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033,
+                                 crosswalk_uncertainty=True)
+    assert gazebo['geometry_id'] != raw['geometry_id']
+    assert gazebo['uncertainty_m'] > 0 and gazebo['crosswalk_uncertainty_m'] > 0
+
+
+@pytest.mark.parametrize('crosswalk', [None, (.1, .2)])
+def test_gazebo_crosswalk_bound_is_reported_even_without_a_detected_zone(crosswalk):
+    keeper = {'boundaries': [], 'crosswalk': crosswalk}
+    enabled = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033,
+                                  crosswalk_uncertainty=True)
+    disabled = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033)
+    assert math.isfinite(enabled['crosswalk_uncertainty_m']) and enabled['crosswalk_uncertainty_m'] > 0
+    assert 'crosswalk_uncertainty_m' not in disabled
+    assert enabled['uncertainty_m'] == disabled['uncertainty_m']
+    assert enabled['boundaries'] == []  # Enabling the bound does not invent a lane boundary.
+    assert ('crosswalk' in enabled) is (crosswalk is not None)
+
+
 def test_payload_preserves_original_image_and_measured_support():
     keeper = {"boundaries": [dict(selected=True, side="left",
                 ends_m=[[.2,.1],[.4,.12]])]}
@@ -122,7 +150,7 @@ def test_gazebo_ground_declares_the_detector_pixel_error_only():
 # camera_profile record's score bands (D-47 table: 8kcn pitch 11.2 +-0.25 deg, roll -1.5 deg,
 # height 0.0575 +-0.005 m; the roll band is not in the table, 0.5 deg is one fine roll step).
 REPO = Path(__file__).resolve().parents[3]
-PROFILE = yaml.safe_load((REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" /
+PROFILE = yaml.safe_load((REPO / "middleware" / "devices" / "pinky" / "profile" / "config" /
                           "camera_nominal.yaml").read_text(encoding="utf-8"))
 RECORD = {**PROFILE, "pitch_rad": math.radians(11.2), "roll_rad": math.radians(-1.5), "height_m": .0575}
 BANDS = {"pitch_deg": .25, "roll_deg": .5, "height_m": .005}
@@ -219,7 +247,7 @@ def test_a_stated_systematic_is_added_to_a_grid_fit_too():
     assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS, "systematic": "x"}) is None
 
 def test_receiver_extrapolation_is_mirrored():
-    text = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
+    text = (REPO / "middleware/control/drive/behaviors/line_follow" /
             "recovery" / "lane_return_evidence.py").read_text(encoding="utf-8")
     assert float(re.search(r"^\s+MAX_EXTRAPOLATION_M = ([0-9.]+)", text, re.M).group(1)) == RECEIVER_EXTRAPOLATION_M
 

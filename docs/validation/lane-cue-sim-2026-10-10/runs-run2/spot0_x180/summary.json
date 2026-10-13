@@ -1,0 +1,117 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "cues": {
+   "sent": 44,
+   "turn_spot_true": 11,
+   "signs": {
+    "+": 5,
+    "-": 6
+   },
+   "refused": [
+    {
+     "accepted": false,
+     "reason": "pose_stale"
+    }
+   ]
+  },
+  "pivots_started": 1,
+  "latched": [],
+  "start_err_gt_deg": -156.9,
+  "pivot_last_view": {
+   "turned_deg": 164.0,
+   "remaining_deg": 11.7,
+   "ticks": 139
+  },
+  "pivot_duration_sim_s": 7.05,
+  "end_reason": "junction_waiting",
+  "end_err_odom_deg": 34.0,
+  "end_err_gt_deg": 33.8,
+  "odom_turned_deg": -169.0,
+  "pivot_xy_drift_m": 0.0,
+  "pivot_cmds": 348,
+  "pivot_sign_changes": 0,
+  "reasons_during_pivot": [
+   "fleet_wrong_way_turn",
+   "junction_waiting"
+  ],
+  "reacquire_hold_seen": false,
+  "after_reacquire": [
+   "HOLD",
+   "junction_waiting"
+  ],
+  "reacquire_s": 0.0,
+  "after": [
+   [
+    "HOLD",
+    "junction_waiting"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   173.768,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   176.619,
+   "WAITING",
+   "no_observation"
+  ],
+  [
+   176.739,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   177.52,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   178.15,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   185.085,
+   "HOLD",
+   "junction_waiting"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/spot0_x180",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.213,
+   0.221,
+   5.811946409141117
+  ],
+  "lane": 2.670353755551324,
+  "spot": 0,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": false,
+  "seed": 50,
+  "spot_xy": [
+   -0.213,
+   0.221
+  ],
+  "lane_deg": 153.0
+ },
+ "rtf": 0.97,
+ "capability_at_end": false
+}

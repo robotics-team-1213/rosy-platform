@@ -6,14 +6,12 @@ experimental in Jazzy, so it is opt-in: ROSY_EXECUTOR=events. Unset or 'single' 
 rclpy.spin(node) exactly as before.
 """
 import ast
-from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
 
 from control.executor_choice import executor_kind, make_executor, spin
-
-CONTROL = Path(__file__).resolve().parents[1]/'control'
+from test.control_sources import control_sources
 
 
 class FakeRclpy:
@@ -84,7 +82,7 @@ def test_make_executor_builds_either_kind():
 
 def test_every_control_entry_point_spins_through_the_selector():
     offenders, users = [], []
-    for path in sorted(CONTROL.rglob('*.py')):
+    for relative, path in control_sources():
         if path.name == 'executor_choice.py':
             continue  # the one place that calls rclpy.spin directly
         tree = ast.parse(path.read_text(encoding='utf-8'))
@@ -92,8 +90,8 @@ def test_every_control_entry_point_spins_through_the_selector():
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'spin':
                 owner = ast.unparse(node.func.value)
                 if owner == 'rclpy':
-                    offenders.append(f'{path.relative_to(CONTROL).as_posix()}:{node.lineno}')
+                    offenders.append(f'{relative}:{node.lineno}')
                 elif owner == 'executor_choice':
-                    users.append(path.relative_to(CONTROL).as_posix())
+                    users.append(relative)
     assert offenders == [], offenders
     assert len(users) == 21, users  # every control node main() (14 on 2026-09-24 + dock_observer_node + learned_lane_node + capture_trigger_node + road_state_node + loc_assist_node + pilot_recorder_node + object_detector_node)

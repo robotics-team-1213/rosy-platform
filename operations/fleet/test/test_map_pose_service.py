@@ -39,6 +39,19 @@ class Wall:
         return self.now
 
 
+def test_survey_odom_service_is_read_only_and_roster_and_freshness_bound():
+    wall = Wall()
+    service = MapPoseService(lambda: ['r1'], wall=wall)
+    assert service.survey_odom('r1') is None
+    service.observe_state('r1', state(T0, x=2, y=3, yaw=0.4))
+    assert service.survey_odom('r1') == ((2, 3, 0.4), T0, 0)
+    assert service.survey_odom('r2') is None
+    assert service.arbitrated_pose('r1').state == UNKNOWN
+    assert service.odom_to_map('r1') is None
+    wall.now += 3.01
+    assert service.survey_odom('r1') is None
+
+
 def test_service_anchors_on_sightings_and_bridges_on_snapshot_odom():
     wall = Wall()
     service = MapPoseService(lambda: ["r1"], wall=wall)
@@ -152,6 +165,30 @@ def test_console_snapshot_feeds_odom(tmp_path):
         assert client.get("/api/fleet/state", headers={"Authorization": f"Bearer {VIEWER_TOKEN}"}).status_code == 200
     tracker = app.state.map_pose._trackers["r1"]
     assert tracker._odom and abs(tracker._odom[-1].stamp - now) < 1e-3
+
+
+def test_undiscovered_robot_map_pose_reads_unknown_instead_of_500(tmp_path, monkeypatch):
+    import httpx
+    import fleet.swarm.discovery_transport as discovery
+
+    app, robot = _app(tmp_path)
+
+    async def missing(*args):
+        raise ValueError('not_discovered: trusted robot name not found')
+
+    monkeypatch.setattr(discovery, 'resolve_robot', missing)
+    endpoint = RobotEndpoint('r1', 'https://robot.local:8443', 'fixture-token')
+    transport = discovery.DiscoveryTransport(endpoint, inner=httpx.MockTransport(lambda req: httpx.Response(200)))
+
+    async def read_state():
+        await transport.handle_async_request(httpx.Request('GET', endpoint.base_url + '/api/v1/robot/state'))
+
+    robot.state = read_state
+    with TestClient(app) as client:
+        result = client.get('/api/fleet/robots/r1/map-pose',
+                            headers={'Authorization': f'Bearer {VIEWER_TOKEN}'})
+    assert result.status_code == 200
+    assert result.json()['state'] == UNKNOWN and result.json()['x'] is None
 
 
 def test_cli_reads_fleet_map_pose_from_the_site_config(tmp_path):
@@ -319,3 +356,21 @@ def test_a_failed_read_with_a_cancelled_waiter_is_retrieved():
         assert service._refreshing == {}
 
     asyncio.run(run())
+
+
+def test_d577_stuck_pose_tells_a_lost_pose_from_no_source():
+    """Safety review 1: UNKNOWN after a sighting (stale odom) is a lost pose, not "Fleet does not know"."""
+    wall = Wall()
+    service = MapPoseService(lambda: ["r1"], wall=wall)
+    assert service.stuck_pose("r1") == {"state": UNKNOWN, "age_s": None, "sourced": False,
+                                        "x": None, "y": None, "yaw": None}
+    for i in range(3):
+        wall.now = T0 + 0.1 * i
+        service.observe_state("r1", state(wall.now))
+        service.observe_sighting(row(wall.now))
+    localized = service.stuck_pose("r1")
+    assert localized["state"] == LOCALIZED and localized["x"] is not None   # 남은 항목 4: peer bands
+    wall.now = T0 + 10.0                                   # odom older than max_odom_age_s
+    assert service.stuck_pose("r1") == {"state": UNKNOWN, "age_s": None, "sourced": True,
+                                        "x": None, "y": None, "yaw": None}
+    assert service.stuck_pose("nobody") is None

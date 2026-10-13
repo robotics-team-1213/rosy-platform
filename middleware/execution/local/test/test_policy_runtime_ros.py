@@ -152,12 +152,12 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
         files = ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
                  for name in ('omx_policy','policy_runtime','policy_source','policy_journal','policy_install')]
         files += ['contracts/learning/src/rosy/contracts/learning/artifacts.py']
-        files += ['middleware/apps/device/omx/adapter/omx_adapter/'+name+'.py'
+        files += ['middleware/devices/omx/adapter/omx_adapter/'+name+'.py'
                   for name in ('command_owner','ros_runtime')]
         if with_parent:
             files += ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
                       for name in ('policy_parent','policy_episode')]
-            files += ['middleware/apps/device/omx/adapter/omx_adapter/'+name+'.py'
+            files += ['middleware/devices/omx/adapter/omx_adapter/'+name+'.py'
                       for name in ('policy_parent','action_store_readback','action_api',
                                    'action_runner','action_store','journal_identity')]
             files += ['contracts/learning/src/rosy/contracts/learning/'+name+'.py'

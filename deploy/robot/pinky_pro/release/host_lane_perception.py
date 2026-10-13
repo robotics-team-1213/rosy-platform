@@ -145,7 +145,9 @@ class LanePerceptionConfig:
         revision = self.model_check() if paint_source == "learned" else None
         params["paint_source"] = paint_source
         if paint_source == "learned":
-            params.update(learned_lane_pointer=MODEL_POINTER, learned_paint_every_n=2, learned_paint_threads=2)
+            # D-585 2: every_n 2 without motion compensation used 0 learned frames on device.
+            params.update(learned_lane_pointer=MODEL_POINTER, learned_paint_every_n=4, learned_paint_threads=2,
+                          learned_paint_motion_compensation=True)
         problem = self.overlay_check(data)
         if problem:
             raise ValueError(problem)

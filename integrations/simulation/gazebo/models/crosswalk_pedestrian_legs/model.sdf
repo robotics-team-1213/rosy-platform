@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<!-- D-573 sim pedestrian: two leg-like cylinders (r 0.02 m, 0.60 m tall, 0.06 m apart along model x), static. Crosses the LiDAR plane (0.125 m). -->
+<sdf version="1.9">
+  <model name="crosswalk_pedestrian_legs">
+    <static>true</static>
+    <link name="leg_l">
+      <pose>-0.03 0 0.3 0 0 0</pose>
+      <collision name="c"><geometry><cylinder><radius>0.02</radius><length>0.6</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.02</radius><length>0.6</length></cylinder></geometry><material><diffuse>0.85 0.35 0.2 1</diffuse><ambient>0.85 0.35 0.2 1</ambient></material></visual>
+    </link>
+    <link name="leg_r">
+      <pose>0.03 0 0.3 0 0 0</pose>
+      <collision name="c"><geometry><cylinder><radius>0.02</radius><length>0.6</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.02</radius><length>0.6</length></cylinder></geometry><material><diffuse>0.85 0.35 0.2 1</diffuse><ambient>0.85 0.35 0.2 1</ambient></material></visual>
+    </link>
+  </model>
+</sdf>
