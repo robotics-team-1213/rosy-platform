@@ -6,6 +6,7 @@ so the calibration ROS-SIM path could not run at all. The rigs are not host
 tests, but what they reference is plain text a host test can check.
 """
 import re
+import runpy
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1]
@@ -14,6 +15,8 @@ GZ = PKG / '..' / '..' / 'tools' / 'sim' / 'gazebo'
 PATH_REF = re.compile(r"../../tools/sim/gazebo/([A-Za-z0-9_]+\.(?:py|sh|yaml|sdf))")
 MODULE_REF = re.compile(r"\btools\.sim\.gazebo\.([A-Za-z0-9_]+)")
 CONTROL_MODULE_REF = re.compile(r"python3 -m (control(?:\.[A-Za-z0-9_]+)+)")
+#: `control.<module>` files live in control/ or one of its source holders (nodes/, ...).
+CONTROL_ROOTS = (PKG / 'control', *runpy.run_path(str(PKG / 'control/_source_layout.py'))['CONTROL_ROOTS'])
 
 
 def _sources():
@@ -36,7 +39,8 @@ def test_every_rig_reference_resolves():
             if not (GZ / f'{module}.py').is_file():
                 missing.append(f'{source.name} -> tools.sim.gazebo.{module}')
         for module in CONTROL_MODULE_REF.findall(text):
-            if not (PKG / (module.replace('.', '/') + '.py')).is_file():
+            relative = module.split('.', 1)[1].replace('.', '/') + '.py'
+            if not any((root / relative).is_file() for root in CONTROL_ROOTS):
                 missing.append(f'{source.name} -> {module}')
     assert missing == [], missing
 
