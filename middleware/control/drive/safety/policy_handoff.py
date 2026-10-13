@@ -30,7 +30,7 @@ class ControlPolicyProducer:
         self.sequence = 0
 
     def publish(self, inputs, *, now=None, applied_revision=None, translation=None, tracking=None,
-                linear_limit=None):
+                linear_limit=None, forward=None):
         """Attempt one snapshot; every attempt consumes a sequence number."""
         self.sequence += 1
         if now is None:
@@ -45,4 +45,5 @@ class ControlPolicyProducer:
             return False
         return self.policy.update_observations(
             self.observations, self.required, inputs, now, self.sequence, revision,
-            translation=translation, tracking=tracking, linear_limit=linear_limit)
+            translation=translation, tracking=tracking, linear_limit=linear_limit,
+            forward=forward)

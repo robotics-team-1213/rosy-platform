@@ -7,7 +7,8 @@ import math
 from dataclasses import dataclass, replace
 from threading import Lock, local
 from uuid import uuid4
-from .lidar_guard import TranslationEvidence, command_translation_bumpers
+from .lidar_guard import (ForwardEvidence, TranslationEvidence, command_forward_arc_clear,
+                          command_translation_bumpers)
 from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
 
 #: D-424: forward speed share left while the camera is unavailable or warming up. Policy, not
@@ -56,6 +57,7 @@ class GateSnapshot:
     translation: TranslationEvidence | None = None
     tracking: TrackedEvidence | None = None
     linear_limit: float | None = None
+    forward: ForwardEvidence | None = None
 
 
 class CommandPolicy:
@@ -91,7 +93,7 @@ class CommandPolicy:
             self._snapshot = None
 
     def update_observations(self, observations, required, inputs, now, sequence, applied_revision, *, translation=None,
-                            tracking=None, linear_limit=None):
+                            tracking=None, linear_limit=None, forward=None):
         """Capture classified state and clocks in one serialized producer callback.
 
         The producer supplies its actually applied revision. Never label sensor
@@ -104,7 +106,7 @@ class CommandPolicy:
             self.invalidate()
             return False
         return self.update(GateSnapshot(self.session, sequence, applied_revision, *window, inputs,
-                                        translation, tracking, linear_limit))
+                                        translation, tracking, linear_limit, forward))
 
     def update(self, snapshot):
         if (not isinstance(snapshot, GateSnapshot) or snapshot.session != self.session or
@@ -190,6 +192,15 @@ class CommandPolicy:
                 front, rear = command_translation_bumpers(snapshot.translation, linear, angular, now)
                 state = replace(state, obstacle=state.obstacle or front, rear_blocked=state.rear_blocked or rear)
             result = evaluate_command(linear, angular, replace(state, command_age=0.))
+            if result.reason == 'trajectory_changed' and state.can_rotate is False:
+                # D-740: the pivot circle is not the body path of a moving forward arc. Admit
+                # only the unchanged twist, only when nothing else restricts it and its own
+                # stopping sweep clears this scan; any other outcome keeps the result above.
+                admitted = evaluate_command(linear, angular,
+                                            replace(state, command_age=0., can_rotate=True))
+                if ((admitted.linear, admitted.angular, admitted.reason) == (linear, angular, 'allow')
+                        and command_forward_arc_clear(snapshot.forward, linear, angular, now)):
+                    result = admitted
             if snapshot.tracking is not None and result.reason in ('allow', 'motion_limited', 'trajectory_changed'):
                 if not isinstance(snapshot.tracking, TrackedEvidence):
                     raise ValueError('Invalid tracking evidence')
