@@ -4,6 +4,18 @@ import pytest
 from learning_workspace import Workspace
 
 
+def test_owner_pipeline_hold_is_visible_without_private_inputs(tmp_path):
+    from learning_workspace import read_report
+    (tmp_path / 'state.json').write_text(json.dumps({'outcome': 'running',
+        'review_autobuild': {'status': 'held', 'blockers': ['no_approved_masks']},
+        'config': {'credential': 'private-value'}}))
+    report = read_report(tmp_path, 'state.json')
+    assert report['declared']['status'] == 'held'
+    assert 'outcome' not in report['declared']
+    assert report['reasons'] == ['no_approved_masks']
+    assert 'private-value' not in json.dumps(report)
+
+
 def test_registration_persists_and_detects_changed_missing_corrupt_reports(tmp_path):
     output = tmp_path / 'run'
     output.mkdir()
@@ -98,3 +110,11 @@ def test_declared_jpg_opens_separately_and_refuses_changed_bytes(tmp_path):
     assert next(row for row in workspace.list()[0]['reports'] if row['name'] == 'summary.json')['status'] == 'invalid'
     with pytest.raises(ValueError, match='not declared'):
         workspace.image(item['id'], image.name)
+def test_signed_runner_resource_hold_is_visible(tmp_path):
+    from learning_workspace import read_report
+    (tmp_path / 'summary.json').write_text(json.dumps({'result': 'held', 'reason': 'work busy: GPU compute job'}))
+    report = read_report(tmp_path, 'summary.json')
+    assert report['declared']['status'] == 'held'
+    assert report['reasons'] == ['work busy: GPU compute job']
+
+

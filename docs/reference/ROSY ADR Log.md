@@ -735,6 +735,8 @@
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
 
+| D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
@@ -1080,6 +1082,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 
 기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
 
+## D-742 · 검수 loopback 현재 결정과 같은 PC 학습 전달
+
+선택 read-only 결정 조회와 local bridge, 기존 ReviewPipeline owner를 연결한다. 승인·출처·평가·TTL과 서명 배포 조건을 유지한다.
 ## D-741 — 모든 앱이 같은 자리를 쓰는 통합 셸
 
 **Status:** Accepted (2026-10-13, 사용자 요청. 구현은 조각마다 따로 착지하며 CI·화면 검증·설치·실물 수용은 별도다)
