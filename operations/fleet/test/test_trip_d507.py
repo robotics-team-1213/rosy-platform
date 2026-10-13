@@ -427,10 +427,18 @@ def test_unexpected_within_the_arm_distance_also_stops_at_once():
     assert runner.view("p1")["reason"] == "junction_unexpected"
 
 
-def test_waiting_beyond_the_arm_distance_stops_without_the_wait():
+def test_waiting_beyond_the_arm_distance_is_dismissed_by_the_map_then_stops():
+    """Map vote: a keeper sighting with no place within arm_distance_m is answered ``straight``
+    three times a trip; the fourth ends the trip at once as before (not after junction_wait_s)."""
     runner, ports = _running_at(0.1)
+    for n in (1, 2, 3):
+        _core_shows(ports, "waiting")
+        _ticks(runner, ports, 1)
+        view = runner.view("p1")
+        assert view["state"] == "running" and view["detail"]["sighting_dismissed"] == n
+        assert ports.sent[-1][:2] == ("straight", f"map-clear-{n}")
     _core_shows(ports, "waiting")
-    _ticks(runner, ports)                                  # 0.5 s, not junction_wait_s (10 s)
+    _ticks(runner, ports, 1)
     view = runner.view("p1")
     assert (view["state"], view["reason"]) == ("stopped", "junction_unexpected")
     assert view["detail"]["junction_state"] == "waiting"
