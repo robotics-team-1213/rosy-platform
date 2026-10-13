@@ -37,3 +37,5 @@
 
 - `shared/web/test/test_chrome_layout.py`가 토큰 값, 두 절차 열의 소비, 머리 영역 문자열, `.ui-sidebar` 표시를 잠근다.
 - 새 `@media` 폭이 없으므로 기존 반응형 허용 목록 시험이 그대로 본다.
+
+> 2026-10-13 [D-741](D-741-unified-app-shell-seats.md) Fleet 앱 바 조각: Fleet 머리에 한해 2항의 64rem 두 줄이 바뀌었다. Fleet 앱 바는 모든 폭에서 한 줄이고 접힘은 셸 칸의 폭(64·48·30rem)에 답한다. Robot·Pilot 머리는 그 화면을 고치는 조각이 착지할 때까지 2항대로다.
