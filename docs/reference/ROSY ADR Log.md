@@ -214,6 +214,7 @@
 | D-201 | 고정 문법 표면의 적합 계약 — 스크롤도 아니고 분쇄도 아니다: 선언 뷰포트에서 문서가 스크롤되지 않고 조작이 눌려 사라지지 않으며, 목록만 프레임 안에서 스크롤되고 안전 조작은 항상 보인다 | Accepted |
 | D-202 | 위험은 채움이다 — 경보 텍스트의 대비 계약: status-crit는 글자색으로 쓰지 않고, 따뜻한 색 글자는 4.5:1 이상이어야 한다 | Accepted |
 | D-203 | 계산 척급 폐쇄 — 화면에 보이는 계산 폰트 크기는 토큰 여섯 단계뿐이다: 선언이 아니라 렌더 결과가 닫혀 있어야 한다 | Accepted |
+| D-204 | 역할별 CORE 화면과 패널 계약 | Accepted |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 | Proposed |
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 | Proposed |
 | D-207 | 제품과 장치 종류는 주인이 하나다 — 제품 기록은 src/products, 새 칩은 종류 안의 구현, 조명 두 서비스와 현장 펌웨어와 맵은 부르는 쪽에 둔다 | Proposed (결정 5의 루트 위치는 Superseded by D-231) |
@@ -427,6 +428,7 @@
 | D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 | Accepted (2026-10-03, 사용자 승인; 목표 구조·문서 기록, 실제 소스 이전·실기 gate 변화 없음; §4 D-427이 부분 대체) |
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 | Proposed (2026-10-03, 사용자 구현 목표 설정) |
 | D-427 | ROSY Platform 최상위를 middleware·operations·learning 세 파트와 공용 contracts·integrations·shared/web으로 나누고 import 규칙을 구조 시험으로 강제; ER2·VLM은 operations/decision, 학습 정책·모델·판정기는 공통 L0~L3 승격; 실물 RL은 파이프라인 경유 학습 모드만; D-209 §4·D-413 §1·D-425 §4 부분 대체 제안 | Accepted (2026-10-03, 사용자 승인 B 목표 + C 시작; 문서만, 코드·폴더 이전 없음; D-413/D-425 최상위 경로로 새 이전 동결; 이행 기록 2026-10-04: wave 0–3a origin, 3b–4e push 전, 동등성 증거·safety rename 리뷰 대기) |
+| D-428 | 웹 표면의 얼굴 하드코딩을 지운다 — ui-* 재도색(클래스·id 경로 포함)을 게이트가 막고, 없는 얼굴은 range·링크·ui-note·ui-stage 넷만 공용에 더하며, 중복 패턴은 기존 부품으로 흡수한다(vh 3곳·정의 안 된 status="good"·죽은 CSS·window.confirm 포함) | Accepted (2026-10-03, 사용자 지시 — 감사 목록 이행; D-292·D-359·D-398·D-405 집행, legacy /dashboard 정적 콘솔은 role-surfaces S2 경계 존중) |
 | D-429 | D-427 세 파트 위에 다섯 관심사(학습·판단·로봇 제어·통신 규약·기타) view(매니페스트 `concern:`)와 층별 판단 표(숙고형·조정·장치 지역 규칙·중재·안전·반응형·판정기·MANUAL); 최상위 `decision/` 기각; 사이트 장치 owner는 `operations/site_devices/<kind>`, 관측기는 operations, 로봇 도킹은 middleware, 신호 순서는 Fleet; ER2는 사이트 장치 변경을 사람 운영자 승인 후보로만, 승인은 Fleet 신호·교통 로직의 입력(D-392 §4에 신호·문·컨베이어·PLC 구동 금지 추가); 공통 제어 바탕 + 로봇 Motion Intent·DeviceControlPort / `rosy.site-device/1`; integrations는 contracts와 kind가 허용된 파트의 `api: true` root만 import; 로봇 출력은 장치당 binding 하나인 DeviceControlPort; `fleet.ai` → `rosy.decision` 개명(D-231 유일 예외); 승인 후보 재확인 실패는 stale·재시도 없음; D-427 §1·§2 보강·§3 확장 제안 | Accepted (2026-10-03, 사용자 승인; 문서만, 코드·폴더·매니페스트 변경 없음; 안전은 D-430) |
 | D-430 | 안전은 판단·제어와 분리된 여섯째 관심사(D-429 `concern:`에 `safety`, 디렉터리 하위 root + `safety_modules:` 모듈 목록, 폴더는 장치 옆 그대로); 층별 안전 체인 표(물리 E-stop·사이트 장치 failsafe·Safety Guard+D-400·반응형 엔벌로프·Arbiter+MANUAL·Fleet 정지/래치/fence/admission·모델 도구 제한)와 현재 상태; 분리 불변식 5개를 wave 0 시험으로 강제(안전은 판단·학습·모델 SDK를 import하지 않음, 판단·학습은 안전을 우회하지 않음, DeviceControlPort binding은 Safety Guard·Arbiter 뒤, 학습 정책·모델 출력은 안전 기능 아님, ROSY는 안전 코일에 쓰지 않음); Fleet·네트워크·모델·감독 상실 시 fail-closed(로봇 D-419/D-400, 신호 적색 점멸, 도크 0 V), 자동 재개 없음; safety 태그 변경은 독립 리뷰 + gate 증거 | Accepted (2026-10-03, 사용자 승인; 문서만, 시험·매니페스트·CI 검사는 wave 0; 상태 정정 2026-10-04: 층 7 시험 있음, `KNOWN_SAFETY_VIOLATIONS` 21건) |
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 | Accepted (2026-10-03; NCNN export and runtime implemented; device acceptance pending) |
@@ -735,6 +737,8 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
+
+| D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1081,6 +1085,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 
 기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
 
+## D-742 · 검수 loopback 현재 결정과 같은 PC 학습 전달
+
+선택 read-only 결정 조회와 local bridge, 기존 ReviewPipeline owner를 연결한다. 승인·출처·평가·TTL과 서명 배포 조건을 유지한다.
 ## D-741 — 모든 앱이 같은 자리를 쓰는 통합 셸
 
 **Status:** Accepted (2026-10-13, 사용자 요청. 구현은 조각마다 따로 착지하며 CI·화면 검증·설치·실물 수용은 별도다)

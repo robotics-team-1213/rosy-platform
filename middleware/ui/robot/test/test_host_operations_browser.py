@@ -225,6 +225,11 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                   window.__callbacks['/api/v1/host/network'].onData(payload);
                   window.__callbacks['/api/v1/host/release'].onData(payload);
                 }""", payload)
+                for name in ("Wi-Fi SSID", "Wi-Fi 암호", "네트워크 프로파일 ID"):
+                    control = page.locator(f'input[aria-label="{name}"]')
+                    assert control.is_enabled() is enabled
+                    if not enabled:
+                        assert control.get_attribute("aria-describedby")
                 for section, button in ((0, "사업장 Wi-Fi로 전환"), (1, "이전 릴리스로 복귀")):
                     result = page.evaluate("""([section, button]) => {
                       const card = document.querySelectorAll('section.ui-readback')[section];
