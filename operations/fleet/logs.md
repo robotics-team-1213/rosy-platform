@@ -2995,6 +2995,7 @@
 
 ## 2026-10-09 · uncommitted · docs(fleet): 호출 지도에 목표 lease presence
 - 변경: `POST /api/fleet/goal-lease/presence`는 임대 중인 목표가 있을 때만 보낸다. 지도 기준을 local main `d8f12328b`로 올렸다.
+- 갱신 2026-10-13: 기준을 `e14245e86`으로 올렸다. 콘솔 원본이 `operations/ui/console`로 옮겨진 경로, 호스트 서비스·로그인·설치 호출, CORE 클라이언트 경로(`rotate_to`, `lane-cue`, `fleet/link` 등), 프록시 포트 표기, 해결기 경로를 현재 소스와 맞췄다.
 - 증거: `signals.js`의 presence 조건(`e42ecc073`).
 - gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
 - 결정: 없음.
