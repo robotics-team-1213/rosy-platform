@@ -57,14 +57,24 @@ def test_account_administration_uses_real_ledger(tmp_path):
                 page.locator("#account-revoke").click()
                 expect(page.locator("#account-heading")).to_have_text("새 계정")
                 page.get_by_role("button", name="bob · 사용 중", exact=True).click()
+                value = next(c["value"] for c in page.context.cookies() if c["name"] == "rosy_fleet_session")
+                bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
+                sessions.update_account(value, bob["account_id"], revision=bob["revision"], role="operator")
+                page.locator("#account-enabled").uncheck()
+                page.locator("#account-save").click()
+                expect(page.locator("#account-status")).to_contain_text("다른 관리자가 변경했습니다")
+                page.locator("#account-reload").click()
+                expect(page.locator("#account-heading")).to_have_text("새 계정")
+                page.get_by_role("button", name="bob · 사용 중", exact=True).click()
                 page.locator("#account-enabled").uncheck()
                 page.locator("#account-save").click()
                 expect(page.locator("#account-list")).to_contain_text("bob · 정지됨")
-                value = next(c["value"] for c in page.context.cookies() if c["name"] == "rosy_fleet_session")
                 bob = next(row for row in sessions.list_accounts(value) if row["login"] == "bob")
-                assert bob["enabled"] is False and bob["revision"] == 4
+                assert bob["enabled"] is False and bob["revision"] == 5
                 assert bob["grants"] == [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                page.goto(origin + "/console")
+                expect(page.locator("#fleet-accounts")).to_have_js_property("hidden", False)
             finally:
                 browser.close()
     finally:
