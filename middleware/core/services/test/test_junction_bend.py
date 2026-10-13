@@ -185,6 +185,23 @@ def test_arc_time_bound():
     assert decision.linear == 0.
 
 
+def test_time_under_a_crosswalk_look_is_not_the_bends():
+    """Gazebo lap m4: a bend pass that took over before a crosswalk stood through the 6 s look and
+    ended 'timeout'. While the crosswalk gate looks the phase clock stands; after it, it runs on."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    rig.m._xwalk.status = lambda now: {'state': 'looking'}
+    for _ in range(400):                                  # commanded but not moving, as under a look
+        decision, status = site_step(rig)
+    assert status.junction.state == 'bending'
+    rig.m._xwalk.status = lambda now: None
+    for _ in range(400):
+        decision, status = site_step(rig)
+        if status.junction.state != 'bending':
+            break
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'timeout')
+
+
 def test_lane_not_found_after_the_arc_is_unresolved_and_holds():
     rig = armed_rig()
     until(rig, 'reacquiring')

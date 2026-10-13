@@ -462,6 +462,14 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 or (reason == 'obstacle_ahead' and own_body_check
                     and (j['state'] != 'reacquiring' or j['action'] == 'bend'))):  # bend: own pursuit
             return self._abort(j, reason or 'hold', decision)
+        # Time a later gate takes is not the maneuver's (Gazebo lap m4: a D-573 look inside a bend
+        # pass ended it 'timeout'): the phase clock stands while the crosswalk gate looks, waits or
+        # crosses, or the D-517 authority is not FREE.
+        auth = (self._config.authority_required or self._authority_seen) and self._authority_state(now)
+        if j.get('tick_at') is not None and ((auth and auth[0] != 'FREE') or (self._xwalk.status(now) or {}).get(
+                'state') in ('looking', 'waiting', 'crossing', 'inside')):
+            j['limit'] += now-j['tick_at']
+        j['tick_at'] = now
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
                 return self._unresolved(j, decision)
