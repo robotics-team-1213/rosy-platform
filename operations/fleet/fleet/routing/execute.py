@@ -77,12 +77,16 @@ ARC_MIN_POINTS = 6
 
 
 def exit_segment(graph: Graph, segments: list, index: int, *, fit_tol_m: float,
-                 outer_line_offset_m: float) -> Optional[dict]:
+                 outer_line_offset_m: float, map_pose: Optional[tuple] = None) -> Optional[dict]:
     """D-520 1: the ``exit_segment`` for the place at the end of segment ``index``, or None.
 
     Only when the next segment is a whole ``lane`` arc to its place whose polyline lies within
     ``fit_tol_m`` of one circle (Kasa fit) of curvature and length in CORE's range. The sign is
     REP-103: + when the circle's centre is left of the lane (counter-clockwise).
+
+    D-744 1: with ``map_pose`` (the robot's map ``x, y, yaw`` and the odom stamp that pose was
+    computed for) the segment carries ``map_anchor``: the circle's centre in the map frame and
+    that pose pair, from which CORE places the circle in its odom frame.
     """
     if index + 1 >= len(segments):
         return None
@@ -109,8 +113,13 @@ def exit_segment(graph: Graph, segments: list, index: int, *, fit_tol_m: float,
     curvature = (1.0 if left else -1.0) / radius
     if not ARC_CURVATURE_1PM[0] <= abs(curvature) <= ARC_CURVATURE_1PM[1]:
         return None
-    return {"curvature_1pm": round(curvature, 4), "length_m": round(arc.length_m, 4),
-            "outer_line_offset_m": outer_line_offset_m, "end_place_id": arc.end_place}
+    segment = {"curvature_1pm": round(curvature, 4), "length_m": round(arc.length_m, 4),
+               "outer_line_offset_m": outer_line_offset_m, "end_place_id": arc.end_place}
+    if map_pose is not None:
+        x, y, yaw, stamp = map_pose
+        segment["map_anchor"] = {"centre_x_m": round(cx, 4), "centre_y_m": round(cy, 4), "pose_x_m": x,
+                                 "pose_y_m": y, "pose_yaw_rad": yaw, "odom_stamp_s": stamp}
+    return segment
 
 
 def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:

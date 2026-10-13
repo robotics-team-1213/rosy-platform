@@ -29,4 +29,6 @@ class LineArcStatus(BaseModel):
     state: str = "running"
     reason: Optional[str] = None
     ir_correction: LineArcIrCorrection = Field(default_factory=LineArcIrCorrection)
+    #: D-744 6: the arc opened on Fleet's map circle (exit_segment.map_anchor), not the pose-derived one.
+    map_anchor_used: bool = False
 
