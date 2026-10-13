@@ -72,8 +72,13 @@ def import_frames(store, body):
     if class_raw:
         try:
             values = build.load_classes(Path(classes_path), source_bytes=class_raw)
-        except (ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        except build.BuildError as exc:
             raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path} ({exc})') from exc
+        except (ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+            # A parser error quotes the offending line; the path is caller-chosen, so name only the line.
+            mark = getattr(exc, 'problem_mark', None)
+            where = f' ({mark.line + 1}번째 줄)' if mark else ''
+            raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path}{where}') from exc
         binding = {'classes': values, 'sha256': review_masks.sha(class_raw), 'ignore_index': 255}
         old = review_masks.classes(store)
         if old and old['sha256'] != binding['sha256']:
