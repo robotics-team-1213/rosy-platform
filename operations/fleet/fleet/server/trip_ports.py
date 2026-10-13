@@ -420,7 +420,8 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     age, lead = pose.get("age_s"), 0.0
     if age is not None and live.pose_read_at is not None:
         lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
-    bend_in = round(bend["s_start"] - s - lead, 3)
+    ahead = bend["s_start"] - s
+    bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
             or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
         return None
