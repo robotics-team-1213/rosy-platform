@@ -2,6 +2,7 @@
 Description=Process eligible review data and retain terminal attempt budgets
 
 [Timer]
+AccuracySec=1s
 OnBootSec=30
 OnUnitActiveSec=30
 Unit=rosy-review-pipeline.service
