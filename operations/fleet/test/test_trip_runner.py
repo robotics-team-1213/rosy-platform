@@ -1212,6 +1212,96 @@ def test_formation_refuses_a_robot_on_a_trip():
     assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
+@pytest.mark.parametrize("owner", ["trip", "formation"])
+def test_goal_rechecks_owner_after_localization_await(owner):
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    state = robot.state
+
+    async def changed_state():
+        result = await state()
+        if owner == "trip":
+            runner.robot = "a"
+        else:
+            console._formation_members = lambda: {"a"}
+        return result
+
+    robot.state = changed_state
+    with pytest.raises(HubError) as error:
+        run(console.goal("a", 1.0, 0.0))
+    assert error.value.code == ("TRIP_ROBOT_BUSY" if owner == "trip" else "FORMATION_ACTIVE")
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_bay_rechecks_trip_owner_after_capability_await():
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    capabilities = robot.capabilities
+
+    async def changed_capabilities():
+        result = await capabilities()
+        runner.robot = "a"
+        return result
+
+    robot.capabilities = changed_capabilities
+    with pytest.raises(HubError, match="running trip"):
+        run(console._send_to_bay("a", (1.0, 1.0), "b"))
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_trip_rechecks_existing_motion_after_start_pose_await():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    engaged = [None]
+    runner._engaged = lambda robot_id: engaged[0]
+    start_pose = runner._start_pose
+
+    async def changed_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        engaged[0] = "goal"
+        return result
+
+    runner._start_pose = changed_pose
+    assert _code(runner.start("p1", "bob")) == "TRIP_ROBOT_BUSY"
+    assert runner.view("p1") is None
+
+
+def test_goal_in_flight_counts_as_engaged_until_its_receipt_arrives():
+    from fleet.server.trip_guard import engaged
+
+    console, _, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    observations = []
+
+    async def accept(*args, **kwargs):
+        observations.append(engaged(console, "a"))
+        return {"accepted": True}
+
+    robot.navigation_goal = accept
+    run(console.goal("a", 1.0, 0.0))
+    assert observations == ["goal_pending"]
+
+
+@pytest.mark.parametrize("stop", ["estop", "cancel"])
+def test_stop_during_trip_start_prevents_opening_a_late_trip(stop):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    start_pose = runner._start_pose
+
+    async def stopped_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        if stop == "estop":
+            runner.close_all("operator_estop")
+        else:
+            await runner.cancel_robot("rosy_60", "operator_cancel")
+        return result
+
+    runner._start_pose = stopped_pose
+    with pytest.raises(TripError):
+        run(runner.start("p1", "bob"))
+    assert runner.view("p1") is None
+
+
 def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
     import fleet.server.console as console_module
 

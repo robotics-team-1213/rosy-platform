@@ -4,7 +4,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const WEB = new URL("../../fleet/server/web/", import.meta.url);
+const WEB = new URL("../../../ui/console/", import.meta.url);
 const PREFIX = "/console/assets/";
 
 export async function resolve(specifier, context, nextResolve) {

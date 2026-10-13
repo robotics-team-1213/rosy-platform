@@ -325,6 +325,7 @@ class Bench:
             raise RuntimeError("no robots.yaml in launch.log")
         boot = ("import logging, sys; logging.basicConfig(level=logging.INFO, "
                 "format='%(asctime)s %(name)s %(levelname)s %(message)s'); "
+                f"sys.path.insert(0, {str(Path(self.args.ws).resolve() / 'operations/world/src')!r}); "
                 "from fleet.cli import main; main(sys.argv[1:])")
         self.spawn([sys.executable, "-c", boot, "console", "--robots", manifest, "--port",
                     str(self.args.fleet_port), "--localization-lane-rules",

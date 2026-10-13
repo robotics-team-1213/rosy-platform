@@ -59,7 +59,7 @@ def test_a_fresh_centre_way_returns_the_steer_error_and_a_live_path():
     assert decided is True
     assert step == pytest.approx((error, confidence))
     assert last["expected_path_state"] == "live"
-    assert len(last["expected_path_m"]) == 2
+    assert len(last["expected_path_m"]) > 2
     assert all(len(point) == 2 for point in last["expected_path_m"])
 
 
@@ -71,11 +71,11 @@ def test_a_missing_way_after_commit_holds_instead_of_the_tape_keeper():
     assert step[1] == pytest.approx(0.90)
     assert last["strategy"] == "expected_path_held"
     assert last["expected_path_state"] == "held"
-    assert len(last["expected_path_m"]) == 2
+    assert len(last["expected_path_m"]) > 2
     assert last["expected_path_s_m"] == pytest.approx(0.0)
     assert last.get("reason") != "drivable_way_stale"
     # Past the steer's 1.5 s latch forget, still inside the 2.5 s path budget.
-    later, later_decided = _step(steer, ways, last, 3.0)
+    later, later_decided = _step(steer, ways, last, 2.6)
     assert later_decided is True and later is not None
     assert last["strategy"] == "expected_path_held"
 
@@ -124,3 +124,30 @@ def test_reset_forgets_a_committed_path():
     step, decided = _step(steer, ways, last, 1.0)
     assert step is None and decided is False
     assert last["reason"] == "drivable_way_stale"
+
+
+def test_missing_way_cannot_override_a_fresh_off_route_refusal():
+    steer, ways, last, *_rest = _commit_centre()
+    ways.way = None
+    guide = (0., .3, False, 0., .3, 0.)
+    step, decided = keep_step(steer, ways, last, G, XO, HALF, _pose, .3, None, guide)
+    assert step is None and decided is True
+    assert last['reason'] == 'off_route_hold'
+    assert last['expected_path_state'] == 'dropped'
+
+
+def test_missing_current_odometry_cannot_reuse_the_camera_source_pose():
+    steer, ways, last, *_rest = _commit_centre()
+    pose_at = lambda stamp: _pose(stamp) if stamp <= ways.stamp else None
+    step, decided = keep_step(steer, ways, last, G, XO, HALF, pose_at, .3, None)
+    assert step is None and decided is True
+    assert last['expected_path_state'] == 'dropped'
+    ways.way = None
+    assert _step(steer, ways, last, .4)[0] is None
+
+
+def test_odometry_gap_discards_memory_before_the_stream_returns():
+    steer, ways, last, *_rest = _commit_centre()
+    ways.way = None
+    assert keep_step(steer, ways, last, G, XO, HALF, lambda _stamp: None, .3, None)[0] is None
+    assert _step(steer, ways, last, .4)[0] is None

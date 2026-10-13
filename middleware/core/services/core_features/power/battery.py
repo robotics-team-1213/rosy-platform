@@ -16,6 +16,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -233,6 +234,12 @@ class BatteryMonitor:
         self._deep_announced = False
         self._sentinel_written = False
         self._charging = False
+        # Display estimate. Policy percent stays the live filtered voltage.
+        # While charging is confirmed, shown percent stays the oldest sample
+        # from the previous 12 s, so a charger holding the pack at 8.4 V
+        # cannot paint 100 %. There is no current sensor to do better (SAF-005).
+        self._shown: Optional[float] = None
+        self._rest: deque[tuple[float, float]] = deque()
 
     def apply_thresholds(
         self,
@@ -262,6 +269,16 @@ class BatteryMonitor:
         """필터된 전압에 대응하는 잔량 추정치. 전류 센싱이 없으므로 추정치다."""
         with self._lock:
             return self._percent_locked()
+
+    @property
+    def shown_percent(self) -> Optional[float]:
+        """What a screen may call the remaining charge.
+
+        Not charging: the live filtered estimate. Charging: the estimate from
+        before the charger voltage, never the float voltage read as 100 %.
+        """
+        with self._lock:
+            return self._shown
 
     def _percent_locked(self) -> Optional[float]:
         if self._voltage is None:
@@ -303,6 +320,7 @@ class BatteryMonitor:
                 shutdown_armed=self._shutdown_armed_locked(),
                 filtered_voltage=self._voltage,
                 charging=self._charging,
+                shown_percent=self._shown,
             )
 
     def _shutdown_armed_locked(self) -> bool:
@@ -329,6 +347,7 @@ class BatteryMonitor:
                 "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale",
                 "sample_age_s": age, "stale_after_s": 5.0,
                 "level": self._level.value, "percent": self._percent_locked(),
+                "shown_percent": self._shown,
                 "filtered_voltage": self._voltage,
                 "charging_state": "confirmed" if confirmed else "unconfirmed",
                 "charging_evidence_age_s": charge_age, "charging_latched": self._charging,
@@ -355,6 +374,11 @@ class BatteryMonitor:
             if bool(confirmed) == self._charging:
                 return
             self._charging = bool(confirmed)
+            if self._charging and self._rest:
+                # Oldest sample in the pre-charge window, not the voltage the
+                # dock is already holding up.
+                self._shown = self._rest[0][1]
+                self._rest.clear()
             if not self._charging and self._level is BatteryLevel.DEEP:
                 self._deep_since = self._last_sample_at
             self._reconcile_sentinel_locked(pending)
@@ -381,6 +405,7 @@ class BatteryMonitor:
             self._last_sample_at = current
 
             self._evaluate_level_locked(current, pending)
+            self._remember_display_locked(current)
             self._reconcile_sentinel_locked(pending)
 
         self._emit_all(pending)
@@ -484,6 +509,21 @@ class BatteryMonitor:
         for type_, severity, data in pending:
             self._events.publish(type_, severity=severity,
                                  source="battery_monitor", data=data)
+
+    def _remember_display_locked(self, now: float) -> None:
+        """Keep the screen estimate. Charging does not adopt the live percent."""
+        live = self._percent_locked()
+        if live is None:
+            return
+        if self._charging:
+            if self._shown is None:
+                self._shown = live
+            return
+        cutoff = now - 12.0
+        self._rest.append((now, live))
+        while self._rest and self._rest[0][0] < cutoff:
+            self._rest.popleft()
+        self._shown = live
 
     def _filtered_locked(self, value: float, now: float) -> float:
         tau = float(self._cfg.filter_tau_s)

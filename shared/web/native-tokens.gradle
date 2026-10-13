@@ -1,0 +1,49 @@
+// Both Android surfaces export canonical web tokens at build time, never at runtime.
+def canonical = file(project.ext.rosyTokenSource)
+def generated = layout.buildDirectory.dir('generated/rosy-tokens')
+def packageName = project.ext.rosyTokenPackage
+def nativeTokens = tasks.register('generateNativeTokens') {
+    inputs.file(canonical)
+    inputs.property('packageName', packageName)
+    outputs.dir(generated)
+    doLast {
+        def css = canonical.getText('UTF-8')
+        def darkMatch = css =~ /(?s):root,\s*\[data-theme="dark"\]\s*\{([^}]+)\}/
+        if (!darkMatch.find()) throw new GradleException('Canonical dark palette is missing')
+        def dark = darkMatch.group(1)
+        def pascal = { name -> name.split('-').collect { it.capitalize() }.join('') }
+        def declarations = [:]
+        (css =~ /--([a-z0-9-]+)\s*:\s*([^;]+);/).each { declarations[it[1]] = it[2].trim() }
+        def resolve
+        resolve = { name, seen = [] ->
+            if (seen.contains(name)) throw new GradleException("Cyclic canonical token --$name")
+            def raw = declarations[name]
+            if (raw == null) throw new GradleException("Missing canonical token --$name")
+            def alias = raw =~ /^var\(--([a-z0-9-]+)\)$/
+            if (alias.matches()) return resolve(alias.group(1), seen + name)
+            def value = raw =~ /^([0-9.]+)(px|rem)?$/
+            if (!value.matches()) throw new GradleException("Non-scalar canonical token --$name: $raw")
+            return Double.parseDouble(value.group(1)) * (value.group(2) == 'rem' ? 16 : 1)
+        }
+        def metrics = declarations.keySet().findAll {
+            it ==~ /(?:space|radius|target|weight|leading)-[a-z0-9-]+/ ||
+                it ==~ /text-(?:micro|label|body|value|title|display)/ ||
+                it in ['inset-button', 'focus-ring-width', 'focus-ring-offset', 'disabled-opacity']
+        }.collect { "    const val ${pascal(it)} = ${resolve(it)}f // --$it" }
+        ['line-14', 'gauge-track'].each { name ->
+            def alpha = declarations[name] =~ /var\(--ink\)\s+([0-9.]+)%/
+            if (!alpha.find()) throw new GradleException("Missing ink alpha --$name")
+            metrics += "    const val ${pascal(name)}Alpha = ${Double.parseDouble(alpha.group(1)) / 100}f // --$name"
+        }
+        def colours = (dark =~ /--([a-z0-9-]+)\s*:\s*#([a-fA-F0-9]{6});/).collect {
+            "    val ${pascal(it[1])} = 0xFF${it[2].toUpperCase(Locale.ROOT)}.toInt() // --${it[1]}"
+        }
+        def folder = generated.get().dir(packageName.replace('.', '/')).asFile
+        folder.mkdirs()
+        ['RosyMetrics': metrics, 'RosyTokenColors': colours].each { name, body ->
+            new File(folder, "${name}.kt").setText("package $packageName\n\n// Generated from shared/web/tokens.css; do not edit.\nobject $name {\n${body.join('\n')}\n}\n", 'UTF-8')
+        }
+    }
+}
+android.sourceSets.getByName('main').java.srcDir(generated)
+tasks.named('preBuild') { dependsOn(nativeTokens) }

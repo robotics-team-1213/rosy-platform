@@ -223,7 +223,7 @@ h1 {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-button);
   background: var(--status-crit);
-  color: var(--ink-on-crit);
+  color: var(--text-on-danger);
   font-weight: var(--weight-label);
 }
 .lost[hidden] { display: none; }
@@ -246,7 +246,7 @@ h1 {
 #halt-status[data-state="pending"],
 #halt-status[data-state="sent"] { color: var(--pitch-ink); }
 
-#halt-status[data-state="error"] { color: var(--lost); }
+#halt-status[data-state="error"] { color: var(--status-crit); }
 
 #halt { min-width: 96px; }
 
