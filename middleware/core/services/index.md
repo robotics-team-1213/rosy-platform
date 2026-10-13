@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · uncommitted · D-24 웨이크 입력과 D-440 기기별 전원 정책 (feat/device-power-policy에서 옮김)
 - 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
 - 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
 - 2026-10-12 · d3bd5513c · 이동 교통 감속의 곡률 보존
 - 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)
-- 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분

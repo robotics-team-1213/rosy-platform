@@ -1071,3 +1071,10 @@
 - 변경: 시험만 추가한다. 카메라가 역산한 추종 오차를 실제 `LineFollowManager._steer`에 넣으면, Pinky 0.10/2.0을 포함한 불러온 법칙에서 각속도/선속도가 기하 곡률과 같다. 공백 구간의 ExpectedPath도 같은 인스턴스 법칙을 쓴다.
 - 증거: `test_line_follow_drivable_law.py`. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-13 · uncommitted · D-440 기기 전원 어댑터와 웨이크 뒤 cmd_vel 0 유지 (feat/device-power-policy에서 옮김)
+
+- 변경: `core/bridge/device_power.py`가 `_reconcile_lidar`를 대신한다(LiDAR 서비스 포트, latched `power/devices` 보드, `power/device_ready` 보고). 받은 스캔이 LiDAR의 확인 보고다. `cmd_vel_cycle`은 `motion_ready`가 정확히 True가 아니면 0을 내고, 게이트 예외는 바퀴에 쓴 뒤에 경고한다. `core/system/power.py`가 `presence.min_presence_s`·`max_gap_s`와 `device_policy`를 읽고, 잘못된 블록은 오류를 남기고 정책을 끈다.
+- 증거: `test_cmd_vel_cycle.py`, `test_power_device_adapters.py`, `test_power_command_routes.py`, `test_bridge_timers.py`. 독립 리뷰(code-reviewer, REQUEST CHANGES 한 번 뒤 APPROVE WITH NOTES)를 받았다. 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음. 스위치가 꺼진 로봇은 기기 명령을 하나도 내지 않고 `motion_ready`는 늘 true다. 실기 증거 없음.
+- 결정: `power/manager.py`·`power/devices.py`·`bridge/device_power.py`의 safety 태그는 넣지 않았다. D-430 매니페스트 결정으로 남긴다.

@@ -3547,3 +3547,9 @@
 - 증거: `test_rule_selection.py`(R9 기록과 같은 poll의 다른 로봇 기록 유지, realign 설정 변경 시 baseline 거절), `test_stuck_realign.py`(이중 등록 로봇의 사람 인계와 재선택 없음, 한쪽 목록 로봇은 그대로). 원격 시험 로그는 X: `land-recent/realign-fu` 세션이다.
 - 이행: REALIGN 행은 0.1.11 독자가 거절한다. 어느 현장이든 `realign_robots`를 켜기 전에 현장 Fleet과 모델 PC wheel이 `rosy-contracts-learning` 0.1.12여야 한다.
 - gate 변화: 없음. 설정 digest 값이 바뀌므로 이 변경 앞뒤의 선택 기록은 같은 `config_sha256` 범위로 export되지 않는다. 장치·현장 수용은 별도다.
+
+## 2026-10-13 · uncommitted · 콘솔에서 로봇 한 대를 재우고 깨운다 (D-440 6, feat/device-power-policy에서 옮김)
+
+- 변경: `POST /api/fleet/robots/{robot_id}/power {action: sleep|wake}`(이름 있는 운영자)가 로봇의 `/api/v1/power/mode`(STANDBY)·`/api/v1/power/wake`로 그대로 간다. `HttpRobotClient.power`. 로봇 카드에 절전·깨우기 버튼과 전원 태그의 `준비 중`. 경로는 `console_routes.py`의 identify 옆에 두었다.
+- 증거: `test/test_fleet_power.py`. 원격 pytest와 브라우저 결과는 착지 보고에 둔다.
+- gate 변화: 없음. 실제 로봇을 재우거나 깨우지 않았다.

@@ -974,3 +974,9 @@
 - gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
 - 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
 
+## 2026-10-13 · uncommitted · D-24 웨이크 입력과 D-440 기기별 전원 정책 (feat/device-power-policy에서 옮김)
+
+- 변경: `PresenceDetector`가 정말로 연속된 유효 근접 표본과 `min_presence_s` 0.4 s·`max_gap_s` 1.0 s를 요구한다. `PowerManager.on_command(source)`가 받아들여진 명령으로 깨운다(정보 창 없음). `power/devices.py`(수준·기기 선언·벤치 스위치·엄격한 파서)와 기기별 수준·준비·`motion_ready()`를 더했다. 꺼졌다 켜진 기기는 `wake_ready_s`와 깨운 뒤의 확인 보고가 둘 다 있어야 준비된다. 정책이 움직이는 기기는 CORE 기동 뒤에도 확인을 기다린다.
+- 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
+- gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
+- 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).

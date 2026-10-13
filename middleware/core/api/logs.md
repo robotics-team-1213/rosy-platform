@@ -938,3 +938,9 @@
 - 변경: `core_api_web/api/AGENTS.md`의 옛 `../web` 안내를 실제 `middleware/ui/robot`과 설치 `share/dashboard` 우선순위로 정정했다.
 - 증거: `app.py::_dashboard_root`의 설치/source fallback과 source holder를 읽었다. 문서 링크 검사는 X: `folder-guidance-p0` 세션에 기록하고, committed HEAD를 원격 착지 gate에서 검증한다.
 - gate 변화: 없음. API/serving/runtime 코드는 수정하지 않았다.
+
+## 2026-10-13 · uncommitted · 받아들여진 명령이 절전 타이머를 리셋한다 (D-24 개정, feat/device-power-policy에서 옮김)
+
+- 변경: `api/command_activity.py`의 `COMMAND_ROUTES` 표와 ASGI 미들웨어가 2xx로 답한 명령 호출 뒤 `PowerManager.on_command(source)`를 부른다. main의 `POST /api/v1/motion/rotate_to`를 표에 더했다. GET·WS·`/power/*`·Fleet 주기 자문·lease 갱신은 표에 없다.
+- 증거: `middleware/core/gateway/test/test_power_command_routes.py`. 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음.

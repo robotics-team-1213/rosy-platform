@@ -1556,3 +1556,9 @@
 - 증거: 원격 pytest(모델 PC) `test_command_gate.py test_os_parameter_graph.py test_lidar_guard.py test_policy_handoff.py test_forward_stopping_sweep.py` 74 passed, 9 skipped, `known_failures` NEW 0. 건너뛴 9건은 rclpy가 필요한 `test_os_parameter_graph.py`이고 새 생산자 시험이 그 안에 있다. 구현 전 같은 게이트 시험 6건은 ImportError로 실패했다.
 - gate 변화: 없음. SOURCE 단위 회귀만이다. 프로필 상한이 (0.10, 0.70)이면 지연 여유가 약 41 mm라서 벽 96 mm인 원래 Gazebo 정지 사례가 풀린다는 증거는 없다. ROS 생산자 시험, Gazebo 반복, 실물 수용은 하지 않았다.
 - 결정: D-740 Proposed
+
+## 2026-10-13 · uncommitted · 카메라가 D-440 전원 보드를 따른다 (feat/device-power-policy에서 옮김)
+
+- 변경: `vision/perception/power_gate.py`의 `DevicePowerGate`가 CORE의 latched `power/devices` 보드를 틱마다의 계획(off·skip·run)으로 바꾼다. `control/camera_power.py`의 `CameraPowerMixin`이 카메라를 멈추면 `camera/blocked`를 true로 내고, 다시 켜면 잠금과 워밍업을 새로 한 뒤 `power/device_ready`에 준비를 알린다. `camera_detect_node.py`는 584줄이다.
+- 증거: `test/test_device_power_gate.py`. ROS 그래프 시험(`test_os_camera_graph.py`)은 Jazzy가 있어야 돈다. 원격 pytest 결과는 착지 보고에 둔다.
+- gate 변화: 없음. 보드는 벤치 스위치가 켜진 CORE만 낸다. 실기에서 카메라를 멈추거나 다시 켠 증거는 없다.
