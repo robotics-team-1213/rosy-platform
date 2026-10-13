@@ -10,13 +10,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import shutil
 import tempfile
 import tarfile
 import time
+import sys
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
 from job_state import Job, JobError, receipt
 from learning_cycle import verified_export
 
@@ -170,11 +171,25 @@ def publish_current_local(snapshot, config, out):
     if root.is_symlink():
         raise ValueError('local authority link refused')
     root.mkdir(exist_ok=True)
+    target = root / 'current.json'
+    if target.is_symlink():
+        raise ValueError('local authority file link refused')
+    if (snapshot.get('schema') != 'rosy.pinky-review-current-delivery/1'
+            or snapshot.get('workspace_id') != config['authority']['workspace_id']):
+        raise ValueError('local authority workspace differs')
+    if target.exists():
+        previous = json.loads(target.read_bytes())
+        old, new = previous.get('revision'), snapshot.get('revision')
+        if (previous['workspace_id'] != snapshot['workspace_id'] or
+                old and (not new or new['workspace_id'] != old['workspace_id']
+                         or new['generation'] < old['generation']
+                         or new['generation'] == old['generation'] and new['decision_sha256'] != old['decision_sha256'])):
+            raise ValueError('local authority highwater differs')
     with tempfile.NamedTemporaryFile(dir=root, prefix='.current-', delete=False) as file:
         file.write((json.dumps(snapshot, sort_keys=True, allow_nan=False) + '\n').encode())
         file.flush(); os.fsync(file.fileno())
         temporary = Path(file.name)
-    os.replace(temporary, root / 'current.json')
+    os.replace(temporary, target)
 
 
 def publish_local(folder, digest, config, out):
@@ -186,6 +201,9 @@ def publish_local(folder, digest, config, out):
     if not re.fullmatch('[0-9a-f]{64}', digest):
         raise ValueError('local transfer digest required')
     snapshot = json.loads((root / '.authority/current.json').read_bytes())
+    captured = verify_bundle(folder, snapshot['authority'], workspace_id=snapshot['workspace_id'], capture_files=True)
+    if captured['contract_sha'] != digest:
+        raise ValueError('local transfer digest differs')
     def verify(path):
         result = verify_bundle(path, snapshot['authority'], workspace_id=snapshot['workspace_id'])
         if result['contract_sha'] != digest:
@@ -197,13 +215,10 @@ def publish_local(folder, digest, config, out):
         with tempfile.TemporaryDirectory(dir=root, prefix='.review-upload-') as temporary:
             staging = Path(temporary) / 'bundle'
             staging.mkdir()
-            for name in export_files(folder):
-                file = folder / name
-                if file.is_symlink() or not file.resolve().is_relative_to(folder):
-                    raise ValueError('local export link refused')
+            for name, raw in captured['captured_files'].items():
                 destination = staging / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(file, destination)
+                destination.write_bytes(raw)
             verify(staging)
             os.replace(staging, target)
     return {'transfer_sha': digest, 'remote_path': str(target), 'training_dataset_qualified': False}
