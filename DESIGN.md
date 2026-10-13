@@ -288,7 +288,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 
 ### 앱 셸의 자리 (D-741)
 
-모든 웹 표면은 같은 자리를 쓴다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
+D-741(Proposed)이 정한, 모든 웹 표면이 같이 쓸 자리다. 아직 이 자리를 쓰는 표면은 없다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
 
 | 자리 | 토큰 | 담는 것 |
 |---|---|---|
@@ -299,6 +299,17 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 | 오른쪽 칸 | `--context-track` 360px | 위는 지금 상태, 아래는 입력·조작·근거 |
 
 셸 폭 64rem 아래에서 레일과 하위 탐색이 가로 한 줄이 되고, 본문 폭 48rem 아래에서 지금 상태, 본문, 나머지 순서로 쌓인다. 둘 다 칸 질의다.
+
+본문 격자의 배치는 `data-layout`으로 고른다. 배치마다 둘 수 있는 칸이 정해져 있고, 그 밖의 칸을 넣으면 격자가 깨진다.
+
+| `data-layout` | 둘 수 있는 `data-pane` | 쓰는 곳 |
+|---|---|---|
+| 없음 | `stage`, `now`, `more` | 목록·미리보기와 오른쪽 칸 |
+| `watch` | `stage`, `now`, `more` | 지도와 오른쪽 칸이 2:1 (D-629) |
+| `solo` | `stage` | 폼과 결과만 |
+| `sense` | `sense`, `stage`, `cam`, `now` | 한 로봇의 감지·관측·조작. 본문 폭 64rem 아래에서 두 칸이 된다 |
+
+`data-order="stage-first"`는 좁은 폭에서 본문을 지금 상태보다 먼저 둔다. `data-seats="rail"`은 하위 탐색이 없는 화면, `data-seats="none"`은 레일도 없는 화면이다. `ui-shell`이 칸이 되므로 앱 바와 레일 안의 공용 부품(`ui-actions`, `.ui-form`)은 셸 폭에 답한다.
 
 ## Elevation & Depth
 

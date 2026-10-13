@@ -2,13 +2,14 @@
    배치만 한다. 색은 역할 토큰, 치수는 자리 토큰에서 온다. 접히는 폭 둘은 칸 질의다
    (D-359 §6.3): 셸은 뷰포트가 아니라 자기 폭에 답한다. */
 .ui-app-shell { container-type: inline-size; }
+.ui-rail-item, .ui-subnav-head, .ui-subnav-item, .ui-pathbar, .ui-pane { box-sizing: border-box; }
 .ui-app-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--rail-track) var(--subnav-track) minmax(0, 1fr); }
 .ui-app-body[data-seats="rail"] { grid-template-columns: var(--rail-track) minmax(0, 1fr); }
 .ui-app-body[data-seats="none"] { grid-template-columns: minmax(0, 1fr); }
 
 .ui-rail { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 .ui-rail-nav { display: flex; flex-direction: column; align-items: center; gap: var(--gap-rail); padding: var(--inset-rail); }
-.ui-rail-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); inline-size: 3.5rem; min-block-size: 3.5rem; border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; white-space: nowrap; }
+.ui-rail-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); align-self: stretch; min-block-size: var(--target-secondary); border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; text-align: center; }
 .ui-rail-item[aria-current="page"] { background: var(--brand-rose-wash); color: var(--brand-rose); }
 
 .ui-subnav { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
@@ -26,7 +27,7 @@
 .ui-stage-grid { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto 1fr; grid-template-areas: "stage now" "stage more"; }
 .ui-stage-grid[data-layout="watch"] { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 .ui-stage-grid[data-layout="solo"] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "stage"; }
-.ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(13rem, 17.5rem) minmax(0, 1fr) var(--context-track); grid-template-areas: "sense stage now" "sense cam now"; }
+.ui-stage-grid[data-layout="sense"] { grid-template-columns: var(--sidebar-track) minmax(0, 1fr) var(--context-track); grid-template-areas: "sense stage now" "sense cam now"; }
 .ui-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--gap-pane); padding: var(--inset-pane); }
 [data-pane="stage"] { grid-area: stage; }
 [data-pane="now"] { grid-area: now; }
@@ -37,17 +38,18 @@
 .ui-pane[data-pane="sense"] { background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 
 @container (width < 64rem) {
-  .ui-app-body, .ui-app-body[data-seats="rail"] { grid-template-columns: minmax(0, 1fr); }
+  .ui-app-body, .ui-app-body[data-seats="rail"] { display: flex; flex-direction: column; }
+  .ui-app-main { flex: 1 1 auto; }
   .ui-rail, .ui-subnav { border-inline-end: 0; border-block-end: 1px solid var(--border-default); }
-  .ui-rail-nav { flex-direction: row; }
-  .ui-rail-item { flex-direction: row; inline-size: auto; min-block-size: var(--target-secondary); padding: var(--inset-button); font-size: var(--text-label); }
+  .ui-rail-nav { flex-direction: row; overflow-x: auto; }
+  .ui-rail-item { flex: none; flex-direction: row; align-self: auto; white-space: nowrap; min-block-size: var(--target-secondary); padding: var(--inset-button); font-size: var(--text-label); }
   .ui-subnav-nav { flex-direction: row; overflow-x: auto; padding: var(--inset-rail); }
   .ui-subnav-head { display: none; }
-  .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; grid-template-areas: "stage now" "cam now" "sense sense"; }
+  .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
 }
 
 @container (width < 48rem) {
-  .ui-stage-grid, .ui-stage-grid[data-layout="watch"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "now" "stage" "more"; }
+  .ui-stage-grid, .ui-stage-grid[data-layout="watch"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; align-content: start; grid-template-areas: "now" "stage" "more"; }
   .ui-stage-grid[data-order="stage-first"] { grid-template-areas: "stage" "now" "more"; }
   .ui-stage-grid[data-layout="solo"] { grid-template-areas: "stage"; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cam" "now" "stage" "sense"; }
