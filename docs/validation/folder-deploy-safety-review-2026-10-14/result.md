@@ -23,3 +23,19 @@ SOURCE에서 확인한 최종 경계는 snapshot future/expired 거부, 제한�
 DEVICE HOLD: 실제 직전 명령의 속도 상한 전달, self-reflection 제거 이후 coverage 의미, 실제 sweep 계산 시간과 0.01초 budget, ROS producer 실행 결과. D-740 상태를 Accepted/device-ready로 바꾸지 않는다. 로봇 두 대는 등록 주소로 접속되지 않으며 ABI·calibration·canary 검증과 활성화도 수행하지 않았다. 현장 서버 후보는 Fleet·Vision·Proxy이며 로봇 motion payload와 별도다.
 
 검토자는 pytest·배포·실물 시험을 실행하지 않았다. 부모 실행기는 각 원격 시험 종료 결과, 정확한 SHA의 CI, 서명, 서버 전환·등록 readback을 X: 배포 세션에 따로 기록한다. 과거 후보 원격 pre-push 6개 invocation은 terminal 0/NEW 0였지만 위 CI는 scope에서 실패하여 test matrix를 실행하지 않았고 서명·배포 근거가 될 수 없다.
+
+## D-400 follow-up historical SOURCE review
+
+Candidate `da7a93ff8`, failed scope CI `38440837584`. Independent Codex /root/authority_review reviewed the following five exact historical revisions. These records are provenance only and require the complete followups, including `0e59264da`; no standalone or DEVICE approval.
+
+| Revision | Reviewed boundary |
+|---|---|
+| `c9983d2fe4` | Decision identity, finite values, lease and disposition validation extraction retains fail-closed checks. |
+| `1e8acc5dd8` | Observation gaps and well-formed timing faults produce bounded ZERO/HOLD; malformed decisions, late STOP and actuation faults latch. Requires readonly, continuity and rollback followups. |
+| `ed8f61fbf2` | Answer budget is one 20ms command period; lease and identity checks retained. G-sim p99 and actuation 10ms constraints unchanged; no measured device acceptance. |
+| `a23efed1f8` | Read-only policy_hold getter preserves ZERO/HOLD/latch meaning. |
+| `6a10113618` | Forward request gaps over 0.5s restart continuity; requires rollback fix. Two-second latch is continuous-gap only, not unconditional wall-clock. |
+
+Active gap clock rollback defect reproduced on `c4e5d4ae3`: `100 -> 100.4 -> 100.3` failed on late, unbound and unavailable providers; original `100 -> 99` passed. Minimal guard `at < _policy_gap_last` precedes gap restart in `0e59264da`, independently SOURCE reviewed. Remote model-PC related suite: **245 passed, NEW 0**, including all six rollback regressions. Evidence: deployment session `logs/clock-red/run-1.txt` and `logs/clock-green/run-1.txt` on X:.
+
+No clock clamping, E-stop reset or new writer was added. Continuous gap two-second latch does not imply an unconditional wall-clock latch across request gaps over 0.5s. Producer/revision classification, actual sensor coverage, measured budget, robot ABI/calibration/canary remain DEVICE HOLD. Signing and site activation require terminal CI success for the exact finalized source revision and separate runtime readback.

@@ -41,6 +41,31 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "c9983d2fe4f1488459c3b214a93eafb591a891c6":  # git commit revision
+        "Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate da7a93ff8; Decision identity, finite values, lease and disposition validation extraction retains fail-closed checks. "
+        "Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance.",
+    "1e8acc5dd81b90b28447f491cc894c5bd846cd41":  # git commit revision
+        "Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate da7a93ff8; Observation gaps and well-formed timing faults produce bounded ZERO/HOLD; malformed decisions, late STOP and actuation faults latch. Requires readonly, continuity and rollback followups. "
+        "Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance.",
+    "ed8f61fbf2af21f993b91d7da184d0ef46e9492f":  # git commit revision
+        "Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate da7a93ff8; Answer budget is one 20ms command period; lease and identity checks retained. G-sim p99 and actuation 10ms constraints unchanged; no measured device acceptance. "
+        "Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance.",
+    "a23efed1f8f9d93b26a7be2ee277983ffa4278db":  # git commit revision
+        "Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate da7a93ff8; Read-only policy_hold getter preserves ZERO/HOLD/latch meaning. "
+        "Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance.",
+    "6a10113618809c02d39b8ccc683c72ea42e8329b":  # git commit revision
+        "Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate da7a93ff8; Forward request gaps over 0.5s restart continuity; requires rollback fix. Two-second latch is continuous-gap only, not unconditional wall-clock. "
+        "Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance.",
     "a1d29a9f994ef1db7822274c146a0f9727107722":  # git commit revision
         "Independent /root/delivery_review retrospective history-only SOURCE provenance review, 2026-10-14: "
         "candidate dbf2f51e4; Document-only parent links; CORE final authority and calibration boundaries remain. "
