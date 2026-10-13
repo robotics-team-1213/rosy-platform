@@ -148,7 +148,7 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
       derivativeContext.fillStyle = tokenColor("--scrim");
       derivativeContext.fillRect(0, derivativeCanvas.height - height, derivativeCanvas.width, height);
       derivativeContext.fillStyle = tokenColor("--ink");
-      derivativeContext.font = window.RosyPalette.canvasFont(Math.max(14, Math.round(height * 0.48)), "body");
+      derivativeContext.font = window.RosyPalette.canvasFont("label", "body");
       derivativeContext.fillText(`${(last.elapsed_ms / 1000).toFixed(1)}s  ${last.action} · ${last.result === "accepted" ? "접수" : "실패"}`,
         8, derivativeCanvas.height - Math.round(height * 0.28), derivativeCanvas.width - 16);
     }

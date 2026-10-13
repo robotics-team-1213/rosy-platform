@@ -40,10 +40,19 @@ import sys
 import time
 from pathlib import Path
 
-SITE_HOST = "robttt@100.82.51.8"  # live Fleet: last, Fleet reserve, CPU cap (D-568 3)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lab_hosts  # noqa: E402
+
+# Live Fleet host: last resort, Fleet reserve, CPU cap (D-568 3).
+# The address is ROSY_SITE_HOST, else gitignored private/lab-hosts.json (D-226).
+_LAB = lab_hosts.load()
+SITE_HOST = os.environ.get("ROSY_SITE_HOST", "").strip() or str(_LAB.get("site_host") or "").strip()
 # Site hosts: SITE_HOST plus every host whose probe finds ~/rosy-jobs/site (any ssh name).
-SITES = {SITE_HOST}
-DEFAULT_HOSTS = f"rosy@100.98.162.71 ai@100.108.76.123 {SITE_HOST}"
+SITES = {SITE_HOST} if SITE_HOST else set()
+_FILE_HOSTS = _LAB.get("test_hosts") or []
+if not isinstance(_FILE_HOSTS, list):
+    raise SystemExit("lab-hosts.json test_hosts must be a list")
+DEFAULT_HOSTS = " ".join(str(item).strip() for item in _FILE_HOSTS if str(item).strip())
 # D-568 2: (free cores, free GB) a host needs for one job of the class.
 NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 SITE_RESERVE = (2, 4)
@@ -59,6 +68,7 @@ CI = ".github/workflows/ci.yml"
 DEVICE_REQ = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
 CRYPTO_REQ = "deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt"
 FLEET_REQ = "deploy/site/requirements-fleet.txt"
+VISION_REQ = "deploy/site/requirements-vision.txt"
 TAIL_LINES = 25
 # Seconds before one pytest invocation counts as hung (a failure).
 PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
@@ -107,19 +117,19 @@ P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
 grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$N/constraints.txt"
-"$N/bin/python" - "$N/constraints.txt" deploy/site/requirements-fleet.txt "$N/fleet-extra.txt" <<'PY'
+"$N/bin/python" - "$N/constraints.txt" deploy/site/requirements-fleet.txt deploy/site/requirements-vision.txt "$N/site-extra.txt" <<'PY'
 import re
 import sys
 from pathlib import Path
 
 normalize = lambda name: re.sub(r"[-_.]+", "-", name).lower()
 pinned = {normalize(line.split("==", 1)[0]) for line in Path(sys.argv[1]).read_text().splitlines()}
-extra = (line for line in Path(sys.argv[2]).read_text().splitlines(keepends=True)
+extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_text().splitlines(keepends=True)
          if normalize(line.split("==", 1)[0]) not in pinned)
-Path(sys.argv[3]).write_text("".join(extra))
+Path(sys.argv[-1]).write_text("".join(extra))
 PY
-$P install -c "$N/constraints.txt" -r "$N/fleet-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
-  jsonschema ext4 numpy pillow opencv-python-headless playwright
+$P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
+  jsonschema ext4 numpy pillow playwright
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
   --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
@@ -258,7 +268,9 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[st
     if hosts is None:
         hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
     if not hosts:
-        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_HOSTS is empty", file=sys.stderr, flush=True)
+        print(f"[remote-pytest] {cls} -> no host: set ROSY_TEST_HOSTS or copy "
+              "tools/remote/hosts.example.json to private/lab-hosts.json",
+              file=sys.stderr, flush=True)
         return []
     with ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(probe, hosts))
@@ -290,7 +302,7 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
     if not match:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
-    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, *dirs)]
+    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, VISION_REQ, *dirs)]
     # Lock/swap changes do not change installed packages or need another venv build.
     install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
     return hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16], dirs

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import yaml
@@ -18,11 +19,12 @@ def test_control_package_is_part_of_the_os_workspace() -> None:
     assert (PACKAGE / "resource" / "control").is_file()
 
 
-def test_control_package_imports_without_the_legacy_checkout() -> None:
+def test_control_package_imports_without_the_legacy_checkout(monkeypatch) -> None:
     module = PACKAGE / "control" / "__init__.py"
     spec = importlib.util.spec_from_file_location("absorbed_control", module)
     assert spec is not None and spec.loader is not None
     loaded = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, loaded)
     spec.loader.exec_module(loaded)
     assert Path(loaded.__file__).resolve().is_relative_to(PACKAGE.resolve())
 

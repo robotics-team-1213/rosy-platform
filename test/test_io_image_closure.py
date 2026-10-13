@@ -62,7 +62,14 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
         ROOT / line.split()[1] for line in build.splitlines()
         if line.startswith("COPY ") and line.split()[1].split("/")[0] in COLCON_ROOTS
     }
-    assert copied == {packages[name][0] for name in selected}
+    layout = runpy.run_path(str(ROOT / "middleware/perception/control/_source_layout.py"))
+    holders = {*layout["FLAT_ROOTS"], layout["PACKAGE_DIRS"]["control.planning"],
+               layout["RUNTIME_ROOT"]}
+    assert copied == {packages[name][0] for name in selected} | holders
+    for source in holders:
+        relative = source.relative_to(ROOT / "middleware/control/drive").as_posix()
+        assert (f"COPY {source.relative_to(ROOT).as_posix()} "
+                f"/opt/rosy_ws/src/runtime/control/drive/{relative}") in build
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())
     for source in copied:
         assert source.is_dir(), source

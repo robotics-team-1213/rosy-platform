@@ -30,6 +30,17 @@ def test_centred_lane_steers_straight():
     assert abs(t["target_m"][1]) < 0.01 and t["both"] and t["ahead_m"] > 0.3
 
 
+def test_observed_centre_path_stops_at_a_gap_between_way_rows():
+    from control.sensing.perception.drivable.target import _row_x
+    way = _lane(HALF, -HALF)
+    way[160:165] = False
+    info = way_target(way, G, XO, HALF)
+    path = info['centre_path_m']
+    assert len(path) > 2
+    assert all(0. < point[0] <= _row_x([165], G, XO)[0] for point in path)
+    assert all(a[0] < b[0] for a, b in zip(path, path[1:]))
+
+
 def test_one_unseen_edge_offsets_from_the_seen_edge():
     t = way_target(_lane(0.4, 0.02), G, XO, HALF)
     assert t["target_m"][1] > 0.02 and not t["both"]
@@ -58,6 +69,18 @@ def test_odometry_moves_the_target_into_the_current_pose():
     steer.reset()
     turned, _, _ = steer.update(way, 1, G, XO, HALF, (0.0, 0.0, 0.0), (0.0, 0.0, 0.3))
     assert turned > straight + 0.05      # turned left since the frame: the same point now lies right
+
+
+def test_reset_cannot_republish_the_previous_turn_on_a_fresh_straight_lane():
+    steer = DrivableSteer()
+    corner = _lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.04, x_max=0.33)
+    assert steer.update(corner, 1, G, XO, HALF)[2]["strategy"] == "drivable_turn_left"
+    steer.reset()  # Called when camera evidence is invalidated.
+    straight = _lane(HALF, -HALF)
+    error, confidence, info = steer.update(straight, 2, G, XO, HALF)
+    fresh_error, fresh_confidence, fresh_info = DrivableSteer().update(straight, 2, G, XO, HALF)
+    assert (error, confidence, info["strategy"], info.get("target_now_m")) == (
+        fresh_error, fresh_confidence, fresh_info["strategy"], fresh_info.get("target_now_m"))
 
 
 def test_only_a_wall_within_two_cm_of_the_body_front_invents_a_closed_way():
@@ -227,6 +250,46 @@ def test_no_turn_circle_creeps_along_the_way_then_holds():
     debug = DrivableSteer().update(_lane(HALF, -HALF), 1, G, XO, HALF, guide_deg=16.0, guide_here_deg=170.0,
                                    guide_pivot_ok=False)[2]
     assert debug.get("reason") != "wrong_way_hold", debug     # a polyline joint, the lane ahead agrees
+
+
+def test_creep_exposes_only_current_boundary_checked_target():
+    steer = DrivableSteer()
+    steer._key = 10.0
+    pose = (0.0, 0.0, 0.0)
+    info = dict(target_m=(0.2, 0.05), exit=None)
+    error, confidence, debug = steer._creep(info, pose, pose, HALF)
+    assert error is not None and confidence > 0
+    assert debug['observed_creep_target_m'] == (0.2, 0.05)
+    assert debug.get('target_now_m') is None
+    assert debug['observed_creep_key'] == 10.0
+    _, _, remembered = steer._creep(dict(target_m=None, exit=None), pose, pose, HALF)
+    assert remembered.get('observed_creep_key') is None
+    assert remembered.get('observed_creep_target_m') is None
+
+
+def test_creep_never_marks_a_target_across_remembered_boundary_as_observed():
+    steer = DrivableSteer()
+    steer._key = 10.0
+    pose = (0.0, 0.0, 0.0)
+    # A point on the pure-pursuit arc to (0.2, 0.05), beyond the body-near exclusion.
+    radius = (0.2 ** 2 + 0.05 ** 2) / (2 * 0.05)
+    steer._edges = [(0.1, radius - (radius ** 2 - 0.1 ** 2) ** 0.5)]
+    _, _, debug = steer._creep(dict(target_m=(0.2, 0.05), exit=None), pose, pose, HALF)
+    assert debug.get('observed_creep_key') is None
+    assert debug.get('observed_creep_target_m') is None
+
+
+def test_creep_metadata_does_not_change_shared_steering_or_promote_memory():
+    from control.sensing.perception.drivable.drivable_steer import pursuit_error, ONE_CONFIDENCE
+    pose = (0.0, 0.0, 0.0)
+    for flags, source in [({}, pose), ({'exit_from_memory': True}, pose),
+                          ({'exit_behind_line': True}, pose), ({}, None)]:
+        steer = DrivableSteer()
+        steer._key = 10.0
+        error, confidence, info = steer._creep(dict(target_m=(.2, .05), exit=None, **flags), pose, source, HALF)
+        assert (error, confidence) == (pursuit_error(.2, .05, ONE_CONFIDENCE), ONE_CONFIDENCE)
+        assert info['strategy'] == 'drivable_creep' and info.get('target_now_m') is None
+        assert ('observed_creep_key' in info) == (not flags and source is not None)
 
 
 def test_driving_context_rules(monkeypatch):

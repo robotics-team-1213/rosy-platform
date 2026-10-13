@@ -11,18 +11,32 @@
 from __future__ import annotations
 
 import time
+import threading
 from itertools import count
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
+
+from core_common.protocol.native_receipts import NativeReceipts
 
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.safety.manager import SafetyManager, TeleopWatchdog, finite_velocity
+from core_features.safety.velocity import limit_velocity
 
 
 @dataclass
 class Twist:
     linear: float = 0.0
     angular: float = 0.0
+
+
+@dataclass(frozen=True)
+class _AutonomousInput:
+    linear: float
+    angular: float
+    stamp: float
+    mode_epoch: int
+    preserve_curvature: bool = False
 
 
 ZERO = Twist()
@@ -42,6 +56,11 @@ class CommandManager:
         # SAF-002: default 500 ms, configurable (safety.teleop_timeout_ms).
         self.watchdog = TeleopWatchdog(timeout_ms=teleop_timeout_ms)
         self._manual_twist: Optional[Twist] = None
+        self._manual_mode_epoch = -1
+        self.native = NativeReceipts()
+        self._native_lock = threading.RLock()
+        self._native_session = 0
+        self._native_terminal_notices = []
         self._modes.manual_active = lambda: self.manual_active
         self._manual_source = 'manual'
         #: teleop 세션 번호. 만료 알림(SAF-002)은 세션당 한 번이다.
@@ -54,13 +73,11 @@ class CommandManager:
         self._announced_session = -1
         #: 알릴 것이 밀려 있는가. 알림은 정지가 바퀴에 닿은 뒤에 낸다.
         self._pending_watchdog: Optional[int] = None
-        self._nav_twist: Optional[Twist] = None
-        self._nav_updated_at: Optional[float] = None
+        self._nav_input: Optional[_AutonomousInput] = None
         self._nav_timeout_s = 0.5
         #: 도킹 전용 슬롯. DOCKING 에서만 바퀴에 닿는다 — nav 슬롯을 같이 쓰면
         #: DOCKING 을 떠난 뒤에도 도킹 틱이 쓴 값이 NAVIGATION 에서 나간다.
-        self._docking_twist: Optional[Twist] = None
-        self._docking_updated_at: Optional[float] = None
+        self._docking_input: Optional[_AutonomousInput] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
         #: D-400: one safety.policy_off per entry into an autonomous mode while the policy is off.
@@ -77,6 +94,7 @@ class CommandManager:
         self.intent_errors = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
+        self._modes.change_listeners.append(self._on_mode_change)
 
     def set_readiness_gate(self, readiness) -> None:
         self._readiness = readiness
@@ -89,8 +107,17 @@ class CommandManager:
             self._events.publish("command.rejected", severity="warning",
                                  source="command_manager", data={"source": source, "reason": reason})
 
-    def teleop(self, linear: float, angular: float, source: str = "manual") -> tuple[bool, str]:
-        accepted, code, clipped = self._teleop_decision(linear, angular, source)
+    def teleop(self, linear: float, angular: float, source: str = "manual", *,
+               correlation_id: str | None = None,
+               expected_boot_id: UUID | None = None,
+               expected_owner_generation: int | None = None,
+               receipt_sink=None) -> tuple[bool, str]:
+        accepted, code, clipped = self._teleop_decision(
+            linear, angular, source, correlation_id=correlation_id,
+            expected_boot_id=expected_boot_id,
+            expected_owner_generation=expected_owner_generation,
+            receipt_sink=receipt_sink)
+        self._publish_native_terminal_notices()
         self.note_intent(linear, angular, source, accepted, code, clipped=clipped)
         return accepted, code
 
@@ -107,7 +134,10 @@ class CommandManager:
             self.intent_errors += 1
 
     def _teleop_decision(self, linear: float, angular: float,
-                         source: str) -> tuple[bool, str, Optional[tuple[float, float]]]:
+                         source: str, *, correlation_id: str | None = None,
+                         expected_boot_id: UUID | None = None,
+                         expected_owner_generation: int | None = None,
+                         receipt_sink=None) -> tuple[bool, str, Optional[tuple[float, float]]]:
         if not self._registry.is_active_source(source):
             self._reject(source, "unregistered source")
             return False, "VALIDATION_ERROR", None
@@ -128,17 +158,36 @@ class CommandManager:
         linear, angular = self._safety.clip(linear, angular, scope="manual")
         # 명령을 먼저 놓고 워치독을 나중에 되살린다. 거꾸로면 그 사이의 틱이
         # 되살아난 워치독과 만료된 **옛** 명령을 함께 읽어 바퀴로 다시 보낸다.
+        generation_error = None
         def commit() -> None:
-            self._manual_twist = Twist(linear, angular)
-            self._manual_source = source
-            self._input_epoch += 1
-            self.watchdog.refresh()
-            # A new command starts a new watchdog episode.
-            self._session += 1
+            nonlocal generation_error
+            with self._native_lock:
+                try:
+                    self.native.expect(expected_boot_id, expected_owner_generation)
+                except ValueError as exc:
+                    generation_error = str(exc)
+                    return
+                current = self.native.current
+                if current is not None and current.phase != "TERMINAL":
+                    closed = self.native.update(current.run_id, phase="TERMINAL",
+                                                result="PREEMPTED", reason="NEW_PULSE")
+                    self._native_terminal_notices.append(closed)
+                operation = self.native.admit("teleop", correlation_id)
+                self._manual_twist = Twist(linear, angular)
+                self._manual_mode_epoch = self._modes.epoch
+                self._manual_source = source
+                self._input_epoch += 1
+                self.watchdog.refresh()
+                self._session += 1
+                self._native_session = self._session
+                if receipt_sink is not None:
+                    receipt_sink(operation)
 
         if not self._modes.commit_manual(commit):
             self._reject(source, "mode changed before manual input commit")
             return False, "MODE_CONFLICT", None
+        if generation_error is not None:
+            return False, generation_error, None
         return True, "", (linear, angular)
 
     @property
@@ -151,42 +200,71 @@ class CommandManager:
         """
         return self._manual_twist is not None and not self.watchdog.expired()
 
-    def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None) -> None:
+    def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None,
+                      *, preserve_curvature: bool = False) -> None:
+        epoch = self._modes.epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
         if twist is not None and not finite_velocity(twist.linear, twist.angular):
             self._reject('navigation', 'invalid velocity')
             twist = None
-        self._nav_twist = twist
-        self._input_epoch += 1
-        self._nav_updated_at = (
-            (now if now is not None else time.monotonic()) if twist is not None else None
-        )
+        candidate = None if twist is None else _AutonomousInput(
+            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch, preserve_curvature)
+        def commit() -> None:
+            self._nav_input = candidate
+            self._input_epoch += 1
+        if twist is None:
+            commit()
+        else:
+            self._modes.commit_input(Mode.NAVIGATION, commit, epoch=epoch)
+
+    def clip_line_candidate(self, linear: float, angular: float) -> tuple[float, float]:
+        """D-737: static LINE caps preserve the candidate curve before traffic gating."""
+        limits = self._safety.limits
+        return limit_velocity(linear, angular, limits.max_linear, limits.max_angular,
+                              preserve_curvature=True)
+
+    @property
+    def _nav_twist(self) -> Optional[Twist]:
+        value = self._nav_input
+        return None if value is None else Twist(value.linear, value.angular)
+
+    @property
+    def _docking_twist(self) -> Optional[Twist]:
+        value = self._docking_input
+        return None if value is None else Twist(value.linear, value.angular)
 
     def clear_navigation(self) -> None:
         self.set_nav_twist(None)
 
     def set_docking_twist(self, twist: Optional[Twist], now: Optional[float] = None) -> None:
+        epoch = self._modes.epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
         if twist is not None and not finite_velocity(twist.linear, twist.angular):
             self._reject('docking', 'invalid velocity')
             twist = None
-        self._docking_twist = twist
-        self._input_epoch += 1
-        self._docking_updated_at = (
-            (now if now is not None else time.monotonic()) if twist is not None else None
-        )
+        candidate = None if twist is None else _AutonomousInput(
+            twist.linear, twist.angular, now if now is not None else time.monotonic(), epoch)
+        def commit() -> None:
+            self._docking_input = candidate
+            self._input_epoch += 1
+        if twist is None:
+            commit()
+        else:
+            self._modes.commit_input(Mode.DOCKING, commit, epoch=epoch)
 
     def clear_docking(self) -> None:
         self.set_docking_twist(None)
 
-    def clear_manual(self) -> None:
+    def clear_manual(self, *, result: str = "CANCELED", reason: str = "SAFETY_STOP") -> None:
+        self._close_native_pulse(result, reason)
         self._manual_twist = None
+        self._manual_mode_epoch = -1
         self._input_epoch += 1
         self.watchdog.refresh(0.0)
 
-    def _drop_manual_session(self) -> None:
+    def _drop_manual_session(self, *, mode_left: bool = False) -> None:
         """쥐고 있던 teleop 을 버리고, 그 세션의 끊김은 알리지 않는다.
 
         E-Stop·정책 정지·readiness HOLD·MANUAL 이탈은 이미 알려진 정지
@@ -196,12 +274,56 @@ class CommandManager:
         """
         self._pending_watchdog = None
         self._announced_session = self._session
-        self.clear_manual()
+        self.clear_manual(result="PREEMPTED" if mode_left else "CANCELED",
+                          reason="MODE_LEFT" if mode_left else "SAFETY_STOP")
 
-    def _clear_for_stop(self) -> None:
-        self._drop_manual_session()
+    def _close_native_pulse(self, result: str, reason: str, session: int | None = None) -> None:
+        with self._native_lock:
+            current = self.native.current
+            if (current is not None and current.phase != "TERMINAL"
+                    and (session is None or self._native_session == session)):
+                self.native.update(current.run_id, phase="TERMINAL", result=result, reason=reason)
+                self._native_terminal_notices.append(self.native.current)
+
+    def _publish_native_terminal_notices(self) -> None:
+        with self._native_lock:
+            notices, self._native_terminal_notices = self._native_terminal_notices, []
+        if self._events is None:
+            return
+        for operation in notices:
+            try:
+                self._events.publish(
+                    "native.operation.terminal", source="command_manager",
+                    data={"run_id": str(operation.run_id), "boot_id": str(operation.boot_id),
+                          "kind": operation.kind, "correlation_id": operation.correlation_id,
+                          "result": operation.result, "reason": operation.reason})
+            except Exception:  # event failure cannot change an accepted pulse
+                self.announce_errors += 1
+
+    def capture_native_operation(self, run_id: UUID | None = None):
+        return self.native.capture(self._native_lock, run_id)
+
+    def native_readback(self, run_id: UUID | None = None) -> dict:
+        with self._native_lock:
+            return self.native.readback(
+                run_id, lease_active=self._manual_twist is not None and not self.watchdog.expired(),
+                transport_generation=self._input_epoch)
+
+    def _clear_for_stop(self, *, mode_left: bool = False) -> None:
+        self._drop_manual_session(mode_left=mode_left)
+        self._publish_native_terminal_notices()
         self.clear_navigation()
         self.clear_docking()
+
+    def _on_mode_change(self, old: Mode, new: Mode) -> None:
+        def clear() -> None:
+            if (new is not Mode.MANUAL or
+                    self._manual_mode_epoch != self._modes.epoch):
+                self._drop_manual_session(mode_left=old is Mode.MANUAL)
+            self.clear_navigation()
+            self.clear_docking()
+        if self._modes.commit_input(new, clear):
+            self._publish_native_terminal_notices()
 
     def _note_watchdog_lapse(self, session: int) -> None:
         """SAF-002 만료를 기록해 둔다. 내보내는 것은 `announce_pending` 이다.
@@ -228,6 +350,12 @@ class CommandManager:
         Nothing here may escape: a failing sink or judge must not reach the
         50 Hz loop, nor skip the announcements after it.
         """
+        # The single serialized bridge writer has delivered the selected zero first.
+        try:
+            self._safety.announce_policy_failure()
+        except Exception:  # noqa: BLE001
+            self.announce_errors += 1
+        self._publish_native_terminal_notices()
         session = self._pending_watchdog
         if session is not None:
             self._pending_watchdog = None
@@ -268,13 +396,20 @@ class CommandManager:
                 except Exception:  # noqa: BLE001
                     self.announce_errors += 1
 
-    def _policy_output(self, linear: float, angular: float, source: str, now: float) -> Twist:
+    def _policy_output(self, linear: float, angular: float, source: str, now: float,
+                       mode_epoch: int, input_epoch: int, *, candidate=None, preserve_curvature: bool = False) -> Twist:
         if linear == 0. and angular == 0.:
             return ZERO
-        epoch, mode, command_id = self._input_epoch, self._modes.mode, next(self._policy_ids)
+        if (input_epoch != self._input_epoch or mode_epoch != self._modes.epoch
+                or (candidate is not None and candidate is not self._autonomous_input(source))):
+            return ZERO
+        mode, command_id = self._modes.mode, next(self._policy_ids)
         output = self._safety.evaluate_candidate(command_id, source, linear, angular, now,
-                                                 scope='manual' if mode is Mode.MANUAL else 'nav')
-        if epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop:
+                                                 scope=('manual' if mode is Mode.MANUAL else
+                                                        'line' if preserve_curvature else 'nav'))
+        if (input_epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop
+                or mode_epoch != self._modes.epoch
+                or (candidate is not None and candidate is not self._autonomous_input(source))):
             return ZERO
         if output is None:
             # Latch first: whatever the mode change sets in motion, the e-stop
@@ -293,8 +428,12 @@ class CommandManager:
             self._pending_unguarded = source
         return result
 
+    def _autonomous_input(self, source: str):
+        return self._nav_input if source == 'navigation' else self._docking_input
+
     def select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
+        mode_epoch = self._modes.epoch
         if self._modes.mode is not self._unguarded_mode:
             self._unguarded_noted = False
             self._unguarded_mode = self._modes.mode
@@ -302,10 +441,14 @@ class CommandManager:
         ready = self._motion_ready()
         leaving_manual = stopped or not ready or self._modes.mode is not Mode.MANUAL
         if leaving_manual and self._manual_twist is not None:
-            self._drop_manual_session()
+            self._drop_manual_session(mode_left=self._modes.mode is not Mode.MANUAL)
         if stopped or not ready:
             return ZERO
+        input_epoch = self._input_epoch
         if self._modes.mode is Mode.MANUAL:
+            if self._manual_twist is not None and self._manual_mode_epoch != mode_epoch:
+                self._drop_manual_session(mode_left=True)
+                return ZERO
             # 번호는 만료 판정 **전에** 읽는다 (`_note_watchdog_lapse`).
             session, held = self._session, self._manual_twist
             if held is not None and not self.watchdog.expired(current):
@@ -316,18 +459,23 @@ class CommandManager:
                 if held is None:
                     return ZERO
                 l, a = self._safety.clip(held.linear, held.angular, "manual")
-                return self._policy_output(l, a, self._manual_source, current)
+                return self._policy_output(l, a, self._manual_source, current, mode_epoch, input_epoch)
             if held is not None:
+                self._close_native_pulse("EXPIRED", "WATCHDOG_EXPIRED", session)
                 self._note_watchdog_lapse(session)
             return ZERO
         if self._modes.mode is Mode.NAVIGATION:
-            held, stamp, source = self._nav_twist, self._nav_updated_at, 'navigation'
+            candidate, source = self._nav_input, 'navigation'
         elif self._modes.mode is Mode.DOCKING:
-            held, stamp, source = self._docking_twist, self._docking_updated_at, 'docking'
+            candidate, source = self._docking_input, 'docking'
         else:
             return ZERO
-        age = current - stamp if stamp is not None else None
-        if held is not None and age is not None and 0.0 <= age <= self._nav_timeout_s:
-            l, a = self._safety.clip(held.linear, held.angular, "nav")
-            return self._policy_output(l, a, source, current)
+        if candidate is None:
+            return ZERO
+        age = current - candidate.stamp
+        if 0.0 <= age <= self._nav_timeout_s and candidate.mode_epoch == mode_epoch:
+            preserve_curvature = candidate.preserve_curvature
+            l, a = self._safety.clip(candidate.linear, candidate.angular, "line" if preserve_curvature else "nav")
+            return self._policy_output(l, a, source, current, mode_epoch, input_epoch, candidate=candidate,
+                                       preserve_curvature=preserve_curvature)
         return ZERO

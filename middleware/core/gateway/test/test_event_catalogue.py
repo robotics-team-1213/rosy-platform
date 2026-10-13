@@ -33,7 +33,8 @@ PACKAGES = (
     SRC.parent / "contracts" / "foundation" / "core_common",
     SRC.parent / "middleware" / "core" / "events" / "core_events",
     SRC.parent / "middleware" / "core" / "services" / "core_features",
-    SRC.parent / "middleware" / "core" / "api_web" / "core_api_web",
+    SRC.parent / "middleware" / "core" / "api" / "core_api_web",
+    ROOT / 'middleware/control/drive/behaviors',
 )
 
 
@@ -43,6 +44,9 @@ def _sources() -> list[Path]:
 
 def _origin(path: Path) -> str:
     """`services/core_features/docking/manager.py` 처럼 도메인 기준 경로."""
+    behavior_root = ROOT / 'middleware/control/drive/behaviors'
+    if path.is_relative_to(behavior_root):
+        return 'services/core_features/' + path.relative_to(behavior_root).as_posix()
     for package in PACKAGES:
         if path.is_relative_to(package):
             return path.relative_to(package.parent.parent).as_posix()
@@ -318,7 +322,7 @@ def fingerprint(node: ast.AST) -> str:
 #: 곧 "이 함수를 다시 읽었다"는 서명이다 — 그러라고 있는 목록이다.
 PINNED_RELAYS = {
     ("services/core_features/docking/manager.py", "DockingManager._emit"):
-        "15ae9dd72fa20f0b",
+        "8ed6498003123b06",
     ("services/core_features/safety/manager.py", "SafetyManager._emit"):
         "e0aca301e45601ff",
     ("services/core_features/power/battery.py", "BatteryMonitor._emit_all"):
@@ -329,7 +333,7 @@ PINNED_RELAYS = {
 
 
 #: 이벤트 이름과 모양이 같은 파일 이름들 (`app.js`, `docks.json`, `audit.jsonl`).
-_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "md", "sh", "py", "webmanifest"}
+_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "xml", "md", "sh", "py", "webmanifest"}
 
 #: 첫 인자가 "점 찍힌 이름"인데 이벤트가 아닌 호출들. capability 경로(CAP-001)와
 #: Host Agent RPC 메서드가 그렇다 — 목록이 아니라 **자리** 로 걸러진다.
@@ -361,7 +365,9 @@ def _literals_with_another_job(tree: ast.AST) -> set[str]:
         func = node.func
         called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
         first = node.args[0]
-        if called in _NAMESPACED_FIRST_ARG and isinstance(first, ast.Constant):
+        logger_name = (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+                       and func.value.id == "logging" and called == "getLogger")
+        if (called in _NAMESPACED_FIRST_ARG or logger_name) and isinstance(first, ast.Constant):
             if isinstance(first.value, str):
                 spoken_for.add(first.value)
         named_first = isinstance(first, ast.Constant) and isinstance(first.value, str)
@@ -379,6 +385,11 @@ def _literals_with_another_job(tree: ast.AST) -> set[str]:
                 if isinstance(keyword.value.value, str):
                     spoken_for.add(keyword.value.value)
     return spoken_for
+
+
+def test_logging_namespace_does_not_hide_an_unknown_event_wrapper():
+    tree = ast.parse('logging.getLogger("core.services"); notify("unknown.event")')
+    assert _literals_with_another_job(tree) == {"core.services"}
 
 
 def emit_sites() -> tuple[list[Emit], list[str]]:

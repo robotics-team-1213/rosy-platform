@@ -5,7 +5,7 @@ import {
   CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
   formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
-} from "../../fleet/server/web/camera-pairing.js";
+} from "../../../ui/console/camera-pairing.js";
 
 const REVEALED = {
   request_id: "req-1", device_label: "Galaxy S21", app_version: "1.4.0", state: "revealed",

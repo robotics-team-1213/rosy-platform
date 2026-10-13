@@ -87,6 +87,38 @@ LEASE={'source_id':'north','lease':'test-lease','frame_path':'/api/vision/source
 FRAME='<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#556070"/></svg>'
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_console_coordinate_overlay_raw_and_corrected_comparison(browser_site, width):
+    from playwright.sync_api import expect
+    page, robot, tracking = browser_site
+    page.set_viewport_size({'width': width, 'height': 1000})
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.route('**/api/fleet/vision/sources', lambda route: route.fulfill(json={'sources': ['north']}))
+    page.route('**/api/fleet/vision/lease', lambda route: route.fulfill(json=LEASE))
+    page.route('**/api/vision/sources/north/frame', lambda route: route.fulfill(
+        content_type='image/svg+xml', body=FRAME,
+        headers={'X-Frame-Rectified': 'false', 'X-Frame-Seq': '42', 'X-Frame-Age-Ms': '20'}))
+    page.goto(page.origin + '/console')
+    expect(page.locator('#map-display-mode')).to_have_value('coordinates')
+    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site', timeout=15000)
+    page.locator('#context-tools-tab').click()
+    expect(page.locator('#vision-image')).to_be_visible(timeout=15000)
+    page.locator('#camera-comparison summary').click()
+    expect(page.locator('#camera-corrected')).to_be_visible()
+    expect(page.locator('#camera-corrected-status')).to_contain_text('track')
+    page.locator('#map-display-mode').select_option('overlay')
+    expect(page.locator('#map-canvas')).to_be_visible()
+    page.locator('#map-display-mode').select_option('camera')
+    expect(page.locator('#map-birdseye')).to_be_visible()
+    expect(page.locator('#map-canvas')).to_be_hidden()
+    page.locator('#map-display-mode').select_option('coordinates')
+    expect(page.locator('#map-canvas')).to_be_visible()
+    assert not [call for call in robot.calls if call[0] == 'navigation_goal']
+    assert not errors
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
 def open_install(page, lanes=SITE_LANES):
     page.route('**/api/fleet/site-lanes',lambda route:route.fulfill(status=200,json=lanes))
     page.route('**/api/fleet/vision/sources',lambda route:route.fulfill(status=200,json={'sources':['north']}))
@@ -239,7 +271,20 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     expect(page.locator('#dispatch-control')).to_be_hidden()  # D-487: one lock banner
     capture_console(page, 'connection-desktop.png')
     page.locator('#connection-guide-action').click()
-    expect(page.locator('#console-token')).to_be_focused()
+    expect(page).to_have_url(page.origin + '/console/login?return=%2Fconsole')
+    expect(page.get_by_role('heading', name='관제 로그인')).to_be_visible()
+    expect(page.locator('#login-availability')).to_be_visible()
+    expect(page.locator('#login-availability')).to_have_text(
+        '이 현장에는 사람 로그인이 설정되지 않았습니다. 현장 관리자에게 계정 설정을 요청하세요.')
+    expect(page.locator('#password-login')).to_be_hidden()
+    back = page.get_by_role('link', name='원래 업무로 돌아가기')
+    expect(back).to_have_attribute('href', '/console')
+    back.click()
+    open_token_access(page)
+    # This fixture seeds its Bearer on every navigation; reproduce the refused session after return.
+    page.locator('#console-token').fill('')
+    page.locator('#token-save').click()
+    expect(page.locator('#connection-guide')).to_be_visible()
     page.locator('#console-token').fill('operator-secret')
     page.locator('#console-token').press('Enter')
     expect(page.locator('#connection-guide')).to_be_hidden()

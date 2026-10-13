@@ -1,56 +1,51 @@
 package io.github.livsbittt.rosy.cam.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 
-/**
- * Colour values copied from shared/web/tokens.css, the only source of colour
- * values (D-129, D-292). Every token colour is written on one line as
- * `Color(0xFFRRGGBB) // --<css-custom-property-name>` so the web_common-owned parity
- * test can parse it; keep that exact form. tokens.css defines a single dark `:root`
- * palette, so there is no light scheme.
- *
- * Aliases in tokens.css: --surface-flat = --ground-soft, --surface-raised = --ground-card,
- * --nominal = --button-primary-bg = --ink, --nominal-quiet = --ink-quiet,
- * --button-irreversible-ink = --flag-danger-ink = --ink-on-crit (same value as --ink),
- * --focus-ring = --series-primary.
- */
+/** Semantic facade over generated shared/web/tokens.css values (D-639). */
 object RosyColors {
-    val Ground = Color(0xFF101214) // --ground
-    val GroundDeep = Color(0xFF08090B) // --ground-deep
-    val GroundRaise = Color(0xFF191B1D) // --ground-raise
-    val GroundSoft = Color(0xFF1D1F21) // --ground-soft
-    val GroundCard = Color(0xFF2B2D30) // --ground-card
-    val GroundCard2 = Color(0xFF35383C) // --ground-card-2
-    val Paper = Color(0xFFEEEEEF) // --ink
-    val Muted = Color(0xFF9499A0) // --ink-quiet
+    val Ground = Color(RosyTokenColors.Ground) // --ground
+    val GroundDeep = Color(RosyTokenColors.GroundDeep) // --ground-deep
+    val GroundRaise = Color(RosyTokenColors.GroundRaise) // --ground-raise
+    val GroundSoft = Color(RosyTokenColors.GroundSoft) // --ground-soft
+    val GroundCard = Color(RosyTokenColors.GroundCard) // --ground-card
+    val GroundCard2 = Color(RosyTokenColors.GroundCard2) // --ground-card-2
+    val Paper = Color(RosyTokenColors.Ink) // --ink
+    val Muted = Color(RosyTokenColors.InkQuiet) // --ink-quiet
 
     /** ROSY wordmark only (D-277). Not for status, focus, commands or data. */
-    val BrandRose = Color(0xFFF697E7) // --brand-rose
+    val BrandRose = Color(RosyTokenColors.BrandRose) // --brand-rose
 
     /** Status colours are for thresholds only; nominal state has no colour (D-82). Crit is a fill with Paper ink. */
-    val StatusCrit = Color(0xFFC40921) // --status-crit
-    val StatusWarn = Color(0xFFFEB432) // --status-warn
-    val StatusOk = Color(0xFF12BB81) // --status-good
+    val StatusCrit = Color(RosyTokenColors.StatusCrit) // --status-crit
+    val StatusWarn = Color(RosyTokenColors.StatusWarn) // --status-warn
+    val StatusOk = Color(RosyTokenColors.StatusGood) // --status-good
 
     /** Focus ring and data series; not a status. */
-    val SeriesPrimary = Color(0xFF49AFFD) // --series-primary
+    val SeriesPrimary = Color(RosyTokenColors.SeriesPrimary) // --series-primary
 
     /** Ink-alpha lines, derived from Paper exactly as tokens.css derives them: color-mix(in oklab, --ink a%, transparent). */
-    val Line08 = Paper.copy(alpha = 0.08f) // derived: --gauge-track (ink 8%)
-    val Line14 = Paper.copy(alpha = 0.14f) // derived: --line-14 (= --surface-line, --field-line)
+    val Line08 = Paper.copy(alpha = RosyMetrics.GaugeTrackAlpha) // derived: --gauge-track (ink 8%)
+    val Line14 = Paper.copy(alpha = RosyMetrics.Line14Alpha) // derived: --line-14 (= --surface-line, --field-line)
 }
 
 /** Primary command is the brightest neutral, not a hue (tokens.css --button-primary-*). */
@@ -93,9 +88,42 @@ val RosyColorScheme: ColorScheme = darkColorScheme(
     surfaceContainerHighest = RosyColors.GroundCard2,
 )
 
+val RosyButtonShape = RoundedCornerShape(RosyMetrics.RadiusButton.dp)
+val RosyButtonPadding = PaddingValues(horizontal = RosyMetrics.InsetButton.dp, vertical = RosyMetrics.Space2.dp)
+
+private fun tokenText(size: Float, weight: Float, leading: Float) = TextStyle(
+    fontSize = size.sp, lineHeight = (size * leading).sp, fontWeight = FontWeight(weight.toInt()),
+)
+
+private val RosyTypography = Typography(
+    displayLarge = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    displayMedium = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    displaySmall = tokenText(RosyMetrics.TextDisplay, RosyMetrics.WeightStrong, RosyMetrics.LeadingDense),
+    headlineLarge = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    headlineMedium = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    headlineSmall = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    titleLarge = tokenText(RosyMetrics.TextTitle, RosyMetrics.WeightStrong, RosyMetrics.LeadingCompact),
+    titleMedium = tokenText(RosyMetrics.TextValue, RosyMetrics.WeightMedium, RosyMetrics.LeadingLabel),
+    titleSmall = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightMedium, RosyMetrics.LeadingBody),
+    bodyLarge = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightRegular, RosyMetrics.LeadingBody),
+    bodyMedium = tokenText(RosyMetrics.TextBody, RosyMetrics.WeightRegular, RosyMetrics.LeadingBody),
+    bodySmall = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightRegular, RosyMetrics.LeadingCopy),
+    labelLarge = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightLabel, RosyMetrics.LeadingControl),
+    labelMedium = tokenText(RosyMetrics.TextLabel, RosyMetrics.WeightLabel, RosyMetrics.LeadingControl),
+    labelSmall = tokenText(RosyMetrics.TextMicro, RosyMetrics.WeightLabel, RosyMetrics.LeadingLabel),
+)
+
+private val RosyShapes = Shapes(
+    extraSmall = RoundedCornerShape(RosyMetrics.RadiusControl.dp),
+    small = RoundedCornerShape(RosyMetrics.RadiusButton.dp),
+    medium = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+    large = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+    extraLarge = RoundedCornerShape(RosyMetrics.RadiusPanel.dp),
+)
+
 @Composable
 fun RosyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = RosyColorScheme) {
+    MaterialTheme(colorScheme = RosyColorScheme, typography = RosyTypography, shapes = RosyShapes) {
         // Screens draw on a plain Column, not a Surface, so set the ink here; otherwise Text
         // falls back to LocalContentColor's default (black) on the dark ground.
         CompositionLocalProvider(LocalContentColor provides RosyColorScheme.onBackground, content = content)
@@ -111,9 +139,9 @@ fun CritMessage(text: String, modifier: Modifier = Modifier) {
     Surface(
         color = MaterialTheme.colorScheme.error,
         contentColor = MaterialTheme.colorScheme.onError,
-        shape = RoundedCornerShape(6.dp), // --radius-control
+        shape = RoundedCornerShape(RosyMetrics.RadiusControl.dp), // --radius-control
         modifier = modifier.fillMaxWidth(),
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = RosyMetrics.InsetButton.dp, vertical = RosyMetrics.Space2.dp))
     }
 }

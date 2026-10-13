@@ -130,3 +130,119 @@ def test_unknown_front_capture_stamp_is_not_reconstructed_as_fresh():
     line = SimpleNamespace(pending=lambda: [{"robot_id": "a", "stuck_id": "s1"}])
     case = routes(first, line, {"a": MissingStamp()}).get("/api/fleet/ai/case/s1").json()
     assert "front" not in case["views"]
+
+
+def test_same_stuck_requeries_only_on_confirmed_boundary_revision(tmp_path):
+    clock = [0.0]
+    boundary = {"state": "baseline", "revision": 0}
+    calls = []
+
+    class Fleet:
+        def call(self, path, body=None):
+            if path.endswith("/problems"):
+                return {"problems": [{"problem_id": "s1"}]}
+            return {"kind": "stuck", "problem_id": "s1", "context": {
+                "robot_inquiry": {"lane_boundary": dict(boundary)}}}
+
+    mode = tmp_path / "mode"
+    mode.write_text("available")
+    vlm = SimpleNamespace(judge=lambda case, now: calls.append(case) or {"decision": "WAIT"})
+    service = Situation(Fleet(), tmp_path / "state", mode, clock=lambda: clock[0], vlm=vlm)
+    service._ai_cycle()
+    for state, revision in [("confirmed", 0), ("confirming", 0), ("unknown", 1)]:
+        clock[0] += 9
+        boundary.update(state=state, revision=revision)
+        service._ai_cycle()
+    assert len(calls) == 1
+    clock[0] += 9
+    boundary.update(state="confirmed", revision=1)
+    service._ai_cycle()
+    assert len(calls) == 2
+
+    clock[0] += 9
+    service._ai_cycle()
+    assert len(calls) == 2
+
+
+def test_inactive_owner_and_failed_inference_do_not_consume_boundary_query(tmp_path):
+    clock = [0.0]
+    posts, calls = [], []
+
+    class Fleet:
+        def call(self, path, body=None):
+            if body is not None:
+                posts.append(body)
+                return {}
+            if path.endswith("/problems"):
+                return {"problems": [{"problem_id": "s1"}]}
+            return {"kind": "stuck", "problem_id": "s1", "context": {
+                "robot_inquiry": {"lane_boundary": {"state": "confirmed", "revision": 0}}}}
+
+    mode = tmp_path / "mode"
+    mode.write_text("shared")
+
+    def judge(case, now):
+        calls.append(case)
+        return None if len(calls) == 1 else {"decision": "WAIT"}
+
+    service = Situation(Fleet(), tmp_path / "state", mode, clock=lambda: clock[0],
+                        vlm=SimpleNamespace(judge=judge))
+    service._ai_cycle()
+    assert calls == [] and service._case_attempts == {}
+    mode.write_text("available")
+    clock[0] += 9
+    service._ai_cycle()
+    assert service._case_boundary == {} and len(calls) == 1
+    clock[0] += 9
+    service._ai_cycle()
+    assert service._case_boundary["s1"] == 0 and len(posts) == 1
+
+
+def test_model_failure_retries_are_bounded_and_new_boundary_can_retry(tmp_path):
+    clock, revision, calls = [0.0], [0], []
+
+    class Fleet:
+        def call(self, path, body=None):
+            if path.endswith("/problems"):
+                return {"problems": [{"problem_id": "s1"}]}
+            return {"kind": "stuck", "problem_id": "s1", "context": {
+                "robot_inquiry": {"lane_boundary": {"state": "confirmed", "revision": revision[0]}}}}
+
+    mode = tmp_path / "mode"
+    mode.write_text("available")
+    service = Situation(Fleet(), tmp_path / "state", mode, clock=lambda: clock[0],
+                        vlm=SimpleNamespace(judge=lambda case, now: calls.append(case) or None))
+    for _ in range(5):
+        service._ai_cycle()
+        clock[0] += 9
+    assert len(calls) == 3
+    revision[0] = 1
+    service._ai_cycle()
+    assert len(calls) == 4
+
+
+def test_failed_proposal_post_does_not_consume_boundary_revision(tmp_path):
+    clock, posts = [0.0], []
+
+    class Fleet:
+        def call(self, path, body=None):
+            if body is not None:
+                posts.append(body)
+                if len(posts) == 1:
+                    raise OSError("Fleet temporarily unavailable")
+                return {}
+            if path.endswith("/problems"):
+                return {"problems": [{"problem_id": "s1"}]}
+            return {"kind": "stuck", "problem_id": "s1", "context": {
+                "robot_inquiry": {"lane_boundary": {"state": "confirmed", "revision": 0}}}}
+
+    mode = tmp_path / "mode"
+    mode.write_text("available")
+    service = Situation(Fleet(), tmp_path / "state", mode, clock=lambda: clock[0],
+                        vlm=SimpleNamespace(judge=lambda case, now: {"decision": "WAIT"}))
+    with pytest.raises(OSError):
+        service._ai_cycle()
+    assert service._case_boundary == {}
+    clock[0] += 9
+    service._ai_cycle()
+    assert service._case_boundary["s1"] == 0

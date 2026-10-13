@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from fleet.ai.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
-from fleet.ai.selector_bridge import (
+from rosy.decision.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
+from rosy.decision.selector_bridge import (
     TargetResolutionError,
     resolve_pick_place_candidate,
 )

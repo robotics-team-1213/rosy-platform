@@ -12,7 +12,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium acceptance")
 
 
-def test_coordinates_switch_from_marker_to_anonymous_and_clear_when_stale(console_url):  # noqa: F811
+@pytest.mark.parametrize('width', [1440, 390])
+def test_coordinates_switch_from_marker_to_anonymous_and_clear_when_stale(console_url, width):  # noqa: F811
     from playwright.sync_api import sync_playwright
 
     body = {"sources": [{"source_id": "north", "status": "OK", "fps": 3}],
@@ -27,12 +28,13 @@ def test_coordinates_switch_from_marker_to_anonymous_and_clear_when_stale(consol
             _serve_api(route)
 
     with sync_playwright() as playwright:
-        browser, page, errors = open_page(playwright, 1440, 900)
+        browser, page, errors = open_page(playwright, width, 900)
         page.add_init_script("sessionStorage.setItem('rosy-console-token', 'tracking-browser')")
         page.route("**/api/**", serve)
         page.goto(console_url, wait_until="domcontentloaded")
         row = page.locator("#tracking-position-rows tr").first
         page.wait_for_function("document.querySelector('#tracking-position-rows').textContent.includes('rosy_01')")
+        frame_before = page.locator('#map-stage').bounding_box()
         assert row.locator("td").all_text_contents() == ["rosy_01", "-1.23", "0.46", "마커 관측"]
 
         body["robots"] = []
@@ -43,8 +45,12 @@ def test_coordinates_switch_from_marker_to_anonymous_and_clear_when_stale(consol
 
         body["unknown"] = []
         body["sources"][0]["status"] = "STALE"
-        page.wait_for_function("document.querySelector('#tracking-positions').hidden")
-        assert page.locator("#tracking-position-rows tr").count() == 0
+        page.wait_for_function("document.querySelector('#tracking-position-rows').textContent.includes('유효한 좌표 없음')")
+        assert not page.locator('#tracking-positions').evaluate('(table) => table.hidden')
+        assert row.locator('td').all_text_contents()[1:3] == ['—', '—']
+        frame_after = page.locator('#map-stage').bounding_box()
+        assert (frame_before['width'], frame_before['height']) == (frame_after['width'], frame_after['height'])
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         assert not errors
         browser.close()
 
@@ -70,8 +76,13 @@ def test_position_expires_even_when_the_next_poll_never_returns(console_url):  #
         page.route("**/api/**", serve)
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function("!document.querySelector('#tracking-positions').hidden")
-        page.wait_for_function("document.querySelector('#tracking-positions').hidden")
-        assert page.locator("#tracking-position-rows tr").count() == 0
+        frame_before = page.locator('#map-stage').bounding_box()
+        page.wait_for_function("document.querySelector('#tracking-position-rows').textContent.includes('유효한 좌표 없음')")
+        assert not page.locator('#tracking-positions').evaluate('(table) => table.hidden')
+        assert page.locator('#tracking-position-rows tr').count() == 1
+        assert '0.25' not in page.locator('#tracking-position-rows').inner_text()
+        frame_after = page.locator('#map-stage').bounding_box()
+        assert (frame_before['width'], frame_before['height']) == (frame_after['width'], frame_after['height'])
         assert not errors
         browser.close()
 

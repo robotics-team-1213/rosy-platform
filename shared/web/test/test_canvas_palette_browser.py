@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from runpy import run_path
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -23,7 +24,8 @@ pytestmark = pytest.mark.skipif(
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
+FLEET_ASSETS = run_path(str(SRC.parent / "operations/fleet/fleet/server/static_routes.py"))["CONSOLE_ASSETS"]
 HOST = "http://rosy.test"
 PALETTES = token_themes.palettes(token_themes.read())
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
@@ -91,7 +93,10 @@ def _serve(route):
     if path.startswith("/common/"):
         target = COMMON / path.removeprefix("/common/")
     elif path.startswith("/console/assets/"):
-        target = FLEET / path.removeprefix("/console/assets/")
+        asset = FLEET_ASSETS.get(path.removeprefix("/console/assets/"))
+        if asset is None:
+            return route.fulfill(status=404, body="")
+        target = FLEET / asset[0]
     elif path.startswith("/assets/"):
         target = DASHBOARD / path.removeprefix("/assets/")
     elif path == "/console":
@@ -179,6 +184,25 @@ def test_free_space_follows_the_theme_without_reload(browser, path, canvas_id):
     assert errors == []
 
 
+def test_canvas_text_roles_scale_from_tokens_and_reject_numeric_sizes(browser):
+    page, errors = _open(browser, "/robot-map")
+    page.wait_for_function("window.__ready === true")
+    got = page.evaluate("""() => {
+      const p = window.RosyPalette;
+      let rejected = false;
+      try { p.canvasFont(14); } catch (error) { rejected = error instanceof TypeError; }
+      const initial = p.canvasFont('label', 'mono', 2);
+      document.documentElement.style.setProperty('--text-label', '17px');
+      p.clear();
+      const changed = p.canvasFont('label', 'mono', 2);
+      return {rejected, initial, changed, size:p.canvasTextSize('label')};
+    }""")
+    assert got["rejected"]
+    assert got["initial"].startswith("28px ")
+    assert got["changed"].startswith("34px ") and got["size"] == 17
+    assert errors == []
+
+
 def test_read_palette_resolves_color_mix_tokens_and_clears_on_theme(browser):
     page, errors = _open(browser, "/robot-map")
     page.wait_for_function("window.__ready === true")
@@ -186,7 +210,7 @@ def test_read_palette_resolves_color_mix_tokens_and_clears_on_theme(browser):
       quiet: window.RosyPalette.readColour('--line-quiet'),
       grad: window.RosyPalette.readColour('--ground-grad-1'),
       table: window.RosyPalette.readPalette({free: '--raster-free', hex: '#102030'}),
-      font: window.RosyPalette.canvasFont(10, 'mono'),
+      font: window.RosyPalette.canvasFont('micro', 'mono'),
       css: window.RosyPalette.cssColor('--raster-free'),
     })"""
     for theme in ("dark", "light"):

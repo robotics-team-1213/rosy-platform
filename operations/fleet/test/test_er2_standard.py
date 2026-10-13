@@ -6,13 +6,13 @@ import json
 import httpx
 import pytest
 
-from fleet.ai.er2_standard import (
+from rosy.decision.er2_standard import (
     ER2ProposalError,
     ER2RequestError,
     GeminiER2StandardAdapter,
     ImageObservation,
 )
-from fleet.ai.candidate import ImageTransform, SpatialSelector
+from rosy.decision.candidate import ImageTransform, SpatialSelector
 from core_common.protocol.schemas import ER2ToolResult, MissionFeedbackTurnScope
 
 
@@ -73,7 +73,7 @@ def _feedback_scope_and_context(outcome_policy="STATUS_ONLY"):
         "goal_evidence_reason": "GOAL_NOT_SATISFIED" if outcome_policy == "STATUS_AND_REPLAN" else None,
         "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
     }
-    policy = __import__("fleet.ai.er2_standard", fromlist=["ER2FeedbackEgressPolicy"])
+    policy = __import__("rosy.decision.er2_standard", fromlist=["ER2FeedbackEgressPolicy"])
     egress = policy.ER2FeedbackEgressPolicy(
         approved=True, project_id="approved-project", service_tier="standard",
         approved_data_classes=frozenset({"mission_progress", "mission_instruction"}),
@@ -321,7 +321,7 @@ def test_long_instruction_is_rejected_before_network_request():
 
 
 def test_feedback_turn_replays_stateless_function_result_and_checks_egress_preflight(tmp_path):
-    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+    from rosy.decision.er2_standard import ER2FeedbackEgressPolicy
 
     requests = []
     returned = [
@@ -443,7 +443,7 @@ def test_feedback_function_call_requires_a_trusted_durable_turn_id():
 
 
 def test_feedback_adapter_uses_async_candidate_dispatch_with_the_durable_turn_id():
-    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+    from rosy.decision.er2_standard import ER2FeedbackEgressPolicy
 
     requests = []
     returned = [
@@ -600,7 +600,7 @@ def test_feedback_turn_without_egress_approval_never_calls_transport():
 
 
 def test_feedback_turn_cost_above_ceiling_is_rejected_before_transport():
-    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+    from rosy.decision.er2_standard import ER2FeedbackEgressPolicy
 
     calls = 0
 
@@ -638,7 +638,7 @@ def test_feedback_turn_cost_above_ceiling_is_rejected_before_transport():
 
 
 def test_feedback_turn_rejects_duplicate_provider_call_ids_without_second_dispatch():
-    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+    from rosy.decision.er2_standard import ER2FeedbackEgressPolicy
 
     requests = 0
     dispatched = []
@@ -705,7 +705,7 @@ def test_feedback_turn_rejects_duplicate_provider_call_ids_without_second_dispat
 
 
 def test_feedback_deadline_also_bounds_async_tool_dispatch(monkeypatch):
-    from fleet.ai import er2_standard
+    from rosy.decision import er2_standard
 
     monkeypatch.setattr(er2_standard, "ER2_PROVIDER_DEADLINE_SECONDS", 0.01, raising=False)
     scope, context, egress = _feedback_scope_and_context("STATUS_AND_REPLAN")
@@ -946,7 +946,7 @@ def test_feedback_provider_step_count_boundary(step_count):
 
 def test_feedback_cost_policy_accepts_exact_ceiling():
     from core_common.protocol.schemas import ER2_MAX_ESTIMATED_TURN_COST_USD
-    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+    from rosy.decision.er2_standard import ER2FeedbackEgressPolicy
 
     scope, _context, _egress = _feedback_scope_and_context()
     policy = ER2FeedbackEgressPolicy(

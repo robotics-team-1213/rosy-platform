@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/runtime/*/test` suites. `conftest.py` inserts `deploy/robot/pinky_pro/release` onto `sys.path` so modules shipped as scripts remain importable.
+ROS-free repository architecture, installation, deployment, motor/network and cross-owner learning tests. Pytest runs on remote test PCs or CI, never this laptop (D-584). These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the current package-level `test` suites. `conftest.py` inserts `deploy/robot/pinky_pro/release` onto `sys.path` so modules shipped as scripts remain importable.
 
 ## Key Files
 
@@ -56,6 +56,7 @@ Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. The
 
 | Directory | Purpose |
 |-----------|---------|
+| `learning/perception/` | Existing 99-file learning regression suite; shared private-delivery fixtures and browser harness retained, callers point to the four learning owners and `tools/perception` |
 | `architecture/` | Repo-structure tests: folder layout, package names, document placement, layer and app boundaries (see `architecture/AGENTS.md`) |
 
 Ignore `__pycache__/`.
@@ -78,8 +79,9 @@ Ignore `__pycache__/`.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest test/ -v
-python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/repo-test -- test/ -v
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/motor-test -- test/test_motor_control.py test/test_host_agent.py -v
+# The following browser command runs only on the selected Linux test PC:
 t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider
 ```
 
@@ -92,7 +94,7 @@ t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1
 
 ### Internal
 
-- `middleware/apps/device/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
+- `middleware/devices/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
 - `deploy/robot/pinky_pro/release/*`, `deploy/robot/pinky_pro/*`, `deploy/robot/pinky_pro/image/*`
 
 ### External
