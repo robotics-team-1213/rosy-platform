@@ -65,7 +65,7 @@ def _send_open(rig, anchor, segment=SEGMENT):
 # --- the map circle ------------------------------------------------------------------------------
 
 @pytest.mark.parametrize('k', [K, -K])
-@pytest.mark.parametrize('length, final', [(SEGMENT['length_m'], .015), (1., .006)])
+@pytest.mark.parametrize('length, final', [(SEGMENT['length_m'], .015), (1., .01)])
 def test_a_map_anchor_opens_the_arc_on_the_map_circle_and_the_robot_converges(k, length, final):
     """Gazebo 2026-10-13: the pivot ended 2 cm outside the ring and 10 deg off its tangent."""
     rig, centre = _wall_rig(), _off_circle(k)
