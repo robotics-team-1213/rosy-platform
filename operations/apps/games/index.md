@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · 73e39c840 · feat(games): 조각 13 원격 결과
 - 2026-10-13 · uncommitted · feat(games): 경기 보드 앱 바와 두 로봇 정지 (D-741 조각 13)
 - 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
 - 2026-10-09 · uncommitted · uiux(games): 경기 보드 홈과 본문 건너뛰기
 - 2026-10-07 · uncommitted · test(games): 시간 결측의 선언 전화 폭
-- 2026-10-07 · uncommitted · test(games): CSP 안전 대기 식
