@@ -118,3 +118,13 @@ flowchart TD
 검증은 알려진 경계의 한 화소 이동, 255 둘레, 예측 경계 없음, 구역 보류, 정답 전체 255, 비대칭 정답 분모, 다른 구역 오인 및 실물/시뮬레이션 분리 사례를 사용한다. 새 라이브러리·서비스·ROS field·주행 소비자는 추가하지 않는다. 입력 dataset/모델 재생 연결, 원본 영상 단위 불확실성 분석과 사전 승인 profile은 별도 구현/실행 근거가 필요하다.
 
 모델 프레임 재생은 기존 로더와 preprocess를 사용한다. 도로면/구역 정답과 투영 기준점은 원본 카메라 화소 좌표에서 시작하고, 영상과 같은 resize grid/crop으로 옮긴다. 라벨은 nearest-neighbour, 기준점은 화소 중심의 스케일 변환을 사용한다. crop 밖 알려진 정답을 정상 음성이나 실제 255 정답으로 바꾸지 않고 제외 수와 전체 grid coverage를 남긴다. 이 내부 어댑터에는 독립 정답을 추론 입력으로 전달하는 경로가 없다. 파일/검수/원본 분리 결속과 실제 보정 검증은 실행 caller가 별도로 수행해야 한다.
+
+## 10. 물체 프레임 진단의 지표와 기존 detector 연결
+
+D-659 물체 평가는 D-602의 여섯 클래스와 기존 ObjectDetModel의 letterbox·decode·NMS를 유지한다. 원본 영상 좌표 bbox_xyxy를 사용하고, 정답은 infer 입력으로 전달하지 않는다. 픽셀 박스 면적을 원본 영상 면적으로 나눈 작은 물체 기준과 매칭 IoU를 실행 전에 명시한다. 검출 confidence 내림차순으로 같은 클래스의 미매칭 정답 중 IoU가 가장 큰 하나를 매칭한다. 같은 confidence/IoU는 입력 순서를 유지한다. 임계값 이상이면 TP, 중복·다른 클래스·미매칭 검출은 FP, 남은 정답은 FN이다. AP/mAP, 최적 이분 매칭 또는 신호 상태 판정을 대신하는 수치는 아니다.
+
+클래스별 precision=TP/(TP+FP), recall=TP/(TP+FN)을 기록하고 분모 0은 null이다. 작은 정답은 전체 프레임 매칭 결과에서 별도로 matched/truth와 recall을 계산한다. 가린 정답도 검수 박스의 명시적 boolean `occluded=true`에 대해서만 같은 방식으로 센다. 해당 필드가 없는 기존 박스는 가림 미확인 정답 수로 남기며 false로 채우지 않는다. 이 추가 속성을 넣은 박스는 기존 검수 변경·재승인과 object_review_sha256 결속을 거쳐야 한다. 함수의 boolean 검사는 인증된 가림 검수를 증명하지 않는다.
+
+None 검출은 추론 보류다. 보류된 프레임도 정답·FN·작은/가린 정답 분모를 유지한다. 카메라 snapshot이 무효·오래됨·미래이면 모델 호출 전에 보류한다. 검출 모델의 오류나 무효 결과 revision/latency는 평가 오류로 전파하고 빈 검출로 성공 처리하지 않는다. 실물/시뮬레이션 및 조건별 집계는 정수 개수를 합산하며 프레임 recall 평균을 사용하지 않는다. 서로 다른 매칭/크기 기준, 모델 revision, camera profile, 전처리 또는 confidence/NMS 기준을 섞거나 모델 결속이 있는 결과와 없는 결과를 섞으면 거절한다.
+
+`learning/evaluation/perception/object_fitness.py`는 지표와 열린 기존 detector의 프레임 어댑터다. 내부 합성 회귀는 통계·전처리 호출 경계의 SOURCE 증거이며 실제 독립 물체 성능은 아니다. D-682의 `object_fitness_replay.py`와 `rosy_ml object-fitness`는 고정 검수 출판물·모델 파일·학습 참조·조건의 실행 전후 해시/예약 결속을 담당한다. explicit complete review와 empty negative 기록, 선언 세션/그룹/실제 이미지 분리는 확인하되 authenticated reviewer·전체 upstream closure·검수 freshness는 별도다. 출력은 항상 HOLD이며 intake·전달·운영 소비자·cmd_vel을 실행하지 않는다. 구현·합성 실행과 미완료 항목은 [검증 기록](../validation/fixed-road-fitness-replay-2026-10-12.md)에 구분한다.

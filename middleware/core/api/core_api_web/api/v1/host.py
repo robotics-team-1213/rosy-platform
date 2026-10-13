@@ -534,13 +534,21 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode.
 
     Schema 2 (D-412) keeps every schema-1 key and adds the updater's idleness
-    inputs. All state keys come from one snapshot, so they describe one instant.
+    inputs. It also carries robot_id, core_process_id, and line_follow_steering_law
+    so a device camera can invert the law this process loaded. All state keys
+    come from one snapshot, so they describe one instant.
     """
     hardware = host_hardware(None, svc)
     devices = [{"id": row["id"], "state": row["state"], "product": row["product"]}
                for row in (hardware["devices"] if hardware.get("available") else [])]
     snapshot = _snapshot(svc)
+    line_config = getattr(getattr(svc, 'line_follow', None), 'config', None)
+    law = (None if line_config is None else
+           {key: getattr(line_config, key) for key in
+            ('cruise_speed', 'max_linear', 'steering_gain', 'min_confidence')})
     return {"schema": 2, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "robot_id": getattr(snapshot, 'robot_id', None), "core_process_id": os.getpid(),
+            "line_follow_steering_law": law,
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
             "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
             "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot),

@@ -29,6 +29,7 @@ CONSOLE_ASSETS = {
     "console.js": ("console.js", "application/javascript"),
     "inbox.js": ("inbox.js", "application/javascript"),
     "work-view.js": ("work-view.js", "application/javascript"),
+    "channel-request-view.js": ("channel-request-view.js", "application/javascript"),
     "incident-view.js": ("incident-view.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
     "install.js": ("install.js", "application/javascript"),
@@ -39,6 +40,9 @@ CONSOLE_ASSETS = {
     "authorization.js": ("shared/authorization.js", "application/javascript"),
     "development-auth.js": ("shared/development-auth.js", "application/javascript"),
     "password-login.js": ("shared/password-login.js", "application/javascript"),
+    "login-page.js": ("shared/login-page.js", "application/javascript"),
+    "profile-page.js": ("shared/profile-page.js", "application/javascript"),
+    "login-return.js": ("shared/login-return.js", "application/javascript"),
     "password-login.css": ("shared/password-login.css", "text/css"),
     "camera-pairing.js": ("camera-pairing.js", "application/javascript"),
     "camera-peer.js": ("camera-peer.js", "application/javascript"),
@@ -81,6 +85,8 @@ CONSOLE_ASSETS = {
     "traffic-view.js": ("traffic-view.js", "application/javascript"),
     "guide-layer.js": ("shared/guide-layer.js", "application/javascript"),
     "connection-view.js": ("connection-view.js", "application/javascript"),
+    "device-watch.js": ("device-watch.js", "application/javascript"),
+    "device-watch.css": ("device-watch.css", "text/css"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }
 
@@ -102,6 +108,20 @@ def shared_assets(root: Optional[Path]) -> dict[str, str]:
 
 
 def install_static_routes(app: FastAPI) -> None:
+    @app.get("/console/profile", include_in_schema=False)
+    def console_profile_page():
+        return FileResponse(
+            WEB_ROOT / "profile.html", media_type="text/html",
+            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
+        )
+
+    @app.get("/console/login", include_in_schema=False)
+    def console_login_page():
+        return FileResponse(
+            WEB_ROOT / "login.html", media_type="text/html",
+            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
+        )
+
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict:
         """Minimal process liveness for local container supervision."""

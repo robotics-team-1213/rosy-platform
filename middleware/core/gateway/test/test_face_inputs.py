@@ -28,7 +28,7 @@ def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=
               line_reason=""):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=55.55, voltage=7.81),
-        battery_status=SimpleNamespace(charging=charging),
+        battery_status=SimpleNamespace(charging=charging, shown_percent=None, level=None),
         robot_id="rosy_01",
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),
@@ -55,9 +55,34 @@ def test_the_payload_is_what_the_reader_validates():
     assert (read["robot_mode"], read["face"], read["power_mode"]) == ("NAVIGATION", "happy", "active")
     assert read["drive"]["speed"] == 0.12 and "kind" not in read["drive"]
     assert read["battery_percent"] == 55.5
+    assert read["battery_voltage"] == 7.81 and read["battery_level"] is None
     # Every key the bridge writes is one the reader knows: nothing rides unread.
     assert set(payload) - {"schema", "written_at", "camera_quality_age_s"} == set(read) - {
         "written_ts", "camera_quality", "camera_quality_until"}
+
+
+def test_charging_hands_over_the_held_percent_not_the_live_one():
+    snap = _snapshot(mode="IDLE", navigation="IDLE", charging=True)
+    snap.battery_status = SimpleNamespace(charging=True, shown_percent=41.24, level="warning")
+    payload = _payload(snap, face="basic")
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+    answer = fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)
+
+    assert payload["battery_percent"] == 41.2
+    assert payload["battery_level"] == "warning"
+    assert answer["strip"] == "Charging · 41%  7.81V"
+
+
+def test_driving_keeps_the_live_percent_when_a_held_value_is_also_present():
+    snap = _snapshot()
+    snap.battery = SimpleNamespace(percent=18.44, voltage=40.0)
+    snap.battery_status = SimpleNamespace(charging=False, shown_percent=90.0, level="nope")
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["battery_percent"] == 18.4 and payload["battery_voltage"] is None
+    assert payload["battery_level"] is None
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Going"
 
 
 def test_idle_carries_no_drive_card():
@@ -138,8 +163,42 @@ def test_lane_tracking_does_not_invent_a_blinker():
     snap = _snapshot()
     snap.line_follow = SimpleNamespace(mode="CAMERA", state="TRACKING", reason="lane_edge_left",
                                         angular=-0.5, stuck=None, junction=None)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
 
-    assert _payload(snap)["signal"] is None
+    assert payload["signal"] is None and payload["line_note"] == "lane_edge"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Lane edge"
+
+
+@pytest.mark.parametrize("reason,note,strip", [
+    ("crosswalk_person_present", "crosswalk", "Crosswalk"),
+    ("ir_guard_crosswalk", "crosswalk", "Crosswalk"),
+    ("lane_departure", "lane_edge", "Lane edge"),
+    ("stuck_yield", "yield", "Yielding"),
+    ("tracking", None, "Following"),
+])
+def test_a_published_reason_names_the_strip(reason, note, strip):
+    state = "RECOVERING" if reason == "stuck_yield" else "TRACKING"
+    if reason in ("crosswalk_person_present", "lane_departure"):
+        state = "HOLD"
+    snap = _snapshot(line_mode="CAMERA", line_state=state, line_reason=reason)
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+
+    assert payload["line_note"] == note
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == strip
+
+
+def test_a_yield_turn_stays_the_side_and_a_plain_hold_stays_a_caution():
+    turning = _snapshot(line_mode="CAMERA", line_state="RECOVERING", line_reason="stuck_yield")
+    turning.line_follow = SimpleNamespace(mode="CAMERA", state="RECOVERING", reason="stuck_yield",
+                                           angular=0.3, stuck=None, junction=None)
+    holding = _snapshot(line_mode="CAMERA", line_state="HOLD", line_reason="obstacle_ahead")
+    read = fs.validate_face_inputs(json.loads(json.dumps(_payload(turning))), NOW)
+
+    assert _payload(turning)["signal"] == "left" and _payload(turning)["line_note"] == "yield"
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["strip"] == "Left"
+    assert display.face_cautions(holding) == ["line_follow_hold"]
 
 
 def test_a_moving_return_keeps_recovery_while_the_question_is_also_named():

@@ -202,6 +202,60 @@ def test_prelabel_refuses_classes_disagreeing_with_model():
         prelabel.resolve_classes(bad, model)
 
 
+def test_prelabel_refuses_declared_road_without_model_semantic_evidence():
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable',
+                          'color': [0, 255, 0], 'semantic': 'road_surface/1'}]
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    with pytest.raises(build.BuildError, match='semantic'):
+        prelabel.resolve_classes(entries, model)
+
+
+def test_prelabel_cli_refuses_road_semantic_substitution_before_output(tmp_path, monkeypatch):
+    import yaml
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable',
+                          'color': [0, 255, 0], 'semantic': 'road_surface/1'}]
+    classes = tmp_path / 'classes.yaml'
+    classes.write_text(yaml.safe_dump({'classes': entries}))
+    raw = [dict(c) for c in entries]
+    raw[-1]['semantic'] = 'current_road_region/1'
+    model = SimpleNamespace(manifest=SimpleNamespace(
+        classes=[SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries],
+        raw={'output': {'classes': raw}}, input=None))
+    monkeypatch.setattr(prelabel, '_open_model', lambda *args: (model, None))
+    frames = tmp_path / 'frames'
+    frames.mkdir()
+    (frames / 'frames.jsonl').write_text('')
+    out = tmp_path / 'out'
+    assert prelabel.main([str(frames), '--model', str(tmp_path / 'model'),
+                          '--classes', str(classes), '--out', str(out)]) == 1
+    assert not out.exists()
+
+
+@pytest.mark.parametrize('yaml_semantic,model_semantic', [
+    ('road_surface/1', 'current_road_region/1'), ('current_road_region/1', 'road_surface/1'),
+    ('road_surface/1', None), (None, 'road_surface/1'),
+    ('road_surface/1', 'trajectory_band/1')])
+def test_prelabel_refuses_different_model_road_meaning(yaml_semantic, model_semantic):
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable', 'color': [0, 255, 0]}]
+    raw = [dict(c) for c in entries]
+    if yaml_semantic is not None:
+        entries[-1]['semantic'] = yaml_semantic
+    if model_semantic is not None:
+        raw[-1]['semantic'] = model_semantic
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    with pytest.raises(build.BuildError, match='semantic'):
+        prelabel.resolve_classes(entries, model, model_raw_classes=raw)
+
+
+@pytest.mark.parametrize('semantic', [None, 'road_surface/1', 'current_road_region/1', 'trajectory_band/1'])
+def test_prelabel_preserves_matching_model_road_meaning(semantic):
+    entries = CLASSES + [{'index': 2, 'name': 'road', 'role': 'drivable', 'color': [0, 255, 0]}]
+    if semantic is not None:
+        entries[-1]['semantic'] = semantic
+    model = [SimpleNamespace(index=c['index'], name=c['name'], role=c['role']) for c in entries]
+    assert prelabel.resolve_classes(entries, model, model_raw_classes=list(reversed(entries))) == entries
+
+
 def test_duplicate_colour_or_label_in_labelmap_rejected(tmp_path):
     for extra in ("cone:0,0,0::\n", "line:1,1,1::\n"):
         lm = tmp_path / "labelmap.txt"

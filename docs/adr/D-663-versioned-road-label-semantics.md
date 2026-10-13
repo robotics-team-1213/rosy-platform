@@ -27,7 +27,11 @@ D-659는 도로면·현재 도로 구역·선택 경로를 구별하지만 실�
 
 `build.load_classes`와 자동 라벨 builder는 의미를 검증·보존한다. 검수 builder는 기존 `load_classes`와 봉인된 classes 바이트를 그대로 사용한다. trainer notebook은 dataset classes의 객체를 export에 전달하고 export_cell은 `semantic`을 보존한다. ONNX 수출 CLI도 같은 writer를 사용한다. 모델 loader는 필드를 검증하되 `ClassSpec`와 ROS/API payload를 확장하지 않고 raw manifest에 보존한다.
 
+모델 기반 prelabel과 pixel draft job은 검증된 raw manifest classes의 ID·이름·role 및 각 클래스 semantic을 출력 classes YAML과 비교한다. 이름과 tensor ID가 같아도 의미가 다르거나 한쪽만 의미를 선언하면 출력 생성·프레임 추론 전에 거절한다. 같은 명시 의미는 그대로 보존하며 양쪽 의미 미확인은 구형 연구 호환으로만 유지한다. ClassSpec만으로 새 의미의 동일성을 추정하지 않는다.
+
 `v13-drivable`의 명시적 의미는 `current_road_region/1`만 허용한다. 기존 의미 미확인 v13은 호환 읽기가 가능하되 상세 인지 적합성의 증거로 인정하지 않는다. 전체 도로면 모델은 v13으로 위장하지 않는다.
+
+검수의 unknown 병합·indexed draft import/apply·승인에서는 명시적 `road_surface/1`을 자기 차선 안쪽으로 제한하지 않는다. 다른 차선의 가시 도로도 정답에 남겨야 하기 때문이다. 구형 의미 미확인과 현재 구역 라벨의 기존 차선 제한은 유지하고, 이미 검수한 화소를 덮거나 초안을 자동 승인하지 않는다. 자기 차선 초안을 만드는 lane clipping/Qwen completion 도구는 전체 도로면 classes를 처리 전에 거절한다. 기존 클래스 바이트나 검수 작업공간을 소급 변경하지 않는다.
 
 #### 3. 의미가 다른 점수와 champion은 비교하지 않는다
 

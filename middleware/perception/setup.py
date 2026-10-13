@@ -77,7 +77,7 @@ map_data_files = [
 
 setup(
     name=package_name,
-    version='0.1.0',
+    version='0.1.1',
     packages=packages,
     package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
     cmdclass={'build_py': HolderBuild, 'sdist': HolderSource},
@@ -89,7 +89,7 @@ setup(
         (os.path.join('share', package_name, 'web'), glob('web/*.html')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
     ] + map_data_files,
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'core_common>=0.0.1'],
     zip_safe=True,
     maintainer='livsbittt',
     maintainer_email='56295815+livsbittt@users.noreply.github.com',
