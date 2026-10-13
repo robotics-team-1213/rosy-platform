@@ -224,7 +224,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 
 - 테마는 `tokens.css`의 `[data-theme="이름"]` 팔레트 블록 **하나**다. 기본(어둡게)은 `:root, [data-theme="dark"]`, 밝게는 `[data-theme="light"]`다.
 - 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
-- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
+- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그리고, Fleet 헤더의 순환 버튼 하나도 같은 목록을 돈다(D-668, `test_theme_choices.py`).
 - 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
 - `python -m pytest shared/web/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
 - 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
@@ -239,7 +239,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 - [`theme.js`](shared/web/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
 - 선호는 `localStorage` `rosy.theme` = `dark|light|system`. 없거나 읽기 실패면 `dark`. `system`은 `prefers-color-scheme`을 따른다.
 - API: `window.RosyTheme.get()`·`set(pref)`·`resolved()`. 바뀌면 `document`에 `rosy:theme` 이벤트(`{theme, preference}`)가 난다.
-- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널과 Fleet `설정` 안에 있다.
+- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널에 있다. Fleet은 헤더의 순환 버튼 하나(`data-theme-cycle`)가 같은 선택지를 돈다(D-668).
 - 고정 표면: `surfaces.yaml`에 `themes: [dark]`인 웹 표면(games 보드, Pilot, `lane_live_view`, `diagnostic.html`)은 `<html data-theme-pin="dark">`이고, 왜 테마를 따르지 않는지 `theme_reason`에 적는다(없으면 레지스트리 시험이 막는다). 네이티브·LCD 사본도 어둡게 고정이다.
 - 캔버스는 CSS 변수를 못 읽는다. `window.RosyPalette`(`readColour`·`readPalette`·`cssColor`·`canvasFont`)로 어떤 CSS 색이든 RGBA로 풀고, `rosy:theme`에서 캐시가 비워진다. 다시 그리는 일은 각 캔버스가 한다.
 
@@ -406,7 +406,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.
 - 붙박이, `ground-deep` 바탕, `--topbar-height`. 64rem 미만은 두 줄이다. 첫째 줄은 이름·상태, 둘째 줄은 화면 전환, 비상 정지는 두 줄을 차지한다. 30rem 미만은 그 두 줄에서 여백과 부제만 줄인다.
-- Fleet은 D-658의 제품·현장 / 연결·권한 / 알림·접속 / 비상정지 네 영역을 사용한다. 48rem 미만에서는 제품·정지를 첫 줄, 상태·조작을 둘째 줄에 둔다. 계정·접속·테마 상세는 모든 폭에서 접고, 접속이 필요할 때 자동으로 펼친다. 문서 이동은 본문 탐색, 시각·진단은 푸터가 담당한다.
+- Fleet은 D-658의 제품·현장 / 연결·권한 / 알림·접속 / 비상정지 네 영역을 사용한다. 48rem 미만에서는 제품·정지를 첫 줄, 상태·조작을 둘째 줄에 둔다. 접속 상세는 모든 폭에서 접고, 접속이 필요할 때 자동으로 펼친다. 계정은 우측의 보이는 로그인/계정(D-683), 테마는 헤더의 버튼 하나다(D-668). 문서 이동은 본문 탐색, 시각·진단은 푸터가 담당한다.
 - 워드마크는 한 줄이다. 칸이 모자라면 표면이 이름 칸에 `container-type: inline-size`를 주고 글자가 칸에 맞게 줄어든다(상한 title).
 
 ### 사이드바 — `.ui-sidebar` (D-466)
@@ -419,7 +419,7 @@ Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다.
 - 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `quiet`로 선다(위험 채움은 비상 정지 하나). 로봇 카드 `운행 취소`와 큐 펼침 `중단`도 `quiet`이고, 멈추는 동작이라 확인 없이 바로 나간다([D-540](docs/adr/D-540-fleet-console-structure-v2.md) 6항).
 
 ### 테마 선택
-- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
+- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널이다. Fleet은 이 묶음 대신 헤더의 순환 버튼 하나를 쓴다(D-668).
 
 ## 작업 화면의 기본 원칙 (D-461)
 
@@ -493,7 +493,7 @@ Native Pilot의 Kotlin 색과 Android 색 리소스는 `tokens.css`의 dark 블�
 화면을 이유 없이 다시 그리지 않으며, 실제 장비 확인과 브라우저 대역 확인은 구별해 기록한다.
 # Fleet 공용 헤더 영역 (D-658)
 
-계정 발견성·로그인 복귀·연결/권한 구분은 [플랫폼 사용 규칙 재정리](docs/plans/2026-10-12-platform-ux-conventions-design.md)와 [D-683](docs/adr/D-683-fleet-account-entry-and-login-return.md)를 따른다. D-683은 아래 D-658의 계정 상세 위치를 대체한다. 우측 유틸리티의 보이는 로그인/계정에서 전용 로그인 문서로 가며, 테마·고급 토큰은 기존 펼침에 남는다. Map/Cell은 초안 보존을 위해 새 탭에서 로그인하고 원래 작업 탭에서 세션을 다시 확인한다. 구현·G1/G2/G3·설치 증거는 별도다.
+계정 발견성·로그인 복귀·연결/권한 구분은 [플랫폼 사용 규칙 재정리](docs/plans/2026-10-12-platform-ux-conventions-design.md)와 [D-683](docs/adr/D-683-fleet-account-entry-and-login-return.md)를 따른다. D-683은 아래 D-658의 계정 상세 위치를 대체한다. 우측 유틸리티의 보이는 로그인/계정에서 전용 로그인 문서로 가며, 고급 토큰은 기존 펼침에 남는다. 테마는 D-668의 헤더 버튼 하나다. Map/Cell은 초안 보존을 위해 새 탭에서 로그인하고 원래 작업 탭에서 세션을 다시 확인한다. 구현·G1/G2/G3·설치 증거는 별도다.
 
-헤더는 제품·현장 정체성, 연결·권한 상태, 알림·접속 조작, 비상정지 네 그룹이다. 상태와 조작을 섞지 않는다. 넓은 화면은 네 그룹을 한 줄로, 좁은 화면은 정체성·비상정지와 상태·조작 두 줄로 둔다. 접속·테마 상세는 별도 펼침 영역이며 화면 폭 때문에 자동으로 드러내지 않는다. 접속이 필요할 때의 자동 펼침은 유지한다. 탐색은 왼쪽 레일 또는 헤더 아래, 작업·지도는 본문, 현재 영상·개입·알림은 오른쪽 문맥 패널, 시각·진단은 푸터가 맡는다.
+헤더는 제품·현장 정체성, 상태 센터, 테마·계정 조작, 비상정지 네 그룹이다. 상태 센터는 연결·메시지·개발 접속 요약을 여는 단일 조작이다(D-668). 넓은 화면은 네 그룹을 한 줄로, 좁은 화면은 정체성·비상정지와 상태·조작 두 줄로 둔다. 접속 상세는 별도 펼침 영역이며 화면 폭 때문에 자동으로 드러내지 않는다. 접속이 필요할 때의 자동 펼침은 유지한다. 탐색은 왼쪽 레일 또는 헤더 아래, 작업·지도는 본문, 현재 영상·개입·알림은 오른쪽 문맥 패널, 시각·진단은 푸터가 맡는다.
 
