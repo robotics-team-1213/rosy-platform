@@ -100,19 +100,23 @@ class AccountAuthority:
                                     token_expires_in=300,
                                     refresh_token_generator=lambda request: secrets.token_urlsafe(32))
 
+    def authorization_fields(self, query):
+        fields = _form(query)
+        if (set(fields) != {'response_type', 'client_id', 'redirect_uri', 'scope', 'state',
+                            'code_challenge', 'code_challenge_method'}
+                or fields['response_type'] != 'code' or fields['code_challenge_method'] != 'S256'
+                or not re.fullmatch(r'[A-Za-z0-9_-]{43}', fields['code_challenge'])
+                or not 1 <= len(fields['state']) <= 512):
+            raise ValueError('invalid authorization request')
+        client = self.clients.get(fields['client_id'])
+        if (client is None or fields['redirect_uri'] not in client['redirect_uris']
+                or fields['scope'] not in client['resources']):
+            raise ValueError('unregistered authorization request')
+        return fields
+
     def authorize(self, query, context):
         try:
-            fields = _form(query)
-            if (set(fields) != {'response_type', 'client_id', 'redirect_uri', 'scope', 'state',
-                                'code_challenge', 'code_challenge_method'}
-                    or fields['response_type'] != 'code' or fields['code_challenge_method'] != 'S256'
-                    or not re.fullmatch(r'[A-Za-z0-9_-]{43}', fields['code_challenge'])
-                    or not 1 <= len(fields['state']) <= 512):
-                return self.error()
-            client = self.clients.get(fields['client_id'])
-            if (client is None or fields['redirect_uri'] not in client['redirect_uris']
-                    or fields['scope'] not in client['resources']):
-                return self.error()
+            fields = self.authorization_fields(query)
             with self.transaction() as db:
                 current = self.resolve_family(db, context['session_family'])
                 if (current is None or current['account_id'] != context['account_id']
