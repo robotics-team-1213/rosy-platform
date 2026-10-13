@@ -2,6 +2,7 @@
 Description=Refresh current review transport while retaining highwater
 
 [Timer]
+AccuracySec=1s
 OnBootSec=15
 OnUnitActiveSec=10
 Unit=rosy-review-bridge.service
