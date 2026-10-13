@@ -33,6 +33,7 @@ ROBOT = [
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
     "test/test_surface_device_browser.py",
+    "test/test_surface_shell_browser.py",
     "test/test_camera_capture_browser.py",
     "middleware/robot_ui/robot/test/*_browser.py",
     "middleware/robot_ui/robot/test/test_surface_bridge.py",

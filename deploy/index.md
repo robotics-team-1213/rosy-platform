@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · uncommitted · OMX recorder configuration preparation
 - 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리
 - 2026-10-12 · d905c939b · ingress dispatcher 경로 접근 복구
 - 2026-10-12 · 7ead3df40 · 보호 conversation 버전의 검토된 교체
 - 2026-10-12 · a5925d7ae · D-728 이전 턴 의미 평가 동결
-- 2026-10-12 · a60550e41 · conversation broker 관리자 설치

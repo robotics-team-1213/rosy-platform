@@ -636,6 +636,12 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
     own = ROOT / package_root
+    modules = {}
+    if package == 'control':
+        from runpy import run_path
+        inventory = run_path(str(own / 'test/control_sources.py'))['control_sources']()
+        modules = {('control.' + name.replace('/', '.')).removesuffix('.py').removesuffix('.__init__'): path
+                   for name, path in inventory}
     for source in _source_files(importer):
         # The package's own imports are not the importer's: control sits inside
         # src/core since a93d5188, and would otherwise pull in all of itself.
@@ -646,6 +652,9 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
             if parts[0] != package:
                 continue
             for depth in range(len(parts), 0, -1):
+                module = '.'.join(parts[:depth])
+                if module in modules:
+                    found.add(modules[module])
                 base = ROOT / package_root / Path(*parts[:depth])
                 for candidate in (base.with_suffix(".py"), base / "__init__.py"):
                     if candidate.is_file():

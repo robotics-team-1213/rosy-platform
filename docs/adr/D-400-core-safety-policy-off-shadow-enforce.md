@@ -70,3 +70,43 @@
 - **D-313 IR 라인 추종 대체 경로는 계획 3까지 쓸 수 없다.** `api/v1/line_follow.py`가 `adapter.calibration_revision`을 요구하는데 어댑터가 보정 블록을 더 이상 읽지 않아 항상 None이고 `IR_FALLBACK_NOT_READY`가 된다. 어느 로봇도 어댑터를 켜지 않아 현장 영향은 없다. 계획 3의 저장소 레코드가 이 값을 대신해야 한다.
 - 남은 LOW 항목(Task 5 리뷰): 준비 상태 경합으로 한 tick 동안 브리지가 0으로 만든 후보에 대해 그림자 판정이나 `policy_off`가 기록될 수 있다(감사 기록에만 영향, 출력은 그대로). 후보 슬롯은 위치 기반 튜플이다.
 - 호스트 pytest 통과는 장치·ARM64 이미지·실주행 수용이 아니다. G-sim, G-dev, G-enforce는 모두 열려 있다.
+
+### 개정 (2026-10-14): 4항 집행 HOLD 구현, 답 시간 상한
+
+4항은 계획 1에서 `stale_hold_s` 키만 두고 쓰지 않았다. 그래서 enforce는 0이 아닌 명령에 판정이 없으면 원인을 가리지 않고 바로 `control:<사유>` e-stop을 래치했다. Gazebo 차로 주행 run59(2026-10-14, 부하가 걸린 공유 PC)는 교차로 접근 중 `control:policy_invalid`로 끝났고, 같은 프로세스에서 34–77 ms 스케줄 지연이 여러 번 보였다. 이 개정은 4항을 enforce 경로에 구현하고, 답 시간 상한의 근거를 다시 적는다. 상태(Status)와 전환 게이트(6항)는 바꾸지 않는다. enforce를 켜는 일은 여전히 로봇별 승인이다.
+
+**끊김으로 치는 것.** 근거나 답이 제때 없는 경우만이다.
+
+- 평가기가 아직 묶이지 않았다(`policy_unavailable`).
+- 정책에 지금 쓸 관측이 없다: `snapshot_missing`, `snapshot_future`, `snapshot_expired`, `snapshot_changed`. 평가기는 이때 `PolicyObservationUnavailable`(`ValueError`의 하위)을 낸다(`policy_failed`). 메시지 문자열로 가리지 않는다.
+- 형식이 맞고 요청과 일치하는 판정이 시간 조건만 어겼다(`policy_invalid`): 답이 상한보다 늦었거나, `request.now` 또는 `request.now + elapsed`가 `[observed_at, expires_at]` 밖이다. `decision_fault`가 `timing`과 `malformed`를 가른다. `decision_valid`와 `check_decision`의 결과는 그대로다.
+
+**바로 래치하는 것(전과 같다).** `stop` 판정(늦게 온 `stop`도), 형식이 틀리거나 요청과 맞지 않는 판정(명령 id·출처·revision 불일치, 유한하지 않은 값, lease 폭 범위 밖, 잘못된 disposition·reason), 평가기의 다른 예외, 평가 중 평가기나 revision이 바뀐 경우, 유한하지 않거나 음수인 경과 시간(시계 고장), `actuation_*` 검사 실패. 끊김인지 확실하지 않은 경우는 래치 쪽에 두었다.
+
+**HOLD 동작.**
+
+- `SafetyManager.bind_policy`·`bind_control_policy`가 `stale_hold_s`를 받는다. 기본 0은 전과 같이 모든 무판정이 바로 래치다. 센서 어댑터는 enforce로 묶을 때 설정값(기본 2 s, (0, 5])을 넘긴다. shadow와 off는 넘기지 않는다.
+- 끊김이 시작된 시각을 정책 시계(`_policy_clock`)로 기억한다. 끊김 나이가 `stale_hold_s`보다 작은 동안 `evaluate_candidate`는 None과 함께 `policy_hold`를 세우고, `CommandManager._policy_output`은 `trigger_estop`과 모드 전이 없이 0을 낸다. 유효한 판정이 오면 끊김 기록을 지우고 그 틱부터 재개한다.
+- 끊김 나이가 `stale_hold_s`에 닿으면 다음 무판정에서 전과 같은 `control:<사유>`로 래치한다. 정책 시계가 거꾸로 가도 래치한다.
+- 속도 0 명령은 전과 같이 정책에 묻지 않는다. 묻지 않으므로 끊김을 끝내지 못한다. 끊김 뒤 0 명령으로 2 s를 넘기고 다시 0이 아닌 명령을 냈는데 첫 평가가 또 끊김이면 바로 래치한다. 래치 뒤 해제해도 끊김 기록은 유효한 판정이 한 번 나올 때까지 남는다.
+- 진단 로그(`Control policy failed ...`)는 끊김이 열릴 때 한 번, 래치할 때 한 번만 낸다. HOLD 중 50 Hz로 내지 않는다.
+
+**답 시간 상한.** `decision_valid`의 `elapsed ≤ 0.01`은 6항 G-sim의 성능 게이트(`eval_ms` p99 ≤ 10 ms)에서 온 숫자였고 안전에서 유도한 값이 아니었다. 이제 이름 있는 상수 `POLICY_ANSWER_BUDGET_S = 1/50 s`다. 근거는 `_policy_output`을 부르는 루프의 주기다. CORE의 유일한 `/cmd_vel` 타이머가 50 Hz(`ros_bridge.py`의 `create_timer(1.0 / 50.0, self._publish_cmd_vel)`, D-2, `test_bridge_timers.py`가 고정)이고, 답은 자신이 판정한 틱에 적용되어야 한다. 근거의 나이 조건(`observed_at ≤ now ≤ now + elapsed ≤ expires_at`, lease 폭 ≤ 0.5 s)은 바꾸지 않았다. 그림자도 같은 규칙을 쓰므로 10–20 ms 답은 이제 `unavailable`이 아니라 판정으로 기록된다. G-sim 게이트의 `eval_ms` p99 ≤ 10 ms는 그대로다.
+
+**표시.** `policy_reason`은 HOLD 중에도 사유를 갖는다. `/robot/state`의 `safety_policy.hold` `{count, reason}`(enforce에서만, API v1.223)가 HOLD로 답한 끊김의 수와 가장 최근 사유를 싣는다. 새 이벤트 종류는 만들지 않았다. 래치는 전과 같이 `safety.estop`의 `source`로 보인다.
+
+**하지 않은 것.**
+
+- `evaluate_candidate`의 actuation 총 예산(`elapsed ≤ 0.01`, `actuation_stale_or_over_budget`)은 그대로다. 시뮬 전용 경로이고 제품 코드에서 `bind_simulation_actuation`을 부르는 곳이 없다. 이 사유는 끊김으로 치지 않는다.
+- 어댑터 설정은 `stale_hold_s` 0을 받지 않으므로(0, 5]), 어댑터로 묶은 enforce는 항상 HOLD가 켜진다. 끄는 설정은 두지 않았다.
+- 워커의 정지 거리와 봉투 문제(계획 1의 "해석 주의와 한계")는 그대로다. HOLD는 근거가 없는 동안 0을 내는 것이라 그 문제를 넓히지 않는다.
+
+**검증.** 호스트 단위 시험만이다(`test_safety_decision_check.py`, `test_control_absorption_safety.py`, `test_control_policy_link.py`, `test_control_sensor_adapter.py`, `test_safety_policy_status.py`). SIM(Gazebo 차로 주행 재실행)과 DEVICE는 하지 않았다. 34–77 ms 지연이 실제로 HOLD 한두 틱으로 끝나는지는 Gazebo에서 확인해야 한다.
+
+독립 안전 검토(2026-10-14, code-reviewer) 뒤 고친 것과 적어 둘 것:
+
+- 끊김 시계는 유효한 판정이 오거나, 증거 임대 폭(0.5초)보다 오래 묻지 않으면 새로 시작한다. 0 명령으로 서 있는 동안에는 정책을 묻지 않으므로, 교차로에서 3초 선 앞뒤의 두 지연은 서로 다른 끊김이다. 끊기지 않고 계속 묻는 죽은 센서는 전과 같이 `stale_hold_s`에 래치한다. 시계가 거꾸로 가면 래치한다.
+- "첫 판정 전"의 HOLD는 `snapshot_missing`으로만 일어난다. 평가기가 묶이기 전(`policy_unavailable`)에는 `stale_hold_s`도 아직 없어 HOLD가 없다. 준비 시간도 같은 `stale_hold_s`로 묶인다: 센서가 준비되기 2초보다 먼저 0이 아닌 명령이 계속 오면 래치한다. 설계 문서의 "준비 중 무기한 대기"와 `safety.policy_hold` 이벤트는 구현하지 않았다.
+- `snapshot_missing`은 생산자가 스스로 무효로 한 경우(잘못된 입력, 워커 개정 불일치, 필수 증거 빠짐)도 포함한다. 전에는 즉시 래치였고 이제는 HOLD 뒤 2초에 래치한다. 출력은 그동안 0이고 움직이려면 유효한 판정이 있어야 한다. 이 경우를 끊김과 가르는 일은 남아 있다.
+- 지금 HOLD 중인지를 알리는 필드는 없다(`hold.count`는 누적). 시간 초과로 난 HOLD와 래치는 경과 시간을 기록하지 않는다.
+- SIM(모델 PC, Gazebo 한 바퀴 run62): 고치기 전 `control:policy_failed` E-stop으로 둘째 바퀴에서 끝났다. 고친 코드의 SIM 실행은 아직 없다.
