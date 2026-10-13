@@ -111,6 +111,12 @@ def test_a_snapshot_published_after_the_clock_read_is_asked_once_more():
     for reads,allowed in (([.97,1.1],True),([.97,.98,1.1],False),([1.4,1.5],False)):
         bind_lane_return_motion(line,a,policy_clock=iter(reads).__next__)
         assert line.provider(40.0,.02,.1) is allowed, reads
+    asked=[]
+    sensor=SimpleNamespace(return_sensor_allowed=lambda *args:asked.append(args) and False)
+    bind_lane_return_motion(line,sensor)                 # the line clock is the policy clock: one ask
+    assert line.provider(1.1,.02,.1) is False and len(asked)==1
+    bind_lane_return_motion(line,a,policy_clock=iter([.97]).__next__)  # the second read raises
+    assert line.provider(40.0,.02,.1) is False
 
 
 def test_bridge_is_told_whether_the_worker_floor_proof_is_live():
