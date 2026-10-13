@@ -177,6 +177,7 @@
   --line-10: color-mix(in oklab, var(--ink) 10%, transparent);
   --line-14: color-mix(in oklab, var(--ink) 14%, transparent);
   --line-30: color-mix(in oklab, var(--ink) 30%, transparent);
+  --line-40: color-mix(in oklab, var(--ink) 40%, transparent);
   --line-quiet: color-mix(in oklab, var(--ink-quiet) 25%, transparent);
 
   /* status 파생 — 임계 면의 옅은 바탕과 테두리 */
@@ -244,6 +245,19 @@
   --topbar-height: 88px;
   /* D-466 — 절차 작업을 고르는 사이드바 열. 넓은 단에서만 칸으로 쓴다. */
   --sidebar-track: minmax(13rem, 18rem);
+  /* D-741 — 모든 앱이 같이 쓰는 자리의 치수. 표면 시트는 이 값을 다시 정하지 않는다. */
+  --appbar-height: 64px;
+  --rail-track: 72px;
+  --subnav-track: 232px;
+  --context-track: 360px;
+  --pathbar-height: 56px;
+  --inset-rail: var(--space-2);
+  --gap-rail: var(--space-1);
+  --inset-subnav: var(--space-3) var(--space-2) var(--space-4);
+  --inset-pathbar: var(--space-1) var(--space-4);
+  --gap-pathbar: var(--space-2) var(--space-3);
+  --inset-pane: var(--space-2) var(--space-4) var(--space-4);
+  --gap-pane: var(--space-3);
 
   /* ---- 색상 역할(D-624) — 팔레트 값 대신 사용 목적을 고른다 ----------- */
   --surface-canvas: var(--ground);
@@ -254,6 +268,10 @@
   --border-subtle: var(--line-10);
   --border-default: var(--line-14);
   --border-strong: var(--line-30);
+  /* D-741 — 단추와 입력의 경계. 면을 가르는 --border-default보다 진해 3:1을 넘는다. */
+  --control-line: var(--line-40);
+  /* D-741 — 옆의 틀(레일, 하위 탐색, 오른쪽 칸)의 면. */
+  --surface-chrome: var(--ground-raise);
 
   /* ---- 면 — 표면이 위계다(concept 16 Law 2) ---------------------------
    * 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다.
