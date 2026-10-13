@@ -51,6 +51,20 @@
 - 증거: main CI의 source encoding guard가 두 파일을 지목했다. 수정 뒤 source guard PASS, 두 Isaac 시험 24 PASS, 독립 byte-only 검토 APPROVE.
 - gate 변화: SOURCE/LOCAL 형식 수정이다. 새 physics/device/field 증거를 주장하지 않는다.
 
+## 2026-10-11 · 97973b01d · fix(isaac): SDK 환경 분리와 headless 실행 복구
+
+- 변경: Pinky headless 렌더를 640×480/AA0으로 제한하고 USD teardown 전에 불필요한 GUI 메뉴를 해제한다. SDK 전용 5.1 dependency repair pins와 현행 5.1/6.x 실행·환경 분리 안내를 추가했다. SDK 실패의 원래 종료 코드는 유지한다.
+- 증거: headless config RED 뒤 원격 pytest 71 passed/1 skipped, known_failures 신규 0. 원래 Lab 설치를 보존한 SDK 복사본의 143-package closure에서 pip check exit 0. 실제 Jazzy URDF 생성·모델 검사, headless 600-frame SDK 단독 및 CORE 연동 실행에서 SDK/observer/CORE exit 0. CORE 연동 clock/odom/joints 각 400개·zero cmd_vel 413개, 단일 CORE publisher, viewer GET API 200을 확인했다. [실측 기록](../../../docs/validation/isaac-headless-repair-2026-10-11/result.md).
+- gate: ROS-SIM HOLD 유지. 무명령·zero 출력에서도 yaw drift·caster 회전이 남았고 1-frame 진단에서 GUI callback이 재현됐다. map_v2_fleet Isaac 맵·센서·두 대 Fleet·신호 준수 완주·RL은 미확인이다.
+- 교훈: 외부 Jazzy PYTHONPATH는 SDK dependency 검사에도 섞이면 안 된다. SDK close 반환·CLI process 종료·로그 무오류·물리 정지는 서로 다른 관측이다. 캐시와 swap 여유를 물리 RAM 32 GB 수용으로 취급하지 않는다.
+
+## 2026-10-11 · 055fd333ce · fix(isaac): headless startup exclusion과 물리 드라이브 복구
+
+- 변경: Wheeled import의 fixed reference links를 병합하고 바퀴만 readback이 확인된 force-type velocity drive로 설정한다. 기존 positive gain/fallback 1과 비구동 caster는 유지한다. headless SDK menu를 초기 startup에서 제외하고 실패했던 runtime unload/cleanup은 제거했다.
+- 증거: 각 설정의 RED 뒤 원격 pytest 75 passed/1 skipped, known_failures 신규 0. 실제 공개 runner의 기본 옵션으로 2400-frame headless CORE 시험에서 SDK exit 0 및 SDK Error/Traceback 없음. 전진 평균 0.049952 m/s, 입력 만료 정착 0.35178/0.34113초, 격리된 CORE SIGKILL 후 SDK watchdog 정착 0.57224초. CORE exit 137은 소유 PID에 대한 의도한 장애 주입이며 watcher exit 0이다. [실측 기록](../../../docs/validation/isaac-headless-repair-2026-10-11/result.md).
+- gate: I1/ROS-SIM HOLD. angular 0.3 목표에 실제 평균 0.194416 rad/s로 observer exit 1이며 유일한 실패 check는 rotation_tracking. 실제 STL 맵·센서·Nav2·두 대 Fleet·신호 준수 완주·RL은 미확인이다. main 착지·push·CI는 별도다.
+- 교훈: 메뉴 확장의 runtime unload는 SDK UI callback을 남길 수 있다. 초기 제외와 후행 SDK dependency의 정상 lifecycle을 분리하고 전체 로그를 검사한다. publisher 죽음은 cached DDS graph 이름 대신 소유 PID와 실제 Twist 수신 중단으로 확인한다.
+
 ## 2026-10-11 · a759f1e6f · fix(isaac): 최신 CORE 메인 위에서 헤드리스 재시험
 
 - 변경: main ea6d4c0a2의 D-627/D-628/D-630 구조를 유지하고 기존 SDK headless/importer/force-drive 수정과 회귀만 적용했다. SDK 전용 pins와 실제 경로·운용 안내를 갱신했다. CORE·계약·Fleet 실행 권한은 그대로다.

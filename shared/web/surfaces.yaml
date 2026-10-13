@@ -204,6 +204,8 @@ surfaces:
     container_breakpoints:
       - value: 22rem
         reason: 공용 부품(ui-form·ui-readout·ui-actions)이 한 열로 접히는 칸 폭 — 폰 한 열(320px 거터 안쪽)과 1366px 콘솔의 좁은 조작 열(약 23–25rem)을 가른다(D-359 §6.3)
+      - value: 48rem
+        reason: 공용 셸 본문이 한 줄로 쌓이는 칸 폭 — 오른쪽 칸 360px과 본문 최소 폭이 같이 설 수 없는 폭이다. 모든 앱이 같은 값을 쓴다(D-741 5항)
     contract_reason: >
       tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
       test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.

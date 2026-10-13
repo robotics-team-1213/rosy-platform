@@ -33,6 +33,7 @@ ROSE_FILES = {
     "learning/curation/perception/review_app_web/app.css",  # ROSY wordmark only; checked below
     "shared/web/tokens.css",                 # 팔레트 원본(정의)
     "shared/web/components.css",             # ui-brand 워드마크
+    "shared/web/app-shell.css",              # 레일의 현재 위치 표식(D-741, D-277 역할 메뉴)
     "middleware/ui/robot/styles.css",                  # 레거시 셸 워드마크(.brand b)
     "middleware/ui/robot/shell/shell.css",             # 역할 메뉴 위치 표식(팔레트 게이트 핀)
     "middleware/ui/robot/panels/surface-panels.css",   # 표면 링크(위치 표식 가족)

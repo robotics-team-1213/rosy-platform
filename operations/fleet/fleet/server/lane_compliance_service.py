@@ -269,6 +269,21 @@ class LaneComplianceMonitor:
     def view(self, robot_id: str) -> Optional[dict]:
         return self._latest.get(robot_id)
 
+    def realign_evidence(self, robot_id: str) -> dict:
+        """D-622 coherent map evidence; default-off selector still proves the full map sweep."""
+        review = self.stuck_heading(robot_id)
+        if review["status"] != "heading_compared":
+            return review
+        pose = self._heading_samples[robot_id]
+        back = (self.view(robot_id) or {}).get("return") or {}
+        travel = getattr(pose, "dead_reckon_m", None)
+        if (not isinstance(travel, (int, float)) or isinstance(travel, bool)
+                or not math.isfinite(travel) or travel < 0):
+            return {"status":"pose_untrusted"}
+        return {**review, "map_id":pose.map_id, "x":pose.x, "y":pose.y, "yaw":pose.yaw,
+                "pose_age_s":pose.age_s, "offset_m":back.get("offset_m"),
+                "u_m":.018+.05*travel}
+
     def stuck_heading(self, robot_id: str) -> dict:
         """D-607: reassess direction from coherent map evidence without issuing a manoeuvre."""
         from fleet.localization.stuck_heading import reassess
