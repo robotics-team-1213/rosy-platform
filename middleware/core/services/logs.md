@@ -954,3 +954,23 @@
 - 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 80 Git blob 동일, 독립 Safety 승인. 초기 원격 CORE 4498 passed와 경로 guard 실패 3건; 수정 후 설치/guard 117 passed, 0 NEW.
 - gate 변화: 배포·ARM64·DEVICE·FIELD gate 변경 없음. 최신 main 통합 시험 별도.
 - 결정: D-649
+
+## 2026-10-12 · d3bd5513c · 이동 교통 감속의 곡률 보존
+
+- 변경: D-735에 따라 공유 교통 정책의 ENFORCED FOLLOW/APPROACH/PROCEED 이동 후보는 선속도·각속도를 같은 비율로 줄인다. 선속도 0의 제자리 회전은 기존 각속도를 유지한다. DISABLED/MONITOR_ONLY, HOLD, finite 검사·현재 revision 검사·CORE 최종 명령 권한을 유지한다.
+- 증거: 정상 AI 원격 RED 7개로 forward/reverse APPROACH·PROCEED와 실제 CommandManager SDK 곡률 변형을 재현했다. 정상 모델 PC의 d3bd5513c 관련 402개 시험은 terminal exit 0이며 독립 SOURCE 승인이다. 모드·상태·이동/직진/후진/pivot/zero 60개 조합, issued trail·현재 revision, D-422 몸 쓸기·출력 경계·관측 법칙과 구조 검사를 포함한다. 원격 로그: X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/traffic-curve-green/run-1.txt.
+- gate 변화: SOURCE/원격 계약 증거만 추가한다. 기존 몸 쓸기 tighter-arc family는 원래 호를 포함하는 보수적 상위 집합으로 유지하며 안전 간격을 완화하지 않는다. 벽 STOP 분류·관측 목표 궤적·Fleet cap 전달·Gazebo 완주·실물 수용은 별도 검증 대상이다.
+- 결정: D-735
+
+## 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
+
+- 변경: navigation·docking·swarm·command owner가 각자의 기존 native lock을 쓰는 capture_native_operation을 제공한다. 동일 ledger helper를 쓰며 실행·취소·readback 상태 전이는 바꾸지 않는다.
+- 증거: 실제 네 owner 잠금을 점유한 정지 latch 시험과 정지 후 잠금 경합 시험의 RED 5건 후 원격 safety/native owner·구조·설치 패키지 exit 0/NEW 0. navigation 600줄, swarm 단위 949줄, docking 788줄로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. CORE 단일 writer와 현장 수용 gate는 그대로다.
+## 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
+
+- 변경: SDK None의 정확한 평가 window와 실제 evaluator traceback을 구분한다. CORE는 첫 실패만 보관하고 기존 단일 writer 이후 announce_pending에서 기록한다. 로그 실패도 후속 알림·zero·E-stop을 방해하지 않는다.
+- 증거: 정상 모델 PC RED 6 NEW 뒤 관련 policy handoff·command gate·CORE 연결·writer 순서·shadow·harness·release/provenance 회귀 terminal 0·NEW 0. 독립 SOURCE 승인. 실제 Leg9는 0.286048511 m 뒤 control:policy_failed로 종료했으며 기존 기록은 세부 원인을 구분하지 못했다.
+- gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
+- 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
+

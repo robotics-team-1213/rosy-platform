@@ -108,7 +108,7 @@ def test_robot_administrator_persists_through_the_existing_owner(core):
 def test_authenticated_viewer_can_stop_but_cannot_release(core):
     client, _, writes = core
     stop = client.post("/api/v1/safety/stop", headers=_headers("core-viewer"))
-    assert stop.status_code == 200 and stop.json() == {"estop": True}
+    assert stop.status_code == 200 and stop.json() == {"estop": True, "operations": []}
     assert writes == [("estop", "api:viewer"), ("mode", "EMERGENCY"), ("state-estop", True)]
     writes.clear()
     assert client.post("/api/v1/safety/release", headers=_headers("core-viewer")).status_code == 403

@@ -138,3 +138,9 @@ source-mode facade와 실제 설치는 구분한다. `control` 배포는 정적 
 위의 초기 후보·미실행 표는 당시 SHA의 이력이다. 이후 채택한 M7 조립·M8·M9 실제 holder 이동과 소비자 수정은 `7f391fa2d`로 local main에 반영했다. 85개 root 판정과 빈 제품 폴더 0개 확인을 마쳤으며, 보류한 패키지 carve와 미래 모델은 완료로 집계하지 않는다. 사용자의 최신 순서에 따라 이동·커밋·머지를 먼저 끝내고 설명 수정을 후속 commit으로 분리했다. [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)은 RED와 수정 후 362 passed, local main 착지와 남은 CI·ROS·장치 gate를 구분한다.
 
 D-637 후속: 이전에 보류했던 Decision/Console은 기존 Fleet 배포를 유지하며 source holder 분리를 완료했다. Learning 214파일을 curation/registry/training/evaluation 및 shared test/CLI로 나누고 지원 2파일·퇴역 WSL 6파일을 처리했다. 89개 현재 root가 실제 소스 owner와 대응한다. Gazebo launch/scripts의 별도 배포 carve는 기존 gz_sim resource owner를 유지하는 결정이다; 누락된 이동 과제가 아니다.
+
+## 2026-10-13 · Control 진단 추가 시 크기 독립 재판정
+
+34d73ae77에서 기존 구조 검사의 계산식을 그대로 독립 재검산했다. 테스트 실행·pytest import 없이 측정한 잔류 control은 중복 없는 234개 production 파일·35025줄이다. Nav2와 등록 vision unit 66파일·13431줄은 기존대로 제외했다. 기존 34855보다 170줄 증가했으며 observer 법칙 reader/조립 87, node 4, facade/setup 14, map generator 45, 같은 CommandPolicy의 진단 20줄로 설명된다. runtime의 네 노드는 기존 perception 노드에서 그대로 이동한 것으로 중복·증가가 아니다.
+
+drive_review는 기존 SPLIT 의무를 유지한 재판정을 승인했다. 실제 Drive holder는 runtime을 포함한 여섯 곳이며 배포는 기존 단일 control이다. 개별 파일 예산·등록 unit·+150 재검토 기준·control_sensing/provider/control_safety 배포 분리 의무를 유지한다. 다음 +150 초과 또는 새 owner 도입 때 다시 판정하며 이번 기록을 분리 완료·새 설치 실행·지도 완주 증거로 세지 않는다. 파일별 줄수·SHA inventory는 세션 X evidence의 structure-count-da1.json에 보관했다.

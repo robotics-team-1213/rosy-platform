@@ -27,7 +27,8 @@ from core_common.domain.tasks import TaskKind
 from core_common.protocol.lane_cue import LaneCueRequest
 from core_common.protocol.line_advice import LineAdviceRequest
 from core_common.protocol.line_authority import LineAuthorityRequest
-from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
+from core_common.protocol.schemas import (DockState, LanePerceptionRequest, LanePerceptionStatus,
+                                         LineStuckPrecondition, RobotMode)
 from core_api_web.api.deps import Mode
 from core_api_web.api.deps import AuthorityRefused, JunctionRefused, LineFollowMode, LineStuckRefused
 
@@ -120,10 +121,13 @@ class LineStuckDecisionRequest(BaseModel):
     yield_m: Optional[float] = None
     yield_turn_rad: Optional[float] = None
     realign: Optional[StuckRealign] = None
+    expected_stuck: Optional[LineStuckPrecondition] = None
 
 
 def _status(svc: CoreServicesLike) -> dict:
     data = svc.line_follow.status().model_dump()
+    if data.get("stuck") is not None:
+        data["stuck"]["conditional_back"] = getattr(svc.line_follow, "conditional_back_supported", False) is True
     authority = getattr(svc.line_follow, "authority_status", lambda: None)()
     if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
         data["authority"] = authority
@@ -371,6 +375,10 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         raise ApiError("VALIDATION_ERROR", 400, "yield_m and yield_turn_rad belong to YIELD")
     if body.decision != "REALIGN" and body.realign is not None:
         raise ApiError("VALIDATION_ERROR", 400, "realign belongs to REALIGN")
+    if body.expected_stuck is not None and body.decision != "BACK_AND_RETRY":
+        raise ApiError("VALIDATION_ERROR", 400, "expected_stuck belongs to BACK_AND_RETRY")
+    if body.expected_stuck is not None and getattr(svc.line_follow, "conditional_back_supported", False) is not True:
+        raise ApiError("STUCK_DECISION_REFUSED", 409, "conditional back is unsupported by CORE")
     if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL", "YIELD", "REALIGN"):
         # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
         # calibration lease like POST /mode does; checked before the stuck is consumed.
@@ -385,6 +393,7 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         outcome = svc.line_follow.stuck_decision(
             body.stuck_id, body.decision, by=auth.role, principal_ref=auth.principal_ref,
             yield_m=body.yield_m, yield_turn_rad=body.yield_turn_rad,
+            **({"expected_stuck": body.expected_stuck.model_dump()} if body.expected_stuck else {}),
             **({"realign": body.realign.model_dump()} if body.realign else {}))
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc

@@ -1,0 +1,7 @@
+{
+  "test_hosts": ["user@<model-pc>", "user@<ai-pc>", "user@<site-pc>"],
+  "site_host": "user@<site-pc>",
+  "robots": {
+    "<robot-id>": "<robot-ip>"
+  }
+}

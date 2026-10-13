@@ -5,7 +5,7 @@ sensor freshness nor replaces the downstream calibrated swept-footprint check.
 """
 import math
 from dataclasses import dataclass, replace
-from threading import Lock
+from threading import Lock, local
 from uuid import uuid4
 from .lidar_guard import TranslationEvidence, command_translation_bumpers
 from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
@@ -76,6 +76,7 @@ class CommandPolicy:
         self._translation_required = False
         self._tracking_required = False
         self._lock = Lock()
+        self._evaluation = local()
 
     @property
     def revision(self):
@@ -151,11 +152,29 @@ class CommandPolicy:
                 and state.pickup is False and not result.discard
                 and result.reason=='allow' and result.linear==linear and result.angular==angular)
 
+    def _take_unavailable_detail(self):
+        detail = getattr(self._evaluation, 'unavailable', None)
+        self._evaluation.unavailable = None
+        return detail
+
+    def _record_unavailable(self, snapshot, now, reason):
+        self._evaluation.unavailable = dict(reason=reason, now=now,
+            session=snapshot.session if snapshot else self.session,
+            sequence=snapshot.sequence if snapshot else None,
+            revision=snapshot.calibration_revision if snapshot else self.revision,
+            observed_at=snapshot.observed_at if snapshot else None,
+            expires_at=snapshot.expires_at if snapshot else None,
+            current_sequence=self._sequence)
+
     def evaluate(self, linear, angular, now, *, allow_bounded_sweep=False):
+        self._evaluation.unavailable = None
         with self._lock:
             snapshot = self._snapshot
-        if snapshot is None or not snapshot.observed_at <= now <= snapshot.expires_at:
-            return None
+            if snapshot is None or not snapshot.observed_at <= now <= snapshot.expires_at:
+                reason = ('snapshot_missing' if snapshot is None else
+                          'snapshot_future' if now < snapshot.observed_at else 'snapshot_expired')
+                self._record_unavailable(snapshot, now, reason)
+                return None
         state = snapshot.inputs
         flags = (state.estop, state.profile_valid, state.localization_ready, state.pickup,
                  state.rotation_trial, state.translation_trial, state.tilt, state.rear_blocked,
@@ -193,6 +212,7 @@ class CommandPolicy:
                                     'adaptive_speed_limit')
         with self._lock:
             if snapshot is not self._snapshot:
+                self._record_unavailable(snapshot, now, 'snapshot_changed')
                 return None
         return snapshot, result
 
