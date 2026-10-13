@@ -561,15 +561,12 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
-    parser.add_argument('--empty-eval', action='store_true',
-                        help='initialize a separate empty evaluation workspace once')
-    parser.add_argument('--empty-training', action='store_true',
-                        help='initialize a separate verified-import review workspace once')
+    parser.add_argument('--empty-eval', action='store_true', help='initialize a separate empty evaluation workspace once')
+    parser.add_argument('--empty-training', action='store_true', help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
-    parser.add_argument('--object-classes', type=Path,
-                        help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
+    parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
     if args.empty_eval and args.empty_training:
