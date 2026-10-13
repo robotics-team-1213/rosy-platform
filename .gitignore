@@ -141,4 +141,5 @@ Thumbs.db
 
 # D-755 filled collaboration settings and encryption keys are private.
 **/learning-collaboration.json
+**/learning-storage.json
 **/learning-accounts.key

@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 103375895 · 워크트리 관문 도구 리뷰 반영 (D-761 Proposed)
 - 2026-10-14 · e1b6c97fe · 워크트리 관문 도구와 손실 없는 청소 (D-761 Proposed)
+- 2026-10-14 · 39817a51e · docs: 학습 수집·영상·저장 개선 범위
 - 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
 - 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
-- 2026-10-14 · uncommitted · OMX native imitation preparation tools
-- 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow

@@ -124,22 +124,29 @@ class AuthorityMixin:
             return dict(reason='malformed')
         if not all(type(v) in (int, float) and math.isfinite(v) for v in values):
             return dict(reason='malformed')
+        found = self._odom_at_stamp(stamp, now)
+        if isinstance(found, str):
+            return dict(reason=found)
+        at, key, path = found
+        c, n = math.cos(at.yaw-myaw), math.sin(at.yaw-myaw)  # map -> odom
+        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key, path=path)
+
+    def _odom_at_stamp(self, stamp, now):
+        """D-744 3 (D-759 3 too): (CORE's odom pose logged at `stamp`, the odom key, the path length
+        now), or why a map pose computed for that stamp cannot be paired with CORE's odom."""
         age = self._wall()-stamp
         if not -STAMP_TOL_S <= age <= ARC_ANCHOR_MAX_AGE_S:
-            return dict(reason='stale' if age > 0 else 'future')
+            return 'stale' if age > 0 else 'future'
         pose, ev, log = self._fresh_pose(now), self._return_evidence, self._odom_log
         # the odom sample the map pose was computed for: the one logged at or just before the stamp
         base = next((e for e in reversed(log) if e[0] <= stamp), None)
         if pose is None or base is None or stamp-base[0] > STAMP_TOL_S:
-            return dict(reason='no_sample')
+            return 'no_sample'
         key = (ev.epoch, pose.frame)
         if base[1] != key:
-            return dict(reason='epoch')
+            return 'epoch'
         at = ev._image_pose(base[2])
-        if at is None:
-            return dict(reason='no_sample')
-        c, n = math.cos(at.yaw-myaw), math.sin(at.yaw-myaw)  # map -> odom
-        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key, path=log[-1][3])
+        return 'no_sample' if at is None else (at, key, log[-1][3])
 
     def _map_anchor_circle(self, anchor, pose, key, k, centre, yaw0, ir_chain):
         """D-744 4-5: (centre, yaw0, reason) at the arc opening: the placed map circle and its

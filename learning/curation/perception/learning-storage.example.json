@@ -1,0 +1,9 @@
+{
+  "project_id": "REPLACE_WITH_PROJECT_OR_WORKSPACE_ID",
+  "reserve_bytes": 1073741824,
+  "roots": [
+    {"id": "raw", "label": "Captured media", "role": "raw", "path": "/private/learning/raw"},
+    {"id": "pending", "label": "Transfer queue", "role": "pending", "path": "/private/learning/pending"}
+  ],
+  "remote_quota": null
+}

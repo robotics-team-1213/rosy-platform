@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import pytest
@@ -103,6 +104,49 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     ports.at(arc, s_start + 0.12)
     _ticks(runner, ports)
     assert ports.sent[1][1] == "SW" and ports.sent[1][0] != "bend"        # then the next place
+
+
+ENTRY_CAPS = dataclasses.replace(BEND_CAPS, lane_bend_map_entry=True)
+
+
+def test_caps_read_lane_bend_map_entry():
+    assert trip_caps(_caps(lane_bend=True)).lane_bend_map_entry is False
+    assert trip_caps(_caps(lane_bend=True, lane_bend_map_entry=True)).lane_bend_map_entry is True
+    assert trip_caps(_caps(lane_bend_map_entry="true")).lane_bend_map_entry is False
+
+
+def _stamped(stamp):
+    """The located pose turned 0.2 rad off its lane, with ``odom_stamp`` (D-759)."""
+    def before(runner):
+        pose = runner._poses.pose
+        runner._poses.pose = dataclasses.replace(pose, yaw=pose.yaw + 0.2, odom_stamp=stamp)
+    return before
+
+
+def test_a_map_entry_robot_gets_the_lane_heading_at_the_arc_start_and_the_located_yaw_pair():
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))
+    fields = ports.expects[0]
+    assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m", "map_entry"}
+    assert fields["map_entry"] == {"yaw_rad": pytest.approx(arc.point_at(s_start)[2], abs=1e-4),
+                                   "pose_yaw_rad": ports.pose.yaw, "odom_stamp_s": 1790000000.25}
+    assert abs(ports.pose.yaw - fields["map_entry"]["yaw_rad"]) > 0.05  # the lane's heading, not the robot's yaw
+    plain = _trip(_bend_map(SW_BEND))[2].expects[0]
+    assert {k: v for k, v in fields.items() if k != "map_entry"} == plain
+
+
+def test_without_the_capability_or_an_odom_stamp_the_bend_is_todays():
+    for caps, stamp in ((BEND_CAPS, 1790000000.25), (ENTRY_CAPS, None)):
+        fields = _trip(_bend_map(SW_BEND), caps, before=_stamped(stamp))[2].expects[0]
+        assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}, (caps, stamp)
+
+
+def test_bend_fields_without_a_located_pose_carry_no_map_entry(monkeypatch):
+    """Review 6: the capability alone is not enough; no pose passed in, no object."""
+    from fleet.server import trip_runner
+    real = trip_runner.bend_fields
+    monkeypatch.setattr(trip_runner, "bend_fields", lambda live, *args: real(live, *args[:4]))
+    fields = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))[2].expects[0]
+    assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
 
 
 def test_a_bend_done_on_one_segment_goes_out_again_on_another():
