@@ -2,7 +2,7 @@
 # Isolated Gazebo calibration/mapping track run (ROS domain 227, partition pinky_calmap227).
 #
 # Ported 2026-09-22 (D-171) from the pre-absorption Rosy Control checkout
-# (archive/legacy-rogic-20260913/Rosy Control/tools/gz/run_track260905.sh), where
+# (archive/legacy-rogic-20260913/Rosy Control/../../tools/sim/gazebo/run_track260905.sh), where
 # run_calibration_spaces.py still expects it. Changes from that script:
 #   - package paths follow the absorbed tree: rosy_control/ -> control/;
 #   - RIG_SINGLE_PROCESS=1 runs every component in one process
@@ -18,18 +18,18 @@
 #     /tmp/rosy-gazebo.lock serialises Gazebo runs of every rig that takes it
 #     (RIG_GZ_LOCK_WAIT seconds, default 1800; exit 4 when it stays busy).
 #   - D-185 R6: RIG_CLOCK_HZ=N (>= 50 x RIG_REALTIME_FACTOR) replaces the bridge's per-step
-#     /clock with tools/gz/clock_relay.py at most N msgs per wall second; exit 2 if invalid.
+#     /clock with ../../tools/sim/gazebo/clock_relay.py at most N msgs per wall second; exit 2 if invalid.
 # Run from anywhere on a Linux box with ROS 2 Jazzy, Gazebo Harmonic,
 # ros_gz_bridge and slam_toolbox. Results land in /tmp/pinky-calmap227.
 set -eo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../../middleware/perception"
 source /opt/ros/jazzy/setup.bash
 set -u
 export ROS_DOMAIN_ID=227 ROS_LOCALHOST_ONLY=1 GZ_IP=127.0.0.1
-export GZ_PARTITION=pinky_calmap227 PYTHONPATH="$PWD:${PYTHONPATH:-}"
+export GZ_PARTITION=pinky_calmap227 PYTHONPATH="$PWD:$PWD/../..:${PYTHONPATH:-}"
 # D-185 R6: a bad RIG_CLOCK_HZ would leave the rig without /clock until the wall timeout; fail first.
 if [[ -n "${RIG_CLOCK_HZ:-}" ]]; then
-  python3 tools/gz/clock_relay.py --check "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" || exit 2
+  python3 ../../tools/sim/gazebo/clock_relay.py --check "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" || exit 2
 fi
 out=/tmp/pinky-calmap227
 mkdir -p "$out"
@@ -38,9 +38,9 @@ flock -n 9 || { echo 'A calibration mapping rig already owns this partition'; ex
 exec 8>/tmp/rosy-gazebo.lock
 flock -w "${RIG_GZ_LOCK_WAIT:-1800}" 8 || { echo 'Another Gazebo run holds /tmp/rosy-gazebo.lock'; exit 4; }
 if [[ -n "${RIG_CALIBRATION_CASE:-}" ]]; then
-  python3 -m tools.gz.calibration_spaces "$RIG_CALIBRATION_CASE" /tmp/pinky-calmap227
+  python3 -m tools.sim.gazebo.calibration_spaces "$RIG_CALIBRATION_CASE" /tmp/pinky-calmap227
 else
-  python3 tools/gz/prepare_track_world.py
+  python3 ../../tools/sim/gazebo/prepare_track_world.py
 fi
 python3 - "$out" <<'PY'
 import sys, os, xml.etree.ElementTree as ET, yaml, shutil, time, json, hashlib, uuid, subprocess
@@ -83,10 +83,10 @@ if plant == 'velocity':
     ET.SubElement(model, 'plugin', filename='gz-sim-velocity-control-system', name='gz::sim::systems::VelocityControl')
 (out/'plant.txt').write_text(plant)
 root.find('.//real_time_factor').text=os.environ.get('RIG_REALTIME_FACTOR', '1.0')
-from tools.gz.c1_lidar import align_gpu_lidar
+from tools.sim.gazebo.c1_lidar import align_gpu_lidar
 align_gpu_lidar(model.find('.//sensor'))
 if os.environ.get('RIG_RENDERED_CAMERA') == '1':
-    from tools.gz.obstacle_camera import add_camera
+    from tools.sim.gazebo.obstacle_camera import add_camera
     add_camera(root.getroot())
 root.write(out/'world.sdf')
 identity=json.loads((out/'track_identity.json').read_text())
@@ -101,7 +101,7 @@ if os.environ.get('RIG_CALIBRATION_CASE'):
     settings['/**']['ros__parameters']['calibration_relocation_enabled']=True
     settings['/**']['ros__parameters']['calibration_after_relocation']=os.environ.get('RIG_CALIBRATION_AFTER','stay')
 (out/'rig.yaml').write_text(yaml.safe_dump(settings))
-slam=yaml.safe_load(Path('tools/gz/slam_sim.yaml').read_text())
+slam=yaml.safe_load(Path('../../tools/sim/gazebo/slam_sim.yaml').read_text())
 slam['slam_toolbox']['ros__parameters']['resolution']=.02
 if os.environ.get('RIG_TRACK_OBSTACLES') == '1':
     slam['slam_toolbox']['ros__parameters']['scan_topic']='/mapping/scan'
@@ -110,7 +110,7 @@ import runpy
 layout=runpy.run_path('control/_source_layout.py')
 source_paths=sorted(set(Path('control').rglob('*.py')) |
                     {p for folder in layout['CONTROL_ROOTS'] for p in Path(os.path.relpath(folder)).glob('*.py')})+sorted(list(Path('config').glob('*.yaml'))+
-                    list(Path('tools/gz').glob('*.py'))+list(Path('tools/gz').glob('*.sh')))
+                    list(Path('../../tools/sim/gazebo').glob('*.py'))+list(Path('../../tools/sim/gazebo').glob('*.sh')))
 try:
     source_at_start=os.environ.get('RIG_SOURCE_COMMIT') or subprocess.check_output(
         ['git','rev-parse','HEAD'],text=True,stderr=subprocess.DEVNULL).strip()
@@ -144,19 +144,19 @@ trap 'exit 130' INT TERM HUP
 rig_start=$(date +%s.%N)
 setsid gz sim -s -r --headless-rendering "$out/world.sdf" > "$out/gz.log" 2>&1 & pids+=($!)
 # The recorder must not hold the rig locks, and exits with this script.
-setsid python3 tools/gz/rig_environment.py record "$out" "$$" 8>&- 9>&- > "$out/environment.log" 2>&1 & pids+=($!)
+setsid python3 ../../tools/sim/gazebo/rig_environment.py record "$out" "$$" 8>&- 9>&- > "$out/environment.log" 2>&1 & pids+=($!)
 sleep 4
 if [[ "${RIG_TRACK_OBSTACLES:-0}" == 1 ]]; then
   setsid python3 -m control.obstacle_observer_node --ros-args -p use_sim_time:=true \
     > "$out/obstacle-observer.log" 2>&1 & pids+=($!)
-  setsid python3 -m tools.gz.record_obstacle_decisions --ros-args -p use_sim_time:=true \
+  setsid python3 -m tools.sim.gazebo.record_obstacle_decisions --ros-args -p use_sim_time:=true \
     > "$out/obstacle-recorder.log" 2>&1 & pids+=($!)
 fi
 if [[ "${RIG_RENDERED_CAMERA:-0}" == 1 ]]; then
   setsid ros2 run ros_gz_bridge parameter_bridge \
     '/pinky/rendered_camera@sensor_msgs/msg/Image[gz.msgs.Image' \
     --ros-args -p use_sim_time:=true > "$out/camera-bridge.log" 2>&1 & pids+=($!)
-  setsid python3 -m tools.gz.rendered_camera_adapter --ros-args -p use_sim_time:=true \
+  setsid python3 -m tools.sim.gazebo.rendered_camera_adapter --ros-args -p use_sim_time:=true \
     > "$out/camera.log" 2>&1 & pids+=($!)
 fi
 bridged=('/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
@@ -167,7 +167,7 @@ bridged=('/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
 if [[ -z "${RIG_CLOCK_HZ:-}" ]]; then
   bridged+=('/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock')
 else
-  setsid python3 tools/gz/clock_relay.py "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" 8>&- 9>&- > "$out/clock-relay.log" 2>&1 & pids+=($!)
+  setsid python3 ../../tools/sim/gazebo/clock_relay.py "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" 8>&- 9>&- > "$out/clock-relay.log" 2>&1 & pids+=($!)
 fi
 setsid ros2 run ros_gz_bridge parameter_bridge "${bridged[@]}" \
   --ros-args -p use_sim_time:=true -r /lidar/scan:=/scan -r /odometry_gt:=/odom_gz \
@@ -180,7 +180,7 @@ fi
 for component in "${components[@]}"; do
   log="$out/$component.log"
   if [[ "$component" == adapter || "$component" == all ]]; then log="$out/stack.log"; fi
-  setsid env RIG_COMPONENT="$component" python3 tools/gz/calibration_mapping_rig.py --ros-args \
+  setsid env RIG_COMPONENT="$component" python3 ../../tools/sim/gazebo/calibration_mapping_rig.py --ros-args \
     --params-file config/robot.yaml --params-file config/wander.yaml \
     --params-file config/goal.yaml --params-file config/web.yaml \
     --params-file "$out/rig.yaml" \
@@ -190,15 +190,15 @@ sleep 3
 setsid ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true \
   slam_params_file:="$out/slam.yaml" > "$out/slam.log" 2>&1 & pids+=($!)
 if [[ "${RIG_ESTOP_PROBE:-0}" == 1 ]]; then
-  setsid python3 tools/gz/rig_estop_probe.py "$out" > "$out/estop-probe.log" 2>&1 & pids+=($!)
+  setsid python3 ../../tools/sim/gazebo/rig_estop_probe.py "$out" > "$out/estop-probe.log" 2>&1 & pids+=($!)
 fi
 
 if [[ "${RIG_DECISION_PROBE:-0}" == 1 ]]; then
-  setsid python3 tools/gz/rig_decision_probe.py > "$out/decision-probe.log" 2>&1 & pids+=($!)
+  setsid python3 ../../tools/sim/gazebo/rig_decision_probe.py > "$out/decision-probe.log" 2>&1 & pids+=($!)
 fi
-setsid python3 tools/gz/track_run_monitor.py > "$out/monitor.log" 2>&1 & pids+=($!)
+setsid python3 ../../tools/sim/gazebo/track_run_monitor.py > "$out/monitor.log" 2>&1 & pids+=($!)
 if [[ "${RIG_OBSTACLE_SCENARIO:-0}" == 1 ]]; then
-  setsid python3 -m tools.gz.obstacle_scenario --ros-args -p use_sim_time:=true \
+  setsid python3 -m tools.sim.gazebo.obstacle_scenario --ros-args -p use_sim_time:=true \
     > "$out/obstacle-scenario.log" 2>&1 & pids+=($!)
   monitor_index=$((${#pids[@]}-2))
 else
@@ -207,7 +207,7 @@ fi
 echo "Isolated exact-track run: $out"
 wait "${pids[$monitor_index]}"
 set +e
-python3 tools/gz/rig_environment.py judge "$out"
+python3 ../../tools/sim/gazebo/rig_environment.py judge "$out"
 environment=$?
 set -e
 if [[ $environment != 0 && $environment != 3 ]]; then
@@ -249,5 +249,5 @@ else:
   sys.exit(3)
 PY
 if [[ "${RIG_REQUIRE_COMPLETE:-0}" == 1 ]]; then
-  python3 -m tools.gz.track_map_audit "$out"
+  python3 -m tools.sim.gazebo.track_map_audit "$out"
 fi

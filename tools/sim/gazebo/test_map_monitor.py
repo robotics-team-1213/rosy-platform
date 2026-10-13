@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("rclpy", reason="mapping run monitor requires the ROS environment")
 
-from tools.gz.map_run_monitor import Mon
+from tools.sim.gazebo.map_run_monitor import Mon
 
 
 class CompletionHoldTest(unittest.TestCase):
@@ -17,7 +17,7 @@ class CompletionHoldTest(unittest.TestCase):
             path_m=0.0, known=1000, known_t=0.0, stall_s=900.0,
             timeout=3600.0, t0=0.0, last_beat=0.0, last_save=0.0,
             trail=[], out='/unused', log=Mock(), render=Mock())
-        with patch('tools.gz.map_run_monitor.time.monotonic') as clock:
+        with patch('tools.sim.gazebo.map_run_monitor.time.monotonic') as clock:
             clock.return_value = 10.0
             Mon.on_state(monitor, SimpleNamespace(data='coverage done'))
             Mon.tick(monitor)

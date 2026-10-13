@@ -3,7 +3,8 @@ from pathlib import Path
 import sys
 import math
 import numpy as np
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
 from control.sensing.localization import MapAgreement
 d = np.load(sys.argv[1])
 m = MapAgreement(d['grid'], float(d['resolution']), d['origin'])

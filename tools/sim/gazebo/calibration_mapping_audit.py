@@ -8,15 +8,16 @@ import sys
 import time
 import uuid
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / 'middleware/perception')))
 import numpy as np
 import rclpy
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import String
-from tools.gz.check_map import measure, parse_sdf_walls
-from tools.gz.save_map import map_pixels
+from tools.sim.gazebo.check_map import measure, parse_sdf_walls
+from tools.sim.gazebo.save_map import map_pixels
 
 
 def main():

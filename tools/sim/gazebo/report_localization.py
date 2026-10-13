@@ -37,7 +37,7 @@ def main():
     metrics['initial_yaw_error_deg'] = math.degrees(initial_yaw)
     metrics['initial_acquisition_sim_s'] = events['drive']['sim_s'] - samples[0]['sim_s']
     manifest = json.loads((run/'run_manifest.json').read_text())
-    root = Path(__file__).resolve().parents[2]
+    root = (Path(__file__).resolve().parents[3] / 'middleware/perception')
     metrics['saved_map_hashes_unchanged'] = all(hashlib.sha256((root/path).read_bytes()).hexdigest() == digest
         for path, digest in manifest['sha256'].items() if path.endswith(('map.pgm', 'map.yaml')))
     (run/'metrics.json').write_text(json.dumps(metrics, indent=2))

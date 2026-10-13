@@ -108,7 +108,7 @@ def main():
     d = clearance(points, walls)
     spawn = points.reshape(-1, 2)[d.argmax()]
     world = root.find('world')
-    robot = copy.deepcopy(ET.parse('tools/gz/pinky_maze.sdf').find(".//model[@name='pinky']"))
+    robot = copy.deepcopy(ET.parse('../../tools/sim/gazebo/pinky_maze.sdf').find(".//model[@name='pinky']"))
     body_geometry = collision_circumradius(robot)
     robot.find('pose').text = f'{spawn[0]} {spawn[1]} .01 0 0 0'
     sensor = robot.find('.//sensor')

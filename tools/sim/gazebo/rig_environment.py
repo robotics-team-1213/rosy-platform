@@ -1,8 +1,8 @@
 """Rig environment guard (D-185 R4): mark runs on an overloaded box invalid, never code evidence.
 
 Usage (from run_track260905.sh):
-  python3 tools/gz/rig_environment.py record <out> <parent_pid>  # every 2 s until the parent exits
-  python3 tools/gz/rig_environment.py judge <out>                # writes <out>/environment.json
+  python3 ../../tools/sim/gazebo/rig_environment.py record <out> <parent_pid>  # every 2 s until the parent exits
+  python3 ../../tools/sim/gazebo/rig_environment.py judge <out>                # writes <out>/environment.json
 
 Exit 3 from ``judge`` means environment-invalid; any other non-zero exit is a crash of the
 guard itself. A run is invalid when, after the first minute of samples (``load1`` is a

@@ -12,7 +12,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String
-from tools.gz.prepare_track_world import clearance
+from tools.sim.gazebo.prepare_track_world import clearance
 
 
 class Scenario(Node):

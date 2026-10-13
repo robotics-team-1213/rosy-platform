@@ -13,8 +13,8 @@ Strict freshness checks (safety 0 <= age <= .2) still see up to one step of lag,
 count stale reasons in both arms.
 
 Usage (from run_track260905.sh):
-  python3 tools/gz/clock_relay.py --check <messages_per_second> <real_time_factor>   (no ROS; exit 2 if bad)
-  python3 tools/gz/clock_relay.py <messages_per_second> <real_time_factor>
+  python3 ../../tools/sim/gazebo/clock_relay.py --check <messages_per_second> <real_time_factor>   (no ROS; exit 2 if bad)
+  python3 ../../tools/sim/gazebo/clock_relay.py <messages_per_second> <real_time_factor>
 Restricted to the isolated rig domain; never a robot entry point.
 """
 import os

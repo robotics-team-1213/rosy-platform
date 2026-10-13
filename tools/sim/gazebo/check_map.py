@@ -200,7 +200,7 @@ def measure(img, res, ox, oy, walls, tol_m=0.10):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--map', default='map/gz_maze.yaml')
-    ap.add_argument('--sdf', default='tools/gz/pinky_maze.sdf')
+    ap.add_argument('--sdf', default='../../tools/sim/gazebo/pinky_maze.sdf')
     ap.add_argument('--tol', type=float, default=0.10,
                     help='wall match tolerance, m')
     ap.add_argument('--out', default='map/gz_maze_overlay.png')

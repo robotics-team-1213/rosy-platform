@@ -4,7 +4,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from control.sensing.lidar_mount import nose_from_quaternion
-from tools.gz.c1_lidar import (
+from tools.sim.gazebo.c1_lidar import (
     C1_SCAN_YAW,
     EVIDENCE_SCOPE,
     align_gpu_lidar,

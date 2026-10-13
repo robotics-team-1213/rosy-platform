@@ -14,12 +14,13 @@ operator can check the result instead of watching:
 import argparse
 import os
 import sys
+from pathlib import Path
 import time
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))  # tools/gz -> repo root
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'middleware/perception'))  # ../../tools/sim/gazebo -> repo root
 
 import rclpy
 from rclpy.node import Node
@@ -27,7 +28,7 @@ from rclpy.qos import qos_profile_sensor_data
 from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
-from tools.gz.save_map import map_pixels
+from tools.sim.gazebo.save_map import map_pixels
 
 SAVE_EVERY = 30.0     # s wall time between PNG saves
 HEARTBEAT = 10.0      # s between stdout status lines

@@ -34,7 +34,7 @@ try:
     for component in ('goal', 'wander'):
         env = dict(os.environ, RIG_COMPONENT=component)
         log = open(f'/tmp/pinky-calmap227/{component}.log', 'a')
-        children.append(subprocess.Popen([sys.executable, 'tools/gz/calibration_mapping_rig.py',
+        children.append(subprocess.Popen([sys.executable, '../../tools/sim/gazebo/calibration_mapping_rig.py',
             '--ros-args', '--params-file', 'config/robot.yaml', '--params-file', 'config/wander.yaml',
             '--params-file', 'config/goal.yaml', '--params-file', '/tmp/pinky-calmap227/rig.yaml'],
             env=env, stdout=log, stderr=subprocess.STDOUT))

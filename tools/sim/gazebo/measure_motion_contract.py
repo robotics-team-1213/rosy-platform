@@ -18,7 +18,7 @@ def _source_root() -> Path:
     silently empty on a clean Device.
     """
     configured = os.environ.get("ROSY_SOURCE_ROOT")
-    root = Path(configured).expanduser() if configured else Path(__file__).resolve().parents[2]
+    root = Path(configured).expanduser() if configured else (Path(__file__).resolve().parents[3] / 'middleware/perception')
     try:
         root = root.resolve()
     except OSError as exc:

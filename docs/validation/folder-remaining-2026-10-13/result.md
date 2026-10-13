@@ -37,3 +37,9 @@ D-749: generic 제품 action rules는 action_rules, 공통 안전은 safety_gate
 D-750: 60개 Fleet server 모듈을 peer/cell/auth/console/ledger source holder로 구분했다. 기존 channel과 app 조립, DB/거래/import identity는 유지한다. source와 wheel 모두 fleet.server.*를 사용한다.
 
 파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S8-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S9
+
+D-751: Gazebo rigs→tools/sim/gazebo, calibration migration→tools/calibration, static ROS audit→tools/validation. 로봇 hotpath/IR 측정 2개는 기존 device holder에 남긴다. map/calibration 입력은 바꾸지 않고 package root/CWD를 명시한다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S9-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
