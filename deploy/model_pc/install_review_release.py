@@ -253,6 +253,24 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                         line = interpreter + space + script + separator + arguments
                 lines.append(line)
             unit_text = "".join(lines)
+        # Retained apps keep their CLI; opt-in controls must survive a roundtrip.
+        app = target / (LEGACY_APP if to_legacy else APP)
+        lines = []
+        for line in (unit_text if unit_text is not None else text).splitlines(keepends=True):
+            if line.startswith('ExecStart='):
+                line = re.sub(r' --learning-control [^\s]+', '', line)
+                line = re.sub(r' --decisions-port [^\s]+', '', line)
+                cli = app.read_text(encoding='utf-8')
+                port_arg = re.search(r' --port ([0-9]+)', line)
+                if port_arg and '--decisions-port' in cli:
+                    line = line.rstrip('\n') + f' --decisions-port {int(port_arg[1]) + 10000}\n'
+                state_arg = re.search(r' --state ([^\s]+)', line)
+                if state_arg and '--learning-control' in cli:
+                    binding = Path(state_arg[1]) / 'learning-control.json'
+                    if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
+            lines.append(line)
+        adjusted = ''.join(lines)
+        if adjusted != text: unit_text = adjusted
     if old_target == target and unit_text is None:
         return target
     try:

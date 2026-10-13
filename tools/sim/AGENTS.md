@@ -58,3 +58,5 @@ Host-only. The Gazebo bench and `sim_verify.sh` are run by hand in WSL.
 - WSL Ubuntu with ROS 2 Jazzy, Gazebo, `curl`; numpy for the host simulations
 
 <!-- MANUAL: -->
+
+`gazebo/` holds the absorbed Perception host rigs (D-751); their explicit package/map source root remains `middleware/perception`. Device measurement tools stay under `middleware/perception/tools/device`.
