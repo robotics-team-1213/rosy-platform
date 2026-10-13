@@ -163,8 +163,9 @@ def test_late_answers_past_the_hold_latch_as_before():
     delay, clock = [.03], [100.]
     command, safety, modes, _ = setup_hold(late(clock, delay), clock=clock)
     assert ask(command, 10.) == Twist() and not safety.estop
-    clock[0] = 101.9
-    assert ask(command, 11.9) == Twist() and not safety.estop
+    for at in (.4, .8, 1.2, 1.6, 1.9):                    # asked on: one gap
+        clock[0] = 100. + at
+        assert ask(command, 10. + at) == Twist() and not safety.estop
     clock[0] = 102.
     assert ask(command, 12.) == Twist()
     assert safety.estop and safety.estop_source == 'control:policy_invalid'
@@ -176,6 +177,9 @@ def test_unbound_evaluator_holds_then_latches():
     assert ask(command, 10.) == Twist()
     assert not safety.estop and modes.mode is Mode.NAVIGATION
     assert safety.policy_hold and safety.policy_reason == 'policy_unavailable'
+    for at in (.4, .8, 1.2, 1.6):
+        clock[0] = 100. + at
+        assert ask(command, 10. + at) == Twist() and not safety.estop
     clock[0] = 102.
     assert ask(command, 12.) == Twist()
     assert safety.estop and safety.estop_source == 'control:policy_unavailable'
@@ -191,9 +195,12 @@ def test_zero_command_does_not_end_a_gap_and_a_valid_answer_does():
     delay[0], clock[0] = .03, 103.
     assert ask(command, 13.) == Twist() and not safety.estop
     assert safety.policy_holds == 2
-    assert ask(command, 13.1, Twist()) == Twist()        # a zero command never asks the policy
-    clock[0] = 105.5
-    assert ask(command, 15.5) == Twist()
+    for at in (.4, .8, 1.2, 1.6):
+        assert ask(command, 13. + at - .1, Twist()) == Twist()   # a zero command never asks the policy
+        clock[0] = 103. + at
+        assert ask(command, 13. + at) == Twist() and not safety.estop
+    clock[0] = 105.
+    assert ask(command, 15.) == Twist()
     assert safety.estop and safety.estop_source == 'control:policy_invalid'
 
 
