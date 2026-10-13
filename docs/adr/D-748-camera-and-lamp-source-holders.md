@@ -25,3 +25,7 @@ D-738 S6의 operations/vision에는 rosy_vision 천장 관측 패키지와 패�
 ## Consequences
 
 세 holder가 실제 관측 출력과 대응한다. 새 서비스·wheel·동작을 만들지 않는다. 되돌림은 holder와 mapping/배포 소비자를 함께 돌리는 새 커밋이다.
+
+## 개정 (2026-10-14): overhead holder에서 D-377 폴더 이름 규칙과의 관계
+
+2항이 `rosy_vision` 패키지의 source holder를 `operations/overhead`로 옮기고 3항이 설치 이름을 유지하므로, 이 holder의 폴더 이름은 D-377의 "폴더 마지막 이름과 패키지 이름은 `rosy_`만 다르다"를 따르지 않는다. D-377의 패키지 이름(`rosy_vision`)과 console script(`rosy-vision`) 규칙은 그대로 적용된다. D-377 본문은 바꾸지 않는다. 검사는 `test/architecture/test_app_identity.py`의 `identity_problems`가 word `vision`의 폴더 이름만 `overhead`로 받으며, 다른 app이나 participant에는 이 예외가 없다.

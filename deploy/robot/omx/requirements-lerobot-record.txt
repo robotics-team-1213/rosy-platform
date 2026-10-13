@@ -1,0 +1,3 @@
+# Candidate direct dependency pin, not a verified transitive environment lock.
+# Separate workstation venv; never install into ROS or the robot product image.
+lerobot[dynamixel]==0.4.4

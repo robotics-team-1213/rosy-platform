@@ -27,6 +27,24 @@
 
 2026-10-12: D-681 source `c7afe628ca`는 선택적 model feedback export를 기존 녹화 사건에 정확한 robot/case·content hash로 연결한다. 기존 bind/schema1과 검수 정답은 유지하며 모델 근거는 UNREVIEWED다. 실제 export→binder·CLI·한글 해시·비용/종결 무결성·크기/폴더 경계의 관련 원격 87 passed, exit 0, NEW 0. 경로는 `docs/plans/2026-10-12-model-improvement-feedback.md`; 실제 현장 데이터·학습·품질·승격은 수행하지 않았다.
 
+## 2026-10-14 · 27b3b81da6 · feat: 공동 학습 계정과 HF 가져오기
+
+- 변경: D-755 사용자·프로젝트 권한, 암호화된 복수 HF 연결, PKCE/OIDC 로그인, 고정 commit 자료 가져오기·취소·재시도와 계정 UI를 연결했다. 인증된 검수자 이력을 남기며 기존 승인 wire를 유지한다.
+- 증거: 해당 HEAD의 모델 PC 원격 회귀 135 passed, known_failures 0 NEW. Chromium 1440/320px에서 두 계정 연결·선택·고정 SHA/해시 가져오기·로그아웃 철회를 검증했다. OAuth는 서명된 모의 공급자 HTTP 통합시험이다.
+- gate 변화: SOURCE와 모의 공급자 통합 검증이다. 실제 OAuth 앱 미등록으로 외부 로그인·운영 활성화는 미검증이다. 가져온 자료는 pending_curation이며 권리·라벨·시간 정렬과 실제 학습 수용을 자동 승인하지 않는다.
+
+## 2026-10-14 · 52011a517e · fix: 공동 계정 권한 표시와 세션 복구
+
+- 변경: 연결·해제와 가져오기 제어를 현재 권한·소유자에 맞춰 표시한다. 세션 철회 시 신원·목록·입력 비밀을 지우고 재로그인하며 서버 일시 오류는 구분한다. OAuth callback 설정 오류는 workspace 바인딩 전에 거부한다.
+- 증거: 수정 전 원격 재현 5 NEW, 수정 후 계정·OAuth·가져오기·HTTP·Chromium 회귀 55 passed, known_failures 0 NEW. 모바일에서 viewer/bob 전환, 타인의 프로젝트 연결·작업 제어 제한, 서버 503 복구, 세션 철회·재로그인을 확인했다.
+- gate 변화: SOURCE와 격리 통합시험 보완이다. 실제 HF 앱 등록·운영 배포·실제 학습 수용은 별도이며 이 변경으로 활성화하지 않는다.
+
+## 2026-10-14 · uncommitted · fix: 계정 이용 확인 체크박스 공용 부품 적용
+
+- 변경: accounts.html의 내부 이용·팀 이용 확인에 ui-field와 label.ui-check를 적용했다. 입력 ID·required·이벤트 의미는 유지한다.
+- 증거: CI 38435850880 core-domain에서 test_product_fields_carry_the_shared_field_class 실패를 확인했다. 기존 공용 필드 계약 시험으로 재검증한다.
+- gate 변화: 없음. 실제 HF 계정·실물 활성화는 별도다.
+
 ## 2026-10-13 · uncommitted · feat(learning): 학습 검수 앱 바와 탐색 레일 (D-741 조각 12)
 
 - 변경: 학습 검수 네 문서의 머리를 앱 바(R 심볼 `Learning`, 화면 표시 선택)로 줄이고, 네 화면 탭을 공용 탐색 레일(`/common/app-shell.css`, `data-seats="rail"`, 짧은 이름 목록·객체·픽셀·자료, 전체 이름은 `aria-label`)로, 쪽 제목 `<h1>`을 본문 위 경로 줄로 옮겼다. `app.css`의 머리 탭 배치 규칙은 지웠고 사진 띠·캔버스·inspector 배치는 그대로다.
