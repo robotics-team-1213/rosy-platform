@@ -28,6 +28,7 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback
+from review_decisions import make_decisions_server, serve_review
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
@@ -555,27 +556,6 @@ def make_server(store, port=8767, host='127.0.0.1'):
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def make_decisions_server(store, port):
-    """Loopback-only readback for the owner transport; never exposes write tokens."""
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            allowed = self.headers.get('Host') in (f'127.0.0.1:{self.server.server_port}',
-                                                   f'localhost:{self.server.server_port}')
-            code = 403 if not allowed else (200 if self.path == '/api/decisions' else 404)
-            raw = json.dumps(review_evidence.decisions(store) if code == 200 else {'error': 'read-only decisions endpoint'}).encode()
-            self.send_response(code)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('Content-Length', str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def do_POST(self):
-            self.send_error(405)
-
-    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', type=Path, required=True)
@@ -608,21 +588,9 @@ def main():
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
-    readback = None
-    if args.decisions_port is not None:
-        readback = make_decisions_server(store, args.decisions_port)
-        threading.Thread(target=readback.serve_forever, daemon=True).start()
     server = make_server(store, args.port, args.host)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
-        if readback:
-            readback.shutdown()
-            readback.server_close()
+    serve_review(server, store, args.decisions_port)
 
 
 if __name__ == '__main__':
