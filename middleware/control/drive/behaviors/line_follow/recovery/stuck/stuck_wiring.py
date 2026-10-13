@@ -99,7 +99,7 @@ class StuckRecoveryMixin:
             if abs(linear) > max_linear or abs(angular) > max_angular:
                 return False
             age = now - self._return_at + self._return_source_age
-            if age < 0.0 or age > min(c.clearance_stale_s, .25):
+            if age < 0.0 or age > c.clearance_stale_s:  # the follow path's own limit; age_pad covers the motion
                 return False
             points = self._return_view.points
             if not points or any(not all(math.isfinite(v) for v in p) for p in points):
@@ -154,7 +154,8 @@ class StuckRecoveryMixin:
                 return False
             # ponytail: any held instruction, also a finished or aborted one, until the next
             # instruction or mode change; narrow to moving states if the scan view costs CPU.
-            if self._junction is not None and self._proof_live():
+            arc = getattr(self, '_arc', None)
+            if (self._junction is not None or (arc is not None and arc.get('state') == 'running')) \n                    and self._proof_live():
                 return True
             return (self._config.recovery_local_enabled
                     and self._return_controller is not None
