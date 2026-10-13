@@ -65,6 +65,8 @@ def digest_tree(source: Path) -> str:
 
 
 def unit_contents(current: Path, state: Path, python: Path, host: str, port: int) -> str:
+    if not 1 <= port <= 55535:
+        raise ValueError('review port must leave room for its loopback decisions port')
     dataset = current / "learning/curation/perception"
     paths = (
         current / "middleware/perception",
@@ -80,7 +82,7 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
-            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host}\n"
+            f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host} --decisions-port {port + 10000}\n"
             "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 
 

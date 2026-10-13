@@ -735,6 +735,9 @@
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Proposed |
 | D-744 | 차로 호(D-520)의 원을 지도에 고정: `exit_segment.map_anchor`, 능력 `lane_arc_map_anchor` | Accepted |
+| D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
+
+| D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1081,8 +1084,11 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 
 기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
 
+## D-742 · 검수 loopback 현재 결정과 같은 PC 학습 전달
+
+선택 read-only 결정 조회와 local bridge, 기존 ReviewPipeline owner를 연결한다. 승인·출처·평가·TTL과 서명 배포 조건을 유지한다.
 ## D-741 — 모든 앱이 같은 자리를 쓰는 통합 셸
 
-**Status:** Proposed (2026-10-13, 설계 캔버스 검토까지. 구현·시험·화면 검증 전)
+**Status:** Accepted (2026-10-13, 사용자 요청. 구현은 조각마다 따로 착지하며 CI·화면 검증·설치·실물 수용은 별도다)
 
-앱 바, 탐색 레일, 하위 탐색, 본문, 오른쪽 칸의 다섯 자리를 모든 앱이 같이 쓰고, 푸터를 없애며, Fleet의 시키는 일을 작업 영역 하나로 모은다. D-658·D-466·D-641·D-540의 일부 항을 바꾸는 제안이다. 전문은 [D-741](../adr/D-741-unified-app-shell-seats.md).
+앱 바, 탐색 레일, 하위 탐색, 본문, 오른쪽 칸의 다섯 자리를 모든 앱이 같이 쓰고, 푸터를 없애며, Fleet의 시키는 일을 작업 영역 하나로 모은다. D-658·D-668·D-683·D-466·D-359·D-641·D-201·D-540의 일부 항을 바꾼다. 전문은 [D-741](../adr/D-741-unified-app-shell-seats.md).

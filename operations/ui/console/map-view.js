@@ -622,14 +622,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     canvas.setAttribute("aria-label", view.call
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
-    drawMapDatum(ctx, (x, y) => {
-      const cell = cellOf(grid, x, y);
-      return {x: cell.cx, y: cell.cy};
-    }, {
-      min_x: grid.origin.x, min_y: grid.origin.y,
-      max_x: grid.origin.x + grid.width * grid.resolution,
-      max_y: grid.origin.y + grid.height * grid.resolution,
-    }, {css});
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
@@ -692,6 +684,15 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
+    // US-009 — 원점 글자(x·y·0,0)도 글자다. 선을 다 그린 뒤, 칩 바로 앞에 칠해 선이 글자를 지나지 않는다.
+    drawMapDatum(ctx, (x, y) => {
+      const cell = cellOf(grid, x, y);
+      return {x: cell.cx, y: cell.cy};
+    }, {
+      min_x: grid.origin.x, min_y: grid.origin.y,
+      max_x: grid.origin.x + grid.width * grid.resolution,
+      max_y: grid.origin.y + grid.height * grid.resolution,
+    }, {css});
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
