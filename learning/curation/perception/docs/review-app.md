@@ -266,6 +266,14 @@ python learning/curation/perception/learning_accounts.py generate-key /private/l
 python learning/curation/perception/learning_accounts.py hash-password
 ```
 
+Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./contracts/foundation`도
+설치한다. collaboration 설정의 `account_client_file`은 보호된 수신 설정의 절대 경로,
+`account_subjects`는 중앙 account_id와 기존 user_id의 명시적 일대일 매핑이다.
+수신 resource는 `project:<project_id>`, callback은 `public_origin + /api/account/callback`이다.
+원장에 최초 연결을 기록한 뒤 소유자를 바꾸거나 중앙 설정을 빼고 이전 비밀번호로 돌아갈 수 없다.
+기존 HF 연결·암호화 키·학습 자료를 교체하지 않는다. 자세한 필드는
+[Account protocol](../../../../docs/reference/rosy-account-protocol.md)을 따른다.
+
 키 생성은 기존 파일을 덮어쓰지 않는다. Linux 키 파일, 설정, DB, 부모 폴더와 백업은 소유자만 접근하도록 관리한다. 암호화 키는 DB와 함께 복구할 수 있도록 별도로 보관한다. 키 파일 교체만으로 기존 연결 비밀이 이전되지는 않는다.
 
 `users[].user_id`는 내부의 안정적인 신원이며 이메일로 계정을 합치지 않는다. `memberships`는 프로젝트 ID별 `view`, `edit`, `approve`, `import`, `manage` 목록이다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리를 각각 허용한다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.

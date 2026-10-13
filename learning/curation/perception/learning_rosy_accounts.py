@@ -4,6 +4,7 @@ from learning_accounts import Accounts, AccountError, CAPABILITIES
 
 
 class RosyAccounts(Accounts):
+    central_account = True
     def __init__(self, *args, receiver, **kwargs):
         super().__init__(*args, **kwargs)
         self.receiver = receiver
@@ -23,9 +24,10 @@ class RosyAccounts(Accounts):
         if claims is None:
             raise AccountError('Account session expired')
         mappings = self.config().get('account_subjects', {})
-        if (not isinstance(mappings, dict) or len(set(mappings.values())) != len(mappings)
+        if (not isinstance(mappings, dict)
                 or any(not isinstance(k, str) or not re.fullmatch('[A-Za-z0-9._-]{1,128}', k)
-                       or not isinstance(v, str) for k, v in mappings.items())):
+                       or not isinstance(v, str) for k, v in mappings.items())
+                or len(set(mappings.values())) != len(mappings)):
             raise AccountError('Invalid Account subject mapping')
         user = self._user(mappings.get(claims.sub))
         with self._db() as db:
@@ -36,7 +38,10 @@ class RosyAccounts(Accounts):
             if occupied and occupied['subject'] != claims.sub:
                 raise AccountError('Learning owner already belongs to another Account')
             if old is None:
-                db.execute('INSERT INTO rosy_account_owners VALUES(?,?)', (claims.sub, user['user_id']))
+                db.execute('INSERT OR IGNORE INTO rosy_account_owners VALUES(?,?)', (claims.sub, user['user_id']))
+                bound = db.execute('SELECT user_id FROM rosy_account_owners WHERE subject=?', (claims.sub,)).fetchone()
+                if not bound or bound['user_id'] != user['user_id']:
+                    raise AccountError('Learning owner already belongs to another Account')
         return {'user_id':user['user_id'], 'username':user['username'],
             'display_name':user.get('display_name', user['username']), 'project_id':self.project_id,
             'capabilities':sorted(cap for cap in CAPABILITIES if claims.permits(claims.aud, 'learning.' + cap)),
