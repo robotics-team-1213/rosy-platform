@@ -73,6 +73,11 @@ def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
     path.write_text(json.dumps({**data, "allow_all": True}))
     with pytest.raises(ValueError):
         load_account_config(path)
+    path.write_text(json.dumps(data))
+    from pathlib import Path
+    Path(data["private_key_file"]).chmod(0o644)
+    with pytest.raises(ValueError, match="protected"):
+        load_account_config(path)
 
 
 def test_authority_configuration_rejects_public_key_before_activation(tmp_path):
@@ -83,11 +88,6 @@ def test_authority_configuration_rejects_public_key_before_activation(tmp_path):
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
     Path(data["private_key_file"]).write_bytes(public)
     with pytest.raises(ValueError, match="private"):
-        load_account_config(path)
-    path.write_text(json.dumps(data))
-    from pathlib import Path
-    Path(data["private_key_file"]).chmod(0o644)
-    with pytest.raises(ValueError, match="protected"):
         load_account_config(path)
 
 
