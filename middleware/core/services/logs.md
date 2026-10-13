@@ -1011,3 +1011,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
+
+## 2026-10-14 · 6579182c7 · D-759 굽이 통과의 진입 직선을 지도의 차로 방향에 놓는다 (API v1.224)
+
+- 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 검사하고(유한한 세 값, `odom_stamp_s` > 0, `bend`에만), `_place_map_entry`가 받은 때 차로 방향을 odom으로 옮기며(`odom yaw + yaw_rad − pose_yaw_rad`), `_start_bend`가 `_map_entry_yaw`로 닻의 yaw를 그 방향으로 바꾼다(닻 yaw와 30° 안, 받은 뒤 경로 1.5 m 안). 닻의 위치는 그대로다. `authority.py`는 D-744의 odom 표본 조회를 `_odom_at_stamp`로 꺼내 `_place_map_anchor`와 같이 쓴다(동작 변화 없음). `gate.py`는 지시에 둔 방향과 까닭을 싣고 상태에 `map_entry_used`·`map_entry_reason`을 낸다.
+- 증거: Gazebo run56·run62·run63·run64(W3에서 넘겨받을 때 yaw가 차로에서 21.6° 어긋나 `motion_unconfirmed`)가 계기다. `test_junction_bend.py`가 그 yaw 어긋남을 rig로 옮겼다: `map_entry`가 있으면 통과 끝이 나가는 직선에서 2 cm 안이고 yaw 60°±3°, 없으면 벽 쪽으로 6 cm 넘게 벗어나고 yaw 38.4°±3°다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. 시제품 run66(16바퀴)은 odom과 지도가 같은 시뮬레이터 overlay였고 이 구현이 아니다. `bend.py` 234줄 → 278줄, `gate.py` 586줄 → 590줄(파일 한도 600), `authority.py` 158줄 → 165줄.
+- 결정: D-759(Proposed). 한도 30°는 `REACQUIRE_HEADING_RAD`다. 횡 위치는 옮기지 않는다.
+- 교훈: odom 궤적은 한 틱에 0.15 rad 넘게 도는 yaw를 새 실행으로 본다(`lane_return.py`). rig에서 21.6°를 한 번에 주면 굽이가 `odom`으로 중단되므로 다섯 틱에 나눠 준다.
