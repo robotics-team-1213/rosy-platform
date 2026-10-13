@@ -18,6 +18,7 @@ runtime:
   navigation_backend: localization
 
 auth:
+  account_client_file: null  # Set to /etc/rosy/account/receiver.json after Account provisioning.
   tokens:
     - token: CHANGE_ME_ADMIN
       role: administrator

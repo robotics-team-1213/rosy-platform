@@ -2,6 +2,7 @@
 import {actionIcon} from '/common/ui.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
+import {canManageAccounts} from '/console/assets/account-permissions.js';
 
 const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
@@ -48,6 +49,11 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   let busy = false, cookie = false, cookiePrincipal = null, cookieRole = null, changing = false;
   const link = document.getElementById('fleet-login');
   const profile = document.getElementById('fleet-profile');
+  const accounts = profile ? document.createElement('a') : null;
+  if (accounts) {
+    accounts.id = 'fleet-accounts'; accounts.href = '/console/accounts';
+    accounts.textContent = '계정 관리'; accounts.hidden = true; profile.after(accounts);
+  }
   if (profile) {
     profile.href = '/console/profile?return=' + encodeURIComponent(loginReturn(location.href, location.origin));
     if (['/console/site-map', '/console/cell'].includes(location.pathname)) {
@@ -81,6 +87,9 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       }
       return false;
     }
+    if (session.account_id) {
+      try { localStorage.setItem('rosy.fleet.account.identity', `${session.account_id}:${session.session_family}:${session.revision}`); } catch {}
+    }
     onChange(true);
     return true;
   }
@@ -112,6 +121,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       cookiePrincipal = cookie ? session.principal_id : null;
       cookieRole = cookie ? session.role : null;
       if (profile) profile.hidden = !cookie || session.password_change_required === true;
+      if (accounts) accounts.hidden = !canManageAccounts(session);
       if (standalone) {
         if (cookie) return verified(session);
       } else {
@@ -133,6 +143,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       if (error?.status === 401 || error?.status === 404) {
         cookie = false; cookiePrincipal = cookieRole = null;
         if (profile) profile.hidden = true;
+        if (accounts) accounts.hidden = true;
         if (standalone && changing) {
           changing = false; host.innerHTML = FORM; bindForm(); part('login').focus();
           errorText('로그인이 만료됐습니다. 다시 로그인해 비밀번호 변경 상태를 확인하세요.');
@@ -228,6 +239,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         }
         sessionStorage.removeItem('rosy-console-token');
         cookie = false; cookiePrincipal = cookieRole = null;
+        try { localStorage.setItem('rosy.fleet.account.identity', ''); } catch {}
         host.hidden = true;
         onChange(false);
         link?.focus();

@@ -372,6 +372,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None, cache='no-store'):
+            if collaboration and isinstance(data, dict) and 'token' in data:
+                data = dict(data, token=collaboration.csrf(self, token))
             if isinstance(data, (dict, list)):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
@@ -526,7 +528,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
-                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js'}
+                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -556,8 +558,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
             path = urlparse(self.path).path
-            login_request = collaboration and path in ('/api/accounts/login', '/api/accounts/oauth')
-            if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != token):
+            login_request = collaboration and path in ('/api/accounts/login', '/api/accounts/oauth', '/api/accounts/logout')
+            expected_token = collaboration.csrf(self, token) if collaboration else token
+            if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()
             origin = self.headers.get('Origin')
             port = self.server.server_port

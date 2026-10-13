@@ -68,3 +68,8 @@
 - 변경: 고정 provider SHA-256과 영속 체크포인트로 부분 재개하고, 강제 종료 tail·Range 전체 응답·손상은 검증 후 처리한다. 같은 imports root의 OS 실행 잠금과 SQLite 트랜잭션, 실제 잔여량 공간 점검·private 한도 설정을 연결했다. UI는 파일별 진행·실패 이유·펼침/초점을 유지하고 HTTP 취소 직후 재시도를 기존 실행 종료 뒤 이어간다.
 - 증거: 초기 실패 12건과 HTTP 재시도 queued 고착 1건을 원격 재현했다. 수정 후 HTTP·Chromium 1440/320px·프로세스 강제 종료·가져오기 회귀 43 passed, known_failures 0 NEW. 모델 PC 합성 9GiB는 4MiB에서 재개·전체 SHA readback 통과, 추가 RSS 2112KiB. 반복 fixture의 할당량 307683328bytes와 13.83초는 실제 영상/네트워크 처리량 근거가 아니다. 독립 검토의 5개 문제를 수정하고 재검토했다.
 - gate 변화: SOURCE와 격리 전송 복구 근거다. 실제 HF 계정 전송·운영 한도 상향·배포·자료 품질·학습/장치 수용은 활성화하지 않았다. 다른 imports root나 외부 앱의 디스크 쓰기를 물리적으로 예약하지 않는다.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.

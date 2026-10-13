@@ -1,4 +1,7 @@
 ﻿# ROSY API & Protocol Reference
+
+D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md). 사람 신원·앱 세션 교환·자원별 접근 자격·계정 관리의 구현 대상이며 운영 활성화 증거는 별도다.
+
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001

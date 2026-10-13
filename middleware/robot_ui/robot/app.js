@@ -1,3 +1,4 @@
+import { restoreAccount, canOperate } from "./client.js";
 import { createReceiverApprovals } from "./peer-approval.js";
 // 대시보드 셸 — 세션·인증·연결 생명주기와 화면 바인딩. 상태 렌더는
 // telemetry.js, 수동 조종은 teleop.js, 상태 소켓은 state-socket.js가 가진다
@@ -77,8 +78,8 @@ export { TELEMETRY_CHANNELS } from "./telemetry.js";
 const pageScope = createPageScope();
 let authLifetime = new AbortController(), commandOwner = null;
 function authTicket() {
-  const held = authLifetime, token = session.token, page = pageScope.capture();
-  return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && token === session.token && page.current()};
+  const held = authLifetime, identity = session.authKey, page = pageScope.capture();
+  return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && identity === session.authKey && page.current()};
 }
 function invalidateAuth() {
   receiverApprovals.clear();
@@ -90,10 +91,10 @@ function invalidateAuth() {
 function updateLegacyLineControls() {
   updateLineFollowButtons();
   const off = document.querySelector('[data-line-mode="OFF"]');
-  if (off) { off.disabled = !session.token || !["operator", "administrator"].includes(session.role); if (off.disabled) off.setAttribute("reason", "운용자 권한 필요"); else off.removeAttribute("reason"); }
+  if (off) { off.disabled = !session.authenticated || !canOperate(); if (off.disabled) off.setAttribute("reason", "운용자 권한 필요"); else off.removeAttribute("reason"); }
 }
 async function runConfirmed(message, opener, eligible, run, fail, pending = () => {}, kind = "", action = "요청 전송") {
-  if (commandOwner || !session.token || !eligible()) return;
+  if (commandOwner || !session.authenticated || !eligible()) return;
   const owner = authTicket(), role = session.role;
   const active = () => commandOwner === owner && owner.current() && role === session.role;
   owner.kind = kind;
@@ -147,7 +148,7 @@ const visionPreview = createVisionPreview({
   setText,
   api,
   authHeaders,
-  hasToken: () => !!session.token,
+  hasToken: () => !!session.authenticated,
   isHidden: () => document.hidden,
   lastGoal: null,
 });
@@ -452,7 +453,7 @@ function signOut(message) {
 }
 
 function showConnectionError(error) {
-  if (error?.status === 401 && session.token) {
+  if (error?.status === 401 && session.authenticated) {
     // The robot no longer knows this token (expired, revoked, logged out elsewhere).
     signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요.");
     return;
@@ -480,7 +481,7 @@ async function connect(owner = authTicket()) {
   return true;
 }
 function restoreConnection() {
-  if (!session.token) return;
+  if (!session.authenticated) return;
   const owner = authTicket();
   connect(owner).catch(error => { if (owner.current()) { showConnectionError(error); elements["auth-drawer"].classList.add("open"); } });
 }
@@ -513,10 +514,10 @@ let codeRetryTimer = null;
 // D-432/D-471: 개발 연결 모드 로봇은 로그인 서랍에 코드 없는 입장을 보여준다.
 let devEntryChecked = false;
 async function revealDevelopmentEntry() {
-  if (devEntryChecked || session.token) return;
+  if (devEntryChecked || session.authenticated) return;
   devEntryChecked = true;
   const offer = await connectionOffer();
-  if (!offer || session.token || !pageScope.capture().current()) return;
+  if (!offer || session.authenticated || !pageScope.capture().current()) return;
   elements["dev-connect-row"].hidden = false;
 }
 let devRetryTimer = null;
@@ -694,7 +695,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopTeleop("화면이 숨겨져 정지했습니다.");
     stopVisionPreview("숨겨진 탭 · 카메라 일시 중지");
-  } else if (session.token) {
+  } else if (session.authenticated) {
     startVisionPreview();
   }
 });
@@ -745,7 +746,7 @@ document.addEventListener("keydown", (event) => {
   if (event.target?.isContentEditable) return;
   if (event.repeat) return;
   if (session.robotState?.safety?.estop === true) return;
-  if (!session.token) return;
+  if (!session.authenticated) return;
   requestStop("비상정지가 활성화되었습니다 (Escape).");
 });
 
@@ -892,5 +893,6 @@ initTelemetry({runConfirmed, captureLifetime: authTicket});
 pageScope.interval(() => setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false })), 1000);
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));
 
-if (session.token) restoreConnection();
+await restoreAccount();
+if (session.authenticated) restoreConnection();
 else { elements["auth-drawer"].classList.add("open"); revealDevelopmentEntry(); }
