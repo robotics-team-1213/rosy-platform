@@ -23,7 +23,7 @@ import re
 
 import pytest
 
-WEB = Path(__file__).resolve().parents[2] / "site_ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 #: D-129 — 단일 L1 파일. 사본은 없다.
 CANON = (Path(__file__).resolve().parents[3] / "shared") / "web" / "tokens.css"
 
