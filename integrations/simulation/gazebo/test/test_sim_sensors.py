@@ -178,3 +178,16 @@ def test_gazebo_lidar_covers_one_turn_without_a_repeated_beam():
         uv = 0.5 * (1.0 + min(axes) / max(axes))
         assert struct.unpack('f', struct.pack('f', uv))[0] < 1.0
         angle += inc
+
+
+def test_gazebo_lidar_noise_stays_within_the_measured_c1():
+    # A static real C1 reads at most 3.4 mm per-beam sigma inside 0.5 m
+    # (docs/validation/crosswalk-core-gate-sim-2026-10-10/result.md). The safety gate takes
+    # the nearest of 640 beams, so a larger sigma pulls every wall about 3 sigma closer.
+    gz = (DESCRIPTION / "rosy_gz.urdf.xacro").read_text(encoding="utf-8")
+    start = gz.index("<sensor name='gpu_lidar'")
+    block = gz[start:gz.index("</sensor>", start)]
+    stddev = float(re.search(r"<stddev>([\d.]+)</stddev>", block).group(1))
+    resolution = float(re.search(r"<range>.*?<resolution>([\d.]+)</resolution>", block, re.S).group(1))
+    assert 0.0 < stddev <= 0.0035
+    assert resolution <= 0.001
