@@ -29,6 +29,16 @@ class SitePrincipal:
     password_fingerprint: str = field(default="", compare=False, repr=False)
     account_id: Optional[str] = None
     grants: tuple = ()
+    site_resource: Optional[str] = None
+
+    def permits(self, resource: str, capability: str) -> bool:
+        return bool(self.account_id) and any(
+            scope == resource and capability in capabilities for scope, capabilities in self.grants)
+
+    def permits_site(self, capability: str, legacy_roles=None) -> bool:
+        if self.account_id:
+            return bool(self.site_resource) and self.permits(self.site_resource, capability)
+        return legacy_roles is None or self.role in legacy_roles
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -188,16 +198,18 @@ def build_authorize(console_token: Optional[str],
 
 def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, named_logins: bool = False):
     def require_viewer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
+        if not principal.permits_site("fleet.read"):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "fleet.read required"})
         return principal
 
     def require_operator(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
-        if principal.role != "operator":
+        if not principal.permits_site("fleet.operate", {"operator"}):
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN",
                                                          "message": "operator role required"})
         return principal
 
     def require_proposer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
-        if principal.role not in {"operator", "service"}:
+        if not principal.permits_site("fleet.operate", {"operator", "service"}):
             raise HTTPException(status_code=403, detail={
                 "code": "FORBIDDEN", "message": "operator or service proposal role required",
             })

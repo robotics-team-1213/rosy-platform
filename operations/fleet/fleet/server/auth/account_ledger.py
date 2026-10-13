@@ -51,6 +51,10 @@ class AccountLedger:
             db.execute("""CREATE TABLE IF NOT EXISTS rosy_account_audit (
                 actor_account_id TEXT NOT NULL, target_account_id TEXT NOT NULL, operation TEXT NOT NULL,
                 previous_revision INTEGER NOT NULL, next_revision INTEGER NOT NULL, created_at REAL NOT NULL)""")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(rosy_account_audit)")}
+            for name, default in (("before_state", "{}"), ("after_state", "{}"), ("outcome", "legacy")):
+                if name not in columns:
+                    db.execute(f"ALTER TABLE rosy_account_audit ADD COLUMN {name} TEXT NOT NULL DEFAULT '{default}'")
             row = db.execute("SELECT site_id FROM rosy_account_authority WHERE singleton=1").fetchone()
             self.site_id = row[0] if row else None
 
@@ -78,14 +82,27 @@ class AccountLedger:
         with self.db(write=True) as db:
             if db.execute("SELECT 1 FROM rosy_account_authority").fetchone():
                 raise ValueError("account authority already activated")
-            overrides = {r["login"]: r["password_scrypt"] for r in
+            overrides = {r["login"]: dict(r) for r in
                          db.execute("SELECT * FROM fleet_console_passwords")}
             for login, source in self.sessions._logins.items():
-                encoded = overrides.get(login, source["password_scrypt"])
+                override = overrides.get(login)
+                if override and override["source_sha256"] != self.sessions._sources[login]:
+                    identities = {r[0] for r in db.execute(
+                        "SELECT principal_id FROM fleet_console_sessions WHERE login=? UNION "
+                        "SELECT principal_id FROM fleet_console_profiles WHERE login=?", (login, login))}
+                    if identities != {source["principal_id"]}:
+                        raise ValueError("ambiguous account identity during password migration")
+                encoded = override["password_scrypt"] if override else source["password_scrypt"]
                 profile = db.execute("SELECT display_name FROM fleet_console_profiles WHERE login=? "
                                      "AND principal_id=?", (login, source["principal_id"])).fetchone()
-                grants = ([{"resource": "site:" + site_id, "capabilities": ["accounts.manage"]}]
-                          if login == admin_login else [])
+                capabilities = ["fleet.read"]
+                if source["role"] == "operator":
+                    capabilities.append("fleet.operate")
+                elif source["role"] == "policy-admin":
+                    capabilities.append("fleet.policy")
+                if login == admin_login:
+                    capabilities.append("accounts.manage")
+                grants = [{"resource": "site:" + site_id, "capabilities": capabilities}]
                 account_id = secrets.token_urlsafe(24)
                 db.execute("INSERT INTO rosy_accounts VALUES (?,?,?,?,?,?,?,?,?,?)", (
                     account_id, login, source["principal_id"], source["role"], encoded,
@@ -107,7 +124,7 @@ class AccountLedger:
     def principal_for(self, row, *, fingerprint=""):
         return SitePrincipal(row["principal_id"], row["role"], bool(row["change_required"]), fingerprint,
                              row["account_id"], tuple((g["resource"], tuple(g["capabilities"]))
-                                                      for g in json.loads(row["grants"])))
+                                                      for g in json.loads(row["grants"])), "site:" + self.site_id)
 
     @staticmethod
     def credential_revision(row):
@@ -194,9 +211,22 @@ class AccountLedger:
             for key in keys:
                 self.sessions._forget(key[0], revoked=True)
 
-    def audit(self, db, actor, target, operation, previous, following):
-        db.execute("INSERT INTO rosy_account_audit VALUES (?,?,?,?,?,?)",
-                   (actor, target, operation, previous, following, self.sessions._clock()))
+    def audit(self, db, actor, target, operation, previous, following, *, before=None):
+        after = db.execute("SELECT * FROM rosy_accounts WHERE account_id=?", (target,)).fetchone()
+        db.execute("INSERT INTO rosy_account_audit VALUES (?,?,?,?,?,?,?,?,?)", (
+            actor, target, operation, previous, following, self.sessions._clock(),
+            json.dumps(public(before) if before is not None else {}), json.dumps(public(after)), "success"))
+
+    def list_audit(self, value):
+        with self.db() as db:
+            self.require_manager(db, value)
+            rows = []
+            for record in db.execute("SELECT * FROM rosy_account_audit ORDER BY rowid"):
+                row = dict(record)
+                row["before"] = json.loads(row.pop("before_state"))
+                row["after"] = json.loads(row.pop("after_state"))
+                rows.append(row)
+            return rows
 
     def require_manager(self, db, value):
         from fleet.server.password_session import _digest
@@ -271,7 +301,7 @@ class AccountLedger:
             if not managers:
                 raise ValueError("cannot remove last active account manager")
             self.delete_sessions(db, account_id)
-            self.audit(db, actor, account_id, operation, revision, revision + 1)
+            self.audit(db, actor, account_id, operation, revision, revision + 1, before=before)
             return public(updated)
 
     def delete_sessions(self, db, account_id):
@@ -320,7 +350,8 @@ class AccountLedger:
             db.execute("UPDATE rosy_accounts SET password_scrypt=?,change_required=0,revision=? WHERE account_id=?",
                        (encoded, updated["revision"], row["account_id"]))
             self.delete_sessions(db, row["account_id"])
-            self.audit(db, row["account_id"], row["account_id"], "password", row["revision"], updated["revision"])
+            self.audit(db, row["account_id"], row["account_id"], "password", row["revision"],
+                       updated["revision"], before=row)
             return self.insert_session(db, updated, row["remember"]), bool(row["remember"])
 
     def profile(self, value, display_name=None):
@@ -332,6 +363,8 @@ class AccountLedger:
             if display_name is not None:
                 db.execute("UPDATE rosy_accounts SET display_name=? WHERE account_id=?",
                            (display_name, row["account_id"]))
+                self.audit(db, row["account_id"], row["account_id"], "profile", row["revision"],
+                           row["revision"], before=row)
                 row["display_name"] = display_name
             principal = row["principal_id"]
             return {"login": row["login"], "principal_id": principal, "role": row["role"],

@@ -127,10 +127,24 @@ class PasswordSessions:
         self._ledger.bootstrap(admin_login, site_id)
 
     def account_context(self, value: str):
+        self._refresh_authority()
         return self._ledger.context(value) if self._ledger.active else None
 
     def context_by_family(self, family: str, *, db=None):
+        self._refresh_authority()
         return self._ledger.context(family=family, db=db) if self._ledger.active else None
+
+    def _refresh_authority(self):
+        if self._ledger.active or not self.path.is_file():
+            return
+        try:
+            with closing(sqlite3.connect(self.path, timeout=_AUTH_DB_TIMEOUT_S)) as db:
+                row = db.execute("SELECT site_id FROM rosy_account_authority WHERE singleton=1").fetchone()
+            if row:
+                self._ledger.site_id = row[0]
+                self._cache.clear()
+        except sqlite3.Error:
+            raise SessionStorageUnavailable() from None
 
     def revoke_family(self, family: str, *, db=None) -> None:
         self._ledger.revoke_family(family, db=db)
@@ -149,6 +163,9 @@ class PasswordSessions:
 
     def list_accounts(self, value: str):
         return self._ledger.list_accounts(value)
+
+    def list_account_audit(self, value: str):
+        return self._ledger.list_audit(value)
 
     def create_account(self, value: str, **fields):
         return self._ledger.create(value, **fields)
@@ -197,6 +214,7 @@ class PasswordSessions:
         so concurrent attempts cannot all pass the count. A login outside the login pattern is
         refused like a wrong password and never becomes a per-login rate key.
         """
+        self._refresh_authority()
         valid = bool(_LOGIN.fullmatch(login))
         keys = [("address", address)] + ([("login", login)] if valid else [])
         now = self._clock()
@@ -230,6 +248,7 @@ class PasswordSessions:
                     hits.remove(stamp)
 
     def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
+        self._refresh_authority()
         if self._ledger.active:
             return self._ledger.issue(login, remember, verified)
         with self._lock:
@@ -258,6 +277,7 @@ class PasswordSessions:
         return value
 
     def change_password(self, value: str, password: str, *, current_password: Optional[str] = None) -> tuple[str, bool]:
+        self._refresh_authority()
         if self._ledger.active:
             return self._ledger.change_password(value, password, current_password)
         with self._lock:
@@ -316,6 +336,7 @@ class PasswordSessions:
             return replacement, bool(fresh["remember"])
 
     def profile(self, value: str, display_name: Optional[str] = None) -> dict:
+        self._refresh_authority()
         if self._ledger.active:
             return self._ledger.profile(value, display_name)
         with self._lock:
@@ -389,6 +410,11 @@ class PasswordSessions:
         A cookie validated within `_CACHE_S` needs no DB. Otherwise the DB decides; a DB error
         raises SessionStorageUnavailable unless `allow_stale` (e-stop) and the cache knows the cookie.
         """
+        try:
+            self._refresh_authority()
+        except SessionStorageUnavailable:
+            if not allow_stale:
+                raise
         if self._ledger.active:
             return self._ledger.principal(value, allow_stale)
         key = _digest(value)
