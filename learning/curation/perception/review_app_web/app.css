@@ -123,7 +123,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .review-summary p { color: var(--text-secondary); margin-bottom: 0; }
 .review-summary > .quiet { font-size: var(--text-label); }
 #review-stage-summary { margin-block: 0 var(--space-2); font-variant-numeric: tabular-nums; }
-.workspace-link { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding-inline: var(--inset-button); border: 1px solid var(--surface-line); border-radius: var(--radius-button); font-size: var(--text-label); text-decoration: none; white-space: nowrap; }
+.workspace-link { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding-inline: var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); font-size: var(--text-label); text-decoration: none; white-space: nowrap; }
 .work-filters { align-items: end; padding-block: var(--space-2); }
 .search-field { flex: 1; min-width: min(100%, 16rem); }
 .work-filters label { min-width: 0; }
@@ -177,7 +177,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .pixel-quick-tools .ui-workspace-bar { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin: 0; padding: var(--space-2); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
 .pixel-quick-tools .ui-workspace-bar > label { min-width: 0; }
 .pixel-quick-tools .ui-workspace-bar .ui-field { width: 100%; min-width: 0; }
-.review-class-chip { display: inline-flex; align-items: center; flex: none; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--surface-line); border-radius: var(--radius-control); cursor: pointer; }
+.review-class-chip { display: inline-flex; align-items: center; flex: none; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--control-line); border-radius: var(--radius-control); cursor: pointer; }
 .review-class-chip[aria-pressed="true"] { border-color: var(--series-primary); box-shadow: none; }
 .review-class-chip:focus-visible { outline: var(--focus-ring-width) solid var(--series-primary); outline-offset: var(--focus-ring-offset-outer); }
 .review-class-chip:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
