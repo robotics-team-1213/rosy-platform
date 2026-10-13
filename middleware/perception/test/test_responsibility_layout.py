@@ -16,13 +16,13 @@ SOURCE_MODULES = {
     "sensors/sensing/lidar.py": "control.sensing.lidar",
     "vision/perception/lane.py": "control.sensing.perception.lane",
     "vision/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
-    "../control/drive/safety/command_gate.py": "control.control.command_gate",
-    "../control/drive/recovery/recover.py": "control.control.recover",
-    "../control/drive/tracking/path_follow.py": "control.control.path_follow",
-    "../control/drive/calibration/calibration.py": "control.control.calibration",
-    "../control/drive/planning/grid/goals.py": "control.planning.goals",
-    "../control/drive/safety/adapter/gate.py": "control.safety.gate",
-    "../control/drive/tracking/wander/motion.py": "control.wander.motion",
+    "../drive/safety/command_gate.py": "control.control.command_gate",
+    "../drive/recovery/recover.py": "control.control.recover",
+    "../drive/tracking/path_follow.py": "control.control.path_follow",
+    "../drive/calibration/calibration.py": "control.control.calibration",
+    "../drive/planning/grid/goals.py": "control.planning.goals",
+    "../drive/safety/adapter/gate.py": "control.safety.gate",
+    "../drive/tracking/wander/motion.py": "control.wander.motion",
 }
 
 
@@ -44,7 +44,7 @@ def test_ros_source_audit_includes_moved_adapter_once(tmp_path):
     _run(str(PACKAGE / "tools/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
     with output.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
-    assert any(row["source"] == "middleware/control/drive/safety/adapter/node.py"
+    assert any(row["source"] == "middleware/drive/safety/adapter/node.py"
                for row in rows)
     keys = [(row["source"], row["line"], row["kind"], row["expression"]) for row in rows]
     assert len(keys) == len(set(keys))
@@ -57,8 +57,8 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
     shutil.copytree(PACKAGE, source, ignore=shutil.ignore_patterns(
         "__pycache__", "*.egg-info", "build", "dist"))
     for relative in ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
-        shutil.copytree(MIDDLEWARE / "control/drive" / relative,
-                        source.parent / "control/drive" / relative)
+        shutil.copytree(MIDDLEWARE / "drive" / relative,
+                        source.parent / "drive" / relative)
     dist = tmp_path / "dist"
     _run("setup.py", "sdist", "--dist-dir", str(dist), cwd=source)
     with tarfile.open(next(dist.glob("*.tar.gz"))) as archive:
@@ -78,7 +78,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
             assert names.count('control/' + name + '.py') == 1
             assert not (PACKAGE / 'control' / (name + '.py')).exists()
         for group in ("safety", "recovery", "tracking", "calibration"):
-            for path in (MIDDLEWARE / "control/drive" / group).glob("*.py"):
+            for path in (MIDDLEWARE / "drive" / group).glob("*.py"):
                 assert names.count("control/control/" + path.name) == 1
                 assert sum(name.startswith("control/control/") and name.endswith("/" + path.name)
                            for name in names) == 1

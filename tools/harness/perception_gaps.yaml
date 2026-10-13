@@ -48,7 +48,7 @@ spots:
       - middleware/perception/control/line_observer_node.py:530
       - middleware/perception/control/line_observer_node.py:635
       - middleware/perception/vision/perception/lane_containment.py:72-74
-      - middleware/control/drive/behaviors/line_follow/crosswalk_zone.py:45-48
+      - middleware/drive/behaviors/line_follow/crosswalk_zone.py:45-48
     replay: unbuilt
     owner: perception
     status: OPEN

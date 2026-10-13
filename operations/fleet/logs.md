@@ -2986,6 +2986,20 @@
 - gate 변화: 없음(SOURCE). 관제 지도 윤곽은 캔버스라 브라우저 시험 없음.
 - 열림: 바닥 검사는 띠 꼭짓점만 본다(오목한 바닥에서 변이 밖으로 나가는 띠는 통과). 상태색·카드 줄은 (f), CORE 전달은 (d).
 
+## 2026-10-09 · uncommitted · docs(fleet): Fleet 호출 지도
+- 변경: `docs/call-map.md`를 추가했다. 브라우저·Fleet·CORE·프록시의 현재 호출과, D-540 밖에 남아 구현 때 접을 메모를 적는다. `AGENTS.md` Key Files에 한 줄을 넣었다.
+- 증거: 기준 local main `3b6072a46`의 소스 대조. 그 사이에 착지한 D-540 (a)(c), D-541 7, D-550 10을 지도에 반영했다. 시험 없음. 현장 이미지 확인 없음.
+- gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
+- 결정: 없음. 계약은 ADR과 API Reference. 화면 구조는 Proposed D-540.
+- 교훈: 호출이 맞는 것과 화면 자리가 하나인 것은 다른 기록이다. 후자는 D-540이 이미 처분한다.
+
+## 2026-10-09 · uncommitted · docs(fleet): 호출 지도에 목표 lease presence
+- 변경: `POST /api/fleet/goal-lease/presence`는 임대 중인 목표가 있을 때만 보낸다. 지도 기준을 local main `d8f12328b`로 올렸다.
+- 갱신 2026-10-13: 기준을 `e14245e86`으로 올렸다. 콘솔 원본이 `operations/ui/console`로 옮겨진 경로, 호스트 서비스·로그인·설치 호출, CORE 클라이언트 경로(`rotate_to`, `lane-cue`, `fleet/link` 등), 프록시 포트 표기, 해결기 경로를 현재 소스와 맞췄다.
+- 증거: `signals.js`의 presence 조건(`e42ecc073`).
+- gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
+- 결정: 없음.
+
 ## 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
 
 - Change: while CORE's arc is running, retain its armed end-place instruction if Fleet map localization has advanced to the next segment. A hold STOP still takes priority.

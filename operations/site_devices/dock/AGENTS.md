@@ -50,7 +50,7 @@ Contract in README; implementation in `firmware/rosy_dock/rosy_dock.ino`; client
 
 ### Internal
 
-- `middleware/control/drive/behaviors/docking/agent.py`
+- `middleware/drive/behaviors/docking/agent.py`
 - Design: `docs/plans/2026-09-02-docking-station-design.md`
 
 ### External

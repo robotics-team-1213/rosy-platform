@@ -43,3 +43,14 @@ GPU가 정상이고 Model PC에서 승인된 digest·revision과 최소 비식�
 기본 환경은 context 8192, Flash Attention, f16 KV cache, 단일 동시 작업·단일 적재 모델·15분 유지다. 선택 `~/.config/rosy/ollama.env`로 문맥 길이를 조정하고 유닛을 재시작한다. 정확도 시험은 같은 프롬프트·영상·모델 digest로 8192/16384와 샘플링을 비교해 관찰 오해석과 10초 deadline을 기록한다. 저정밀 KV cache나 더 큰 문맥을 정확도 개선으로 자동 인정하지 않는다. API request의 options가 환경 기본값을 덮어쓸 수 있으므로 평가 기록에 실제 options도 저장한다.
 
 상황 서비스의 `situation.env`에는 선택 `ROSY_VLM_OPTIONS={"num_ctx":8192,"temperature":0,"seed":42}`를 둘 수 있다. 지원 키는 num_ctx(4096–16384 정수), temperature(0–1), seed(0–2147483647 정수), repeat_penalty(0.8–1.2), top_p(0.1–1), top_k(1–100 정수)다. 잘못된 키·값은 시작 시 거절한다. 기본값은 위 JSON이며 실제 options는 evidence.model_options와 모델 profile의 options 해시에 기록된다. 변경 후 situation 서비스도 재시작한다.
+
+## 헤드리스 Gazebo 준비 (D-571)
+
+AI PC는 다른 사람과 같이 쓴다. 아래 설치는 **소유자가 동의한 뒤 소유자가 직접** 실행한다. 설치하기 전에는 `tools/remote/remote_sim.py`가 이 PC를 `no sim capability`로 건너뛴다. 2026-10-09 rootless `--dry-run` 결과 빠진 패키지는 `ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-realtime-tools ros-jazzy-joint-state-publisher`이다.
+
+```bash
+python3 deploy/hosts/common/rosy-host-state install ai --dry-run         # root 없이 차이만
+sudo python3 deploy/hosts/common/rosy-host-state install ai --approve sim
+```
+
+`--approve sim`은 apt 패키지만 더한다. D-530의 다른 승인 줄(sshd, sudoers, 워치독)은 이 명령으로 바뀌지 않지만, 같은 명령이 `safe` 줄(새벽 재부팅 유닛 등)과 `report` 줄도 적용하므로 소유자가 `--dry-run` 출력을 먼저 확인한다. apt는 빠진 패키지만 `--no-upgrade --no-remove`로 설치하므로 이미 있는 패키지를 올리거나 지우지 않는다. CORE pip 의존성 설치, colcon 빌드, 벤치는 4코어, 4 GB, `nice 10`의 사용자 scope 안에서 돈다. 커밋 전송, 출력 가져오기, 정리는 scope 밖에서 `nice 15`와 idle I/O로 돈다. D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 이 PC를 고르지 않는다. 소유자는 `touch ~/rosy-jobs/busy`로 언제든 막을 수 있다. 실행기는 자기 scope(`rosy-sim-*.scope`) 밖의 프로세스를 멈추지 않는다.

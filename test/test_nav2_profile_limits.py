@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from robot_contracts import ROOT
-sys.path.insert(0, str(ROOT / "middleware" / "control" / "drive" / "planning" / "nav2"))
+sys.path.insert(0, str(ROOT / "middleware" / "drive" / "planning" / "nav2"))
 
 from navigation.profile_limits import (
     MotionLimits,
@@ -18,7 +18,7 @@ from navigation.profile_limits import (
 
 
 PROFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.hardware.yaml"
-NAV2 = ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "middleware" / "drive" / "planning" / "nav2" / "params" / "nav2_params.yaml"
 
 
 def test_costmaps_wait_for_amcl_before_activating():

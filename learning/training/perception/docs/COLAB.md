@@ -60,7 +60,7 @@ store는 경로 하나다. 지금은 사이트 PC의 로컬 폴더이고, 팀이
 
 ```python
 !git clone --depth 1 --filter=blob:none --sparse https://github.com/robotics-team-1213/rosy-platform.git rosy
-!cd rosy && git sparse-checkout set learning/training/perception learning/registry/perception middleware/perception middleware/control/drive contracts/foundation
+!cd rosy && git sparse-checkout set learning/training/perception learning/registry/perception middleware/perception middleware/drive contracts/foundation
 !pip -q install onnx onnxruntime
 
 import sys

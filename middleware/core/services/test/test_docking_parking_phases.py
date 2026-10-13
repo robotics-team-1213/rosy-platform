@@ -14,7 +14,7 @@ from core_features.docking.parking_phases import ParkingPhases
 
 from test_docking_parking_manager import ENTRY_X, SPOT, a_parking, done, run
 
-DOCKING = Path(__file__).resolve().parents[4] / 'middleware/control/drive/behaviors/docking'
+DOCKING = Path(__file__).resolve().parents[4] / 'middleware/drive/behaviors/docking'
 POSE_ENTRIES = ("begin_entry_turn", "begin_turn", "begin_undock_turn", "begin_acquiring",
                 "tick_turning", "tick_acquiring", "tick_approaching", "tick_aligning",
                 "tick_settling", "tick_backoff")

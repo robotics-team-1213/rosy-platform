@@ -4,7 +4,7 @@
 # fleet
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-09
 
 ## Purpose
 
@@ -55,6 +55,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
+| `docs/call-map.md` | 현재 소스의 Fleet 호출 지도. 계약은 ADR·API Reference. 화면 구조는 D-540 |
 
 ## Subdirectories
 
