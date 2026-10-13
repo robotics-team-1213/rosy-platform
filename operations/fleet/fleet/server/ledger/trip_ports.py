@@ -390,7 +390,7 @@ def next_bend(live: "LiveTrip", index: int, s: float) -> Optional[dict]:
     """The first bend on this segment the robot has not passed and Fleet has not finished."""
     found = []
     for place_id, place in live.graph.places.items():
-        geometry = None if place_id in live.bends_done else bend_geometry(place, live.arc(index))
+        geometry = None if (index, place_id) in live.bends_done else bend_geometry(place, live.arc(index))
         if geometry is not None and s < geometry[1] and geometry[0] < live.segments[index]["s_to"]:
             found.append((geometry[0], place_id, geometry))
     if not found:
@@ -544,7 +544,7 @@ class LiveTrip:
         self.at_stamp: Optional[float] = None
         self.authority: Optional[dict] = None
         #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
-        self.bends_done: set[str] = set()
+        self.bends_done: set = set()  # (segment index, place id): a lap may pass one bend on two segments
         self.dismissed = 0  # keeper sightings without a map place, answered ``straight``
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
