@@ -8,7 +8,10 @@ import signal
 async def exchange(c, command, packet, remaining, *, output_limit=16384):
     if command not in ('rosy-status-v1', 'rosy-conversation-v1'):
         raise ValueError('FIXED_BROKER_COMMAND_REQUIRED')
-    argv=('ssh','-F','/dev/null','-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes',
+    port = getattr(c, 'ssh_port', 22)
+    if type(port) is not int or port not in (22, 2222):
+        raise ValueError('FIXED_BROKER_PORT_REQUIRED')
+    argv=('ssh','-F','/dev/null','-T','-p',str(port),'-o','BatchMode=yes','-o','IdentitiesOnly=yes',
           '-o','StrictHostKeyChecking=yes','-o','GlobalKnownHostsFile=/dev/null',
           '-o','UserKnownHostsFile='+c.known_hosts_file,'-o','ConnectTimeout=5',
           '-o','ClearAllForwardings=yes','-o','IdentityAgent=none','-i',c.key_file,'rosy-model-ingress@'+c.host,command)

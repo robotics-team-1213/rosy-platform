@@ -6,11 +6,9 @@ import hashlib
 import json
 import logging
 import math
-import os
 from pathlib import Path
-import re
-import signal
 import time
+from typing import Literal
 
 from pydantic import BaseModel,ConfigDict,Field
 from rosy.decision.deliberation import canonical
@@ -27,6 +25,7 @@ from .broker_transport import exchange
 class BrokerConfig(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True,frozen=True)
     host:str=Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$')
+    ssh_port:Literal[22,2222]=22
     key_file:str=Field(pattern=r'^/run/rosy-deliberation/broker.key$')
     known_hosts_file:str=Field(pattern=r'^/run/rosy-deliberation/known_hosts$')
     profile_revision:str=Field(pattern=r'^d720-[a-z0-9-]{1,40}$')

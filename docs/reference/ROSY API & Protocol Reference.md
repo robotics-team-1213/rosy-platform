@@ -14,6 +14,12 @@
 
 ### v1.220 CORE native outcome ports (D-732)
 
+`POST /api/v1/safety/stop`은 본문 없는 Viewer 호출과 `{estop:true}`를 유지하고 `operations:NativeOperation[]`을 추가한다. 각 native owner(nav/home, dock/undock, follow, teleop)의 기존 잠금을 기다리지 않고 획득하여 stop 직전 current nonterminal run과 boot를 따로 캡처한다. 잠금 경합이나 캡처 실패는 전체 `operations:[]`로 남기고 기존 E-Stop latch를 먼저 적용한다. backend·transport·중첩 잠금 조회는 이 선택적 캡처에 넣지 않는다. 정지 listener 이후에도 같은 nonblocking 경계에서 캡처한 UUID만 읽는다. 첫 terminal은 그대로 반환하며 잠금 경합·lookup UNKNOWN·prune·재부팅·readback 실패에서는 원래 pending receipt를 보존한다. 다른 최신 run이나 terminal 이력을 대신 넣지 않는다. 선택적 증거 읽기는 E-Stop을 늦추지 않는다. 빈 목록은 ACK뿐이며 물리적 정지 성공이 아니다. site stop은 `robots[].result.operations`에 로봇별 목록을 그대로 유지한다.
+
+`operations`는 owner별로 순차 캡처한 정지 직전의 best-effort snapshot이다. 캡처와 latch 사이의 동시 owner 변경을 포함하는 전체 실행 목록이나 로봇의 물리적 정지 증명이 아니다.
+
+Fleet channel stop step의 receipt는 `stop_outcomes:[{robot_id, operation:NativeOperation, outcome?:NativeOperation, quiescence?:NativeQuiescence}]`로 각 run을 보존한다. `operation`은 원래 캡처한 식별자, `outcome`은 변경할 수 없는 첫 terminal, `quiescence`는 같은 로봇·boot·run의 새 owner readback이다. 모든 캡처 run에 exact terminal과 RPC 시작부터 step CAS까지 2초 이내의 quiescence가 있어야 step을 CANCELED로 닫는다. 빌린 claim을 해제하거나 다음 동작을 진행하지 않으며 SAFE_RELEASED나 물리적 정지를 주장하지 않는다. 누락·빈 목록·부분 site ACK는 유한한 HOLD/ACK-only로 끝낸다. native 식별자 없는 idle cancel/follow_cancel ACK도 유한한 HOLD이며, 이후 계획을 진행하지 않는다.
+
 SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 기존 실행 owner와 최종 cmd_vel 권한, envelope protocol_version 1.0을 유지한다.
 
 | 기존 명령 | 선택적 추가 본문 | 승인 응답 추가 필드 / owner |
@@ -883,6 +889,8 @@ STOP_REQUIRED | WAIT_SIGNAL | PROCEED | HOLD` 다. `ENFORCED`에서는 stale,
 정지선에서는 신호색과 무관하게 먼저 완전 정지와 dwell을 완료한 뒤, 신뢰도
 기준을 통과한 `GREEN`만 `PROCEED`를 허용한다. `MONITOR_ONLY`는 같은 판정을
 표시하지만 주행 후보를 변경하지 않는다. `junction_rule`은 v1.54 additive다.
+2026-10-12(D-735): ENFORCED FOLLOW/APPROACH/PROCEED의 이동 후보는 선속도와
+각속도에 같은 감속 비율을 적용한다. 선속도 0의 제자리 회전은 기존 각속도를 유지한다.
 `signal_controlled`(기본)는 위 동작 그대로다. `stop_and_go`는 무신호 교차로
 선언이다 — 완전 정지와 dwell을 마친 뒤 신호가 관측되지 않으면
 `PROCEED / unsignalized_proceed`로 `proceed_speed_scale` 속도로 진입하고,

@@ -72,6 +72,14 @@ execution handles. CHAT prose may be generated; status/control factual claims
 must reference bounded observed state or owner receipts. Replies suppress mass
 mentions and never echo credentials or declare physical success from model text.
 
+The status and conversation client configuration permits `ssh_port` 22 (legacy
+default) or 2222 only. When Tailscale SSH owns tailnet port 22, the admitted
+forced-command OpenSSH path uses a tailnet-only TCP forwarder on 2222 to the
+existing loopback SSH listener, with the same pinned host key and dedicated
+ingress key. It does not grant the ingress account a Tailscale SSH shell or
+change general account privileges. Port reachability and the actual fixed
+command response are required runtime evidence separately from source tests.
+
 Required negative coverage includes duplicate/edited messages, role revocation,
 map changes during awaits and queued dispatch, crash before/after acceptance,
 partial plans and UNKNOWN replies, quoted/negated/hypothetical commands, prompt

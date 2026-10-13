@@ -100,7 +100,6 @@ class CallResult:
 
 
 def call_cost_evidence(invocation, problem, bound, checked, cost):
-    """Validate optional immutable call evidence without discarding known numeric cost."""
     if type(invocation) is not CallResult: return None, False
     evidence = invocation.cost_evidence
     if evidence is not None:

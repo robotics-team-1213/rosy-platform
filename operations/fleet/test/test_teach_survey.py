@@ -18,7 +18,7 @@ class Clock:
         return self.now
 
 
-def setup():
+def survey_start():
     clock = Clock()
     poses = MapPoseService(lambda: ['r1'], wall=clock)
     store = SiteMapStore(clock=clock)
@@ -50,7 +50,7 @@ async def advance(service, poses, clock, distance, seconds=0.5):
 
 
 def test_relative_recording_projects_to_the_declared_origin_and_saves_only_observed_draft():
-    service, poses, store, clock, draft = setup()
+    service, poses, store, clock, draft = survey_start()
 
     async def run():
         view = await start(service, draft)
@@ -77,7 +77,7 @@ def test_relative_recording_projects_to_the_declared_origin_and_saves_only_obser
     ({'map_id': 'other'}, 'TEACH_SURVEY_CHANGED'),
     ({'reference_revision': 'other'}, 'TEACH_SURVEY_CHANGED')])
 def test_survey_start_requires_the_saved_basis(changes, code):
-    service, _poses, _store, _clock, draft = setup()
+    service, _poses, _store, _clock, draft = survey_start()
     with pytest.raises((TeachError, SiteMapError)) as error:
         asyncio.run(start(service, draft, **changes))
     assert error.value.code == code
@@ -87,7 +87,7 @@ def test_survey_start_requires_the_saved_basis(changes, code):
 @pytest.mark.parametrize('loss,reason', [('gap', 'odom_lost'), ('reset', 'odom_reset'),
     ('draft', 'survey_changed')])
 def test_recording_stops_before_a_gap_reset_or_draft_change(loss, reason):
-    service, poses, store, clock, draft = setup()
+    service, poses, store, clock, draft = survey_start()
 
     async def run():
         await start(service, draft)
@@ -113,7 +113,7 @@ def test_recording_stops_before_a_gap_reset_or_draft_change(loss, reason):
 
 
 def test_confirm_rejects_changed_reference_and_keeps_the_record_for_review():
-    service, poses, store, clock, draft = setup()
+    service, poses, store, clock, draft = survey_start()
 
     async def run():
         await start(service, draft)
@@ -131,7 +131,7 @@ def test_confirm_rejects_changed_reference_and_keeps_the_record_for_review():
 
 
 def test_survey_start_refuses_stale_odometry_without_creating_a_record():
-    service, _poses, store, clock, draft = setup()
+    service, _poses, store, clock, draft = survey_start()
     clock.now += 3.01
     with pytest.raises(TeachError) as error:
         asyncio.run(start(service, draft))
@@ -140,7 +140,7 @@ def test_survey_start_refuses_stale_odometry_without_creating_a_record():
 
 
 def test_survey_confirm_preserves_the_expected_revision_rule_and_invalidates_review():
-    service, poses, store, clock, draft = setup()
+    service, poses, store, clock, draft = survey_start()
 
     async def run():
         await start(service, draft)
@@ -169,7 +169,7 @@ def test_survey_http_start_stop_confirm_are_named_operator_actions_without_motio
     from hashlib import sha256
     from test_teach import OPERATOR, VIEWER
 
-    _service, poses, store, clock, draft = setup()
+    _service, poses, store, clock, draft = survey_start()
     robot = FakeRobot('r1')
     console = FleetConsole([RobotEndpoint('r1', 'http://127.0.0.1:8080', 't')], [robot])
     users = {sha256(b'operator-token').hexdigest(): {'principal_id': 'bob', 'role': 'operator'},
@@ -202,7 +202,7 @@ def test_survey_http_start_stop_confirm_are_named_operator_actions_without_motio
 
 @pytest.mark.parametrize("stamp_delta", [-0.1, 0.0])
 def test_rejected_odom_breaks_survey_without_resuming_across_it(stamp_delta):
-    service, poses, store, clock, draft = setup()
+    service, poses, store, clock, draft = survey_start()
 
     async def run():
         await start(service, draft)
@@ -230,7 +230,7 @@ def test_normal_teach_cannot_write_operational_coordinates_into_survey_draft(act
             await _drive(service, poses, [(0.2, 0)])
             return await service.stop('bob')
         result = asyncio.run(run())
-    survey = setup()[4]['map']
+    survey = survey_start()[4]['map']
     draft = store.save_draft(SiteMap.model_validate(survey), expected_revision=None, principal_id='bob')
     with pytest.raises(TeachError) as error:
         if action == 'start':
@@ -249,7 +249,7 @@ def test_operational_teach_preserves_active_survey_and_invalidates_draft_review(
     from copy import deepcopy
     from test_teach import MAP, Poses, _drive
     body = deepcopy(MAP)
-    body['survey'] = {**setup()[4]['map']['survey'], 'reviewed': True, 'review_note': 'Measured'}
+    body['survey'] = {**survey_start()[4]['map']['survey'], 'reviewed': True, 'review_note': 'Measured'}
     body['edges'][0]['evidence'] = {'source': 'operator', 'status': 'reviewed',
         'reference_revision': 'reference-1', 'note': 'Measured'}
     store = SiteMapStore()
