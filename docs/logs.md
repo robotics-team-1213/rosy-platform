@@ -8275,6 +8275,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. SOURCE와 원격 시험 증거뿐이며 장치·현장 상태는 그대로다. D-622 REALIGN과 D-571 시뮬레이션 실행기는 켜지 않았고, 실행기는 실제 PC에서 돌린 적이 없다.
 - 결정: D-556 odom 차선 보류 포팅은 착지하지 않고 `fix/lane-odom-cross-veto-port`에 둔다. 판정이 몸체가 아니라 앞쪽 선을 보고, 걸린 로봇이 Fleet에 막힘을 올리지 않기 때문이다. push는 하지 않았다.
 
+## 2026-10-13 · uncommitted · docs(design): 좁은 머리 규칙을 D-668 테마 버튼과 맞춘다
+
+- 변경: DESIGN.md 허용 목록 예를 Fleet `48rem`(D-658)으로, Header Budget Rule에서 테마를 접는 부가 항목에서 뺐다. Fleet 헤더 버튼 하나(D-668)이고 로봇 대시보드는 시스템 화면 설정, Pilot·games는 어둡게 고정이라 접는 표면이 없다.
+- 증거: surfaces.yaml에 Fleet 90rem 등록이 없고 console 헤더 html 4곳이 `data-theme-cycle` 버튼을 둔다.
+- gate 변화: 없음. 문서 문구만 바뀐다.
+
 ## 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
 
 - 변경: 원본·라벨·시계·profile·용도별 적격성, HF 로그인/복수 계정 연결, 프로젝트 권한과 공동 검수, 고정 revision 가져오기 및 LeRobot 검증 설계를 결정했다.
