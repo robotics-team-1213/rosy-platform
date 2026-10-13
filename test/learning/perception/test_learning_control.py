@@ -144,3 +144,39 @@ def test_unreadable_ledger_still_allows_stopping_the_validated_owner(tmp_path):
     stopped = target.action({'action': 'stop', 'version': value['version']})
     assert not stopped['active'] and not stopped['automatic']
     assert path.read_text() == 'not JSON'
+
+
+def test_http_control_requires_existing_workspace_authorization(tmp_path):
+    import threading
+    import urllib.request
+    import urllib.error
+    import review_evidence
+    from review_app import make_server
+    from test_review_app import open_store
+    from learning_control import Control
+    store = open_store(tmp_path / 'reviews')
+    workspace = review_evidence.decisions(store)['workspace_id']
+    file, home, _, _, runner = binding(tmp_path / 'owner', workspace)
+    target = Control(file, workspace, home=home, runner=runner)
+    server = make_server(store, 0, control=target)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    before = review_evidence.decisions(store)
+    try:
+        value = json.load(urllib.request.urlopen(url + '/api/learning'))
+        assert value['control']['available']
+        body = json.dumps({'action': 'start', 'version': value['control']['version']}).encode()
+        for headers in [{}, {'X-Pinky-Token': value['token'], 'Origin': 'http://evil.example'}]:
+            request = urllib.request.Request(url + '/api/learning/control', data=body, headers=headers)
+            with pytest.raises(urllib.error.HTTPError) as error: urllib.request.urlopen(request)
+            assert error.value.code == 403
+        assert not [args for args in runner.commands if args[0] != 'show']
+        request = urllib.request.Request(url + '/api/learning/control', data=body,
+            headers={'X-Pinky-Token': value['token']})
+        assert json.load(urllib.request.urlopen(request))['active']
+        with pytest.raises(urllib.error.HTTPError) as error: urllib.request.urlopen(request)
+        assert error.value.code == 409
+        assert json.load(urllib.request.urlopen(url + '/api/learning/control'))['active']
+        assert review_evidence.decisions(store) == before
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
