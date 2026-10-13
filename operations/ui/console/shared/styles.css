@@ -256,6 +256,7 @@ main {
 /* 늦게 들어오는 카메라 교정 설명이 배지를 늘려 지도를 아래로 밀지 않게 한다. */
 #map-tag { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-head .spacer { flex: 1; }
+.map-robots { display: inline-flex; align-items: center; gap: var(--gap-button-detail); white-space: nowrap; }
 /* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
 .trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
 .trail-control > summary { display: list-item; }

@@ -26,9 +26,12 @@ def test_header_ids_and_one_sheet():
     for name in DOCS:
         page, header = _header(name)
         for element_id in ("console-token", "token-save", "user-role", "password-login", "token-access",
-                           "fleet-theme", "development-badge", "online-pill", "topbar-more", "estop",
+                           "fleet-theme", "development-badge", "topbar-more", "estop",
                            "clock", "link-state"):
             assert f'id="{element_id}"' in header, (name, element_id)
+        # D-741 3: 로봇 연결 수는 앱 바가 아니라 관제 화면의 내용이다.
+        assert 'id="online-pill"' not in header, name
+        assert page.count('id="online-pill"') == (1 if name == "index.html" else 0), name
         # The old site-map/Cell identity row is gone; one id names one thing on every document.
         for retired in ('id="session"', 'id="credential"', 'id="connect"', "site-access", "cell-access"):
             assert retired not in page, (name, retired)
@@ -47,10 +50,10 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
         "identity", "status", "actions", "safety"]
     assert 'id="fleet-header-actions"' in header
     entry = re.search(r'<ui-button[^>]*id="topbar-more".*?</ui-button>', header, re.S).group(0)
-    for element_id in ("online-pill", "header-unread", "development-badge"):
+    for element_id in ("header-unread", "development-badge"):
         assert f'id="{element_id}"' in entry
     assert entry.count("<ui-button") == 1
-    assert 'data-action-icon="connect"' in entry and 'data-action-icon="notification"' in entry
+    assert 'data-action-icon="connect"' not in entry and 'data-action-icon="notification"' in entry
     assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
     controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
     assert '$("topbar-extra").prepend(inbox)' in controller

@@ -130,7 +130,10 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             role = page.locator("#user-role")
             expect(role).to_have_text("운영자", timeout=15000)  # D-540 2: Korean role, principal id in title
             expect(page.locator("#development-badge")).to_be_visible()
-            expect(page.locator("#online-pill")).to_have_text("2/3", timeout=15000)
+            if name == "console":
+                expect(page.locator('main [aria-labelledby="map-heading"] #online-pill')).to_have_text("2/3", timeout=15000)
+            else:
+                expect(page.locator("#online-pill")).to_have_count(0)
             expect(page.locator("#estop")).to_be_enabled()
             expect(page.locator("#clock")).not_to_have_text("--:--:--")
             expect(page.locator("#link-state")).to_have_text("실시간", timeout=15000)
@@ -144,7 +147,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert page.locator('[data-header-region="actions"] #fleet-theme').count() == 1
                 assert page.locator('#topbar-more ui-button').count() == 0
                 expect(page.locator('#topbar-more #development-badge')).to_have_text("개발")
-                expect(page.locator('#topbar-more')).to_have_attribute("aria-label", re.compile("상태 센터.*2/3"))
+                expect(page.locator('#topbar-more')).to_have_attribute("aria-label", re.compile("상태 센터"))
                 for value in page.locator('#topbar-more ui-tag').all():
                     expect(value).to_have_css("border-width", "0px")
                     expect(value).to_have_css("background-color", "rgba(0, 0, 0, 0)")

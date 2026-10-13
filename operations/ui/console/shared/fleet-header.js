@@ -112,7 +112,7 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
     const count = $("header-unread").textContent;
     const messages = count === "—" ? "미확인 메시지 수는 관제에서 확인" : `미확인 메시지 ${count}개`;
     const development = $("development-badge").hidden ? "" : " · 개발 연결 모드";
-    const label = `상태 센터 · 로봇 연결 ${$("online-pill").textContent} · ${messages}${development}`;
+    const label = `상태 센터 · ${messages}${development}`;
     entry.setAttribute("aria-label", label);
     entry.setAttribute("data-ui-tooltip", `${label} · 연결·권한·메시지 확인`);
   }
@@ -165,6 +165,7 @@ export function showSignedOut({fold = true, refused = true} = {}) {
 export function showFleet(fleet, robots = null) {
   $("fleet-name").textContent = fleet.name || "사이트";
   const pill = $("online-pill");
+  if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
   delete pill.dataset.locked;
   // A robot answering late (link "degraded") still counts as connected on the pill.
   const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
@@ -172,8 +173,8 @@ export function showFleet(fleet, robots = null) {
   pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
 }
 
-// Pages without their own state poll (설치·보정, 현장 지도, Cell) read the count every 5 s. A 401/403 leaves
-// the pill to the page's lock words; anything else says the server is missing.
+// Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
+// and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   async function read() {
     try {
@@ -182,10 +183,6 @@ export function watchFleet(request, {every = 5000, interval = setInterval} = {})
       showFleet(state.fleet, state.robots);
     } catch (error) {
       noteLink(error);
-      if (error.name === "AbortError" || error.status === 401 || error.status === 403) return;
-      const pill = $("online-pill");
-      pill.textContent = "Fleet 서버 없음";
-      pill.setAttribute("status", "crit");
     }
   }
   read();
