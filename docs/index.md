@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 91995a99e · OMX SIM 준비 검증·보류 기록
 - 2026-10-14 · uncommitted · OMX 시뮬레이션 경로 조사와 준비
 - 2026-10-14 · 39817a51e · docs: 학습 수집·영상·저장 개선 범위
 - 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
 - 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
-- 2026-10-14 · uncommitted · OMX native imitation preparation tools

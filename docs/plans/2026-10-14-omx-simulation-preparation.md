@@ -58,6 +58,15 @@ Isaac은 학습 환경 확장에 유용하지만 OMX controller/camera/task가 �
   이미지 build·live ROS-SIM은 아직 미확인이다. 자원 기준을 낮추지 않는다.
 - OMX-F/L은 `prepare_omx_urdf.py`로 vendor manifest·관절·mesh 경로 검사 후
   X: 세션 export에 실제 URDF를 생성했다. Isaac SDK/USD import를 실행한 것은 아니다.
+- 구현 commit `91995a99e`의 새 Compose·기존 OMX·문서 배치·harness 원격 시험은
+  129 passed, NEW 0이다. 독립 리뷰의 새 터미널 SHA 누락과 build 자원 상한
+  오해를 수정한 뒤 추가 소스 차단 사항 없음으로 재검토했다.
+- 모델 PC의 Docker version/image 읽기 요청은 `/var/run/docker.sock` 접근 거부로
+  실패했다. 설치·그룹·권한을 변경하지 않았다. 운영자가 준비한 비현장 build
+  환경과 사용 가능한 Docker context, 여유 자원을 확인한 뒤 live 실행을 재개한다.
+- 원격 로그: `X:/DevTemp/projects/rosy-platform/2026-10-14--035840--omx-sim--9a5dea/logs/preparation/run-1.txt`.
+  Compose 해석 결과와 누락 SHA 거절은 같은 세션 `evidence/`, 검사한 URDF는 `export/`에 있다.
+  URDF의 mesh URI는 생성 host의 절대 경로이므로 다른 host에서는 그 checkout에서 재생성한다.
 - 이전 [6개 Gazebo 시연·ACT 평가](../validation/omx-diverse-sim-act-2026-10-04.md)는
   재사용 가능한 설계 근거다. 당시 ACT가 상수 기준보다 나빠 reject였으며 현재
   commit의 새 실행 성공이나 정책 집기 성공으로 재표시하지 않는다.
