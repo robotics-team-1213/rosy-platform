@@ -5,7 +5,7 @@ let workspace, busy=false, checkedAt=0;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
 const states={running:'진행 중',reading:'자료 읽는 중',training:'학습 중',failed:'실패',rejected:'품질 거절',reject:'품질 거절',
   ready:'자료 준비 완료',done:'완료',pass:'보고서 통과',research_only:'연구 결과',research_exported:'연구 결과 저장됨',
-  offline_only:'오프라인 평가 결과',not_eligible:'승격 대상 아님',candidate_evaluated:'후보 평가 완료',HOLD:'적용 보류'};
+  offline_only:'오프라인 평가 결과',not_eligible:'승격 대상 아님',candidate_evaluated:'후보 평가 완료',HOLD:'적용 보류',held:'승인·입력 조건 대기',request_published:'학습 요청 준비됨',already_completed:'같은 자료 처리 완료'};
 const nextActions={perception:'보고서 상태와 단계별 근거를 확인하고 학습 담당자에게 전달하세요. 로봇 실행 수용은 별도입니다.',
   raw:'원본 검증 보고서와 학습·평가 세션 분리를 확인하세요.',
   pinky:'이동 속도와 회전 속도 평가를 각각 확인하세요. 로봇 실행 수용은 별도입니다.',
@@ -13,7 +13,9 @@ const nextActions={perception:'보고서 상태와 단계별 근거를 확인하
   policy:'산출물 파일과 승격 증거를 정책 원장에서 확인하세요.',
   isaac:'환경과 과제 설정이 맞는지 독립 시뮬레이션에서 확인하세요.',
   segmentation:'픽셀 검수 결과를 확인하세요. 객체 박스 승인과 별개입니다.'};
-const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.'};
+const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.',no_approved_masks:'아직 사람이 승인한 픽셀 마스크가 없습니다.',
+  'work busy: GPU compute job':'다른 GPU 작업이 끝나면 자동으로 다시 확인합니다.',
+  'work busy: GPU utilization':'GPU 사용 중입니다. 자동으로 다시 확인합니다.'};
 function readableError(error) {
   const message=error.message||String(error);
   if(message.includes('no supported report')) return '선택한 작업 종류에 맞는 결과 파일이 없습니다.';
@@ -57,8 +59,9 @@ function summary(item) {
   if(!reports.length) return {label:'파일 확인 필요',attention:true};
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
-  if(reports.some(row=>row.status==='changed')) return {label:'결과 변경',attention:true};
+  if(reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
   if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
+  if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
   return {label:states[status]||'보고서 확인',attention:false};
 }
@@ -113,8 +116,8 @@ function render() {
         }
       }
     }
+    for(const reason of new Set(item.reports.flatMap(report=>report.reasons||[]))) text(card,'p',reasons[reason]||reason,'job-reason');
     for(const report of item.reports) {
-      for(const reason of report.reasons||[]) text(card,'p',reasons[reason]||reason,'job-reason');
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
       if(report.error) text(card,'p',report.error,'job-reason');
     }
