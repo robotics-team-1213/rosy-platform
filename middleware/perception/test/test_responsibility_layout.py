@@ -2,6 +2,7 @@
 
 from pathlib import Path, PurePosixPath
 import csv
+import importlib
 import shutil
 import subprocess
 import sys
@@ -13,17 +14,46 @@ import xml.etree.ElementTree as ET
 PACKAGE = Path(__file__).resolve().parents[1]
 MIDDLEWARE = PACKAGE.parent
 SOURCE_MODULES = {
+    "nodes/sensor_provider.py": "control.sensor_provider",
+    "nodes/recording.py": "control.recording",
+    "nodes/camera_detect_node.py": "control.camera_detect_node",
+    "localization/loc_assist.py": "control.loc_assist",
+    "localization/loc_assist_node.py": "control.loc_assist_node",
+    "localization/localization_node.py": "control.localization_node",
+    "graph_health/watch.py": "control.watch",
+    "graph_health/watch_node.py": "control.watch_node",
+    "front_camera/object_observation/object_detector.py": "control.object_detector",
+    "front_camera/object_observation/object_detector_node.py": "control.object_detector_node",
+    "sensors/line_observation/ir_overlay.py": "control.ir_overlay",
+    "sensors/line_observation/core_law_input.py": "control.core_law_input",
+    "sensors/line_observation/route_context_input.py": "control.route_context_input",
+    "sensors/line_observation/route_followers.py": "control.route_followers",
+    "sensors/line_observation/line_observer_node.py": "control.line_observer_node",
+    "snapshots/capture_trigger.py": "control.capture_trigger",
+    "snapshots/capture_trigger_node.py": "control.capture_trigger_node",
     "sensors/sensing/lidar.py": "control.sensing.lidar",
-    "vision/perception/lane.py": "control.sensing.perception.lane",
-    "vision/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
-    "../drive/safety/command_gate.py": "control.control.command_gate",
+    "front_camera/perception/lane.py": "control.sensing.perception.lane",
+    "front_camera/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
+    "../drive/motion_limits/command_gate.py": "control.control.command_gate",
     "../drive/recovery/recover.py": "control.control.recover",
     "../drive/tracking/path_follow.py": "control.control.path_follow",
     "../drive/calibration/calibration.py": "control.control.calibration",
     "../drive/planning/grid/goals.py": "control.planning.goals",
-    "../drive/safety/adapter/gate.py": "control.safety.gate",
+    "../drive/motion_limits/adapter/gate.py": "control.safety.gate",
     "../drive/tracking/wander/motion.py": "control.wander.motion",
 }
+
+
+def test_judgment_imports_resolve_to_one_canonical_source():
+    for relative, module in SOURCE_MODULES.items():
+        if module.count('.') != 1:
+            continue
+        assert not (PACKAGE / 'control' / Path(relative).name).exists()
+        if module.endswith('_node'):
+            continue
+        loaded = importlib.import_module(module)
+        assert Path(loaded.__file__).resolve() == (PACKAGE / relative).resolve()
+        assert loaded is importlib.import_module(module)
 
 
 def _run(*args, cwd):
@@ -41,10 +71,10 @@ def test_sensor_and_drive_sources_have_distinct_semantic_holders():
 
 def test_ros_source_audit_includes_moved_adapter_once(tmp_path):
     output = tmp_path / "endpoints.csv"
-    _run(str(PACKAGE / "tools/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
+    _run(str(PACKAGE / "../../tools/validation/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
     with output.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
-    assert any(row["source"] == "middleware/drive/safety/adapter/node.py"
+    assert any(row["source"] == "middleware/drive/motion_limits/adapter/node.py"
                for row in rows)
     keys = [(row["source"], row["line"], row["kind"], row["expression"]) for row in rows]
     assert len(keys) == len(set(keys))
@@ -56,7 +86,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
     source = tmp_path / "source/middleware/perception"
     shutil.copytree(PACKAGE, source, ignore=shutil.ignore_patterns(
         "__pycache__", "*.egg-info", "build", "dist"))
-    for relative in ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
+    for relative in ("motion_limits", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
         shutil.copytree(MIDDLEWARE / "drive" / relative,
                         source.parent / "drive" / relative)
     dist = tmp_path / "dist"
@@ -74,10 +104,15 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         names = wheel.namelist()
         for module in SOURCE_MODULES.values():
             assert names.count(module.replace(".", "/") + ".py") == 1
+        for relative, module in SOURCE_MODULES.items():
+            assert wheel.read(module.replace('.', '/') + '.py') == (PACKAGE / relative).read_bytes()
+        for source in (PACKAGE / 'nodes').glob('*.py'):
+            assert names.count('control/' + source.name) == 1
+            assert wheel.read('control/' + source.name) == source.read_bytes()
         for name in ('control_node', 'goal_node', 'wander_node', 'safety_node'):
             assert names.count('control/' + name + '.py') == 1
             assert not (PACKAGE / 'control' / (name + '.py')).exists()
-        for group in ("safety", "recovery", "tracking", "calibration"):
+        for group in ("motion_limits", "recovery", "tracking", "calibration"):
             for path in (MIDDLEWARE / "drive" / group).glob("*.py"):
                 assert names.count("control/control/" + path.name) == 1
                 assert sum(name.startswith("control/control/") and name.endswith("/" + path.name)
@@ -105,6 +140,9 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         "e.value == 'control.sensor_provider:PROVIDER' for e in entries), ('provider entry point', entries); "
         "root = pathlib.Path(sys.argv[1]).resolve(); "
         "modules = ['control.sensing.lidar', 'control.sensing.perception.lane', "
+        "'control.loc_assist', 'control.watch', 'control.object_detector', "
+        "'control.ir_overlay', 'control.core_law_input', 'control.route_context_input', "
+        "'control.route_followers', 'control.capture_trigger', "
         "'control.control.recover', 'control.planning.goals', "
         "'control.sensing.perception.learned.road_observation', 'core_common.observation']; "
         "paths = {m: pathlib.Path(importlib.import_module(m).__file__).resolve() for m in modules}; "

@@ -45,6 +45,9 @@ MUST_IGNORE = [
     # tracked form is the sd template beside the bundle tooling.
     "private/tailscale-auth-key.txt",
     "private/lab-hosts.json",
+    "learning-collaboration.json",
+    "learning-accounts.key",
+    "private/learning/oauth-client-secret",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
@@ -60,9 +63,10 @@ MUST_TRACK = [
     "deploy/robot/pinky_pro/sd/provision.schema.json",
     "deploy/robot/pinky_pro/sd/tailscale-auth-key.template.txt",
     "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
-    "operations/vision/signal_observer/config.example.json",
+    "operations/signal_observation/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
     "tools/remote/hosts.example.json",
+    "learning/curation/perception/learning-collaboration.example.json",
 ]
 
 # Live lab endpoints. Historical ADR, plan, validation, assessment, and log

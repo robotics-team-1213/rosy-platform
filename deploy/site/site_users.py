@@ -24,7 +24,7 @@ from pathlib import Path
 
 import yaml
 
-# File-level contract mirrors fleet/server/site_users.py (D-276). `service`
+# File-level contract mirrors fleet/server/auth/site_users.py (D-276). `service`
 # rows exist for non-operator automation (Cell workspace proposals) and are
 # managed by that flow, not provisioned by hand here.
 FILE_ROLES = frozenset({"viewer", "operator", "policy-admin", "service", "ai_observer"})

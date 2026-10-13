@@ -13,18 +13,18 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    task_dispatch = (ROOT / "operations/fleet/fleet/server/task_dispatch_routes.py").read_text(
+    task_dispatch = (ROOT / "operations/fleet/fleet/server/ledger/task_dispatch_routes.py").read_text(
         encoding="utf-8")
     intent = (ROOT / "operations/fleet/fleet/server/intent_routes.py").read_text(
         encoding="utf-8")
     execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
-    web_root = ROOT / "operations/ui/console"
+    web_root = ROOT / "operations/site_ui/console"
     web = (web_root / "console.js").read_text(encoding="utf-8")
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.221" in reference
+    assert "**Version:** v1.223" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -76,7 +76,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
 
 
 def test_task_path_does_not_enable_automatic_policy_dispatch_by_default():
-    source = (ROOT / "operations/fleet/fleet/server/task_service.py").read_text(encoding="utf-8")
+    source = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(encoding="utf-8")
     plan = (ROOT / "docs/plans/2026-09-26-middleware-device-server-contract-integration.md").read_text(
         encoding="utf-8")
 
@@ -91,7 +91,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.221" in reference
+    assert "**Version:** v1.223" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (
@@ -131,9 +131,9 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
 def test_site_estop_audit_failure_boundary_is_documented():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    site_auth = (ROOT / "operations/fleet/fleet/server/site_auth.py").read_text(
+    site_auth = (ROOT / "operations/fleet/fleet/server/auth/site_auth.py").read_text(
         encoding="utf-8")
-    task_dispatch = (ROOT / "operations/fleet/fleet/server/task_dispatch_routes.py").read_text(
+    task_dispatch = (ROOT / "operations/fleet/fleet/server/ledger/task_dispatch_routes.py").read_text(
         encoding="utf-8")
 
     assert "still sends the stop fanout if the audit store" in reference
@@ -147,8 +147,8 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
         encoding="utf-8")
     adr = (ROOT / "docs/adr/D-318-site-camera-preview-rectification.md").read_text(
         encoding="utf-8")
-    vision = (ROOT / "operations/vision/rosy_vision/ingest.py").read_text(encoding="utf-8")
-    ui = (ROOT / "operations/ui/console/install.html").read_text(encoding="utf-8")
+    vision = (ROOT / "operations/overhead/rosy_vision/ingest.py").read_text(encoding="utf-8")
+    ui = (ROOT / "operations/site_ui/console/install.html").read_text(encoding="utf-8")
 
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr
     assert "### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)" in reference
@@ -165,7 +165,7 @@ def test_policy_evidence_contract_is_governed_together():
         encoding="utf-8")
     schema = (ROOT / "contracts/foundation/core_common/protocol/policy_evidence.py").read_text(
         encoding="utf-8")
-    task_service = (ROOT / "operations/fleet/fleet/server/task_service.py").read_text(
+    task_service = (ROOT / "operations/fleet/fleet/server/ledger/task_service.py").read_text(
         encoding="utf-8")
     store = (ROOT / "operations/fleet/fleet/server/policy_evidence.py").read_text(
         encoding="utf-8")

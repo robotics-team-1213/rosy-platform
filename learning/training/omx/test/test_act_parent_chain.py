@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx/test',
-    'middleware/execution/local/test', 'middleware/devices/omx/adapter/test', 'operations/fleet')]
+    'middleware/robot_execution/local/test', 'middleware/devices/omx/adapter/test', 'operations/fleet')]
 from test_act_owner_capture import case, infer_for_owner
 from test_policy_runtime_binding import runtime_methods
 from native_parent_chain import submit_parent, export_parent

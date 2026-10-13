@@ -1071,3 +1071,11 @@
 - 변경: 시험만 추가한다. 카메라가 역산한 추종 오차를 실제 `LineFollowManager._steer`에 넣으면, Pinky 0.10/2.0을 포함한 불러온 법칙에서 각속도/선속도가 기하 곡률과 같다. 공백 구간의 ExpectedPath도 같은 인스턴스 법칙을 쓴다.
 - 증거: `test_line_follow_drivable_law.py`. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-14 · 06ce5334b · enforce 어댑터가 stale_hold_s를 안전 관리자에 넘긴다 (D-400 4항, API v1.223)
+
+- 변경: `bridge/control_sensor_adapter.py::bind_safety`가 enforce에서 `bind_control_policy(policy, stale_hold_s=...)`로 묶는다. shadow와 off는 그대로다. `safety_policy_status.py`가 enforce일 때 `hold {count, reason}`를 싣고 `node.py`가 안전 관리자를 넘긴다.
+- 증거: `test_control_sensor_adapter.py`(설정값 전달, shadow·off 미전달, 실제 `SafetyManager` 바인딩), `test_control_absorption_safety.py`·`test_control_policy_link.py`(HOLD, 재개, 2 s 뒤 래치, 바로 래치하는 경우), `test_safety_policy_status.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM과 장치 수용은 미검증이다.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 시험의 가짜 safety 둘(`bind_control_policy(self, policy)`)은 새 키워드 인자를 받도록 고쳐야 했다.

@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.221."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.223."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def _dashboard_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "robot"
+    return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "robot"
 
 
 def _pilot_root() -> Path:
@@ -109,14 +109,14 @@ def _pilot_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "pilot"
+    return Path(__file__).resolve().parents[5] / 'middleware' / 'robot_ui' / "pilot"
 
 
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.221)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.223)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)

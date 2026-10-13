@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.execute import ends_at_place, plan_body
 from fleet.routing.graph import build_graph
 from fleet.routing.trip import PlanRequest, plan_trip
@@ -237,7 +237,7 @@ def test_a_new_lap_drives_its_bends_again():
     runner, store, fleet = _setup(ids=("a",))
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
     live, _ = _to_tail(runner, store, fleet, "a")
-    live.bends_done.add("B_SW")
+    live.bends_done.add((0, "B_SW"))
     _ticks(runner, fleet)
     assert runner.view("a")["lap"] == 2 and live.bends_done == set()
 

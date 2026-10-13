@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
 from fleet.localization.lane_compliance import ACT, OK, UNKNOWN, LaneComplianceConfig
-from fleet.localization.map_pose import MapPose, MapPoseConfig, MapPoseTracker, OdomSample
+from rosy.world.state.projections.map_pose import MapPose, MapPoseConfig, MapPoseTracker, OdomSample
 from fleet.routing.graph import build_graph
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole

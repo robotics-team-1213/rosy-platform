@@ -33,17 +33,17 @@ bundle is a calibration-reference asset only, not the source of runtime maps.
 
 ### Testing Requirements
 
-None. Loaded by `../tools/gz/` rigs.
+None. Loaded by `../../../tools/sim/gazebo/` rigs.
 
 ### Common Patterns
 
-One world file at this level; generated maze SDF also exists under `../tools/gz/pinky_maze.sdf`.
+One world file at this level; generated maze SDF also exists under `../../../tools/sim/gazebo/pinky_maze.sdf`.
 
 ## Dependencies
 
 ### Internal
 
-- `../tools/gz/`
+- `../../../tools/sim/gazebo/`
 
 ### External
 

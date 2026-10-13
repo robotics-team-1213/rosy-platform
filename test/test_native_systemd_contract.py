@@ -533,13 +533,13 @@ PROGRAM_SOURCES = {
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
-                            "middleware/perception/control/camera_detect_node.py",
-                            "middleware/perception/control/road_observer_node.py",
+                            "middleware/perception/nodes/camera_detect_node.py",
+                            "middleware/perception/nodes/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
-                            "middleware/perception/control/ir_overlay.py",
+                            "middleware/perception/sensors/line_observation/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
-                            "middleware/perception/control/pilot_recorder_node.py",
-                            "middleware/perception/control/pilot_recording.py"],
+                            "middleware/perception/nodes/pilot_recorder_node.py",
+                            "middleware/perception/nodes/pilot_recording.py"],
     "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
@@ -547,13 +547,13 @@ PROGRAM_SOURCES = {
                           "contracts/foundation/core_common/robot_state.py",
                           # D-433: the situation table and the face-inputs reader.
                           "contracts/foundation/core_common/face_screen.py",
-                          "middleware/ui/face/emotion/info_screen.py",
-                          "middleware/ui/face/emotion/rosy_lcd.py",
+                          "middleware/robot_ui/face/emotion/info_screen.py",
+                          "middleware/robot_ui/face/emotion/rosy_lcd.py",
                           "middleware/devices/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
     "rosy-boot-display.service": ["contracts/foundation/core_common/robot_state.py",
-                                  "middleware/ui/face/emotion/rosy_lcd.py",
+                                  "middleware/robot_ui/face/emotion/rosy_lcd.py",
                                   "middleware/devices/pinky/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
@@ -636,6 +636,12 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
     own = ROOT / package_root
+    modules = {}
+    if package == 'control':
+        from runpy import run_path
+        inventory = run_path(str(own / 'test/control_sources.py'))['control_sources']()
+        modules = {('control.' + name.replace('/', '.')).removesuffix('.py').removesuffix('.__init__'): path
+                   for name, path in inventory}
     for source in _source_files(importer):
         # The package's own imports are not the importer's: control sits inside
         # src/core since a93d5188, and would otherwise pull in all of itself.
@@ -646,6 +652,9 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
             if parts[0] != package:
                 continue
             for depth in range(len(parts), 0, -1):
+                module = '.'.join(parts[:depth])
+                if module in modules:
+                    found.add(modules[module])
                 base = ROOT / package_root / Path(*parts[:depth])
                 for candidate in (base.with_suffix(".py"), base / "__init__.py"):
                     if candidate.is_file():
@@ -1066,8 +1075,8 @@ def test_core_program_scan_follows_imports_into_the_control_package():
     assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
                 for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
-    assert "middleware/perception/control/sensor_provider.py" in resolved
-    assert "middleware/perception/control/calibration_storage.py" in resolved
+    assert "middleware/perception/nodes/sensor_provider.py" in resolved
+    assert "middleware/perception/nodes/calibration_storage.py" in resolved
 
 
 # D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.

@@ -323,7 +323,7 @@ def fingerprint(node: ast.AST) -> str:
 PINNED_RELAYS = {
     ("services/core_features/docking/manager.py", "DockingManager._emit"):
         "8ed6498003123b06",
-    ("services/core_features/safety/manager.py", "SafetyManager._emit"):
+    ("services/core_features/safety_gate/manager.py", "SafetyManager._emit"):
         "e0aca301e45601ff",
     ("services/core_features/power/battery.py", "BatteryMonitor._emit_all"):
         "fdb020d71a91a47a",

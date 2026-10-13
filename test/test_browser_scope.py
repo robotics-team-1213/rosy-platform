@@ -6,35 +6,41 @@ import browser_scope
 
 
 def test_fleet_web_change_selects_fleet_browser_tests():
-    found = browser_scope.targets(["operations/ui/console/site-map.js"])
+    found = browser_scope.targets(["operations/site_ui/console/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found
     assert "operations/fleet/test/test_start_point_browser.py" in found
     assert "operations/fleet/test/test_site_map_browser.py" in found
     assert "operations/fleet/test/test_cell_app_browser.py" in found
-    assert not any(t.startswith("middleware/ui/pilot/") for t in found)
+    assert not any(t.startswith("middleware/robot_ui/pilot/") for t in found)
 
 
 def test_shared_web_change_reaches_every_surface_family():
     found = browser_scope.targets(["shared/web/components.css"])
     for expected in ("shared/web/test/test_theme_browser.py", "test/test_dashboard_browser.py",
-                     "test/test_fleet_console_browser.py", "middleware/ui/pilot/test/test_pilot_browser.py"):
+                     "test/test_fleet_console_browser.py", "middleware/robot_ui/pilot/test/test_pilot_browser.py"):
         assert expected in found
 
 
 def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothing():
     assert browser_scope.targets(["test/test_games_board_browser.py"]) == ["test/test_games_board_browser.py"]
-    assert browser_scope.targets(["docs/logs.md", "middleware/perception/control/goals.py"]) == []
+    assert browser_scope.targets(["docs/logs.md", "middleware/drive/planning/grid/goals.py"]) == []
 
 
 def test_windows_separators_are_accepted():
-    assert browser_scope.targets(["middleware\\ui\\pilot\\styles.css"]) == browser_scope.targets(
-        ["middleware/ui/pilot/styles.css"])
+    found = browser_scope.targets(["middleware\\robot_ui\\pilot\\styles.css"])
+    assert found and found == browser_scope.targets(["middleware/robot_ui/pilot/styles.css"])
 
 
 def test_every_scope_target_exists():
     for patterns in browser_scope.SCOPE.values():
         for pattern in patterns:
             assert browser_scope._expand(pattern), pattern
+
+
+def test_every_scope_prefix_exists():
+    """A prefix left behind by a folder move matches nothing and selects no test."""
+    for prefix in browser_scope.SCOPE:
+        assert (browser_scope.ROOT / prefix).exists(), prefix
 
 
 def test_a_listed_non_browser_named_test_selects_itself():
@@ -46,6 +52,8 @@ def test_shared_web_reaches_review_smoke_and_core_console():
     found = browser_scope.targets(["shared/web/ui.js"])
     assert "test/learning/perception/test_review_app_smoke.py" in found
     assert "middleware/core/api/test/test_d283_console_browser.py" in found
+    assert "test/test_surface_shell_browser.py" in found
+    assert "test/test_surface_shell_browser.py" in browser_scope.targets(["middleware/robot_ui/robot/web/app.js"])
 
 
 def test_empty_selection_exits_3_without_targets(capsys):

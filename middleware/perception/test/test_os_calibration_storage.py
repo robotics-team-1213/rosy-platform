@@ -13,7 +13,7 @@ from control.calibration_record import runtime_calibration_path
 
 
 def node_method(name):
-    path = Path(__file__).parents[1] / 'control/calib_node.py'
+    path = Path(__file__).parents[1] / 'nodes/calib_node.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CalibNode')
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)

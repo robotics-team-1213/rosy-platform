@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.teach import TeachRefused, append_edge, candidates, keep, simplify
 from fleet.site_map import SiteMap
 

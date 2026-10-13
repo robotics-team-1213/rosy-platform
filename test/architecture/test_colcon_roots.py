@@ -57,7 +57,7 @@ EXEMPT = {
     "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
     "contracts/foundation/core_common/profile.py": "error-message text",
-    "middleware/perception/control/web_node.py": "docstring",
+    "middleware/perception/nodes/web_node.py": "docstring",
     "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
@@ -191,9 +191,9 @@ def test_ros_package_names_are_frozen():
     assert set(locations) == FROZEN_ROS_PACKAGES
     # Each name has exactly one source path (supersedes test_target_layout's uniqueness check).
     assert {name: paths for name, paths in locations.items() if len(paths) != 1} == {}
-    # operations/ui/cam is the Rosy Cam Android app: colcon skips it (COLCON_IGNORE) and it
+    # operations/site_ui/cam is the Rosy Cam Android app: colcon skips it (COLCON_IGNORE) and it
     # holds no package.xml, so it adds no name. The walk above does not honour
     # COLCON_IGNORE because CI drops one into gz_sim before the root suite runs.
-    cam = ROOT / "operations" / "ui" / "cam"
+    cam = ROOT / 'operations' / 'site_ui' / "cam"
     assert (cam / "COLCON_IGNORE").is_file()
     assert not list(cam.rglob("package.xml"))

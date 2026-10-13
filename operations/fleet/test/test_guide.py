@@ -7,7 +7,7 @@ import math
 
 from core_common.robot_body import PINKY_PRO
 from fleet.guide.situation import GuideConfig, add_near, lane_context, situation, uncertainty_m
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.graph import build_graph
 from fleet.server.guide_service import GuideService
 from test_blocks import _demo_map

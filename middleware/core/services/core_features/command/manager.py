@@ -412,6 +412,10 @@ class CommandManager:
                 or (candidate is not None and candidate is not self._autonomous_input(source))):
             return ZERO
         if output is None:
+            if self._safety.policy_hold:
+                # D-400 4: a sensor gap younger than stale_hold_s. Zero now, no latch, no mode
+                # change; the next tick asks again and a gap that outlasts the hold latches below.
+                return ZERO
             # Latch first: whatever the mode change sets in motion, the e-stop
             # is already set.
             self._safety.trigger_estop('control:' + self._safety.policy_reason)

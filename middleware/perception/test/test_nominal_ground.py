@@ -42,6 +42,6 @@ def test_payload_labels_nominal_camera_evidence_only():
 
 
 def test_node_wires_nominal_ground_behind_read_only_opt_in():
-    text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    text = (PKG / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)" in text
     assert "nominal_ground_plane(" in text and "ground=(self._ground_label()" in text
