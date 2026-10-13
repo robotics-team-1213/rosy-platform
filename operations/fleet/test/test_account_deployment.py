@@ -38,8 +38,9 @@ def service(tmp_path):
         {"resource": "robot:r1", "capabilities": ["robot.read"]}])
     value = cookie(sessions)
     authority = AccountAuthority(sessions.path, issuer=ISSUER, private_key=pem, key_id="key-1",
-        clients=data["clients"], resolve_family=lambda db, family: sessions.context_by_family(family, db=db),
-        revoke_family=lambda db, family: sessions.revoke_family(family, db=db))
+                                 clients=data["clients"],
+                                 resolve_family=lambda db, family: sessions.context_by_family(family, db=db),
+                                 revoke_family=lambda db, family: sessions.revoke_family(family, db=db))
     return authority, sessions, value
 
 
@@ -71,6 +72,17 @@ def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
     path, data, _ = config(tmp_path)
     path.write_text(json.dumps({**data, "allow_all": True}))
     with pytest.raises(ValueError):
+        load_account_config(path)
+
+
+def test_authority_configuration_rejects_public_key_before_activation(tmp_path):
+    from fleet.server.account_config import load_account_config
+    from pathlib import Path
+    path, data, _ = config(tmp_path)
+    public = Ed25519PrivateKey.generate().public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    Path(data["private_key_file"]).write_bytes(public)
+    with pytest.raises(ValueError, match="private"):
         load_account_config(path)
     path.write_text(json.dumps(data))
     from pathlib import Path
