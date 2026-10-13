@@ -296,7 +296,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);
     if (unbounded) {
       const boundNode = tag(unbounded.word, unbounded.kind);
-      boundNode.dataset.ruleM = robot.rule_m.reason || "";
       boundNode.title = unbounded.text;
       head.appendChild(boundNode);
     }

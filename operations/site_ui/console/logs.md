@@ -215,3 +215,9 @@
 - 변경: `queues.js` `attentionItems`가 `robot.rule_m.state === "unbounded"`일 때 주의 행 하나(`: 한도 없는 움직임 — 관제가 끊겨도 로봇이 계속 갑니다 (<이유>)`)를 낸다. `roster.js` 카드는 연결 태그 자리 옆에 `한도 없음` 태그를 붙인다. 이유 글은 `link-tag.js` `ruleMTag` 한 곳에 있다. 새 칸·새 클래스·인라인 스타일은 없다.
 - 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과, `test_console_queues_contract.py` 원격 통과. 브라우저 시험과 화면 확인 없음.
 - gate 변화: 없음.
+
+## 2026-10-14 · ba11d856d · fix(fleet): 규칙 M 카드 글과 이유 정리 (검토 반영)
+
+- 변경: 카드 태그 글을 `정지 한도 없음`으로 바꿨다. 이유는 `hold_back`·`no_goal_lease`·`leg_unknown` 셋이다. `ruleMTag`의 쓰지 않는 `reason` 값과 카드의 `data-rule-m`을 지웠다. 오프라인 로봇은 서버가 판정을 주지 않아 주의 행도 카드 태그도 없다.
+- 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과. 브라우저 시험과 화면 확인 없음.
+- gate 변화: 없음.

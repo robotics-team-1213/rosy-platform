@@ -169,11 +169,6 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
         refresh_s=1.0, max_age_s=5.0)
     lane = getattr(app.state, "lane_compliance", None)
-    # D-550 8 / D-760 3: Rule M reads a paired robot's SAF-003 policy, at most once per 30 s.
-    # Three missed reads and the kept policy is unknown again.
-    policy_display = app.state.safety_policy_display = CapabilityDisplay(
-        console._clients, console._clock, read_method="safety_state", refresh_s=30.0, max_age_s=90.0)
-
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
@@ -198,17 +193,12 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         # D-550 8 / D-760 3 stage 1: warn only. The verdict is shown, nothing is refused.
         runner = getattr(app.state, "trip_runner", None)
         trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}
-        followers = console._formation_members()
-        paired = [row for row in rows if row.get("gather_source") == "hub"]
-        policies = dict(zip((row["robot_id"] for row in paired), await asyncio.gather(
-            *(policy_display.shown(row["robot_id"]) for row in paired))))
         for row in rows:
             robot_id = row["robot_id"]
-            row["rule_m"] = rule_m.verdict(
-                trip=trips.get(robot_id), leg=runner.leg_mode(robot_id) if robot_id in trips else None,
-                follower=robot_id in followers, goal=row.get("goal"),
-                navigation=(row.get("state") or {}).get("navigation"), gather_source=row.get("gather_source"),
-                fleet_loss_policy=(policies.get(robot_id) or {}).get("fleet_loss_policy"))
+            if row["online"]:  # an offline row already says the link is down
+                row["rule_m"] = rule_m.verdict(
+                    trip=trips.get(robot_id), leg=runner.leg_mode(robot_id) if robot_id in trips else None,
+                    goal=row.get("goal"), navigation=(row.get("state") or {}).get("navigation"))
         return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
