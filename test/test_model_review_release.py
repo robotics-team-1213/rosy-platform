@@ -114,6 +114,7 @@ def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
 def test_retained_legacy_release_reactivation_roundtrip_preserves_code_state_and_receipts(tmp_path, monkeypatch):
     source = tmp_path / "source"
     source_tree(source)
+    (source / release.APP).write_text("parser.add_argument('--decisions-port')", encoding='utf-8')
     state = tmp_path / "state"
     state.mkdir()
     database = state / "reviews.sqlite3"
