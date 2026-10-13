@@ -72,6 +72,24 @@ def test_refuses_state_inside_release_source(tmp_path):
         release.check_source(source, tmp_path / "root", source / "state")
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
+def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
+    root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
+    (state/'learning-control.json').write_text('{}')
+    old=root/'releases/old'; new=root/'releases/new'
+    source_tree(old); source_tree(new)
+    (new/release.APP).write_text("parser.add_argument('--learning-control')")
+    (root/'current').symlink_to(new)
+    unit=tmp_path/'unit'
+    unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
+    monkeypatch.setattr(release,'run_systemctl',lambda *args:None)
+    monkeypatch.setattr(release,'check_live',lambda *args:None)
+    release.install(None,'old',root,None,None,'127.0.0.1',8774,unit)
+    assert '--learning-control' not in unit.read_text()
+    release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
+    assert f'--learning-control {state}/learning-control.json' in unit.read_text()
+
+
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
     source = tmp_path / "source"
     source_tree(source)
