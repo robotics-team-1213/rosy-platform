@@ -648,3 +648,11 @@
 - 변경: 기존 NativeReceipts에 실제 owner 잠금을 nonblocking으로 얻어 immutable receipt만 반환하는 capture를 추가한다. 경합은 명시적 실패이며 unlocked lookup이나 transport 조회가 없다.
 - 증거: 실제 owner 잠금 경합 RED 5건 후 safety/native owner·구조·설치 패키지 원격 exit 0/NEW 0. native 크기 단위 117로 기존 예산을 유지한다.
 - gate 변화: SOURCE 회귀 근거 추가. 배포·장치·현장 수용은 수행하지 않았다.
+
+## 2026-10-14 · 06ce5334b · safety_policy.hold와 stale_hold_s 주석 (D-400 4항, API v1.223)
+
+- 변경: `SafetyPolicyHold`와 `SafetyPolicyStatus.hold`(선택, enforce에서만). `rosy_default.yaml`의 `stale_hold_s` 주석이 "reserved"가 아니라 enforce HOLD를 설명한다. 값은 그대로 2.0이다.
+- 증거: `test_safety_policy_status.py`. `schemas.py`는 1340줄에서 1348줄이고 기록된 1389줄 한도 안이다. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-400 개정(2026-10-14).
+- 교훈: 없음.
