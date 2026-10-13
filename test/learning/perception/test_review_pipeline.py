@@ -312,7 +312,7 @@ def test_no_actual_mask_approval_holds_before_source_or_companion_reads(tmp_path
     assert not list(requests.glob('*.json'))
 
 
-def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypatch):
+def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypatch, capsys):
     import runpy
     import time
     from test_review_authority import current as pending
@@ -328,7 +328,15 @@ def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypat
     file.write_text(json.dumps({'cycle': config, 'review': settings}, default=str))
     out = tmp_path / 'cli-state'
     monkeypatch.setattr(sys, 'argv', ['review_pipeline.py', str(file), '--out', str(out), '--once'])
+    original = learning_cycle.run_once
+    def noisy_run(*args, **kwargs):
+        print('epoch progress from trainer')
+        return original(*args, **kwargs)
+    monkeypatch.setattr(learning_cycle, 'run_once', noisy_run)
     runpy.run_path(review_pipeline.__file__, run_name='__main__')
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)['review_autobuild']['status'] == 'held'
+    assert 'epoch progress from trainer' in captured.err
     assert json.loads((out / 'state.json').read_text())['review_autobuild']['blockers'] == ['no_approved_masks']
     assert not list(requests.glob('*.json'))
 
