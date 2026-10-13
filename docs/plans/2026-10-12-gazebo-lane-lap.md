@@ -475,7 +475,14 @@ Leg1–13b는 모두 0.29–0.37m에서 멈췄다. 정지 사유를 하나씩 �
 
 **결과.** run45와 run46에서 로봇이 한 바퀴를 돌고 둘째 바퀴에 들어섰다(run46 4.37m, 호 세 개 모두 `map_anchor_used`). Fleet의 `arrived`는 아직 없다. 실행의 절반쯤은 완주하지 못한다.
 
-**남은 정지.** run37·39·42·44·48·52는 남서 교차로 앞에서 `junction_corner_hold`로 끝났다. run52 기록으로는 W1 `bend` 통과가 끝나고 0.2초 뒤 `right SW`가 걸리자마자 정지했고, Fleet은 그 첫 프레임에서 주행을 끝냈다. CORE는 지시와 반대쪽 코너 프레임을 2초 동안 붙들어 두는데(`CORNER_LATCH_S`), W1은 왼쪽 모서리이고 다음 지시는 오른쪽이다. 굽은길 자신의 코너 프레임이 다음 지시의 반대쪽 코너로 읽혔다는 가설이다. 확인되지 않았다. run53이 keep_debug 프레임마다 전략·지시·자세를 남겼고 아직 읽지 못했다.
+**남은 정지와 그 원인 (run53–run56).** run37·39·42·44·48·52는 남서 교차로 앞에서 `junction_corner_hold`로 끝났다. 처음 세운 가설(W1 굽이의 코너 프레임이 2초 래치에 남는다)은 run53의 keep_debug 기록으로 버렸다. 기록이 보여 준 것은 다음이다.
+
+- 추종기는 굽이 자신의 바깥선을 교차로 선으로 읽는다. run53에서는 W2 진입 직선에서 `junction_transverse` 0.318m(꼭짓점 0.097m 너머)였고, 통과가 `waiting`으로 끝나 Fleet이 `junction_unexpected`로 주행을 끝냈다. 다음 장소가 0.84m 앞이라 Fleet의 지도 기각(0.9m 안에서는 기각하지 않음)도 걸리지 않았다.
+- W1에서는 다음 교차로 SW의 실제 선이 호 가운데에서 0.41–0.43m로 읽혀 넘겨진다. SW 앞에서 추종기는 `corner_left`를 내므로, 이 넘겨받은 목격이 없으면 `junction_corner_hold`가 난다(추정, 직접 재현하지는 않았다).
+- 수정: 굽이 자신의 바깥선은 넘기지 않는다(D-507 9항, `fix/bend-own-corner-sighting`, 로컬 main). 오버레이로 넣은 run54는 Fleet 기준 한 바퀴와 둘째 바퀴 일부, run55는 세 바퀴를 돌았다. Fleet이 한 바퀴를 센 것은 run54가 처음이다.
+- run55에서는 W3를 47° 돈 뒤에도 바깥선이 `junction_fork` 0.17m로 읽혀 `waiting`이 한 번 났고 Fleet의 기각이 한 번 쓰였다. 모양만으로는 SW의 실제 선과 갈리지 않아, 지도의 다음 선 거리로 가리는 D-754(`feat/bend-next-line-in`, Proposed, 미착지)를 만들었다.
+- run56은 둘째 바퀴 W3에서 `motion_unconfirmed`로 끝났다. CORE가 정책 시계를 읽고 0.034초 뒤 올라온 snapshot이 `snapshot_future`로 거절된 한 틱이었다. 수정: 거절되면 시계를 새로 읽어 한 번 더 묻는다(D-740 개정 2, `fix/sdk-snapshot-future-skew`, 로컬 main). SIM 구성에만 닿고 실물은 열려 있다.
+- 열린 정지: run54·55는 W2를 나온 뒤 차선이 보이지 않아 W1 굽이의 기준점을 잡지 못하고 `no_anchor`로 끝났다(굽이 간격 0.58m).
 
 **반복 주행.** 양방향 도로와 원형 교차로는 Fleet의 교통 구역이라 주행의 끝이 구역 밖으로 옮겨지고(`stop_moved LAP_END→NE`) 반복은 `TRIP_STOP_IN_ZONE`으로 거절된다. run52는 서쪽 도로를 일방통행으로 바꿔 반복 주행을 받아들이게 했다(계획 4.07m).
 
