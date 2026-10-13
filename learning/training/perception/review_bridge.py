@@ -6,14 +6,18 @@ Config: source, peer, remote_reviews, interval_s, max_attempts. No training/appr
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import tarfile
 import time
+import sys
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
 from job_state import Job, JobError, receipt
 from learning_cycle import verified_export
 
@@ -153,10 +157,85 @@ print(json.dumps({'transfer_sha':DIGEST,'remote_path':str(target),'training_data
     return result
 
 
+def local_root(config):
+    root = Path(config['remote_reviews'])
+    if not root.is_absolute() or any(p.is_symlink() or (hasattr(p, 'is_junction') and p.is_junction())
+                                     for p in (root, *root.parents)):
+        raise ValueError('local review destination must be absolute and without links')
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def publish_current_local(snapshot, config, out):
+    root = local_root(config) / '.authority'
+    if root.is_symlink():
+        raise ValueError('local authority link refused')
+    root.mkdir(exist_ok=True)
+    target = root / 'current.json'
+    if target.is_symlink():
+        raise ValueError('local authority file link refused')
+    if (snapshot.get('schema') != 'rosy.pinky-review-current-delivery/1'
+            or snapshot.get('workspace_id') != config['authority']['workspace_id']):
+        raise ValueError('local authority workspace differs')
+    if target.exists():
+        previous = json.loads(target.read_bytes())
+        old, new = previous.get('revision'), snapshot.get('revision')
+        if (previous['workspace_id'] != snapshot['workspace_id'] or
+                old and (not new or new['workspace_id'] != old['workspace_id']
+                         or new['generation'] < old['generation']
+                         or new['generation'] == old['generation'] and new['decision_sha256'] != old['decision_sha256'])):
+            raise ValueError('local authority highwater differs')
+    with tempfile.NamedTemporaryFile(dir=root, prefix='.current-', delete=False) as file:
+        file.write((json.dumps(snapshot, sort_keys=True, allow_nan=False) + '\n').encode())
+        file.flush(); os.fsync(file.fileno())
+        temporary = Path(file.name)
+    os.replace(temporary, target)
+
+
+def publish_local(folder, digest, config, out):
+    from review_authority import verify_bundle
+    root = local_root(config)
+    folder = Path(folder).resolve()
+    if root == folder or root.is_relative_to(folder) or folder.is_relative_to(root):
+        raise ValueError('local source and destination must be separate')
+    if not re.fullmatch('[0-9a-f]{64}', digest):
+        raise ValueError('local transfer digest required')
+    snapshot = json.loads((root / '.authority/current.json').read_bytes())
+    captured = verify_bundle(folder, snapshot['authority'], workspace_id=snapshot['workspace_id'], capture_files=True)
+    if captured['contract_sha'] != digest:
+        raise ValueError('local transfer digest differs')
+    def verify(path):
+        result = verify_bundle(path, snapshot['authority'], workspace_id=snapshot['workspace_id'])
+        if result['contract_sha'] != digest:
+            raise ValueError('local transfer digest differs')
+    target = root / digest
+    if target.exists() or target.is_symlink():
+        verify(target)
+    else:
+        with tempfile.TemporaryDirectory(dir=root, prefix='.review-upload-') as temporary:
+            staging = Path(temporary) / 'bundle'
+            staging.mkdir()
+            for name, raw in captured['captured_files'].items():
+                destination = staging / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(raw)
+            verify(staging)
+            os.replace(staging, target)
+    return {'transfer_sha': digest, 'remote_path': str(target), 'training_dataset_qualified': False}
+
+
 def run_once(config, out, *, publisher=publish, current_fetcher=fetch_current,
              current_publisher=publish_current):
-    if set(config) - {"authority"} != {"source", "peer", "remote_reviews", "interval_s", "max_attempts"}:
+    if set(config) - {"authority", "transport"} != {"source", "peer", "remote_reviews", "interval_s", "max_attempts"}:
         raise JobError("bridge source/peer/remote_reviews/interval_s/max_attempts required")
+    transport = config.get('transport', 'ssh')
+    if transport == 'local':
+        if not config.get('authority'):
+            raise JobError('local transport requires pinned current authority')
+        if publisher is publish: publisher = publish_local
+        if current_publisher is publish_current: current_publisher = publish_current_local
+    elif transport != 'ssh':
+        raise JobError('unsupported review transport')
     if any(type(config[k]) is not int or config[k] < 1 for k in ("interval_s", "max_attempts")):
         raise JobError("positive interval and attempt limit required")
     authority_config = config.get("authority")
