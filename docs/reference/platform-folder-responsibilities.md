@@ -1,5 +1,7 @@
 # ROSY Platform 현재 폴더 책임
 
+2026-10-13 S1~S10 source 정리 및 local main 착지 완료. 원격 재검증·CI·배포·장치는 별도 NOT RUN. [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이 현재 배치 기준이다.
+
 2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
 
 2026-10-11 local main `d4988bffba`에 반영한 소스 배치. 실제 폴더 이동과 경로 수정의 커밋·머지 이후 이 안내를 정리했다. [이동·검증·착지 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 소스·설치·시험·배포·장치·현장 증거를 구분한다.
@@ -8,28 +10,28 @@
 
 `middleware`는 장치 실행과 권한, `operations`는 관측 사실과 작업 조정, `learning`은 경험·학습·평가·아티팩트 관리를 맡는다. `contracts`는 교환 형식, `integrations`는 외부 기술 접점, `shared/web`은 여러 UI가 실제로 공유하는 기반이다. 같은 concern이 같은 실행 권한을 뜻하지 않는다.
 
-D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph 건강은 `graph_health`, snapshot 판단은 `snapshots`, 차선 관측은 `sensors/line_observation`, advisory object 관측은 `vision/object_observation`에 전용 ROS adapter와 같이 둔다. `control`에는 잔여 보정·기록·provider/executor/TF/web 조립과 설치 초기화가 남는다. 기존 control.* 설치 이름은 유지한다.
+D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph 건강은 `graph_health`, snapshot 판단은 `snapshots`, 차선 관측은 `sensors/line_observation`, advisory object 관측은 `front_camera/object_observation`에 전용 ROS adapter와 같이 둔다. `nodes`에는 잔여 보정·기록·provider/executor/TF/web 조립, `control`에는 설치/source 호환 초기화만 남는다. 기존 control.* 설치 이름은 유지한다.
 
 ## 편집 집
 
-세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 2026-10-11 소스 배치 스냅샷은 그대로다.
+세션이 코드를 찾을 때 쓰는 열두 집이다. 소유와 import의 정본은 아래 manifest root와 [platform_parts.yaml](../../tools/harness/platform_parts.yaml)이다. 이 절은 그 root를 유지보수 단위로 묶는다. 집을 위해 폴더를 새로 만들거나 설치 이름 `control`, `core_features`, `fleet`를 바꾸지 않는다. 경로로 실행 PC를 추정하지 않는다(D-315). 아래 현재 경로는 2026-10-13 후속 착지 기준이며 과거 검증 스냅샷과 구분한다.
 
 | 집 | 이름 | 현재 경로 |
 |---|---|---|
 | 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/robot_ui` |
 | 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
 | 3 | Drive 동작 | `middleware/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
-| 4 | Drive 근거 | `middleware/drive/{safety,tracking,planning,recovery,calibration}` |
+| 4 | Drive 근거 | `middleware/drive/{motion_limits,tracking,planning,recovery,calibration}` |
 | 5 | 인지 구현 | `middleware/perception/sensors/{sensing,line_observation}`, `middleware/perception/front_camera/{perception,object_observation}`, `middleware/perception/{localization,graph_health,snapshots}` |
-| 6 | 인지 노드 | `middleware/perception/control`. ROS 패키지 이름은 `control`. 다섯 호환 초기화 폴더는 설치 이름만 잇고, 노드·어댑터 파일이 이 집의 본체다 |
+| 6 | 인지 노드 | `middleware/perception/nodes`. ROS 패키지 이름은 `control`; `control/`의 다섯 호환 초기화는 설치 이름만 잇는다. 기능별 전용 adapter는 해당 판단 holder에 둔다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
-| 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |
+| 8 | Fleet 원장 | `operations/fleet/fleet/server/{ledger,auth,cell,console,peer}`와 기존 `server/channel`. app.py는 조립하고 기존 fleet.server.* 설치 이름을 유지한다 |
 | 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
 | 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
-| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/overhead` |
+| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
-집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World의 `predicted`는 odom dead reckoning이다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sightings/odom의 현재 상태를 투영하며 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
 
 같은 영어 단어는 집을 나눈다.
 
@@ -44,7 +46,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/robot_execution/local` |
 | execution | 현장 목표·진척 | 10 | `operations/site_execution` |
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/front_camera` |
-| vision | 천장 관측 | 11 | `operations/overhead` |
+| vision | 천장 관측 | 11 | `operations/overhead`, `operations/signal_observation` |
 
 `middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
 
@@ -184,7 +186,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |
-| `operations/overhead` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
+| `operations/overhead`, `operations/signal_observation` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
 | `operations/site_ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
 | `operations/apps/games` | ROS `games`; `games` | 유지 — overhead camera를 쓰는 game host. 범용 process/control backend가 아님 |
 | `learning/training/perception` | trainer Python CLI·library | 분리 완료 — 학습 job·trainer·COLAB docs. 인식 runtime은 middleware vision 소유 |

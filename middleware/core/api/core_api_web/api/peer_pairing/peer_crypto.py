@@ -1,4 +1,7 @@
-"""Dedicated application identity proof; never a release or SSH signing key."""
+"""Dedicated application identity proof; never a release or SSH signing key.
+
+CORE/Fleet ship independently; update both copies together (test_peer_proof_ownership).
+"""
 import base64
 import hashlib
 import json
