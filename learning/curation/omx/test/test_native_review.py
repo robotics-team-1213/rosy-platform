@@ -44,6 +44,13 @@ def test_review_does_not_infer_task_success(module, recording):
     assert all(len(e['content_sha256']) == 64 for e in report['episodes'])
 
 
+def test_reader_tuple_shapes_are_supported(module, recording):
+    info, rows = recording
+    for feature in info['features'].values():
+        feature['shape'] = tuple(feature['shape'])
+    assert module.inspect_frames(info, rows)['frame_count'] == 4
+
+
 @pytest.mark.parametrize('fault', ['nan', 'missing_camera', 'time', 'order', 'length', 'sim'])
 def test_review_rejects_incomplete_or_incompatible_data(module, recording, fault):
     info, rows = recording

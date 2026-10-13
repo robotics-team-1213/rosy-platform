@@ -25,7 +25,7 @@ def inspect_frames(info, frames):
         raise ValueError('expected native omx_follower LeRobot v3 data, not ROSY SIM')
     features = info.get('features', {})
     for key in ('action', 'observation.state'):
-        if features.get(key, {}).get('names') != JOINTS or features[key].get('shape') != [6]:
+        if features.get(key, {}).get('names') != JOINTS or tuple(features[key].get('shape', ())) != (6,):
             raise ValueError('native OMX joint order and six position features are required')
     cameras = {key: value for key, value in features.items() if key.startswith('observation.images.')}
     if not cameras:
