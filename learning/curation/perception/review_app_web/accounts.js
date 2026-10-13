@@ -47,7 +47,6 @@ async function refresh() {
   try { session=await api('/api/accounts/session'); }
   catch(e) {
     if (e.status !== 401 && e.status !== 403) {
-      token=null; active=false; $('signed-in').hidden=true;
       throw e;
     }
     if(options.rosy_account) {
