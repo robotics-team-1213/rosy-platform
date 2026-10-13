@@ -14,6 +14,8 @@ from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
+from fleet.server.channel.execution.journal import native_required
+from fleet.server.channel.execution.outcomes.task_receipt import bind_native_task_result
 from fleet.swarm.transport import RobotApiError
 
 
@@ -39,19 +41,8 @@ class FleetTaskService:
         self.channel_admission = None
         self.core_events = None
 
-    def bind_native_receipt(self, task_id, attempt_id, robot_id, receipt, *, unsent=False, expected_boot_id=None):
-        from fleet.server.channel.execution.outcomes.task_receipt import bind_native_receipt
-        if bind_native_receipt(self.store, task_id, attempt_id, robot_id, receipt, unsent=unsent,
-                               expected_boot_id=expected_boot_id) and self.core_events is not None:
-            operation = receipt['operation']
-            for event in self.core_events.native_events(robot_id, operation['boot_id'], operation['run_id']):
-                self.project_core_event(event)
-
-    def native_required(self, task_id):
-        if self.channel_admission is None:
-            return False
-        with self.store._connect() as conn:
-            return conn.execute('SELECT 1 FROM fleet_channel_execution_steps WHERE task_id=?', (task_id,)).fetchone() is not None
+    bind_native_receipt = bind_native_task_result
+    native_required = native_required
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
