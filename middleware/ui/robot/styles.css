@@ -236,7 +236,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .surface-bridge a:hover { color: var(--text-primary); background: var(--surface-flat); }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
-.view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }
+.view-switch { display: inline-flex; border: 1px solid var(--control-line); border-radius: var(--radius-button); overflow: hidden; }
 .view-tab {
   min-height: var(--target-secondary);
   padding: 0 var(--space-4);

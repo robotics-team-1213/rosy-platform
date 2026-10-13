@@ -118,3 +118,17 @@ def test_signed_runner_resource_hold_is_visible(tmp_path):
     assert report['reasons'] == ['work busy: GPU compute job']
 
 
+@pytest.mark.parametrize('phase,expected', [('ready', 'done'), ('candidate', 'candidate'),
+    ('running', 'running'), ('retry', 'failed'), ('gave_up', 'failed'), ('rejected', 'rejected')])
+def test_owner_report_displays_only_current_training_cycles(tmp_path, phase, expected):
+    from learning_workspace import read_report
+    (tmp_path / 'state.json').write_text(json.dumps({'review_autobuild': {
+        'status': 'request_published', 'cycle_keys': ['current']}, 'cycles': {
+            'old': {'status': 'rejected', 'error': 'old failure'},
+            'current': {'status': phase, 'result': {'revision': 'lane-seg-example'}}}}))
+    report = read_report(tmp_path, 'state.json')
+    assert report['declared']['status'] == expected
+    assert 'old failure' not in json.dumps(report)
+    assert report['steps'][0]['status'] == phase
+
+

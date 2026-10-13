@@ -224,6 +224,19 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     return _status(svc)
 
 
+class LineArcMapAnchor(BaseModel):
+    """D-744 1: the exit_segment's circle in the map frame and one pose pair: Fleet's map pose of the
+    robot and the stamp of the odom sample it was computed for (CORE wall clock, as snapshot
+    odom_pose.stamp). Sent only to a robot announcing lane_arc_map_anchor."""
+
+    centre_x_m: float = Field(allow_inf_nan=False)
+    centre_y_m: float = Field(allow_inf_nan=False)
+    pose_x_m: float = Field(allow_inf_nan=False)
+    pose_y_m: float = Field(allow_inf_nan=False)
+    pose_yaw_rad: float = Field(ge=-6.2832, le=6.2832, allow_inf_nan=False)
+    odom_stamp_s: float = Field(gt=0, allow_inf_nan=False)
+
+
 class LineExitSegment(BaseModel):
     """D-520 1: the lane the robot enters after this place's turn is one circular arc to the next
     place. Fleet sends it only to a robot announcing lane_arc, always with the instruction's map_id."""
@@ -232,6 +245,7 @@ class LineExitSegment(BaseModel):
     length_m: float = Field(gt=0, le=1.0)
     outer_line_offset_m: float = Field(ge=0.05, le=0.20)
     end_place_id: str = Field(min_length=1, max_length=128)
+    map_anchor: Optional[LineArcMapAnchor] = None  # D-744 1
 
 
 class LineJunctionRequest(BaseModel):
@@ -311,7 +325,7 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
                                               body.stop_after_m, body.turn_deg, body.advance_m,
                                               expect=_expect(body),
                                               exit_segment=(None if body.exit_segment is None
-                                                            else body.exit_segment.model_dump()))
+                                                            else body.exit_segment.model_dump(exclude_none=True)))
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
