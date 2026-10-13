@@ -26,8 +26,9 @@ def test_header_ids_and_one_sheet():
     for name in DOCS:
         page, header = _header(name)
         for element_id in ("console-token", "token-save", "user-role", "password-login", "token-access",
-                           "fleet-theme", "development-badge", "topbar-more", "estop",
-                           "clock", "link-state"):
+                           "fleet-theme", "development-badge", "topbar-more", "topbar-extra", "estop",
+                           "clock", "link-state", "fleet-inbox", "header-unread", "fleet-login",
+                           "fleet-account", "fleet-account-identity", "fleet-profile", "fleet-name"):
             assert f'id="{element_id}"' in header, (name, element_id)
         # D-741 3: 로봇 연결 수는 앱 바가 아니라 관제 화면의 내용이다.
         assert 'id="online-pill"' not in header, name
@@ -49,14 +50,25 @@ def test_header_regions_keep_identity_status_actions_and_safety_separate():
     assert re.findall(r'data-header-region="([^"]+)"', header) == [
         "identity", "status", "actions", "safety"]
     assert 'id="fleet-header-actions"' in header
+    # D-741 3: 연결 자리에는 조작이 없다. 알림, 로그인, 나(계정 단추) 순서로 정지 앞에 선다.
+    status = header.split('data-header-region="status"', 1)[1].split('data-header-region="actions"', 1)[0]
+    assert 'id="link-state"' in status and 'id="clock"' in status and "<ui-button" not in status
+    actions = header.split('data-header-region="actions"', 1)[1].split('data-header-region="safety"', 1)[0]
+    assert actions.index('id="fleet-inbox"') < actions.index('id="fleet-login"') < actions.index('id="topbar-more"')
+    inbox = re.search(r'<ui-button[^>]*id="fleet-inbox".*?</ui-button>', header, re.S).group(0)
+    assert 'id="header-unread"' in inbox and 'data-action-icon="notification"' in inbox
     entry = re.search(r'<ui-button[^>]*id="topbar-more".*?</ui-button>', header, re.S).group(0)
-    for element_id in ("header-unread", "development-badge"):
+    for element_id in ("user-role", "development-badge"):
         assert f'id="{element_id}"' in entry
-    assert entry.count("<ui-button") == 1
-    assert 'data-action-icon="connect"' not in entry and 'data-action-icon="notification"' in entry
+    assert entry.count("<ui-button") == 1 and 'data-action-icon="account"' in entry
+    assert 'aria-controls="topbar-extra"' in entry
     assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
+    menu = header.split('id="topbar-extra"', 1)[1]
+    for element_id in ("fleet-account", "password-login", "fleet-theme", "token-access", "console-token", "token-save"):
+        assert f'id="{element_id}"' in menu, element_id
+    assert "<details id=\"fleet-account\"" not in header, "계정 정보는 계정 단추 하나 아래에 있다"
     controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
-    assert '$("topbar-extra").prepend(inbox)' in controller
+    assert "createElement(\"ui-button\")" not in controller, "알림 단추는 정적 마크업이다(D-658 5항)"
 
 
 def test_estop_is_live_in_markup_and_one_module_gates_it():

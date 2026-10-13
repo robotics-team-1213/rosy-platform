@@ -42,6 +42,8 @@ test("one theme button cycles the shared choices; one status click toggles once"
   globalThis.window = {RosyTheme: {choices, get: () => preference, set: value => {preference = value;}}};
   globalThis.MutationObserver = class { observe() {} };
   bindTopbarToggle();
+  assert.match(nodes["topbar-more"].getAttribute("aria-label"), /^계정과 접속/);
+  assert.equal(typeof nodes["fleet-inbox"].listeners.click, "function");
   for (const value of ["light", "system", "dark"]) {
     nodes["fleet-theme"].listeners.click();
     assert.equal(preference, value);
