@@ -230,8 +230,10 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   lane_turn=(expect or {}).get('lane_turn_deg'),
                                   arc_anchor=self._place_map_anchor(exit_segment, current))  # D-744 3
             if pose is not None:  # D-507 addendum: odom travel counts from here
+                entry = self._place_map_entry(expect.get('map_entry'), current)  # D-759 3
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
+                                      map_entry=entry, entry_why=entry.get('reason'),
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
@@ -246,6 +248,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         return LineJunctionStatus(pending_action=j.get('action'), place_id=j.get('place_id'),
                                   state=state, seq=self._junction_seq, turn_deg=j.get('turn_deg'),
                                   reason=j.get('reason'), pivot_basis=j.get('pivot_basis'),
+                                  map_entry_used=j.get('entry_used') is True,
+                                  map_entry_reason=j.get('entry_why'),
                                   signal_request_id=(self._junction_signal or {}).get('id'),
                                   signal_state=(self._junction_signal or {}).get('state'))
 

@@ -5,7 +5,8 @@ Fleet sends action 'bend' for a site-map bend place: the lane distance to the ar
 camera follows and CORE sums fresh odom travel; every straight confident tick anchors the line
 the body followed (D-476 rev 1). Inside the lead window CORE takes over at the first tick where
 the camera stops following straight (its own HOLD or loss, a large error, a sighting), or at the
-earliest arc start (bend_in - tol); any other HOLD (obstacle, IR, limits) just holds: 'bending' pursues the anchor line, the arc and the exit line (pure pursuit
+earliest arc start (bend_in - tol; D-759: the anchor line then runs on the lane's map heading when
+Fleet's map_entry placed one near the body's own); any other HOLD (obstacle, IR, limits) just holds: 'bending' pursues the anchor line, the arc and the exit line (pure pursuit
 at the D-476 bridge_lookahead_m: on a circle it commands that circle's curvature, and on a
 corner it turns in early, inside the arc, away from the wall outside the turn), then
 'reacquiring' keeps to the exit line until D-495 M5 reacquisition or the next junction's
@@ -18,11 +19,17 @@ from __future__ import annotations
 
 import math
 
+from core_features.line_follow.authority import ARC_ANCHOR_MAX_CARRY_M
 from core_features.line_follow.recovery.junction.approach import (
     CORRIDOR_HALF_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
 BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
+MAP_ENTRY_FIELDS = ('yaw_rad', 'pose_yaw_rad', 'odom_stamp_s')  # D-759 1
+#: D-759 4: the placed lane heading replaces the anchor's own yaw only within this of it: the
+#: bound inside which this module already takes a heading as the lane's (the reacquisition check).
+#: Gazebo 2026-10-14 measured 21.6 deg at a take-over; more is a wrong map yaw or a lost lane.
+MAP_ENTRY_MAX_HEADING_RAD = REACQUIRE_HEADING_RAD
 #: ponytail: the 260919 camera/keeper sees a 63 deg bend's new lines ~0.22 m before the arc
 #: start (B8 misread onset 0.22 m, B9 gate-on HOLD 0.21 m); a plausibility value, SIM-tuned.
 BEND_LEAD_M = .25
@@ -42,6 +49,11 @@ CAMERA_HOLDS = frozenset({'line_not_visible', 'observation_stale', 'no_observati
 def check_bend(action, turn_deg, expect):
     """The bend fields belong to 'bend' and 'bend' needs all of them (the API answers 400 first)."""
     e = expect or {}
+    entry = e.get('map_entry')
+    if entry is not None and not (action == 'bend' and isinstance(entry, dict) and all(
+            type(entry.get(k)) in (int, float) and math.isfinite(entry[k]) for k in MAP_ENTRY_FIELDS)
+            and entry['odom_stamp_s'] > 0):
+        raise ValueError('map_entry belongs to bend: finite yaw_rad, pose_yaw_rad and odom_stamp_s > 0')
     if action != 'bend':
         if any(e.get(k) is not None for k in BEND_FIELDS):
             raise ValueError('bend_in_m, bend_tol_m and bend_radius_m belong to bend')
@@ -88,6 +100,36 @@ class JunctionBendMixin:
             return (c.site_floor_map_id is not None and c.ir_guard_enabled
                     and c.obstacle_mode == 'path' and c.body_stop_known)
 
+    @property
+    def supports_lane_bend_map_entry(self):
+        """D-759 2 capability: CORE takes the bend's `map_entry` wherever it takes the bend."""
+        return self.supports_lane_bend
+
+    def _place_map_entry(self, entry, now):
+        """D-759 3: at receipt, the lane's map heading at the arc start turned into odom through
+        Fleet's yaw pair (the map yaw and CORE's odom yaw at `odom_stamp_s`): {yaw, path}, or
+        {reason} for today's anchor. check_bend has validated the object."""
+        if entry is None:
+            return dict(reason='none_sent')
+        found = self._odom_at_stamp(entry['odom_stamp_s'], now)
+        if isinstance(found, str):
+            return dict(reason=found)
+        return dict(yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau),
+                    path=found[2])
+
+    def _map_entry_yaw(self, j, yaw):
+        """D-759 4: the placed lane heading for the pass's anchor line, or the anchor's own `yaw`
+        with the reason on the record. The odom run is the pass's own (a new one aborts it). Locked."""
+        entry, log = j['map_entry'], self._odom_log
+        if 'reason' in entry:
+            return yaw
+        j['entry_why'] = why = (
+            'carry' if not log or log[-1][3]-entry['path'] > ARC_ANCHOR_MAX_CARRY_M else
+            'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > MAP_ENTRY_MAX_HEADING_RAD
+            else None)
+        j['entry_used'] = why is None
+        return yaw if why else entry['yaw']
+
     def _bend_armed(self, j, now, seen, decision):
         """Follow and measure until the lead window, then take over. Locked."""
         if now > j['expires_at']:
@@ -130,6 +172,8 @@ class JunctionBendMixin:
         if speed <= 0:
             return self._abort(j, 'linear_limit_zero', decision)
         x, y, yaw, travel = anchor
+        yaw = self._map_entry_yaw(j, yaw)
+        j['anchor'] = (x, y, yaw, travel)  # the entry axis _bend_own_line and the target read
         turn, radius = math.radians(j['turn_deg']), j['radius']
         ahead = self._config.bridge_lookahead_m
         points, arc_end = bend_path(x, y, yaw, max(0., j['bend_in']-travel), radius, turn,
