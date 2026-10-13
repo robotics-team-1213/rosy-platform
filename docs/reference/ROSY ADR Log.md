@@ -733,6 +733,7 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
+| D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1078,3 +1079,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 **Status:** Accepted (2026-10-13, 사용자 단축키 요청)
 
 기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
+
+## D-741 — 모든 앱이 같은 자리를 쓰는 통합 셸
+
+**Status:** Proposed (2026-10-13, 설계 캔버스 검토까지. 구현·시험·화면 검증 전)
+
+앱 바, 탐색 레일, 하위 탐색, 본문, 오른쪽 칸의 다섯 자리를 모든 앱이 같이 쓰고, 푸터를 없애며, Fleet의 시키는 일을 작업 영역 하나로 모은다. D-658·D-466·D-641·D-540의 일부 항을 바꾸는 제안이다. 전문은 [D-741](../adr/D-741-unified-app-shell-seats.md).
