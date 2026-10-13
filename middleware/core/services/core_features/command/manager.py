@@ -21,6 +21,7 @@ from core_common.protocol.native_receipts import NativeReceipts
 
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.safety.manager import SafetyManager, TeleopWatchdog, finite_velocity
+from core_features.safety.velocity import limit_velocity
 
 
 @dataclass
@@ -218,15 +219,10 @@ class CommandManager:
             self._modes.commit_input(Mode.NAVIGATION, commit, epoch=epoch)
 
     def clip_line_candidate(self, linear: float, angular: float) -> tuple[float, float]:
-        """The static profile caps used by D-422 before the traffic arc family."""
+        """D-737: static LINE caps preserve the candidate curve before traffic gating."""
         limits = self._safety.limits
-        if not finite_velocity(linear, angular):
-            return 0., 0.
-        if not finite_velocity(limits.max_linear, limits.max_angular) or min(
-                limits.max_linear, limits.max_angular) < 0:
-            return 0., 0.
-        return (max(-limits.max_linear, min(limits.max_linear, linear)),
-                max(-limits.max_angular, min(limits.max_angular, angular)))
+        return limit_velocity(linear, angular, limits.max_linear, limits.max_angular,
+                              preserve_curvature=True)
 
     @property
     def _nav_twist(self) -> Optional[Twist]:
@@ -354,6 +350,11 @@ class CommandManager:
         Nothing here may escape: a failing sink or judge must not reach the
         50 Hz loop, nor skip the announcements after it.
         """
+        # The single serialized bridge writer has delivered the selected zero first.
+        try:
+            self._safety.announce_policy_failure()
+        except Exception:  # noqa: BLE001
+            self.announce_errors += 1
         self._publish_native_terminal_notices()
         session = self._pending_watchdog
         if session is not None:

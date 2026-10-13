@@ -1751,6 +1751,18 @@ SSH/sudo/config의 기존 내용과 mode를 모두 확인하고, 변경 후 검�
 사이트 클라이언트는 별도로 보호된 개인키, 고정 `known_hosts`, 동일 source/profile/policy
 설정이 필요하다. 설치기가 개인키를 출력하거나 사이트 client 설정을 자동 활성화하지 않는다.
 
+현장 `install-status-client.py --conversation`은 기본 D-720 설치와 별개다. root가
+`/root/rosy-conversation-reviewed/` 아래에 복사하고 해시를 확인한 config, 단일 22번
+host pin, 승인된 공개키와 독립 semantic proof를 입력한다. 기존 세 positional 인자와
+`--config-sha256`, `--known-hosts-sha256`에 `--conversation-proof`, `--proof-sha256`,
+`--public-key-sha256`을 더한다. 설정의 source/profile/policy와 proof를 대조하고,
+입증 시점으로부터 7일 이내의 유효기간만 허용한다. 원본 개인키는 기존 고정 staging
+경로에서 읽어 공개키와 일치할 때만 설치한다. `/etc/rosy/fleet-deliberation/`은
+root:10001, 0750이며 `conversation.json`, `broker.key`, `known_hosts`는 root:10001,
+0640이다. 기존 파일이 다르면 덮어쓰지 않는다. 이 단계는 이미지나 서비스를 활성화하지
+않는다. 새 설정 필드와 주기적 후속 응답 활성화는 해당 계약을 지원하는 서명 이미지의
+별도 배포 및 실제 회신 확인 뒤에 진행한다.
+
 상태·대화 client의 `ssh_port`는 생략 시 22이며, 고정 대체 포트 2222만 추가로 허용한다.
 Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설정에 도달하지 않는다.
 이 경우 관리자가 `tailscale serve --bg --tcp=2222 tcp://127.0.0.1:22`로 tailnet 안에서만
@@ -1758,3 +1770,23 @@ Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설�
 `[<host>]:2222` 항목을 쓴다. 기존 Serve 설정을 먼저 확인하며, 다른 포트·Funnel·SSH
 정책·일반 계정 권한은 바꾸지 않는다. 설치, 포트 readback, 고정 명령 시험과 실제
 Discord 회신을 각각 확인한다.
+
+기존 보호 conversation 버전을 교체할 때는 검토한 이전 CONFIG와 BROKER의 SHA256을
+`--previous-config-sha256 <sha256>`와 `--previous-broker-sha256 <sha256>`로 함께 지정한다.
+두 파일의 root 소유·mode·group·정확한 해시와, 이전 source commit의 고정 zero-argument
+wrapper를 의존성 준비·모델 조회·파일 변경 전에 확인한다. 이 두 파일만 교체 허용 목록에
+들어가며 SSH·sudo·키·GLM 정책의 교체 권한은 늘어나지 않는다. 잘못되거나 한쪽만 있는
+pin은 거절한다. 성공 뒤 동일 버전 재확인은 이전 pin을 빼고 실행한다. 이전 pin을 계속
+지정하면 현재 파일과 다르므로 거절하며, 관리자 검토 없이 새 이전값을 추정하지 않는다.
+
+SSH dispatcher는 ingress 계정이 접근할 수 있는 root 소유
+`/usr/local/libexec/rosy-model-ingress`에 둔다. 실제 broker 디렉터리의 0750과
+전용 계정의 group 격리는 유지한다. 이전 보호 디렉터리 안 dispatcher에서 옮길 때는
+그 파일의 정확한 관리 바이트·소유·mode·group을 확인한 경우에만 기존 key와 sshd의
+고정 경로를 바꾸고 이전 파일은 보존한다. 설치 완료 전 실제 ingress UID로 두 명령에
+잘못된 `{}` 요청을 보내 broker HOLD를 확인하고, 알 수 없는 명령과 추가 인자는
+exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없으면 선택 기능 미설치로
+기록하고 status 정상 경로 시험만 생략한다. conversation 정상 경로와 두 명령의 추가 인자
+거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
+`optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
+이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.

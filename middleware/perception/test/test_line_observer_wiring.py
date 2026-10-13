@@ -83,6 +83,7 @@ def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
 @pytest.mark.parametrize('native_law_missing', [False, True])
 def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires(native_law_missing):
     import json
+    import os
 
     from control.route_context_input import RouteContextInput, bend_expected
     from control.core_law_input import refresh_drivable_law
