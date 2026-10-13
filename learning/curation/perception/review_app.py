@@ -28,6 +28,7 @@ import numpy as np
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback
+from review_decisions import make_decisions_server, serve_review
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[3] / 'shared/web'
@@ -566,6 +567,7 @@ def main():
     parser.add_argument('--empty-training', action='store_true',
                         help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
+    parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path,
@@ -588,12 +590,7 @@ def main():
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
     server = make_server(store, args.port, args.host)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+    serve_review(server, store, args.decisions_port)
 
 
 if __name__ == '__main__':
