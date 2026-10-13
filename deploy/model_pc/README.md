@@ -76,7 +76,7 @@ python3 deploy/hosts/common/rosy-host-state install model --dry-run      # root 
 sudo python3 deploy/hosts/common/rosy-host-state install model --approve sim
 ```
 
-네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. 코어당 부하 0.9 초과나 남은 메모리 4 GB 미만이면 실행기가 이 PC를 고르지 않는다. 실행과 점검은 개발 PC에서 한다.
+네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 실행기가 이 PC를 고르지 않는다. 실행과 점검 명령은 개발 PC에서 내고, Gazebo는 고른 PC에서만 돈다(D-584). `--host model`은 `ROSY_SIM_HOSTS`나 `private/lab-hosts.json`의 `sim_hosts`에 `=model` 역할이 적혀 있어야 한다.
 
 ```bash
 python tools/remote/remote_sim.py --check

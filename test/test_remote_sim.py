@@ -1,4 +1,4 @@
-"""tools/remote/remote_sim.py (D-571): probe parsing, readiness, load-aware placement, site PC excluded."""
+"""tools/remote/remote_sim.py (D-571): sim candidates, D-568 placement, site PC excluded, job lock."""
 
 from __future__ import annotations
 
@@ -14,79 +14,88 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
 import remote_sim as rs  # noqa: E402
 
-IDLE = {"cores": 24, "load": 1.0, "mem_kb": 12_000_000, "gpu": 3, "native": 1, "fleet": 0, "gz": 0, "heavy": 0}
+rp = rs.rp
+IDLE = {"nproc": 24, "load1": 1.0, "avail_gb": 12.0, "total_gb": 15.0, "pytest": True, "sim": True,
+        "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False}
 
 
-def probe(**kw):
-    return {**IDLE, **kw}
+@pytest.fixture(autouse=True)
+def lab(monkeypatch):
+    """No private lab file, no leftover env, a fresh site set."""
+    for name in ("ROSY_SIM_HOSTS", "ROSY_TEST_HOSTS", "ROSY_TEST_LOCAL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(rp, "_LAB", {})
+    monkeypatch.setattr(rp, "DEFAULT_HOSTS", "")
+    monkeypatch.setattr(rp, "SITE_HOST", "site@lab")
+    monkeypatch.setattr(rp, "SITES", {"site@lab"})
 
 
-def test_probe_output_is_parsed_and_a_stale_nonce_is_rejected():
-    text = "nonce=abc\ncores=24\nload=25.49\nmem_kb=1831128\ngpu=98\nnative=1\nfleet=0\ngz=1\nheavy=4\n"
-    p = rs.parse_probe(text, "abc")
-    assert p["cores"] == 24 and p["load"] == 25.49 and p["gpu"] == 98 and p["gz"] == 1
-    assert rs.parse_probe(text, "other") is None
-    # A host without nvidia-smi prints an empty gpu value.
-    assert rs.parse_probe(text.replace("gpu=98", "gpu="), "abc")["gpu"] is None
+def probes(monkeypatch, table):
+    monkeypatch.setattr(rp, "probe", lambda host: None if table[host] is None else {**IDLE, **table[host]})
 
 
-def test_readiness_needs_the_native_stack():
-    assert rs.placement(probe(native=0), "ai")[0] is False
-    assert rs.placement(probe(), "model")[0] is True
-    assert rs.placement(None, "model") == (False, 0.0, "unreachable or stale probe")
-
-
-def test_busy_or_short_of_memory_hosts_are_refused():
-    assert "busy" in rs.placement(probe(load=25.5), "model")[2]  # 2026-10-09 model PC
-    assert "low memory" in rs.placement(probe(mem_kb=1_831_128), "model")[2]
+def test_hosts_come_from_env_then_the_lab_file_then_the_pytest_hosts(monkeypatch):
+    monkeypatch.setattr(rp, "DEFAULT_HOSTS", "m@1 a@2 site@lab")
+    assert rs.candidates() == [("m@1", "ai"), ("a@2", "ai")]  # no role: the shared-PC caps
+    monkeypatch.setattr(rp, "_LAB", {"sim_hosts": ["m@1=model", "a@2=ai"]})
+    assert rs.candidates() == [("m@1", "model"), ("a@2", "ai")]
+    monkeypatch.setenv("ROSY_SIM_HOSTS", "u@1=model v@2")
+    assert rs.candidates() == [("u@1", "model"), ("v@2", "ai")]
+    assert rs.candidates("model") == [("u@1", "model")] and rs.candidates("v@2") == [("v@2", "ai")]
+    with pytest.raises(SystemExit, match="not a sim host"):
+        rs.candidates("x@9")
 
 
 def test_the_site_pc_is_production_only_and_never_a_candidate(monkeypatch):
     """User 2026-10-09: 관제 PC는 시뮬레이션에서 제외."""
-    assert all("robttt" not in h and role != "site" for h, role in rs.hosts_from_env())
-    monkeypatch.setenv("ROSY_SIM_HOSTS", "u@1=model robttt@100.82.51.8=site x@9=site")
-    assert rs.hosts_from_env() == [("u@1", "model")]
-    for want in ("site", "robttt@100.82.51.8"):
+    monkeypatch.setenv("ROSY_SIM_HOSTS", "u@1=model site@lab x@9=site")
+    assert rs.candidates() == [("u@1", "model")]
+    for want in ("site", "site@lab"):
         with pytest.raises(SystemExit, match="production only"):
-            rs.choose([("u@1", "model", None, (True, 1.0, "ok"))], want)
+            rs.candidates(want)
         with pytest.raises(SystemExit, match="production only"):
             rs.main(["--host", want, "--check"])
-    # A host running Fleet is refused whatever it is called.
-    assert rs.placement(probe(fleet=3), "model") == (False, 0.0, rs.PRODUCTION_REFUSAL)
-    assert rs.PRODUCTION_REFUSAL in rs.table([])
+    # A host carrying ~/rosy-jobs/site is dropped whatever it is called, even when nothing else fits.
+    probes(monkeypatch, {"u@1": {"avail_gb": 1.0}, "alias@lan": {"site": True, "nproc": 64, "total_gb": 64.0,
+                                                                  "avail_gb": 60.0}})
+    assert rs.ranked([("u@1", "model"), ("alias@lan", "ai")]) == []
 
 
-def test_scores_prefer_free_capacity_and_penalise_running_sims_and_a_full_gpu():
-    base = rs.placement(probe(), "model")[1]
-    assert rs.placement(probe(gz=1), "model")[1] == pytest.approx(base - 1)
-    assert rs.placement(probe(gpu=95), "model")[1] == pytest.approx(base - 1)
-    assert rs.placement(probe(load=12.0), "model")[1] < base
+def test_placement_is_the_d568_sim_floor_with_locks_and_busy(monkeypatch):
+    hosts = [("m@1", "model"), ("a@2", "ai")]
+    probes(monkeypatch, {"m@1": {"avail_gb": 9.0}, "a@2": {}})
+    assert rs.ranked(hosts) == ["a@2", "m@1"]  # most headroom first
+    probes(monkeypatch, {"m@1": {"avail_gb": 1.8}, "a@2": {"lock_cores": 20}})  # 2026-10-09 model PC; a running sim
+    assert rs.ranked(hosts) == []
+    probes(monkeypatch, {"m@1": {"sim": False}, "a@2": {"busy": True}})
+    assert rs.ranked(hosts) == []
+    probes(monkeypatch, {"m@1": None, "a@2": {}})
+    assert rs.ranked(hosts) == ["a@2"]
 
 
-def test_choose_takes_the_best_or_the_named_host_and_explains_a_refusal():
-    rows = [("m@1", "model", None, (False, 0.0, "busy")), ("a@2", "ai", None, (True, 1.5, "ok"))]
-    assert rs.choose(rows, None)[0] == "a@2"
-    assert rs.choose(rows, "ai")[0] == "a@2"
+def test_check_runs_nothing_and_a_run_without_a_host_fails(monkeypatch):
+    monkeypatch.setenv("ROSY_SIM_HOSTS", "m@1=model")
+    probes(monkeypatch, {"m@1": {"avail_gb": 1.8}})
+    monkeypatch.setattr(rs, "run_sim", lambda *a, **k: pytest.fail("ran"))
+    assert rs.main(["--check"]) == 0
     with pytest.raises(SystemExit, match="no host can take a sim"):
-        rs.choose(rows, "model")
-    with pytest.raises(SystemExit, match="not in ROSY_SIM_HOSTS"):
-        rs.choose(rows, "x@9")
+        rs.main(["swarm_bench"])
 
 
-def test_hosts_come_from_env_with_roles(monkeypatch):
-    monkeypatch.setenv("ROSY_SIM_HOSTS", "u@1=model v@2")
-    assert rs.hosts_from_env() == [("u@1", "model"), ("v@2", "ai")]
-
-
-def test_runs_are_capped_on_loopback_and_cleanup_touches_only_this_run():
+def test_runs_are_capped_on_loopback_hold_a_job_lock_and_cleanup_touches_only_this_run():
     assert "MemoryMax=" in rs.SIM and "CPUQuota=" in rs.SIM and "nice -n 10" in rs.SIM
     assert "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST" in rs.SIM and "GZ_IP=127.0.0.1" in rs.SIM
+    # D-568 2: `<pid> sim <cores> <GB>` before exec, so the pid stays the run's.
+    lock = 'echo "$$ sim $CPUS ${MEM%G}" > ~/rosy-jobs/"$NAME".lock'
+    assert lock in rs.SIM and rs.SIM.index(lock) < rs.SIM.index("exec timeout")
+    assert '~/rosy-jobs/"$1".lock' in rp.CLEANUP
     assert "docker" not in rs.SIM and "docker" not in rs.STOP
     assert 'rosy-sim-$1.scope' in rs.STOP and "pkill" not in rs.STOP and "kill " not in rs.STOP
     assert "headless:=true" in rs.BENCHES["swarm_bench"] and "gazebo_gui:=false" in rs.BENCHES["map_v2_runner"]
+    assert set(rs.PROFILES) == {"model", "ai"} and rs.PROFILES["ai"]["cpus"] < rs.PROFILES["model"]["cpus"]
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
-@pytest.mark.parametrize("name", ["PROBE", "INNER", "SIM", "FETCH", "STOP"])
+@pytest.mark.parametrize("name", ["INNER", "SIM", "FETCH", "STOP"])
 def test_remote_scripts_parse(name):
     assert subprocess.run(["bash", "-n"], input=getattr(rs, name).encode()).returncode == 0

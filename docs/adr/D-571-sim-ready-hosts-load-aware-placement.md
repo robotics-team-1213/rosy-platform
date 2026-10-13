@@ -21,7 +21,7 @@
 
 | 일 | 모델 PC | AI PC | 관제 PC |
 | --- | --- | --- | --- |
-| 호스트 pytest (`remote_pytest.py`) | 첫 번째 | 두 번째 | 하지 않음 |
+| 호스트 pytest (`remote_pytest.py`) | D-568 여유 순 | D-568 여유 순 | 다른 PC가 하한을 넘지 못할 때만(D-568 3항) |
 | 헤드리스 Gazebo (`remote_sim.py`) | 기본, 네이티브 | 소유자가 설치에 동의한 뒤, 네이티브 | **하지 않음** |
 | 학습·모델 평가(D-434, D-527) | 맡음 | 하지 않음 | 하지 않음 |
 | AI 추론(D-516, D-527) | 하지 않음 | 맡음 | 하지 않음 |
@@ -37,14 +37,13 @@
 - 관제 PC 매니페스트에는 apt 줄을 두지 않는다.
 - 컨테이너 이미지는 두지 않는다. 남은 두 PC 중 모델 PC의 `rosy` 계정은 docker 소켓 권한이 없고 AI PC에는 docker가 없어, 이미지를 쓸 호스트가 없다.
 
-**3. 배치는 측정한 여유로 고른다.**
+**3. 배치는 D-568의 잰 여유로 고른다.** (2026-10-13 개정)
 
-- 후보는 `ROSY_SIM_HOSTS`(기본 모델 PC, AI PC)다. 관제 PC는 목록에 적혀 있어도 빠지고, `--host site`나 관제 PC 주소를 지정하면 "production only, excluded from simulation (D-571)"로 거절한다. Fleet 컨테이너가 도는 호스트는 이름과 관계없이 같은 이유로 거절한다. `--check` 표는 관제 PC를 이 문구로 한 줄 보여 준다.
-- `tools/remote/remote_sim.py`가 후보 PC마다 ssh로 nonce를 붙여 읽는다: 준비(네이티브 ros_gz·Nav2·gz_ros2_control), 코어당 부하, `MemAvailable`, `nvidia-smi` 사용률, 돌고 있는 `gz sim` 수, 누적 CPU 50 % 이상인 프로세스 수.
-- 거절 조건(어느 하나라도): 준비 안 됨, 코어당 부하 0.9 초과, 남은 메모리 4 GB 미만.
-- 점수 = min(남은 코어 ÷ 실행당 CPU 상한, 남은 메모리 ÷ 실행당 메모리 상한) − 돌고 있는 `gz sim` 수 − (GPU 90 % 이상이면 1). 점수가 0 이하이면 거절한다. 무거운 프로세스는 표에 보이지만 점수에는 부하 평균으로만 들어간다.
-- 가장 높은 점수의 PC, 또는 `--host`로 지정한 PC로 보낸다. 지정한 PC도 거절 조건을 그대로 받는다. 받아 줄 PC가 없으면 표를 보여 주고 실행하지 않는다.
-- `--check`는 표만 출력한다.
+- 후보는 `ROSY_SIM_HOSTS`(`user@addr[=role]`), 없으면 gitignore된 `private/lab-hosts.json`의 `sim_hosts`, 그것도 없으면 `remote_pytest.py`의 시험 호스트다. 주소는 공개 저장소에 적지 않는다(D-226). 역할(`model`, `ai`, 기본 `ai`)은 4항의 상한만 고른다.
+- 관제 PC는 목록에 적혀 있어도 빠진다. `=site` 역할, 설정된 현장 호스트(`site_host`), `~/rosy-jobs/site` 표시가 있는 호스트(D-568 3항: 라이브 Fleet 호스트에 둔다)는 이름과 관계없이 쓰지 않는다. `--host site`나 현장 호스트 주소를 지정하면 "production only, excluded from simulation (D-571)"로 거절한다.
+- 재기와 순위는 `remote_pytest.py`의 `placed_hosts("sim")` 하나다(D-568 2항). 호스트마다 ssh 한 번으로 코어, load, 메모리, `sim` 능력(`ros_gz_sim`·`nav2_bringup`), `~/rosy-jobs`의 잠금·예약, `busy`를 읽고, `sim` 하한(코어 6, 8 GB)을 넘은 호스트를 여유가 큰 순서로 쓴다. 이 실행기는 따로 재지 않는다.
+- 실행기는 고른 호스트에 자기 상한만큼 10분 예약을 쓰고, 실행하는 동안 `~/rosy-jobs/<실행>.lock`(`pid sim 코어 GB`, 4항의 상한 값)을 잡는다. 끝나면 지운다.
+- `--host`로 지정한 PC도 같은 하한을 받는다. 받아 줄 PC가 없으면 호스트마다의 이유를 찍고 실행하지 않는다. `--check`는 그 이유만 찍는다.
 
 **4. 상한.** 실행 하나당 `systemd-run --user --scope -p MemoryMax -p CPUQuota`, `nice -n 10`:
 
@@ -59,17 +58,27 @@
 **5. 같이 쓰는 AI PC.**
 
 - 설치(`--approve sim`)는 소유자가 동의하고 소유자가 직접 sudo로 한다. 설치하지 않은 동안 실행기는 AI PC를 "준비 안 됨"으로 건너뛴다. 설치가 곧 동의의 기록이다.
-- 실행기는 남의 프로세스를 멈추거나 우선순위를 바꾸지 않는다. 자기 scope만 정리하고, `pkill`·`kill`을 쓰지 않는다. 같은 `ai` 계정 안의 남의 `gz sim`은 점수에서 한 자리씩 뺀다.
+- 실행기는 남의 프로세스를 멈추거나 우선순위를 바꾸지 않는다. 자기 scope만 정리하고, `pkill`·`kill`을 쓰지 않는다. 같은 `ai` 계정 안의 남의 `gz sim`은 load와 남은 메모리로만 보인다(D-568 Consequences).
 - AI PC 상한은 모델 PC보다 낮다(4코어, 4 GB).
 
 ### Consequences
 
-- 모델 PC가 바쁘면 AI PC(설치 뒤)로 간다. 둘 다 바쁘면 기다린다. 관제 PC로 넘기지 않는다. 세션마다 작업공간과 pip 의존성을 손으로 만들지 않는다.
+- 모델 PC가 바쁘면 AI PC(설치 뒤)로 간다. 둘 다 바쁘면 실행하지 않고 끝난다(D-568 7항: `sim`은 대체하지 않는다). 관제 PC로 넘기지 않는다. 세션마다 작업공간과 pip 의존성을 손으로 만들지 않는다.
 - 같은 저장소 커밋에서 colcon으로 빌드하므로 실행마다 빌드 시간(수 분)이 든다. 캐시는 두지 않는다.
 - 실행 결과는 SIM 등급 증거일 뿐이다. 장치·필드 수용을 대신하지 않는다.
 
 ### Verification
 
-호스트 pytest: `test/test_remote_sim.py`(가짜 probe 출력으로 nonce·준비·거절·점수·지정 PC, 관제 PC 제외와 `--host site` 거절, 스크립트 구문), `test/test_host_state.py`(apt 줄은 `--approve sim`일 때만 설치, 타이머는 보고만, 관제 PC 매니페스트에는 apt 줄 없음). 2026-10-09 모델 PC에서 실행기로 `gz_sim` 빌드와 헤드리스 `gz_multi` 한 대 spawn까지 확인했고, 실행 뒤 남은 scope·프로세스·폴더는 없었다. 설치와 실제 벤치 실행 결과는 이 ADR의 증거가 아니며 설치 뒤 각 PC에서 따로 확인한다.
+호스트 pytest: `test/test_remote_sim.py`(후보 출처와 역할, 가짜 잼 값으로 D-568 하한·순위·잠금·busy, 관제 PC 제외와 `--host site` 거절, 작업 잠금 줄, 스크립트 구문), `test/test_host_state.py`(apt 줄은 `--approve sim`일 때만 설치, 타이머는 보고만, 관제 PC 매니페스트에는 apt 줄 없음). 2026-10-09 모델 PC에서 실행기로 `gz_sim` 빌드와 헤드리스 `gz_multi` 한 대 spawn까지 확인했고, 실행 뒤 남은 scope·프로세스·폴더는 없었다. 설치와 실제 벤치 실행 결과는 이 ADR의 증거가 아니며 설치 뒤 각 PC에서 따로 확인한다. 2026-10-13 개정 뒤의 실행기(D-568 배치, 작업 잠금)는 호스트 pytest만 거쳤고 실제 PC에서 Gazebo로 돌리지 않았다.
 
-**Related:** [D-434](D-434-model-pc-and-site-pc-roles.md), [D-476 모델 PC Gazebo 검증](../validation/d476-gazebo-model-pc-2026-10-06/result.md), [D-527](D-527-decision-test-host-boundaries.md), [D-530](D-530-host-management-desired-state-and-guard.md), D-553(`remote_pytest.py` 분산).
+### 2026-10-13 개정 (main 합류)
+
+이 브랜치가 쓰인 뒤 main에 [D-568](D-568-compute-pool-headroom-placement.md)(잰 여유 배치, `~/rosy-jobs` 잠금·예약), [D-584](D-584-tests-never-run-on-operator-laptop.md)(시험은 노트북에서 돌리지 않는다), D-226의 호스트 주소 분리(`private/lab-hosts.json`)가 들어왔다. 겹치는 곳은 main의 규칙을 따른다.
+
+- 1항 표의 pytest 줄: "관제 PC는 하지 않음"을 D-568 3항(맨 뒤, Fleet 몫 제외)으로 고쳤다. 관제 PC의 시뮬레이션 제외는 그대로다.
+- 3항: 실행기의 자체 probe와 점수(nonce, `gz_ros2_control` 확인, Fleet 컨테이너 감지, `gz sim` 수·GPU 감점, 코어당 부하 0.9·4 GB 거절)를 없애고 D-568의 재기 하나를 쓴다. 준비 여부는 D-568의 `sim` 능력(`ros_gz_sim`·`nav2_bringup`)으로 본다. `gz_ros2_control`이 빠진 PC는 실행 중 launch 오류로 드러난다. Fleet 호스트는 `~/rosy-jobs/site` 표시로 가린다.
+- 기본 호스트 주소를 코드에서 빼고 `sim_hosts`(D-226)로 옮겼다.
+- 4항의 상한(모델 8코어·6 GB, AI 4코어·4 GB)은 그대로다. 하한은 D-568의 `sim` 값(코어 6, 8 GB)이라 상한과 숫자가 다르다. 잠금에는 상한을 적는다.
+- `remote_pytest.py --pick sim`(D-568 5항)은 바꾸지 않았다. 관제 PC가 `sim` 능력과 하한을 갖추면 그 경로는 관제 PC를 고를 수 있다. 지금은 8스레드와 nav2 부재로 넘지 못한다(D-568 3항).
+
+**Related:** [D-434](D-434-model-pc-and-site-pc-roles.md), [D-476 모델 PC Gazebo 검증](../validation/d476-gazebo-model-pc-2026-10-06/result.md), [D-527](D-527-decision-test-host-boundaries.md), [D-530](D-530-host-management-desired-state-and-guard.md), D-553(`remote_pytest.py` 분산), [D-568](D-568-compute-pool-headroom-placement.md), [D-584](D-584-tests-never-run-on-operator-laptop.md).
