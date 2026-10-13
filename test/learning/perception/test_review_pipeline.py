@@ -312,6 +312,35 @@ def test_no_actual_mask_approval_holds_before_source_or_companion_reads(tmp_path
     assert not list(requests.glob('*.json'))
 
 
+def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypatch, capsys):
+    import runpy
+    import time
+    from test_review_authority import current as pending
+    args, authority, built, config, owner, current, requests = setup(tmp_path)
+    value = pending()
+    receipt = delivery(value, stamp=time.time())
+    receipt['revision'] = {k: value[k] for k in ('workspace_id', 'generation', 'decision_sha256')}
+    current.write_text(json.dumps(receipt))
+    config['authority']['workspace_id'] = value['workspace_id']
+    settings = dict(source_proof_files=args['source_proof_files'],
+                    staging_parent=str(args['staging_parent']), dataset_name='indexed')
+    file = tmp_path / 'owner.json'
+    file.write_text(json.dumps({'cycle': config, 'review': settings}, default=str))
+    out = tmp_path / 'cli-state'
+    monkeypatch.setattr(sys, 'argv', ['review_pipeline.py', str(file), '--out', str(out), '--once'])
+    original = learning_cycle.run_once
+    def noisy_run(*args, **kwargs):
+        print('epoch progress from trainer')
+        return original(*args, **kwargs)
+    monkeypatch.setattr(learning_cycle, 'run_once', noisy_run)
+    runpy.run_path(review_pipeline.__file__, run_name='__main__')
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)['review_autobuild']['status'] == 'held'
+    assert 'epoch progress from trainer' in captured.err
+    assert json.loads((out / 'state.json').read_text())['review_autobuild']['blockers'] == ['no_approved_masks']
+    assert not list(requests.glob('*.json'))
+
+
 def test_build_cannot_change_valid_proof_bytes_under_old_logical_budget(tmp_path,monkeypatch):
     args,authority,built,config,owner,current,requests=setup(tmp_path)
     original=review_pipeline.build_dataset

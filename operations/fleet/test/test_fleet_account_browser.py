@@ -70,6 +70,7 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    expect(page.locator('#fleet-login')).to_be_hidden()  # D-683 1: login link or account menu, never both
     page.locator('#topbar-more').click()
     expect(page.locator('#fleet-account')).to_be_visible()
     expect(page.locator('#fleet-profile')).to_be_visible()
