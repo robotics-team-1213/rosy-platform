@@ -161,7 +161,9 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 expect(page.locator('#connections')).to_have_text('')
                 login('bob')
                 page.get_by_text('읽기 토큰으로 연결', exact=True).click()
-                expect(page.locator('#sharing option[value=project]')).to_be_disabled()
+                page.locator('#sharing').focus()
+                page.keyboard.press('End')
+                expect(page.locator('#sharing')).to_have_value('personal')
                 expect(page.locator('#connections button')).to_have_count(0)
                 expect(page.locator('#imports button')).to_have_count(0)
                 # An unavailable backend must not masquerade as a logged-out session.
