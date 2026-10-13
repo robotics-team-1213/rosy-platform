@@ -434,6 +434,27 @@ def test_enforce_basis_refusing_the_twist_holds_then_aborts():
     assert .5 < rig.now-start <= .75
 
 
+def test_a_refusal_whose_second_ask_passes_still_aborts_in_time_and_a_blocked_hold_does_not_count():
+    """Review: the bend asks the proof twice a tick; refused then allowed is still a refused tick.
+    A long D-422 blocked hold before the first refusal does not use up the hold."""
+    rig = _bending_under_the_proof()
+    allowed, asks = rig.m._return_motion, []
+    rig.m.bind_return_motion(lambda now, v, w: asks.append(now) is not None and asks.count(now) > 1,
+                             proof_configured=lambda: True)
+    start = rig.now
+    for _ in range(40):
+        decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+        assert (decision.linear, decision.angular) == (0., 0.)
+        if status.junction.state == 'aborted':
+            break
+    assert status.junction.reason == 'motion_unconfirmed' and .5 < rig.now-start <= .75
+    rig = _bending_under_the_proof()
+    rig.m._junction['phase_at'] -= 1.                      # as after a blocked hold over 0.5 s
+    rig.m.bind_return_motion(lambda now, v, w: False, proof_configured=lambda: True)
+    decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+    assert (status.junction.state, status.reason) == ('bending', 'junction_motion_unconfirmed')
+
+
 def test_lane_bend_capability_needs_a_basis():
     """Review M1: announced only when a bend could be admitted at all (enforce or the site parts)."""
     assert site_rig().m.supports_lane_bend is False        # no floor declaration, proof not live
