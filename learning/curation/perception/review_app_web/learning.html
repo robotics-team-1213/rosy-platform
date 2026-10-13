@@ -2,12 +2,13 @@
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rosy 개발 — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
-<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
-<ui-shell grammar="procedure"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning 작업 목록"><b>ROSY</b></ui-brand><h1>학습 작업</h1>
-<nav class="workspace-tabs" aria-label="학습 화면"><a data-action-icon="list" href="/learning" aria-current="page">작업 목록</a><a data-action-icon="box" href="/">객체 검수</a><a data-action-icon="pixels" href="/pixels">픽셀 검수</a><a data-action-icon="folder" href="/catalog">자료 등록</a></nav><span data-spacer></span>
+<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="작업 목록" aria-current="page">목록</a><a class="ui-rail-item" data-action-icon="box" href="/" aria-label="객체 검수">객체</a><a class="ui-rail-item" data-action-icon="pixels" href="/pixels" aria-label="픽셀 검수">픽셀</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><h1>학습 작업</h1></div>
 <main id="learning-main" class="learning-main" tabindex="-1">
 <div class="workspace-heading"><div><h2>학습·검수 작업대</h2><p>현재 검수할 자료와 기존 학습 결과를 각각 확인하세요.</p></div><a class="ui-field" href="/accounts">계정·외부 자료</a></div>
 <ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
@@ -33,4 +34,4 @@
 <p id="expected-files" class="quiet"></p><ui-button id="connect" data-action-icon="check" kind="primary" disabled>연결 저장</ui-button></form></details>
 <details class="learning-section"><summary>지원 기능과 다음 작업</summary><div id="capabilities"></div>
 <p class="quiet">자료 등록과 픽셀 검수는 이 앱에서 이어갑니다. 연결된 소유 학습 실행기는 시작·중지·재시도할 수 있습니다. 기존 CLI 작업 결과도 여기서 확인합니다. CVAT 서버 연결과 정책 승격은 별도입니다.</p></details>
-</main></ui-shell></body></html>
+</main></div></div></ui-shell></body></html>

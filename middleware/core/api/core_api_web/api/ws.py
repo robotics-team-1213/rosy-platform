@@ -213,7 +213,7 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
     websocket.state.token_id = auth.token_id
     websocket.state.account_auth = account_auth
     authorization_header = 'authorization'
-    websocket.state.account_bearer = websocket.headers.get(authorization_header) if account_auth else None
+    websocket.state.account_bearer = websocket.headers.get(authorization_header, None) if account_auth else None
     websocket.state.min_role = min_role
     websocket.state.token_guard = asyncio.create_task(_watch_token(websocket, svc, auth.token_id))
     return svc

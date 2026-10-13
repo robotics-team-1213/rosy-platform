@@ -32,6 +32,8 @@ def test_fleet_documents_share_the_stop_and_chrome_icons():
         assert ">비상 정지</span>" in page
         assert "래치 · 로봇별 관리자 해제" in page
         assert 'sr-only">전체 비상 정지' not in page
-        for icon in ("connect", "notification", "theme-dark", "refresh"):
+        for icon in ("notification", "theme-dark", "refresh"):
             assert f'data-action-icon="{icon}"' in page, (name, icon)
+        # D-741 3: 로봇 연결 수와 그 아이콘은 관제 문서의 지도 머리에만 있다.
+        assert ('data-action-icon="connect"' in page) == (name == "index.html"), name
         assert 'd="M4 7h16' not in page

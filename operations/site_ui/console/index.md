@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
+- 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
 - 2026-10-13 · 1438d53d1 · feat(web): control line (D-741), Cell 묶음 선 유지
 - 2026-10-13 · 7f40561e6 · main 브라우저 회귀 수정 재확인 (D-683/D-493/D-519)
 - 2026-10-13 · cfeced643 · main 브라우저 회귀 수정 (D-683/D-493/D-519)
-- 2026-10-12 · e7ada4b52 · D-668 Fleet header controls
-- 2026-10-12 · 5941920df7 · D-720 원문 요청의 숙고 상태 표시

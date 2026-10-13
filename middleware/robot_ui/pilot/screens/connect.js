@@ -162,8 +162,12 @@ function renderRecentList(root, onConnect) {
 }
 
 // 이 화면이 붙어 있는 로봇. 옆 로봇 목록보다 먼저 보여 준다.
+// D-741 3: 앱 바의 이름표가 앱 이름 다음에 그 로봇 이름을 적는다. 모르면 비워 둔다.
 function rememberRobot(root, offer) {
-  if (offer?.robotId) root.__pilotRobotId = offer.robotId;
+  if (!offer?.robotId) return;
+  root.__pilotRobotId = offer.robotId;
+  const name = document.querySelector("[data-pilot-robot]");
+  if (name) { name.textContent = offer.robotId; name.hidden = false; }
 }
 
 async function showConnection(host, root, onConnect) {
