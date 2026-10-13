@@ -60,7 +60,7 @@ Glossary for the perception and model boundary. The picture and the status of ea
 
 ### Perception
 
-The production of an observation from sensors or a camera, carrying source, time, frame, and calibration revision (D-290). On the robot that code lives in `middleware/perception` and does not publish the final `/cmd_vel`. Site ceiling-camera observations live in `operations/vision`. Offline drafts and training live in `learning/training/perception`. A learned lane model publishes a shadow observation only (D-356, Proposed).
+The production of an observation from sensors or a camera, carrying source, time, frame, and calibration revision (D-290). On the robot that code lives in `middleware/perception` and does not publish the final `/cmd_vel`. Site ceiling-camera observations live in `operations/overhead`. Offline drafts and training live in `learning/training/perception`. A learned lane model publishes a shadow observation only (D-356, Proposed).
 
 ### World state
 

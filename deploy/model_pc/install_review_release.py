@@ -23,13 +23,49 @@ APP = Path("learning/curation/perception/review_app.py")
 WEB = Path("learning/curation/perception/review_app_web")
 LEGACY_APP = Path("learning/training/perception/dataset/review_app.py")
 SPLIT_REQUIRED = (
+                  'middleware/perception/nodes/calib_node.py',
+                  'middleware/perception/nodes/calibrated_values.py',
+                  'middleware/perception/nodes/calibration_atomic.py',
+                  'middleware/perception/nodes/calibration_camera.py',
+                  'middleware/perception/nodes/calibration_lock.py',
+                  'middleware/perception/nodes/calibration_record.py',
+                  'middleware/perception/nodes/calibration_relocation.py',
+                  'middleware/perception/nodes/calibration_rotation.py',
+                  'middleware/perception/nodes/calibration_sequence.py',
+                  'middleware/perception/nodes/calibration_snapshot.py',
+                  'middleware/perception/nodes/calibration_storage.py',
+                  'middleware/perception/nodes/camera_detect_node.py',
+                  'middleware/perception/nodes/camera_lock.py',
+                  'middleware/perception/nodes/camera_region_range.py',
+                  'middleware/perception/nodes/dock_observer_node.py',
+                  'middleware/perception/nodes/executor_choice.py',
+                  'middleware/perception/nodes/goal_escape.py',
+                  'middleware/perception/nodes/ir_adc_node.py',
+                  'middleware/perception/nodes/learned_lane_node.py',
+                  'middleware/perception/nodes/line_observer_overrides.py',
+                  'middleware/perception/nodes/obstacle_observer_node.py',
+                  'middleware/perception/nodes/pilot_recorder_node.py',
+                  'middleware/perception/nodes/pilot_recording.py',
+                  'middleware/perception/nodes/record_session.py',
+                  'middleware/perception/nodes/recording.py',
+                  'middleware/perception/nodes/road_observer_node.py',
+                  'middleware/perception/nodes/road_state_node.py',
+                  'middleware/perception/nodes/sensor_provider.py',
+                  'middleware/perception/nodes/startup_calibration_node.py',
+                  'middleware/perception/nodes/tf_buffer.py',
+                  'middleware/perception/nodes/web_http.py',
+                  'middleware/perception/nodes/web_map_control.py',
+                  'middleware/perception/nodes/web_node.py',
+                  'middleware/perception/nodes/web_render.py',
+                  'middleware/perception/nodes/web_state.py',
+
                   'middleware/perception/localization/loc_assist.py',
                   'middleware/perception/localization/loc_assist_node.py',
                   'middleware/perception/localization/localization_node.py',
                   'middleware/perception/graph_health/watch.py',
                   'middleware/perception/graph_health/watch_node.py',
-                  'middleware/perception/vision/object_observation/object_detector.py',
-                  'middleware/perception/vision/object_observation/object_detector_node.py',
+                  'middleware/perception/front_camera/object_observation/object_detector.py',
+                  'middleware/perception/front_camera/object_observation/object_detector_node.py',
                   'middleware/perception/sensors/line_observation/ir_overlay.py',
                   'middleware/perception/sensors/line_observation/core_law_input.py',
                   'middleware/perception/sensors/line_observation/route_context_input.py',
@@ -39,13 +75,13 @@ SPLIT_REQUIRED = (
                   'middleware/perception/snapshots/capture_trigger_node.py',
                   "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
-                  "middleware/perception/vision/perception/__init__.py",
-                  "middleware/drive/safety/command_gate.py",
+                  "middleware/perception/front_camera/perception/__init__.py",
+                  "middleware/drive/motion_limits/command_gate.py",
                   "middleware/drive/recovery/recover.py",
                   "middleware/drive/tracking/path_follow.py",
                   "middleware/drive/calibration/modes.py",
                   "middleware/drive/planning/grid/__init__.py",
-                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/motion_limits/adapter/__init__.py",
                   "middleware/drive/tracking/wander/__init__.py")
 
 
@@ -217,6 +253,24 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                         line = interpreter + space + script + separator + arguments
                 lines.append(line)
             unit_text = "".join(lines)
+        # Retained apps keep their CLI; opt-in controls must survive a roundtrip.
+        app = target / (LEGACY_APP if to_legacy else APP)
+        lines = []
+        for line in (unit_text if unit_text is not None else text).splitlines(keepends=True):
+            if line.startswith('ExecStart='):
+                line = re.sub(r' --learning-control [^\s]+', '', line)
+                line = re.sub(r' --decisions-port [^\s]+', '', line)
+                cli = app.read_text(encoding='utf-8')
+                port_arg = re.search(r' --port ([0-9]+)', line)
+                if port_arg and '--decisions-port' in cli:
+                    line = line.rstrip('\n') + f' --decisions-port {int(port_arg[1]) + 10000}\n'
+                state_arg = re.search(r' --state ([^\s]+)', line)
+                if state_arg and '--learning-control' in cli:
+                    binding = Path(state_arg[1]) / 'learning-control.json'
+                    if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
+            lines.append(line)
+        adjusted = ''.join(lines)
+        if adjusted != text: unit_text = adjusted
     if old_target == target and unit_text is None:
         return target
     try:

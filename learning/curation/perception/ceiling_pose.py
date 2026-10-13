@@ -1,6 +1,6 @@
 """D-563 3: ceiling marker poses (poses.jsonl from tools/capture/ceiling_poses.py, which owns the
 Rosy Cam / rosy_vision side) fused with robot odometry. Learning code reads the poses only
-(D-427 §2: learning does not import operations/vision).
+(D-427 §2: learning does not import operations/overhead).
 
 ``fuse`` (used by map_projected_drivable.py) gives each robot camera stamp a map pose: the
 nearest detection within max_gap_s, carried to the stamp by the odometry's relative motion;

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from tools.gz.audit_track_footprint import separation, audit
+from tools.sim.gazebo.audit_track_footprint import separation, audit
 
 
 def test_separating_axis_gap_distinguishes_touching_and_crossing_boxes():

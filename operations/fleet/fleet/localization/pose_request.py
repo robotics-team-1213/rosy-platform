@@ -39,7 +39,7 @@ def is_live(request: Mapping) -> bool:
 def overhead_decision(request: Mapping, pose) -> Optional[LocalizationDecision]:
     """The overhead map pose as a decision, or None when it is not trustworthy.
 
-    `pose` is `fleet.localization.map_pose.MapPose`. Only a LOCALIZED pose whose anchor is a
+    `pose` is `rosy.world.state.projections.map_pose.MapPose`. Only a LOCALIZED pose whose anchor is a
     fresh sighting counts: DEGRADED and UNKNOWN are not, and neither is any pose that is
     odom alone (a robot's own odom is what a stale-pose request says it cannot trust)."""
     if (pose is None or pose.state != "LOCALIZED" or pose.anchor_age_s is None

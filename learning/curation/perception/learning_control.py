@@ -101,9 +101,15 @@ class Control:
         # shortcut: bound ledger reads to 16 MiB; use a compact projection for larger histories.
         ledger_error = None
         try:
-            cycles = json.loads(_bytes(state, 16 * 1024 * 1024)).get('cycles', {}) if state.exists() else {}
-            retry = not cycles or any(row.get('status') in ('pending', 'retry', 'running')
-                and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in cycles.values())
+            ledger = json.loads(_bytes(state, 16 * 1024 * 1024)) if state.exists() else {}
+            cycles = ledger.get('cycles', {})
+            pipeline = ledger.get('review_autobuild', {})
+            keys = pipeline.get('cycle_keys')
+            if keys is not None and (not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys)):
+                raise ValueError('invalid current cycle references')
+            rows = [cycles.get(key, {'status': 'pending', 'attempts': 0}) for key in keys] if keys else list(cycles.values())
+            retry = pipeline.get('status') == 'held' or not rows or any(row.get('status') in ('pending', 'retry', 'running')
+                and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in rows)
         except (ValueError, KeyError, TypeError, AttributeError, OSError):
             retry = False
             ledger_error = '학습 실행 기록을 읽지 못했습니다. 중지는 가능하며 재시도 전에 기록을 확인하세요.'

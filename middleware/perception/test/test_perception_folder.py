@@ -3,7 +3,7 @@
 from pathlib import Path
 
 SENSING = Path(__file__).resolve().parents[1] / "sensors" / "sensing"
-PERCEPTION = Path(__file__).resolve().parents[1] / "vision" / "perception"
+PERCEPTION = Path(__file__).resolve().parents[1] / "front_camera" / "perception"
 
 
 def test_image_modules_moved_and_geometry_stayed():

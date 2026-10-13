@@ -10,8 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT/path) for path in (
-    'contracts/learning/src', 'middleware/execution/local/src',
-    'middleware/execution/local/test', 'middleware/devices/omx/adapter',
+    'contracts/learning/src', 'middleware/robot_execution/local/src',
+    'middleware/robot_execution/local/test', 'middleware/devices/omx/adapter',
     'middleware/devices/omx/adapter/test', 'learning/registry/policy',
     'learning/registry/policy/test', 'learning/curation/pinky',
     'learning/curation/pinky/test', 'test')]

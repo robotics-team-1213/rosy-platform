@@ -19,8 +19,8 @@ WHEEL_SOURCES=("$CONTRACT_WORK/skill" "$CONTRACT_WORK/motion")
 WHEEL_NAMES=(rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0)
 if [[ -f "$WORKSPACE/operations/fleet/package.xml" ]]; then
     mkdir -p "$CONTRACT_WORK/execution"
-    cp "$WORKSPACE/operations/execution/pyproject.toml" "$CONTRACT_WORK/execution/"
-    cp -a "$WORKSPACE/operations/execution/src" "$CONTRACT_WORK/execution/"
+    cp "$WORKSPACE/operations/site_execution/pyproject.toml" "$CONTRACT_WORK/execution/"
+    cp -a "$WORKSPACE/operations/site_execution/src" "$CONTRACT_WORK/execution/"
     WHEEL_SOURCES+=("$CONTRACT_WORK/execution")
     WHEEL_NAMES+=(rosy-execution==0.1.2)
 fi
