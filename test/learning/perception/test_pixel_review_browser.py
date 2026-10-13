@@ -22,6 +22,62 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+def test_keyboard_pixel_cursor_samples_without_changing_photo(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('1')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('Alt+ArrowRight')
+    expect(page.locator('#pixel-keyboard-position')).to_contain_text('17, 12')
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    page.keyboard.press('Space')
+    expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+    assert review_masks.get(store, 0)['version'] == 0
+    page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 1)
+
+
+def test_keyboard_pixel_brush_saves_source_coordinates_and_cancels(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('4')
+    page.locator('#pixel-radius').fill('0')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('t')
+    page.keyboard.down('Space')
+    page.keyboard.press('Alt+ArrowRight')
+    page.keyboard.up('Space')
+    expect(page.locator('#pixel-draft')).to_contain_text('1획')
+    assert review_masks.get(store, 0)['version'] == 0
+    page.keyboard.press('Control+s')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    pixels = review_masks.pixels(store, review_masks.get(store, 0))
+    assert pixels[12, 16] == pixels[12, 17] == 4
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.down('Space'); page.keyboard.press('Alt+ArrowUp')
+    page.keyboard.press('Escape'); page.keyboard.up('Space')
+    expect(page.locator('#pixel-draft')).to_have_text('')
+    assert review_masks.get(store, 0)['version'] == 1
+
+
+def test_keyboard_pixel_polygon_uses_same_apply_and_undo(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('1')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('p')
+    page.keyboard.press('Space')
+    page.keyboard.press('Alt+Shift+ArrowRight'); page.keyboard.press('Space')
+    page.keyboard.press('Alt+Shift+ArrowUp'); page.keyboard.press('Space')
+    expect(page.locator('#pixel-draft')).to_contain_text('3개')
+    page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.keyboard.press('Control+z')
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    assert np.all(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
+
+
 @pytest.mark.parametrize('width', [1440, 1262, 390, 320])
 def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, width):
     page, store, expect = browser_workspace
