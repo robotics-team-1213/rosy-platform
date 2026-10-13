@@ -27,6 +27,7 @@ async function perform(action) {
 async function refresh() {
   const options=await api('/api/accounts/options');
   $('hf-login').hidden=$('hf-link').hidden=!options.oauth;
+  if(options.rosy_account) $('hf-login').hidden=true;
   if(!options.enabled) {
     $('account-status').textContent='협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.';
     $('login-panel').hidden=$('signed-in').hidden=true; active=false; return;
@@ -34,6 +35,11 @@ async function refresh() {
   let session;
   try { session=await api('/api/accounts/session'); }
   catch(e) {
+    if(options.rosy_account) {
+      $('login-panel').hidden=true; $('signed-in').hidden=true;
+      $('account-status').textContent='Rosy Account로 연결 중…';
+      window.location.assign('/api/account/login?return=/accounts'); return;
+    }
     token=null; active=false; $('login-panel').hidden=false; $('signed-in').hidden=true;
     $('account-status').textContent='프로젝트에 로그인하세요.'; return;
   }
