@@ -106,6 +106,23 @@ def _is_cache(worktree: Path, rel: str) -> bool:
     return False
 
 
+def _only_caches(worktree: Path, rel: str) -> bool:
+    """An ignored path loses nothing when it is in a cache, or is a directory with no file outside caches.
+
+    git reports a directory whose whole content is ignored as one entry (``ws/``), so it is walked.
+    """
+    if _is_cache(worktree, rel):
+        return True
+    if not rel.endswith("/"):
+        return False
+    for folder, dirs, files in os.walk(worktree / rel):
+        if files:
+            return False
+        inside = Path(folder).relative_to(worktree).as_posix()
+        dirs[:] = [d for d in dirs if not _is_cache(worktree, f"{inside}/{d}/")]
+    return True
+
+
 # --- inventory ------------------------------------------------------------------
 
 def _row(path: Path, **facts) -> dict:
@@ -172,7 +189,7 @@ def _status(path: Path) -> tuple[list[str], list[str]] | None:
             continue
         if code != "!!":
             changed.append(rel)
-        elif not _is_cache(path, rel):
+        elif not _only_caches(path, rel):
             ignored.append(rel)
     return changed, ignored
 
