@@ -1,5 +1,6 @@
 """D-757 durable human accounts and live revocation, without robot commands."""
 import sqlite3
+import json
 
 import pytest
 
@@ -217,3 +218,73 @@ def test_disabled_sessions_cannot_change_profile_or_password_across_instances(tm
         other.profile(value, "stale edit")
     with pytest.raises(StalePasswordCheck):
         other.change_password(value, "another secret", current_password="permanent secret")
+
+
+def test_managed_operator_requires_exact_site_grant_for_robot_command(tmp_path):
+    app, _ = _app(tmp_path)
+    sessions = app.state.password_sessions
+    sessions.bootstrap_accounts("alice", "test-site")
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
+                                  password="temporary secret", grants=[])
+    client = _client(app)
+    assert _login(client, login="bob", password="temporary secret").status_code == 204
+    assert client.post("/api/fleet/auth/change-password", headers=ORIGIN,
+                       json={"password": "permanent secret"}).status_code == 204
+    robot = app.state.console.clients()["rosy_01"]
+    before = list(robot.calls)
+    assert client.get("/api/fleet/state").status_code == 403
+    assert client.post("/api/fleet/estop", headers=ORIGIN).status_code == 403
+    assert robot.calls == before
+    row = next(r for r in sessions.list_accounts(manager) if r["login"] == "bob")
+    row = sessions.update_account(manager, row["account_id"], revision=row["revision"], grants=[
+        {"resource": "site:test-site", "capabilities": ["fleet.read", "fleet.operate"]}])
+    assert _login(client, login="bob", password="permanent secret").status_code == 204
+    assert client.post("/api/fleet/estop", headers=ORIGIN).status_code == 200
+    assert len(robot.calls) > len(before)
+    before = list(robot.calls)
+    sessions.update_account(manager, row["account_id"], revision=row["revision"], grants=[
+        {"resource": "site:other-site", "capabilities": ["fleet.read", "fleet.operate"]}])
+    assert _login(client, login="bob", password="permanent secret").status_code == 204
+    assert client.post("/api/fleet/estop", headers=ORIGIN).status_code == 403
+    assert robot.calls == before
+
+
+def test_account_audit_preserves_historical_before_after_grants(tmp_path):
+    sessions = activated(tmp_path)
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
+                                  password="temporary secret", grants=[])
+    first = [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]
+    updated = sessions.update_account(manager, row["account_id"], revision=row["revision"], grants=first)
+    sessions.update_account(manager, row["account_id"], revision=updated["revision"], grants=[])
+    history = [r for r in sessions.list_account_audit(manager) if r["target_account_id"] == row["account_id"]]
+    assert history[-2]["before"]["grants"] == []
+    assert history[-2]["after"]["grants"] == first
+    assert history[-1]["before"]["grants"] == first
+    assert history[-1]["after"]["grants"] == []
+    assert history[-1]["outcome"] == "success"
+    assert "password_scrypt" not in json.dumps(history)
+
+
+def test_preactivation_worker_observes_activation_and_disable(tmp_path):
+    sessions = PasswordSessions(tmp_path / "accounts.sqlite3", _accounts())
+    old = PasswordSessions(sessions.path, _accounts())
+    old_cookie = cookie(old)
+    sessions.bootstrap_accounts("alice", "test-site")
+    manager = cookie(sessions)
+    row = sessions.create_account(manager, login="bob", principal_id="bob", role="operator",
+                                  password="temporary secret", grants=[])
+    assert old.principal(old_cookie) is None
+    assert old.check("b", "bob", "temporary secret") is not None
+    sessions.update_account(manager, row["account_id"], revision=row["revision"], enabled=False)
+    assert old.check("c", "bob", "temporary secret") is None
+
+
+def test_migration_rejects_reused_login_with_different_principal(tmp_path):
+    path = tmp_path / "accounts.sqlite3"
+    sessions = PasswordSessions(path, _accounts())
+    sessions.change_password(cookie(sessions), "a changed password", current_password=TYPED)
+    with pytest.raises(ValueError, match="identity"):
+        PasswordSessions(path, _accounts(principal_id="different-owner"),
+                         accounts_bootstrap=("alice", "test-site"))
