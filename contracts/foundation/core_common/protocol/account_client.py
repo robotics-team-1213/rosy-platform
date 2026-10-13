@@ -272,7 +272,8 @@ def load_account_client(filename, *, destinations=('/pilot', '/dashboard', '/'))
     base = Path(filename).resolve().parent
     def file(value):
         return base / value
+    key_file = file(settings['encryption_key_file'])
     return AccountClient(file(settings['session_db']), issuer=settings['issuer'],
         client_id=settings['client_id'], resource=settings['resource'], callback=settings['callback'],
         public_keys={kid: read(file(path)) for kid, path in settings['public_key_files'].items()},
-        encryption_key=read(file(settings['encryption_key_file']), secret=True).strip(), destinations=destinations)
+        encryption_key=read(key_file, True).strip(), destinations=destinations)
