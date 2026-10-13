@@ -20,7 +20,8 @@ def test_sidebar_track_is_the_procedure_column():
     # D-741 6: the Robot task list sits in the shared sub-nav seat, not in a column of its own.
     assert "--sidebar-track" not in shell and "procedure-tasks" not in shell
     robot = SHELL.parents[1]
-    assert '<div class="ui-subnav" hidden></div>' in (robot / "surface.html").read_text(encoding="utf-8")
+    assert '<div class="ui-subnav"></div>' in (robot / "surface.html").read_text(encoding="utf-8")
+    assert ".ui-subnav:empty { display: none; }" in shell, "a screen without tasks folds the empty seat"
     assert "subnav.append(taskChooser.element);" in (robot / "shell" / "mount.js").read_text(encoding="utf-8")
     assert "grid-template-columns: var(--sidebar-track) minmax(0, 1fr);" in fleet
     assert "minmax(13rem, 18rem)" not in shell

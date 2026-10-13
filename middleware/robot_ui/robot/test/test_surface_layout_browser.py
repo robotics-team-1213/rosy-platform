@@ -43,7 +43,7 @@ def _page(browser, width: int, height: int):
             <a class="ui-rail-item" aria-current="page" aria-label="운용"><span>운용</span></a>
             <a class="ui-rail-item" aria-label="작업 준비"><span>준비</span></a>
             <a class="ui-rail-item" aria-label="설치·정비"><span>설치</span></a></nav></div>
-          <div class="ui-subnav" hidden></div>
+          <div class="ui-subnav"></div>
           <main class="ui-app-main surface-main" id="surface-main">
             <ui-empty id="surface-status" hidden></ui-empty>
             <div class="surface-slot" data-slot="banner"></div>

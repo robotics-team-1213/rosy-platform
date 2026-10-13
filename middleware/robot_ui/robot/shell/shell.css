@@ -50,7 +50,8 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
 }
 ui-section[data-failed="true"] { border-style: dashed; }
 /* D-741 6 — 작업 목록은 공용 하위 탐색 자리에 선다. 자리의 배치는 app-shell.css가 갖고
-   여기서는 그 안의 여백만 준다. */
+   여기서는 그 안의 여백만 주고, 작업이 없는 화면(/console)에서는 빈 자리를 접는다. */
+.ui-subnav:empty { display: none; }
 .ui-subnav > .ui-task-chooser { padding: var(--space-3); }
 body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] {
   align-items: start;

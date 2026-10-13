@@ -49,8 +49,7 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   let closed = false;
   const procedurePanels = panels.filter(panel => panel.slot === "main");
   const procedureSlot = root.querySelector('[data-slot="main"]');
-  // D-741 6 — 작업 목록은 공용 하위 탐색 자리(.ui-subnav)에 선다. 작업이 없는 화면은 그 자리를 접는다.
-  const subnav = root.querySelector(".ui-subnav");
+  const subnav = root.querySelector(".ui-subnav"); // D-741 6 — 작업 목록이 서는 공용 하위 탐색 자리. 비면 접힌다.
   const procedureContainers = new Map();
   let taskChooser = null;
   if (procedureSlot && procedurePanels.length) {
@@ -71,7 +70,6 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
       },
     });
     subnav.append(taskChooser.element);
-    subnav.hidden = false;
     subnav.parentElement.removeAttribute("data-seats");
     procedureSlot.append(content);
   }
@@ -276,7 +274,6 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
         throw error;
       }
       taskChooser.destroy();
-      subnav.hidden = true;
       subnav.parentElement.dataset.seats = "rail";
     }
     for (const { container, ctx, unmount } of handles) {

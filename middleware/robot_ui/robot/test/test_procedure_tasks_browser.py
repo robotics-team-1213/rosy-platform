@@ -32,7 +32,7 @@ class Handler(SimpleHTTPRequestHandler):
             <ui-brand>ROSY</ui-brand><ui-text id='shell-notice'></ui-text>
             <ui-button id='shell-estop' kind='irreversible' data-always-live>비상 정지</ui-button></ui-topbar>
             <div class='ui-app-body' data-seats='rail'><div class='ui-rail'><nav class='ui-rail-nav'></nav></div>
-            <div class='ui-subnav' hidden></div>
+            <div class='ui-subnav'></div>
             <main class='ui-app-main surface-main'><div class='surface-slot' data-slot='main'></div></main></div></ui-shell>
             <script type='module'>
             import '/common/ui.js';
@@ -96,7 +96,7 @@ def test_selection_retains_all_panels_drafts_and_failure_isolation(page):
     # D-741 6: the task list stands in the shared sub-nav seat, left of the chosen task.
     seat = page.evaluate("""() => {
       const subnav = document.querySelector('.ui-subnav'), box = node => node.getBoundingClientRect().toJSON();
-      return {inSeat: subnav.firstElementChild?.classList.contains('ui-task-chooser') === true, hidden: subnav.hidden,
+      return {inSeat: subnav.firstElementChild?.classList.contains('ui-task-chooser') === true, hidden: getComputedStyle(subnav).display === 'none',
         seats: subnav.parentElement.getAttribute('data-seats'), subnav: box(subnav),
         main: box(document.querySelector('.surface-main')), slotHasChooser: !!document.querySelector('[data-slot=main] .ui-task-chooser')};
     }""")
@@ -158,7 +158,7 @@ def test_keyboard_compact_chooser_and_teardown(page):
     page.evaluate('window.mounted.unmountAll()')
     assert page.locator('.procedure-panel').count() == 0
     assert page.locator('.ui-task-chooser').count() == 0
-    assert page.evaluate("document.querySelector('.ui-subnav').hidden && document.querySelector('.ui-app-body').dataset.seats === 'rail'")
+    assert page.evaluate("getComputedStyle(document.querySelector('.ui-subnav')).display === 'none' && document.querySelector('.ui-app-body').dataset.seats === 'rail'")
     assert page.evaluate('window.counts.unmount') == 2
     assert page.evaluate('window.counts.scope') == 4
 
