@@ -1,0 +1,228 @@
+{
+ "scenario": "fault",
+ "inject": "none",
+ "then": "resend",
+ "plan": [
+  "right:-110/0.0"
+ ],
+ "injected": null,
+ "resend": {
+  "code": 200,
+  "resp": {
+   "accepted": true,
+   "junction_seq": 11,
+   "state": "armed"
+  },
+  "seq": [
+   {
+    "t": 20.879,
+    "sim_t": 287.41,
+    "gt": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873
+    ],
+    "odom": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": 0.1329,
+    "j": "unresolved",
+    "jr": null
+   },
+   {
+    "t": 20.991,
+    "sim_t": 287.52,
+    "gt": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873
+    ],
+    "odom": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": 0.1394,
+    "j": "armed",
+    "jr": null
+   },
+   {
+    "t": 52.153,
+    "sim_t": 317.613,
+    "gt": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873
+    ],
+    "odom": [
+     -0.6556257348491507,
+     -0.43151648155779865,
+     -0.754061889864873,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": 0.1367,
+    "j": "idle",
+    "jr": null
+   }
+  ],
+  "last": {
+   "t": 60.89,
+   "sim_t": 326.065,
+   "gt": [
+    -0.6556257348491507,
+    -0.43151648155779865,
+    -0.754061889864873
+   ],
+   "odom": [
+    -0.6556257348491507,
+    -0.43151648155779865,
+    -0.754061889864873,
+    0.0,
+    0.0
+   ],
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "keep": "no_boundary",
+   "body_gap_m": 0.1413,
+   "j": "idle",
+   "jr": null
+  }
+ },
+ "final_vs_entry_target_deg": 2.62,
+ "final_turned_from_entry_deg": -107.38,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-110/0.0",
+   "result": "unresolved",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "stop": {
+    "travel_after_sight_m": 0.0,
+    "sight_to_still_sim_s": 0.315,
+    "paint_ahead_of_front_m": 0.346,
+    "state_at_still": "turning"
+   },
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": -43.2,
+    "error_vs_target_gt_deg": 2.62,
+    "turned_gt_deg": -107.38,
+    "turned_odom_deg": -107.38,
+    "state_after": "reacquiring",
+    "reason_after": null,
+    "turn_s": 4.59
+   },
+   "at_done": {
+    "gt": [
+     -0.656,
+     -0.432,
+     -0.754
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "j": "unresolved",
+    "jr": null,
+    "lane_offset_m": 0.002,
+    "heading_vs_lane_deg": 72.8
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "OFF",
+     "reason": "mode_off",
+     "sim_t": 277.716
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 277.82
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 278.031
+    },
+    {
+     "j": "reacquiring",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_reacquiring",
+     "sim_t": 282.407
+    },
+    {
+     "j": "reacquiring",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "camera_line_not_visible",
+     "sim_t": 282.52
+    },
+    {
+     "j": "unresolved",
+     "jr": null,
+     "state": "LOST",
+     "reason": "camera_reselection_required",
+     "sim_t": 285.515
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-110/0.0",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0008,
+ "final": {
+  "t": 60.89,
+  "sim_t": 326.065,
+  "gt": [
+   -0.6556257348491507,
+   -0.43151648155779865,
+   -0.754061889864873
+  ],
+  "odom": [
+   -0.6556257348491507,
+   -0.43151648155779865,
+   -0.754061889864873,
+   0.0,
+   0.0
+  ],
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "keep": "no_boundary",
+  "body_gap_m": 0.1413,
+  "j": "idle",
+  "jr": null
+ },
+ "capability_at_end": true
+}

@@ -127,6 +127,23 @@ def _on_ring_s(store):
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
+@pytest.mark.parametrize('state', ['ARMING', 'RUNNING', 'HOLDING'])
+def test_activation_preserves_active_formation_until_explicit_release(tmp_path, monkeypatch, state):
+    client, _tasks, store, robot = _app(tmp_path)
+    draft = store.save_draft(SiteMap.model_validate(_line()), expected_revision=None, principal_id='bob')
+    active = store.active_view()
+    formation = {'active': True, 'state': state}
+    monkeypatch.setattr(client.app.state.console, 'formation_status', lambda: dict(formation))
+    refused = client.post('/api/fleet/site-map/activate', headers=OPERATOR, json={'expected_revision': draft['revision']})
+    assert refused.status_code == 409 and refused.json()['detail']['code'] == 'SITE_MAP_ROUTE_ACTIVE'
+    assert store.active_view() == active and store.draft_view() == draft
+    assert client.app.state.console.formation_status() == formation
+    assert robot.calls == []
+    formation.update(active=False, state='IDLE')
+    assert client.post('/api/fleet/site-map/activate', headers=OPERATOR,
+        json={'expected_revision': draft['revision']}).status_code == 200
+
+
 def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     client, tasks, store, _robot = _app(tmp_path)
     active = client.get("/api/fleet/site-map/active", headers=VIEWER)
@@ -183,6 +200,15 @@ def test_trip_returns_a_plan_records_it_and_never_drives(tmp_path):
     assert [s["edge_id"] for s in body["segments"]] == ["ring_s", "ring_e", "ring_n"]
     assert body["places"] == ["SE", "NE", "NW"] and body["actions"][-1]["action"] == "stop"
     assert body["map_version"] == 1 and body["length_m"] > 1.0 and body["expires_at"] > 0
+    context = body["context"]
+    assert context["role"] == "fact" and context["planner"] == "lane_graph"
+    assert context["supplied"]["to"] == "NW" and context["supplied"]["blocked_edges"] == []
+    assert context["holds"]["segments"] == ["ring_s", "ring_e", "ring_n"]
+    assert [row["id"] for row in context["planners"]] == ["lane_graph", "lane_step", "nav2", "grid"]
+    assert context["planners"][0]["note"] == "plan_only"
+    assert context["planners"][2]["live"] is False and context["planners"][3]["live"] is False
+    stored = store.plans()[0]["result"]
+    assert stored["context"]["planner"] == "lane_graph" and "context" not in stored["plan"]
     assert not [c for c in robot.calls if c[0] == "navigation_goal"]
     assert store.plans()[0]["plan_id"] == body["plan_id"]
     assert ("/api/fleet/robots/rosy_60/trip", "RESULT", 200) in [
@@ -191,6 +217,47 @@ def test_trip_returns_a_plan_records_it_and_never_drives(tmp_path):
     point = client.post("/api/fleet/robots/rosy_60/trip", json={"to": {"x": x, "y": y + 0.05}},
                         headers=OPERATOR)
     assert point.status_code == 200 and point.json()["actions"][-1]["place_id"] is None
+
+
+def test_caller_blocks_and_costs_reach_the_plan(tmp_path):
+    client, _tasks, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+    url = "/api/fleet/robots/rosy_60/trip"
+    plain = client.post(url, json={"to": "NW"}, headers=OPERATOR)
+    costed = client.post(url, json={"to": "NW", "extra_cost": {"ring_s": 2.0}}, headers=OPERATOR)
+    blocked = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e"]}, headers=OPERATOR)
+    closed = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e", "east"]}, headers=OPERATOR)
+    unknown = client.post(url, json={"to": "NW", "blocked_edges": ["no-such-edge"]}, headers=OPERATOR)
+    duplicate = client.post(url, json={"to": "NW", "blocked_edges": ["ring_e", "ring_e"]}, headers=OPERATOR)
+    negative = client.post(url, json={"to": "NW", "extra_cost": {"ring_s": -1}}, headers=OPERATOR)
+
+    assert plain.status_code == 200 and costed.status_code == 200, costed.text
+    assert [s["edge_id"] for s in costed.json()["segments"]] == ["ring_s", "ring_e", "ring_n"]
+    assert costed.json()["eta_s"] == pytest.approx(plain.json()["eta_s"] + 2.0)
+    assert costed.json()["context"]["supplied"]["extra_cost"] == {"ring_s": 2.0}
+    # ring_s can leave onto east:rev, so closing only ring_e takes that lane.
+    assert blocked.status_code == 200, blocked.text
+    assert [s["edge_id"] for s in blocked.json()["segments"]] == ["ring_s", "east", "ring_n"]
+    assert blocked.json()["context"]["supplied"]["blocked_edges"] == ["ring_e"]
+    assert "ring_e" not in blocked.json()["context"]["holds"]["segments"]
+    assert closed.status_code == 422 and closed.json()["detail"]["code"] == "TRIP_NO_ROUTE"
+    assert unknown.status_code == 422 and unknown.json()["detail"]["code"] == "TRIP_UNKNOWN_EDGE"
+    assert unknown.json()["detail"]["detail"]["edge"] == "no-such-edge"
+    assert duplicate.status_code == 422 and negative.status_code == 422
+    assert not [c for c in robot.calls if c[0] == "navigation_goal"]
+
+
+def test_one_lap_plan_requires_the_robot_at_its_selected_return_place(tmp_path):
+    client, _tasks, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+    url = "/api/fleet/robots/rosy_60/trip"
+    body = {"to": "NW", "via": ["SE"], "repeat": False, "start_at": "NW"}
+    refused = client.post(url, json=body, headers=OPERATOR)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "TRIP_START_PLACE_MISMATCH"
+    assert store.plans()[0]["result"]["error"] == "TRIP_START_PLACE_MISMATCH"
+    invalid = client.post(url, json={**body, "repeat": True}, headers=OPERATOR)
+    assert invalid.status_code == 422
 
 
 @pytest.mark.parametrize(("body", "code"), [
@@ -289,6 +356,31 @@ def test_activation_refuses_a_map_the_planner_cannot_use(tmp_path, monkeypatch):
     assert store.active()[0] == 1
 
 
+def test_a_start_place_must_face_along_its_lane(tmp_path):
+    """D-513: a start place carries the departure heading and must be a pose a trip can start from."""
+    client, _tasks, _store, _robot = _app(tmp_path)
+
+    def activate(yaw):
+        body = _line()
+        body["places"].append({"id": "S1", "name": "출발-1", "x": 1.0, "y": 0.02, "yaw": yaw, "kind": "start"})
+        revision = client.get("/api/fleet/site-map/draft", headers=OPERATOR).json()["revision"]
+        saved = client.put("/api/fleet/site-map/draft", json={"map": body, "expected_revision": revision},
+                           headers=OPERATOR).json()
+        return client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
+                           headers=OPERATOR)
+
+    refused = activate(3.0)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "SITE_MAP_START_INVALID"
+    assert "TRIP_HEADING_CONFLICT" in str(refused.json()["detail"])
+    assert activate(0.1).status_code == 200
+
+    headless = _line()
+    headless["places"].append({"id": "S1", "name": "출발-1", "x": 1.0, "y": 0.0, "kind": "start"})
+    with pytest.raises(ValueError, match="needs a yaw"):
+        SiteMap.model_validate(headless)
+
+
 def test_an_unexpected_planner_failure_is_a_coded_500_logged_once(tmp_path, monkeypatch, caplog):
     import fleet.server.trip_routes as trip_module
 
@@ -344,3 +436,13 @@ def test_the_store_warms_the_planner_with_the_site_routing_config():
     store = SiteMapStore(routing_config=config)
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
     assert list(store.active()[2]._successors) == [config]
+
+
+def test_site_map_view_turn_is_a_quarter_turn_defaulting_to_zero():
+    """D-513 7: one screen orientation per map, display only."""
+    assert SiteMap.model_validate(_line()).view_turn_deg == 0
+    assert "view_turn_deg" not in SiteMap.model_validate(_line()).body()  # older Fleet can still read it
+    assert SiteMap.model_validate({**_line(), "view_turn_deg": 90}).body()["view_turn_deg"] == 90
+    for bad in (45, -90, "90"):
+        with pytest.raises(ValueError):
+            SiteMap.model_validate({**_line(), "view_turn_deg": bad})

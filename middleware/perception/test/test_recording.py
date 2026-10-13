@@ -109,6 +109,10 @@ def test_record_topics_include_the_lidar_for_wall_labels():
     assert "scan" in RECORD_TOPICS and "odom" in RECORD_TOPICS
 
 
+def test_snapshot_records_camera_ground_status_with_each_learning_session():
+    assert "camera/calibration/status" in RECORD_TOPICS
+
+
 def test_bag_command_namespace_prefixes_every_topic(tmp_path):
     cmd = bag_command(tmp_path / "s", namespace="/pinky1/")
     assert cmd[-len(RECORD_TOPICS):] == [f"/pinky1/{t}" for t in RECORD_TOPICS]

@@ -215,7 +215,7 @@ def test_first_placement_falls_back_to_a_guess_from_the_camera_profile():
     import yaml
     m = module()
     root = Path(__file__).resolve().parents[3]
-    profile = yaml.safe_load((root/'middleware'/'apps'/'device'/'pinky'/'profile'/'config'/'camera_nominal.yaml')
+    profile = yaml.safe_load((root/'middleware'/'devices'/'pinky'/'profile'/'config'/'camera_nominal.yaml')
                              .read_text(encoding='utf-8'))
     k = np.array([[281.6, 0, 160], [0, 281.6, 120], [0, 0, 1]], float)
     with pytest.raises(ValueError):

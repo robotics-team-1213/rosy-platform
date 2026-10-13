@@ -7,6 +7,12 @@ approved paint-fit record, and pairs fresh map-frame robot poses with detections
 (tracking_match.py). Robot states arrive through ``observe_states`` from the console
 state route; nothing here calls a robot. Traffic, bays, missions and localization never
 import this module (test_boundaries.py).
+
+D-600: the config also names ``occupied`` robot regions so Vision never learns a robot into
+its background. Per robot of the source, first match wins: a fresh marker on this source, the
+D-494 map pose (``map_pose``, set by the app: sighting or D-593 operator pin anchor, radius grown
+by the odom bridge), the robot's own LOCALIZED map pose. Unassigned markers and anonymous blobs
+of the last OK frame (LAST_SEEN_S) are added; robots with none of these are ``unlocated``.
 """
 
 from __future__ import annotations
@@ -28,6 +34,13 @@ MAX_FUTURE_S = 0.05
 #: A robot state older than this (seen through the console state route) is no pose.
 STATE_FRESH_S = 2.0
 FPS_WINDOW_S = 3.0
+#: D-600: a robot region is the rotation radius plus this margin; uncertain sources add more.
+REGION_MARGIN_M = 0.03
+ROBOT_RADIUS_M = 0.0826  # URDF rotation radius (model.py ROTATION_RADIUS_M in Vision)
+OWN_POSE_EXTRA_M = 0.05
+MAX_BRIDGE_EXTRA_M = 0.3
+#: Anonymous blobs of the last OK frame count this long (a relearn sends LEARNING frames).
+LAST_SEEN_S = 60.0
 
 
 class TrackingError(ValueError):
@@ -43,12 +56,17 @@ class _SourceState:
     arrivals: deque = field(default_factory=deque)
     last_error: Optional[str] = None
     relearn_seq: int = 0
+    last_ok: Optional[OverheadDetectionsPayload] = None  # D-600
 
 
 class TrackingService:
     def __init__(self, sources: Sequence[SightingSource], *, calibrations: TrackingCalibrationStore,
                  clock: Callable[[], float] = time.time, lease_s: float = DETECTION_LEASE_S,
-                 state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M) -> None:
+                 state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M,
+                 drift_provider: Optional[Callable[[], Mapping[str, dict]]] = None) -> None:
+        # drift_provider (calibration-drift watch, tracking_drift.py): per-source server
+        # verdicts embedded in the snapshot's source rows. Display only; None keeps the
+        # rows without the field's value (calibration_drift stays null).
         for value in (lease_s, state_fresh_s, gate_m):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError("tracking lease, state freshness and gate must be positive")
@@ -72,12 +90,24 @@ class TrackingService:
         self.lease_s = lease_s
         self.state_fresh_s = state_fresh_s
         self.gate_m = gate_m
+        self._drift_provider = drift_provider
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
+        #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
+        self.identity = None
+        #: D-600 robot_id -> D-494 MapPose or None (set by the app), for the occupied regions.
+        self.map_pose: Optional[Callable[[str], object]] = None
 
     @property
     def enabled(self) -> bool:
         return bool(self.sources)
+
+    def retarget(self, sources: Sequence[SightingSource]) -> None:
+        """D-580: the sighting service's sources after a roster change (same ids and tokens)."""
+        if [s.source_id for s in sources] != [s.source_id for s in self.sources]:
+            raise ValueError("tracking sources cannot change identity")
+        self.sources = tuple(sources)
+        self._by_id = {source.source_id: source for source in self.sources}
 
     def authenticate(self, authorization: Optional[str]) -> SightingSource:
         candidate = authorization or ""
@@ -93,9 +123,16 @@ class TrackingService:
         source = self.authenticate(authorization)
         record = self.calibrations.get(source.source_id)
         usable = record is not None and record.map_id == source.map_id
-        return {"source_id": source.source_id, "map_id": source.map_id,
-                "calibration": record.to_dict() if usable else None,
-                "relearn_seq": self._sources[source.source_id].relearn_seq}
+        config = {"source_id": source.source_id, "map_id": source.map_id,
+                  "calibration": record.to_dict() if usable else None,
+                  "relearn_seq": self._sources[source.source_id].relearn_seq,
+                  # D-580: Vision uses these over its YAML (the roster's numbers, D-562).
+                  "robot_markers": dict(source.robot_markers),
+                  "occupied": self.occupied(source)[0]}
+        if self.identity is not None:
+            config["identity_challenge"] = self.identity.challenge_for(source.source_id)
+            config["identity_challenges"] = self.identity.challenges_for(source.source_id)  # D-596
+        return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:
         source = self.authenticate(authorization)
@@ -122,9 +159,13 @@ class TrackingService:
             state.last_error = "DETECTION_OUT_OF_ORDER"
             raise TrackingError(409, "DETECTION_OUT_OF_ORDER", "detection is not newer than readback")
         state.payload = payload
+        if payload.status == "OK":
+            state.last_ok = payload
         state.last_error = None
         state.arrivals.append(now)
         self._trim(state, now)
+        if self.identity is not None:
+            self.identity.on_detections(source.source_id, payload)
         return {"accepted": True, "source_id": source.source_id, "seq": payload.seq,
                 "status": payload.status}
 
@@ -164,21 +205,65 @@ class TrackingService:
             raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
         state = self._sources[source_id]
         state.relearn_seq += 1
-        return {"source_id": source_id, "relearn_seq": state.relearn_seq}
+        regions, unlocated = self.occupied(self._by_id[source_id])
+        return {"source_id": source_id, "relearn_seq": state.relearn_seq,
+                "occupied": len(regions), "unlocated": unlocated}
+
+    def occupied(self, source: SightingSource) -> tuple[list[dict], list[str]]:
+        """D-600: (robot regions on this source's floor, robot ids of the source with none)."""
+        now = self._clock()
+        state = self._sources[source.source_id]
+        regions, unlocated = [], []
+        payload = state.payload if state.payload is not None and now - state.payload.captured_at <= self.lease_s else None
+        markers = {d.marker_id: d for d in (payload.detections if payload is not None else ()) if d.marker_id is not None}
+        assigned = dict(source.robot_markers)
+        for rid in source.robot_ids:
+            region = None
+            marker = markers.pop(assigned.get(rid), None) if rid in assigned else None
+            if marker is not None:
+                region = (marker.x, marker.y, ROBOT_RADIUS_M + REGION_MARGIN_M, "marker")
+            pose = self.map_pose(rid) if region is None and self.map_pose is not None else None
+            if (region is None and pose is not None and getattr(pose, "state", "UNKNOWN") != "UNKNOWN"
+                    and getattr(pose, "map_id", None) in (None, source.map_id)
+                    and _finite(getattr(pose, "x", None), getattr(pose, "y", None))):
+                extra = min(MAX_BRIDGE_EXTRA_M, max(0.0, float(getattr(pose, "dead_reckon_m", 0.0) or 0.0)))
+                region = (pose.x, pose.y, ROBOT_RADIUS_M + REGION_MARGIN_M + extra,
+                          getattr(pose, "anchor_source", None) or "map_pose")
+            own = self._pose(rid, source.map_id, now) if region is None else None
+            if own is not None and own.verified:
+                region = (own.x, own.y, ROBOT_RADIUS_M + REGION_MARGIN_M + OWN_POSE_EXTRA_M, "own_pose")
+            if region is None:
+                unlocated.append(rid)
+            else:
+                regions.append({"robot_id": rid, "x": region[0], "y": region[1], "radius_m": region[2],
+                                "basis": region[3]})
+        for marker in markers.values():   # D-575: an unassigned marker is a robot on the floor too
+            regions.append({"robot_id": None, "x": marker.x, "y": marker.y,
+                            "radius_m": ROBOT_RADIUS_M + REGION_MARGIN_M, "basis": "marker"})
+        last = state.last_ok
+        if last is not None and now - last.captured_at <= LAST_SEEN_S:
+            regions.extend({"robot_id": None, "x": d.x, "y": d.y, "radius_m": d.footprint_m / 2 + REGION_MARGIN_M,
+                            "basis": "blob"} for d in last.detections if d.marker_id is None)
+        return regions, unlocated
 
     def now(self) -> float:
         return self._clock()
 
-    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None) -> None:
+    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None,
+                       observed: Optional[Mapping[str, float]] = None) -> None:
         """Remember the robot states the console state route just gathered.
 
         ``now`` is when the gather started (default: the clock now), so a slow robot read
-        never makes its state look fresher than it is. An online row with a state replaces
-        the robot's entry; any other row for that robot (offline, or no state) drops it, so
-        a robot that went away keeps no stale pose.
+        never makes its state look fresher than it is. ``observed`` (robot_id -> this clock)
+        is when each robot's own state was read; it wins over ``now``. Without it a whole
+        gather slower than ``state_fresh_s`` left every state stale on arrival, so LED
+        identify always answered IDENTIFY_NOT_MOVING (site, 2026-10-09: 3.4 s gathers).
+        An online row with a state replaces the robot's entry; any other row for that robot
+        (offline, or no state) drops it, so a robot that went away keeps no stale pose.
         """
         if now is None:
             now = self._clock()
+        observed = observed or {}
         for row in robots:
             if not isinstance(row, Mapping):
                 continue
@@ -187,12 +272,13 @@ class TrackingService:
                 continue
             state = row.get("state")
             if row.get("online") and isinstance(state, Mapping):
-                self._states[robot_id] = (dict(state), now)
+                self._states[robot_id] = (dict(state), observed.get(robot_id, now))
             else:
                 self._states.pop(robot_id, None)
 
     def snapshot(self) -> dict:
         now = self._clock()
+        drift = dict(self._drift_provider()) if self._drift_provider is not None else {}
         sources_out: list[dict] = []
         unknown: list[dict] = []
         tracks: dict[str, Track] = {}
@@ -212,6 +298,14 @@ class TrackingService:
                 "fps": round(len(state.arrivals) / FPS_WINDOW_S, 1),
                 "last_error": state.last_error,
                 "relearn_seq": state.relearn_seq,
+                # D-600: floor the background has not seen yet (a robot stood there while it learned).
+                "unknown_floor": [area.model_dump() for area in payload.unknown_floor] if fresh else [],
+                # D-589 8: the camera's recognition tuning as Vision last reported it.
+                "tuning": (payload.tuning.model_dump(mode="json")
+                           if fresh and payload.tuning is not None else None),
+                # Server-side calibration-drift verdict (tracking_drift.py); null when the
+                # watch never produced one for this source. Display only.
+                "calibration_drift": drift.get(source.source_id),
             })
             seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
                      if d.marker_id is None]
@@ -221,14 +315,23 @@ class TrackingService:
             poses = {rid: self._pose(rid, source.map_id, now) for rid in source.robot_ids}
             assignments = {marker: rid for rid, marker in source.robot_markers}
             measured = {}
+            # D-575: a marker no robot is assigned to is still a robot on the floor: unknown, with its id.
+            unassigned: dict[int, Seen] = {}
             if fresh and status == "OK":
                 for detection in payload.detections:
+                    if detection.marker_id is None:
+                        continue
                     rid = assignments.get(detection.marker_id)
+                    item = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
                     if rid is not None and rid in source.robot_ids:
-                        measured[rid] = Seen(detection.x, detection.y, detection.footprint_m, detection.score)
-            if measured and seen is not None:
-                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), rid, index)
-                               for rid, m in measured.items() for index, d in enumerate(seen)
+                        measured[rid] = item
+                    else:
+                        unassigned[detection.marker_id] = item
+            marked = {**measured, **unassigned}
+            if marked and seen is not None:
+                # One anonymous blob per marker is that marker's robot, not another one.
+                pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), str(rid), index)
+                               for rid, m in marked.items() for index, d in enumerate(seen)
                                if math.hypot(d.x - m.x, d.y - m.y) <= max(d.footprint_m, m.footprint_m))
                 used_markers, duplicates = set(), set()
                 for _, rid, index in pairs:
@@ -248,10 +351,39 @@ class TrackingService:
                     track_source[row.robot_id] = source.source_id
                 tracks[row.robot_id] = chosen
             unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
-                            "footprint_m": item.footprint_m, "score": item.score} for item in extra)
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": None}
+                           for item in extra)
+            unknown.extend({"source_id": source.source_id, "x": item.x, "y": item.y,
+                            "footprint_m": item.footprint_m, "score": item.score, "marker_id": marker_id}
+                           for marker_id, item in sorted(unassigned.items()))
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
                 "sources": sources_out, "robots": robots, "unknown": unknown}
+
+    def latest(self, source_id: str) -> Optional[OverheadDetectionsPayload]:
+        """The source's last accepted payload while inside the lease, else None."""
+        state = self._sources.get(source_id)
+        payload = None if state is None else state.payload
+        if payload is None or self._clock() - payload.captured_at > self.lease_s:
+            return None
+        return payload
+
+    def robot_state(self, robot_id: str) -> Optional[dict]:
+        """The robot's state from the last console gather while fresh, else None."""
+        entry = self._states.get(robot_id)
+        if entry is None or not 0.0 <= self._clock() - entry[1] <= self.state_fresh_s:
+            return None
+        return entry[0]
+
+    def approved_revision(self, source: SightingSource) -> Optional[str]:
+        """D-587 2: the approved record's revision for this source's map, else None."""
+        record = self.calibrations.get(source.source_id)
+        if record is None or record.map_id != source.map_id:
+            return None
+        return record.calibration_revision
+
+    def revisions(self, source: SightingSource) -> set[str]:
+        return self._revisions(source)
 
     def _revisions(self, source: SightingSource) -> set[str]:
         allowed = {source.calibration_revision}  # corner-marker path (CameraMap), D-457 2
@@ -287,6 +419,10 @@ class TrackingService:
     def _trim(state: _SourceState, now: float) -> None:
         while state.arrivals and now - state.arrivals[0] > FPS_WINDOW_S:
             state.arrivals.popleft()
+
+
+def _finite(*values) -> bool:
+    return all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values)
 
 
 def _render(track: Track, source_id: str) -> dict:

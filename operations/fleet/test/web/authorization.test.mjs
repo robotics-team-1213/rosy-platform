@@ -1,7 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON, applyRoleToControls } from "../../fleet/server/web/authorization.js";
+import { OPERATOR_REASON, applyRoleToControls } from "../../../ui/console/shared/authorization.js";
+import { createConfirmedAction } from "../../../ui/console/confirmed-action.js";
+import { createPageScope } from "../../../../shared/web/scope.js";
+
+test("a pending confirmation belongs to its original named operator", async () => {
+  for (const changed of [false, true]) {
+    const scope = createPageScope({events: new EventTarget()});
+    const auth = {token: '', role: 'operator', principal: 'bob', locked: false};
+    let finish, requests = 0;
+    const confirmation = new Promise(resolve => { finish = resolve; });
+    const action = createConfirmedAction({scope, identity: () => ({...auth}), confirm: () => confirmation});
+    const running = action.run({eligible: () => true, request: () => { requests++; }, onError: error => { throw error; }});
+    if (changed) auth.principal = 'alice';
+    finish(true);
+    await running;
+    assert.equal(requests, changed ? 0 : 1);
+    scope.dispose();
+  }
+});
 
 // D-359 §5.3: the lock reads and writes the `reason` attribute, so the fakes carry attributes.
 function fakeControl(disabled, localName = "input") {

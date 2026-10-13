@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(lamp): D-583 질문·좌·우 패턴
 - 2026-10-06 · uncommitted · 후면 램프 식별 패턴
 - 2026-10-04 · uncommitted · feat: 기존 lamp helper 흰 조명 패턴
 - 2026-10-01 · uncommitted · feat(lamp): D-381 패턴 blocked
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
-- 2026-09-30 · uncommitted · feat(lamp): D-375 패턴 manual·navigating·docking·emergency

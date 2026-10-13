@@ -1,7 +1,10 @@
-<!-- Parent: ../../../src/sim/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-02 | Updated: 2026-09-14 -->
 
 # gz_sim
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 
@@ -26,7 +29,7 @@ Gazebo simulation: worlds, models, ros_gz bridge params, lamp plugin, and `gz_mu
 | `models/` | Robot/shelf meshes and SDF (see `models/AGENTS.md`) |
 | `params/` | `rosy_bridge.yaml` ros_gz topic maps |
 | `plugins/` | `gz_lamp_control_plugin.cpp/.hpp` |
-| `scripts/` | Swarm formation bench (no rclpy; uses `fleet`) (see `scripts/AGENTS.md`) |
+| `scripts/` | Existing SIM harnesses, live-view helpers, swarm bench and `sim_jpeg_relay.py` (see `scripts/AGENTS.md`) |
 | `test/` | `gz_multi.launch.py` identity/port contracts (see `test/AGENTS.md`) |
 
 ## For AI Agents
@@ -43,10 +46,14 @@ ros2 launch gz_sim gz_multi.launch.py robots:=3 mode:=slam headless:=true
 - One Gazebo server; per-robot RSP, spawn, and ros_gz bridge with namespaced `cmd_vel`.
 - Do not assume mapper `scan_topic` is namespaced — override per robot if needed.
 - `CMakeLists.txt` exits on aarch64. Pi images do not ship Gazebo.
+- A Fleet that drives SIM robots passes one of two shared site configs (`--site-config`; in-process harnesses: `TripConfig.from_mapping` of its `fleet.trip`), chosen by whether its SIM has a camera:
+  - `config/fleet_sim_site.yaml` (`lane_camera_check: false`): no camera (`gz_multi`, `start_camera:=false`). CORE has no front preview, so D-601 would refuse every lane plan `TRIP_LANE_CAMERA_UNAVAILABLE`.
+  - `config/fleet_sim_camera_site.yaml` (`lane_camera_check: true`): camera launches (`map_v2_fleet_lane`, `map_v2_fleet_real`, d495_real-style harness copies). They run `sim_jpeg_relay.py` (source `scripts/sim_jpeg_relay.py`, installed as `lib/gz_sim/sim_jpeg_relay.py`; `camera/front` -> `camera/preview/compressed`), so `/api/v1/vision/front/status` is live. The relay publishes only the display JPEG, never `road/observation`, so `traffic_policy` does not change.
+  - New SIM Fleet scripts join `SIM_FLEETS` (and new camera launches `CAMERA_LAUNCHES`) in `operations/fleet/test/test_fleet_sim_site_d601.py`.
 
 ### Testing Requirements
 
-Launch-level. CI flake8 includes `gz_sim/launch`.
+Host launch-graph and source/install contracts live in `integrations/simulation/gazebo/test/`. Run committed HEAD through `tools/remote/remote_pytest.py --log-dir X:/DevTemp/gazebo-contracts -- integrations/simulation/gazebo/test/ -q`, then `test/known_failures.py` on the returned log (D-584). CI flake8 includes this package?s `launch/`. Live Gazebo runs use the designated simulation host and remain separate from these unit contracts.
 
 ### Common Patterns
 

@@ -26,6 +26,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     private val target = connection.target
     private val scheme = if (connection.secure) "https" else "http"
     val capability = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+    val cookieName = "rosy-shell-${capability.take(16)}"
     val origin get() = "http://127.0.0.1:$listeningPort"
     private val client = connection.client()
     @Volatile private var identityVerified = false
@@ -46,7 +47,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     }
     override fun serve(session: IHTTPSession): Response {
         val requiresApproval = session.uri.startsWith("/api/v1/") || session.uri.startsWith("/ws/") || session.uri == "/pilot/bootstrap.js"
-        if ((requiresApproval && !connection.authorized()) || !ProxyGuard("127.0.0.1:$listeningPort", capability).permits(session.headers) ||
+        if ((requiresApproval && !connection.authorized()) || !ProxyGuard("127.0.0.1:$listeningPort", capability, cookieName).permits(session.headers) ||
             !ProxyGuard.allowedPath(session.uri)) return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Connection unavailable")
         return super.serve(session)
     }
@@ -124,7 +125,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             } finally { if (!streaming) response.close() }
         } catch (_: Exception) {
             failureReported = true
-            failure("TLS 또는 연결을 확인하세요")
+            failure(LINK_LOST)
             return reply(502, "text/plain", "Trusted connection unavailable".toByteArray())
         }
     }
@@ -175,6 +176,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
 
     private inner class Relay(session: IHTTPSession) : WebSocket(session) {
         private var upstream: okhttp3.WebSocket? = null
+        @Volatile private var closing = false
         private var ready = false
         private val pending = ArrayDeque<String>()
         private var pendingBytes = 0
@@ -196,8 +198,11 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     runCatching { send(bytes.toByteArray()) }.onFailure { disconnect() }
                 }
                 override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) {
-                    failureReported = true
-                    failure("TLS 또는 연결을 확인하세요"); disconnect()
+                    if (!closing) {
+                        failureReported = true
+                        failure(LINK_LOST)
+                    }
+                    disconnect()
                 }
                 override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { disconnect() }
             })
@@ -213,9 +218,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 pending.add(text)
             }
         }
-        override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { upstream?.cancel(); sockets.remove(this) }
+        override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { closing = true; upstream?.cancel(); sockets.remove(this) }
         override fun onPong(frame: WebSocketFrame) = Unit
-        override fun onException(error: IOException) { upstream?.cancel(); sockets.remove(this) }
-        fun disconnect() { upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
+        override fun onException(error: IOException) { closing = true; upstream?.cancel(); sockets.remove(this) }
+        fun disconnect() { closing = true; upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
     }
 }
+
+/** Shown on the session bar while the robot does not answer; the next good reply restores "연결됨". */
+const val LINK_LOST = "로봇이 응답하지 않습니다. 다시 닿으면 자동으로 이어집니다. 계속되면 '로봇 목록'에서 다시 선택하세요."

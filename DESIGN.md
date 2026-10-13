@@ -77,40 +77,40 @@ components:
   button-primary:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.ground}"
-    typography: "{typography.body}"
+    typography: "{typography.label}"
     rounded: "{rounded.radius-button}"
-    padding: "0 24px"
+    padding: "0 12px"
     height: "48px"
   button-quiet:
     textColor: "{colors.ink-quiet}"
     typography: "{typography.label}"
     rounded: "{rounded.radius-button}"
     padding: "0 12px"
-    height: "44px"
+    height: "48px"
   button-irreversible:
     backgroundColor: "{colors.status-crit}"
     textColor: "{colors.ink-on-crit}"
-    typography: "{typography.value}"
+    typography: "{typography.label}"
     rounded: "{rounded.radius-button}"
-    padding: "8px 16px"
-    height: "58px"
+    padding: "0 12px"
+    height: "48px"
   button-segment-pressed:
     backgroundColor: "{colors.ground-card-2}"
     textColor: "{colors.ink}"
     typography: "{typography.label}"
-    height: "44px"
+    height: "48px"
   button-toggle-active:
     backgroundColor: "{colors.series-primary}"
     textColor: "{colors.ground}"
     rounded: "{rounded.radius-button}"
-    height: "44px"
+    height: "48px"
   field:
     backgroundColor: "{colors.ground}"
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.radius-control}"
     padding: "0 12px"
-    height: "44px"
+    height: "48px"
   tag:
     textColor: "{colors.ink-quiet}"
     typography: "{typography.label}"
@@ -147,7 +147,7 @@ ROSY 화면은 사람이 로봇을 안전하게 감시·개입·설치·점검�
 D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 1. **아는 만큼 말한다.** 알 수 없는 값을 정상처럼 그리지 않는다. 증거 네 상태(`fresh`/`delayed`/`disconnected`/`unavailable`)를 따로 그린다. `unavailable`은 점선 테다.
-2. **중요한 것이 먼저 보인다.** 비상 정지는 모든 폭에서 첫 화면에 있다. 되돌릴 수 없는 조작이 가장 크다(58px).
+2. **중요한 것이 먼저 보인다.** 비상 정지는 모든 폭에서 첫 화면에 있다. 모든 버튼은 48px이며 위험 조작은 색상과 보이는 동사로 구분한다.
 3. **복잡함을 다룰 수 있게.** 막힌 버튼은 이유를 보이는 글로 말한다(`reason`). 부가 항목은 좁은 창에서 접힌다.
 4. **따뜻함은 작은 곳에.** 장미색은 워드마크와 현재 위치 표식에만 쓴다([D-277](docs/adr/D-277-rosy-brand-colour-tokens.md)).
 5. **현대성은 정교한 품질로.** 닫힌 척도(글자 6단, 간격 6단, 모서리 4종)만 쓴다. 장식 움직임은 없다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
@@ -162,6 +162,36 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 접점마다 같은 화면을 복제하지 않고 같은 성격을 매체에 맞게(D-280): 로봇 얼굴 LCD는 표정으로 조금 더 큰 표현 자유가 있고(D-280 P4·D-385), 비웹 표면은 등록부의 `token_copy` 사본이 이 체계를 따른다(D-345)
 
 ## Colors
+
+### 반드시 지키는 색상 법칙 (D-624)
+
+운영 표면의 토큰·규격·역할 폐쇄성은 [D-639](docs/adr/D-639-operational-ui-role-token-closure.md)를 따른다. 색뿐 아니라 글자 계단·조작 크기·내부 여백·포커스도 공용 원본에서 소비하며, 실제 화면이 공용 부품을 덧칠하지 않는다. 캔버스는 숫자 글자 크기 대신 글자 역할을 읽고 native는 같은 원본의 생성 export를 사용한다. 등록된 표면과 하위 자산 전체를 검사하며, 레지스트리 중복 키는 실패다. [전체 실행 계획](docs/plans/2026-10-11-platform-ui-role-tokens.md)의 역할 표와 소비자 시험으로 마감한다.
+
+운용 화면의 배치와 정보 공개는 [D-641](docs/adr/D-641-operator-shell-icons-and-progressive-evidence.md)의 다섯 영역을 따른다. 헤더·전역 탐색·업무·현재 맥락·보조 운영정보의 소유권을 섞지 않는다. 반복 조작은 공용 의미 아이콘과 접근성 설명으로 정리하고, 현재 상태·위험·판단 결과의 필수 문구는 남긴다. 원시 JSON과 내부 코드는 개발 진단을 열었을 때 보여주며 요약·근거·실행 완료를 구분한다. 새 화면은 [확정 와이어프레임](docs/plans/2026-10-11-operator-shell-icons.md)과 실제 아이콘 견본을 기준으로 배치한다.
+
+전역 탐색과 맥락 탭, 접속·알림·새로고침·확대·내보내기는 아이콘 단독을 기본으로 한다. 같은 의미의 글자를 옆에 반복하지 않으며 이름은 접근성 트리와 공용 툴팁으로 제공한다. 알림 숫자와 필수 상태·위험·실행 결과는 숨기지 않는다.
+
+Fleet 헤더의 테마는 우측 버튼 하나로 기존 선호를 순환한다. 상태 센터는 연결 비율·미확인 메시지 수·개발 접속 조건을 하나의 누름 영역으로 모은다. 내부 값은 외곽선 없는 `ui-tag variant="inline"`이고 연결고리와 종은 각각 연결과 메시지만 뜻한다. 개발 모드는 짧은 필수 경고이며 연결 아이콘으로 대체하지 않는다. 상태 센터·개인 테마·안전 조작은 간격과 책임으로 분리한다. 요약 열기·메시지 읽음·개입 해소는 별개다([D-668](docs/adr/D-668-fleet-theme-and-status-entry.md)).
+
+플랫폼 정체성은 [D-654](docs/adr/D-654-rosy-platform-route-mark.md)의 경로 R 심볼을 사용한다. `shared/web/brand/mark.svg`가 기하의 정본이며 공용 `ui-brand`가 기존 장미색과 글자 토큰으로 표시한다. 제품 이름·역할 아이콘·조작 아이콘의 목적은 서로 구분한다. 상태와 승인 여부를 플랫폼 색이나 심볼로 표현하지 않는다.
+
+색은 값보다 역할을 먼저 정한다. `shared/web/tokens.css`가 원시 색의 유일한 출처이며, 모든 웹 화면은 `/common/tokens.css`를 읽는다. 파일 안에서 **팔레트 → 파생 → 역할 → 컴포넌트** 순서로 나눈다. `token.css` 사본이나 화면별 팔레트를 추가하지 않는다.
+
+| 역할 | 토큰 | 사용 기준 |
+|---|---|---|
+| 화면 바탕 | `--surface-canvas` | 페이지와 작업 캔버스의 기본 바탕 |
+| 들어간 면 | `--surface-recessed` | 영상·지도처럼 내용이 안으로 들어가는 면 |
+| 보고 / 조작 면 | `--surface-flat` / `--surface-raised` | 기존 면 위계를 따른다 |
+| 본문 / 보조 글 | `--text-primary` / `--text-secondary` | 중요도와 읽는 순서, 상태 의미를 대신하지 않는다 |
+| 위험 채움 위 글 | `--text-on-danger` | 위험 색 위에서 읽히는 글; 일반 본문에 쓰지 않는다 |
+| 경계선 | `--border-subtle` / `--border-default` / `--border-strong` | 행 구분 / 면 구분 / 강조 경계. 안전 신호를 대신하지 않는다 |
+| 명령 / 입력 / 포커스 | `--button-*` / `--field-*` / `--focus-ring` | 공용 컴포넌트가 소유한다 |
+| 위험 / 주의 / 정상 | `--status-crit` / `--status-warn` / `--nominal*` | 확인된 임계만 색으로 강조; 미확인은 정상으로 칠하지 않는다 |
+| 데이터 / 지도 / 브랜드 | `--series-*`, `--robot-*`, `--raster-*`, `--brand-rose*` | 데이터 정체성·지형·제품 식별을 상태 색과 섞지 않는다 |
+
+새 화면은 먼저 목적·주 동작·현재 상태·복귀 동작을 정하고, 그 다음 위 역할을 선택한다. 색만으로 상태를 전하지 않고 글자·형태·출처·신선도를 함께 보여 준다. 같은 목적의 조작은 같은 공용 부품을 사용한다. 예외는 `surfaces.yaml`에 사유와 범위를 등록하고 해당 ADR을 연결한다.
+
+변경자는 원시 색 금지, 역할 우선, 테마 키·대비·native parity 시험을 원격으로 실행한다. 새 역할은 ADR·사용처·시험을 같은 커밋에 넣는다. G1 시험 통과와 G2 화면 검증, G3 사용자 작업 검토를 구분해 기록한다. 모든 표면의 G2/G3가 없으면 제품 전체 디자인 완료로 선언하지 않는다.
 
 색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 OKLCH에서 생성했다.
 
@@ -194,7 +224,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 - 테마는 `tokens.css`의 `[data-theme="이름"]` 팔레트 블록 **하나**다. 기본(어둡게)은 `:root, [data-theme="dark"]`, 밝게는 `[data-theme="light"]`다.
 - 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
-- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
+- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그리고, Fleet 헤더의 순환 버튼 하나도 같은 목록을 돈다(D-668, `test_theme_choices.py`).
 - 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
 - `python -m pytest shared/web/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
 - 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
@@ -209,7 +239,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - [`theme.js`](shared/web/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
 - 선호는 `localStorage` `rosy.theme` = `dark|light|system`. 없거나 읽기 실패면 `dark`. `system`은 `prefers-color-scheme`을 따른다.
 - API: `window.RosyTheme.get()`·`set(pref)`·`resolved()`. 바뀌면 `document`에 `rosy:theme` 이벤트(`{theme, preference}`)가 난다.
-- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널과 Fleet `설정` 안에 있다.
+- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널에 있다. Fleet은 헤더의 순환 버튼 하나(`data-theme-cycle`)가 같은 선택지를 돈다(D-668).
 - 고정 표면: `surfaces.yaml`에 `themes: [dark]`인 웹 표면(games 보드, Pilot, `lane_live_view`, `diagnostic.html`)은 `<html data-theme-pin="dark">`이고, 왜 테마를 따르지 않는지 `theme_reason`에 적는다(없으면 레지스트리 시험이 막는다). 네이티브·LCD 사본도 어둡게 고정이다.
 - 캔버스는 CSS 변수를 못 읽는다. `window.RosyPalette`(`readColour`·`readPalette`·`cssColor`·`canvasFont`)로 어떤 CSS 색이든 RGBA로 풀고, `rosy:theme`에서 캐시가 비워진다. 다시 그리는 일은 각 캔버스가 한다.
 
@@ -238,19 +268,48 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## Layout
 
+### 목적이 공간보다 먼저
+
+화면의 크기와 연결은 [D-543](docs/adr/D-543-task-purpose-navigation-and-layout-review.md)의 작업 카드로 설명한다. 사용자가 누구인지, 첫눈에 답할 질문, 다음 안전한 행동, 완료 근거와 복귀 경로를 정한 뒤 지도·영상·목록의 면적을 배분한다. 전역 탭은 위치를 알려 주고, 맥락 링크는 작업 인계를 알려 준다. Fleet 네 문서의 같은 탭 줄(D-501)은 유지하되, 관제와 Cell 사이에서는 실제 인계의 목적과 결과를 화면에서 설명해야 한다. `설정`도 접속·역할·화면 표시·장치 설정의 소유와 효과를 구분해 평가한다. [작업별 평가표와 반복 절차](docs/plans/2026-10-09-uiux-purpose-and-layout-pipeline.md)가 첫 적용 기준이다.
+
 - **간격 척도**: 4의 배수 여섯 단계 `--space-1..6`(4/8/12/16/24/32px). 임의 값을 쓰지 않는다.
 - **역할 간격**: 부품은 척도 대신 역할 이름을 읽는다 — `--inset-button`, `--inset-field`, `--inset-tag`, `--gap-actions`, `--gap-form`, `--gap-readout`, `--gap-topbar` 등([D-292](docs/adr/D-292-design-tokens-and-component-layout-contract.md)).
 - **세 단**: **compact** `width < 30rem`, **medium** `30rem ≤ width < 64rem`, **wide** `width ≥ 64rem`. 범위 문법(`@media (width < 30rem)`)을 쓰고 `.01` 보정을 쓰지 않는다. 값은 rem이다.
 - **허용 목록**: 세 단 밖의 값은 `surfaces.yaml`의 그 표면 `breakpoints`에 값과 이유를 적는다. 예: Fleet `90rem` — 머리의 토큰·역할·테마를 `설정` 뒤로 접는 폭. `test_responsive_tiers.py`가 대조한다.
 - **칸 질의**: 공용 부품(`ui-form`, `ui-readout`, `ui-actions`)은 뷰포트가 아니라 자기 칸에 반응한다 — `@container (width < 22rem)`에서 한 열로 접힌다. 칸(`container-type: inline-size`)은 표면이 정한다. 22rem은 `surfaces.yaml` `container_breakpoints`에 있다. 표면이 공용 부품을 뷰포트 질의로 재정의하지 않는다.
 - **표면이 배치를 소유한다.** 공용 부품은 얼굴만 준다. 어디 놓을지는 표면 시트가 정한다.
-- **동등한 창은 같은 폭**: 같은 행의 운용 영역과 나란한 지도·카메라 창은 같은 너비를 쓴다. 좁은 화면에서는 한 열로 쌓아 각 창이 가용 너비를 채운다. 탐색 사이드바처럼 역할이 다른 칸은 콘텐츠에 필요한 폭을 쓴다.
+- **동등한 창은 같은 폭**: 같은 행의 운용 영역과 나란한 지도·카메라 창은 같은 너비를 쓴다. 좁은 화면에서는 한 열로 쌓아 각 창이 가용 너비를 채운다. 탐색 사이드바처럼 역할이 다른 칸은 콘텐츠에 필요한 폭을 쓴다. Fleet `/console`의 현장 지도와 오른쪽 개입 열은 동등한 창이 아니며, [D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)에 따라 넓은 화면에서 2:1로 배치한다.
 
 **The Header Budget Rule.** 390×844와 320×568에서 붙박이 상단바는 창 높이의 20% 이하다. 좁은 창에서는 두 줄로 모으거나 부가 항목(토큰 입력·역할·테마)을 접는다.
 
 **The E-stop First Rule.** 비상 정지는 compact를 포함한 모든 폭에서 첫 화면에 보인다. 상단바 격자에서 늘 오른쪽 위에 두 줄을 차지한다.
 
 **The Tall Enough Rule.** 고정 높이 프레임은 `(width >= 64rem) and (height >= 40rem)`에서만 쓴다. 그 밖은 흐르며 스크롤한다. 높이는 `vh`가 아니라 `dvh`다. 열 수는 폭만 따른다: 낮은 wide 창(1366×600)은 프레임만 풀고 열을 지킨다 — 프레임 규칙과 열 규칙을 한 미디어 조건에 묶지 않는다.
+
+### 앱 셸의 자리 (D-741)
+
+D-741(Proposed)이 정한, 모든 웹 표면이 같이 쓸 자리다. 아직 이 자리를 쓰는 표면은 없다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
+
+| 자리 | 토큰 | 담는 것 |
+|---|---|---|
+| 탐색 레일 | `--rail-track` 72px | 그 앱의 영역. 아이콘 아래에 이름 |
+| 하위 탐색 | `--subnav-track` 232px | 영역 안의 화면이나 작업. 없으면 `data-seats="rail"` |
+| 경로 줄 | `--pathbar-height` 56px | `영역 / 화면`과 만들기 단추 |
+| 본문 | 남는 폭 | 지도, 영상, 목록, 미리보기, 폼 |
+| 오른쪽 칸 | `--context-track` 360px | 위는 지금 상태, 아래는 입력·조작·근거 |
+
+셸 폭 64rem 아래에서 레일과 하위 탐색이 가로 한 줄이 되고, 본문 폭 48rem 아래에서 지금 상태, 본문, 나머지 순서로 쌓인다. 둘 다 칸 질의다.
+
+본문 격자의 배치는 `data-layout`으로 고른다. 배치마다 둘 수 있는 칸이 정해져 있고, 그 밖의 칸을 넣으면 격자가 깨진다.
+
+| `data-layout` | 둘 수 있는 `data-pane` | 쓰는 곳 |
+|---|---|---|
+| 없음 | `stage`, `now`, `more` | 목록·미리보기와 오른쪽 칸 |
+| `watch` | `stage`, `now`, `more` | 지도와 오른쪽 칸이 2:1 (D-629) |
+| `solo` | `stage` | 폼과 결과만 |
+| `sense` | `sense`, `stage`, `cam`, `now` | 한 로봇의 감지·관측·조작. 본문 폭 64rem 아래에서 두 칸이 된다 |
+
+`data-order="stage-first"`는 좁은 폭에서 본문을 지금 상태보다 먼저 둔다. `data-seats="rail"`은 하위 탐색이 없는 화면, `data-seats="none"`은 레일도 없는 화면이다. `ui-shell`이 칸이 되므로 앱 바와 레일 안의 공용 부품(`ui-actions`, `.ui-form`)은 셸 폭에 답한다.
 
 ## Elevation & Depth
 
@@ -273,13 +332,28 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **패널 모서리** (`--radius-panel` 12px): 패널.
 - **깃발 모서리** (`--radius-flag` 999px): `ui-tag`, 점 표지.
 
-누름 면 크기가 위험도를 말한다 — 되돌릴 수 없는 것이 가장 크다.
+비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)).
 
-- `--target-secondary` 44px: 모든 버튼·필드·체크 라벨의 최소 높이.
+- `--target-secondary` 48px: 일반 버튼·필드·체크 라벨의 최소 높이.
 - `--target-primary` 48px: 주 명령.
-- `--target-irreversible` 58px: 비상 정지·되돌릴 수 없는 조작.
+- `--target-irreversible` 48px: 비상 정지·되돌릴 수 없는 조작.
 
-**The Risk Ladder Rule.** 44 → 48 → 58은 위험 사다리다. 덜 위험한 조작을 더 크게 만들지 않는다.
+**공통 조작 법칙.** 비상 정지를 포함한 모든 버튼은 종류에 관계없이 48px·라벨 글자·좌우 여백을 공유한다. 폭은 라벨 길이로 정하고 아이콘 전용은 같은 누름 면의 정사각형이다. 크기는 최소값이므로 긴 문구·비활성 사유는 늘어날 수 있다. 버튼의 의미는 채움과 상태, 아이콘과 보이는 동사로 구분한다. 위험 조작의 크기 예외나 화면별 작은 버튼을 만들지 않는다.
+
+### 관제의 정보 위계와 배치 이유
+
+알림은 공통 머리의 조회 버튼에서 오른쪽 알림 창으로 들어간다. 현재 개입 요약과 최근 관제 메시지는 이 창구에 모으고, 상세 사건 증거는 `기록·근거`에 둔다. 읽음은 브라우저의 미확인 표시만 바꾸며 개입 해소·승인·정지 해제를 뜻하지 않는다. 반복 폴링은 새 알림이 아니다. 현재 개입과 비상 정지는 알림 창 밖에 유지한다([D-632](docs/adr/D-632-fleet-notification-inbox.md)).
+
+| 영역 | 순서·강조 | 사용자에게 필요한 이유 |
+|---|---|---|
+| 비상 정지 | 머리에 고정, 위험 채움·48px·보이는 동사 | 어느 작업 중에도 즉시 정지할 수 있어야 한다. |
+| 현재 개입 | 대응 레일 첫 항목, 실제 위험에만 상태색 | 지금 해결할 문제와 가능한 답을 먼저 찾는다. |
+| 현장 지도 | 넓은 화면 왼쪽 2/3, 탭 전환과 무관하게 고정 | 로봇·경로·관측의 공간 관계를 계속 확인한다. |
+| 등록 로봇 | 현재 개입 다음 | 개별 연결·상태·명령 대상을 찾는다. |
+| 카메라·운영 도구 | 로봇 상태 다음 | 관측을 확인하거나 작업을 바꿀 때 펼친다. |
+| 기록·근거 탭 | 오른쪽의 보조 탭, 기록은 중립 구분선 | 현재 경보와 과거 증거를 구분한다. 시작 시각은 제목과 분리한다. |
+
+오른쪽 1/3의 현재 개입 큐는 탭 밖에서 항상 보인다. 그 아래 기본 `로봇 상태`, `기록·근거`, `운영 도구` 탭을 두어 확인·검토·설정 목적을 구분한다. 기록의 출처별 증거·검토 저장·내보내기를 없애지 않는다. 탭을 바꾸어도 지도의 크기와 표시가 유지되며, 넓은 화면의 지도/대응 레일과 좁은 화면의 단일 열은 같은 읽기 순서로 DOM과 시각 순서가 일치한다. 새 UI 배치에는 현재 작업, 다음 행동, 보조 증거의 구분과 그 이유를 먼저 기록한다.
 
 ## 표면 문법
 
@@ -293,6 +367,8 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 등록부(`surfaces.yaml`)의 `grammar` 칸이 [`ui.js`](shared/web/ui.js)의 `GRAMMARS`와 같은지 계약 시험이 대조한다. 웹이 아닌 다섯째 문법 **intent**(로봇 얼굴, concept 16 §7.4)은 LCD 표면이 소유한다.
 
 ## Components
+
+공용 구현은 [`shared/web/ui.js`](shared/web/ui.js)·[`components.css`](shared/web/components.css), 실행 가능한 견본은 로봇 `/styleguide`의 [`스타일 갤러리`](middleware/ui/robot/styleguide.html)다. 새 컴포넌트 모음이나 화면별 버튼·입력 사본을 만들지 않는다. 갤러리에서 색상 역할, 다섯 버튼 종류, 입력, 상태, 증거, 읽기·되읽기, 작업 행·작업 선택을 함께 비교한다. 부품 변경은 사용 화면·갤러리·접근성/반응형 시험을 같은 변경에서 맞춘다.
 
 모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 
@@ -312,7 +388,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.
 
 ### 버튼 — `<ui-button kind="…">`
-- **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 58px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
+- **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 48px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
 - **상태**: `:hover`·`:active`·`:focus-visible`·비활성이 모두 `components.css`에 있다. 눌림은 `aria-pressed="true"`(또는 `aria-selected`, `.active`)의 공용 표현이다. 채움 종류는 누르는 동안 바탕색 안쪽 테를 얻는다.
 - **비활성 사유**: `reason="운용자 권한이 필요합니다"`처럼 속성을 단다. `ui.js`가 버튼 안 `<small data-reason>`으로 그리고 `aria-describedby`로 잇는다. 사유가 있는 비활성은 흐리지 않고 점선 테와 조용한 글자로 말한다. `title`만으로는 사유가 아니다(터치에서 보이지 않는다).
 - **목록 행 예외** ([D-371](docs/adr/D-371-list-row-irreversible-actions-confirm-before-danger-fill.md)): 같은 종류 항목이 반복되는 목록·표의 행(`li`·`tr`·`[role=row]`)에서 되돌릴 수 없는 조작은 `irreversible`이 아니라 `quiet` `삭제…`다(말줄임표 = 다음 단계가 있다). 누르면 `ui.js`의 `confirmIrreversible({message, action, opener})`가 확인 대화상자(아래)를 연다: 대상을 따옴표로 이름 부르며 묻고(`"operator-tablet" 토큰을 삭제할까요?`), `취소`는 `quiet`, 실행 버튼 하나(`토큰 삭제`)만 `irreversible`이다. Esc·취소는 요청 없이 닫히고 포커스는 행 버튼으로 돌아간다. 첫 화면의 위험 채움은 비상 정지 외에 하나를 넘지 않는다. 비상 정지와 단일 대상 명령은 그대로 위험 채움이다. `test_list_row_irreversible.py`·`test_list_row_confirm_browser.py`가 지킨다.
@@ -323,9 +399,9 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 정지 컨트롤을 가진 모든 ui.js 페이지는 그 버튼에 `data-always-live`를 단다(`test_stop_always_live.py`). 보기: `styleguide.html`의 `확인 대화상자` 칸.
 
 ### 필드 — `class="ui-field"`
-- 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 44px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
+- 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 48px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
 - `readonly`는 점선 테·조용한 글자, `:user-invalid`·`aria-invalid="true"`는 `--field-invalid` 테, 비활성은 `--disabled-opacity`.
-- 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 44px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` **점선** 테 — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 되고, 실선이면 꺼진 빈 상자가 켜진 빈 상자와 같아 보인다. 테와 체크는 두 테마에서 3:1 이상이다.
+- 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 48px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` **점선** 테 — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 되고, 실선이면 꺼진 빈 상자가 켜진 빈 상자와 같아 보인다. 테와 체크는 두 테마에서 3:1 이상이다.
 - `<ui-field>` 감싸개도 같은 얼굴이지만 제품 화면은 클래스 방식을 쓴다.
 
 ### 태그 — `<ui-tag status="…">`
@@ -355,7 +431,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.
 - 붙박이, `ground-deep` 바탕, `--topbar-height`. 64rem 미만은 두 줄이다. 첫째 줄은 이름·상태, 둘째 줄은 화면 전환, 비상 정지는 두 줄을 차지한다. 30rem 미만은 그 두 줄에서 여백과 부제만 줄인다.
-- Fleet은 90rem 미만에서 접속·역할·테마를 `설정` 뒤로 접는다. 등록된 예외이고, 접힌 뒤의 바깥 자리도 brand·cluster·estop이다.
+- Fleet은 D-658의 제품·현장 / 연결·권한 / 알림·접속 / 비상정지 네 영역을 사용한다. 48rem 미만에서는 제품·정지를 첫 줄, 상태·조작을 둘째 줄에 둔다. 접속 상세는 모든 폭에서 접고, 접속이 필요할 때 자동으로 펼친다. 계정은 우측의 보이는 로그인/계정(D-683), 테마는 헤더의 버튼 하나다(D-668). 문서 이동은 본문 탐색, 시각·진단은 푸터가 담당한다.
 - 워드마크는 한 줄이다. 칸이 모자라면 표면이 이름 칸에 `container-type: inline-size`를 주고 글자가 칸에 맞게 줄어든다(상한 title).
 
 ### 사이드바 — `.ui-sidebar` (D-466)
@@ -365,10 +441,10 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ### 비상 정지
 - `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`(팔각 아이콘과 보이는 동사 비상 정지. 넓은 머리의 래치 부제는 "래치 · 로봇별 관리자 해제". 명령은 [D-421](docs/adr/D-421-fleet-cancel-all-driving-separate-from-latched-estop.md)의 래치형 전체 비상 정지). 동사는 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
-- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `primary`로 선다(위험 채움은 비상 정지 하나).
+- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `quiet`로 선다(위험 채움은 비상 정지 하나). 로봇 카드 `운행 취소`와 큐 펼침 `중단`도 `quiet`이고, 멈추는 동작이라 확인 없이 바로 나간다([D-540](docs/adr/D-540-fleet-console-structure-v2.md) 6항).
 
 ### 테마 선택
-- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
+- `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널이다. Fleet은 이 묶음 대신 헤더의 순환 버튼 하나를 쓴다(D-668).
 
 ## 작업 화면의 기본 원칙 (D-461)
 
@@ -440,3 +516,9 @@ Native Pilot의 Kotlin 색과 Android 색 리소스는 `tokens.css`의 dark 블�
 화면 개선은 목적·주 동작·상태/오류·복귀·가로/세로 배치를 순차 확인한다. 보조 도구에서 설정이나
 녹화본을 열면 이전 패널을 접고, 닫으면 보이는 여는 동작으로 초점을 복귀한다. 같은 규칙을 쓰는
 화면을 이유 없이 다시 그리지 않으며, 실제 장비 확인과 브라우저 대역 확인은 구별해 기록한다.
+# Fleet 공용 헤더 영역 (D-658)
+
+계정 발견성·로그인 복귀·연결/권한 구분은 [플랫폼 사용 규칙 재정리](docs/plans/2026-10-12-platform-ux-conventions-design.md)와 [D-683](docs/adr/D-683-fleet-account-entry-and-login-return.md)를 따른다. D-683은 아래 D-658의 계정 상세 위치를 대체한다. 우측 유틸리티의 보이는 로그인/계정에서 전용 로그인 문서로 가며, 고급 토큰은 기존 펼침에 남는다. 테마는 D-668의 헤더 버튼 하나다. Map/Cell은 초안 보존을 위해 새 탭에서 로그인하고 원래 작업 탭에서 세션을 다시 확인한다. 구현·G1/G2/G3·설치 증거는 별도다.
+
+헤더는 제품·현장 정체성, 상태 센터, 테마·계정 조작, 비상정지 네 그룹이다. 상태 센터는 연결·메시지·개발 접속 요약을 여는 단일 조작이다(D-668). 넓은 화면은 네 그룹을 한 줄로, 좁은 화면은 정체성·비상정지와 상태·조작 두 줄로 둔다. 접속 상세는 별도 펼침 영역이며 화면 폭 때문에 자동으로 드러내지 않는다. 접속이 필요할 때의 자동 펼침은 유지한다. 탐색은 왼쪽 레일 또는 헤더 아래, 작업·지도는 본문, 현재 영상·개입·알림은 오른쪽 문맥 패널, 시각·진단은 푸터가 맡는다.
+

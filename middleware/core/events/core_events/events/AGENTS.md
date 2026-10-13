@@ -3,6 +3,9 @@
 
 # events
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 EVT-001–005 in-process bus (D-8): monotonic seq, ring buffer, subscriber broadcast, `since_seq` gap fill.

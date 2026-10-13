@@ -1,0 +1,21 @@
+{"t": 53942.992068732, "kind": "wait", "value": "ConnectError('All connection attempts failed')"}
+{"t": 54004.529341427, "kind": "localization", "value": [null, null]}
+{"t": 54004.7346037, "kind": "frames", "value": ["map", "map"]}
+{"t": 54014.784103795, "kind": "truth", "value": "ready", "latest": {"rosy_01": [-1.8000000000000094, -2.2, 2.9458581394535258e-18], "rosy_02": [-2.3999999972237323, -2.2, 3.1411080351500775e-19]}}
+{"t": 54014.797204697, "kind": "state", "value": "rosy_01", "pose": {"x": -1.803333294349885, "y": -2.18264556365884, "yaw": -0.011933697520291118}, "mode": "IDLE", "localization": null}
+{"t": 54014.811903193, "kind": "state", "value": "rosy_02", "pose": {"x": -2.3929663910963996, "y": -2.1823664608875397, "yaw": -0.004110388128207851}, "mode": "IDLE", "localization": null}
+{"t": 54015.331884016, "kind": "armed", "value": {"direct": {"role": "follower", "formation": "follow:rosy_01@0.60/0.00", "active": true, "holding": false, "target_robot_id": "rosy_01", "source": "fleet", "max_speed": 0.18, "map_mismatch": null, "mode": "trail", "trail": null, "stream_age_s": null}}}
+{"t": 54015.344650386, "kind": "phase", "value": "straight_e"}
+{"t": 54032.066352725, "kind": "phase", "value": "arc_left_r0.4"}
+{"t": 54037.394776097, "kind": "phase", "value": "straight_n"}
+{"t": 54044.1395301, "kind": "phase", "value": "s_left_r0.5"}
+{"t": 54050.771056329, "kind": "phase", "value": "s_right_r0.5"}
+{"t": 54057.421690106, "kind": "phase", "value": "straight_n2"}
+{"t": 54062.512515997, "kind": "phase", "value": "stop_10s"}
+{"t": 54072.579403159, "kind": "phase", "value": "pivot_right"}
+{"t": 54075.788036003, "kind": "phase", "value": "straight_e2"}
+{"t": 54079.879676441, "kind": "cut", "value": "pause"}
+{"t": 54084.880096569, "kind": "cut", "value": "relay_resume"}
+{"t": 54092.513083904, "kind": "phase", "value": "stop_end"}
+{"t": 54104.608817314, "kind": "phase", "value": "done"}
+{"t": 54104.757054076, "kind": "final_swarm", "value": {"role": "follower", "formation": "follow:rosy_01@0.60/0.00", "active": true, "holding": false, "target_robot_id": "rosy_01", "source": "fleet", "max_speed": 0.18, "map_mismatch": null, "mode": "trail", "trail": {"leader_s": 8.18, "progress": 7.576, "hold_reason": null}, "stream_age_s": 0.035}}

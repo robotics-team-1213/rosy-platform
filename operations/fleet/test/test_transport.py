@@ -34,6 +34,123 @@ def test_it_satisfies_the_protocol():
     assert isinstance(_client(lambda r: httpx.Response(200, json={})), RobotClient)
 
 
+def test_conditional_back_transport_preserves_predicate_and_legacy_body():
+    seen = []
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"stuck": {"conditional_back": True}})
+        assert request.url.path == "/api/v1/line-follow/stuck/decision"
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"outcome": "back"})
+    async def main():
+        client = _client(handler)
+        try:
+            await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                expected_stuck={"phase": "ASKING", "attempts": 0})
+            await client.line_stuck_decision("stuck-1", "WAIT")
+        finally:
+            await client.aclose()
+    run(main())
+    assert seen == [
+        {"stuck_id": "stuck-1", "decision": "BACK_AND_RETRY",
+         "expected_stuck": {"phase": "ASKING", "attempts": 0}},
+        {"stuck_id": "stuck-1", "decision": "WAIT"},
+    ]
+
+
+@pytest.mark.parametrize("support", [None, False, "true", 1])
+def test_conditional_back_does_not_post_to_unsupported_core(support):
+    methods = []
+    def handler(request):
+        methods.append(request.method)
+        return httpx.Response(200, json={"stuck": {"conditional_back": support}})
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(RobotApiError, match="conditional back is unsupported"):
+                await client.line_stuck_decision("stuck-1", "BACK_AND_RETRY",
+                    expected_stuck={"phase": "ASKING", "attempts": 0})
+        finally:
+            await client.aclose()
+    run(main())
+    assert methods == ["GET"]
+
+
+@pytest.mark.parametrize('result', [True, False, None, 1, 'true', 'error', 'cancel'])
+def test_conditional_back_rechecks_final_guard_after_capability_read(result):
+    events = []
+    async def handler(request):
+        events.append(request.method)
+        await asyncio.sleep(0)
+        return httpx.Response(200, json={'stuck': {'conditional_back': True}} if request.method == 'GET' else {'outcome': 'back'})
+    async def guard():
+        assert events == ['GET']
+        events.append('guard')
+        if result == 'error': raise ValueError('changed admission')
+        if result == 'cancel': raise asyncio.CancelledError
+        return result
+    async def main():
+        client = _client(handler)
+        try:
+            operation = client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=guard)
+            if result is True:
+                assert await operation == {'outcome': 'back'}
+            else:
+                error = asyncio.CancelledError if result == 'cancel' else ValueError if result == 'error' else RobotApiError
+                with pytest.raises(error): await operation
+        finally:
+            await client.aclose()
+    run(main())
+    assert events == (['GET', 'guard', 'POST'] if result is True else ['GET', 'guard'])
+
+
+def test_unsupported_conditional_core_never_invokes_submission_guard():
+    events = []
+    def handler(request):
+        events.append(request.method)
+        return httpx.Response(200, json={'stuck': {'conditional_back': False}})
+    async def guard():
+        pytest.fail('unsupported CORE must not consume a physical claim')
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(RobotApiError):
+                await client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                    expected_stuck={'phase': 'ASKING', 'attempts': 0}, before_submit=guard)
+        finally:
+            await client.aclose()
+    run(main())
+    assert events == ['GET']
+
+
+@pytest.mark.parametrize('expected,guard', [(None, lambda: True), ({'phase': 'ASKING', 'attempts': 0}, True)])
+def test_submission_guard_requires_conditional_request_and_explicit_port(expected, guard):
+    def handler(request): pytest.fail('invalid guard must not make a request')
+    async def main():
+        client = _client(handler)
+        try:
+            with pytest.raises(ValueError):
+                await client.line_stuck_decision('stuck-1', 'BACK_AND_RETRY',
+                    expected_stuck=expected, before_submit=guard)
+        finally:
+            await client.aclose()
+    run(main())
+
+
+def test_power_health_uses_authenticated_read_only_route():
+    seen = {}
+
+    def handler(request):
+        seen.update(method=request.method, path=request.url.path,
+                    auth=request.headers.get("authorization"))
+        return httpx.Response(200, json={"battery": {"charging_state": "unconfirmed"}})
+
+    assert run(_client(handler).power_health())["battery"]["charging_state"] == "unconfirmed"
+    assert seen == {"method": "GET", "path": "/api/v1/power/health",
+                    "auth": "Bearer op-token"}
+
+
 def test_follow_posts_the_params_with_a_bearer_token():
     seen = {}
 
@@ -58,13 +175,16 @@ def test_identity_request_uses_the_enrolled_robot_credential_and_fixed_color():
     seen = {}
     def handler(request: httpx.Request) -> httpx.Response:
         seen.update(path=request.url.path, auth=request.headers.get("authorization"),
-                    body=json.loads(request.content))
+                    body=json.loads(request.content), **({"quiet": request.url.params["quiet"]}
+                                                         if "quiet" in request.url.params else {}))
         return httpx.Response(200, json={"accepted": True, "request_id": "abc"})
     assert run(_client(handler).identify_lamp("blue"))["accepted"] is True
     assert seen == {"path": "/api/v1/host/lamp/identify", "auth": "Bearer op-token",
                     "body": {"color": "blue"}}
     with pytest.raises(ValueError):
         run(_client(handler).identify_lamp("red"))
+    run(_client(handler).identify_lamp("blue", quiet=True))  # D-596: automatic requests do not chirp
+    assert seen["path"] == "/api/v1/host/lamp/identify" and seen["quiet"] == "true"
 
 
 def test_an_error_body_becomes_a_robot_api_error_with_the_robots_code():
@@ -158,6 +278,37 @@ def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
                     "body": {"mode": "IR_LINE"}}
     with pytest.raises(ValueError):
         run(client.line_follow_mode("CAMERA_LINE"))
+
+
+def test_d601_the_trip_start_puts_camera_line_and_reads_the_front_camera_status():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content) if request.content else None))
+        if request.url.path.endswith("/front/status"):
+            return httpx.Response(200, json={"available": False, "stale": True})
+        return httpx.Response(200, json={"mode": "CAMERA_LINE", "state": "TRACKING"})
+
+    client = _client(handler)
+    assert run(client.line_follow_trip_start())["mode"] == "CAMERA_LINE"
+    assert run(client.front_status()) == {"available": False, "stale": True}
+    assert seen == [("PUT", "/api/v1/line-follow/mode", {"mode": "CAMERA_LINE"}),
+                    ("GET", "/api/v1/vision/front/status", None)]
+
+
+def test_d603_rotate_to_posts_the_turn_and_reads_and_stops_it():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content) if request.content else None))
+        return httpx.Response(202 if request.method == "POST" else 200, json={"kind": "rotate_to", "state": "running"})
+
+    client = _client(handler)
+    assert run(client.rotate_to(-170.5, "kim"))["state"] == "running"
+    run(client.rotate_to_status())
+    run(client.rotate_to_stop())
+    assert seen == [("POST", "/api/v1/motion/rotate_to", {"delta_deg": -170.5, "operator_name": "kim"}),
+                    ("GET", "/api/v1/motion/rotate_to", None), ("DELETE", "/api/v1/motion/rotate_to", None)]
 
 
 def test_line_stuck_decision_posts_the_id_and_answer_and_keeps_cores_refusal():

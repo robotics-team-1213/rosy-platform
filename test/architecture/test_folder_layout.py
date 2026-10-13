@@ -23,7 +23,7 @@ def test_root_shell_is_only_the_dev_environment():
 
 def test_package_trees_do_not_carry_a_second_installer():
     assert list(ROOT.glob("src/**/deploy/*.sh")) == []
-    assert (ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "scripts" / "rosy_env.sh").is_file()
+    assert (ROOT / "middleware" / "devices" / "pinky" / "bringup" / "scripts" / "rosy_env.sh").is_file()
     assert (ROOT / "middleware" / "perception" / "tools" / "gz" / "run_track260905.sh").is_file()
 
 
@@ -78,12 +78,14 @@ def test_ament_marker_repair_reaches_nested_product_packages(tmp_path):
     shutil.copy2(ROOT / "tools" / "fix_ament_resource.sh", script)
 
     packages = {
-        "products/pinky_pro/profile": "pinky_pro",
-        "products/omx/adapter": "omx_adapter",
-        "drivers/imu_bno055": "imu_bno055",
+        "middleware/devices/pinky/profile": "pinky_pro",
+        "middleware/devices/omx/adapter": "omx_adapter",
+        "middleware/drivers/imu_bno055": "imu_bno055",
     }
+    for relative in ("contracts", "middleware", "operations", "integrations", "learning"):
+        (workspace / relative).mkdir()
     for relative, name in packages.items():
-        package = workspace / "src" / relative
+        package = workspace / relative
         package.mkdir(parents=True)
         (package / "setup.py").write_text("# ament_python package\n", encoding="utf-8")
         (package / "package.xml").write_text(
@@ -93,7 +95,7 @@ def test_ament_marker_repair_reaches_nested_product_packages(tmp_path):
     result = subprocess.run(["bash", str(script)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     for relative, name in packages.items():
-        assert (workspace / "src" / relative / "resource" / name).is_file(), relative
+        assert (workspace / relative / "resource" / name).is_file(), relative
 
 
 def test_validation_shells_stay_inside_evidence():

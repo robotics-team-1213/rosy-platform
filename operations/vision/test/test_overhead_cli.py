@@ -107,6 +107,7 @@ def test_old_console_scripts_are_aliases_of_rosy_vision(monkeypatch):
         scripts[name] = target
     assert captured["name"] == "rosy_vision"
     assert scripts == {"rosy-vision": "rosy_vision.cli:main", "rosy-lane-map": "rosy_vision.lane_map:main",
+                       "rosy-camera-calibrate": "rosy_vision.camera_calibration:main",
                        "site_vision": "rosy_vision.cli:main",
                        "overhead": "rosy_vision.cli:main"}
 

@@ -1,0 +1,72 @@
+{
+ "min_gap_m": 0.3667,
+ "min_gap_at": [
+  35.35,
+  "a",
+  "b"
+ ],
+ "contacts": 0,
+ "overlap_periods": 0,
+ "grant_conflicts": 0,
+ "grants": 144,
+ "authority_stops": {
+  "a": 0,
+  "b": 13
+ },
+ "laps": {
+  "a": [
+   81.0,
+   183.0,
+   285.0,
+   387.0,
+   489.0,
+   591.0
+  ],
+  "b": [
+   97.0,
+   199.0,
+   301.0,
+   403.0,
+   505.0
+  ]
+ },
+ "ends": {},
+ "holds": [],
+ "resolver": [],
+ "max_tick_ms": 21.213535001152195,
+ "authority_refusals": 0,
+ "dist_m": {
+  "a": 44.69,
+  "b": 44.52
+ },
+ "waiting_periods": {
+  "a": 0,
+  "b": 352
+ },
+ "min_convoy_gap_m": null,
+ "sim_s": 600.0,
+ "lap_times_s": {
+  "a": [
+   102.0,
+   102.0,
+   102.0,
+   102.0,
+   102.0
+  ],
+  "b": [
+   102.0,
+   102.0,
+   102.0,
+   102.0
+  ]
+ },
+ "block_length_m": {
+  "east": 0.665,
+  "ring_e": 0.46,
+  "ring_n": 0.372,
+  "ring_s": 0.374,
+  "ring_w": 0.374,
+  "west": 0.716
+ },
+ "stop_gap_m": 0.045000000000000005
+}

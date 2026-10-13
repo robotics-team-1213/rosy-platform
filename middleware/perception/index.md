@@ -36,6 +36,9 @@
 | D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 
 ## 계획·결과 문서
 
@@ -56,6 +59,7 @@
 - [2026-09-22-scene-context-road.md](../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](../../docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-12-observed-path-gap-implementation.md](../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -68,8 +72,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
-- 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
-- 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
-- 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
-- 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
+- 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
+- 2026-10-12 · uncommitted · 카메라가 CORE 유효 조향 법칙을 역산한다
+- 2026-10-12 · 946cec53d · 가까운 경계 수정의 전체 관측 회귀
+- 2026-10-12 · af76fcc5f · 도로 표식의 가까운 경계 거리
+- 2026-10-12 · 47ace984f2 · 내장 센서 이름 분리와 Gazebo 전방 정지 진단

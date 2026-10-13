@@ -1,11 +1,14 @@
-<!-- Parent: ../../../src/runtime/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_features
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
-Feature managers behind `CoreServices`: command arbitration, safety, state, navigation, swarm, waypoints, power, docking, diagnostics, fleet_agent, maps, line_follow, traffic_policy, vision, and shared `decision/` (allowed action id only, D-228).
+The `core_features` distribution installs common CORE command arbitration, safety, state, waypoints, power, diagnostics, Fleet attachment, maps, preview transport and local allowed-action judgment. D-649 places Base navigation, swarm, docking, localization, line-follow, road and traffic behavior sources in `middleware/control/drive/behaviors`; this same distribution installs them once under their original `core_features.*` identities. General calibration-session leases and camera-fault action eligibility remain CORE admission policy.
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 

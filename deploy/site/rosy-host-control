@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Service Control helper (D-524), installed root-owned as /usr/local/sbin/rosy-host-control.
+# Runs only through `sudo -n` (sudoers drop-in from install-host-control.sh, no SETENV, no
+# env_keep). The role (site, ai, or model) comes from the root-owned
+# /etc/rosy/host-control/role and the account that owns the AI user units from
+# /etc/rosy/host-control/units-user, never from the environment. It does not accept a process name,
+# a signal, or a shell string.
+#   reboot          shutdown -r +10, refused (exit 3) while any reboot is already scheduled
+#   cancel-reboot   shutdown -c, only for the reboot this helper scheduled (else exit 4); the
+#                   nightly window reboot and unattended-upgrades are never cancelled here
+#   restart-unit U  systemctl --no-block restart U (allowlisted U)
+#   stop-unit U     systemctl --no-block stop U (allowlisted U; site units are restart-only)
+#   install-site-config N  copy ~SUDO_USER/.rosy/site-incoming/N to /etc/rosy/site/N (site role,
+#                   allowlisted N, read as SUDO_USER so a symlink reaches nothing more than that
+#                   account can read, YAML-checked, 64 KiB cap, previous copy kept under
+#                   /var/lib/rosy-host-control/backup). Not reachable from the Fleet key.
+set -euo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+CONF=/etc/rosy/host-control
+SCHEDULED=/run/systemd/shutdown/scheduled   # logind's record of a pending shutdown -r
+STATE=/run/rosy-host-control                # tmpfs: the marker disappears with the reboot
+SITE_CONF=/etc/rosy/site
+BACKUP=/var/lib/rosy-host-control/backup
+ACTION=${1:-}
+UNIT=${2:-}
+ROLE=$(cat "$CONF/role" 2>/dev/null || true)
+
+log() { logger -t rosy-host-control "role=$ROLE action=$ACTION unit=$UNIT by=${SUDO_USER:-root} $*"; }
+refuse() { log "result=refused($1)"; echo "refused: $1" >&2; exit "${2:-2}"; }
+scheduled_usec() { sed -n 's/^USEC=//p' "$SCHEDULED" 2>/dev/null || true; }
+
+[ $# -le 2 ] || refuse "arguments"
+mkdir -p -m 0700 "$STATE"
+exec 9>"$STATE/lock"
+flock 9
+
+case "$ROLE:$ACTION:$UNIT" in
+  site:reboot:|ai:reboot:|model:reboot:)
+    [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
+    shutdown -r +10 "Rosy Service Control will reboot this host in 10 minutes."
+    scheduled_usec > "$STATE/reboot"
+    ;;
+  site:cancel-reboot:|ai:cancel-reboot:|model:cancel-reboot:)
+    mine=$(cat "$STATE/reboot" 2>/dev/null || true)
+    [ -n "$mine" ] && [ "$mine" = "$(scheduled_usec)" ] || refuse "no reboot scheduled by Service Control" 4
+    shutdown -c
+    rm -f "$STATE/reboot"
+    ;;
+  site:restart-unit:docker.service|\
+  site:restart-unit:rosy-site-stack.service|\
+  site:restart-unit:rosy-site-firewall.service)
+    systemctl --no-block restart "$UNIT"
+    ;;
+  ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
+  ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
+  ai:stop-unit:pinky-nav2.service|ai:restart-unit:pinky-nav2.service|\
+  ai:stop-unit:pinky-rosbridge-d12.service|ai:restart-unit:pinky-rosbridge-d12.service|\
+  ai:stop-unit:pinky-rosbridge-d13.service|ai:restart-unit:pinky-rosbridge-d13.service|\
+  ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
+    owner=$(cat "$CONF/units-user" 2>/dev/null || true)
+    [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
+    systemctl --user --machine="$owner@" --no-block "${ACTION%-unit}" "$UNIT"
+    ;;
+  site:install-site-config:fleet-site.yaml|\
+  site:install-site-config:site-cameras.yaml)
+    [[ "${SUDO_USER:-}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && [ "$SUDO_USER" != root ] || refuse "no login user"
+    home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    [ -n "$home" ] || refuse "no home"
+    tmp=$(mktemp "$SITE_CONF/.$UNIT.XXXXXX")
+    trap 'rm -f "$tmp"' EXIT
+    runuser -u "$SUDO_USER" -- head -c 65537 -- "$home/.rosy/site-incoming/$UNIT" > "$tmp" || refuse "cannot read incoming file"
+    [ "$(stat -c %s "$tmp")" -le 65536 ] || refuse "file larger than 64 KiB"
+    python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' "$tmp" || refuse "not valid YAML"
+    if [ -e "$SITE_CONF/$UNIT" ]; then
+      backup=$BACKUP/$(date +%Y%m%dT%H%M%S)-$UNIT
+      mkdir -p -m 0700 "$BACKUP"
+      cp -a "$SITE_CONF/$UNIT" "$backup"
+      log "backup=$backup"
+    fi
+    chown root:root "$tmp"
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$SITE_CONF/$UNIT"
+    trap - EXIT
+    ;;
+  *)
+    refuse "not allowlisted"
+    ;;
+esac
+log "result=accepted"
+echo accepted

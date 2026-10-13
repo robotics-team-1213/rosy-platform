@@ -3,6 +3,9 @@
 
 # assets
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Non-executable images used by repository documentation. Requirements, runbooks, and architecture decisions belong in the appropriate `docs/` subdirectory.

@@ -20,7 +20,11 @@ The site mission coordinator and durable task ledger. It selects and sequences a
 
 ### Fleet Mission, Mission Step, Device Action, Local Transaction
 
-A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. These are target terms; the current Fleet `/api/fleet/tasks/*` tracks durable navigation requests, not a general Mission engine (D-298).
+A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. General cross-device sequencing remains a target. The current `/api/fleet/tasks/*` tracks navigation requests and the current Mission ledger supports fixed-workcell `PICK_PLACE`. D-664's common read view preserves these two source identities and states; it does not connect them into a multi-device execution.
+
+### Workcell, Process and Rosy Cell
+
+A Workcell is a configured work space and shared-resource context: frames, calibration, equipment and access regions. It is not the arm Device. A Process describes work such as palletizing; its Recipe/compiler produces a proposed plan, not device authority. The current Rosy Cell app and `rosy_cell.cell/2` configuration are specialized palletizing interfaces and are not a general Workcell registry. A mobile base and a fixed arm can participate in one future site Mission; an arm mounted on a base additionally needs the separately accepted D-55 local composite transaction (D-664).
 
 ### Action identity and message identity
 
@@ -49,6 +53,22 @@ The one ROSY process on a robot that holds host privilege — network mode, Wi-F
 *Avoid:* `Host Agent` in operator copy — the screen says 호스트 에이전트; the English name stays in code, logs and API codes (`HOST_AGENT_*`).
 
 When it cannot be reached, every host action it would carry is blocked for the same reason, so the screen states that cause and its next step once for the whole group rather than beside each button.
+
+## Observation and decision
+
+Glossary for the perception and model boundary. The picture and the status of each layer are in the repository README section 「인지와 판단」. These entries do not add an API.
+
+### Perception
+
+The production of an observation from sensors or a camera, carrying source, time, frame, and calibration revision (D-290). On the robot that code lives in `middleware/perception` and does not publish the final `/cmd_vel`. Site ceiling-camera observations live in `operations/vision`. Offline drafts and training live in `learning/training/perception`. A learned lane model publishes a shadow observation only (D-356, Proposed).
+
+### World state
+
+The gathered, aged facts for one robot. Today that shape is Fleet `MapPose` (`state`, `source`, `age_s`). A general World State contract waits until a second consumer exists (D-503, Proposed). `world` contrasts an observation with a confirmed event. It is not a generative world model, and a model's description does not overwrite an execution fact (architecture design v0.2 §3.1, D-290).
+
+### Decision candidate
+
+A fact or an allowlisted choice returned by an approved model version on the AI PC. Fleet checks it and picks. CORE rechecks before motion. The model PC owns learning, evaluation, and promotion evidence. Identity facts (`wall`, `object`, `robot`, `person`, `unknown`) and text choice candidates are separate tasks (D-516, D-527, D-492). A candidate string is not a command.
 
 ## Robot commissioning
 
@@ -93,7 +113,7 @@ The computer that runs CORE — hostname, architecture, OS, software version, ru
 *Avoid:* rclpy node. ROS nodes stay an implementation detail inside the CORE process (D-1).
 
 ### Device
-The physical robot CORE manages. Its `device_id` is the ROS namespace derived from the Robot number.
+An independently assigned local execution/control and stop boundary. The current mobile implementation is the physical robot CORE manages, whose `device_id` is the ROS namespace derived from the Robot number. This domain role does not make the current mobile Device API a generic arm or workcell API.
 
 *Code:* `Device`
 

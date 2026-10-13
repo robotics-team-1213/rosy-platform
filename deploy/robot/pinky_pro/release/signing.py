@@ -381,3 +381,53 @@ def verify_release_files(root: Path, public_key: Path) -> list[Rejection]:
         return rejections
 
     return verify_checksums(root, entries) + find_unlisted_files(root, entries)
+
+
+#: Marker a delta payload carries (D-553 addendum 3): the base release id and
+#: the sha256 of that base's SHA256SUMS. rosy-release-unpack.sh rebuilds the
+#: full release from the base on the device and removes the marker.
+DELTA_MARKER = ".rosy-delta-base"
+
+
+def verify_delta_files(root: Path, public_key: Path) -> list[Rejection]:
+    """Operator-side pre-flight for a delta payload: the signature first, then
+    every file the delta carries must be listed with its signed digest.
+
+    Files listed but absent come from the base on the device, where
+    native_release.py verify() checks the complete rebuilt release.
+    """
+    sums_path = root / CHECKSUM_FILENAME
+    sig_path = root / SIGNATURE_FILENAME
+    if not sums_path.is_file():
+        return [Rejection("SHA256SUMS_MISSING", CHECKSUM_FILENAME, "release has no checksum list")]
+    if not sig_path.is_file():
+        return [Rejection("SIGNATURE_MISSING", SIGNATURE_FILENAME, "release is unsigned")]
+    sums = sums_path.read_bytes()
+    try:
+        signature = sig_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return [Rejection("SIGNATURE_MALFORMED", SIGNATURE_FILENAME, "signature file is not UTF-8 text")]
+    rejections = verify_signature(sums, signature, public_key)
+    if rejections:
+        return rejections
+    entries, rejections = parse_sha256sums(sums)
+    if rejections:
+        return rejections
+    present = {
+        path.relative_to(root).as_posix(): path
+        for path in sorted(root.rglob("*"))
+        if path.is_file() or path.is_symlink()
+    }
+    for relative, path in present.items():
+        if relative in (CHECKSUM_FILENAME, SIGNATURE_FILENAME, DELTA_MARKER):
+            continue
+        if path.is_symlink():
+            rejections.append(Rejection("CHECKSUM_SYMLINK", relative, "a release must not contain symlinks"))
+        elif relative not in entries:
+            rejections.append(Rejection("CHECKSUM_UNLISTED_FILE", relative,
+                                        "present in the delta but not covered by the signed checksum list"))
+        elif sha256_file(path) != entries[relative]:
+            rejections.append(Rejection("CHECKSUM_MISMATCH", relative, "differs from the signed checksum list"))
+    if "manifest.json" not in present:
+        rejections.append(Rejection("CHECKSUM_FILE_MISSING", "manifest.json", "a delta carries its new manifest"))
+    return rejections

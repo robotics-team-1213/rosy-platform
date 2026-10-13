@@ -47,7 +47,10 @@ _ALLOWED: dict[Mode, set[Mode]] = {
     Mode.NAVIGATION: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
     # MANUAL(3) outranks DOCKING(4): the operator can always take the robot.
     Mode.DOCKING: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
-    Mode.EMERGENCY: {Mode.IDLE},
+    # SAF-001: only release_emergency() leaves EMERGENCY, and only with the latch
+    # released after it. POST /mode IDLE used to leave it with the latch still set
+    # (8kcn 2026-10-10), and release then refused "not in EMERGENCY".
+    Mode.EMERGENCY: set(),
 }
 
 
@@ -95,7 +98,9 @@ class ModeMachine:
         # Check-and-set only. Listeners run after the lock is released: the
         # docking listener takes the docking lock, and docking calls in here
         # while holding it (docking lock -> mode lock, never the reverse).
-        self._lock = threading.Lock()
+        # Watchdog renewal may read the mode epoch again on the committing thread.
+        self._lock = threading.RLock()
+        self._epoch = 0
         self.manual_active: Callable[[], bool] = lambda: False
         self._motion_reserved = False
         # Calibration admission and host configuration admission are one decision.
@@ -132,8 +137,17 @@ class ModeMachine:
         The callback only stores command data; it must not emit events or call
         a mode transition. Validation and clipping happen before this boundary.
         """
+        return self.commit_input(Mode.MANUAL, update)
+
+    @property
+    def epoch(self) -> int:
         with self._lock:
-            if self.mode is not Mode.MANUAL:
+            return self._epoch
+
+    def commit_input(self, mode: Mode, update: Callable[[], None], *, epoch=None) -> bool:
+        """Store validated input against the same mode/epoch lock as transitions."""
+        with self._lock:
+            if self.mode is not mode or (epoch is not None and epoch != self._epoch):
                 return False
             update()
             return True
@@ -153,6 +167,7 @@ class ModeMachine:
             if not self.can_transition(new):
                 return False, f"invalid transition {self.mode.value}->{new.value}"
             old, self.mode = self.mode, new
+            self._epoch += 1
         # The mode is committed. A listener's failure must neither escape to the
         # caller (the e-stop path would skip its latch) nor stop the others —
         # the same rule as EventBus.publish and the e-stop listeners.
@@ -168,6 +183,7 @@ class ModeMachine:
             if self.mode is not Mode.EMERGENCY:
                 return False, "not in EMERGENCY"
             self.mode = Mode.IDLE
+            self._epoch += 1
         # Same listener contract as transition(): the mode is committed, a
         # listener's failure must not escape (the state mirror relies on it).
         for listener in list(self.change_listeners):

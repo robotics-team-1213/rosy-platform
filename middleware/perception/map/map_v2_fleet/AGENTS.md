@@ -3,6 +3,9 @@
 
 # map_v2_fleet
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Bundle for the 260919 road track (2.81 x 1.26 m): lane paint on a dark floor plus a perimeter wall ring. It holds the CAD source, a deterministic Gazebo world generator, the Nav2 perimeter map, and the human-owned lane network rules with the graph generated from them. Read `README.md` first for regeneration, run commands, and known limits. Sim and calibration-reference asset only: it never publishes `/cmd_vel` (CORE does).

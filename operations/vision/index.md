@@ -16,7 +16,10 @@
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
+| D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-636 | 소형 AprilGrid 측정 교정과 지도 관측 영역 및 AI 보조 검토 |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 
 ## 계획·결과 문서
 
@@ -24,6 +27,8 @@
 - [2026-09-26-overhead-camera-android-app-design.md](../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
 - [2026-09-28-site-camera-preview-rectification.md](../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-30-app-identity-rename-plan.md](../../docs/plans/2026-09-30-app-identity-rename-plan.md)
+- [2026-10-11-compact-camera-calibration.md](../../docs/plans/2026-10-11-compact-camera-calibration.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 
 ## 교훈 (docs/solutions)
 
@@ -35,8 +40,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(vision): 도로 경계와 흰색 무늬를 구분하고 ROI 가장자리 연결 유지
-- 2026-10-07 · uncommitted · fix(vision): camera-map integration contract pins
-- 2026-10-07 · 556dd1954 · feat(vision): 카메라 차선 지도 초안 생성
-- 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션
-- 2026-10-05 · uncommitted · fix(test): signal observer exact-source collection
+- 2026-10-12 · d780942b9 · feat(vision): D-691 미리보기 읽기 뒤 30초 유지
+- 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
+- 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
+- 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
+- 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정

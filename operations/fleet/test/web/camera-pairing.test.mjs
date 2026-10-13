@@ -5,7 +5,7 @@ import {
   CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
   formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
-} from "../../fleet/server/web/camera-pairing.js";
+} from "../../../ui/console/camera-pairing.js";
 
 const REVEALED = {
   request_id: "req-1", device_label: "Galaxy S21", app_version: "1.4.0", state: "revealed",
@@ -94,7 +94,7 @@ test("each refusal maps to its operator sentence; a wrong code says the tries le
     assert.equal(messageFor({ code })[0], MESSAGES[code], code);
   }
   const named = messageFor({ code: "OPERATOR_IDENTITY_REQUIRED", message: "named operator required (site-users.yaml)" });
-  assert.match(named[0], /이름 있는 운용자/);
+  assert.match(named[0], /이름 있는 운영자/);
   assert.match(named[0], /site-users\.yaml/);
   assert.match(messageFor({ code: "SOMETHING_NEW" })[0], /SOMETHING_NEW/);
   assert.match(messageFor({ code: "PAIRING_RATE_LIMITED" })[0], /잠시 뒤/);

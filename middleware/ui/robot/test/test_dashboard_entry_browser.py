@@ -7,10 +7,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[4]
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_RUN_BROWSER_TESTS') != '1', reason='optional Chromium')
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='optional Chromium')
 
 
 @pytest.fixture
@@ -103,6 +104,13 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
         assert stop_box['x'] >= role['x'] + role['width'] - 1
         assert stop_box['x'] + stop_box['width'] <= width
         assert page.evaluate('document.documentElement.scrollWidth-innerWidth') == 0
+        assert page.locator('#entry-role').evaluate("""node => {
+          const range = document.createRange(); range.selectNodeContents(node);
+          return new Set([...range.getClientRects()].map(rect => rect.top)).size <= 1;
+        }"""), "접속 권한은 한 줄로 읽혀야 합니다"
+        if shot_dir := os.environ.get("ROSY_SHOT_DIR"):
+            Path(shot_dir).mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(Path(shot_dir) / f"robot-dashboard-{width}.png"))
     stop = page.get_by_role('button', name='비상 정지', exact=True)
     expect(stop).to_be_enabled()
     stop.click()
@@ -137,13 +145,14 @@ def test_entry_code_pairing_and_local_logout_use_existing_credential_helpers(ent
     page, state = entry
     _open(page, token='')
     expect(page.locator('#auth-drawer')).to_be_visible()
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-label').fill('fixture tablet')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()
     expect(page.get_by_role('navigation', name='작업 화면')).to_be_visible()
-    assert state['calls'][0] == ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})
+    assert [call for call in state['calls'] if call[1] == '/api/v1/auth/pair'] == [
+        ('POST', '/api/v1/auth/pair', {'code': 'ABCDEFGH', 'label': 'fixture tablet'})]
     # A response beyond seven days may never become a remembered browser token.
     assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == 'fixture-paired'
@@ -197,7 +206,7 @@ def test_entry_remembers_only_expiring_paired_login_and_revokes_on_logout(entry)
     page.locator('#code-input').fill('ABCD')
     page.locator('#code-submit').click()
     expect(page.locator('#code-message')).to_contain_text('8자')
-    assert state['calls'] == []
+    assert state['calls'] == [('GET', '/api/v1/auth/connection', None)]
     page.locator('#code-input').fill('ABCD-EFGH')
     page.locator('#code-remember').check()
     page.locator('#code-submit').click()

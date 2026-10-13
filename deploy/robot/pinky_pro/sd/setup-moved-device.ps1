@@ -165,7 +165,7 @@ try {
     $parsedAddress = $null
     if (-not [System.Net.IPAddress]::TryParse($RobotAddress, [ref]$parsedAddress) -or
         $parsedAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
-        Stop-Setup "RobotAddress에는 192.168.1.202 형식의 IPv4 주소를 입력하세요. 변경된 항목은 없습니다."
+        Stop-Setup "RobotAddress에는 192.0.2.10 형식의 IPv4 주소를 입력하세요. 변경된 항목은 없습니다."
     }
     Write-Host "1/4: 로봇의 SETUP 화면을 확인합니다..."
     $page = Get-SetupPage $RobotAddress

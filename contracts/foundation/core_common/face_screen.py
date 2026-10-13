@@ -59,6 +59,11 @@ CAUTION_TEXT = {
     "dock_failed": "Docking failed: check the dock",
 }
 
+#: D-546: the moving lane-recovery phases CORE names in ``recovery``; the LCD says the
+#: first two (ASCII), ``bridge`` (D-476) is lamp only.
+RECOVERY_PHASES = frozenset({"retrace", "return", "bridge"})
+RECOVERY_TEXT = {"retrace": "Recovering: reversing", "return": "Recovering: returning to lane"}
+
 # --- the drive card cadence (D-394) ----------------------------------------------
 
 DRIVE_EVERY_S = 20.0
@@ -186,9 +191,14 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "docking_state": _name(data.get("docking_state"), DOCK_STATES),
         "battery_percent": percent if percent is not None and 0.0 <= percent <= 100.0 else None,
         "battery_charging": _flag(data.get("battery_charging")),
+        "battery_voltage": _battery_voltage(data.get("battery_voltage")),
+        "battery_level": _name(data.get("battery_level"), BATTERY_LEVELS),
         "line_follow_mode": _name(data.get("line_follow_mode")),
         "line_follow_state": _name(data.get("line_follow_state")),
+        "line_note": _name(data.get("line_note"), LINE_NOTES),
         "caution": sorted(set(codes)),
+        "recovery": _name(data.get("recovery"), RECOVERY_PHASES),
+        "signal": data.get("signal") if data.get("signal") in robot_state.DRIVE_SIGNALS else None,
         "drive": _card(data.get("drive")),
         "wake": wake,
     }
@@ -222,7 +232,7 @@ def _code(value: Any, length: int) -> Optional[str]:
 
 
 def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
-    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    """``{"requests": [{"display_code", "approval_code"}, ...], "tls_ca_sha256"?}`` of the live pending requests
     (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
 
     Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
@@ -243,7 +253,14 @@ def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None
             continue
         if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
             shown.append({"display_code": display, "approval_code": approval})
-    return {"requests": shown} if shown else None
+    if not shown:
+        return None
+    answer = {"requests": shown}
+    # The CA digest the requester compares on first contact; the LCD draws its first 16 digits.
+    ca = data.get("tls_ca_sha256")
+    if isinstance(ca, str) and re.fullmatch(r"[0-9a-f]{64}", ca):
+        answer["tls_ca_sha256"] = ca
+    return answer
 
 
 def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:
@@ -297,9 +314,46 @@ CORE_MISSING_LINE = "CORE not responding"
 STOP_RELEASE = "Release: dashboard > E-stop reset"
 #: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
 SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
-BLOCKED_LINE = "Blocked"
+NAV_STOP_LINE = {"BLOCKED": "Route blocked", "FAILED": "Navigation failed"}
+#: D-688: travel states that are not "Going", and a line the robot is actually on.
+NAV_TRAVEL_LINE = {"PLANNING": "Planning", "ARRIVED": "Arrived"}
+LINE_SITUATION = {"TRACKING": "Following", "HOLD": "Holding", "LOST": "Line lost"}
+#: Closed notes the bridge copies from a published line-follow reason (D-719).
+LINE_NOTES = frozenset({"crosswalk", "lane_edge", "yield"})
+LINE_NOTE_TEXT = {"crosswalk": "Crosswalk", "lane_edge": "Lane edge", "yield": "Yielding"}
+BATTERY_LEVELS = frozenset({"ok", "warning", "critical", "deep"})
+LEVEL_WORD = {"warning": "Low", "critical": "Critical", "deep": "Deep"}
 #: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
 _ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def _battery_voltage(value: Any) -> Optional[float]:
+    """A pack voltage the strip may show, or None. Outside 0–30 V is not a reading."""
+    voltage = _number(value)
+    if voltage is None or not 0.0 <= voltage <= 30.0:
+        return None
+    return voltage
+
+
+def _charging_line(core: Mapping[str, Any]) -> str:
+    """Docked and charging. The percent is the held estimate, never the float voltage."""
+    percent = core.get("battery_percent")
+    line = "Charging" if percent is None else f"Charging · {percent:.0f}%"
+    voltage = core.get("battery_voltage")
+    if voltage is not None:
+        line = f"{line}  {voltage:.2f}V"
+    return line
+
+
+def _with_level(strip: str, core: Mapping[str, Any]) -> str:
+    """Name a low pack on a calm line. The charging line already carries its number."""
+    word = LEVEL_WORD.get(core.get("battery_level"))
+    if word is None:
+        return strip
+    percent = core.get("battery_percent")
+    if percent is None:
+        return f"{strip} · {word}"
+    return f"{strip} · {word} {percent:.0f}%"
 
 
 def _stopped_cause(core: Mapping[str, Any]) -> str:
@@ -361,11 +415,18 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return status("login")
 
     # Rows 9-11: strips under the face. Caution (Q3) outranks a test and calibration.
-    caution = [CAUTION_TEXT[code] for code in core.get("caution") or [] if code in CAUTION_TEXT]
+    codes = list(core.get("caution") or [])
+    # A fleet question replaces the generic line-hold sentence. Other cautions stay.
+    if core.get("signal") == "ask":
+        codes = [code for code in codes if code != "line_follow_hold"]
+    caution = [CAUTION_TEXT[code] for code in codes if code in CAUTION_TEXT]
     # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
     # to the D-8 catalogue guard (test_event_catalogue.py).
     strip = tone = None
-    if state == robot_state.CAUTION or caution:
+    if core.get("recovery") in RECOVERY_TEXT:  # D-546: a moving recovery outranks every other strip
+        strip = RECOVERY_TEXT[core["recovery"]]
+        tone = "caution"
+    elif state == robot_state.CAUTION or caution:
         strip = todo or (caution[0] if caution else "Caution")
         tone = "caution"
     elif test in ("buzzer", "lamp"):
@@ -385,6 +446,21 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         strip = call_line
         tone = "info"
 
+    # A fleet question or a committed turn. Recovery, caution, a bench test,
+    # calibration and a call keep their own strip. The mode face stays.
+    ask_line = None
+    signal = core.get("signal")
+    if strip is None and signal == "ask":
+        ask_line = "?"
+        strip = ask_line
+        tone = "info"
+    elif strip is None and signal == "left":
+        strip = "Left"
+        tone = "info"
+    elif strip is None and signal == "right":
+        strip = "Right"
+        tone = "info"
+
     mode = core.get("robot_mode")
     wake = core.get("wake")
     power = core.get("power_mode") or "active"
@@ -394,8 +470,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= 20)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
-    # Row 18: standby sleeps the panel unless a wake card, a caution, or a call must be seen.
-    if power == "standby" and wake is None and tone != "caution" and call_line is None:
+    # Row 18: standby sleeps unless a wake card, a caution, a call, or a fleet question must be seen.
+    if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
     face = core.get("face") if core.get("face") in FACES else DEFAULT_FACE
@@ -408,15 +484,25 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     elif core.get("drive") is not None and drive_card_visible(mode, drive_since, now):
         overlay, row = {"kind": "drive", "payload": {**core["drive"], "kind": "drive"}}, "drive"  # rows 13-16
     if strip is None and mode == "IDLE" and core.get("battery_charging"):  # row 13, resting on the dock
-        percent = core.get("battery_percent")
-        strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
+        strip = _charging_line(core)
         tone = "info"
     elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in robot_state.NAV_STUCK:
-        strip = BLOCKED_LINE
+        strip = NAV_STOP_LINE[core["nav_state"]]
+        tone = "info"
+    elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in NAV_TRAVEL_LINE:
+        strip = NAV_TRAVEL_LINE[core["nav_state"]]
+        tone = "info"
+    elif strip is None and mode in ("NAVIGATION", "MANUAL") and core.get("line_note") in LINE_NOTE_TEXT:
+        strip = LINE_NOTE_TEXT[core["line_note"]]
+        tone = "info"
+    elif strip is None and mode in ("NAVIGATION", "MANUAL") and core.get("line_follow_state") in LINE_SITUATION:
+        strip = LINE_SITUATION[core["line_follow_state"]]
         tone = "info"
     elif strip is None and mode in SITUATION_LINE:
         strip = SITUATION_LINE[mode]
         tone = "info"
-    backlight = 100 if overlay is not None or call_line is not None else BACKLIGHT.get(power, 100)
+    if strip is not None and tone == "info" and not strip.startswith("Charging"):
+        strip = _with_level(strip, core)
+    backlight = 100 if overlay is not None or call_line is not None or ask_line is not None else BACKLIGHT.get(power, 100)
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
             "strip_tone": tone, "backlight": backlight}

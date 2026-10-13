@@ -91,6 +91,7 @@ class FakeCore:
                                              "swarm": {"lead": True, "follow": True}})
         if path == "/api/v1/robot/state":
             return httpx.Response(200, json={"robot_id": self.robot_id, "navigation": self.navigation,
+                                             "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                              "pose": {"x": self.pose[0], "y": self.pose[1],
                                                       "yaw": 0.0}})
         if path == "/api/v1/navigation/path":

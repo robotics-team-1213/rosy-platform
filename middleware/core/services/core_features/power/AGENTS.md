@@ -3,6 +3,9 @@
 
 # power
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 PWR-001–004 duty cycling and SAF-005 battery integrity. Policy only: no GPIO, no halt, no cmd_vel. STANDBY is the deepest sleep (D-25); OS halt is D-27 via sentinel.

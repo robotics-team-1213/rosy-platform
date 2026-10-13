@@ -54,10 +54,10 @@ def test_launch_spec_requires_valid_domain_and_matching_robot_namespaces(tmp_pat
     parts = _parts()
     spec = {"run_id": "d426-unit", "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
-            "gz_partition": "d426-unit", "ros_domain_id": 150,
+            "gz_partition": "d426-unit", "ros_domain_id": 80,
             "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
     path = tmp_path / "run_spec.yaml"
-    for domain in (None, True, "150", 119, 200):
+    for domain in (None, True, "80", 79, 100, 120, 172, 199):
         path.write_text(yaml.safe_dump({**spec, "ros_domain_id": domain}), encoding="utf-8")
         with pytest.raises(RuntimeError, match="domain"):
             parts.load_run_spec(str(path))
@@ -83,6 +83,25 @@ def test_domain_action_precedes_every_launch_participant():
     assert participants and domain.lineno < min(participants)
 
 
+@pytest.mark.parametrize("seed", range(20))
+def test_reserved_domain_is_accepted_by_core_and_launch(tmp_path, monkeypatch, seed):
+    import yaml
+    monkeypatch.syspath_prepend(str(TOOLS.parents[2] / "middleware/core/gateway"))
+    from core.system.ros_graph import parse_domain_id
+
+    reservation = Reservations.derive(f"d426-domain-{seed}", robots=2, started_at=0.)
+    assert 80 <= reservation.ros_domain_id <= 99
+    assert parse_domain_id(reservation.ros_domain_id) == reservation.ros_domain_id
+    spec = {"run_id": reservation.run_id, "core_config_dir": str(tmp_path),
+            "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": reservation.hub_url,
+            "gz_partition": reservation.gz_partition, "ros_domain_id": reservation.ros_domain_id,
+            "robots": [{"namespace": ns, "api_port": port}
+                       for ns, port in zip(reservation.namespaces, reservation.api_ports)]}
+    path = tmp_path / "run_spec.yaml"
+    path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    assert _parts().load_run_spec(str(path))["ros_domain_id"] == reservation.ros_domain_id
+
+
 def test_runner_refuses_existing_domain_reservation_before_writing(tmp_path):
     old = _reservations()
     write_manifest(tmp_path / "old", old, versions={}, hashes={}, argv=[])
@@ -90,7 +109,7 @@ def test_runner_refuses_existing_domain_reservation_before_writing(tmp_path):
         run_cli.check_reservations(tmp_path, old)
 
 
-@pytest.mark.parametrize("field,value", [("ros_domain_id", "150"), ("robots", True),
+@pytest.mark.parametrize("field,value", [("ros_domain_id", "80"), ("robots", True),
                                          ("api_ports", []), ("namespaces", ["other_01"])])
 def test_runner_refuses_corrupted_recorded_reservations(tmp_path, field, value):
     path = write_manifest(tmp_path / "old", _reservations(), versions={}, hashes={}, argv=[])

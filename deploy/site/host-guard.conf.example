@@ -1,0 +1,11 @@
+# /etc/rosy/host-guard/hosts.conf on the guarding host (D-530). Host-local: it holds addresses,
+# so only this template is tracked. Quiet window = the target's nightly reboot (rosy-nightly-reboot.timer)
+# from 10 min before to 20 min after; "-" means none.
+# <name> pc <user>@<tailnet-address> <HH:MM-HH:MM>
+# <name> robot <lan-address>:<core-port>
+model pc <user>@<model-pc-address> 05:53-06:23
+ai pc <user>@<ai-pc-address> 05:48-06:18
+robot-a robot <robot-a-address>:8080
+robot-b robot <robot-b-address>:8080
+# On the model PC (reverse guard of the site PC), the file holds one line:
+# site pc <user>@<site-pc-address> 05:58-06:28

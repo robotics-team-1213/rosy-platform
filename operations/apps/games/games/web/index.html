@@ -12,8 +12,9 @@
 </head>
 <body>
   <ui-shell grammar="focal">
+  <a class="skip-link" href="#match-main">경기 필드로 건너뛰기</a>
   <ui-topbar>
-    <ui-brand>
+    <ui-brand href="/" aria-label="Rosy 경기 보드 홈">
       <small>노트북 게임 호스트</small>
       <b>1v1 피치</b>
     </ui-brand>
@@ -32,7 +33,7 @@
     </div>
   </section>
   <p id="match-announcement" class="sr-only" role="status" aria-live="polite"></p>
-  <main class="match-layout" aria-label="경기 필드와 관측">
+  <main id="match-main" class="match-layout" aria-label="경기 필드와 관측" tabindex="-1">
     <div class="field-media">
       <div class="pitch-wrap" id="pitch-wrap">
         <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드" aria-describedby="field-evidence"></canvas>

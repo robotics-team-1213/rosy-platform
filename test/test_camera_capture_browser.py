@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 
 
 CAPTURE_JS = Path(__file__).resolve().parents[1] / "middleware/ui/robot/camera-capture.js"
 # D-359 §4: 캔버스 색·글꼴은 ui.js(window.RosyPalette)가 푼다 — 실제 화면처럼 먼저 싣는다.
-UI_JS = Path(__file__).resolve().parents[1] / "shared/web/ui.js"
+COMMON = Path(__file__).resolve().parents[1] / "shared/web"
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run Chromium capture",
 )
 
@@ -28,10 +27,12 @@ def test_chromium_records_real_webm_jpeg_and_operation_manifest():
         try:
             page.route("http://rosy.test/", lambda route: route.fulfill(
                 status=200, content_type="text/html",
-                body="<!doctype html><script type='module' src='/common/ui.js'></script><body></body>"))
-            page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
-                status=200, content_type="application/javascript",
-                body=UI_JS.read_text(encoding="utf-8")))
+                body="<!doctype html><link rel='stylesheet' href='/common/tokens.css'>"
+                     "<script type='module' src='/common/ui.js'></script><body></body>"))
+            page.route("http://rosy.test/common/*", lambda route: route.fulfill(
+                status=200, content_type="text/css" if route.request.url.endswith(".css")
+                else "application/javascript",
+                body=(COMMON / route.request.url.rsplit("/", 1)[-1]).read_text(encoding="utf-8")))
             page.route("http://rosy.test/assets/camera-capture.js", lambda route: route.fulfill(
                 status=200, content_type="application/javascript",
                 body=CAPTURE_JS.read_text(encoding="utf-8")))

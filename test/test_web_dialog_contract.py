@@ -49,16 +49,21 @@ PINNED_CONFIRMS = {
     "middleware/ui/robot/peer-approval.js": 2,
     "middleware/ui/robot/settings.js": 2,
     "middleware/ui/robot/telemetry.js": 1,
-    "operations/fleet/fleet/server/web/camera-pairing.js": 2,
-    "operations/fleet/fleet/server/web/camera-peer.js": 2,
-    "operations/fleet/fleet/server/web/cell.js": 1,
-    "operations/fleet/fleet/server/web/confirmed-action.js": 1,
-    "operations/fleet/fleet/server/web/console.js": 3,
-    "operations/fleet/fleet/server/web/enrollment.js": 1,
-    "operations/fleet/fleet/server/web/roster.js": 1,
-    # Activation, camera-draft replacement (D-497), trip cancel (D-494).
-    "operations/fleet/fleet/server/web/site-map.js": 3,
-    "operations/fleet/fleet/server/web/tracking-view.js": 1,
+    "operations/ui/console/camera-pairing.js": 2,
+    "operations/ui/console/camera-peer.js": 2,
+    "operations/ui/console/cell/cell.js": 1,
+    "operations/ui/console/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
+    "operations/ui/console/confirmed-action.js": 1,
+    # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
+    "operations/ui/console/console.js": 4,  # includes the channel review bridge to the same confirmedAction owner
+    "operations/ui/console/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
+    "operations/ui/console/host-services.js": 1,  # named operator host control, shared confirmation
+    "operations/ui/console/roster.js": 1,
+    # Activation and profile replacement; D-655 camera replacement moved to its controller.
+    "operations/ui/console/site-map.js": 2,
+    "operations/ui/console/site-map-camera.js": 1,
+    "operations/ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
+    "operations/ui/console/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

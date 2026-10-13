@@ -121,11 +121,9 @@ def test_90_degree_corner_is_turned_on_the_centre_without_an_opening(side):
     assert not signals & {"LEFT_OPENS", "RIGHT_OPENS"}
 
 
-def test_lost_lines_step_down_through_memory_to_stop():
-    """Both lines end at x=-0.3. Memory carries the centre a bounded way,
-    then the output stops. It must not pursue the iso-line loop round the
-    dead end: lane_bev's support test alone accepts points past a round end
-    cap, and that loop turned the robot 128 deg (END_AXIS_RADIUS_M)."""
+def test_lost_lines_stop_before_the_dead_end_memory_loop():
+    """Both lines end at x=-0.3; neither is fresh, so the old 128 deg
+    memory loop cannot become a drive candidate."""
     world = World().line(offset_polyline(np.array([(-1.0, 0.0), (-0.3, 0.0)]), H)).line(
         offset_polyline(np.array([(-1.0, 0.0), (-0.3, 0.0)]), -H))
     t = tracker()
@@ -137,12 +135,11 @@ def test_lost_lines_step_down_through_memory_to_stop():
         return False
 
     log, pose = drive(world, t, steps=200, pose=(-0.9, 0.0, 0.0), stop=record)
-    assert tiers.index("MEMORY") < tiers.index("STOP")
-    assert tiers[-1] == "STOP"
     first_blind = blind.index(True)
+    assert tiers[first_blind:] == ["STOP"] * len(tiers[first_blind:])
     travel = sum(math.dist(a[:2], b[:2])
                  for (a, _, _), (b, _, _) in zip(log[first_blind:], log[first_blind + 1:]))
-    assert travel <= MEMORY_TRAVEL_M
+    assert travel == 0.0
     assert abs(pose[2]) < math.radians(30)
 
 

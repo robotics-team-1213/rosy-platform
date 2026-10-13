@@ -2591,3 +2591,172 @@
 - gate 변화: 없음. 현장 감시 컨테이너에 validate 게이트 적용 여부는 별도 확인 사항.
 - 결정: 없음 (D-276 파일 계약 유지, CLI role은 사람 세 역할로 제한 — service 행은 Cell 흐름 소유)
 - 교훈: 원자적 쓰기는 내용 무결성만 지킨다. 오소유(root:101) 사고는 쓰기 후 소유권 적용·검사가 없으면 그대로 재시작 루프로 이어진다 — 재시작 감시자는 "바뀌었으니 재시작"이 아니라 "검증 통과했으니 재시작"이어야 한다.
+
+## 2026-10-07 · uncommitted · feat(site): Fleet 컨테이너가 Vision 맞춤 제안을 읽어 교정 낡음 감시
+- 변경: `deploy/site/compose.yaml` fleet 서비스에 `--vision-url https://vision:$ROSY_VISION_PORT`(사이트 CA는 fleet 컨테이너의 기존 SSL_CERT_FILE, site leaf의 vision SAN 검증). 주기는 기본 60 s 켬(끄려면 `--calibration-drift-interval-s 0`)
+- 증거: `test/test_site_calibration_drift_deploy.py` 신규 2 passed(compose 핀·CLI 플래그 파싱). 변이 증명: compose의 vision-url 값을 바꾸면 적색, 복원 초록
+- gate 변화: 없음
+- 결정: 해당 없음
+- 교훈: 없음
+## 2026-10-07 · uncommitted · fix(release): push 게이트 해제 — D-502 수선 쌍 provenance 등록과 line-follow 핀 갱신
+- 변경: 두 push 게이트 실패를 해제했다. (1) `tools/harness/log_repairs.yaml`에 오늘 `eee9d5bdc`(D-502)가 추가한 저널 블록 쌍이 공개 출처 목록에 미등록이라 high-entropy-token 오탐으로 push를 막았다 — `public_provenance.json` records에 해당 줄 sha256(`e0d8cd9c…`)과 두 값을 기존 네 쌍과 같은 reason 양식으로 등록했다. (2) 동료의 API Ref v1.120 반영에 line-follow 문서 핀이 v1.119으로 남아 `test_api_reference_documents_line_follow_endpoints_and_snapshot`이 실패했다 — 핀을 v1.120으로 올렸다(PRT-006 "같은 변경에서 핀 갱신" 절차의 사후 보강).
+- 증거: `test_no_secrets_in_tracked_files`·`test_secret_public_provenance.py` 전체·`test_line_follow_contract_docs.py` 전체 **18 passed**, `known_failures.py` 0 NEW. provenance JSON 재파싱 확인(records 102, 마지막이 새 레코드).
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: provenance는 JSONL이 아니라 하나의 JSON 문서다 — 줄 단위 추가가 아니라 records 배열 안에 넣어야 하며, 무작정 append는 "Extra data"로 스캐너 자체를 죽인다. 하루에 같은 오탐 클래스가 세 번(log_repairs 미등록 포함) 나왔다 — 회차 문서·수선 표를 쓰는 세션은 착지 전 시크릿 시험 1회(`docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`)를 돌려야 한다
+
+## 2026-10-08 · uncommitted · feat(face): D-472 식별 점멸 — 움직이는 로봇, 안전 거절, 6 s 상한
+- 변경: `rosy-face`가 식별 점멸을 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다. E-Stop·EMERGENCY·고장·주의·booting·blocked·CORE 인계 없음이면 결과 파일에 `failed`를 바로 쓰고 거절하며, 점멸 중 그렇게 되면 끊는다. 인계 요청은 1 s, 점멸은 3.5 s에 끝낸다. `rosy-hw-test`는 1.5 s보다 오래된 식별 요청을 버린다. 요청부터 끝까지 6 s 이내
+- 증거: `test/test_rosy_face.py`·`test/test_hw_test.py` 호스트 시험(거절·중단·기한·요청 나이). 실제 LED·ARM64 배포 없음
+- gate 변화: 없음. DEVICE/FIELD 미확인, D-430 Safety-Review 미수령
+- 결정: D-472 addendum 5항
+
+## 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리
+- 변경: 식별 점멸 helper가 SIGKILL 뒤에도 끝나지 않으면 한 번 기록하고 상태 패턴 갱신으로 넘어간다(예외로 face 루프를 끊지 않음)
+- 증거: `test_rosy_face.py` 등 267 passed, known_failures 0 NEW. 새 시험은 수정 전 코드에서 실패
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE, DEVICE/FIELD 미확인
+
+## 2026-10-08 · uncommitted · AI PC 오프라인 Decision watchdog
+
+- 변경: `deploy/ai_pc/`에 systemd 사용자 GPU 점검 타이머와 수동 활성화 Laya loopback 서비스를 추가했다. AI PC에서 linger와 GPU 타이머를 켰고 Laya 자동 시작은 꺼 두었다.
+- 증거: 두 번의 GPU 점검이 드라이버 부재를 exit 9로 기록했다. Laya GPU 서비스는 preflight에서 거부됐고 포트 8000은 닫혔다. 별도 CPU 서버에서 합성 2건을 5회 재생해 호출 오류 0을 확인했다(`docs/validation/decision-ai-pc-watchdog-2026-10-08/`).
+- gate 변화: 없음. GPU 복구, 사람 라벨 L0, 고정 ModelProfile 및 현장 Fleet/CORE 수용은 미검증.
+
+## 2026-10-09 · uncommitted · docs(decision): split model test hosts
+
+- 변경: 모델 PC 독립 L0, AI PC 승인 버전 스모크, 개발 로컬 PC 계약 검사와 현장 수용을 ADR·계획·호스트 안내에 분리.
+- 증거: 문서 lint·관련 계약 시험은 착지 전 확인; 모델 PC 모델 평가와 AI PC GPU 스모크는 HOLD.
+- gate 변화: 없음.
+
+## 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
+
+- 변경: 세 PC의 새벽 재부팅 유닛(관제 06:08, 모델 06:03, AI 05:58)과 관제 PC Docker 갱신 유닛·스크립트를 실제 파일 그대로 `deploy/{site,model_pc,ai_pc}/host-state/`에 옮겼다. `deploy/hosts/common/rosy-host-state`(역할별 설치, `--dry-run` diff, 30분 드리프트 점검은 safe만 수정). `rosy-model-guard-check`를 `deploy/site/rosy-host-guard`로 일반화(모델 PC·AI PC·로봇, N → 유닛 재시작 → 2N → 재부팅, 새벽 창 제외, 실행은 D-524 도우미).
+- 증거: 모델 PC `test/test_host_state.py`·`test/test_host_guard.py` 25 passed. 모델 PC에서 읽기 전용 `install model --dry-run`: 새벽 재부팅 파일 일치, 워치독·panic 설정 없음을 보고.
+- gate 변화: 없음. 실제 PC 설치·활성화 없음(sudo·승인 필요). D-524 착지 뒤 도우미 줄이 채워진다.
+
+## 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
+
+- 변경: D-545에 따라 모델 PC 검수 앱에 불변 코드 릴리스, current 링크, DB 외부 경로, 서비스 재시작 후 HTTP 확인과 실패 복구 절차를 추가했다.
+- 증거: 모델 PC Linux 설치기 시험 2 passed; 실제 기존 코드에서 state/를 제외해 studio-d538-20261009 릴리스로 전환; rosy-review-v13.service active, ExecStart는 current 경유, /api/workspace와 /pixels 응답. 실제 브라우저에서 객체 43장 목록과 픽셀 검수·제외 상태를 읽었다. 사람 승인 동작은 실행하지 않았다.
+- gate 변화: 없음. 새 코드의 자동 전송과 검수 승인·학습 반영은 별도 검증이다.
+## 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
+- 변경: `rosy-face`가 `/etc/rosy/dev-mode`를 보면 얼굴 띠 앞에 `DEV `(띠가 없으면 `DEV MODE`), 상태 카드 줄 앞에 `DEV `.
+- 증거: test/test_rosy_face.py.
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · fix(site): 비밀을 설정 디렉터리 밖으로, Vision은 카메라 파일만 (D-524 보안 검토)
+- 변경: Vision이 `/etc/rosy/site` 전체 대신 `site-cameras.yaml`만 마운트. 기본 비밀 경로 `/etc/rosy/site-secrets`(.env.example, mdns-bridge·model-watch 유닛, preflight, functional setup, rosy_ml). `migrate-site-secrets.sh`. D-524 결정 11, README.
+- 증거: test_host_control.py::test_vision_cannot_reach_fleet_secrets (원격 pytest 결과는 커밋 메시지·보고).
+- gate 변화: SOURCE. 실제 사이트 PC는 건드리지 않았다. 현장 이전(스크립트 실행·재시작)은 열림.
+## 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
+- 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
+- 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
+- gate 변화: SOURCE.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 램프
+- 변경: 표시 기록이 없는 옛 설치에서 `rosy-face`는 신호 인자를 먼저 부르고, 없으면 복구 인자, 없으면 세 인자로 돌아간다.
+- 증거: `test_rosy_face.py` 혼합 설치 시험.
+- gate 변화: SOURCE.
+- 결정: D-583
+
+## 2026-10-10 · uncommitted · feat: AI PC local Qwen inference
+
+- Change: User-authorized loopback Ollama service with shared tested model digest, f16 KV cache and bounded single-model concurrency; model-PC relay retired after local GPU check.
+- Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
+- Gate: SOURCE; deployment and model accuracy are separate evidence.
+
+## 2026-10-12 · c21b8bea0c · fix: deliberation host admission
+
+- 변경: root 소유 전용 bwrap/AppArmor 설치, 단독 system 계정의 설치·preflight 공통 검증, 실제 자식 종료·cgroup readback, 수집된 scope 정리 확인.
+- 증거: 원격 회귀·구조 검사 66 passed, NEW 0. `docs/validation/deliberation-host-admission-2026-10-12/result.md`.
+- gate 변화: SOURCE 검증. 양쪽 SSH 계정 sudo가 암호를 요구하여 관리자 설치·HOST PASS는 미확인. 운영 제공자·장치·Discord 활성화는 수행하지 않았다.
+
+## 2026-10-12 · uncommitted · fix: sandbox PWD preflight
+
+- 변경: 실제 관리자 설치 후 PWD 때문에 실패한 환경 검사에서 PWD=/tmp만 허용하고 PATH도 고정값으로 검증한다. 다른 변수·HOME/PATH/PWD 경로 변경은 거절한다.
+- 증거: 사용자 AI PC 출력은 환경 검사 외 12개 경계 true, 최초 HOST 결과는 HOLD. 원격 RED에서 정상 PWD 오거절과 변경 PATH 오수용을 재현했다. 수정 후 시험·실제 재실행은 후속 증거로 기록한다.
+- gate 변화: HOST PASS 미확인 유지. 관리자 설치 완료 출력은 확인했으나 모델·장치 수용으로 승격하지 않는다.
+
+## 2026-10-12 · b78edf399 · D-675 Fleet-only Discord private config
+
+- 변경: 정식 Compose에 optional intake 경로와 Fleet-only 읽기 mount 추가; absent OFF, malformed fail closed.
+- 증거: RED3NEW 후 원격138 PASS/NEW0, 독립 source/Safety 검토 승인.
+- gate 변화: source만 수용. 기존 CI/signature/updater gate 유지, unsigned runtime 교체/push/장치 명령 없음.
+
+## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
+
+- 변경: 실제 HOST 수용 결과와 수동 Qwen 스모크 증거를 기록하고 현재 수용 안내를 갱신했다.
+- 증거: 팀 관리자 preflight 13개 true / PASS_HOST_OFFLINE_ONLY. 기존 적재 digest의 로컬 Qwen 실제 strict JSON 응답 및 기존 Supervisor HOLD / UNRESOLVED_OBJECTION / calls=1 확인. `docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md`.
+- gate 변화: 전용 호스트 OFFLINE 경계와 수동 모델 transport 확인. 운영 제공자 admission, 독립 모델 평가·실제 Pinky·FIELD는 미확인 유지. OpenCode CLI 수용은 병렬 작업으로 분리한다.
+
+## 2026-10-12 · 4ebcb80c86 · fix: pinned OpenCode CLI compatibility
+
+- 변경: OpenCode 1.18.35는 --pure로 고정 번역, 기존2.0.22는 유지, 다른 버전 거절. 호스트 주입에서 버전을 전달하며 생성 실패 때도 snapshot을 닫는다.
+- 증거: 병렬 작업 원격 48 passed, NEW 0, 독립 검토 blocker 없음. `docs/plans/2026-10-12-opencode-cli-admission.md`.
+- gate 변화: SOURCE 확인. 실제 sandbox CLI version/help와 최소 제공자 연결·token cap 검수는 후속 단계다. --pure를 도구/설정 격리 수용으로 해석하지 않는다.
+
+## 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
+
+- 변경: 동일 사건의 Fleet 기준과 Qwen 의견 불일치를 제한된 GLM 검토로 연결하고 기존 정책과 cached 결과 교차 사용을 거부한다. 설치·실행 경계를 분리하고 모델 교체·확률 보정·자동 처리·최종 사람 인수·개선의 통합 목표를 기록했다.
+- 증거: 원격 통합 146 passed, exit 0, NEW 0; 마지막 통합 실행은 자원 하한 fallback 경고가 있어 성능 증거로 쓰지 않는다. docs/validation/deliberation-host-admission-2026-10-12/conditional-review.md.
+- gate 변화: SOURCE/원격 논리만 확인했다. 실제 Fleet 기준 선택 생산자·격리 SDK/모델 호출·독립 보정·자동 처리·배포·현장 수용은 미확인이다. Discord는 담당 세션 작업이다.
+
+## 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
+
+- 변경: upstream 모델 ID와 assistant 역할이 고정 요청과 다르면 결과 재작성 전에 거부한다.
+- 증거: 새 3개 RED 확인 후 통합 149 passed, exit 0, NEW 0; opencode_admission 독립 검토에서 blocker 해소. model-binding-green/run-1.txt. 자원 하한 fallback 경고는 유지되므로 운영 성능 증거가 아니다.
+- gate 변화: SOURCE/원격 검증만 확인. 실제 호출·영속 사용 표식·배포·자동 처리·독립 보정·현장 수용은 미확인 유지.
+
+
+## 2026-10-12 · 7ab44069a · gateway 구성 경로와 credential 값 구분
+
+- 변경: main 통합의 secret guard가 Path 상수 SECRET을 credential 값으로 오인해 CONFIG_PATH로 바꾸고 시험 호출자를 연결한다. 구성 파일 경로·job secret_path·읽기 권한·NOFOLLOW 검사는 유지한다. 스캐너 예외와 실제 비밀 값은 추가하지 않는다.
+- 증거: release boundary/gateway/opencode/relay/sandbox 원격 134 PASS, exit 0, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/logs/gateway-guard-green/run-1.txt. pipeline_review가 호출자와 보안 동작 보존을 수용했다.
+- gate 변화: SOURCE/원격 회귀 근거만 추가한다. 배포·런타임 credential readback은 수행하지 않았다.
+
+## 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+
+- 변경: v2 프로파일·판정 JSON·공통 요청·CLI/로컬 어댑터·독립 보정을 구현하고 모델 프로파일 전체 SHA에 보정을 고정했다. GLM 첫 호출의 영속 표식과 Pinky 전용 읽기/지속 예산 계약을 추가했다. 로컬 실행은 기본 미수용이다.
+- 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
+- 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
+- gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · 5572a09d5 · 운영 PC TLS 접속 안내와 계정 후속 검사
+
+- 변경: 인증서 이름·DNS·공개 CA 등록·Schannel 폐기 정보 오류를 분리하고 계정 재조회 절차를 안내했다.
+- 증거: account-tls-2026-10-12/result.md. 원격 계정/프로필 Chromium 포함 104 passed, exit 0, NEW 0. 실제 설치 이미지의 네트워크 없는 임시 DB 계정 수명주기 PASS; 실제 HTTPS 8개 응답 200, 이름 불일치/신뢰 CA 없는 연결 거부.
+- gate 변화: 실제 개인 계정 브라우저와 운영 PC 자동 DNS/완전한 폐기 상태는 미확인. 실물·현장 수용은 요청에 따라 제외했다. 운영 계정 비밀번호·개인 프로필은 변경하지 않았다.
+
+## 2026-10-12 · 5941920df7 · D-720 보호 상태 브로커 설치 준비
+- 변경: 별도 root-reviewed SHA source snapshot·전용 forced-command ingress/key/host pin·immutable backups·정확한 root-owned 파일 경계를 준비했다. GLM credential/spent marker는 복사·초기화하지 않는다.
+- 증거: pipeline_review scoped source 승인. source/model/structured Qwen conformance와 GLM 별도 status/billing/offline sandbox 증거가 실제 설치 gate다.
+- gate 변화: 검토 가능한 설치 소스만 승인. 관리자 실행·서명 Fleet 배포·런타임 왕복은 아직 미확인이다.
+
+## 2026-10-12 · a60550e41 · conversation broker 관리자 설치
+
+- 변경: 독립 평가 source·proof·receipt·공개키와 오프라인 wheel closure를 SHA로 결속하는 관리자 설치기를 추가한다. 기존 status/GLM 상태를 보존하고 정확한 두 SSH 명령만 전달한다. 설정·SSH 검증 실패는 이번 파일 변경을 원복한다.
+- 증거: 보호 경계·tamper·의존성 pin·계정 충돌·멱등·전체 설치 단계 실패/원복을 원격 시험했다. 관리자 실제 설치와 live Discord 수용은 별도다.
+- gate 변화: 없음. 설치 SOURCE와 시뮬레이션 증거이며 활성화·현장 수용은 주장하지 않는다.
+
+## 2026-10-12 · a5925d7ae · D-728 이전 턴 의미 평가 동결
+
+- 변경: 고정 평가를 38개로 확장하고 실제 이전 턴 형태의 입력 8개를 포함한다. 수용 문맥·CHAT·상태·미수용·UNKNOWN·철회·타인·지도 변경을 구분하고 순서·원문·전체 명령 인자 및 추론 소스 해시를 검증한다.
+- 증거: 보호 평가 입력·문맥·명령·순서 변조 거절을 포함한 원격 집중 검증 통과. 합성 의미 입력은 운영 실행 증거가 아니다.
+- gate 변화: 없음. 새 소스 고정 snapshot과 독립 실제 모델 38개 평가를 받기 전 기존 보호 브로커에 새 입력을 활성화하지 않는다.
+
+## 2026-10-12 · 7ead3df40 · 보호 conversation 버전의 검토된 교체
+
+- 변경: 이전 config와 고정 wrapper의 SHA256을 함께 검증한 경우에만 두 파일 교체를 허용한다. 의존성·모델 조회·상태 변경 전 거절하며 기존 원자 교체·백업·원복을 재사용한다.
+- 증거: 이전 버전 설치 뒤 새 버전 교체, 잘못된·누락된·단독 pin, 외부 wrapper, 동일 버전 재확인, 실패 시 이전 두 파일 원복을 원격 검증했다. 관련 82개 통과·NEW 0.
+- gate 변화: SOURCE만. 실제 관리자 교체·보호 설정 readback·Discord 수용은 별도다.
+
+## 2026-10-12 · d905c939b · ingress dispatcher 경로 접근 복구
+
+- 변경: 실제 SSH exit 126의 원인인 보호 broker 상위 디렉터리 접근 실패를 해소한다. dispatcher만 공개 root 소유 libexec 경로에 두고 이전 관리 key/sshd 경로의 정확한 바이트만 교체한다. 기존 보호 디렉터리·group·이전 dispatcher는 유지한다.
+- 증거: 원격 Linux 권한 재현, 관리 경로 이전·외부 파일 거부·원복과 ingress UID의 두 명령 및 추가 인자 거절 검증을 포함한 90개 통과·NEW 0.
+- gate 변화: SOURCE만. 관리자 복구 실행·현장 SSH 및 Discord 수용은 별도다.
+
+## 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리
+
+- 변경: 실제 진단에서 D-720 status wrapper/config가 모두 없음을 확인했다. 두 파일이 없을 때 status 정상 경로 시험만 생략하고 conversation 및 알 수 없는 명령·추가 인자 거절은 항상 검사한다. 기존 status는 보호 metadata와 HOLD를 검증하며 변경하지 않는다. 실패에는 제한된 경로·종료 코드·출력을 남긴다.
+- 증거: 선택 status 미설치 재현 RED 뒤, 미설치·기존 설치·원복·보호 경계 원격 91개 통과·NEW 0.
+- gate 변화: SOURCE만. 새 관리자 복구 및 실제 conversation 회신은 별도 확인한다.

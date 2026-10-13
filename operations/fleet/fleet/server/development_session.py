@@ -1,4 +1,4 @@
-"""D-473 개발 연결 모드 — 같은 망 브라우저에 1시간 운용자 세션을 메모리에만 준다.
+"""D-473 개발 연결 모드 — 같은 망 브라우저에 1시간 운영자 세션을 메모리에만 준다.
 
 D-432 CORE `POST /api/v1/auth/development-session` 의 Fleet 짝이다. 켜는 조건
 (`ROSY_DEPLOYMENT=development` + `--connection-mode development`)은 `cli.run_console` 이 본다.
@@ -117,7 +117,9 @@ class DevelopmentSessions:
         with self._lock:
             self._prune(now)
             while len(self._sessions) >= MAX_SESSIONS:
-                self._sessions.popitem(last=False)  # D-473 2: the oldest goes first
+                # D-473 2: the oldest goes first, judged by last use (field check 2026-10-10: by
+                # issue time, new tabs evicted a console still polling every second).
+                self._sessions.popitem(last=False)
             self._sessions[_digest(token)] = (principal, expires)
         return token, principal, datetime.fromtimestamp(expires, timezone.utc).isoformat(timespec="seconds")
 
@@ -128,8 +130,11 @@ class DevelopmentSessions:
             matched = None
             for stored, (principal, _expires) in self._sessions.items():
                 if hmac.compare_digest(stored, digest):
-                    matched = principal
-            return matched
+                    matched = stored, principal
+            if matched is None:
+                return None
+            self._sessions.move_to_end(matched[0])  # least recently used is evicted first
+            return matched[1]
 
     def revoke(self, token: str) -> None:
         with self._lock:
@@ -145,11 +150,12 @@ def _digest(token: str) -> str:
 
 
 def install_development_routes(app, *, sessions: Optional[DevelopmentSessions], task_service,
-                               trust_forwarded: bool) -> None:
+                               trust_forwarded: bool, account_login: bool = False) -> None:
     @app.get("/api/fleet/auth/connection", tags=["fleet-auth"])
     def fleet_connection() -> JSONResponse:
-        return JSONResponse(headers=NO_STORE,
-                            content={"mode": "development" if sessions is not None else "paired"})
+        # D-519 6: `account_login` (field `password_login`) tells the console whether to offer 아이디·비밀번호 or the token.
+        return JSONResponse(headers=NO_STORE, content={
+            "mode": "development" if sessions is not None else "paired", "password_login": account_login})
 
     @app.post("/api/fleet/auth/development-session", status_code=201, tags=["fleet-auth"])
     def fleet_development_session(request: Request) -> JSONResponse:

@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 
 WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
-API_PKG = (Path(__file__).resolve().parents[4] / "middleware" / "core") / "api_web" / "core_api_web"
+API_PKG = (Path(__file__).resolve().parents[4] / "middleware" / "core") / "api" / "core_api_web"
 INDEX = WEB_ROOT / "index.html"
 DOM = WEB_ROOT / "dom.js"
 APP = WEB_ROOT / "app.js"

@@ -1,0 +1,113 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "cue_turn_signs": {
+   "+": 39,
+   "-": 1
+  },
+  "cues_refused": [],
+  "pivot_started": true,
+  "obstacle_ahead_seen": true,
+  "turning_reason_seen": false,
+  "nonzero_angular_after_pivot_start": 3,
+  "yaw_change_deg": 0.06,
+  "body_gap_m": [
+   0.0,
+   0.0001,
+   0.0002
+  ],
+  "after": [
+   [
+    485.123,
+    "HOLD",
+    "obstacle_ahead"
+   ],
+   [
+    490.164,
+    "RECOVERING",
+    "stuck_back_off"
+   ],
+   [
+    492.87,
+    "HOLD",
+    "stuck_settling"
+   ],
+   [
+    493.841,
+    "HOLD",
+    "fleet_wrong_way"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   479.98,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   483.971,
+   "WAITING",
+   "no_observation"
+  ],
+  [
+   484.094,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   485.123,
+   "HOLD",
+   "obstacle_ahead"
+  ],
+  [
+   490.164,
+   "RECOVERING",
+   "stuck_back_off"
+  ],
+  [
+   492.87,
+   "HOLD",
+   "stuck_settling"
+  ],
+  [
+   493.841,
+   "HOLD",
+   "fleet_wrong_way"
+  ]
+ ],
+ "scenario": "s3",
+ "args": {
+  "scenario": "s3",
+  "out": "runs/box_spot2",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.524,
+   -0.242,
+   2.478367537831948
+  ],
+  "lane": -0.6632251157578453,
+  "spot": 2,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": true,
+  "seed": 82,
+  "spot_xy": [
+   -0.524,
+   -0.242
+  ],
+  "lane_deg": -38.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

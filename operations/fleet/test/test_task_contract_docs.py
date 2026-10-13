@@ -17,13 +17,14 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
         encoding="utf-8")
     intent = (ROOT / "operations/fleet/fleet/server/intent_routes.py").read_text(
         encoding="utf-8")
-    web_root = ROOT / "operations/fleet/fleet/server/web"
+    execution = (ROOT / "operations/fleet/fleet/server/intent_execution.py").read_text(encoding="utf-8")
+    web_root = ROOT / "operations/ui/console"
     web = (web_root / "console.js").read_text(encoding="utf-8")
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.119" in reference
+    assert "**Version:** v1.220" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -60,7 +61,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     }
     assert 'alias="Idempotency-Key"' in task_dispatch
     assert 'alias="Idempotency-Key"' in intent
-    assert 'call.verb == "navigate"' in intent
+    assert 'await execution.step(call, principal, idempotency_key' in intent
+    assert 'call.verb == "navigate"' in execution
     assert '"Idempotency-Key": crypto.randomUUID()' in web
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
@@ -89,7 +91,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.119" in reference
+    assert "**Version:** v1.220" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (
@@ -146,7 +148,7 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
     adr = (ROOT / "docs/adr/D-318-site-camera-preview-rectification.md").read_text(
         encoding="utf-8")
     vision = (ROOT / "operations/vision/rosy_vision/ingest.py").read_text(encoding="utf-8")
-    ui = (ROOT / "operations/fleet/fleet/server/web/install.html").read_text(encoding="utf-8")
+    ui = (ROOT / "operations/ui/console/install.html").read_text(encoding="utf-8")
 
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr
     assert "### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)" in reference

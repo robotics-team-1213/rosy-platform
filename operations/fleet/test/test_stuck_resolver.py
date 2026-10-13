@@ -5,16 +5,19 @@ import math
 import pytest
 
 from fleet.meet.place import pose_on, project
-from site_map_fixture import painted_track
-from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
+from site_map_fixture import painted_track, painted_without_crosswalks
+from fleet.stuck.resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
 def _row(robot_id="rosy_01", stuck=None, *, mode="CAMERA_LINE", pose=(0.0, 0.0, 0.0),
-         online=True, estop=False, localization=None):
+         online=True, estop=False, localization="map"):
+    """A D-395 trusted map-frame row by default; ``localization=None`` is a LEGACY (odom) row."""
+    if localization == "map":
+        localization = _frame("map")
     state = {"robot_id": robot_id, "safety": {"estop": estop},
              "pose": None if pose is None else {"x": pose[0], "y": pose[1], "yaw": pose[2]},
              "line_follow": {"mode": mode, "state": "HOLD" if stuck else "TRACKING",
-                             "stuck": stuck}}
+                             "stuck": stuck, "crosswalk": None}}
     if localization is not None:
         state["localization"] = localization
     return {"robot_id": robot_id, "online": online, "state": state}
@@ -99,11 +102,11 @@ def test_r1_ignores_a_peer_behind_or_beside_and_unknown_poses():
     assert r.step(0.0, [me, behind, beside])[0].rule == "R2"
     r2 = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r2.step(0.0, [_row("rosy_01", _stuck(), pose=None),
-                         _row("rosy_02", None, pose=(0.2, 0.0, 0.0))])[0].rule == "R2"
+                         _row("rosy_02", None, pose=(0.2, 0.0, 0.0))])[0].rule == "R5"   # D-577 남은 항목 4
 
 
 def test_r3_backs_off_on_lane_lost():
-    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
     assert r.step(0.0, [_row(stuck=_stuck(cause="lane_lost"))]) == [
         Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
@@ -322,7 +325,7 @@ def test_localized_map_pose_still_yields_and_odom_frame_does_not():
         _row("near", _stuck(), pose=near, localization=_frame("odom")),
         _row("far", None, pose=far, localization=_frame("odom")),
     ])
-    assert odom == [Answer("near", "stuck-1", "WAIT", "R1")]
+    assert odom == [Answer("near", "stuck-1", "WAIT", "R5", escalate="obstacle_ahead_hold:peer_unknown")]
 
 
 def test_a_gap_beside_the_line_returns_to_the_paint_not_across_the_floor():
@@ -394,7 +397,7 @@ def test_rejoin_holds_when_a_roster_peer_has_no_current_map_pose(unavailable):
     room = next(item for item in painted.rooms if item.id == "east_room")
     me = _row("near", _yielded(), pose=(*room.hold_xy, 0.0))
     past = pose_on(painted, "east", door.s_m - 0.70, direction=-1)
-    peer = _row("far", None, pose=past)
+    peer = _row("far", None, pose=past, localization=None)
     if unavailable == "offline":
         peer["online"], peer["state"] = False, None
     elif unavailable == "missing_state":
@@ -423,10 +426,606 @@ def test_rejoin_never_moves_or_resumes_from_a_lapsed_own_pose(where):
     assert resolver.step(1.0, [_row("near", _yielded(), pose=hold),
                                _row("far", None, pose=_far)]) == []
     pose = hold if where == "room" else pose_on(painted, "east", door.s_m + 0.15, direction=1)
-    me = _row("near", _yielded(), pose=pose)
+    me = _row("near", _yielded(), pose=pose, localization=None)
     me["localization"] = badge(me["state"], lapsed=True)
     assert me["localization"]["trusted"] is False
     assert resolver.step(2.0, [me, peer]) == []
+    me = _row("near", _yielded(), pose=pose)      # trusted map pose again (R1 reads no LEGACY pose)
     me["localization"] = badge(me["state"])
     action = resolver.step(3.0, [me, peer])
     assert len(action) == 1 and action[0].decision == ("YIELD" if where == "room" else "RESUME")
+
+
+@pytest.mark.parametrize("peer_pose", [(0.20, 0.03, 3.14), (0.80, 0.0, 3.14), (-0.20, 0.0, 0.0),
+                                       (0.20, 0.30, 3.14), None])
+def test_the_shared_peer_ahead_matches_the_resolvers_r1(peer_pose):
+    from fleet.stuck.lane_lost import peer_ahead
+
+    me = _row("rosy_01", _stuck(local=False), pose=(0.0, 0.0, 0.0))
+    peer = _row("rosy_02", None, pose=peer_pose)
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    fired = r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+    assert bool(peer_ahead(me, [me, peer], ResolverConfig())) is fired
+    assert peer_ahead(_row("rosy_01", _stuck(), pose=None), [me, peer], ResolverConfig()) is None
+
+
+@pytest.mark.parametrize("trip", [False, True])
+@pytest.mark.parametrize("untrusted", ["me_legacy", "peer_legacy", "both_legacy", "me_odom", "peer_odom"])
+def test_d577_r1_reads_only_trusted_map_poses(untrusted, trip):
+    """D-577 남은 항목 4 (D-607 P0): R1 compares trusted map poses (D-395) of both robots. A LEGACY
+    (no `localization`) or odom-frame pose is not the painted map: no R1, and no blind R2 either;
+    the robot WAITs under R5 and a human gets the stuck."""
+    from fleet.stuck.lane_lost import peer_ahead
+
+    def loc(who):
+        if untrusted in (f"{who}_legacy", "both_legacy"):
+            return None
+        return _frame("odom") if untrusted == f"{who}_odom" else _frame("map")
+
+    me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0), localization=loc("me"))
+    peer = _row("rosy_02", None, pose=(0.20, 0.03, 3.14), localization=loc("peer"))
+    me = _trip(me) if trip else me
+    assert peer_ahead(me, [me, peer], ResolverConfig()) is None
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [me, peer]) == [
+        Answer("rosy_01", "stuck-1", "WAIT", "R5", escalate="obstacle_ahead_hold:peer_unknown")]
+    trusted = [_row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0), localization=_frame("map")),
+               _row("rosy_02", None, pose=(0.20, 0.03, 3.14), localization=_frame("map"))]
+    trusted[0] = _trip(trusted[0]) if trip else trusted[0]
+    assert StuckResolver(ResolverConfig(), painted=painted_track).step(0.0, trusted) == [
+        Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+
+
+def _trip(row):
+    return {**row, "trip": True}
+
+
+def test_trip_robot_gets_only_the_stopping_r1_wait():
+    """D-517 5 (M4): a trip robot is answered, but only WAIT; a moving rule goes to a human (D-494 14)."""
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _trip(_row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0)))
+    peer = _row("rosy_02", None, pose=(0.20, 0.03, 3.14))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+    alone = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert alone.step(0.0, [_trip(_row(stuck=_stuck()))]) == [Escalate("rosy_01", "stuck-1", "no_rule")]
+    lost = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert lost.step(0.0, [_trip(_row(stuck=_stuck(cause="lane_lost")))]) == [
+        Escalate("rosy_01", "stuck-1", "no_rule")]
+
+
+def test_trip_robot_head_on_waits_instead_of_yielding():
+    _painted, _door, near, far = _east_pair()
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(0.0, [_trip(_row("near", _stuck(), pose=near)), _row("far", None, pose=far)])
+    assert actions == [Answer("near", "stuck-1", "WAIT", "R1")]
+
+
+def test_trip_robot_refused_wait_goes_to_a_human_not_a_back_off():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    rows = [_trip(_row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))), _row("rosy_02", None, pose=(0.20, 0.0, 3.14))]
+    wait = r.step(0.0, rows)[0]
+    r.sent(wait, 0.0)
+    assert r.result(wait, code="STUCK_DECISION_REFUSED") is None
+    assert r.step(1.0, rows) == [Escalate("rosy_01", "stuck-1", "no_rule")]
+
+
+# ---- D-577 1: lane_lost answers only safe moves (R3 under all preconditions, else R5 WAIT + human) ----
+
+def _lost(**kw):
+    return _stuck(cause="lane_lost", **kw)
+
+
+def _hold(reason):
+    return [Answer("rosy_01", "stuck-1", "WAIT", "R5", escalate=f"lane_lost_hold:{reason}")]
+
+
+def test_d577_r3_needs_every_precondition():
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    me = _row(stuck=_lost())
+    me["map_pose"] = {"state": "LOCALIZED", "age_s": 0.5}
+    assert r.step(0.0, [me]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d577_peer_behind_holds_instead_of_backing_off():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0), localization=_frame("map"))
+    peer = _row("rosy_02", None, pose=(-0.20, 0.03, 0.0), localization=_frame("map"))
+    assert r.step(0.0, [me, peer]) == _hold("peer_behind")
+
+
+@pytest.mark.parametrize("legacy", ["me", "peer"])
+def test_d577_legacy_odom_pose_never_clears_the_rear_band(legacy):
+    """D-577 남은 항목 1: a robot without `localization` reports odom, not the painted map."""
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0),
+              localization=None if legacy == "me" else _frame("map"))
+    peer = _row("rosy_02", None, pose=(-3.0, 0.0, 0.0),
+                localization=None if legacy == "peer" else _frame("map"))
+    assert r.step(0.0, [me, peer]) == _hold("peer_unknown")
+
+
+def test_d577_a_peer_ahead_does_not_block_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _row(stuck=_lost(), pose=(0.0, 0.0, 0.0), localization=_frame("map"))
+    peer = _row("rosy_02", None, pose=(0.20, 0.0, 3.14), localization=_frame("map"))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+@pytest.mark.parametrize("stuck, extra, reason", [
+    (_lost(attempts=2, max_attempts=2), {}, "attempts"),
+    (_lost(local=False), {}, "local_disabled"),
+    (_lost(), {"crosswalk": {"state": "WAITING", "zone_id": "cw-1"}}, "crosswalk"),
+    (_lost(), {"map_pose": {"state": "DEGRADED", "age_s": 0.2}}, "pose"),
+    (_lost(), {"map_pose": {"state": "LOCALIZED", "age_s": 2.5}}, "pose"),
+    (_lost(), {"map_pose": {"state": "LOCALIZED", "age_s": None}}, "pose"),
+])
+def test_d577_each_false_precondition_is_r5(stuck, extra, reason):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=stuck)
+    if "crosswalk" in extra:
+        row["state"]["line_follow"]["crosswalk"] = extra["crosswalk"]
+    if "map_pose" in extra:
+        row["map_pose"] = extra["map_pose"]
+    assert r.step(0.0, [row]) == _hold(reason)
+
+
+def test_d577_unknown_map_pose_leaves_the_rear_to_core():
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    row = _row(stuck=_lost())
+    row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
+    assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d577_r5_is_once_per_stuck_and_spends_no_budget():
+    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_without_crosswalks)
+    first = r.step(0.0, [_row(stuck=_lost(local=False))])
+    assert first == _hold("local_disabled")
+    r.sent(first[0], 0.0)
+    assert r.step(1.0, [_row(stuck=_lost(local=False))]) == []      # one R5 per stuck
+    assert r._chains["rosy_01"].rule_answers == 0
+    # The stuck closes and reopens inside the restuck window: R3 still has the whole budget.
+    r.step(2.0, [_row(stuck=None)])
+    assert r.step(3.0, [_row(stuck=_lost(stuck_id="stuck-2"))]) == [
+        Answer("rosy_01", "stuck-2", "BACK_AND_RETRY", "R3")]
+
+
+def test_d577_r5_still_stops_after_the_rule_budget():
+    r = StuckResolver(ResolverConfig(rule_budget=1), painted=painted_without_crosswalks)
+    back = r.step(0.0, [_row(stuck=_lost())])[0]
+    r.sent(back, 0.0)
+    r.step(1.0, [_row(stuck=None)])
+    assert r.step(2.0, [_row(stuck=_lost(stuck_id="stuck-2", attempts=1))]) == [
+        Answer("rosy_01", "stuck-2", "WAIT", "R5", escalate="lane_lost_hold:rule_budget")]
+
+
+def test_d577_refused_back_off_holds_and_goes_to_a_human():
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    back = r.step(0.0, [_row(stuck=_lost())])[0]
+    r.sent(back, 0.0)
+    assert r.result(back, code="STUCK_DECISION_REFUSED") is None
+    assert r.step(1.0, [_row(stuck=_lost())]) == _hold("refused")
+
+
+def test_d577_trip_robot_lane_lost_stays_no_rule():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = {**_row(stuck=_lost(local=False)), "trip": True}
+    assert r.step(0.0, [row]) == [Escalate("rosy_01", "stuck-1", "no_rule")]
+
+
+def test_d577_lane_lost_never_resumes_property():
+    """1000 random rosters: no path sends RESUME (or YIELD) for a lane_lost stuck."""
+    import random
+
+    rnd = random.Random(577)
+    painted = painted_track()
+    track = [pose_on(painted, "east", s, direction=d) for s in (0.4, 1.0, 1.2, 1.45) for d in (1, -1)]
+    for _ in range(1000):
+        r = StuckResolver(ResolverConfig(rule_budget=rnd.choice((0, 1, 2))), painted=painted_track)
+        rows = []
+        for i in range(rnd.randint(1, 3)):
+            pose = rnd.choice(track + [None, (rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-3, 3))])
+            stuck = None
+            if i == 0 or rnd.random() < 0.5:
+                stuck = _stuck(f"s{i}", rnd.choice(("lane_lost", "obstacle_ahead")),
+                               local=rnd.random() < 0.7, attempts=rnd.randint(0, 3))
+                stuck["phase"] = rnd.choice(("ASKING", "YIELDED", "BACKING"))
+            row = _row(f"r{i}", stuck, pose=pose, localization=rnd.choice((None, _frame("map"))))
+            if rnd.random() < 0.3:
+                row["trip"] = True
+            if rnd.random() < 0.5:
+                row["map_pose"] = {"state": rnd.choice(("LOCALIZED", "DEGRADED", "UNKNOWN")),
+                                   "age_s": rnd.choice((None, 0.1, 3.0))}
+            rows.append(row)
+        for t in range(4):
+            for action in r.step(float(t), rows):
+                if isinstance(action, Answer):
+                    cause = _row_cause(rows, action.robot_id)
+                    if cause == "lane_lost":
+                        assert action.decision in ("WAIT", "BACK_AND_RETRY"), action
+                    r.sent(action, float(t))
+                    if rnd.random() < 0.3:
+                        r.result(action, code=rnd.choice((None, "STUCK_DECISION_REFUSED")))
+
+
+def _row_cause(rows, robot_id):
+    row = next(item for item in rows if item["robot_id"] == robot_id)
+    return row["state"]["line_follow"]["stuck"]["cause"]
+
+
+# ---- D-577 safety review (REVISE): fail closed on lost pose, untrusted peers, unknown crosswalk ----
+
+def _clear(row):
+    row["state"]["line_follow"]["crosswalk"] = None        # CORE reports "no crosswalk zone"
+    return row
+
+
+def test_d577_lost_map_pose_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _clear(_row(stuck=_lost()))
+    row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": True}
+    assert r.step(0.0, [row]) == _hold("pose")
+
+
+def test_d577_no_map_pose_source_leaves_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    row = _clear(_row(stuck=_lost()))
+    row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
+    assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d577_absent_crosswalk_report_fails_closed():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost())
+    del row["state"]["line_follow"]["crosswalk"]           # today's CORE: no crosswalk report at all
+    assert r.step(0.0, [row]) == _hold("crosswalk_unknown")
+
+
+@pytest.mark.parametrize("peer_kw", [
+    {"pose": None},                                                       # online, no pose
+    {"pose": (-1.0, 0.0, 0.0), "localization": {"state": "CANDIDATES", "pose_frame": "odom",
+                                                "confidence": 0.2}},     # untrusted pose
+])
+def test_d577_unknown_peer_pose_holds(peer_kw):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    peer = _row("rosy_02", None, **peer_kw)
+    assert r.step(0.0, [me, peer]) == _hold("peer_unknown")
+
+
+def test_d577_own_untrusted_pose_with_a_peer_online_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_without_crosswalks)
+    me = _clear(_row(stuck=_lost(), localization={"state": "SUSPECT", "pose_frame": "map",
+                                                   "confidence": 0.3}))
+    peer = _row("rosy_02", None, pose=(2.0, 0.0, 0.0), localization=_frame("map"))
+    assert r.step(0.0, [me, peer]) == _hold("peer_unknown")
+
+
+def test_d577_trusted_peer_far_away_allows_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    peer = _row("rosy_02", None, pose=(-1.0, 0.0, 0.0), localization=_frame("map"))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d577_r5_wait_is_resent_once_after_a_transport_failure():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost(local=False))
+    first = r.step(0.0, [row])[0]
+    r.sent(first, 0.0)
+    assert r.result(first, code="ROBOT_UNREACHABLE") is None            # one resend
+    again = r.step(1.0, [row])
+    assert again == [first]
+    r.sent(again[0], 1.0)
+    assert r.result(again[0], code="ROBOT_UNREACHABLE") == Escalate(
+        "rosy_01", "stuck-1", "lane_lost_hold:local_disabled")
+    assert r.step(2.0, [row]) == []
+
+
+# ---- D-577 개정 2026-10-10: acting AI facts only stop a back-off ----
+
+def test_d577_acting_ai_fact_turns_a_back_off_into_r5_wait_and_a_human():
+    row = _row(stuck=_stuck())
+    row["ai_facts"] = [{"kind": "rear_blocked", "robot_ids": ["rosy_01"], "stage": "acting"}]
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [row]) == [Answer("rosy_01", "stuck-1", "WAIT", "R5",
+                                         escalate="obstacle_ahead_hold:ai:rear_blocked")]
+    plain = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert plain.step(0.0, [_row(stuck=_stuck())]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+
+
+# ---- D-577 개정 2026-10-10: AI PC proposes, Fleet validates the envelope, rules on refusal/timeout ----
+
+def _proposal(decision="BACK_AND_RETRY", stuck_id="stuck-1", reason="obstacle_ahead_back_off"):
+    return {"robot_id": "rosy_01", "stuck_id": stuck_id, "decision": decision, "reason": reason,
+            "confidence": 0.6, "evidence": {}, "source": "analyzer:stuck_scene@1", "observed_at": 0.0, "ttl_s": 6.0}
+
+
+def _ai_row(proposal=None, stuck=None, wait=True):
+    row = _row(stuck=stuck or _stuck())
+    if proposal is not None:
+        row["ai_proposal"] = proposal
+    if wait:
+        row["ai_wait"] = True
+    return row
+
+
+def _trusted(row):
+    """A trusted, fresh Fleet map pose: the site map's crosswalks can be measured (D-573 1)."""
+    row["state"]["localization"] = _frame("map")
+    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2, **row["state"]["pose"]}
+    return row
+
+
+def test_d577_valid_ai_proposal_is_forwarded():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_trusted(_ai_row(_proposal()))]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")]
+    assert [v["verdict"] for v in r.ai_verdicts] == ["forwarded"]
+    wait = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert wait.step(0.0, [_ai_row(_proposal("WAIT", reason="rear_blocked"))]) == [
+        Answer("rosy_01", "stuck-1", "WAIT", "ai", escalate="ai_wait:rear_blocked")]
+
+
+@pytest.mark.parametrize("proposal, stuck, verdict, fallback", [
+    (_proposal("MANUAL"), None, "word_not_allowed", "BACK_AND_RETRY"),
+    (_proposal("RESUME"), _stuck(cause="lane_lost"), "word_not_allowed", None),
+    (_proposal(stuck_id="stuck-0"), None, "stuck_mismatch", "BACK_AND_RETRY"),
+    (_proposal(), _stuck(attempts=2), "attempts", None),
+    (_proposal(), _stuck(local=False), "local_disabled", None),
+])
+def test_d577_invalid_ai_proposal_falls_back_to_the_rules(proposal, stuck, verdict, fallback):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(10.0, [_ai_row(proposal, stuck, wait=False)])
+    assert [v["verdict"] for v in r.ai_verdicts] == [verdict]
+    assert not any(isinstance(a, Answer) and a.rule == "ai" for a in actions)
+    if fallback:
+        assert actions == [Answer("rosy_01", "stuck-1", fallback, "R2")]
+
+
+def test_d577_no_ai_proposal_in_time_falls_back_to_the_rules():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_ai_row()]) == []                   # the AI PC still has its time
+    assert r.step(4.0, [_ai_row()]) == []
+    assert r.step(10.1, [_ai_row()]) == []
+    assert r.step(12.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    assert r.ai_verdicts == []
+
+
+# ---- D-577 개정 2026-10-10 Safety-Review: every AI proposal passes the rules' gates ----
+
+def _judged(proposal, row, *rows):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(10.0, [row, *rows])
+    return r.ai_verdicts[0]["verdict"], [a for a in actions if isinstance(a, Answer) and a.rule == "ai"]
+
+
+def _with(row, **line_follow):
+    row["state"]["line_follow"].update(line_follow)
+    return row
+
+
+@pytest.mark.parametrize("decision", ["ABORT", "BACK_AND_RETRY"])
+def test_d577_ai_abort_resume_back_off_hold_where_a_crosswalk_is_unknown_or_occupied(decision):
+    row = _ai_row(_proposal(decision), wait=False)
+    del row["state"]["line_follow"]["crosswalk"]
+    assert _judged(None, row)[0] == "crosswalk_unknown"
+    row = _with(_ai_row(_proposal(decision), wait=False), crosswalk={"zone_id": "cw-1"})
+    assert _judged(None, row)[0] == "crosswalk"
+
+
+def test_d577_forwarded_ai_abort_also_raises_a_human_row():
+    verdict, sent = _judged(None, _ai_row(_proposal("ABORT", reason="scene_blocked"), wait=False))
+    assert verdict == "forwarded"
+    assert sent == [Answer("rosy_01", "stuck-1", "ABORT", "ai", escalate="ai_abort:scene_blocked")]
+
+
+@pytest.mark.parametrize("decision, stuck, extra, verdict", [
+    ("BACK_AND_RETRY", _stuck(local=False), {}, "local_disabled"),
+    ("BACK_AND_RETRY", _stuck(attempts=2), {}, "attempts"),
+    ("BACK_AND_RETRY", None, {"map_pose": {"state": "LOCALIZED", "age_s": 5.0}}, "pose"),
+    ("BACK_AND_RETRY", None, {"map_pose": {"state": "DEGRADED", "age_s": 0.1}}, "pose"),
+    ("BACK_AND_RETRY", None, {"ai_facts": [{"kind": "rear_blocked", "robot_ids": ["rosy_01"], "stage": "acting"}]},
+     "ai_fact:rear_blocked"),
+    ("BACK_AND_RETRY", None, {"ai_facts": [{"kind": "path_blocked_by_robot", "robot_ids": ["rosy_01"],
+                                            "stage": "acting"}]}, "ai_fact:path_blocked_by_robot"),
+])
+def test_d577_ai_moving_words_need_every_r3_precondition(decision, stuck, extra, verdict):
+    row = _ai_row(_proposal(decision), stuck, wait=False)
+    row.update(extra)
+    assert _judged(None, row) == (verdict, [])
+
+
+def test_d577_ai_back_off_holds_for_an_untrusted_peer_pose_and_resume_is_never_an_ai_word():
+    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0), localization=None)  # LEGACY odom pose: not a map pose
+    no_motion = _trusted(_ai_row(_proposal(), _stuck(cause="no_motion"), wait=False))
+    assert _judged(None, no_motion, peer)[0] == "peer_unknown"
+    legacy = _ai_row(_proposal(), _stuck(cause="no_motion"), wait=False)
+    del legacy["state"]["localization"]                      # LEGACY: no localization block (D-395)
+    assert _judged(None, legacy, peer)[0] == "crosswalk_unknown"   # no map pose near a mapped crosswalk   # R6's waiver is not the AI's
+    for cause in ("obstacle_ahead", "lane_lost", "no_motion"):   # the rules never RESUME a stuck
+        assert _judged(None, _ai_row(_proposal("RESUME"), _stuck(cause=cause), wait=False)) == (
+            "word_not_allowed", [])
+
+
+@pytest.mark.parametrize("stuck, setup, verdict", [
+    (None, lambda row: row["state"]["line_follow"].pop("crosswalk"), "crosswalk_unknown"),
+    (None, lambda row: row.update(trip=True), "trip"),
+    (_stuck(cause="crosswalk_blocked"), lambda row: None, "word_not_allowed"),
+])
+def test_d577_a_held_ai_abort_stops_with_r5_wait_and_a_human_not_the_rules_motion(stuck, setup, verdict):
+    row = _ai_row(_proposal("ABORT"), stuck, wait=False)
+    setup(row)
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(10.0, [row]) == [Answer("rosy_01", "stuck-1", "WAIT", "R5", escalate=f"ai_abort_held:{verdict}")]
+    assert [v["verdict"] for v in r.ai_verdicts] == [verdict]
+
+
+def test_d577_a_proposal_after_the_stuck_was_answered_is_audited_not_acted_on():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    answer = r.step(10.0, [_ai_row(wait=False)])
+    assert answer == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    r.sent(answer[0], 10.0)
+    assert r.step(11.0, [_ai_row(_proposal("ABORT"), wait=False)]) == []
+    assert r.step(12.0, [_ai_row(_proposal("ABORT"), wait=False)]) == []
+    assert [v["verdict"] for v in r.ai_verdicts] == ["after_answer"]
+
+
+def test_d577_ai_back_off_with_a_peer_ahead_waits_for_r1_first():
+    peer = _row("rosy_02", pose=(0.2, 0.0, 0.0))
+    peer["state"]["localization"] = _frame("map")
+    row = _ai_row(_proposal(), wait=False)
+    row["state"]["localization"] = _frame("map")
+    assert _judged(None, row, peer)[0] == "peer_ahead"
+
+
+@pytest.mark.parametrize("cause", ["obstacle_ahead", "lane_lost", "no_motion"])
+def test_d577_ai_back_off_refused_when_the_rear_is_unknown_allowed_when_clear(cause):
+    # D-577 / D-610: peer_behind None (a peer with no trusted map pose) is not a clear rear.
+    unknown = _row("rosy_02", pose=(-0.2, 0.0, 0.0), localization=None)
+    assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), unknown) == (
+        "peer_unknown", [])
+    clear = _trusted(_row("rosy_02", pose=(0.0, 1.0, 0.0)))             # trusted, outside both bands
+    assert _judged(None, _trusted(_ai_row(_proposal(), _stuck(cause=cause), wait=False)), clear) == (
+        "forwarded", [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "ai")])
+
+
+def test_d577_ai_never_forwards_a_moving_word_the_r3_gate_would_hold():
+    import random
+
+    from fleet.stuck.lane_lost import lane_lost_hold
+    from fleet.stuck.resolver import _Chain
+
+    rng = random.Random(577)
+    for _ in range(1000):
+        cause = rng.choice(["obstacle_ahead", "lane_lost", "no_motion"])
+        decision = rng.choice(["WAIT", "BACK_AND_RETRY", "RESUME", "ABORT"])
+        stuck = _stuck(cause=cause, local=rng.random() < 0.7, attempts=rng.randint(0, 2))
+        if rng.random() < 0.3:
+            stuck["rear_state"] = "blocked"
+        row = _ai_row(_proposal(decision), stuck, wait=False)
+        if rng.random() < 0.3:
+            row["map_pose"] = {"state": rng.choice(["LOCALIZED", "DEGRADED"]), "age_s": rng.uniform(0, 4)}
+        crosswalk = rng.choice(["absent", None, {"zone_id": "cw"}])
+        if crosswalk == "absent":
+            del row["state"]["line_follow"]["crosswalk"]
+        else:
+            row["state"]["line_follow"]["crosswalk"] = crosswalk
+        if rng.random() < 0.3:
+            row["trip"] = True
+        rows = [row] + ([_row("rosy_02", pose=(rng.uniform(-0.4, 0.4), rng.uniform(-0.2, 0.2), 0.0))]
+                        if rng.random() < 0.6 else [])
+        if rng.random() < 0.5:                                # trusted map poses: the peer band is real
+            for each in rows:
+                each["state"]["localization"] = _frame("map")
+        r = StuckResolver(ResolverConfig(), painted=painted_track)
+        for answer in r.step(10.0, rows):
+            if not isinstance(answer, Answer) or answer.rule != "ai":
+                continue
+            assert not row.get("trip") or answer.decision == "WAIT"
+            assert answer.decision != "RESUME"
+            if answer.decision == "BACK_AND_RETRY":
+                assert lane_lost_hold(row, stuck, rows, _Chain(0.0, ""), ResolverConfig()) is None
+                assert stuck.get("rear_state") != "blocked"
+            if answer.decision != "WAIT":
+                assert row["state"]["line_follow"].get("crosswalk", "absent") is None
+
+
+# ---- D-573 6 개정 2026-10-10: CORE reports crosswalk null / zone / unknown with the gate off ----
+
+def test_d573_core_unknown_crosswalk_holds_as_unknown():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost())
+    row["state"]["line_follow"]["crosswalk"] = {"state": "unknown", "source": "camera", "reason": "pose_stale"}
+    assert r.step(0.0, [row]) == _hold("crosswalk_unknown")
+
+
+@pytest.mark.parametrize("state", ["inside", "ahead"])
+def test_d573_core_zone_holds_as_crosswalk(state):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _row(stuck=_lost())
+    row["state"]["line_follow"]["crosswalk"] = {"state": state, "source": "camera"}
+    assert r.step(0.0, [row]) == _hold("crosswalk")
+
+
+def test_d573_core_null_crosswalk_with_every_other_precondition_opens_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _trusted(_clear(_row(stuck=_lost(), localization=_frame("map"))))
+    peer = _trusted(_row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map")))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+# ---- D-577 남은 항목 2: a failed R5 send is resent as R5, never replaced by R3 ----
+
+def test_d577_failed_r5_send_is_resent_as_the_same_r5_even_if_r3_now_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    behind = _row("rosy_02", None, pose=(-0.20, 0.03, 0.0), localization=_frame("map"))
+    first = r.step(0.0, [me, behind])
+    assert first == _hold("peer_behind")
+    r.sent(first[0], 0.0)
+    assert r.result(first[0], code="ROBOT_UNREACHABLE") is None        # one transport resend
+    gone = _row("rosy_02", None, pose=(3.0, 0.0, 0.0), localization=_frame("map"))
+    assert r.step(1.0, [me, gone]) == first                            # not R3
+
+
+# ---- D-573 1 / review 2026-10-10: the site-map crosswalk is the reference for R3 ----
+# painted_track() carries map_v2_fleet's two lane_graph crosswalks; one spans x 0.309..0.429, y -0.582..-0.438.
+
+def _clear_trusted(pose):
+    row = _clear(_row(stuck=_lost(), pose=pose, localization=_frame("map")))
+    row["map_pose"] = {"state": "LOCALIZED", "age_s": 0.2}
+    return row
+
+
+@pytest.mark.parametrize("pose", [(0.37, -0.50, 0.0),       # on it
+                                  (0.37, -0.20, 0.0)])     # 0.24 m beside it: within body + back-off reach
+def test_d573_map_crosswalk_near_the_trusted_pose_holds_even_with_core_null(pose):
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_clear_trusted(pose)]) == _hold("crosswalk")
+
+
+def test_d573_map_crosswalk_far_from_the_trusted_pose_leaves_r3():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert r.step(0.0, [_clear_trusted((0.0, 0.0, 0.0))]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
+
+
+def test_d573_map_with_crosswalks_and_no_trusted_pose_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    legacy = _clear(_row(stuck=_lost(), localization=None))       # no localization: odom, not the map
+    assert r.step(0.0, [legacy]) == _hold("crosswalk_unknown")
+
+
+def test_d573_map_with_crosswalks_and_an_unsourced_unknown_pose_holds():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    row = _clear(_row(stuck=_lost(), localization=_frame("map")))
+    row["map_pose"] = {"state": "UNKNOWN", "age_s": None, "sourced": False}
+    assert r.step(0.0, [row]) == _hold("crosswalk_unknown")
+# ---- D-577 남은 항목 4: with Fleet map poses (Rosy Cam) peers are judged on them, not on odom ----
+
+def _mp(x, y=0.0, yaw=0.0, state="LOCALIZED", age=0.5):
+    return {"state": state, "age_s": age, "sourced": True, "x": x, "y": y, "yaw": yaw}
+
+
+def test_d577_r1_uses_fleet_map_poses_not_odom_origins():
+    me, peer = _row("rosy_01", _stuck()), _row("rosy_02", None, pose=(0.2, 0.0, 0.0))   # odom: peer "ahead"
+    me["map_pose"], peer["map_pose"] = _mp(1.0), _mp(-1.0)                             # map: far apart
+    r = StuckResolver(ResolverConfig(), painted=lambda: None)
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    me2, peer2 = _row("rosy_01", _stuck()), _row("rosy_02", None, pose=(5.0, 0.0, 0.0))
+    me2["map_pose"], peer2["map_pose"] = _mp(1.0), _mp(1.2)                            # map: peer ahead
+    r2 = StuckResolver(ResolverConfig(), painted=lambda: None)
+    assert r2.step(0.0, [me2, peer2]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+
+
+# ---- merge of XW removal and D-573 6 crosswalk holds: the stricter answer wins ----
+
+def test_overlap_mapped_crosswalk_with_unknown_report_and_an_ai_back_off_waits_for_a_human():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    r.at_crosswalk = lambda rid: True
+    for trip in (False, True):
+        row = _ai_row(_proposal(), _lost(), wait=False)
+        row["state"]["line_follow"]["crosswalk"] = {"state": "unknown", "source": "camera", "reason": "pose_stale"}
+        if trip:
+            row["trip"] = True
+        r = StuckResolver(ResolverConfig(), painted=painted_track)
+        r.at_crosswalk = lambda rid: True
+        assert r.step(10.0, [row]) == [Answer("rosy_01", "stuck-1", "WAIT", "R5", escalate="crosswalk_human")]
