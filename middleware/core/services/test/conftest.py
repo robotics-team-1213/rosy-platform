@@ -11,6 +11,7 @@ import sys
 REPO = Path(__file__).resolve().parents[4]
 for _path in (
     REPO / "middleware" / "core" / "services",
+    REPO / "middleware" / "core" / "gateway",  # test_lane_return_manager imports core.drive.line_follow
     REPO / "contracts" / "foundation",
     REPO / "middleware" / "perception",
 ):
