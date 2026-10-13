@@ -175,11 +175,15 @@ def test_logs_accept_english_field_labels():
     assert harness.validate_log(english) == []
 
 
-def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema():
-    legacy = """## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
-- 변경: one concurrent branch version
-"""
+@pytest.mark.parametrize("heading", [
+    "## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership",
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
+])
+def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema(heading):
+    legacy = heading + "\n- 변경: one concurrent branch version\n"
     assert harness.validate_log(legacy) == []
+    assert harness.validate_log(legacy.replace(heading, heading + " altered"))
 
 
 def test_committed_role_g2_heading_is_preserved_as_legacy():
@@ -535,6 +539,27 @@ def test_append_only_follows_a_moved_module_through_legacy(tmp_path):
         edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
         assert not harness.is_append_only(committed, edited)
     assert harness._committed_log(tmp_path, base, "new/other", moved) is None
+
+
+def test_append_only_follows_a_later_layout_move_with_frozen_ownership(tmp_path):
+    git = _git_repo(tmp_path)
+    (tmp_path / "owned/pkg").mkdir(parents=True)
+    (tmp_path / "owned/pkg/logs.md").write_text(GOOD_LOG, encoding="utf-8")
+    git("add", "owned/pkg/logs.md")
+    git("commit", "-q", "-m", "ownership layout")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "current").mkdir()
+    git("mv", "owned/pkg", "current/pkg")
+    git("commit", "-q", "-m", "later layout")
+    moved = [{"path": "current/pkg", "layout_target": "current/pkg",
+              "d427_target": "owned/pkg", "legacy": "original/pkg"}]
+    committed = harness._committed_log(tmp_path, base, "current/pkg", moved)
+    assert committed == GOOD_LOG
+    edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
+    errors, warnings_ = harness._append_only_findings(
+        tmp_path, [base], "pkg", "current/pkg", edited, moved)
+    assert len(errors) == 1 and "were edited" in errors[0]
+    assert warnings_ == []
 
 
 def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):

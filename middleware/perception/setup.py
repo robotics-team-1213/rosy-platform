@@ -1,7 +1,64 @@
 import os
+from pathlib import Path
+import runpy
+import shutil
 from glob import glob
 
 from setuptools import find_packages, setup
+from setuptools.command.build_py import build_py
+from setuptools.command.sdist import sdist
+
+
+layout = runpy.run_path('control/_source_layout.py')
+package_dirs = layout['PACKAGE_DIRS']
+flat_roots = layout['FLAT_ROOTS']
+packages = ['control', 'control.control']
+for name, folder in package_dirs.items():
+    packages.append(name)
+    packages.extend(name + '.' + child for child in find_packages(where=str(folder)))
+
+
+class HolderBuild(build_py):
+    def find_package_modules(self, package, package_dir):
+        modules = super().find_package_modules(package, package_dir)
+        if package == 'control':
+            relative = Path(os.path.relpath(layout['RUNTIME_ROOT']))
+            modules.extend((package, path.stem, str(path))
+                           for path in sorted(relative.glob('*.py')))
+            names = [name for _, name, _ in modules]
+            if len(names) != len(set(names)):
+                raise ValueError('Duplicate control runtime source module')
+        if package == 'control.control':
+            for folder in flat_roots:
+                relative = Path(os.path.relpath(folder))
+                modules.extend((package, path.stem, str(path))
+                               for path in sorted(relative.glob('*.py'))
+                               if path.name != '__init__.py')
+            names = [name for _, name, _ in modules]
+            if len(names) != len(set(names)):
+                raise ValueError('Duplicate control.control source module')
+        return modules
+
+
+class HolderSource(sdist):
+    def add_defaults(self):
+        super().add_defaults()
+        self.filelist.extend('control/' + name + '/__init__.py'
+                             for name in ('sensing', 'planning', 'safety', 'wander'))
+
+    def make_release_tree(self, base_dir, files):
+        root = Path.cwd().resolve()
+        super().make_release_tree(base_dir, [name for name in files
+            if (root / name).resolve().is_relative_to(root)])
+        snapshot = Path(base_dir) / '_source_roots/drive'
+        for relative in ('safety', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
+            shutil.copytree(layout['DRIVE_ROOT'] / relative, snapshot / relative,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        manifest = Path(base_dir) / 'control.egg-info/SOURCES.txt'
+        text = manifest.read_text(encoding='utf-8').replace(
+            '../control/drive/', '_source_roots/drive/')
+        manifest.unlink()  # The release tree may hard-link its source manifest.
+        manifest.write_text(text, encoding='utf-8')
 
 package_name = 'control'
 map_bundles = (
@@ -20,8 +77,10 @@ map_data_files = [
 
 setup(
     name=package_name,
-    version='0.1.0',
-    packages=find_packages(exclude=['test']),
+    version='0.1.1',
+    packages=packages,
+    package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
+    cmdclass={'build_py': HolderBuild, 'sdist': HolderSource},
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -30,7 +89,7 @@ setup(
         (os.path.join('share', package_name, 'web'), glob('web/*.html')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
     ] + map_data_files,
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'core_common>=0.0.1'],
     zip_safe=True,
     maintainer='livsbittt',
     maintainer_email='56295815+livsbittt@users.noreply.github.com',

@@ -19,8 +19,19 @@ from pathlib import Path
 
 
 SERVICE = "rosy-review-v13.service"
-APP = Path("learning/training/perception/dataset/review_app.py")
-WEB = Path("learning/training/perception/dataset/review_app_web")
+APP = Path("learning/curation/perception/review_app.py")
+WEB = Path("learning/curation/perception/review_app_web")
+LEGACY_APP = Path("learning/training/perception/dataset/review_app.py")
+SPLIT_REQUIRED = ("middleware/perception/package.xml",
+                  "middleware/perception/sensors/sensing/__init__.py",
+                  "middleware/perception/vision/perception/__init__.py",
+                  "middleware/control/drive/safety/command_gate.py",
+                  "middleware/control/drive/recovery/recover.py",
+                  "middleware/control/drive/tracking/path_follow.py",
+                  "middleware/control/drive/calibration/modes.py",
+                  "middleware/control/drive/planning/grid/__init__.py",
+                  "middleware/control/drive/safety/adapter/__init__.py",
+                  "middleware/control/drive/tracking/wander/__init__.py")
 
 
 def check_source(source: Path, root: Path, state: Path) -> None:
@@ -30,6 +41,10 @@ def check_source(source: Path, root: Path, state: Path) -> None:
     for required in (APP, WEB / "index.html", WEB / "pixels.html", Path("shared/web/shared-assets.json")):
         if not (source / required).is_file():
             raise ValueError(f"release source is missing {required}")
+    if (source / "middleware/perception/control/_source_layout.py").is_file():
+        for required in SPLIT_REQUIRED:
+            if not (source / required).is_file():
+                raise ValueError(f"release source is missing {required}")
     for directory, dirs, files in os.walk(source):
         for name in dirs + files:
             entry = Path(directory) / name
@@ -50,13 +65,14 @@ def digest_tree(source: Path) -> str:
 
 
 def unit_contents(current: Path, state: Path, python: Path, host: str, port: int) -> str:
-    dataset = current / "learning/training/perception/dataset"
+    dataset = current / "learning/curation/perception"
     paths = (
         current / "middleware/perception",
         current / "contracts/foundation",
-        current / "learning/training/perception",
+        current / "tools/perception",
+        current / "learning/registry/perception",
         dataset,
-        current / "learning/training/perception/training",
+        current / "learning/training/perception",
     )
     for value in (current, state, python):
         if any(char.isspace() for char in str(value)):
@@ -144,15 +160,45 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
             "release": release, "source_sha256": source_digest}, indent=2) + "\n", encoding="utf-8")
         env = os.environ.copy()
         env["PYTHONPATH"] = ":".join(str(staging / part) for part in (
-            "middleware/perception", "contracts/foundation", "learning/training/perception",
-            "learning/training/perception/dataset", "learning/training/perception/training"))
+            "middleware/perception", "contracts/foundation", "tools/perception",
+            "learning/registry/perception", "learning/curation/perception", "learning/training/perception"))
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         subprocess.run((str(python), "-c", "import review_app"), env=env, check=True)
         os.replace(staging, target)
-    elif not (target / APP).is_file():
+    elif not ((target / APP).is_file() or (target / LEGACY_APP).is_file()):
         raise ValueError(f"existing release is missing: {target}")
     else:
         unit_text = None
+        # Retained releases keep their code, digest and receipt bytes. Translate
+        # only this managed unit's exact source-holder paths when crossing D-637.
+        canonical = str(current / APP.parent)
+        legacy = str(current / LEGACY_APP.parent)
+        text = old_unit.decode("utf-8")
+        to_legacy = not (target / APP).is_file()
+        if ((to_legacy and f"WorkingDirectory={canonical}\n" in text)
+                or (not to_legacy and f"WorkingDirectory={legacy}\n" in text)):
+            pairs = (("learning/curation/perception", "learning/training/perception/dataset"),
+                     ("learning/registry/perception", "learning/training/perception/model"),
+                     ("learning/training/perception", "learning/training/perception/training"),
+                     ("tools/perception", "learning/training/perception"))
+            paths = {str(current / (a if to_legacy else b)): str(current / (b if to_legacy else a))
+                     for a, b in pairs}
+            lines = []
+            for line in text.splitlines(keepends=True):
+                if line == f"WorkingDirectory={canonical if to_legacy else legacy}\n":
+                    line = f"WorkingDirectory={legacy if to_legacy else canonical}\n"
+                elif line.startswith("Environment=PYTHONPATH="):
+                    tokens = line.removeprefix("Environment=PYTHONPATH=").removesuffix("\n").split(":")
+                    line = "Environment=PYTHONPATH=" + ":".join(paths.get(token, token) for token in tokens) + "\n"
+                elif line.startswith("ExecStart="):
+                    interpreter, space, rest = line.partition(" ")
+                    script, separator, arguments = rest.partition(" ")
+                    expected = str(current / (APP if to_legacy else LEGACY_APP))
+                    if script == expected:
+                        script = str(current / (LEGACY_APP if to_legacy else APP))
+                        line = interpreter + space + script + separator + arguments
+                lines.append(line)
+            unit_text = "".join(lines)
     if old_target == target and unit_text is None:
         return target
     try:

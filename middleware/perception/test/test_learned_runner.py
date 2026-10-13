@@ -54,6 +54,100 @@ def test_open_and_infer(tmp_path):
     assert r.latency_ms >= 0
 
 
+def test_missing_warning_class_stays_unavailable(tmp_path):
+    model = LaneSegModel.open(_model_dir(tmp_path), session_factory=_factory())
+    _, _, info, _ = model.infer_drivable(np.zeros((240, 320, 3), np.uint8))
+    assert 'speed_bump_mask' not in info and 'crosswalk_mask' not in info
+
+
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
+@pytest.mark.parametrize("method", ["infer", "infer_mask", "infer_drivable", "infer_with_mask"])
+def test_legacy_inference_refuses_other_road_semantics_before_session(tmp_path, semantic, method):
+    folder = _model_dir(tmp_path)
+    path = folder / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": semantic})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    model = LaneSegModel.open(folder, session_factory=_factory(n_classes=3))
+
+    def refuse_session(_):
+        pytest.fail("incompatible semantics reached inference")
+
+    model._session.run = refuse_session
+    with pytest.raises(ManifestError, match="drivable semantic"):
+        getattr(model, method)(np.zeros((240, 320, 3), np.uint8))
+
+
+@pytest.mark.parametrize("semantic", [None, "current_road_region/1"])
+@pytest.mark.parametrize("method", ["infer", "infer_mask", "infer_drivable", "infer_with_mask"])
+def test_legacy_inference_keeps_existing_road_semantics(tmp_path, semantic, method):
+    folder = _model_dir(tmp_path)
+    path = folder / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    road = {"index": 2, "name": "drivable", "role": "drivable"}
+    if semantic is not None:
+        road["semantic"] = semantic
+    doc["output"]["classes"].append(road)
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    model = LaneSegModel.open(folder, session_factory=_factory(n_classes=3))
+    assert getattr(model, method)(np.zeros((240, 320, 3), np.uint8)) is not None
+
+
+@pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
+def test_slot_keeps_previous_when_new_model_has_incompatible_road_semantics(tmp_path, semantic):
+    good = _model_dir(tmp_path)
+    other = _model_dir(tmp_path, "other", "lane-seg-other")
+    path = other / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": semantic})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    pointer = tmp_path / "shadow"
+    now = [0.0]
+    slot = ModelSlot(pointer, opener=lambda p: LaneSegModel.open(
+        p, session_factory=_factory(n_classes=3 if p == other else 2)),
+        clock=lambda: now[0], poll_s=1.0)
+    pointer.write_text(str(good), encoding="utf-8")
+    previous = slot.poll()
+    pointer.write_text(str(other), encoding="utf-8")
+    now[0] = 1.0
+    assert slot.poll() is previous
+    assert "drivable semantic" in slot.last_error
+
+
+@pytest.mark.parametrize("signed", [False, True])
+def test_semantic_swap_refusal_preserves_previous_signature_status(tmp_path, monkeypatch, signed):
+    from control.sensing.perception.learned import signature
+
+    good = _model_dir(tmp_path)
+    other = _model_dir(tmp_path, "other", "lane-seg-other")
+    path = other / "model_manifest.json"
+    doc = json.loads(path.read_text())
+    doc["output"]["classes"].append({"index": 2, "name": "drivable", "role": "drivable",
+                                      "semantic": "road_surface/1"})
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+    def verify(folder, _):
+        if (folder == good) == signed:
+            return "test-key"
+        raise signature.SignatureError("test unsigned")
+
+    monkeypatch.setattr(signature, "verify_manifest_signature", verify)
+    checked = signature.SignatureCheck(lambda p: LaneSegModel.open(
+        p, session_factory=_factory(n_classes=3 if p == other else 2)), enforce=False)
+    pointer = tmp_path / "shadow"
+    now = [0.0]
+    slot = ModelSlot(pointer, opener=checked, clock=lambda: now[0], poll_s=1.0)
+    pointer.write_text(str(good), encoding="utf-8")
+    previous = slot.poll()
+    previous_status = (checked.signed, checked.reason)
+    pointer.write_text(str(other), encoding="utf-8")
+    now[0] = 1.0
+    assert slot.poll() is previous
+    assert (checked.signed, checked.reason) == previous_status
+
+
 def test_open_refuses_tampered_file(tmp_path):
     d = _model_dir(tmp_path)
     (d / "model.onnx").write_bytes(b"other")

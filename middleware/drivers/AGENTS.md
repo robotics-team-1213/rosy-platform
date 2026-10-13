@@ -35,7 +35,7 @@ ament_cmake or ament_python as the package already uses. Node names stay in the 
 
 ### Internal
 
-- Started by `middleware/apps/device/pinky/bringup/`.
+- Started by `middleware/devices/pinky/bringup/`.
 - CORE reads their topics through `core.bridge`.
 
 ### External

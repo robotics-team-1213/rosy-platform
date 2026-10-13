@@ -90,7 +90,7 @@ def test_named_http_to_actual_uds_dispatcher_and_owner_recovers_without_motion(t
     import sys
     from pathlib import Path
     root = Path(__file__).resolve().parents[3]
-    for relative in ("middleware/apps/device/omx/adapter", "middleware/apps/device/omx/adapter/test"):
+    for relative in ("middleware/devices/omx/adapter", "middleware/devices/omx/adapter/test"):
         sys.path.insert(0, str(root / relative))
     from omx_adapter.action_api import ActionApi
     from omx_adapter.action_store import ActionStore

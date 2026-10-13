@@ -1,0 +1,1219 @@
+{
+  "baseline": "ea6d4c0a2",
+  "moves": [
+    {
+      "source": "learning/training/perception/AGENTS.md",
+      "target": "tools/perception/AGENTS.md"
+    },
+    {
+      "source": "learning/training/perception/classes/lane_lr5.yaml",
+      "target": "learning/curation/perception/classes/lane_lr5.yaml"
+    },
+    {
+      "source": "learning/training/perception/classes/lane_lr6_drivable.yaml",
+      "target": "learning/curation/perception/classes/lane_lr6_drivable.yaml"
+    },
+    {
+      "source": "learning/training/perception/classes/object_review_obstacle_v1.yaml",
+      "target": "learning/curation/perception/classes/object_review_obstacle_v1.yaml"
+    },
+    {
+      "source": "learning/training/perception/dataset/AGENTS.md",
+      "target": "learning/curation/perception/AGENTS.md"
+    },
+    {
+      "source": "learning/training/perception/dataset/autolabel.py",
+      "target": "learning/curation/perception/autolabel.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/bag_to_video.py",
+      "target": "learning/curation/perception/bag_to_video.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/build.py",
+      "target": "learning/curation/perception/build.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/catalog.py",
+      "target": "learning/curation/perception/catalog.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/ceiling_pose.py",
+      "target": "learning/curation/perception/ceiling_pose.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/class_sets.py",
+      "target": "learning/curation/perception/class_sets.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/clip_lane_draft.py",
+      "target": "learning/curation/perception/clip_lane_draft.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/edge_capture.py",
+      "target": "learning/curation/perception/edge_capture.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/edge_capture_session.py",
+      "target": "learning/curation/perception/edge_capture_session.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/edge_review.py",
+      "target": "learning/curation/perception/edge_review.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/edge_review_return.py",
+      "target": "learning/curation/perception/edge_review_return.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/extract.py",
+      "target": "learning/curation/perception/extract.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/fetch_http.py",
+      "target": "learning/curation/perception/fetch_http.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/frames.py",
+      "target": "learning/curation/perception/frames.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/geometry.py",
+      "target": "learning/curation/perception/geometry.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/harvest.py",
+      "target": "learning/curation/perception/harvest.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/incident_feedback.py",
+      "target": "learning/curation/perception/incident_feedback.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/labels.py",
+      "target": "learning/curation/perception/labels.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/lane_derived_drivable.py",
+      "target": "learning/curation/perception/lane_derived_drivable.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/lane_failure.py",
+      "target": "learning/curation/perception/lane_failure.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/lane_failure_loop.py",
+      "target": "learning/curation/perception/lane_failure_loop.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/learning_workspace.py",
+      "target": "learning/curation/perception/learning_workspace.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/map_projected_drivable.py",
+      "target": "learning/curation/perception/map_projected_drivable.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/mcap_proof.py",
+      "target": "learning/curation/perception/mcap_proof.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/object_boxes.py",
+      "target": "learning/curation/perception/object_boxes.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/pixel_label_job.py",
+      "target": "learning/curation/perception/pixel_label_job.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/prelabel.py",
+      "target": "learning/curation/perception/prelabel.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/publish.py",
+      "target": "learning/curation/perception/publish.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/qwen_points.py",
+      "target": "learning/curation/perception/qwen_points.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/qwen_review_completion.py",
+      "target": "learning/curation/perception/qwen_review_completion.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app.py",
+      "target": "learning/curation/perception/review_app.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/app.css",
+      "target": "learning/curation/perception/review_app_web/app.css"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/app.js",
+      "target": "learning/curation/perception/review_app_web/app.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/box-geometry.mjs",
+      "target": "learning/curation/perception/review_app_web/box-geometry.mjs"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/catalog.html",
+      "target": "learning/curation/perception/review_app_web/catalog.html"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/catalog.js",
+      "target": "learning/curation/perception/review_app_web/catalog.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/history.js",
+      "target": "learning/curation/perception/review_app_web/history.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/index.html",
+      "target": "learning/curation/perception/review_app_web/index.html"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/learning.html",
+      "target": "learning/curation/perception/review_app_web/learning.html"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/learning.js",
+      "target": "learning/curation/perception/review_app_web/learning.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/pixels.html",
+      "target": "learning/curation/perception/review_app_web/pixels.html"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/pixels.js",
+      "target": "learning/curation/perception/review_app_web/pixels.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_app_web/viewport.js",
+      "target": "learning/curation/perception/review_app_web/viewport.js"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_eval_bootstrap.py",
+      "target": "learning/curation/perception/review_eval_bootstrap.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_evidence.py",
+      "target": "learning/curation/perception/review_evidence.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_ingest.py",
+      "target": "learning/curation/perception/review_ingest.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_masks.py",
+      "target": "learning/curation/perception/review_masks.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_pack.py",
+      "target": "learning/curation/perception/review_pack.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_quality.py",
+      "target": "learning/curation/perception/review_quality.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/review_return.py",
+      "target": "learning/curation/perception/review_return.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/road_draft.py",
+      "target": "learning/curation/perception/road_draft.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/sam3_road_draft.py",
+      "target": "learning/curation/perception/sam3_road_draft.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/shrink_session.py",
+      "target": "learning/curation/perception/shrink_session.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/stuck_markers.py",
+      "target": "learning/curation/perception/stuck_markers.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/vision_review_drafts.py",
+      "target": "learning/curation/perception/vision_review_drafts.py"
+    },
+    {
+      "source": "learning/training/perception/dataset/vlm_mask_feedback.py",
+      "target": "learning/curation/perception/vlm_mask_feedback.py"
+    },
+    {
+      "source": "learning/training/perception/docs/review-app.md",
+      "target": "learning/curation/perception/docs/review-app.md"
+    },
+    {
+      "source": "learning/training/perception/model/AGENTS.md",
+      "target": "learning/registry/perception/AGENTS.md"
+    },
+    {
+      "source": "learning/training/perception/model/bench_backends.py",
+      "target": "learning/registry/perception/bench_backends.py"
+    },
+    {
+      "source": "learning/training/perception/model/compare_backends.py",
+      "target": "learning/registry/perception/compare_backends.py"
+    },
+    {
+      "source": "learning/training/perception/model/convert.py",
+      "target": "learning/registry/perception/convert.py"
+    },
+    {
+      "source": "learning/training/perception/model/deliver.py",
+      "target": "learning/registry/perception/deliver.py"
+    },
+    {
+      "source": "learning/training/perception/model/delivery_journal.py",
+      "target": "learning/registry/perception/delivery_journal.py"
+    },
+    {
+      "source": "learning/training/perception/model/drivable_versions.py",
+      "target": "learning/registry/perception/drivable_versions.py"
+    },
+    {
+      "source": "learning/training/perception/model/drivable_versions.yaml",
+      "target": "learning/registry/perception/drivable_versions.yaml"
+    },
+    {
+      "source": "learning/training/perception/model/export_class_names.py",
+      "target": "learning/registry/perception/export_class_names.py"
+    },
+    {
+      "source": "learning/training/perception/model/export_ncnn.py",
+      "target": "learning/registry/perception/export_ncnn.py"
+    },
+    {
+      "source": "learning/training/perception/model/export_ncnn_lane.py",
+      "target": "learning/registry/perception/export_ncnn_lane.py"
+    },
+    {
+      "source": "learning/training/perception/model/export_onnx.py",
+      "target": "learning/registry/perception/export_onnx.py"
+    },
+    {
+      "source": "learning/training/perception/model/intake.py",
+      "target": "learning/registry/perception/intake.py"
+    },
+    {
+      "source": "learning/training/perception/model/intake_eval_gate.py",
+      "target": "learning/registry/perception/intake_eval_gate.py"
+    },
+    {
+      "source": "learning/training/perception/model/intake_gate.yaml",
+      "target": "learning/registry/perception/intake_gate.yaml"
+    },
+    {
+      "source": "learning/training/perception/model/peer_targets.py",
+      "target": "learning/registry/perception/peer_targets.py"
+    },
+    {
+      "source": "learning/training/perception/model/sign_model.py",
+      "target": "learning/registry/perception/sign_model.py"
+    },
+    {
+      "source": "learning/training/perception/model/slot_cli.py",
+      "target": "learning/registry/perception/slot_cli.py"
+    },
+    {
+      "source": "learning/training/perception/model/watch.py",
+      "target": "learning/registry/perception/watch.py"
+    },
+    {
+      "source": "learning/training/perception/model/watch_core.py",
+      "target": "learning/registry/perception/watch_core.py"
+    },
+    {
+      "source": "learning/training/perception/operator_ssh.py",
+      "target": "tools/perception/operator_ssh.py"
+    },
+    {
+      "source": "learning/training/perception/road_replay.py",
+      "target": "learning/evaluation/perception/road_replay.py"
+    },
+    {
+      "source": "learning/training/perception/road_replay_inputs.py",
+      "target": "learning/evaluation/perception/road_replay_inputs.py"
+    },
+    {
+      "source": "learning/training/perception/road_replay_metrics.py",
+      "target": "learning/evaluation/perception/road_replay_metrics.py"
+    },
+    {
+      "source": "learning/training/perception/rosy_ml.py",
+      "target": "tools/perception/rosy_ml.py"
+    },
+    {
+      "source": "learning/training/perception/store.py",
+      "target": "learning/registry/perception/store.py"
+    },
+    {
+      "source": "learning/training/perception/test/conftest.py",
+      "target": "test/learning/perception/conftest.py"
+    },
+    {
+      "source": "learning/training/perception/test/deliver_shadow_golden.json",
+      "target": "test/learning/perception/deliver_shadow_golden.json"
+    },
+    {
+      "source": "learning/training/perception/test/review_box_geometry.test.mjs",
+      "target": "test/learning/perception/review_box_geometry.test.mjs"
+    },
+    {
+      "source": "learning/training/perception/test/test_autolabel_geometry.py",
+      "target": "test/learning/perception/test_autolabel_geometry.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_bag_to_video.py",
+      "target": "test/learning/perception/test_bag_to_video.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_capture_goal.py",
+      "target": "test/learning/perception/test_capture_goal.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_ceiling_pose.py",
+      "target": "test/learning/perception/test_ceiling_pose.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_class_sets.py",
+      "target": "test/learning/perception/test_class_sets.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_cli_help.py",
+      "target": "test/learning/perception/test_cli_help.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_clip_lane_draft.py",
+      "target": "test/learning/perception/test_clip_lane_draft.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_d379_catalog_and_store.py",
+      "target": "test/learning/perception/test_d379_catalog_and_store.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_d379_evalset.py",
+      "target": "test/learning/perception/test_d379_evalset.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_d379_review.py",
+      "target": "test/learning/perception/test_d379_review.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_dataset_build.py",
+      "target": "test/learning/perception/test_dataset_build.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_dataset_extract.py",
+      "target": "test/learning/perception/test_dataset_extract.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_dataset_harvest.py",
+      "target": "test/learning/perception/test_dataset_harvest.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_dataset_publish.py",
+      "target": "test/learning/perception/test_dataset_publish.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_delivery_journal.py",
+      "target": "test/learning/perception/test_delivery_journal.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_drivable_cli_admission.py",
+      "target": "test/learning/perception/test_drivable_cli_admission.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_drivable_head.py",
+      "target": "test/learning/perception/test_drivable_head.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_drivable_versions.py",
+      "target": "test/learning/perception/test_drivable_versions.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_capture_frames.py",
+      "target": "test/learning/perception/test_edge_capture_frames.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_capture_v2.py",
+      "target": "test/learning/perception/test_edge_capture_v2.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_capture_v3.py",
+      "target": "test/learning/perception/test_edge_capture_v3.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_capture_verified.py",
+      "target": "test/learning/perception/test_edge_capture_verified.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_review.py",
+      "target": "test/learning/perception/test_edge_review.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_edge_review_return.py",
+      "target": "test/learning/perception/test_edge_review_return.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_fetch_http.py",
+      "target": "test/learning/perception/test_fetch_http.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_incident_feedback.py",
+      "target": "test/learning/perception/test_incident_feedback.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_install_model_watch_config_lines.py",
+      "target": "test/learning/perception/test_install_model_watch_config_lines.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_lane_derived_drivable.py",
+      "target": "test/learning/perception/test_lane_derived_drivable.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_lane_derived_training.py",
+      "target": "test/learning/perception/test_lane_derived_training.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_lane_failure.py",
+      "target": "test/learning/perception/test_lane_failure.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_learning_cycle.py",
+      "target": "test/learning/perception/test_learning_cycle.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_learning_cycle_authority.py",
+      "target": "test/learning/perception/test_learning_cycle_authority.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_learning_workspace.py",
+      "target": "test/learning/perception/test_learning_workspace.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_map_projected_drivable.py",
+      "target": "test/learning/perception/test_map_projected_drivable.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_mcap_proof.py",
+      "target": "test/learning/perception/test_mcap_proof.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_mcap_review_import.py",
+      "target": "test/learning/perception/test_mcap_review_import.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_backend_parity.py",
+      "target": "test/learning/perception/test_model_backend_parity.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_bench_backends.py",
+      "target": "test/learning/perception/test_model_bench_backends.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_convert.py",
+      "target": "test/learning/perception/test_model_convert.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_deliver.py",
+      "target": "test/learning/perception/test_model_deliver.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_deliver_tasks.py",
+      "target": "test/learning/perception/test_model_deliver_tasks.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_intake.py",
+      "target": "test/learning/perception/test_model_intake.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_intake_eval.py",
+      "target": "test/learning/perception/test_model_intake_eval.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_intake_tasks.py",
+      "target": "test/learning/perception/test_model_intake_tasks.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_ncnn_intake.py",
+      "target": "test/learning/perception/test_model_ncnn_intake.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_peer_targets.py",
+      "target": "test/learning/perception/test_model_peer_targets.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_sign.py",
+      "target": "test/learning/perception/test_model_sign.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_watch.py",
+      "target": "test/learning/perception/test_model_watch.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_watch_host.py",
+      "target": "test/learning/perception/test_model_watch_host.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_model_watch_inbox.py",
+      "target": "test/learning/perception/test_model_watch_inbox.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_object_boxes.py",
+      "target": "test/learning/perception/test_object_boxes.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_operator_doc.py",
+      "target": "test/learning/perception/test_operator_doc.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_operator_ssh.py",
+      "target": "test/learning/perception/test_operator_ssh.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_pixel_draft_import.py",
+      "target": "test/learning/perception/test_pixel_draft_import.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_pixel_label_job.py",
+      "target": "test/learning/perception/test_pixel_label_job.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_pixel_review_browser.py",
+      "target": "test/learning/perception/test_pixel_review_browser.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_qwen_points.py",
+      "target": "test/learning/perception/test_qwen_points.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_qwen_review_completion.py",
+      "target": "test/learning/perception/test_qwen_review_completion.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_recording_job.py",
+      "target": "test/learning/perception/test_recording_job.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_admission.py",
+      "target": "test/learning/perception/test_review_admission.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_app.py",
+      "target": "test/learning/perception/test_review_app.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_app_smoke.py",
+      "target": "test/learning/perception/test_review_app_smoke.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_authority.py",
+      "target": "test/learning/perception/test_review_authority.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_bridge.py",
+      "target": "test/learning/perception/test_review_bridge.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_bridge_authority.py",
+      "target": "test/learning/perception/test_review_bridge_authority.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_cycle.py",
+      "target": "test/learning/perception/test_review_cycle.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_dataset.py",
+      "target": "test/learning/perception/test_review_dataset.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_eval_package.py",
+      "target": "test/learning/perception/test_review_eval_package.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_flow_browser.py",
+      "target": "test/learning/perception/test_review_flow_browser.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_masks_flood.py",
+      "target": "test/learning/perception/test_review_masks_flood.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_migration.py",
+      "target": "test/learning/perception/test_review_migration.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_pack.py",
+      "target": "test/learning/perception/test_review_pack.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_pipeline.py",
+      "target": "test/learning/perception/test_review_pipeline.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_quality.py",
+      "target": "test/learning/perception/test_review_quality.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_review_return.py",
+      "target": "test/learning/perception/test_review_return.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_road_draft.py",
+      "target": "test/learning/perception/test_road_draft.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_road_replay.py",
+      "target": "test/learning/perception/test_road_replay.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_rosy_ml.py",
+      "target": "test/learning/perception/test_rosy_ml.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_rosy_ml_tasks.py",
+      "target": "test/learning/perception/test_rosy_ml_tasks.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_sam3_road_draft.py",
+      "target": "test/learning/perception/test_sam3_road_draft.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_shared_publication.py",
+      "target": "test/learning/perception/test_shared_publication.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_shrink_session.py",
+      "target": "test/learning/perception/test_shrink_session.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_site_install_model_watch.py",
+      "target": "test/learning/perception/test_site_install_model_watch.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_site_model_watch_units.py",
+      "target": "test/learning/perception/test_site_model_watch_units.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_store.py",
+      "target": "test/learning/perception/test_store.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_stuck_markers.py",
+      "target": "test/learning/perception/test_stuck_markers.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_contract.py",
+      "target": "test/learning/perception/test_training_contract.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_handover.py",
+      "target": "test/learning/perception/test_training_handover.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_job.py",
+      "target": "test/learning/perception/test_training_job.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_job_state.py",
+      "target": "test/learning/perception/test_training_job_state.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_model.py",
+      "target": "test/learning/perception/test_training_model.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_notebook.py",
+      "target": "test/learning/perception/test_training_notebook.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_recipes.py",
+      "target": "test/learning/perception/test_training_recipes.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_training_run_log.py",
+      "target": "test/learning/perception/test_training_run_log.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_vision_review_drafts.py",
+      "target": "test/learning/perception/test_vision_review_drafts.py"
+    },
+    {
+      "source": "learning/training/perception/test/test_vlm_mask_feedback.py",
+      "target": "test/learning/perception/test_vlm_mask_feedback.py"
+    },
+    {
+      "source": "learning/training/perception/training/AGENTS.md",
+      "target": "learning/training/perception/AGENTS.md"
+    },
+    {
+      "source": "learning/training/perception/training/COLAB.md",
+      "target": "learning/training/perception/docs/COLAB.md"
+    },
+    {
+      "source": "learning/training/perception/training/README.md",
+      "target": "learning/training/perception/README.md"
+    },
+    {
+      "source": "learning/training/perception/training/capture_goal.py",
+      "target": "learning/training/perception/capture_goal.py"
+    },
+    {
+      "source": "learning/training/perception/training/check_manifest.py",
+      "target": "learning/training/perception/check_manifest.py"
+    },
+    {
+      "source": "learning/training/perception/training/docs/review-eval-package.md",
+      "target": "learning/training/perception/docs/review-eval-package.md"
+    },
+    {
+      "source": "learning/training/perception/training/drivable_head.py",
+      "target": "learning/training/perception/drivable_head.py"
+    },
+    {
+      "source": "learning/training/perception/training/export_cell.py",
+      "target": "learning/training/perception/export_cell.py"
+    },
+    {
+      "source": "learning/training/perception/training/gen_notebook.py",
+      "target": "learning/training/perception/gen_notebook.py"
+    },
+    {
+      "source": "learning/training/perception/training/handover.py",
+      "target": "learning/training/perception/handover.py"
+    },
+    {
+      "source": "learning/training/perception/training/job_state.py",
+      "target": "learning/training/perception/job_state.py"
+    },
+    {
+      "source": "learning/training/perception/training/learning_cycle.py",
+      "target": "learning/training/perception/learning_cycle.py"
+    },
+    {
+      "source": "learning/training/perception/training/recipes.py",
+      "target": "learning/training/perception/recipes.py"
+    },
+    {
+      "source": "learning/training/perception/training/recording_job.py",
+      "target": "learning/training/perception/recording_job.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_admission.py",
+      "target": "learning/training/perception/review_admission.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_authority.py",
+      "target": "learning/training/perception/review_authority.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_bridge.py",
+      "target": "learning/training/perception/review_bridge.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_dataset.py",
+      "target": "learning/training/perception/review_dataset.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_eval_companion.py",
+      "target": "learning/training/perception/review_eval_companion.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_eval_package.py",
+      "target": "learning/training/perception/review_eval_package.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_migration.py",
+      "target": "learning/training/perception/review_migration.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_pipeline.py",
+      "target": "learning/training/perception/review_pipeline.py"
+    },
+    {
+      "source": "learning/training/perception/training/review_provenance.py",
+      "target": "learning/training/perception/review_provenance.py"
+    },
+    {
+      "source": "learning/training/perception/training/rosy_lane_model.py",
+      "target": "learning/training/perception/rosy_lane_model.py"
+    },
+    {
+      "source": "learning/training/perception/training/rosy_lane_training.ipynb",
+      "target": "learning/training/perception/rosy_lane_training.ipynb"
+    },
+    {
+      "source": "learning/training/perception/training/run_log.py",
+      "target": "learning/training/perception/run_log.py"
+    },
+    {
+      "source": "learning/training/perception/training/train_job.py",
+      "target": "learning/training/perception/train_job.py"
+    },
+    {
+      "source": "tools/sim_jpeg_relay.py",
+      "target": "integrations/simulation/gazebo/scripts/sim_jpeg_relay.py"
+    },
+    {
+      "source": "tools/review_app_smoke.py",
+      "target": "learning/curation/perception/tools/review_app_smoke.py"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/AGENTS.md",
+      "target": "operations/ui/console/AGENTS.md"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/__init__.py",
+      "target": "operations/ui/console/__init__.py"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/camera-backdrop.js",
+      "target": "operations/ui/console/camera-backdrop.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/camera-pairing.js",
+      "target": "operations/ui/console/camera-pairing.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/camera-peer.js",
+      "target": "operations/ui/console/camera-peer.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/camera-warp.js",
+      "target": "operations/ui/console/camera-warp.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/card-trip.js",
+      "target": "operations/ui/console/card-trip.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/cell/__init__.py",
+      "target": "operations/ui/console/cell/__init__.py"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/cell/cell-document-editor.js",
+      "target": "operations/ui/console/cell/cell-document-editor.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/cell/cell.css",
+      "target": "operations/ui/console/cell/cell.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/cell/cell.html",
+      "target": "operations/ui/console/cell/cell.html"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/cell/cell.js",
+      "target": "operations/ui/console/cell/cell.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/confirmed-action.js",
+      "target": "operations/ui/console/confirmed-action.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/connection-view.js",
+      "target": "operations/ui/console/connection-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/console.js",
+      "target": "operations/ui/console/console.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/enrollment.js",
+      "target": "operations/ui/console/enrollment.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/field-layers.js",
+      "target": "operations/ui/console/field-layers.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/field-view.js",
+      "target": "operations/ui/console/field-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/formation.js",
+      "target": "operations/ui/console/formation.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/host-services.js",
+      "target": "operations/ui/console/host-services.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/index.html",
+      "target": "operations/ui/console/index.html"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/install.html",
+      "target": "operations/ui/console/install.html"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/install.js",
+      "target": "operations/ui/console/install.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/line-stuck.js",
+      "target": "operations/ui/console/line-stuck.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/link-tag.js",
+      "target": "operations/ui/console/link-tag.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/localization-badge.js",
+      "target": "operations/ui/console/localization-badge.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/map-fit-view.js",
+      "target": "operations/ui/console/map-fit-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/map-view.js",
+      "target": "operations/ui/console/map-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/motion-readiness.js",
+      "target": "operations/ui/console/motion-readiness.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/package.json",
+      "target": "operations/ui/console/package.json"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/peer-picker.js",
+      "target": "operations/ui/console/peer-picker.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/power-health-view.js",
+      "target": "operations/ui/console/power-health-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/queues.js",
+      "target": "operations/ui/console/queues.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/roster.js",
+      "target": "operations/ui/console/roster.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/__init__.py",
+      "target": "operations/ui/console/shared/__init__.py"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/address-drift.js",
+      "target": "operations/ui/console/shared/address-drift.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/authorization.js",
+      "target": "operations/ui/console/shared/authorization.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/development-auth.js",
+      "target": "operations/ui/console/shared/development-auth.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/doc-tabs.css",
+      "target": "operations/ui/console/shared/doc-tabs.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/field-warp.js",
+      "target": "operations/ui/console/shared/field-warp.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/fleet-header.css",
+      "target": "operations/ui/console/shared/fleet-header.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/fleet-header.js",
+      "target": "operations/ui/console/shared/fleet-header.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/guide-layer.js",
+      "target": "operations/ui/console/shared/guide-layer.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/map-fit.js",
+      "target": "operations/ui/console/shared/map-fit.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/password-login.css",
+      "target": "operations/ui/console/shared/password-login.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/password-login.js",
+      "target": "operations/ui/console/shared/password-login.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/poll-gate.js",
+      "target": "operations/ui/console/shared/poll-gate.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/site-map-model.js",
+      "target": "operations/ui/console/shared/site-map-model.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/styles.css",
+      "target": "operations/ui/console/shared/styles.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/shared/vision-view.js",
+      "target": "operations/ui/console/shared/vision-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/signals.js",
+      "target": "operations/ui/console/signals.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-layer.js",
+      "target": "operations/ui/console/site-layer.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-map-teach.js",
+      "target": "operations/ui/console/site-map-teach.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-map.css",
+      "target": "operations/ui/console/site-map.css"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-map.html",
+      "target": "operations/ui/console/site-map.html"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-map.js",
+      "target": "operations/ui/console/site-map.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/site-path.js",
+      "target": "operations/ui/console/site-path.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/start-point-layer.js",
+      "target": "operations/ui/console/start-point-layer.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/start-point-view.js",
+      "target": "operations/ui/console/start-point-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/state-age.js",
+      "target": "operations/ui/console/state-age.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/tracking-layer.js",
+      "target": "operations/ui/console/tracking-layer.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/tracking-relearn.js",
+      "target": "operations/ui/console/tracking-relearn.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/tracking-view.js",
+      "target": "operations/ui/console/tracking-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/traffic-view.js",
+      "target": "operations/ui/console/traffic-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/trail-view.js",
+      "target": "operations/ui/console/trail-view.js"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/trip-replan.js",
+      "target": "operations/ui/console/trip-replan.js"
+    },
+    {
+      "source": "tools/tar_sync.sh",
+      "target": "docs/reference/legacy-tools/wsl/tar_sync.sh"
+    },
+    {
+      "source": "tools/sync_rosy.sh",
+      "target": "docs/reference/legacy-tools/wsl/sync_rosy.sh"
+    },
+    {
+      "source": "tools/sync_rosy_fast.sh",
+      "target": "docs/reference/legacy-tools/wsl/sync_rosy_fast.sh"
+    },
+    {
+      "source": "tools/sync_pilot_files.sh",
+      "target": "docs/reference/legacy-tools/wsl/sync_pilot_files.sh"
+    },
+    {
+      "source": "tools/sync_api_restart.sh",
+      "target": "docs/reference/legacy-tools/wsl/sync_api_restart.sh"
+    },
+    {
+      "source": "tools/migrate_sim_home.sh",
+      "target": "docs/reference/legacy-tools/wsl/migrate_sim_home.sh"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/AGENTS.md",
+      "target": "operations/decision/src/rosy/decision/AGENTS.md"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/__init__.py",
+      "target": "operations/decision/src/rosy/decision/__init__.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/candidate.py",
+      "target": "operations/decision/src/rosy/decision/candidate.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/decision_pipeline.py",
+      "target": "operations/decision/src/rosy/decision/decision_pipeline.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/er2_standard.py",
+      "target": "operations/decision/src/rosy/decision/er2_standard.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/model_tool_catalog.py",
+      "target": "operations/decision/src/rosy/decision/model_tool_catalog.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/model_tool_contract.py",
+      "target": "operations/decision/src/rosy/decision/model_tool_contract.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/selector_bridge.py",
+      "target": "operations/decision/src/rosy/decision/selector_bridge.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/tool_dispatch.py",
+      "target": "operations/decision/src/rosy/decision/tool_dispatch.py"
+    },
+    {
+      "source": "operations/fleet/fleet/ai/vision_observation_source.py",
+      "target": "operations/decision/src/rosy/decision/vision_observation_source.py"
+    },
+    {
+      "source": "operations/fleet/fleet/server/web/inbox.js",
+      "target": "operations/ui/console/inbox.js"
+    }
+  ],
+  "missing": [],
+  "currentManifestRoots": 89,
+  "baseline_peer_merge": "8a140aeb28",
+  "source_landed_commit": "d4988bffba",
+  "verification": {
+    "unique_sources": 299,
+    "unique_targets": 299,
+    "all_targets_tracked": true,
+    "console_source_files": 67,
+    "console_installed_resources": 65,
+    "learning_files": 214,
+    "shared_learning_test_files": 99
+  },
+  "inventory_candidate": "b641e1378c",
+  "reused_original_path_with_new_owner_guide": [
+    "learning/training/perception/AGENTS.md"
+  ],
+  "description_closure_evidence": "X:/DevTemp/projects/rosy-platform/2026-10-11--144205--remaining-platform-folders--4d3bb9/evidence/description-closure.json"
+}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-NAV = (Path(__file__).resolve().parents[4] / "src" / "runtime") / "core_features" / "core_features" / "navigation"
+NAV = Path(__file__).resolve().parents[4] / 'middleware/control/drive/behaviors/navigation'
 
 
 def test_navigation_tree_has_no_swarm_module():
@@ -13,6 +13,7 @@ def test_navigation_tree_has_no_swarm_module():
 
 
 def test_navigation_sources_do_not_import_swarm():
+    assert (NAV / 'manager.py').is_file(), 'Navigation boundary scan must not be empty'
     for path in NAV.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

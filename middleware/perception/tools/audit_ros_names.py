@@ -8,9 +8,10 @@ import ast
 import csv
 from collections import Counter
 from pathlib import Path
+import runpy
 
 
-def inventory(package):
+def inventory(package, *, source_root=None):
     rows = []
     endpoints = {'create_publisher', 'create_subscription', 'create_client', 'create_service'}
     for path in sorted(package.rglob('*.py')):
@@ -36,7 +37,7 @@ def inventory(package):
                 scope = 'absolute' if default.startswith('/') else 'relative_or_frame'
             else:
                 scope = 'dynamic_unresolved'
-            rows.append(dict(source=path.relative_to(package).as_posix(), line=node.lineno,
+            rows.append(dict(source=path.relative_to(source_root or package).as_posix(), line=node.lineno,
                              kind=kind, expression=expression,
                              declared_default=default if isinstance(default, str) else '',
                              scope=scope))
@@ -65,8 +66,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    package = Path(__file__).resolve().parents[1] / 'control'
-    rows = inventory(package)
+    package = Path(__file__).resolve().parents[1]
+    layout = runpy.run_path(str(package / 'control/_source_layout.py'))
+    roots = [package / 'control', *layout['PACKAGE_DIRS'].values(), *layout['FLAT_ROOTS'], layout['RUNTIME_ROOT']]
+    roots = [root for root in roots if not any(root != other and root.is_relative_to(other)
+                                               for other in roots)]
+    rows = [row for root in roots for row in inventory(root, source_root=package.parents[1])]
+    rows.sort(key=lambda row: (row['source'], row['line'], row['kind']))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('w', encoding='utf-8', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=[

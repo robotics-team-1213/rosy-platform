@@ -1,6 +1,6 @@
 import pytest
 
-from fleet.server.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
 
 
 def predicate():

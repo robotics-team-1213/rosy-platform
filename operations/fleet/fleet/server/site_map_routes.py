@@ -11,12 +11,12 @@ from __future__ import annotations
 from typing import Optional
 
 import yaml
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
-from fleet.site_map import SiteMap, crosswalks_from_lane_graph
+from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
 
 #: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
@@ -31,6 +31,10 @@ class DraftRequest(BaseModel):
 class ActivateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: str = Field(min_length=1, max_length=64)
+
+
+class ProfileRequest(DraftRequest, MapProfileInfo):
+    name: str = Field(min_length=1, max_length=64, pattern=r"\S")
 
 
 def invalid_errors(exc: ValidationError) -> list[dict]:
@@ -61,6 +65,30 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))
+
+    @app.get("/api/fleet/site-map/profiles", dependencies=read_guard, tags=["site-map"])
+    def site_map_profiles() -> dict:
+        return {"profiles": site_maps.profiles()}
+
+    @app.put("/api/fleet/site-map/profiles/{profile_id}", tags=["site-map"])
+    async def site_map_save_profile(request: Request,
+                                    profile_id: str = Path(pattern=r"^[A-Za-z0-9_.-]{1,64}$"),
+                                    principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            body = ProfileRequest.model_validate_json(await _bounded_body(request))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
+        try:
+            return site_maps.save_profile(profile_id, name=body.name, site_map=body.map,
+                                          info=(MapProfileInfo(kind=body.kind, description=body.description,
+                                                               soccer_field=body.soccer_field)
+                                                if body.model_fields_set & {"kind", "description", "soccer_field"}
+                                                else None),
+                                          expected_revision=body.expected_revision,
+                                          principal_id=principal.principal_id)
+        except SiteMapError as exc:
+            raise fail(exc) from exc
 
     @app.get("/api/fleet/site-map/active", dependencies=read_guard, tags=["site-map"])
     def site_map_active() -> dict:
@@ -100,7 +128,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise fail(exc) from exc
 
     @app.post("/api/fleet/site-map/activate", tags=["site-map"])
-    def site_map_activate(body: ActivateRequest,
+    async def site_map_activate(body: ActivateRequest,
                           principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             return site_maps.activate(expected_revision=body.expected_revision,
