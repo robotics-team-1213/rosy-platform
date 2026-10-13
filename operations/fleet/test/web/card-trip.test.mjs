@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../ui/console/card-trip.js");
-const { createRoster, selectRobot } = await import("../../../ui/console/roster.js");
+const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../site_ui/console/card-trip.js");
+const { createRoster, selectRobot } = await import("../../../site_ui/console/roster.js");
 
 const robot = (estop = false, extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop } }, ...extra });
 const ACTIVE = { version: 4, map: { places: [] } };

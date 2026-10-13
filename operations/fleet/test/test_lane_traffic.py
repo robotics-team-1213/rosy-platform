@@ -237,7 +237,7 @@ def test_a_new_lap_drives_its_bends_again():
     runner, store, fleet = _setup(ids=("a",))
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
     live, _ = _to_tail(runner, store, fleet, "a")
-    live.bends_done.add("B_SW")
+    live.bends_done.add((0, "B_SW"))
     _ticks(runner, fleet)
     assert runner.view("a")["lap"] == 2 and live.bends_done == set()
 
