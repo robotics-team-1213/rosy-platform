@@ -467,7 +467,14 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "fleet": (
-        55_286,
+        55_302,
+        "split: independently measured by delivery_review on 2026-10-14 (D-753). "
+        "Baseline55302 is the previous55286 plus exactly16 source-only lines: "
+        "server/__init__7, _source_layout3, setup3, proof-copy explanation3. "
+        "Current55452 equals55302+150; no functional-growth allowance was added. "
+        "All production sources remain scanned; non-package holders are not size-unit exclusions. "
+        "Preserve every nested/zero/file/hard ceiling and previous split obligation. "
+        "Previous55286 verdict: "
         "split: independently derived by pipeline_review on 2026-10-12 after integrating "
         "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Accepted main56077 "
         "minus six moved legacy owners827 plus six required identity facades36 gives55286; "
@@ -1700,6 +1707,16 @@ SIZE_VERDICTS = {
         "argument checks and journal stay in one file so the default shadow scripts stay "
         "byte-identical (golden test in test/learning/perception/test_model_deliver.py). "
         "Split the remote_script builders out if it grows again",
+    ),
+    "learning/curation/perception/review_app.py": (
+        666,
+        "accept: independently measured and reviewed on 2026-10-14 by /root/minimal_review. "
+        "ReviewStore and the local HTTP composition keep one request boundary; account domain "
+        "logic lives in learning_accounts/learning_oauth/learning_imports and account dispatch "
+        "in learning_collaboration. Host/Origin/token, bounded JSON, status errors and audit actor "
+        "stay together. This is training review/control wiring, not robot motion admission. "
+        "Keep the 600-line threshold and existing regrowth guard; re-judge before further "
+        "endpoint growth and extract handlers through the existing domain helpers then",
     ),
     "learning/curation/perception/lane_derived_drivable.py": (
         678,

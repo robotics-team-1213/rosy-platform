@@ -7,6 +7,7 @@ tests, but what they reference is plain text a host test can check.
 """
 import re
 from pathlib import Path
+from test.control_sources import source_path
 
 PKG = Path(__file__).resolve().parents[1]
 GZ = PKG / '..' / '..' / 'tools' / 'sim' / 'gazebo'
@@ -36,7 +37,11 @@ def test_every_rig_reference_resolves():
             if not (GZ / f'{module}.py').is_file():
                 missing.append(f'{source.name} -> tools.sim.gazebo.{module}')
         for module in CONTROL_MODULE_REF.findall(text):
-            if not (PKG / (module.replace('.', '/') + '.py')).is_file():
+            try:
+                path = source_path(module.removeprefix('control.').replace('.', '/') + '.py')
+            except KeyError:
+                path = None
+            if path is None or not path.is_file():
                 missing.append(f'{source.name} -> {module}')
     assert missing == [], missing
 
