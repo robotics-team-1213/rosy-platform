@@ -269,3 +269,94 @@ def test_missing_registered_dataset_blocks_promotion(tmp_path):
         db.execute('DELETE FROM datasets')
     with pytest.raises(ValueError, match='dataset'):
         registry.promote(prom, evidence, receipts)
+
+
+@pytest.mark.parametrize('existing_root', [False, True])
+def test_read_only_registry_missing_database_never_creates_it(tmp_path, existing_root):
+    root = tmp_path / 'missing'
+    if existing_root:
+        root.mkdir()
+    with pytest.raises(sqlite3.OperationalError):
+        Registry(root, read_only=True)
+    assert root.exists() is existing_root
+    assert not (root / 'registry.sqlite3').exists()
+
+
+def test_read_only_registry_audits_without_write_lock_or_mutation(tmp_path, monkeypatch):
+    root, doc = source(tmp_path)
+    writer = Registry(tmp_path / 'registry'); writer.register(root)
+    dbpath = writer.root / 'registry.sqlite3'
+    before = (dbpath.read_bytes(), dbpath.stat().st_mtime_ns)
+    connection = sqlite3.connect(dbpath)
+    connection.execute('BEGIN IMMEDIATE')
+    try:
+        reader = Registry(writer.root, read_only=True)
+        assert reader.show(doc['revision'])['stage'] == 'unregistered'
+        assert len(reader.history()) == 1
+        for operation in [lambda: reader.register(root), lambda: reader.assess_act(doc['revision']),
+                          lambda: reader.assess_pinky(doc['revision']), lambda: reader.promote(None, None, None)]:
+            with pytest.raises(PermissionError, match='read-only'):
+                operation()
+    finally:
+        connection.rollback(); connection.close()
+    assert (dbpath.read_bytes(), dbpath.stat().st_mtime_ns) == before
+    (writer.root / 'artifacts' / doc['revision'] / 'weights.bin').write_bytes(b'tamper')
+    with pytest.raises(ValueError, match='hash'):
+        reader.history()
+
+
+def test_read_only_promoted_audit_does_not_initialize_dataset_database(tmp_path):
+    root, doc = source(tmp_path)
+    evidence, prom, receipts = promotion(tmp_path, doc)
+    trusted = {'test-verifier': {'key': TEST_KEY, 'kinds': {c['kind'] for c in prom['checks']}}}
+    writer = Registry(tmp_path / 'registry', trusted=trusted)
+    writer.register(root); writer.promote(prom, evidence, receipts)
+    reader = Registry(writer.root, read_only=True)
+    assert reader.show(doc['revision'])['stage'] == 'L0'
+    dbpath = writer.root / 'datasets' / 'datasets.sqlite3'
+    dbpath.unlink()
+    with pytest.raises(sqlite3.OperationalError):
+        reader.history()
+    assert not dbpath.exists()
+
+
+
+def test_read_only_sql_has_no_ddl_or_immediate_transaction(tmp_path, monkeypatch):
+    root, doc = source(tmp_path)
+    writer = Registry(tmp_path / 'registry'); writer.register(root)
+    statements = []
+    original = sqlite3.connect
+    def traced(*args, **kwargs):
+        db = original(*args, **kwargs)
+        db.set_trace_callback(statements.append)
+        return db
+    monkeypatch.setattr(sqlite3, 'connect', traced)
+    def no_mkdir(*args, **kwargs):
+        raise AssertionError('read-only audit called mkdir')
+    monkeypatch.setattr(Path, 'mkdir', no_mkdir)
+    reader = Registry(writer.root, read_only=True)
+    reader.show(doc['revision'])
+    assert 'BEGIN' in statements
+    assert all(not sql.upper().startswith(('CREATE', 'INSERT', 'UPDATE', 'DELETE', 'BEGIN IMMEDIATE'))
+               for sql in statements)
+
+
+def test_read_only_wal_audit_sees_commits_and_keeps_consistent_snapshot(tmp_path, monkeypatch):
+    root, doc = source(tmp_path, rejected_report())
+    writer = Registry(tmp_path / 'registry'); writer.register(root)
+    with sqlite3.connect(writer.root / 'registry.sqlite3') as wal:
+        assert wal.execute('PRAGMA journal_mode=WAL').fetchone()[0] == 'wal'
+        reader = Registry(writer.root, read_only=True)
+        original = reader._policy
+        called = False
+        def concurrent_commit(revision):
+            nonlocal called
+            result = original(revision)
+            if not called:
+                called = True
+                writer.assess_act(revision)
+            return result
+        monkeypatch.setattr(reader, '_policy', concurrent_commit)
+        assert len(reader.history()) == 1
+        assert len(reader.history()) == 2
+        assert reader.show(doc['revision'])['stage'] == 'unregistered'

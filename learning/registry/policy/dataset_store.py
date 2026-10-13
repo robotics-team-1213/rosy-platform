@@ -56,16 +56,28 @@ def closure(root, *, policy=None):
 
 
 class DatasetStore:
-    def __init__(self, root):
+    def __init__(self, root, *, read_only=False):
         self.root = Path(root).resolve()
         if self.root.drive.upper() == 'F:':
             raise ValueError('dataset output belongs outside source drive F:')
-        self.root.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
-            db.execute('CREATE TABLE IF NOT EXISTS datasets (revision TEXT PRIMARY KEY)')
+        if not isinstance(read_only, bool):
+            raise ValueError('read_only must be boolean')
+        self._read_only = read_only
+        if not read_only:
+            self.root.mkdir(parents=True, exist_ok=True)
+        with closing(self._connect()) as db:
+            if read_only:
+                db.execute('SELECT revision FROM datasets LIMIT 0')
+            else:
+                db.execute('CREATE TABLE IF NOT EXISTS datasets (revision TEXT PRIMARY KEY)')
+
+    def _connect(self):
+        path = self.root / 'datasets.sqlite3'
+        return (sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
+                if self._read_only else sqlite3.connect(path))
 
     def require(self, revisions, *, policy=None):
-        with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
+        with closing(self._connect()) as db:
             registered = {row[0] for row in db.execute('SELECT revision FROM datasets')}
         for revision in revisions:
             if not isinstance(revision, str) or len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):
@@ -77,6 +89,8 @@ class DatasetStore:
         return list(revisions)
 
     def register(self, source):
+        if self._read_only:
+            raise PermissionError("dataset store is read-only")
         source = Path(source).resolve()
         doc = closure(source)
         revision = doc['revision']
