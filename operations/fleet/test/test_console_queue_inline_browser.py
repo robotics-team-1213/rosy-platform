@@ -251,6 +251,10 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
+        entry = page.locator("#topbar-more")
+        unread = entry.get_attribute("aria-label")
+        entry.click()
+        assert entry.get_attribute("aria-label") == unread
         button = page.locator("#fleet-inbox")
         assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
         button.click()

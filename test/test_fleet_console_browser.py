@@ -411,7 +411,7 @@ def test_empty_fleet_renders_zero_online_and_no_ghosts(console_url):
         browser, page, errors = _open_console(p, api)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
-            "() => document.getElementById('online-pill')?.textContent === '0/0 연결'"
+            "() => document.getElementById('online-pill')?.textContent === '0/0'"
         )
         assert "rosy" not in page.inner_text("#roster")
         assert "등록된 로봇이 없습니다" in page.inner_text("#roster")
@@ -510,7 +510,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
         for state in ("loading", "recovered"):
             if state == "recovered":
                 page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
-                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
+                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3'")
                 assert "rosy_03" in page.inner_text("#roster")
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
@@ -920,7 +920,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
-            "() => document.getElementById('online-pill')?.textContent === '2/3 연결'"
+            "() => document.getElementById('online-pill')?.textContent === '2/3'"
         )
         roster = page.inner_text("#roster")
         assert "닿지 않음: CONNECT_ERROR" in roster
@@ -932,7 +932,8 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         assert "NAVIGATING" not in offline.inner_text()
         assert "0.45" not in offline.inner_text()
         assert page.locator("#robot-workspace .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
-        offline.scroll_into_view_if_needed()
+        # The roster replaces its cards on every poll; scroll in one step so a re-render cannot detach the node mid-wait.
+        offline.evaluate("node => node.scrollIntoView({block: 'nearest'})")
         stop = page.locator("#estop").bounding_box()
         assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -2494,7 +2495,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          inbox: document.querySelector('#fleet-inbox').getBoundingClientRect().toJSON(),
+          inbox: document.querySelector('#fleet-theme').getBoundingClientRect().toJSON(),
           stopScopeHidden: (() => {
             const small = document.querySelector('#estop small');
             return !!small && getComputedStyle(small).display === 'none';
@@ -2515,7 +2516,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-641: compact header keeps status/inbox; the visible clock belongs to the flow footer.
+        # D-641/D-668: compact header keeps the status center and theme on one row; the clock belongs to the flow footer.
         status, inbox = layout["status"], layout["inbox"]
         assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
         assert layout["clock"]["height"] > 0, layout
@@ -2558,7 +2559,7 @@ def test_formation_buttons_keep_their_reasons_readable(console_url, width):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
-    """접속 입력·테마는 접히고 현재 역할은 상태 영역에 남는다. 머리는 창 높이의 20% 이하다.
+    """접속 입력·현재 역할은 상태 센터 뒤로 접히고 테마 버튼 하나는 남는다(D-668). 머리는 창 높이의 20% 이하다.
 
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
     from playwright.sync_api import sync_playwright
@@ -2574,15 +2575,15 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             topbar: box('ui-topbar'), sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
             stop: box('#estop'), more: box('#topbar-more'),
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
-            token: shown('#console-token'), theme: shown('#theme-choice'), role: shown('#user-role'),
+            token: shown('#console-token'), theme: shown('#fleet-theme'), role: shown('#user-role'),
             status: shown('#online-pill'), clock: shown('#clock'),
             clockInFooter: !!document.querySelector('footer.fleet-footer #clock'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
-        page.get_by_role("button", name="화면 표시와 고급 접속", exact=True).click()
+        page.locator("#topbar-more").click()
         opened = page.evaluate(probe)
-        page.get_by_role("button", name="화면 표시와 고급 접속", exact=True).click()
+        page.locator("#topbar-more").click()
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         scrolled = page.evaluate(probe)
         save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
@@ -2594,7 +2595,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     assert folded["sticky"] == "sticky", folded
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
-    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and folded["role"], folded
+    assert folded["expanded"] == "false" and not folded["token"] and folded["theme"] and not folded["role"], folded
     assert folded["status"] and folded["clock"] and folded["clockInFooter"], folded
     assert not folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
@@ -2614,18 +2615,12 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
-            if page.locator('#topbar-more').is_visible():
-                page.locator('#topbar-more').click()
-                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
-                page.locator('#topbar-more').click()
-            else:
-                assert page.get_by_role('group', name='화면 표시', exact=True).count() == 1
+            # D-668: 테마는 접히지 않는 버튼 하나다. 접속 상세는 상태 센터 뒤에 접혀 있다.
+            assert page.locator('#fleet-theme').is_visible()
+            assert page.locator('#topbar-extra').is_hidden()
             results[width] = page.evaluate("""() => {
-              const label = document.querySelector('#theme-choice-label');
-              const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
               const more = document.querySelector('#topbar-more');
-              return {labelLines: label.getClientRects().length ? Math.round(label.getBoundingClientRect().height / line) : 0,
-                moreShown: more.getClientRects().length > 0,
+              return {moreShown: more.getClientRects().length > 0,
                 topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
                 stop: document.querySelector('#estop').getBoundingClientRect().toJSON()};
             }""")
@@ -2633,7 +2628,7 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
 
     assert errors == []
     for width in (1920, 1366, 1280):
-        assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
+        assert results[width]["moreShown"], results
     for width, result in results.items():
         assert result["topbar"] <= 100, results
         assert result["stop"]["top"] <= 30 and width - result["stop"]["right"] <= 32, results
@@ -3802,7 +3797,8 @@ def test_development_mode_console_gets_a_session_and_shows_the_badge(console_url
 
         assert page.is_visible("#development-badge")
         assert page.inner_text("#development-badge").strip() == "개발"
-        assert page.locator("#development-badge").get_attribute("data-action-icon") == "connect"
+        # D-668 5: the development warning does not reuse the connection glyph.
+        assert page.locator("#development-badge").get_attribute("data-action-icon") is None
         assert page.locator("#development-badge").get_attribute("aria-label") == (
             "개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공")
         assert page.evaluate("() => sessionStorage.getItem('rosy-console-token')") == "dev-token-1"

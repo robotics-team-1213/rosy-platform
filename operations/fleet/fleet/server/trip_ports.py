@@ -413,7 +413,15 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
     and ``bend_radius_m``; None on another map version, when the arc start is not 0-2 m ahead or
     while the lane before it still turns (``straight_approach``)."""
-    bend_in = round(bend["s_start"] - s, 3)
+    # The pose is latency seconds old and the robot drove on meanwhile: a bend_in_m measured from
+    # it starts the arc late and the exit runs outside the lane (Gazebo lap 2026-10-13: 2 cm late,
+    # 1.8 cm toward the wall after a 64 deg bend). Leading by the trip speed errs to the inside.
+    caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
+    age, lead = pose.get("age_s"), 0.0
+    if age is not None and live.pose_read_at is not None:
+        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
+    ahead = bend["s_start"] - s
+    bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
             or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
         return None
