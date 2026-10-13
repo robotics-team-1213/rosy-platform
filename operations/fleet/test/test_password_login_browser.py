@@ -80,7 +80,9 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                             toggle.click()
                         principal = tab.locator("#fleet-account-identity")
                         expect(principal).to_be_hidden()
-                        assert tab.locator('[data-header-region="status"] ui-button').count() == 0
+                        # D-668: the status region is the one status-center entry and holds no other control.
+                        assert tab.locator('[data-header-region="status"] ui-button:not(#topbar-more)').count() == 0
+                        assert tab.locator('[data-header-region="status"] #topbar-more').count() == 1
                         height = tab.locator("ui-topbar").bounding_box()["height"]
                         tab.locator('#fleet-account > summary').click()
                         expect(principal).to_be_visible()
