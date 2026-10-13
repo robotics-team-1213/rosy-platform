@@ -1751,6 +1751,18 @@ SSH/sudo/config의 기존 내용과 mode를 모두 확인하고, 변경 후 검�
 사이트 클라이언트는 별도로 보호된 개인키, 고정 `known_hosts`, 동일 source/profile/policy
 설정이 필요하다. 설치기가 개인키를 출력하거나 사이트 client 설정을 자동 활성화하지 않는다.
 
+현장 `install-status-client.py --conversation`은 기본 D-720 설치와 별개다. root가
+`/root/rosy-conversation-reviewed/` 아래에 복사하고 해시를 확인한 config, 단일 22번
+host pin, 승인된 공개키와 독립 semantic proof를 입력한다. 기존 세 positional 인자와
+`--config-sha256`, `--known-hosts-sha256`에 `--conversation-proof`, `--proof-sha256`,
+`--public-key-sha256`을 더한다. 설정의 source/profile/policy와 proof를 대조하고,
+입증 시점으로부터 7일 이내의 유효기간만 허용한다. 원본 개인키는 기존 고정 staging
+경로에서 읽어 공개키와 일치할 때만 설치한다. `/etc/rosy/fleet-deliberation/`은
+root:10001, 0750이며 `conversation.json`, `broker.key`, `known_hosts`는 root:10001,
+0640이다. 기존 파일이 다르면 덮어쓰지 않는다. 이 단계는 이미지나 서비스를 활성화하지
+않는다. 새 설정 필드와 주기적 후속 응답 활성화는 해당 계약을 지원하는 서명 이미지의
+별도 배포 및 실제 회신 확인 뒤에 진행한다.
+
 상태·대화 client의 `ssh_port`는 생략 시 22이며, 고정 대체 포트 2222만 추가로 허용한다.
 Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설정에 도달하지 않는다.
 이 경우 관리자가 `tailscale serve --bg --tcp=2222 tcp://127.0.0.1:22`로 tailnet 안에서만
