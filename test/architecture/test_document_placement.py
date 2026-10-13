@@ -46,6 +46,7 @@ MUST_IGNORE = [
     "private/tailscale-auth-key.txt",
     "private/lab-hosts.json",
     "learning-collaboration.json",
+    "learning-storage.json",
     "learning-accounts.key",
     "private/learning/oauth-client-secret",
 ]
@@ -67,6 +68,7 @@ MUST_TRACK = [
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
     "tools/remote/hosts.example.json",
     "learning/curation/perception/learning-collaboration.example.json",
+    "learning/curation/perception/learning-storage.example.json",
 ]
 
 # Live lab endpoints. Historical ADR, plan, validation, assessment, and log

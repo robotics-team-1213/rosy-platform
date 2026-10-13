@@ -8281,6 +8281,12 @@ osy-d395-s1d\`.
 - 증거: surfaces.yaml에 Fleet 90rem 등록이 없고 console 헤더 html 4곳이 `data-theme-cycle` 버튼을 둔다.
 - gate 변화: 없음. 문서 문구만 바뀐다.
 
+## 2026-10-13 · uncommitted · test: ACT 결과 테스트 이식 (ported from 7d84fa446, 373e71482)
+
+- 변경: 낡은 feat/act-native-chain(2026-10-05)의 커밋된 테스트·설계 문서만 현재 main에 이식했다. 원본 결과 공급자(parent attempt 결속 뒤, 실행 직렬화 밖)를 쓰는 `act_cpu_fixture.py`, `test_act_native_chain.py`, `test_act_parent_chain.py`, ROS 부분 설정 실패 격리 `test_native_setup_cleanup.py`, `test_policy_runtime_ros.py` 재작업(main의 경로 수정 유지), 설계 `docs/plans/2026-10-05-act-native-chain-design.md`. 제품 코드는 바꾸지 않았다. 원본 로그의 인코딩 보존 커밋과 index 행 커밋은 이 이식에서 필요 없어 옮기지 않았다.
+- 증거: 원격 pytest 27 PASS / 4 SKIP, 새 실패 0(`test/known_failures.py`). SKIP은 rclpy·torch·lerobot과 domain199 localhost가 없는 시험 PC 때문이며 실행 근거가 아니다. 원본 브랜치 실행 기록(X:/DevTemp/act-native-chain/)은 이식에서 다시 돌리지 않았다.
+- gate 변화: 없음. SOURCE/HOST 시험만이고 네이티브 CPU ROS 실행은 의존성 설치 전까지 수용되지 않는다. 제품 활성화, 물리 동작, push 없음.
+
 ## 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
 
 - 변경: 원본·라벨·시계·profile·용도별 적격성, HF 로그인/복수 계정 연결, 프로젝트 권한과 공동 검수, 고정 revision 가져오기 및 LeRobot 검증 설계를 결정했다.
@@ -8306,3 +8312,15 @@ osy-d395-s1d\`.
 - 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
 - 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
 - gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
+
+## 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
+
+- 변경: 공유 main 공개 검증에서 발견한 계정 체크박스 계약과 HOLD 시계 결함을 수정했다. 이력 재작성 없이 독립 리뷰와 수정 후손을 묶어 safety-review 예외를 기록했다.
+- 증거: CI 38435850880 계정 화면 실패 재현 뒤 UI 31 passed; HOLD 원격 RED 7건 뒤 322 passed, NEW 0. 검토와 한계는 validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. 실제 장치·HF 계정·Spaces 연결 수용은 D-756에 남아 있다.
+
+## 2026-10-14 · 39817a51e · docs: 학습 수집·영상·저장 개선 범위
+
+- 변경: plans/2026-10-14-learning-collection-storage.md에 수집·용량 현황, 대량 전송·복구, 자료 계보·적격성, 조직 Hub 전송, Spaces 탐색·피드백의 단계와 수용 기준을 기록했다. D-755/D-756와 기존 registry 전송 경로를 재사용하며 첫 구현은 읽기 전용 현황이다.
+- 증거: 기준 main 39817a51e의 import 제한·영상 처리·OMX 변환·Hub 도구를 대조했다. 공식 저장 조건은 2026-10-14 확인 자료를 참조하고 운영 시 재확인한다. 문서·계약 검사는 이 계획 커밋에서 수행한다.
+- gate 변화: 없음. 구현 계획이며 업로드·유료 증설·삭제·배포 또는 실제 학습 수용을 수행하지 않는다.

@@ -15,11 +15,16 @@
   <a class="skip-link" href="#match-main">경기 필드로 건너뛰기</a>
   <ui-topbar>
     <ui-brand href="/" aria-label="Rosy 경기 보드 홈">
-      <small>노트북 게임 호스트</small>
       <b>1v1 피치</b>
+      <small>노트북 게임 호스트</small>
     </ui-brand>
     <p id="phase">대기</p>
     <p id="connection">경기 데이터 대기 중</p>
+    <ui-button id="halt" kind="irreversible" data-always-live type="button">두 로봇 정지</ui-button>
+    <p class="halt-note">
+      <span>스페이스 키로도 두 로봇을 세웁니다</span>
+      <span id="halt-status" role="status" aria-live="polite"></span>
+    </p>
   </ui-topbar>
   <section class="score" aria-label="점수">
     <span id="score-evidence" hidden>마지막 수신 점수</span>
@@ -50,11 +55,6 @@
       <img id="frame" alt="천장 프레임" hidden>
     </aside>
   </main>
-  <p class="halt-row">
-    <ui-button id="halt" kind="irreversible" data-always-live type="button">정지</ui-button>
-    <span>스페이스 키로도 두 로봇을 세웁니다</span>
-    <span id="halt-status" role="status" aria-live="polite"></span>
-  </p>
   </ui-shell>
 </body>
 </html>

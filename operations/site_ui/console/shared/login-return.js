@@ -11,7 +11,9 @@ export function loginReturn(value, origin) {
       query.set('return', back.pathname === '/console/profile' ? '/console' : loginReturn(back.href, origin));
     }
     if (url.pathname === '/console') {
-      if (url.searchParams.get('view') === 'work') query.set('view', 'work');
+      const view = url.searchParams.get('view'), show = url.searchParams.get('show');
+      if (view === 'work' || view === 'records') query.set('view', view);
+      if (query.has('view') && ['pending', 'done', 'open', 'closed', 'facts', 'log'].includes(show)) query.set('show', show);
       if (url.searchParams.get('inbox') === '1') query.set('inbox', '1');
     }
     const robot = url.searchParams.get('robot');

@@ -59,9 +59,9 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                 page.locator("#password-login [data-login=password]").fill("pw-1234")
                 page.locator("#password-login [data-login=password]").press("Enter")
                 expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator", timeout=15000)
-                page.locator('#fleet-account > summary').click()
+                page.locator('#topbar-more').click()
                 expect(page.locator('#fleet-account-identity')).to_contain_text('alice')
-                page.locator('#fleet-account > summary').click()
+                page.locator('#topbar-more').click()
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')") is None
 
                 page.reload()
@@ -80,19 +80,19 @@ def test_console_login_survives_reload_and_new_tab_then_logs_out(tmp_path):
                             toggle.click()
                         principal = tab.locator("#fleet-account-identity")
                         expect(principal).to_be_hidden()
-                        # D-668: the status region is the one status-center entry and holds no other control.
-                        assert tab.locator('[data-header-region="status"] ui-button:not(#topbar-more)').count() == 0
-                        assert tab.locator('[data-header-region="status"] #topbar-more').count() == 1
+                        # D-741 3: the link seat holds no control; the account button sits with the alerts button.
+                        assert tab.locator('[data-header-region="status"] ui-button').count() == 0
+                        assert tab.locator('[data-header-region="actions"] > #topbar-more').count() == 1
                         height = tab.locator("ui-topbar").bounding_box()["height"]
-                        tab.locator('#fleet-account > summary').click()
+                        toggle.click()
                         expect(principal).to_be_visible()
                         expect(tab.locator("#fleet-account [data-login=logout]")).to_be_visible()
                         assert tab.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                        tab.locator('#fleet-account > summary').click()
+                        toggle.click()
                         assert tab.locator("ui-topbar").bounding_box()["height"] == height
                     tab.close()
 
-                page.locator('#fleet-account > summary').click()
+                page.locator('#topbar-more').click()
                 logout = page.locator("#fleet-account [data-login=logout]")
                 expect(logout).to_be_visible()
                 logout.click()

@@ -352,13 +352,16 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None):
     check_bind_host(host)
     collaboration = None
     with store.connect() as db:
         bound = db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone()
     if bound and not accounts:
         raise ValueError('collaboration-bound workspace requires its account configuration')
+    project = accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id')
+    if storage and storage.project_id != project:
+        raise ValueError('storage project must match workspace project')
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:
@@ -406,6 +409,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
+                if path == '/api/learning/storage':
+                    return self.send(storage.snapshot() if storage else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
                     frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
                               for row in store.list_frames()]
@@ -519,6 +524,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
+                         '/storage.js': 'storage.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js'}
                 name = path.removeprefix('/common/')
@@ -571,6 +577,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if path == '/api/learning/storage/preflight':
+                    if not storage:
+                        raise ValueError('storage is not configured')
+                    return self.send(storage.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':
@@ -628,6 +638,7 @@ def main():
     parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
     parser.add_argument('--learning-control', type=Path, help='private binding for owned signed pipeline controls')
     parser.add_argument('--collaboration', type=Path, help='private project account/OAuth configuration')
+    parser.add_argument('--storage-config', type=Path, help='private registered project storage roots and quota estimates')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -657,7 +668,15 @@ def main():
             parser.error('collaboration cannot expose unauthenticated decisions-port')
         from learning_collaboration import load
         accounts, oauth, imports = load(args.collaboration, store)
-    server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports)
+    storage = None
+    if args.storage_config:
+        from storage_inventory import StorageInventory
+        try:
+            storage = StorageInventory(store.db, json.loads(args.storage_config.read_text(encoding='utf-8')),
+                accounts.project_id if accounts else review_evidence.metadata(store, 'workspace_id'))
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+    server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports, storage=storage)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

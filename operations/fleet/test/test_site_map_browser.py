@@ -481,7 +481,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page, store, robot = page_site
     page.set_viewport_size({"width": width, "height": height})
     expect(page).to_have_title("Rosy Fleet · 현장 지도")
-    expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
+    expect(page.locator("ui-brand")).to_contain_text("Fleet")
+    expect(page.locator("ui-brand a")).to_have_attribute("aria-label", "Rosy Fleet 관제 홈")
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
