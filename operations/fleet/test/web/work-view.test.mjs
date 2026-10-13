@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {workKey, workStatus} from "../../../ui/console/work-view.js";
+import {workKey, workStatus} from "../../../site_ui/console/work-view.js";
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));

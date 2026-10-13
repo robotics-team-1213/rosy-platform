@@ -65,3 +65,5 @@ Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for COR
 - numpy, PyYAML, `mcap`; `ssh`/`scp` and a robot reachable over the network for `run_calibration.py` (not for `--offline`)
 
 <!-- MANUAL: -->
+
+`migrate_calibration.py` moved from perception/tools (D-751): existing destinations and bound records are rejected; source measurements are preserved and values are not activated.
