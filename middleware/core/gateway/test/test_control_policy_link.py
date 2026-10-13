@@ -389,6 +389,9 @@ def test_observation_gap_holds_resumes_and_latches_after_the_hold(linked, gap):
     assert not safety.policy_hold and not safety.estop
     clock[0] = 101.
     assert drive(command, 10.6) == Twist() and not safety.estop      # a new gap: expired again
+    for step in range(1, 5):                                          # asked on, every 0.4 s
+        clock[0] = 101. + step * .4
+        assert drive(command, 10.6 + step * .01) == Twist() and not safety.estop
     clock[0] = 103.
     assert drive(command, 10.7) == Twist()
     assert safety.estop and safety.estop_source == 'control:policy_failed'
@@ -405,10 +408,22 @@ def test_held_gap_is_logged_when_it_opens_and_when_it_latches(linked, caplog):
             command.announce_pending()
         assert len(caplog.records) == 1 and 'snapshot_expired' in caplog.text
         assert not safety.estop
-        clock[0] = 102.
-        assert drive(command, 10.3) == Twist()
-        command.announce_pending()
+        for step in range(1, 6):
+            clock[0] = 100.04 + step * .4
+            assert drive(command, 10.25 + step * .01) == Twist()
+            command.announce_pending()
     assert safety.estop and len(caplog.records) == 2
+
+
+def test_a_stand_still_between_two_stalls_is_two_gaps(linked):
+    """Review: a gap tick, 3 s without a question (zero commands at a junction), another gap
+    tick: a new 2 s hold, not a latch. Asked on without a break it still latches at 2 s."""
+    command, safety, modes, policy, snapshot = linked
+    clock = hold_two_seconds(linked)
+    assert drive(command, 10.21) == Twist() and safety.policy_hold
+    clock[0] = 103.5
+    assert drive(command, 10.22) == Twist()
+    assert safety.policy_hold and not safety.estop and modes.mode is Mode.NAVIGATION
 
 
 def test_genuine_exception_latches_at_once_even_with_a_hold(linked, monkeypatch):

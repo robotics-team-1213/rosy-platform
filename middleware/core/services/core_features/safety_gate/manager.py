@@ -225,6 +225,10 @@ class PersonAdvisoryFeed:
         return {'advisory': False, 'reason': reason}
 
 
+#: D-400 4: gap ticks further apart than the evidence lease (decision_valid: 0.5 s) are separate gaps.
+GAP_LINK_S = .5
+
+
 class SafetyManager:
     """E-Stop(SAF-001)·속도 제한(SAF-004)·배터리 정책(SAF-005)·Fleet 단절 정책(SAF-003)."""
 
@@ -241,6 +245,7 @@ class SafetyManager:
         #: 0 keeps every None a latch.
         self._policy_hold_s = 0.0
         self._policy_gap_since: Optional[float] = None
+        self._policy_gap_last = 0.0
         self._policy_holding = False
         self.policy_holds = 0          # gaps answered with HOLD since start
         self.policy_hold_reason = ''   # policy_reason of the latest held tick
@@ -385,12 +390,14 @@ class SafetyManager:
 
     def _policy_gap(self, at: float) -> bool:
         """D-400 4: one tick of a sensor gap at policy-clock time ``at``. True (HOLD) while the gap
-        is younger than stale_hold_s. Only a valid decision ends a gap; a zero command never asks."""
+        is younger than stale_hold_s. A valid decision ends a gap; so does not being asked for
+        longer than the evidence lease (review: a stand-still between two stalls is two gaps)."""
         if not self._policy_hold_s:
             return False
-        if self._policy_gap_since is None:
+        if self._policy_gap_since is None or at - self._policy_gap_last > GAP_LINK_S:
             self._policy_gap_since = at
             self.policy_holds += 1
+        self._policy_gap_last = at
         self._policy_holding = 0 <= at - self._policy_gap_since < self._policy_hold_s
         if self._policy_holding:
             self.policy_hold_reason = self.policy_reason

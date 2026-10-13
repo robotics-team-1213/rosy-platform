@@ -18,7 +18,7 @@
 
 - 동작: 0이 아닌 명령에 대해 정책의 근거나 답이 제때 없으면(평가기가 아직 묶이지 않음, 정책에 지금 쓸 관측이 없음, 형식이 맞는 판정이 늦었거나 근거 lease 밖) CORE는 그 틱에 명령 0을 내보내고 E-stop을 걸지 않으며 모드도 바꾸지 않는다. 유효한 판정이 다시 오면 스스로 재개한다. 끊김이 `control.sensor_adapter.stale_hold_s`(기본 2 s, (0, 5])에 닿으면 전과 같이 `safety.estop` `source: "control:<사유>"`로 래치한다. `stop` 판정, 형식이 틀리거나 요청과 맞지 않는 판정, 평가기의 다른 예외는 전과 같이 바로 래치한다.
 - 답 시간 상한: 정책 답은 `/cmd_vel` 타이머 한 주기(50 Hz, 20 ms) 안에 와야 한다. 전에는 10 ms였다. 근거의 나이 조건(`observed_at ≤ now ≤ expires_at`, lease 폭 ≤ 0.5 s)은 그대로다.
-- 필드: `safety_policy.hold` `{count, reason}`. `enforce`에서만 실린다(아니면 `null`). `count`는 CORE 시작 뒤 HOLD로 답한 끊김의 수, `reason`은 가장 최근 HOLD 틱의 정책 사유(`policy_unavailable` \| `policy_failed` \| `policy_invalid`, 없었으면 빈 문자열)다. 지금 HOLD 중인지를 뜻하지 않는다.
+- 필드: `safety_policy.hold` `{count, reason}`. `enforce`에서만 실린다(아니면 `null`). `count`는 CORE 시작 뒤 HOLD로 답한 끊김의 수, `reason`은 가장 최근 HOLD 틱의 정책 사유(`policy_failed` \| `policy_invalid`, 없었으면 빈 문자열)다. 평가기가 묶이기 전의 `policy_unavailable`은 HOLD가 되지 않는다. 지금 HOLD 중인지를 뜻하지 않는다.
 
 ### v1.222 거절된 한 틱은 교차로 기동을 버리지 않는다 (D-740 개정 3)
 
