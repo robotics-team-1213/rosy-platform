@@ -33,7 +33,7 @@ class AccountSessionTest {
         assertThrows(IllegalArgumentException::class.java) { session.complete(cb) }
         assertTrue(session.permits("site:test", "camera.manage"))
         assertFalse(session.permits("site:test", "accounts.manage"))
-        now += 280; assertNotNull(session.access("site:test")); assertEquals(1, refreshes)
+        now += 320; assertNotNull(session.access("site:test")); assertEquals(1, refreshes)
         active = false; now += 16; assertNull(session.access("site:test"))
         assertTrue(session.logout()); assertNull(store.read())
     }
