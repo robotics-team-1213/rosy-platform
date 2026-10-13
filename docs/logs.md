@@ -8204,3 +8204,23 @@ osy-d395-s1d\`.
 - 변경: 검토 표의 커밋 식별자를 12자리로 표시한다. 검토 코드의 정확한 전체 SHA와 검토 조건은 유지한다.
 - 증거: ec6f54431 pre-push 원격 검사에서 문서의 전체 Git SHA 네 개가 high-entropy-token으로 검출됐다. 516 PASS/1 NEW 뒤 표시만 수정했으며 검사 규칙은 바꾸지 않았다. 후속 원격 결과는 별도 확인한다.
 - gate 변화: 없음. 주행 코드·안전 허용·완주 수용은 바뀌지 않는다.
+
+## 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 변경: `assessments/2026-10-13-folder-responsibility-audit.md`에 우산·제품 소스·물리 잔여 폴더의 시점을 구분한 조사 보고서를 추가했다. 브랜치는 `docs/folder-responsibility-audit`다.
+- 증거: 기준 SHA 추적 파일 7,665개, manifest root 95개, 반복 basename 97종, 동일 내용 묶음 5개를 정적 확인했다. 관리 인벤토리는 worktree 250개(primary 1/task 249), task dirty 52개, HOLD 155/REVIEW 95개다. X: 세션 `2026-10-13--115930--folder-responsibility-audit--deea14`에 원자료를 남겼다.
+- gate 변화: 없음. pytest·ROS·이미지·배포·장치·현장 수용은 미실행이며, 정리/이동/삭제·착지·push도 하지 않았다. 문서 링크 검사 및 harness generate/lint는 보고서 작성 후 별도 로그로 확인한다.
+- 결정: 기존 D-738의 10단계 계획과 현재 물리 배치를 구분한다. 새 ADR나 구조 변경은 없다.
+- 교훈: 동일 basename, 설치 alias, 이력 payload, 내용이 같은 제품 구현, ignored 캐시를 서로 다른 근거로 판단한다.
+
+## 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 변경: `plans/2026-10-13-folder-responsibility-cleanup.md`에 P0 안내, P1 생성물, D-738 S1~S10, P2 proof 동등성, P3 worktree 정리의 담당 책임·실행 순서·검증·중단·되돌림을 작성했다.
+- 증거: 앞 조사 보고서와 Accepted D-738, 현행 manifest/source mapping을 연결했다. 보고서 로컬 링크 17개와 inventory/proof 동일성 PASS, harness lint 오류 0/경고 28이었다. 이번 계획의 커밋·local main 착지는 사용자 요청이며, 최종 원격 affected/known_failures/착지 결과는 X: 세션 landing 로그와 Git readback으로 확인한다.
+- gate 변화: 계획은 PLANNED. 제품 정리 구현·이동·삭제·push·배포·장치 수용은 하지 않는다.
+- 결정: 첫 실제 실행은 P0만, 구조 단계는 D-738 순서 그대로다. proof는 runtime dependency 추가보다 기존 시험의 동등성 guard를 먼저 선택한다.
+- 교훈: 조사/계획의 local main 반영과 정리 구현·실물 수용을 구분한다.
+
+## 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 변경: 폴더 조사 보고서의 Git SHA 두 곳에 `commit` 문맥을 명시했다. 검사 규칙·known_failures 목록은 바꾸지 않았다.
+- 증거: 첫 착지 원격 검사 370 passed/1 NEW(`test_no_secrets_in_tracked_files`). 원인은 보고서 3/12행의 공개 Git revision 표기였다. 기존 scan_text로 수정 전 high-entropy-token 2건, 수정 후 보고서·계획 0건을 확인했다. 이 정적 확인은 원격 재검증을 대신하지 않는다.
+- gate 변화: 첫 착지는 중단되어 main 미반영. 수정 커밋 이후 `tools/land.py --tests auto` 전체 affected/known_failures 재검증으로 다시 착지한다.
+- 결정: 비밀정보 검사 완화 없이 공개 commit 출처만 분명히 표기한다.
