@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import runpy
 
 import pytest
 
@@ -633,29 +632,16 @@ def _expand(path: str, directives: dict[str, list[str]]) -> str:
 IMPORT_OF = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", re.MULTILINE)
 
 
-def _module_bases(package_root: str, parts: list[str]):
-    """Folders or stems a dotted module may live at: the package folder, then the
-    `control` source holders (control/_source_layout.py), which keep `control.*` names."""
-    yield ROOT / package_root / Path(*parts)
-    layout_file = ROOT / package_root / parts[0] / "_source_layout.py"
-    if parts[0] != "control" or not layout_file.is_file():
-        return
-    layout = runpy.run_path(str(layout_file))
-    for end in range(len(parts), 1, -1):
-        folder = layout["PACKAGE_DIRS"].get(".".join(parts[:end]))
-        if folder is not None:
-            yield folder.joinpath(*parts[end:])
-    for holder in layout["CONTROL_ROOTS"]:
-        yield holder.joinpath(*parts[1:])
-    if parts[:2] == ["control", "control"]:
-        for holder in layout["FLAT_ROOTS"]:
-            yield holder.joinpath(*parts[2:])
-
-
 def _imported_modules(importer: str, package: str, package_root: str) -> list[Path]:
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
     own = ROOT / package_root
+    modules = {}
+    if package == 'control':
+        from runpy import run_path
+        inventory = run_path(str(own / 'test/control_sources.py'))['control_sources']()
+        modules = {('control.' + name.replace('/', '.')).removesuffix('.py').removesuffix('.__init__'): path
+                   for name, path in inventory}
     for source in _source_files(importer):
         # The package's own imports are not the importer's: control sits inside
         # src/core since a93d5188, and would otherwise pull in all of itself.
@@ -666,10 +652,13 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
             if parts[0] != package:
                 continue
             for depth in range(len(parts), 0, -1):
-                for base in _module_bases(package_root, parts[:depth]):
-                    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
-                        if candidate.is_file():
-                            found.add(candidate)
+                module = '.'.join(parts[:depth])
+                if module in modules:
+                    found.add(modules[module])
+                base = ROOT / package_root / Path(*parts[:depth])
+                for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+                    if candidate.is_file():
+                        found.add(candidate)
     return sorted(found)
 
 

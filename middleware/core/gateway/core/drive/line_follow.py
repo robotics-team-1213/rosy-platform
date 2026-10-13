@@ -226,8 +226,12 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
     """
     def allowed(now, linear, angular) -> bool:
         try:
-            sensor_now = now if policy_clock is None else policy_clock()
-            return (sensor_adapter.return_sensor_allowed(sensor_now, linear, angular) is True
+            def sensor():
+                at = now if policy_clock is None else policy_clock()
+                return sensor_adapter.return_sensor_allowed(at, linear, angular) is True
+            # The worker can publish between the clock read and the probe (snapshot_future, Gazebo
+            # lap run56: 0.034 s); a refusal is asked once more on a fresh read of the policy clock.
+            return ((sensor() or (policy_clock is not None and sensor()))
                     and line_follow.return_body_clear(now, linear, angular) is True)
         except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
             return False

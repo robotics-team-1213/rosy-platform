@@ -75,12 +75,9 @@ def test_wall_cases_leave_translation_room_before_rotation_relocation(name,tmp_p
 
 
 def test_cli_case_and_output_arguments(tmp_path):
-    import os
     import subprocess
     import sys
-    # Same module path as tools/sim/gazebo/run_track260905.sh: package dir, then the repo root.
-    env={**os.environ,'PYTHONPATH':os.pathsep.join([str(PKG_ROOT),str(PKG_ROOT.parents[1])])}
     result=subprocess.run([sys.executable,'-m','tools.sim.gazebo.calibration_spaces','open',str(tmp_path)],
-                          capture_output=True,text=True,cwd=PKG_ROOT,env=env)
+                          capture_output=True,text=True,cwd=PKG_ROOT.parents[1])
     assert result.returncode==0,result.stderr
     assert json.loads((tmp_path/'track_identity.json').read_text())['case']=='open'
