@@ -387,3 +387,15 @@ def test_lane_bend_capability_needs_a_basis():
     assert site_rig().m.supports_lane_bend is False        # no floor declaration, proof not live
     assert site_rig(**SITE).m.supports_lane_bend is True
     assert Rig().m.supports_lane_bend is True             # enforce proof configured
+
+
+def test_a_pending_instruction_under_the_live_proof_asks_for_the_return_scan_view():
+    """Gazebo lap 2026-10-13: under the D-400 proof CORE's probe also needs return_body_clear's
+    scan view, fed only while wants_return_scan. Unfed, every bend twist was motion_unconfirmed.
+    The site basis sweeps the D-422 scan points instead and does not ask for the view."""
+    rig = Rig(**BODY)                                      # proof bound, liveness unknown = live
+    rig.step()
+    assert rig.m.wants_return_scan is False
+    assert send(rig) == (True, 1, 'armed')
+    assert rig.m.wants_return_scan is True
+    assert armed_rig().m.wants_return_scan is False
