@@ -82,3 +82,19 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 먼저 bridge와 pipeline 서비스를 한 번 실행하고 수신 current.json의 workspace/revision, bridge-state/state.json, cycle-state/state.json의 review_autobuild를 확인한 뒤 타이머를 활성화한다. 사람이 승인한 mask가 없으면 `held / no_approved_masks`이며 학습 요청·GPU 작업을 만들지 않는다. 자료가 준비되면 모든 실제 eval version 및 source pixels를 재검사하고 기존 owner admission으로 처리한다. 학습 화면에는 cycle-state를 Perception 결과로 연결하며 승인 대기 사유를 표시한다.
 
 서명 코드 승인·검수 DB 백업·릴리스 전환·원격 시험·실제 서비스 읽기 증거는 각각 기록한다. 테스트용 승인 fixture를 운영 정답이나 운영 모델로 승격하지 않는다. 새 camera/gate/proof 설정은 기존 원장에 덮어쓰지 않고 명시 새 cycle로 검증한다.
+
+## 헤드리스 Gazebo 준비 (D-571)
+
+모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.
+
+```bash
+python3 deploy/hosts/common/rosy-host-state install model --dry-run      # root 없이 차이만
+sudo python3 deploy/hosts/common/rosy-host-state install model --approve sim
+```
+
+네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 실행기가 이 PC를 고르지 않는다. 실행과 점검 명령은 개발 PC에서 내고, Gazebo는 고른 PC에서만 돈다(D-584). `--host model`은 `ROSY_SIM_HOSTS`나 `private/lab-hosts.json`의 `sim_hosts`에 `=model` 역할이 적혀 있어야 한다.
+
+```bash
+python tools/remote/remote_sim.py --check
+python tools/remote/remote_sim.py --host model swarm_bench -- --scenario follow --duration 90
+```
