@@ -43,7 +43,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 #estop[disabled][reason] > small:not([data-reason]) { display: none; }
 
 /* D-741 3·5 — 앱 바는 모든 폭에서 한 줄이다: 맥락 | 연결 | 알림·나 | 정지. 계정 상세만 아래 줄로 펼친다.
-   연결 칸이 남는 폭을 받고, 모자라면 연결 칸이 먼저 비고 그 다음 계정 단추의 역할 이름이 준다. */
+   연결 칸이 남는 폭을 받는다. 48rem 아래에서 평상(실시간) 글은 접히고, 그 밖의 연결 글은 아래 자기 줄에 선다. */
 ui-topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
@@ -90,8 +90,9 @@ ui-topbar {
 @container (width < 48rem) {
   ui-topbar { gap: var(--space-2); padding: var(--space-1) var(--space-2); }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  /* 좁은 폭의 연결 자리는 평상시 조용하다. 연결 대기·지연·연결 끊김은 보인다. */
+  /* 좁은 폭의 연결 자리는 평상시 비어 있다. 연결 대기·지연·연결 끊김은 남는 폭에 잘리지 않게 앱 바 아래 자기 줄에 선다. */
   #clock, #link-state[data-link="live"] { display: none; }
+  .fleet-link-status:has(#link-state:not([data-link="live"])) { grid-area: auto; grid-column: 1 / -1; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }
