@@ -105,8 +105,6 @@ class FakeRobot:
         self.state_error: Optional[BaseException] = None
         self.power_health_value: Optional[dict] = None
         self.power_health_error: Optional[BaseException] = None
-        #: D-550 8: what ``GET /api/v1/safety/state`` answers (Rule M reads ``fleet_loss_policy``).
-        self.safety_state_value: dict = {"fleet_loss_policy": "STOP"}
         self.swarm_state_error: Optional[BaseException] = None
         self.pose_frames: asyncio.Queue = asyncio.Queue()
         self.event_frames: asyncio.Queue = asyncio.Queue()
@@ -159,10 +157,6 @@ class FakeRobot:
         if self.power_health_error is not None:
             raise self.power_health_error
         return dict(self.power_health_value or {})
-
-    async def safety_state(self) -> dict:
-        self._record("safety_state")
-        return dict(self.safety_state_value)
 
     async def map(self) -> dict:
         self._record("map")

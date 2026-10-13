@@ -1951,14 +1951,13 @@ gather failed: the D-535 reason (transport failure classified by the Fleet, or t
 `error.code`/HTTP status). Message and action come from Fleet's own table, never the robot's text.
 
 Fleet `GET /api/fleet/state` robot rows also carry `rule_m` (D-550 8, D-760 3 stage 1; display only,
-nothing is refused): `{state: bounded|unbounded|idle, motion: lane_trip|goal|follow|null, reason}`.
-It is Fleet's verdict on the motion Fleet itself started for that robot. `reason` is null unless
-`state` is `unbounded`: `hold_back` (lane trip without CORE traffic authority or a held trip lease),
-`rest_only` (unleased goal, robot not gathered over the hub), `policy_continue` / `policy_unknown`
-(unleased goal on a hub robot whose SAF-003 `fleet_loss_policy` is `CONTINUE` or was not read) and
-`leg_unknown`. For hub-gathered robots Fleet reads `fleet_loss_policy` from the Viewer
-`GET /api/v1/safety/state` at most once per 30 s. Line follow opened outside a trip is not judged.
-An older Fleet omits the field.
+nothing is refused): `{state: bounded|unbounded|idle, motion: lane_trip|goal|null, reason}`. It is
+Fleet's verdict on the motion Fleet itself started for that robot, counting only the TTL bounds Fleet
+holds: CORE traffic authority or a held trip lease for a trip, a goal lease for a navigation goal.
+The robot's link and SAF-003 policy are not counted. `reason` is null unless `state` is `unbounded`:
+`hold_back` (lane trip with neither), `no_goal_lease`, `leg_unknown`. A row with `online: false` has
+no `rule_m`. Stage 1 covers two of the three D-550 item 7 violations: a line follow Fleet opens
+outside a trip is not detected. An older Fleet omits the field.
 
 Fleet `GET /api/fleet/state` robot rows also carry optional D-509 display fields
 `power_health` and `power_health_age_s`. `power_health` is the existing shared

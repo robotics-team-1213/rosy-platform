@@ -3555,3 +3555,10 @@
 - 뺀 것: trip 밖 LINE_FOLLOW. Fleet은 `POST /api/fleet/robots/{id}/line-follow`로 IR_LINE을 켤 수 있지만 켰다는 기록을 남기지 않아, 대시보드가 켠 것과 가리지 못한다. 추측하지 않고 판정에서 뺐다.
 - 증거: `test_rule_m.py`(D-550 7항 행마다, 모르는 입력, 상태 행, 30초 읽기), `test_console_queues_contract.py`, `test/web/link-tag.test.mjs`·`attention-stale.test.mjs`. 원격 시험 로그는 X: `rule-m-warn` 세션이다.
 - gate 변화: 없음. 표시만이다. 장치·현장 확인과 화면 확인은 하지 않았다.
+
+## 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
+- 변경: 앞 항목의 SAF-003 정책 경로를 지웠다(`safety_state` 읽기, 정책 캐시, `rest_only`·`policy_*` 이유). CORE의 SAF-003은 `correlation_id`가 있는 목표에만 동작하고 Fleet은 dispatch 시도나 목표 임대가 있을 때만 그것을 보내므로, 허브 연결과 정책으로 "한도 있음"이라 할 수 없다. 이제 한도는 통행권 `core`, 쥐고 있는 trip 임대, 목표 임대 셋뿐이고 임대 없는 목표는 `no_goal_lease`다. 군집 추종 입력도 뺐다(추종만 하는 로봇은 `idle`). 오프라인 행에는 `rule_m`이 없다.
+- 범위: 1단계는 D-550 7항의 위반 셋 중 둘(임대 없는 목표, `hold_back` 차로 trip)만 본다. trip 밖에서 Fleet이 연 LINE_FOLLOW는 잡지 못한다.
+- 알려진 오경보: 끝난 Fleet 목표의 기록이 남아 있는 로봇을 대시보드·Pilot이 항법으로 움직이면 Fleet 목표로 보인다. 상태 스냅숏에 항법 `correlation_id`가 없어 가릴 수 없다.
+- 증거: `test_rule_m.py`(행 판정, 깨진 `navigation` 값, 오프라인 행). 원격 시험 로그는 X: `rule-m-warn/fix1`이다.
+- gate 변화: 없음. 표시만이다.
