@@ -74,7 +74,7 @@ issuer/키/클라이언트 등록은 운영자가 보호된 구성으로 제공�
 키를 재생성하지 않는다. verifier는 배포된 trusted key 목록만 읽고 토큰이 지정한 URL을
 fetch하지 않는다. 회전 시 새 공개키 배포→새 서명→구 token 만료→옛 키 제거 순서를 지킨다.
 
-대상 verifier는 최대 20초마다 중앙 introspection을 재확인하여 연결 중 회수 30초
+대상 verifier는 최대 10초마다 중앙 introspection을 재확인하여 연결 중 회수 30초
 상한을 맞춘다. inactive가 확인되면 즉시 캐시를 지운다. 중앙 장애 때 마지막 검증된
 token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 않는다. WS도 반복 검사한다.
 로그아웃/정지/초기화 이후 모든 앱의 갱신과 새 권한 발급은 거부한다.
@@ -85,7 +85,7 @@ token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 �
 
 CORE의 Robot·Pilot 웹은 같은 origin의 `/api/account/login?return=/pilot` 또는
 `return=/dashboard`로 시작하고 `/api/account/callback`에서 state/PKCE를 확인한다.
-`GET /api/account/session`은 enabled/authenticated/account_id/resource/capabilities만
+`GET /api/account/session`은 enabled/authenticated/account_id/session_family/revision/resource/capabilities만
 반환한다. `POST /api/account/logout`은 same-origin 요청만 받으며 로컬 세션과
 중앙 family를 회수한다. 중앙 장애면 로컬 로그아웃 후 암호화된 회수 대기열을
 재시도하고 503으로 미완료 사실을 알린다. 재접속을 권한 복구로 처리하지 않는다.
@@ -102,6 +102,15 @@ CORE의 중앙 계정은 `robot.read`/`robot.operate`/`robot.admin`을 각각 �
 encryption_key_file(Fernet key 경로), session_db이며 운영 비밀을 기본 설정에 넣지 않는다.
 resource는 해당 호스트의 실제 robot identity와 일치해야 한다. 설정이 없으면 기존
 명시적 local recovery를 유지하며, 설정이 잘못되면 시작을 거부한다.
+
+Review 앱은 기존 collaboration 설정에 `account_client_file`과 `account_subjects`
+(중앙 account_id→기존 learning user_id)를 명시한다. 기존 connection 소유권은 유지하고
+최초 사용한 매핑은 원장에 고정하여 다른 사용자로 바꾸지 못한다. 권한은 해당
+`project:<id>`의 중앙 learning capability에서 읽으며 작업 대기열에서도 다시 확인한다.
+Account 모드에서는 기존 프로젝트 비밀번호·HF 로그인으로 사람 인증을 우회하지
+못한다. HF 연결·동의는 Rosy Account로 로그인한 사람에게 별도로 귀속한다.
+수신 endpoint는 `/api/account/login`, `/api/account/callback`이며 복귀는 `/accounts`
+또는 `/`만 허용한다. 로그인 후에는 기존 `/api/accounts/session`·logout을 사용한다.
 
 중앙 ledger bootstrap은 지정한 기존 admin login과 site_id를 명시해야 한다.
 운영 계정을 자동 선택하지 않는다. authority URL·키·client callback·기존 identity와
