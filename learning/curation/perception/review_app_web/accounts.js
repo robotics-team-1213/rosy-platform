@@ -36,7 +36,7 @@ async function perform(action) {
 }
 async function refresh() {
   const options=await api('/api/accounts/options');
-  $('hf-login').hidden=$('hf-link').hidden=!options.oauth;
+  $('hf-login').hidden=!options.oauth;
   if(!options.enabled) {
     signedOut();
     $('account-status').textContent='협업 계정이 설정되지 않았습니다. 관리자에게 프로젝트 설정을 요청하세요.';
