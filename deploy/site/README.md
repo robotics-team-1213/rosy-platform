@@ -46,6 +46,19 @@ The [Account protocol](../../docs/reference/rosy-account-protocol.md) defines th
 JSON and migration checks. Use the signed candidate deployment path, then read
 back accounts, grants and session revocation. Source tests do not activate SSO.
 
+Android callbacks require an approved HTTPS domain with a browser/Android-trusted
+certificate on port443. Existing `.local` site certificates do not prove this.
+For an existing tailnet, read the site machine's MagicDNS name and HTTPS state;
+provision the matching certificate and authenticated tailnet ingress before
+selecting that name as issuer. Keep site backend TLS validation and existing
+interface firewall rules. Do not expose the console publicly to obtain SSO.
+The proxy serves only `/.well-known/assetlinks.json` from
+`/etc/rosy/account-public/assetlinks.json` (public, UID10001-readable). Populate it
+with `delegate_permission/common.handle_all_urls`, the Pilot/Cam package names
+and the actual installed APK signing certificate SHA256 fingerprints. Never use
+a debug/test signing identity for the production registration. Verify the exact
+callback host and Android app-link verification before activating the clients.
+
 | Role | Installation and current responsibility |
 |---|---|
 | Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |
