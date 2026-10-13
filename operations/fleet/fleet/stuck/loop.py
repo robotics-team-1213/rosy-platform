@@ -146,7 +146,7 @@ class StuckResolverLoop:
 
     def _row(self, row: dict) -> dict:
         extra = {}
-        if self._resolver.realign.robots:
+        if getattr(getattr(self._resolver, "realign", None), "robots", None):   # D-622; absent = off
             try:
                 extra["realign_evidence"] = self.realign_evidence(row["robot_id"])
             except Exception:  # noqa: BLE001 - absence must hold, never authorize motion
