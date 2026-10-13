@@ -20,7 +20,7 @@
 
 **구조 토론 후 S1:** [D-743](../adr/D-743-drive-holder-promotion.md)과 [S1 실행 계획](2026-10-13-drive-holder-s1.md)에 따라 안쪽 Drive를 middleware/drive로 승격한다. S6의 signal_observer 범위는 실행 전에 따로 확정한다. 단계 순서는 유지한다.
 
-**S2 범위 확정:** [D-747](../adr/D-747-perception-judgment-holders.md)에 따라 판단과 전용 adapter 14개를 출력별 기능 holder에 둔다. ROS-free 파일 IO나 보정 명령을 순수 판단으로 간주하지 않는다. 실행·검증·착지는 [S2 계획](2026-10-13-perception-judgment-s2.md)과 [기록](../validation/perception-judgment-s2-2026-10-13/result.md)에서 구분한다.
+**S2 범위 확정·착지 HOLD:** [D-747](../adr/D-747-perception-judgment-holders.md)에 따라 판단과 전용 adapter 14개를 출력별 기능 holder에 배치하는 SOURCE 구현·독립 검토를 완료했다. 통합 후보의 시험 PC 3곳 SSH 불가로 원격 재검증은 600초 대기 뒤 NOT RUN이며 local main에는 착지하지 않았다. S3는 S2 착지 뒤에 연다. ROS-free 파일 IO나 보정 명령을 순수 판단으로 간주하지 않는다. 실행·검증·착지는 [S2 계획](2026-10-13-perception-judgment-s2.md)과 [기록](../validation/perception-judgment-s2-2026-10-13/result.md)에서 구분한다.
 
 ## 범위·책임·순서
 
