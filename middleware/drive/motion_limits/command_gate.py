@@ -15,6 +15,9 @@ from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
 #: geometry; the LiDAR body strip still stops at the gap. An unranged camera obstacle stops
 #: forward motion instead (review H2).
 CAMERA_LIMIT_SCALE = .5
+#: Evidence observed at most this long after the caller's clock read still answers that request
+#: (one 20 Hz control tick; Gazebo lap run56: 0.034 s). More is another clock, refused as before.
+REQUEST_LEAD_S = .05
 
 
 @dataclass(frozen=True)
@@ -174,6 +177,10 @@ class CommandPolicy:
         detail = getattr(self._evaluation, 'unavailable', None)
         if output is None and detail is not None and detail['reason'] == 'snapshot_changed':
             output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
+        elif (output is None and detail is not None and detail['reason'] == 'snapshot_future'
+              and detail['observed_at']-now <= REQUEST_LEAD_S):
+            # the caller read its clock, then the worker published: judged at the evidence's own time
+            output = self._evaluate_once(linear, angular, detail['observed_at'], allow_bounded_sweep)
         return output
 
     def _evaluate_once(self, linear, angular, now, allow_bounded_sweep):
