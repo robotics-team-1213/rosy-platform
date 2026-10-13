@@ -62,7 +62,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/core/events /opt/rosy_ws/src/runtime/events
 COPY middleware/core/services /opt/rosy_ws/src/runtime/services
-COPY middleware/control/drive/behaviors /opt/rosy_ws/src/runtime/services/_source_roots/behaviors
+COPY middleware/drive/behaviors /opt/rosy_ws/src/runtime/services/_source_roots/behaviors
 COPY middleware/core/api /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
@@ -139,16 +139,16 @@ COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
 COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/devices/pinky/description /opt/rosy_ws/src/sim/description
 COPY middleware/devices/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
-COPY middleware/control/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
+COPY middleware/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
-COPY middleware/control/drive/safety /opt/rosy_ws/src/runtime/control/drive/safety
-COPY middleware/control/drive/recovery /opt/rosy_ws/src/runtime/control/drive/recovery
-COPY middleware/control/drive/tracking /opt/rosy_ws/src/runtime/control/drive/tracking
-COPY middleware/control/drive/calibration /opt/rosy_ws/src/runtime/control/drive/calibration
-COPY middleware/control/drive/planning/grid /opt/rosy_ws/src/runtime/control/drive/planning/grid
-COPY middleware/control/drive/runtime /opt/rosy_ws/src/runtime/control/drive/runtime
+COPY middleware/drive/safety /opt/rosy_ws/src/runtime/drive/safety
+COPY middleware/drive/recovery /opt/rosy_ws/src/runtime/drive/recovery
+COPY middleware/drive/tracking /opt/rosy_ws/src/runtime/drive/tracking
+COPY middleware/drive/calibration /opt/rosy_ws/src/runtime/drive/calibration
+COPY middleware/drive/planning/grid /opt/rosy_ws/src/runtime/drive/planning/grid
+COPY middleware/drive/runtime /opt/rosy_ws/src/runtime/drive/runtime
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \

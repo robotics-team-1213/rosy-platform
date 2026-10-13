@@ -102,7 +102,7 @@ def test_the_scan_sees_nodes_and_libraries():
 
 def test_the_scan_includes_relocated_safety_and_tracking():
     modules = dict(_modules())
-    drive = ROOT / "middleware/control/drive"
+    drive = ROOT / "middleware/drive"
     assert modules["control.safety.gate"] == drive / "safety/adapter/gate.py"
     assert modules["control.wander.motion"] == drive / "tracking/wander/motion.py"
 

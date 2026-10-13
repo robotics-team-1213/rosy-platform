@@ -133,7 +133,8 @@ roots:
     wave: "4d"
     import_prefix: [core]
     concern: control
-  - path: middleware/control/drive/behaviors
+  - path: middleware/drive/behaviors
+    layout_target: middleware/drive/behaviors
     part: middleware
     d427_target: middleware/control/drive/behaviors
     wave: none
@@ -148,7 +149,8 @@ roots:
       road_behaviour: core_features.road_behaviour
       traffic_policy: core_features.traffic_policy
     note: D-649 Base behavior implementation installed by core_features; no final writer.
-  - path: middleware/control/drive/runtime
+  - path: middleware/drive/runtime
+    layout_target: middleware/drive/runtime
     part: middleware
     d427_target: middleware/control/drive/runtime
     wave: none
@@ -197,8 +199,8 @@ roots:
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
     concern: control
-  - path: middleware/control/drive/planning/nav2
-    layout_target: middleware/control/drive/planning/nav2
+  - path: middleware/drive/planning/nav2
+    layout_target: middleware/drive/planning/nav2
     part: middleware
     d427_target: middleware/core/navigation
     legacy: src/runtime/navigation
@@ -218,10 +220,10 @@ roots:
       D-630 sensing and vision source holders; control remains the ROS distribution/import identity.
       Node composition, recorder compatibility and map assets stay in this package.
     concern: control
-  - path: middleware/control/drive
+  - path: middleware/drive
     part: middleware
     d427_target: middleware/control/drive
-    layout_target: middleware/control/drive
+    layout_target: middleware/drive
     wave: none
     import_prefix: [control.control, control.planning, control.wander]
     source_packages:
@@ -234,7 +236,8 @@ roots:
       tracking/wander: control.wander
     concern: control
     note: D-630 Drive algorithms; installed by the existing control distribution.
-  - path: middleware/control/drive/safety
+  - path: middleware/drive/safety
+    layout_target: middleware/drive/safety
     part: middleware
     d427_target: middleware/control/drive/safety
     wave: none
@@ -790,10 +793,10 @@ safety_modules:
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
   - middleware/core/services/core_features/command/arbitration.py
-  - middleware/control/drive/behaviors/docking/charging.py
-  - middleware/control/drive/behaviors/line_follow/body_stop.py
-  - middleware/control/drive/behaviors/line_follow/clearance.py
-  - middleware/control/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
+  - middleware/drive/behaviors/docking/charging.py
+  - middleware/drive/behaviors/line_follow/body_stop.py
+  - middleware/drive/behaviors/line_follow/clearance.py
+  - middleware/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
