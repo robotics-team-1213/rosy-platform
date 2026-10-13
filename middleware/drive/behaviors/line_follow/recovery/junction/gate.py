@@ -51,8 +51,8 @@ _CONTINUE = frozenset({'tracking', 'line_not_visible', 'observation_stale', 'no_
                        'low_confidence', 'lane_recovery', 'invalid_observation',
                        'lane_edge_left', 'lane_edge_right', 'reselection_required',
                        'lane_bridge', 'lane_bridge_blocked', 'lane_bridge_motion_unconfirmed'})
-#: A refused motion proof holds a maneuver this long before it aborts: the D-468 scan view's age
-#: limit, one evidence period. One late scan or clock race is not a lost basis (Gazebo lap run56,
+#: A refused motion proof holds a maneuver at most this long before it aborts: the D-468 scan
+#: view's age limit (min with clearance_stale_s), one evidence period. One late scan or clock race is not a lost basis (Gazebo lap run56,
 #: run58: a single refused tick ended the trip).
 UNCONFIRMED_HOLD_S = .5
 _HOLD_REASON = {'waiting': 'junction_waiting', 'unresolved': 'junction_unresolved',
@@ -558,9 +558,13 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
 
     def _unconfirmed(self, j, now, decision):
         """The motion proof refused this tick's twist: stand still and keep the maneuver; abort
-        once it has stayed refused for UNCONFIRMED_HOLD_S. Locked."""
-        if now-j.get('confirmed_at', j['phase_at']) > UNCONFIRMED_HOLD_S:
+        once it has been refused without a confirmed tick for the scan view's age limit (review:
+        counted from the first refusal, across phases and blocked holds). Locked."""
+        j['refused_tick'] = now
+        if now-j.setdefault('refused_since', now) > min(self._config.clearance_stale_s, UNCONFIRMED_HOLD_S):
             return self._abort(j, 'motion_unconfirmed', decision)
+        if 'w' in j:
+            j['w'] = 0.  # nothing is commanded: the turn's lead-stop must not see the planned rate
         return self._junction_hold('junction_motion_unconfirmed', decision)
 
     def _maneuver_twist(self, j, now, linear, angular, decision, reason):
@@ -573,7 +577,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         if self._turn_basis_now == 'enforce' and not self._return_probe(now, linear, angular):
             return self._unconfirmed(j, now, decision)  # site basis: D-422 above
         if j['action'] != 'bend':  # the bend confirms after its own second check
-            j['confirmed_at'] = now
+            j.pop('refused_since', None)
         # D-468 measured the old lane; it starts afresh after the maneuver, not toward it.
         self._return_controller, self._bridge = None, None
         self._loss_started_at, self._lost_latched = None, False
