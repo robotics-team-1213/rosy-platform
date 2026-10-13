@@ -106,7 +106,18 @@ class PolicyUnavailableDiagnosticsTests(unittest.TestCase):
         self.assertEqual(detail['current_sequence'], 1)
         self.assertIsNone(detail['observed_at'])
 
-    def test_one_replacement_is_judged_on_the_newer_snapshot_and_a_second_refuses(self):
+    def test_evidence_just_after_the_callers_clock_read_is_judged_at_its_own_time(self):
+        """Gazebo lap run56: the worker published 0.034 s after CORE read its clock, one refusal
+        aborted the bend. Within one control tick the snapshot answers; beyond it stays future."""
+        snapshot, result = self.policy.evaluate(.01, 0., 9.966)
+        self.assertEqual((snapshot.sequence, result.reason, result.linear), (1, 'allow', .01))
+        self.assertIsNone(self.policy._take_unavailable_detail())
+        self.assertIsNone(self.policy.evaluate(.01, 0., 9.94))
+        self.assertEqual(self.policy._take_unavailable_detail()['reason'], 'snapshot_future')
+        self.policy.update(replace(self.snapshot, sequence=2, observed_at=9.99, expires_at=9.995))
+        self.assertIsNone(self.policy.evaluate(.01, 0., 9.966))      # an invalid window stays refused
+
+
         from control.control.command_gate import evaluate_command
         sequences = iter(range(2, 9))
         def replace_during_evaluation(*args):
