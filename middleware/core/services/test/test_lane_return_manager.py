@@ -125,7 +125,8 @@ def test_local_return_clearance_covers_motion_since_the_measured_scan():
     _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
     manager.observe_return_scan(scan_view((.5, 0.)),source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
     assert manager.return_body_clear(1.1,.03,0.)
-    assert not manager.return_body_clear(1.5,.03,0.)
+    assert manager.return_body_clear(1.5,.03,0.)       # at the follow path's clearance_stale_s (0.5 s)
+    assert not manager.return_body_clear(1.51,.03,0.)  # older than that proves nothing
 
 
 def test_replayed_scan_stamp_cannot_refresh_receipt_age():
