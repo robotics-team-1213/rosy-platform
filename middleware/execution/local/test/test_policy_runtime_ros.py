@@ -1,6 +1,6 @@
-"""Opt-in isolated actual ROS transport; synthetic policy/authority, no inference.
+"""Opt-in isolated ROS transport; default synthetic candidate, optional CPU ACT.
 
-This fixture declares 2s source/joint budgets and a 12s lease. It does not
+    This fixture declares 2s source/joint budgets and a 12s lease. It does not
 qualify the separately rejected 50ms fixture, hardware, task success or Fleet.
 Run only with domain199 and localhost discovery, with basetemp on X:.
 """
@@ -64,10 +64,11 @@ def install_transport_fixture(session, runtime, policy_root):
 
 @pytest.mark.parametrize('revoke', [False, True])
 @pytest.mark.parametrize('with_parent',[False,True],ids=['native_only','parent_episode_fleet'])
-def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent):
+def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent, *, with_inference=False):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, _, _, authority, policy_root = setup_session(
-        tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000)
+        tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000,
+        camera=with_inference)
     suffix = uuid4().hex[:10]
     prefix = '/isolated_policy_'+suffix
     rclpy.init()
@@ -103,6 +104,26 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
         finally:entry['elapsed_ms'] = (time.monotonic()-entry['begin'])*1000
     runtime.action_port._event_sink = trace_sink
     install_transport_fixture(session,runtime,policy_root)
+    if with_inference:
+        # Explicit test-only numerical composition. Cold loading precedes the
+        # original lease/grant issuance; inference never refreshes their clocks.
+        sys.path[:0] = [str(ROOT/'learning/training/omx'), str(ROOT/'learning/training/omx/test')]
+        from act_cpu_fixture import install_cpu_fixture
+        from test_act_owner_capture import CapturedRGB, infer_for_owner
+        from test_omx_policy_session import CameraSnapshot
+        engine = install_cpu_fixture(session, policy_root)
+        rgb = bytes(range(192))
+        captured_results = []
+        def prepare_inference():
+            result_candidate, numerical = infer_for_owner(engine, session, CapturedRGB(camera_capture, rgb))
+            captured_results.append(numerical)
+            import base64
+            result_doc = asdict(numerical)
+            result_doc['source']['rgb_base64'] = base64.b64encode(result_doc['source'].pop('rgb')).decode('ascii')
+            (tmp_path/'inference-result.json').write_text(json.dumps(dict(
+                result=result_doc, candidate=asdict(result_candidate), actual_cpu=True,
+                synthetic_model=True, clock_scope='actual isolated runtime monotonic'), indent=2), encoding='utf-8')
+            return result_candidate
     publisher = nodes[2].create_publisher(JointState,prefix+'/joints',1)
     def publish():
         message = JointState();message.name = ['joint_1','joint_2'];message.position = [.1,0.]
@@ -121,13 +142,18 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
         # neither the admission nor any live installed policy is changed.
         now = int(runtime.monotonic()*1e9)
         session._lease = replace(session.lease,issued_at_ns=now,expires_at_ns=now+12_000_000_000)
+        if with_inference:
+            camera_capture = CameraSnapshot('front', 'cam-front', 'a'*64, (3,8,8),
+                int(runtime.monotonic()*1e9), hashlib.sha256(rgb).hexdigest())
+            session._cameras = lambda: (camera_capture,)
         session.bind_runtime(runtime)
-        state, _ = session.capture_observation()
-        action_candidate = candidate(session,sequence=state.sequence,
-            observed_at_ns=int(state.received_at*1e9),produced_at_ns=int(runtime.monotonic()*1e9))
         if with_parent:
-            command,runner,api,parent=submit_parent(session,journal,tmp_path)
+            command,runner,api,parent=submit_parent(session,journal,tmp_path,
+                candidate_factory=prepare_inference if with_inference else None)
         else:
+            state, _ = session.capture_observation()
+            action_candidate = candidate(session,sequence=state.sequence,
+                observed_at_ns=int(state.received_at*1e9),produced_at_ns=int(runtime.monotonic()*1e9))
             result=session.submit(action_candidate)
             assert result.accepted
             command=result.command_id
@@ -146,7 +172,16 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
             assert server_canceled.is_set() and session.hold_reason
             assert runtime.owner.state == 'hold'
         source = journal.read_source(record['intent']['source_revision'])
-        assert source['payloads']['policy/model.bin'] == b'host-fixture'
+        if with_inference:
+            assert len(captured_results) == 1 and captured_results[0].positions == (0.,0.)
+            assert source['header']['policy_revision'] == captured_results[0].policy_revision
+            expected = captured_results[0].candidate_fields()
+            for key, value in expected.items():
+                assert record['intent']['candidate'][key] == (list(value) if isinstance(value, tuple) else value)
+            for ref in engine.metadata['files']:
+                assert hashlib.sha256(source['payloads']['policy/'+ref['path']]).hexdigest() == ref['sha256']
+        else:
+            assert source['payloads']['policy/model.bin'] == b'host-fixture'
         if with_parent:
             export_parent(tmp_path,journal,command,runner,api,parent,revoke=revoke)
         files = ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
@@ -165,11 +200,18 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
             files += ['learning/registry/policy/fleet_join.py',
                       'middleware/execution/local/test/native_parent_chain.py',
                       'middleware/execution/local/test/test_policy_runtime_ros.py']
-        proof = dict(scope='isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet',
+        if with_inference:
+            files += ['learning/training/omx/'+path for path in ('act_inference.py', 'act_owner_capture.py',
+                'test/act_cpu_fixture.py', 'test/test_act_owner_capture.py', 'test/test_act_native_chain.py')]
+            files += ['contracts/learning/src/rosy/contracts/learning/inference.py']
+        scope = ('isolated actual CPU ACT and ROS transport; synthetic zero weights/capture/authority; '
+                 'no trained quality/task/hardware/authenticated Fleet' if with_inference else
+                 'isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet')
+        proof = dict(scope=scope,
             fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
                                 poll_period_s=.01),
             short_deadline_acceptance=False,revoke=revoke,journal=record,
-            parent_chain_verified=with_parent,
+            parent_chain_verified=with_parent, actual_cpu_synthetic_inference=with_inference,
             source_revision=record['intent']['source_revision'],
             loaded_source_sha256={path:hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in files})
         (tmp_path/'transport-receipt.json').write_text(json.dumps(proof,indent=2),encoding='utf-8')
