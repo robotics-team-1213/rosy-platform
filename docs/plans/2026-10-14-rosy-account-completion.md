@@ -211,7 +211,7 @@ python test/known_failures.py X:/DevTemp/projects/rosy-platform/<session>/logs/a
 | pilot-shell | external browser PKCE, 검증 app link, Keystore 보관, native Bearer proxy | JVM·APK 및 서명 fixture 검증; 기기 app-link 수용 별도 |
 | cam | 같은 native Account, camera.manage와 기계 스트림 자격 분리 | 관리 작업 회수/지연 응답 fence; 실제 폰 수용 별도 |
 | pinky-review | 중앙 subject→기존 owner 고정, 프로젝트 capability, worker 재검증 | 공유 연결 owner 회수, 기존 provider 연결, 계정별 쓰기 CSRF·늦은 응답 차단 |
-| game-board | 같은 receiver, site games.operate와 HTTPS Origin으로 /stop 보호 | 원격 114개 Games 시험; 미설정 보드는 공개 읽기 전용 |
+| game-board | 같은 receiver, site games.operate와 HTTPS Origin으로 /stop 보호 | `be0ba5111`의 실제 Chromium 38개와 단위·표면 115개 통과; 미설정 보드는 공개 읽기 전용 |
 | lane-live-view | /status.json·graph·run 기록 GET만 사용 | 비제품 시뮬 읽기 표면, 사용자 명령 발행 없음 |
 | control-diagnostic | D-266 PARKED 비제품 개발 도구 | 운영 활성화·중앙 로그인 표면으로 승격하지 않음 |
 | robot-face | 부팅·이름·일회 코드 표시 LCD | 입력/명령/사용자 세션 없음 |
@@ -229,6 +229,13 @@ X: `account-native--1143d2/logs`에 보관하며 원격 shell assets 4개도 통
 배포 설정 회귀 31개와 실제 Caddy 설정 검증은 통과했으나 서비스 reload는 하지 않았다.
 공유 앱 헤더를 합친 `ebbaee602c`에서 Node 330개와 비밀/배포 경계 회귀 97개가 통과했다.
 이 결과는 범위가 겹치므로 하나의 최종 SHA 전체 시험 수로 합산하지 않는다.
+
+통합 기준 `b5ef80b2a9`의 원격 회귀는 세 묶음에서 20,681개가 통과했고 Games 버튼
+마크업 기대값 1개가 실패했다. 이 기대값은 `cf85f33d8`에서 고쳤으며, 별도 Chromium
+검사에서 발견한 숨김 CSS와 모바일 배치 문제도 수정해 위 Games 재검증을 통과했다.
+`c18c8f69c`의 최신 주행 계약 병합 관련 12개 시험 파일은 NEW 0이다.
+학습 가져오기 복구를 병합한 `89832755d`에서는 실제 브라우저를 포함한 관련 5개 파일이
+61개 통과, 대용량 전송 실험 1개 skip, NEW 0이며 계정 응답 격리 Node 시험 2개도 통과했다.
 
 실계정 변경은 하지 않았다. 기존 계정 목록·사이트 TLS 이름·tailnet 이름을 읽기 전용으로
 확인했으며 실제 주소/계정/인증서는 공개 저장소에 기록하지 않는다. 기존 LAN 인증서는
