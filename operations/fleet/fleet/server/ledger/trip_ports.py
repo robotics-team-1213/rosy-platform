@@ -422,10 +422,10 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
         return None
     fields = dict(map_id=active[1].map_id, bend_in_m=bend_in, bend_tol_m=_pose_tol(live, config), bend_radius_m=bend["radius_m"])
     k = next((k for k in range(index, len(segs)) if ends_at_place(live.graph, segs[k])), None)
-    if caps.get("lane_bend_next_line") and k is not None:  # D-754: vertex -> arc end -> that place -> its painted line
+    past = line_past(live.graph, *live.arc(k).point_at(segs[k]["s_to"])) if caps.get("lane_bend_next_line") and k is not None else None
+    if past is not None:  # D-754: vertex -> arc end -> that place -> its painted line; no known line, no field
         line = bend["radius_m"] * math.tan(math.radians(abs(bend["turn_deg"])) / 2) - live.progress(index, bend["s_end"])
-        line += live.progress(k, segs[k]["s_to"]) + (line_past(live.graph, *live.arc(k).point_at(segs[k]["s_to"])) or 0.0)
-        fields["next_line_in_m"] = round(max(0.0, min(line, MAX_EXPECT_IN_M)), 3)  # 2 = that far or further
+        fields["next_line_in_m"] = round(max(0.0, min(line + live.progress(k, segs[k]["s_to"]) + past, MAX_EXPECT_IN_M)), 3)
     return fields
 
 
