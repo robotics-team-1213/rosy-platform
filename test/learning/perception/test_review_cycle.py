@@ -443,7 +443,7 @@ def test_pixel_classes_with_display_round_trip_through_export_verification(tmp_p
 def test_draft_free_catalog_binds_the_classes_yaml_beside_it(tmp_path):
     store = open_store(tmp_path)
     folder, classes, _ = catalog(tmp_path)
-    lane = (Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml').read_bytes()
+    lane = (Path(__file__).resolve().parents[3] / 'learning' / 'curation' / 'perception' / 'classes' / 'lane_lr5.yaml').read_bytes()
     classes.write_bytes(lane)
     assert review_masks.classes(store) is None
     assert review_ingest.import_frames(store, {'path': str(folder)})['added'] == 1
@@ -478,7 +478,7 @@ def test_drafts_from_another_class_set_are_refused_in_plain_words(tmp_path):
     rows[0]['mask'] = {'zip': str(archive), 'entry': 'SegmentationClass/0.png',
                        'sha256': hashlib.sha256(png).hexdigest()}
     (folder / 'verified-inputs.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows))
-    lane = Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml'
+    lane = Path(__file__).resolve().parents[3] / 'learning' / 'curation' / 'perception' / 'classes' / 'lane_lr5.yaml'
     with pytest.raises(ValueError, match='다른 클래스셋') as refused:
         review_ingest.import_frames(store, {'path': str(folder), 'classes': str(lane)})
     assert 'floor' in str(refused.value) and '초안 없이' in str(refused.value)

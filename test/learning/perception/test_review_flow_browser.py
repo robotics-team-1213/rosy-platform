@@ -1423,7 +1423,7 @@ def test_class_options_keep_class_index_order(custom_class_workspace):
         ['클래스 선택 필요', '10', 'car', '신호등'])
 
 
-LANE_LR5 = Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml'
+LANE_LR5 = Path(__file__).resolve().parents[3] / 'learning' / 'curation' / 'perception' / 'classes' / 'lane_lr5.yaml'
 
 
 def test_catalog_class_file_field_binds_lane_classes(browser_workspace, tmp_path):
