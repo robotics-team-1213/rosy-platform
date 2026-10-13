@@ -11,10 +11,10 @@ This directory holds `__init__.py` and this guide. The initializer preserves the
 
 | Canonical source holder | Flat pure modules | Responsibility |
 |---|---:|---|
-| `middleware/control/drive/safety` | 15 | Candidate gates, body/sweep clearance, floor evidence, speed limits and policy handoff |
-| `middleware/control/drive/tracking` | 6 | Path following, pursuit, route and navigation-session evidence |
-| `middleware/control/drive/recovery` | 11 | Escape, recovery budgets, rotation trials and safe-trail retreat |
-| `middleware/control/drive/calibration` | 18 | Calibration profiles/certificates, startup configuration and canonical mode labels |
+| `middleware/drive/safety` | 15 | Candidate gates, body/sweep clearance, floor evidence, speed limits and policy handoff |
+| `middleware/drive/tracking` | 6 | Path following, pursuit, route and navigation-session evidence |
+| `middleware/drive/recovery` | 11 | Escape, recovery budgets, rotation trials and safe-trail retreat |
+| `middleware/drive/calibration` | 18 | Calibration profiles/certificates, startup configuration and canonical mode labels |
 
 The separate planning/grid, tracking/wander and safety/adapter packages retain `control.planning`, `control.wander` and `control.safety`. See the [current platform folder guide](../../../../docs/reference/platform-folder-responsibilities.md) and [composition guide](../AGENTS.md).
 
@@ -47,7 +47,7 @@ The separate planning/grid, tracking/wander and safety/adapter packages retain `
 ## Dependencies
 
 ### Internal
-- Consumed under the existing import identities by the actual `middleware/control/drive/tracking/wander` and `middleware/control/drive/safety/adapter` implementations, the sensor provider and ROS composition adapters.
+- Consumed under the existing import identities by the actual `middleware/drive/tracking/wander` and `middleware/drive/safety/adapter` implementations, the sensor provider and ROS composition adapters.
 
 ### External
 - Existing ROS-free algorithm dependencies remain declared by the `control` distribution; this compatibility initializer adds no runtime or motion authority.

@@ -6,12 +6,17 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 
 import build
 import edge_review
 import review_evidence
 import review_masks
 from mcap_proof import prove_frames
+
+
+OTHER_CLASS_SET = ('초안 마스크가 다른 클래스셋으로 만들어졌습니다 ({}). 초안은 같은 클래스셋의 것만 '
+                   '가져올 수 있습니다. 초안 없이 가져오거나 초안과 같은 classes.yaml을 지정하세요.')
 
 
 def bounded(path, limit=32 * 1024 * 1024):
@@ -57,16 +62,30 @@ def import_frames(store, body):
         if draft:
             classes_path = (str(Path(draft['zip']).parent / 'classes.yaml') if 'zip' in draft
                             else str(catalog.parent / 'classes.yaml'))
+        elif not review_masks.classes(store) and (catalog.parent / 'classes.yaml').is_file():
+            classes_path = str(catalog.parent / 'classes.yaml')   # first binding of a draft-free catalog
     binding = review_masks.classes(store)
-    class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
+    try:
+        class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
+    except OSError as exc:
+        raise ValueError(f'픽셀 클래스 파일을 읽을 수 없습니다: {classes_path}') from exc
     if class_raw:
-        values = build.load_classes(Path(classes_path), source_bytes=class_raw)
+        try:
+            values = build.load_classes(Path(classes_path), source_bytes=class_raw)
+        except build.BuildError as exc:
+            raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path} ({exc})') from exc
+        except (ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+            # A parser error quotes the offending line; the path is caller-chosen, so name only the line.
+            mark = getattr(exc, 'problem_mark', None)
+            where = f' ({mark.line + 1}번째 줄)' if mark else ''
+            raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path}{where}') from exc
         binding = {'classes': values, 'sha256': review_masks.sha(class_raw), 'ignore_index': 255}
         old = review_masks.classes(store)
         if old and old['sha256'] != binding['sha256']:
             raise ValueError('pixel classes differ from existing workspace')
     if not binding:
-        raise ValueError('verified classes.yaml required for pixel review')
+        raise ValueError('픽셀 검수에는 검증된 classes.yaml이 필요합니다. 클래스 파일 경로를 넣거나 '
+                         '자료 폴더 옆에 classes.yaml을 두세요.')
     mcap_groups = {}
     with store.connect() as db:
         kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
@@ -127,7 +146,7 @@ def import_frames(store, body):
                 raise ValueError('draft mask digest required')
             if set(ref) == {'indexed_png', 'sha256', 'classes_sha256'}:
                 if ref['classes_sha256'] != binding['sha256']:
-                    raise ValueError('indexed draft classes hash differs')
+                    raise ValueError(OTHER_CLASS_SET.format('indexed draft classes hash differs'))
                 draft = bounded(edge_review.bound(catalog.parent, ref['indexed_png']))
                 if review_masks.sha(draft) != ref['sha256']:
                     raise ValueError('draft mask hash differs')
@@ -142,7 +161,12 @@ def import_frames(store, body):
                         raise ValueError('draft mask hash differs')
                     labelmap_raw = archive.read('labelmap.txt')
                     labelmap_sha = review_masks.sha(labelmap_raw)
-                    mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                    try:
+                        mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                    except build.BuildError as exc:   # only an unknown label means another class set
+                        if 'is not in classes.yaml' not in str(exc):
+                            raise
+                        raise ValueError(OTHER_CLASS_SET.format(exc)) from exc
             else:
                 raise ValueError('draft mask reference must be indexed PNG or color ZIP')
             indexed = cv2.imdecode(np.frombuffer(mask, np.uint8), cv2.IMREAD_UNCHANGED)

@@ -8,7 +8,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SOURCE = ROOT/'middleware/control/drive/safety/adapter/node.py'
+SOURCE = ROOT/'middleware/drive/safety/adapter/node.py'
 
 
 @pytest.mark.parametrize('sensor_only,namespace,embedded', [

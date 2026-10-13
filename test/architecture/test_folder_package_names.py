@@ -33,7 +33,7 @@ FOLDER_TO_PACKAGE = {
     "middleware/core/gateway": "core",
     "middleware/perception": "control",
     "middleware/core/services": "core_features",
-    "middleware/control/drive/planning/nav2": "navigation",  # D-626 preserves ROS identity
+    "middleware/drive/planning/nav2": "navigation",  # D-626 preserves ROS identity
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",
     "learning/envs/isaac": "isaac_sim",

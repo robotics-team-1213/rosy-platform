@@ -25,13 +25,13 @@ LEGACY_APP = Path("learning/training/perception/dataset/review_app.py")
 SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/vision/perception/__init__.py",
-                  "middleware/control/drive/safety/command_gate.py",
-                  "middleware/control/drive/recovery/recover.py",
-                  "middleware/control/drive/tracking/path_follow.py",
-                  "middleware/control/drive/calibration/modes.py",
-                  "middleware/control/drive/planning/grid/__init__.py",
-                  "middleware/control/drive/safety/adapter/__init__.py",
-                  "middleware/control/drive/tracking/wander/__init__.py")
+                  "middleware/drive/safety/command_gate.py",
+                  "middleware/drive/recovery/recover.py",
+                  "middleware/drive/tracking/path_follow.py",
+                  "middleware/drive/calibration/modes.py",
+                  "middleware/drive/planning/grid/__init__.py",
+                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/tracking/wander/__init__.py")
 
 
 def check_source(source: Path, root: Path, state: Path) -> None:

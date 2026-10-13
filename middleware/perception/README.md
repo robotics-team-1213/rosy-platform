@@ -10,10 +10,10 @@ a runtime dependency.
 |---|---|
 | `sensors/sensing` | `control.sensing` |
 | `vision/perception` | `control.sensing.perception`, including drivable/learned backends |
-| `../control/drive/{safety,tracking,recovery,calibration}` | `control.control` modules |
-| `../control/drive/planning/grid` | `control.planning` |
-| `../control/drive/safety/adapter` | `control.safety` |
-| `../control/drive/tracking/wander` | `control.wander` |
+| `../drive/{safety,tracking,recovery,calibration}` | `control.control` modules |
+| `../drive/planning/grid` | `control.planning` |
+| `../drive/safety/adapter` | `control.safety` |
+| `../drive/tracking/wander` | `control.wander` |
 
 `control/` retains provider and ROS composition plus source compatibility
 facades. `setup.py` installs each old import once; only `control.control`
