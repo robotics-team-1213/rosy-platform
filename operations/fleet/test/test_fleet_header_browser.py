@@ -133,6 +133,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             expect(page.locator("#online-pill")).to_have_text("2/3", timeout=15000)
             expect(page.locator("#estop")).to_be_enabled()
             expect(page.locator("#clock")).not_to_have_text("--:--:--")
+            expect(page.locator("#link-state")).to_have_text("실시간", timeout=15000)
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(400)
@@ -159,8 +160,14 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 measured[(name, width)] = fact
                 nav = page.locator(".doc-tabs").bounding_box()
                 main = page.locator("main").bounding_box()
-                footer = page.get_by_role("contentinfo")
-                expect(footer.locator("#clock")).not_to_have_text("--:--:--")
+                expect(page.get_by_role("contentinfo")).to_have_count(0)
+                expect(page.locator('[data-header-region="status"] #clock')).not_to_have_text("--:--:--")
+                if width >= 768:
+                    expect(page.locator("#clock")).to_be_visible()
+                    expect(page.locator("#link-state")).to_be_visible()
+                else:  # 48rem 아래: 시계와 평상(실시간) 글은 접힌다
+                    expect(page.locator("#clock")).to_be_hidden()
+                    expect(page.locator("#link-state")).to_be_hidden()
                 expect(page.get_by_role("banner")).to_have_count(1)
                 assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
                 for link in page.locator(".doc-tabs a").all():
@@ -183,7 +190,6 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
                 else:
                     assert nav["y"] + nav["height"] <= main["y"] + 1, (name, width, nav, main)
-                assert footer.bounding_box()["y"] >= main["y"] + main["height"] - 1
                 x, y, w, h = fact["stop"]
                 assert fact["overflow"] <= 0, (name, width, fact["overflowNodes"])
                 assert page.locator("#development-badge").evaluate(

@@ -54,6 +54,7 @@ ui-topbar {
 .fleet-header-identity { grid-area: identity; min-width: 0; }
 .fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
 .fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+#clock { flex: none; white-space: nowrap; }
 #development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 /* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
@@ -93,6 +94,8 @@ ui-topbar {
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
   .fleet-header-actions { justify-content: flex-end; gap: 0; }
+  /* 좁은 폭의 연결 자리는 평상시 조용하다. 연결 대기·지연·연결 끊김은 보인다. */
+  #clock, #link-state[data-link="live"] { display: none; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }

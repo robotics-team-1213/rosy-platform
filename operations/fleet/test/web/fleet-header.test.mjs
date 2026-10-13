@@ -7,7 +7,8 @@ import { OPERATOR_REASON } from "../../../ui/console/shared/authorization.js";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
-  SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, roleLabel, showFleet, showInboxCount, showSession, showSignedOut,
+  LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
+  showInboxCount, showSession, showSignedOut, tickClock,
 } = await import("../../../ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
@@ -25,7 +26,7 @@ function fakeNode(id) {
 function fakeHeader() {
   const nodes = Object.fromEntries(["user-role", "development-badge", "estop", "estop-feedback", "topbar-more",
     "topbar-extra", "online-pill", "fleet-name", "clock", "fleet-inbox", "fleet-theme", "header-unread",
-    "fleet-login", "fleet-account", "fleet-account-identity"].map(id => [id, fakeNode(id)]));
+    "fleet-login", "fleet-account", "fleet-account-identity", "link-state"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
   globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
@@ -137,4 +138,34 @@ test("the shared press posts once and reports partial stops as an error", async 
   bindEstop(async () => { throw Object.assign(new Error("offline"), {status: undefined}); });
   await nodes.estop.listeners.click();
   assert.match(nodes["estop-feedback"].textContent, /^비상 정지 결과 확인 불가/);
+});
+
+test("the link word follows Fleet's answers: live, late after LATE_MS, down on a failed request", () => {
+  const nodes = fakeHeader();
+  noteLink(null, 1000);
+  assert.equal(nodes["link-state"].textContent, "실시간");
+  assert.equal(nodes["link-state"].dataset.link, "live");
+  assert.equal(linkState(1000 + LATE_MS), "live");
+  assert.equal(linkState(1001 + LATE_MS), "late");
+  noteLink(Object.assign(new Error("denied"), {status: 401}), 2000);  // the server answered
+  assert.equal(nodes["link-state"].textContent, "실시간");
+  noteLink(Object.assign(new Error("bad gateway"), {status: 502}), 3000);
+  assert.equal(nodes["link-state"].textContent, "연결 끊김");
+  assert.equal(nodes["link-state"].getAttribute("status"), "crit");
+  noteLink(new TypeError("fetch failed"), 4000);
+  assert.equal(linkState(4000), "down");
+  noteLink(Object.assign(new Error("aborted"), {name: "AbortError"}), 5000);
+  assert.equal(linkState(5000), "down");  // an aborted read says nothing either way
+  noteLink(null, 6000);
+  assert.equal(nodes["link-state"].textContent, "실시간");
+  assert.equal(nodes["link-state"].getAttribute("status"), "neutral");
+});
+
+test("the clock tick writes the time and repaints the link word when answers stop", () => {
+  const nodes = fakeHeader();
+  noteLink(null, Date.now() - LATE_MS - 1000);
+  tickClock();
+  assert.match(nodes.clock.textContent, /^\d\d:\d\d:\d\d$/);
+  assert.equal(nodes["link-state"].textContent, "지연");
+  assert.equal(nodes["link-state"].getAttribute("status"), "warn");
 });

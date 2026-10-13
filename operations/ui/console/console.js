@@ -27,7 +27,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
-import { bindEstop, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
+import { bindEstop, noteLink, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -396,6 +396,7 @@ async function refreshState() {
     life.check();
     pathSample.fleet = { finished: true, status: 200 };
     fleetAnswered = true;
+    noteLink();
     paintSitePath();
     view.robots = snapshot.robots;
     view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
@@ -419,6 +420,7 @@ async function refreshState() {
     }
   } catch (err) {
     if (err.name === "AbortError") return;
+    noteLink(err);
     if (!fleetAnswered) {
       pathSample.fleet = typeof err.status === "number"
         ? { finished: true, status: err.status }
