@@ -847,3 +847,17 @@ def test_hidden_untracked_files_still_block_signed_code(tmp_path, guard):
         signed.mkdir()
         assert "differs" in m.checkout_script_conflict(signed, repo, script.relative_to(repo).as_posix())
     assert script.read_bytes() == b"local edit\n"
+
+@pytest.mark.parametrize("missing", [
+    "middleware/perception/localization/loc_assist.py",
+    "middleware/perception/graph_health/watch.py",
+    "middleware/perception/snapshots/capture_trigger.py",
+])
+def test_functional_holder_cannot_be_omitted_from_signed_release(tmp_path, keys, missing):
+    m = module()
+    assert missing in m.SPLIT_REQUIRED
+    helper = {"middleware/perception/control/_source_layout.py": b"pass\n"}
+    helper.update({name: b"source\n" for name in m.SPLIT_REQUIRED if name != missing})
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="source-holder dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")

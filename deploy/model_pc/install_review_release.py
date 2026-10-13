@@ -22,7 +22,22 @@ SERVICE = "rosy-review-v13.service"
 APP = Path("learning/curation/perception/review_app.py")
 WEB = Path("learning/curation/perception/review_app_web")
 LEGACY_APP = Path("learning/training/perception/dataset/review_app.py")
-SPLIT_REQUIRED = ("middleware/perception/package.xml",
+SPLIT_REQUIRED = (
+                  'middleware/perception/localization/loc_assist.py',
+                  'middleware/perception/localization/loc_assist_node.py',
+                  'middleware/perception/localization/localization_node.py',
+                  'middleware/perception/graph_health/watch.py',
+                  'middleware/perception/graph_health/watch_node.py',
+                  'middleware/perception/vision/object_observation/object_detector.py',
+                  'middleware/perception/vision/object_observation/object_detector_node.py',
+                  'middleware/perception/sensors/line_observation/ir_overlay.py',
+                  'middleware/perception/sensors/line_observation/core_law_input.py',
+                  'middleware/perception/sensors/line_observation/route_context_input.py',
+                  'middleware/perception/sensors/line_observation/route_followers.py',
+                  'middleware/perception/sensors/line_observation/line_observer_node.py',
+                  'middleware/perception/snapshots/capture_trigger.py',
+                  'middleware/perception/snapshots/capture_trigger_node.py',
+                  "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/vision/perception/__init__.py",
                   "middleware/drive/safety/command_gate.py",

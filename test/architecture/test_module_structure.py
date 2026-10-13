@@ -1643,7 +1643,7 @@ SIZE_VERDICTS = {
         "the next control re-judge needs a dated P1a step in docs/plans/ (sensing/perception move); "
         "without it, REJECT.",
     ),
-    "perception/control/line_observer_node.py": (
+    "perception/sensors/line_observation/line_observer_node.py": (
         608,
         "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
         "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 (D-468 paint inner edge). "

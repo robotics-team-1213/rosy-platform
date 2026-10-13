@@ -16,12 +16,12 @@ middleware/perception/config/line_follow.yaml
 middleware/perception/config/robot.yaml
 middleware/perception/control/calibration_relocation.py
 middleware/perception/control/dock_observer_node.py
-middleware/perception/control/ir_overlay.py
+middleware/perception/sensors/line_observation/ir_overlay.py
 middleware/perception/control/line_observer_overrides.py
 middleware/perception/control/goal_escape.py
 middleware/perception/control/ir_adc_node.py
-middleware/perception/control/line_observer_node.py
-middleware/perception/control/loc_assist_node.py
+middleware/perception/sensors/line_observation/line_observer_node.py
+middleware/perception/localization/loc_assist_node.py
 middleware/drive/safety/adapter/node.py
 middleware/perception/sensors/sensing/body.py
 middleware/perception/sensors/sensing/dock_tag.py

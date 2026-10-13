@@ -94,7 +94,7 @@ plans:
 
 ## 현재 유효한 금지사항
 
-- 순수 로직 결정은 `control/control/`, `control/planning/`, `control/sensing/`, `control/watch.py`에만 두고 ROS import를 넣지 않는다(AGENTS.md).
+- 순수 로직 결정은 `../drive/`, `sensors/sensing/`, `vision/perception/`, `localization/`, `graph_health/`, `snapshots/`, `sensors/line_observation/`, `vision/object_observation/`에만 두고 ROS import를 넣지 않는다(AGENTS.md).
 - 이 패키지의 레거시 최종 `/cmd_vel` publisher를 CORE와 나란히 기동하지 않는다(AGENTS.md, D-38).
 - `config/robot.yaml`이 단일 공유 파라미터 소스이며 per-node yaml은 이후에만 override한다(AGENTS.md).
 

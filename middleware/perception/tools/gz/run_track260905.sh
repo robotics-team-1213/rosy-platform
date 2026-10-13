@@ -106,7 +106,10 @@ slam['slam_toolbox']['ros__parameters']['resolution']=.02
 if os.environ.get('RIG_TRACK_OBSTACLES') == '1':
     slam['slam_toolbox']['ros__parameters']['scan_topic']='/mapping/scan'
 (out/'slam.yaml').write_text(yaml.safe_dump(slam))
-source_paths=sorted(list(Path('control').rglob('*.py'))+list(Path('config').glob('*.yaml'))+
+import runpy
+layout=runpy.run_path('control/_source_layout.py')
+source_paths=sorted(set(Path('control').rglob('*.py')) |
+                    {p for folder in layout['CONTROL_ROOTS'] for p in Path(os.path.relpath(folder)).glob('*.py')})+sorted(list(Path('config').glob('*.yaml'))+
                     list(Path('tools/gz').glob('*.py'))+list(Path('tools/gz').glob('*.sh')))
 try:
     source_at_start=os.environ.get('RIG_SOURCE_COMMIT') or subprocess.check_output(
