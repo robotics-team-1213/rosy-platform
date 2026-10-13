@@ -756,6 +756,7 @@
 | D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
 
 | D-753 | Fleet holder 설치 namespace·구조 증가 검사 보완 | Accepted |
+| D-755 | 공통 학습 데이터와 다중 계정 협업 연동 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
