@@ -99,7 +99,8 @@ class StuckRecoveryMixin:
             if abs(linear) > max_linear or abs(angular) > max_angular:
                 return False
             age = now - self._return_at + self._return_source_age
-            if age < 0.0 or age > c.clearance_stale_s:  # the follow path's own limit; age_pad covers the motion
+            # The follow path's own limit, never above 0.5 s whatever an overlay sets (review 2026-10-13).
+            if age < 0.0 or age > min(c.clearance_stale_s, .5):
                 return False
             points = self._return_view.points
             if not points or any(not all(math.isfinite(v) for v in p) for p in points):
