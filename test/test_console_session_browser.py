@@ -47,6 +47,7 @@ def test_console_documents_share_session_and_recover_from_expiry(console_url, fi
         asset = first.replace(".html", ".js").replace("index.js", "console.js")
         assert page.request.get(f"{base}/console/assets/{asset}").body() == (WEB / asset).read_bytes()
         page.wait_for_function("document.querySelector('#user-role').textContent === '인증 필요'")
+        open_token_access(page)  # D-519 6 / D-658 6: the token field stays inside the 토큰으로 접속 fold
         page.fill("#console-token", accepted_token)
         page.locator("#token-save").click()
         page.wait_for_function("document.querySelector('#user-role').title === 'local-operator · operator'")
@@ -102,6 +103,7 @@ def test_console_session_does_not_follow_the_document_to_another_origin(console_
         browser, page, errors = open_page(playwright, 1440, 900)
         page.route("**/api/**", serve_api)
         page.goto(console_url, wait_until="domcontentloaded")
+        open_token_access(page)  # D-519 6 / D-658 6: the token field stays inside the 토큰으로 접속 fold
         page.fill("#console-token", "origin-scoped-fleet")
         page.locator("#token-save").click()
         page.wait_for_function("document.querySelector('#user-role').title === 'origin-operator · operator'")
