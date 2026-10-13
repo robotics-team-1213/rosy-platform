@@ -58,7 +58,7 @@ COLOR_ROLES = {
     "background": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
     "background-color": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
     "border-color": {"--line-10": "--border-subtle", "--line-14": "--border-default",
-                     "--line-30": "--border-strong"},
+                     "--line-30": "--border-strong", "--line-50": "--control-line"},
 }
 
 
