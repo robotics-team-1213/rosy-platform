@@ -273,15 +273,31 @@ function renderBoxes() {
     ['x0','y0','x1','y1'].forEach((name,j) => {
       const label=document.createElement('label'); label.textContent=name;
       const input=document.createElement('input'); input.className='ui-field'; input.type='number'; input.step='0.1'; input.min='0'; input.max=String(j%2 ? frame.source.height : frame.source.width); input.value=box.bbox_xyxy[j]; input.setAttribute('aria-label',`박스 ${i+1} ${name}`);
+      const validationMessage=()=>{
+        const value=Number(input.value), limit=Number(input.max);
+        if(input.value===''||!Number.isFinite(value))return `${name}에 좌표 숫자를 입력하세요.`;
+        if(value<0||value>limit)return `${name}은 사진 범위 0~${limit} 안의 좌표로 입력하세요.`;
+        const other=box.bbox_xyxy[(j+2)%4];
+        if(j<2&&value>=other)return `${j===0?'왼쪽':'위쪽'} 좌표 ${name}은 ${j===0?'오른쪽':'아래쪽'} 좌표 ${other}보다 작아야 합니다.`;
+        if(j>=2&&value<=other)return `${j===2?'오른쪽':'아래쪽'} 좌표 ${name}은 ${j===2?'왼쪽':'위쪽'} 좌표 ${other}보다 커야 합니다.`;
+        return '';
+      };
+      input.setAttribute('aria-describedby','error');
       input.onfocus=()=> {selected=i; paint();};
       input.oninput=()=> {
         const boxes=structuredClone(frame.review.boxes); boxes[i].bbox_xyxy[j]=Number(input.value);
         const [x0,y0,x1,y1]=boxes[i].bbox_xyxy;
         if (input.value!=='' && 0<=x0 && x0<x1 && x1<=frame.source.width && 0<=y0 && y0<y1 && y1<=frame.source.height) {
+          input.removeAttribute('aria-invalid'); error();
           coordinatePreview=boxes; paint();
         }
       };
-      input.onchange=()=>edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value)); label.append(input); coordinates.append(label);
+      input.onchange=()=>{
+        const message=validationMessage();
+        if(message){input.setAttribute('aria-invalid','true');coordinatePreview=null;paint();error(message);return;}
+        input.removeAttribute('aria-invalid');error();
+        if(Number(input.value)!==box.bbox_xyxy[j])edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value));
+      }; label.append(input); coordinates.append(label);
     }); row.append(coordinates); $('boxes').append(row);
   });
   enable();
