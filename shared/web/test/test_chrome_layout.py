@@ -27,7 +27,8 @@ def test_header_keeps_one_recipe_of_named_areas():
     shell = SHELL.read_text(encoding="utf-8")
     fleet = FLEET_HEADER.read_text(encoding="utf-8")
     assert '"brand role estop" "nav nav estop"' in shell
-    # D-501/D-632: document links own their tab row; inbox and stop stay outside connection settings.
+    # D-741 3·5: the Fleet app bar is one row at every width; it folds by its shell container.
     assert '"identity status actions safety"' in fleet
-    assert '"identity safety" "status actions"' in fleet
+    assert '"identity safety" "status actions"' not in fleet
+    assert fleet.count("grid-template-areas") == 1
     assert ".fleet-header-actions { grid-area: actions;" in fleet

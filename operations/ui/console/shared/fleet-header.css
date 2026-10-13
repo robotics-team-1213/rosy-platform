@@ -42,13 +42,15 @@ ui-topbar input[type="checkbox"] { width: auto; }
 }
 #estop[disabled][reason] > small:not([data-reason]) { display: none; }
 
-/* D-658: four roles own the header; connection details have their own fold. */
+/* D-741 3·5 — 앱 바는 모든 폭에서 한 줄이다: 맥락 | 연결 | 알림·나 | 정지. 계정 상세만 아래 줄로 펼친다.
+   연결 칸이 남는 폭을 받고, 모자라면 연결 칸이 먼저 비고 그 다음 계정 단추의 역할 이름이 준다. */
 ui-topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
   grid-template-areas: "identity status actions safety";
   align-items: center;
   gap: var(--space-4);
+  min-height: var(--appbar-height);
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
@@ -80,23 +82,26 @@ ui-topbar {
 }
 .topbar-extra[data-open="true"] { display: flex; }
 #console-token { flex: 1 1 10rem; width: auto; min-width: 0; }
-@media (width < 64rem) {
+/* 접힘은 뷰포트가 아니라 셸 칸(.fleet-shell, doc-tabs.css)의 폭에 답한다(D-359 §6.3). 48rem은 surfaces.yaml에 있다. */
+@container (width < 64rem) {
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }
 }
-@media (width < 48rem) {
-  ui-topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "identity safety" "status actions";
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
-  }
-  .fleet-header-identity { container-type: inline-size; }
+@container (width < 48rem) {
+  ui-topbar { gap: var(--space-2); padding: var(--space-1) var(--space-2); }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
-  .fleet-header-actions { justify-content: flex-end; gap: 0; }
   /* 좁은 폭의 연결 자리는 평상시 조용하다. 연결 대기·지연·연결 끊김은 보인다. */
   #clock, #link-state[data-link="live"] { display: none; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
+}
+@container (width < 30rem) {
+  ui-topbar { gap: var(--space-1); }
+  /* R 심볼만 남긴다. 링크의 접근 이름(Rosy Fleet 관제 홈)은 그대로다. */
+  .fleet-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #fleet-login .ui-icon { display: none; }
+  /* 로그인 전에는 읽을 알림이 없다. 로그인 글과 계정 단추가 그 폭을 쓴다. */
+  .fleet-header-actions:has(#fleet-login:not([hidden])) #fleet-inbox { display: none; }
+  #fleet-inbox { gap: var(--space-1); }
+  #estop .ui-icon { width: var(--space-4); height: var(--space-4); }
 }

@@ -94,3 +94,18 @@ def test_document_sheets_do_not_paint_the_header():
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
     assert ".fleet-footer" not in (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")
+
+
+def test_app_bar_folds_by_the_shell_container_not_the_viewport():
+    """D-741 5 / D-359 §6.3 — 접힘은 셸 칸의 폭에 답한다. 앱 바 높이는 공용 자리 토큰이다."""
+    header_sheet = (WEB / "shared/fleet-header.css").read_text(encoding="utf-8")
+    tabs_sheet = (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")
+    assert "@media" not in header_sheet
+    assert set(re.findall(r"@container \(([^)]+)\)", header_sheet)) == {
+        "width < 64rem", "width < 48rem", "width < 30rem"}
+    assert "container-type" not in header_sheet, "칸은 셸 하나다"
+    assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
+    assert tabs_sheet.count("container-type") == 1
+    assert re.findall(r"@media ([^{]+?)\s*\{", tabs_sheet) == ["(width >= 64rem) and (height >= 40rem)"]
+    assert "min-height: var(--appbar-height);" in header_sheet
+    assert "var(--rail-track)" in tabs_sheet
