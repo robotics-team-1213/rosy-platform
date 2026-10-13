@@ -7,7 +7,8 @@ import math
 from dataclasses import dataclass, replace
 from threading import Lock, local
 from uuid import uuid4
-from .lidar_guard import TranslationEvidence, command_translation_bumpers
+from .lidar_guard import (ForwardEvidence, TranslationEvidence, command_forward_arc_clear,
+                          command_translation_bumpers)
 from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
 
 #: D-424: forward speed share left while the camera is unavailable or warming up. Policy, not
@@ -56,6 +57,7 @@ class GateSnapshot:
     translation: TranslationEvidence | None = None
     tracking: TrackedEvidence | None = None
     linear_limit: float | None = None
+    forward: ForwardEvidence | None = None
 
 
 class CommandPolicy:
@@ -91,7 +93,7 @@ class CommandPolicy:
             self._snapshot = None
 
     def update_observations(self, observations, required, inputs, now, sequence, applied_revision, *, translation=None,
-                            tracking=None, linear_limit=None):
+                            tracking=None, linear_limit=None, forward=None):
         """Capture classified state and clocks in one serialized producer callback.
 
         The producer supplies its actually applied revision. Never label sensor
@@ -104,7 +106,7 @@ class CommandPolicy:
             self.invalidate()
             return False
         return self.update(GateSnapshot(self.session, sequence, applied_revision, *window, inputs,
-                                        translation, tracking, linear_limit))
+                                        translation, tracking, linear_limit, forward))
 
     def update(self, snapshot):
         if (not isinstance(snapshot, GateSnapshot) or snapshot.session != self.session or
@@ -167,6 +169,14 @@ class CommandPolicy:
             current_sequence=self._sequence)
 
     def evaluate(self, linear, angular, now, *, allow_bounded_sweep=False):
+        """One decision on one snapshot; replaced mid-evaluation it is judged once more, then refused."""
+        output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
+        detail = getattr(self._evaluation, 'unavailable', None)
+        if output is None and detail is not None and detail['reason'] == 'snapshot_changed':
+            output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
+        return output
+
+    def _evaluate_once(self, linear, angular, now, allow_bounded_sweep):
         self._evaluation.unavailable = None
         with self._lock:
             snapshot = self._snapshot
@@ -190,6 +200,17 @@ class CommandPolicy:
                 front, rear = command_translation_bumpers(snapshot.translation, linear, angular, now)
                 state = replace(state, obstacle=state.obstacle or front, rear_blocked=state.rear_blocked or rear)
             result = evaluate_command(linear, angular, replace(state, command_age=0.))
+            if (linear > 0. and angular != 0. and (result.linear, result.angular) != (linear, angular)
+                    and (state.can_rotate is False or state.obstacle)
+                    and isinstance(snapshot.forward, ForwardEvidence)):
+                # D-740: a forward arc is judged by its own stopping sweep, not the pivot circle or the
+                # straight front strip; only the unchanged twist, only when nothing else restricts it.
+                admitted = evaluate_command(linear, angular, replace(
+                    state, command_age=0., can_rotate=True,
+                    obstacle=state.obstacle and snapshot.forward.front_blocked_other is not False))
+                if ((admitted.linear, admitted.angular, admitted.reason) == (linear, angular, 'allow')
+                        and command_forward_arc_clear(snapshot.forward, linear, angular, now)):
+                    result = admitted
             if snapshot.tracking is not None and result.reason in ('allow', 'motion_limited', 'trajectory_changed'):
                 if not isinstance(snapshot.tracking, TrackedEvidence):
                     raise ValueError('Invalid tracking evidence')

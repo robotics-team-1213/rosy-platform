@@ -176,6 +176,38 @@ def command_translation_bumpers(evidence, linear, angular, now):
             lidar_blocked(evidence.travel[1], evidence.travel[1], evidence.previous_rear, 0., .010, True))
 
 
+@dataclass(frozen=True)
+class ForwardEvidence:
+    """D-740: one scan for the forward-arc stopping sweep; never motion authority."""
+    scan_received_at: float
+    scan_source_at: float
+    points: tuple
+    observed: bool
+    body: object
+    limits: tuple
+    front_blocked_other: bool | None = None  # non-LiDAR front block (ultrasonic); None stays blocked
+
+
+def command_forward_arc_clear(evidence, linear, angular, now):
+    """D-740: this forward arc's swept body clears the scan out to its stop; else the pivot rule stays."""
+    def finite(value):
+        return type(value) in (int, float) and math.isfinite(value)
+    if (not isinstance(evidence, ForwardEvidence) or evidence.observed is not True or
+            type(evidence.points) is not tuple or
+            not all(finite(v) for v in (linear, angular, now, evidence.scan_received_at,
+                                       evidence.scan_source_at)) or
+            linear <= 0. or angular == 0.):
+        return False
+    scan_age, source_age = now - evidence.scan_received_at, now - evidence.scan_source_at
+    if not 0. <= scan_age <= .5 or not 0. <= source_age <= .5:
+        return False
+    from .footprint_sweep import forward_stopping_sweep_clearance
+    clearance = forward_stopping_sweep_clearance(  # previous command taken as no faster (D-740 rev 1)
+        evidence.points, body=evidence.body, linear=linear, angular=angular, limits=evidence.limits,
+        previous_limits=(linear, abs(angular)), scan_age=scan_age, source_age=source_age)
+    return clearance is not None and clearance > 0.
+
+
 def lidar_can_rotate(ranges, radius, fresh, base_clearance=None, *, sweep_radius=None):
     """D-424: the body sweeps at least the URDF rotation radius (never less, whatever the
     configured radius) + 0.010. Seen points decide; a sector without a return is unknown

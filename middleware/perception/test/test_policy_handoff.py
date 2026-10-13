@@ -106,16 +106,27 @@ class PolicyUnavailableDiagnosticsTests(unittest.TestCase):
         self.assertEqual(detail['current_sequence'], 1)
         self.assertIsNone(detail['observed_at'])
 
-    def test_replacement_records_both_sequences_and_still_refuses_the_candidate(self):
+    def test_one_replacement_is_judged_on_the_newer_snapshot_and_a_second_refuses(self):
         from control.control.command_gate import evaluate_command
+        sequences = iter(range(2, 9))
         def replace_during_evaluation(*args):
-            self.assertTrue(self.policy.update(replace(self.snapshot, sequence=2)))
+            self.assertTrue(self.policy.update(replace(self.snapshot, sequence=next(sequences))))
             return evaluate_command(*args)
         with patch('control.control.command_gate.evaluate_command', replace_during_evaluation):
             self.assertIsNone(self.policy.evaluate(.01, 0., 10.1))
         detail = self.policy._take_unavailable_detail()
         self.assertEqual((detail['reason'], detail['sequence'], detail['current_sequence']),
-                         ('snapshot_changed', 1, 2))
+                         ('snapshot_changed', 2, 3))
+        calls = []
+        def replace_once(*args):
+            if not calls:
+                self.assertTrue(self.policy.update(replace(self.snapshot, sequence=9)))
+            calls.append(1)
+            return evaluate_command(*args)
+        with patch('control.control.command_gate.evaluate_command', replace_once):
+            snapshot, result = self.policy.evaluate(.01, 0., 10.1)
+        self.assertEqual((snapshot.sequence, len(calls)), (9, 2))
+        self.assertIsNone(self.policy._take_unavailable_detail())
 
     def test_diagnostics_are_thread_local_and_success_does_not_leave_a_failure(self):
         barrier = Barrier(2)

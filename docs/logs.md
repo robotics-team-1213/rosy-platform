@@ -8260,3 +8260,10 @@ osy-d395-s1d\`.
 - 증거: source candidate commit b3687f8dec 원격 17,827 passed/929 skipped/NEW 0. 최신 main의 후속 차이는 SSH/문서이고 Drive·Fleet·source mapping은 동일하다. 최종 차이/구조/설치 closure 검사는 X: drive-holder-s1 세션에 기록한다.
 - gate 변화: SOURCE/원격 관련 검사 PASS. local main은 ff-only 도구 종료와 readback으로 확인하며 FULL CI·이미지·ROS·장치·현장 증거는 미확인이다.
 - 결정: 통과한 source suite를 후속 metadata 검사 SHA의 결과로 집계하지 않는다. 실패·중단 로그 보존, source/package identity와 동료 WIP 유지, push 미실행.
+
+## 2026-10-13 · uncommitted · fix(review): port the D-485 acceptance defect fixes onto the restructured tree
+
+- 변경: 옛 브랜치 `fix/review-class-set-e2e`(2026-10-07)의 미병합 수정을 `learning/curation/perception`으로 옮겼다. 시작 거부(다른 `--object-classes`, 기존 state에 `--source`, data.yaml에 없는 라벨)는 traceback 대신 exit 2 한 줄이고 라벨 이름과 허용 클래스를 말한다. `/catalog`에 선택 「클래스 파일 경로 (classes.yaml)」 칸을 두고, 픽셀 클래스가 아직 없는 작업 공간은 초안 없는 카탈로그도 옆 `classes.yaml`로 묶는다. 다른 클래스셋 초안은 계속 거부하되 이유를 한국어로 알린다. 옛 클래스 이름을 가정한 픽셀 화면 안내 문구를 지웠다.
+- 증거: 원격 pytest와 브라우저 결과는 이 브랜치의 착지 보고에 둔다.
+- gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
+- 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
