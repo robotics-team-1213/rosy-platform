@@ -50,6 +50,56 @@ def browser_workspace(tmp_path):
         yield value
 
 
+@pytest.mark.parametrize('route', ['/', '/pixels', '/learning', '/catalog'])
+def test_all_review_pages_offer_keyboard_command_search(browser_workspace, route):
+    page, _, expect = browser_workspace
+    base = page.url.split('?')[0].rstrip('/')
+    page.goto(base + route, wait_until='networkidle')
+    opener = page.locator('#review-command-open')
+    opener.focus()
+    page.keyboard.press('Control+k')
+    expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
+    search = page.get_by_role('textbox', name='기능 검색어')
+    expect(search).to_be_focused()
+    search.fill('자료 등록')
+    expect(page.locator('#review-command-results ui-button').first).to_contain_text('자료 등록')
+    page.keyboard.press('Escape')
+    expect(opener).to_be_focused()
+    page.keyboard.press('Control+k')
+    search.fill('자료 등록')
+    page.keyboard.press('Enter')
+    expect(page).to_have_url(base + '/catalog')
+
+
+def test_command_search_keeps_approval_guards_and_opens_coordinate_fields(browser_workspace):
+    page, store, expect = browser_workspace
+    before = store.get(0)
+    page.keyboard.press('Control+k')
+    search = page.get_by_role('textbox', name='기능 검색어')
+    search.fill('검수 승인')
+    expect(page.locator('#review-command-results ui-button').first).to_be_disabled()
+    page.keyboard.press('Enter')
+    assert store.get(0) == before
+    page.keyboard.press('Escape')
+    page.keyboard.press('Control+k')
+    search.fill('박스 1 x0')
+    page.keyboard.press('Enter')
+    field = page.get_by_role('spinbutton', name='박스 1 x0', exact=True)
+    expect(field).to_be_focused()
+    field.fill('2'); field.press('Tab')
+    expect(page.locator('#save-status')).to_contain_text('v2')
+    assert store.get(0)['review']['boxes'][0]['bbox_xyxy'][0] == 2
+
+
+def test_command_shortcuts_do_not_run_while_typing_or_composing(browser_workspace):
+    page, store, expect = browser_workspace
+    page.get_by_role('spinbutton', name='박스 1 x0', exact=True).focus()
+    page.keyboard.press('u')
+    assert store.get(0)['status'] == 'approved'
+    page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {key:'k',code:'KeyK',ctrlKey:true,isComposing:true,bubbles:true}))")
+    expect(page.get_by_role('dialog', name='기능 검색')).not_to_be_visible()
+
+
 @pytest.mark.parametrize('field,value,message', [
     ('x0', '12', '왼쪽 좌표'),
     ('y1', '0', '아래쪽 좌표'),
