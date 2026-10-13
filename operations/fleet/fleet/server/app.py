@@ -117,6 +117,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                site_logins: Optional[Mapping[str, Mapping[str, str]]] = None,
                accounts_bootstrap: Optional[tuple[str, str]] = None,
+               account_config: Optional[Path] = None,
                discovery=None, discovery_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
@@ -205,7 +206,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if cell_job_compiler is not None:
         from fleet.server.cell_goal_evidence import make_cell_job_resolver
         cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
-    if (site_users is not None or site_logins or accounts_bootstrap is not None) and task_service is None:
+    if (site_users is not None or site_logins or accounts_bootstrap is not None
+            or account_config is not None) and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
         raise ValueError("discovery and its dedicated credential must be configured together")
@@ -472,12 +474,34 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  or tuple(tracking.sources) != tuple(sightings.sources)):
         raise ValueError("overhead tracking must use the configured sighting sources")
     # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
+    authority = None
+    if account_config is not None:
+        from fleet.server.account_config import load_account_config
+        from fleet.server.account_authority import AccountAuthority
+        settings = load_account_config(account_config)
+        admin = settings.pop("bootstrap_admin_login", None)
+        site_id = settings.pop("site_id")
+        if accounts_bootstrap is not None:
+            raise ValueError("use one explicit Account bootstrap configuration")
+        if admin is not None:
+            accounts_bootstrap = (admin, site_id)
+        if accounts_bootstrap is None and not PasswordSessions.accounts_active(task_service.store.path):
+            raise ValueError("Account first activation requires an explicit existing administrator login")
+        authority = AccountAuthority(task_service.store.path, **settings,
+            resolve_family=lambda db, family: password_sessions.context_by_family(family, db=db),
+            revoke_family=lambda db, family: password_sessions.revoke_family(family, db=db))
     account_login = bool(site_logins) or accounts_bootstrap is not None or (
         task_service is not None and PasswordSessions.accounts_active(task_service.store.path))
     principals = {} if account_login and not site_users else parse_site_principals(site_users, console)
     password_sessions = (PasswordSessions(task_service.store.path, site_logins or {},
                                          accounts_bootstrap=accounts_bootstrap) if account_login else None)
     app.state.password_sessions = password_sessions
+    app.state.account_authority = authority
+    if authority is not None:
+        if password_sessions._ledger.site_id != site_id:
+            raise ValueError("Account configured site does not match the activated authority")
+        from fleet.server.account_authority_routes import install_account_authority_routes
+        install_account_authority_routes(app, sessions=password_sessions, authority=authority)
     other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (

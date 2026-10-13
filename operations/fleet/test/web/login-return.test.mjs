@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {loginReturn, loginHref} from '../../../site_ui/console/shared/login-return.js';
 
 const origin = 'https://fleet.test';
+test('Account authorization returns preserve only bounded protocol fields on this origin', () => {
+  const target = '/api/fleet/auth/authorize?response_type=code&client_id=pilot&redirect_uri=https%3A%2F%2Frobot.test%2Fcallback&scope=robot%3Ar1&state=s&code_challenge=' + 'x'.repeat(43) + '&code_challenge_method=S256';
+  assert.equal(loginReturn(target, origin), target);
+  assert.equal(loginReturn(target + '&token=secret', origin), '/console');
+  assert.equal(loginReturn('/console/accounts', origin), '/console/accounts');
+  assert.equal(loginReturn('https://evil.test' + target, origin), '/console');
+});
 test('return restores Fleet documents and existing work/inbox readers', () => {
   for (const path of ['/console', '/console/install', '/console/site-map', '/console/cell']) {
     assert.equal(loginReturn(path, origin), path);
