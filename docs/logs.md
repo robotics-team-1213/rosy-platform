@@ -8218,3 +8218,9 @@ osy-d395-s1d\`.
 - gate 변화: 계획은 PLANNED. 제품 정리 구현·이동·삭제·push·배포·장치 수용은 하지 않는다.
 - 결정: 첫 실제 실행은 P0만, 구조 단계는 D-738 순서 그대로다. proof는 runtime dependency 추가보다 기존 시험의 동등성 guard를 먼저 선택한다.
 - 교훈: 조사/계획의 local main 반영과 정리 구현·실물 수용을 구분한다.
+
+## 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 변경: 폴더 조사 보고서의 Git SHA 두 곳에 `commit` 문맥을 명시했다. 검사 규칙·known_failures 목록은 바꾸지 않았다.
+- 증거: 첫 착지 원격 검사 370 passed/1 NEW(`test_no_secrets_in_tracked_files`). 원인은 보고서 3/12행의 공개 Git revision 표기였다. 기존 scan_text로 수정 전 high-entropy-token 2건, 수정 후 보고서·계획 0건을 확인했다. 이 정적 확인은 원격 재검증을 대신하지 않는다.
+- gate 변화: 첫 착지는 중단되어 main 미반영. 수정 커밋 이후 `tools/land.py --tests auto` 전체 affected/known_failures 재검증으로 다시 착지한다.
+- 결정: 비밀정보 검사 완화 없이 공개 commit 출처만 분명히 표기한다.
