@@ -118,7 +118,7 @@ function draw(payload) {
     ctx.fillStyle = tone(id === homeId ? "--home" : "--away");
     wedge(X(pose.x), Y(pose.y), pose.yaw, Math.max(11, 7 * displayScale));
     ctx.fillStyle = tone("--pitch-ink");
-    ctx.font = window.RosyPalette.canvasFont(12 * displayScale, "body");
+    ctx.font = window.RosyPalette.canvasFont("micro", "body", displayScale);
     ctx.fillText(id, X(pose.x) + 8 * displayScale, Y(pose.y) - 8 * displayScale);
   });
   if (payload.ball) {

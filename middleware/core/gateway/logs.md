@@ -1011,3 +1011,63 @@
 - 변경: 인식 콜백이 마지막 발행 seq 대신 그 순간 CORE의 지시/호 seq를 확인한다. 다른 번호의 관측은 즉시 무효화하고 교차로 감지는 버린다.
 - 증거: gateway 관련 46 passed, 독립 안전 검토, 문서/구조 36 passed. ROS 그래프는 미검증.
 - gate 변화: P1 SOURCE 후보.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전을 인계에 싣는다
+- 변경: `face_inputs_payload`가 stuck·reason·angular·junction으로 `signal`을 만든다. 없는 필드는 신호 없음.
+- 증거: `test_face_inputs.py`.
+- gate 변화: SOURCE.
+- 결정: D-583
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · refactor: CORE Drive 조립 책임 분리
+
+- 변경: D-627 core/drive의 line-follow 배선·docking/swarm 조립을 추출하고 legacy import와 CoreServices 공개 attribute·동일 객체·listener 순서를 유지했다. services.py는 481줄이다. 새 배선 Safety 추적과 앵커 4개를 등록했다.
+- 증거: 추출 전 원격 257 성공, 후보 전체 CORE와 실제 wheel 설치 2575 성공·10 skip, feature 1675 성공. 독립 Safety source 승인과 최초 구현 trailer, 현재 holder를 따르는 종료/사건 scanner 검증. 세부 결과는 docs/validation/d626-holder-migration-2026-10-11/result.md.
+- gate 변화: 없음. 기존 ROS-SIM evidence를 이 후보에 확대하지 않는다. 새 graph·ARM64·장치·현장 수용 미확인.
+
+## 2026-10-12 · uncommitted · 정지 기동 시 교통 정책 snapshot 일치
+
+- 변경: CoreServices가 교통 관리자를 생성한 직후 실제 status를 StateManager에 반영한다. 관측·주행 tick이 없어도 기본 DISABLED 값이 활성 설정을 가리지 않는다. 명령·정책 gate는 변경하지 않는다.
+- 증거: A21 설정 ENFORCED와 snapshot DISABLED 불일치를 추적했다. 기본 snapshot 초기값과 비활성 line-follow tick의 early return을 확인했다. 세 모드의 관측 없는 기동에서 API 관리자 status와 snapshot 일치·HOLD/no_road_evidence 보존 회귀를 추가했다. 원격 시험과 native 직접 readback은 아직 미확인이다.
+- gate 변화: 없음. 신호·위치·도로 증거·명령 admission과 완주 수용은 기존 기준을 유지한다.
+
+## 2026-10-12 · 077d2e475 · API 시작 전 유효 주행법칙 handover 기록
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로
+
+- 변경: `face_line_note`가 발행된 `line_follow.reason`만 본다. `crosswalk_`와 `ir_guard_crosswalk`는 횡단보도, 차선 가장자리 셋은 차선 가장자리, `stuck_yield`는 양보다. 그 이름으로 붙은 HOLD는 선 소실 주의를 내지 않는다. 각속도가 있는 양보는 기존 좌우 신호가 남는다.
+- 증거: `test_face_inputs.py`에 사유별 노트와 양보 회전·일반 HOLD 시험을 넣었다. 원격 pytest는 커밋 전이라 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
+
+## 2026-10-12 · 47ace984f2 · 내장 센서 이름과 CORE clock 전달
+
+- 변경: 명시 namespace의 sensor-only SafetyNode가 CORE 전역 이름 remap에 덮이지 않도록 자체 이름만 지정한다. CORE는 실제 use_sim_time을 센서 생성에 전달하며 기존 namespace·topic remap을 유지한다.
+- 증거: 실제 Jazzy 실행을 포함한 정상 원격 115 PASS/NEW 0, 독립 SOURCE 승인이다. 별도 안전 gate 계약도 NEW 0이다. 실제 Gazebo graph에서 이 후보의 readback은 다음 실행에서 확인한다.
+- gate 변화: 없음. Leg4 실행 소스는 e6d0fe12ba이며 0.311955m 뒤 전방 제한으로 정지했다. 원본 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · af76fcc5f · 관측 표식의 가까운 경계와 기존 교통 gate 검증
+
+- 변경: 실제 road detector와 payload 변환을 통과한 두꺼운 정지선·거리 미확인 표식을 기존 CORE 교통 정책으로 검증하는 시험을 추가했다. CORE 제품 정책·모드·안전 상한은 바꾸지 않았다.
+- 증거: 중앙 거리로는 양수 APPROACH가 나왔던 RED를 가까운 경계로는 기존 stop_distance에 들어가 STOP_REQUIRED/zero가 되는 것으로 검증했다. 지평선 바로 아래 먼 표식의 거리None은 HOLD/stop_distance_unavailable을 유지한다. 정상 원격 관련 234 PASS/NEW 0이다.
+- gate 변화: SOURCE/원격 SDK 계약 증거만 추가한다. 관측 의미 분류와 실제 Gazebo 주행·완주·실물 수용은 별도 검증 대상이다.
+
+## 2026-10-12 · d3bd5513c · 이동 교통 감속과 실제 command SDK 정합성
+
+- 변경: gateway 제품 bridge는 바꾸지 않았다. static profile clip 이후의 주행 호가 공유 교통 정책·CommandManager 곡률 보존 제한을 지나 유지되고 같은 traffic 적용 값이 issued trail에 기록되는지 검증했다.
+- 증거: 정책의 이동 선속도만 줄이면 실제 SDK에서 곡률 3.2가 9.2로 바뀌는 RED가 났다. D-735 수정 뒤 관련 402개 시험은 정상 원격에서 통과했고 독립 SOURCE 승인이다. stale 또는 새 evidence/revision은 기존 적용 거절을 유지한다.
+- gate 변화: SOURCE/원격 SDK 증거만 추가한다. 실제 수정 후보 Gazebo 주행·완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
+
+- 변경: 시험만 추가한다. 카메라가 역산한 추종 오차를 실제 `LineFollowManager._steer`에 넣으면, Pinky 0.10/2.0을 포함한 불러온 법칙에서 각속도/선속도가 기하 곡률과 같다. 공백 구간의 ExpectedPath도 같은 인스턴스 법칙을 쓴다.
+- 증거: `test_line_follow_drivable_law.py`. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음.

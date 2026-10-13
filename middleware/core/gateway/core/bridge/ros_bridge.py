@@ -257,7 +257,8 @@ class RosBridge:
         self.docking_executor = BridgeDockingExecutor(
             self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
-            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
+            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info,
+            transport_snapshot=self._goals.transport_snapshot)
         self._svc.docking.executor = self.docking_executor
         # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
         # It must be the robot node's clock (its ttl counts from it): both nodes share
@@ -337,7 +338,7 @@ class RosBridge:
         odometry.observe_lane_return(self, msg, sample)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
-            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
+            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
@@ -429,6 +430,7 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
+        self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
         if not self._svc.line_follow.active or self._svc.safety.estop:
             self._publish_route_context(None)
             return
@@ -805,6 +807,12 @@ class RosBridge:
         except Exception as exc:  # 추종 실패가 브리지 루프를 멈추면 안 된다
             self._node.get_logger().warning(f"swarm tick failed: {exc}")
 
+    def _tick_trail(self) -> None:
+        try:
+            self._svc.swarm.trail_tick(self._line_clock())
+        except Exception as exc:  # a failed tick holds (the nav twist ages out in 0.5 s)
+            self._node.get_logger().warning(f"trail tick failed: {exc}")
+
     def _tick_docking(self) -> None:
         docking = self._svc.docking
         self._dock_ticks += 1
@@ -815,6 +823,10 @@ class RosBridge:
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
     def send_goal(self, spec: NavGoalSpec, *, correlation_id: str | None = None) -> None:
+        self.send_native_goal(spec, None, correlation_id=correlation_id)
+
+    def send_native_goal(self, spec: NavGoalSpec, native_run_id,
+                         *, correlation_id: str | None = None) -> None:
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = spec.frame
         goal.pose.header.stamp = self._node.get_clock().now().to_msg()
@@ -824,7 +836,7 @@ class RosBridge:
         goal.pose.pose.orientation.w = math.cos(spec.yaw / 2.0)
         if not self.nav_client.wait_for_server(timeout_sec=0.0):
             self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
-        generation = self._goals.opening(correlation_id)
+        generation = self._goals.opening(correlation_id, native_run_id)
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(
             lambda done, gen=generation: self._goal_response_cb(done, gen))
@@ -847,6 +859,9 @@ class RosBridge:
         if handles:
             self._node.get_logger().info(
                 f"navigation cancel requested ({len(handles)} goal(s))")
+
+    def native_transport_snapshot(self):
+        return self._goals.transport_snapshot()
 
     def send_initial_pose(self, x: float, y: float, yaw: float) -> None:
         msg = PoseWithCovarianceStamped()

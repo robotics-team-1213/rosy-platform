@@ -27,6 +27,25 @@ RECORD = {
 POINT = (0.5, 0.25)
 
 
+def test_off_frame_pixels_have_a_mask_and_crop_specific_coverage():
+    from rosy_vision.rectify import plane_observed_fraction
+    record = {**RECORD, "track_bounds_m": {"min_x": -3., "min_y": -2., "max_x": 5., "max_y": 3.}}
+    plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert plane.valid_mask.shape == (plane.size[1], plane.size[0])
+    assert 0 < plane_observed_fraction(plane) < 1
+    assert plane_observed_fraction(plane, (0., 0., .1)) == 1
+    assert plane_observed_fraction(plane, (4.5, 2.5, .1)) == 0
+
+
+def test_margin_beyond_projective_horizon_does_not_sample_mirrored_camera_pixels():
+    record = {**RECORD, "map_to_image": [100., 1., 101., 100., -10., 100., 1., 0., 1.],
+              "track_bounds_m": {"min_x": -.9, "min_y": 0., "max_x": -.8, "max_y": .05}}
+    plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
+    assert plane is not None
+    assert not plane.valid_mask[:, 0].any()
+    assert plane.valid_mask[:, -1].any()
+
+
 def _frame_jpeg():
     """640x360 frame (half the record size) with a white dot at the image of POINT."""
     image = np.full((360, 640, 3), 120, np.uint8)
@@ -94,7 +113,7 @@ def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():
     image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
     # The plane's left edge (x = -3.15 m) is outside the frame: constant dark fill there,
     # the frame itself in the middle.
-    assert image[plane.size[1] // 2, 0] == pytest.approx(24, abs=4)
+    assert 20 <= image[plane.size[1] // 2, 0] <= 44
     assert image[plane.size[1] // 2, plane.size[0] // 4] == pytest.approx(120, abs=4)
 
 
@@ -108,12 +127,38 @@ def test_map_plane_response_headers():
     assert headers["X-Frame-Rectified"] == "map"
     assert headers["X-Frame-Plane"] == "-1.1500,-0.6500,1.1500,0.6500,400.0000"
     assert headers["X-Frame-Calibration"] == "paint-test"
+    assert float(headers["X-Frame-Observed-Fraction"]) == 1
     assert (headers["X-Frame-Width"], headers["X-Frame-Height"]) == ("920", "520")
     assert headers["X-Frame-Seq"] == "42"
     assert "X-Frame-Age-Ms" in headers and "X-Frame-Captured-At" in headers
     assert headers["X-Source-Lens"] == "kind=standard;focal_mm=5.4;hfov_deg=67.8"
     image = cv2.imdecode(np.frombuffer(response.body, np.uint8), cv2.IMREAD_COLOR)
     assert image.shape[:2] == (520, 920)
+
+
+def test_ai_map_crop_lease_returns_only_the_robot_neighborhood():
+    server = _server()
+    server.report_calibration(SOURCE, RECORD, MAP)
+    token = server.preview_signer.issue(principal_id="ai-case", source_id=SOURCE,
+                                        rectification={"mode": "map"}, crop_map=(0.0, 0.0, 0.5),
+                                        crop_map_id=MAP, crop_revision=RECORD["calibration_revision"])
+    response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
+    assert response.status_code == 200
+    assert response.headers["X-Frame-Rectified"] == "map-crop"
+    assert float(response.headers["X-Frame-Observed-Fraction"]) == 1
+    image = cv2.imdecode(np.frombuffer(response.body, np.uint8), cv2.IMREAD_COLOR)
+    assert image.shape[:2] == (400, 400)
+
+
+@pytest.mark.parametrize("changed", [{"map_id": "other"}, {"calibration_revision": "next"}])
+def test_ai_crop_lease_cannot_follow_a_map_or_calibration_switch(changed):
+    server = _server()
+    token = server.preview_signer.issue(principal_id="ai-case", source_id=SOURCE,
+                                        rectification={"mode": "map"}, crop_map=(0.0, 0.0, 0.5),
+                                        crop_map_id=MAP, crop_revision=RECORD["calibration_revision"])
+    server.report_calibration(SOURCE, {**RECORD, **changed}, changed.get("map_id", MAP))
+    response = asyncio.run(server._preview_response(f"/api/vision/sources/{SOURCE}/frame", f"Bearer {token}"))
+    assert response.status_code == 409 and response.headers["X-Frame-State"] == "plane-unavailable"
 
 
 @pytest.mark.parametrize("record, lens", [

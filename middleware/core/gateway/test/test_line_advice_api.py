@@ -9,6 +9,7 @@ OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 URL = "/api/v1/line-follow/advice"
 ROOT = Path(__file__).resolve().parents[4]
 FEATURES = ROOT / "middleware/core/services/core_features"
+BEHAVIORS = ROOT / 'middleware/control/drive/behaviors'
 
 
 def _body(**fields):
@@ -44,8 +45,8 @@ def test_bad_ttl_is_a_validation_error(core_client):
 
 
 def test_no_line_follow_module_imports_or_names_the_advice():
-    modules = list((FEATURES / "line_follow").rglob("*.py")) + list((FEATURES / "decision").rglob("*.py"))
-    assert FEATURES / "line_follow/authority.py" in modules
+    modules = list((BEHAVIORS / "line_follow").rglob("*.py")) + list((FEATURES / "decision").rglob("*.py"))
+    assert BEHAVIORS / "line_follow/authority.py" in modules
     for path in modules:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             names = []

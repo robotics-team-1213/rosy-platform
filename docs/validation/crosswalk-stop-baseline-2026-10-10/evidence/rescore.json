@@ -1,0 +1,462 @@
+{
+ "empty_01": {
+  "verdict": "passed",
+  "stopped_before_crosswalk": true,
+  "first_stop": {
+   "t0": 377.17,
+   "edge_m": 0.196,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "keep": "no_boundary",
+   "body_gap_m": null,
+   "clearance_source": null,
+   "t1": 380.08,
+   "dur_s": 2.9
+  },
+  "stops": [
+   {
+    "t0": 377.17,
+    "edge_m": 0.196,
+    "state": "HOLD",
+    "reason": "camera_line_not_visible",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 380.08,
+    "dur_s": 2.9
+   },
+   {
+    "t0": 394.976,
+    "edge_m": -0.278,
+    "state": "OFF",
+    "reason": "mode_off",
+    "keep": null,
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 396.355,
+    "dur_s": 1.4
+   }
+  ],
+  "entered_crosswalk": true,
+  "passed_crosswalk": true,
+  "min_gap_to_ped_m": null,
+  "collision": false,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.068,
+  "end_front_to_near_edge_m": -0.278,
+  "sim_s": 21.7,
+  "result": "passed",
+  "trip_at_end": {
+   "state": "running",
+   "reason": null,
+   "hold": null,
+   "detail": {}
+  }
+ },
+ "legs_01": {
+  "verdict": "stopped_before",
+  "stopped_before_crosswalk": true,
+  "first_stop": {
+   "t0": 412.338,
+   "edge_m": 0.028,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0306,
+   "clearance_source": "lidar",
+   "t1": 417.193,
+   "dur_s": 4.9
+  },
+  "stops": [
+   {
+    "t0": 412.338,
+    "edge_m": 0.028,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0306,
+    "clearance_source": "lidar",
+    "t1": 417.193,
+    "dur_s": 4.9
+   },
+   {
+    "t0": 419.983,
+    "edge_m": 0.109,
+    "state": "HOLD",
+    "reason": "stuck_settling",
+    "keep": null,
+    "body_gap_m": 0.0986,
+    "clearance_source": "lidar",
+    "t1": 420.993,
+    "dur_s": 1.0
+   },
+   {
+    "t0": 422.276,
+    "edge_m": 0.027,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0188,
+    "clearance_source": "lidar",
+    "t1": 427.141,
+    "dur_s": 4.9
+   },
+   {
+    "t0": 429.922,
+    "edge_m": 0.108,
+    "state": "HOLD",
+    "reason": "stuck_settling",
+    "keep": null,
+    "body_gap_m": 0.0949,
+    "clearance_source": "lidar",
+    "t1": 430.944,
+    "dur_s": 1.0
+   },
+   {
+    "t0": 431.299,
+    "edge_m": 0.089,
+    "state": "OFF",
+    "reason": "mode_off",
+    "keep": null,
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 445.055,
+    "dur_s": 13.8
+   }
+  ],
+  "entered_crosswalk": false,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": 0.067,
+  "collision": false,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.0,
+  "end_front_to_near_edge_m": 0.089,
+  "sim_s": 36.9,
+  "result": "held",
+  "trip_at_end": {
+   "state": "stopped",
+   "reason": "stall",
+   "hold": null,
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.223,
+    "stop_sent": true
+   }
+  }
+ },
+ "legs_02": {
+  "verdict": "stopped_before",
+  "stopped_before_crosswalk": true,
+  "first_stop": {
+   "t0": 460.91,
+   "edge_m": 0.02,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0206,
+   "clearance_source": "lidar",
+   "t1": 465.799,
+   "dur_s": 4.9
+  },
+  "stops": [
+   {
+    "t0": 460.91,
+    "edge_m": 0.02,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0206,
+    "clearance_source": "lidar",
+    "t1": 465.799,
+    "dur_s": 4.9
+   },
+   {
+    "t0": 470.759,
+    "edge_m": 0.025,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.028,
+    "clearance_source": "lidar",
+    "t1": 475.758,
+    "dur_s": 5.0
+   },
+   {
+    "t0": 478.468,
+    "edge_m": 0.106,
+    "state": "HOLD",
+    "reason": "stuck_settling",
+    "keep": null,
+    "body_gap_m": 0.1091,
+    "clearance_source": "lidar",
+    "t1": 479.503,
+    "dur_s": 1.0
+   },
+   {
+    "t0": 480.538,
+    "edge_m": 0.044,
+    "state": "OFF",
+    "reason": "mode_off",
+    "keep": null,
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 494.26,
+    "dur_s": 13.7
+   }
+  ],
+  "entered_crosswalk": false,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": 0.06,
+  "collision": false,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.0,
+  "end_front_to_near_edge_m": 0.044,
+  "sim_s": 37.5,
+  "result": "held",
+  "trip_at_end": {
+   "state": "stopped",
+   "reason": "stall",
+   "hold": null,
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.264,
+    "stop_sent": true
+   }
+  }
+ },
+ "fig150_01": {
+  "verdict": "stopped_before",
+  "stopped_before_crosswalk": true,
+  "first_stop": {
+   "t0": 510.537,
+   "edge_m": 0.031,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0413,
+   "clearance_source": "lidar",
+   "t1": 515.323,
+   "dur_s": 4.8
+  },
+  "stops": [
+   {
+    "t0": 510.537,
+    "edge_m": 0.031,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0413,
+    "clearance_source": "lidar",
+    "t1": 515.323,
+    "dur_s": 4.8
+   },
+   {
+    "t0": 518.114,
+    "edge_m": 0.113,
+    "state": "HOLD",
+    "reason": "stuck_settling",
+    "keep": null,
+    "body_gap_m": 0.1162,
+    "clearance_source": "lidar",
+    "t1": 519.118,
+    "dur_s": 1.0
+   },
+   {
+    "t0": 520.421,
+    "edge_m": 0.038,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0406,
+    "clearance_source": "lidar",
+    "t1": 525.301,
+    "dur_s": 4.9
+   },
+   {
+    "t0": 530.553,
+    "edge_m": 0.026,
+    "state": "OFF",
+    "reason": "mode_off",
+    "keep": null,
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 544.335,
+    "dur_s": 13.8
+   }
+  ],
+  "entered_crosswalk": false,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": 0.066,
+  "collision": false,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.0,
+  "end_front_to_near_edge_m": 0.026,
+  "sim_s": 38.2,
+  "result": "held",
+  "trip_at_end": {
+   "state": "stopped",
+   "reason": "stall",
+   "hold": null,
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.255,
+    "stop_sent": true
+   }
+  }
+ },
+ "fig150_02": {
+  "verdict": "stopped_before",
+  "stopped_before_crosswalk": true,
+  "first_stop": {
+   "t0": 560.693,
+   "edge_m": 0.022,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0355,
+   "clearance_source": "lidar",
+   "t1": 565.595,
+   "dur_s": 4.9
+  },
+  "stops": [
+   {
+    "t0": 560.693,
+    "edge_m": 0.022,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0355,
+    "clearance_source": "lidar",
+    "t1": 565.595,
+    "dur_s": 4.9
+   },
+   {
+    "t0": 570.532,
+    "edge_m": 0.033,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0451,
+    "clearance_source": "lidar",
+    "t1": 575.272,
+    "dur_s": 4.7
+   },
+   {
+    "t0": 580.036,
+    "edge_m": 0.063,
+    "state": "OFF",
+    "reason": "mode_off",
+    "keep": null,
+    "body_gap_m": null,
+    "clearance_source": null,
+    "t1": 593.815,
+    "dur_s": 13.8
+   }
+  ],
+  "entered_crosswalk": false,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": 0.062,
+  "collision": false,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.0,
+  "end_front_to_near_edge_m": 0.063,
+  "sim_s": 37.6,
+  "result": "held",
+  "trip_at_end": {
+   "state": "stopped",
+   "reason": "stall",
+   "hold": null,
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.226,
+    "stop_sent": true
+   }
+  }
+ },
+ "fig100_01": {
+  "verdict": "collision",
+  "stopped_before_crosswalk": false,
+  "first_stop": {
+   "t0": 611.096,
+   "edge_m": -0.039,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0,
+   "clearance_source": "lidar",
+   "t1": 624.972,
+   "dur_s": 13.9
+  },
+  "stops": [
+   {
+    "t0": 611.096,
+    "edge_m": -0.039,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "clearance_source": "lidar",
+    "t1": 624.972,
+    "dur_s": 13.9
+   }
+  ],
+  "entered_crosswalk": true,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": -0.0,
+  "collision": true,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.068,
+  "end_front_to_near_edge_m": -0.04,
+  "sim_s": 19.2,
+  "result": "held",
+  "trip_at_end": {
+   "state": "running",
+   "reason": null,
+   "hold": null,
+   "detail": {}
+  }
+ },
+ "fig100_02": {
+  "verdict": "collision",
+  "stopped_before_crosswalk": false,
+  "first_stop": {
+   "t0": 642.597,
+   "edge_m": -0.042,
+   "state": "HOLD",
+   "reason": "obstacle_ahead",
+   "keep": null,
+   "body_gap_m": 0.0,
+   "clearance_source": "lidar",
+   "t1": 656.416,
+   "dur_s": 13.8
+  },
+  "stops": [
+   {
+    "t0": 642.597,
+    "edge_m": -0.042,
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "clearance_source": "lidar",
+    "t1": 656.416,
+    "dur_s": 13.8
+   }
+  ],
+  "entered_crosswalk": true,
+  "passed_crosswalk": false,
+  "min_gap_to_ped_m": -0.005,
+  "collision": true,
+  "max_speed_mps": 0.068,
+  "max_speed_in_zone_mps": 0.068,
+  "end_front_to_near_edge_m": -0.045,
+  "sim_s": 19.5,
+  "result": "held",
+  "trip_at_end": {
+   "state": "running",
+   "reason": null,
+   "hold": null,
+   "detail": {}
+  }
+ }
+}

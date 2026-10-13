@@ -1,68 +1,67 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-30 | Updated: 2026-09-30 -->
+<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
 
-# perception
+# Perception training
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-11
 
 ## Purpose
 
-Developer-side half of the D-356 perception learning loop: turn robot recordings into datasets, hand them to a trainer that lives outside this repository, and check and deliver the returned model. Not installed on the robot and not a ROS package. The robot side is `middleware/perception/control/sensing/perception/learned/`.
+The trainer-side contract of the D-356/D-373 learned loop. Training itself runs outside this repository (Colab or any GPU PC); what lives here is the input/output agreement: export a model folder with a manifest, check it, and hand it to the store inbox. The store folder, not Hugging Face, is the source of truth (HF is optional).
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `bag_to_video.py` turns a session into an H.265/H.264 mp4 plus per-frame sidecar in `data/teleop/learning/` (gitignored), `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
-| `dataset/stuck_markers.py` (D-407 §6) | At harvest, pairs CORE `nav.line_stuck_opened/closed` (event history, wall-clock `ts`) and writes `stuck_markers.json` beside each overlapping session (5 s pad); match frames by `log_ns` |
-| `dataset/` (D-379) | `catalog.py` keeps `data/perception/catalog.jsonl` (one row per session); `autolabel.py` + `labels.py` + `geometry.py` label frames automatically (LiDAR walls, driven floor); `build.py --auto-labels` builds them into `<store>/datasets/<name>/<content_sha>/`, `--eval-set` into `<store>/evalsets/<name>/<content_sha>/` (intake scores lane models on it) |
-| `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it to the shadow slot (and rolls back), `watch.py` does intake + shadow push for each READY folder in the store inbox (or, with `backend: hf`, each new HF commit) on the site host (D-373) |
-| `store.py` | The store folder (D-373 decision 8): `content_sha`, `datasets/<name>/<content_sha>/`, `models/{inbox,accepted,rejected}`, the READY rule. Stdlib only |
-| `rosy_ml.py` | The operator CLI (D-373 decision 7): `init`, `doctor`, `status`, `store-status`, `deliver`, `rollback`, `release-hold`, `harvest`, `intake`; guide in `docs/deployment/learned-perception-operators.md` |
-| `operator_ssh.py` | Operator SSH options shared by `deliver.py` and `harvest.py`: user `rosy`, key + pinned known_hosts, BatchMode (D-373) |
-| `training/` | Trainer contract (`README.md`), step-by-step Colab manual (`COLAB.md`), `check_manifest.py`, `export_cell.py`, `handover.py` (drop a READY folder into the store inbox), the Colab notebook (`gen_notebook.py` generates it). Training itself runs outside this repo |
-| `test/` | Host tests for the above |
-| `prototype/` | Unreviewed D-205 prototypes, see `prototype/README.md` |
-
-## Subdirectories
-
-| Directory | Purpose |
-|-----------|---------|
-| `dataset/` | Recordings to datasets (see `dataset/AGENTS.md`) |
-| `model/` | Export, intake, delivery (see `model/AGENTS.md`) |
-| `training/` | Trainer contract (see `training/AGENTS.md`) |
-| `test/` | Tests |
-| `prototype/` | D-205 prototypes, not the learned loop (see `prototype/AGENTS.md`) |
+| `README.md` | The training contract: store layout, model folder and manifest rules (Korean) |
+| `docs/COLAB.md` | Manual, step-by-step Colab procedure for people using their own notebook. Hand-written; keep it in step with the notebook. States that the notebook has only been run as a local stub, not on a real Colab runtime |
+| `rosy_lane_training.ipynb` | Ready-to-run Colab notebook: baseline model training, export, check, hand-over. Generated, do not edit by hand |
+| `gen_notebook.py` | Source of the notebook: edit here, then `python gen_notebook.py`; `test_training_notebook.py` fails if they differ |
+| `rosy_lane_model.py` | Baseline trainer (`LaneUNet`, same structure as the deployed 0930 model). Imports torch at module level; `train(on_epoch=...)` feeds an optional tracker, never imports wandb |
+| `drivable_head.py` | Frozen delivered lane model (TorchScript, e.g. now2466 v11) + drivable head library (user decision 2026-10-07). Rebuilds the lane model as `LaneUNet` (key renames, output parity checked) and trains only the head. Direct CLI export is held until this library is called under D-464 `IndexedReview`; this script cannot mint a `v13-drivable` artifact directly. |
+| `run_log.py` | Default experiment record (D-356 addendum 2026-10-03): `RunLog(run_dir)` writes `config.json` (secret-looking keys dropped), `history.json` (per epoch, atomic), `summary.json` and optional TensorBoard events; `chain()` joins `on_epoch` hooks. Logging errors never stop training. No torch import at module level |
+| `export_cell.py` | Trainer-side export of `model.onnx` plus `model_manifest.json` (`rosy.perception.model/1`). Copy into a notebook or import it; torch is imported lazily and `write_manifest()` needs none. `experiment=` stores a `wandb` or `local` run link as `metrics.experiment` (known keys per tracker only) |
+| `check_manifest.py` | `check_manifest.py <model_folder>`: load the manifest, verify files, open the model if `onnxruntime` is importable; prints `OK <model_revision>` or the error, exit 1 on failure |
+| `handover.py` | `package()` drops a model folder into `<store>/models/inbox/<model_revision>__<utc>/` with `READY` written last; `package_zip()` makes a downloadable zip. Only `model_manifest.json` and the files it names are handed over |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Model weights never go in `src/` or git. Artifacts (recordings, datasets, models, reports) live in `data/perception/`, which is gitignored.
-- Delivery refuses a model whose intake failed; unharvested robot data is never deleted; the store is the source of truth (HF is an optional backend; its revisions must be commit hashes, not tags); a store version folder is never overwritten and an inbox folder counts only with a matching READY.
-- Robot writes go through `sudo -n` as `rosy` (D-373); `harvest.py` pulls only while CORE `/api/v1/robot/state` reports idle (D-136), `--assume-idle` is bench-only.
-- `extract.py` (MCAP or mp4 + sidecar) follows one clock rule: stamped evidence (shadow, `line/observation` from `CAMERA_LINE` only) attaches by equal stamp (1 us) when logged after the frame's capture and at most 0.5 s after its log time; every other side topic, `scan` and `odom` included, is the latest at or before the frame's log time. A sidecar without `stamp_ns` on stamped entries gives null, never a shifted value. Rows carry `t` (header stamp), `stamp_ns`, `log_ns`, `dt`.
-- Datasets carry `ignore_index` (255, unlabelled, D-379); the trainer leaves those pixels out of the loss and IoU and no class may use that index.
-- The delivered model runs shadow-only. Activating it for driving is a separate decision after the D-205 P3 gate.
-- D-379 labels are automatic only. Rule masks (device `line`, keep) are compared, never used as labels. LiDAR geometry comes from the sim URDF; the camera pitch is fitted per session to the LiDAR walls, so a session without `scan` needs `--pitch-deg` from a LiDAR session of the same camera mount.
+- Edit `gen_notebook.py`, never the `.ipynb`; regenerate and commit both.
+- `export_cell.py` must stay torch-free at import time; only `rosy_lane_model.py` may import torch at module level.
+- The manifest contract is defined on the robot side in `middleware/perception/vision/perception/learned/manifest.py`; change both sides together.
+- Do not commit weights, datasets or Colab outputs. Do not put tokens or Drive paths in the notebook.
+- Local run records + TensorBoard are the default tracking (D-356 addendum 2026-10-03); keep `run_log.py` torch-free at import and never write secret-looking config keys.
+- W&B is optional (D-356 addendum 2026-10-03): the key comes only from Colab Secrets / env `WANDB_API_KEY`, is never printed or written (no `wandb.login`, which writes `~/.netrc`); site and robot tools never depend on wandb.
+- Class lists and measured Pi numbers are open items; do not invent them in the docs.
 
 ### Testing Requirements
 
 ```bash
-python -m pytest learning/training/perception/test -q -p no:cacheprovider
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception/test_training_contract.py test/learning/perception/test_training_handover.py test/learning/perception/test_training_model.py test/learning/perception/test_training_notebook.py test/learning/perception/test_training_run_log.py test/learning/perception/test_drivable_head.py test/learning/perception/test_drivable_cli_admission.py -q -p no:cacheprovider
 ```
 
-Needs `onnxruntime`, `torch` and `mcap`; use a venv that has them. Tests skip cleanly where a package is missing.
+Needs `torch` and `onnxruntime`; tests skip where missing.
+
+### Common Patterns
+
+- `READY` is written last, so an inbox folder without a matching `READY` is never taken (`learning/registry/perception/store.py`).
+- Hand-over is a copy into the store inbox; intake and delivery happen later in `learning/registry/perception/`.
 
 ## Dependencies
 
 ### Internal
 
-- `middleware/perception/control/sensing/perception/learned/manifest.py` (manifest contract)
+- `learning/registry/perception/store.py`, `learning/registry/perception/` (intake, deliver, watch), `middleware/perception/vision/perception/learned/manifest.py`
 
 ### External
 
-- `onnxruntime`, `torch`, `mcap` (dev venv only)
+- `torch`, `onnxruntime`, `numpy`; Colab for the notebook
 
 <!-- MANUAL: -->
+
+## Owner evidence
+
+See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md). The folder split in D-637 preserves bare import identities and the shared artifact/provenance store. Remote host tests do not admit learning or activate robot behavior.

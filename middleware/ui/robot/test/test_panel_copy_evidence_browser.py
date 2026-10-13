@@ -186,8 +186,9 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
     }""")
     rows = summary.locator("dd")
     assert status.is_hidden() and summary.is_visible()
-    assert summary.locator(":scope > dt").count() == summary.locator(":scope > dd").count() == 4
-    mode, navigation = rows.nth(0), rows.nth(1)
+    assert summary.locator(":scope > dt").count() == summary.locator(":scope > dd").count() == 7
+    mode = summary.locator("dt", has_text="운전 모드").locator("+ dd")
+    navigation = summary.locator("dt", has_text="내비게이션").locator("+ dd")
     assert mode.inner_text() == "수동"
     assert mode.get_attribute("title") == "MANUAL"
     assert mode.get_attribute("data-evidence") == "fresh"
@@ -197,13 +198,13 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
 
     page.evaluate("""() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE', navigation: 'ARRIVED',
       evidence: {navigation: {evidence: 'disconnected'}}})""")
-    assert rows.nth(1).inner_text() == "연결 끊김"
-    assert rows.nth(1).get_attribute("data-evidence") == "disconnected"
+    assert navigation.inner_text() == "연결 끊김"
+    assert navigation.get_attribute("data-evidence") == "disconnected"
 
     page.evaluate("""() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE', navigation: 'ARRIVED',
       evidence: {navigation: {evidence: 'fresh'}}})""")
-    assert rows.nth(1).inner_text() == "도착"
-    assert rows.nth(1).get_attribute("title") == "ARRIVED"
+    assert navigation.inner_text() == "도착"
+    assert navigation.get_attribute("title") == "ARRIVED"
     page.evaluate("() => __callbacks['/api/v1/robot/state'].onError(new Error('fixture'))")
     assert "상태를 불러오지 못했습니다" in status.inner_text()
     assert status.get_attribute("state") == "error" and status.is_visible() and summary.is_hidden()
@@ -357,6 +358,20 @@ def test_camera_explains_lane_object_labels_and_disables_expansion_without_a_fra
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+def test_camera_decision_chain_names_the_layer_that_stops(panel):
+    page = panel('console/camera.js', role='viewer', width=390, height=844)
+    page.evaluate("""() => window.__callbacks['/api/v1/line-follow'].onData({state:'HOLD', reason:'lane_departure',
+      stuck:{stuck_id:'stuck-3d', cause:'no_motion', phase:'WAITING_CONSOLE', held_s:5.5, last_answer:'WAIT'}})""")
+    rows = page.locator('.surface-camera-chain ui-status')
+    assert rows.count() == 4
+    assert rows.nth(0).inner_text().startswith('STOPPED BY: 3 CORE GATES - lane_departure')
+    assert rows.nth(0).get_attribute('state') == 'error'
+    assert rows.nth(3).get_attribute('state') == 'warning'
+    page.evaluate("() => window.__callbacks['/api/v1/line-follow'].onError(new Error('down'))")
+    assert rows.count() == 1
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
 def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
     import cv2
     import numpy as np
@@ -495,7 +510,7 @@ def test_confirmation_abort_cleans_live_dialog_and_preserves_stop(panel):
 @pytest.mark.parametrize('module,selector,callbacks', [
     ('mode.js', '[data-mode="NAVIGATION"]', "__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL'});__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})"),
     ('docking.js', '.ui-form ui-button', "__callbacks['/api/v1/docking/status'].onData({supported:true,state:'UNDOCKED'});__callbacks['/api/v1/docking/docks'].onData({docks:[{id:'fixture-dock'}]})"),
-    ('line-follow.js', '.ui-form ui-button', "__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'OFF'});__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})"),
+    ('line-follow.js', '.ui-form ui-button', "__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'OFF'});__callbacks['/api/v1/system/capabilities'].onData({teleop:true,runtime:{drive:'ready'},navigation:{goal_navigation:true}})"),
 ])
 def test_console_confirmation_is_nonblocking_and_unmount_cancels_late_action(panel, module, selector, callbacks):
     page = panel('console/' + module)

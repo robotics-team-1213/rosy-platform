@@ -6,7 +6,7 @@ import pytest
 
 from core_common.protocol.schemas import MissionFeedbackTurnScope
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from fleet.ai.vision_observation_source import (
+from rosy.decision.vision_observation_source import (
     VisionObservationSourceSpec,
     VisionPostActionObservationSource,
 )

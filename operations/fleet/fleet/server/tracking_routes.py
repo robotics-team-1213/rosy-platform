@@ -135,8 +135,9 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
             result = tracking.request_relearn(body.source_id)
         except TrackingError as exc:
             raise _http(exc) from exc
-        _LOG.info("tracking relearn requested: source_id=%s relearn_seq=%d principal_id=%s",
-                  result["source_id"], result["relearn_seq"], principal.principal_id)
+        _LOG.info("tracking relearn requested: source_id=%s relearn_seq=%d occupied=%d unlocated=%s principal_id=%s",
+                  result["source_id"], result["relearn_seq"], result["occupied"], result["unlocated"],
+                  principal.principal_id)
         return result
 
     @app.get("/api/fleet/calibrations", dependencies=read_guard, tags=["tracking"])

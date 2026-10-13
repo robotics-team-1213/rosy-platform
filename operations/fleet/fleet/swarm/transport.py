@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncIterator, Optional, Protocol, Sequence, runtime_checkable
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
 from pydantic import ValidationError
 
 from core_common.protocol.localization import CandidateReport, LocalizationDecision
-from core_common.protocol.schemas import SwarmFollowParams
+from core_common.protocol.schemas import LineStuckPrecondition, SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
 
 log = logging.getLogger(__name__)
@@ -124,7 +124,8 @@ class RobotClient(Protocol):
 
     async def navigation_goal(
         self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
-        lease_ttl_s: float | None = None,
+        lease_ttl_s: float | None = None, expected_boot_id: str | None = None,
+        expected_owner_generation: int | None = None,
     ) -> dict: ...
 
     async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict: ...
@@ -137,10 +138,14 @@ class RobotClient(Protocol):
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict: ...
+                                  yield_turn_rad: float | None = None,
+                                  expected_stuck: dict | None = None,
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None,
+                                  realign: dict | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
+    async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
+    async def identify_lamp_result(self, request_id: str) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_request(self) -> Optional[dict]: ...
@@ -248,6 +253,8 @@ class HttpRobotClient:
         return self._check(await self._http.get(path, headers=self._headers()))
 
     async def _post(self, path: str, body: Optional[dict[str, Any]] = None) -> dict:
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(path=path)
         return self._check(await self._http.post(path, json=body, headers=self._headers()))
 
     async def state(self) -> dict:
@@ -281,12 +288,18 @@ class HttpRobotClient:
 
     async def navigation_goal(self, x: float, y: float, yaw: float, *,
                               correlation_id: str | None = None,
-                              lease_ttl_s: float | None = None) -> dict:
+                              lease_ttl_s: float | None = None,
+                              expected_boot_id: str | None = None,
+                              expected_owner_generation: int | None = None) -> dict:
         body = {"x": x, "y": y, "yaw": yaw}
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
         if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
             body["lease_ttl_s"] = lease_ttl_s
+        if expected_boot_id is not None or expected_owner_generation is not None:
+            if expected_boot_id is None or expected_owner_generation is None:
+                raise ValueError('NATIVE_OWNER_EPOCH_PAIR_REQUIRED')
+            body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
         return await self._post("/api/v1/navigation/goal", body)
 
     async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
@@ -300,6 +313,25 @@ class HttpRobotClient:
         return self._check(await self._http.put(
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
+
+    async def line_follow_trip_start(self) -> dict:
+        """D-601 A: only the trip loop, holding the trip lease after every start check, turns the camera
+        line on; ``line_follow_mode`` (operator routes) still selects only IR_LINE or OFF."""
+        return self._check(await self._http.put(
+            "/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=self._headers()
+        ))
+
+    async def rotate_to(self, delta_deg: float, operator_name: str) -> dict:
+        """D-603 ``POST /api/v1/motion/rotate_to``: CORE turns in place by ``delta_deg`` (its odom, its
+        defaults: 5 deg tolerance, 20 deg/s, 10 s). Only the trip loop asks, at a trip start."""
+        return await self._post("/api/v1/motion/rotate_to",
+                                {"delta_deg": delta_deg, "operator_name": operator_name})
+
+    async def rotate_to_status(self) -> dict:
+        return await self._get("/api/v1/motion/rotate_to")
+
+    async def rotate_to_stop(self) -> dict:
+        return self._check(await self._http.delete("/api/v1/motion/rotate_to", headers=self._headers()))
 
     async def line_follow(self) -> dict:
         """D-143 ``GET /api/v1/line-follow``: selected mode and status."""
@@ -334,16 +366,62 @@ class HttpRobotClient:
         """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
         return await self._post("/api/v1/line-follow/advice", body)
 
+    async def line_follow_lane_cue(self, body: dict) -> dict:
+        """D-511 rev 1: Fleet's lane return cue ``LaneCueRequest``; an old CORE answers 404."""
+        return await self._post("/api/v1/line-follow/lane-cue", body)
+
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None) -> dict:
+                                  yield_turn_rad: float | None = None,
+                                  expected_stuck: dict | None = None,
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None,
+                                  realign: dict | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
+        if before_submit is not None and (expected_stuck is None or not callable(before_submit)):
+            raise ValueError("conditional request and explicit submission guard required")
         body: dict = {"stuck_id": stuck_id, "decision": decision}
+        if expected_stuck is not None:
+            if decision != "BACK_AND_RETRY":
+                raise ValueError("expected_stuck belongs to BACK_AND_RETRY")
+            body["expected_stuck"] = LineStuckPrecondition.model_validate(expected_stuck).model_dump()
+            current = await self.line_follow()
+            stuck = current.get("stuck")
+            if not isinstance(stuck, dict) or stuck.get("conditional_back") is not True:
+                raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED",
+                                    "conditional back is unsupported by CORE")
         if yield_m is not None:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
             body["yield_turn_rad"] = yield_turn_rad
+        if realign is not None:
+            if decision != "REALIGN":
+                raise ValueError("realign body requires REALIGN decision")
+            body["realign"] = realign
+        # D-724: the owner binds final admission and its durable claim after the capability await.
+        if before_submit is not None and await before_submit() is not True:
+            raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED", "final submission guard refused")
         return await self._post("/api/v1/line-follow/stuck/decision", body)
+
+    async def front_status(self) -> dict:
+        """CORE ``GET /api/v1/vision/front/status`` (D-601 B: ``available`` = the front camera is live)."""
+        return await self._get("/api/v1/vision/front/status")
+
+    async def front_frame(self, *, overlay: bool = True) -> tuple[bytes, dict]:
+        """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
+        status = await self.front_status()
+        if not status.get("available") or not status.get("sequence"):
+            raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
+                                "front camera preview is missing or stale")
+        params = {"sequence": status["sequence"]}
+        if not overlay:
+            if not status.get("raw_available") or not status.get("raw_sequence"):
+                raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "raw front frame unavailable")
+            params = {"sequence": status["raw_sequence"], "overlay": "false"}
+        resp = await self._http.get("/api/v1/vision/front/frame", params=params,
+                                    headers=self._headers())
+        if resp.status_code >= 400:
+            self._check(resp)
+        return resp.content, status if overlay else {**status, "overlay": "none", "sequence": status["raw_sequence"]}
 
     async def fleet_link_put(self, body: dict) -> dict:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
@@ -358,11 +436,17 @@ class HttpRobotClient:
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
-    async def identify_lamp(self, color: Optional[str] = None) -> dict:
-        """D-472: None asks for the robot's configured colour; the answer names the one used."""
+    async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict:
+        """D-472: None asks for the robot's configured colour; the answer names the one used.
+        D-596: ``quiet`` asks for no call chirp (a query flag: an older CORE ignores it and chirps)."""
         if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        return await self._post("/api/v1/host/lamp/identify", {} if color is None else {"color": color})
+        return await self._post("/api/v1/host/lamp/identify" + ("?quiet=true" if quiet else ""),
+                                {} if color is None else {"color": color})
+
+    async def identify_lamp_result(self, request_id: str) -> dict:
+        """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
+        return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

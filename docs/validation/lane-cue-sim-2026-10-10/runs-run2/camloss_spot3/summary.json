@@ -1,0 +1,88 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "camloss": 424.758,
+  "camloss_end": 427.217,
+  "cues": {
+   "sent": 84,
+   "turn_spot_true": 84,
+   "signs": {
+    "+": 48,
+    "-": 36
+   },
+   "refused": []
+  },
+  "pivots_started": 0,
+  "latched": []
+ },
+ "timeline": [
+  [
+   null,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   385.788,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   391.489,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  [
+   392.473,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   395.171,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  [
+   425.155,
+   "HOLD",
+   "junction_waiting"
+  ],
+  [
+   427.391,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s5",
+ "args": {
+  "scenario": "s5",
+  "out": "runs/camloss_spot3",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -0.214,
+   -0.264,
+   3.5779249665883754
+  ],
+  "lane": 0.4363323129985824,
+  "spot": 3,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 2.5,
+  "camloss_at": 90.0,
+  "prejudged": true,
+  "exact180": true,
+  "box": false,
+  "seed": 73,
+  "spot_xy": [
+   -0.214,
+   -0.264
+  ],
+  "lane_deg": 25.0
+ },
+ "capability_at_end": false
+}

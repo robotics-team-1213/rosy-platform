@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from fleet.ai.decision_pipeline import (
+from rosy.decision.decision_pipeline import (
     COMMAND_WORDS,
     ChoiceCandidate,
     IdentityFact,

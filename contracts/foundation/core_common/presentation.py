@@ -10,9 +10,10 @@ and the expression, and picks the sound from that one record in the same tick.
 
 Priority, highest first (D-546 extends D-380/D-381): FAILED > EMERGENCY (or a
 latched e-stop) > RECOVERING > CAUTION (a health caution, or a CORE caution code)
-> BOOTING > DOCKING > BLOCKED > NAVIGATING > MANUAL > READY. ``status_level`` is
-the severity of the winning lamp pattern, so lamp, bar colour and expression can
-never name different severities.
+> BOOTING > DOCKING > ask/left/right > BLOCKED > NAVIGATING > MANUAL > READY.
+``status_level`` is the severity of the winning lamp pattern, so lamp, bar colour
+and expression can never name different severities. A turn signal keeps the mode
+face: the letters under it say which way.
 
 Standard library only, like ``robot_state``: rosy-face loads it from the
 release's site-packages. Unknown or missing inputs are never guessed (D-385 1).
@@ -33,7 +34,7 @@ LAMP_LEVEL = {
     "failed": DANGER, "emergency": DANGER,
     "recovering": CAUTION, "caution": CAUTION, "blocked": CAUTION,
     "bridging": OK, "booting": OK, "docking": OK, "navigating": OK, "manual": OK, "ready": OK,
-    "illumination": OK,
+    "ask": OK, "left": OK, "right": OK, "illumination": OK,
 }
 
 #: The CORE-chosen face (D-385 vocabulary) a severity may keep. A cheerful face under an
@@ -103,16 +104,22 @@ def present(*, state: Any, robot_mode: Any = None, nav_state: Any = None,
     if core:
         mode, nav = core.get("robot_mode") or robot_mode, core.get("nav_state") or nav_state  # CORE's 1 s value wins, else the files'
         recovery = core.get("recovery") if not estop else None
-        if state not in (robot_state.FAILED, robot_state.BOOTING) and core.get("caution"):
+        signal = core.get("signal") if not estop else None
+        cautions = core.get("caution")
+        # A fleet question replaces the generic line-hold. Other cautions still raise the lamp.
+        if signal == "ask" and isinstance(cautions, (list, tuple)):
+            cautions = [code for code in cautions if code != "line_follow_hold"]
+        if state not in (robot_state.FAILED, robot_state.BOOTING) and cautions:
             state = robot_state.CAUTION  # a CORE caution code is a caution, not just an amber strip
     else:
-        mode, nav, recovery = robot_mode, nav_state, None
+        mode, nav, recovery, signal = robot_mode, nav_state, None, None
     if recovery == "bridge" and state == robot_state.CAUTION:
         recovery = None  # the soft D-476 bridge yields to a caution the bar is already saying
     if estop:
         mode = "EMERGENCY"
     kind = screen.get("kind") if screen else None
-    lamp = "illumination" if kind == "light" else robot_state.lamp_pattern(state, mode, nav, recovery)
+    lamp = "illumination" if kind == "light" else robot_state.lamp_pattern(
+        state, mode, nav, recovery, signal)
     level = LAMP_LEVEL.get(lamp, OK)
 
     percent = core.get("battery_percent") if core else None

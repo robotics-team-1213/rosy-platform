@@ -50,7 +50,11 @@ def _actions(tmp_path):
 
 def test_a_healthy_pc_is_never_touched(tmp_path):
     assert _guard(tmp_path, HEALTHY, runs=5) == ["health"] * 5
-    assert json.loads((tmp_path / "state/status.json").read_text())["pc1"]["state"] == "ok"
+    row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]
+    assert row["state"] == "ok"
+    assert row["resources"] == {
+        "avail_pct": 60, "swap_pct": 5, "load": 1.2, "cores": 24, "uptime_s": 7200, "down": [],
+    }
 
 
 @pytest.mark.parametrize("junk", ["", "{not json", "[1, 2]"])
@@ -137,6 +141,7 @@ def test_a_pc_that_just_booted_is_not_rebooted(tmp_path):
 def test_an_unreachable_pc_is_only_logged(tmp_path):
     assert _guard(tmp_path, "", runs=4, exit_code=255) == ["health"] * 4
     assert _actions(tmp_path) == []
+    assert _status(tmp_path)["pc1"]["resources"] is None
 
 
 @pytest.mark.parametrize("now,window", [("06:00", "05:50-06:20"), ("23:59", "23:50-00:20"), ("00:10", "23:50-00:20")])

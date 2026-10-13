@@ -19,7 +19,7 @@ def test_io_image_contains_line_follow_runtime_without_polluting_core():
 
 
 def test_hardware_launch_reaches_sensing_only_line_follow_launch():
-    launch = (ROOT / "middleware/core/navigation/launch/hardware.launch.py").read_text(
+    launch = (ROOT / "middleware/control/drive/planning/nav2/launch/hardware.launch.py").read_text(
         encoding="utf-8")
     assert 'get_package_share_directory("control")' in launch
     assert '"line_follow.launch.py"' in launch

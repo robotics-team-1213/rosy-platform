@@ -35,10 +35,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
         </collision>
         <visual name="visual">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
           <material><ambient>0.13 0.14 0.13 1</ambient><diffuse>0.13 0.14 0.13 1</diffuse></material>
         </visual>
       </link>
@@ -295,6 +295,62 @@
       </link>
     </model>
 
+    <model name="caution_NE_black">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_NE_black.stl</uri></mesh></geometry>
+        <material><ambient>0.02 0.02 0.02 1</ambient>
+          <diffuse>0.02 0.02 0.02 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_NE_orange">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_NE_orange.stl</uri></mesh></geometry>
+        <material><ambient>0.9 0.73 0.17 1</ambient>
+          <diffuse>0.9 0.73 0.17 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_NW_black">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_NW_black.stl</uri></mesh></geometry>
+        <material><ambient>0.02 0.02 0.02 1</ambient>
+          <diffuse>0.02 0.02 0.02 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_NW_orange">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_NW_orange.stl</uri></mesh></geometry>
+        <material><ambient>0.9 0.73 0.17 1</ambient>
+          <diffuse>0.9 0.73 0.17 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_SW_black">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_SW_black.stl</uri></mesh></geometry>
+        <material><ambient>0.02 0.02 0.02 1</ambient>
+          <diffuse>0.02 0.02 0.02 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_SW_orange">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_SW_orange.stl</uri></mesh></geometry>
+        <material><ambient>0.9 0.73 0.17 1</ambient>
+          <diffuse>0.9 0.73 0.17 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_SE_black">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_SE_black.stl</uri></mesh></geometry>
+        <material><ambient>0.02 0.02 0.02 1</ambient>
+          <diffuse>0.02 0.02 0.02 1</diffuse></material>
+      </visual></link>
+    </model>
+    <model name="caution_SE_orange">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/caution_SE_orange.stl</uri></mesh></geometry>
+        <material><ambient>0.9 0.73 0.17 1</ambient>
+          <diffuse>0.9 0.73 0.17 1</diffuse></material>
+      </visual></link>
+    </model>
     <model name="road_lines">
       <static>true</static>
       <pose>0 0 0.001 0 0 0</pose>

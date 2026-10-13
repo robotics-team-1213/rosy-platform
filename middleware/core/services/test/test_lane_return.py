@@ -81,6 +81,36 @@ def test_clear_sensor_search_is_attempted_without_checkpoint_before_fleet():
     assert not action.fleet_required
 
 
+@pytest.mark.parametrize("yaw0", [0., math.pi-.03])
+def test_search_observes_both_sides_of_the_original_heading(yaw0):
+    ctl = ReturnController(BODY)
+    ctl.tick(inp(1., pose=pose(1., yaw=yaw0), corridor=OUT))
+    yaw, offsets = yaw0, []
+    for tick in range(100):
+        t = round(1.1 + tick*.05, 6)
+        action = ctl.tick(inp(t, pose=pose(t, yaw=yaw), corridor=None))
+        offsets.append(math.atan2(math.sin(yaw-yaw0), math.cos(yaw-yaw0)))
+        assert action.linear == 0.
+        if action.fleet_required:
+            break
+        yaw += action.angular*.05
+    assert action.fleet_required and action.reason == "local_candidates_exhausted"
+    assert max(offsets) >= .08 and min(offsets) <= -.08
+    assert max(abs(offset) for offset in offsets) <= .18
+    assert t < 5.1  # Two existing 2 s candidate budgets, including their stop ticks.
+
+
+def test_search_cannot_keep_turning_after_both_time_budgets_expire():
+    ctl = ReturnController(BODY)
+    ctl.tick(inp(1., corridor=OUT))
+    assert ctl.tick(inp(1.1, corridor=None)).angular > 0.
+    for tick in range(1, 46):
+        t = round(1.1 + tick*.1, 6)
+        action = ctl.tick(inp(t, corridor=None))
+    action = ctl.tick(inp(t+.1, corridor=None, turn_clear=False))
+    assert action.fleet_required and action.angular == 0.
+
+
 @pytest.mark.parametrize("change", [dict(authorized=False), dict(floor_safe=False),
     dict(clearance_at=0), dict(pose=pose(0)), dict(turn_clear=False)])
 def test_search_never_moves_when_evidence_or_authority_is_missing(change):
@@ -109,6 +139,20 @@ def test_return_verifies_several_new_frames_and_geometry_identity():
     assert ctl.tick(inp(1.5)).phase == "verify"
     assert ctl.tick(inp(1.5)).phase == "verify"  # duplicate evidence cannot count
     assert ctl.tick(inp(1.6)).phase == "tracking"
+
+
+def test_boundary_change_compares_geometry_after_pose_alignment_not_camera_motion():
+    old = Corridor(Boundary(0, .1), Boundary(0, -.1), "camera-a")
+    anchor = pose(1)
+    current = pose(1.1, y=.02)
+    moved_camera = Corridor(Boundary(0, .08), Boundary(0, -.12), "camera-a")
+    assert moved_camera.matches(old, anchor, current)
+    jitter = Corridor(Boundary(0, .085), Boundary(0, -.115), "camera-a")
+    assert jitter.matches(old, anchor, current)
+    changed = Corridor(Boundary(0, .1), Boundary(0, -.1), "camera-a")
+    assert not changed.matches(old, anchor, current)
+    revised = Corridor(Boundary(0, .08), Boundary(0, -.12), "camera-b")
+    assert not revised.matches(old, anchor, current)
 
 
 def test_nonfinite_sensor_values_are_rejected():

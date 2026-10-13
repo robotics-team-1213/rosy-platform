@@ -1,9 +1,10 @@
-package io.github.livsbittt.rosy.pilot
+﻿package io.github.livsbittt.rosy.pilot
 
 import java.io.File
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
@@ -12,8 +13,56 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The app opens one session. The bundled Pilot page receives that session and does not open another. */
+/** Each bundled Pilot page receives its selected robot session. */
 class ShellConnectionTest {
+    @Test fun twoRobotViewsKeepCameraAndTeleopOnTheirOwnRobot() {
+        MockWebServer().use { a -> MockWebServer().use { b ->
+            a.start(); b.start()
+            val first = Candidate("robot-a.local", a.port, listOf("127.0.0.1"), "A", "rosy_01", false)
+            val second = Candidate("robot-b.local", b.port, listOf("127.0.0.1"), "B", "rosy_02", false)
+            val store = CandidateStore().apply {
+                resolved("a", found("a")!!, first); resolved("b", found("b")!!, second)
+            }
+            val pa = PilotProxy(LobbySession(RobotTarget("rosy_01", first.host, first.port, "first-private-token"),
+                false, java.time.Instant.now().plusSeconds(3600), first, store), failure = {})
+            val pb = PilotProxy(LobbySession(RobotTarget("rosy_02", second.host, second.port, "second-private-token"),
+                false, java.time.Instant.now().plusSeconds(3600), second, store), failure = {})
+            val browser = OkHttpClient()
+            try {
+                a.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_01\"}"))
+                b.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_02\"}"))
+                pa.verifyIdentity(); pb.verifyIdentity()
+                a.takeRequest(1, TimeUnit.SECONDS); b.takeRequest(1, TimeUnit.SECONDS)
+                pa.start(5000, false); pb.start(5000, false)
+                assertFalse(pa.cookieName == pb.cookieName)
+                browser.newCall(Request.Builder().url("${pa.origin}/api/v1/vision/front/status")
+                    .header("Cookie", "${pb.cookieName}=${pb.capability}").build())
+                    .execute().use { assertEquals(403, it.code) }
+                assertNull(a.takeRequest(100, TimeUnit.MILLISECONDS))
+                for ((remote, proxy, token) in listOf(Triple(a, pa, "first-private-token"), Triple(b, pb, "second-private-token"))) {
+                    remote.enqueue(MockResponse().setBody("{\"available\":false}"))
+                    browser.newCall(Request.Builder().url("${proxy.origin}/api/v1/vision/front/status")
+                        .header("Cookie", "${pa.cookieName}=${pa.capability}; ${pb.cookieName}=${pb.capability}")
+                        .header("Authorization", "Bearer $token")
+                        .build()).execute().use { assertEquals(200, it.code) }
+                    assertEquals("Bearer $token", remote.takeRequest(1, TimeUnit.SECONDS)!!.getHeader("Authorization"))
+                    remote.enqueue(MockResponse().setBody("{\"accepted\":true}"))
+                    browser.newCall(Request.Builder().url("${proxy.origin}/api/v1/teleop")
+                        .header("Cookie", "${pa.cookieName}=${pa.capability}; ${pb.cookieName}=${pb.capability}")
+                        .header("Authorization", "Bearer $token")
+                        .post("{\"linear\":0,\"angular\":0}".toRequestBody()).build())
+                        .execute().use { assertEquals(200, it.code) }
+                    assertEquals("Bearer $token", remote.takeRequest(1, TimeUnit.SECONDS)!!.getHeader("Authorization"))
+                }
+            } finally {
+                a.enqueue(MockResponse().setBody("{}")); b.enqueue(MockResponse().setBody("{}"))
+                pa.stop(); pb.stop()
+                browser.dispatcher.cancelAll(); browser.connectionPool.evictAll(); browser.dispatcher.executorService.shutdown()
+            }
+            assertEquals("/api/v1/teleop", a.takeRequest(1, TimeUnit.SECONDS)!!.path)
+            assertEquals("/api/v1/teleop", b.takeRequest(1, TimeUnit.SECONDS)!!.path)
+        } }
+    }
     @Test fun developmentSessionReachesBundledPilotWithoutASecondConnect() {
         MockWebServer().use { remote ->
             remote.start()
@@ -37,7 +86,7 @@ class ShellConnectionTest {
                 assertEquals("/api/v1/system/info", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
                 proxy.start(5000, false)
                 val browser = OkHttpClient()
-                val cookie = "rosy-shell=${proxy.capability}"
+                val cookie = "${proxy.cookieName}=${proxy.capability}"
                 browser.newCall(Request.Builder().url("${proxy.origin}/pilot").header("Cookie", cookie).build())
                     .execute().use { page ->
                         assertEquals(200, page.code)

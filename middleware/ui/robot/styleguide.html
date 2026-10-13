@@ -8,6 +8,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/styleguide/assets/styleguide.js"></script>
@@ -20,6 +21,28 @@
   </header>
 
   <main>
+    <section class="entry" id="color-roles">
+      <h2>색상 역할</h2>
+      <p class="rule">색상은 바탕·글자·경계·상태·데이터·브랜드로 나눕니다. 모든 견본은 같은 공용 토큰을 사용합니다.</p>
+      <ul class="color-roles">
+        <li><span class="color-sample sample-canvas" aria-hidden="true"></span><code>surface-canvas</code> · 기본 바탕</li>
+        <li><span class="color-sample sample-recessed" aria-hidden="true"></span><code>surface-recessed</code> · 들어간 면</li>
+        <li><span class="color-sample sample-primary" aria-hidden="true"></span><code>text-primary</code> · 본문</li>
+        <li><span class="color-sample sample-secondary" aria-hidden="true"></span><code>text-secondary</code> · 보조 글</li>
+        <li><span class="color-sample sample-subtle" aria-hidden="true"></span><code>border-subtle</code> · 행 구분</li>
+        <li><span class="color-sample sample-default" aria-hidden="true"></span><code>border-default</code> · 면 구분</li>
+        <li><span class="color-sample sample-strong" aria-hidden="true"></span><code>border-strong</code> · 강조 경계</li>
+        <li><span class="color-sample sample-danger" aria-hidden="true">글</span><code>text-on-danger</code> · 위험 채움 위 글</li>
+      </ul>
+    </section>
+
+    <section class="entry" id="component-map">
+      <h2>공용 컴포넌트 모음</h2>
+      <p class="rule">버튼·입력·상태·증거·읽기·작업 선택은 공용 부품이 모양을 소유합니다. 화면은 배치와 실제 동작을 소유합니다. 이 갤러리의 동작은 장비 명령을 보내지 않습니다.</p>
+      <nav class="demo" aria-label="컴포넌트 견본">
+        <a class="docs-link" href="#buttons">버튼</a><a class="docs-link" href="#fields">입력</a><a class="docs-link" href="#readback">읽기·되읽기</a><a class="docs-link" href="#status">상태</a><a class="docs-link" href="#evidence">증거</a><a class="docs-link" href="#task-row">작업 행</a><a class="docs-link" href="#task-choice">작업 선택</a>
+      </nav>
+    </section>
     <section class="entry">
       <h2>라벨</h2>
       <p class="rule">작은 대문자. 값이 아니라 값의 이름이다.</p>
@@ -65,13 +88,28 @@
       <p class="gate">게이트: <code>test_spacing_comes_from_the_step_scale</code></p>
     </section>
 
-    <section class="entry">
-      <h2>버튼 셋</h2>
-      <p class="rule">주(가장 밝은 중립) · 조용(테두리 하나) · 되돌릴 수 없는 것(채운 면 + 잉크).</p>
+    <section class="entry" id="headings-disclosures">
+      <h2>목적 제목과 접힘 행</h2>
+      <p class="rule">화면 제목과 묶음 제목은 역할별 척도를 쓰고, 접힘 행은 일반 조작 규격을 따른다.</p>
+      <div class="demo demo-wide">
+        <h3 class="ui-page-heading">선택한 로봇의 현재 작업</h3>
+        <h4 class="ui-section-heading">연결·운전 준비 근거</h4>
+        <details><summary class="ui-disclosure-row">긴 연결 상태와 거절 이유 확인</summary><p>최근 수신한 근거와 다음 행동을 확인하세요.</p></details>
+        <button class="ui-disclosure-row" type="button" aria-expanded="false"><span class="ui-disclosure-name">rosy_40</span><span>현재 작업 상세</span></button>
+      </div>
+    </section>
+
+    <section class="entry" id="buttons">
+      <h2>버튼 다섯 종류</h2>
+      <p class="rule">일반 조작은 높이 48px·글자·좌우 여백을 공유한다. 폭은 라벨 길이에 따른다.
+      모두 48px · 주(가장 밝은 중립) · 조용(테두리 하나) · 되돌릴 수 없는 것(위험 채움 + 보이는 동사).
+      긴 문구·비활성 사유는 잘리지 않도록 최소 높이보다 커질 수 있다(D-629).</p>
       <div class="demo demo-row">
         <ui-button kind="primary" type="button">주 버튼</ui-button>
         <ui-button kind="quiet" type="button">조용한 버튼</ui-button>
         <ui-button kind="irreversible" type="button" data-always-live>전체 정지</ui-button>
+        <ui-button kind="segment" type="button" aria-pressed="true">선택 항목</ui-button>
+        <ui-button kind="toggle" type="button" aria-pressed="true">보기 켬</ui-button>
       </div>
       <p class="gate">게이트: <code>test_irreversible_actions_are_a_fill_not_text</code>,
       <code>test_a_danger_fill_carries_ink_not_dark_text</code></p>
@@ -95,11 +133,11 @@
       <code>test_device_estop_stays_live_over_the_delete_dialog</code></p>
     </section>
 
-    <section class="entry">
+    <section class="entry" id="fields">
       <h2>필드</h2>
       <p class="rule">파인 면. 바닥은 터치 바닥 이상, 포커스는 상태색 아닌 링.
       제품 화면은 네이티브 <code>input</code>·<code>select</code>에 <code>class="ui-field"</code>를 단다(D-359 §5.1).
-      체크는 <code>label.ui-check</code>가 44px 누름 면이다. <code>&lt;ui-field&gt;</code> 감싸개도 같은 얼굴이다.</p>
+      체크는 <code>label.ui-check</code>가 48px 누름 면이다. <code>&lt;ui-field&gt;</code> 감싸개도 같은 얼굴이다.</p>
       <div class="demo demo-wide ui-form">
         <label class="ui-field-label">이름표<input class="ui-field" placeholder="bay 7 태블릿"></label>
         <label class="ui-field-label">정책<select class="ui-field"><option>정지 유지</option><option>도크 복귀</option></select></label>
@@ -126,7 +164,7 @@
       <p class="gate">게이트: <code>test_responsive_tiers.py</code>(칸 질의)</p>
     </section>
 
-    <section class="entry">
+    <section class="entry" id="readback">
       <h2>이름–값 읽기</h2>
       <p class="rule"><code>.ui-readout</code>는 <code>dl</code> 두 열 — 이름은 조용한 글자, 값은 등폭.
       좁은 칸에서 한 열로 접힌다. <code>.ui-readback</code>은 쓰기 뒤 되읽기 묶음(D-286·D-287).</p>
@@ -136,6 +174,11 @@
           <dt>배터리</dt><dd>12.8 V</dd>
           <dt>연결</dt><dd>최신</dd>
         </dl>
+      </div>
+      <div class="ui-readback">
+        <h3>전달한 명령과 장치 결과</h3>
+        <dl class="ui-readout"><dt>관제 요청</dt><dd>대기</dd><dt>장치 수신</dt><dd>확인됨</dd><dt>복구 완료</dt><dd>확인 전</dd></dl>
+        <ui-evidence state="unavailable">수신 확인은 복구 완료와 다릅니다.</ui-evidence>
       </div>
       <p class="gate">게이트: <code>test_responsive_tiers.py</code> ·
       <code>test_calibration_chip_browser.py</code>(소비)</p>
@@ -173,13 +216,19 @@
         <ui-tag status="warn">CAUTION</ui-tag>
         <ui-tag status="crit">DANGER</ui-tag>
       </div>
+      <p class="rule">하나의 상태 요약 조작 안에는 <code>variant="inline"</code>으로 값을 표시한다. 내부 값마다 새 누름 영역이나 배지 외곽선을 만들지 않는다.</p>
+      <div class="demo demo-row">
+        <ui-tag variant="inline">2/2</ui-tag>
+        <ui-tag variant="inline" status="crit">1/2</ui-tag>
+        <ui-tag variant="inline" status="warn">개발</ui-tag>
+      </div>
       <p class="gate">게이트: <code>test_nominal_carries_no_colour</code></p>
     </section>
 
-    <section class="entry">
+    <section class="entry" id="status">
       <h2>상태 글</h2>
       <p class="rule">화면 알림 한 줄. 주의 계열(warning·error·unavailable·forbidden)만 주의색
-      글자고 나머지는 잉크다. <code>state</code>가 없으면 계약 표지가 그려진다.</p>
+      글자고 나머지는 잉크다. <code>state</code>가 없으면 대기이며, 알 수 없는 상태 값은 계약 표지가 그려진다.</p>
       <div class="demo demo-row">
         <ui-status state="pending">명령 접수 대기</ui-status>
         <ui-status state="ready">준비됨</ui-status>
@@ -209,17 +258,48 @@
       <p class="gate">게이트: <code>test_the_map_tools_stay_off_the_raster</code></p>
     </section>
 
-    <section class="entry">
-      <h2>아이콘</h2>
+    <section class="entry" id="platform-brand">
+      <h2>ROSY 플랫폼 심볼</h2>
+      <p class="rule">경로 R은 관측·판단·실행의 연결을 나타냅니다. 워드마크의 장미색은 제품 식별이며 상태나 명령 승인을 뜻하지 않습니다.</p>
+      <div class="demo"><ui-brand><b>ROSY</b><small>Platform</small></ui-brand></div>
+      <p class="rule">플랫폼 심볼과 Fleet·Robot·Pilot·Cam의 역할 아이콘을 구분합니다. 링크 이름과 제품 이름은 유지하고 심볼은 새 조작 대상을 만들지 않습니다.</p>
+    </section>
+
+    <section class="entry" id="semantic-icons">
+      <h2>의미 아이콘</h2>
       <p class="rule">24 viewBox · 실선 2 · <code>currentColor</code>. 크기는 토큰 박스
       (<code>--text-value</code>)가 정하고 색은 글자가 나른다. 식별은 라벨이 하고 아이콘은
       보조다(D-405).</p>
-      <div class="demo demo-row">
-        <span data-action-icon="pose"></span>
-        <span data-action-icon="battery"></span>
-        <ui-text scale="label">POSE · BATT</ui-text>
+      <p class="rule">같은 업무는 같은 그림을 씁니다. 아이콘은 조작 이름을 보조하며 접속·전달·완료 상태를 대신하지 않습니다.</p>
+      <div class="demo icon-inventory">
+        <ui-button kind="quiet" type="button" data-action-icon="fleet" data-ui-tooltip="사이트 전체 로봇을 관제합니다">관제</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="map" data-ui-tooltip="활성 지도와 초안을 확인합니다">지도</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="install" data-ui-tooltip="장비 설치 단계와 결과를 확인합니다">설치</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="cell" data-ui-tooltip="셀 작업을 준비하고 진행을 확인합니다">Cell</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="notification" data-ui-tooltip="개입이 필요한 알림을 확인합니다">알림</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="history" data-ui-tooltip="이전 사건과 처리 결과를 확인합니다">기록</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="tools" data-ui-tooltip="운영 설정과 진단 도구를 확인합니다">운영 도구</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="refresh" data-ui-tooltip="서버에서 현재 내용을 다시 조회합니다">새로고침</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="download" data-ui-tooltip="현재 결과를 파일로 내보냅니다">내보내기</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="connect" data-ui-tooltip="대상과 접속 상태를 확인합니다">접속</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="login" data-ui-tooltip="현장에 로그인합니다">로그인</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="account" data-ui-tooltip="계정과 접속을 확인합니다">계정</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="logout" data-ui-tooltip="이 브라우저의 로그인을 끝냅니다">로그아웃</ui-button>
       </div>
-      <p class="gate">게이트: 없음 — 규칙만(D-405). 원시 색 금지는 <code>test_ui_token_contracts.py</code>가 지킨다</p>
+      <p class="rule">아이콘 단독도 이름을 유지합니다. 마우스를 올리거나 Tab으로 이동하면 설명이 보이고 Escape로 닫습니다. 선택은 페이지·탭·토글 각각의 상태로 표현합니다.</p>
+      <nav class="demo icon-states" aria-label="아이콘 상태 견본">
+        <a class="ui-disclosure-row" href="#semantic-icons" data-action-icon="fleet" data-icon-only aria-current="page">관제</a>
+        <div class="icon-tab-demo" role="tablist" aria-label="맥락 선택 견본">
+          <ui-button id="icon-history-tab" kind="segment" type="button" data-action-icon="history" data-icon-only aria-selected="true" role="tab" aria-controls="icon-history-panel">기록</ui-button>
+          <ui-button id="icon-tools-tab" kind="segment" type="button" data-action-icon="tools" data-icon-only aria-selected="false" role="tab" aria-controls="icon-tools-panel" tabindex="-1">운영 도구</ui-button>
+        </div>
+        <ui-button kind="toggle" type="button" data-action-icon="notification" data-icon-only aria-pressed="true">알림 보기</ui-button>
+        <ui-button id="icon-focus-demo" kind="quiet" type="button" data-action-icon="refresh" data-icon-only data-ui-tooltip="Tab으로 이동해 현재 내용 다시 조회 설명을 확인합니다">새로고침</ui-button>
+        <ui-button kind="quiet" type="button" data-action-icon="download" data-icon-only disabled reason="이 견본에는 내보낼 결과가 없습니다">내보내기</ui-button>
+      </nav>
+      <p id="icon-history-panel" role="tabpanel" aria-labelledby="icon-history-tab">견본 기록 · 현재 개입과 과거 처리 결과를 구분합니다.</p>
+      <p id="icon-tools-panel" role="tabpanel" aria-labelledby="icon-tools-tab" hidden>견본 운영 도구 · 실제 장비의 설정을 변경하지 않습니다.</p>
+      <p class="gate">게이트: <code>test_semantic_icons_browser.py</code> — 이름·선택·focus 설명·48px·비활성 사유. 이 견본은 장치 요청을 보내지 않습니다.</p>
     </section>
 
     <section class="entry">
@@ -231,7 +311,7 @@
       <p class="gate">게이트: <code>test_triage_contract.py</code></p>
     </section>
 
-    <section class="entry">
+    <section class="entry" id="evidence">
       <h2>증거·빈 상태</h2>
       <p class="rule">fresh에는 아무것도 붙이지 않는다. delayed·disconnected·unavailable만 표시한다.</p>
       <div class="demo demo-row">
@@ -243,13 +323,50 @@
       <p class="gate">게이트: <code>test_evidence_margin.py</code></p>
     </section>
 
-    <section class="entry">
+    <section class="entry" id="task-row">
+      <h2>작업 행과 작업 도구</h2>
+      <div class="ui-workspace-bar"><label class="ui-field-label">작업 찾기<input class="ui-field" type="search" placeholder="이름으로 찾기"></label><span data-spacer></span><ui-button kind="quiet" type="button">새로고침</ui-button></div>
+      <article class="ui-task-row">
+        <div class="ui-task-heading"><h3>현재 상황 확인</h3><ui-tag status="neutral">확인 대기</ui-tag></div>
+        <p class="ui-task-meta">영상·지도·장치 상태를 함께 확인합니다.</p>
+        <p class="ui-task-next">다음: 최신 증거를 확인한 뒤 조치를 선택합니다.</p>
+        <details><summary>판단 근거</summary><ui-evidence state="unavailable">이 항목은 공용 부품 견본입니다.</ui-evidence></details>
+      </article>
+    </section>
+
+    <section class="entry" id="task-choice">
       <h2>작업 선택</h2>
       <div id="task-demo"></div>
       <section id="task-input"><label class="ui-field-label">이름표<input class="ui-field" placeholder="전환해도 입력 유지"></label></section>
       <section id="task-readback"><ui-empty>이 견본은 장치 요청을 보내지 않습니다.</ui-empty></section>
       <p class="rule">확인(D-371)·Fleet 예외 행·좁은 콘솔(D-359)은 공용 어휘로 조립한다. LCD의 intent는 얼굴이 소유한다(D-385).</p>
       <p class="rule">쓰이지 않는 컴포넌트는 결함을 숨긴다(D-92 §5). 둘 이상의 웹 표면이 필요한 로직은 headless로 공유한다(D-130.2).</p>
+    </section>
+
+    <section class="entry" id="app-shell-seats">
+      <h2>앱 셸의 자리 (D-741)</h2>
+      <p>탐색 레일, 하위 탐색, 경로 줄, 본문, 오른쪽 칸. 이 갤러리의 글 칸은 720px라 여기서는 접힌 모습만 보인다. 넓은 배치는 표면이 이 자리를 쓰기 시작하면 그 화면에서 본다.</p>
+      <div class="ui-app-shell">
+        <div class="ui-app-body">
+          <div class="ui-rail"><nav class="ui-rail-nav" aria-label="견본 영역">
+            <a class="ui-rail-item" href="#app-shell-seats" aria-current="page"><span>견본 가</span></a>
+            <a class="ui-rail-item" href="#app-shell-seats"><span>견본 나</span></a>
+          </nav></div>
+          <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="견본 화면">
+            <div class="ui-subnav-head">진행</div>
+            <a class="ui-subnav-item" href="#app-shell-seats" aria-current="page">전체 작업</a>
+            <a class="ui-subnav-item" href="#app-shell-seats">승인 대기</a>
+          </nav></div>
+          <div class="ui-app-main">
+            <div class="ui-pathbar"><nav class="ui-crumbs" aria-label="경로"><a href="#app-shell-seats">작업</a></nav><strong>전체 작업</strong></div>
+            <div class="ui-stage-grid">
+              <div class="ui-pane" data-pane="stage">본문</div>
+              <div class="ui-pane" data-pane="now">지금 상태</div>
+              <div class="ui-pane" data-pane="more">입력과 근거</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </body>

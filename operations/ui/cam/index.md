@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · feat(cam): D-544 노출 자동 보정 1단계 (기본 꺼짐)
-- 2026-10-07 · uncommitted · Cam 페어링 복구 오류와 신뢰 위험의 색 구분
-- 2026-10-06 · uncommitted · uiux(cam): 좁은 폰의 인증서 지문 묶음
-- 2026-10-06 · uncommitted · uiux(cam): Pairing/Peer 합성 화면과 안전 영역
-- 2026-10-06 · uncommitted · uiux(cam): Pairing 결정 조작 너비
+- 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
+- 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
+- 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+- 2026-10-10 · uncommitted · fix(cam): D-589 S2 재리뷰 반영
+- 2026-10-10 · uncommitted · fix(cam): D-589 S2 독립 리뷰 반영

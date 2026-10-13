@@ -34,6 +34,41 @@ class MapPlane:
     revision: str
     #: Frame pixel index to plane pixel index (row-major 3x3), the matrix the warp used.
     image_to_plane: tuple[float, ...]
+    valid_mask: np.ndarray
+
+
+def crop_map_plane(plane: MapPlane, x: float, y: float, radius_m: float
+                   ) -> tuple[bytes, tuple[int, int], tuple[float, float, float, float]] | None:
+    """The signed robot neighborhood in map metres, clipped to this calibrated plane."""
+    left, top, right, bottom = _crop_window(plane, x, y, radius_m)
+    if right <= left or bottom <= top:
+        return None
+    image = _decode(plane.jpeg)[top:bottom, left:right]
+    min_x, _, _, max_y = plane.bounds_m
+    ppm = plane.px_per_m
+    bounds = (min_x + left / ppm, max_y - bottom / ppm, min_x + right / ppm, max_y - top / ppm)
+    return _encode(image), (right - left, bottom - top), bounds
+
+
+def _crop_window(plane, x, y, radius_m):
+    if not all(math.isfinite(v) for v in (x, y, radius_m)) or radius_m <= 0:
+        raise ValueError("invalid map crop")
+    min_x, _, _, max_y = plane.bounds_m
+    ppm = plane.px_per_m
+    return (max(0, round((x - radius_m - min_x) * ppm)),
+            max(0, round((max_y - y - radius_m) * ppm)),
+            min(plane.size[0], round((x + radius_m - min_x) * ppm)),
+            min(plane.size[1], round((max_y - y + radius_m) * ppm)))
+
+
+def plane_observed_fraction(plane: MapPlane, crop=None) -> float:
+    mask = plane.valid_mask
+    if crop is not None:
+        left, top, right, bottom = _crop_window(plane, *crop)
+        if right <= left or bottom <= top:
+            return 0.0
+        mask = mask[top:bottom, left:right]
+    return float(mask.mean())
 
 
 def _decode(jpeg: bytes) -> np.ndarray:
@@ -83,13 +118,23 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
                              [0.0, -ppm, max_y * ppm - 0.5],
                              [0.0, 0.0, 1.0]])
     image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
-    # ponytail: plane points beyond the camera horizon would sample a mirrored image; an
-    # overhead camera over track bounds + 15 cm never sees its horizon. Mask by w if one does.
+    inverse = np.linalg.inv(image_to_plane)
+    u, v = np.meshgrid(np.arange(out_w), np.arange(out_h))
+    raw = inverse @ np.stack((u.ravel(), v.ravel(), np.ones(u.size)))
+    # Homography scale has no sign: compare with the approved track's centre ray.
+    centre = map_to_plane @ np.array([(b[0] + b[2])/2, (b[1] + b[3])/2, 1.])
+    reference_w = (inverse @ centre)[2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        x, y = raw[0]/raw[2], raw[1]/raw[2]
+    valid = (np.isfinite(x) & np.isfinite(y) & (raw[2] * reference_w > 1e-12)
+             & (x >= 0) & (y >= 0) & (x < width - 1) & (y < height - 1)).reshape(out_h, out_w)
     plane = cv2.warpPerspective(image, image_to_plane, (out_w, out_h), flags=cv2.INTER_LINEAR,
                                 borderMode=cv2.BORDER_CONSTANT, borderValue=PLANE_FILL_BGR)
+    hatch = np.where(((u + v) // 8) % 2 == 0, 24, 40).astype(np.uint8)
+    plane[~valid] = hatch[~valid, None]
     return MapPlane(jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
                     size=(out_w, out_h), revision=calibration.revision,
-                    image_to_plane=tuple(float(v) for v in image_to_plane.reshape(-1)))
+                    image_to_plane=tuple(float(v) for v in image_to_plane.reshape(-1)), valid_mask=valid)
 
 
 def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:

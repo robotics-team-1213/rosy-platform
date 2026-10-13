@@ -69,6 +69,13 @@ MODE_LAMP = {"MANUAL": "manual", "NAVIGATION": "navigating", "DOCKING": "docking
 NAV_STATES = frozenset({"IDLE", "PLANNING", "NAVIGATING", "ARRIVED", "CANCELED", "FAILED", "BLOCKED"})
 NAV_STUCK = frozenset({"BLOCKED", "FAILED"})
 
+#: Rear indicators beside the mode lamp. ``ask`` waits on Fleet. ``left`` and
+#: ``right`` are committed turns, not lane corrections (REP-103 and D-495: + is left).
+DRIVE_SIGNALS = frozenset({"ask", "left", "right"})
+ASK_PHASES = frozenset({"ASKING", "WAITING_CONSOLE"})
+#: D-495 junction states that mean the turn is chosen or under way.
+TURN_STATES = frozenset({"armed", "turning", "advancing"})
+
 #: D-383: the swarm role (SwarmRole) as this table sees it — leader/follower ride
 #: beside the mode for the LCD and the dashboard's fourth gauge cell.
 SWARM_ROLES = frozenset({"leader", "follower"})
@@ -168,16 +175,63 @@ def mode_suffix(robot_mode: Any) -> str:
     return f" - {mode}" if mode in OPERATING_MODES else ""
 
 
-def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None, recovery: Any = None) -> str:
+def _field(obj: Any, name: str) -> Any:
+    if isinstance(obj, Mapping):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
+def _signed(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _junction_turn(junction: Any) -> Optional[str]:
+    """``left``/``right`` while a junction turn is chosen or happening, else None."""
+    if junction is None:
+        return None
+    action = _field(junction, "pending_action")
+    state = _field(junction, "state")
+    if action not in ("left", "right") or state not in TURN_STATES:
+        return None
+    degrees = _field(junction, "turn_deg")
+    if _signed(degrees) and degrees != 0:
+        return "left" if degrees > 0 else "right"
+    return action
+
+
+def drive_signal(stuck_phase: Any = None, reason: Any = None, angular: Any = None,
+                 junction: Any = None) -> Optional[str]:
+    """The rear indicator, or None when the robot is just driving or parked.
+
+    ``ask``: a stuck is waiting on the console, or lane return can only be
+    cleared by Fleet. A committed junction left/right blinks that side. A yield
+    turn (``stuck_yield``, REP-103) blinks the same way. Lane-edge guards and
+    tracking corrections are not turns. This function sends no command.
+    """
+    phase = stuck_phase if isinstance(stuck_phase, str) else ""
+    why = reason if isinstance(reason, str) else ""
+    if phase in ASK_PHASES or why == "lane_return_fleet_required":
+        return "ask"
+    turn = _junction_turn(junction)
+    if turn is not None:
+        return turn
+    if why == "stuck_yield" and _signed(angular) and abs(angular) > 0.05:
+        return "left" if angular > 0 else "right"
+    return None
+
+
+def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None, recovery: Any = None,
+                 signal: Any = None) -> str:
     """D-380/D-381: the one lamp pattern for a health state, CORE's mode and its navigation.
 
-    Priority: FAILED > EMERGENCY > RECOVERING > CAUTION > BOOTING > DOCKING > BLOCKED >
-    NAVIGATING > MANUAL > READY. A mode reaches the lamp only through CORE's 10 s
-    hand-over (``status-inputs.json``), so a robot whose CORE is down never keeps
-    showing a stale mode — the health patterns alone answer for it.
+    Priority: FAILED > EMERGENCY > RECOVERING > CAUTION > BOOTING > DOCKING >
+    ask/left/right > BLOCKED > NAVIGATING > MANUAL > READY. A mode reaches the lamp
+    only through CORE's 10 s hand-over (``status-inputs.json``), so a robot whose
+    CORE is down never keeps showing a stale mode — the health patterns alone answer for it.
 
     D-546: ``recovery`` (CORE's moving lane-recovery phase) shows amber ``recovering``
     (``bridge``: the softer ``bridging``) over everything but FAILED and EMERGENCY.
+    A drive signal is a later argument and never takes that slot.
 
     D-381: inside NAVIGATION, a goal that is BLOCKED or FAILED blinks the same
     cyan ("blocked") instead of breathing — the robot says "I am trying and
@@ -199,6 +253,8 @@ def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None, reco
         return "booting"
     if mode == "DOCKING":
         return "docking"
+    if isinstance(signal, str) and signal in DRIVE_SIGNALS:
+        return signal
     if mode == "NAVIGATION" and valid_nav_state(nav_state) in NAV_STUCK:
         return "blocked"
     if mode == "NAVIGATION":

@@ -15,6 +15,22 @@ import os
 
 import yaml
 
+
+def observer_steering_law(path):
+    """Forward four nonsecret law parameters; CORE's private overlay stays with CORE."""
+    from core_common.config import load_config
+    previous = os.environ.get('ROSY_CONFIG')
+    os.environ['ROSY_CONFIG'] = str(path)
+    try:
+        raw = load_config(fleet_link=False)['line_follow']
+        return {'core_'+key: float(raw[key]) for key in
+                ('cruise_speed', 'max_linear', 'steering_gain', 'min_confidence')}
+    finally:
+        if previous is None:
+            os.environ.pop('ROSY_CONFIG', None)
+        else:
+            os.environ['ROSY_CONFIG'] = previous
+
 #: 시뮬 로봇의 API 토큰. core_common 의 개발 토큰(`config/rosy_dev_auth.yaml`)이다. D-193 7 이후
 #: 기본값에는 토큰이 없으므로 core 노드는 `ROSY_DEV_AUTH=1` 로 띄운다.
 SIM_OPERATOR_TOKEN = "rosy-dev-operator"
@@ -67,8 +83,8 @@ def load_run_spec(path_text: str) -> dict:
     if missing:
         raise RuntimeError(f"run_spec is missing runner fields: {', '.join(missing)}")
     domain = spec.get("ros_domain_id")
-    if type(domain) is not int or not 120 <= domain <= 199:
-        raise RuntimeError("run_spec ros_domain_id must be an integer in 120..199")
+    if type(domain) is not int or not 80 <= domain <= 99:
+        raise RuntimeError("run_spec ros_domain_id must be an integer in 80..99")
     rows = spec.get("robots")
     if not isinstance(rows, list) or not 1 <= len(rows) <= 8:
         raise RuntimeError("run_spec robots must contain 1..8 namespace reservations")

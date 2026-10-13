@@ -36,7 +36,7 @@ SAFETY = "safety"
 
 def test_charging_confirmation_is_safety_tagged():
     """D-443 Q8: charging evidence controls D-27 discharge-stop suppression."""
-    path = "middleware/core/services/core_features/docking/charging.py"
+    path = "middleware/control/drive/behaviors/docking/charging.py"
     assert path in _manifest()["safety_modules"]
     assert _concern_of(path) == SAFETY
 
@@ -316,8 +316,8 @@ CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
 CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
-CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/perception/control/safety/node.py"}
-OMX_SCOPE = ("middleware/apps/device/omx/", "integrations/robots/omx/")
+CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/control/drive/safety/adapter/node.py"}
+OMX_SCOPE = ("middleware/devices/omx/", "integrations/robots/omx/")
 
 
 def _is_cmd_vel(node: ast.AST | None, constants: dict) -> bool:
@@ -376,7 +376,7 @@ def test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it():
     assert found["parameters"] == CMD_VEL_PARAMETER_ALLOWLIST
     assert found["pub_users"] == {(CMD_VEL_PUBLISHER, "__init__"), (CMD_VEL_PUBLISHER, "_send_twist")}
     assert {entry for entry in found["send_goal"] if entry[1] != "<module>"} == {
-        ("middleware/apps/device/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
+        ("middleware/devices/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
 
 
 def test_each_separation_rule_checks_at_least_one_importer():

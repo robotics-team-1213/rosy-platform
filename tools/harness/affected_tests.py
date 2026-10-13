@@ -86,7 +86,19 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 3, "sensing": 2}
+SUITE_SHARDS = {"fleet": 4, "sensing": 2}
+# Main CI 38056130519 (2026-10-10), seconds per slow Fleet file. These only
+# choose runners; every discovered test still runs exactly once.
+# shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
+FLEET_TEST_SECONDS = {
+    "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
+    "test_blocks.py": 89, "test_start_point_browser.py": 45,
+    "test_console_roles_browser.py": 28, "test_password_session.py": 28,
+    "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
+    "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
+    "test_signal_phase.py": 13, "test_trip_runner.py": 11,
+    "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
+}
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
@@ -94,21 +106,22 @@ CI_FULL_MATRIX = (
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
-        "middleware/apps/device/pinky/profile/test", "middleware/apps/device/omx/profile/test"]], "ros": "none"},
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
-        ["operations/vision/test"], ["operations/processes/cell/test"],
+        ["operations/vision/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
+        ["operations/world/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
          "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
     {"name": "gz-sim", "invocations": [["integrations/simulation/gazebo/test"]], "ros": "overlay"},
     {"name": "hardware-safety", "invocations": [[
-        "middleware/apps/device/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
+        "middleware/devices/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
         "middleware/perception/test/test_ir_adc_lock.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_flake8.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_pep257.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
 )
 
 # A module whose `tests` is the whole root suite is too broad to select by
@@ -210,9 +223,11 @@ class Repo:
 
     def module_for(self, path: str) -> dict | None:
         best = None
+        best_length = -1
         for module in self.modules:
-            if _under(path, module["path"]) and (best is None or len(module["path"]) > len(best["path"])):
-                best = module
+            for source in (module['path'], *module.get('source_paths', ())):
+                if _under(path, source) and len(source) > best_length:
+                    best, best_length = module, len(source)
         return best
 
     def prefixes_under(self, path: str) -> tuple[str, ...]:
@@ -416,7 +431,15 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             if len(files) < n or n == 1:
                 entries.append(dict(entry))
                 continue
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[files[i::n]])
+            groups = [files[i::n] for i in range(n)]
+            if entry["name"] == "fleet":
+                groups, loads = [[] for _ in range(n)], [0] * n
+                for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)):
+                    i = min(range(n), key=lambda i: (loads[i], i))
+                    groups[i].append(path)
+                    loads[i] += FLEET_TEST_SECONDS.get(PurePosixPath(path).name, 1)
+                groups = [sorted(group) for group in groups]
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[groups[i]])
                         for i in range(n)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",

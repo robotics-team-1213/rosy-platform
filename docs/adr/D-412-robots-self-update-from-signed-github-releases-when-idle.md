@@ -120,3 +120,7 @@
 이 명령은 서명 검증과 `canary_ok=true`를 요구하며 철회 상태, payload 해시, source revision,
 카나리 목록과 발행 시각을 유지한다. 동시 변경을 발견하면 덮어쓰지 않는다.
 로봇의 IDLE·정지·주행/도킹/교정 없음, hold, 배터리, claim 조건과 건강 판정은 그대로 적용한다.
+
+### Addendum (2026-10-10, D-553 addendum 3)
+
+자동 업데이트 채널은 main 전체 릴리스만 받는다. `publish_payload_release.py`는 델타 페이로드와 `source-ref.txt`가 `main`이 아닌 tarball을 거부한다. 근거와 조건은 [D-553](D-553-cd-speed-parallel-build-and-test-pcs.md) Addendum 3에 있다.

@@ -1,0 +1,3938 @@
+{
+  "models": {
+    "pidnet": "sim-pidnet-4d4cd27e",
+    "unet": "sim-unet-5159bea1",
+    "v11": "lane-seg-20261006-5f5ddcd9",
+    "v13_drivable": "v13-drivable-20261009-982b09a9"
+  },
+  "sources": {
+    "unet": {
+      "rows": [
+        {
+          "stamp": 39.0,
+          "gt_xy": [
+            -1.2672,
+            -0.4197
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5270
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5237
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5260
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5260
+            }
+          }
+        },
+        {
+          "stamp": 39.125,
+          "gt_xy": [
+            -1.2672,
+            -0.4197
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5270
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5237
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5260
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5260
+            }
+          }
+        },
+        {
+          "stamp": 39.25,
+          "gt_xy": [
+            -1.2662,
+            -0.4219
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5369
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5344
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5363
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5363
+            }
+          }
+        },
+        {
+          "stamp": 39.375,
+          "gt_xy": [
+            -1.2649,
+            -0.4244
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5404
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5369
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5377
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5377
+            }
+          }
+        },
+        {
+          "stamp": 39.5,
+          "gt_xy": [
+            -1.2637,
+            -0.4265
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5365
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5359
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5352
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5352
+            }
+          }
+        },
+        {
+          "stamp": 39.625,
+          "gt_xy": [
+            -1.2623,
+            -0.4287
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5422
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5346
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5332
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5332
+            }
+          }
+        },
+        {
+          "stamp": 39.75,
+          "gt_xy": [
+            -1.2606,
+            -0.4313
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5442
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5568
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5345
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5345
+            }
+          }
+        },
+        {
+          "stamp": 39.875,
+          "gt_xy": [
+            -1.259,
+            -0.4335
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5470
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5444
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5352
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5352
+            }
+          }
+        },
+        {
+          "stamp": 40.0,
+          "gt_xy": [
+            -1.2576,
+            -0.4353
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5681
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5411
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5324
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5324
+            }
+          }
+        },
+        {
+          "stamp": 40.125,
+          "gt_xy": [
+            -1.2576,
+            -0.4353
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5562
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5356
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5287
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5287
+            }
+          }
+        },
+        {
+          "stamp": 40.25,
+          "gt_xy": [
+            -1.2576,
+            -0.4353
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5562
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5356
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5287
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5287
+            }
+          }
+        },
+        {
+          "stamp": 40.375,
+          "gt_xy": [
+            -1.2559,
+            -0.4374
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5510
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5448
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5372
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5372
+            }
+          }
+        },
+        {
+          "stamp": 40.5,
+          "gt_xy": [
+            -1.254,
+            -0.4398
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5566
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5414
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5331
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5331
+            }
+          }
+        },
+        {
+          "stamp": 40.625,
+          "gt_xy": [
+            -1.2517,
+            -0.4424
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5700
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5482
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5338
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5338
+            }
+          }
+        },
+        {
+          "stamp": 40.75,
+          "gt_xy": [
+            -1.2496,
+            -0.4446
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5992
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5892
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5270
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5270
+            }
+          }
+        },
+        {
+          "stamp": 40.875,
+          "gt_xy": [
+            -1.2476,
+            -0.4467
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6522
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5507
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5281
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5281
+            }
+          }
+        },
+        {
+          "stamp": 41.0,
+          "gt_xy": [
+            -1.2467,
+            -0.4476
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6831
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5658
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5366
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5366
+            }
+          }
+        },
+        {
+          "stamp": 41.125,
+          "gt_xy": [
+            -1.2459,
+            -0.4485
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6082
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5969
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5662
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5662
+            }
+          }
+        },
+        {
+          "stamp": 41.25,
+          "gt_xy": [
+            -1.2452,
+            -0.4493
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6596
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6278
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6249
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6249
+            }
+          }
+        },
+        {
+          "stamp": 41.375,
+          "gt_xy": [
+            -1.2445,
+            -0.4502
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6791
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6678
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6632
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6632
+            }
+          }
+        },
+        {
+          "stamp": 41.5,
+          "gt_xy": [
+            -1.2438,
+            -0.4512
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7046
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6926
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6943
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6943
+            }
+          }
+        },
+        {
+          "stamp": 41.625,
+          "gt_xy": [
+            -1.2432,
+            -0.4522
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7303
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7166
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7209
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7209
+            }
+          }
+        },
+        {
+          "stamp": 41.75,
+          "gt_xy": [
+            -1.2427,
+            -0.4533
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7422
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7387
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7440
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7440
+            }
+          }
+        },
+        {
+          "stamp": 41.875,
+          "gt_xy": [
+            -1.2422,
+            -0.4543
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7489
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7472
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7633
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7633
+            }
+          }
+        },
+        {
+          "stamp": 42.0,
+          "gt_xy": [
+            -1.2418,
+            -0.4556
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7600
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7299
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7782
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7782
+            }
+          }
+        },
+        {
+          "stamp": 42.125,
+          "gt_xy": [
+            -1.2415,
+            -0.4566
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7634
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6983
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7910
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7910
+            }
+          }
+        },
+        {
+          "stamp": 42.25,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6983
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6812
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8059
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8059
+            }
+          }
+        },
+        {
+          "stamp": 42.375,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 42.5,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 42.625,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 42.75,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 42.875,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.0,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.125,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.25,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.375,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.5,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.625,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.75,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 43.875,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.0,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.125,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.25,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.375,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.5,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.625,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.75,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 44.875,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 45.0,
+          "gt_xy": [
+            -1.2415,
+            -0.4567
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6654
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6452
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8102
+            }
+          }
+        },
+        {
+          "stamp": 45.125,
+          "gt_xy": [
+            -1.2417,
+            -0.4553
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6965
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6504
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8278
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8278
+            }
+          }
+        },
+        {
+          "stamp": 45.25,
+          "gt_xy": [
+            -1.2423,
+            -0.4518
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8074
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7018
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8463
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8463
+            }
+          }
+        },
+        {
+          "stamp": 45.375,
+          "gt_xy": [
+            -1.243,
+            -0.4478
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7840
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8210
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8378
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8378
+            }
+          }
+        },
+        {
+          "stamp": 45.5,
+          "gt_xy": [
+            -1.2436,
+            -0.4443
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7299
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7995
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8036
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8036
+            }
+          }
+        },
+        {
+          "stamp": 45.625,
+          "gt_xy": [
+            -1.2443,
+            -0.4403
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7384
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7581
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7602
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7602
+            }
+          }
+        },
+        {
+          "stamp": 45.75,
+          "gt_xy": [
+            -1.245,
+            -0.4363
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6803
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7191
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7214
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7214
+            }
+          }
+        },
+        {
+          "stamp": 45.875,
+          "gt_xy": [
+            -1.2456,
+            -0.4327
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6740
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6840
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6851
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6851
+            }
+          }
+        },
+        {
+          "stamp": 46.0,
+          "gt_xy": [
+            -1.2462,
+            -0.4292
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6445
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6526
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6536
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6536
+            }
+          }
+        }
+      ],
+      "strategy_counts_after_8_warmup_frames": {
+        "threshold": {
+          "left_only": 13,
+          "none": 36
+        },
+        "pidnet": {
+          "left_only": 15,
+          "none": 34
+        },
+        "unet": {
+          "left_only": 15,
+          "none": 34
+        },
+        "v11": {
+          "left_only": 15,
+          "none": 34
+        },
+        "v13_drivable": {
+          "left_only": 15,
+          "none": 34
+        }
+      }
+    },
+    "v13_drivable": {
+      "rows": [
+        {
+          "stamp": 39.0,
+          "gt_xy": [
+            -1.2592,
+            -0.4388
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5807
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5794
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5682
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5682
+            }
+          }
+        },
+        {
+          "stamp": 39.125,
+          "gt_xy": [
+            -1.2574,
+            -0.4411
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5932
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5767
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5712
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5712
+            }
+          }
+        },
+        {
+          "stamp": 39.25,
+          "gt_xy": [
+            -1.2558,
+            -0.4429
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5865
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5748
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5696
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5696
+            }
+          }
+        },
+        {
+          "stamp": 39.375,
+          "gt_xy": [
+            -1.2546,
+            -0.4444
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6029
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5881
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5820
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 5820
+            }
+          }
+        },
+        {
+          "stamp": 39.5,
+          "gt_xy": [
+            -1.2541,
+            -0.445
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6285
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6139
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6077
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6077
+            }
+          }
+        },
+        {
+          "stamp": 39.625,
+          "gt_xy": [
+            -1.254,
+            -0.4451
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6390
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6300
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6192
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6192
+            }
+          }
+        },
+        {
+          "stamp": 39.75,
+          "gt_xy": [
+            -1.254,
+            -0.4451
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6396
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6298
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6192
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6192
+            }
+          }
+        },
+        {
+          "stamp": 39.875,
+          "gt_xy": [
+            -1.2538,
+            -0.4454
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6443
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6392
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6240
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6240
+            }
+          }
+        },
+        {
+          "stamp": 40.0,
+          "gt_xy": [
+            -1.2532,
+            -0.4461
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6570
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6523
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6407
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6407
+            }
+          }
+        },
+        {
+          "stamp": 40.125,
+          "gt_xy": [
+            -1.2532,
+            -0.4461
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6621
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6466
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            }
+          }
+        },
+        {
+          "stamp": 40.25,
+          "gt_xy": [
+            -1.2532,
+            -0.4461
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6621
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6466
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            }
+          }
+        },
+        {
+          "stamp": 40.375,
+          "gt_xy": [
+            -1.2532,
+            -0.4461
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6621
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6466
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            }
+          }
+        },
+        {
+          "stamp": 40.5,
+          "gt_xy": [
+            -1.2532,
+            -0.4461
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6621
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6466
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6472
+            }
+          }
+        },
+        {
+          "stamp": 40.625,
+          "gt_xy": [
+            -1.2529,
+            -0.4465
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6656
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6515
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6516
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6516
+            }
+          }
+        },
+        {
+          "stamp": 40.75,
+          "gt_xy": [
+            -1.2522,
+            -0.4476
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6841
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6682
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6699
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6699
+            }
+          }
+        },
+        {
+          "stamp": 40.875,
+          "gt_xy": [
+            -1.2516,
+            -0.4486
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7077
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6953
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6975
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 6975
+            }
+          }
+        },
+        {
+          "stamp": 41.0,
+          "gt_xy": [
+            -1.2511,
+            -0.4496
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7326
+            },
+            "unet": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7242
+            },
+            "v11": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7275
+            },
+            "v13_drivable": {
+              "strategy": "left_only",
+              "reason": null,
+              "mask_pixels": 7275
+            }
+          }
+        },
+        {
+          "stamp": 41.125,
+          "gt_xy": [
+            -1.2506,
+            -0.4506
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7530
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7471
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7537
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7537
+            }
+          }
+        },
+        {
+          "stamp": 41.25,
+          "gt_xy": [
+            -1.2502,
+            -0.4517
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7683
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7582
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7775
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7775
+            }
+          }
+        },
+        {
+          "stamp": 41.375,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7776
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7567
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8014
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8014
+            }
+          }
+        },
+        {
+          "stamp": 41.5,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7870
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7290
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8218
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8218
+            }
+          }
+        },
+        {
+          "stamp": 41.625,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 41.75,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 41.875,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.0,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.125,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.25,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.375,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.5,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.625,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.75,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 42.875,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.0,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.125,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.25,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.375,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.5,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.625,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.75,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 43.875,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 44.0,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 44.125,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 44.25,
+          "gt_xy": [
+            -1.2499,
+            -0.4526
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7551
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7171
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8296
+            }
+          }
+        },
+        {
+          "stamp": 44.375,
+          "gt_xy": [
+            -1.2502,
+            -0.451
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7944
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7183
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8331
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8331
+            }
+          }
+        },
+        {
+          "stamp": 44.5,
+          "gt_xy": [
+            -1.2509,
+            -0.4475
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7936
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8149
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8257
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 8257
+            }
+          }
+        },
+        {
+          "stamp": 44.625,
+          "gt_xy": [
+            -1.2516,
+            -0.444
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7746
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7924
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7971
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7971
+            }
+          }
+        },
+        {
+          "stamp": 44.75,
+          "gt_xy": [
+            -1.2524,
+            -0.44
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7271
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7521
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7552
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7552
+            }
+          }
+        },
+        {
+          "stamp": 44.875,
+          "gt_xy": [
+            -1.2531,
+            -0.4365
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7017
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7150
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7167
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 7167
+            }
+          }
+        },
+        {
+          "stamp": 45.0,
+          "gt_xy": [
+            -1.2539,
+            -0.4325
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6730
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6798
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6814
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6814
+            }
+          }
+        },
+        {
+          "stamp": 45.125,
+          "gt_xy": [
+            -1.2546,
+            -0.4291
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6453
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6481
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6493
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6493
+            }
+          }
+        },
+        {
+          "stamp": 45.25,
+          "gt_xy": [
+            -1.2554,
+            -0.4251
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6121
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6194
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6201
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 6201
+            }
+          }
+        },
+        {
+          "stamp": 45.375,
+          "gt_xy": [
+            -1.2561,
+            -0.4216
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5854
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5906
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5923
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5923
+            }
+          }
+        },
+        {
+          "stamp": 45.5,
+          "gt_xy": [
+            -1.2568,
+            -0.4182
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5602
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5584
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5670
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5670
+            }
+          }
+        },
+        {
+          "stamp": 45.625,
+          "gt_xy": [
+            -1.2575,
+            -0.4147
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5384
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5379
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5426
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5426
+            }
+          }
+        },
+        {
+          "stamp": 45.75,
+          "gt_xy": [
+            -1.2583,
+            -0.4107
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5131
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5172
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5216
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5216
+            }
+          }
+        },
+        {
+          "stamp": 45.875,
+          "gt_xy": [
+            -1.2591,
+            -0.4068
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4894
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4968
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5005
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 5005
+            }
+          }
+        },
+        {
+          "stamp": 46.0,
+          "gt_xy": [
+            -1.2598,
+            -0.4035
+          ],
+          "models": {
+            "threshold": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": null
+            },
+            "pidnet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4698
+            },
+            "unet": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4765
+            },
+            "v11": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4807
+            },
+            "v13_drivable": {
+              "strategy": "none",
+              "reason": "no_boundary",
+              "mask_pixels": 4807
+            }
+          }
+        }
+      ],
+      "strategy_counts_after_8_warmup_frames": {
+        "threshold": {
+          "left_only": 8,
+          "none": 41
+        },
+        "pidnet": {
+          "left_only": 9,
+          "none": 40
+        },
+        "unet": {
+          "left_only": 9,
+          "none": 40
+        },
+        "v11": {
+          "left_only": 9,
+          "none": 40
+        },
+        "v13_drivable": {
+          "left_only": 9,
+          "none": 40
+        }
+      }
+    }
+  }
+}

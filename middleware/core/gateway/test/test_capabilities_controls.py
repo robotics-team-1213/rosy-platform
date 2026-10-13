@@ -150,3 +150,28 @@ def test_d491_nan_odom_does_not_fail_the_state_api(core_client):
     response = client.get("/api/v1/robot/state", headers=VIEWER)
     assert response.status_code == 200
     assert response.json()["odom_pose"]["x"] == 0.5
+
+
+def test_d604_line_camera_reports_the_front_preview_store(core_client):
+    import time
+
+    client, svc = _live_core(core_client)
+
+    def camera():
+        response = client.get("/api/v1/system/capabilities", headers=VIEWER)
+        return response.json()["line_follow"]["camera"]
+
+    assert camera() == {"available": False, "age_ms": None, "source": "NONE"}  # no frame yet
+    now = time.monotonic()
+    svc.vision.publish(b"\xff\xd8f\xff\xd9", captured_at=1.0, received_at=now,
+                       frame_id="front_camera_link", source="ROSY")
+    fresh = camera()
+    assert fresh["available"] is True and fresh["source"] == "DEVICE" and fresh["age_ms"] >= 0
+    assert fresh["available"] is svc.vision.status()["available"]  # one source with front/status
+    svc.vision.publish(b"\xff\xd8g\xff\xd9", captured_at=2.0, received_at=now - 60.0,
+                       frame_id="front_camera_link", source="GAZEBO")
+    stale = camera()
+    assert stale["available"] is False and stale["source"] == "GAZEBO" and stale["age_ms"] >= 59_000
+    assert (_controls(client)["items"][0]["drive_modes"][0] == "lane")  # drive_modes unchanged
+    svc.line_follow = None
+    assert "line_follow" not in client.get("/api/v1/system/capabilities", headers=VIEWER).json()

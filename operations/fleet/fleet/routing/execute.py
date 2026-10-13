@@ -129,7 +129,8 @@ def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig)
 
 
 def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, junction_turn: bool,
-                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False) -> Optional[dict]:
+                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False,
+                final_place: Optional[str] = None) -> Optional[dict]:
     """None when the robot can drive every segment; otherwise ``TRIP_MODE_UNSUPPORTED`` detail.
 
     Any lane segment needs ``junction_turn`` (CORE's junction gate runs only with live keep-mode
@@ -149,7 +150,7 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
             continue
         if not junction_turn:
             return {"edge_id": segment["edge_id"], "reason": "JUNCTION_TURN_UNSUPPORTED"}
-        if i + 1 == len(segments) and not repeat and ends_at_place(graph, segment) is None:
+        if i + 1 == len(segments) and not repeat and ends_at_place(graph, segment) is None and final_place is None:
             return {"edge_id": segment["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
         if lane_action(graph, segments, i, config) == STOP:
             continue  # the last place, or a hand-over
@@ -177,21 +178,24 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
             map_version=active[0], start_pose=tuple(start_pose), goal=goal, robot_kind=caps.get("kind"),
             drive_modes=frozenset(caps.get("modes") or ("lane", "free")), max_speed_mps=caps.get("max_speed"),
             via=tuple(v for v in request.get("via", ()) if v not in passed), arrive_yaw=request.get("arrive_yaw"),
-            speed_cap=request.get("speed_cap"), blocked_edges=blocked), config)
+            speed_cap=request.get("speed_cap"),
+            blocked_edges=frozenset(blocked) | frozenset(request.get("blocked_edges") or ()),
+            extra_cost=request.get("extra_cost") or {}), config)
     except PlanError as exc:
         return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)
     refused = unsupported(active[2], body["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
                           junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg,
-                          repeat=bool(request.get("repeat")))
+                          repeat=bool(request.get("repeat")), final_place=body["actions"][-1]["place_id"])
     if refused is not None:
         return None, {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
     return body, None
 
 
 def route_key(segments: list) -> list:
-    """What makes two routes the same (D-489 9): the edges driven and where each ends."""
-    return [(s["edge_id"], s["forward"], s["s_to"]) for s in segments]
+    """What makes two routes the same (D-489 9): the edges driven and where each ends. A zero-length
+    segment drives nothing (a plan from a place may start at the very end of the lane into it)."""
+    return [(s["edge_id"], s["forward"], s["s_to"]) for s in segments if s["s_to"] - s["s_from"] > 1e-6]
 
 
 def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,

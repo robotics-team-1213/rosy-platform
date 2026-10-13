@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>ROSY Platform</title>
+  <!-- D-654: derived from mark.svg; geometry and token colours are checked together. -->
+  <path id="background" d="M24 0H84A24 24 0 0 1 108 24V84A24 24 0 0 1 84 108H24A24 24 0 0 1 0 84V24A24 24 0 0 1 24 0Z" fill="#101214"/>
+  <path id="rosy-mark" d="M26 20H66A22 22 0 0 1 66 64H54L86 96H64L31 63A8 8 0 0 1 38 49H66A7 7 0 0 0 66 35H26A7.5 7.5 0 0 1 26 20Z" transform="translate(18 14) scale(.66)" fill="#f697e7"/>
+</svg>

@@ -25,10 +25,19 @@ ROOT = Path(__file__).resolve().parents[3]
 @pytest.fixture
 def browser_site(tmp_path):
     from playwright.sync_api import sync_playwright
+    from core_common.protocol.channel_requests import DiscordRequestEnvelope
+    from fleet.server.channel_requests import ChannelConfig
 
     client, tasks, _ = _setup(
         tmp_path, compiler=PalletizingCellJobCompiler(tol_m=0.001),
-        cell_app_service_id="cell-service", web_common=ROOT / "shared/web", start_task_dispatcher=False)
+        cell_app_service_id="cell-service", web_common=ROOT / "shared/web", start_task_dispatcher=False,
+        channel_config=ChannelConfig(guild_id='100000000000000000', channel_id='100000000000000001',
+            bot_id='100000000000000002', transport_key='test-transport-' * 3,
+            users={'100000000000000003': 'operator-1'}))
+    tasks.discord_request = client.app.state.channel_requests.receive(DiscordRequestEnvelope(
+        guild_id='100000000000000000', channel_id='100000000000000001', author_id='100000000000000003',
+        message_id='100000000000000004', mentions=['100000000000000002'], author_bot=False,
+        webhook_id=None, content='<@100000000000000002> <script>window.discordXss=true</script> prepare cell'))
     listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(
@@ -63,11 +72,11 @@ def browser_site(tmp_path):
 def _prepare(page):
     from playwright.sync_api import expect
 
-    if "operator-1" not in page.locator("#user-role").inner_text():
+    if "operator-1" not in (page.locator("#user-role").get_attribute("title") or ""):
         open_token_access(page)
         page.locator("#console-token").fill("operator-secret")
         page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_have_text("operator-1 · 운영자")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -80,6 +89,37 @@ def _prepare(page):
         expect(page.locator(f"#{kind}-revision")).to_contain_text("저장된 버전")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(browser_site, width, height):
+    from playwright.sync_api import expect
+    page, tasks, origin = browser_site
+    page.set_viewport_size({'width': width, 'height': height})
+    request_id = tasks.discord_request['request_id']
+    page.goto(origin + '/console/cell?channel_request=' + request_id)
+    _prepare(page)
+    expect(page.locator('#cell-channel-original')).to_contain_text('<script>')
+    assert page.evaluate('window.discordXss === undefined')
+    page.locator('#workcell').fill('omx_sim')
+    page.locator('#instance').fill('omx_sim_01')
+    page.locator('#cell-channel-reason').fill('reviewed saved recipe and cell')
+    page.locator('#propose').click()
+    expect(page.locator('#proposal')).to_contain_text('운영자 별도 승인 대기')
+    proposal_id = page.locator('#mission-id').input_value()
+    from fleet.server.cell_job_store import CellJobStore
+    jobs = CellJobStore(tasks.store.path)
+    assert jobs.get(proposal_id)['status'] == 'PROPOSED'
+    page.locator('#read-job').click()
+    expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+    page.locator('#admit').click()
+    page.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+    assert jobs.get(proposal_id)['status'] == 'PROPOSED'
+    page.locator('#admit').click()
+    page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+    expect(page.locator('#job-summary')).to_contain_text('실행 대기')
+    assert jobs.get(proposal_id)['status'] == 'READY'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -264,7 +304,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
 
     page, _, _ = browser_site
     expect(page.locator("#cell-purpose")).to_contain_text("레시피와 셀 문서를 준비")
-    expect(page.locator("#cell-purpose")).to_contain_text("5단계")
+    expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
         status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
     open_token_access(page)
@@ -272,6 +312,12 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("Cell 서비스 구성을 확인")
     expect(page.locator("#saved-status")).to_contain_text("Cell 서비스 구성을 확인")
+    for control in ("recipe-save", "cell-save", "compile", "recipe-load", "cell-load", "read-job"):
+        expect(page.locator(f"#{control}")).to_be_disabled()
+        expect(page.locator(f"#{control}")).to_have_attribute("reason", "Cell 서비스 구성 확인 필요")
+    expect(page.locator("#token-save")).to_be_enabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    expect(page.locator("#recipe-id")).to_be_enabled()
     assert "CELL_APP_UNCONFIGURED" not in page.locator("main").inner_text()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
@@ -280,9 +326,15 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
             page.evaluate("window.scrollTo(0, 0)")
             page.screenshot(path=str(Path(output) / f"fleet-cell-purpose-{width}x{height}.png"))
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.unroute("**/api/fleet/cell-app/documents")
+    open_token_access(page)
+    page.locator("#token-save").click()
+    expect(page.locator("#notice")).to_contain_text("접속 완료")
+    for control in ("recipe-save", "cell-save", "recipe-load", "cell-load", "read-job"):
+        expect(page.locator(f"#{control}")).to_be_enabled()
 
 
-@pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
+@pytest.mark.parametrize("denial,notice", [(401, "로그인하거나 고급 접속을 확인하세요"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, width, height):
     from playwright.sync_api import expect
@@ -363,6 +415,8 @@ def test_cell_save_unavailable_does_not_claim_success(browser_site):
     revision = page.locator("#recipe-revision")
     expect(revision).to_contain_text("저장 결과 확인 불가")
     expect(revision).to_contain_text("최신 버전")
+    expect(page.locator("#notice")).to_contain_text("현재 상태를 다시 조회하세요")
+    expect(page.locator("#notice")).not_to_contain_text("HTTP 503")
     assert page.locator("#propose").is_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
@@ -594,7 +648,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
     page.set_viewport_size({"width": width, "height": height})
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("operator-1")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     job = {"mission_id": "sheet-held", "status": "HOLD", "current_step_index": 0,
            "reason": "OPERATOR_SHEET_ACCESS_UNAVAILABLE", "steps": [
                {"step_index": 0, "status": "HOLD", "step": {"inputs": {
@@ -647,7 +701,7 @@ def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):
     page.reload()
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page.locator("#user-role")).to_contain_text("operator-1")
+    expect(page.locator("#user-role")).to_have_attribute("title", "operator-1 · operator")
     for kind in ("recipe", "cell"):
         page.locator(f"#{kind}-load").click()
         expect(page.locator("#notice")).to_contain_text("저장된 문서를 불러왔습니다")

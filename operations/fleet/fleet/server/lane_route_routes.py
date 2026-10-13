@@ -15,7 +15,8 @@ from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from fleet.hub.hub import HubError
-from fleet.lane_route import LaneRouteError, next_step, route_lines
+from fleet.lane_route import LaneRouteError, next_step, route_lines, step_facts
+from fleet.routing.brief import route_context
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.task_store import IdempotencyConflict
@@ -84,10 +85,12 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
             raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
         if step is not None:
             followed[route_key] = step.at_m
+        context = route_context(planner="lane_step", supplied={"edges": list(body.edges)},
+                                holds=step_facts(lines, step))
         if step is None:
             followed.pop(route_key, None)
             return {"accepted": False, "queued": False, "reason": "ROUTE_COMPLETE",
-                    "goal": None, "edges": list(body.edges)}
+                    "goal": None, "edges": list(body.edges), "context": context}
         goal = {"x": step.x, "y": step.y, "yaw": step.yaw}
         try:
             if task_service is not None:
@@ -97,9 +100,10 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
                     request_key=idempotency_key,
                 )
                 return {"accepted": task["status"] == "ACCEPTED",
-                        "queued": task["status"] == "QUEUED", "task": task, "goal": goal}
+                        "queued": task["status"] == "QUEUED", "task": task, "goal": goal,
+                        "context": context}
             result = await console.goal(robot_id, step.x, step.y, step.yaw)
-            return {**result, "goal": goal}
+            return {**result, "goal": goal, "context": context}
         except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail={
                 "code": "IDEMPOTENCY_CONFLICT", "message": str(exc),

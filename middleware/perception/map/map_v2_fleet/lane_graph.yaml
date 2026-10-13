@@ -939,3 +939,6 @@ segments:
     - [-0.5198, 0.1723]
     to: NW
 source_sha256: cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b
+turn_bans:
+- {at: NW, from_edge: west, to_edge: ring_w}
+- {at: SE, from_edge: east, to_edge: ring_e}
