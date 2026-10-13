@@ -340,12 +340,20 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     offenders = []
     for role, base in roles.items():
         assert base.is_dir(), base
+    # The `control` package's node files sit in source holders beside control/
+    # (control/_source_layout.py CONTROL_ROOTS); only their entry points are exempt.
+    import runpy
+    layout = runpy.run_path(str(roles["sensing"] / "control/_source_layout.py"))
+    node_holders = ("sensing/control/", *(f"sensing/{root.relative_to(roles['sensing']).as_posix()}/"
+                                          for root in layout["CONTROL_ROOTS"]
+                                          if root.is_relative_to(roles["sensing"])))
+    assert len(node_holders) > 1, node_holders
     for role, path in ((role, path) for role, base in roles.items() for path in base.rglob("*.py")):
         rel = f"{role}/{path.relative_to(roles[role]).as_posix()}"
         if "/test/" in f"/{rel}" or rel == "gateway/core/main.py" or rel.startswith("sensing/tools/"):
             continue
         source = path.read_text(encoding="utf-8-sig")
-        spans = _entry_point_spans(source) if rel.startswith("sensing/control/") else []
+        spans = _entry_point_spans(source) if rel.startswith(node_holders) else []
         for lineno, line in enumerate(source.splitlines(), 1):
             if pattern.search(line) and not any(a <= lineno <= b for a, b in spans):
                 offenders.append(f"{rel}:{lineno}: {line.strip()}")
