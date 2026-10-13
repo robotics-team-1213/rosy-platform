@@ -14,6 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.responses import HTMLResponse
 from core_api_web.api.ui_registry import load_registry
+from core_api_web.api.command_activity import CommandActivityMiddleware
 
 from core_api_web.api.deps import CoreServicesLike, device_mode, refused_token_count
 from core_common.config import DEV_MODE_MARKER, dev_auth_enabled
@@ -149,6 +150,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     # gzip 뒤에는 29 KB다 — 첫 로드에서 93 KB가 줄어든다. 별도 런타임도,
     # 빌드 산출물도 늘리지 않으므로 D-23의 최소 표면 원칙을 지킨다.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # D-24 (2026-10-04): an accepted command resets the power inactivity timer.
+    app.add_middleware(CommandActivityMiddleware, power=lambda: getattr(services, "power", None))
     register_exception_handlers(app)
 
     web_root = _dashboard_root()

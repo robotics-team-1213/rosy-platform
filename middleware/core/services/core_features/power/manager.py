@@ -27,6 +27,7 @@ WAKE_CONTACT = "contact"
 WAKE_ACTIVITY = "activity"
 WAKE_API = "api"
 WAKE_BATTERY = "battery"
+WAKE_COMMAND = "command"
 
 
 @dataclass
@@ -40,6 +41,10 @@ class PresenceConfig:
     release_samples: int = 3        # 해제에 필요한 연속 표본 수
     min_valid_m: float = 0.02       # 센서 min_range — 미만은 무효 표본
     max_valid_m: float = 3.0        # 센서 max_range — 초과는 무효 표본
+    # D-24 개정(2026-10-04): 검출은 "연속 유효 표본 + 최소 체류 시간" 둘 다다.
+    # 표본 수만 보면 20 Hz에서 0.05 s짜리 반사파 두 개로 깨어난다.
+    min_presence_s: float = 0.4     # 연속 근접이 이만큼 이어져야 검출
+    max_gap_s: float = 1.0          # 근접 표본 사이가 이보다 벌어지면 연속이 끊긴다
 
 
 @dataclass
@@ -80,10 +85,19 @@ _RATE_ATTR = {
 
 
 class PresenceDetector:
-    """양방향 디바운스 + 히스테리시스.
+    """양방향 디바운스 + 히스테리시스 + 최소 체류 시간 (D-24 개정 2026-10-04).
 
     단발 반사파로 깨어나지 않고, 단발 드롭아웃으로 화면이 꺼지지 않는다.
-    무효 표본(NaN/Inf/센서 범위 밖)은 카운터를 건드리지 않고 버린다.
+
+    검출(NONE→NEAR/CONTACT)은 **정말로 연속된** 유효 근접 표본이 필요하다.
+    무효 표본(NaN/Inf/센서 범위 밖)과 히스테리시스 대역 표본은 검출 연속을
+    끊는다 — 예전에는 둘 다 카운터를 보존해서, 몇 분 떨어진 반사파 두 개가
+    "연속 2표본"으로 합쳐져 proximity 웨이크를 냈다. 해제(→NONE)는 그대로
+    대역 밖 표본만 세며, 무효 표본은 해제 카운터를 건드리지 않는다.
+
+    `now`를 주면 시간 규칙도 적용한다: 연속 근접이 `min_presence_s` 이상
+    이어져야 하고, 근접 표본 간격이 `max_gap_s`를 넘으면 연속이 끊긴다.
+    `now`가 없으면 표본 수만 본다(시계 없는 호출자용).
     """
 
     def __init__(self, config: PresenceConfig) -> None:
@@ -92,6 +106,9 @@ class PresenceDetector:
         self._near_count = 0
         self._contact_count = 0
         self._far_count = 0
+        self._near_since: Optional[float] = None
+        self._contact_since: Optional[float] = None
+        self._last_near_at: Optional[float] = None
         self.last_valid_range: Optional[float] = None
         # 마지막 유효 표본이 해제 임계(near_m + hysteresis_m) 안이었는가.
         # 정보 창 연장은 이 값만 보고 결정한다 — 프레즌스 상태와 분리한다.
@@ -106,8 +123,22 @@ class PresenceDetector:
             return False
         return self._cfg.min_valid_m <= value <= self._cfg.max_valid_m
 
-    def update(self, range_m: float) -> PresenceState:
+    def _break_detection(self) -> None:
+        self._near_count = 0
+        self._contact_count = 0
+        self._near_since = None
+        self._contact_since = None
+        self._last_near_at = None
+
+    def _held(self, since: Optional[float], now: Optional[float]) -> bool:
+        if now is None or since is None:
+            return True
+        return now - since >= self._cfg.min_presence_s - 1e-9   # float tolerance
+
+    def update(self, range_m: float, now: Optional[float] = None) -> PresenceState:
         if not self.is_valid(range_m):
+            # 드롭아웃은 해제가 아니다(far 카운터 보존). 검출 연속만 끊는다.
+            self._break_detection()
             return self.state
 
         value = float(range_m)
@@ -115,25 +146,35 @@ class PresenceDetector:
         self.last_valid_range = value
         self.last_inside = value <= cfg.near_m + cfg.hysteresis_m
 
-        if value < cfg.contact_m:
-            self._contact_count += 1
+        if value < cfg.near_m:
+            if (now is not None and self._last_near_at is not None
+                    and now - self._last_near_at > cfg.max_gap_s):
+                self._break_detection()
+            self._last_near_at = now
             self._near_count += 1
-            self._far_count = 0
-        elif value < cfg.near_m:
-            self._contact_count = 0
-            self._near_count += 1
+            if self._near_since is None:
+                self._near_since = now
+            if value < cfg.contact_m:
+                self._contact_count += 1
+                if self._contact_since is None:
+                    self._contact_since = now
+            else:
+                self._contact_count = 0
+                self._contact_since = None
             self._far_count = 0
         elif value > cfg.near_m + cfg.hysteresis_m:
-            self._contact_count = 0
-            self._near_count = 0
+            self._break_detection()
             self._far_count += 1
         else:
-            # 히스테리시스 대역 — 어느 쪽으로도 카운트하지 않고 현 상태를 유지한다.
+            # 히스테리시스 대역 — 현 상태를 유지하되, 검출 연속은 끊는다.
+            self._break_detection()
             return self.state
 
-        if self._contact_count >= cfg.detect_samples:
+        if (self._contact_count >= cfg.detect_samples
+                and self._held(self._contact_since, now)):
             self.state = PresenceState.CONTACT
-        elif self._near_count >= cfg.detect_samples:
+        elif (self._near_count >= cfg.detect_samples
+                and self._held(self._near_since, now)):
             self.state = PresenceState.NEAR
         elif self._far_count >= cfg.release_samples:
             self.state = PresenceState.NONE
@@ -142,8 +183,7 @@ class PresenceDetector:
 
     def reset(self) -> None:
         self.state = PresenceState.NONE
-        self._near_count = 0
-        self._contact_count = 0
+        self._break_detection()
         self._far_count = 0
         self.last_inside = False
 
@@ -251,10 +291,11 @@ class PowerManager:
         """초음파 표본 1건 반영 (PWR-002)."""
         current = self._clock() if now is None else now
         if not self._detector.is_valid(range_m):
+            self._detector.update(range_m, now=current)    # 검출 연속만 끊는다
             return
 
         previous = self._detector.state
-        state = self._detector.update(range_m)
+        state = self._detector.update(range_m, now=current)
         pending: list[tuple] = []
 
         if state != previous:
@@ -295,6 +336,26 @@ class PowerManager:
             if hold:
                 self._last_activity = current
         self._evaluate(current, reason=f"robot_mode:{mode.value}")
+
+    def on_command(self, source: str, now: Optional[float] = None) -> None:
+        """명령 1건 (D-24 개정 2026-10-04) — 무명령 타이머를 리셋하고 즉시 ACTIVE.
+
+        "명령"은 로봇에게 무언가를 하라는 요청이 받아들여진 것이다: teleop,
+        목표/내비게이션, 미션, 모드 전환, Fleet 작업, 0이 아닌 최종 cmd_vel.
+        GET·텔레메트리·WS 구독은 명령이 아니다 — 대시보드를 열어 두기만 해서
+        로봇이 영영 잠들지 못하면 안 된다. 정보 창은 열지 않는다(사람이 앞에
+        있다는 증거가 아니다). 절전 중이었다면 웨이크 사유를 남긴다.
+        """
+        current = self._clock() if now is None else now
+        pending: list[tuple] = []
+        with self._lock:
+            self._last_activity = current
+            if self._mode != PowerMode.ACTIVE:
+                self._last_wake_reason = WAKE_COMMAND
+                pending.append(("power.wake", Severity.INFO,
+                                {"reason": WAKE_COMMAND, "source": source}))
+        self._emit_all(pending)
+        self._evaluate(current, reason=f"command:{source}")
 
     def on_battery_alert(self, state: str, now: Optional[float] = None) -> None:
         """SAF-005 임계 통과 — 로봇 본체에서 바로 보이도록 깨운다."""
