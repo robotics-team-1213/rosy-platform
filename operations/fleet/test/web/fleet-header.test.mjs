@@ -8,7 +8,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
   LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
-  showInboxCount, showSession, showSignedOut, tickClock,
+  showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
 } = await import("../../../ui/console/shared/fleet-header.js");
 
 function fakeNode(id) {
@@ -170,4 +170,28 @@ test("the clock tick writes the time and repaints the link word when answers sto
   assert.match(nodes.clock.textContent, /^\d\d:\d\d:\d\d$/);
   assert.equal(nodes["link-state"].textContent, "지연");
   assert.equal(nodes["link-state"].getAttribute("status"), "warn");
+});
+
+test("only the request feeds the link word: a paint error after an answer is not a lost link", async () => {
+  const nodes = fakeHeader();
+  const reads = [];
+  const poll = answer => { watchFleet(answer, {interval: fn => reads.push(fn)}); return new Promise(setImmediate); };
+  await poll(async () => ({fleet: null, robots: null}));  // showFleet throws on this answer
+  assert.equal(nodes["link-state"].textContent, "실시간");
+  await poll(async () => { throw Object.assign(new Error("forbidden"), {status: 403}); });  // signed out: Fleet answered
+  assert.equal(nodes["link-state"].textContent, "실시간");
+  await poll(async () => { throw new TypeError("fetch failed"); });
+  assert.equal(nodes["link-state"].textContent, "연결 끊김");
+  assert.equal(reads.length, 3);
+});
+
+test("the console counts every Fleet answer and keeps asking while signed out", async () => {
+  const {readFile} = await import("node:fs/promises");
+  const source = await readFile(new URL("../../../ui/console/console.js", import.meta.url), "utf8");
+  const wrapper = source.slice(source.indexOf("async function call("), source.indexOf("const incidents ="));
+  assert.match(wrapper, /noteLink\(\);/);  // every answered request, 401/403 included
+  assert.match(wrapper, /path === "\/api\/fleet\/state" \|\| error\.status < 500\) noteLink\(error\)/);
+  const poll = source.slice(source.indexOf("async function refreshState("), source.indexOf("async function refreshAuthorization("));
+  assert.match(poll, /if \(auth\.locked\) return void fleetClient\("\/api\/fleet\/auth\/connection"/);
+  assert.doesNotMatch(poll, /noteLink\(err\)/);  // a throw after the answer (render) never paints 연결 끊김
 });

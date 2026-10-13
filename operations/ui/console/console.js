@@ -190,7 +190,13 @@ async function call(path, options = {}) {
   task.check();
   const cameraPreview = path === "/api/fleet/vision/sources" || path === "/api/fleet/vision/lease";
   try {
-    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
+    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]}).catch(error => {
+      // Any answer keeps the link word live. Only the state poll may call it down: Fleet answers 502/503
+      // for a refusing robot or a feature that is off.
+      if (path === "/api/fleet/state" || error.status < 500) noteLink(error);
+      throw error;
+    });
+    noteLink();
     task.check();
     if (auth.locked && path !== "/api/fleet/session" && !cameraPreview) throw new DOMException("Authentication changed", "AbortError");
     if (path === "/api/fleet/session") markUnlocked();
@@ -388,7 +394,9 @@ pageScope.onDispose(() => {
 async function refreshState() {
   const life = pageScope.capture();
   life.check();
-  if (auth.locked || statePollInFlight) return;
+  // A signed-out console still asks Fleet's open endpoint, so the link word does not drift to 지연.
+  if (auth.locked) return void fleetClient("/api/fleet/auth/connection", {signals: [life.signal]}).then(() => noteLink(), noteLink);
+  if (statePollInFlight) return;
   statePollInFlight = true;
   let fleetAnswered = false;
   try {
@@ -396,7 +404,6 @@ async function refreshState() {
     life.check();
     pathSample.fleet = { finished: true, status: 200 };
     fleetAnswered = true;
-    noteLink();
     paintSitePath();
     view.robots = snapshot.robots;
     view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
@@ -420,7 +427,6 @@ async function refreshState() {
     }
   } catch (err) {
     if (err.name === "AbortError") return;
-    noteLink(err);
     if (!fleetAnswered) {
       pathSample.fleet = typeof err.status === "number"
         ? { finished: true, status: err.status }
