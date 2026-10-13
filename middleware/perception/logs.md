@@ -1549,3 +1549,10 @@
 - 변경: `test_drivable_preview`의 가짜 steer가 `pursuit_error`를 갖는다. keep가 ExpectedPath를 만들 때 그 함수를 쓴다.
 - 증거: 착지 라운드의 `middleware/perception/test`가 `test_keep_step_puts_the_steered_way_into_keep_debug`에서 AttributeError로 멈췄다. 재시험은 이 기록 다음에 돈다.
 - gate 변화: 없음.
+
+## 2026-10-13 · b6590448c · SDK 게이트가 전진 호를 그 호의 정지 궤적으로 검사한다 (D-740)
+
+- 변경: `can_rotate`가 거짓이어서 `trajectory_changed`가 된 전진 호(v>0, w≠0) 후보만, 같은 스캔의 `forward_stopping_sweep_clearance`가 양수이면 원래 twist 그대로 허용한다. 센서 어댑터가 `ForwardEvidence`(스캔 점, 완전성, 시각, URDF 몸, 프로필 상한)를 `GateSnapshot.forward`로 넘긴다. 제자리 회전, 후진, 전방 장애물, cliff, tilt, 시험 영역, stale·불완전 스캔은 기존 결과다. 임계값과 여유는 그대로다.
+- 증거: 원격 pytest(모델 PC) `test_command_gate.py test_os_parameter_graph.py test_lidar_guard.py test_policy_handoff.py test_forward_stopping_sweep.py` 74 passed, 9 skipped, `known_failures` NEW 0. 건너뛴 9건은 rclpy가 필요한 `test_os_parameter_graph.py`이고 새 생산자 시험이 그 안에 있다. 구현 전 같은 게이트 시험 6건은 ImportError로 실패했다.
+- gate 변화: 없음. SOURCE 단위 회귀만이다. 프로필 상한이 (0.10, 0.70)이면 지연 여유가 약 41 mm라서 벽 96 mm인 원래 Gazebo 정지 사례가 풀린다는 증거는 없다. ROS 생산자 시험, Gazebo 반복, 실물 수용은 하지 않았다.
+- 결정: D-740 Proposed
