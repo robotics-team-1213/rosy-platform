@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -21,10 +21,10 @@
 
 ## 계획·결과 문서
 
-- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
-- [2026-09-15-module-harness-design.md](../../../../../docs/plans/2026-09-15-module-harness-design.md)
-- [2026-09-21-hardware-mapping-g5-design.md](../../../../../docs/plans/2026-09-21-hardware-mapping-g5-design.md)
-- [2026-09-21-hardware-mapping-g5.md](../../../../../docs/plans/2026-09-21-hardware-mapping-g5.md)
+- [2026-09-13-rosy-os-device-validation-implementation-plan.md](../../../../docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
+- [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-21-hardware-mapping-g5-design.md](../../../../docs/plans/2026-09-21-hardware-mapping-g5-design.md)
+- [2026-09-21-hardware-mapping-g5.md](../../../../docs/plans/2026-09-21-hardware-mapping-g5.md)
 
 ## 교훈 (docs/solutions)
 

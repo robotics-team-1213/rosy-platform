@@ -734,6 +734,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Proposed |
+| D-743 | Drive holder를 한 층 올리고 설치·배포 identity를 유지한다 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

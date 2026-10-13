@@ -16,7 +16,7 @@ middleware/
 │  │  ├─ safety/ (공통 보호·policy·velocity 검증)
 │  │  └─ state, power, diagnostics, calibration lease, recovery admission 등
 │  └─ events/ (core_events)
-├─ control/drive/
+├─ drive/
 │  ├─ behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}
 │  ├─ runtime/ (기존 control/goal/wander/safety ROS 진입 모듈)
 │  ├─ planning/{nav2,grid}
@@ -40,9 +40,9 @@ middleware/
 | CORE 공통 조립 | `middleware/core/gateway/core/services.py` | 공통 state·identity·Command/Safety 객체와 service attribute. subsystem parser는 명시적 legacy reexport |
 | Drive 조립 | `core/drive/line_follow.py`, `docking.py`, `traffic.py` | 기존 line manager와 live angular provider, docking/swarm, policy/observer 생성. 새로운 framework/process/container 없음 |
 | 공통 power/battery | `core/system/power.py`, `core_features.power` | 기존 parser fallback·validation·data path와 power→battery 생성 순서. shutdown sentinel은 요청이며 host unit이 halt 소유 |
-| Drive planning backend | `middleware/control/drive/planning/nav2`, `planning/grid` | ROS `navigation`과 기존 `control.planning` identity. CORE goal facade·취소 generation·backend 입출력 구분 |
-| 차선·군집·localization 실행 | `middleware/control/drive/behaviors`의 해당 구현 | D-649로 소스 이전. 설치 identity는 기존 `core_features.*`, 새 library/process 없음 |
-| 기존 Control Drive 알고리즘 | `middleware/control/drive/{tracking,recovery,calibration,safety}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
+| Drive planning backend | `middleware/drive/planning/nav2`, `planning/grid` | ROS `navigation`과 기존 `control.planning` identity. CORE goal facade·취소 generation·backend 입출력 구분 |
+| 차선·군집·localization 실행 | `middleware/drive/behaviors`의 해당 구현 | D-649로 소스 이전. 설치 identity는 기존 `core_features.*`, 새 library/process 없음 |
+| 기존 Control Drive 알고리즘 | `middleware/drive/{tracking,recovery,calibration,safety}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
 | 공통 Base 명령/Safety | `core_features.command`, `core_features.safety`, `core.bridge` | CORE 최종 command 선택과 ROS publisher. E-stop/readiness/deadman·policy·세대 검증 |
 | Drive 기하·운동 proof | `line_follow/{clearance,body_stop}`, recovery sweep, Drive envelope·floor/body 검사 | 현재 후보의 곡률·전진·후진·pivot 근거. CORE 공통 Safety를 대체하지 않음 |
 | Arm 실행/Safety | `middleware/devices/omx/adapter/omx_adapter` | joint/action owner, limits·fresh feedback·stop/rearm/HOLD. Base cmd_vel slot에 합치지 않음 |
@@ -76,7 +76,7 @@ KTURN 후진 arc는 기존 rear strip·blind band·trail·freshness 거절 검�
 
 ## D-649 책임 이동 보완
 
-`middleware/control/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/control/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
+`middleware/drive/behaviors/{line_follow,docking,navigation,localization,swarm,road_behaviour,traffic_policy}`가 Base 행동 구현의 정본이다. CORE 서비스 배포가 기존 `core_features.*` 이름으로 설치하며 구현 복사본은 없다. `middleware/drive/runtime/`는 기존 control/goal/wander/safety ROS 진입 모듈을 소유하고 `control.*` 이름으로 설치한다. 위의 이전 배치 설명은 이 이동으로 보완된다. CORE 공통 Command/Safety와 `core/drive` 조립은 유지한다.
 
 반복 이름은 세 종류다: 설치 패키지 이름(`core`, `control`, `fleet`, `rosy` namespace), 서로 다른 권한(장치-local execution/현장 execution, 관측 safety adapter/CORE Safety), 실제 혼재했던 행동 구현(이번 Drive 이동). 호환 initializer에는 알고리즘을 추가하지 않는다. 일반 캘리브레이션 lease와 카메라 장애 복구 자격 판정은 CORE 공통 admission이며 Drive 탈출 운동 구현과 다르다. Perception localization 노드는 상태/관측 근거를 소유한다.
 

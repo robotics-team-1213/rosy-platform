@@ -35,7 +35,7 @@ def test_overlay_contains_each_moved_behavior_under_its_installed_identity(tmp_p
                         'swarm', 'road_behaviour', 'traffic_policy'):
             name = 'python/core_features/' + package + '/__init__.py'
             assert names.count(name) == 1
-            source = ROOT / 'middleware/control/drive/behaviors' / package / '__init__.py'
+            source = ROOT / 'middleware/drive/behaviors' / package / '__init__.py'
             assert packed.extractfile(name).read() == source.read_bytes()
 
 
