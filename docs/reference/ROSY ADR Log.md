@@ -708,12 +708,28 @@
 | D-718 | CORE 적용 시점의 조건부 막힘 답 | Accepted |
 | D-722 | 검증된 모델 복구 후보와 기존 사건 원장 결속 | Accepted |
 | D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
+| D-735 | 이동 후보의 교통 감속 곡률 보존 | Accepted |
+| D-737 | LINE body and command curve agreement | Accepted |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
+| D-720 | Discord 상태 질의와 읽기 전용 숙고형 연결 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
+| D-725 | 격리 Gazebo의 명시적 native SIM MapPose 결속 | Proposed |
 | D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 | Accepted |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 | Accepted |
+| D-726 | 경로 사실 묶음과 호출자가 넘기는 차로 맥락 | Accepted |
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 | Accepted |
 | D-727 | 설치·독립 근거·현재 epoch에 결속한 운영 복구 receipt | Accepted |
+| D-730 | 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim | Accepted |
+| D-731 | 기존 Fleet 루프의 단일 규칙·모델 제출 책임 | Accepted |
+| D-734 | 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자 | Proposed |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 | Accepted |
+
+| D-728 | 기명 자연어 대화와 기존 조종 owner 연결 | Accepted |
+| D-732 | CORE native 실행 결과 식별과 readback | Proposed |
+
+| D-733 | Hourly KST Discord Fleet health subscription | Accepted (source only) |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -972,6 +988,11 @@ bounded read-only 실행의 실제 child owner를 분리하고 외부 승인 art
 
 읽기 전용 원장 목록과 별도 고정 digest로 평가 사건 누락·변경을 거절한다. 전문은 [D-715](../adr/D-715-independent-incident-case-inventory.md).
 
+## D-720 — Discord 상태 질의와 읽기 전용 숙고형 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance separate)
+
+기명 원문·현재 관측·고정 profile·bounded broker·영속 모델 job·기존 답글을 읽기 전용으로 연결한다. 장치 권한과 보호 계정·비용·독립 수용 경계를 유지한다. 전문은 [D-720](../adr/D-720-discord-read-only-deliberation.md).
 ## D-717 — 진행 중 제한 후진의 중복 답 거절
 
 **Status:** Accepted (2026-10-12, source safety contract)
@@ -1005,3 +1026,42 @@ Status: Accepted (shared source contract; no operating admission).
 Status: Accepted (source contract; no operational activation).
 
 전문은 [D-724](../adr/D-724-conditional-stuck-final-submission-guard.md).
+
+## 교통 감속 결정 — D-735
+
+Status: Accepted (SOURCE 계약; Gazebo·실물 수용 별도).
+
+ENFORCED 이동 후보는 `(s*v,s*w)`, 제자리 회전은 기존 각속도를 유지한다. D-422의 선속도만 감속한다는 부분만 대체하며 몸 쓸기 상위 집합과 CORE 최종 권한은 유지한다. 전문은 [D-735](../adr/D-735-moving-traffic-curvature.md).
+## D-730 — 동일 Fleet DB의 운영 수용 epoch와 사건 단일 제출 claim
+
+Status: Accepted (source contract; no operational activation).
+
+전문은 [D-730](../adr/D-730-atomic-fleet-operating-state-and-case-claim.md).
+
+## D-731 — 기존 Fleet 루프의 단일 규칙·모델 제출 책임
+
+**Status:** Accepted (2026-10-12, source contract; no operational activation)
+
+전문은 [D-731](../adr/D-731-fleet-model-recovery-submission-owner.md).
+
+## LINE body and command curve agreement - D-737
+
+Status: Accepted (SOURCE contract; runtime and field acceptance separate).
+
+[D-737](../adr/D-737-line-body-command-curve.md).
+## D-734 — 원본 검수 자료와 현재 설치를 분리하는 운영 근거 소유자
+
+**Status:** Proposed (2026-10-12, SOURCE only; no operating admission)
+
+전문은 [D-734](../adr/D-734-frozen-operational-evidence-owner.md).
+## D-728 — 기명 자연어 대화와 기존 조종 owner 연결
+
+**Status:** Accepted (2026-10-12, source design; runtime acceptance pending)
+
+원문·기명 대화 문맥과 기존 intent/Task/Mission/CORE owner를 law/rule·현재 근거·영속 예산/최종 fence로 연결하고 자연어 회신까지 처리한다. D-720 읽기 전용 조각만으로 전체 완료를 선언하지 않는다. 전문은 [D-728](../adr/D-728-natural-language-channel-operations.md).
+
+## D-732 — CORE native 실행 결과 식별과 readback
+
+**Status:** Proposed (2026-10-12, contract review before implementation)
+
+기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).

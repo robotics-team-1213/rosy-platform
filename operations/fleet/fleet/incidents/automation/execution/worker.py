@@ -16,7 +16,7 @@ from fleet.server.incident_deliberation import FleetBaseline
 from ..closure import observe_closure
 from ..contract import CaseBudget, CaseScope, micros
 from ..ledger.receipt import model_receipt
-from rosy.decision.deliberation.contracts.billing import call_cost_evidence
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence, _RejectedJudgment
 from rosy.decision.deliberation.calibration_selection import select_calibrated
 from ..recovery_candidates import RecoveryCandidates, observed_recovery
 
@@ -25,7 +25,7 @@ class IncidentCaseWorker:
     def __init__(self, store, observation, board, *, profiles, providers, admission,
                  current_profiles, human_owned, budget, final_handoff, clock=time.time,
                  enabled=False, baseline=None, calibration_artifacts=None, approved_artifacts=None,
-                 new_case_admission=None, routed=False, recovery_enabled=False):
+                 new_case_admission=None, routed=False, recovery_enabled=False, recovery_submit=None):
         profiles = incident_profiles(profiles)
         if (type(enabled) is not bool or len(providers) != len(profiles)
                 or any(not callable(port) for port in (admission, current_profiles, human_owned, budget, final_handoff))
@@ -42,6 +42,9 @@ class IncidentCaseWorker:
         if type(recovery_enabled) is not bool:
             raise ValueError('EXPLICIT_RECOVERY_MODE_REQUIRED')
         self.recovery_candidates = RecoveryCandidates(store) if recovery_enabled else None
+        if recovery_submit is not None and (not recovery_enabled or not callable(recovery_submit)):
+            raise ValueError('EXPLICIT_RECOVERY_SUBMISSION_PORT_REQUIRED')
+        self.recovery_submit = recovery_submit
         if type(routed) is not bool: raise ValueError('EXPLICIT_ROUTING_MODE_REQUIRED')
         self.routed = routed
         if new_case_admission is not None and not callable(new_case_admission):
@@ -266,6 +269,9 @@ class IncidentCaseWorker:
                 if not self._fresh(problem): return
                 attempt = hashlib.sha256(canonical([problem.digest, 'model', bound.profile.profile_id]).encode()).hexdigest()
                 await self._db(self.recovery_candidates.propose, scope, attempt, worker_id=self._worker_id)
+                if self.recovery_submit is not None:
+                    if await self.recovery_submit(scope, attempt, problem, self) is not True:
+                        await self._finish(scope, 'RECOVERY_SUBMISSION_NOT_CONFIRMED'); return
                 self._waiting[scope] = (problem.generation, dict(tool_name='get_incident_status', arguments={},
                                                               evidence_ids=list(problem.evidence_ids)))
             else: await self._finish(scope, 'NO_ADMITTED_READ_OR_REVIEW')
@@ -294,7 +300,7 @@ class IncidentCaseWorker:
         case = await self._db('case', scope)
         remaining = min(profile.timeout_s, case['deadline'] - self.clock())
         cost, checked, state = None, None, 'UNKNOWN'
-        cost_evidence, evidence_error = None, False
+        cost_evidence, evidence_error, rejected_unsafe = None, False, False
         try:
             if remaining <= 0 or not self._fresh(problem): raise ValueError('INCIDENT_SCOPE_CHANGED')
             async with asyncio.timeout(remaining):
@@ -311,6 +317,14 @@ class IncidentCaseWorker:
                 state='UNKNOWN', actual_cost_usd=cost, summary={'reason': 'WORKER_CANCELLED'}))
             await asyncio.shield(self._finish(scope, 'WORKER_CANCELLED'))
             raise
+        except _RejectedJudgment as error:
+            try:
+                if (type(error) is not _RejectedJudgment or error.bound != bound
+                        or type(error.unsafe) is not bool or micros(error.cost_usd) > micros(profile.max_cost_usd)):
+                    raise ValueError('REJECTED_CALL_CONTEXT_CHANGED')
+                error.bound.validate(problem, profile)
+                cost, state, rejected_unsafe = error.cost_usd, 'REJECTED', error.unsafe
+            except (ValueError, TypeError): cost, state = None, 'UNKNOWN'
         except Exception:
             if cost is not None:
                 try: micros(cost)
@@ -331,6 +345,8 @@ class IncidentCaseWorker:
         updated = await self._db('case', scope)
         if updated['state'] != 'ACTIVE':
             await self._finish(scope, updated['reason']); return None
+        if rejected_unsafe:
+            await self._finish(scope, 'MODEL_UNSAFE_REJECTION'); return None
         if completed['state'] != 'COMPLETED' and checked is not None:
             if self._fresh(problem): await self._finish(scope, 'COST_EVIDENCE_REJECTED' if evidence_error else 'MODEL_TRACE_REJECTED')
             return None

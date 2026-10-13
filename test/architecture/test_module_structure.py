@@ -85,9 +85,12 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
+#: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("control/drive/behaviors/line_follow",
+              "foundation/core_common/protocol/native",
+              "control/drive/behaviors/navigation",
               "control/drive/behaviors/line_follow/recovery",
               "control/drive/behaviors/line_follow/recovery/junction",
               "control/drive/behaviors/line_follow/recovery/stuck",
@@ -98,13 +101,21 @@ SIZE_UNITS = ("control/drive/behaviors/line_follow",
               "control/drive/behaviors/swarm",
               "fleet/fleet/traffic",
               "fleet/fleet/observe",
+              "fleet/fleet/server/channel",
+              "fleet/fleet/server/channel/health",
+              "fleet/fleet/server/channel/conversation",
+              "fleet/fleet/server/channel/execution",
+              "fleet/fleet/server/channel/execution/outcomes",
               "fleet/fleet/localization",
               "fleet/fleet/stuck",
+              "fleet/fleet/stuck/submission",
               "fleet/fleet/incidents",
               "fleet/fleet/incidents/automation",
               "fleet/fleet/incidents/automation/ledger",
               "fleet/fleet/incidents/automation/execution",
+              "fleet/fleet/incidents/automation/operating",
               "decision/src/rosy/decision/deliberation",
+              "decision/src/rosy/decision/conversation",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
               "decision/src/rosy/decision/deliberation/evaluation",
@@ -116,6 +127,82 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/stuck/submission": (
+        203,
+        "accept: D-731 extracts the actual existing loop rule dispatch and adds the same owner's "
+        "conditional model dispatch and owned SQLite writes. No new service, provider or policy. "
+        "docs/plans/2026-10-12-fleet-submission-owner.md records initial 203 physical lines, "
+        "stable loop methods and simultaneous parent measurement. Keep +150 and parent ceilings.",
+    ),
+    "foundation/core_common/protocol/native": (
+        106,
+        "accept: D-732 strict native operation contract and ROS-free bounded receipt bookkeeping "
+        "live in one installed protocol/native subpackage. Independent native-verify precheck on "
+        "2026-10-12 measured native106 and residual core_common10142 simultaneously, below unchanged "
+        "core_common10031+150. Stable old-path facades preserve object identity; no new writer, "
+        "storage, dispatcher or authority. Keep +150 and all historical file/hard ceilings. "
+        "See docs/plans/2026-10-12-core-native-outcome-ports.md.",
+    ),
+    "control/drive/behaviors/navigation": (
+        773,
+        "accept: D-732 actual navigation goal/readback owner was already an installed physical "
+        "subpackage. Independent native-verify precheck on 2026-10-12 measured navigation773 "
+        "and residual core_features9410 simultaneously; core_features remains below10000. "
+        "No route planner, process, writer, authority or scan exclusion moved. Keep +150 and "
+        "existing file/hard ceilings. See docs/plans/2026-10-12-core-native-outcome-ports.md.",
+    ),
+    "fleet/fleet/incidents/automation/operating": (
+        294,
+        "accept: D-730 owns the actual same-DB validated candidate, signed operating epochs "
+        "and single-case rule/model claim; no provider or robot client. Initial 294 physical lines; "
+        "docs/plans/2026-10-12-incident-operating-subpackage.md records the simultaneous parent "
+        "measurement, stable imports and installed closure. Keep +150 and existing parent ceilings.",
+    ),
+    "fleet/fleet/server/channel/execution": (
+        487,
+        "accept: D-728 actual original-instruction grant, durable step/Task linkage and existing-owner "
+        "dispatch subpackage independently prechecked by pipeline_review on 2026-10-12 at487. "
+        "Final source9eebc457c5 measures execution582/residual channel1440/conversation300/Fleet55222 "
+        "simultaneously; retain original channel1379/conversation280/Fleet55120 and every historical "
+        "verdict, +150 allowance, zero/file/hard ceiling and earlier split obligation. "
+        "Installed wheel/sdist/source-image closure is a separate remote gate; "
+        "source admission never establishes activation or physical completion. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md.",
+    ),
+    "fleet/fleet/server/channel/execution/outcomes": (
+        332,
+        "accept: D-732 first-response identity binding, exact native outcome readback and local claim "
+        "closure owner independently prechecked by ralph_native_verify on 2026-10-12 at332 in "
+        "041d567e60. Simultaneous execution residual563/channel1453/conversation300/health248/"
+        "Fleet55249/task_store1043 retain every historical parent, file and zero-growth ceiling. "
+        "No new writer, database, process, dependency or scan exclusion. Installed wheel/sdist/"
+        "source-image closure remains a separate gate. See "
+        "docs/plans/2026-10-12-fleet-native-outcome-consumer.md.",
+    ),
+    "fleet/fleet/server/channel/conversation": (
+        280,
+        "accept: D-728 actual conversation journal/worker/runtime owner measured 280 physical lines on "
+        "2026-10-12; independent pipeline_review structural precheck PASS. Residual channel1418 and "
+        "Fleet55132 remain within unchanged1379/55120+150 allowances. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Source/installed closure and "
+        "semantic admission are distinct gates; model remains OFF pending conformance.",
+    ),
+    "decision/src/rosy/decision/conversation": (
+        256,
+        "accept: D-728 pure strict conversation/profile/semantic-step codec measured 256 physical lines "
+        "on 2026-10-12; independent pipeline_review structural precheck PASS. No Fleet writer imports, "
+        "network, credentials or activation. Keep +150 and all file/hard limits. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Independent semantic "
+        "conformance and protected host admission remain required.",
+    ),
+    "fleet/fleet/server/channel": (
+        1_379,
+        "split: D-728 actual channel owner extraction measured on 2026-10-12; independent pipeline_review precheck PASS. "
+        "The nine intake/workflow/Mission/incident/outbox/gateway/model modules retain existing owners and "
+        "guards; stable old module paths alias the same implementation objects. Largest child file249; "
+        "installed wheel/sdist/source-image closure is verified separately. Keep +150 and every file/hard "
+        "ceiling. See docs/plans/2026-10-12-natural-language-channel-operations.md",
+    ),
     "decision/src/rosy/decision/deliberation": (
         231,
         "split: responsibility_review applied three actual responsibility subpackages on 2026-10-12. "
@@ -351,15 +438,60 @@ SIZE_VERDICTS = {
         "lines were added. Protocol5298 + domain1203 + other3504 + foundation root26. "
         "The strict contract family already lives in protocol/channel_requests.py; no DB, transport, "
         "provider, ROS, process or actuation authority and no upstream imports. Keep package10000/+150, "
-        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. No new SIZE_UNITS "
-        "or scan exclusion. Before the next protocol family expansion, review an actual protocol "
-        "subpackage split with installed consumers/direction, one canonical schema facade and same-change "
-        "parent/unit measurements. Preserve prior protocol/schema extraction obligations. "
+        "all file ceilings/HARD_TIER and schemas1386 within its1389 zero-growth cap. D-732 registers "
+        "the actual installed protocol/native strict contract and receipt subpackage after independent "
+        "precheck on 2026-10-12: unit106, residual parent10142, below unchanged10031+150. "
+        "Canonical schema facade and public object identity stay stable; no scan exclusion. "
+        "Preserve prior protocol/schema extraction obligations and every historical baseline. "
         "See docs/plans/2026-10-12-discord-fleet-end-to-end.md",
     ),
+    "fleet/fleet/server/channel/health": (
+        193,
+        "accept: fixed KST scheduling, durable claim, cache-only report and bounded bare Discord publisher "
+        "are an actual subscription lifecycle owner distinct from interactive channel intake. "
+        "pipeline_review independently prechecked 2026-10-12: Fleet55428/channel1645/health193/"
+        "conversation300/execution588 simultaneously; registering this owner leaves residual channel1452. "
+        "Preserve Fleet55286/channel1379/conversation280/execution487 baselines, +150, all historical "
+        "filters, file/hard ceilings and prior split obligations. Installed wheel/sdist/source closure "
+        "and first real Discord readback remain separate gates. "
+        "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
+    ),
     "fleet": (
-        55_856,
+        55_286,
+        "split: independently derived by pipeline_review on 2026-10-12 after integrating "
+        "main0e8b91739 with D-728 sourceba3645264, before Task3 implementation. Accepted main56077 "
+        "minus six moved legacy owners827 plus six required identity facades36 gives55286; "
+        "current parent55428 consumes the unchanged +150 allowance, leaving8. Three new facades18 "
+        "and remaining Task1/2 nonunit growth are not rebaselined. Channel1440, conversation300, "
+        "execution588, operating314 measured simultaneously. Retain all prior "
+        "55120/56077 histories, every nested baseline, +150, zero/file/hard ceilings and split "
+        "obligation. Independent precheck is source scope only; terminal remote regression, "
+        "installation, activation and physical acceptance remain separate. "
+        "See docs/plans/2026-10-12-natural-language-channel-operations.md. Previous55120 verdict: "
+        "split: D-728 actual channel subpackage measured parent55120/child1379 together on 2026-10-12; "
+        "independent pipeline_review precheck PASS. Combined56499 includes only55 compatibility/package lines above56444; "
+        "existing nine implementations moved without behavior change. Preserve +150, every zero/file/hard "
+        "ceiling and all prior obligations. See docs/plans/2026-10-12-natural-language-channel-operations.md. "
+        "Previous56444 verdict: split: combined D-720/device-watch actual parent independently re-judged by pipeline_review "
+        "on2026-10-12 at56444. Separate durable channel owner and display-only watch keep their "
+        "existing readers/authority; app923, console.py1325, ConsoleJS1035. Preserve +150, all "
+        "zero/file/hard ceilings and every password/full-progress/observe/server/UI/channel split "
+        "obligation. Runtime installation remains a separate gate. Prior56056 and55856 reviews: "
+        "split: D-720 independently re-judged by pipeline_review on 2026-10-12 at56056. "
+        "Durable channel-model storage, bounded worker and fixed SSH/runtime composition remain "
+        "separate small server owners; original receipt/outbox and CORE authority are unchanged. "
+        "Keep +150, every file/zero-growth/hard ceiling and password/full-progress/observe/server/UI "
+        "obligation. Before further independent channel runtime growth, review an actual channel "
+        "subpackage responsibility split with installed consumers and simultaneous parent/unit "
+        "measurements. Source/runtime admission is separate from structural approval. "
+        "docs/plans/2026-10-12-discord-deliberation-runtime.md. Previous55664 verdict: "
         "split: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
+        "split: re-judged at 56077 on 2026-10-12 for the route fact bundle (D-726). "
+        "trip and /route return a fact an AI or another system can read. A caller can "
+        "block an edge or add seconds, and a /route chord shortens only when the nominal "
+        "body would leave the imported lane. The console names TRIP_UNKNOWN_EDGE. "
+        "No new package, command, or Nav2 path. Keep the observation-journal split and +150. "
+        "Previous verdict: re-judged at 55856 on 2026-10-12 for the operate-map device watch "
         "(operations/ui/console/device-watch.js, device-watch.css). Display-only tags and "
         "the existing ceiling frame; no new command, poll, or CORE route. Keep the "
         "observation-journal split and +150. Previous verdict: "
@@ -1401,8 +1533,16 @@ SIZE_VERDICTS = {
         "addendum); measured after merging local main.",
     ),
     "control": (
-        34_855,
-        f"split: independently re-judged at 34855 on 2026-10-11 by safety_structure_review for D-630: 233 unique production files across the perception distribution and its five declared Drive source holders; Nav2 and registered vision units excluded. The +236 reflects packaging/source facades and source audit overhead. Physical holder separation keeps the existing control distribution, so the split obligation and +150 trigger remain (docs/plans/2026-10-11-platform-structure-migration.md). Previously re-judged at 34619 on 2026-10-10 for D-597 (learned_paint_target parameter and drivable paint wiring in line_observer_node.py, overlay key in ir_overlay.py, --paint-target in line_observer_overrides.py; the decision logic is in the perception unit). P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        35_025,
+        "split: independently re-judged at 35025 on 2026-10-13 by drive_review: 234 unique production "
+        "files across the perception distribution and six existing Drive holders, with Nav2 and registered "
+        "vision units excluded. Growth +170 is observer law reader/assembly +87, node +4, facades/setup +14, "
+        "map generator +45 and same-owner policy diagnostics +20. Four runtime nodes moved byte-identically; "
+        "no new responsibility, process, dependency or command writer. Keep all file ceilings, registered units, "
+        "+150 re-judgement trigger and deploy control_sensing/provider/control_safety split obligations "
+        "(docs/plans/2026-10-11-platform-structure-migration.md, 2026-10-13 addendum). Re-judge at the next "
+        "+150 crossing or new owner; this does not complete the distribution split or runtime acceptance. "
+        f"Previously independently re-judged at 34855 on 2026-10-11 by safety_structure_review for D-630: 233 unique production files across the perception distribution and its five declared Drive source holders; Nav2 and registered vision units excluded. The +236 reflects packaging/source facades and source audit overhead. Physical holder separation keeps the existing control distribution, so the split obligation and +150 trigger remain (docs/plans/2026-10-11-platform-structure-migration.md). Previously re-judged at 34619 on 2026-10-10 for D-597 (learned_paint_target parameter and drivable paint wiring in line_observer_node.py, overlay key in ir_overlay.py, --paint-target in line_observer_overrides.py; the decision logic is in the perception unit). P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "

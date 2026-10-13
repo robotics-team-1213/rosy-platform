@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 import math
 import os
+import logging
+from threading import Lock
 from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
@@ -287,6 +289,8 @@ class SafetyManager:
         self._policy_revision = ''
         self._policy_clock = time.monotonic
         self.policy_reason = ''
+        self._pending_policy_failure = None
+        self._policy_failure_lock = Lock()
         self._actuation = None
         self._actuation_required = False
         self._simulation_clock_enabled = None
@@ -342,7 +346,8 @@ class SafetyManager:
                        self._actuation.revision == request.calibration_revision and self._simulation_actuation_enabled())
             output = evaluate(request.linear, request.angular, request.now, allow_bounded_sweep=bounded)
             if output is None:
-                raise ValueError('Control observation unavailable')
+                detail = getattr(policy, '_take_unavailable_detail', lambda: None)()
+                raise ValueError(f'Control observation unavailable: {detail!r}')
             snapshot, result = output
             disposition = ('limit' if result.reason in ('allow', 'motion_limited', 'trajectory_changed',
                            'adaptive_speed_limit', 'obstacle_replan', 'obstacle_wait',
@@ -432,8 +437,11 @@ class SafetyManager:
         try:
             decision = evaluator(request)
             elapsed = self._policy_clock() - started
-        except Exception:
+        except Exception as exc:
             self.policy_reason = 'policy_failed'
+            with self._policy_failure_lock:
+                if self._pending_policy_failure is None:
+                    self._pending_policy_failure = request, (type(exc), exc, exc.__traceback__)
             return None
         self.policy_reason = 'policy_invalid'
         if evaluator is not self._policy or revision != self._policy_revision:
@@ -474,6 +482,16 @@ class SafetyManager:
             return None
         self.policy_reason = ''
         return prepared.motor_linear, prepared.angular
+
+    def announce_policy_failure(self) -> None:
+        with self._policy_failure_lock:
+            pending, self._pending_policy_failure = self._pending_policy_failure, None
+        if pending is not None:
+            request, exc_info = pending
+            logging.getLogger(__name__).error(
+                'Control policy failed command=%s source=%s revision=%s now=%s candidate=(%s,%s)',
+                request.command_id, request.source, request.calibration_revision,
+                request.now, request.linear, request.angular, exc_info=exc_info)
 
     def _emit(self, type_: str, severity: str, source: str, data: dict | None = None) -> None:
         if self._events is not None:

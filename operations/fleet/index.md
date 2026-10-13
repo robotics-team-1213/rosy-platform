@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-12 · e5f078ee02 · 지도 검토 저장 완료 관측 보완
-- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
-- 2026-10-12 · 1e29edaed · 최신 통합과 CI 도우미 회귀
-- 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
-- 2026-10-12 · uncommitted · 공유 지도 합법 진입 routing fixture 정합성
+- 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
+- 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source
+- 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
+- 2026-10-12 · 36b51d124 · D-728 channel owner extraction

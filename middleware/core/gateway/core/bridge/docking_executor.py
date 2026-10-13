@@ -25,13 +25,15 @@ class BridgeDockingExecutor:
                  cancel_goal: Callable[[], None],
                  publish_exemption: Callable[[bool], None],
                  odom_pose: Callable[[], Pose],
-                 info: Callable[[str], None]) -> None:
+                 info: Callable[[str], None],
+                 transport_snapshot: Callable[[], tuple[int, bool, bool]] | None = None) -> None:
         self._svc = services
         self._send_goal = send_goal
         self._cancel_goal = cancel_goal
         self._publish_exemption = publish_exemption
         self._odom_pose = odom_pose
         self._info = info
+        self.native_transport_snapshot = transport_snapshot
         self._dock_odom_mark = None
         self._applied_dock_exemption = False
 

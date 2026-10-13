@@ -397,7 +397,7 @@ $('token-save').addEventListener('click', async () => {
     }
     notice(localEdit ? '재접속 확인 · 편집 중인 초안을 보존했습니다. 저장 전 최신 서버 초안과 비교하세요.'
       : state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
-      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 없이 시작에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
+      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 지도 만들기에서 기준을 정하거나 저장된 지도 설정을 불러오세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
