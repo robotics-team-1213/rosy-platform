@@ -8293,3 +8293,9 @@ osy-d395-s1d\`.
 - 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
 - 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
 - gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
+
+## 2026-10-14 · 3f6c69245 · OMX 후속 push 준비와 독립 안전 리뷰
+
+- 변경: 공유 main 공개 검증에서 발견한 계정 체크박스 계약과 HOLD 시계 결함을 수정했다. 이력 재작성 없이 독립 리뷰와 수정 후손을 묶어 safety-review 예외를 기록했다.
+- 증거: CI 38435850880 계정 화면 실패 재현 뒤 UI 31 passed; HOLD 원격 RED 7건 뒤 322 passed, NEW 0. 검토와 한계는 validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. 실제 장치·HF 계정·Spaces 연결 수용은 D-756에 남아 있다.
