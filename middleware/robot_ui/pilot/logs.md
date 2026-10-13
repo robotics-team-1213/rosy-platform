@@ -870,9 +870,9 @@
 - 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
 - gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
 
-## 2026-10-14 · D-757 · Rosy Account native Pilot
+## 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
 
 - 변경: 공통 Account 로그인과 보호된 native 세션을 연결했다. Proxy는 현재 Bearer를 HTTP/WS upstream에만 전달하고 WebView 저장소에는 넣지 않는다. 계정/family 변경은 이전 연결을 닫는다. 활성 로봇 최대 두 대만 갱신하며 조작과 정지 경로는 네트워크를 기다리지 않는 검증된 캐시를 읽는다. TLS CA 범위와 CORE의 최종 정지 권한은 유지한다.
 - 증거: 설정 포함 Gradle testDebugUnitTest 107 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/pilot-configured.txt. APK 공개 설정과 merged manifest의 정확한 callback/autoVerify를 확인했다. 원격 OMEN에서 test_shell_assets.py 4 passed, known_failures NEW 0 (같은 세션 logs/web-closure/run-1.txt).
 - 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB이며 Cam/Pilot은 순서대로 빌드했다.
-- 한계: 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.
+- gate 변화: SOURCE/JVM/APK. 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.
