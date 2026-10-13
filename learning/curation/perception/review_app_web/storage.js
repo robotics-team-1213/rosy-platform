@@ -5,14 +5,15 @@ let send, busy=false;
 function line(parent,value){const p=document.createElement('p');p.textContent=value;parent.append(p);}
 function fail(error){$('storage-error').textContent=error.message||'저장 현황을 확인할 수 없습니다.';$('storage-error').hidden=false;}
 export function clearStorage(){
+  $('storage-status').textContent='저장 현황 미확인';
   $('storage-roots').replaceChildren();$('storage-destination').replaceChildren();
   $('storage-preflight').hidden=true;$('storage-result').textContent='';
 }
 export async function loadStorage(request){
   if(busy)return;
   send=request;busy=true;$('storage-refresh').disabled=true;$('storage-error').hidden=true;
-  $('storage-status').textContent='저장 현황을 확인하는 중입니다.';
   clearStorage();
+  $('storage-status').textContent='저장 현황을 확인하는 중입니다.';
   try{
     const data=await send('/api/learning/storage');
     if(data.status==='not_configured'){
