@@ -76,7 +76,7 @@ Fleet 운영자 인증과 OS sudo 인증은 서로 다른 권한이다. 운영�
 
 ## Related
 
-- [등록 복원](../../../src/site/fleet/fleet/server/enrollment.py), [roster 충돌](../../../src/site/fleet/fleet/server/roster.py), [실제 시작 CLI](../../../src/site/fleet/fleet/cli.py).
+- [등록 복원](../../../src/site/fleet/fleet/server/auth/enrollment.py), [roster 충돌](../../../src/site/fleet/fleet/server/roster.py), [실제 시작 CLI](../../../src/site/fleet/fleet/cli.py).
 - [Fleet sightings parser](../../../src/site/fleet/fleet/server/sightings_config.py), [Vision parser](../../../src/site/vision/rosy_vision/vision_config.py).
 - [Fleet 이미지](../../../deploy/site/Dockerfile.fleet), [Compose](../../../deploy/site/compose.yaml), [사용자 discovery installer](../../../deploy/site/install-user-discovery.py), [사이트 운영 절차](../../../deploy/site/README.md).
 - [별도 commissioning 계약](../../../deploy/robot/pinky_pro/commissioning_session.py).

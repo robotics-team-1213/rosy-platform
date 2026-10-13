@@ -35,35 +35,35 @@ registry = _load_registry()
 
 #: 상대 경로별 공용 확인/소유 처리기 호출 수. 새 확인은 이 표와 함께 리뷰한다.
 PINNED_CONFIRMS = {
-    "middleware/ui/robot/app.js": 6,
-    "middleware/ui/robot/map.js": 1,
-    "middleware/ui/robot/panels/console/docking.js": 1,
-    "middleware/ui/robot/panels/console/line-follow.js": 1,
-    "middleware/ui/robot/panels/console/mode.js": 1,
-    "middleware/ui/robot/panels/host/operations.js": 1,
-    "middleware/ui/robot/panels/setup/dock-admin.js": 2,
-    "middleware/ui/robot/panels/setup/docking.js": 1,
-    "middleware/ui/robot/panels/setup/localization.js": 1,
-    "middleware/ui/robot/panels/setup/traffic-policy.js": 1,
-    "middleware/ui/robot/panels/system/security.js": 1,
-    "middleware/ui/robot/peer-approval.js": 2,
-    "middleware/ui/robot/settings.js": 2,
-    "middleware/ui/robot/telemetry.js": 1,
-    "operations/ui/console/camera-pairing.js": 2,
-    "operations/ui/console/camera-peer.js": 2,
-    "operations/ui/console/cell/cell.js": 1,
-    "operations/ui/console/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
-    "operations/ui/console/confirmed-action.js": 1,
+    "middleware/robot_ui/robot/app.js": 6,
+    "middleware/robot_ui/robot/map.js": 1,
+    "middleware/robot_ui/robot/panels/console/docking.js": 1,
+    "middleware/robot_ui/robot/panels/console/line-follow.js": 1,
+    "middleware/robot_ui/robot/panels/console/mode.js": 1,
+    "middleware/robot_ui/robot/panels/host/operations.js": 1,
+    "middleware/robot_ui/robot/panels/setup/dock-admin.js": 2,
+    "middleware/robot_ui/robot/panels/setup/docking.js": 1,
+    "middleware/robot_ui/robot/panels/setup/localization.js": 1,
+    "middleware/robot_ui/robot/panels/setup/traffic-policy.js": 1,
+    "middleware/robot_ui/robot/panels/system/security.js": 1,
+    "middleware/robot_ui/robot/peer-approval.js": 2,
+    "middleware/robot_ui/robot/settings.js": 2,
+    "middleware/robot_ui/robot/telemetry.js": 1,
+    "operations/site_ui/console/camera-pairing.js": 2,
+    "operations/site_ui/console/camera-peer.js": 2,
+    "operations/site_ui/console/cell/cell.js": 1,
+    "operations/site_ui/console/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
+    "operations/site_ui/console/confirmed-action.js": 1,
     # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
-    "operations/ui/console/console.js": 4,  # includes the channel review bridge to the same confirmedAction owner
-    "operations/ui/console/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
-    "operations/ui/console/host-services.js": 1,  # named operator host control, shared confirmation
-    "operations/ui/console/roster.js": 1,
+    "operations/site_ui/console/console.js": 4,  # includes the channel review bridge to the same confirmedAction owner
+    "operations/site_ui/console/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
+    "operations/site_ui/console/host-services.js": 1,  # named operator host control, shared confirmation
+    "operations/site_ui/console/roster.js": 1,
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
-    "operations/ui/console/site-map.js": 2,
-    "operations/ui/console/site-map-camera.js": 1,
-    "operations/ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
-    "operations/ui/console/tracking-relearn.js": 1,
+    "operations/site_ui/console/site-map.js": 2,
+    "operations/site_ui/console/site-map-camera.js": 1,
+    "operations/site_ui/console/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
+    "operations/site_ui/console/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

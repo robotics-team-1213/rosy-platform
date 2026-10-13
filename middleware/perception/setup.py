@@ -22,9 +22,11 @@ class HolderBuild(build_py):
     def find_package_modules(self, package, package_dir):
         modules = super().find_package_modules(package, package_dir)
         if package == 'control':
-            relative = Path(os.path.relpath(layout['RUNTIME_ROOT']))
-            modules.extend((package, path.stem, str(path))
-                           for path in sorted(relative.glob('*.py')))
+            for folder in layout['CONTROL_ROOTS']:
+                relative = Path(os.path.relpath(folder))
+                modules.extend((package, path.stem, str(path))
+                               for path in sorted(relative.glob('*.py'))
+                               if path.name != '__init__.py')
             names = [name for _, name, _ in modules]
             if len(names) != len(set(names)):
                 raise ValueError('Duplicate control runtime source module')
@@ -51,7 +53,7 @@ class HolderSource(sdist):
         super().make_release_tree(base_dir, [name for name in files
             if (root / name).resolve().is_relative_to(root)])
         snapshot = Path(base_dir) / '_source_roots/drive'
-        for relative in ('safety', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
+        for relative in ('motion_limits', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
             shutil.copytree(layout['DRIVE_ROOT'] / relative, snapshot / relative,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'control.egg-info/SOURCES.txt'

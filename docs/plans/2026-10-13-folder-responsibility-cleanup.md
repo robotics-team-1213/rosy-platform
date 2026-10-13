@@ -20,6 +20,10 @@
 
 **구조 토론 후 S1:** [D-743](../adr/D-743-drive-holder-promotion.md)과 [S1 실행 계획](2026-10-13-drive-holder-s1.md)에 따라 안쪽 Drive를 middleware/drive로 승격한다. S6의 signal_observer 범위는 실행 전에 따로 확정한다. 단계 순서는 유지한다.
 
+**S2 범위 확정·착지 HOLD:** [D-747](../adr/D-747-perception-judgment-holders.md)에 따라 판단과 전용 adapter 14개를 출력별 기능 holder에 배치하는 SOURCE 구현·독립 검토를 완료했다. 통합 후보의 시험 PC 3곳 SSH 불가로 원격 재검증은 600초 대기 뒤 NOT RUN이며 local main에는 착지하지 않았다. S3는 S2 착지 뒤에 연다. ROS-free 파일 IO나 보정 명령을 순수 판단으로 간주하지 않는다. 실행·검증·착지는 [S2 계획](2026-10-13-perception-judgment-s2.md)과 [기록](../validation/perception-judgment-s2-2026-10-13/result.md)에서 구분한다.
+
+**S2 후속 사용자 지시:** 위 HOLD 뒤에 사용자가 주소/VPN 변경을 확인하고 local merge까지만 요청했다. 원격 재검증 NOT RUN을 유지하고 lint·ff-only까지만 수행한다. push·다음 구조 단계는 이번 요청 범위 밖이다. 실제 착지는 Git와 검증 기록의 X landing readback으로 확인한다.
+
 ## 범위·책임·순서
 
 | 묶음 | 담당 책임 | 실행 순서 | 완료 결과 |
@@ -37,7 +41,7 @@
 **수정 경로:** 우산 `F:\Dev\Control\Robot\Rosy\README.md`, `archive/AGENTS.md`의 현재 소스 안내, 제품 `middleware/core/api/core_api_web/api/AGENTS.md`, `operations/fleet/fleet/server/AGENTS.md`. 필요하면 root `AGENTS.md`의 현재 의존 경로를 함께 정정한다. 우산 파일은 제품 Git에 포함되지 않으므로 제품 commit과 별도 변경 기록을 남긴다.
 
 1. `src/runtime/sensing`, `src/site/fleet`, 기존 UI `web` 안내를 찾고 실제 source mapping/serving 소비자를 읽는다. 역사 ADR·날짜 로그·payload 내부 안내는 수정하지 않는다.
-2. 현재 Control은 `middleware/perception`, Fleet은 `operations/fleet`, UI 원본은 `middleware/ui/robot`, `operations/ui/console`으로 안내한다. 오래된 계획 링크는 역사로 표시하고 현재 작업 입구는 현행 책임 안내로 연결한다.
+2. 현재 Control은 `middleware/perception`, Fleet은 `operations/fleet`, UI 원본은 `middleware/robot_ui/robot`, `operations/site_ui/console`으로 안내한다. 오래된 계획 링크는 역사로 표시하고 현재 작업 입구는 현행 책임 안내로 연결한다.
 3. 공유 main의 `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 소유 세션의 의도를 확인한다. 무단 restore나 가짜 zip/holder 생성으로 링크를 맞추지 않는다.
 4. `.worktrees/AGENTS.md`, `.worktrees/README.md`가 여전히 없으면 관리 도구 `InitWorktrees`로 안내를 설치한다. tool state와 task checkout 내부 안내를 일괄 갱신하지 않는다.
 5. 수정한 현재 안내의 로컬 링크를 검사하고 아래 문서 시험·lint를 실행한다. 제품 문서만 정확한 파일 목록으로 커밋한다. 우산 변경은 파일 목록·전후 근거를 X:에 기록한다.
@@ -64,9 +68,9 @@
 | S1 | `middleware/control/drive` → `middleware/drive` (D-743) | 설치 import, CORE `core/drive` 조립은 별도 | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_folder_package_names.py` |
 | S2 | `middleware/perception/control/loc_assist.py`, `watch.py` 및 나머지 순수 판단을 출력별 기능 holder로 판정 | facts/lease/command/graph 판단을 구분; 이미 이전된 Drive runtime은 다시 옮기지 않음 | `middleware/perception/test/`의 해당 adapter·순수 판단 시험 |
 | S3 | S2 뒤 남은 `middleware/perception/control` 조립 → `middleware/perception/nodes` | `control` ROS package와 다섯 호환 설치 initializer | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_colcon_roots.py` |
-| S4 | `middleware/execution` → `middleware/robot_execution`; `operations/execution` → `operations/site_execution` | local policy/receipt와 site goal/progress, `rosy.execution.*` | `middleware/execution/local/test/`, `test/test_judgment_extraction.py`, gateway/palletizing 소비 시험; 이동 뒤 시험 경로로 실행 |
-| S5 | `middleware/ui` → `middleware/robot_ui`; `operations/ui` → `operations/site_ui` | 기존 dashboard/Pilot/Face 및 Fleet Console/Cam serving, CSP, 앱 identity | `test/architecture/test_app_roles.py`, `test/architecture/test_app_identity.py`, 이동된 UI 시험과 Fleet console 시험 |
-| S6 | `operations/vision` → `operations/overhead`; `middleware/perception/vision` → `middleware/perception/front_camera` | display-only ceiling 관측과 로봇 앞 카메라 evidence, `rosy_vision`, wire 이름 | 현재 `operations/vision/test/`, `middleware/perception/test/` 해당 perception 시험; 이동된 경로로 실행 |
+| S4 | `middleware/robot_execution` → `middleware/robot_execution`; `operations/site_execution` → `operations/site_execution` | local policy/receipt와 site goal/progress, `rosy.execution.*` | `middleware/robot_execution/local/test/`, `test/test_judgment_extraction.py`, gateway/palletizing 소비 시험; 이동 뒤 시험 경로로 실행 |
+| S5 | `middleware/robot_ui` → `middleware/robot_ui`; `operations/site_ui` → `operations/site_ui` | 기존 dashboard/Pilot/Face 및 Fleet Console/Cam serving, CSP, 앱 identity | `test/architecture/test_app_roles.py`, `test/architecture/test_app_identity.py`, 이동된 UI 시험과 Fleet console 시험 |
+| S6 | `operations/overhead` → `operations/overhead`; `middleware/perception/front_camera` → `middleware/perception/front_camera` | display-only ceiling 관측과 로봇 앞 카메라 evidence, `rosy_vision`, wire 이름 | 현재 `operations/overhead/test/`, `middleware/perception/test/` 해당 perception 시험; 이동된 경로로 실행 |
 | S7 | 로컬 decision/safety/preview/Drive 후보 제한 구현 → `lane_rules`, `safety_gate`, `preview`, `motion_limits` | `core_features.decision/safety/vision`, `control.safety` 옛 import를 유지; CORE 최종 `/cmd_vel` | `middleware/core/services/test/`, `test/architecture/test_safety_separation.py`, `test/architecture/test_cmd_vel_publisher_identity.py` |
 | S8 | `operations/fleet/fleet/server` → 원장/채널/셀 어댑터/콘솔 조립/peer 책임 하위 폴더 | 한 SQLite·한 프로세스·기존 auth/claim/admission 거래; `app.py`는 조립 | `operations/fleet/test/`, `test/test_judgment_extraction.py`, source image/외부 설치 검사 |
 | S9 | `middleware/perception/tools`의 호스트 도구 → 기존 `tools/sim`, `tools/calibration` | `device` 측정 도구는 host/소비 확인 후 개별 판정 | 도구를 언급하는 추적 시험·문서 검색 및 해당 suite; 보정 입력 보존/기존 destination 거절 |
@@ -84,7 +88,7 @@
 
 ## P2: 동일 proof 코드의 최소 유지보수 조치
 
-**기존 파일:** `middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py`, `operations/fleet/fleet/server/camera_peer_crypto.py`.
+**기존 파일:** `middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py`, `operations/fleet/fleet/server/peer/camera_peer_crypto.py`.
 
 **기존 시험/소비자:** `middleware/core/api/test/test_peer_pairing.py`, `operations/fleet/test/test_camera_peer_vectors.py`, `operations/fleet/test/test_camera_peer_service.py`; CORE `receiver_service.py`, Fleet `camera_peer_service.py`, `camera_peer_store.py`, `camera_peer_routes.py`.
 

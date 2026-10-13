@@ -9,7 +9,7 @@ from control.sensing.map_pose import record_odom
 
 
 def test_odometry_burst_records_all_motion_without_reprojecting_display():
-    path = Path(__file__).parents[1]/'control/web_node.py'
+    path = Path(__file__).parents[1]/'nodes/web_node.py'
     cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef) and n.name == 'WebNode')
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'on_odom')
     state = {}
@@ -27,7 +27,7 @@ def test_odometry_burst_records_all_motion_without_reprojecting_display():
 
 
 def test_display_refresh_retains_steady_five_hz_timer():
-    path = Path(__file__).parents[1]/'control/web_node.py'
+    path = Path(__file__).parents[1]/'nodes/web_node.py'
     tree = ast.parse(path.read_text(encoding='utf-8'))
     timers = [n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)
               and n.func.attr=='create_timer' and len(n.args)>1 and isinstance(n.args[1],ast.Attribute)

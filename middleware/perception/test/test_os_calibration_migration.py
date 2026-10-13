@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from tools.migrate_calibration import migrate
+from tools.calibration.migrate_calibration import migrate
 
 
 def test_legacy_merge_preserves_sources_and_unmeasured_fields(tmp_path):

@@ -42,7 +42,7 @@ from fastapi import HTTPException
 from fleet.localization.lane_compliance import (OFF_MAP, ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
                                                 LaneComplianceTracker, ReturnTracker, map_bounds)
 from fleet.localization.lap_context import build_lap, context as lap_context
-from fleet.localization.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
+from rosy.world.state.projections.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
 PERIOD_S = 0.5

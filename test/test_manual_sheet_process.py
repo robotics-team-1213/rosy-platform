@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [
     str(ROOT / "operations/processes/palletizing/src"),
-    str(ROOT / "operations/execution/src"),
+    str(ROOT / "operations/site_execution/src"),
     str(ROOT / "contracts/skill/src"),
     str(ROOT / "contracts/foundation"),
     str(ROOT / "operations/fleet"),

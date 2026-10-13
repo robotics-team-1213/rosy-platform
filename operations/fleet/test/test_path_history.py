@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 import fleet.server.path_history as path_history
 from fakes import FakeRobot
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.path_history import CAMERA_ONLY, HEARTBEAT_S, PathRecorder, PathStore

@@ -20,7 +20,7 @@ if rclpy is not None:
 @unittest.skipIf(rclpy is None, 'Requires isolated ROS Jazzy graph')
 class CalibrationAckGraphTests(unittest.TestCase):
     def test_accepted_and_rejected_ros_responses_are_distinguished(self):
-        source = Path(__file__).parents[1] / 'control/calib_node.py'
+        source = Path(__file__).parents[1] / 'nodes/calib_node.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CalibNode')
         methods = [m for m in cls.body if isinstance(m, ast.FunctionDef)
