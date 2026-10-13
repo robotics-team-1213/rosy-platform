@@ -4,7 +4,9 @@ import pytest
 
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager, Twist
-from core_features.safety.manager import SafetyManager, SpeedLimits, BatteryPolicy, SafetyDecision
+from core_features.safety.manager import (
+    SafetyManager, SpeedLimits, BatteryPolicy, SafetyDecision, PolicyObservationUnavailable,
+)
 
 
 def decision(request, **changes):
@@ -211,6 +213,43 @@ def test_backward_policy_clock_is_not_held():
     clock[0] = 99.
     assert ask(command, 10.1) == Twist()
     assert safety.estop
+
+
+def test_backward_clock_above_gap_start_is_not_held():
+    command, safety, modes, clock = setup_hold()
+    for tick in (100., 100.4):
+        clock[0] = tick
+        assert ask(command, tick) == Twist() and not safety.estop
+    clock[0] = 100.3
+    assert ask(command, 100.5) == Twist()
+    assert safety.estop and not safety.policy_hold
+
+
+@pytest.mark.parametrize('duration', [3., -.1, float('nan'), float('inf')])
+def test_unavailable_completion_clock_cannot_extend_hold(duration):
+    clock = [100.]
+    def unavailable(request):
+        clock[0] += duration
+        raise PolicyObservationUnavailable('snapshot_missing')
+    command, safety, modes, _ = setup_hold(unavailable, clock=clock)
+    assert ask(command, 10.) == Twist()
+    assert safety.estop and not safety.policy_hold
+
+
+@pytest.mark.parametrize('unavailable', [False, True])
+def test_evaluation_time_is_not_idle_time_between_gaps(unavailable):
+    clock = [100.]
+    def slow(request):
+        clock[0] += .6
+        if unavailable:
+            raise PolicyObservationUnavailable('snapshot_missing')
+        return decision(request)
+    command, safety, modes, _ = setup_hold(slow, clock=clock)
+    for index in range(3):
+        assert ask(command, 10. + index) == Twist() and not safety.estop
+        clock[0] += .02
+    assert ask(command, 14.) == Twist()
+    assert safety.estop and not safety.policy_hold
 
 
 def boom(request):
