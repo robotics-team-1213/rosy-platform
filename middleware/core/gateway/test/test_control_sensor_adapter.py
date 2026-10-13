@@ -120,7 +120,7 @@ def test_adapter_can_bind_the_same_policy_to_core_safety_manager():
         def __init__(self):
             self.bound = None
 
-        def bind_control_policy(self, policy):
+        def bind_control_policy(self, policy, stale_hold_s=0.0):
             self.bound = policy
 
     safety = Safety()
@@ -425,9 +425,11 @@ def test_packaged_default_merged_with_legacy_enabled_overlay_is_enforce():
 class RecordingSafety:
     def __init__(self):
         self.calls = []
+        self.holds = []
 
-    def bind_control_policy(self, policy):
+    def bind_control_policy(self, policy, stale_hold_s=0.0):
         self.calls.append(("enforce", policy))
+        self.holds.append(stale_hold_s)
 
     def bind_shadow_control_policy(self, policy):
         self.calls.append(("shadow", policy))
@@ -441,6 +443,34 @@ def test_bind_safety_follows_the_mode():
 
         assert adapter.bind_safety(safety) is True
         assert safety.calls == [(mode, adapter.policy)]
+
+
+@pytest.mark.parametrize("raw, holds", [
+    ({"mode": "enforce"}, [2.0]),
+    ({"mode": "enforce", "stale_hold_s": 0.5}, [0.5]),
+    ({"enabled": True, "stale_hold_s": 5}, [5.0]),
+    ({"mode": "shadow", "stale_hold_s": 0.5}, []),
+    ({"mode": "off", "stale_hold_s": 0.5}, []),
+])
+def test_only_enforce_hands_the_configured_stale_hold_to_safety(raw, holds):
+    adapter = ControlSensorAdapter(raw, sensor_node_factory=lambda **k: FakeSensorNode(**k),
+                                   **_provider_factories())
+    safety = RecordingSafety()
+
+    adapter.bind_safety(safety)
+
+    assert safety.holds == holds
+
+
+def test_enforce_binding_arms_the_hold_on_the_real_safety_manager():
+    from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
+    adapter = ControlSensorAdapter({"mode": "enforce", "stale_hold_s": 1.5},
+                                   sensor_node_factory=lambda **k: FakeSensorNode(**k),
+                                   **_provider_factories())
+    safety = SafetyManager(SpeedLimits(), BatteryPolicy())
+
+    assert adapter.bind_safety(safety) is True
+    assert safety.policy_mode == "enforce" and safety._policy_hold_s == 1.5
 
 
 def _policy_only():
