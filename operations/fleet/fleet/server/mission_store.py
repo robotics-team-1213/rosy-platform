@@ -20,7 +20,7 @@ from core_common.protocol.schemas import (
 
 from .dispatch_admission import release as release_dispatch_claims
 from .dispatch_admission import reserve as reserve_dispatch_claims
-from .goal_evidence import GoalEvidence, GoalPredicate
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalPredicate
 from .sqlite_policy import configure_connection, enable_wal
 
 
@@ -703,6 +703,21 @@ class MissionStore:
             row = connection.execute(
                 "SELECT * FROM fleet_missions WHERE status='READY' "
                 "ORDER BY created_at, mission_id LIMIT 1",
+            ).fetchone()
+        return self._row(row)
+
+    def next_dispatch_mission(self, instances: Mapping[str, str], *, after_id: str) -> dict[str, Any] | None:
+        """One bounded round-robin choice; unresolved attempts remain readable without configuration."""
+        clauses = ["status='RUNNING'", "reconciliation_pending=1"]
+        values = []
+        for workcell_id, instance_id in instances.items():
+            clauses.append("(status='READY' AND workcell_id=? AND instance_id=?)")
+            values.extend((workcell_id, instance_id))
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE (" + " OR ".join(clauses) + ") "
+                "ORDER BY CASE WHEN mission_id>? THEN 0 ELSE 1 END, mission_id LIMIT 1",
+                [*values, after_id],
             ).fetchone()
         return self._row(row)
 

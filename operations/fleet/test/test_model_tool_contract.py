@@ -7,7 +7,7 @@ from core_common.protocol.schemas import (
     ER2_TOOL_ARGUMENT_MAX_BYTES,
     ER2_TOOL_RESULT_MAX_BYTES,
 )
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
 
 
 def _call(**overrides):

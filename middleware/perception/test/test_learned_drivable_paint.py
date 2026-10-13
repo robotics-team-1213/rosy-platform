@@ -318,23 +318,27 @@ def test_a_white_line_across_the_road_still_ends_the_way_and_is_no_crosswalk():
     assert not crosswalk.any()                               # nothing for the crosswalk extent
 
 
-def test_runner_hands_the_crosswalk_class_mask_beside_the_way(tmp_path, monkeypatch):
+@pytest.mark.parametrize('class_index,name', [(3, 'crosswalk'), (4, 'speed_bump')])
+def test_runner_hands_the_traffic_class_mask_beside_the_way(tmp_path, monkeypatch, class_index, name):
     from control.sensing.perception.learned.runner import LaneSegModel
     labels = _road()
-    labels[170:180, 120:200] = 3
+    labels[170:180, 120:200] = class_index
     model = LaneSegModel.__new__(LaneSegModel)
     model.manifest = type("M", (), dict(classes=CLASSES, input=type("I", (), dict(crop=None))()))()
     monkeypatch.setattr(model, "_logits", lambda bgr: _logits(labels))
     mask, kind, info, _ = model.infer_drivable(np.zeros((480, 640, 3), np.uint8))
     assert kind == "drivable" and mask[350, 300]                # the way runs through the crosswalk
-    assert info["crosswalk_mask"].shape == (480, 640) and info["crosswalk_mask"][350, 300]
-    assert not info["crosswalk_mask"][300, 300]
+    assert info[name + '_mask'].shape == (480, 640) and info[name + '_mask'][350, 300]
+    assert not info[name + '_mask'][300, 300]
+    other = 'speed_bump' if name == 'crosswalk' else 'crosswalk'
+    assert not info[other + '_mask'].any()
 
 
 class _CrosswalkModel(_DrivableModel):
     def infer_drivable(self, frame):
         mask, kind, info, latency = super().infer_drivable(frame)
         info["crosswalk_mask"] = np.full(frame.shape[:2], 1, np.uint8)
+        info["speed_bump_mask"] = np.full(frame.shape[:2], 3, np.uint8)
         return mask, kind, info, latency
 
 
@@ -347,8 +351,12 @@ def test_worker_serves_the_crosswalk_mask_beside_the_paint_and_moves_it_with_the
     worker.mask_for(frame, 1, 10.125, clean_drivable=lambda m: m)
     assert worker.used_crosswalk is not None and worker.used_crosswalk.all()
     assert "crosswalk_mask" not in worker.used_drivable                 # keep_debug stays JSON
+    assert worker.used_speed_bump is not None and (worker.used_speed_bump == 3).all()
+    assert 'speed_bump_mask' not in worker.used_drivable
     moved = worker.mask_for(frame, 2, 10.25, clean_drivable=lambda m: m, max_age_s=1.0,
                             motion=lambda m, a, b: (m * 0 + 2, 0.01, 0.0))
     assert int(moved.max()) == 2 and int(worker.used_crosswalk.max()) == 2
+    assert int(worker.used_speed_bump.max()) == 2
     worker.reset()
     assert worker.used_crosswalk is None
+    assert worker.used_speed_bump is None

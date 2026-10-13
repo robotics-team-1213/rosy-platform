@@ -34,12 +34,14 @@ def keys(tmp_path):
     return private, public
 
 
-def candidate(m, root, keys, seq=1, env="e" * 64, *, bad_source=False, extra_files=None):
+def candidate(m, root, keys, seq=1, env="e" * 64, *, bad_source=False, extra_files=None, omit_files=()):
     dest = root / "inbox" / str(seq)
     dest.mkdir(parents=True)
     with tarfile.open(dest / "code.tar", "w") as tar:
-        for name in ("learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
+        for name in (*m.LEARNING_REQUIRED,
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
+            if name in omit_files:
+                continue
             data = b"broken python !" if bad_source else b"print('ok')\n"
             info = tarfile.TarInfo(name)
             info.size = len(data)
@@ -92,6 +94,108 @@ def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
         m.unpack(folder / "code.tar", tmp_path / "release")
 
 
+def test_split_perception_archive_requires_its_declared_drive_closure(tmp_path, keys):
+    m = module()
+    helper = {"middleware/perception/control/_source_layout.py": b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="source-holder dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    helper.update({name: b"source\n" for name in m.SPLIT_REQUIRED})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=helper)
+    m.unpack(folder / "code.tar", tmp_path / "complete")
+    for name in m.SPLIT_REQUIRED:
+        assert (tmp_path / "complete" / name).read_bytes() == b"source\n"
+
+
+def test_road_fitness_archive_requires_signed_observation_contract(tmp_path, keys):
+    m = module()
+    helper = {"learning/evaluation/perception/road_fitness_replay.py": b"pass\n"}
+    folder = candidate(m, tmp_path, keys, extra_files=helper)
+    with pytest.raises(ValueError, match="road-fitness observation dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    names = ("contracts/foundation/core_common/observation.py",)
+    helper.update({name: (SCRIPT.parents[2] / name).read_bytes() for name in names})
+    folder = candidate(m, tmp_path, keys, seq=2, extra_files=helper)
+    release = tmp_path / "complete"
+    m.unpack(folder / "code.tar", release)
+    probe = release / m.PREFIX / "probe.py"
+    probe.write_text("from core_common.observation import ObservationSnapshot, road_region_input_errors\n")
+    subprocess.run(m.bootstrap_command(sys.executable, release, probe, []), check=True)
+
+
+@pytest.mark.parametrize("path", ["middleware/control/drive/planning/nav2/node.py",
+                                  "middleware/control/drive/unknown/code.py",
+                                  "middleware/control/arm/safety/code.py"])
+def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
+    m = module()
+    folder = candidate(m, tmp_path, keys, extra_files={path: b"pass\n"})
+    with pytest.raises(ValueError, match="approved model-code dependencies"):
+        m.unpack(folder / "code.tar", tmp_path / "release")
+
+
+@pytest.mark.parametrize("missing", [
+    "learning/curation/perception/review_app.py",
+    "learning/curation/perception/classes/lane_lr5.yaml",
+    "learning/registry/perception/store.py",
+    "learning/training/perception/train_job.py",
+    "learning/evaluation/perception/road_replay.py",
+    "tools/perception/operator_ssh.py",
+])
+def test_learning_archive_refuses_missing_owner_dependency(tmp_path, keys, missing):
+    m = module()
+    folder = candidate(m, tmp_path, keys, omit_files=(missing,))
+    before = (folder / "release.json").read_bytes()
+    with pytest.raises(ValueError, match="missing model-code entry point or dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "incomplete")
+    assert (folder / "release.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("path", ["learning/curation/omx/tool.py", "learning/registry/policy/tool.py",
+                                   "learning/evaluation/unknown/tool.py", "tools/remote/tool.py"])
+def test_learning_archive_refuses_undeclared_owner(tmp_path, keys, path):
+    m = module()
+    folder = candidate(m, tmp_path, keys, extra_files={path: b"pass\n"})
+    with pytest.raises(ValueError, match="approved model-code dependencies"):
+        m.unpack(folder / "code.tar", tmp_path / "release")
+
+
+@pytest.mark.parametrize("job,path", [
+    ("dataset/build.py", "learning/curation/perception/build.py"),
+    ("model/watch.py", "learning/registry/perception/watch.py"),
+    ("training/train_job.py", "learning/training/perception/train_job.py"),
+    ("road_replay.py", "learning/evaluation/perception/road_replay.py"),
+    ("store.py", "learning/registry/perception/store.py"),
+])
+def test_existing_job_names_resolve_only_the_canonical_signed_file(tmp_path, job, path):
+    m = module()
+    source = tmp_path / "release"
+    for name in (path, "learning/registry/perception/watch.py"):
+        file = source / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    before = (source / path).read_bytes()
+    file, base, name, mapped = m.job_entry(source, job)
+    assert (file, base, name, mapped) == ((source / path).resolve(), source.resolve(), path, path)
+    assert file.read_bytes() == before
+    for bad in ("./" + job, "../" + job, path, str(file)):
+        with pytest.raises((ValueError, OSError)):
+            m.job_entry(source, bad)
+
+
+@pytest.mark.parametrize("prefix", ["learning/training/perception/", "tools/perception/"])
+def test_retained_signed_release_keeps_its_original_job_paths_and_bytes(tmp_path, prefix):
+    m = module()
+    source = tmp_path / "old-signed-release"
+    file = source / prefix / "model/watch.py"
+    file.parent.mkdir(parents=True)
+    file.write_bytes(b"ORIGINAL_SIGNED_BYTES = True\n")
+    resolved, base, name, mapped = m.job_entry(source, "model/watch.py")
+    assert (resolved, base, name, mapped) == (file.resolve(), source / prefix, "model/watch.py", None)
+    assert resolved.read_bytes() == b"ORIGINAL_SIGNED_BYTES = True\n"
+    with pytest.raises((ValueError, OSError)):
+        m.job_entry(source, "../../outside.py")
+
+
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
     m = module()
     source = tmp_path / "release"
@@ -103,7 +207,8 @@ def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
     assert (base, name) == (source.resolve(), m.CAMERA_MAP_ENTRY)
     file, base, name, mapped = m.job_entry(source, "rosy_ml.py")
     assert file == (source / m.PREFIX / "rosy_ml.py").resolve() and mapped is None
-    assert m.JOB_ENTRY_POINTS == {"camera_lane_map.py": m.CAMERA_MAP_ENTRY}
+    assert m.JOB_ENTRY_POINTS["camera_lane_map.py"] == m.CAMERA_MAP_ENTRY
+    assert m.JOB_ENTRY_POINTS["model/watch.py"] == "learning/registry/perception/watch.py"
     # Other names resolve only under PREFIX: no other source path, no escape.
     for bad in ("../../../outside.py", str((source / "outside.py").resolve()), m.CAMERA_MAP_ENTRY,
                 "./camera_lane_map.py", "lane_map.py"):
@@ -143,7 +248,7 @@ def test_atomic_update_preserves_legacy_data_and_does_not_downgrade(tmp_path, ke
     candidate(m, tmp_path, keys, seq=2)
     u = updater(m, tmp_path, keys)
     assert u.run()["result"] == "applied"
-    assert (tmp_path / "current/learning/training/perception/rosy_ml.py").read_text() == "print('ok')\n"
+    assert (tmp_path / "current/tools/perception/rosy_ml.py").read_text() == "print('ok')\n"
     assert sentinel.read_bytes() == b"precious"
     candidate(m, tmp_path, keys, seq=1)
     assert u.run()["result"] == "idle"
@@ -213,14 +318,14 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
-                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False),
+                                      ("middleware/devices/pinky/profile/config/camera_nominal.yaml.extra", False),
                                       ("operations/vision/rosy_vision/cli.py", False),
                                       ("operations/vision/rosy_vision/lane_map.py.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
     m = module()
     p = tmp_path / "bad.tar"
     with tarfile.open(p, "w") as tar:
-        for valid in ["learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
+        for valid in [*m.LEARNING_REQUIRED,
                       "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"]:
             data = b"print('ok')\n"
             baseline = tarfile.TarInfo(valid)
@@ -267,11 +372,12 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     def git(*args):
         return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
     git("init")
-    code = repo / "learning/training/perception"
-    (code / "model").mkdir(parents=True)
-    (code / "model/watch.py").write_text("print('committed')\n")
-    (code / "rosy_ml.py").write_text("print('committed')\n")
-    profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+    code = repo / "tools/perception"
+    for name in m.LEARNING_REQUIRED:
+        file = repo / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("print('committed')\n")
+    profile = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
     dependencies = ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
                     "shared/web/shared-assets.json", profile]
     if camera_map:
@@ -280,8 +386,7 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
         dep = repo / name
         dep.parent.mkdir(parents=True, exist_ok=True)
         dep.write_text("PINNED = True\n")
-    git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        *dependencies)
+    git("add", *m.LEARNING_REQUIRED, *dependencies)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
@@ -291,8 +396,8 @@ def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     out = tmp_path / "candidate"
     m.build(repo, sha, 1, "e" * 64, out, "test", keys[0], keys[1])
     m.unpack(out / "code.tar", tmp_path / "result")
-    assert (tmp_path / "result/learning/training/perception/rosy_ml.py").read_text() == "print('committed')\n"
-    assert not (tmp_path / "result/learning/training/perception/secret").exists()
+    assert (tmp_path / "result/tools/perception/rosy_ml.py").read_text() == "print('committed')\n"
+    assert not (tmp_path / "result/tools/perception/secret").exists()
     assert (tmp_path / "result/middleware/perception/control/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/shared/web/shared-assets.json").read_text() == "PINNED = True\n"
@@ -311,16 +416,16 @@ def test_uncommitted_perception_edits_are_kept(tmp_path):
     def git(*args):
         return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
     git("init")
-    edited = repo / "learning/training/perception/rosy_ml.py"
+    edited = repo / "tools/perception/rosy_ml.py"
     edited.parent.mkdir(parents=True)
     edited.write_text("print('committed')\n", encoding="utf-8")
-    git("add", "learning/training/perception/rosy_ml.py")
+    git("add", "tools/perception/rosy_ml.py")
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     edited.write_text("print('local edit')\n", encoding="utf-8")
     assert m.perception_edits([repo]) == "uncommitted perception edits"
     assert edited.read_text(encoding="utf-8") == "print('local edit')\n"
     (repo / "notes.txt").write_text("outside the code payload", encoding="utf-8")
-    git("checkout", "--", "learning/training/perception/rosy_ml.py")
+    git("checkout", "--", "tools/perception/rosy_ml.py")
     assert m.perception_edits([repo]) is None
     assert m.perception_edits([tmp_path / "not-a-checkout"]) is None
 
@@ -342,6 +447,9 @@ def test_a_local_script_that_differs_from_the_signed_release_is_refused(tmp_path
 @pytest.mark.skipif(os.name == "nt", reason="Linux symlink/flock updater")
 @pytest.mark.parametrize("code_path", [
     "learning/training/perception/rosy_ml.py", "tools/perception/rosy_ml.py",
+    "learning/curation/perception/review_app.py", "learning/curation/perception/tools/review_app_smoke.py",
+    "learning/registry/perception/store.py", "learning/evaluation/perception/road_replay.py",
+    "learning/training/perception/train_job.py",
     "middleware/perception/control/model.py", "src/runtime/sensing/control/model.py",
     "contracts/foundation/core_common/model.py", "src/contracts/foundation/core_common/model.py",
 ])
@@ -404,6 +512,74 @@ def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkey
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
     (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00")
     assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
+
+
+@pytest.mark.parametrize("script", [
+    "learning/curation/perception/pixel_label_job.py", "learning/registry/perception/convert.py",
+    "learning/training/perception/train_job.py", "learning/evaluation/perception/road_replay.py",
+    "tools/perception/rosy_ml.py", "learning/training/perception/training/train_job.py",
+    "tools/perception/model/convert.py",
+])
+def test_busy_guard_detects_each_source_holder_outside_enrolled_cwd(tmp_path, monkeypatch, script):
+    m = module()
+    proc = tmp_path / "proc"
+    entry = proc / "999999"
+    entry.mkdir(parents=True)
+    (entry / "comm").write_text("python")
+    (entry / "cmdline").write_bytes(("python\0/app/" + script + "\0").encode())
+    monkeypatch.setattr(m.os, "getuid", lambda: entry.stat().st_uid, raising=False)
+    original = Path.resolve
+    monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
+                        tmp_path if path == entry / "cwd" else original(path, *a, **kw))
+    assert m.legacy_busy([str(tmp_path / "enrolled")], proc=proc) == "legacy work pid 999999"
+
+
+@pytest.mark.parametrize("layout", ["canonical", "learning/training/perception", "tools/perception"])
+def test_health_checks_actual_entrypoints_in_canonical_and_retained_releases(tmp_path, keys, monkeypatch, layout):
+    m = module()
+    source = tmp_path / "source"
+    names = ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
+             "dataset/build.py", "dataset/review_app.py")
+    expected = []
+    for name in names:
+        relative = m.JOB_ENTRY_POINTS.get(name, m.PREFIX + name) if layout == "canonical" else layout + "/" + name
+        file = source / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"print('unchanged signed source')\n")
+        expected.append(str(file.resolve()))
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda command, **kwargs: calls.append(command))
+    updater(m, tmp_path / "updater", keys).check_health(source)
+    assert [command[6] for command in calls if command[-1] == "--help"] == expected
+    assert len(calls) == 8
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux signed job work lock")
+@pytest.mark.parametrize("checkout_path", [
+    "learning/registry/perception/convert.py", "learning/training/perception/model/convert.py",
+    "tools/perception/model/convert.py",
+])
+def test_mapped_job_refuses_current_or_enrolled_old_script_edits(tmp_path, keys, monkeypatch, checkout_path):
+    m = module()
+    code_root = tmp_path / "code"
+    source = code_root / "releases" / "signed"
+    for relative in ("learning/registry/perception/watch.py", "learning/registry/perception/convert.py"):
+        file = source / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    (code_root / "current").symlink_to(source, target_is_directory=True)
+    checkout = tmp_path / "checkout"
+    local = checkout / checkout_path
+    local.parent.mkdir(parents=True)
+    local.write_bytes(b"LOCAL = True\n")
+    monkeypatch.setattr(m, "gpu_busy", lambda: None)
+    monkeypatch.setattr(m, "legacy_busy", lambda roots: None)
+    config = {"root": str(code_root), "key_id": "test", "public_key": str(keys[1]),
+              "python": sys.executable, "work_dir": str(checkout), "legacy_roots": []}
+    with pytest.raises(ValueError, match="differs"):
+        m.execute(config, "model/convert.py", [])
+    assert local.read_bytes() == b"LOCAL = True\n"
+    assert not (code_root / "jobs").exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux job receipt and flock")
@@ -485,7 +661,7 @@ def test_user_service_and_timer_units_validate(tmp_path):
 def test_isolated_bootstrap_uses_pinned_sibling_and_dependency_paths(tmp_path):
     m = module()
     root = tmp_path / "release"
-    model = root / "learning/training/perception/model"
+    model = root / "learning/registry/perception"
     model.mkdir(parents=True)
     (model / "helper.py").write_text("VALUE = 'pinned'\n")
     (model / "tool.py").write_text("import sys,helper,control,core_common; print(helper.VALUE,control.VALUE,core_common.VALUE,sys.flags.isolated)\n")
@@ -609,6 +785,9 @@ def test_incomplete_distribution_without_readable_provenance_fails_closed(tmp_pa
 
 @pytest.mark.parametrize("code_path", [
     "learning/training/perception/rosy_ml.py", "tools/perception/rosy_ml.py",
+    "learning/curation/perception/review_app.py", "learning/curation/perception/tools/review_app_smoke.py",
+    "learning/registry/perception/store.py", "learning/evaluation/perception/road_replay.py",
+    "learning/training/perception/train_job.py",
     "middleware/perception/control/model.py", "src/runtime/sensing/control/model.py",
     "contracts/foundation/core_common/model.py", "src/contracts/foundation/core_common/model.py",
 ])

@@ -39,7 +39,7 @@ ROS-free provider. Device planner types come from `omx_adapter` in the ROS works
 
 ### Internal
 
-- `middleware/apps/device/omx/adapter/` for planner and runtime types.
+- `middleware/devices/omx/adapter/` for planner and runtime types.
 - Manipulation Skill wheel.
 
 ### External

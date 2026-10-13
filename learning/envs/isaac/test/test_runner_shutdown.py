@@ -42,6 +42,10 @@ def test_sdk_error_survives_runner_cleanup(runner, headless, tmp_path, monkeypat
             captured["closed"] = True
 
     monkeypatch.setitem(sys.modules, "isaacsim", SimpleNamespace(SimulationApp=App))
+    manager = SimpleNamespace(set_extension_enabled_immediate=lambda *args: None,
+                              is_extension_enabled=lambda name: False)
+    monkeypatch.setitem(sys.modules, 'omni.kit.app', SimpleNamespace(
+        get_app=lambda: SimpleNamespace(get_extension_manager=lambda: manager)))
     original_import = builtins.__import__
 
     def failing_sdk_import(name, *args, **kwargs):
@@ -59,4 +63,3 @@ def test_sdk_error_survives_runner_cleanup(runner, headless, tmp_path, monkeypat
         assert captured["extra_args"] == ['--/app/extensions/excluded=["isaacsim.gui.menu"]']
     else:
         assert not {"width", "height", "anti_aliasing"}.intersection(captured)
-

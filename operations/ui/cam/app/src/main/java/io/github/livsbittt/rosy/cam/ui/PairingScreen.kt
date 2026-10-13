@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -117,9 +118,9 @@ fun PairingScreen(
                 .widthIn(max = 560.dp)
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(16.dp)
+                .padding(RosyMetrics.Space4.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space4.dp),
         ) {
             Text(stringResource(R.string.pairing_title), style = MaterialTheme.typography.headlineSmall)
             Text(stringResource(R.string.pairing_site, site.serviceName, site.tlsHost), style = MaterialTheme.typography.bodyMedium)
@@ -127,7 +128,7 @@ fun PairingScreen(
             when (state) {
                 PairingState.Discover -> {
                     Text(stringResource(R.string.pairing_working), style = MaterialTheme.typography.bodyLarge)
-                    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_cancel)) }
+                    OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onCancel, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_cancel)) }
                 }
                 is PairingState.Requested, is PairingState.AwaitingApproval -> {
                     val code = if (state is PairingState.Requested) state.code else (state as PairingState.AwaitingApproval).code
@@ -136,11 +137,11 @@ fun PairingScreen(
                         PairingText.groupedCode(code),
                         style = MaterialTheme.typography.displayLarge,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight(RosyMetrics.WeightStrong.toInt()),
                         modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") },
                     )
                     Text(stringResource(R.string.pairing_waiting), style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_cancel)) }
+                    OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onCancel, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_cancel)) }
                 }
                 is PairingState.ConfirmFingerprint -> {
                     Text(stringResource(R.string.pairing_fp_title), style = MaterialTheme.typography.titleMedium)
@@ -150,7 +151,7 @@ fun PairingScreen(
                         state.fingerprint.replace("-", "-\u200B"),
                         style = MaterialTheme.typography.headlineMedium,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight(RosyMetrics.WeightStrong.toInt()),
                         modifier = Modifier.semantics { contentDescription = state.fingerprint },
                     )
                     Text(
@@ -160,9 +161,9 @@ fun PairingScreen(
                     )
                     // No site-supplied free text before the fingerprint is confirmed: source_id is pattern-checked.
                     Text(stringResource(R.string.pairing_fp_source, state.sourceId), style = MaterialTheme.typography.bodyMedium)
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(enabled = !busy, onClick = { onAnswer(false) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_mismatch)) }
-                        Button(enabled = !busy, onClick = { onAnswer(true) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_match)) }
+                    Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, enabled = !busy, onClick = { onAnswer(false) }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_mismatch)) }
+                        Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape, enabled = !busy, onClick = { onAnswer(true) }, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_match)) }
                     }
                 }
                 is PairingState.Paired -> {
@@ -171,21 +172,21 @@ fun PairingScreen(
                         color = RosyColors.StatusOk,
                         style = MaterialTheme.typography.bodyLarge,
                     )
-                    Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_done)) }
+                    Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onClose, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_done)) }
                 }
                 is PairingState.Rejected, is PairingState.Expired -> {
                     val message = PairingText.failure(state) ?: R.string.pairing_failed_other
                     val text = stringResource(message, PairingText.failureArg(state))
                     if (PairingText.critical(state)) CritMessage(text)
                     else Text(text, color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth().border(1.dp, RosyColors.StatusWarn, RoundedCornerShape(6.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp))
+                        modifier = Modifier.fillMaxWidth().border(1.dp, RosyColors.StatusWarn, RoundedCornerShape(RosyMetrics.RadiusControl.dp))
+                            .padding(horizontal = RosyMetrics.Space3.dp, vertical = RosyMetrics.Space2.dp))
                     PairingText.unsettledCredential(state)?.let { id ->
                         Text(stringResource(R.string.pairing_credential, id), fontFamily = FontFamily.Monospace)
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_close)) }
-                        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_retry)) }
+                    Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onClose, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_close)) }
+                        Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onRetry, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.pairing_retry)) }
                     }
                 }
             }

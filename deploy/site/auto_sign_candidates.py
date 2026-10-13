@@ -22,7 +22,9 @@ invocation:
 
 Exit codes: 0 nothing to do, 10 signed at least one and refused nothing,
 20 refused or failed at least one, 2 bad configuration or another run holds
-the lock. The site host still verifies every file before ``docker load``.
+the lock. A candidate whose newest exact-main CI run has finished red
+(failure or cancelled) is left unsigned and does not fail the run. The site
+host still verifies every file before ``docker load``.
 """
 
 from __future__ import annotations
@@ -68,6 +70,14 @@ _REFUSED_LIMIT = 200
 
 class Refused(Exception):
     """This candidate must not be signed; the reason is recorded."""
+
+
+class CiRed(Exception):
+    """The newest exact-main CI run finished without success.
+
+    Leave the candidate unsigned. A later run of the same manifest may still
+    pass, so this does not fail the process and is not a permanent refusal.
+    """
 
 
 class ConfigError(ValueError):
@@ -259,7 +269,10 @@ class AutoSigner:
                     if row.get("head_sha") == commit and row.get("head_branch") == "main"
                     and row.get("event") in {"push", "workflow_dispatch", "schedule"}]
             latest = max(runs, key=lambda row: row["id"])
-            if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+            conclusion = latest.get("conclusion")
+            if latest.get("status") == "completed" and conclusion in {"failure", "cancelled"}:
+                raise CiRed(str(conclusion))
+            if latest.get("status") != "completed" or conclusion != "success":
                 raise RuntimeError("CI is not successful yet")
             jobs = json.loads(self._gh("api", f"repos/{self.repo}/actions/runs/{latest['id']}/jobs"
                                       "?filter=latest&per_page=100"))["jobs"]
@@ -411,6 +424,10 @@ class AutoSigner:
             for row in candidates[: self.config["max_per_run"]]:
                 try:
                     outcomes.append(self._sign_one(row["tag"], state))
+                except CiRed as error:
+                    self._audit({"decision": "ci-red", "tag": row["tag"],
+                                 "conclusion": str(error)})
+                    outcomes.append("skipped")
                 except (RuntimeError, OSError) as error:
                     self._audit({"decision": "error", "tag": row["tag"], "reason": str(error)})
                     outcomes.append("error")

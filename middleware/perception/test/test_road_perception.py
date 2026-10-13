@@ -1,10 +1,13 @@
 import numpy as np
 import pytest
 
+from control.sensing.perception.camera_ground import simulation_ground_plane
+
 from control.sensing.perception.road import (
     PreviewRateLimiter,
     RoadObservation,
     RoadPreviewConfig,
+    RoadPerceptionConfig,
     detect_road_observation,
     render_road_preview,
     road_observation_payload,
@@ -13,6 +16,105 @@ from control.sensing.perception.road import (
 
 WIDTH = 320
 HEIGHT = 240
+
+
+def _longitudinal_crosswalk_frame(centres=(-.06, -.02, .02, .06), *, extent=(.22, .34)):
+    # Project the source map's four 25 mm x 120 mm bars at 40 mm pitch through the nominal camera.
+    ground = simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=WIDTH, height_px=HEIGHT, height_m=.06343,
+        pitch_rad=.13962634015954636, hfov_rad=1.0334, max_range_m=.6)
+    frame = np.full((HEIGHT, WIDTH, 3), 35, dtype=np.uint8)
+    for row in range(HEIGHT):
+        distance = ground.distance(row)
+        if distance is not None and extent[0] <= distance <= extent[1]:
+            for column in range(WIDTH):
+                lateral = ground.lateral(column, row)
+                if any(abs(lateral-centre) <= .0125 for centre in centres):
+                    frame[row, column] = 245
+    return frame, ground
+
+
+def test_260919_longitudinal_crosswalk_has_metric_road_evidence():
+    frame, ground = _longitudinal_crosswalk_frame()
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is None
+    assert observation.crosswalk.distance_m == pytest.approx(.22, abs=.01)
+    assert 0 < observation.crosswalk.confidence <= 1
+    assert ground.distance(observation.crosswalk.image_row) == pytest.approx(observation.crosswalk.distance_m)
+    assert detect_road_observation(frame).crosswalk is None
+    assert detect_road_observation(frame, ground=ground,
+                                  config=RoadPerceptionConfig(crosswalk_min_bars=5)).crosswalk is None
+
+
+@pytest.mark.parametrize("centres", [(), (-.02, .02), (.125, .165, .205, .245)])
+def test_metric_crosswalk_requires_three_bars_in_this_corridor(centres):
+    frame, ground = _longitudinal_crosswalk_frame(centres)
+    if centres:
+        assert (frame > 180).any()
+    assert detect_road_observation(frame, ground=ground).crosswalk is None
+
+
+def test_unprojected_disjoint_mark_remains_a_conservative_stop_candidate():
+    frame = np.full((HEIGHT, WIDTH, 3), 35, dtype=np.uint8)
+    for start in (0, 58, 105, 153, 200, 298):
+        frame[135:139, start:start + 22] = 245
+    assert (frame[136, :, 0] > 180).mean() > .4
+    assert detect_road_observation(frame).stop_line is not None
+
+
+@pytest.mark.parametrize('stop_row', [130, 160, 190])
+def test_independent_stop_bar_is_retained_with_longitudinal_crosswalk(stop_row):
+    frame, ground = _longitudinal_crosswalk_frame()
+    frame[stop_row - 2:stop_row + 2, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is not None
+    assert observation.stop_line.image_row == pytest.approx(stop_row, abs=3)
+
+
+@pytest.mark.parametrize('gap', [1, 2, 10])
+def test_broken_stop_bar_is_retained_with_longitudinal_crosswalk(gap):
+    frame, ground = _longitudinal_crosswalk_frame()
+    frame[158:162, 55:265] = 245
+    frame[158:162, 159:159 + gap] = 35
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is not None
+    assert observation.stop_line.image_row == pytest.approx(160, abs=3)
+
+
+def test_stop_bar_at_edge_of_merged_stripe_group_is_retained():
+    frame, ground = _longitudinal_crosswalk_frame()
+    frame[90:, :24] = 245
+    frame[90:, -24:] = 245
+    frame[159:161, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is not None
+
+
+@pytest.mark.parametrize('stop_row', [172, 185, 190])
+def test_thin_stop_bar_survives_bev_source_row_aliasing(stop_row):
+    frame, ground = _longitudinal_crosswalk_frame(extent=(.12, .25))
+    frame[90:, :24] = 245
+    frame[90:, -24:] = 245
+    frame[stop_row, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.crosswalk is not None
+    assert observation.stop_line is not None
+
+
+@pytest.mark.parametrize("marking", [{"lane_x": 160}, {"stop_y": 180}])
+def test_metric_crosswalk_does_not_reclassify_a_lane_or_single_stop_line(marking):
+    ground = simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=WIDTH, height_px=HEIGHT, height_m=.06343,
+        pitch_rad=.13962634015954636, hfov_rad=1.0334, max_range_m=.6)
+    observation = detect_road_observation(_frame(**marking), ground=ground)
+    assert observation.crosswalk is None
+    assert (observation.stop_line is not None) == ('stop_y' in marking)
 
 
 def _frame(*, lane_x=None, stop_y=None, crosswalk_rows=(), signals=()):
@@ -51,6 +153,60 @@ def test_single_wide_horizontal_group_is_a_stop_line_not_a_crosswalk():
     assert observation.stop_line is not None
     assert observation.stop_line.image_row == pytest.approx(180, abs=3)
     assert observation.crosswalk is None
+
+
+def test_thick_stop_distance_uses_the_nearest_visible_edge():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame(lane_x=220)
+    frame[140:230, 55:265] = 245
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line.image_row == 229.0
+    assert observation.stop_line.distance_m == pytest.approx(ground.distance(229))
+    assert observation.stop_line.distance_m < .12 < ground.distance(184.5)
+    payload = road_observation_payload('CAMERA_ROAD', 1., 'map', 'rev', observation)
+    assert payload['stop_line']['image_row'] == 229.0
+    assert payload['stop_line']['distance_m'] == observation.stop_line.distance_m
+    assert observation.lane.error == pytest.approx(detect_road_observation(frame).lane.error)
+
+
+def test_transverse_crosswalk_distance_matches_nearest_bar_edge():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame(crosswalk_rows=(130, 145, 160))
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is None
+    assert observation.crosswalk.image_row == 161.0
+    assert observation.crosswalk.distance_m == pytest.approx(ground.distance(161))
+
+
+def test_same_colour_wall_and_attached_stop_remain_visible():
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame()
+    frame[:123] = 240
+    frame[123:131, 55:265] = 240
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is not None
+    assert observation.stop_line.image_row == 130.0
+    assert observation.stop_line.distance_m == pytest.approx(ground.distance(130))
+    assert observation.stop_line.confidence > .9
+
+
+@pytest.mark.parametrize('case', ['thin_horizon', 'far_floor', 'above_horizon', 'no_ground', 'invalid_ground'])
+def test_unknown_marking_range_preserves_visible_evidence(case):
+    _, ground = _longitudinal_crosswalk_frame()
+    frame = _frame()
+    top, bottom = {'thin_horizon': (78, 84), 'far_floor': (81, 84),
+                   'above_horizon': (30, 36)}.get(case, (170, 180))
+    frame[top:bottom, 55:265] = 245
+    if case == 'no_ground':
+        ground = None
+    elif case == 'invalid_ground':
+        ground = simulation_ground_plane(source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+            width_px=WIDTH, height_px=HEIGHT, height_m=0., pitch_rad=.14, hfov_rad=1., max_range_m=.6)
+        assert ground is None
+    observation = detect_road_observation(frame, ground=ground)
+    assert observation.stop_line is not None and observation.stop_line.distance_m is None
+    assert observation.stop_line.image_row == float(bottom - 1)
+    assert observation.stop_line.confidence > .5
 
 
 def test_repeated_wide_horizontal_groups_are_a_crosswalk():

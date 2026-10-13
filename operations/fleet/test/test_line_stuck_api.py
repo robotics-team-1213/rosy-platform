@@ -51,11 +51,11 @@ def _console(robot: FakeRobot, clock=None) -> FleetConsole:
     return FleetConsole([endpoint], [robot], **({"clock": clock} if clock else {}))
 
 
-def _named_app(console: FleetConsole, tmp_path):
+def _named_app(console: FleetConsole, tmp_path, **kwargs):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     app = create_app(
         console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
-        start_task_dispatcher=False,
+        start_task_dispatcher=False, **kwargs,
         site_users={
             sha256(OPERATOR.encode()).hexdigest(): {"principal_id": "op-7", "role": "operator"},
             sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"},

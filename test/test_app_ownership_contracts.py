@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("middleware/core/api_web", "middleware/core/services", "middleware/core/events"):
+for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -108,7 +108,7 @@ def test_robot_administrator_persists_through_the_existing_owner(core):
 def test_authenticated_viewer_can_stop_but_cannot_release(core):
     client, _, writes = core
     stop = client.post("/api/v1/safety/stop", headers=_headers("core-viewer"))
-    assert stop.status_code == 200 and stop.json() == {"estop": True}
+    assert stop.status_code == 200 and stop.json() == {"estop": True, "operations": []}
     assert writes == [("estop", "api:viewer"), ("mode", "EMERGENCY"), ("state-estop", True)]
     writes.clear()
     assert client.post("/api/v1/safety/release", headers=_headers("core-viewer")).status_code == 403
@@ -178,8 +178,8 @@ def test_console_documents_have_one_api_and_session_owner(fleet):
 @pytest.mark.parametrize("surface,source,function,path", [
     ("robot", "middleware/ui/robot/client.js", "api", "/api/v1/auth/whoami"),
     ("pilot", "middleware/ui/pilot/client.js", "api", "/api/v1/auth/whoami"),
-    ("console", "operations/fleet/fleet/server/web/console.js", "call", "/api/fleet/state"),
-    ("console", "operations/fleet/fleet/server/web/install.js", "call", "/api/fleet/discovery"),
+    ("console", "operations/ui/console/console.js", "call", "/api/fleet/state"),
+    ("console", "operations/ui/console/install.js", "call", "/api/fleet/discovery"),
 ])
 def test_existing_client_request_reaches_its_declared_plane(surface, source, function, path):
     """Run the exact request function; isolate its DOM/session hooks, not its fetch path."""
