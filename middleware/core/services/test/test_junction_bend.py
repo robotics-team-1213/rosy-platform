@@ -1,5 +1,6 @@
 """D-507 addendum (2026-10-08): the map-based bend pass on odometry in the real line-follow
 manager (no ROS, no physical motion). Fleet's 'bend' instruction only; nothing else changes."""
+import dataclasses
 import math
 
 import pytest
@@ -483,9 +484,10 @@ MAP_TURN = .4                    # the map frame: odom turned by this
 OFF_DEG = 21.6                   # Gazebo 2026-10-14, W3: the body's yaw off the lane at the take-over
 
 
-def _wall_rig():
-    rig = site_rig(**SITE)
-    rig.m._wall = lambda: WALL + rig.now
+def _wall_rig(enabled=True, y=0.):
+    """line_follow.bend_map_entry_enabled on (the default is off); the body starts `y` left of the lane."""
+    rig = site_rig(**SITE, bend_map_entry_enabled=enabled)
+    rig.m._wall, rig.y = (lambda: WALL + rig.now), y
     site_step(rig)
     return rig
 
@@ -646,6 +648,101 @@ def test_the_own_line_rule_reads_the_map_entry_axis():
     assert decision.linear > 0 and rig.m._junction_held is False
 
 
-def test_capability_follows_lane_bend():
-    assert site_rig().m.supports_lane_bend_map_entry is False
-    assert site_rig(**SITE).m.supports_lane_bend_map_entry is True
+def test_capability_needs_the_flag_and_lane_bend():
+    assert site_rig(bend_map_entry_enabled=True).m.supports_lane_bend_map_entry is False
+    assert site_rig(**SITE).m.supports_lane_bend_map_entry is False     # the flag is off by default
+    assert site_rig(**SITE).m.supports_lane_bend is True
+    assert site_rig(**SITE, bend_map_entry_enabled=True).m.supports_lane_bend_map_entry is True
+    with pytest.raises(ValueError):
+        site_rig(bend_map_entry_enabled=1)
+
+
+def test_with_the_flag_off_a_map_entry_is_ignored_and_the_pass_is_todays():
+    """Review 1: nothing changes on a robot until line_follow.bend_map_entry_enabled is set."""
+    off, plain = _wall_rig(enabled=False), _wall_rig(enabled=False)
+    assert send(off, map_entry=_entry(off)) == (True, 1, 'armed') and send(plain) == (True, 1, 'armed')
+    assert off.m._junction['map_entry'] == dict(reason='disabled')
+    (_, s1), (_, s2) = _steered_take_over(off), _steered_take_over(plain)
+    assert (s1.junction.map_entry_used, s1.junction.map_entry_reason) == (False, 'disabled')
+    assert s2.junction.map_entry_reason == 'none_sent'
+    assert off.m._junction['anchor'] == plain.m._junction['anchor']
+    assert off.m._junction['path'] == plain.m._junction['path']
+    for _ in range(60):
+        (d1, s1), (d2, s2) = site_step(off, move=True), site_step(plain, move=True)
+        assert (d1.linear, d1.angular, s1.junction.state) == (d2.linear, d2.angular, s2.junction.state)
+
+
+def _camera_reads(rig, error):
+    """From now on the camera sees the lane `error` off centre: tracking, but not straight."""
+    observe = rig.m.observe
+    rig.m.observe = lambda obs, **kw: observe(
+        dataclasses.replace(obs, error=error) if obs.visible and obs.error == 0. else obs, **kw)
+
+
+def test_a_stale_anchor_is_rebased_to_the_body_when_the_map_heading_is_used():
+    """Review 2: the last straight tick is 0.22 m back and the body drove on 21.6 deg off the lane,
+    7 cm beside a line from that point on the lane's heading (past OFF_PATH_M). The entry line
+    starts at the body instead, and the arc start stays bend_in of travel from the receipt."""
+    rig = _wall_rig()
+    assert send(rig, bend_in_m=.6, map_entry=_entry(rig)) == (True, 1, 'armed')
+    while rig.x < .08:                                     # straight ticks, before the lead window
+        site_step(rig, dx=.01)
+    _camera_reads(rig, .2)
+    for k in range(400):
+        if k < 5:
+            rig.yaw -= math.radians(OFF_DEG)/5
+        rig.y += .01*math.sin(rig.yaw)
+        _, status = site_step(rig, dx=.01*math.cos(rig.yaw))
+        if status.junction.state != 'armed':
+            break
+    j = rig.m._junction
+    assert status.junction.state == 'bending' and status.junction.map_entry_used is True
+    assert j['bend_in']-j['anchor'][3] == pytest.approx(.3, abs=.011)  # taken over at the lead window's edge
+    assert rig.y < -.065                                   # the old anchor's line (y = 0) is past OFF_PATH_M
+    assert j['anchor'][:3] == pytest.approx((rig.x, rig.y, 0.), abs=1e-9)
+    until(rig, 'reacquiring')                              # no off_path: the pass drives its arc
+    assert math.degrees(rig.yaw) > 20.
+
+
+@pytest.mark.parametrize('wrong_deg', [15., 25.])
+def test_a_wrong_fleet_yaw_turns_the_entry_line_of_an_aligned_body(wrong_deg):
+    """Review 1 / D-759 limit 8, pinned: the body follows the lane exactly and Fleet's map yaw of
+    it is wrong. The entry line follows the map entry, so here it is worse than the body's own yaw."""
+    rig, wrong = _wall_rig(), math.radians(wrong_deg)
+    send(rig, map_entry=_entry(rig, pose_yaw_rad=rig.yaw+MAP_TURN+wrong))
+    _, status = until(rig, 'bending')
+    j = rig.m._junction
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (True, None)
+    assert j['anchor'][2] == pytest.approx(-wrong, abs=1e-9)
+    (x0, y0), (x1, y1) = j['path'][0], j['path'][6]
+    assert y1-y0 == pytest.approx(-.03*math.sin(wrong), abs=1e-9)   # toward the wall of a left bend
+    assert j['target'] == pytest.approx(math.radians(60.)-wrong, abs=1e-9)
+
+
+def test_a_lateral_offset_is_kept_through_the_pass_not_closed():
+    """D-759 limit 1: heading only. A body 5 cm inside the lane (Gazebo W3) keeps an offset of that
+    order beside the lane's exit line: the path is parallel to the lane, through the body."""
+    rig = _wall_rig(y=.05)
+    send(rig, map_entry=_entry(rig))
+    _steered_take_over(rig)
+    beside = rig.m._junction['anchor'][1]                  # the body's offset at the take-over
+    offset, yaw = _pass_end(rig)
+    assert .02 < beside < .05 and yaw == pytest.approx(60., abs=3.)
+    assert offset == pytest.approx(beside*math.cos(math.radians(60.)), abs=.02), (offset, beside)
+    assert 0. < offset < .05
+
+
+def test_a_resend_places_a_heading_the_first_receipt_could_not():
+    """Review 3: the first map_entry was stale; the refresh brings a fresh pose pair."""
+    rig = _wall_rig()
+    old = _entry(rig)
+    for _ in range(round(authority.ARC_ANCHOR_MAX_AGE_S/.05)+1):
+        site_step(rig)
+    send(rig, map_entry=old)
+    assert rig.m._junction['map_entry'] == dict(reason='stale')
+    assert send(rig, map_entry=_entry(rig, lane_yaw=.1)) == (True, 1, 'armed')
+    assert rig.m._junction['map_entry']['yaw'] == pytest.approx(.1, abs=1e-9)
+    assert rig.m.status().junction.map_entry_reason is None
+    assert send(rig, map_entry=_entry(rig, lane_yaw=.2)) == (True, 1, 'armed')   # a placed one stays
+    assert rig.m._junction['map_entry']['yaw'] == pytest.approx(.1, abs=1e-9)
+    assert send(rig) == (True, 1, 'armed') and 'yaw' in rig.m._junction['map_entry']

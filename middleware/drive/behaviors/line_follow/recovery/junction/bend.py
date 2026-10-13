@@ -102,33 +102,34 @@ class JunctionBendMixin:
 
     @property
     def supports_lane_bend_map_entry(self):
-        """D-759 2 capability: CORE takes the bend's `map_entry` wherever it takes the bend."""
-        return self.supports_lane_bend
+        """D-759 2 capability: line_follow.bend_map_entry_enabled (default off) wherever CORE
+        takes the bend."""
+        return self._config.bend_map_entry_enabled and self.supports_lane_bend
 
-    def _place_map_entry(self, entry, now):
+    def _place_map_entry(self, j, entry, now):
         """D-759 3: at receipt, the lane's map heading at the arc start turned into odom through
-        Fleet's yaw pair (the map yaw and CORE's odom yaw at `odom_stamp_s`): {yaw, path}, or
-        {reason} for today's anchor. check_bend has validated the object."""
-        if entry is None:
-            return dict(reason='none_sent')
-        found = self._odom_at_stamp(entry['odom_stamp_s'], now)
-        if isinstance(found, str):
-            return dict(reason=found)
-        return dict(yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau),
-                    path=found[2])
+        Fleet's yaw pair (the map yaw and CORE's odom yaw at `odom_stamp_s`) into j['map_entry']:
+        {yaw, path}, or {reason} for today's anchor. check_bend has validated the object."""
+        found = ('none_sent' if entry is None else
+                 'disabled' if not self._config.bend_map_entry_enabled else
+                 self._odom_at_stamp(entry['odom_stamp_s'], now))
+        placed = dict(reason=found) if isinstance(found, str) else dict(
+            yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2])
+        j.update(map_entry=placed, entry_why=placed.get('reason'))
 
     def _map_entry_yaw(self, j, yaw):
-        """D-759 4: the placed lane heading for the pass's anchor line, or the anchor's own `yaw`
-        with the reason on the record. The odom run is the pass's own (a new one aborts it). Locked."""
+        """D-759 4: the placed lane heading for the pass's entry line, or None for today's anchor
+        (whose own `yaw` it is judged against) with the reason on the record. The odom run is the
+        pass's own (a new one aborts it). Locked."""
         entry, log = j['map_entry'], self._odom_log
         if 'reason' in entry:
-            return yaw
+            return None
         j['entry_why'] = why = (
             'carry' if not log or log[-1][3]-entry['path'] > ARC_ANCHOR_MAX_CARRY_M else
             'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > MAP_ENTRY_MAX_HEADING_RAD
             else None)
         j['entry_used'] = why is None
-        return yaw if why else entry['yaw']
+        return None if why else entry['yaw']
 
     def _bend_armed(self, j, now, seen, decision):
         """Follow and measure until the lead window, then take over. Locked."""
@@ -172,8 +173,13 @@ class JunctionBendMixin:
         if speed <= 0:
             return self._abort(j, 'linear_limit_zero', decision)
         x, y, yaw, travel = anchor
-        yaw = self._map_entry_yaw(j, yaw)
-        j['anchor'] = (x, y, yaw, travel)  # the entry axis _bend_own_line and the target read
+        entry = self._map_entry_yaw(j, yaw)
+        if entry is not None:
+            # D-759 4: the lane's heading, from where the body is now. The straight-tick point may
+            # be BEND_LEAD_M back and off a line on another heading (0.2 m at 21.6 deg: 7 cm, past
+            # OFF_PATH_M); the arc start stays bend_in of measured travel from the receipt.
+            x, y, yaw, travel = pose.x, pose.y, entry, j['travel']
+            j['anchor'] = (x, y, yaw, travel)  # the entry axis _bend_own_line and the target read
         turn, radius = math.radians(j['turn_deg']), j['radius']
         ahead = self._config.bridge_lookahead_m
         points, arc_end = bend_path(x, y, yaw, max(0., j['bend_in']-travel), radius, turn,

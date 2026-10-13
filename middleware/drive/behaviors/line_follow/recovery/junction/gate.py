@@ -210,6 +210,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                     j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
                     action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
                 j['expires_at'] = current+float(expires_s)  # a refresh keeps the measured travel
+                if 'reason' in j['map_entry']:  # D-759 3: an unplaced heading is tried again
+                    self._place_map_entry(j, expect.get('map_entry'), current)
                 return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
@@ -230,10 +232,9 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                   lane_turn=(expect or {}).get('lane_turn_deg'),
                                   arc_anchor=self._place_map_anchor(exit_segment, current))  # D-744 3
             if pose is not None:  # D-507 addendum: odom travel counts from here
-                entry = self._place_map_entry(expect.get('map_entry'), current)  # D-759 3
+                self._place_map_entry(self._junction, expect.get('map_entry'), current)  # D-759 3
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
-                                      map_entry=entry, entry_why=entry.get('reason'),
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as

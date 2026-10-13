@@ -103,6 +103,8 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     lf.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     assert _controls(client)["items"][0]["junction_turn"] is True
     assert _controls(client)["items"][0]["lane_bend"] is True  # enforce proof configured
+    assert _controls(client)["items"][0]["lane_bend_map_entry"] is False  # line_follow.bend_map_entry_enabled off
+    lf._config = dataclasses.replace(lf._config, bend_map_entry_enabled=True)
     assert _controls(client)["items"][0]["lane_bend_map_entry"] is True
     lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
