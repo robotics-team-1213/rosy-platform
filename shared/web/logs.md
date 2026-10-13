@@ -771,3 +771,9 @@
 - 변경: `surfaces.yaml`의 `console`에서 `@media` 48rem 등재를 지우고 `container_breakpoints` 48rem을 올렸다. `test_chrome_layout.py`, `test_action_icon_contract.py`, `test_theme_browser.py`가 Fleet 앱 바의 새 배치를 따른다. 공용 시트와 토큰은 바뀌지 않았다.
 - 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0.
 - gate 변화: 없음.
+
+## 2026-10-13 · 2a7afbd1f · test(web): Rosy Robot이 공용 레일과 하위 탐색 자리를 쓴다 (D-741 6)
+
+- 변경: 공용 시트와 토큰은 그대로다. `test_chrome_layout.py`는 Robot 머리의 격자를 한 줄(`"brand role estop"`)로, 작업 목록을 `.ui-subnav` 자리로 고정한다. `test_palette_gates.py`는 현재 위치의 장미색 표식을 `app-shell.css`의 `.ui-rail-item[aria-current="page"]`에서 본다.
+- 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0(2a7afbd1f). 브라우저 측정은 없다.
+- gate 변화: 없음.
