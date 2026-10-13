@@ -68,7 +68,7 @@ def test_every_registered_panel_module_exports_mount():
 
 def test_no_inline_style_or_html_injection_in_shell_or_panels():
     bad = []
-    for path in [*_js("shell"), *_js("panels"), WEB / "shell" / "surface.html"]:
+    for path in [*_js("shell"), *_js("panels"), WEB / "surface.html"]:
         text = path.read_text(encoding="utf-8-sig")
         for needle in ("style=", ".style.", "innerHTML", "insertAdjacentHTML", "<script>"):
             if needle in text:
