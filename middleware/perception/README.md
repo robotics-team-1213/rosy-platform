@@ -12,7 +12,7 @@ a runtime dependency.
 | `front_camera/perception` | `control.sensing.perception`, including drivable/learned backends |
 | `../drive/{safety,tracking,recovery,calibration}` | `control.control` modules |
 | `../drive/planning/grid` | `control.planning` |
-| `../drive/safety/adapter` | `control.safety` |
+| `../drive/motion_limits/adapter` | `control.safety` |
 | `../drive/tracking/wander` | `control.wander` |
 
 `control/` retains provider and ROS composition plus source compatibility

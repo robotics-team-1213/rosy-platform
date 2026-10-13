@@ -57,8 +57,8 @@
 !middleware/drive/planning/nav2/**
 !middleware/drive/planning/grid/
 !middleware/drive/planning/grid/**
-!middleware/drive/safety/
-!middleware/drive/safety/**
+!middleware/drive/motion_limits/
+!middleware/drive/motion_limits/**
 !middleware/drive/recovery/
 !middleware/drive/recovery/**
 !middleware/drive/tracking/

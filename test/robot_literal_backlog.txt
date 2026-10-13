@@ -22,7 +22,7 @@ middleware/perception/nodes/goal_escape.py
 middleware/perception/nodes/ir_adc_node.py
 middleware/perception/sensors/line_observation/line_observer_node.py
 middleware/perception/localization/loc_assist_node.py
-middleware/drive/safety/adapter/node.py
+middleware/drive/motion_limits/adapter/node.py
 middleware/perception/sensors/sensing/body.py
 middleware/perception/sensors/sensing/dock_tag.py
 middleware/perception/sensors/sensing/ir_adc.py
@@ -86,9 +86,9 @@ contracts/foundation/core_common/robot_body.py
 # (a) imports pinky_controls (D-411) for the capabilities announce; drops out when the controls profile moves to the product profile (see controls.py).
 middleware/core/api/core_api_web/api/v1/system.py
 # (a) comment-only: Pinky LiDAR example numbers in a docstring (D-424); safety-tagged, left unedited pending safety review.
-middleware/drive/safety/lidar_guard.py
+middleware/drive/motion_limits/lidar_guard.py
 # (a) comment-only: Pinky LiDAR floor note (D-424); safety-tagged, left unedited pending safety review.
-middleware/drive/safety/safety_profile.py
+middleware/drive/motion_limits/safety_profile.py
 # (a) comment-only: Pinky example distances in a docstring (D-424); the values already come from config/URDF body, reword when the Pinky profile owns them.
 middleware/drive/behaviors/localization/mission.py
 # D-449: exact Episode/PolicyArtifact profile discriminants and owner kind; contract identity, no actuator defaults. Move to registered product profiles when that registry is accepted.

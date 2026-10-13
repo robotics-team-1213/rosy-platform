@@ -13,7 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[2]
 DESCRIPTION = REPO / "middleware" / "devices" / "pinky" / "description" / "urdf"
-SAFETY_ADAPTER = REPO / "middleware" / "drive" / "safety" / "adapter"
+SAFETY_ADAPTER = REPO / 'middleware' / 'drive' / 'motion_limits' / "adapter"
 
 
 def _ir():

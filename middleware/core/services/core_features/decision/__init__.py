@@ -1,18 +1,4 @@
-"""Shared judgment library. Products supply the allowed set and the rule."""
+"""Source-only facade for the preserved installed identity."""
+from core_features._source_layout import load_source_package
 
-from core_features.decision.contract import (
-    ActionOption,
-    DecisionRequest,
-    DecisionResult,
-    DecisionStatus,
-)
-from core_features.decision.router import constrain, route
-
-__all__ = [
-    "ActionOption",
-    "DecisionRequest",
-    "DecisionResult",
-    "DecisionStatus",
-    "constrain",
-    "route",
-]
+load_source_package(globals())

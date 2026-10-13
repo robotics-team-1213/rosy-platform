@@ -76,12 +76,12 @@ SPLIT_REQUIRED = (
                   "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/front_camera/perception/__init__.py",
-                  "middleware/drive/safety/command_gate.py",
+                  "middleware/drive/motion_limits/command_gate.py",
                   "middleware/drive/recovery/recover.py",
                   "middleware/drive/tracking/path_follow.py",
                   "middleware/drive/calibration/modes.py",
                   "middleware/drive/planning/grid/__init__.py",
-                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/motion_limits/adapter/__init__.py",
                   "middleware/drive/tracking/wander/__init__.py")
 
 
