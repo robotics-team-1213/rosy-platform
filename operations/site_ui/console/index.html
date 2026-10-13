@@ -77,6 +77,15 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console/cell">새 작업</a>
   </nav></div>
+  <div class="ui-subnav" data-area="records" hidden><nav class="ui-subnav-nav" aria-label="기록 화면">
+    <span class="ui-subnav-head">사건</span>
+    <a class="ui-subnav-item" href="/console?view=records">검토할 사건</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=open">열린 사건</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=closed">닫힌 사건</a>
+    <span class="ui-subnav-head">AI 판단</span>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=facts">AI 상황 사실</a>
+    <a class="ui-subnav-item" href="/console?view=records&amp;show=log">관제 기록</a>
+  </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
@@ -85,7 +94,6 @@
       <p id="connection-guide-detail">아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
     <a id="connection-guide-action" class="ui-disclosure-row" href="#console-token" data-action-icon="login">관제 접속</a>
   </section>
-
 
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
@@ -409,10 +417,6 @@
           <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-
-
-
-
         <details id="console-diagnostics" class="console-diagnostics">
           <summary class="ui-disclosure-row">진단</summary>
           <dl class="diag-readout">
@@ -466,7 +470,10 @@
           <ul id="incident-traffic-list" class="issue-list"></ul>
         </div>
       </section>
-
+      <section class="panel" id="incident-side" aria-labelledby="incident-side-heading" hidden>
+        <h2 id="incident-side-heading">원인과 조치</h2><div id="incident-judgment"></div>
+        <p class="hint">사건을 열면 담당 인수와 사람 검토를 여기에 적습니다.</p>
+      </section>
         </div>
       </section>
     </aside>

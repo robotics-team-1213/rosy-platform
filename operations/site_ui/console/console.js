@@ -59,15 +59,19 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
-layoutPanels.push(el("work-overview"));
+// D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
+const raised = area.get("view") !== "records" ? el("work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
+layoutPanels.push(raised);
+if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
+if (raised.id !== "work-overview") { layoutPanels[MAP_PANEL].hidden = true; el("incident-side").hidden = false; if (inbox.choice !== "inbox") inbox.select("evidence"); }
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  const ordered = workView.active ? [el("work-overview"), document.querySelector('.console-context'),
-    ...layoutPanels.filter(node => node.id !== "work-overview" && !node.matches('.console-context'))] : layoutPanels;
+  const ordered = areaNav ? [raised, document.querySelector('.console-context'),
+    ...layoutPanels.filter(node => node !== raised && !node.matches('.console-context'))] : layoutPanels;
   ordered.forEach((node) => {
-    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
+    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node === raised ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
