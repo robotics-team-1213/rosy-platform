@@ -15,7 +15,6 @@ from __future__ import annotations
 import math
 
 from core_common.protocol.line_arc import LineArcStatus
-from core_common.protocol.line_authority import STAMP_TOL_S
 from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
 from core_features.line_follow.model import LineFollowDecision
 from core_features.line_follow.recovery.junction.gate import DEFAULT_ADVANCE_M, JunctionRefused
@@ -42,14 +41,6 @@ ARC_MAX_RADIAL_M = .075
 ARC_IR_INSET_M = .0325
 #: HOLD reasons of a stopped arc (besides today's mode and limit reasons). lane_arc_entry is step 2:
 #: the first confident fit within 0.10 m with |e_theta| > 5 deg; it needs lane_arc_fit.py.
-#: D-744 5: a map anchor's odom stamp may be this old at receipt. The pose trail keeps 2 s at 50 Hz
-#: (100 samples); Fleet's pose is one trip period (0.5 s) and the request old.
-ARC_ANCHOR_MAX_AGE_S = 2.
-#: D-744 5: odom travel from receipt to the arc opening over which the placed circle is kept (the
-#: bridge Fleet itself trusts between sightings, fleet.map_pose.max_dead_reckon_m; the instruction
-#: comes within arm_distance_m 0.6 m, or one lane <= 1 m, of the place).
-ARC_ANCHOR_MAX_CARRY_M = 1.5
-ARC_ANCHOR_FIELDS = ('centre_x_m', 'centre_y_m', 'pose_x_m', 'pose_y_m', 'pose_yaw_rad', 'odom_stamp_s')
 ARC_STOP_REASONS = ('lane_arc_edge', 'lane_arc_entry', 'obstacle_ahead', 'lane_arc_pose_lost',
                     'lane_arc_motion_unconfirmed', 'lane_arc_timeout', 'lane_arc_blind')
 
@@ -93,35 +84,6 @@ class ArcMixin:
         cfg = self._config
         return cfg.arc_enabled and cfg.site_floor_map_id is not None and cfg.ir_guard_speed_scale > 0
 
-    @property
-    def supports_lane_arc_map_anchor(self):
-        """D-744 2 capability: CORE takes `exit_segment.map_anchor` wherever it runs the arc."""
-        return self.supports_lane_arc
-
-    def _place_map_anchor(self, segment, now):
-        """D-744 3: at receipt, Fleet's map circle centre placed in odom through its pose pair (the
-        map pose and CORE's odom pose at `odom_stamp_s`, CORE wall clock as snapshot
-        odom_pose.stamp): {centre, key, odometer}, or None for today's pose-derived circle."""
-        try:
-            cx, cy, mx, my, myaw, stamp = values = [segment['map_anchor'][n] for n in ARC_ANCHOR_FIELDS]
-        except (KeyError, TypeError, ValueError):
-            return None
-        pose, ev = self._fresh_pose(now), self._return_evidence
-        if (pose is None or not all(type(v) in (int, float) and math.isfinite(v) for v in values)
-                or not -STAMP_TOL_S <= self._wall()-stamp <= ARC_ANCHOR_MAX_AGE_S):
-            return None
-        key = (ev.epoch, pose.frame)
-        # the odom sample the map pose was computed for: the one logged at or just before the stamp
-        base = next((e for e in reversed(self._odom_log) if e[0] <= stamp), None)
-        if base is None or base[1] != key or stamp-base[0] > STAMP_TOL_S:
-            return None
-        at = ev._image_pose(base[2])
-        if at is None:
-            return None
-        c, n = math.cos(at.yaw-myaw), math.sin(at.yaw-myaw)  # map -> odom
-        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key,
-                    odometer=ev.trail.odometer)
-
     def _check_exit_segment(self, segment, action, turn_deg, expect):
         check_exit_segment(segment, action, turn_deg, expect, self.supports_lane_arc)
 
@@ -145,7 +107,7 @@ class ArcMixin:
             reason=a['reason'], ir_correction=dict(
                 side=c.get('side'), phase=c.get('phase'), away_m=round(c.get('away_m', 0.), 4),
                 level_m=round(c.get('level_m', 0.), 4), used=bool(c)),
-            map_anchor_used=a['anchored'])
+            map_anchor_used=a.get('anchored', False))
 
     def _arc_speed(self):
         """The trip's lane speed: min(cruise_speed, max_linear, live manual linear limit); 0 unknown."""
@@ -194,7 +156,6 @@ class ArcMixin:
             'length': float(segment['length_m']), 'map_id': j.get('map_id'), 'travelled': 0.,
             'offset': float(segment['outer_line_offset_m']),
             'state': 'running', 'reason': None, 'corr': None, 'grace': set(), 'checked': False,
-            'anchored': False,
             'deadline': now + STEP_MARGIN_S}
         v = self._arc_capped(v, 0.)
         a['deadline'] += segment['length_m']/v if v > 0 else 0.
@@ -210,15 +171,11 @@ class ArcMixin:
         else:
             yaw0 = j['target'] if j.get('target') is not None and j['action'] != 'straight' else pose.yaw
             centre, integral = (pose.x-math.sin(yaw0)/k, pose.y+math.cos(yaw0)/k), 0.
-        # D-744 4: the map's circle when Fleet's anchor was placed in this odom run and the body is
-        # near it (5); the controller then pulls the robot onto it from wherever the turn ended.
-        m = j.get('arc_anchor')
-        if (m is not None and m['key'] == key
-                and abs(self._return_evidence.trail.odometer-m['odometer']) <= ARC_ANCHOR_MAX_CARRY_M
-                and abs(math.hypot(pose.x-m['centre'][0], pose.y-m['centre'][1])-1/abs(k)) <= ARC_MAX_RADIAL_M):
-            centre, a['anchored'] = m['centre'], True
-            yaw0 = math.atan2(pose.y-centre[1], pose.x-centre[0]) + math.copysign(math.pi/2, k)
-        a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre, integral=integral)
+        m = self._map_anchor_centre(j.get('arc_anchor'), pose, key, k, ARC_MAX_RADIAL_M)
+        if m is not None:  # D-744 4: the map's circle and its tangent here; e_r / e_th pull the robot on
+            centre, yaw0 = m, math.atan2(pose.y-m[1], pose.x-m[0]) + math.copysign(math.pi/2, k)
+        a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre, integral=integral,
+                 anchored=m is not None)
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
         self._arc_quiet()

@@ -11,6 +11,15 @@ from dataclasses import replace
 
 from core_common.protocol.line_authority import SHRINK_TOL_M, STAMP_TOL_S, AuthorityRefused, LineAuthorityStatus
 
+#: D-744 5: a map anchor's odom stamp may be this old at receipt. The pose trail keeps 2 s at 50 Hz
+#: (100 samples); Fleet's pose is one trip period (0.5 s) and the request old.
+ARC_ANCHOR_MAX_AGE_S = 2.
+#: D-744 5: odom travel from receipt to the arc opening over which the placed circle is kept (the
+#: bridge Fleet itself trusts between sightings, fleet.map_pose.max_dead_reckon_m; the instruction
+#: comes within arm_distance_m 0.6 m, or one lane <= 1 m, of the place).
+ARC_ANCHOR_MAX_CARRY_M = 1.5
+ARC_ANCHOR_FIELDS = ('centre_x_m', 'centre_y_m', 'pose_x_m', 'pose_y_m', 'pose_yaw_rad', 'odom_stamp_s')
+
 
 class AuthorityMixin:
     _wall = staticmethod(time.time)  # CORE wall clock, the one odom_pose.stamp is on
@@ -87,3 +96,43 @@ class AuthorityMixin:
         if self._status.state not in ('LOST', 'OFF'):
             self._status = self._status.model_copy(update={'state': 'HOLD', 'reason': state[2], 'linear': 0., 'angular': 0.})
         return replace(decision, linear=0., angular=0.)
+
+    # --- D-744: the lane arc's map anchor (here for the odom log and the wall clock it is matched on) ---
+
+    @property
+    def supports_lane_arc_map_anchor(self):
+        """D-744 2 capability: CORE takes `exit_segment.map_anchor` wherever it runs the arc."""
+        return self.supports_lane_arc
+
+    def _place_map_anchor(self, segment, now):
+        """D-744 3: at receipt, Fleet's map circle centre placed in odom through its pose pair (the
+        map pose and CORE's odom pose at `odom_stamp_s`, CORE wall clock as snapshot
+        odom_pose.stamp): {centre, key, odometer}, or None for today's pose-derived circle."""
+        try:
+            cx, cy, mx, my, myaw, stamp = values = [segment['map_anchor'][n] for n in ARC_ANCHOR_FIELDS]
+        except (KeyError, TypeError, ValueError):
+            return None
+        pose, ev = self._fresh_pose(now), self._return_evidence
+        if (pose is None or not all(type(v) in (int, float) and math.isfinite(v) for v in values)
+                or not -STAMP_TOL_S <= self._wall()-stamp <= ARC_ANCHOR_MAX_AGE_S):
+            return None
+        key = (ev.epoch, pose.frame)
+        # the odom sample the map pose was computed for: the one logged at or just before the stamp
+        base = next((e for e in reversed(self._odom_log) if e[0] <= stamp), None)
+        if base is None or base[1] != key or stamp-base[0] > STAMP_TOL_S:
+            return None
+        at = ev._image_pose(base[2])
+        if at is None:
+            return None
+        c, n = math.cos(at.yaw-myaw), math.sin(at.yaw-myaw)  # map -> odom
+        return dict(centre=(at.x+c*(cx-mx)-n*(cy-my), at.y+n*(cx-mx)+c*(cy-my)), key=key,
+                    odometer=ev.trail.odometer)
+
+    def _map_anchor_centre(self, anchor, pose, key, k, max_radial_m):
+        """D-744 4-5: the placed centre at the arc opening, or None: another odom run since receipt,
+        more travel than the carry bound, or the body further than max_radial_m from that circle."""
+        if (anchor is None or anchor['key'] != key
+                or abs(self._return_evidence.trail.odometer-anchor['odometer']) > ARC_ANCHOR_MAX_CARRY_M
+                or abs(math.hypot(pose.x-anchor['centre'][0], pose.y-anchor['centre'][1])-1/abs(k)) > max_radial_m):
+            return None
+        return anchor['centre']
