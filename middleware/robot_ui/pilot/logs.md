@@ -875,3 +875,9 @@
 - 변경: 머리의 이름표를 R 심볼과 앱 이름 `Pilot`, 그 다음 이 화면이 붙어 있는 로봇 이름(`/api/v1/auth/connection`의 `robot_id`, 모르면 숨김)으로 바꿨다. 부제 `직접 조종`은 뺐다. 머리의 순서(이름표, 알림, 상태, `운용 지도`, 비상 정지)와 비상 정지 마크업·동작, 주행 중 얇은 머리, Android 셸 숨김, 64rem 아래 접속 화면 격자, `--topbar-height`, 주행 HUD는 고치지 않았다. `styles.css`는 바뀌지 않았다. 로봇 이름은 기존 규칙대로 주행·Gazebo 연습 화면과 64rem 아래 접속 화면에서 숨는다. `sw.js` 캐시 이름을 `rosy-pilot-shell-2026-10-13-app-bar`로 올렸다.
 - 증거: 소스 시험 `test/test_app_bar.py` 셋을 더했고 `test_pilot_browser.py::test_connection_offer_names_this_robot_before_the_neighbour`에 이름표와 마지막 조작 단언을 더했다. 원격 결과는 다음 항목에 적는다.
 - gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기다. 화면 렌더, 설치본, Android 셸, 실물 로봇에서의 비상 정지는 이 변경으로 확인하지 않았다. 브랜치 `feat/pilot-app-bar`.
+
+## 2026-10-13 · 44aca95f3 · feat(pilot): 조각 11 원격 결과
+
+- 변경: 없음(증거 기록).
+- 증거: 원격 `middleware/robot_ui/pilot/test` 97 passed 149 skipped, CORE `/pilot` 경로와 표면 쪽 시험 8 passed 13 skipped, `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/pilot-app-bar/pilot.txt`, `core-api.txt`, `shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main 10581c1ce에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
+- gate 변화: 없음. 건너뛴 시험은 브라우저 시험이다. 화면·Android·실물 수용은 확인 못 함.
