@@ -41,6 +41,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     private val request: (String, Map<String, String>) -> JSONObject,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 }) {
     private var data = store.read()?.let { JSONObject(it) } ?: JSONObject()
+    @Volatile private var stopSnapshot: Map<String, String> = emptyMap()
     private val checked = mutableMapOf<String, Long>()
     private fun save() { store.write(data.toString()) }
     private fun random() = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) })
@@ -93,12 +94,12 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         if (previous.isNotEmpty() && previous != c.getString("sub")) {
             require(switching) { "refresh changed identity" }
             val old = data.optJSONObject("tokens")
-            data.remove("tokens"); checked.clear(); save()
+            data.remove("tokens"); stopSnapshot = emptyMap(); checked.clear(); save()
             old?.keys()?.forEach { r -> runCatching { request("revoke", mapOf("token" to old.getJSONObject(r).getString("refresh_token"))) } }
         }
         data.put("subject", c.getString("sub"))
         val tokens = data.optJSONObject("tokens") ?: JSONObject().also { data.put("tokens", it) }
-        tokens.put(resource, result); checked.remove(resource); save()
+        tokens.put(resource, result); stopSnapshot = stopSnapshot + (resource to result.getString("access_token")); checked.remove(resource); save()
     }
     @Synchronized fun access(resource: String): String? {
         require(resource in config.resources)
@@ -117,14 +118,15 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
                 require(state.optBoolean("active") && state.getString("sub") == c.getString("sub") && state.getString("aud") == resource)
                 checked[resource] = clock()
             }
+            stopSnapshot = stopSnapshot + (resource to token)
             return token
         } catch (e: Exception) {
             // Fail closed and never replay a possibly consumed rotating refresh credential.
-            tokens.remove(resource); checked.remove(resource); save(); return null
+            tokens.remove(resource); stopSnapshot = stopSnapshot - resource; checked.remove(resource); save(); return null
         }
     }
-    @Synchronized fun cachedAccess(resource: String): String? = runCatching {
-        data.getJSONObject("tokens").getJSONObject(resource).getString("access_token").also { claims(it, resource) }
+    fun cachedAccess(resource: String): String? = runCatching {
+        stopSnapshot[resource]?.also { claims(it, resource) }
     }.getOrNull()
     @Synchronized fun identity(resource: String): String? = runCatching {
         val token = data.getJSONObject("tokens").getJSONObject(resource).getString("access_token")
@@ -147,7 +149,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             g.getString("resource") == resource && g.getJSONArray("capabilities").let { a -> (0 until a.length()).any { a.getString(it) == capability } } }
     }
     @Synchronized fun logout(): Boolean {
-        val old = data.optJSONObject("tokens"); data = JSONObject(); checked.clear(); store.write(null)
+        val old = data.optJSONObject("tokens"); data = JSONObject(); stopSnapshot = emptyMap(); checked.clear(); store.write(null)
         var complete = true
         old?.keys()?.forEach { r -> if (runCatching { request("revoke", mapOf("token" to old.getJSONObject(r).getString("refresh_token"))) }.isFailure) complete = false }
         return complete

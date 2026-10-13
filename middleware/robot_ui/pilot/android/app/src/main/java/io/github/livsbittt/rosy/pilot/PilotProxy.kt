@@ -222,6 +222,9 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         @Synchronized override fun onMessage(frame: WebSocketFrame) {
             if (!connection.authorized() || frame.binaryPayload.size > 65536 || frame.opCode != WebSocketFrame.OpCode.Text) { disconnect(); return }
             val text = frame.textPayload
+            if (connection.managed && runCatching { JSONObject(text).let { it.has("token") || it.optString("type") == "auth" } }.getOrDefault(false)) {
+                disconnect(); return
+            }
             if (ready) {
                 if (upstream?.queueSize() ?: Long.MAX_VALUE > 65536 || upstream?.send(text) != true) disconnect()
             } else {

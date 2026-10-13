@@ -62,6 +62,7 @@ import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
 class MainActivity : ComponentActivity() {
     private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
     private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private var accountVersion = 0L
     private val accountReady = mutableStateOf(false)
     private val accountMessage = mutableStateOf("??? ?? ???? ??????")
     private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
@@ -69,11 +70,13 @@ class MainActivity : ComponentActivity() {
         if (!accountConfigured || account?.isCallback(incoming) != true) return false
         val callback = incoming?.dataString ?: return true
         incoming.data = null
+        val version = ++accountVersion
         lifecycleScope.launch {
             val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
                 val resource = account!!.session.complete(callback)
                 account!!.session.permits(resource, "camera.manage")
             }.getOrDefault(false) }
+            if (version != accountVersion) return@launch
             accountReady.value = ok; accountMessage.value = if (ok) "????" else "??? ?? ??? ?? ??? ?????"
         }
         return true
@@ -164,16 +167,18 @@ class MainActivity : ComponentActivity() {
         if (!accountConfigured) { CameraContent(); return }
         LaunchedEffect(Unit) {
             while (true) {
-                accountReady.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val version = accountVersion
+                val ready = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
                 }
+                if (version == accountVersion) accountReady.value = ready
                 kotlinx.coroutines.delay(10000)
             }
         }
         Column {
             if (accountReady.value) {
                 TextButton(onClick = {
-                    accountReady.value = false; pairingModel.close(); cameraPeerModel.close(); pendingPairing.value = null
+                    accountVersion++; accountReady.value = false; pairingModel.close(); cameraPeerModel.close(); pendingPairing.value = null
                     lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
                         accountMessage.value = if (ok) "?????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????" }
                 }) { Text("Rosy Account ? ???? / ?? ??") }
