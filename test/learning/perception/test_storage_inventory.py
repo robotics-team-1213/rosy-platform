@@ -59,6 +59,19 @@ def test_project_overlap_and_symlink_root_rejected(tmp_path):
     with pytest.raises(ValueError): StorageInventory(tmp_path / 'state.db', cfg, 'one')
 
 
+def test_root_swapped_after_registration_is_not_followed(tmp_path):
+    root, cfg = configured(tmp_path)
+    service = StorageInventory(tmp_path / 'state.db', cfg, 'one')
+    root.rename(tmp_path / 'original')
+    outside = tmp_path / 'other-project'; outside.mkdir()
+    (outside / 'secret').write_bytes(b'private')
+    root.symlink_to(outside, target_is_directory=True)
+    result = service.snapshot()
+    assert result['roots'][0]['status'] == 'unavailable'
+    assert result['roots'][0]['logical_bytes'] is None
+    assert 'other-project' not in json.dumps(result)
+
+
 def test_permission_failure_does_not_expose_path(tmp_path, monkeypatch):
     root, cfg = configured(tmp_path)
     def denied(_): raise PermissionError(str(root / 'private-name'))

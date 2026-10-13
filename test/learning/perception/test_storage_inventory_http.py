@@ -76,7 +76,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.route('**/api/learning/storage', lambda route: route.fulfill(status=503,
                     content_type='application/json', body='{"error":"storage unavailable"}'))
                 page.locator('#storage-refresh').click()
-                expect(page.locator('#storage-error')).to_contain_text('storage unavailable')
+                expect(page.locator('#storage-error')).to_contain_text('잠시 후 다시 시도하세요')
                 expect(page.locator('#storage-roots')).to_have_text('')
                 page.unroute('**/api/learning/storage')
                 page.locator('#storage-refresh').click()
