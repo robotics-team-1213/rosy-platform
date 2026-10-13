@@ -303,13 +303,6 @@
 }
 .map-legend li { display: flex; align-items: center; gap: var(--space-2); }
 .map-legend li::before { content: ""; width: 10px; height: 10px; border: 1px solid var(--surface-line); }
-/* 견본은 map.js가 실제로 칠하는 토큰과 같아야 한다. 다르면 범례가 거짓말이다. */
-.map-legend [data-swatch="free"]::before { background: var(--raster-free); }
-.map-legend [data-swatch="occupied"]::before { background: var(--raster-occupied); }
-.map-legend [data-swatch="unknown"]::before { background: var(--raster-unknown); }
-.map-legend [data-swatch="cost"]::before { background: var(--status-warn); }
-.map-legend [data-swatch="path"]::before { background: var(--series-primary); }
-.map-legend [data-swatch="robot"]::before { background: var(--ink); }
 
 /* ---- 조작 — 크기가 위험도다(Law 3) ----------------------------------------
    되돌릴 수 없는 것이 가장 크고 맨 위이며 언제나 같은 자리에 있다.

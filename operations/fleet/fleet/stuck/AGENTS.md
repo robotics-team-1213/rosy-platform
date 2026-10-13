@@ -19,6 +19,7 @@ D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plan
 | `reports.py` | `LineStuckAnswerLog` — durable answers, episodes, incident reports and operator reviews; existing SQLite schema |
 | `resolver.py` | D-438 `StuckResolver` — pure rule core (R1 WAIT for a peer ahead, R2 back-off, R3/R6 lane-lost or no-motion back-off, R5 hold + human), `ResolverConfig`. No I/O |
 | `lane_lost.py` | D-577 lane-lost hold rules, AI PC proposal envelope check, `peer_ahead`/`peer_behind` on trusted map poses only |
+| `realign.py` | D-622 standalone REALIGN (R9): opt-in `realign_robots`/recovery-area config, sweep geometry, evidence selection; pure, returns a request or a hold reason |
 | `loop.py` | `StuckResolverLoop` — 1 s poll + hub wake, board update, sends answers as `fleet-resolver` |
 | `ai_facts.py` | D-577 AI PC facts, heartbeat and proposals (`ai_observer`, no command path), routes and audit |
 
