@@ -90,9 +90,11 @@
 5. **Fleet 재시작 뒤 T 동안 새 허가가 없다(M3).** Fleet은 뜬 뒤 `T`(5 s) 동안 통행권을 늘려 보내지 않는다. 이전 프로세스가 준 통행권은 그 사이에 모두 만료한다. 그 뒤 표는 관측된 자세로만 점유를 세운다. D-517 6항의 "저장된 예약에서 다시 세운다"는 구현되지 않았고, 이 항으로 바꾼다. 열려 있던 trip을 재시작 뒤 세우는 것(`run_restart`)은 그대로다.
 
 6. **규칙 M 평가기를 만든다(D-550 13항 2단계, M4).** 순수 함수 하나가 로봇마다 진행 중인 Fleet 움직임을 `bounded` \| `unbounded(<이유>)` \| `idle`로 판정한다.
-   - 입력: 움직임 종류, 그 로봇의 능력, trip 보기(`traffic_authority`, 임대), 목표 임대 상태, `gather_source`(hub \| rest), `fleet_loss_policy`.
-   - `fleet_loss_policy`는 Fleet이 지금 읽지 않는다. 허브 페어링 로봇에 한해 `GET /api/v1/safety/limits`를 수집의 능력 갱신 옆에서 30 s에 한 번 읽는다(D-550 8항). 평가기 자신은 로봇을 부르지 않는다. 읽지 못한 값은 "모름"이고 `unbounded`로 센다.
-   - 판정은 D-550 7항 표와 이 기록 2항이다. `CONTINUE`는 한도 없음이다.
+   - **Fleet이 직접 쥔 유효 시간만 센다**: 통행권(`traffic_authority: core`), trip 임대(`held`), 목표 임대(`leased`). 임대 없는 목표는 링크와 정책이 무엇이든 `unbounded`(`no_goal_lease`)다.
+   - SAF-003 `fleet_loss_policy`는 세지 않는다. CORE의 SAF-003은 correlation id가 붙은 목표만 지키는데(`navigation/manager.py:247-256`), Fleet은 임대가 꺼져 있으면 비켜서기·일반 목표를 id 없이 보낸다(`server/goal_lease.py:95-102`). 정책만 보고 `bounded`라 하면 틀린다(1단계 리뷰 HIGH). D-550 8항의 정책 읽기는 하지 않는다 — 그 항이 적은 `GET /api/v1/safety/limits`는 없고(PUT만), 값은 `GET /api/v1/safety/state`에 있다.
+   - 그래서 7항으로 목표 임대가 켜지기 전까지, 허브에 붙은 로봇의 id 있는 배차 목표는 실제로는 SAF-003이 지키는데도 `unbounded`로 보인다.
+   - 오프라인 로봇은 판정하지 않는다(연결 끊김 행이 이미 있다). 군집 팔로워는 trip·목표가 없으면 `idle`이다.
+   - **1단계가 보지 못하는 것:** Fleet이 trip 밖에서 연 LINE_FOLLOW(Fleet이 자기가 연 것을 기록하지 않는다)와, 도착한 옛 Fleet 목표 뒤의 대시보드 주행(스냅숏에 진행 중인 목표의 correlation id가 없어 Fleet 목표로 잘못 센다).
    - 표시: 관제 예외 큐의 주의 행 하나와 로봇 카드 `link:` 옆 표시. 1단계에서는 거절하지 않는다.
 
 7. **한도를 기본으로 켠다(K2).** 2–5단계가 착지하고 6단계 시험을 통과하면 현장 전체를 한 번에 바꾼다. D-550 8항 "지금은 경고만(J2)"과 13항 5단계 "로봇마다"를 고친다.
@@ -179,7 +181,7 @@
 | M1 `shrink`에 순서가 없다 | Decision 3: `seq` |
 | M2 Fleet이 줄이는 경우가 정해지지 않았다 | Context 5, Decision 3 |
 | M3 "구간이 비어 있다"가 과장이다 | Context 6, Decision 5 재시작 뒤 T |
-| M4 `fleet_loss_policy`를 읽지 않는다 | Decision 6 |
+| M4 `fleet_loss_policy`를 읽지 않는다 | Decision 6: 읽지 않기로 한다(1단계 리뷰 뒤). Fleet이 쥔 유효 시간만 센다 |
 | M5 5 s가 모두 같아 경합이다 | Decision 1: 통행권 5, 임대 8, 목표 임대 3.5 |
 | M6 3·4·5단계에 Safety-Review가 없다 | 11: 2–6단계 모두 |
 | M7 시험에 빠진 경우 | 11: 6단계 시험 |
