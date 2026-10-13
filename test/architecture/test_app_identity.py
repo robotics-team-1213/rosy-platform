@@ -67,8 +67,9 @@ def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True) 
     for key in ("app_name", "app_name_en", "short_name"):
         if key in row and row[key] != display:
             problems.append(f"{key} {row[key]!r} should be {display!r}")
-    if folder.name != word:
-        problems.append(f"folder {row['path']!r} should end in {word!r}")
+    holder = 'overhead' if word == 'vision' else word  # D-748 keeps the rosy_vision identity.
+    if folder.name != holder:
+        problems.append(f"folder {row['path']!r} should end in {holder!r}")
     icon = row.get("icon")
     if check_icon and (not icon or Path(icon).name != f"{word}.svg"):
         problems.append(f"icon {icon!r} should be named {word}.svg")

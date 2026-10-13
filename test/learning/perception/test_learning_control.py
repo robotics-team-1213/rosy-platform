@@ -80,6 +80,22 @@ def test_start_stop_retry_are_bounded_and_read_back(tmp_path):
     assert not (out / 'state.json').exists()
 
 
+@pytest.mark.parametrize('phase', ['ready', 'candidate', 'rejected', 'gave_up'])
+def test_retry_ignores_old_interrupted_cycles_after_current_terminal(tmp_path, phase):
+    target, _, out, _, _ = control(tmp_path)
+    (out/'state.json').write_text(json.dumps({'review_autobuild': {'status': 'already_completed',
+        'cycle_keys': ['current']}, 'cycles': {'old': {'status': 'running', 'attempts': 1},
+        'current': {'status': phase, 'attempts': 1}}}))
+    assert not target.status()['can_retry']
+
+
+def test_retry_allows_selected_unattempted_cycle(tmp_path):
+    target, _, out, _, _ = control(tmp_path)
+    (out/'state.json').write_text(json.dumps({'review_autobuild': {'status': 'request_published',
+        'cycle_keys': ['new']}, 'cycles': {'old': {'status': 'ready', 'attempts': 1}}}))
+    assert target.status()['can_retry']
+
+
 @pytest.mark.parametrize('status,attempts', [('ready', 1), ('candidate', 1), ('rejected', 1), ('gave_up', 3), ('retry', 3)])
 def test_retry_never_resets_terminal_states_or_budgets(tmp_path, status, attempts):
     target, runner, out, _, _ = control(tmp_path)

@@ -12,13 +12,13 @@ On-robot middleware. CORE (the external API and the only final `/cmd_vel` publis
 | Directory | Purpose |
 |-----------|---------|
 | `core/` | Gateway, events, services and web API (see `core/AGENTS.md`) |
-| `drive/` | Drive planning/tracking/recovery/calibration/safety source holders, including Nav2; existing `control.*` and `navigation` package identities (see `drive/AGENTS.md`, D-630) |
+| `drive/` | Drive planning/tracking/recovery/calibration/motion_limits source holders, including Nav2; existing `control.*` and `navigation` package identities (see `drive/AGENTS.md`, D-630) |
 | `devices/` | Pinky and OMX hardware-family assembly, profiles and adapters (see `devices/AGENTS.md`, D-626) |
 | `drivers/` | Board drivers: IMU, ADC, lamp, LED (see `drivers/AGENTS.md`) |
-| `perception/` | ROS `control` distribution: sensors/vision implementations, node composition and thin import facades; no second operational final command publisher (see `perception/AGENTS.md`) |
-| `ui/` | Robot face, Pilot, and the CORE dashboard (see `ui/AGENTS.md`) |
+| `perception/` | ROS `control` distribution: sensors/front_camera implementations, node composition and thin import facades; no second operational final command publisher (see `perception/AGENTS.md`) |
+| `robot_ui/` | Robot face, Pilot, and the CORE dashboard (see `robot_ui/AGENTS.md`) |
 | `skills/` | ROS-free Skill wheels (see `skills/AGENTS.md`) |
-| `execution/` | Local execution evidence wheel. Not `operations/site_execution` (see `execution/AGENTS.md`) |
+| `robot_execution/` | Local execution evidence wheel. Not `operations/site_execution` (see `robot_execution/AGENTS.md`) |
 
 ## For AI Agents
 
