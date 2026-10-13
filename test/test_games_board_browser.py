@@ -29,9 +29,134 @@ from games.game import Observation, Phase  # noqa: E402
 from games.game.state import MatchState  # noqa: E402
 from games.host.preview import (  # noqa: E402
     PreviewBoard,
-    PreviewServer,
+    PreviewServer as AccountPreviewServer,
     overlay_payload,
 )
+
+
+class _LayoutAccount:
+    """Verified-claims fixture for layout only; security flow is tested below."""
+    resource = 'site:layout'
+
+    def resolve(self, _cookie):
+        from types import SimpleNamespace
+        return SimpleNamespace(permits=lambda resource, capability:
+                               (resource, capability) == (self.resource, 'games.operate'))
+
+    def retry_revocations(self):
+        pass
+
+
+def PreviewServer(board, **kwargs):
+    account = _LayoutAccount()
+    server = AccountPreviewServer(board, account=account, **kwargs)
+    account.callback = server.url.rstrip('/') + '/api/account/callback'
+    return server
+
+
+def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
+    """Real HTTPS receiver/cookies/SQLite; only authority transport is a signed fixture."""
+    pytest.importorskip('playwright.sync_api')
+    import ssl
+    import subprocess
+    import time
+    from functools import partial
+    from urllib.parse import parse_qs, urlsplit, urlencode
+    from playwright.sync_api import sync_playwright
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+    from core_common.protocol.account_access import sign_access
+    from core_common.protocol.account_client import AccountClient
+    from games.host.preview import _Handler
+
+    cert, key = tmp_path/'cert.pem', tmp_path/'key.pem'
+    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+                    '-keyout', str(key), '-out', str(cert), '-days', '1',
+                    '-subj', '/CN=localhost'], check=True, capture_output=True)
+    board = PreviewBoard(clock=lambda: 100.0)
+    board.publish(_play_payload())
+    server = AccountPreviewServer(board, port=0)
+    origin = server.url.rstrip('/').replace('http:', 'https:')
+    issuer = origin.replace('127.0.0.1', 'localhost')
+    callback = origin + '/api/account/callback'
+    private = Ed25519PrivateKey.generate()
+    raw = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption())
+    public = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    clock = [int(time.time())]
+    state = {'active': True, 'operate': False, 'challenge': ''}
+
+    def authority(endpoint, fields):
+        if endpoint == 'introspect':
+            return {'active': state['active']}
+        if endpoint == 'revoke':
+            state['active'] = False
+            return {}
+        assert endpoint == 'token' and fields['grant_type'] == 'authorization_code'
+        import base64
+        from hashlib import sha256
+        assert base64.urlsafe_b64encode(sha256(fields['code_verifier'].encode()).digest()).rstrip(b'=').decode() == state['challenge']
+        assert fields['redirect_uri'] == callback and fields['code'] == 'browser-code'
+        access = sign_access({'iss': issuer, 'aud': 'site:games',
+            'sub': 'alice', 'sid': 'family', 'jti': 'browser-fixture-123', 'rev': 1,
+            'iat': clock[0], 'exp': clock[0] + 300,
+            'grants': [{'resource': 'site:games', 'capabilities': ['games.operate' if state['operate'] else 'fleet.read']}]},
+            raw, key_id='key')
+        return {'access_token': access, 'refresh_token': 'fixture-reusable-token', 'token_type': 'Bearer'}
+
+    account = AccountClient(tmp_path/'account.db', issuer=issuer,
+        client_id='games', resource='site:games', callback=callback, public_keys={'key': public},
+        encryption_key=Fernet.generate_key(), clock=lambda: clock[0], post=authority)
+    server.account = account
+    class FixtureHandler(_Handler):
+        def do_GET(self):
+            request = urlsplit(self.path)
+            if request.path == '/api/fleet/auth/authorize':
+                query = parse_qs(request.query)
+                state['challenge'] = query['code_challenge'][0]
+                target = callback + '?' + urlencode({'state': query['state'][0], 'code': 'browser-code'})
+                self._send(302, 'text/plain', b'', headers=[('Location', target)])
+            else:
+                super().do_GET()
+    server._httpd.RequestHandlerClass = partial(FixtureHandler, board=board, account=account)
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(cert, key)
+    server._httpd.socket = tls.wrap_socket(server._httpd.socket, server_side=True)
+    server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(ignore_https_errors=True)
+            navigation_errors = []
+            page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
+            page.goto(origin)
+            page.locator('#account-login').wait_for(state='visible')
+            assert page.locator('#halt').is_hidden()
+            stop = "async () => (await fetch('/stop', {method:'POST'})).status"
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#account-login').click()
+            page.wait_for_url(origin + '/')
+            page.locator('#account-logout').wait_for(state='visible')
+            assert page.locator('#halt').is_hidden()
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#account-logout').click()
+            page.locator('#account-login').wait_for(state='visible')
+            state.update(active=True, operate=True)
+            page.locator('#account-login').click()
+            page.locator('#halt').wait_for(state='visible')
+            page.locator('#halt').click()
+            page.locator('#halt-status[data-state="sent"]').wait_for()
+            assert board.stop
+            board.stop = False
+            state['active'] = False
+            clock[0] += 11
+            assert page.evaluate(stop) == 403 and not board.stop
+            page.locator('#halt').wait_for(state='hidden', timeout=15000)
+            assert page.locator('#account-login').is_visible()
+            browser.close()
+    finally:
+        server.close()
 
 
 def _play_payload() -> dict:
