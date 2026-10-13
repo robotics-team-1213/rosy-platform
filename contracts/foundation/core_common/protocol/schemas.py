@@ -999,6 +999,11 @@ class LineJunctionStatus(BaseModel):
     pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
     signal_request_id: Optional[str] = None  # D-620: one stopped junction episode
     signal_state: Optional[str] = None       # waiting | red | unknown | green | fallback | entered
+    #: D-759 5: the bend pass took its entry heading from Fleet's map_entry, not the body's own yaw.
+    map_entry_used: bool = False
+    #: D-759 5: why not (none_sent, disabled, stale, future, no_sample, epoch, carry, heading); None when used,
+    #: before the take-over of a placed one, and for every instruction that is not a bend.
+    map_entry_reason: Optional[str] = None
 
 
 class LineFollowStatus(BaseModel):

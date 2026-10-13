@@ -943,3 +943,8 @@
 - 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
 - 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
 - gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · a9901c702 · 굽이 지시의 map_entry와 능력 lane_bend_map_entry (D-759, API v1.224)
+- 변경: `v1/line_follow.py`에 `LineBendMapEntry {yaw_rad, pose_yaw_rad, odom_stamp_s}`와 `LineJunctionRequest.map_entry`. `bend`가 아닌 action에 실으면 400이다. `_expect`가 매니저로 넘긴다. `v1/system.py`가 `supports_lane_bend_map_entry`를 `lane_bend_map_entry`로 알린다.
+- 증거: `middleware/core/gateway/test/test_line_junction_api.py`(400 일곱 가지와 객체가 아닌 값 셋, 저장, 스냅숏의 `map_entry_reason`), `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
