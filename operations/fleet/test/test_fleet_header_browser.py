@@ -208,7 +208,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                     assert label.bounding_box()["y"] >= icon["y"] + icon["height"] - 1, (name, width)
                     assert link.get_attribute("data-ui-tooltip") is None, (name, width)
                     labels.append(label.text_content().strip())
-                assert labels == ["관제", "설치", "지도", "작업", "Cell"], (name, width)
+                assert labels == ["관제", "작업", "기록", "지도", "설치"], (name, width)
                 rail = page.locator(".doc-tabs")
                 expect(rail.get_by_role("link", name="설치·보정", exact=True)).to_have_count(1)
                 expect(rail.get_by_role("link", name="현장 지도", exact=True)).to_have_count(1)

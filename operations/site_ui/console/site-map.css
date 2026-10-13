@@ -74,5 +74,3 @@ a { color: var(--text-primary); }
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .draft-actions { grid-template-columns: minmax(0, 1fr); }
 }
-/* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
-.doc-tabs { max-width: 90rem; margin-inline: auto; padding-inline: var(--space-4); }

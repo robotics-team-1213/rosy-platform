@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
@@ -58,25 +59,25 @@
     </div>
   </ui-topbar>
   </header>
-  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
     <a href="/console" data-action-icon="fleet">관제</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+    <a href="/console?view=work" data-action-icon="list" aria-current="page">작업</a>
+    <a href="/console?view=records" data-action-icon="history">기록</a>
     <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console?view=work" data-action-icon="history">작업</a>
-    <a href="/console/cell" data-action-icon="cell" aria-current="page">Cell</a>
+    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+  <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="Cell 작업 단계">
+    <a class="ui-subnav-item" href="#recipe-heading">레시피</a>
+    <a class="ui-subnav-item" href="#cell-heading">셀 설정</a>
+    <a class="ui-subnav-item" href="#preview-heading">적재 계획</a>
+    <a class="ui-subnav-item" href="#proposal-heading">작업 제안</a>
+    <a class="ui-subnav-item" href="#mission-heading">승인·진행</a>
+    <a class="ui-subnav-item" href="#saved-heading">저장된 문서</a>
+  </nav></div>
   <div class="fleet-workspace">
   <main id="cell-main" tabindex="-1">
-    <nav class="task-nav" aria-label="Cell 작업 단계">
-      <a href="#recipe-heading">레시피</a>
-      <a href="#cell-heading">셀 설정</a>
-      <a href="#preview-heading">적재 계획</a>
-      <a href="#proposal-heading">작업 제안</a>
-      <a href="#mission-heading">승인·진행</a>
-      <a href="#saved-heading">저장된 문서</a>
-    </nav>
     <ui-status id="estop-feedback" hidden></ui-status>
     <div class="cell-intro">
       <h1 class="ui-page-heading">Cell 작업 준비</h1>

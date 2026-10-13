@@ -2095,7 +2095,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
         # D-493: document navigation owns one link to each other document; recovery CTAs may repeat a destination.
-        for href in ("/console/install", "/console/site-map", "/console/cell"):
+        for href in ("/console/install", "/console/site-map", "/console?view=work", "/console?view=records"):
             assert page.get_by_role("navigation", name="Rosy Fleet 문서", exact=True).locator(f'a[href="{href}"]').count() == 1, href
         assert page.locator('.install-link, .device-link').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
@@ -2504,8 +2504,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         if width <= 320:
-            # D-501: the Cell link lives in the document tab row, visible without opening settings.
-            assert page.locator('.doc-tabs a[href="/console/cell"]').is_visible()
+            # D-741 2: the work area link lives in the rail, visible without opening settings.
+            assert page.locator('.doc-tabs a[href="/console?view=work"]').is_visible()
         browser.close()
     assert errors == []
     assert layout["overflow"] == 0, layout["outside"]

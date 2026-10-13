@@ -61,14 +61,14 @@
     </div>
   </ui-topbar>
   </header>
-  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
   <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
     <a href="/console" data-action-icon="fleet">관제</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정" aria-current="page">설치</a>
+    <a href="/console?view=work" data-action-icon="list">작업</a>
+    <a href="/console?view=records" data-action-icon="history">기록</a>
     <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console?view=work" data-action-icon="history">작업</a>
-    <a href="/console/cell" data-action-icon="cell">Cell</a>
+    <a href="/console/install" data-action-icon="install" aria-label="설치·보정" aria-current="page">설치</a>
   </nav>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>

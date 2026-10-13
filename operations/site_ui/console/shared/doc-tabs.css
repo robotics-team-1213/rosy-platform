@@ -1,4 +1,4 @@
-/* D-501 — Rosy Fleet 문서 탭 줄. 관제·설치·보정·현장 지도·Cell 네 문서가 머리 바로 아래에 같은 줄을 쓴다.
+/* D-501·D-741 — Rosy Fleet 탐색 레일. 네 문서가 같은 다섯 영역(관제·작업·기록·지도·설치)을 쓴다.
    현재 문서는 aria-current="page"로 표시한다(굵기와 아래 선). 색은 토큰만 쓴다(CSP style-src 'self'). */
 .doc-tabs {
   display: flex;
@@ -31,15 +31,11 @@
 @container (width < 64rem) {
   .doc-tabs { padding-inline: var(--space-3); }
 }
-.task-nav { display: flex; gap: var(--space-1); min-width: 0; }
-.task-nav a { display: flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--text-secondary); text-decoration: none; border-radius: var(--radius-control); }
-.task-nav a:hover, .task-nav a:focus-visible { color: var(--text-primary); background: var(--surface-raised); }
-.task-nav a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
-/* One scrolling row at every width: a side column shifted the content off the stop feedback
-   and a phone grid pushed the map below the first screen. */
-.task-nav { overflow-x: auto; scrollbar-width: thin; }
-.task-nav a { flex: 0 0 auto; white-space: nowrap; }
+/* D-741 6 — 하위 탐색 자리(/common/app-shell.css의 .ui-subnav)가 레일과 본문 사이에 선다. 숨긴 자리는 칸을 잡지 않는다. */
+.fleet-body:has(> .ui-subnav:not([hidden])) { grid-template-columns: var(--rail-track) var(--subnav-track) minmax(0, 1fr); }
+.fleet-body:has(> .ui-subnav) [id$="-heading"] { scroll-margin-top: calc(var(--appbar-height) + var(--space-4)); }
+.ui-subnav-item:hover, .ui-subnav-item:focus-visible { color: var(--text-primary); background: var(--surface-raised); }
+@container (width >= 64rem) { .fleet-body > .ui-subnav > nav { position: sticky; top: var(--appbar-height); } }
 
 /* D-641: document navigation frames the existing task-owned workspace. */
 .fleet-shell { container-type: inline-size; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 100dvh; }
@@ -56,7 +52,8 @@ main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
   .fleet-workspace > #fleet-main { flex: 1; min-height: 0; }
 }
 @container (width < 64rem) {
-  .fleet-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .fleet-body { display: flex; flex-direction: column; }
+  .fleet-workspace { flex: 1 1 auto; }
   .fleet-body > .doc-tabs { flex-direction: row; justify-content: flex-start; overflow-x: auto; padding: var(--inset-rail); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .fleet-body > .doc-tabs a { border-inline-start: 0; border-bottom: 2px solid transparent; }
   .fleet-body > .doc-tabs a[aria-current="page"] { border-bottom-color: var(--ink); }
