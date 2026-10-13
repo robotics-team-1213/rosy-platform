@@ -218,3 +218,23 @@ def test_oauth_roundtrip_through_http_uses_signed_identity(tmp_path, accounts):
         assert replay.value.code == 403
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('origin,callback', [
+    (None, 'https://learning.example/oauth/huggingface/callback'),
+    ('https://learning.example', 'https://other.example/oauth/huggingface/callback'),
+    ('https://learning.example', 'https://learning.example/wrong-path'),
+    ('https://learning.example', 'http://learning.example/oauth/huggingface/callback'),
+])
+def test_oauth_setup_rejected_before_workspace_binding(tmp_path, accounts, origin, callback):
+    from learning_collaboration import Collaboration
+    from learning_oauth import OAuth
+    cfg = json.loads(accounts.config_path.read_text())
+    cfg.update(public_origin=origin, oauth={'client_id': 'client', 'redirect_uri': callback})
+    accounts.config_path.write_text(json.dumps(cfg))
+    folder = tmp_path / 'review'; folder.mkdir()
+    store = open_store(folder)
+    with pytest.raises((ValueError, PermissionError)):
+        Collaboration(accounts, store, oauth=OAuth(accounts))
+    with store.connect() as db:
+        assert db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone() is None
