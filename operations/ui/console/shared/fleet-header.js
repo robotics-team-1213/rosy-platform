@@ -10,21 +10,16 @@ const $ = id => document.getElementById(id);
 
 // Every Fleet document has one inbox entry; only the console owns its local unread state.
 function inboxButton() {
-  if (!document.querySelector(".fleet-link-status")) {
-    const status = document.createElement("div");
-    status.className = "fleet-link-status";
-    $("online-pill").before(status);
-    status.append($("online-pill"), $("development-badge"));
-  }
   if ($("fleet-inbox")) return $("fleet-inbox");
   const inbox = document.createElement("ui-button");
   inbox.id = "fleet-inbox";
   inbox.setAttribute("kind", "quiet");
   inbox.setAttribute("type", "button");
-  inbox.textContent = "알림";
+  inbox.setAttribute("aria-label", "알림 창");
+  inbox.setAttribute("data-ui-tooltip", "알림 창");
   inbox.setAttribute("data-action-icon", "notification");
   actionIcon(inbox, "notification");
-  $("estop").before(inbox);
+  $("fleet-header-actions").prepend(inbox);
   inbox.addEventListener("click", () => {
     const request = new CustomEvent("rosy:inbox", {cancelable: true});
     if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
@@ -33,8 +28,9 @@ function inboxButton() {
 }
 export function showInboxCount(count) {
   const inbox = inboxButton();
-  inbox.textContent = count ? `알림 ${count}` : "알림";
+  inbox.textContent = count ? String(count) : "";
   inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
+  inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
   actionIcon(inbox, "notification");
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
@@ -73,10 +69,15 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
 
 // English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
 export function showSession(identity) {
+  $('fleet-login').hidden = true;
+  $('fleet-account').hidden = false;
+  $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
+  const token = $('token-access');
+  if (token) token.open = false;
   const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
   tag.textContent = roleLabel(identity.role);
   tag.title = `${identity.principal_id} · ${identity.role}`;
-  tag.setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+  tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
   if (development) $("development-badge").hidden = false;
   gateEstop(identity);
   if (openedForLock) setTopbarOpen(false);
@@ -86,6 +87,9 @@ export function showSession(identity) {
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
 // the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
 export function showSignedOut({fold = true, refused = true} = {}) {
+  $('fleet-account').hidden = true;
+  $('fleet-account').open = false;
+  $('fleet-login').hidden = false;
   const tag = $("user-role");
   tag.textContent = "인증 필요";
   tag.removeAttribute("title");

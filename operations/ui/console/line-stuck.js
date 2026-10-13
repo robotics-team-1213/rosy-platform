@@ -8,6 +8,15 @@ import { primaryButton, quietButton, setReason, stuckOverdue } from "./queues.js
 
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
+export function judgmentText(receipt, caseId, now = Date.now() / 1000) {
+  if (!receipt) return "현재 판단 미확인";
+  if (receipt.request?.case_id !== caseId || receipt.evaluated_at > now || receipt.valid_until <= now)
+    return "현재 판단 보류 · 관측 갱신 필요";
+  return {INTERVENE: "현재 판단 참고 · 개입 필요 · 실행 승인은 별도",
+    DO_NOT_INTERVENE: "현재 판단 참고 · 개입 불필요",
+    ABSTAIN: "현재 판단 보류 · 추가 근거 필요"}[receipt.necessity] || "현재 판단 미확인";
+}
+
 export const DECISION_LABEL = Object.freeze({
   WAIT: "대기",
   RESUME: "재개",
@@ -128,6 +137,7 @@ function escalationText(code) {
 export function resolverText(note) {
   if (!note) return "";
   if (note.escalated) {
+    if (note.escalated.startsWith("auto_hold:")) return `자동 대기 · 상태 관측 중 (${escalationText(note.escalated.slice(10))})`;
     if (note.escalated === "human_claimed") return "운영자가 맡음";
     const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
     const why = code ? `CORE 응답 ${code}` : escalationText(note.escalated);
@@ -168,7 +178,8 @@ export function chainRows(body, nowMs = Date.now()) {
   for (const robot of chain.robots || []) {
     const last = robot.last_answer;
     const answer = !last ? "답 없음"
-      : last.decision === "ESCALATE" ? `사람에게 (${escalationText(last.escalated)})`
+      : last.decision === "ESCALATE" ? (last.escalated?.startsWith("auto_hold:")
+        ? `자동 대기 (${escalationText(last.escalated.slice(10))})` : `사람에게 (${escalationText(last.escalated)})`)
         : `${last.rule || last.tier} ${DECISION_LABEL[last.decision] || last.decision}`;
     rows.push([robot.robot_id, [CREDENTIAL_TEXT[robot.credential] || robot.credential,
       robot.ai_acting ? "AI 제안 실행" : "AI 사실만", `마지막 ${answer}`,
@@ -207,8 +218,8 @@ function watchChainStatus({ scope, call }) {
 
 const OUTCOME_TEXT = Object.freeze({
   hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
-  back: "후진 후 재시도를 시작했습니다",
-  resume: "재개했습니다 — 차선 추종을 다시 시작합니다",
+  back: "CORE가 후진 후 재시도를 수락했습니다 · 실제 진행은 로봇 상태에서 확인하세요",
+  resume: "CORE가 재개를 수락했습니다 · 실제 진행은 로봇 상태에서 확인하세요",
   manual: "수동 모드로 넘겼습니다",
   idle: "차선 추종을 중단했습니다",
 });
@@ -510,7 +521,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     return figure;
   }
 
-  function item(robotId, stuck) {
+  function item(robotId, stuck, judgment) {
     const li = document.createElement("div");
     li.className = "stuck-item";
     li.dataset.robotId = robotId;
@@ -569,7 +580,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     }
     const summaryLine = document.createElement("p");
     summaryLine.className = "stuck-resolver";
-    summaryLine.textContent = stuckSummary(stuck);
+    summaryLine.textContent = `${stuckSummary(stuck)} · ${judgmentText(judgment, stuck.stuck_id)}`;
     const detail = document.createElement("details"), detailTitle = document.createElement("summary");
     detail.dataset.focusKey = "evidence";
     detailTitle.dataset.focusKey = "evidence-summary";
@@ -705,12 +716,12 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
       if (!preview || (preview.state !== "loading" && Date.now() - preview.at >= 2000)) {
         loadPreview(robot.robot_id, stuck.stuck_id);
       }
-      const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
+      const signature = JSON.stringify([stable, judgmentText(robot.judgment, stuck.stuck_id), confirming.get(robot.robot_id) || null,
         previews.get(robot.robot_id)?.state || null, previews.get(robot.robot_id)?.at || null,
         results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
-        const replacement = item(robot.robot_id, stuck);
+        const replacement = item(robot.robot_id, stuck, robot.judgment);
         if (node?.dataset.stuckId === stuck.stuck_id) {
           for (const fold of node.querySelectorAll("details[data-focus-key]")) {
             const next = replacement.querySelector(`details[data-focus-key="${fold.dataset.focusKey}"]`);

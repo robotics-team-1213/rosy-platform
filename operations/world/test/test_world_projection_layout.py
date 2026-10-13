@@ -27,18 +27,39 @@ def test_world_wheel_contains_projection_without_fleet(tmp_path):
     assert PROJECTION.is_file(), "the standalone world wheel must ship its projection"
     source = tmp_path / "world"
     shutil.copytree(WORLD, source, ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "build", "dist"))
+    foundation = tmp_path / "foundation"
+    shutil.copytree(REPO / "contracts/foundation", foundation,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "build", "dist"))
     wheelhouse, installed = tmp_path / "wheelhouse", tmp_path / "installed"
     subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
                     "--wheel-dir", str(wheelhouse), str(source)], check=True, capture_output=True, text=True)
     wheels = list(wheelhouse.glob("rosy_world-*.whl"))
     assert len(wheels) == 1
+    subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
+                    "--wheel-dir", str(wheelhouse), str(foundation)], check=True, capture_output=True, text=True)
+    wheels += list(wheelhouse.glob("core_common-*.whl"))
+    assert len(wheels) == 2
     subprocess.run([sys.executable, "-m", "pip", "install", "--no-deps", "--no-index",
-                    "--target", str(installed), str(wheels[0])], check=True, capture_output=True, text=True)
+                    "--target", str(installed), *map(str, wheels)], check=True, capture_output=True, text=True)
     result = subprocess.run([sys.executable, "-I", "-c", """
 import pathlib, sys
 sys.path.insert(0, sys.argv[1])
+import importlib.metadata
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+assert importlib.metadata.version('core_common') == '0.0.2'
+requirements = {canonicalize_name(requirement.name): requirement
+                for requirement in map(Requirement, importlib.metadata.requires('rosy-world'))}
+dependency = requirements['core-common']
+assert str(dependency.specifier) == '>=0.0.1'
+assert dependency.marker is None and not dependency.extras
 from rosy.world.api import ObservationSnapshot
 from rosy.world.state.projections import map_pose
+from rosy.world.state.projections.road_region import road_region_input_errors
+from core_common import observation
+assert ObservationSnapshot is observation.ObservationSnapshot
+assert road_region_input_errors is observation.road_region_input_errors
+assert callable(road_region_input_errors)
 assert pathlib.Path(map_pose.__file__).is_relative_to(pathlib.Path(sys.argv[1]))
 assert map_pose.MapPoseTracker('robot').pose(1800000000.0).state == map_pose.UNKNOWN
 assert not any(name == 'fleet' or name.startswith('fleet.') for name in sys.modules)

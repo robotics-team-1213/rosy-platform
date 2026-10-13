@@ -14,6 +14,48 @@ NOMINAL = ROOT.parent / "middleware" / "devices" / "pinky" / "profile" / "config
 BUNDLE = ROOT.parent / "middleware" / "perception" / "map" / "map_v2_fleet"
 
 
+def test_two_learned_observers_publish_crosswalk_uncertainty():
+    tree = ast.parse((LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py').read_text())
+    observers = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_observers')
+    loop = next(n for n in observers.body if isinstance(n, ast.For))
+    assert ast.literal_eval(loop.iter) == ('rosy_01', 'rosy_02')
+    nodes = [n for n in ast.walk(loop) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == 'Node']
+    line = next(n for n in nodes if any(k.arg == 'executable' and k.value.value == 'line_observer_node'
+                                       for k in n.keywords))
+    params = next(k.value.elts[1] for k in line.keywords if k.arg == 'parameters')
+    constants = {key.value: value.value for key, value in zip(params.keys, params.values)
+                 if isinstance(value, ast.Constant)}
+    assert constants.get('crosswalk_uncertainty_enabled') is True
+    assert constants['camera_ground_source'] == 'GAZEBO'
+    assert constants['allow_simulation_ground'] is True and constants['use_sim_time'] is True
+
+
+def test_two_camera_road_evidence_matches_core_binding_and_has_one_preview_owner():
+    path = LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py'
+    calls = [n for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == 'Node']
+    executables = [next(k.value.value for k in n.keywords if k.arg == 'executable') for n in calls]
+    assert executables.count('road_observer_node') == 1  # Instantiated inside the two-namespace loop.
+    assert 'sim_jpeg_relay.py' not in executables
+    road = calls[executables.index('road_observer_node')]
+    params = ast.literal_eval(next(k.value.elts[1] for k in road.keywords if k.arg == 'parameters'))
+    core = yaml.safe_load((LAUNCH.parents[1] / 'config/map_v2_fleet_core.yaml').read_text())['traffic_policy']
+    assert (params['map_id'], params['scene_revision']) == (core['map_id'], core['scene_revision'])
+    assert params['camera_ground_mode'] == 'gazebo_pinhole' and params['allow_simulation_ground'] is True
+    assert params['rotate_deg'] == 0 and params['require_camera_controls_stable'] is False
+    assert params['gazebo_camera_height_m'] == .06343
+    assert params['gazebo_camera_pitch_rad'] == .13962634015954636
+    assert params['gazebo_camera_hfov_rad'] == 1.0334
+    from control.sensing.perception.camera_ground import simulation_ground_plane
+    assert simulation_ground_plane(
+        source=params['dashboard_source'],
+        simulation_enabled=params['allow_simulation_ground'], use_sim_time=params['use_sim_time'],
+        width_px=320, height_px=240, height_m=params['gazebo_camera_height_m'],
+        pitch_rad=params['gazebo_camera_pitch_rad'], hfov_rad=params['gazebo_camera_hfov_rad'],
+        max_range_m=params['gazebo_camera_max_range_m']) is not None
+
+
 def _constants():
     tree = ast.parse(LAUNCH.read_text(encoding="utf-8"))
     names = {}

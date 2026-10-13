@@ -8,7 +8,9 @@
 
 **Tech Stack:** 기존 Python, httpx/pydantic, Fleet 저장소, 기존 remote pytest; Claude Code/OpenCode의 설치된 CLI/구조화 프로토콜은 별도 adapter 스모크로 고정.
 
-**Status:** D-640 Proposed. [설계](2026-10-11-fleet-deliberation-loop-design.md)를 먼저 읽는다. 구현·설치·실제 모델 토론은 미실행이다. 아래 새 파일명은 구현 예정이며 현재 존재하는 API가 아니다.
+**Status:** D-640 Accepted (2026-10-12), 후보 전용 source 구현. [실제 파일·책임·검증 상태](2026-10-12-decision-deliberation-boundary.md)를 우선한다. 실제 provider/배포/FIELD는 HOLD다. 아래 원래 작업 순서의 단일 파일 예정명은 `deliberation/{__init__,cli}.py` 하위 패키지로 구체화했다.
+
+**사용자 추가 지시:** Discord 제외 나머지 소스를 먼저 진행한다. Task 1/2 source와 Task 3 fixed translator, Task 4 advisory journal, Task 5 offline 비교는 구현했다. 실제 launcher 격리/CLI smoke, 운영 사건 연결·독립 현장 정답과 실제 모델 비교는 미완료다. 원래 현장 receipt 관문은 활성화·승격에 유지한다.
 
 **선행 조건 (2026-10-11 사용자 추가 지시):** [Fleet 중앙 판단 단계 계획](2026-10-11-fleet-central-judgment-stages.md)의 D-647에서 공통 판단 책임·초기 배포를 먼저 결정한 뒤 D-642~D-646을 수행한다. 근거/현재 상태, 개입·비개입·판단 보류, 중앙 조치/결과, 외부 알림·사람 처리, 독립 수용 receipt가 준비될 때 이 계획의 모델 라우팅/토론 구현 관문을 연다. 정상/비개입도 평가 분모에 포함한다. 선행 문서 계약 통과는 런타임 수용 완료가 아니다.
 
@@ -41,7 +43,7 @@ provider 프로파일 미설정은 호출 불가다. 셸/쓰기/MCP/배포/장�
 
 ## 4. Fleet 사건과 비실행 후보/결과 연결
 
-Read/extend: `operations/situation/rosy_situation/incidents/context.py`, `operations/decision/src/rosy/decision/tool_dispatch.py`와 기존 Fleet incident/Mission turn journal 소비자.
+Read/extend: `operations/situation/rosy_situation/incidents/context.py`, `operations/fleet/fleet/server/model_feedback_dispatch.py`와 기존 Fleet incident/Mission turn journal 소비자.
 Test: `operations/fleet/test/test_deliberation_journal.py` (new), 기존 `test_mission_feedback_loop.py`, `test_model_tool_call_journal.py`, `test_mission_model_turn_store.py`.
 
 먼저 기존 서비스 호출자를 `rg`로 찾아 연결 위치를 확정한다. durable 시작/의견/최종 후보/거절/종료를 기존 사건과 연결하고 중복·내용 변경·원장 장애·재시작을 시험한다. 모델 출력은 새로운 임의 tool 호출을 만들지 않으며 첫 버전은 출력 미적용이다. 후보 접수·Action terminal·goal evidence를 따로 기록한다. 실제 장치 재개 연결은 기존 정책·Safety 리뷰·장치 관문이 준비된 후속 변경이다.

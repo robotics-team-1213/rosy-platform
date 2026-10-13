@@ -6,8 +6,8 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
 DOCS = {"index.html": "/console", "install.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console/cell"}
-ORDER = ["/console", "/console/install", "/console/site-map", "/console/cell"]
-ICONS = ["fleet", "install", "map", "cell"]
+ORDER = ["/console", "/console/install", "/console/site-map", "/console?view=work", "/console/cell"]
+ICONS = ["fleet", "install", "map", "history", "cell"]
 
 
 def _page(name):
@@ -33,6 +33,7 @@ def test_every_document_has_the_same_tabs_and_marks_itself():
         assert [link["href"] for link in links] == ORDER, name
         assert [link["href"] for link in links if link.get("aria-current") == "page"] == [current], name
         assert [link.get("data-action-icon") for link in links] == ICONS, name
+        assert all("data-icon-only" in link for link in links), name
         assert '/console/assets/doc-tabs.css' in page, name
 
 

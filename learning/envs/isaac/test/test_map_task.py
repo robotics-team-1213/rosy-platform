@@ -22,10 +22,25 @@ def task():
 def test_exact_map_lineage_and_connected_complete_route():
     track = load_track()
     assert track['source_sha256'] == 'cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b'
-    assert track['segments'] == ('east', 'ring_e', 'ring_n', 'ring_w', 'west', 'ring_w', 'ring_s', 'ring_e')
+    assert track['segments'] == ('ring_n', 'west:reverse', 'ring_s', 'east:reverse', 'ring_n', 'ring_w', 'ring_s', 'ring_e')
     assert track['points'][0] == track['points'][-1]
     assert all(w.height == .30 for w in track['scene'].walls)
     assert max(math.dist(a, b) for a, b in zip(track['points'], track['points'][1:])) < .025
+
+
+def test_isaac_uses_the_gazebo_warning_mesh_definition():
+    track = load_track()
+    from build_world import caution_meshes
+    assert track['caution_meshes'] == caution_meshes()
+    assert len(track['caution_meshes']) == 8
+
+
+def test_native_route_rejects_reentering_the_ring_at_an_exit(monkeypatch):
+    import map_task
+    for route in (('east', 'ring_e'), ('west', 'ring_w')):
+        monkeypatch.setattr(map_task, 'SEGMENTS', route)
+        with pytest.raises(ValueError, match='turn forbidden'):
+            map_task.load_track()
 
 
 def test_initial_goal_proximity_cannot_count_as_closed_loop_completion():
@@ -150,3 +165,40 @@ def test_final_output_invalid_clock_clears_previous_intent(now):
     owner.submit(intent(), observed_at=10., now=10.01)
     assert owner.select_output(now=now).linear == 0
     assert owner.halted
+
+
+def test_two_simulation_owners_reject_cross_device_commands_and_reset_independently():
+    a = SimulationOwner(device_id='isaac-pinky-a')
+    b = SimulationOwner(device_id='isaac-pinky-b')
+    a.begin(1); b.begin(1)
+    ia = intent(device_id='isaac-pinky-a')
+    ib = intent(device_id='isaac-pinky-b')
+    assert a.submit(ia, observed_at=10., now=10.01).linear == .03
+    assert b.submit(ib, observed_at=10., now=10.01).linear == .03
+    assert b.submit(ia, observed_at=10., now=10.02).linear == 0
+    assert b.halted and a.select_output(now=10.02).linear == .03
+    b.begin(2)
+    assert b.submit(intent(2, device_id='isaac-pinky-b'), observed_at=10., now=10.03).linear == .03
+    a.stop()
+    assert a.select_output(now=10.04).linear == 0
+    assert b.select_output(now=10.04).linear == .03
+    a.begin(2)
+    assert a.submit(ia, observed_at=10., now=10.05).linear == 0
+    assert a.halted and b.select_output(now=10.05).linear == .03
+
+
+def test_one_simulation_owner_expiry_does_not_expire_another_owner():
+    a = SimulationOwner(device_id='isaac-pinky-a')
+    b = SimulationOwner(device_id='isaac-pinky-b')
+    a.begin(1); b.begin(1)
+    a.submit(intent(device_id='isaac-pinky-a'), observed_at=10., now=10.01)
+    b.submit(intent(device_id='isaac-pinky-b', issued_at=10.05), observed_at=10.05, now=10.06)
+    assert a.select_output(now=10.11).linear == 0
+    assert a.halted and b.select_output(now=10.11).linear == .03
+    assert not b.halted
+
+
+@pytest.mark.parametrize('device_id', ['real-pinky', 'isaac-pinky-c', '', None, True])
+def test_simulation_owner_refuses_non_simulation_identity(device_id):
+    with pytest.raises(ValueError, match='simulation device'):
+        SimulationOwner(device_id=device_id)

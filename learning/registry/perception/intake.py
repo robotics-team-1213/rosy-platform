@@ -44,14 +44,15 @@ for _p in (_SENSING, _FOUNDATION):
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    ManifestError, load_manifest, verify_files)
+    ManifestError, load_manifest, verify_files, validate_label_semantic)
 from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: E402
 from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
 from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
-                              v13_lineage_error, v13_quality_error)
+                              v13_lineage_error, v13_quality_error, evaluation_semantics, road_delivery_error)
 import drivable_versions  # noqa: E402  D-558 ledger
+from intake_dataset import EvalSetError, _verified_manifest, _sessions, training_sessions  # noqa: E402
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
 REPORT_NAME = "intake_report.json"
@@ -61,13 +62,9 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
 CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
-EVAL_KEYS = ("require_eval", "eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
+EVAL_KEYS = ("require_eval", "require_label_semantics", "eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
              "min_lane_marking_iou")  # lane_seg only
 DEFAULT_IGNORE_INDEX = 255
-
-
-class EvalSetError(ValueError):
-    """The gate's eval set is missing or unreadable: the site's setup, not the model."""
 
 
 def graph_precision(path) -> str:
@@ -300,35 +297,7 @@ def _read_eval_set(path: Path) -> dict:
     return manifest
 
 
-def _sessions(manifest: dict) -> set[str]:
-    """Sessions of a dataset/eval set manifest: frames[].session and labels[].session."""
-    return ({f["session"] for f in manifest.get("frames") or [] if isinstance(f, dict) and "session" in f}
-            | {v["session"] for v in manifest.get("labels") or [] if isinstance(v, dict) and "session" in v})
-
-
-def training_sessions(store, revision) -> tuple[str, set[str], set[str], set[str]] | None:
-    """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
-    found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
-    (no store, a revision that is not a 64-hex content sha, no such folder)."""
-    if not store or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
-        return None
-    for mf in sorted(Path(store).glob(f"datasets/*/{revision}/manifest.json")):
-        try:
-            doc = json.loads(mf.read_text(encoding="utf-8"))
-            groups = {row.get("capture_group") for row in doc["frames"] if row.get("capture_group")}
-            grouped_sessions = {row["session"] for row in doc["frames"] if row.get("capture_group")}
-            for row in doc.get("sources", []):
-                if isinstance(row, dict) and row.get("capture_group"):
-                    groups.add(row["capture_group"])
-                    grouped_sessions.add(row.get("session"))
-            return (f"{mf.parent.parent.name}@{revision}", _sessions(doc), groups,
-                    grouped_sessions)
-        except (OSError, ValueError):
-            continue
-    return None
-
-
-def evaluate(model, eval_dir, max_frames: int) -> dict:
+def evaluate(model, eval_dir, max_frames: int, *, verify_content=False) -> dict:
     """Per-class IoU of the model on a fixed eval set (D-379 d3).
 
     The prediction is argmax of the logits at the model input size; the label mask
@@ -342,7 +311,14 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     the gate score. Frames with non-finite logits are skipped and counted (the replay gate already fails NaN
     models). An eval set without frames is a setup error (EvalSetError)."""
     eval_dir = Path(eval_dir)
-    manifest = _read_eval_set(eval_dir)
+    manifest = _verified_manifest(eval_dir) if verify_content else _read_eval_set(eval_dir)
+    if manifest.get("purpose") != "eval":
+        raise EvalSetError(f"eval set {eval_dir}: manifest purpose is not 'eval'")
+    try:
+        for c in manifest.get("classes", []):
+            validate_label_semantic(c)
+    except ManifestError as exc:
+        raise EvalSetError(f"eval set {eval_dir}: {exc}") from exc
     model_classes = model.manifest.classes
     set_classes = {c["name"]: int(c["index"]) for c in manifest.get("classes", [])}
     set_roles = {c["name"]: c.get("role") for c in manifest.get("classes", [])}
@@ -361,6 +337,9 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
               "lane_marking_iou": {}, "source_groups": []}
+    model_class_docs = (((getattr(model.manifest, "raw", None) or {}).get("output") or {}).get("classes") or
+                        [{"name": c.name, "role": c.role} for c in model_classes])
+    result.update(evaluation_semantics(model_class_docs, manifest.get("classes", []), matched))
     if not matched:
         return result
     ignore = manifest.get("ignore_index", DEFAULT_IGNORE_INDEX)
@@ -416,10 +395,13 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
         result["miou"] = float(np.mean([result["iou"][n] for n in result["miou_classes"]]))
     result["lane_marking_iou"] = {c.name: result["iou"].get(c.name) for c in model_classes
                                   if c.role == "lane_marking" and c.name in set_classes}
+    if verify_content:
+        _verified_manifest(eval_dir)
+        result["content_verified"] = True
     return result
 
 
-def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict | None:
+def find_champion(out, content_sha: str, exclude_revision: str | None, *, label_semantics=None) -> dict | None:
     """The best earlier pass on the same eval set: {"model_revision", "miou", "iou"} or None.
     Reports that are not well-formed (not a dict, non-numeric mIoU) are skipped."""
     best = None
@@ -438,6 +420,8 @@ def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict |
                 or not _number(ev.get("miou"))):
             continue
         iou = ev.get("iou") if isinstance(ev.get("iou"), dict) else {}
+        if label_semantics is not None and ev.get("label_semantics", {}) != label_semantics:
+            continue
         if best is None or ev["miou"] > best["miou"]:
             best = {"model_revision": rep.get("model_revision"), "miou": float(ev["miou"]),
                     "iou": {k: float(v) for k, v in iou.items() if _number(v)}}
@@ -518,8 +502,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                 eval_dir = Path(root) / gate["eval_set"]
                 if not eval_dir.is_dir():
                     raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
-                ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
-                trained = training_sessions(store, getattr(manifest, "dataset_revision", None))
+                strict = gate.get("require_label_semantics", False)
+                ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400, verify_content=strict)
+                trained = training_sessions(store, getattr(manifest, "dataset_revision", None),
+                                            verify_content=strict)
                 reservations = {}
                 if store:
                     import store as store_module
@@ -529,6 +515,13 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                     report.setdefault("warnings", []).append(
                         "disjoint: unverified (dataset.revision is not a dataset version in the store)")
                 else:
+                    if strict:
+                        classes = ((getattr(manifest, "raw", None) or {}).get("output") or {}).get("classes", [])
+                        train_classes = trained[4]["classes"]
+                        matched = sorted({c["name"] for c in classes} & {c["name"] for c in train_classes})
+                        binding = evaluation_semantics(classes, train_classes, matched)
+                        ev.update({f"training_{key}": value for key, value in binding.items()})
+                        ev["training_content_verified"] = True
                     shared = sorted(trained[1] & set(ev["sessions"]))
                     ev["training_dataset"], ev["disjoint"] = trained[0], not shared
                     if shared:
@@ -537,7 +530,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                                          or trained[2] & set(reservations.values())
                                          or trained[1] - trained[3]):
                         ev["reserved_eval_overlap"] = True
-                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
+                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision,
+                                      label_semantics=ev["label_semantics"])
                 ev["champion_comparison"] = compare_to_champion(ev, champ)
                 ev["champion"] = None if champ is None else {
                     "model_revision": champ["model_revision"], "miou": champ["miou"]}
@@ -550,6 +544,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
             if report["eval"].get("reserved_eval_overlap"):
                 report["reasons"].append("eval: training dataset overlaps or cannot exclude reserved eval sources")
             report["verdict"] = "fail" if report["reasons"] else "pass"
+        error = road_delivery_error(getattr(manifest, "raw", None) or {})
+        if error:
+            report["reasons"].append(error)
+            report["verdict"] = "fail"
         if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
             report["transient"] = True
             report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")

@@ -149,10 +149,18 @@ def draft_image(store, index, digest):
     return encode(pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256'])))
 
 
+def lane_boundary_classes(binding):
+    """Whole-road labels include other lanes; legacy/current-region labels stay bounded."""
+    if any(c['name'] == 'drivable' and c.get('role') == 'drivable' and c.get('semantic') == 'road_surface/1'
+           for c in binding['classes']):
+        return {}
+    return {entry['name']: entry['index'] for entry in binding['classes']}
+
+
 def merge_unknown(current, proposal, binding):
-    """Keep reviewed pixels; never add drivable beyond reviewed lane edges."""
+    """Keep reviewed pixels and the declared road meaning when filling unknown."""
     selected = (current == 255) & (proposal != 255)
-    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    by_name = lane_boundary_classes(binding)
     if {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
         for y, row in enumerate(current):
             left = np.flatnonzero(row == by_name['lane_left'])
@@ -199,8 +207,8 @@ def draft_preview(store, index, digest, merge=False):
 
 
 def lane_boundary_violations(image, binding):
-    """Count drivable pixels beyond visible left/right lane edges per image row."""
-    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    """Count own-road violations; whole-road labels are not confined to the ego lane."""
+    by_name = lane_boundary_classes(binding)
     if not {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
         return {'left': 0, 'right': 0}
     drivable = by_name['drivable']

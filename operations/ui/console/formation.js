@@ -3,7 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
-import { capabilityReason, chooseLeader, formationReason, leaderPathKind } from "./motion-readiness.js";
+import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
 const stateLabel = (state) => enumLabel(FORMATION_STATE_LABEL, state);
 const shapeLabel = (shape) => enumLabel(FORMATION_SHAPE_LABEL, shape);
@@ -131,7 +131,8 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     if (view.formationUnavailable) return "대형 상태 확인 불가";
     if (!view.formation?.active) return PATH_AFTER;
     const robot = view.robots.find((row) => row.robot_id === view.formation.leader);
-    return leaderPathKind(robot, pathContext()).reason;
+    const path = leaderPathKind(robot, pathContext());
+    return path.reason || motionCommandReason(view, robot?.robot_id, path.kind);
   }
 
   function setPath() {
@@ -309,11 +310,12 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
       formationCall("/api/fleet/formation/stop", null, "해제"));
 
     scope.listen(el("formation-path"), "click", () => {
-      if (el("formation-path").disabled) return;
+      if (pathReason()) return;
       const leader = view.formation?.leader;
       const robot = view.robots.find((row) => row.robot_id === leader);
       const kind = leaderPathKind(robot, pathContext());
       if (kind.kind === "goal") {
+        view.focusRobotWorkspace?.(leader);
         view.selected = leader;
         view.pinning = null;
         view.cursor = view.map

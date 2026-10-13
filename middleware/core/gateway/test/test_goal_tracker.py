@@ -201,8 +201,26 @@ def test_an_acceptance_for_a_superseded_goal_is_cancelled_not_registered():
 
     assert handle.cancelled is True
     assert nav.calls == []
-    assert attached == []
+    assert attached == [(handle.result_future, first)]
     assert tracker.live_count == 0
+
+
+def test_stale_uncorrelated_acceptance_drains_only_after_its_result():
+    tracker = GoalTracker()
+    first, second = tracker.opening(), tracker.opening()
+    nav = _Nav()
+    handle = _Handle(result_future=_Future(SimpleNamespace(status=5)))
+    attached = []
+    on_response(tracker, nav, _Future(handle), first,
+                attach_result=lambda *args: attached.append(args))
+    assert handle.cancelled and attached == [(handle.result_future, first)]
+    assert tracker.transport_snapshot()[1:] == (True, False)
+    on_result(tracker, nav, attached[0][0], first)
+    assert nav.calls == []
+    assert tracker.transport_snapshot()[1:] == (True, False)  # second still opens
+    tracker.accepted(second, object())
+    tracker.finished(second)
+    assert tracker.transport_snapshot()[1:] == (False, False)
 
 
 def test_a_current_acceptance_notifies_and_wires_the_result_future():

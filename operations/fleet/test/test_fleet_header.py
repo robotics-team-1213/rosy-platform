@@ -38,6 +38,16 @@ def test_header_ids_and_one_sheet():
         assert '/console/assets/fleet-header.css' in page, name
 
 
+def test_header_regions_keep_identity_status_actions_and_safety_separate():
+    _, header = _header("index.html")
+    assert re.findall(r'data-header-region="([^"]+)"', header) == [
+        "identity", "status", "actions", "safety"]
+    assert 'id="fleet-header-actions"' in header
+    assert header.index('data-header-region="safety"') < header.index('id="topbar-extra"')
+    controller = (WEB / "shared/fleet-header.js").read_text(encoding="utf-8")
+    assert '$("fleet-header-actions").prepend(inbox)' in controller
+
+
 def test_estop_is_live_in_markup_and_one_module_gates_it():
     """No document ships a disabled E-stop: only fleet-header.js locks it, after a refused session."""
     _, header = _header("index.html")

@@ -111,6 +111,23 @@ def test_world_has_four_lidar_height_wall_collisions_only():
     assert not [c for c in world.iter("collision") if c.find("./geometry/mesh") is not None]
 
 
+@pytest.mark.parametrize('relative', ['worlds/map_v2_fleet.world',
+    'worlds/map_v2_fleet_real.world', 'training-curved/worlds/map_v2_fleet_real.world'])
+def test_shared_ground_covers_measured_wall_footprints(relative):
+    world = ET.parse(BUNDLE / relative).getroot().find('world')
+    ground = world.find("./model[@name='ground_plane']/link")
+    size = tuple(map(float, ground.findtext('./collision/geometry/plane/size').split()))
+    assert size == (5., 5.)
+    assert ground.findtext('./visual/geometry/plane/size') == ground.findtext('./collision/geometry/plane/size')
+    walls = world.findall("./model[@name='track_v2_fleet']/link/collision")
+    assert len(walls) == 4
+    for collision in walls:
+        pose = tuple(map(float, collision.findtext('pose').split()))
+        box = tuple(map(float, collision.findtext('./geometry/box/size').split()))
+        assert pose[3:] == (0., 0., 0.)
+        assert all(abs(pose[i]) + box[i] / 2 < size[i] / 2 for i in (0, 1))
+
+
 def test_lane_mesh_is_visual_only_above_the_ground_plane():
     world = ET.parse(WORLD).getroot().find("world")
     uris = [u.text for u in world.iter("uri")]

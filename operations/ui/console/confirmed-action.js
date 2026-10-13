@@ -12,7 +12,7 @@ export function createConfirmedAction({scope, identity, confirm}) {
     const life = scope.capture(), controller = new AbortController();
     const owner = {controller, kind, signal: AbortSignal.any([life.signal, controller.signal])};
     owner.current = () => held === owner && !owner.signal.aborted && life.current()
-      && caller.token === identity().token && caller.role === identity().role && !identity().locked;
+      && caller.token === identity().token && caller.role === identity().role && caller.principal === identity().principal && !identity().locked;
     owner.check = () => { if (!owner.current()) throw new DOMException("Command owner changed", "AbortError"); };
     held = owner;
     try {

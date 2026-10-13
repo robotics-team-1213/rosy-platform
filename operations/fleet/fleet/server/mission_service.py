@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from collections.abc import Mapping
 from typing import Any, Callable
 
-from .goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
+from rosy.execution.site.goal_evidence import GoalEvidence, GoalEvidenceError, GoalPredicate, verify_goal
 from .mission_store import MissionStore
 
 _GOAL_EVIDENCE_AUDIT_FIELDS = (
@@ -74,6 +74,9 @@ class MissionService:
 
     def next_ready(self) -> dict[str, Any] | None:
         return self.store.next_ready_mission()
+
+    def next_dispatch(self, instances: Mapping[str, str], *, after_id: str) -> dict[str, Any] | None:
+        return self.store.next_dispatch_mission(instances, after_id=after_id)
 
     def next_running(self) -> dict[str, Any] | None:
         return self.store.next_running_mission()

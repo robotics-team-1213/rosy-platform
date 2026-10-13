@@ -21,6 +21,13 @@ for name, folder in package_dirs.items():
 class HolderBuild(build_py):
     def find_package_modules(self, package, package_dir):
         modules = super().find_package_modules(package, package_dir)
+        if package == 'control':
+            relative = Path(os.path.relpath(layout['RUNTIME_ROOT']))
+            modules.extend((package, path.stem, str(path))
+                           for path in sorted(relative.glob('*.py')))
+            names = [name for _, name, _ in modules]
+            if len(names) != len(set(names)):
+                raise ValueError('Duplicate control runtime source module')
         if package == 'control.control':
             for folder in flat_roots:
                 relative = Path(os.path.relpath(folder))
@@ -44,7 +51,7 @@ class HolderSource(sdist):
         super().make_release_tree(base_dir, [name for name in files
             if (root / name).resolve().is_relative_to(root)])
         snapshot = Path(base_dir) / '_source_roots/drive'
-        for relative in ('safety', 'recovery', 'tracking', 'calibration', 'planning/grid'):
+        for relative in ('safety', 'recovery', 'tracking', 'calibration', 'planning/grid', 'runtime'):
             shutil.copytree(layout['DRIVE_ROOT'] / relative, snapshot / relative,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'control.egg-info/SOURCES.txt'
@@ -70,7 +77,7 @@ map_data_files = [
 
 setup(
     name=package_name,
-    version='0.1.0',
+    version='0.1.1',
     packages=packages,
     package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
     cmdclass={'build_py': HolderBuild, 'sdist': HolderSource},
@@ -82,7 +89,7 @@ setup(
         (os.path.join('share', package_name, 'web'), glob('web/*.html')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
     ] + map_data_files,
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'core_common>=0.0.1'],
     zip_safe=True,
     maintainer='livsbittt',
     maintainer_email='56295815+livsbittt@users.noreply.github.com',

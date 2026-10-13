@@ -63,7 +63,8 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
         if line.startswith("COPY ") and line.split()[1].split("/")[0] in COLCON_ROOTS
     }
     layout = runpy.run_path(str(ROOT / "middleware/perception/control/_source_layout.py"))
-    holders = {*layout["FLAT_ROOTS"], layout["PACKAGE_DIRS"]["control.planning"]}
+    holders = {*layout["FLAT_ROOTS"], layout["PACKAGE_DIRS"]["control.planning"],
+               layout["RUNTIME_ROOT"]}
     assert copied == {packages[name][0] for name in selected} | holders
     for source in holders:
         relative = source.relative_to(ROOT / "middleware/control/drive").as_posix()

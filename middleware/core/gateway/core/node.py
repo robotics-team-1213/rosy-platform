@@ -109,7 +109,7 @@ class RosyCoreNode(Node):
                 overlay=sensor_cfg.get("parameters") or {}, simulation=simulation)
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
-            sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace,
+            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time}, namespace=namespace,
             policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
@@ -147,6 +147,7 @@ class RosyCoreNode(Node):
         from core_api_web.api.v1.host import STATUS_INPUTS_PERIOD_S
         self._status_inputs_failed = False
         self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
+        self._write_status_inputs()
         self.core.state.set_map_id(config.get("navigation", {}).get("map_id"))
         self.core.events.publish("system.boot", source="core",
                                  data={"version": SOFTWARE_VERSION})
