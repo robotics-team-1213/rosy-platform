@@ -3522,3 +3522,8 @@
 - 변경: 기존 실행 선택·Task 원장의 정확한 native 성공 및 안전 해제 증거를 재사용한다. 원문·사용자·채널·지도·권한·세대·receipt 변경을 각 모델 경계와 최종 전송 전에 거절한다. 기존 상태 조회로 이전 run과 현재 boot·owner generation을 확인하고 CORE CAS에 전달한다.
 - 증거: 최초 재현 2 NEW, live 재시작·run 소실 재현 11 NEW 뒤 원격 집중 284개 및 공개 CORE CAS 2개 통과, NEW0. 전송 전 거절은 명령 호출·native marker·점유를 남기지 않는다.
 - gate 변화: 없음. fake owner 경로의 소스 검증이며 실제 모델·보호 설치·Discord·물리 수용은 별도다.
+
+## 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
+- 변경: `fleet/server/AGENTS.md`의 옛 `web` 편집 안내를 `operations/ui/console` 정본과 설치 `fleet/server/web` mapping으로 정정했다.
+- 증거: `fleet._source_layout.console_root`, `static_routes.WEB_ROOT`와 실제 Console source holder를 읽었다. 링크/원격 검사·착지 결과는 X: `folder-guidance-p0` 세션과 Git으로 확인한다.
+- gate 변화: 없음. SQLite/auth/admission/serving은 수정하지 않았다.
