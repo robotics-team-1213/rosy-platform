@@ -11,8 +11,11 @@
 ---
 
 설계 정본: [준비 설계](2026-10-14-omx-imitation-preparation-design.md).
-이 계획과 운영 기록 양식만 작성했다. 아래 구현·시험·외부 계정 연동은 미실행이다.
-새 파일명은 구현 위치 제안이며 등록된 API나 실행 명령이 아니다.
+구현 브랜치: `feat/omx-imitation-tools`. [실행 안내](../../learning/curation/omx/README.md)에 현재 명령을 정리했다.
+Task 1–4의 준비 도구를 구현했다: 녹화 설정 검사, native reader 검토·분할, 공식 ACT 설정, private Hub 해시 왕복 도구.
+원격 기본 시험 70개와 별도 실제 LeRobot 통합 시험 1개가 통과했다. 통합 시험은 합성 RGB 영상의 저장·재독출·분할, train 통계 격리, ACT 1-step backward·저장·재로딩이다.
+실물 환경 lock·녹화·GPU 학습·실제 Hub 왕복은 미확인이다. 실행 PC와 HF 조직은 미정이며, Task 5 Pilot 실물 조작과 Task 6 Spaces 계정 접근 검증은 남아 있다.
+아래 Task는 전체 수용 기준이며, 일부 준비 구현만으로 완료 처리하지 않는다.
 
 ## Task 1: 실물 녹화 구성과 환경을 고정한다
 
@@ -93,7 +96,7 @@ python3 deploy/robot/omx/preflight.py \
 ## Task 4: private Hub 왕복을 별도 작업으로 만든다
 
 **Files:**
-- 추가 후보: `learning/curation/omx/hub_sync.py`, `learning/curation/omx/test/test_hub_sync.py`.
+- 구현: `learning/registry/policy/hub_sync.py`, `learning/registry/policy/test/test_hub_sync.py`. curation의 업로드 금지 경계를 유지한다.
 - 문서: `learning/curation/omx/README.md`.
 
 1. 전송 전 preview, allowlist 파일만 전송, 기존 public 저장소 거부, 토큰 미출력, 실패 시 원본 유지, commit SHA receipt 시험을 만든다.

@@ -1,6 +1,6 @@
 # OMX 모방학습 우선 준비 설계
 
-상태: 구현 전 준비안. 실물 연결, 학습 실행, Hugging Face 저장소 생성·업로드, Spaces 배포를 하지 않았다.
+상태: 로컬 준비 도구와 원격 합성 데이터·ACT smoke 검증 구현. 실물 연결·실데이터 학습, Hugging Face 저장소 생성·업로드, Spaces 배포는 미실행이다.
 사용자 요구: OMX-L 교시·녹화 후 모방학습이 우선이며, Pilot의 OMX-F 수동 조작과 LeRobot/Hugging Face 연동도 필요하다.
 기준 소스: `b0f7a1896a7f205cf97a695e403dcaf299180fb6`, 작업 브랜치 `docs/omx-imitation-preparation`.
 
@@ -67,7 +67,7 @@ LeRobot 0.4.4를 호환성 조사 기준으로 삼되, 실물 recorder·trainer�
 | 학습/평가 | train/validation/test episode 목록, seed, 설정, 모델·전처리·정규화 bytes, 독립 평가 |
 
 LeRobot native의 joint 이름과 정규화 값은 ROSY SIM의 ordered rad 목표와 다르다.
-`use_degrees`와 gripper의 단위는 버전별 구현으로 확인하고 리더/팔로워 설정을 맞춘다.
+공식 0.4.4 leader는 body -100..100 정규화이며 `use_degrees` 설정이 없다. follower는 `use_degrees=false`, gripper는 0..100으로 맞춘다.
 이름 변경이나 단순 숫자 복사로 데이터셋을 합치지 않는다. 필요할 때만 명시적 변환을 추가하고 원본을 보존한다.
 리더가 요청한 행동, 실제 전송한 행동, 팔로워 관측값을 구분한다. recorder가 어느 값을 action으로 저장하는지 고정 버전으로 확인한다.
 타임스탬프가 부족한 원본에 sensor capture 시각을 추정해 채우지 않는다.
