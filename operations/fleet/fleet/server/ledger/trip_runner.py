@@ -185,7 +185,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
-                             "lane_bend": caps.lane_bend}
+                             "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
