@@ -1080,7 +1080,7 @@
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 시험의 가짜 safety 둘(`bind_control_policy(self, policy)`)은 새 키워드 인자를 받도록 고쳐야 했다.
 
-## 2026-10-14 ? D-400 active policy-gap clock rollback
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
 
 - Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
 - Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.

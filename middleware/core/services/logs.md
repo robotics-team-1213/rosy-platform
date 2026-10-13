@@ -991,6 +991,12 @@
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
 
+## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
+
+- 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.
+- 증거: 단독 실행 ModuleNotFoundError 원인은 services conftest 에 gateway 경로가 없던 것. 단독·CI 모양 원격 실행 결과는 커밋 메시지 참조.
+- gate 변화: 없음. 테스트 경로 설정만 바뀐다. 제품 코드 무변경.
+
 ## 2026-10-14 · 7c94fc4af · D-740 개정 3 거절된 한 틱은 교차로 기동을 버리지 않는다 (API v1.222)
 
 - 변경: `recovery/junction/gate.py::_unconfirmed`. 기동 중 `_return_probe`가 거절하면 그 틱은 HOLD `junction_motion_unconfirmed`(명령 0)이고 기동은 유지된다. 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 `motion_unconfirmed`로 중단한다. 굽이는 두 번째 물음(`motion_admitted`)까지 통과해야 승인으로 친다.
@@ -1006,8 +1012,14 @@
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
 
-## 2026-10-14 ? D-400 active policy-gap clock rollback
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
 
 - Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
 - Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
 - Gates: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
+## 2026-10-14 · 3f6c69245 · fix: HOLD 공백 시간에 평가 실행 시간 포함
+
+- 변경: 시계 역행·비유한 완료 시각을 거절하고 평가 완료까지 HOLD 나이를 센다. idle은 이전 평가 완료부터 다음 시작까지다. 처음부터 래치한 평가를 HOLD 계수에 넣지 않는다.
+- 증거: 원격 재현 NEW 7 후 수정본 322 passed, NEW 0. 독립 Codex review_release_safety 소스 리뷰; docs/validation/omx-release-safety-review-2026-10-14.md.
+- gate 변화: SOURCE/원격 회귀만. E-stop reset·SIM·실물 활성화 없음.

@@ -388,20 +388,21 @@ class SafetyManager:
         except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
             self.shadow_record_errors += 1
 
-    def _policy_gap(self, at: float) -> bool:
+    def _policy_gap(self, at: float, finished: Optional[float] = None) -> bool:
         """D-400 4: one tick of a sensor gap at policy-clock time ``at``. True (HOLD) while the gap
         is younger than stale_hold_s. A valid decision ends a gap; so does not being asked for
         longer than the evidence lease (review: a stand-still between two stalls is two gaps)."""
-        if not self._policy_hold_s:
-            return False
-        if self._policy_gap_since is not None and at < self._policy_gap_last:
+        finished = at if finished is None else finished
+        if (not self._policy_hold_s or not math.isfinite(at) or not math.isfinite(finished)
+                or finished < at or (self._policy_gap_since is not None and at < self._policy_gap_last)):
             self._policy_holding = False
             return False
         if self._policy_gap_since is None or at - self._policy_gap_last > GAP_LINK_S:
             self._policy_gap_since = at
-            self.policy_holds += 1
-        self._policy_gap_last = at
-        self._policy_holding = 0 <= at - self._policy_gap_since < self._policy_hold_s
+            if finished - at < self._policy_hold_s:
+                self.policy_holds += 1
+        self._policy_gap_last = finished
+        self._policy_holding = 0 <= finished - self._policy_gap_since < self._policy_hold_s
         if self._policy_holding:
             self.policy_hold_reason = self.policy_reason
         return self._policy_holding
@@ -427,11 +428,12 @@ class SafetyManager:
         started = self._policy_clock()
         try:
             decision = evaluator(request)
-            elapsed = self._policy_clock() - started
+            finished = self._policy_clock()
+            elapsed = finished - started
         except Exception as exc:
             self.policy_reason = 'policy_failed'
             opened = self._policy_gap_since is None
-            held = isinstance(exc, PolicyObservationUnavailable) and self._policy_gap(started)
+            held = isinstance(exc, PolicyObservationUnavailable) and self._policy_gap(started, self._policy_clock())
             if opened or not held:   # one diagnostic when a gap opens and one when it latches, not 50 Hz
                 with self._policy_failure_lock:
                     if self._pending_policy_failure is None:
@@ -445,7 +447,7 @@ class SafetyManager:
             self.policy_reason = why
             # Late or out of lease is a gap; a stop, however late, and a malformed answer are not.
             if decision_fault(decision, request, elapsed) == 'timing' and decision.disposition != 'stop':
-                self._policy_gap(started)
+                self._policy_gap(started, finished)
             return None
         self._policy_gap_since = None
         self.policy_reason = ''
