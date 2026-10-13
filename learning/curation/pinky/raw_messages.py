@@ -107,6 +107,11 @@ def load_tables(raw):
                     name = 'camera'
                     value = {'stamp_ns': stamp_ns(msg), 'width': size[0], 'height': size[1]}
                 elif name == 'cmd_vel':
+                    axes = tuple(getattr(vector, axis) for vector in (msg.linear, msg.angular) for axis in ('x', 'y', 'z'))
+                    if any(not math.isfinite(value) for value in axes):
+                        raise ValueError('raw cmd_vel nonfinite')
+                    if any(axes[index] != 0 for index in (1, 2, 3, 4)):
+                        raise ValueError('raw cmd_vel unsupported planar axes')
                     value = {'linear': msg.linear.x, 'angular': msg.angular.z}
                 elif name == 'odom':
                     p, q = msg.pose.pose.position, msg.pose.pose.orientation

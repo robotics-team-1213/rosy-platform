@@ -257,7 +257,8 @@ class RosBridge:
         self.docking_executor = BridgeDockingExecutor(
             self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
-            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
+            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info,
+            transport_snapshot=self._goals.transport_snapshot)
         self._svc.docking.executor = self.docking_executor
         # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
         # It must be the robot node's clock (its ttl counts from it): both nodes share
@@ -822,6 +823,10 @@ class RosBridge:
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
     def send_goal(self, spec: NavGoalSpec, *, correlation_id: str | None = None) -> None:
+        self.send_native_goal(spec, None, correlation_id=correlation_id)
+
+    def send_native_goal(self, spec: NavGoalSpec, native_run_id,
+                         *, correlation_id: str | None = None) -> None:
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = spec.frame
         goal.pose.header.stamp = self._node.get_clock().now().to_msg()
@@ -831,7 +836,7 @@ class RosBridge:
         goal.pose.pose.orientation.w = math.cos(spec.yaw / 2.0)
         if not self.nav_client.wait_for_server(timeout_sec=0.0):
             self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
-        generation = self._goals.opening(correlation_id)
+        generation = self._goals.opening(correlation_id, native_run_id)
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(
             lambda done, gen=generation: self._goal_response_cb(done, gen))
@@ -854,6 +859,9 @@ class RosBridge:
         if handles:
             self._node.get_logger().info(
                 f"navigation cancel requested ({len(handles)} goal(s))")
+
+    def native_transport_snapshot(self):
+        return self._goals.transport_snapshot()
 
     def send_initial_pose(self, x: float, y: float, yaw: float) -> None:
         msg = PoseWithCovarianceStamped()

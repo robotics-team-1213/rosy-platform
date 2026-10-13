@@ -8,6 +8,22 @@ from rosy.decision.deliberation import Supervisor
 from test_deliberation import Provider, problem
 
 
+@pytest.mark.parametrize('conditional_first', [False, True])
+def test_cached_case_cannot_change_evaluation_policy(tmp_path, conditional_first):
+    class ReviewSupervisor(Supervisor):
+        policy_id = 'conditional-review-v1'
+    first, second = (ReviewSupervisor, Supervisor) if conditional_first else (Supervisor, ReviewSupervisor)
+    journal = DeliberationJournal(tmp_path / 'fleet.db')
+    providers = [Provider('a'), Provider('b')]
+    request = problem()
+    asyncio.run(journal.run(request, first(clock=lambda: 101), providers, current=lambda: True))
+    calls = sum(len(p.calls) for p in providers)
+    result = asyncio.run(journal.run(request, second(clock=lambda: 101), providers, current=lambda: True))
+    assert result['state'] == 'HOLD' and result['reason'] == 'EVALUATION_POLICY_CHANGED'
+    assert result['choice'] is None and result['action_admissible'] is False
+    assert sum(len(p.calls) for p in providers) == calls
+
+
 def test_durable_candidate_duplicate_and_content_conflict(tmp_path):
     journal = DeliberationJournal(tmp_path / 'fleet.db')
     providers = [Provider('a'), Provider('b')]

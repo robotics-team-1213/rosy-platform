@@ -31,6 +31,7 @@ from core_features.line_follow.model import (  # noqa: F401 — re-exported
 )
 from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
+from core_features.safety.velocity import same_curve
 
 
 class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecoveryMixin, AuthorityMixin,
@@ -482,6 +483,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
         current = float(current)
         with self._lock:
             self._path_evaluated = False
+            self._checked_line_curve = None
             try:
                 decision = self._tick_locked(current)
                 # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
@@ -500,13 +502,22 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                     # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
                     return self._crosswalk_gate(current, self._authority_gate(
                         current, self._junction_gate(current, decision)))
+                original = decision
                 local = self._apply_lane_return(current, decision)
                 if local is not None:
                     self._local_owned_tick(current)  # D-468 owns the tick: no_motion restarts (stuck_wiring)
                 decision = self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
                     current, local if local is not None else self._apply_recovery(current, decision))))
+                proof = self._checked_line_curve
+                if proof is not None and (decision.linear or decision.angular) and (
+                        (local is not None and local is not original)
+                        or decision.mode is not LineFollowMode.CAMERA_LINE
+                        or (decision.generation, decision.evidence_revision) != proof[1:]
+                        or not same_curve(proof[0], (decision.linear, decision.angular))):
+                    return self._stop_decision("HOLD", "motion_unconfirmed")
                 return self._signal_committed(decision)
             finally:
+                self._checked_line_curve = None
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.
                     self._clear_since = None
@@ -574,7 +585,21 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                     self._intended = (0.0, cue[1])   # D-422: a pivot is checked on its rotation circle
                 if self._config.body_stop_known:
                     # D-422: 몸 윤곽이 의도 경로를 따라 쓸고 갈 때 첫 접촉까지의 거리.
-                    self._set_clearance(*self._body_clearance(current))
+                    observation = self._observation
+                    normal_curve = (self._curve_preserving_envelope
+                        and self._mode is LineFollowMode.CAMERA_LINE and cue is None
+                        and guard in (None, "clear") and not self._lost_latched
+                        and self._config.obstacle_mode == "path"
+                        and self._junction is None and self._bridge is None
+                        and self._recovery.phase is None
+                        and (self._return_controller is None or self._return_controller.phase == "tracking")
+                        and observation.source is self._mode and observation.visible
+                        and observation.error is not None
+                        and observation.confidence >= self._config.min_confidence
+                        and 0 <= current - self._clearance_at <= self._config.clearance_stale_s
+                        and self._received_at is not None
+                        and 0 <= current - self._received_at <= self._config.stale_after_s)
+                    self._set_clearance(*self._body_clearance(current, preserve_curvature=normal_curve))
                 else:
                     self._clear_gap()
                     self._set_clearance(self._path_clearance(), current)
@@ -653,6 +678,8 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             return self._lane_cue_turn(cue)
         error = float(observation.error)
         linear, angular, reason = self._steer(observation, guard, cap)
+        if self._checked_line_curve is not None:
+            linear, angular = self._checked_line_curve[0]
         decision = LineFollowDecision(
             linear=linear, angular=angular,
             generation=self._generation,

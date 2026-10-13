@@ -1,6 +1,6 @@
 """Reserve, build, sign and push a delta release to several robots in one command (D-553 addendum 4).
 
-    python tools/release/ship.py --base <base-id> --robots 9dfk,8kcn
+    python tools/release/ship.py --base <base-id> --robots <robot-id>,<robot-ip>
 
 1. Starts each robot's calibration guard (rosy-calibration-guard.ps1) in the background.
 2. Reserves the next release id with the payload-reserved-<id> tag robot_cd.py uses
@@ -38,11 +38,13 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 PINKY = ROOT / "deploy" / "robot" / "pinky_pro"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT / "tools" / "remote"))
+import lab_hosts  # noqa: E402
 import make_delta_release  # noqa: E402
 from robot_cd import RELEASE, next_release_id  # noqa: E402
 
 REPO = "robotics-team-1213/rosy-platform"
-ROBOTS = {"9dfk": "192.168.1.201", "8kcn": "192.168.1.202"}
+_IPV4 = re.compile(r"(?:\d{1,3}\.){3}\d{1,3}")
 CONTROL = "install/lib/python3.12/site-packages/control/"
 # Loaded only by rosy-camera's camera_preview.launch.py nodes. control/sensing/__init__
 # and ir_adc_node (rosy-io) never import perception/ (test_ship.py pins that); CORE
@@ -125,7 +127,8 @@ def push(name: str, ip: str, guard_run: subprocess.Popen, stdin: bytes, log: Pat
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--base", required=True, help="base release id the robots hold (prepared on this PC)")
-    parser.add_argument("--robots", required=True, help="comma list of 9dfk, 8kcn or IPv4 addresses")
+    parser.add_argument("--robots", required=True,
+                        help="comma-separated robot ids from private/lab-hosts.json, or IPv4 addresses")
     parser.add_argument("--release-id", help="already reserved id (default: reserve the next one)")
     parser.add_argument("--revision", default="HEAD")
     parser.add_argument("--not-shipped", action="append", default=[])
@@ -133,9 +136,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="build and print the plan; no reserve, guard or push")
     args = parser.parse_args(argv)
     started = time.monotonic()
-    robots = {name: ROBOTS.get(name, name) for name in args.robots.split(",") if name}
-    if not robots or not all(re.fullmatch(r"[0-9.]+|[A-Za-z0-9-]+", ip) for ip in robots.values()):
-        parser.error("--robots needs 9dfk, 8kcn or IPv4 addresses")
+    known = lab_hosts.robots()
+    robots = {}
+    for name in (part.strip() for part in args.robots.split(",")):
+        if not name:
+            continue
+        if name in known:
+            address = known[name]
+        elif _IPV4.fullmatch(name):
+            address = name
+        else:
+            parser.error(f"unknown robot {name!r}: add it under robots in private/lab-hosts.json "
+                         "(copy tools/remote/hosts.example.json) or pass an IPv4 address")
+        if not re.fullmatch(r"[0-9.]+|[A-Za-z0-9.-]+", address):
+            parser.error(f"address for {name!r} in private/lab-hosts.json is not a host token")
+        robots[name] = address
+    if not robots:
+        parser.error("--robots needs a robot id from private/lab-hosts.json or an IPv4 address")
     if not RELEASE.fullmatch(args.base):
         parser.error("--base must be YYYY.MM.DD-NNN")
     guards = {} if args.dry_run else {name: guard(ip) for name, ip in robots.items()}

@@ -168,10 +168,10 @@ class SandboxLauncher:
 
 
 @contextmanager
-def sandbox_provider(*, kind, executable, executable_sha256, model, profile_id):
+def sandbox_provider(*, kind, executable, executable_sha256, model, profile_id, cli_version='2.0.22'):
     from rosy.decision.deliberation.cli import CliProvider
     launcher = SandboxLauncher(kind, executable, executable_sha256)
     try:
-        yield CliProvider(kind=kind, model=model, profile_id=profile_id, launch=launcher)
+        yield CliProvider(kind=kind, model=model, profile_id=profile_id, launch=launcher, cli_version=cli_version)
     finally:
         launcher.close()
