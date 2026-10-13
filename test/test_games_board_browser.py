@@ -109,7 +109,17 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
         client_id='games', resource='site:games', callback=callback, public_keys={'key': public},
         encryption_key=Fernet.generate_key(), clock=lambda: clock[0], post=authority)
     server.account = account
-    server._httpd.RequestHandlerClass = partial(_Handler, board=board, account=account)
+    class FixtureHandler(_Handler):
+        def do_GET(self):
+            request = urlsplit(self.path)
+            if request.path == '/api/fleet/auth/authorize':
+                query = parse_qs(request.query)
+                state['challenge'] = query['code_challenge'][0]
+                target = callback + '?' + urlencode({'state': query['state'][0], 'code': 'browser-code'})
+                self._send(302, 'text/plain', b'', headers=[('Location', target)])
+            else:
+                super().do_GET()
+    server._httpd.RequestHandlerClass = partial(FixtureHandler, board=board, account=account)
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(cert, key)
     server._httpd.socket = tls.wrap_socket(server._httpd.socket, server_side=True)
@@ -120,20 +130,13 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page = browser.new_page(ignore_https_errors=True)
             navigation_errors = []
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
-            def authorize(route):
-                query = parse_qs(urlsplit(route.request.url).query)
-                state['challenge'] = query['code_challenge'][0]
-                route.fulfill(status=302, headers={'Location': callback + '?' + urlencode({
-                    'state': query['state'][0], 'code': 'browser-code'})})
-            page.route(issuer + '/api/fleet/auth/authorize*', authorize)
             page.goto(origin)
             page.locator('#account-login').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
             stop = "async () => (await fetch('/stop', {method:'POST'})).status"
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-login').click()
-            page.wait_for_timeout(1000)
-            assert page.url.rstrip('/') == origin, (page.url, navigation_errors, page.locator('body').inner_text())
+            page.wait_for_url(origin + '/')
             page.locator('#account-logout').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
             assert page.evaluate(stop) == 403 and not board.stop
