@@ -1201,6 +1201,12 @@
 - 증거: [실제 CORE 지도 미수신 화면](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 390×844·1366×768 캡처, 관련 브라우저 3 passed, known_failures 0 NEW.
 - gate 변화: LOCAL 시나리오 근거 추가. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
 
+## 2026-10-08 · uncommitted · uiux(robot): Host Agent 차단 시 네트워크 입력 잠금
+
+- 변경: `/device` 네트워크 작업에서 Host Agent 원본을 사용할 수 없거나 조회가 지연된 동안 SSID·암호·프로파일 입력도 실행 버튼과 함께 잠그고 같은 차단 안내에 연결한다. fresh 회복 시 초안을 유지해 다시 입력할 수 있다.
+- 증거: [Robot 절차 LOCAL 검증](../../../docs/validation/uiux-robot-procedure-2026-10-08/result.md). Host 작업 브라우저 3 passed, 역할 G2 60기록 1 passed, 넘침·pageerror 0, 비상 정지 60/60, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 차단·회복 부분 근거. 실물 Host Agent, 설치자 G3와 현장 수용은 HOLD.
+
 ## 2026-10-09 · uncommitted · uiux(robot): 현재 내비게이션 지도 상태 재검증과 좌표 행 정리
 
 - 변경: 지도 G2 fixture의 `runtime.maps`를 제공하는 지도와 일치시켜 지연·단절 캡처 중 지도가 사라지지 않게 했다. Console의 선택 좌표 행은 실제 선택 동안만 보이며 Esc 해제 뒤 숨긴다.

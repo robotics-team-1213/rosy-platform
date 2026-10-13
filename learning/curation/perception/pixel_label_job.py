@@ -342,6 +342,8 @@ def run_draft(config, out, min_confidence=0.6):
         with temporary.open("w", encoding="utf-8") as stream:
             for row, frame in zip(rows, frames):
                 entry = dict(row, image=str(edge_review.bound(catalog.parent, row["image"])),
+                             annotation_source='model_pixel_draft',
+                             annotation_note=f"{model.model_revision[:60]} / manifest {inputs['model_manifest_sha256'][:12]}",
                              mask={"indexed_png": f"drafts/{frame['catalog_index']:06d}.png",
                                    "sha256": frame["mask_sha256"],
                                    "classes_sha256": proof["classes_sha256"]})
