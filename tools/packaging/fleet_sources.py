@@ -11,7 +11,8 @@ from setuptools.command.build_py import build_py
 from setuptools.command.develop import develop
 
 
-roots = runpy.run_path('fleet/_source_layout.py')['SOURCE_ROOTS']
+layout = runpy.run_path('fleet/_source_layout.py')
+roots = layout['SOURCE_ROOTS']
 package_dirs = {
     'rosy.decision': roots['decision'] / 'src/rosy/decision',
     'rosy.decision.conversation': roots['decision'] / 'src/rosy/decision/conversation',
@@ -35,6 +36,12 @@ class HolderDevelop(develop):
 class PureAssessment(build_py):
     def find_package_modules(self, package, package_dir):
         modules = super().find_package_modules(package, package_dir)
+        if package == 'fleet.server':
+            for name in layout['SERVER_HOLDERS']:
+                modules.extend(super().find_package_modules(package, str(Path(package_dir) / name)))
+            names = [item[1] for item in modules]
+            if len(names) != len(set(names)):
+                raise ValueError('Duplicate Fleet server source module')
         return [item for item in modules if package != 'rosy_situation' or item[1] in ASSESSMENT_MODULES]
 
 

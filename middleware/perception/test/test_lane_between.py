@@ -115,7 +115,7 @@ def test_invalid_arguments_rejected():
 
 
 def test_line_observer_wires_between_mode_without_changing_the_default():
-    node = Path(__file__).resolve().parents[1] / 'control' / 'line_observer_node.py'
+    node = Path(__file__).resolve().parents[1] / 'sensors/line_observation' / 'line_observer_node.py'
     source = node.read_text(encoding='utf-8')
     assert "self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)" in source
     assert "elif mode == 'between':" in source

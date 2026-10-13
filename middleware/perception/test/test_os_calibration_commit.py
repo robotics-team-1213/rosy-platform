@@ -11,7 +11,7 @@ from control.calibration_storage import single_calibration_path
 
 
 def fixture(sign_path='calibration.yaml', save_path='calibration.yaml'):
-    source = Path(__file__).parents[1] / 'control/calib_node.py'
+    source = Path(__file__).parents[1] / 'nodes/calib_node.py'
     cls = next(n for n in ast.parse(source.read_text(encoding='utf-8')).body
                if isinstance(n, ast.ClassDef) and n.name == 'CalibNode')
     method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'compute')

@@ -365,7 +365,7 @@ def test_cancel_all_contract_is_documented_and_wired_to_the_console():
     root = Path(__file__).resolve().parents[3]
     reference = (root / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
     srs = (root / "docs/spec/ROSY FLEET SRS.md").read_text(encoding="utf-8")
-    web = root / "operations/ui/console"
+    web = root / "operations/site_ui/console"
     console_js = (web / "console.js").read_text(encoding="utf-8")
     index = (web / "index.html").read_text(encoding="utf-8")
 

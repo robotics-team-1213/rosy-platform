@@ -23,7 +23,7 @@ from typing import Callable, Iterable, Optional
 from pydantic import ValidationError
 
 from fleet.routing import teach
-from fleet.localization.map_pose import compose, relative
+from rosy.world.state.projections.map_pose import compose, relative
 from fleet.routing.graph import polyline_length
 from fleet.server.site_map_routes import MAX_DRAFT_BYTES, invalid_errors
 from fleet.site_map import IMPORT_WIDTH_M, MAX_POINTS, MIN_EDGE_M, SiteMap

@@ -37,7 +37,7 @@
 ## 최근 기록
 
 - 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
+- 2026-10-13 · 8ce598214 · D-744 독립 리뷰 후속 (방향 문, 열 때 한도, IR 사슬, 까닭 기록)
+- 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
 - 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
 - 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
-- 2026-10-12 · d3bd5513c · 이동 교통 감속의 곡률 보존
-- 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)

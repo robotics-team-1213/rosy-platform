@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id);
 let workspace, busy=false, checkedAt=0;
 const labels={unchanged:'등록한 파일과 일치',changed:'등록 후 변경됨',missing:'파일 없음',invalid:'읽기 실패'};
 const states={running:'진행 중',reading:'자료 읽는 중',training:'학습 중',failed:'실패',rejected:'품질 거절',reject:'품질 거절',
-  ready:'자료 준비 완료',done:'완료',pass:'보고서 통과',research_only:'연구 결과',research_exported:'연구 결과 저장됨',
+  ready:'자료 준비 완료',done:'완료',candidate:'학습 후보 저장됨',pass:'보고서 통과',research_only:'연구 결과',research_exported:'연구 결과 저장됨',
   offline_only:'오프라인 평가 결과',not_eligible:'승격 대상 아님',candidate_evaluated:'후보 평가 완료',HOLD:'적용 보류',held:'승인·입력 조건 대기',request_published:'학습 요청 준비됨',already_completed:'같은 자료 처리 완료'};
 const nextActions={perception:'보고서 상태와 단계별 근거를 확인하고 학습 담당자에게 전달하세요. 로봇 실행 수용은 별도입니다.',
   raw:'원본 검증 보고서와 학습·평가 세션 분리를 확인하세요.',
@@ -36,7 +36,49 @@ function setBusy(value) {
     button.disabled=value||(!workspace&&button.id!=='refresh');
   }
   for(const id of ['search','kind-filter','state-filter','kind','name','path'])$(id).disabled=value||!workspace;
+  updateControls();
 }
+function updateControls() {
+  const control=workspace?.control,status=$('owner-control-status');
+  if(!status)return;
+  status.textContent=control?.available
+    ? ({running:'실행기 처리 중',stopping:'중지 요청 처리 중',waiting:'자동 확인 켜짐 · 조건 대기',stopped:'자동 확인 중지됨'}[control.state]||control.state)
+    : '실행기 제어 상태 확인 불가';
+  if(control?.error)status.textContent+=` · ${control.error}`;
+  for(const action of ['start','stop','retry']) {
+    const button=$(`owner-control-${action}`);
+    button.disabled=busy||!control?.available||!control[`can_${action}`];
+    button.reason=busy?'요청 처리 중입니다':control?.reasons?.[action]||control?.error||'';
+  }
+}
+async function controlAction(action) {
+  if(busy)return;
+  const version=workspace.control.version;setBusy(true);message('learning-error','');
+  try {
+    await request('/api/learning/control',{action,version});
+    await load();message('notice','실행기 요청을 접수했습니다. 아래 상태와 학습 결과를 확인하세요.');
+    $('owner-control-status')?.focus();
+  } catch(error) {
+    if(error.status===409)await load().catch(()=>{});
+    message('learning-error',readableError(error));
+  } finally {setBusy(false);}
+}
+let polling=false, pendingReportRefresh=false;
+setInterval(async()=> {
+  if(busy||polling||!workspace?.control)return;
+  polling=true;
+  try {
+    const previous=workspace.control;
+    workspace.control=await request('/api/learning/control');updateControls();
+    if(workspace.control.available&&!workspace.control.active&&previous.version!==workspace.control.version)
+      pendingReportRefresh=true;
+    if(pendingReportRefresh&&!document.querySelector('dialog[open]')&&!$('connection-panel').open) {
+      await load();pendingReportRefresh=false;
+    }
+  } catch(error) {
+    if(workspace){workspace.control={available:false,error:readableError(error)};updateControls();}
+  } finally {polling=false;}
+},2000);
 async function request(path,body) {
   const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
   if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
@@ -59,7 +101,7 @@ function summary(item) {
   if(!reports.length) return {label:'파일 확인 필요',attention:true};
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
-  if(reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
+  if(item.path!==workspace.control?.out_path&&reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
   if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
   if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
@@ -97,6 +139,14 @@ function render() {
     const card=taskRow({title:item.name,subtitle:kind.name,status:status.label,attention:status.attention,
       description:candidate?'독립 시험 결과를 확인하세요. 로봇 적용은 별도 검증이 필요합니다.':nextActions[item.kind]||item.next});
     card.dataset.job=item.id;
+    if(item.kind==='perception'&&item.path===workspace.control?.out_path) {
+      const group=text(card,'div','','ui-workspace-bar');
+      const status=text(group,'p','');status.id='owner-control-status';status.setAttribute('role','status');status.tabIndex=-1;
+      for(const [action,label] of [['start','시작'],['stop','중지'],['retry','재시도']]) {
+        const button=text(group,'ui-button',label);button.id=`owner-control-${action}`;
+        button.setAttribute('aria-label',`학습 ${label}`);button.onclick=()=>controlAction(action);
+      }
+    }
     text(card,'p','','ui-task-meta').dataset.reportAge='';
     for(const report of item.reports) {
       if(report.metrics?.length) {

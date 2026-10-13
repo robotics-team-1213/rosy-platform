@@ -114,7 +114,7 @@ def test_decision_has_no_actuator_and_no_ros_import():
 
 
 def test_decision_lives_in_core_features_not_a_runtime_rename():
-    assert (ROOT / "middleware" / "core" / "services" / "core_features" / "decision").is_dir()
+    assert (ROOT / 'middleware' / 'core' / 'services' / 'core_features' / 'action_rules').is_dir()
     for banned in (
         ROOT / "src" / "site" / "rosy_ai_worker",
         ROOT / "src" / "runtime" / "rosy_pinky_pro",
