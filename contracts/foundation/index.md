@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 기본값과 설명 (D-759 검토 반영, API v1.224)
 - 2026-10-14 · a9901c702 · 능력 lane_bend_map_entry와 junction.map_entry_used·map_entry_reason (D-759, API v1.224)
 - 2026-10-14 · 06ce5334b · safety_policy.hold와 stale_hold_s 주석 (D-400 4항, API v1.223)
 - 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
 - 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
-- 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
