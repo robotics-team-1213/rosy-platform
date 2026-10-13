@@ -1,36 +1,5 @@
 /* D-501·D-741 — Rosy Fleet 탐색 레일. 네 문서가 같은 다섯 영역(관제·작업·기록·지도·설치)을 쓴다.
    현재 문서는 aria-current="page"로 표시한다(굵기와 아래 선). 색은 토큰만 쓴다(CSP style-src 'self'). */
-.doc-tabs {
-  display: flex;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0 var(--space-5);
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-canvas);
-  scrollbar-width: thin;
-}
-.doc-tabs a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  flex: 0 0 auto;
-  min-width: var(--target-secondary);
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-3);
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.doc-tabs a:hover { color: var(--text-primary); }
-.doc-tabs a[aria-current="page"] { color: var(--text-primary); font-weight: var(--weight-strong); border-bottom-color: var(--ink); }
-.doc-tabs a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-@container (width < 64rem) {
-  .doc-tabs { padding-inline: var(--space-3); }
-}
 /* D-741 6 — 하위 탐색 자리(/common/app-shell.css의 .ui-subnav)가 레일과 본문 사이에 선다. 숨긴 자리는 칸을 잡지 않는다. */
 .fleet-body:has(> .ui-subnav:not([hidden])) { grid-template-columns: var(--rail-track) var(--subnav-track) minmax(0, 1fr); }
 .fleet-body:has(> .ui-subnav) [id$="-heading"] { scroll-margin-top: calc(var(--appbar-height) + var(--space-4)); }
@@ -44,9 +13,11 @@
 .fleet-workspace > main { box-sizing: border-box; width: 100%; min-width: 0; }
 /* D-741 2·6 — 탐색 레일: 아이콘 아래에 짧은 이름. 치수는 공용 자리 토큰(--rail-track 72px)을 쓴다.
    72px 자리에서 안쪽 여백과 오른쪽 선을 뺀 칸은 55px이라, 세로 레일의 항목은 그 칸 폭까지만 넓다. */
-.fleet-body > .doc-tabs { flex-direction: column; align-items: center; gap: var(--gap-rail); overflow-x: visible; padding: var(--inset-rail); border-bottom: 0; border-right: 1px solid var(--border-subtle); }
-.fleet-body > .doc-tabs a { flex-direction: column; gap: var(--gap-rail); inline-size: 3.5rem; max-inline-size: 100%; min-block-size: 3.5rem; padding: 0; border-bottom: 0; border-inline-start: 2px solid transparent; font-size: var(--text-micro); }
-.fleet-body > .doc-tabs a[aria-current="page"] { border-inline-start-color: var(--ink); background: var(--surface-raised); }
+.fleet-body > .doc-tabs { display: flex; flex-direction: column; align-items: center; gap: var(--gap-rail); margin: 0; padding: var(--inset-rail); border-right: 1px solid var(--border-subtle); background: var(--surface-canvas); scrollbar-width: thin; }
+.fleet-body > .doc-tabs a { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); box-sizing: border-box; flex: 0 0 auto; inline-size: 3.5rem; max-inline-size: 100%; min-width: var(--target-secondary); min-block-size: 3.5rem; padding: 0; border-inline-start: 2px solid transparent; color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; white-space: nowrap; }
+.fleet-body > .doc-tabs a:hover { color: var(--text-primary); }
+.fleet-body > .doc-tabs a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.fleet-body > .doc-tabs a[aria-current="page"] { color: var(--text-primary); font-weight: var(--weight-strong); border-inline-start-color: var(--ink); background: var(--surface-raised); }
 @media (width >= 64rem) and (height >= 40rem) {
   .fleet-shell:has(#fleet-main) { height: 100dvh; }
   .fleet-workspace > #fleet-main { flex: 1; min-height: 0; }
@@ -54,7 +25,7 @@
 @container (width < 64rem) {
   .fleet-body { display: flex; flex-direction: column; }
   .fleet-workspace { flex: 1 1 auto; }
-  .fleet-body > .doc-tabs { flex-direction: row; justify-content: flex-start; overflow-x: auto; padding: var(--inset-rail); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  .fleet-body > .doc-tabs { flex-direction: row; justify-content: flex-start; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .fleet-body > .doc-tabs a { border-inline-start: 0; border-bottom: 2px solid transparent; }
   .fleet-body > .doc-tabs a[aria-current="page"] { border-bottom-color: var(--ink); }
 }

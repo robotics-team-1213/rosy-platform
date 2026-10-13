@@ -36,6 +36,17 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
+// D-741 6·7 — 주소의 view가 영역을 고른다: 레일의 현재 위치와 그 영역의 하위 탐색, 그 안의 현재 화면(show)이 따라온다.
+const area = new URLSearchParams(location.search);
+const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
+if (areaNav) {
+  areaNav.hidden = false;
+  for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
+    const to = new URL(link.href).searchParams;
+    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === area.get("show"))) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
