@@ -225,6 +225,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
     # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `lane_arc_map_anchor` (D-744 2): the manager takes exit_segment.map_anchor (with lane_arc).
+    # `lane_bend_map_entry` (D-759 2): the manager takes the bend's map_entry (with lane_bend).
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
@@ -254,6 +255,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       lane_arc_map_anchor=getattr(
                                           svc.line_follow, "supports_lane_arc_map_anchor", False) is True,
                                       lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
+                                      lane_bend_map_entry=getattr(
+                                          svc.line_follow, "supports_lane_bend_map_entry", False) is True,
                                       route_context=(True if svc.line_follow is not None and
                                                      svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
