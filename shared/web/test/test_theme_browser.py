@@ -153,12 +153,21 @@ def test_a_pinned_surface_ignores_the_preference(browser):
     assert state["meta"] == PALETTES["dark"]["ground"]  # theme.js가 없던 meta를 만든다
 
 
+def _show_theme_button(page):
+    """D-741 3: 화면 표시는 계정 단추 아래에 있다. 접속을 잃으면 그 칸이 저절로 열리므로 닫혀 있을 때만 연다."""
+    page.wait_for_load_state("networkidle")
+    more = page.locator("#topbar-more")
+    if more.get_attribute("aria-expanded") != "true":
+        more.click()
+
+
 def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     page = _open(browser, "/console")
     page.wait_for_function("customElements.get('ui-button') !== undefined")
     button = page.locator("#fleet-theme")
     assert "어둡게" in button.get_attribute("aria-label")
-    button.dispatch_event("click")
+    _show_theme_button(page)
+    button.click()
     page.wait_for_function("document.documentElement.dataset.theme === 'light'")
     state = _state(page)
     light = PALETTES["light"]["ground"]
@@ -168,9 +177,10 @@ def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     assert page.evaluate("localStorage.getItem('rosy.theme')") == "light"
     page.reload(wait_until="domcontentloaded")
     assert _state(page)["theme"] == "light"
-    button.dispatch_event("click")
+    _show_theme_button(page)
+    button.click()
     assert page.evaluate("RosyTheme.get()") == "system"
-    button.dispatch_event("click")
+    button.click()
     assert page.evaluate("RosyTheme.get()") == "dark"
 
 
