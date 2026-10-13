@@ -208,7 +208,8 @@ def bend_sighting_line_ahead(rig, ahead=.4):
     """Drive into the arc, sight the next junction's line once mid-arc (lap SIM A: 0.39-0.45 m
     ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
     until(rig, 'bending')
-    for _ in range(3):
+    entry = rig.m._junction['anchor'][2]
+    while abs(math.remainder(rig.yaw-entry, math.tau)) <= math.radians(35.):  # turned: not the bend's own line
         site_step(rig, move=True)
     sight(rig, ahead)
     site_step(rig, move=True)
