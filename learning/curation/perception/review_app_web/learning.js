@@ -13,7 +13,9 @@ const nextActions={perception:'보고서 상태와 단계별 근거를 확인하
   policy:'산출물 파일과 승격 증거를 정책 원장에서 확인하세요.',
   isaac:'환경과 과제 설정이 맞는지 독립 시뮬레이션에서 확인하세요.',
   segmentation:'픽셀 검수 결과를 확인하세요. 객체 박스 승인과 별개입니다.'};
-const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.',no_approved_masks:'아직 사람이 승인한 픽셀 마스크가 없습니다.'};
+const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.',no_approved_masks:'아직 사람이 승인한 픽셀 마스크가 없습니다.',
+  'work busy: GPU compute job':'다른 GPU 작업이 끝나면 자동으로 다시 확인합니다.',
+  'work busy: GPU utilization':'GPU 사용 중입니다. 자동으로 다시 확인합니다.'};
 function readableError(error) {
   const message=error.message||String(error);
   if(message.includes('no supported report')) return '선택한 작업 종류에 맞는 결과 파일이 없습니다.';
