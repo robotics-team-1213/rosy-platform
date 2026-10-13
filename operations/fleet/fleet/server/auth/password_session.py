@@ -81,7 +81,7 @@ class CurrentPasswordIncorrect(Exception):
 
 class PasswordSessions:
     def __init__(self, path: Path | str, logins: Mapping[str, Mapping[str, str]], *,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time, accounts_bootstrap=None) -> None:
         self.path = Path(path)
         # D-519 3: the site-users snapshot loaded at startup; account changes apply on restart.
         self._logins = {login: dict(account) for login, account in logins.items()}
@@ -106,6 +106,14 @@ class PasswordSessions:
                 login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_profiles (
                 login TEXT PRIMARY KEY, principal_id TEXT NOT NULL, display_name TEXT NOT NULL)""")
+        from fleet.server.account_ledger import AccountLedger
+        self._ledger = AccountLedger(self)
+        if accounts_bootstrap is not None and not self._ledger.active:
+            self.bootstrap_accounts(*accounts_bootstrap)
+        if self._ledger.active:
+            self._required = {}
+            return
+        with closing(self._connect(timeout=10)) as db, db:
             for row in db.execute("SELECT * FROM fleet_console_passwords").fetchall():
                 if self._sources.get(row["login"]) == row["source_sha256"]:
                     self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
@@ -115,6 +123,33 @@ class PasswordSessions:
                     db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
         self._required = {login: verify_password(login, account["password_scrypt"])
                           for login, account in self._logins.items()}
+
+    def bootstrap_accounts(self, admin_login: str, site_id: str) -> None:
+        self._ledger.bootstrap(admin_login, site_id)
+
+    def account_context(self, value: str):
+        return self._ledger.context(value) if self._ledger.active else None
+
+    def context_by_family(self, family: str):
+        return self._ledger.context(family=family) if self._ledger.active else None
+
+    def revoke_family(self, family: str) -> None:
+        self._ledger.revoke_family(family)
+
+    def list_accounts(self, value: str):
+        return self._ledger.list_accounts(value)
+
+    def create_account(self, value: str, **fields):
+        return self._ledger.create(value, **fields)
+
+    def update_account(self, value: str, account_id: str, *, revision: int, **changes):
+        return self._ledger.mutate(value, account_id, revision, changes)
+
+    def reset_account_password(self, value: str, account_id: str, *, revision: int, password: str):
+        return self._ledger.reset_password(value, account_id, revision, password)
+
+    def revoke_account_sessions(self, value: str, account_id: str, *, revision: int):
+        return self._ledger.mutate(value, account_id, revision, {}, operation="revoke")
 
     def _connect(self, *, timeout: float = _AUTH_DB_TIMEOUT_S) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=timeout)
@@ -164,12 +199,14 @@ class PasswordSessions:
             self._refund(keys, now)
             raise LoginRateLimited()
         try:
-            account = self._logins.get(login) if valid else None
+            account = (self._ledger.account(login) if self._ledger.active else self._logins.get(login)) if valid else None
             ok = verify_password(password, account["password_scrypt"] if account else self._dummy_hash)
         finally:
             _SCRYPT_SLOTS.release()
         if ok and account is not None:
             self._refund(keys, now)
+            if self._ledger.active:
+                return self._ledger.principal_for(account, fingerprint=_digest(account["password_scrypt"]))
             return SitePrincipal(account["principal_id"], account["role"],
                                  self._required[login], _digest(account["password_scrypt"]))
         return None
@@ -182,6 +219,8 @@ class PasswordSessions:
                     hits.remove(stamp)
 
     def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
+        if self._ledger.active:
+            return self._ledger.issue(login, remember, verified)
         with self._lock:
             if (verified is not None
                     and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"])):
@@ -208,6 +247,8 @@ class PasswordSessions:
         return value
 
     def change_password(self, value: str, password: str, *, current_password: Optional[str] = None) -> tuple[str, bool]:
+        if self._ledger.active:
+            return self._ledger.change_password(value, password, current_password)
         with self._lock:
             cached = self._cache.get(_digest(value))
             checked_hash = self._logins[cached["login"]]["password_scrypt"] if cached else None
@@ -264,6 +305,8 @@ class PasswordSessions:
             return replacement, bool(fresh["remember"])
 
     def profile(self, value: str, display_name: Optional[str] = None) -> dict:
+        if self._ledger.active:
+            return self._ledger.profile(value, display_name)
         with self._lock:
             now, key = self._clock(), _digest(value)
             try:
@@ -335,6 +378,8 @@ class PasswordSessions:
         A cookie validated within `_CACHE_S` needs no DB. Otherwise the DB decides; a DB error
         raises SessionStorageUnavailable unless `allow_stale` (e-stop) and the cache knows the cookie.
         """
+        if self._ledger.active:
+            return self._ledger.principal(value, allow_stale)
         key = _digest(value)
         now = self._clock()
         with self._lock:
@@ -443,6 +488,8 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         attempted = SitePrincipal(f"login:{login if _LOGIN.fullmatch(login) else '?'}", "viewer")
         try:
             principal = sessions.check(address, login, password)
+        except SessionStorageUnavailable:
+            raise _storage_unavailable() from None
         except LoginRateLimited:
             if sessions.audit_limit(address):
                 try:
@@ -471,6 +518,9 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         response = Response(status_code=204, headers=NO_STORE)
         _set_cookie(response, value, remember=remember)
         return response
+
+    from fleet.server.account_routes import install_account_routes
+    install_account_routes(app, sessions=sessions, authorize=authorize)
 
     @app.post("/api/fleet/auth/change-password", status_code=204, tags=["fleet-auth"])
     def fleet_auth_change_password(request: Request, payload: dict = Body(...),
