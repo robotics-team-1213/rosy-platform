@@ -45,6 +45,9 @@ MUST_IGNORE = [
     # tracked form is the sd template beside the bundle tooling.
     "private/tailscale-auth-key.txt",
     "private/lab-hosts.json",
+    "learning-collaboration.json",
+    "learning-accounts.key",
+    "private/learning/oauth-client-secret",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
@@ -63,6 +66,7 @@ MUST_TRACK = [
     "operations/signal_observation/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
     "tools/remote/hosts.example.json",
+    "learning/curation/perception/learning-collaboration.example.json",
 ]
 
 # Live lab endpoints. Historical ADR, plan, validation, assessment, and log

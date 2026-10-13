@@ -758,6 +758,8 @@
 | D-753 | Fleet holder 설치 namespace·구조 증가 검사 보완 | Accepted |
 | D-755 | 공통 학습 데이터와 다중 계정 협업 연동 | Accepted |
 
+| D-756 | OMX 모방학습 준비의 미완료 항목과 재개 조건 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

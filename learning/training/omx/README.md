@@ -91,3 +91,7 @@ python learning/training/omx/act_inference_replay.py
 owner dispatch·독립 SIM 과제·물리 수용을 증명하지 않는다.
 고정 seed/data의 4행동/1행동 실제 비교와 남은 품질 거절은
 [추론 binding 검증](../../../docs/validation/act-inference-binding-2026-10-04.md)에 기록했다.
+
+## Native OMX ACT 준비
+
+`native-act.example.json`은 공식 LeRobot 0.4.4 CPU smoke 설정이다. [실행 안내](../../curation/omx/README.md)에 따라 검토한 train 경로를 채운다. SIM rad 데이터와 섞지 않는다. 실제 GPU 학습·독립 평가는 별도다.
