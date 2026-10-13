@@ -11,11 +11,17 @@ defaults from line_follow.yaml except for the declared Gazebo ground.
 
 import math
 import os
+import sys
 from typing import List
+
+_LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_parts import observer_steering_law
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -85,6 +91,36 @@ def generate_launch_description():
         DeclareLaunchArgument("route", default_value="[]"),
         DeclareLaunchArgument("route_start", default_value="[]"),
         simulation,
+        OpaqueFunction(function=_line_observer, kwargs={"line_config": line_config, "map_graph": map_graph}),
+        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
+        # Display JPEG only; no road/observation, so traffic_policy is untouched.
+        Node(
+            package="gz_sim",
+            executable="sim_jpeg_relay.py",
+            name="sim_jpeg_relay",
+            output="screen",
+            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
+            # subscription cost ~24% of a core against <1% without (2026-10-10).
+            remappings=[("camera/image_raw", "camera/front")],
+        ),
+        Node(
+            package="core",
+            executable="core",
+            name="core",
+            output="screen",
+            parameters=[{"use_sim_time": True}],
+            # D-193 7: the dev tokens below exist only with ROSY_DEV_AUTH=1.
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay"), "ROSY_DEV_AUTH": "1"},
+        ),
+        LogInfo(msg=(
+            "map_v2_fleet REAL-profile sim: http://127.0.0.1:8080/dashboard "
+            "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
+            "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
+    ])
+
+
+def _line_observer(context, *, line_config, map_graph):
+    return [
         Node(
             package="control",
             executable="line_observer_node",
@@ -113,30 +149,6 @@ def generate_launch_description():
                 # lane_corner_turning and camera_x_offset_m come from the payload
                 # line_follow.yaml (D-495 SIM acceptance runs the payload values; the
                 # test pins that they equal this profile).
-            }],
-        ),
-        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
-        # Display JPEG only; no road/observation, so traffic_policy is untouched.
-        Node(
-            package="gz_sim",
-            executable="sim_jpeg_relay.py",
-            name="sim_jpeg_relay",
-            output="screen",
-            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
-            # subscription cost ~24% of a core against <1% without (2026-10-10).
-            remappings=[("camera/image_raw", "camera/front")],
-        ),
-        Node(
-            package="core",
-            executable="core",
-            name="core",
-            output="screen",
-            parameters=[{"use_sim_time": True}],
-            # D-193 7: the dev tokens below exist only with ROSY_DEV_AUTH=1.
-            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay"), "ROSY_DEV_AUTH": "1"},
-        ),
-        LogInfo(msg=(
-            "map_v2_fleet REAL-profile sim: http://127.0.0.1:8080/dashboard "
-            "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
-            "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
-    ])
+            }, observer_steering_law(LaunchConfiguration("core_overlay").perform(context))],
+        )
+    ]

@@ -41,6 +41,25 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "d02a45c9ed426977960f33419aad1a13e281c0c0":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "sensor-only worker naming and explicit CORE clock retain the single final publisher. "
+        "Runtime law/readiness followups remain required. See docs/validation/"
+        "gazebo-drive-safety-review-2026-10-13/result.md; no standalone/device acceptance.",
+    "f6731953a263da5564fdef8534d2693fb13d6647":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "D-735 joint traffic slowdown preserves curvature; full candidate coherence requires "
+        "D-737 c8286b9bf and c20c8095f followups. See docs/validation/"
+        "gazebo-drive-safety-review-2026-10-13/result.md; no standalone/device acceptance.",
+    "9926a21c51a6cc47ab7e339adee17079cb84b3fc":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "documentation-stripped AST identical to parent in both affected files. "
+        "See docs/validation/gazebo-drive-safety-review-2026-10-13/result.md; no device acceptance.",
+    "3a7fd7323806d95458c5d74dec129d6a28668898":  # git commit revision
+        "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
+        "deferred failure diagnostics and LINE common clip require c8286b9bf checked-pair/final-curve "
+        "and c20c8095f forward/reverse union; historical legacy envelope is not standalone approved. "
+        "See docs/validation/gazebo-drive-safety-review-2026-10-13/result.md; no device acceptance.",
     "68e6f973f958ca4dccc58ed2669524644acfcf83":  # git commit revision
         "Independent /root/robot_pilot_ui retrospective review, 2026-10-12: history-only; "
         "ownership rechecks and explicit acceptance receipts require later stop/continuation fences. "

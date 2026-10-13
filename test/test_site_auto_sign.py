@@ -158,12 +158,14 @@ def _audit(tmp_path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
-@pytest.mark.parametrize("case", ["failed", "pending", "missing", "wrong-sha", "missing-gate", "failed-gate",
-                                  "newer-pending", "wrong-event"])
+@pytest.mark.parametrize("case", ["failed", "cancelled", "pending", "missing", "wrong-sha",
+                                  "missing-gate", "failed-gate", "newer-pending", "wrong-event"])
 def test_ci_must_pass_before_signing_and_remains_retryable(tmp_path, keys, case):
     gh = FakeGh()
     if case == "failed":
         gh.ci_runs[0]["conclusion"] = "failure"
+    elif case == "cancelled":
+        gh.ci_runs[0]["conclusion"] = "cancelled"
     elif case == "pending":
         gh.ci_runs[0]["status"] = "in_progress"
     elif case == "missing":
@@ -179,9 +181,14 @@ def test_ci_must_pass_before_signing_and_remains_retryable(tmp_path, keys, case)
     elif case == "wrong-event":
         gh.ci_runs[0]["event"] = "pull_request"
     signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
-    assert signer.run() == auto.EXIT_REFUSED
+    quiet = case in {"failed", "cancelled"}
+    assert signer.run() == (auto.EXIT_IDLE if quiet else auto.EXIT_REFUSED)
     assert gh.uploads == []
     assert json.loads((tmp_path / "state/auto-sign-state.json").read_text())["refused"] == []
+    if quiet:
+        record = _audit(tmp_path)[-1]
+        assert record["decision"] == "ci-red"
+        assert record["conclusion"] == ("failure" if case == "failed" else "cancelled")
     gh.ci_runs = [{"id": 101, "head_sha": COMMIT, "head_branch": "main", "event": "push",
                    "status": "completed", "conclusion": "success"}]
     gh.ci_jobs = [{"name": "ci-result", "status": "completed", "conclusion": "success"}]

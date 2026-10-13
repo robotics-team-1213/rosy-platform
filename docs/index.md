@@ -232,6 +232,8 @@
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
 | D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
 | D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -332,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
-- 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
-- 2026-10-12 · uncommitted · docs: 자연어 요청을 통합 규칙집에 연결
-- 2026-10-12 · uncommitted · docs: 공개 트리에서 실험실 주소를 뺀다
-- 2026-10-12 · uncommitted · docs(adr): D-729 바닥 한 번 뒤의 복귀
+- 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정

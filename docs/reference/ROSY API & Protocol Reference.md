@@ -889,6 +889,8 @@ STOP_REQUIRED | WAIT_SIGNAL | PROCEED | HOLD` 다. `ENFORCED`에서는 stale,
 정지선에서는 신호색과 무관하게 먼저 완전 정지와 dwell을 완료한 뒤, 신뢰도
 기준을 통과한 `GREEN`만 `PROCEED`를 허용한다. `MONITOR_ONLY`는 같은 판정을
 표시하지만 주행 후보를 변경하지 않는다. `junction_rule`은 v1.54 additive다.
+2026-10-12(D-735): ENFORCED FOLLOW/APPROACH/PROCEED의 이동 후보는 선속도와
+각속도에 같은 감속 비율을 적용한다. 선속도 0의 제자리 회전은 기존 각속도를 유지한다.
 `signal_controlled`(기본)는 위 동작 그대로다. `stop_and_go`는 무신호 교차로
 선언이다 — 완전 정지와 dwell을 마친 뒤 신호가 관측되지 않으면
 `PROCEED / unsignalized_proceed`로 `proceed_speed_scale` 속도로 진입하고,

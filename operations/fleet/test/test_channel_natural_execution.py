@@ -17,12 +17,12 @@ from fleet.server.channel.execution.worker import ExecutionWorker
 from fleet.server.intent_execution import IntentExecution
 from fleet.server.task_service import FleetTaskService
 from fleet.swarm.dispatch_guard import dispatch_guard, check_dispatch
-from test_channel_model_jobs import _setup
+from test_channel_model_jobs import model_jobs
 from test_channel_conversation import environment, receipt_text, answer
 
 
 def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None,*,extra_robots=()):
-    _,raw,accounts,receipt,_,_,clock=_setup(tmp_path)
+    _,raw,accounts,receipt,_,_,clock=model_jobs(tmp_path)
     receipt=receipt_text(receipt,text)
     with raw._connect() as conn,conn:
         conn.execute('UPDATE fleet_channel_requests SET receipt=?',(json.dumps(receipt),))
