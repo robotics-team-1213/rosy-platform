@@ -338,4 +338,4 @@
 - 2026-10-14 · uncommitted · OMX native imitation preparation tools
 - 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
 - 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
-- 2026-10-13 · uncommitted · docs(design): 좁은 머리 규칙을 D-668 테마 버튼과 맞춘다
+- 2026-10-13 · uncommitted · test: ACT 결과 테스트 이식 (ported from 7d84fa446, 373e71482)

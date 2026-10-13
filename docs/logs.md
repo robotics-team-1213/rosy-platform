@@ -8281,6 +8281,12 @@ osy-d395-s1d\`.
 - 증거: surfaces.yaml에 Fleet 90rem 등록이 없고 console 헤더 html 4곳이 `data-theme-cycle` 버튼을 둔다.
 - gate 변화: 없음. 문서 문구만 바뀐다.
 
+## 2026-10-13 · uncommitted · test: ACT 결과 테스트 이식 (ported from 7d84fa446, 373e71482)
+
+- 변경: 낡은 feat/act-native-chain(2026-10-05)의 커밋된 테스트·설계 문서만 현재 main에 이식했다. 원본 결과 공급자(parent attempt 결속 뒤, 실행 직렬화 밖)를 쓰는 `act_cpu_fixture.py`, `test_act_native_chain.py`, `test_act_parent_chain.py`, ROS 부분 설정 실패 격리 `test_native_setup_cleanup.py`, `test_policy_runtime_ros.py` 재작업(main의 경로 수정 유지), 설계 `docs/plans/2026-10-05-act-native-chain-design.md`. 제품 코드는 바꾸지 않았다. 원본 로그의 인코딩 보존 커밋과 index 행 커밋은 이 이식에서 필요 없어 옮기지 않았다.
+- 증거: 원격 pytest 27 PASS / 4 SKIP, 새 실패 0(`test/known_failures.py`). SKIP은 rclpy·torch·lerobot과 domain199 localhost가 없는 시험 PC 때문이며 실행 근거가 아니다. 원본 브랜치 실행 기록(X:/DevTemp/act-native-chain/)은 이식에서 다시 돌리지 않았다.
+- gate 변화: 없음. SOURCE/HOST 시험만이고 네이티브 CPU ROS 실행은 의존성 설치 전까지 수용되지 않는다. 제품 활성화, 물리 동작, push 없음.
+
 ## 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
 
 - 변경: 원본·라벨·시계·profile·용도별 적격성, HF 로그인/복수 계정 연결, 프로젝트 권한과 공동 검수, 고정 revision 가져오기 및 LeRobot 검증 설계를 결정했다.
