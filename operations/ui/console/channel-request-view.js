@@ -1,6 +1,8 @@
 // Fleet binds the current review and existing Task creation in one transaction.
+import {enumLabel} from "/common/core_ui_logic.js";
 import {workStatus} from "/console/assets/work-view.js";
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
+const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: "확인 불가", SUPERSEDED: "대체됨"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
   let receipt = null, review = null, version = 0, busy = false, incidentRows = [], modelState = "";
   const panel = el("channel-review"), state = el("channel-review-state");
@@ -44,7 +46,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
         const model = await call(`/api/fleet/channel-requests/${encodeURIComponent(row.request_id)}/deliberation`);
         life.check(); if (current !== version) return;
         const models = model.result?.models?.map(item => item.model_id).join(", ") || model.result?.reason || "";
-        modelState = `숙고 ${model.state} · ${models} · 실행 승인 아님`;
+        modelState = `숙고 ${enumLabel(deliberationState, model.state)} · ${models} · 실행 승인 아님`;
       } catch { life.check(); if (current !== version) return; }
       el("channel-review-original").textContent = row.content;
       const picker = el("channel-review-robot"); picker.replaceChildren();

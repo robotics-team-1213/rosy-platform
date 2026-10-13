@@ -124,7 +124,7 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                       input_hash={'const': problem.digest},
                       verdict={'enum': [v for v in VERDICTS if problem.domain != 'fleet_status' or v != 'candidate']},
                       evidence_ids={**array(problem.evidence_ids), 'minItems': 1},
-                      missing_evidence=array(tuple(identifier(v) for v in missing_allowlist)), objections=array(OBJECTIONS),
+                      missing_evidence=array(tuple(identifier(v) for v in missing_allowlist)), objections=array(sorted(OBJECTIONS)),
                       alternatives={'type': 'array', 'minItems': len(problem.choices), 'maxItems': len(problem.choices),
                                     'items': {'type': 'object', 'additionalProperties': False,
                                               'required': ['choice', 'probability'], 'properties': {

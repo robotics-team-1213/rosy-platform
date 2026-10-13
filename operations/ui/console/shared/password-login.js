@@ -1,4 +1,5 @@
 ﻿// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
+import {actionIcon} from '/common/ui.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 
@@ -19,7 +20,7 @@ const FORM = `
   </form>`;
 const WHO = `<div class="password-login-who" data-login="who">
   <span data-login="principal"></span>
-  <ui-button kind="quiet" type="button" data-login="logout">로그아웃</ui-button>
+  <ui-button kind="quiet" type="button" data-login="logout" data-action-icon="logout">로그아웃</ui-button>
   <span class="password-login-error" data-login="error" role="alert" hidden></span>
 </div>`;
 const CHANGE = `
@@ -61,6 +62,16 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   const errorText = message => {
     part('error').textContent = message;
     part('error').hidden = !message;
+  };
+  const paintLoginWords = text => {
+    if (!link) return;
+    link.textContent = text;
+    const icon = link.getAttribute('data-action-icon');
+    if (icon) actionIcon(link, icon);
+  };
+  const paintLogout = button => {
+    button.textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
+    actionIcon(button, 'logout');
   };
   function verified(session) {
     if (session.via !== 'cookie' || !session.principal_id || !session.role) throw new Error('Session not verified');
@@ -106,13 +117,13 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       } else {
         if (cookie && session.password_change_required === true) {
           cookie = false; host.hidden = true;
-          if (link) link.textContent = '비밀번호 변경';
+          paintLoginWords('비밀번호 변경');
           return false;
         }
-        if (link) link.textContent = '로그인';
+        paintLoginWords('로그인');
         host.hidden = false;
-        part('principal').textContent = `${session.principal_id} · ${session.role}`;
-        part('logout').textContent = cookie ? '로그아웃' : '이 탭 접속 해제';
+        part('principal').textContent = '';
+        paintLogout(part('logout'));
         part('logout').title = cookie ? '이 브라우저의 현장 로그인 종료' : '서버 토큰은 폐기하지 않습니다';
         part('logout').disabled = false;
         part('logout').removeAttribute('reason');
@@ -192,7 +203,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         if (session.via !== 'cookie') return;
         if (session.password_change_required === true) {
           cookie = false; cookiePrincipal = cookieRole = null;
-          if (link) link.textContent = '비밀번호 변경';
+          paintLoginWords('비밀번호 변경');
           onChange(false); return;
         }
         if (cookie && cookiePrincipal === session.principal_id && cookieRole === session.role) return;

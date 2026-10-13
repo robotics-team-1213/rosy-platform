@@ -30,7 +30,7 @@ class ChannelReplyOutbox:
 
     def received(self, conn, receipt):
         self.enqueue(conn, receipt, 'RECEIVED',
-                     f"ROSY 요청 접수 · {receipt['request_id']}\nFleet Console에서 확인합니다. 실행 승인 전입니다.")
+                     f"ROSY 요청 접수 · {receipt['request_id']}\n요청을 받았습니다. 처리 상태는 Fleet Console에서도 확인할 수 있습니다.")
 
     def enqueue(self, conn, receipt, kind, content):
         self.journal.current_receipt(receipt)

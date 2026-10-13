@@ -6,8 +6,10 @@ import time
 
 
 def main():
-    arguments = ('run', '--pure', '--format', 'json', '--model', 'zai-coding-plan/glm-5.3-flash')
-    if tuple(sys.argv[1:]) != arguments:
+    arguments = tuple(sys.argv[1:])
+    allowed = tuple(('run', '--pure', '--format', 'json', '--model', model) for model in
+                    ('zai-coding-plan/glm-5.3-flash', 'opencode/mimo-v2.6-flash-free'))
+    if arguments not in allowed:
         raise ValueError('UNTRUSTED_OPENCODE_ARGUMENTS')
     relay = subprocess.Popen(['/usr/bin/python3', '/relay.py'], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)

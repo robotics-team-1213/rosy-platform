@@ -11,6 +11,7 @@ import stat
 from pathlib import Path
 
 import pytest
+import yaml
 
 launch = pytest.importorskip("launch")
 if not hasattr(launch, "LaunchContext"):
