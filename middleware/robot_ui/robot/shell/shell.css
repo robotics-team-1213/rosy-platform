@@ -221,7 +221,9 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   ui-brand { grid-area: brand; }
   #shell-notice { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
   #shell-notice:empty { display: none; }
-  #shell-role { grid-area: role; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  /* 역할 표는 자기 칸 안에서만 줄어든다. border-box라 안쪽 여백과 테두리가 칸 밖(정지 쪽)으로 나가지 않고,
+     한 줄 블록이라 넘친 글은 말줄임이 된다. 줄 높이는 표 높이에서 위아래 테두리를 뺀 값이다. */
+  #shell-role:not([hidden]) { grid-area: role; justify-self: start; box-sizing: border-box; display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; line-height: calc(var(--space-6) - 2px); }
   #shell-estop { grid-area: estop; align-self: stretch; }
   ui-topbar [data-spacer] { display: none; }
 }
