@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 
 
 def test_dispatch_control_status_and_operator_rearm_are_wired():

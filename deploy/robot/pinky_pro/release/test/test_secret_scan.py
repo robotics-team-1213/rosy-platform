@@ -5,6 +5,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import secret_scan  # noqa: E402
 
+
+def test_public_source_paths_with_holder_separators_keep_adjacent_secrets_detectable():
+    path = 'middleware/robot_ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt'
+    line = 'token_verification: ' + path
+    assert secret_scan.scan_text('shared/web/surfaces.yaml', line) == []
+    assert secret_scan.scan_text('shared/web/surfaces.yaml', line + ' ' + 'a1' * 32)
+    assert secret_scan.scan_text('shared/web/surfaces.yaml', 'api_token: ' + path)
+
 # Assemble the planted key at runtime so no private-key literal reaches the
 # tracked source, and use a KNOWN_FIXTURES passphrase for the Wi-Fi line.
 _BEGIN = "-----BEGIN " + "PRIVATE KEY-----"
