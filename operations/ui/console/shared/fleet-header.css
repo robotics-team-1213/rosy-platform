@@ -52,11 +52,19 @@ ui-topbar {
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
-.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
-.fleet-link-status ui-tag { box-sizing: border-box; flex: none; white-space: nowrap; }
+.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+#development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
-.fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
-.fleet-header-safety { grid-area: safety; }
+/* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
+.fleet-header-actions { grid-area: actions; position: relative; display: flex; align-items: center; gap: var(--space-1); }
+.fleet-header-actions [hidden] { display: none; }
+#fleet-login,
+#fleet-account > summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.fleet-account-panel .password-login-who { flex-wrap: wrap; }
+.fleet-account-panel [data-login="principal"] { display: none; }
+.fleet-header-safety { grid-area: safety; justify-self: end; }
 #topbar-more { display: inline-flex; max-width: 100%; }
 .header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); }
 .topbar-extra {
@@ -83,8 +91,8 @@ ui-topbar {
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  .fleet-link-status { justify-content: flex-start; align-content: center; }
-  .fleet-header-actions { justify-content: flex-end; }
+  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
+  .fleet-header-actions { justify-content: flex-end; gap: 0; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }

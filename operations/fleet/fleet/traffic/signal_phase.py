@@ -55,11 +55,13 @@ class SignalState:
 
 
 def entering_arcs(graph: Graph, layout: Layout, zone: str) -> set[str]:
-    """Arcs outside ``zone`` that end where an arc of ``zone`` starts."""
+    """Arcs outside ``zone`` with a connected, non-banned transition into it."""
     def in_zone(arc) -> bool:
         return any(unit == zone for unit, _s0, _s1 in layout.edge_units.get(arc.edge_id, ()))
-    starts = {arc.start_place for arc in graph.arcs.values() if in_zone(arc)}
-    return {arc.id for arc in graph.arcs.values() if not in_zone(arc) and arc.end_place in starts}
+    inside = [arc for arc in graph.arcs.values() if in_zone(arc)]
+    return {arc.id for arc in graph.arcs.values() if not in_zone(arc)
+            and any(arc.end_place == nxt.start_place
+                    and (arc.end_place, arc.edge_id, nxt.edge_id) not in graph.bans for nxt in inside)}
 
 
 def check(plan: SignalPlan, graph: Graph, layout: Layout) -> list[str]:

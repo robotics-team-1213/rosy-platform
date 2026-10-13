@@ -52,9 +52,9 @@ JOB_ENTRY_POINTS.update({'dataset/' + name: 'learning/curation/perception/' + na
                              'extract.py', 'fetch_http.py', 'frames.py', 'geometry.py', 'harvest.py',
                              'incident_feedback.py', 'labels.py', 'lane_derived_drivable.py',
                              'lane_failure.py', 'lane_failure_loop.py', 'learning_workspace.py',
-                             'map_projected_drivable.py', 'mcap_proof.py', 'object_boxes.py',
+                             'map_projected_drivable.py', 'mcap_proof.py', 'media_pipeline.py', 'object_boxes.py',
                              'pixel_label_job.py', 'prelabel.py', 'publish.py', 'qwen_points.py',
-                             'qwen_review_completion.py', 'review_app.py', 'review_eval_bootstrap.py',
+                             'qwen_review_completion.py', 'reclaim.py', 'review_app.py', 'review_eval_bootstrap.py',
                              'review_evidence.py', 'review_ingest.py', 'review_masks.py', 'review_pack.py',
                              'review_quality.py', 'review_return.py', 'road_draft.py', 'sam3_road_draft.py',
                              'shrink_session.py', 'stuck_markers.py', 'vision_review_drafts.py',
@@ -90,6 +90,8 @@ SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/control/drive/runtime/control_node.py",
                   "middleware/control/drive/safety/adapter/__init__.py",
                   "middleware/control/drive/tracking/wander/__init__.py")
+FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
+FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
                  "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
@@ -317,6 +319,9 @@ def unpack(archive, dest):
     if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
+    if (dest / FITNESS_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
+            raise ValueError("missing road-fitness observation dependency")
 
 
 def replace_link(root, target):

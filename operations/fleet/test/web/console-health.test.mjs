@@ -18,6 +18,9 @@ test('charging requires fresh CORE evidence and never clears a safety stop', () 
   assert.equal(fresh.safetyRelease, '관리자: 로봇 안전 상태 확인 후 명시적으로 해제');
   assert.equal(powerHealthView(robot({ charging_state: 'unconfirmed' }), 1000, 1000).charging,
     '충전 미확인');
+  const held = powerHealthView(robot({ shown_percent: 72.2, percent: 100 }), 1000, 1000);
+  assert.equal(held.battery, '72%');
+  assert.equal(held.charging, '충전 확인 · 72%');
   assert.equal(powerHealthView(robot({ evidence: 'stale' }), 1000, 1000).battery, '확인 불가');
   assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');
   assert.equal(powerHealthView(robot({ charging_evidence_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');

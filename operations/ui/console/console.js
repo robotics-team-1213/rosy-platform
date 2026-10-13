@@ -7,8 +7,10 @@ import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
+import { createChannelRequestView } from "./channel-request-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
+import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -38,7 +40,14 @@ const layoutMedia = matchMedia("(min-width: 64rem)");
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
-const workView = createWorkView({scope: pageScope, call, el});
+const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
+  robots: () => view.robots,
+  canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
+  canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
+    && !motionCommandReason(view, robotId, "goal")
+    && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
+  confirm: options => confirmedAction.run(options)});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
 layoutPanels.push(el("work-overview"));
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
@@ -140,10 +149,10 @@ function markUnlocked() {
 }
 
 function operatorControls() {
-  // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
+  // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling)는 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
 }
 
 const view = {
@@ -188,12 +197,12 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if (error.status === 401 && !cameraPreview) markLocked();
+    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
     throw error;
   }
 }
 
-const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth});
+const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 
 async function refreshDispatchControl(life = pageScope.capture()) {
   life.check();
@@ -309,6 +318,7 @@ function render() {
   inbox.refresh();
   roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
+  deviceWatch.render();
   tripReplan.render();
 
   formation.fillLeaders();
@@ -547,7 +557,7 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     life.check();
-    if (auth.role !== identity.role) confirmedAction.cancel();
+    if (auth.role !== identity.role || auth.principal !== identity.principal_id) { confirmedAction.cancel(); workView.reset(); }
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     showSession(identity);
@@ -577,7 +587,7 @@ async function refreshAuthorization() {
     render();
   } catch (_err) {
     if (_err.name === "AbortError") return;
-    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
+    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
   }
 }
 
@@ -883,6 +893,7 @@ view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(rob
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
+const deviceWatch = createDeviceWatch({ scope: pageScope, el, view });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason,
   openCard: (robotId) => { roster.openCard(robotId); render(); } });

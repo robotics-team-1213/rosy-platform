@@ -30,10 +30,23 @@ D-622 reserved by another active session; ADR not yet landed in this branch
 
 
 
-D-663 reserved by another active branch; its ADR is not in this snapshot
 
-D-665 Reserved by a parallel branch; ADR not landed in this branch yet.
 
-D-666 Reserved by a parallel branch; ADR not landed in this branch yet.
 
-D-667 Reserved by a parallel branch; ADR not landed in this branch yet.
+D-677 allocated outside this branch and absent from main; remove when its ADR lands
+
+
+D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
+
+
+
+
+
+
+
+
+
+
+
+
+

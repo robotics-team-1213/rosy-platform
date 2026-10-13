@@ -69,9 +69,9 @@ modules:
     functional: [test/learning/perception/test_training_job.py]
   - name: perception_evaluation
     path: learning/evaluation/perception
-    tests: [test/learning/perception]
+    tests: [test/learning/perception, learning/evaluation/perception/test]
     functional_kind: pytest
-    functional: [test/learning/perception/test_road_replay.py]
+    functional: [test/learning/perception/test_road_replay.py, learning/evaluation/perception/test]
   - name: perception_cli
     path: tools/perception
     tests: [test/learning/perception]

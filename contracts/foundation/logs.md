@@ -623,3 +623,28 @@
 - 변경: 읽기 판단·관측 종료 DTO를 protocol/fleet_judgment.py로 옮기고 schemas.py의 정식 export를 유지했다. 크기 제한·예외·wire 필드는 변경하지 않았다.
 - 증거: 통합 원격 크기 검사에서 초과를 재현했다. 책임 분리 후 수정 HEAD의 구조/설치 재검증 대기.
 - gate 변화: SOURCE 책임 분리. 실제 설치·배포·현장 수용은 별도다.
+
+## 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+
+- 변경: 두 사람 승인 정답과 별도 관측 입력·모델·학습 출처를 고정 버전으로 결속하고, 로봇 설정 없이 HOLD 보고서를 생성한다. 공통 관측 계약과 World 기존 import는 같은 객체를 사용한다. 새 계약 파일을 구분하는 패키지 버전·의존 pin·서명 코드 묶음의 필수 파일을 정리했다.
+- 증거: 재생 20개 합성 시험 terminal exit 0, NEW0. 승인 hash/짝 영상 검사를 제거한 2개 실패를 확인하고 복구했다. 공통 계약 이전 후 World 설치·아키텍처·학습 관련 시험 terminal exit 0, NEW0. 독립 소스 검토의 패키지 버전 문제를 수정했다. 최신 버전의 설치/전체 회귀·착지 증거는 후속 기록이다.
+- gate 변화: 없음. 실제 독립 정답·보정·물체 성능·수용 profile·장치 관측 전달과 지연/손실, 실물/시뮬레이션 성능은 HOLD다. 기존 20261010 검수 데이터의 의미와 운영 선택을 유지한다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
+
+- 변경: 얼굴 입력 `line_note`는 `crosswalk`, `lane_edge`, `yield`만 받는다. 내비게이션과 수동에서 막힘·계획·도착 다음에 `Crosswalk`, `Lane edge`, `Yielding`을 말한다. 대기와 모르는 값은 기존 줄을 유지한다.
+- 증거: `test_face_screen.py`에 노트 줄과 모르는 값 시험을 넣었다. 이 브랜치는 커밋 전이라 원격 pytest는 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
+
+## 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
+
+- 변경: 기존 NativeReceipts에 실제 owner 잠금을 nonblocking으로 얻어 immutable receipt만 반환하는 capture를 추가한다. 경합은 명시적 실패이며 unlocked lookup이나 transport 조회가 없다.
+- 증거: 실제 owner 잠금 경합 RED 5건 후 safety/native owner·구조·설치 패키지 원격 exit 0/NEW 0. native 크기 단위 117로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. 배포·장치·현장 수용은 수행하지 않았다.

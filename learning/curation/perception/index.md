@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
 
 ## 계획·결과 문서
 
@@ -25,4 +26,5 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
+- 2026-10-12 · 5acb174a1 · fix(learning): 모바일 검수 헤더의 작업 영역 확보

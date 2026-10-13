@@ -64,8 +64,10 @@ def test_sim_needs_capability_and_its_own_floor():
     assert rp.place("sim", hosts, [host(sim=True), host()])[0] == ["model@1"]
 
 
-def test_site_pc_is_last_resort_with_fleet_reserve_and_busy_flag():
-    site = rp.SITE_HOST
+def test_site_pc_is_last_resort_with_fleet_reserve_and_busy_flag(monkeypatch):
+    site = "site@lab"
+    monkeypatch.setattr(rp, "SITE_HOST", site)
+    monkeypatch.setattr(rp, "SITES", {site})
     hosts = ["model@1", site]
     roomy = host(nproc=8, load1=0.2, avail_gb=13)
     assert rp.place("pytest", hosts, [host(), roomy])[0] == ["model@1"]
@@ -78,7 +80,7 @@ def test_site_pc_is_last_resort_with_fleet_reserve_and_busy_flag():
 
 def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
-    monkeypatch.setattr(rp, "SITES", {rp.SITE_HOST})
+    monkeypatch.setattr(rp, "SITES", {"site@lab"})
     other = "robttt@192.168.1.230"
     roomy = host(nproc=8, load1=0.2, avail_gb=13, site=True)  # ~/rosy-jobs/site on the host
     probes = {"model@1": host(), other: roomy}
@@ -140,7 +142,9 @@ def test_host_appearing_during_the_wait_runs_there(monkeypatch, tmp_path):
 
 def test_pytest_falls_back_to_full_non_site_hosts_but_sim_does_not(monkeypatch):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
-    probes = {"a@1": host(avail_gb=1), "b@2": host(avail_gb=1, busy=True), rp.SITE_HOST: host(avail_gb=1)}
+    monkeypatch.setattr(rp, "SITE_HOST", "site@lab")
+    monkeypatch.setattr(rp, "SITES", {"site@lab"})
+    probes = {"a@1": host(avail_gb=1), "b@2": host(avail_gb=1, busy=True), "site@lab": host(avail_gb=1)}
     monkeypatch.setattr(rp, "probe", probes.get)
     assert rp.placed_hosts("pytest", list(probes)) == ["a@1"]
     assert rp.placed_hosts("sim", list(probes)) == []
@@ -198,6 +202,8 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
 
 
 def test_site_pc_pytest_gets_a_cpu_quota(monkeypatch, tmp_path):
+    monkeypatch.setattr(rp, "SITE_HOST", "site@lab")
+    monkeypatch.setattr(rp, "SITES", {"site@lab"})
     sent = []
     monkeypatch.setattr(rp, "ship", lambda *a: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))

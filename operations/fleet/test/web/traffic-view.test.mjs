@@ -39,3 +39,28 @@ test('signal and occupancy descriptions stay outside the floor plane', () => {
     assert.equal(elements['map-traffic-status'].rows[0].textContent, '교통 표시 꺼짐');
   } finally {globalThis.document = previous; globalThis.window = previousWindow;}
 });
+
+test('a zone occupancy sentence is a chip on the zone and stays in the list', () => {
+  const chips = [];
+  const ctx = new Proxy({canvas: {width: 800, height: 600}}, {get(target, key) {
+    if (key in target) return target[key];
+    return () => {};
+  }});
+  const elements = {'legend-traffic': {}, 'map-traffic-status': {replaceChildren(...rows) {this.rows = rows;}}};
+  const previous = globalThis.document;
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  globalThis.document = {createElement: () => ({getContext: () => ctx})};
+  try {
+    const options = {view: {activeSiteMap: {version: 5, map: {edges: [{id: 'east', polyline: [[0, 0], [2, 0]]}]}}, traffic: {
+      map_version: 5, block_length_m: {east: 1},
+      units: [{id: 'yard', zone: true, state: 'FREE', capacity: 2, holders: ['rosy_01'], waiting: ['rosy_02']}],
+    }}, el: id => elements[id], css: token => token, colorOf: () => '',
+      drawChip: (_ctx, _grid, _x, _y, text) => chips.push(text), on: true};
+    drawTraffic(ctx, (x, y) => ({x, y}), 100, options);
+    assert.deepEqual(chips, ['점유 1/2 · 대기 1']);
+    assert.ok(elements['map-traffic-status'].rows.some(row => row.textContent.includes('점유 1/2 · 대기 1')));
+    drawTraffic(ctx, (x, y) => ({x, y}), 100, {...options, on: false});
+    assert.deepEqual(chips, ['점유 1/2 · 대기 1']);
+  } finally {globalThis.document = previous; globalThis.window = previousWindow;}
+});

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from uuid import UUID
 
 from core_api_web.api.v1.common import (
     enter_navigation_mode,
@@ -26,6 +27,7 @@ _SWARM_HTTP = {
     "DOCKING_ACTIVE": 409,
     "MAPPING_ACTIVE": 409,
     "VALIDATION_ERROR": 400,
+    "OWNER_GENERATION_CHANGED": 409,
 }
 
 
@@ -53,24 +55,29 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
                        f"cannot follow from {svc.modes.mode.value}")
 
     with localized_start(svc):  # D-395 §2: autonomy only from LOCALIZED
-        status = svc.swarm.follow(body, source=f"api:{auth.role}")
+        token = svc.swarm.reserve_follow(body)
+        receipt = []
         try:
             enter_navigation_mode(svc, auth)
-        except ApiError:
-            # 여기까지 올 일은 없어야 하지만, 왔다면 무장된 채로 두지 않는다.
-            svc.swarm.cancel(source="api", reason="mode_conflict")
-            raise
-    return {**svc.swarm.state_payload(), "role": status.role.value}
+            status = svc.swarm.follow(body, source=f"api:{auth.role}",
+                                      reservation=token, receipt_sink=receipt.append)
+        finally:
+            svc.swarm.release_follow_reservation(token)
+    return {**svc.swarm.state_payload(), "role": status.role.value,
+            "operation": receipt[0].model_dump(mode="json")}
 
 
 @swarm_router.post("/cancel")
 def swarm_cancel(auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
-    svc.swarm.cancel(source=f"api:{auth.role}")
-    return svc.swarm.state_payload()
+    receipt = []
+    svc.swarm.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
+    return {**svc.swarm.state_payload(),
+            "operation": receipt[0].model_dump(mode="json") if receipt else None}
 
 
 @swarm_router.get("/state")
 def swarm_state(_: AuthContext = Depends(viewer),
-                svc: CoreServicesLike = Depends(get_services)):
-    return svc.swarm.state_payload()
+                svc: CoreServicesLike = Depends(get_services),
+                run_id: UUID | None = None):
+    return {**svc.swarm.state_payload(), **svc.swarm.native_readback(run_id)}

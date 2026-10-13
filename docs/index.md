@@ -225,6 +225,15 @@
 | D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
 | D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
 | D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -307,6 +316,7 @@
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
 - [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
+- [2026-10-11-perception-fitness-pipeline.md](plans/2026-10-11-perception-fitness-pipeline.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -324,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
-- 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
-- 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
-- 2026-10-11 · 1cbe8fa67 · D-664 공통 작업 읽기 첫 구현
-- 2026-10-11 · db1b69bc0 · D-664 혼합 장치 작업 개념과 책임 검토
+- 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정
