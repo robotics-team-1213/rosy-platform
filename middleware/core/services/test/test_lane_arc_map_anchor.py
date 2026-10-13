@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from core_features.line_follow.arc.lane_arc import ARC_ANCHOR_MAX_AGE_S, ARC_ANCHOR_MAX_CARRY_M
+from core_features.line_follow.authority import ARC_ANCHOR_MAX_AGE_S, ARC_ANCHOR_MAX_CARRY_M
 from test_lane_arc import K, SEGMENT, ArcRig, running, send
 
 WALL = 1_790_000_000.            # CORE wall clock at rig time 0 (snapshot odom_pose.stamp is on it)
