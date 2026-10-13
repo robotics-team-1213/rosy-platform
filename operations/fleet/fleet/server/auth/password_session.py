@@ -167,6 +167,13 @@ class PasswordSessions:
     def list_account_audit(self, value: str):
         return self._ledger.list_audit(value)
 
+    def migrated_principal(self, principal_id: str) -> bool:
+        self._refresh_authority()
+        if not self._ledger.active:
+            return False
+        with self._ledger.db() as db:
+            return db.execute("SELECT 1 FROM rosy_accounts WHERE principal_id=?", (principal_id,)).fetchone() is not None
+
     def create_account(self, value: str, **fields):
         return self._ledger.create(value, **fields)
 
@@ -248,10 +255,11 @@ class PasswordSessions:
                 if hits is not None and stamp in hits:
                     hits.remove(stamp)
 
-    def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
+    def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None,
+              replacing: Optional[str] = None) -> str:
         self._refresh_authority()
         if self._ledger.active:
-            return self._ledger.issue(login, remember, verified)
+            return self._ledger.issue(login, remember, verified, replacing)
         with self._lock:
             if (verified is not None
                     and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"])):
@@ -502,11 +510,15 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
                             trust_forwarded: bool) -> None:
     @app.get("/api/fleet/auth/session", tags=["fleet-auth"])
     def fleet_auth_session(request: Request, principal: SitePrincipal = Depends(authorize)) -> JSONResponse:
+        managed = ({"account_id": principal.account_id, "site_resource": principal.site_resource,
+                    "grants": [{"resource": resource, "capabilities": list(capabilities)}
+                               for resource, capabilities in principal.grants]} if principal.account_id else {})
         return JSONResponse(headers=NO_STORE, content={
             "principal_id": principal.principal_id, "role": principal.role,
             "via": getattr(request.state, "site_auth_via", "bearer"),
             "expires_at": getattr(request.state, "site_auth_expires_at", None),
             "password_change_required": principal.password_change_required,
+            **managed,
         })
 
     if sessions is None:
@@ -547,7 +559,8 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=401, detail={
                 "code": "LOGIN_FAILED", "message": "login or password is incorrect"})
         try:
-            value = sessions.issue(login, remember=remember, verified=principal)
+            value = sessions.issue(login, remember=remember, verified=principal,
+                                   replacing=request.cookies.get(COOKIE))
         except SessionStorageUnavailable:
             raise _storage_unavailable() from None
         except StalePasswordCheck:

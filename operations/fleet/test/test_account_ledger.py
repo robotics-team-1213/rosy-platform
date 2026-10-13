@@ -1,6 +1,7 @@
 """D-757 durable human accounts and live revocation, without robot commands."""
 import sqlite3
 import json
+from hashlib import sha256
 
 import pytest
 
@@ -312,3 +313,30 @@ def test_managed_policy_role_does_not_inflate_policy_permission(tmp_path):
                        json={"password": "permanent secret"}).status_code == 204
     response = client.delete("/api/fleet/ai/human-classes/missing?reason=test", headers=ORIGIN)
     assert response.status_code == 403
+
+
+def test_migrated_human_bearer_cannot_bypass_grants_or_disable(tmp_path):
+    users = {sha256(b"old-human-key").hexdigest(): {"principal_id": "alice", "role": "operator"},
+             sha256(b"machine-key").hexdigest(): {"principal_id": "site-health", "role": "viewer"}}
+    app, _ = _app(tmp_path, users=users)
+    client = _client(app)
+    human = {"Authorization": "Bearer old-human-key"}
+    machine = {"Authorization": "Bearer machine-key"}
+    assert client.get("/api/fleet/state", headers=human).status_code == 200
+    sessions = app.state.password_sessions
+    sessions.bootstrap_accounts("alice", "test-site")
+    manager = cookie(sessions)
+    alice = sessions.account_context(manager)
+    sessions.update_account(manager, alice["account_id"], revision=alice["revision"], grants=[
+        {"resource": "site:test-site", "capabilities": ["accounts.manage"]}])
+    assert client.get("/api/fleet/state", headers=human).status_code == 401
+    assert client.get("/api/fleet/state", headers=machine).status_code == 200
+    manager = cookie(sessions)
+    sessions.create_account(manager, login="bob", principal_id="bob", role="viewer",
+                            password="temporary secret", grants=[
+                                {"resource": "site:test-site", "capabilities": ["accounts.manage"]}])
+    bob, _ = sessions.change_password(cookie(sessions, "bob", "temporary secret"), "permanent secret")
+    alice = sessions.account_context(manager)
+    sessions.update_account(bob, alice["account_id"], revision=alice["revision"], enabled=False)
+    assert client.get("/api/fleet/state", headers=human).status_code == 401
+    assert client.get("/api/fleet/state", headers=machine).status_code == 200
