@@ -81,8 +81,18 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.unroute('**/api/learning/storage')
                 page.locator('#storage-refresh').click()
                 expect(page.locator('#storage-roots')).to_contain_text('Incoming media')
+                delayed = []
+                snapshot = storage.snapshot()
+                page.route('**/api/learning/storage', lambda route: delayed.append(route))
+                with page.expect_request('**/api/learning/storage'):
+                    page.locator('#storage-refresh').click()
+                expect(page.locator('#storage-refresh')).to_be_disabled()
+                assert delayed
                 accounts.logout(session)
-                page.locator('#storage-refresh').click()
+                page.locator('#refresh').click()
+                expect(page.locator('#learning-status')).to_contain_text('확인할 수 없습니다')
+                delayed[0].fulfill(status=200, content_type='application/json', body=json.dumps(snapshot))
+                expect(page.locator('#storage-refresh')).to_be_enabled()
                 expect(page.locator('#storage-roots')).to_have_text('')
                 expect(page.locator('#storage-preflight')).to_be_hidden()
                 assert not errors
