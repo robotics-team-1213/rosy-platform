@@ -336,10 +336,6 @@ class MissionModelTurnStore:
         return self._transition(turn_id, expected="SUBMITTING", state="RESPONDED",
                                 clear_claim=True)
 
-    def mark_rejected(self, turn_id: str, *, reason_code: str) -> dict[str, Any] | None:
-        return self._transition(turn_id, expected="SUBMITTING", state="REJECTED",
-                                reason_code=reason_code, clear_claim=True)
-
     def release_preflight(self, turn_id: str, *, worker_id: str,
                           reason_code: str) -> dict[str, Any] | None:
         return self._transition(turn_id, expected="CLAIMED", state="PENDING",

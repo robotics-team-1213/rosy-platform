@@ -8,14 +8,13 @@ export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
 
 export function createWorkView({scope, call, el, channelRequestView}) {
-  const active = new URLSearchParams(location.search).get("view") === "work";
+  const query = new URLSearchParams(location.search), active = query.get("view") === "work";
+  // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
+  const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]}[query.get("show")];
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
   el("work-overview").hidden = !active;
   if (active) {
-    const link = document.querySelector('.doc-tabs a[href="/console?view=work"]');
-    link.closest("nav").querySelectorAll('[aria-current="page"]').forEach(item => item.removeAttribute("aria-current"));
-    link.setAttribute("aria-current", "page");
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
     el("work-context").hidden = false;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
@@ -92,14 +91,14 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     try {
       const result = await call("/api/fleet/work"); life.check();
       const previous = rows.find(row => workKey(row) === selected);
-      rows = result.rows;
-      channelRequestView.setSources(rows);
+      rows = shown ? result.rows.filter(row => shown.includes(row.status)) : result.rows;
+      channelRequestView.setSources(result.rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;
         el("work-evidence").textContent = "작업 상태가 갱신됐습니다. 작업을 다시 선택해 결과 근거를 확인하세요.";
       }
-      el("work-state").textContent = `${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
+      el("work-state").textContent = `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
       el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);

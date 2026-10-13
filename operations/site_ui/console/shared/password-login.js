@@ -202,12 +202,8 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   }
   if (standalone) bindForm();
   else {
-    const account = document.getElementById('fleet-account');
     part('logout').disabled = true;
     part('logout').setAttribute('reason', '계정 상태 확인 중');
-    account.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { account.open = false; account.querySelector('summary').focus(); }
-    });
     window.addEventListener('focus', async () => {
       try {
         const session = await cookieRequest('/api/fleet/auth/session');
@@ -245,7 +241,6 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         cookie = false; cookiePrincipal = cookieRole = null;
         try { localStorage.setItem('rosy.fleet.account.identity', ''); } catch {}
         host.hidden = true;
-        document.getElementById('fleet-account').open = false;
         onChange(false);
         link?.focus();
       } catch { errorText('로그아웃 결과 확인 불가 · 계정 메뉴에서 다시 확인하세요.'); }

@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
+- 2026-10-13 · 44aca95f3 · feat(pilot): 조각 11 원격 결과
+- 2026-10-13 · uncommitted · feat(pilot): Pilot 웹 앱 바의 이름표 (D-741 조각 11)
 - 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
 - 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
-- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
-- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선

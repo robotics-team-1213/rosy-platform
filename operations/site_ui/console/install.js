@@ -72,10 +72,6 @@ function markLocked(reason = "auth") {
   auth.role = null;
   peerPicker?.reset();
   showSignedOut({refused: reason === "auth"});
-  const pill = el("online-pill");
-  pill.textContent = "접속 전";
-  pill.setAttribute("status", "neutral");
-  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
   el("console-token").setAttribute("aria-invalid", "true");
   applyRole();
 }
@@ -302,12 +298,6 @@ async function refreshAuthorization(renewed = false) {
     if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
     loginForm.refresh(false);
     showSession(identity);
-    const pill = el("online-pill");
-    if (pill.dataset.locked === "true") {
-      delete pill.dataset.locked;
-      pill.textContent = "설치 준비 중";
-      pill.setAttribute("status", "neutral");
-    }
     applyRole();
     await Promise.allSettled([
       cameraPairing.refresh({ credentials: true }),
