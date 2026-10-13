@@ -158,13 +158,16 @@ class AccountLedger:
             _digest(value), row["account_id"], row["revision"], family))
         return value
 
-    def issue(self, login, remember, verified):
-        from fleet.server.password_session import StalePasswordCheck
+    def issue(self, login, remember, verified, replacing=None):
+        from fleet.server.password_session import StalePasswordCheck, _digest
         with self.db(write=True) as db:
             row = db.execute("SELECT * FROM rosy_accounts WHERE login=? AND enabled=1", (login,)).fetchone()
             if (row is None or verified is None or verified.account_id != row["account_id"]
                     or verified.password_fingerprint != self.credential_revision(row)):
                 raise StalePasswordCheck()
+            previous = self.session_row(db, _digest(replacing)) if replacing else None
+            if previous:
+                self.revoke_family(previous["session_family"], db=db)
             return self.insert_session(db, row, remember)
 
     def principal(self, value, allow_stale=False):
