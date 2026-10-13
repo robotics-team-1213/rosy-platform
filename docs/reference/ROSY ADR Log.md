@@ -755,6 +755,8 @@
 
 | D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
 
+| D-754 | 굽이 통과가 넘겨주는 목격은 지도가 가린다: `bend`의 `next_line_in_m`, 능력 `lane_bend_next_line` | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
