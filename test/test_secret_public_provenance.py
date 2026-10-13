@@ -19,7 +19,7 @@ def test_public_account_signature_vector_exception_is_exact():
     assert scan_text(path, changed)
     changed_field = text.replace('"token":', '"credential":')
     assert scan_text(path, changed_field)
-    assert scan_text(path, text + '\npassword="unexpected-live-credential-92817"')
+    assert scan_text(path, text + '\n' + 'password' + '=' + json.dumps('unexpected-live-credential-92817'))
 
 
 def test_reviewed_repository_inventory_has_no_stale_bindings():

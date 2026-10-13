@@ -1,6 +1,6 @@
-// D-540 2 — the one Rosy Fleet header. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar> markup
-// (test_fleet_header.py pins it) and drive it only through this module: role words, development badge,
-// connection count, clock, the settings fold and the one E-stop rule. Each page keeps its own session probe.
+// D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
+// markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
+// count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import {actionIcon} from "/common/ui.js";
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
 
@@ -8,33 +8,42 @@ export const SESSION_REASON = "접속이 필요합니다";
 const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
 const $ = id => document.getElementById(id);
 
-// Every Fleet document has one inbox entry; only the console owns its local unread state.
-function inboxButton() {
-  if ($("fleet-inbox")) return $("fleet-inbox");
-  const inbox = document.createElement("ui-button");
-  inbox.id = "fleet-inbox";
-  inbox.setAttribute("kind", "quiet");
-  inbox.setAttribute("type", "button");
-  inbox.setAttribute("aria-label", "알림 창");
-  inbox.setAttribute("data-ui-tooltip", "알림 창");
-  inbox.setAttribute("data-action-icon", "notification");
-  actionIcon(inbox, "notification");
-  $("topbar-extra").prepend(inbox);
-  inbox.addEventListener("click", () => {
-    const request = new CustomEvent("rosy:inbox", {cancelable: true});
-    if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
-  });
-  return inbox;
+// D-741 3 — 브라우저와 Fleet 사이의 연결. 답이 오면 실시간, LATE_MS 넘게 새 답이 없으면 지연,
+// 요청이 닿지 않았거나 서버가 5xx로 답하면 연결 끊김이다. 401·403은 서버가 답한 것이라 실시간이다.
+// 로봇과의 연결은 여기 것이 아니다. 그것은 관제 화면의 연결 수와 로봇 카드가 말한다.
+const LINK = {wait: ["연결 대기", "neutral"], live: ["실시간", "neutral"], late: ["지연", "warn"], down: ["연결 끊김", "crit"]};
+export const LATE_MS = 12000;  // 5초 조회 두 번을 놓치고 2초
+let answeredAt = null, linkFailed = false;
+export function linkState(now = Date.now()) {
+  if (linkFailed) return "down";
+  if (answeredAt === null) return "wait";
+  return now - answeredAt > LATE_MS ? "late" : "live";
+}
+function paintLink(now) {
+  const tag = $("link-state"), state = linkState(now);
+  if (tag.dataset.link === state) return;
+  tag.dataset.link = state;
+  tag.textContent = LINK[state][0];
+  tag.setAttribute("status", LINK[state][1]);
+}
+export function noteLink(error = null, now = Date.now()) {
+  if (error?.name === "AbortError") return;
+  linkFailed = Boolean(error) && !(typeof error.status === "number" && error.status < 500);
+  if (!linkFailed) answeredAt = now;
+  paintLink(now);
+}
+
+// The alerts button is static markup on every Fleet document; only the console owns the unread count.
+function openInbox() {
+  const request = new CustomEvent("rosy:inbox", {cancelable: true});
+  if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
 }
 export function showInboxCount(count) {
-  const inbox = inboxButton();
-  inbox.textContent = count ? String(count) : "";
+  const inbox = $("fleet-inbox"), unread = $("header-unread");
+  unread.textContent = count ? String(count) : "";
+  unread.hidden = !count;
   inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
   inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
-  const entry = $("topbar-more");
-  $("header-unread").textContent = String(count);
-  $("header-unread").hidden = !count;
-  actionIcon(inbox, "notification");
   inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
 }
 
@@ -80,16 +89,14 @@ export function setTopbarOpen(open) {
   $("topbar-extra").dataset.open = String(open);
 }
 export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
-  inboxButton();
+  listen($("fleet-inbox"), "click", openInbox);
   bindThemeCycle(listen);
   const entry = $("topbar-more");
   function summarize() {
-    const count = $("header-unread").textContent;
-    const messages = count === "—" ? "미확인 메시지 수는 관제에서 확인" : `미확인 메시지 ${count}개`;
     const development = $("development-badge").hidden ? "" : " · 개발 연결 모드";
-    const label = `상태 센터 · 로봇 연결 ${$("online-pill").textContent} · ${messages}${development}`;
+    const label = `계정과 접속 · ${$("user-role").textContent}${development}`;
     entry.setAttribute("aria-label", label);
-    entry.setAttribute("data-ui-tooltip", `${label} · 연결·권한·메시지 확인`);
+    entry.setAttribute("data-ui-tooltip", `${label} · 계정·화면 표시·토큰 접속`);
   }
   new MutationObserver(summarize).observe(entry, {subtree: true, childList: true,
     attributes: true, attributeFilter: ["hidden", "status"]});
@@ -124,7 +131,6 @@ export function showSession(identity) {
 // the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
 export function showSignedOut({fold = true, refused = true} = {}) {
   $('fleet-account').hidden = true;
-  $('fleet-account').open = false;
   $('fleet-login').hidden = false;
   const tag = $("user-role");
   tag.textContent = "인증 필요";
@@ -140,6 +146,7 @@ export function showSignedOut({fold = true, refused = true} = {}) {
 export function showFleet(fleet, robots = null) {
   $("fleet-name").textContent = fleet.name || "사이트";
   const pill = $("online-pill");
+  if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
   delete pill.dataset.locked;
   // A robot answering late (link "degraded") still counts as connected on the pill.
   const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
@@ -147,26 +154,23 @@ export function showFleet(fleet, robots = null) {
   pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
 }
 
-// Pages without their own state poll (설치·보정, 현장 지도, Cell) read the count every 5 s. A 401/403 leaves
-// the pill to the page's lock words; anything else says the server is missing.
+// Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
+// and the link word. They show no robot count.
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   async function read() {
-    try {
-      const state = await request("/api/fleet/state");
-      showFleet(state.fleet, state.robots);
-    } catch (error) {
-      if (error.name === "AbortError" || error.status === 401 || error.status === 403) return;
-      const pill = $("online-pill");
-      pill.textContent = "Fleet 서버 없음";
-      pill.setAttribute("status", "crit");
-    }
+    let state;
+    try { state = await request("/api/fleet/state"); } catch (error) { return noteLink(error); }
+    noteLink();
+    try { showFleet(state.fleet, state.robots); } catch { /* a paint error after an answer is not a lost link */ }
   }
   read();
   return interval(read, every);
 }
 
 export function tickClock() {
-  $("clock").textContent = new Date().toTimeString().slice(0, 8);
+  const now = Date.now();
+  $("clock").textContent = new Date(now).toTimeString().slice(0, 8);
+  paintLink(now);  // 답이 끊긴 채 시간이 가면 이 틱이 지연으로 바꾼다
 }
 
 export function stopNotice(message = "", state = "warning") {
