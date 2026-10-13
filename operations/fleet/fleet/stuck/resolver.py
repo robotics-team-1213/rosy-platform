@@ -215,7 +215,8 @@ class StuckResolver:
                 chain.retries[answer.stuck_id] = 1    # WAIT stops; resending it once is safe
                 chain.answered.discard(answer.stuck_id)
                 return None
-            reason = f"core:{code}" if answer.robot_id in self.autonomous_robots and code else answer.escalate
+            reason = (f"core:{code}" if answer.robot_id in self.autonomous_robots and code
+                      and not answer.escalate.startswith("realign_hold:") else answer.escalate)
             return self._escalate(chain, answer.robot_id, answer.stuck_id, reason)
         if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
             return None                               # late reply from an older chain
@@ -331,8 +332,8 @@ class StuckResolver:
         return None
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
-        if rid in self.autonomous_robots and not reason.startswith("human_class:") and reason not in (
-                "ai_manual", "no_resolver_token"):
+        if rid in self.autonomous_robots and not reason.startswith(("human_class:", "realign_hold:")) and (
+                reason not in ("ai_manual", "no_resolver_token")):   # D-622: a REALIGN hold goes to a human
             if chain.observing == reason:
                 return None
             chain.observing = reason
