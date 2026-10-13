@@ -108,10 +108,11 @@ class StuckRecoveryMixin:
                 half_width_m=c.body_half_width_m,rotation_radius_m=c.body_rotation_radius_m,
                 lidar_x_m=c.body_lidar_x_m,margin_m=c.obstacle_body_margin_m)
             horizon = min(c.obstacle_path_horizon_m, max(.15, c.recovery_back_m))
-            # Use immutable configured maxima: the live cap may have been lowered after
-            # the scan, but that cannot undo motion already performed since its source pose.
-            age_pad = c.max_linear * age + c.body_rotation_radius_m * c.max_angular * age
-            margin = c.obstacle_body_margin_m + c.derived_stop_gap_m(abs(linear))
+            # User decision 2026-10-13 (Gazebo lane lap): motion since the scan is taken as no
+            # faster than this candidate, and the body margin counts once (inside the stop gap).
+            # With the configured maxima and a second margin the lane 116 mm from a wall failed.
+            age_pad = abs(linear) * age + c.body_rotation_radius_m * abs(angular) * age
+            margin = c.derived_stop_gap_m(abs(linear))
             if abs(linear) <= 1e-6:
                 return body.rotation_reason(self._return_view, margin + age_pad) is None
             if body.unknown_blocks(self._return_view, reverse=linear < 0,
