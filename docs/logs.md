@@ -8276,5 +8276,6 @@ osy-d395-s1d\`.
 - 결정: 기존 wire·원본을 소급 변경하지 않고 단계별 구현한다.
 
 ## 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
-- 사용자 범위: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
-- 계획 문서이며 제품 구현·착지·push·배포·실계정 전환 증거가 아니다.
+- 변경: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
+- 증거: 기준 62fbb5a13d의 인증 131개 원격 통과와 현재 계약·표면 목록을 읽고 계획했다.
+- gate 변화: 없음. 계획 문서이며 제품 구현·착지·push·배포·실계정 전환 증거가 아니다.
