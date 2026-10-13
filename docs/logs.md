@@ -8224,3 +8224,9 @@ osy-d395-s1d\`.
 - 증거: 첫 착지 원격 검사 370 passed/1 NEW(`test_no_secrets_in_tracked_files`). 원인은 보고서 3/12행의 공개 Git revision 표기였다. 기존 scan_text로 수정 전 high-entropy-token 2건, 수정 후 보고서·계획 0건을 확인했다. 이 정적 확인은 원격 재검증을 대신하지 않는다.
 - gate 변화: 첫 착지는 중단되어 main 미반영. 수정 커밋 이후 `tools/land.py --tests auto` 전체 affected/known_failures 재검증으로 다시 착지한다.
 - 결정: 비밀정보 검사 완화 없이 공개 commit 출처만 분명히 표기한다.
+
+## 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 변경: root AGENTS의 Docker source 입력과 CORE/Fleet 화면 편집 안내, 정리 계획의 P0 실행 기록을 정정했다. 제품 Git 밖의 우산 README와 archive 최상위 현재 소스 안내를 고치고 관리 도구 `InitWorktrees`로 holder AGENTS/README를 설치했다.
+- 증거: source serving/설치 mapping을 확인했다. 우산 파일 전후 복사·hash·링크 검사는 X: 세션 `2026-10-13--124414--folder-guidance-p0--4bdefe`에 보존하며 제품 변경은 브랜치 `docs/folder-guidance-p0`의 committed HEAD에서 원격 검사 후 ff-only 착지한다.
+- gate 변화: 문서 변경만. 공유 main `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 확인 근거가 없어 HOLD로 보존한다. 계획의 P1/S1~S10/P2/P3는 PLANNED다.
+- 결정: 역사 ADR/로그/payload 내부 안내는 소급 수정하지 않는다. 산출물·worktree 이동/삭제와 장치 작업·push는 이번 범위가 아니다.
