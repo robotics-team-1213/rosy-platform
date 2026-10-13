@@ -734,6 +734,7 @@
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Proposed |
+| D-744 | 차로 호(D-520)의 원을 지도에 고정: `exit_segment.map_anchor`, 능력 `lane_arc_map_anchor` | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
