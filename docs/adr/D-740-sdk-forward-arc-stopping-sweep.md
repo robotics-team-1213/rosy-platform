@@ -60,7 +60,7 @@ Gazebo 한 바퀴 run56에서 굽이 통과가 `motion_unconfirmed`로 끝났다
 
 개정 2를 넣은 run58은 첫 바퀴 W3 굽이에서 다시 `motion_unconfirmed`로 끝났다. 기록은 두 틱이다. 첫 틱은 `snapshot_future`였고 다시 묻기로 넘어갔다. 0.077초 뒤 다음 틱에는 몸 스캔 뷰가 비어 있었다(`return_body_clear`, 뷰 없음). `observe_return_scan`은 출처 시각이 앞선 것보다 새롭지 않은 스캔이 오면 뷰를 비운다. 두 틱 모두 프로세스가 밀린 순간의 일이다.
 
-결정: 교차로 기동(접근, 회전, 전진, 재획득, 굽이 통과)에서 운동 증명이 거절되면 그 틱은 정지(`junction_motion_unconfirmed`, twist 0)하고 기동을 유지한다. 마지막으로 승인된 때부터(없으면 그 단계가 시작된 때부터) `UNCONFIRMED_HOLD_S` 0.5초를 넘겨 거절이 이어지면 전과 같이 `motion_unconfirmed`로 중단한다. 0.5초는 몸 스캔 뷰가 쓰일 수 있는 나이의 상한(`return_body_clear`의 `min(clearance_stale_s, 0.5)`)이다. 그보다 오래 증거가 돌아오지 않으면 근거를 잃은 것이다. 차선 복귀와 bridge는 이미 거절을 HOLD로 다룬다.
+결정: 교차로 기동(접근, 회전, 전진, 굽이 통과와 그 재획득)에서 운동 증명이 거절되면 그 틱은 정지(`junction_motion_unconfirmed`, twist 0)하고 기동을 유지한다. 처음 거절된 때부터 승인된 틱 없이 `min(clearance_stale_s, UNCONFIRMED_HOLD_S 0.5초)`를 넘겨 거절이 이어지면 전과 같이 `motion_unconfirmed`로 중단한다. 0.5초는 몸 스캔 뷰가 쓰일 수 있는 나이의 상한(`return_body_clear`의 `min(clearance_stale_s, 0.5)`)이다. 그보다 오래 증거가 돌아오지 않으면 근거를 잃은 것이다. 차선 복귀와 bridge는 이미 거절을 HOLD로 다룬다.
 
 바뀌지 않는 것: 근거가 아예 없을 때의 즉시 중단(`_maneuver_refusal`), D-422 몸 정지, 단계 시간 상한, 거절된 틱에 나가는 명령이 0이라는 점. D-507 부록 7항의 "근거 상실 중단"은 "0.5초 넘는 상실"로 읽는다.
 
