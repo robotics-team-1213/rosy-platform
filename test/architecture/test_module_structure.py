@@ -358,8 +358,18 @@ SIZE_VERDICTS = {
         "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/stuck": (
-        3317,
-        "accept: independently re-judged at 3317 on 2026-10-12 by pipeline_review for D-685: "
+        3488,
+        "accept: independently re-judged at 3488 on 2026-10-13 by critic for D-622: one new pure "
+        "rule-candidate file realign.py (157: opt-in recovery-area config, CORE PIVOT/KTURN sweep "
+        "geometry and R9 evidence selection; imports only the standard library and "
+        "core_common.robot_body) joins the existing rule owners beside lane_lost.py. pipeline.py, "
+        "loop.py and resolver.py add 27 lines of wiring, attempt count and an injectable wall clock "
+        "in existing owners. No policy-service, HTTP, journal, storage or transport owner and no "
+        "size unit is added; ai_facts.py, ai_routes.py, board.py and reports.py are unchanged, so "
+        "the ai_facts HTTP/journal separation is not triggered and remains owed. resolver.py is at "
+        "587 of the 600 file budget: its next growth extracts first. +150 and all separation "
+        "obligations unchanged. "
+        "Previously independently re-judged at 3317 on 2026-10-12 by pipeline_review for D-685: "
         "existing dispatch/readback and receipt owners add crash-consistent admission; no new "
         "policy, HTTP or journal owner or size unit. +150 and all separation obligations unchanged. "
         "Previously independently re-judged at 3163 on 2026-10-12 by pipeline_review for D-674: "
