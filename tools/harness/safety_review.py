@@ -41,6 +41,58 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "a1d29a9f994ef1db7822274c146a0f9727107722":  # git commit revision
+        "Independent /root/delivery_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Document-only parent links; CORE final authority and calibration boundaries remain. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "58d1295eb4f1c342371d5acc9924979182a1eaee":  # git commit revision
+        "Independent /root/delivery_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Selected-run identity, quiescence, live context, transport dispatch guard and CORE epoch fence remain. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "568cb207f4528b6bacc9f9372535bd31b11418c2":  # git commit revision
+        "Independent /root/delivery_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; At most two identical floor-policy probes on fresh caller clocks; second refusal, exceptions and body denial fail closed. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "b6590448ce7681816ce1146979794e0fe328b739":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Producer/snapshot/candidate evidence retains CORE final writer; requires rev1 and coverage followups. No standalone approval. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "d385f23953408b16ae60e4f6c6a8d2b95bf071d3":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Arc sweep retains ultrasonic/unknown-front blocks. Actual previous-command bound remains DEVICE HOLD. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "685f6e04a419778fa21dcece94dc2eacc8636e01":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Unknown other-front block applies when obstacle is true; rev1 device limits remain. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "a4b1181642ca4b3beba93eda5ee174257db379a1":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Separates beam coverage from pivot verdict; coverage after self-reflection removal remains DEVICE HOLD. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "d3883044fb1b05ad33fb82846e3c83d7bc404e2a":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; One snapshot replacement retry retains caller clock and final identity; a second replacement refuses. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "ce427feea5bf9004a6adf18cb356b815e90842c4":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Five safety files are byte-identical to first-parent files across holder relocation; inherited rev1 limits remain. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "600186c84cff7a021bf1f33d26ad7ef6fbb2b446":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Comment/docstring reduction; documentation-stripped AST equals parent in both files. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "7822df78518d134fae30bcec6f391fd67cc51620":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Adapter comment reduction; documentation-stripped AST equals parent. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "b775a01d7ce39b6d2127de51037c661a59b85881":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Standalone REJECT: observed_at substituted for caller clock. History-only exemption requires exact revert 806d82f8c present in reviewed candidate. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
+    "806d82f8cc5fadf167b465b57bebf6afdd98b8ee":  # git commit revision
+        "Independent /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: "
+        "candidate dbf2f51e4; Required exact revert: production and test bytes equal parent of rejected b775a01d7; no REQUEST_LEAD_S or observed_at policy-clock substitution remains. "
+        "See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no device or motion acceptance.",
     "d02a45c9ed426977960f33419aad1a13e281c0c0":  # git commit revision
         "Independent drive_review retrospective SOURCE review, 2026-10-13: history-only; "
         "sensor-only worker naming and explicit CORE clock retain the single final publisher. "
