@@ -31,8 +31,9 @@ def test_seat_spacing_roles_reference_the_base_scale():
 
 
 def test_control_line_and_chrome_surface_are_roles():
-    assert _decl("--line-40") == "color-mix(in oklab, var(--ink) 40%, transparent)"
-    assert _decl("--control-line") == "var(--line-40)"
+    assert _decl("--line-50") == "color-mix(in oklab, var(--ink) 50%, transparent)"
+    assert _decl("--line-40") is None, "잉크 40%는 밝게 테마에서 2.4:1이라 남기지 않는다"
+    assert _decl("--control-line") == "var(--line-50)"
     assert _decl("--surface-chrome") == "var(--ground-raise)"
     assert _decl("--border-default") == "var(--line-14)", "면을 가르는 선은 그대로 둔다"
 
