@@ -55,6 +55,9 @@ def check_bend(action, turn_deg, expect):
         raise ValueError('bend needs turn_deg (0 < |turn_deg| <= 90), map_id, bend_in_m (0, 2], '
                          'bend_tol_m (0, 0.30] and bend_radius_m (0, 0.5], and no window or pivot')
 
+#: D-507 note 9: from this turn the bend's own outer line and a line along the exit separate.
+OWN_LINE_MIN_TURN_RAD = math.radians(60.)
+
 
 def bend_path(x, y, yaw, line, radius, turn, tail):
     """Odom points every BEND_STEP_M: `line` straight on yaw, the arc of `radius` through `turn`
@@ -187,7 +190,7 @@ class JunctionBendMixin:
         from 60 deg, where the two separate; a shallower bend keeps the hand-over (review). Locked."""
         a, (x, y, yaw, travel) = self._junction_anchor, j['anchor']
         pose, turn = a['pose'], math.radians(j['turn_deg'])
-        if abs(turn) < 2*REACQUIRE_HEADING_RAD:
+        if abs(turn) < OWN_LINE_MIN_TURN_RAD:
             return False
         vertex = max(0., j['bend_in']-travel)+j['radius']*math.tan(abs(turn)/2)
         px = pose.x+a['ahead']*math.cos(pose.yaw)-x-vertex*math.cos(yaw)  # line point from the vertex
