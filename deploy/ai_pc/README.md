@@ -53,4 +53,4 @@ python3 deploy/hosts/common/rosy-host-state install ai --dry-run         # root 
 sudo python3 deploy/hosts/common/rosy-host-state install ai --approve sim
 ```
 
-`--approve sim`은 apt 패키지만 더한다. D-530의 다른 승인 줄(sshd, sudoers, 워치독)은 이 명령으로 바뀌지 않지만, 같은 명령이 `safe` 줄(새벽 재부팅 유닛 등)과 `report` 줄도 적용하므로 소유자가 `--dry-run` 출력을 먼저 확인한다. 실행은 4코어, 4 GB, `nice 10`의 사용자 scope 안에서만 돌고, D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 이 PC를 고르지 않는다. 소유자는 `touch ~/rosy-jobs/busy`로 언제든 막을 수 있다. 실행기는 자기 scope(`rosy-sim-*.scope`) 밖의 프로세스를 멈추지 않는다.
+`--approve sim`은 apt 패키지만 더한다. D-530의 다른 승인 줄(sshd, sudoers, 워치독)은 이 명령으로 바뀌지 않지만, 같은 명령이 `safe` 줄(새벽 재부팅 유닛 등)과 `report` 줄도 적용하므로 소유자가 `--dry-run` 출력을 먼저 확인한다. apt는 빠진 패키지만 `--no-upgrade --no-remove`로 설치하므로 이미 있는 패키지를 올리거나 지우지 않는다. CORE pip 의존성 설치, colcon 빌드, 벤치는 4코어, 4 GB, `nice 10`의 사용자 scope 안에서 돈다. 커밋 전송, 출력 가져오기, 정리는 scope 밖에서 `nice 15`와 idle I/O로 돈다. D-568의 `sim` 하한(잠금·예약을 뺀 여유 코어 6, 8 GB)에 못 미치거나 `~/rosy-jobs/busy`가 있으면 이 PC를 고르지 않는다. 소유자는 `touch ~/rosy-jobs/busy`로 언제든 막을 수 있다. 실행기는 자기 scope(`rosy-sim-*.scope`) 밖의 프로세스를 멈추지 않는다.

@@ -354,14 +354,30 @@ def test_apt_lines_wait_for_the_sim_approval_and_the_timer_only_reports(tmp_path
     _lib(tmp_path, "", "approval=sim apt pkg-a pkg-b\n", {})
     assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
     status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
-    assert status["awaiting_approval"] == ["apt packages missing: pkg-b"]
+    assert status["awaiting_approval"] == [
+        "apt packages missing: pkg-b (apt-get install -y -q --no-install-recommends --no-upgrade --no-remove)"]
     assert not [c for c in _calls(fake) if c.startswith("apt-get")]
 
     dry = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run").stdout
     assert "[approval=sim] apt packages missing:" in dry and "skip (needs --approve)" in dry
+    assert "--no-upgrade --no-remove" in dry  # the dry run states how it would install
+    (fake / "dpkg.out").write_text("ros-jazzy-xacro install ok installed\n")
     assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "sim").returncode == 0
-    assert any(c.startswith("apt-get install -y -q --no-install-recommends ros-jazzy-ros-gz")
-               for c in _calls(fake))
+    installs = [c for c in _calls(fake) if c.startswith("apt-get install")]
+    # Only missing names, after `--`; nothing installed is upgraded and nothing is removed.
+    assert len(installs) == 1 and installs[0].startswith(
+        "apt-get install -y -q --no-install-recommends --no-upgrade --no-remove -- ros-jazzy-ros-gz ")
+    assert "ros-jazzy-xacro" not in installs[0]
+
+
+def test_an_apt_line_without_an_approval_policy_is_refused(tmp_path):
+    """D-571: the timer (safe) and a plain install (report) must never reach apt-get."""
+    for policy in ("safe", "report"):
+        fake, bin_dir = _apt_fakes(tmp_path / policy, [])
+        _lib(tmp_path / policy, "", f"{policy} apt pkg-a\n", {})
+        result = _run(tmp_path / policy, bin_dir, fake, "check")
+        assert result.returncode != 0 and "apt needs an approval policy" in result.stderr
+        assert not [c for c in _calls(fake) if c.startswith("apt-get")]
 
 
 def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
@@ -373,3 +389,6 @@ def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
             assert not lines
         else:
             assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role
+    # The common manifest reaches every PC, the site PC included.
+    common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8").splitlines()
+    assert not [line for line in common if line.split("#", 1)[0].split()[1:2] == ["apt"]]

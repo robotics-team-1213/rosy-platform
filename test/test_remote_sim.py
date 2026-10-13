@@ -1,10 +1,13 @@
-"""tools/remote/remote_sim.py (D-571): sim candidates, D-568 placement, site PC excluded, job lock."""
+"""tools/remote/remote_sim.py (D-571): sim candidates, D-568 placement, site PC excluded, job lock, cleanup order."""
 
 from __future__ import annotations
 
+import io
+import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -82,20 +85,108 @@ def test_check_runs_nothing_and_a_run_without_a_host_fails(monkeypatch):
         rs.main(["swarm_bench"])
 
 
-def test_runs_are_capped_on_loopback_hold_a_job_lock_and_cleanup_touches_only_this_run():
+def test_runs_are_capped_on_loopback_hold_a_job_lock_and_clean_up_only_this_run():
     assert "MemoryMax=" in rs.SIM and "CPUQuota=" in rs.SIM and "nice -n 10" in rs.SIM
     assert "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST" in rs.SIM and "GZ_IP=127.0.0.1" in rs.SIM
-    # D-568 2: `<pid> sim <cores> <GB>` before exec, so the pid stays the run's.
+    assert "ROS_DOMAIN_ID=$((1 + RANDOM % 19))" in rs.SIM  # Linux-safe 0-101, clear of robots and other sims
+    # D-568 2: `<pid> sim <cores> <GB>`. The shell stays (no exec), so $$ is the lock's pid and its
+    # trap cleans up on the host even when the laptop is gone.
     lock = 'echo "$$ sim $CPUS ${MEM%G}" > ~/rosy-jobs/"$NAME".lock'
-    assert lock in rs.SIM and rs.SIM.index(lock) < rs.SIM.index("exec timeout")
-    assert '~/rosy-jobs/"$1".lock' in rp.CLEANUP
-    assert "docker" not in rs.SIM and "docker" not in rs.STOP
-    assert 'rosy-sim-$1.scope' in rs.STOP and "pkill" not in rs.STOP and "kill " not in rs.STOP
+    assert lock in rs.SIM and "exec " not in rs.SIM and rs.SIM.rstrip().endswith("wait $!")
+    assert rs.SIM.index("trap cleanup EXIT") < rs.SIM.index(lock)
+    assert 'systemctl --user stop "rosy-sim-$NAME.scope"' in rs.SIM and 'rm -f ~/rosy-jobs/"$NAME".lock' in rs.SIM
+    assert 'rosy-sim-$1.scope' in rs.STOP and '~/rosy-jobs/"$1".lock' in rp.CLEANUP
+    for script in (rs.SIM, rs.STOP, rs.DROP):
+        assert "docker" not in script and "pkill" not in script and "kill " not in script
+    # The pip deps and the build run inside the scope, the build with as many workers as the quota.
+    assert rs.DEPS in rs.INNER and "pip install" not in rs.SIM and '--parallel-workers "$CPUS"' in rs.INNER
     assert "headless:=true" in rs.BENCHES["swarm_bench"] and "gazebo_gui:=false" in rs.BENCHES["map_v2_runner"]
     assert set(rs.PROFILES) == {"model", "ai"} and rs.PROFILES["ai"]["cpus"] < rs.PROFILES["model"]["cpus"]
 
 
+def _fake_host(monkeypatch, fetch):
+    """run_sim against no host: records ship, the run and every remote script, in order."""
+    calls = []
+
+    def remote(host, script, *args, **kw):
+        calls.append(script)
+        return subprocess.CompletedProcess([], *(fetch if script is rs.FETCH else (0, b"", b"")))
+
+    monkeypatch.setattr(rp, "ship", lambda *a: calls.append("ship"))
+    monkeypatch.setattr(rp, "remote", remote)
+    monkeypatch.setattr(rs.subprocess, "run", lambda *a, **k: calls.append("run") or subprocess.CompletedProcess(
+        [], 7, "bench \U0001F600\n".encode()))
+    return calls
+
+
+def test_the_scope_stops_before_the_fetch_and_outputs_go_only_after_a_good_fetch(monkeypatch, tmp_path, capsys):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo("./launch.txt")
+        info.size = 2
+        tar.addfile(info, io.BytesIO(b"ok"))
+    calls = _fake_host(monkeypatch, (0, buf.getvalue(), b""))
+    assert rs.run_sim("m@1", "model", "true", [], "a" * 40, tmp_path, tmp_path / "log", 1) == 7
+    # No pick reservation: ship's reservation covers the window until the job lock (D-568 2).
+    assert calls == ["ship", "run", rs.STOP, rs.FETCH, rs.DROP, rp.CLEANUP]
+    assert (tmp_path / "log/out/launch.txt").read_text() == "ok"
+
+    calls = _fake_host(monkeypatch, (1, b"partial", b"tar: ./launch.txt: file changed as we read it"))
+    # A console that cannot encode the bench output must not stop the fetch.
+    real, sys.stdout = sys.stdout, io.TextIOWrapper(io.BytesIO(), encoding="cp949")
+    try:
+        assert rs.run_sim("m@1", "model", "true", [], "a" * 40, tmp_path, tmp_path / "log2", 1) == 7
+    finally:
+        sys.stdout = real
+    assert calls == ["ship", "run", rs.STOP, rs.FETCH, rp.CLEANUP]  # the outputs stay on the host
+    err = capsys.readouterr().err
+    assert "fetching outputs failed (exit 1)" in err and "file changed" in err and "kept on m@1" in err
+    assert not (tmp_path / "log2/out").exists()
+
+
+BASH = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None, reason="needs bash, flock")
+
+
+def _bash(script, **env):
+    return subprocess.run(["bash", "-c", script], env={**os.environ, **env}, capture_output=True, text=True,
+                          timeout=60)
+
+
+@BASH
+def test_swarm_bench_waits_for_robots_yaml_instead_of_dying_on_the_first_look(tmp_path):
+    """INNER runs benches under `set -eo pipefail`; a failed `ls | head` must not end the wait loop."""
+    script = ('set -eo pipefail\nros2() { echo "ros2 $*"; }; sleep() { :; }; seq() { echo 1 2 3; }\n'
+              + rs.BENCHES["swarm_bench"])
+    made = tmp_path / "tmp" / "rosy_gz_multi_x"
+    made.parent.mkdir()
+    env = {"OUT": str(tmp_path), "TMPDIR": str(made.parent)}
+    missing = _bash(script, **env)
+    assert missing.returncode == 1 and "no robots.yaml after 180 s" in missing.stdout
+    made.mkdir()
+    (made / "robots.yaml").write_text("")
+    found = _bash(script, **env)
+    assert found.returncode == 0 and f"swarm_bench.py --robots {made / 'robots.yaml'} " in found.stdout
+
+
+@BASH
+def test_a_failed_pip_install_is_never_stamped_ok(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    uv = bin_dir / "uv"
+    uv.write_text('#!/bin/sh\nwhile [ $# -gt 1 ]; do [ "$1" = --target ] && mkdir -p "$2"; shift; done\n'
+                  'exit "${UV_RC:-0}"\n')
+    uv.chmod(0o755)
+    deps = tmp_path / "deps" / "abc"
+    deps.parent.mkdir()
+    env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "PYDEPS": str(deps), "REQ": "req.txt"}
+    script = "set -eo pipefail\n" + rs.DEPS + "echo built\n"
+    failed = _bash(script, UV_RC="1", **env)
+    assert failed.returncode == 1 and "CORE pip deps failed" in failed.stdout and "built" not in failed.stdout
+    assert not deps.exists()
+    assert _bash(script, **env).stdout == "built\n" and (deps / ".ok").is_file()
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
-@pytest.mark.parametrize("name", ["INNER", "SIM", "FETCH", "STOP"])
+@pytest.mark.parametrize("name", ["DEPS", "INNER", "SIM", "FETCH", "STOP", "DROP"])
 def test_remote_scripts_parse(name):
     assert subprocess.run(["bash", "-n"], input=getattr(rs, name).encode()).returncode == 0
