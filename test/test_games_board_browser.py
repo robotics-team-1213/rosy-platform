@@ -80,9 +80,9 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     origin = server.url.rstrip('/').replace('http:', 'https:')
     callback = origin + '/api/account/callback'
     private = Ed25519PrivateKey.generate()
-    raw = private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+    raw = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                 serialization.NoEncryption())
-    public = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    public = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
     clock = [int(time.time())]
     state = {'active': True, 'operate': False, 'challenge': ''}
 
