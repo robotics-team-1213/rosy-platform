@@ -13,3 +13,9 @@
 로봇 local policy/receipt는 middleware/robot_execution, 현장 PlanBundle/progress는 operations/site_execution. Existing rosy.execution.local and rosy.execution imports/wheels remain unchanged. Source install, CI, Docker, test and current guide paths move together; immutable d427_target retained.
 
 파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S4-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S5
+
+로봇 Dashboard/Pilot/Face와 현장 Console/Cam holder를 robot_ui/site_ui로 구분했다. App/serving/import identity, assets and backend authority remain unchanged; packaging/deploy/source consumers use the new paths.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S5-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.

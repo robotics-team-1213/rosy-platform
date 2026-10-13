@@ -10,7 +10,7 @@ import yaml
 from core_api_web.api.ui_registry import load_registry
 
 REPO = Path(__file__).resolve().parents[4]
-WEB = REPO / "middleware" / "ui" / "robot"
+WEB = REPO / 'middleware' / 'robot_ui' / "robot"
 CAPABILITY_FILES = [
     *sorted((REPO / "deploy" / "robot" / "pinky_pro" / "config").glob("capabilities.*.yaml")),
     REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "capabilities.yaml",

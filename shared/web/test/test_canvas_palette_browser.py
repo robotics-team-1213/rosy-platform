@@ -23,8 +23,8 @@ pytestmark = pytest.mark.skipif(
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
-DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "ui" / "console"
+DASHBOARD = SRC.parent / 'middleware' / 'robot_ui' / "robot"
+FLEET = SRC.parent / 'operations' / 'site_ui' / "console"
 FLEET_ASSETS = run_path(str(SRC.parent / "operations/fleet/fleet/server/static_routes.py"))["CONSOLE_ASSETS"]
 HOST = "http://rosy.test"
 PALETTES = token_themes.palettes(token_themes.read())

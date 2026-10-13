@@ -5,8 +5,8 @@ contracts/foundation/core_common/calibration_store.py
 contracts/foundation/core_common/profile.py
 contracts/foundation/core_common/protocol/connect_reason.py
 contracts/foundation/core_common/protocol/schemas.py
-middleware/ui/face/emotion/info_screen.py
-middleware/ui/face/emotion/wifi_qr.py
+middleware/robot_ui/face/emotion/info_screen.py
+middleware/robot_ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
 middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
 middleware/core/api/core_api_web/api/app.py

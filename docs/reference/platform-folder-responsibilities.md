@@ -16,7 +16,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 
 | 집 | 이름 | 현재 경로 |
 |---|---|---|
-| 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/ui` |
+| 1 | CORE 창구 | `middleware/core/gateway`, `middleware/core/api`, `middleware/core/events`. 로봇 화면 원본은 `middleware/robot_ui` |
 | 2 | CORE 공통 | `middleware/core/services`. 명령·공통 Safety·전원. 장치 로컬 허용 동작은 `core_features.decision` |
 | 3 | Drive 동작 | `middleware/drive/behaviors/<동작 하나>`. 설치 이름은 `core_features.*` |
 | 4 | Drive 근거 | `middleware/drive/{safety,tracking,planning,recovery,calibration}` |
@@ -26,7 +26,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |
 | 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
 | 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
-| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/ui/{console,cam}`, `operations/apps`, `operations/vision` |
+| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/vision` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
 집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World의 `predicted`는 odom dead reckoning이다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
@@ -166,10 +166,10 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `middleware/robot_execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
 | `operations/site_execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
 | `operations/site_execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
-| `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
-| `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
-| `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
-| `middleware/ui/face` | ROS `emotion`; `emotion` | 유지 — robot face/display. 제어 정책과 구분 |
+| `middleware/robot_ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
+| `middleware/robot_ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
+| `middleware/robot_ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
+| `middleware/robot_ui/face` | ROS `emotion`; `emotion` | 유지 — robot face/display. 제어 정책과 구분 |
 | `operations/site_devices/dock` | dock contract·firmware 소스 | 유지 — 현장 dock 소유. robot docking manager의 직접 `/status` polling은 그대로 |
 | `operations/site_devices/dock/firmware` | dock MCU firmware | 유지 — limit-switch interlock·0 V boot. CORE/Arm Safety와 별도 현장 보호 대상 |
 | `operations/site_devices/signal` | signal contract·driver library | 유지 — Fleet 소비 signal 장치. Fleet가 sequence·command owner를 유지 |
@@ -178,14 +178,14 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose는 World, 순수 목표/진척 규칙은 execution 소비. D-657 `server/model_feedback_dispatch` 원장 어댑터와 admission·claim·dispatch·producer 인증·MapPoseService 조립·trip consumer는 Fleet 소유 |
 | `operations/fleet/fleet/incidents` | `fleet.incidents.handoff`, `fleet.incidents.notifications` | 분리 완료 — D-661 이름 있는 담당자의 사건 인수와 기존 Fleet DB의 알림 outbox·고정 채널 worker·receipt. 판단·resolver는 `fleet/stuck`, 인증·라우트·worker 생명주기는 `fleet/server`에 유지. 실제 운영 수용은 HOLD |
 | `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
-| `operations/ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
+| `operations/site_ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |
 | `operations/vision` | ROS `rosy_vision`; `rosy_vision` | 유지 — overhead vision worker·sighting evidence. Fleet pose consumer로 전달, cmd_vel 권한 없음 |
-| `operations/ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
+| `operations/site_ui/cam` | Android Cam 앱 | 유지 — camera/operator surface. vision·robot UI와 현재 책임 구분 |
 | `operations/apps/games` | ROS `games`; `games` | 유지 — overhead camera를 쓰는 game host. 범용 process/control backend가 아님 |
 | `learning/training/perception` | trainer Python CLI·library | 분리 완료 — 학습 job·trainer·COLAB docs. 인식 runtime은 middleware vision 소유 |
 | `learning/curation/perception` | dataset/review Python CLI·app | 분리 완료 — 기록·정답·dataset provenance·review source. 서명 closure와 source mismatch 거절 유지 |

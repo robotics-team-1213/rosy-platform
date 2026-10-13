@@ -379,27 +379,31 @@ roots:
     import_prefix: [rosy.execution.site]
     note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
-  - path: middleware/ui/robot
+  - path: middleware/robot_ui/robot
+    layout_target: middleware/robot_ui/robot
     part: middleware
     d427_target: middleware/ui/robot
     legacy: src/hmi/dashboard
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
-  - path: middleware/ui/pilot
+  - path: middleware/robot_ui/pilot
+    layout_target: middleware/robot_ui/pilot
     part: middleware
     d427_target: middleware/ui/pilot
     legacy: src/hmi/pilot
     wave: "4b"
     concern: other
-  - path: middleware/ui/pilot/android
+  - path: middleware/robot_ui/pilot/android
+    layout_target: middleware/robot_ui/pilot/android
     part: middleware
     d427_target: middleware/ui/pilot/android
     legacy: apps/pilot
     wave: "4b"
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
     concern: other
-  - path: middleware/ui/face
+  - path: middleware/robot_ui/face
+    layout_target: middleware/robot_ui/face
     part: middleware
     d427_target: middleware/ui/face
     legacy: src/hmi/face
@@ -475,7 +479,8 @@ roots:
     source_packages: {src/rosy/decision: rosy.decision}
     note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
-  - path: operations/ui/console
+  - path: operations/site_ui/console
+    layout_target: operations/site_ui/console
     part: operations
     d427_target: operations/ui/console
     legacy: src/site/fleet/fleet/server/web
@@ -529,7 +534,8 @@ roots:
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other
-  - path: operations/ui/cam
+  - path: operations/site_ui/cam
+    layout_target: operations/site_ui/cam
     part: operations
     d427_target: operations/ui/cam
     legacy: src/site/cam

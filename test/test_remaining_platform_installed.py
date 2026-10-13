@@ -38,18 +38,18 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     support.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
-    for relative in ('operations/fleet', 'operations/decision', 'operations/ui/console', 'operations/situation',
+    for relative in ('operations/fleet', 'operations/decision', 'operations/site_ui/console', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
                      'operations/site_execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/ui/console', 'operations/situation',
+        if relative not in ('operations/decision', 'operations/site_ui/console', 'operations/situation',
                             'integrations/messaging/discord'):
             sources.append(copied)
-    expected = {p.relative_to(ROOT / 'operations/ui/console').as_posix():
+    expected = {p.relative_to(ROOT / 'operations/site_ui/console').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in (ROOT / 'operations/ui/console').rglob('*')
+                for p in (ROOT / 'operations/site_ui/console').rglob('*')
                 if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
     assert len(expected) == 79  # D-680 request review, D-683/D-689 account assets, device-watch.js, device-watch.css, map-datum.js.
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
@@ -73,7 +73,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
-        shutil.rmtree(staging / 'operations/ui/console')
+        shutil.rmtree(staging / 'operations/site_ui/console')
         shutil.rmtree(staging / 'operations/situation')
         shutil.rmtree(staging / 'integrations/messaging/discord')
         shutil.rmtree(staging / 'tools')

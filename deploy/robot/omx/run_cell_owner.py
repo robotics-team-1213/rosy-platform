@@ -68,7 +68,7 @@ def main() -> None:
         pilot = PilotSimRuntime(runtime)
         holder["pilot"] = pilot
         return create_pilot_sim_app(
-            runtime=pilot, pilot_root=REPO / "middleware/ui/pilot",
+            runtime=pilot, pilot_root=REPO / "middleware/robot_ui/pilot",
             common_root=REPO / "shared/web", pairing_code=secrets.token_urlsafe(12))
 
     def gripper_readback(grant):
