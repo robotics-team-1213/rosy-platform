@@ -19,7 +19,7 @@ const bindings=[
 for(const [,keys,ids] of bindings)for(const id of ids){const el=document.getElementById(id);if(el)el.setAttribute('aria-keyshortcuts',keys);}
 for(const p of document.querySelectorAll('#object-keys p,#pixel-keys p'))p.append(' Ctrl+K 기능 검색 · R 최신 내용 · U 재검수 · E 승인 자료 준비 · 픽셀 Ctrl+S 초안 저장 · 객체 Insert 좌표 박스 추가.');
 
-let commands=[],closeCommands=null;
+let closeCommands=null;
 const disabled=el=>el.matches(':disabled,[disabled],[aria-disabled="true"]');
 function reachable(el){
   if(!el.isConnected||dialog.contains(el)||el===trigger)return false;
@@ -44,7 +44,7 @@ function inventory(){
     .sort((a,b)=>Number(!!a.el.closest('#frames,#pixel-frames'))-Number(!!b.el.closest('#frames,#pixel-frames')));
 }
 function execute({el}){
-  if(!reachable(el)||disabled(el)){commands=inventory();render();count.textContent='현재 실행할 수 없는 기능입니다. 상태와 비활성 이유를 확인하세요.';return;}
+  if(!reachable(el)||disabled(el)){render();count.textContent='현재 실행할 수 없는 기능입니다. 상태와 비활성 이유를 확인하세요.';return;}
   closeCommands?.('selected');
   for(let parent=el.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&parent.firstElementChild!==el)parent.open=true;
   if(el.matches('section'))el.tabIndex=-1;
@@ -52,7 +52,7 @@ function execute({el}){
   if(!el.matches('textarea,select,canvas,section,input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])'))el.click();
 }
 function render(){
-  const query=search.value.trim().toLocaleLowerCase(),rows=commands.filter(row=>row.label.toLocaleLowerCase().includes(query))
+  const query=search.value.trim().toLocaleLowerCase(),rows=inventory().filter(row=>row.label.toLocaleLowerCase().includes(query))
     .sort((a,b)=>Number(b.label.toLocaleLowerCase()===query)-Number(a.label.toLocaleLowerCase()===query));
   results.replaceChildren();count.textContent=`${rows.length}개 항목${rows.length>30?' · 처음 30개 표시, 검색어를 더 입력하세요.':''}`;
   for(const command of rows.slice(0,30)){
@@ -66,15 +66,15 @@ function render(){
 }
 function open(){
   if(dialog.open||document.querySelector('dialog[open]'))return;
-  commands=inventory();search.value='';render();
+  search.value='';render();
   closeCommands=openLiveDialog(dialog,{initialFocus:search,onClose:()=>{closeCommands=null;}});
 }
 trigger.onclick=open;search.oninput=render;
 dialog.addEventListener('keydown',event=>{
   event.stopPropagation();
   if(event.isComposing)return;
+  if(event.key==='Enter'&&event.target===search){event.preventDefault();render();results.querySelector('ui-button:not([disabled])')?.click();return;}
   const buttons=[...results.querySelectorAll('ui-button:not([disabled])')];
-  if(event.key==='Enter'&&event.target===search){event.preventDefault();buttons[0]?.click();}
   if(['ArrowDown','ArrowUp'].includes(event.key)&&buttons.length){
     event.preventDefault();const at=buttons.indexOf(document.activeElement),step=event.key==='ArrowDown'?1:-1;
     buttons[at<0?(step>0?0:buttons.length-1):(at+step+buttons.length)%buttons.length].focus();
