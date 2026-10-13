@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-14 · uncommitted · docs: D-757 Rosy Account 통합 신원과 자동 세션
 - 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
 - 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
 - 2026-10-14 · uncommitted · OMX native imitation preparation tools
-- 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
