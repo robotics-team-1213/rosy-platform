@@ -31,8 +31,8 @@ pixelResultNote.after($('pixel-quick-classes'));
 const pixelTools=document.querySelector('.pixel-quick-tools');
 const compactTools=matchMedia('(width < 64rem)');
 function placePixelTools(){
- if(compactTools.matches)$('pixel-quick-classes').after(pixelTools);
- else document.querySelector('.pixel-editor-column').append(pixelTools);
+ if(compactTools.matches){$('pixel-quick-classes').after(pixelTools);pixelTools.append(document.querySelector('.pixel-ribbon-nav'));}
+ else {document.querySelector('.pixel-editor-column').append(pixelTools);pixelTools.prepend(document.querySelector('.pixel-ribbon-nav'));}
 }
 compactTools.addEventListener('change',placePixelTools);
 placePixelTools();

@@ -53,6 +53,8 @@ def browser_workspace(tmp_path):
 @pytest.mark.parametrize('field,value,message', [
     ('x0', '12', '왼쪽 좌표'),
     ('y1', '0', '아래쪽 좌표'),
+    ('x1', '1', '오른쪽 좌표'),
+    ('y0', '14', '위쪽 좌표'),
     ('x0', '-1', '사진 범위'),
     ('x0', '', '숫자'),
 ])
@@ -64,6 +66,8 @@ def test_invalid_coordinate_explains_correction_without_saving(browser_workspace
     input_field.press('Tab')
     expect(page.locator('#error')).to_contain_text(message)
     expect(input_field).to_have_attribute('aria-invalid', 'true')
+    page.locator('#complete').check()
+    expect(page.locator('#approve')).to_be_disabled()
     assert store.get(0) == before
     input_field.fill(str(before['review']['boxes'][0]['bbox_xyxy'][['x0', 'y0', 'x1', 'y1'].index(field)]))
     input_field.press('Tab')
