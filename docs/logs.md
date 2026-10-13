@@ -8242,3 +8242,9 @@ osy-d395-s1d\`.
 - 증거: source 경계/reparse/tracked 상태, producer/process, exclusive-read open, 전체 source/destination hash·크기·파일 목록 안정성을 확인했다. source 부재와 CLI 조회 전후 동일성 PASS, 설치 `GRAPHIFY_OUT` X 경로 해석 PASS. 실제 bytes는 Git에 넣지 않는다.
 - gate 변화: P1 분류·확인된 Graphify 부분 이관. 나머지 15곳은 owner/참조 미확정 또는 overlay 범위로 HOLD다. user 요청에 따라 문서 commit/원격 gate/local main 착지는 이어서 실행하며 결과는 해당 X: landing 로그와 Git readback으로 확인한다.
 - 결정: `.omc`/lock/credential/overlay를 disposable cache로 확대 적용하지 않는다. source 이동·worktree 제거·push/배포/실물 수용은 미실행이다.
+
+## 2026-10-13 · 33d76482f · docs: verify and process P1 held artifacts
+- 변경: P1 HOLD 15곳의 추가 확인/처리 기록과 계획 상태를 갱신했다. Git 밖의 비활성 orphan pyc 1,715개, tool cache 76개, 시험 자료 56개를 X: 세션 `2026-10-13--154416--artifact-hold-review--8df57c`로 이관했다.
+- 증거: source 부재·비추적/reparse/producer/exclusive-open/전체 hash·크기 안정성을 확인했고, 1,847파일·42,508,179 bytes의 destination readback과 원본 부재 PASS다. 일반 orphan-cache import 거절은 X: 임시 자료의 assert로 확인했으며 bytecode 실행은 하지 않았다. Docker mount/WSL/협업 actor 이력/설치 소비자도 읽기 확인했다.
+- gate 변화: 8곳 정리/2곳 부분 정리/5곳 유지. metadata·자격 원문·참조 overlay는 보존했다. committed HEAD 원격 gate/known_failures/local main 착지는 사용자 요청에 따라 이어서 실행하고 X: landing 로그와 Git으로 확인한다.
+- 결정: credential 값·협업 본문을 공개 기록으로 복사하지 않는다. S1 및 worktree 제거·push/배포/실물 작업은 미실행이다.
