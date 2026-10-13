@@ -63,15 +63,18 @@ async function controlAction(action) {
     message('learning-error',readableError(error));
   } finally {setBusy(false);}
 }
-let polling=false;
+let polling=false, pendingReportRefresh=false;
 setInterval(async()=> {
   if(busy||polling||!workspace?.control)return;
   polling=true;
   try {
-    const wasActive=workspace.control.active;
+    const previous=workspace.control;
     workspace.control=await request('/api/learning/control');updateControls();
-    if(wasActive&&!workspace.control.active&&!document.querySelector('dialog[open]')
-       &&!$('connection-panel').open)await load();
+    if(workspace.control.available&&!workspace.control.active&&previous.version!==workspace.control.version)
+      pendingReportRefresh=true;
+    if(pendingReportRefresh&&!document.querySelector('dialog[open]')&&!$('connection-panel').open) {
+      await load();pendingReportRefresh=false;
+    }
   } catch(error) {
     if(workspace){workspace.control={available:false,error:readableError(error)};updateControls();}
   } finally {polling=false;}
@@ -98,7 +101,7 @@ function summary(item) {
   if(!reports.length) return {label:'파일 확인 필요',attention:true};
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
-  if(reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
+  if(item.path!==workspace.control?.out_path&&reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
   if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
   if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
