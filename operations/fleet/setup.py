@@ -32,7 +32,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'core_common>=0.0.2', 'rosy-world==0.1.1', 'rosy-execution==0.1.2', 'rosy-contracts-learning>=0.1.11'],
+    install_requires=['setuptools', 'core_common>=0.0.2', 'rosy-world==0.1.1', 'rosy-execution==0.1.2', 'rosy-contracts-learning>=0.1.12'],
     extras_require={'learning': []},
     zip_safe=True,
     maintainer='rosy',

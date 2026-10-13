@@ -18,6 +18,10 @@ def selection_receipt(assessment, action, *, source_sha256, config_sha256, mixed
     if isinstance(action, Answer):
         selection.update(kind='ANSWER', rule=action.rule, decision=action.decision, reason=action.escalate,
                          yield_m=action.yield_m, yield_turn_rad=action.yield_turn_rad)
+        if action.realign is not None:             # D-622: bind the manoeuvre body without copying its pose
+            from hashlib import sha256
+            selection['realign_sha256'] = sha256(json.dumps(
+                action.realign, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
         mixed = mixed or action.rule == 'ai'
     elif isinstance(action, Escalate):
         selection.update(kind='HOLD' if isinstance(action, Hold) else 'HANDOFF', reason=action.reason)
@@ -89,6 +93,9 @@ def candidate(resolver, now, row, stuck, rows, chain):
     if stuck.get("cause") in LOST_LIKE and resolver.at_crosswalk(rid):
         return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
     if rid in resolver.realign.robots:                # D-622: standalone REALIGN, CORE re-checks
+        held = chain.held.get(sid) or ""
+        if held.startswith("realign_hold:"):          # a held REALIGN is not reopened on the same stuck
+            return Answer(rid, sid, "WAIT", "R5", escalate=held)
         from fleet.stuck.realign import select
         realign, why = select(row, rows, resolver.realign, now=resolver._wall(),
                               attempt=chain.realign_attempts+1)
