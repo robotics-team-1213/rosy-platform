@@ -45,7 +45,7 @@ object RosyColors {
 
     /** Ink-alpha lines, derived from Paper exactly as tokens.css derives them: color-mix(in oklab, --ink a%, transparent). */
     val Line08 = Paper.copy(alpha = RosyMetrics.GaugeTrackAlpha) // derived: --gauge-track (ink 8%)
-    val Line14 = Paper.copy(alpha = RosyMetrics.Line14Alpha) // derived: --line-14 (= --surface-line, --field-line)
+    val Line14 = Paper.copy(alpha = RosyMetrics.Line14Alpha) // derived: --line-14 (= --surface-line). --field-line is --control-line (ink 50%) on the web since D-741.
 }
 
 /** Primary command is the brightest neutral, not a hue (tokens.css --button-primary-*). */

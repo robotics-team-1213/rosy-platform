@@ -301,7 +301,7 @@
   --button-irreversible-ink: var(--text-on-danger);
 
   --field-bg: var(--surface-canvas);
-  --field-line: var(--border-default);
+  --field-line: var(--control-line);
   --field-invalid: var(--status-crit);
 
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
