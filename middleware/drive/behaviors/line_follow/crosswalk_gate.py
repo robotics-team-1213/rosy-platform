@@ -409,12 +409,9 @@ class CrosswalkGate:
 
 
 def lane_edges(left, right, half: float = CORRIDOR_HALF_M, body_half: float = 0.0):
-    """Seen lane edges, no wider than a lane (D-573 개정 4). Two edges further apart than the lane
-    model are not the lane's (Gazebo lap 2026-10-14: the camera gave the wall bases 0.120 and 0.122 m
-    either side, A's edge lay on the wall and its returns held 'person' for good): the lane width is
-    kept about their middle. Raw edges only: uncertainty, drift and slope pads go on outside this.
-    The body that took the image stands in that lane, so the lane's middle is at most half - body_half
-    from the anchor (review: one misread far edge must not slide the lane off the body)."""
+    """Raw seen lane edges, no wider than a lane (D-573 개정 4: wall bases 0.120/0.122 m either side
+    were read as the edges and held 'person' for good). The width is kept about their middle, at most
+    half - body_half from the anchor: the body that took the image stands in that lane."""
     if left is not None and right is not None and left - right > 2 * half:
         reach = max(half - body_half, 0.0)
         middle = min(max((left + right) / 2, -reach), reach)
@@ -422,8 +419,7 @@ def lane_edges(left, right, half: float = CORRIDOR_HALF_M, body_half: float = 0.
     return left, right
 
 
-def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None,
-            body_half_m: float = 0.0) -> Zone:
+def zone_of(z: dict, range_error_fraction: float, along_default=None, body_half_m: float = 0.0) -> Zone:
     """A D-491 zone record with a resolved anchor as a Zone. Along the road the frame's crosswalk
     bound (D-573 6 개정), else along_default, else the lane's lateral bound (D-491 as before)."""
     a = z["anchor"]
