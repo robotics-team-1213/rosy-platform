@@ -29,6 +29,9 @@ from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, Motion
 GUARD_REVISION = "command-manager-b-v1"
 GUARD_LIFETIME_S = 0.3
 _BINDING_TOKEN = object()
+# A faulting motion gate would otherwise log at 50 Hz; same 5 s as the bridge's wheels_sent warning.
+GATE_FAULT_WARN_PERIOD_S = 5.0
+_gate_fault_warned_at = float("-inf")
 
 
 class PinkyTwistPort:
@@ -214,4 +217,7 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
         power.on_activity("cmd_vel")
     command.announce_pending()
     if gate_fault is not None and warn is not None:
-        warn(f"cmd_vel motion readiness failed: {gate_fault}")
+        global _gate_fault_warned_at
+        if time.monotonic() - _gate_fault_warned_at >= GATE_FAULT_WARN_PERIOD_S:
+            _gate_fault_warned_at = time.monotonic()
+            warn(f"cmd_vel motion readiness failed: {gate_fault}")

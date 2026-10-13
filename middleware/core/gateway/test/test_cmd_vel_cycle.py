@@ -16,7 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from core.bridge import cmd_vel as cmd_vel_module
 from core.bridge.cmd_vel import cmd_vel_cycle
+
+
+@pytest.fixture(autouse=True)
+def _fresh_gate_fault_throttle(monkeypatch):
+    monkeypatch.setattr(cmd_vel_module, "_gate_fault_warned_at", float("-inf"))
 
 
 @dataclass
@@ -164,6 +170,23 @@ def test_a_raising_motion_gate_sends_zero_and_keeps_the_cycle_alive():
     assert rec.sent == [(0.0, 0.0)]
     assert "announce" in rec.log
     assert warnings and "motion readiness" in warnings[0]
+
+
+def test_a_lasting_gate_fault_warns_once_per_period_and_still_sends_zero_every_cycle(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(cmd_vel_module.time, "monotonic", lambda: now[0])
+    warnings, rec = [], Recorder(Out(0.3, 0.0))
+
+    def boom():
+        raise RuntimeError("power gate fault")
+
+    for _ in range(50):                                   # one second at 50 Hz
+        cmd_vel_cycle(rec, rec, rec.send, None, warnings.append, motion_ready=boom)
+        now[0] += 0.02
+    assert rec.sent == [(0.0, 0.0)] * 50 and len(warnings) == 1
+    now[0] += cmd_vel_module.GATE_FAULT_WARN_PERIOD_S
+    cmd_vel_cycle(rec, rec, rec.send, None, warnings.append, motion_ready=boom)
+    assert len(warnings) == 2
 
 
 def test_a_gate_fault_is_reported_after_the_wheels_are_written():
