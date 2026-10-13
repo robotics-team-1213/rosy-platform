@@ -4,14 +4,14 @@
 
 | 단계 | local main에 포함된 commit |
 |---|---|
-| S3 | `8acaebe047493a5c5af7aa3bd3ccefcd52da4766` |
-| S4 | `57c99647dff3517c724371d64b909354606f319a` |
-| S5 | `575fa2466cc93b9aced696f39dff76d56d41a6de` |
-| S6 | `2134e03b64ff06e67fd2db83a64d8b50173d96ca` |
-| S7 | `2e96da6dddf5a4b15dbaeaf5f5dee7a447bd1b73` |
-| S8 | `5b5eb527c7e647adac9f58187394e80702f78c66` |
-| S9 | `cb827166368bccfdefa657bade4c56c82e8e3f19` |
-| S10 | `10581c1cea9e610cdda41b5ad43248b5ac573d89` |
+| S3 | `8acaebe047` |
+| S4 | `57c99647df` |
+| S5 | `575fa2466c` |
+| S6 | `2134e03b64` |
+| S7 | `2e96da6ddd` |
+| S8 | `5b5eb527c7` |
+| S9 | `cb82716636` |
+| S10 | `10581c1cea` |
 
 
 

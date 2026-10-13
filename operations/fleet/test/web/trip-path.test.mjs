@@ -5,7 +5,7 @@ import {
   oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip,
   tripErrorText, tripRefusalText,
   tripStartReason, tripPoseReason,
-} from '../../../ui/console/shared/site-map-model.js';
+} from '../../../site_ui/console/shared/site-map-model.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
 
