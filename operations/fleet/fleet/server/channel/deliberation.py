@@ -1,14 +1,8 @@
 """Durable, read-only model questions; the original operator receipt stays immutable."""
-from contextlib import closing
 from dataclasses import asdict
 import hashlib
-import json
-import math
 import re
-import sqlite3
-import time
 
-from fastapi import HTTPException
 from rosy.decision.deliberation import Problem, canonical, identifier
 
 

@@ -206,13 +206,22 @@ def test_zero_command_does_not_end_a_gap_and_a_valid_answer_does():
     assert safety.estop and safety.estop_source == 'control:policy_invalid'
 
 
-def test_backward_policy_clock_is_not_held():
+@pytest.mark.parametrize('samples', [(100., 99.), (100., 100.4, 100.3)])
+@pytest.mark.parametrize('provider_kind', ['late', 'unbound', 'missing'])
+def test_backward_policy_clock_is_not_held(samples, provider_kind):
     delay, clock = [.03], [100.]
-    command, safety, modes, _ = setup_hold(late(clock, delay), clock=clock)
-    assert ask(command, 10.) == Twist() and not safety.estop
-    clock[0] = 99.
-    assert ask(command, 10.1) == Twist()
-    assert safety.estop
+    def missing(request):
+        raise PolicyObservationUnavailable('snapshot missing')
+    provider = {'late': late(clock, delay), 'unbound': None, 'missing': missing}[provider_kind]
+    command, safety, modes, _ = setup_hold(provider, clock=clock)
+    for index, at in enumerate(samples[:-1]):
+        clock[0] = at
+        assert ask(command, 10. + index * .1) == Twist()
+        assert safety.policy_hold and not safety.estop
+    clock[0] = samples[-1]
+    assert ask(command, 10. + len(samples) * .1) == Twist()
+    assert safety.estop and not safety.policy_hold
+    assert modes.mode is Mode.EMERGENCY
 
 
 def test_backward_clock_above_gap_start_is_not_held():
