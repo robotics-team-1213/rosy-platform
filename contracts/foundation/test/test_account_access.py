@@ -17,7 +17,7 @@ def keys():
 
 def claims(**changes):
     return dict(iss='https://account.example.test', aud='robot:r1', sub='account-1',
-                sid='family-1', rev=1, iat=1000, exp=1300,
+                sid='family-1', jti='unique-access-id-1', rev=1, iat=1000, exp=1300,
                 grants=[{'resource': 'robot:r1', 'capabilities': ['robot.read']}], **changes)
 
 
