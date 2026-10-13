@@ -169,9 +169,7 @@ class CommandPolicy:
             current_sequence=self._sequence)
 
     def evaluate(self, linear, angular, now, *, allow_bounded_sweep=False):
-        """One decision on one snapshot. A snapshot replaced during the evaluation is judged once
-        more on the newer one (the sweep makes an evaluation longer than a producer period);
-        replaced again, the candidate is refused."""
+        """One decision on one snapshot; replaced mid-evaluation it is judged once more, then refused."""
         output = self._evaluate_once(linear, angular, now, allow_bounded_sweep)
         detail = getattr(self._evaluation, 'unavailable', None)
         if output is None and detail is not None and detail['reason'] == 'snapshot_changed':
@@ -205,9 +203,8 @@ class CommandPolicy:
             if (linear > 0. and angular != 0. and (result.linear, result.angular) != (linear, angular)
                     and (state.can_rotate is False or state.obstacle)
                     and isinstance(snapshot.forward, ForwardEvidence)):
-                # D-740: neither the pivot circle nor the straight front strip is the body path
-                # of a moving forward arc. Admit only the unchanged twist, only when nothing but
-                # those two LiDAR rules restricts it and its own stopping sweep clears this scan.
+                # D-740: a forward arc is judged by its own stopping sweep, not the pivot circle or the
+                # straight front strip; only the unchanged twist, only when nothing else restricts it.
                 admitted = evaluate_command(linear, angular, replace(
                     state, command_age=0., can_rotate=True,
                     obstacle=state.obstacle and snapshot.forward.front_blocked_other is not False))

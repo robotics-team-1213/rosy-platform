@@ -185,16 +185,11 @@ class ForwardEvidence:
     observed: bool
     body: object
     limits: tuple
-    #: A front block that is not the LiDAR strip (ultrasonic); None = unknown, kept as blocked.
-    front_blocked_other: bool | None = None
+    front_blocked_other: bool | None = None  # non-LiDAR front block (ultrasonic); None stays blocked
 
 
 def command_forward_arc_clear(evidence, linear, angular, now):
-    """D-740: this forward arc's swept body clears every scan point out to its stop.
-
-    Judged for this candidate only, when the pivot circle refuses the turn. Missing, invalid,
-    incomplete or stale evidence, a pivot or a reverse is False: the pivot rule stays.
-    """
+    """D-740: this forward arc's swept body clears the scan out to its stop; else the pivot rule stays."""
     def finite(value):
         return type(value) in (int, float) and math.isfinite(value)
     if (not isinstance(evidence, ForwardEvidence) or evidence.observed is not True or
@@ -204,15 +199,12 @@ def command_forward_arc_clear(evidence, linear, angular, now):
             linear <= 0. or angular == 0.):
         return False
     scan_age, source_age = now - evidence.scan_received_at, now - evidence.scan_source_at
-    # A negative age is a clock fault. The sweep itself accepts no scan older than 0.2 s.
     if not 0. <= scan_age <= .5 or not 0. <= source_age <= .5:
         return False
     from .footprint_sweep import forward_stopping_sweep_clearance
-    # The command before this one is taken as no faster than this candidate (D-740 rev 1).
-    clearance = forward_stopping_sweep_clearance(
-        evidence.points, body=evidence.body, linear=linear, angular=angular,
-        limits=evidence.limits, previous_limits=(linear, abs(angular)),
-        scan_age=scan_age, source_age=source_age)
+    clearance = forward_stopping_sweep_clearance(  # previous command taken as no faster (D-740 rev 1)
+        evidence.points, body=evidence.body, linear=linear, angular=angular, limits=evidence.limits,
+        previous_limits=(linear, abs(angular)), scan_age=scan_age, source_age=source_age)
     return clearance is not None and clearance > 0.
 
 
