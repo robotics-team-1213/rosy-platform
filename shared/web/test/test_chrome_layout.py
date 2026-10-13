@@ -1,4 +1,5 @@
-"""D-466 — the header has three slots and the procedure column has one track."""
+"""D-466 — the header has three slots and the procedure column has one track.
+D-741 6 — the Robot surface's screen switch and task list sit in the shared rail and sub-nav seats."""
 
 from pathlib import Path
 
@@ -16,7 +17,11 @@ def test_sidebar_track_is_the_procedure_column():
     assert "--sidebar-track: minmax(13rem, 18rem);" in tokens
     shell = SHELL.read_text(encoding="utf-8")
     fleet = FLEET.read_text(encoding="utf-8")
-    assert "grid-template-columns: var(--sidebar-track) minmax(0, 1fr);" in shell
+    # D-741 6: the Robot task list sits in the shared sub-nav seat, not in a column of its own.
+    assert "--sidebar-track" not in shell and "procedure-tasks" not in shell
+    robot = SHELL.parents[1]
+    assert '<div class="ui-subnav" hidden></div>' in (robot / "surface.html").read_text(encoding="utf-8")
+    assert "subnav.append(taskChooser.element);" in (robot / "shell" / "mount.js").read_text(encoding="utf-8")
     assert "grid-template-columns: var(--sidebar-track) minmax(0, 1fr);" in fleet
     assert "minmax(13rem, 18rem)" not in shell
     assert "minmax(12rem, .22fr)" not in fleet
@@ -26,7 +31,9 @@ def test_sidebar_track_is_the_procedure_column():
 def test_header_keeps_one_recipe_of_named_areas():
     shell = SHELL.read_text(encoding="utf-8")
     fleet = FLEET_HEADER.read_text(encoding="utf-8")
-    assert '"brand role estop" "nav nav estop"' in shell
+    # D-741 6: screen switching left the Robot header for the rail; the header is one row.
+    assert 'grid-template-areas: "brand role estop";' in shell
+    assert "grid-area: nav" not in shell and shell.count("grid-template-areas: \"brand") == 1
     # D-501/D-632: document links own their tab row; inbox and stop stay outside connection settings.
     assert '"identity status actions safety"' in fleet
     assert '"identity safety" "status actions"' in fleet

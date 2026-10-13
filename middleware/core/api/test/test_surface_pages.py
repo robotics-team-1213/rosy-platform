@@ -43,10 +43,10 @@ def test_each_surface_page_declares_its_grammar_and_slots():
     device = client.get("/device")
     assert device.status_code == 200
     assert 'data-surface="device"' in device.text
-    assert '<ui-shell grammar="procedure">' in device.text
+    assert '<ui-shell grammar="procedure" class="ui-app-shell">' in device.text
     assert re.findall(r'data-slot="([a-z_]+)"', device.text) == ["main"]
     console = client.get("/console").text
-    assert '<ui-shell grammar="spatial">' in console
+    assert '<ui-shell grammar="spatial" class="ui-app-shell">' in console
     assert re.findall(r'data-slot="([a-z_]+)"', console) == ["banner", "sense", "observe", "act"]
 
 

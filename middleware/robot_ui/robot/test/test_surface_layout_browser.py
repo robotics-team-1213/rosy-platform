@@ -26,57 +26,92 @@ def _page(browser, width: int, height: int):
         for path in (
             WEB_COMMON / "tokens.css",
             WEB_COMMON / "components.css",
+            WEB_COMMON / "app-shell.css",
             ROOT / "shell" / "shell.css",
             ROOT / "panels" / "surface-panels.css",
         )
     )
     page.set_content(
         f"""<!doctype html><html lang="ko"><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>{styles}</style></head>
-        <body data-surface="console"><ui-shell grammar="spatial">
+        <body data-surface="console"><ui-shell grammar="spatial" class="ui-app-shell">
           <ui-topbar><ui-brand><b>ROSY</b><small>운용</small></ui-brand>
-            <nav id="surface-switch" class="surface-switch"><a aria-current="page">운용</a><a>작업 준비</a><a>설치·정비</a></nav>
             <span data-spacer></span><ui-text id="shell-notice" scale="label"></ui-text>
             <ui-tag id="shell-role">administrator</ui-tag><ui-button kind="irreversible" id="shell-estop">비상 정지</ui-button>
           </ui-topbar>
-          <main class="surface-main" id="surface-main">
+          <div class="ui-app-body" data-seats="rail">
+          <div class="ui-rail"><nav id="surface-switch" class="ui-rail-nav">
+            <a class="ui-rail-item" aria-current="page" aria-label="운용"><span>운용</span></a>
+            <a class="ui-rail-item" aria-label="작업 준비"><span>준비</span></a>
+            <a class="ui-rail-item" aria-label="설치·정비"><span>설치</span></a></nav></div>
+          <div class="ui-subnav" hidden></div>
+          <main class="ui-app-main surface-main" id="surface-main">
             <ui-empty id="surface-status" hidden></ui-empty>
             <div class="surface-slot" data-slot="banner"></div>
             <div class="surface-slot" data-slot="sense"><ui-section style="min-height: 24rem">Sense</ui-section></div>
             <div class="surface-slot" data-slot="observe"><ui-section style="min-height: 30rem">Observe</ui-section></div>
             <div class="surface-slot" data-slot="act"><ui-section style="min-height: 32rem">Act</ui-section></div>
-          </main></ui-shell></body></html>""",
+          </main></div></ui-shell></body></html>""",
         wait_until="load",
     )
     return page
 
 
-def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
+@pytest.mark.parametrize("width,height", ((390, 844), (320, 568)))
+def test_mobile_topbar_is_one_row_above_the_navigation_rail(width, height):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        page = _page(browser, 390, 844)
+        page = _page(browser, width, height)
         result = page.evaluate("""() => {
           const rect = (selector) => {
-            const {x, y, right, bottom} = document.querySelector(selector).getBoundingClientRect();
-            return {x, y, right, bottom};
+            const {x, y, right, bottom, height} = document.querySelector(selector).getBoundingClientRect();
+            return {x, y, right, bottom, height};
           };
           return {
             overflow: document.documentElement.scrollWidth - innerWidth,
             brand: rect('ui-brand'), nav: rect('#surface-switch'), role: rect('#shell-role'),
-            estop: rect('#shell-estop'),
+            estop: rect('#shell-estop'), topbar: rect('ui-topbar'), rail: rect('.ui-rail'),
+            items: [...document.querySelectorAll('.ui-rail-item')].map(node => node.getBoundingClientRect().toJSON()),
+            current: getComputedStyle(document.querySelector('.ui-rail-item[aria-current=page]')).backgroundColor,
+            other: getComputedStyle(document.querySelector('.ui-rail-item:not([aria-current])')).backgroundColor,
           };
         }""")
         browser.close()
 
-    # D-359 §6.4 — 두 줄 머리: 이름·역할 / 화면 전환, 비상 정지는 두 줄 오른쪽에 걸친다.
+    # D-741 5·6 — 한 줄 머리(이름·역할·비상 정지) 아래에 화면 전환 레일이 가로 한 줄로 선다.
     assert result["overflow"] == 0
     assert result["estop"]["y"] <= result["brand"]["y"]
     assert result["brand"]["bottom"] <= result["estop"]["bottom"]
-    assert result["brand"]["bottom"] <= result["nav"]["y"]
-    assert result["role"]["bottom"] <= result["nav"]["y"]
     assert result["brand"]["right"] <= result["role"]["x"]
     assert result["role"]["right"] <= result["estop"]["x"]
-    assert result["nav"]["right"] <= result["estop"]["x"]
-    assert result["estop"]["right"] <= 390
+    assert result["estop"]["right"] <= width
+    assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
+    assert result["topbar"]["bottom"] <= result["nav"]["y"]
+    assert result["nav"]["right"] <= width
+    items = result["items"]
+    assert len(items) == 3 and max(item["y"] for item in items) - min(item["y"] for item in items) <= 1, items
+    assert all(left["right"] <= right["x"] for left, right in zip(items, items[1:])), items
+    assert all(item["height"] >= 48 for item in items), items
+    assert result["current"] != result["other"], "현재 화면 표식(D-277)이 보이지 않는다"
+    # D-359 §6.4 — 머리와 레일 줄을 더해도 창 높이의 20% 이하다.
+    assert result["topbar"]["height"] + result["rail"]["height"] <= 0.2 * height, result
+
+
+def test_desktop_navigation_is_a_rail_beside_the_three_columns():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1366, 768)
+        result = page.evaluate("""() => {
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {rail: rect('.ui-rail'), topbar: rect('ui-topbar'), sense: rect('[data-slot=sense]'),
+            items: [...document.querySelectorAll('.ui-rail-item')].map(node => node.getBoundingClientRect().toJSON())};
+        }""")
+        browser.close()
+
+    assert result["rail"]["x"] == 0 and abs(result["rail"]["width"] - 72) <= 1, result
+    assert result["rail"]["y"] >= result["topbar"]["bottom"] and abs(result["rail"]["bottom"] - 768) <= 1, result
+    assert result["rail"]["right"] <= result["sense"]["x"], result
+    items = result["items"]
+    assert len(items) == 3 and all(above["bottom"] <= below["y"] for above, below in zip(items, items[1:])), items
 
 
 def test_mobile_console_puts_navigation_before_controls_and_camera():
