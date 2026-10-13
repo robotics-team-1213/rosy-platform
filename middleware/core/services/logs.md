@@ -974,3 +974,9 @@
 - gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
 - 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
 
+
+## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
+
+- 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.
+- 증거: 단독 실행 ModuleNotFoundError 원인은 services conftest 에 gateway 경로가 없던 것. 단독·CI 모양 원격 실행 결과는 커밋 메시지 참조.
+- gate 변화: 없음. 테스트 경로 설정만 바뀐다. 제품 코드 무변경.
