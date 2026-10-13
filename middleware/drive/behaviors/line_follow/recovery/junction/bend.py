@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from core_features.line_follow.recovery.junction.approach import (
-    REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
+    CORRIDOR_HALF_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
 BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
@@ -54,6 +54,9 @@ def check_bend(action, turn_deg, expect):
             or any(e.get(k) is not None for k in ('expect_in_m', 'expect_tol_m', 'pivot_past_line_m'))):
         raise ValueError('bend needs turn_deg (0 < |turn_deg| <= 90), map_id, bend_in_m (0, 2], '
                          'bend_tol_m (0, 0.30] and bend_radius_m (0, 0.5], and no window or pivot')
+
+#: D-507 note 9: from this turn the bend's own outer line and a line along the exit separate.
+OWN_LINE_MIN_TURN_RAD = math.radians(60.)
 
 
 def bend_path(x, y, yaw, line, radius, turn, tail):
@@ -147,7 +150,8 @@ class JunctionBendMixin:
         """'bending' and the bend's 'reacquiring': pursue the path, bounded. Locked."""
         if j['state'] == 'reacquiring':
             seen = self._junction_seen_at is not None and self._junction_seen_at >= j['phase_at']
-            ahead = self._line_ahead(now, j['pass_at'])  # lap SIM A: sighted during the pass, not yet reached
+            # lap SIM A: sighted during the pass, not yet reached (and not the bend's own outer line)
+            ahead = self._line_ahead(now, j['pass_at']) and not self._bend_own_line(j)
             if self._reacquired(j, pose) or ((seen or ahead) and abs(
                     math.remainder(pose.yaw-j['target'], math.tau)) <= REACQUIRE_HEADING_RAD):
                 self._junction_done(keep_sighting=ahead)
@@ -173,11 +177,28 @@ class JunctionBendMixin:
             self._loss_started_at, self._lost_latched = None, False  # the pass owns the loss clock
             return self._junction_hold('junction_bend_blocked', decision)
         out = self._maneuver_twist(j, now, *twist, decision, 'junction_'+j['state'])
-        if j['state'] == 'aborted':
-            return out
+        if j['state'] == 'aborted' or j.get('refused_tick') == now:
+            return out  # held this tick: a second ask that passes must not confirm it (review)
         if not self.motion_admitted(now, *twist, 'bend', j['map_id']):
-            return self._abort(j, 'motion_unconfirmed', decision)
+            return self._unconfirmed(j, now, decision)
+        j.pop('refused_since', None)
         return out
+
+    def _bend_own_line(self, j):
+        """The anchored sighting's line point lies past the bend's vertex on the entry axis and no
+        further along the exit line than the lane's own outer line reaches there: the bend's own
+        outer line (Gazebo lap run53: 0.097 m past W2's vertex), not the next junction's. Only
+        from 60 deg, where the two separate; a shallower bend keeps the hand-over (review). Locked."""
+        a, (x, y, yaw, travel) = self._junction_anchor, j['anchor']
+        pose, turn = a['pose'], math.radians(j['turn_deg'])
+        if abs(turn) < OWN_LINE_MIN_TURN_RAD:
+            return False
+        vertex = max(0., j['bend_in']-travel)+j['radius']*math.tan(abs(turn)/2)
+        px = pose.x+a['ahead']*math.cos(pose.yaw)-x-vertex*math.cos(yaw)  # line point from the vertex
+        py = pose.y+a['ahead']*math.sin(pose.yaw)-y-vertex*math.sin(yaw)
+        past = px*math.cos(yaw)+py*math.sin(yaw)
+        out = px*math.cos(j['target'])+py*math.sin(j['target'])
+        return past > 0 and out <= CORRIDOR_HALF_M*(1+1/math.tan(abs(turn)))
 
     def _bend_blocked(self, now, twist):
         """The D-422 swept body gap of this twist is at or under its restart gap."""

@@ -251,7 +251,7 @@ def test_body_and_ir_consumers():
     for config, block in (("robot.yaml", "/**"), ("auto_calib.yaml", "/**/safety_node")):
         radius = _yaml(SENSING / "config" / config)[block]["ros__parameters"]["robot_radius"]
         assert radius == pytest.approx(circumradius, abs=1e-9), config
-    model = SENSING / "vision" / "perception" / "road_state_model.py"
+    model = SENSING / "front_camera" / "perception" / "road_state_model.py"
     assert _number(model, r"ir_x_m: float = ([0-9.]+)") == G["ir"]["mid"]["x_m"]
     node = SENSING / 'nodes' / 'road_state_node.py'
     assert _number(node, r"declare_parameter\('ir_half_span_m', ([0-9.]+)\)") == G["ir"]["half_span_m"]
