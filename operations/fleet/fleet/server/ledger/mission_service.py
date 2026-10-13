@@ -78,12 +78,6 @@ class MissionService:
     def next_dispatch(self, instances: Mapping[str, str], *, after_id: str) -> dict[str, Any] | None:
         return self.store.next_dispatch_mission(instances, after_id=after_id)
 
-    def next_running(self) -> dict[str, Any] | None:
-        return self.store.next_running_mission()
-
-    def next_reconciliation(self) -> dict[str, Any] | None:
-        return self.store.next_reconciliation_mission()
-
     def finish_reconciliation(self, mission_id: str, *, action_id: str,
                               attempt_id: str) -> dict[str, Any]:
         return self.store.finish_reconciliation(
