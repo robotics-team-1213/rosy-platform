@@ -8,6 +8,20 @@ import pytest
 from secret_scan import load_public_provenance, scan_files, scan_text
 
 
+def test_public_account_signature_vector_exception_is_exact():
+    root = Path(__file__).resolve().parents[1]
+    path = 'operations/site_ui/cam/app/src/test/resources/account-access-v1.json'
+    text = (root/path).read_text(encoding='utf-8')
+    fixture = json.loads(text)
+    assert scan_text(path, text) == []
+    assert scan_text('test/copied-account.json', text)
+    changed = text.replace(fixture['token'], fixture['token'][:-1] + 'A')
+    assert scan_text(path, changed)
+    changed_field = text.replace('"token":', '"credential":')
+    assert scan_text(path, changed_field)
+    assert scan_text(path, text + '\npassword="unexpected-live-credential-92817"')
+
+
 def test_reviewed_repository_inventory_has_no_stale_bindings():
     root = Path(__file__).resolve().parents[1]
     policy = load_public_provenance(root/'deploy/robot/pinky_pro/release/public_provenance.json')
