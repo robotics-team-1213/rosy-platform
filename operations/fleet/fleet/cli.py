@@ -101,6 +101,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
+    console.add_argument('--conversation-config-optional',default=None,type=Path,
+                         help='optional independently admitted natural conversation broker config')
+    console.add_argument('--deliberation-config-optional',default=None,type=Path,
+                         help='optional private D-720 fixed read-only status broker config')
+    discord = console.add_mutually_exclusive_group()
+    discord.add_argument("--discord-intake-config", default=None, type=Path,
+                         help="D-671 private named Discord intake configuration; absent disables intake")
+    discord.add_argument("--discord-intake-config-optional", default=None, type=Path,
+                         help="D-675 private intake configuration; missing file disables intake")
     console.add_argument("--stuck-resolver", action="store_true",
                          help="D-577 2: accepted for compatibility; the resolver is on by default")
     console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
@@ -646,6 +655,21 @@ def run_console(args: argparse.Namespace) -> None:
 
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
     notification_config = None
+    channel_config = None
+    if getattr(args, 'discord_intake_config', None) is not None:
+        from fleet.server.channel_requests import ChannelConfig
+        channel_config = ChannelConfig.load(args.discord_intake_config)
+    elif getattr(args, 'discord_intake_config_optional', None) is not None:
+        from fleet.server.channel_requests import ChannelConfig
+        channel_config = ChannelConfig.load(args.discord_intake_config_optional, optional=True)
+    model_config=None
+    conversation_config=None
+    if getattr(args,'conversation_config_optional',None) is not None:
+        from fleet.server.channel.conversation.runtime import ConversationConfig
+        conversation_config=ConversationConfig.load(args.conversation_config_optional,optional=True)
+    if getattr(args,'deliberation_config_optional',None) is not None:
+        from fleet.server.channel_model_runtime import BrokerConfig
+        model_config=BrokerConfig.load(args.deliberation_config_optional,optional=True)
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
@@ -671,6 +695,7 @@ def run_console(args: argparse.Namespace) -> None:
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
+                     autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
@@ -679,7 +704,9 @@ def run_console(args: argparse.Namespace) -> None:
                      traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
                      trip_lease=_trip_lease(args),
                      identity_config=identity_config,
-                     lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config)
+                     lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
+                     channel_config=channel_config,channel_model_config=model_config,
+                     conversation_config=conversation_config)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

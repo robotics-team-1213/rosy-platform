@@ -1,6 +1,7 @@
 """D-439 authentication entry uses real CORE assets without operational clients."""
 import importlib.util
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -103,6 +104,13 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
         assert stop_box['x'] >= role['x'] + role['width'] - 1
         assert stop_box['x'] + stop_box['width'] <= width
         assert page.evaluate('document.documentElement.scrollWidth-innerWidth') == 0
+        assert page.locator('#entry-role').evaluate("""node => {
+          const range = document.createRange(); range.selectNodeContents(node);
+          return new Set([...range.getClientRects()].map(rect => rect.top)).size <= 1;
+        }"""), "접속 권한은 한 줄로 읽혀야 합니다"
+        if shot_dir := os.environ.get("ROSY_SHOT_DIR"):
+            Path(shot_dir).mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(Path(shot_dir) / f"robot-dashboard-{width}.png"))
     stop = page.get_by_role('button', name='비상 정지', exact=True)
     expect(stop).to_be_enabled()
     stop.click()

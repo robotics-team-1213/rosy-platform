@@ -47,7 +47,7 @@ sys.path.insert(0, sys.argv[1])
 import importlib.metadata
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
-assert importlib.metadata.version('core_common') == '0.0.1'
+assert importlib.metadata.version('core_common') == '0.0.2'
 requirements = {canonicalize_name(requirement.name): requirement
                 for requirement in map(Requirement, importlib.metadata.requires('rosy-world'))}
 dependency = requirements['core-common']

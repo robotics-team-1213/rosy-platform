@@ -736,6 +736,14 @@ class ProposalStore:
                 ).fetchone()
         return self._row(row)
 
+    def get_in_transaction(self, connection, proposal_id: str) -> dict[str, Any] | None:
+        """Read current metadata without acquiring a second writer to purge expiry."""
+        row = connection.execute("SELECT * FROM fleet_proposals WHERE proposal_id=?",
+                                 (_text("proposal_id", proposal_id),)).fetchone()
+        if row is None or row['expires_at'] <= datetime.now(timezone.utc).isoformat():
+            return None
+        return self._row(row)
+
     def by_request(self, *, principal_id: str, request_key: str) -> dict[str, Any] | None:
         self.purge_expired()
         with closing(self._connect()) as connection:

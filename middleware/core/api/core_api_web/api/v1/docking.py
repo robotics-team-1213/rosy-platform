@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from pydantic import Field
+from uuid import UUID
 
 from core_api_web.api.v1.common import (
     admin, operator, localized_start, require_calibration_owner, viewer,
@@ -31,6 +33,7 @@ _DOCK_HTTP = {
     "MODE_CONFLICT": 409,
     "NO_ODOMETRY": 409,
     "NOT_LOCALIZED": 409,
+    "OWNER_GENERATION_CHANGED": 409,
 }
 
 
@@ -69,15 +72,26 @@ class DockRequest(BaseModel):
 
 class DockCommand(BaseModel):
     dock: str | None = None
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
+
+
+class UndockCommand(BaseModel):
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
 
 
 @docking_router.get("/status")
 def docking_status(_: AuthContext = Depends(viewer),
-                   svc: CoreServicesLike = Depends(get_services)):
+                   svc: CoreServicesLike = Depends(get_services),
+                   run_id: UUID | None = None):
     """상태 조회는 capability 로 막지 않는다 — 막으면 대시보드가 "도킹 없음"
     조차 표시할 수 없다."""
     body = svc.docking.status().model_dump()
     body["supported"] = svc.capability.supports("docking.supported")
+    body.update(svc.docking.native_readback(run_id))
     return body
 
 
@@ -150,27 +164,41 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
         # 매니저가 DOCKING 을 먼저 쥔다 (CoreServices.take_docking_mode). 못
         # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다. D-395 §2: LOCALIZED 에서만.
         with localized_start(svc):
-            svc.docking.dock(body.dock)
+            receipt = []
+            svc.docking.dock(body.dock, correlation_id=body.correlation_id,
+                             expected_boot_id=body.expected_boot_id,
+                             expected_owner_generation=body.expected_owner_generation,
+                             receipt_sink=receipt.append)
     except DockError as exc:
         raise _dock_error(exc)
-    return svc.docking.status().model_dump()
+    return {**svc.docking.status().model_dump(),
+            "operation": receipt[0].model_dump(mode="json")}
 
 
 @docking_router.post("/undock")
 def docking_undock(auth: AuthContext = Depends(operator),
-                   svc: CoreServicesLike = Depends(get_services)):
+                   svc: CoreServicesLike = Depends(get_services),
+                   body: UndockCommand | None = None):
+    body = body or UndockCommand()
     TaskKind.DOCK.require(svc.capability)
     require_calibration_owner(svc, auth, "undocking")
     try:
-        svc.docking.undock()
+        receipt = []
+        svc.docking.undock(correlation_id=body.correlation_id,
+                           expected_boot_id=body.expected_boot_id,
+                           expected_owner_generation=body.expected_owner_generation,
+                           receipt_sink=receipt.append)
     except DockError as exc:
         raise _dock_error(exc)
-    return svc.docking.status().model_dump()
+    return {**svc.docking.status().model_dump(),
+            "operation": receipt[0].model_dump(mode="json")}
 
 
 @docking_router.post("/cancel")
 def docking_cancel(auth: AuthContext = Depends(operator),
                    svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)
-    svc.docking.cancel()
-    return svc.docking.status().model_dump()
+    receipt = []
+    svc.docking.cancel(receipt_sink=receipt.append)
+    return {**svc.docking.status().model_dump(),
+            "operation": receipt[0].model_dump(mode="json") if receipt else None}
