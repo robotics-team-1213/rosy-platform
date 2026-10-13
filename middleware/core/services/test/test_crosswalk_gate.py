@@ -368,6 +368,22 @@ def test_the_track_wall_beside_the_lane_is_outside_the_look_area():
     assert go - stop_t <= 5.6
 
 
+def test_wall_bases_read_as_the_lane_edges_do_not_hold_an_empty_crosswalk():
+    """Gazebo lap 2026-10-14 (m3): the camera gave the wall bases 0.120 / 0.122 m either side as the
+    lane edges; A's edge lay on the wall, its returns hit one edge cell every scan and the persistence
+    rule answered person for good. The lane is no wider than its model, so the wall stays outside."""
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.121, 0.121)]
+    s.to_stop()
+    stop_t = s.t
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert go - stop_t <= 5.6
+    s = Sim(edges=(0.120, -0.122))                         # a person in the lane still stops it
+    s.objects = [(0.42, 0.05, 0.03)]
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
 def test_a_person_inside_the_seen_lane_corridor_still_stops():
     s = Sim(edges=(LANE_HALF, -LANE_HALF))
     s.objects = [(0.60, -0.07, 0.02)]           # beside the body path, on the lane
