@@ -223,6 +223,11 @@ owner/client 재검증 32개, Games 114개가 각각 원격 통과했다(중복 
 갱신→원장 회수→WS 15초 이내 종료, Fleet 관리자 UI, learning 계정·권한·장애 복구를
 검증했다. 기존 공유 학습 연결은 소유자의 재연결로 현재 중앙 승인 session에 결속한다.
 
+Native 최종 소스 `57243be29`는 Cam 431개, Pilot 107개 JVM 시험과 설정 포함 APK 빌드가 통과했다.
+APK 공개 설정과 정확한 HTTPS callback/autoVerify manifest를 읽어 확인했다. 검증 로그는
+X: `account-native--1143d2/logs`에 보관하며 원격 shell assets 4개도 통과했다.
+배포 설정 회귀 31개와 실제 Caddy 설정 검증은 통과했으나 서비스 reload는 하지 않았다.
+
 실계정 변경은 하지 않았다. 기존 계정 목록·사이트 TLS 이름·tailnet 이름을 읽기 전용으로
 확인했으며 실제 주소/계정/인증서는 공개 저장소에 기록하지 않는다. 기존 LAN 인증서는
 tailnet HTTPS 이름을 포함하지 않고 443 listener·Account 설정이 없으므로 설치 수용은
