@@ -932,7 +932,8 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         assert "NAVIGATING" not in offline.inner_text()
         assert "0.45" not in offline.inner_text()
         assert page.locator("#robot-workspace .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
-        offline.scroll_into_view_if_needed()
+        # The roster replaces its cards on every poll; scroll in one step so a re-render cannot detach the node mid-wait.
+        offline.evaluate("node => node.scrollIntoView({block: 'nearest'})")
         stop = page.locator("#estop").bounding_box()
         assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
