@@ -145,6 +145,29 @@ encryption_key_file(Fernet key 경로), session_db이며 운영 비밀을 기본
 resource는 해당 호스트의 실제 robot identity와 일치해야 한다. 설정이 없으면 기존
 명시적 local recovery를 유지하며, 설정이 잘못되면 시작을 거부한다.
 
+Pinky native systemd 배치는 보호된 receiver 설정·키를 `/etc/rosy/account`에 두고
+`rosy-core`만 읽게 한다. 세션 DB는 서비스 소유의 영속 경로
+`/var/lib/rosy/core/account.sqlite3`에 둔다. `auth.account_client_file`은 기본값이나
+모든 로봇에 같은 파일을 복사하지 않고 각 로봇의 실제 overlay에서 지정한다.
+개발용 Compose에서 같은 설정을 시험하면 설정 디렉터리를 CORE에만 읽기 전용으로
+mount한다. OMX·시뮬 CORE도 동일 설정 계약을 사용하되 각자의 robot resource를
+등록한다. 학습/Games는 별도 서비스 소유 DB·암호화 키를 사용한다.
+
+```json
+{
+  "issuer": "https://account.example.test",
+  "client_id": "robot-example",
+  "resource": "robot:example",
+  "callback": "https://robot.example.test/api/account/callback",
+  "public_key_files": {"key-1": "account-public.pem"},
+  "encryption_key_file": "session.key",
+  "session_db": "/var/lib/rosy/core/account.sqlite3"
+}
+```
+
+주소·resource·key ID는 설치 대상의 승인 값으로 바꾼다. 공개키와 Fernet 암호화 키는
+서로 다른 파일이다. 기존 세션 DB를 두고 암호화 키를 다시 만들지 않는다.
+
 Review 앱은 기존 collaboration 설정에 `account_client_file`과 `account_subjects`
 (중앙 account_id→기존 learning user_id)를 명시한다. 기존 connection 소유권은 유지하고
 최초 사용한 매핑은 원장에 고정하여 다른 사용자로 바꾸지 못한다. 권한은 해당
