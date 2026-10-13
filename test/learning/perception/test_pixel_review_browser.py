@@ -86,9 +86,11 @@ def test_keyboard_pixel_cursor_is_bounded_and_pan_never_paints(browser_workspace
     for _ in range(5):
         page.keyboard.press('Alt+Shift+ArrowRight'); page.keyboard.press('Alt+Shift+ArrowDown')
     expect(page.locator('#pixel-keyboard-position')).to_contain_text('31, 23')
+    before = page.locator('#pixel-draft').inner_text()
     page.keyboard.press('h')
     page.keyboard.press('Alt+ArrowLeft'); page.keyboard.press('Space')
-    expect(page.locator('#pixel-draft')).to_contain_text('먼저 픽셀 클래스')
+    expect(page.locator('#pixel-draft')).to_have_text(before)
+    expect(page.locator('#pixel-sample-apply')).to_be_disabled()
     assert review_masks.get(store, 0)['version'] == 0
 
 
