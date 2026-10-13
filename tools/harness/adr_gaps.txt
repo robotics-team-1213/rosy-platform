@@ -33,6 +33,5 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 
 
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
-D-744 Reserved by a concurrent local session; ADR not included in this branch as of S2
 D-745 Reserved by a concurrent local session; ADR not included in this branch as of S2
 D-746 Reserved by a concurrent local session; ADR not included in this branch as of S2
