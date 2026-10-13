@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from fleet.server.password_session import PasswordSessions, StalePasswordCheck
-from test_password_session import _accounts, _app, _client, _login, HASH, TYPED, ORIGIN
+from test_password_session import _accounts, _app, _client, _login, TYPED, ORIGIN
 
 
 def activated(tmp_path):
@@ -119,3 +119,47 @@ def test_account_api_cookie_origin_capability_and_strict_bodies(tmp_path):
                             json={"revision": row["revision"], "enabled": False})
     assert response.status_code == 200
     assert response.json()["enabled"] is False
+
+
+def test_family_context_and_logout_share_authority_transaction(tmp_path):
+    sessions = activated(tmp_path)
+    value = cookie(sessions)
+    family = sessions.account_context(value)["session_family"]
+    assert sessions.context_by_family(family)["login"] == "alice"
+    with sessions._ledger.db(write=True) as db:
+        assert sessions.context_by_family(family, db=db)["login"] == "alice"
+        sessions.revoke_family(family, db=db)
+    assert sessions.principal(value) is None
+    assert sessions.context_by_family(family) is None
+
+
+@pytest.mark.parametrize("grants", [
+    [{"resource": "robot:r1", "capabilities": ["accounts.manage"]}],
+    [{"resource": "site:s1", "capabilities": ["robot.operate"]}],
+    [{"resource": "project:p1", "capabilities": []}],
+    [{"resource": "project:*", "capabilities": ["learning.view"]}],
+])
+def test_grants_reject_capability_resource_mismatch(tmp_path, grants):
+    sessions = activated(tmp_path)
+    with pytest.raises(ValueError):
+        sessions.create_account(cookie(sessions), login="bob", principal_id="bob", role="viewer",
+                                password="temporary secret", grants=grants)
+
+
+def test_active_ledger_app_restarts_without_yaml(tmp_path):
+    app, _ = _app(tmp_path)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    restarted, _ = _app(tmp_path, logins={})
+    client = _client(restarted)
+    assert _login(client).status_code == 204
+    assert client.get("/api/fleet/auth/accounts", headers=ORIGIN).status_code == 200
+
+
+def test_account_api_rejects_non_string_role(tmp_path):
+    app, _ = _app(tmp_path)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    client = _client(app)
+    assert _login(client).status_code == 204
+    assert client.post("/api/fleet/auth/accounts", headers=ORIGIN,
+                       json={"login": "bob", "principal_id": "bob", "role": [],
+                             "password": "temporary secret", "grants": []}).status_code == 422
