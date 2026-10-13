@@ -60,6 +60,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
     async def guarded_goal(robot_id, *args, trip: bool = False, **kwargs):
         if not trip:
             refuse([robot_id])
+        else:  # D-550 10: the trip loop, not the console loop, renews a trip goal's lease
+            kwargs["lease_source"] = "trip"
         result = await goal(robot_id, *args, **kwargs)
         console.trip_goal_sent_at[robot_id] = clock()
         return result
@@ -94,6 +96,7 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
 
     async def guarded_estop_all(*args, **kwargs):
         closed = runner.close_all("operator_estop")  # D-517 1: no trip step sends after this line
+        runner.traffic.signals_all_red()  # D-525 4: virtual signals go all red with the E-stop
         try:
             return await estop_all(*args, **kwargs)
         finally:
@@ -109,6 +112,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
 
 def engaged(console, robot_id: str, *, clock=time.monotonic) -> Optional[str]:
     """Why the robot already moves for someone else, or None (a trip start refuses then)."""
+    if robot_id in console.goal_leases.pending or robot_id in console._goal_busy:
+        return "goal_pending"
     if robot_id in console._goals:
         sent_at = getattr(console, "trip_goal_sent_at", {}).get(robot_id)
         navigating = (console._seen.get(robot_id) or {}).get("navigation") == "NAVIGATING"

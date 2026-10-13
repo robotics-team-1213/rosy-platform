@@ -1,6 +1,4 @@
-"""core_common.protocol.schemas — Fleet 프로토콜 envelope/이벤트 스키마 (P1-19, ADR-D-10).
-
-계약 원천: ROSY-API-REF-001 §6~§9.
+"""Fleet protocol schemas and canonical read exports (ROSY-API-REF-001, D-10, D-664).
 - Envelope: 모든 Fleet↔Robot WS 메시지 공통 포장 (API Ref §7.1)
 - HelloPayload / WelcomePayload: 핸드셰이크 (API Ref §7.2)
 - HeartbeatPayload: 1 Hz 상태 전송 (API Ref §7.3)
@@ -13,6 +11,13 @@ additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노
 
 from __future__ import annotations
 
+from .channel_requests import (  # noqa: F401
+    DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
+    ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
+    ChannelWorkPrepareRequest, ChannelMissionPrepareRequest, ChannelCellPrepareRequest, ChannelWorkAdmitRequest,
+    ChannelIncidentReference, ChannelIncidentClaimRequest,
+)
+
 import enum
 import json
 import math
@@ -21,11 +26,17 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
-from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.docking import DockState, DockingStatus  # noqa: F401
+from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
+from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
+from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
+from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
+from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
-
+from core_common.protocol.route_context import RouteContext
+from core_common.protocol.line_crosswalk import LineCrosswalkStatus  # noqa: F401 (D-573 6)
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus, OdomPose
@@ -33,23 +44,16 @@ from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
+from core_common.protocol.line_arc import LineArcIrCorrection, LineArcStatus  # noqa: F401
+from core_common.protocol.trip_lease import TripLeaseFields  # D-541 1: trip_lease, trip_lease_ended
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
+from core_common.protocol.site_survey import SurveyReference, RoadEvidence, FacilityApproach, SiteFacility  # noqa: F401
 # PowerHealthResponse lives in protocol.power_health and references these shared types.
 # Import that response from its module to avoid a schema import cycle.
 
 PROTOCOL_VERSION = "1.0"
-
-
-class HostStatusEvidence(BaseModel):
-    """CORE judgment of one Host Agent network or release status sample."""
-
-    evidence: EvidenceState = EvidenceState.UNAVAILABLE
-    observed_at: str | None = None
-    age_s: float | None = None
-    stale_after_s: float = 15.0
-    reason: str = ""
 
 
 def utc_now_iso() -> str:
@@ -895,33 +899,11 @@ class BatteryStatus(BaseModel):
     shutdown_armed: bool = False
     filtered_voltage: Optional[float] = None
     charging: bool = False      # 확인된 충전 — DEEP 셧다운을 억제한다 (D-27)
+    shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
-class DockState(str, enum.Enum):
-    """도킹 상태 (DNC-003).
-
-    계약이 명시한 DOCK/UNDOCK/CHARGING/DOCKED/DOCK_FAILED 을 다듬은 것이다.
-    계약에는 "도크에 있지 않다"는 상태가 없는데 로봇은 대부분의 시간을 거기서
-    보내고, 도킹이라는 *행위* 와 그 *결과* 가 한 이름에 섞여 있었다.
-    enum 값 추가는 additive 이므로 문서의 MINOR 로 기록된다(PRT-006).
-    """
-
-    UNDOCKED = "UNDOCKED"        # 기본 — 도크에 있지 않고 가는 중도 아니다
-    DOCKING = "DOCKING"          # 시퀀스 진행 중 (스테이징 주행 포함)
-    DOCKED = "DOCKED"            # 접점은 물렸으나 충전은 미확인
-    CHARGING = "CHARGING"        # 도크가 전류를 보고하고 전압이 떨어지지 않는다
-    UNDOCKING = "UNDOCKING"      # 오도메트리만으로 후진 중
-    DOCK_FAILED = "DOCK_FAILED"  # 재시도를 소진했다. 명령 전까지 종착이다
 
 
-class DockingStatus(BaseModel):
-    """상태 스냅샷 additive 필드 (DNC-002)."""
-
-    state: DockState = DockState.UNDOCKED
-    dock_id: Optional[str] = None
-    phase: Optional[str] = None      # DOCKING 중의 내부 단계
-    retries: int = 0
-    error: Optional[str] = None
 
 
 class SafetySummary(BaseModel):
@@ -959,38 +941,12 @@ class PowerStatus(BaseModel):
 
 # --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
 
-class SwarmRole(str, enum.Enum):
-    NONE = "none"
-    LEADER = "leader"
-    FOLLOWER = "follower"
 
 
-class SwarmStatus(BaseModel):
-    """상태 스냅샷 additive 필드 (SWM-006)."""
-
-    role: SwarmRole = SwarmRole.NONE
-    formation: Optional[str] = None
-    active: bool = False
 
 
-class SwarmReferenceSource(str, enum.Enum):
-    """D-21 분산 진화 훅: 참조 pose 스트림 소스 (SWM-007)."""
-
-    FLEET = "fleet"  # 기본 — Fleet 릴레이 (API Ref §7.8)
-    PEER = "peer"    # 예약 — 로봇 간 P2P (재검토 트리거 발생 시 구현)
 
 
-class SwarmFollowParams(BaseModel):
-    """POST /api/v1/swarm/follow payload (SWM-002)."""
-
-    target_robot_id: str
-    distance: float = 0.5          # 종방향 유지 거리 (m)
-    lateral: float = 0.0           # 측방 오프셋 (m)
-    max_speed: float = 0.15        # m/s (SAF-004 상한과 별개 추가 제약)
-    stream_timeout_ms: int = 1000  # pose 스트림 단절 판정 (SWM-004)
-    source: SwarmReferenceSource = SwarmReferenceSource.FLEET  # v1.2 additive
-    #: v1 additive. 대형 멤버를 robots.yaml 순서로. 비어 있으면 승계를 하지 않는다.
-    members: list[str] = Field(default_factory=list)
 
 
 class PoseSample(BaseModel):
@@ -1001,21 +957,32 @@ class PoseSample(BaseModel):
     seq: int
     #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
     map_id: Optional[str] = None
+    frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
+    #: D-581 additive. "fleet": Fleet re-expressed the leader in `for_robot_id`'s own odom frame
+    #: from ceiling-camera anchors (frame "odom"); only that follower's trail accepts it.
+    anchor: Optional[Literal["fleet"]] = None
+    for_robot_id: Optional[str] = None
+    anchor_age_s: Optional[float] = None  # oldest of the two camera anchors behind this sample
+    anchor_hold: Optional[str] = None  # set: Fleet has no usable anchor (why); hold, keep the stream
 
 
 class LineStuckStatus(BaseModel):
     """D-407 open lane stuck: the console answers it by ``stuck_id``."""
 
     stuck_id: str
-    cause: str                            # obstacle_ahead | lane_lost
+    cause: str  # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4) | no_motion | no_progress | dithering (D-607)
     phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
     held_s: float = 0.0
     attempts: int = 0
     max_attempts: int = 0
     local_enabled: bool = False
+    conditional_back: bool = False  # D-718: absent on old CORE; no conditional POST admission
     ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
     last_answer: Optional[str] = None
     decisions: list[str] = Field(default_factory=list)
+    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; else the (last) HOLD reason
+    detail: Optional[str] = None
+    inquiry: Optional[dict] = None  # D-623 current typed situation context; not execution permission
 
 
 class LineJunctionStatus(BaseModel):
@@ -1027,7 +994,9 @@ class LineJunctionStatus(BaseModel):
     seq: int = 0
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
-    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point
+    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
+    signal_request_id: Optional[str] = None  # D-620: one stopped junction episode
+    signal_state: Optional[str] = None       # waiting | red | unknown | green | fallback | entered
 
 
 class LineFollowStatus(BaseModel):
@@ -1053,6 +1022,28 @@ class LineFollowStatus(BaseModel):
     # following as recovery off). None when D-468 is not tracking or not configured.
     lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
+    arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
+    route_context: Optional[RouteContext] = None
+    route_context_published_at_s: Optional[float] = None
+    lane_cue: Optional[dict] = None  # D-511 rev 1: the unexpired Fleet lane cue (LaneCueRequest)
+    # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
+    crosswalk: Optional[LineCrosswalkStatus] = None
+    crosswalk_reported: bool = Field(default=False, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _crosswalk_key_means_reported(cls, data):
+        # Only the key says "reported" (hub copy, D-555); a bare flag is not null=outside (D-577 R3).
+        if isinstance(data, dict):
+            data = {**data, "crosswalk_reported": "crosswalk" in data}
+        return data
+
+    @model_serializer(mode="wrap")
+    def _omit_unreported_crosswalk(self, handler):
+        data = handler(self)
+        if not self.crosswalk_reported:
+            data.pop("crosswalk", None)
+        return data
 
 
 class TrafficPolicyStatus(BaseModel):
@@ -1163,7 +1154,7 @@ class SafetyPolicyStatus(BaseModel):
     shadow: Optional[SafetyShadowStatus] = None
 
 
-class StateSnapshot(BaseModel):
+class StateSnapshot(TripLeaseFields):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
     robot_id: str
@@ -1198,8 +1189,19 @@ class StateSnapshot(BaseModel):
     odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
 
 
+class JunctionSignalAnswer(BaseModel):
+    """D-620: a paired Fleet answer, correlated to the stopped junction episode."""
+
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    lamp: Literal["green", "red", "unknown"]
+    may_enter: bool = Field(strict=True)
+    reason: str = Field(max_length=96)
+
+
 class HeartbeatPayload(BaseModel):
     state_snapshot: StateSnapshot
+    junction_signal_request: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{32}$")
 
 
 # --- 이벤트 (EVT-001, API Ref §8 이벤트 카탈로그) ---------------------------

@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · uiux(robot): Host Agent 차단 시 네트워크 입력 잠금
-- 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
-- 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
-- 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
-- 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+- 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
+- 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)

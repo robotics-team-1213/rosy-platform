@@ -79,10 +79,16 @@ OPERATOR_LANE_MODES = ("line", "between", "lane", "edge_left", "centre", "keep")
 OPERATOR_GROUND_SOURCES = ("PINKY", "NOMINAL")
 #: D-397 operator layer, same physical range as calibration_store.check_values camera_profile.
 OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
-                   "camera_height_m_override": (0.02, 0.2)}
+                   "camera_height_m_override": (0.02, 0.2),
+                   "camera_pitch_uncertainty_rad_override": (0.0, 0.05),
+                   "camera_height_uncertainty_m_override": (0.0, 0.02)}
+#: Same values as paint_worker.TARGETS (kept literal: this module must import without numpy/cv2).
+LEARNED_PAINT_TARGETS = ("lane_marking", "drivable")
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
                            "nominal_camera_profile_path", "debug_overlay", "paint_source",
-                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads")
+                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads",
+                           "learned_paint_motion_compensation", "learned_paint_target",
+                           "learned_paint_floor_gate", "crosswalk_uncertainty_enabled")
                           + tuple(OPERATOR_RANGES))
 
 
@@ -99,7 +105,8 @@ def operator_overlay_problem(data) -> Optional[str]:
     if ("camera_ground_source" in params
             and params["camera_ground_source"] not in OPERATOR_GROUND_SOURCES):
         return f"camera_ground_source must be one of {list(OPERATOR_GROUND_SOURCES)}"
-    for key in ("allow_nominal_ground", "debug_overlay"):
+    for key in ("allow_nominal_ground", "debug_overlay", "learned_paint_motion_compensation",
+                "learned_paint_floor_gate", "crosswalk_uncertainty_enabled"):
         if key in params and type(params[key]) is not bool:
             return f"{key} must be true or false"
     if "nominal_camera_profile_path" in params:
@@ -123,17 +130,22 @@ def operator_overlay_problem(data) -> Optional[str]:
             return "paint_source must be threshold, denoise or learned"
         if params["paint_source"] != "threshold" and params.get("camera_lane_mode") != "keep":
             return "denoise/learned paint requires camera_lane_mode: keep"
+    # D-597: inert unless paint_source is learned, so a later switch back to threshold
+    # (Host Agent lane_perception.set keeps the other keys) still leaves a valid file.
+    if "learned_paint_target" in params and params["learned_paint_target"] not in LEARNED_PAINT_TARGETS:
+        return f"learned_paint_target must be one of {list(LEARNED_PAINT_TARGETS)}"
     if "learned_lane_pointer" in params:
         value = params["learned_lane_pointer"]
         if not isinstance(value, str) or not value.startswith("/"):
             return "learned_lane_pointer must be an absolute path"
     if params.get("paint_source") == "learned" and not params.get("learned_lane_pointer"):
         return "learned paint needs learned_lane_pointer in the same file"
-    # D-408 measured cadence is at most two frames; a Pi has four cores and
-    # CORE/IO must retain capacity. Do not expose unbounded thread counts here.
-    for key in ("learned_paint_every_n", "learned_paint_threads"):
-        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= 2):
-            return f"{key} must be an integer in [1, 2]"
+    # every_n up to 4: measured Pi 5 lane-seg inference is ~240-300 ms, about
+    # 2.4 frames at 8 Hz, so every_n 2 never serves a mask (0/84 live, 9dfk).
+    # Threads stay at 2: a Pi has four cores and CORE/IO must retain capacity.
+    for key, high in (("learned_paint_every_n", 4), ("learned_paint_threads", 2)):
+        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= high):
+            return f"{key} must be an integer in [1, {high}]"
     return None
 
 

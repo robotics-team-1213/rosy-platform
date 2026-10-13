@@ -480,4 +480,4 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
         return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
                 "mission": admitted, "physical_submission": "NOT_CONNECTED"}
 
-    return fleet_proposal_create, fleet_proposal_resolve
+    return fleet_proposal_create, fleet_proposal_resolve, fleet_mission_admit

@@ -8,6 +8,8 @@
 > 어떤 로봇이든 웹·표준 API로 제어하고, 현장 Fleet이 여러 대에 미션을 나눠 주는 로봇 플랫폼.
 > 첫 하드웨어는 **Pinky Pro** (Raspberry Pi 5). [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
 
+ROSY Platform은 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결한다. 현재 World는 관측과 odom 기반 상태 projection을 제공한다. 행동 후보를 조건으로 미래 상태를 예측하는 World model은 후속 계획이다. [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md)과 [CORE·Drive 구조](docs/reference/core-drive-responsibilities.md)에서 실제 구현 위치와 권한 경계를 확인할 수 있다.
+
 ## 한눈에 보기
 
 ```mermaid
@@ -35,12 +37,36 @@ flowchart TB
 |---|---|---|
 | **CORE** | 각 로봇 | 외부와 말하는 유일한 창구. 상태·안전을 지키고 최종 주행 명령을 혼자 낸다 |
 | **Fleet** | 현장 PC | 여러 로봇에 미션을 나누고 작업 원장을 소유한다. 로봇 모터를 직접 움직이지 않는다 |
-| **Vision** | 현장 PC | 천장 카메라 영상에서 로봇 위치를 뽑아 Fleet에 준다 |
-| **인지·내비게이션** | 각 로봇 | 차선·장애물 증거, 경로 계획. 명령은 CORE를 거친다 |
+| **Vision** | 현장 PC | 천장 카메라로 지도 위 위치 관측을 만든다. 표시와 감시에 쓰고, 최종 주행 명령은 CORE가 낸다 |
+| **인지·내비게이션** | 각 로봇 | 차선·장애물 사실과 경로. 층과 모델의 자리는 아래 「인지와 판단」 |
 | **학습·평가** | 모델 PC | 데이터·사람 정답으로 모델을 학습·평가하고 고정 산출물의 승격 증거를 만든다 |
 | **AI 추론** | AI PC | 승인된 모델 버전으로 정체 사실 또는 Mission/Task 후보만 낸다. Fleet 원장·장치 명령 권한은 없다. 현재는 오프라인 연결 시험 단계 |
 
-모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md)).
+시험도 개발 로컬 PC 계약 검사 → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](docs/adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md)).
+
+## 인지와 판단
+
+사실 → 나이 → 규칙 → CORE. `world`는 관측과 확정 사건을 대조하는 상태이고, 생성형 월드 모델이 아니다 ([v0.2 §3.1](docs/reference/ROSY_Platform_Architecture_Design_v0.2.md), [D-290](docs/adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)).
+
+```mermaid
+flowchart LR
+    sense["Perception<br/>사실"] --> world["World State<br/>나이"]
+    world --> rule["Supervisor<br/>규칙"]
+    rule --> core["CORE<br/>재검사 · 최종 명령"]
+    learn["모델 PC"] -.-> ai["AI PC"]
+    ai -.-> rule
+```
+
+| 층 | 자리 | 지금 |
+|---|---|---|
+| **Perception** | `middleware/perception` · `operations/vision`; 학습은 `learning/{curation,registry,training,evaluation}/perception`, 운영 CLI는 `tools/perception` | 동작. 학습 차선은 섀도 ([D-356](docs/adr/D-356-perception-learning-loop-and-model-delivery.md) Proposed) |
+| **World State** | `operations/world/src/rosy/world/state/projections/map_pose.py`; Fleet `MapPose`는 identity alias | 관측·odom 기반 현재 상태 projection. Fleet service·trip·swarm 등이 소비 ([D-630](docs/adr/D-630-remaining-platform-semantic-holders.md)) |
+| **Decision** | `operations/decision/src/rosy/decision` (`rosy.decision`, Fleet 배포에 포함) | 기존 ER2/VLM·후보·도구 요청. 원장·admission·dispatch는 Fleet에 유지 (D-637) |
+| **Supervisor** | Fleet `stuck_resolver` | 규칙 · 사람 |
+| **모델** | 모델 PC 평가 → AI PC 승인 버전 | [D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md) 경계. 점선은 목표. VLM은 [D-492](docs/adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) Proposed |
+| **CORE** | `middleware/core/gateway` | 최종 `/cmd_vel` (D-2) |
+
+정체(`wall` · `object` · `robot` · `person` · `unknown`)와 텍스트 후보는 별도 작업이다. 다섯 층은 [D-503](docs/adr/D-503-autonomy-chain-facts-and-exception-queue.md)이 문서만으로 제안한다. 절차는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md).
 
 ## 시작하기
 
@@ -64,7 +90,9 @@ flowchart LR
 | 제품 | [PRODUCT.md](PRODUCT.md) 누구를 위한 제품인가 · [CONCEPTS.md](CONCEPTS.md) 공통 용어 · [DESIGN.md](DESIGN.md) 화면 규칙 |
 | 요구사항·계약 | [CORE SRS](docs/spec/ROSY%20CORE%20SRS.md) · [FLEET SRS](docs/spec/ROSY%20FLEET%20SRS.md) · [API & Protocol Reference](docs/reference/ROSY%20API%20&%20Protocol%20Reference.md) |
 | 결정 | [ADR Log](docs/reference/ROSY%20ADR%20Log.md) · [개별 ADR](docs/adr/) |
-| 설계 | [목표 아키텍처](docs/architecture/) |
+| 설계 | [목표 아키텍처](docs/architecture/) · [인지와 판단](#인지와-판단) · [Decision 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md) |
+| 현재 구조 | [전체 폴더 책임](docs/reference/platform-folder-responsibilities.md) · [CORE·Drive 책임](docs/reference/core-drive-responsibilities.md) |
+| 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
 | 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
 
@@ -87,6 +115,8 @@ flowchart LR
   `package.xml`로 확인한다.
 - **공개 저장소 경계** — 이 저장소는 공개다. 실제 장치 주소·계정·채워진 장치 설정은
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
+  시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
+  `tools/remote/hosts.example.json`을 복사한다.
   날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
   `docs/` 하나에 둔다.
 

@@ -27,6 +27,8 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
+from fleet.server import trip_runner
+from core_features.line_follow.recovery.junction.gate import MANEUVER as CORE_MANEUVER
 from fleet.server.trip_runner import TripError, TripRunner
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint
@@ -39,7 +41,7 @@ VIEWER = {"Authorization": "Bearer viewer-token"}
 # D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
 LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
-MANOEUVRE = ("turning", "advancing", "reacquiring")
+MANOEUVRE = CORE_MANEUVER  # the fake CORE is busy exactly when CORE is
 
 
 class FakeCore:
@@ -76,8 +78,9 @@ class FakeCore:
         if self.mode != "CAMERA_LINE":
             raise RobotApiError("rosy_60", 409, "LINE_FOLLOW_NOT_ACTIVE", "line follow is off")
         if not 0 < expires_s <= 30 or (stop_after_m is not None and (action != "stop" or not 0 <= stop_after_m <= 2)) \
-                or (turn_deg is not None and (action not in ("left", "right") or not 0 < abs(turn_deg) <= 150
-                                              or (turn_deg > 0) != (action == "left"))):
+                or (turn_deg is not None and action != "bend" and (
+                    action not in ("left", "right") or not 0 < abs(turn_deg) <= 150
+                    or (turn_deg > 0) != (action == "left")))                 or (action == "bend" and (turn_deg is None or not 0 < abs(turn_deg) <= 90)):
             raise RobotApiError("rosy_60", 400, "VALIDATION_ERROR", "bad junction instruction")
         if self.done_place == (place_id, action):
             raise RobotApiError("rosy_60", 409, "JUNCTION_ALREADY_DONE", f"{action} at {place_id} already ran")
@@ -91,7 +94,7 @@ class FakeCore:
         if self.done_place is not None and self.done_place[0] != place_id:
             self.done_place = None
         self.seq += 1
-        state = ("armed" if action == "straight" or turn_deg is not None
+        state = ("armed" if action in ("straight", "bend") or turn_deg is not None
                  else "executing" if action == "stop" else "unresolved")
         self.j = {"action": action, "place_id": place_id, "seq": self.seq, "state": state, "reason": None,
                   "expires_at": self.ports.now + expires_s, "stop_after_m": stop_after_m or 0.0,
@@ -158,6 +161,9 @@ class Ports:
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
         self.refreshes = 0
+        self.line_starts: list[str] = []  # D-601 A: CAMERA_LINE turned on by the trip
+        self.line_start_error = None
+        self.camera = {"available": True, "stale": False, "age_ms": 40}  # D-601 B
 
     def caps_for(self, robot_id):
         return self.caps.get(robot_id)
@@ -179,6 +185,16 @@ class Ports:
 
     async def line_follow_mode(self, robot_id):
         return self.core.mode
+
+    async def start_camera_line(self, robot_id):
+        if self.line_start_error is not None:
+            raise self.line_start_error
+        self.line_starts.append(robot_id)
+        self.core.mode = "CAMERA_LINE"
+        return {"mode": "CAMERA_LINE", "state": "TRACKING"}
+
+    async def front_camera(self, robot_id):
+        return self.camera
 
     async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
                             advance_m=None, expect=None):
@@ -307,6 +323,26 @@ def test_the_fake_core_follows_the_junction_contract():
 
 # ---- start checks ---------------------------------------------------------------------
 
+def test_pinky_trip_exposes_body_width_for_ai_route_check():
+    from core_common.robot_body import NOMINAL_BODY
+
+    runner, store, ports = _setup(_free_map("lane"), caps=LANE)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    view = run(runner.start("p1", "bob"))
+    assert view["body_half_width_m"] == pytest.approx(NOMINAL_BODY.half_width_m)
+    assert view["pose_observed_at"] == ports.now
+
+    async def delayed_junction(robot_id):
+        ports.now += 3.0
+        return ports.core.status()
+
+    ports.junction_state = delayed_junction
+    sampled_at = ports.now
+    run(runner.tick())
+    assert view["pose_observed_at"] == sampled_at
+    assert view["updated_at"] >= sampled_at + 3.0
+
+
 def test_start_refuses_with_every_d491_code_in_order():
     runner, store, ports = _setup()
     assert _code(runner.start("nope", "bob")) == "TRIP_PLAN_UNKNOWN"
@@ -319,7 +355,7 @@ def test_start_refuses_with_every_d491_code_in_order():
     ports.caps = {"rosy_60": TripCaps("pinky_pro", frozenset({"free"}), 0.2, junction_turn=True)}
     assert _code(runner.start("p1", "bob")) == "TRIP_MODE_UNSUPPORTED"
     ports.caps = {"rosy_60": LANE}
-    ports.core.mode = "OFF"
+    ports.core.mode = None  # unknown (D-601 A: OFF is turned on by the start itself)
     assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
     ports.core.mode = "IR_LINE"  # no junction detection on IR (M4)
     assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
@@ -338,6 +374,45 @@ def test_start_refuses_with_every_d491_code_in_order():
     _plan(store, ports, "ring_s:fwd", 0.1, "NE", plan_id="p2")
     assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
 
+
+def test_one_lap_start_rechecks_selected_place_before_opening_a_lease():
+    runner, store, ports = _setup()
+    graph = store.active()[2]
+    arc = graph.arcs["ring_s:fwd"]
+    x, y, yaw = arc.point_at(0.1)
+    ports.at(arc, 0.1)
+    plan = plan_trip(graph, PlanRequest(map_version=store.active()[0], start_pose=(x, y, yaw), goal="NW"),
+                     store.routing_config)
+    store.record_plan(plan_id="lap", robot_id="rosy_60", principal_id="bob", map_version=plan.map_version,
+                      request={"to": "NW", "via": ["SE"], "start_at": "NW"}, result={"plan": plan_body(plan)})
+    assert _code(runner.start("lap", "bob")) == "TRIP_START_PLACE_MISMATCH"
+    assert runner.running() is None
+
+
+
+def test_d593_a_still_operator_pin_starts_up_to_its_anchor_age_limit():
+    """D-593 7 (user 2026-10-10): a pin older than 2 s starts only while odom has not moved."""
+    def pin(moved_m=0.0, turned_deg=0.0, anchor=8.0, source="operator_pin"):
+        x, y, yaw = ring_s.point_at(0.1)
+        ports.pose = MapPose(x, y, yaw, "LOCALIZED", source, moved_m, 0.1, anchor,
+                             anchor_source=source, bridge_turn_deg=turned_deg)
+
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.core.mode = "CAMERA_LINE"
+    ring_s = _arc(store, "ring_s:fwd")
+    for kwargs in ({"moved_m": 0.03}, {"turned_deg": 2.5}, {"source": "sighting"}):
+        pin(**kwargs)
+        assert _code(runner.start("p1", "bob")) == "TRIP_POSE_UNTRUSTED"
+    pin(moved_m=0.02, turned_deg=2.0)
+    assert run(runner.start("p1", "bob"))["state"] == "started"
+
+
+def test_d593_pin_still_thresholds_are_bounded():
+    with pytest.raises(ValueError):
+        TripConfig(pin_start_still_m=0.2)
+    with pytest.raises(ValueError):
+        TripConfig(pin_start_still_deg=15.0)
 
 def _activate_again(store):
     draft = store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None,
@@ -474,6 +549,33 @@ def test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on():
     assert ports.sent[-1] == ("stop", "C", 0.5)
 
 
+def test_fleet_counts_every_core_manoeuvre_state_as_busy():
+    """Lap SIM B (3/20): Fleet's list lacked CORE's D-507 4 ``approaching``; one list, checked."""
+    assert set(trip_runner.MANOEUVRE) == set(CORE_MANEUVER)
+
+
+def test_no_instruction_goes_out_while_core_approaches_the_pivot_past_the_place():
+    """Lap SIM B: mid-approach the map pose is already on the next lane; the next place's
+    instruction would abort the turn (CORE answers ``aborted``, Fleet stops the trip)."""
+    runner, store, ports = _setup(_map(("A", 0, 0), ("B", 1, 0), ("C", 1, 0.5), edges=[
+        ("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", [[1, 0], [1, 0.5]], "lane")]))
+    ab, bc = _arc(store, "ab:fwd"), _arc(store, "bc:fwd")
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    assert ports.sent == [("left", "B", None)]
+    ports.at(ab, ab.length_m - 0.05)
+    ports.core.see_junction()
+    ports.core.phase("approaching")
+    _ticks(runner, ports)
+    ports.at(bc, 0.05)  # the approach drives past the place point onto the next lane
+    _ticks(runner, ports, 10)
+    assert ports.sent == [("left", "B", None)] and runner.running()["state"] == "running"
+    ports.core.done()  # the turn ends: the next place's instruction goes out
+    _ticks(runner, ports)
+    assert ports.sent[-1] == ("stop", "C", pytest.approx(0.45, abs=0.01))
+
+
 def test_a_turn_over_90_degrees_moves_on_by_core_or_by_the_pose():
     for core_reports in (True, False):
         runner, store, ports = _setup(_sharp_map())
@@ -580,6 +682,23 @@ def test_free_trip_sends_d463_points_ahead_across_the_place_and_arrives():
     assert runner.view("p1")["state"] == "arrived"
 
 
+def test_each_trip_step_renews_the_goal_lease_and_a_failed_renewal_keeps_the_trip():
+    """D-550 10: the trip loop is the renewer of trip goals; a renewal error is left to CORE."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    renewed = []
+
+    async def renew(robot_id):
+        renewed.append(robot_id)
+        if len(renewed) == 2:
+            raise ConnectionError("no route")
+
+    runner._renew_lease = renew
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports, n=3)
+    assert renewed == ["rosy_60"] * 3 and runner.view("p1")["state"] == "running"
+
+
 def test_a_free_robot_error_fails_the_trip_and_cancels_the_goal():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
     _plan(store, ports, "ab:fwd", 0.1, "C")
@@ -641,6 +760,7 @@ def test_off_lane_beyond_half_the_width_stops_the_trip():
     _ticks(runner, ports)
     view = runner.view("p1")
     assert view["state"] == "stopped" and view["detail"]["off_lane_m"] == pytest.approx(0.11)
+    assert ports.canceled == ["rosy_60"] and view["detail"]["stop_sent"] is True
 
 
 def test_no_progress_for_stall_s_stops_and_holds_the_robot():
@@ -984,6 +1104,24 @@ def _app(tmp_path, ports):
     return TestClient(app), tasks, store, robot, console
 
 
+def test_trip_plan_reads_fleet_map_pose_for_a_robot_that_reports_no_localization(tmp_path):
+    """Field 2026-10-10: a motor-mode robot (localization null) with a LOCALIZED MapPose plans and starts."""
+    ports = Ports()
+    client, _tasks, store, robot, _console = _app(tmp_path, ports)
+    robot._state = {"robot_id": "rosy_60", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "localization": None}
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+    assert plan.status_code == 200, plan.text
+    started = client.post(f"/api/fleet/trips/{plan.json()['plan_id']}/start", headers=OPERATOR)
+    assert started.status_code == 200, started.text
+    run(client.app.state.trip_runner.cancel(plan.json()["plan_id"], "bob"))
+    for state in ("DEGRADED", "UNKNOWN"):
+        ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, state=state)
+        refused = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+        assert refused.status_code == 422 and refused.json()["detail"] == {
+            "code": "TRIP_POSE_UNTRUSTED", "detail": {"pose_state": state}}
+
+
 def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_path):
     ports = Ports()
     client, tasks, store, _robot, _console = _app(tmp_path, ports)
@@ -1072,6 +1210,96 @@ def test_formation_refuses_a_robot_on_a_trip():
     with pytest.raises(HubError) as err:
         run(console.formation_start("a"))
     assert err.value.code == "TRIP_ROBOT_BUSY"
+
+
+@pytest.mark.parametrize("owner", ["trip", "formation"])
+def test_goal_rechecks_owner_after_localization_await(owner):
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    state = robot.state
+
+    async def changed_state():
+        result = await state()
+        if owner == "trip":
+            runner.robot = "a"
+        else:
+            console._formation_members = lambda: {"a"}
+        return result
+
+    robot.state = changed_state
+    with pytest.raises(HubError) as error:
+        run(console.goal("a", 1.0, 0.0))
+    assert error.value.code == ("TRIP_ROBOT_BUSY" if owner == "trip" else "FORMATION_ACTIVE")
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_bay_rechecks_trip_owner_after_capability_await():
+    console, runner, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    capabilities = robot.capabilities
+
+    async def changed_capabilities():
+        result = await capabilities()
+        runner.robot = "a"
+        return result
+
+    robot.capabilities = changed_capabilities
+    with pytest.raises(HubError, match="running trip"):
+        run(console._send_to_bay("a", (1.0, 1.0), "b"))
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+
+
+def test_trip_rechecks_existing_motion_after_start_pose_await():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    engaged = [None]
+    runner._engaged = lambda robot_id: engaged[0]
+    start_pose = runner._start_pose
+
+    async def changed_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        engaged[0] = "goal"
+        return result
+
+    runner._start_pose = changed_pose
+    assert _code(runner.start("p1", "bob")) == "TRIP_ROBOT_BUSY"
+    assert runner.view("p1") is None
+
+
+def test_goal_in_flight_counts_as_engaged_until_its_receipt_arrives():
+    from fleet.server.trip_guard import engaged
+
+    console, _, robots = _guarded("a", trip=None)
+    robot = robots[0]
+    observations = []
+
+    async def accept(*args, **kwargs):
+        observations.append(engaged(console, "a"))
+        return {"accepted": True}
+
+    robot.navigation_goal = accept
+    run(console.goal("a", 1.0, 0.0))
+    assert observations == ["goal_pending"]
+
+
+@pytest.mark.parametrize("stop", ["estop", "cancel"])
+def test_stop_during_trip_start_prevents_opening_a_late_trip(stop):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    start_pose = runner._start_pose
+
+    async def stopped_pose(*args, **kwargs):
+        result = await start_pose(*args, **kwargs)
+        if stop == "estop":
+            runner.close_all("operator_estop")
+        else:
+            await runner.cancel_robot("rosy_60", "operator_cancel")
+        return result
+
+    runner._start_pose = stopped_pose
+    with pytest.raises(TripError):
+        run(runner.start("p1", "bob"))
+    assert runner.view("p1") is None
 
 
 def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
@@ -1202,6 +1430,29 @@ def test_a_carried_out_instruction_is_never_sent_again():
     ports.at(ring_s, 0.05)
     _ticks(runner, ports, 3, dt=3.0)
     assert len(ports.sent) == 1
+
+
+def test_a_carried_out_place_short_of_the_next_lane_keeps_the_pose_on_this_lane():
+    """lap SIM 2 lap_12: CORE went idle on our straight while the robot backed off 0.26 m before
+    SE; the pose is judged against ring_s, not ring_e (0.276 m away), so no false 'pose' stop."""
+    runner, store, ports = _setup()
+    ring_s = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.05, "NW")
+    run(runner.start("p1", "bob"))
+    ports.at(ring_s, ring_s.length_m - 0.2)
+    _ticks(runner, ports)
+    ports.core.see_junction()  # CORE executes our straight through SE
+    _ticks(runner, ports)
+    assert runner._live["rosy_60"].sent["carried"]
+    ports.core.j = None  # CORE closed it (the keeper lost the junction while backing off)
+    ports.at(ring_s, ring_s.length_m - 0.26)
+    sent = len(ports.sent)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "running" and runner.view("p1")["segment_index"] == 0
+    assert len(ports.sent) == sent                         # the carried-out straight is not sent again
+    ports.at(_arc(store, "ring_e:fwd"), 0.03)               # on the next lane: it moves on
+    _ticks(runner, ports)
+    assert runner.view("p1")["segment_index"] == 1
 
 
 def test_already_done_from_core_counts_as_carried_out():
@@ -1385,14 +1636,17 @@ def test_formation_reform_and_resume_refuse_a_trip_robot():
         assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
-def test_the_fleet_stuck_resolver_skips_a_trip_robot():
-    from fleet.server.stuck_resolver_loop import StuckResolverLoop
+def test_the_fleet_stuck_resolver_marks_a_trip_robot():
+    """D-517 5 (M4): no longer skipped; the resolver gives a marked trip robot stopping answers only."""
+    from fleet.stuck.loop import StuckResolverLoop
 
     seen = []
 
     class Resolver:
+        ai_verdicts: list = []
+
         def step(self, now, rows):
-            seen.extend(row["robot_id"] for row in rows)
+            seen.extend((row["robot_id"], row.get("trip", False)) for row in rows)
             return []
 
     async def snapshot():
@@ -1401,7 +1655,7 @@ def test_the_fleet_stuck_resolver_skips_a_trip_robot():
     loop = StuckResolverLoop(snapshot, board=None, resolver=Resolver(), clients=dict)
     loop.trip_busy = lambda robot_id: robot_id == "b"
     run(loop.run_once())
-    assert seen == ["a"]
+    assert seen == [("a", False), ("b", True)]
 
 
 @pytest.mark.parametrize(("decision", "status", "ends"), [

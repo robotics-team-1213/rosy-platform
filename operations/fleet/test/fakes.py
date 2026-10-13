@@ -81,6 +81,7 @@ class FakeRobot:
         #: 여러 로봇의 호출 순서를 한 줄로 보고 싶을 때 같은 리스트를 넘긴다.
         self.log = log if log is not None else []
         self._state = state or {"robot_id": robot_id, "map_id": "m1",
+                                "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                 "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}}
         self._swarm_state = swarm_state or {"active": True, "holding": False}
         #: 관제 콘솔이 읽는 점유 격자. `None` 이면 빈 dict 를 돌려준다(맵 없는 로봇).
@@ -122,6 +123,8 @@ class FakeRobot:
         self.sink_error_sticky = False
         #: D-395: what `localization_candidates` returns (None = not in CANDIDATES).
         self.candidates = None
+        #: D-546 5: what `localization_request` returns (None = no open request).
+        self.pose_request = None
         self.decisions: list = []
         self.suspects: list[str] = []
         #: Raised by `localization_decision` (e.g. RobotApiError 409 STALE_REQUEST).
@@ -135,6 +138,7 @@ class FakeRobot:
         self.mission_status_error: Optional[BaseException] = None
         #: D-407: raised by `line_stuck_decision` (e.g. RobotApiError 409 STUCK_ID_MISMATCH).
         self.stuck_decision_error: Optional[BaseException] = None
+        self.front_status_value: dict = {"available": True, "stale": False, "age_ms": 40}
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -178,7 +182,9 @@ class FakeRobot:
             await self.follow_gate.wait()
         if self.follow_error is not None:
             raise self.follow_error
-        return {"role": "follower", "active": True}
+        if params.mode == "trail" and getattr(self, "offset_only", False):
+            return {"role": "follower", "active": True}  # a CORE from before D-559
+        return {"role": "follower", "active": True, "mode": params.mode}
 
     async def swarm_cancel(self) -> dict:
         self._record("swarm_cancel")
@@ -206,6 +212,10 @@ class FakeRobot:
         self._record("line_follow_mode", mode)
         return {"mode": mode, "state": "WAITING" if mode == "IR_LINE" else "OFF"}
 
+    async def front_status(self) -> dict:
+        """D-601 B: CORE ``vision/front/status``; a plan with a lane edge reads it (not recorded)."""
+        return self.front_status_value
+
     async def line_stuck_decision(self, stuck_id: str, decision: str, **_extra) -> dict:
         self._record("line_stuck_decision", stuck_id, decision)
         if self.stuck_decision_error is not None:
@@ -216,13 +226,17 @@ class FakeRobot:
         self._record("estop")
         return {"estop": True}
 
-    async def identify_lamp(self, color=None) -> dict:
+    async def identify_lamp(self, color=None, quiet=False) -> dict:
         self._record("identify_lamp", color)
         return {"accepted": True, "request_id": "fake-led-test", "color": color or "blue"}
 
     async def localization_candidates(self):
         self._record("localization_candidates")
         return self.candidates
+
+    async def localization_request(self):
+        self._record("localization_request")
+        return self.pose_request
 
     async def localization_decision(self, decision) -> dict:
         self._record("localization_decision", decision.request_id)

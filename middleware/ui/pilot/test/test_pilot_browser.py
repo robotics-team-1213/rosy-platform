@@ -579,6 +579,8 @@ def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
             page.goto(f"{base_url}/pilot")
             page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").wait_for()
             for state in ("empty", "failed"):
+                # refreshLobby appends retry after the independent self-state read settles.
+                page.locator("[data-lobby-retry]").wait_for(state="visible")
                 if state == "failed":
                     response["fail"] = True
                     page.locator("[data-lobby-retry]").click()
@@ -589,6 +591,10 @@ def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
                     page.screenshot(path=str(shot_dir / f"pilot-lobby-{state}-{width}x{height}.png"))
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("[data-lobby-retry]").is_visible()
+                if state == "empty":
+                    status_box = page.locator("[data-lobby-self]").bounding_box()
+                    summary_box = page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").bounding_box()
+                    assert status_box["y"] + status_box["height"] <= summary_box["y"]
                 assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
                 assert page.locator("form[data-pilot-token-form] label").is_visible()
                 estop = page.locator("ui-topbar [data-estop]").bounding_box()
@@ -718,15 +724,306 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
-def _enter_drive(page, base_url):
+def _refuse_second_session(page):
+    calls = []
+
+    def refuse(route):
+        calls.append(route.request.url)
+        route.fulfill(status=500, body="second session")
+
+    page.route("**/api/v1/auth/development-session", refuse)
+    page.route("**/api/v1/auth/pair", refuse)
+    return calls
+
+
+def _open_in_pilot_app(page, base_url, token):
+    """Same handoff as PilotProxy: a classic script at the start of <head>, before the modules."""
+
+    def inject(route):
+        response = route.fetch()
+        store = (
+            f"sessionStorage.setItem('rosy.pilot.token',{json.dumps(token)});"
+            if token else "")
+        script = (
+            "<script>document.documentElement.dataset.pilotShell='android';"
+            f"{store}</script>")
+        headers = {
+            key: value for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "content-encoding"}}
+        route.fulfill(
+            status=response.status, headers=headers,
+            body=response.text().replace("<head>", "<head>" + script, 1))
+
+    page.route("**/pilot", inject)
+    page.goto(f"{base_url}/pilot")
+
+
+def _assert_visible(page, selector, errors):
+    try:
+        page.locator(selector).wait_for()
+    except Exception:
+        shell = page.evaluate("document.documentElement.dataset.pilotShell")
+        token = page.evaluate("sessionStorage.getItem('rosy.pilot.token')")
+        text = page.locator("body").inner_text()
+        raise AssertionError(
+            f"missing {selector}; shell={shell!r} token={token!r} text={text!r} errors={errors!r}") from None
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_uses_the_app_session(tablet_page):
+    """The Pilot app already connected. The page uses that token and does not open another session."""
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert calls == []
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-enroll-section]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    assert page.evaluate("navigator.serviceWorker.getRegistrations().then((list) => list.length)") == 0
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+    assert page.locator("[data-drive-goal]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    page.locator("ui-topbar [data-goto]").evaluate("node => node.click()")
+    page.wait_for_timeout(200)
+    assert "/console" not in page.url
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("token_value", ["", "not-a-session"])
+def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_value):
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, token_value)
+    _assert_visible(page, "[data-app-session]", errors)
+    assert "Rosy Pilot 앱이 엽니다" in page.locator("[data-app-session]").inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert calls == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
+    """Manual movement is explicitly attributed to this robot."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "MANUAL",
+                   "evidence": {"velocity": {"evidence": "fresh"}},
+                   "velocity": {"linear": 0.08, "angular": 0.0}}))
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "이 로봇 · 운전 중"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state",
+               lambda route: route.fulfill(json={
+                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0},
+                   "evidence": {"velocity": {"evidence": "fresh"}}}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == "이 로봇 · 정지 상태"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("status,state,word", [
+    (503, {}, "속도 연결 끊김"),
+    (200, {"mode": "MANUAL", "velocity": {"linear": 0}}, "속도 정보 없음"),
+    (200, {"mode": "SAFE_STOP", "safety": {"estop": True},
+           "evidence": {"safety": {"evidence": "fresh"}}}, "안전 정지"),
+    (200, {"mode": "SAFE_STOP", "safety": {"estop": True}}, "안전 정지 보고 · 안전 상태 확인 불가"),
+    (200, {"mode": "NAVIGATION", "velocity": {"linear": 0, "angular": 0.1},
+           "evidence": {"velocity": {"evidence": "fresh"}}}, "이동 중"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "delayed"}}}, "속도 지연"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "disconnected"}}}, "속도 연결 끊김"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
+           "evidence": {"velocity": {"evidence": "unavailable"}}}, "속도 정보 없음"),
+    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0}}, "속도 연결 끊김"),
+])
+def test_lobby_self_state_never_turns_missing_or_moving_evidence_into_idle(tablet_page, status, state, word):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": []}))
+    page.route("**/api/v1/robot/state", lambda route: route.fulfill(status=status, json=state))
+    page.goto(f"{base_url}/pilot")
+    tag = page.locator("[data-lobby-self]")
+    tag.wait_for(state="visible")
+    assert tag.inner_text() == f"이 로봇 · {word}"
+    assert page.locator("[data-lobby-retry]").is_visible()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("stored", ["null", "{}", "[null, 1]", '[{"host":"other.test","label":"다른 로봇"}]',
+                                   '[{"host":"other.test","label":null,"token":"legacy-secret"}]'])
+def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin(tablet_page, stored):
+    base_url, page, errors = tablet_page
+    page.add_init_script(f"localStorage.setItem('rosy.pilot.recent', {json.dumps(stored)})")
+    page.goto(f"{base_url}/pilot")
+    page.locator("form[data-pilot-token-form] ui-field input").wait_for(state="visible")
+    assert page.locator("[data-recent-connect]").count() == 0
+    assert "legacy-secret" not in page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
+    assert errors == [], errors
+
+
+def _enter_drive(page, base_url, access_token=None):
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", access_token or dev_server.DEV_TOKEN)
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
     page.wait_for_selector("[data-drive-stick]")
     page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-map-handoff-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            button = page.locator("ui-topbar [data-goto]")
+            assert button.get_attribute("data-goto") == "/console"
+            assert button.inner_text() == "운용 지도"
+            assert page.locator('[aria-label="운전 모드"] [data-drive-goal]').count() == 0
+            page.evaluate("sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token')")
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            arrived = []
+
+            def console(route):
+                arrived.append({"modes": dev_server.MODE_LOG[modes_before:],
+                                "teleop": dev_server.TELEOP_LOG[teleop_before:]})
+                route.fulfill(status=200, content_type="text/html", body="<h1>운용 지도</h1>")
+
+            page.route("**/console", console)
+            button.click()
+            page.wait_for_url("**/console")
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == dev_server.DEV_TOKEN
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert dev_server.DEV_TOKEN not in page.url
+            assert arrived and "IDLE" in arrived[0]["modes"]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in arrived[0]["teleop"])
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tmp_path, monkeypatch):
+    """Pilot's live tab reaches the real CORE Console assets with its own token."""
+    root = HERE.parents[3]
+    for package in ("middleware/core/api", "middleware/core/gateway", "middleware/core/events",
+                    "middleware/core/services", "contracts/foundation"):
+        monkeypatch.syspath_prepend(str(root / package))
+    from fastapi.testclient import TestClient
+    from core_api_web.api.app import create_app
+    from core_common.profile import RobotProfile, robot_config_dir
+    from core.services import CoreServices
+    import yaml
+    from urllib.parse import urlsplit
+
+    config_dir = root / "contracts/foundation/config"
+    config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config["auth"] = {**config["auth"], **yaml.safe_load(
+        (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
+    operator = next(item for item in config["auth"]["tokens"] if item["role"] == "operator")
+    monkeypatch.setattr(dev_server, "DEV_TOKEN", operator["token"])
+    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+    capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    core = TestClient(create_app(config, CoreServices.build(config, profile, capabilities, tmp_path / "docks.json")))
+    phase = {"console": False}
+    requests = []
+
+    def serve(route):
+        target = urlsplit(route.request.url)
+        path = target.path
+        if path == "/console":
+            phase["console"] = True
+        if not phase["console"]:
+            route.continue_()
+            return
+        requests.append((route.request.method, path, route.request.headers.get("authorization")))
+        if route.request.method != "GET":
+            route.fulfill(status=501, json={"detail": "fixture blocks writes"})
+            return
+        response = core.get(path + (f"?{target.query}" if target.query else ""),
+                            headers={"Authorization": route.request.headers.get("authorization", "")})
+        route.fulfill(status=response.status_code, headers={
+            "content-type": response.headers.get("content-type", "application/octet-stream"),
+            "cache-control": "no-store",
+        }, body=response.content)
+
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", serve)
+            _enter_drive(page, base_url, operator["token"])
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-before-console-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            page.locator("ui-topbar [data-goto='/console']").click()
+            page.wait_for_url("**/console")
+            page.locator('[data-panel="console.map"] .surface-map-frame').wait_for(state="visible")
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+            assert "지도 데이터가 아직 없습니다" in page.locator('.surface-map-overlay').inner_text()
+            assert "지도가 들어오면 읽기 전용으로" in page.locator('#map-action-reason').inner_text()
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == operator["token"]
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert ("GET", "/api/v1/ui/surfaces/console", f"Bearer {operator['token']}") in requests
+            assert "IDLE" in dev_server.MODE_LOG[modes_before:]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in dev_server.TELEOP_LOG[teleop_before:])
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert page.locator("#shell-estop").is_visible()
+            spacing = page.evaluate("""() => {
+              const layers = document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect();
+              const setup = document.querySelector('.surface-link[href="/setup"]').getBoundingClientRect();
+              const status = document.querySelector('#map-status').getBoundingClientRect();
+              return {layersBottom: layers.bottom, setupTop: setup.top,
+                      setupBottom: setup.bottom, statusTop: status.top};
+            }""")
+            assert spacing["layersBottom"] <= spacing["setupTop"] <= spacing["setupBottom"] <= spacing["statusTop"], spacing
+            assert errors == [], errors
+            if output:
+                page.screenshot(path=str(shots / f"console-after-pilot-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        finally:
+            browser.close()
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
@@ -1099,18 +1396,21 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
     if viewport[0] < 480:
         buttons = action_boxes["buttons"]
-        assert len(buttons) == (2 if viewport[0] == 320 else 4), action_boxes
+        assert len(buttons) == 2, action_boxes
         assert max(button["width"] for button in buttons) - min(button["width"] for button in buttons) <= 1, action_boxes
         assert all(button["height"] >= 44 for button in buttons), action_boxes
         assert abs(buttons[0]["left"] - action_boxes["track"]["left"]) <= 1, action_boxes
         assert abs(buttons[-1]["right"] - action_boxes["track"]["right"]) <= 1, action_boxes
         assert abs(buttons[0]["top"] - buttons[1]["top"]) <= 1, action_boxes
-        if len(buttons) == 4:
-            assert abs(buttons[2]["top"] - buttons[3]["top"]) <= 1, action_boxes
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
-        assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
-        assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
+        if viewport[0] == 390:
+            assert cue is None
+            assert all(box["bottom"] <= controls["viewport"] + 1 for box in controls["boxes"]), controls
+            assert scrolled["page"] == 0, scrolled
+        else:
+            assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
+            assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
     else:
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]), controls
 
@@ -1326,7 +1626,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     base_url, page, errors = tablet_page
     page.set_viewport_size({"width": width, "height": height})
     _arm_auto(page, base_url)
-    robot = page.locator('ui-topbar [data-goto="/dashboard"]').bounding_box()
+    robot = page.locator('ui-topbar [data-goto="/console"]').bounding_box()
     stop = page.locator('ui-topbar [data-estop]').bounding_box()
     assert robot and stop and robot["x"] + robot["width"] <= stop["x"]
     if page.locator("ui-topbar ui-brand").is_visible():
@@ -1343,7 +1643,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-auto-{width}x{height}.png"))
     page.click("[data-drive-manual]")
     page.wait_for_selector("[data-drive-pivots]", state="visible")
-    assert page.locator("[data-drive-scroll-cue]").is_visible()
+    assert page.locator("[data-drive-scroll-cue]").is_visible() == (width == 320)
     if output:
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-manual-{width}x{height}.png"))
     page.locator('[data-drive-pivot="left"]').scroll_into_view_if_needed()
@@ -1386,6 +1686,21 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     panel.locator("details.pilot-models summary").first.click()
     assert panel.locator("details.pilot-models").first.get_attribute("open") is not None
     page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
+    assert panel.is_visible()
+    assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "true"
+    assert page.locator("[data-drive-tools-panel] [data-drive-fit]").count() == 1
+    assert page.locator("[data-drive-tools-panel] [data-drive-fill]").count() == 1
+    assert page.locator("[data-drive-tools-panel] details.pilot-models[open]").count() == 1
+    bounds = panel.bounding_box()
+    assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 844
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-390x844.png"))
+    scroll = panel.evaluate("node => { node.scrollTop = node.scrollHeight; return {top: node.scrollTop, height: node.scrollHeight, visible: node.clientHeight}; }")
+    assert scroll["height"] > scroll["visible"] and scroll["top"] > 0, scroll
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-tools-scroll-390x844.png"))
+    page.set_viewport_size({"width": 500, "height": 844})
     page.wait_for_function("document.querySelectorAll('[data-drive-hud] details.pilot-models').length === 2")
     assert panel.is_hidden()
     assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "false"

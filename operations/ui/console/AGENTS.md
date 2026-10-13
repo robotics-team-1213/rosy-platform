@@ -1,0 +1,75 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
+
+# console
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-11
+
+## Purpose
+
+Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. The physical source holder is `operations/ui/console`. Fleet static mapping installs it as the existing `fleet.server.web` package and `fleet/server/web` resource path. Backend source remains `operations/fleet/fleet/server`. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
+
+Source-move verification is recorded in [progress.md](progress.md), [logs.md](logs.md), and the generated [index.md](index.md). D-637 keeps the Fleet distribution and installed `fleet.server.web` resource identity.
+
+## Key Files
+
+| File | Description |
+|------|-------------|
+| `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
+| `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
+| `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |
+| `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
+| `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
+| `roster.js` | Robot cards and attention/intervention queues |
+| `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
+| `work-view.js` | D-664 source-scoped Task/Mission read view at `/console?view=work`; owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
+| `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; session, polling cadence and command authority remain in `console.js` |
+| `formation.js` | Formation panel |
+| `signals.js` | Traffic-signal cards |
+| `site-layer.js` | Ceiling-camera sightings layer (pure; display and cross-check only) |
+| `shared/vision-view.js`, `field-view.js`, `field-layers.js` | Camera preview, field proposal/rectified view, layer toggles |
+| `site-map.html`, `site-map.js`, `shared/site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-494 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회), D-494 6 지도 가르치기 칸(`site-map-teach.js`, 1 s 조회). 순수 계산은 `shared/site-map-model.js` |
+| `shared/map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
+| `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
+| `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
+| `shared/address-drift.js`, `state-age.js`, `localization-badge.js`, `shared/poll-gate.js`, `shared/authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
+| `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-519 인증 API·HttpOnly 쿠키를 유지하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 토큰/테마는 고급 접속·화면 표시 펼침에 둔다 |
+| `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 공통 머리 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 역할 글·개발 배지·연결 수·시계·설정 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 문서 시트는 머리를 칠하지 않는다 |
+| `package.json` | `{"type": "module"}` so node can run the tests |
+
+## For AI Agents
+
+### Working In This Directory
+
+- Read DESIGN.md color-role laws and shared component catalog before UI changes (D-624). Paint belongs to shared/web tokens and components; surfaces own placement and actions. Keep gallery and responsive/accessibility checks aligned.
+
+- CSP is `style-src 'self'; script-src 'self'` (`operations/fleet/fleet/server/static_routes.py` `CONSOLE_CSP`): no inline scripts, no `style=` attributes, no `el.style.x =`. Express colour and layout with classes.
+- A new asset must be added to the allowlist in `operations/fleet/fleet/server/static_routes.py`; unlisted files are not served.
+- Robot pose is in the shared `map` frame (TF `map` to `<ns>base_footprint`); never introduce per-robot map frames in the drawing code.
+- Keep DOM-free logic in pure functions (the `*-view` / `createXPanel` files wire the DOM) so node tests cover it. Sightings and proposals are display-only: never feed them into goals or `cmd_vel`.
+- Do not call CORE directly or hold robot tokens in the browser.
+
+### Testing Requirements
+
+```bash
+node --test operations/fleet/test/web/
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/console -- operations/fleet/test/test_server_app.py operations/fleet/test/test_console_palette.py operations/fleet/test/test_console_disabled_features.py -q
+```
+
+`node --check <file>.js` is a quick syntax check for DOM-free source. Pytest and browser checks run from committed HEAD on remote test PCs per D-584. `test/test_remaining_platform_installed.py` checks wheel/self-contained sdist resources and HTTP allowlist/CSP.
+
+### Common Patterns
+
+Factory functions (`createMapView`, `createFormation`, ...) return handlers the shell wires; operator-facing strings are Korean.
+
+## Dependencies
+
+### Internal
+
+- `operations/fleet/fleet/server/static_routes.py` (allowlist, CSP), `operations/fleet/fleet/server/app.py`, `shared/web` (`/common/` assets)
+
+### External
+
+- None at runtime (browser only); node for tests

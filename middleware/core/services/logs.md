@@ -798,3 +798,179 @@
 - 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
 - gate 변화: SOURCE.
 - 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
+
+## 2026-10-08 · uncommitted · fix(maps): 수신 지도의 ID를 스냅숏에 보관
+- 변경: `MapSnapshotStore.set_map`이 선택 `map_id`를 격자와 같은 잠금 안에 저장한다. 로봇 상태 ID가 바뀌어도 기존 지도에 새 ID가 붙지 않는다.
+- 증거: gateway `test_map_snapshots.py` 11 passed. [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 계약 근거 추가. 실물 지도 전환은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(maps): 계획 경로 수신 근거 보관
+- 변경: `MapSnapshotStore`는 경로 점과 함께 수신 때 map ID·frame ID·monotonic 시각을 보관하고 마지막 수신 나이를 원자적으로 읽는다. 기존 `get_path()` 점 목록 계약은 유지한다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 경로 출처 근거 추가. 실기 메시지 readback은 HOLD.
+## 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
+- 변경: `recovery/junction_bend.py`(새 mixin) — `bend` 지시는 `armed` 동안 카메라 추종을 그대로 두고 받은 뒤 odom 이동 거리를 센다. 곧은 확신 추종 틱이 닻(몸이 따라온 선)을 남긴다. 호 시작점 `bend_tol_m` + 0.25 m 앞부터 곧은 확신이 아닌 첫 틱(또는 호 시작점 `bend_tol_m` 앞)에서 `bending`: 닻 직선 + 반지름 `bend_radius_m` 호 + 나가는 직선을 pure pursuit로 좇고, `reacquiring`은 나가는 직선을 0.20 m·5 s 안에서 좇으며 D-495 재획득이나 다음 교차로 감지로 끝, 아니면 `unresolved`. 매 틱 D-495 기동 twist(D-422 몸 sweep, enforce 증명)와 `motion_admitted(..., 'bend', map_id)`(IR `clear`만). 거리(odom × 1.08 > 남은 경로 + 0.05)·시간 상한, 근거 상실 `bend_basis_lost`. `junction.py`는 action·검증·`MANEUVER`·운동 근거 종류만 고쳤고, D-495 재획득 상수는 `junction_approach.py`로 옮겼다(값 그대로).
+- 증거: `test_junction_bend.py` 26건(지시 없음과 비트 같음, 카메라 추종 뒤 호와 재획득, lead 창 안 손실로 넘겨받기, 장애물 HOLD에서는 넘겨받지 않음, 닻 없음, 창 밖 감지 unexpected, IR·스캔 stale 근거 상실, IR centre, D-422 막힘 HOLD·재개·오래 막히면 끝, 거리·시간 상한, unresolved, 다음 교차로 감지로 끝, 재전송이 거리 유지, 필드 검증). services 전체 1310 passed(첫 커밋 기준).
+- SIM 뒤 고침: 추적 lookahead를 D-476 `bridge_lookahead_m`으로(모서리 안쪽으로 일찍 돎), 카메라 자신의 HOLD에서만 넘겨받기, 닻 없으면 호 시작점까지 지금의 HOLD, D-422 막힘은 중단이 아니라 그 틱 HOLD(`junction_bend_blocked`). `junction.py`는 굽이 `reacquiring`에서도 `obstacle_ahead`를 이어 보게 했다.
+- gate 변화: SOURCE. SIM은 `docs/validation/lane-bend-odom-sim-2026-10-08`, DEVICE 열림.
+- 결정: D-507 보충(2026-10-08 "지도 기반 odom 통과")
+
+## 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
+- 변경: 코드 변경 없음(SIM 증거). `docs/validation/lane-bend-odom-sim-2026-10-08/` 결과·하네스·분석.
+- 증거: CORE `e5735bd5f`, 도메인 86·`rosy_bendodom`·포트 8113. 아래 길 진입 18회 굽이 통과 18/18, 회전교차로 입구 14/18(4회는 넘겨준 뒤 keeper `flipping` LOST). 서쪽 출발은 굽이 전 모서리 LOST(기준선 5/5)로 측정 불가. 독립 안전 검토 APPROVE WITH NOTES, 크기 재판정 split(후속 브랜치).
+- gate 변화: SIM 부분 통과(아래 길 진입). DEVICE 열림.
+- 결정: D-507 보충
+
+## 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
+- 변경: `AuthorityMixin` — `set_authority(authority_id, leg_id, pose_stamp, until_m, ttl_s)`. odom 표본마다 CORE 벽시계·궤적·누적 경로 길이를 기록하고, `pose_stamp` 이전 표본 뒤 경로 길이를 빼서 남은 거리를 낸다. 남은 거리 ≤ `derived_stop_gap_m(min(cruise, max_linear))` 이면 선다(재출발은 + `obstacle_resume_hysteresis_m`). 같은 leg 에서 0.02 m 넘게 줄면 무시(ttl 미연장), `ttl_s` 만료·odom 낡음·궤적 변경·통행권 없음이면 선다. 설정 `authority_required` 또는 세션 첫 통행권 뒤에만 켜지고 모드 변경이 끝낸다. 게이트는 최종 결정을 0 으로만 만든다.
+- 증거: 모델 PC `test_line_authority.py` 13 통과(services·api_web·contracts·test/architecture 실행 2354 통과, 새 실패는 모델 PC의 git 없는 tar 환경 2건뿐이고 로컬 git 실행 41 통과). 변이: 만료 검사를 `+10 s` 로 바꾸면 2건 실패(`test_ttl_expiry_on_cores_clock_stands_the_robot`, `test_an_ignored_shrink_does_not_refresh_the_ttl`), 원본으로 통과.
+- gate 변화: SOURCE. SIM·DEVICE 전, 독립 Safety-Review 전.
+- 결정: D-517 4항 (M2). core_features 12921 (판정 12772+150=12922 안).
+
+## 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
+- 변경: (a14f0b847 와 함께) `ir_guard_enabled` 검증 문구를 D-517 전 그대로 되돌림(`authority_required` 는 자기 문구). 통행권 정지 거리는 `derived_stop_gap_m(max_linear)` — line follow 가 낼 수 있는 가장 빠른 속도(D-468 복귀 포함, cruise ≤ max_linear).
+- 증거: 모델 PC 수정 전 `test_config_flag_is_a_boolean`·`test_the_stop_gap_is_from_max_linear_not_cruise` 실패, 수정 뒤 대상 241 통과. services·gateway·test/ 전체는 main 과 같은 실패 목록(+ 병합 직후 생성 문서 낡음).
+- gate 변화: SOURCE. 독립 Safety-Review 재검토 전.
+- 결정: D-517 4항 독립 리뷰 MINOR 4·5. core_features 12922 (판정 12772+150 안).
+
+## 2026-10-08 · 854d2de64 · refactor(core): 교차로 믹스인을 recovery/junction/ 하위 패키지로
+- 변경: `recovery/junction.py`·`junction_approach.py`·`junction_bend.py`를 `git mv`로 `recovery/junction/gate.py`·`approach.py`·`bend.py`. `__init__.py`는 설명 문자열뿐(shim 없음). import는 `manager.py`, `core_api_web/api/deps.py`, 시험 셋에서 고침. 동작·API·설정 키 변경 없음. 분리 계획 2026-10-08 후속 절.
+- 증거: `test_line_junction.py`·`test_junction_approach.py`·`test_junction_bend.py`·`test_junction_turn_site_basis.py`·gateway `test_line_junction_api.py` 등 207 passed, known_failures 0 new. `test_module_structure.py` 34 passed.
+- gate 변화: 없음(SOURCE, 동작 없음)
+- 결정: `SIZE_UNITS`에 `recovery/junction`, 파일은 가장 안쪽 단위로 셈. recovery 3040→2093, junction 947. critic 독립 재판정 APPROVE WITH CHANGES(문구 반영). 2987 판정의 교차로 증가 금지는 이 이동으로 끝남
+- 교훈: 없음
+
+## 2026-10-08 · 070959eea · fix(core): 굽이 통과 중 본 교차로를 교차로 게이트로 넘김
+- 변경: lap SIM 원인 A(11/20). `recovery/junction/bend.py` 호 끝에서 목격을 지우지 않고(진입 yaw만), 통과가 끝날 때 넘겨받은 뒤 시작된 목격 묶음의 마지막 목격이 같은 odom 실행에 잰 가로선이 아직 앞이면(`approach.py` `_line_ahead`) 목격을 남겨 `waiting`(HOLD), 정지 진입 방향은 굽이 나가는 방향. `gate.py`는 odom이 그 선을 지날 때까지 그 목격을 감지로 셈(`_junction_held`, 낡은 odom 한 틱은 유지, epoch 바뀌면 끝). 리뷰 반영 6ef90b792·7cb2d775a. D-507 보충 8항
+- 증거: 수정 전 새 시험 4개 실패(굽이 뒤 `idle`, 다음 회전이 keeper를 따름), 수정 뒤 모델 PC 스냅숏 288 passed(교차로·굽이·arc·API·Fleet bend), 넓은 묶음 526 passed. 독립 Safety-Review code-reviewer(opus) APPROVE WITH NOTES. SIM은 아래 결과 행
+- gate 변화: SOURCE. SIM(모델 PC) 결과 기록 전
+- 결정: 크기 junction 959→978(판정 959+150 안)
+- 교훈: 한 칸을 쥔 기동이 끝날 때 그 기동 중 본 다음 근거를 지우면 다음 지시가 그 근거 없이 시작된다. 끝낼 때 넘길 것과 버릴 것을 측정(odom 앞인지)으로 가른다
+
+## 2026-10-08 · 7cb2d775a · test(sim): 굽이→교차로 넘겨주기 SIM (모델 PC)
+- 변경: `docs/validation/bend-junction-handoff-sim-2026-10-08` (lap 하네스, 도메인 89·`rosy_handoff`·포트 8288/8289)
+- 증거: 12회. SW 회전 끝 10/11(lap SIM 전 0/16), 넘겨주기 10/11, trip 완료 0/12. 원인 A·B·D로 끝난 run 0. 넘겨주지 못한 1회는 굽이 중 목격이 없던 run(모서리 오독, `fix/junction-corner-hold` 몫). 나머지 정지는 모두 SW 회전 뒤 회전교차로 둘레(D-520 호 주행 꺼짐)
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-10-08 · 8fa0df8f6 · fix(core): 기대 교차로 앞 keeper 모서리 회전은 HOLD junction_corner_hold
+- 변경: lap SIM 원인 A. 기대 창이 있는 지도 지시가 `armed` 이고 감지가 없을 때 `line/keep_debug` `strategy` 가 `corner_left`·`corner_right`(2 s 래치)이고 기대 가로선이 0.45 m + tol 안이면 keeper 의 모서리 회전 대신 HOLD(461259067, 5ec173670). 창을 잴 수 없으면 HOLD. 그 정지 중 지시가 만료되면 풀지 않고 새 지시나 모드 변경까지 HOLD(8fa0df8f6, fail closed). API Ref v1.148
+- 증거: 모델 PC 스냅숏 영향 묶음 423 passed, 교차로·Fleet d507 130 passed. 새 만료·목격 테스트는 수정 전 gate.py 에서 실패. 독립 Safety-Review code-reviewer(opus) APPROVE WITH NOTES
+- gate 변화: SOURCE. SIM은 lane-trip-lap-sim2 행
+- 결정: 없음
+- 교훈: 정지 사유를 새로 만들면 그 정지가 만료·재전송·모드 변경 중 어디서 풀리는지와 관제가 그 사유로 무엇을 하는지를 같이 정한다. 아니면 조용한 정지(stall 20 s)나 만료 뒤 풀림이 된다
+
+## 2026-10-08 · uncommitted · test(sim): Fleet 한 바퀴 SIM 2차 (모델 PC, main 47fa82b1a)
+- 변경: `docs/validation/lane-trip-lap-sim2-2026-10-08` (lap 하네스, 도메인 91·`rosy_lap2`·포트 8388/8389), `.gitattributes` 배치 목록 LF
+- 증거: 출하 기본 12회: 모서리·굽이·SW 회전 12/12, ring 0/12(`junction_corner_hold` 11 — keeper `corner_left`가 ring 곡선을 따름, SE `straight` 창이 `ring_s` 전체를 덮음; `pose` 1), 완료 0/12. D-520 `arc_enabled` 12회: SW 회전 12/12, SE 통과 2/12, 완료 1/12(arc_11), `lane_arc_edge` 10(호 시작 yaw가 접선보다 −12…−17°, Δr 최대 +0.068 m). 정지 뒤 Fleet 종료 0.12–0.49 s, hang 0
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 지도가 교차로를 말하는 자리의 keeper 모서리 금지는 곧은 spoke에서만 오독이다. 곡선 차로 위 `straight` 지시에서는 차로 자체를 막는다
+
+## 2026-10-08 · uncommitted · fix(core): 모서리 정지는 지시와 어긋나는 모서리만 (lap SIM 2 원인 1)
+- 변경: `junction_corner_hold` 범위를 좁혔다. `left`·`right` 는 반대쪽 모서리만, `straight` 는 새 선택 필드 `lane_turn_deg`(Fleet 지도 차로가 장소까지 도는 방향 변화)가 그 모서리 쪽으로 20° 이상이 아닐 때만 정지한다. 필드가 없으면 예전처럼 모든 모서리에서 정지. 리뷰 HIGH 반영: 모서리 방향마다 따로 2 s 래치(`_corner_left_at`·`_corner_right_at`), 반대 방향 한 프레임이 정지를 풀지 않는다(만료 때 포함)
+- 증거: 모델 PC 스냅숏 `test_junction_approach.py`·`test_line_junction_api.py` 108 passed, `test_trip_d507.py` 53 passed. 독립 Safety-Review code-reviewer(opus) 1차 REQUEST CHANGES(HIGH 래치) → 2차 APPROVE WITH NOTES
+- gate 변화: SOURCE. SIM은 lane-trip-lap-sim3 행
+- 결정: 같은 방향 모서리는 지시를 `armed` 로 둔다(47fa82b1a 이전 동작, 창·`junction_unexpected`·만료가 처리). 260919 회전교차로에는 안쪽 spoke가 없어 `straight` 의 차로 쪽 모서리 허용이 안전하다
+- 교훈: 지도 지시를 기준으로 keeper 판단을 막을 때는 지시가 말하는 방향과 keeper 방향이 같은지부터 본다. 곡선 차로 위 `straight` 는 방향이 없는 지시가 아니다
+
+## 2026-10-09 · uncommitted · test(sim): Fleet 한 바퀴 SIM 3차, 회전교차로 둘레 (모델 PC, main b23055884)
+- 변경: `docs/validation/lane-trip-lap-sim3-2026-10-09` (lap 하네스, 도메인 92·`rosy_ring`·포트 8488/8489, 출하 기본, arc 끔)
+- 증거: 12회: 모서리·굽이·SW 회전 12/12. SW 회전 끝 방향 −1.1…−8.0°(수정 전 약 −20°). ring 0/12, 완료 0/12. `junction_corner_hold` 오정지는 사라졌다(남은 8건은 차선을 잃은 뒤 후진 중 `corner_right`). ring 상실 원인: 섬 선이 시야 밖이고 접선 방향 화면에 SE spoke의 두 경계가 쌍으로 보여 keeper가 spoke로 향함(기록 2회, B8 재생 488/553·474/537 재현). 원시 기록 `X:\DevTemp\lap-sim3\lap3_runs_full.tgz`
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: keeper는 바꾸지 않았다. ring 통과는 D-520 호 주행 또는 keeper 지도 사전(새 입력)의 결정이 필요하다. B9 fixture 그대로
+- 교훈: 0.25 m 원 차로에서는 한쪽 경계가 늘 시야 밖이다. 보이는 온전한 차로가 내 차로라는 keeper 가정은 회전교차로 둘레에서 틀린다
+
+## 2026-10-09 · uncommitted · feat(core): D-541 trip lease 상태 제공자 (`state/manager.py`)
+- 변경: `StateManager.set_trip_lease_provider` — 스냅숏의 `trip_lease`·`trip_lease_ended`를 live로 읽는다. lease 자체는 `core/trip_lease.py`(gateway)에 둔다: core_features 크기 판정이 증가를 막는다. lease 동작: Fleet trip lease 한 개(로봇당). 같은 토큰·같은 `lease_id`만 renew, 그 밖은 `TRIP_LEASED`. TTL 1–10 s(기본 5) CORE 단조 시계. 만료·넘겨받기는 lease를 지운 뒤 락 밖에서 `halt`(CORE 배선: line-follow 끔, 내비게이션 취소, NAVIGATION→IDLE). 읽기는 만료시키지 않는다(5 Hz 타이머만) — 지난 lease는 처리될 때까지 계속 막는다. `trip_lease_ended`는 끝난 뒤 10 s 보인다. `trip_lease.renewed`는 lease당 30 s에 한 번. 주인 토큰의 teleop·다른 출발지 `/ws/state`는 `trip_lease.shared_token` 한 번.
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(모델 PC).
+- gate 변화: SOURCE. Safety-Review·SIM(Fleet kill → IDLE)·DEVICE 열림.
+
+## 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
+
+- 변경: 현재 지시·호 주행의 원래 seq·odom 진행 거리·만료를 묶어 junction/bend/ring 경로 문맥을 계산한다. 신선한 odom과 CAMERA_LINE 모드가 없으면 만들지 않는다. 발행 중인 문맥과 시각을 상태에서 읽는다.
+- 증거: services 1500 passed, `known_failures.py` 신규 실패 0. ROS-SIM·DEVICE 미확인.
+- gate 변화: D-531 P1 SOURCE 후보. 차선 선택 규칙은 그대로다.
+
+## 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
+
+- 변경: `exit_segment`가 있는 접근 지시를 `junction`으로 내고 실제 호가 running일 때만 `ring` 곡률을 낸다. 독립 검토에서 발견한 접근 차로 오거부 위험을 막는다.
+- 증거: `test_route_context.py` 6 passed(호 시작 전 사례 포함).
+- gate 변화: P1 SOURCE 후보.
+## 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
+- 변경: `localization/pose_request.py`(`PoseRequests`: 사유당 하나, `ttl_s` 30 s, 같은 사유는 id 유지), `recovery/lane_return_pose_request.py`(`fleet` 단계 또는 1 s 넘은 `pose_stale`에서 열고 그 밖의 틱·리셋에서 닫음, `resume_after_pose`는 수락된 결정 뒤 D-407 RESUME). `LocalizationAssist.on_result accepted`가 요청을 닫는다.
+- 증거: `middleware/core/services/test/test_lane_return_pose_request.py`.
+- gate 변화: SOURCE. Safety-Review 대상(line_follow/recovery, localization). SIM·DEVICE 열림.
+
+## 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
+- 변경: `on_result`는 결과의 `request_id`가 열린 요청의 id이고 Fleet이 보낸 결정일 때만 닫고 `fleet_pose` RESUME을 건다(사람 initialpose·homing 제외). line follow가 CAMERA_LINE이 아닌 틱(OFF, driver_released)에서도 요청을 닫는다.
+- 증거: `test_lane_return_pose_request.py`.
+- gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · fix(core): D-531 굽이 단계 문맥 발행
+
+- 변경: 굽이 `bending`·`reacquiring` 상태에는 `bend_phase`를 발행하고 접근 거리 `ahead_m`은 생략한다. 차선 복귀 시 B9가 이미 지난 접근 창에 의존하지 않게 한다.
+- 증거: `test_route_context.py` 집중 검사. 계약 v1.166.
+- gate 변화: SOURCE. 기본 `route_context_enabled=false`; 실물 재생·SIM·DEVICE 수용 대기.
+
+## 2026-10-10 · uncommitted · fix(core): preserve high-gain curvature at angular saturation
+
+- 변경: 선행 각속도 clip을 제거하고 최종 설정·수동 cap에서 선속도도 비례 축소한다.
+- 증거: test_line_follow_obstacle_path.py의 양방향 큰 오차·설정 상한·수동 상한·override 회귀. 수정 전 원격 시험 6 failed.
+- gate 변화: SOURCE. 독립 검토 snapshot-review /root/snapshot_review; 최종 원격 시험과 DEVICE 수용은 별도.
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-10 · uncommitted · feat: robot situation inquiry
+
+- Change: Existing stuck opened/asked events carry situation-inquiry-v1 goal, frame reference, scan age and attempts; no new motion authority.
+- Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
+- Gate: SOURCE; deployment and model accuracy are separate evidence.
+
+## 2026-10-10 · uncommitted · fix(core): bounded lane search
+
+- Change: Freeze verified same-corridor search bearing and search both directions without resetting the existing attempt or time budget.
+- Evidence: Remote return suite 128 passed, 0 NEW on d49e9740e; independent lap_review APPROVE WITH NOTES for the combined diff.
+- Gate: Source regression evidence only; new source DEVICE/FIELD pending.
+
+## 2026-10-11 · uncommitted · fix(core): fresh lane boundary evidence (D-623)
+
+- Change: Current inquiry carries pose-aligned lane boundary revision after three consistent new observations; stale data and camera motion do not advance the revision.
+- Evidence: Independent source review approved; remote regression pending.
+- Gate: SOURCE only; CORE motion authority and safety checks unchanged; DEVICE/FIELD pending.
+## 2026-10-11 · 1691d395c · refactor: Drive 조립 위치와 feature 책임 구분
+
+- 변경: 알고리즘과 최종 권한은 기존 feature에 두고 CORE 조립을 gateway/core/drive로 분리했다. stuck provider 안내 경로만 정렬했다.
+- 증거: 원격 전체 core_features 1675 성공, known_failures 0 NEW/0 known. CORE 조립은 별도 독립 Safety source 검토를 통과했다.
+- gate 변화: 없음. 새 producer·복구·곡률 정책과 장치 활성화는 추가하지 않았다.
+
+## 2026-10-11 · 177e7faff · refactor: Drive behavior source ownership (D-649)
+- 변경: Base 행동 구현 일곱 package를 Drive behaviors로 이전. 설치 core_features identity와 CORE Command/Safety 권한 유지; source/sdist/wheel, Docker, dev overlay, Safety 태그, architecture 크기·의존·영향 시험 연결 갱신.
+- 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 80 Git blob 동일, 독립 Safety 승인. 초기 원격 CORE 4498 passed와 경로 guard 실패 3건; 수정 후 설치/guard 117 passed, 0 NEW.
+- gate 변화: 배포·ARM64·DEVICE·FIELD gate 변경 없음. 최신 main 통합 시험 별도.
+- 결정: D-649
+
+## 2026-10-12 · d3bd5513c · 이동 교통 감속의 곡률 보존
+
+- 변경: D-735에 따라 공유 교통 정책의 ENFORCED FOLLOW/APPROACH/PROCEED 이동 후보는 선속도·각속도를 같은 비율로 줄인다. 선속도 0의 제자리 회전은 기존 각속도를 유지한다. DISABLED/MONITOR_ONLY, HOLD, finite 검사·현재 revision 검사·CORE 최종 명령 권한을 유지한다.
+- 증거: 정상 AI 원격 RED 7개로 forward/reverse APPROACH·PROCEED와 실제 CommandManager SDK 곡률 변형을 재현했다. 정상 모델 PC의 d3bd5513c 관련 402개 시험은 terminal exit 0이며 독립 SOURCE 승인이다. 모드·상태·이동/직진/후진/pivot/zero 60개 조합, issued trail·현재 revision, D-422 몸 쓸기·출력 경계·관측 법칙과 구조 검사를 포함한다. 원격 로그: X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/traffic-curve-green/run-1.txt.
+- gate 변화: SOURCE/원격 계약 증거만 추가한다. 기존 몸 쓸기 tighter-arc family는 원래 호를 포함하는 보수적 상위 집합으로 유지하며 안전 간격을 완화하지 않는다. 벽 STOP 분류·관측 목표 궤적·Fleet cap 전달·Gazebo 완주·실물 수용은 별도 검증 대상이다.
+- 결정: D-735
+
+## 2026-10-12 · ddbc7f64aa · D-732 owner 잠금을 기다리지 않는 정지 receipt
+
+- 변경: navigation·docking·swarm·command owner가 각자의 기존 native lock을 쓰는 capture_native_operation을 제공한다. 동일 ledger helper를 쓰며 실행·취소·readback 상태 전이는 바꾸지 않는다.
+- 증거: 실제 네 owner 잠금을 점유한 정지 latch 시험과 정지 후 잠금 경합 시험의 RED 5건 후 원격 safety/native owner·구조·설치 패키지 exit 0/NEW 0. navigation 600줄, swarm 단위 949줄, docking 788줄로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. CORE 단일 writer와 현장 수용 gate는 그대로다.
+## 2026-10-13 · 4d20dbc0d · 안전 정책 최초 실패를 출력 이후 기록
+
+- 변경: SDK None의 정확한 평가 window와 실제 evaluator traceback을 구분한다. CORE는 첫 실패만 보관하고 기존 단일 writer 이후 announce_pending에서 기록한다. 로그 실패도 후속 알림·zero·E-stop을 방해하지 않는다.
+- 증거: 정상 모델 PC RED 6 NEW 뒤 관련 policy handoff·command gate·CORE 연결·writer 순서·shadow·harness·release/provenance 회귀 terminal 0·NEW 0. 독립 SOURCE 승인. 실제 Leg9는 0.286048511 m 뒤 control:policy_failed로 종료했으며 기존 기록은 세부 원인을 구분하지 못했다.
+- gate 변화: 진단 SOURCE 증거만 추가한다. 정책 반환·TTL·clock·E-stop·EMERGENCY·속도 조건은 유지한다. 새 SDK/CORE 설치 실행과 지도 완주·실물 수용은 미검증이다.
+- 결정: 새 전체 동결 설치와 정지 점검 뒤 원인을 재현한다. 기존 Leg9 E-stop을 해제하지 않는다.
+

@@ -6,7 +6,7 @@
 
 ### Context
 
-관제 콘솔(`operations/fleet`)은 운용자에게 Bearer 토큰을 요구한다(`fleet/server/site_auth.py` `build_authorize`). 토큰은 관제 PC의 `/etc/rosy/site/secrets/operator.token`(root 전용) 또는 `site-users.yaml` 해시에 있다. 2026-10-06 실기 점검에서 이 토큰을 얻는 절차가 시험을 막았고, 사용자는 관제 PC와 다른 PC에서 토큰 없이 쓰기를 원했다.
+관제 콘솔(`operations/fleet`)은 운용자에게 Bearer 토큰을 요구한다(`fleet/server/site_auth.py` `build_authorize`). 토큰은 관제 PC의 `/etc/rosy/site-secrets/operator.token`(root 전용) 또는 `site-users.yaml` 해시에 있다. 2026-10-06 실기 점검에서 이 토큰을 얻는 절차가 시험을 막았고, 사용자는 관제 PC와 다른 PC에서 토큰 없이 쓰기를 원했다.
 
 D-471은 같은 망 전면 무인증을 기각하고 무코드 접속은 D-432 개발 연결 모드로만 둔다고 정했다. 그 결정은 CORE와 Pilot에 구현되어 있지만(`POST /api/v1/auth/development-session`) Fleet 콘솔에는 대응 경로가 없다.
 

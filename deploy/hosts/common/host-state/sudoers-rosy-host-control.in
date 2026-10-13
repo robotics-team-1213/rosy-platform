@@ -1,0 +1,1 @@
+@LOGIN@ ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control

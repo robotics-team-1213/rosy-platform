@@ -20,7 +20,7 @@
     <a class="skip-link" href="#entry-main">로그인과 작업 화면으로 건너뛰기</a>
     <ui-topbar class="entry-topbar">
       <ui-brand><a href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b></a></ui-brand>
-      <ui-tag id="entry-role" hidden></ui-tag>
+      <ui-tag id="entry-role" aria-label="접속 권한" hidden></ui-tag>
       <ui-button kind="quiet" id="entry-logout" hidden>로그아웃</ui-button>
       <ui-button kind="irreversible" id="entry-stop" data-always-live disabled reason="로그인 후 사용할 수 있습니다.">비상 정지</ui-button>
       <ui-status id="entry-stop-notice" hidden></ui-status>
@@ -290,7 +290,7 @@
             <canvas id="map-canvas" width="800" height="480" role="img" aria-label="점유 격자 지도"></canvas>
             <p id="map-empty" class="map-empty">맵 토픽을 기다리는 중입니다.</p>
           </div>
-          <ul id="map-legend" class="map-legend">
+          <ul id="map-legend" class="map-legend ui-legend">
             <li data-swatch="free">자유</li>
             <li data-swatch="occupied">점유</li>
             <li data-swatch="unknown">미지</li>
@@ -665,7 +665,7 @@
               <h3 id="slam-heading">맵핑 세션</h3>
               <ui-tag id="slam-capability" data-mode="UNKNOWN"></ui-tag>
             </header>
-            <p class="host-note">SLAM 세션은 이 로봇에서만 동작합니다. 저장하면 현재 map_id가 바뀝니다.</p>
+            <p class="host-note">맵핑 요청은 이 로봇에 전달됩니다. 세션 수락만으로 지도 갱신 여부는 확인할 수 없습니다. 저장하면 현재 map_id가 바뀝니다.</p>
             <div class="host-actions">
               <ui-button kind="quiet" type="button" id="slam-start">맵핑 시작</ui-button>
               <ui-button kind="quiet" type="button" id="slam-stop">맵핑 중지</ui-button>

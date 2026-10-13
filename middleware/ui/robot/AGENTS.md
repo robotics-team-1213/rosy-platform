@@ -36,6 +36,8 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 
 ### Working In This Directory
 
+- Read DESIGN.md color-role laws and shared component catalog before UI changes (D-624). Paint belongs to shared/web tokens and components; surfaces own placement and actions. Keep gallery and responsive/accessibility checks aligned.
+
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Assets install through `CMakeLists.txt`. Keep filenames `index.html`, `styles.css`, `app.js`.
 - CSP forbids inline script/style. Do not add `onclick=` handlers or `<style>` blocks.
@@ -60,3 +62,9 @@ Vanilla ES modules, no bundler. Import direction is one-way: `dom.js` ← `clien
 None (browser APIs only).
 
 <!-- MANUAL: -->
+
+### UI 역할과 공용 부품
+
+- `/dashboard`는 대상 신원과 목적 선택, `/console`은 상태·지도·선택한 조작 결과, `/setup`과 `/device`는 현재 절차와 근거를 먼저 보여준다. 역할·capability·신선도 검사와 CORE 최종 명령 권한을 유지한다.
+- 일반 조작·정지는 공용 48px/14px/좌우12px, 제목·묶음·접힘 행은 공용 역할 부품을 소비한다. 표면 CSS는 배치와 영상/지도 기하만 소유한다.
+- 브라우저 시험은 현재 선택 절차와 의미 있는 readout 이름을 찾는다. 다른 역할의 숨겨진 패널이나 숫자 행 순서를 사용자 화면으로 간주하지 않는다.

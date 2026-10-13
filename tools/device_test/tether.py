@@ -26,6 +26,7 @@ import math
 from pathlib import Path
 
 import edge_drive
+import identify
 from core_common.robot_body import PINKY_PRO
 
 CABLES_M = (2.0, 5.0)             # the two cables on site (user 2026-10-08)
@@ -70,10 +71,11 @@ def place(pose, offset):
 
 
 def binding(verdict, policy):
-    """What tether_check.jpg showed: cable, charger, picked pixels, margin and the capture pose."""
+    """What tether_check.jpg showed: cable, charger, picked pixels, margin, the capture pose and the
+    lamp identify that proved the robot (D-512 amendment 2)."""
     t = verdict["tether"]
     key = [t["cable_m"], t.get("charger_robot_frame"), t.get("pixels"), policy["margin_m"],
-           pose_of(verdict.get("pose_at_capture"))]
+           pose_of(verdict.get("pose_at_capture")), t.get("identity")]
     return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -105,6 +107,9 @@ def declared(verdict, policy):
 def check(verdict, policy):
     """declared() plus the agent's look at tether_check.jpg for exactly these values."""
     t = declared(verdict, policy)
+    ident = (t or {}).get("identity") or {}
+    if t is not None and not (ident.get("request_id") and "refused" not in ident):
+        raise ValueError("tether: no lamp identify proved the robot (tether.identity); run --tether-check again")
     if t is not None and not (t.get("visual_check_ok") is True and CHECK_IMAGE in (verdict.get("frames") or {})
                               and (t.get("check") or {}).get("for") == binding(verdict, policy)):
         raise ValueError(f"tether: run --tether-check, look at {CHECK_IMAGE}, then set tether.visual_check_ok "
@@ -163,7 +168,8 @@ def from_pixels(map_to_image, pixels, size, body=PINKY_PRO):
 
 def tether_check(robot, args):
     """--tether-check VERDICT --plan PLAN: draw the declared tether on the judged overhead frame.
-    Reads the site calibration only; sends nothing to the robot. Refuses rather than guessing a scale."""
+    Reads the site calibration; to the robot it sends only the lamp identify (identify.py, D-512
+    amendment 2), which must blink at the drawn robot. Refuses rather than guessing a scale or a robot."""
     import cv2
     import numpy as np
     from plan_rules import load_plan
@@ -209,11 +215,20 @@ def tether_check(robot, args):
     if not all(0 <= u < w and 0 <= q < h for u, q in (pts["charger"], pts["robot"])):
         raise SystemExit(f"tether check: charger or robot falls outside the overhead picture: {pts['charger']}, "
                          f"{pts['robot']}")
+    try:      # the drawn robot must be the target: its lamp blinks there (D-512 amendment 2)
+        t["identity"] = identify.identify(robot, pts["robot"], identify.radius_px(
+            rec["map_to_image"], draw_pose[:2], _project), path.parent,
+            identify.floor_polygon(rec["map_to_image"], rec.get("track_bounds_m"), _project))
+    except identify.Refused as exc:     # the refusal and its frames go into the verdict as evidence
+        t.update(identity=exc.evidence, visual_check_ok=False)
+        path.write_text(json.dumps(v, indent=2), encoding="utf-8")
+        raise SystemExit(f"tether check: {exc}") from exc
     ring = np.array([p for p in pts["circle"] if all(map(math.isfinite, p))], np.int32)
     cv2.polylines(img, [ring], True, (0, 220, 255), 2)
     cv2.circle(img, tuple(map(round, pts["charger"])), 7, (0, 0, 255), -1)
     cv2.circle(img, tuple(map(round, pts["robot"])), 6, (0, 200, 0), 2)
     cv2.arrowedLine(img, tuple(map(round, pts["robot"])), tuple(map(round, pts["heading"])), (0, 200, 0), 2)
+    cv2.circle(img, tuple(map(round, t["identity"]["blob_center"])), 4, (255, 0, 255), -1)   # lamp blob
     cv2.putText(img, f"charger, {t['cable_m']} m cable - {policy['margin_m']} m = {radius:.2f} m", (10, 24),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
     out = path.parent / CHECK_IMAGE
@@ -223,7 +238,8 @@ def tether_check(robot, args):
         "for": binding(v, policy), "mode": "pixels" if pixel else "map", "source_id": source, "map_id": rec["map_id"],
         "calibration_revision": rec.get("calibration_revision"), "use": rec.get("use")})   # D-457: display-only
     path.write_text(json.dumps(v, indent=2), encoding="utf-8")
-    print(f"look at {out}: red = charger, yellow = {radius:.2f} m stop radius, green = robot and heading. "
+    print(f"look at {out}: red = charger, yellow = {radius:.2f} m stop radius, green = robot and heading, "
+          f"magenta = the target's lamp blink. "
           f"If they match the picture, set tether.visual_check_ok true in {path}; otherwise fix the tether and rerun.")
     return 0
 
@@ -242,13 +258,28 @@ class Guard:
     def _pose(self, st):
         return pose_of(st.get("pose") if isinstance(st, dict) else None)
 
-    def _start(self, x, y, yaw):
-        """The charger from the pose the image check used; the first driving pose must still be it."""
+    def _near_capture(self, x, y, yaw, what):
         cx, cy, cyaw = self.capture
         moved, turned = math.hypot(x - cx, y - cy), abs(math.degrees(wrap(yaw - cyaw)))
         if moved > START_MAX_MOVE_M or turned > START_MAX_TURN_DEG:
-            raise Abort(f"tether: first driving pose is {moved:.3f} m / {turned:.1f} deg from the checked capture "
+            raise Abort(f"tether: {what} is {moved:.3f} m / {turned:.1f} deg from the checked capture "
                         f"pose (max {START_MAX_MOVE_M} m / {START_MAX_TURN_DEG} deg); preflight again")
+
+    def rebase(self, before, after):
+        """A CORE restart (the overlay) starts odometry again at zero. The robot must still be at the
+        capture pose just before the restart; the pose after it is then the reference, and the charger,
+        kept in the robot frame, moves with it (2026-10-10: a capture pose left by an earlier drive
+        aborted every run as 0.41 m / 69 deg away though the robot had not moved)."""
+        if not self.t:
+            return
+        if before is None or after is None:
+            raise Abort("tether: pose unknown around the CORE restart; the tether limits cannot be enforced")
+        self._near_capture(*before, "the pose just before the CORE restart")
+        self.capture = after
+
+    def _start(self, x, y, yaw):
+        """The charger from the pose the image check used; the first driving pose must still be it."""
+        self._near_capture(x, y, yaw, "first driving pose")
         self.anchor = place(self.capture, self.t["charger_robot_frame"])
 
     def _update(self, x, y, yaw, phase="drive"):

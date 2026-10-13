@@ -83,3 +83,12 @@ def test_snapshot_json_exposes_server_strings_and_thresholds():
     assert pose["evidence"] == "fresh"
     assert pose["stale_after_s"] == STALE_POSE_S
     assert pose["received_at"]
+
+
+def test_host_status_evidence_keeps_its_public_alias_and_wire_defaults():
+    from core_common.protocol.evidence import HostStatusEvidence
+    from core_common.protocol.schemas import HostStatusEvidence as PublicHostStatusEvidence
+    assert PublicHostStatusEvidence is HostStatusEvidence
+    assert PublicHostStatusEvidence().model_dump(mode="json") == {
+        "evidence": "unavailable", "observed_at": None, "age_s": None,
+        "stale_after_s": 15.0, "reason": ""}

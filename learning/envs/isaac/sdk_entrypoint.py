@@ -10,6 +10,19 @@ import sys
 import traceback
 
 
+def close_sdk(app, *, headless):
+    try:
+        if headless:
+            from importlib import import_module
+            manager = import_module('omni.kit.app').get_app().get_extension_manager()
+            # The URDF importer can enable this menu after the startup exclusion.
+            manager.set_extension_enabled_immediate('isaacsim.gui.menu', False)
+            if manager.is_extension_enabled('isaacsim.gui.menu'):
+                raise RuntimeError('headless menu still enabled')
+    finally:
+        app.close()
+
+
 def run_cli(main, exit_process=os._exit):
     status = 0
     try:

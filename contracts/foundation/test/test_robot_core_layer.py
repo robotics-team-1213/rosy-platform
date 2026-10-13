@@ -15,7 +15,7 @@ from core_common.config import ConfigError, load_config
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch, tmp_path):
     for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE",
-                 "ROSY_DEVICE_NAME", "ROSY_ROBOT_NUMBER", "ROSY_DEV_AUTH"):
+                 "ROSY_DEVICE_NAME", "ROSY_DEVICE_UID", "ROSY_ROBOT_NUMBER", "ROSY_DEV_AUTH"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
 

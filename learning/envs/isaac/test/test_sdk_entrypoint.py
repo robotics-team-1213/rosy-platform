@@ -77,9 +77,11 @@ def test_cli_control_status_is_not_replaced_with_success(failure, expected):
     assert codes == [expected]
 
 
-@pytest.mark.parametrize("runner", ["run_rosy", "import_omx"])
+@pytest.mark.parametrize("runner", ["run_rosy", "import_omx", "run_map_rl"])
 def test_public_runner_uses_status_preserving_entrypoint(runner):
-    source = (Path(__file__).parents[1] / f"{runner}.py").read_text(encoding="utf-8")
+    root = (Path(__file__).resolve().parents[4] / 'tools/sim/isaac'
+            if runner == 'run_map_rl' else Path(__file__).parents[1])
+    source = (root / f"{runner}.py").read_text(encoding="utf-8")
     assert "run_cli(main)" in source
 
 @pytest.mark.parametrize('initial_status', [0, 2])
@@ -95,3 +97,36 @@ def test_stream_flush_failure_is_nonzero_and_other_stream_is_flushed(monkeypatch
             raise SystemExit(initial_status)
     helper().run_cli(main, lambda code: events.append(('exit', code)))
     assert events == ['stdout', 'stderr', ('exit', initial_status or 1)]
+
+
+@pytest.mark.parametrize('failed', [False, True])
+def test_headless_close_removes_menu_before_stage_and_still_closes_on_failure(monkeypatch, failed):
+    events = []
+    def disable(name, enabled):
+        events.append((name, enabled))
+        if failed:
+            raise RuntimeError('menu cleanup failed')
+    manager = SimpleNamespace(set_extension_enabled_immediate=disable,
+                              is_extension_enabled=lambda name: False)
+    monkeypatch.setitem(sys.modules, 'omni.kit.app', SimpleNamespace(
+        get_app=lambda: SimpleNamespace(get_extension_manager=lambda: manager)))
+    app = SimpleNamespace(close=lambda: events.append('stage-close'))
+    if failed:
+        with pytest.raises(RuntimeError, match='menu cleanup failed'):
+            helper().close_sdk(app, headless=True)
+    else:
+        helper().close_sdk(app, headless=True)
+    assert events == [('isaacsim.gui.menu', False), 'stage-close']
+
+
+def test_visible_close_keeps_menu_and_headless_disable_refusal_is_failure(monkeypatch):
+    events = []
+    app = SimpleNamespace(close=lambda: events.append('stage-close'))
+    helper().close_sdk(app, headless=False)
+    manager = SimpleNamespace(set_extension_enabled_immediate=lambda *args: None,
+                              is_extension_enabled=lambda name: True)
+    monkeypatch.setitem(sys.modules, 'omni.kit.app', SimpleNamespace(
+        get_app=lambda: SimpleNamespace(get_extension_manager=lambda: manager)))
+    with pytest.raises(RuntimeError, match='headless menu still enabled'):
+        helper().close_sdk(app, headless=True)
+    assert events == ['stage-close', 'stage-close']

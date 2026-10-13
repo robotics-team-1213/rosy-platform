@@ -31,6 +31,24 @@ def browser_tests_enabled() -> bool:
     return "1" in (os.environ.get("ROSY_RUN_BROWSER_TESTS"), os.environ.get("ROSY_BROWSER_TESTS"))
 
 
+def open_token_access(page) -> None:
+    """Open the paired console's token fallback before using its controls."""
+    try:  # a polling console may never go idle; the wait only covers the auth refresh
+        page.wait_for_load_state("networkidle", timeout=5000)
+    except Exception as error:  # playwright TimeoutError, imported lazily like the rest of the harness
+        if type(error).__name__ != "TimeoutError":
+            raise
+    # Reconnect publishes selections before finishing; open after its controls settle.
+    page.wait_for_function("() => !document.getElementById('token-save')?.disabled")
+    # D-540 2: below 90rem the token sits in the header fold behind 설정.
+    toggle = page.locator("#topbar-more")
+    if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
+        toggle.click()
+    details = page.locator("#token-access")
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+
+
 def safe_listener(host: str = "127.0.0.1") -> socket.socket:
     """A socket bound to a free port Chromium will load (never a restricted one)."""
     for _ in range(64):

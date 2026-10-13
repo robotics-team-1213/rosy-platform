@@ -54,6 +54,21 @@ class LaneJunctionPort(Protocol):
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         """The robot's selected line-follow mode (``GET /api/v1/line-follow`` ``mode``)."""
 
+    async def start_camera_line(self, robot_id: str) -> dict:
+        """D-601 A: ``PUT /api/v1/line-follow/mode {mode: CAMERA_LINE}`` from the trip lease owner."""
+
+    async def front_camera(self, robot_id: str) -> dict:
+        """D-601 B: ``GET /api/v1/vision/front/status``."""
+
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
+        """D-603: ``POST /api/v1/motion/rotate_to`` (the trip start's alignment turn)."""
+
+    async def rotate_status(self, robot_id: str) -> dict:
+        """D-603: ``GET /api/v1/motion/rotate_to``."""
+
+    async def rotate_stop(self, robot_id: str) -> dict:
+        """D-603: ``DELETE /api/v1/motion/rotate_to``."""
+
 
 class HttpLaneJunction:
     """D-494 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
@@ -77,17 +92,52 @@ class HttpLaneJunction:
     async def junction_state(self, robot_id: str) -> Optional[dict]:
         line = (await self._client(robot_id).state()).get("line_follow") or {}
         junction = line.get("junction")
-        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
-        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
+        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction.
+        # D-517 M3: a D-407 stuck or a RECOVERING state may reverse; no follower follows it then.
+        # D-520 2: ``arc`` is CORE's ``line_follow.arc`` record (arc_seq, from_place_id, state, ...)
+        recovering = line.get("state") == "RECOVERING" or line.get("stuck") is not None
+        return ({**junction, "line_reason": line.get("reason"), "line_recovering": recovering,
+                 "arc": line.get("arc")}
+                if isinstance(junction, dict) else None)
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
         # robot going), so the immediate stop is mode OFF, the existing Fleet-allowed selection.
         return await self._client(robot_id).line_follow_mode("OFF")
 
+    async def send_authority(self, robot_id: str, body: dict) -> dict:
+        """D-517 4: ``POST /api/v1/line-follow/authority`` (``trip_authority``)."""
+        return await self._client(robot_id).line_follow_authority(body)
+
+    async def send_advice(self, robot_id: str, body: dict) -> dict:
+        """D-551: ``POST /api/v1/line-follow/advice`` (``trip_advice``)."""
+        return await self._client(robot_id).line_follow_advice(body)
+
+    async def trip_lease(self, robot_id: str, body: dict) -> dict:
+        """D-541 7: ``PUT /api/v1/trip-lease`` with Fleet's own robot token (``fleet.traffic.trip_lease``)."""
+        return await self._client(robot_id).trip_lease(body)
+
+    async def trip_lease_release(self, robot_id: str, lease_id: str) -> dict:
+        return await self._client(robot_id).trip_lease_release(lease_id)
+
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None
+
+    async def start_camera_line(self, robot_id: str) -> dict:
+        return await self._client(robot_id).line_follow_trip_start()
+
+    async def front_camera(self, robot_id: str) -> dict:
+        return await self._client(robot_id).front_status()
+
+    async def rotate_to(self, robot_id: str, delta_deg: float, operator_name: str) -> dict:
+        return await self._client(robot_id).rotate_to(delta_deg, operator_name)
+
+    async def rotate_status(self, robot_id: str) -> dict:
+        return await self._client(robot_id).rotate_to_status()
+
+    async def rotate_stop(self, robot_id: str) -> dict:
+        return await self._client(robot_id).rotate_to_stop()
 
 
 @dataclass(frozen=True)
@@ -115,6 +165,18 @@ class TripConfig:
     junction_wait_s: float = 10.0
     #: A trip starts only within this long after the pose's sighting anchor.
     start_anchor_age_s: float = 2.0
+    #: D-593 7 (user, 2026-10-10): an operator-pin anchor up to the map pose's anchor age limit
+    #: (10 s) also starts a trip, but only while odom has moved at most this much since the pin.
+    pin_start_still_m: float = 0.02
+    pin_start_still_deg: float = 2.0
+    #: D-601 D (user, 2026-10-10): a lane trip starts only with the robot within this of its first
+    #: lane's direction (and on that lane); the planner's own snap allows ``fleet.routing.heading_tol_deg``.
+    start_heading_tol_deg: float = 20.0
+    #: D-601 B: a lane plan needs the robot's front preview live; false only where none exists (SIM).
+    lane_camera_check: bool = True
+    #: D-603: a start refused TRIP_START_HEADING_MISMATCH on its lane asks CORE ``rotate_to`` first
+    #: (off until field-accepted).
+    auto_align: bool = False
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -123,6 +185,11 @@ class TripConfig:
     port_timeout_s: float = 1.5
     #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30).
     expect_tol_min_m: float = 0.12
+    #: D-520 1: a lane within this of one circle is an ``exit_segment`` (260919 ring: 0.00007 m).
+    arc_fit_tol_m: float = 0.005
+    #: D-520 1: lane centre to the outer painted line's centre on a curve (260919 ring: line
+    #: radii 0.155/0.345 m, half of 0.19); the site map has no paint, so it is site config.
+    arc_outer_line_offset_m: float = 0.095
     #: Robots of trips open before a restart are stopped every this long, this many times at most.
     restart_retry_s: float = 10.0
     restart_attempts: int = 30
@@ -130,9 +197,19 @@ class TripConfig:
     def __post_init__(self) -> None:
         for item in fields(self):
             value = getattr(self, item.name)
+            if item.name in ("lane_camera_check", "auto_align"):
+                if not isinstance(value, bool):
+                    raise ValueError(f"fleet.trip.{item.name} must be true or false")
+                continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+        if not 0.05 <= self.arc_outer_line_offset_m <= 0.20:  # D-520 1: CORE's range
+            raise ValueError("fleet.trip.arc_outer_line_offset_m must be in [0.05, 0.20]")
+        if self.start_heading_tol_deg > 90.0:
+            raise ValueError("fleet.trip.start_heading_tol_deg must be at most 90")
+        if self.pin_start_still_m > 0.10 or self.pin_start_still_deg > 10.0:  # D-593 7: "not moved"
+            raise ValueError("fleet.trip.pin_start_still_m/deg must be at most 0.10 m / 10 deg")
         if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
             raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 
@@ -174,6 +251,8 @@ _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
 MAX_WINDOW_BEND_DEG = 15.0
 #: The lane heading is checked this often ahead of the robot.
 WINDOW_BEND_STEP_M = 0.02
+#: CORE's lane_turn_deg range (lap SIM 2).
+MAX_LANE_TURN_DEG = 360.0
 # D-507 B9 diagnostic only: inspect the current edge, never authorize motion from this.
 BEND_PREVIEW_M = 0.40
 BEND_MAX_ANGLE_DEG = 80.0  # keeper's non-square bend limit
@@ -264,21 +343,90 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         # No negative pivot without a window: map-backed CORE holds any unplaced sighting.
     if not window:
         return fields  # no window: map-backed CORE holds a junction sighting here
+    tol = _pose_tol(live, config, expect_in,
+                    _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose))
+    fields.update(expect_in_m=expect_in, expect_tol_m=tol)
+    if action == STRAIGHT:  # lap SIM 2: CORE follows a keeper corner the way this lane turns
+        turn = math.degrees(_lane_turn(live.arc(index), live.segments[index]["s_to"], remaining))
+        fields["lane_turn_deg"] = round(max(-MAX_LANE_TURN_DEG, min(turn, MAX_LANE_TURN_DEG)), 1)
+    return fields
+
+
+def _pose_tol(live: "LiveTrip", config: TripConfig, travel: float = 0.0, extra: float = 0.0) -> float:
+    """How well the map pose places the robot along its lane, at most ``MAX_EXPECT_TOL_M``:
+    ``travel`` is the odom path CORE measures to the place, ``extra`` widens a known pose."""
+    caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
-        tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
-    else:
-        # ponytail: the map pose has no along-path error estimate, so it is odom drift over the
-        # distance dead-reckoned since the last sighting and over the path CORE measures to the
-        # place, plus how far the robot drives at its trip speed over the pose age, the measured
-        # read-to-send time and SEND_ALLOWANCE_S, floored by the site knob ``expect_tol_min_m``;
-        # replace with the provider's own covariance once MapPose reports one.
-        latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
-        tol = max(config.expect_tol_min_m,
-                  ODOM_DRIFT_PER_M * (reckoned + expect_in) + speed * latency + ENDPOINT_TOL_M)
-        tol += _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose)
-    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
-    return fields
+        return MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
+    # ponytail: the map pose has no along-path error estimate, so it is odom drift over the
+    # distance dead-reckoned since the last sighting and over the path CORE measures to the
+    # place, plus how far the robot drives at its trip speed over the pose age, the measured
+    # read-to-send time and SEND_ALLOWANCE_S, floored by the site knob ``expect_tol_min_m``;
+    # replace with the provider's own covariance once MapPose reports one.
+    latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
+    tol = max(config.expect_tol_min_m,
+              ODOM_DRIFT_PER_M * (reckoned + travel) + speed * latency + ENDPOINT_TOL_M)
+    return round(min(tol + extra, MAX_EXPECT_TOL_M), 3)
+
+def bend_geometry(place, arc) -> Optional[tuple[float, float, float, float]]:
+    """``(s of the arc start, s of its end, signed turn deg, radius)`` of a ``bend`` place on this
+    lane arc in its direction of travel, or None. Both tangent points must lie on the arc and the
+    lane must run the bend's entering way at the start (either drawn direction of the place)."""
+    if getattr(place, "kind", None) != "bend" or arc.drive_mode != "lane":
+        return None
+    turn = wrap(place.exit_yaw - place.yaw)
+    for entry, delta in ((place.yaw, turn), (wrap(place.exit_yaw + math.pi), -turn)):
+        t = place.radius_m * math.tan(abs(delta) / 2)
+        off_a, s_a, heading = arc.project(place.x - t * math.cos(entry), place.y - t * math.sin(entry))
+        off_e, s_e, _ = arc.project(place.x + t * math.cos(entry + delta), place.y + t * math.sin(entry + delta))
+        if (max(off_a, off_e) <= ENDPOINT_TOL_M and s_e > s_a
+                and abs(math.degrees(wrap(heading - entry))) <= MAX_WINDOW_BEND_DEG):
+            return s_a, s_e, math.degrees(delta), place.radius_m
+    return None
+
+
+def next_bend(live: "LiveTrip", index: int, s: float) -> Optional[dict]:
+    """The first bend on this segment the robot has not passed and Fleet has not finished."""
+    found = []
+    for place_id, place in live.graph.places.items():
+        geometry = None if place_id in live.bends_done else bend_geometry(place, live.arc(index))
+        if geometry is not None and s < geometry[1] and geometry[0] < live.segments[index]["s_to"]:
+            found.append((geometry[0], place_id, geometry))
+    if not found:
+        return None
+    s_start, place_id, (_, s_end, turn, radius) = min(found)
+    return {"place_id": place_id, "s_start": s_start, "s_end": s_end, "turn_deg": turn, "radius_m": radius}
+
+
+def straight_approach(arc, s: float, s_start: float) -> bool:
+    """The lane runs within ``MAX_WINDOW_BEND_DEG`` of its heading at ``s_start`` from ``s`` on:
+    CORE measures ``bend_in_m`` as odom travel, and through a corner the robot cuts the lane short
+    (SIM 2026-10-08: sent inside the W->S corner, the arc started late, 5 cm outside)."""
+    heading = arc.point_at(s_start)[2]
+    steps = max(1, math.ceil((s_start - s) / WINDOW_BEND_STEP_M))
+    return all(abs(math.degrees(wrap(arc.point_at(s + (s_start - s) * k / steps)[2] - heading)))
+               <= MAX_WINDOW_BEND_DEG for k in range(steps + 1))
+
+
+def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig) -> Optional[dict]:
+    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
+    and ``bend_radius_m``; None on another map version, when the arc start is not 0-2 m ahead or
+    while the lane before it still turns (``straight_approach``)."""
+    # The pose is latency seconds old and the robot drove on meanwhile: a bend_in_m measured from
+    # it starts the arc late and the exit runs outside the lane (Gazebo lap 2026-10-13: 2 cm late,
+    # 1.8 cm toward the wall after a 64 deg bend). Leading by the trip speed errs to the inside.
+    caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
+    age, lead = pose.get("age_s"), 0.0
+    if age is not None and live.pose_read_at is not None:
+        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
+    ahead = bend["s_start"] - s
+    bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
+    if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
+            or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
+        return None
+    return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
+            "bend_radius_m": bend["radius_m"]}
 
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
@@ -311,6 +459,18 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
     return past if past <= MAX_PIVOT_PAST_LINE_M else None
 
 
+def _lane_steps(arc, s_to: float, remaining: float) -> list:
+    """Heading changes (rad, left +) along the rest of the lane, WINDOW_BEND_STEP_M apart."""
+    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
+    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
+    return [wrap(b - a) for a, b in zip(headings, headings[1:])]
+
+
+def _lane_turn(arc, s_to: float, remaining: float) -> float:
+    """The signed heading change (rad, left +) along the rest of the lane to the place."""
+    return sum(_lane_steps(arc, s_to, remaining))
+
+
 def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     """A robot this far beside the lane drives a curve this much longer or shorter than its
     centre line: the offset times the heading change (rad) along the rest of the lane. Safety
@@ -318,9 +478,12 @@ def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     if pose.get("x") is None or pose.get("y") is None:
         return 0.0
     offset = arc.project(pose["x"], pose["y"])[0]
-    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
-    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
-    return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
+    return offset * sum(abs(step) for step in _lane_steps(arc, s_to, remaining))
+
+
+def arc_newer(seq, base: Optional[int]) -> bool:
+    """D-520 2: CORE opened arc ``seq`` after the one numbered ``base`` (None: none seen)."""
+    return isinstance(seq, int) and not isinstance(seq, bool) and (base is None or seq > base)
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
@@ -345,6 +508,8 @@ class LiveTrip:
         #: The last instruction CORE accepted: index, action, place, seq, at.
         self.sent: Optional[dict] = None
         self.first_seq: Optional[int] = None
+        #: D-520 2: CORE's last ``arc_seq`` at our first send; a newer arc is one of this trip's.
+        self.arc_base: Optional[int] = None
         #: Our held replan stop (seq) that the confirmed plan's action may replace while executing.
         self.replaceable: Optional[int] = None
         self.last_goal: Optional[tuple[float, float]] = None
@@ -360,6 +525,8 @@ class LiveTrip:
         self.lap_route: Optional[list] = None
         #: D-517 3: the arc ids of one lap of the cycle (via…, to); the loop it shares with others.
         self.lap_arcs: tuple[str, ...] = ()
+        #: D-517 9 M3: the leader this trip follows in a lane convoy (None: not a follower).
+        self.convoy: Optional[str] = (request.get("convoy") or {}).get("leader")
         #: Failed lap checks in a row and when the last one ran (retried every ``LAP_RETRY_S``).
         self.lap_tries = 0
         self.lap_tried_at = -math.inf
@@ -373,6 +540,11 @@ class LiveTrip:
         self.at: Optional[tuple[int, float]] = None
         #: The block table's answer for this robot (``TrafficService``): waiting_for, authority, refused_at_m.
         self.traffic: Optional[dict] = None
+        #: D-517 4: the odom stamp of the pose ``at`` came from (set with it); CORE's last ``authority``.
+        self.at_stamp: Optional[float] = None
+        self.authority: Optional[dict] = None
+        #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
+        self.bends_done: set[str] = set()
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
         """``(reason, detail)`` when CORE's junction state ends the trip, else None.
@@ -382,6 +554,8 @@ class LiveTrip:
         (``remaining`` m to its place) CORE is ``unexpected``, or ``waiting`` with the place
         beyond ``arm_distance_m`` (no instruction of ours is due there). The trip view keeps the
         map pose; ``line_reason`` is CORE's line-follow reason beside the junction state.
+        Lap SIM A ``junction_corner_hold``, at once: CORE holds our instruction short of the
+        keeper's corner and keeps holding it, so the trip ends now, not at the stall check.
         """
         junction = self.junction
         state = junction.get("state")
@@ -392,6 +566,8 @@ class LiveTrip:
                 state == "waiting" and remaining > config.arm_distance_m)):
             return "junction_unexpected", {**detail, "line_reason": junction.get("line_reason")}
         ours = self.first_seq is not None and (junction.get("seq") or 0) >= self.first_seq
+        if ours and junction.get("line_reason") == "junction_corner_hold":
+            return "junction_corner_hold", {**detail, "line_reason": "junction_corner_hold"}
         if (state in ("aborted", "unresolved") and ours) or (
                 state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
             return "junction", detail
@@ -413,7 +589,9 @@ class LiveTrip:
         return self.graph.arcs[arc_id(self.segments[index])]
 
     def place(self, index: int) -> Optional[str]:
-        return ends_at_place(self.graph, self.segments[index])
+        place = ends_at_place(self.graph, self.segments[index])
+        return (place if place is not None or self.view["repeat"] or index != len(self.segments) - 1
+                else self.view["plan"]["actions"][-1]["place_id"])
 
     def progress(self, index: int, s: float) -> float:
         """Metres along the whole plan."""

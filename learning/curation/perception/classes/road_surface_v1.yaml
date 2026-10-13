@@ -1,0 +1,10 @@
+# D-659/D-663: new whole-road review workspace only; never reinterpret legacy masks.
+# Drivable labels all visible road floor, independent of the robot's region or goal.
+# Paint has its own class; occluded/unobserved pixels use mask value 255.
+classes:
+- {index: 0, name: floor, role: background, display: 도로 밖 바닥·배경, color: [90, 90, 90]}
+- {index: 1, name: lane_line, role: lane_marking, display: 차선·도로 경계 칠, color: [255, 210, 0]}
+- {index: 2, name: wall, role: wall, display: 벽, color: [255, 90, 90]}
+- {index: 3, name: drivable, role: drivable, semantic: road_surface/1, display: 보이는 도로 바닥 전체, color: [60, 200, 60]}
+- {index: 4, name: stop_line, role: stop_line, display: 정지선, color: [0, 200, 255]}
+- {index: 5, name: crosswalk, role: ignore, display: 횡단보도 칠, color: [255, 255, 255]}

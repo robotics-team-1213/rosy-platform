@@ -117,7 +117,9 @@ class DevelopmentSessions:
         with self._lock:
             self._prune(now)
             while len(self._sessions) >= MAX_SESSIONS:
-                self._sessions.popitem(last=False)  # D-473 2: the oldest goes first
+                # D-473 2: the oldest goes first, judged by last use (field check 2026-10-10: by
+                # issue time, new tabs evicted a console still polling every second).
+                self._sessions.popitem(last=False)
             self._sessions[_digest(token)] = (principal, expires)
         return token, principal, datetime.fromtimestamp(expires, timezone.utc).isoformat(timespec="seconds")
 
@@ -128,8 +130,11 @@ class DevelopmentSessions:
             matched = None
             for stored, (principal, _expires) in self._sessions.items():
                 if hmac.compare_digest(stored, digest):
-                    matched = principal
-            return matched
+                    matched = stored, principal
+            if matched is None:
+                return None
+            self._sessions.move_to_end(matched[0])  # least recently used is evicted first
+            return matched[1]
 
     def revoke(self, token: str) -> None:
         with self._lock:

@@ -4,9 +4,9 @@ import asyncio
 from datetime import datetime, timezone
 
 from core_common.protocol.schemas import MissionFeedbackContext, MissionFeedbackTurnScope
-from fleet.ai.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
-from fleet.ai.tool_dispatch import MissionFeedbackToolDispatcher
+from rosy.decision.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
+from fleet.server.model_feedback_dispatch import MissionFeedbackToolDispatcher
 from test_mission_api import _client, _create, _resolve
 
 
