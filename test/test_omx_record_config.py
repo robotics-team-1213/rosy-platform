@@ -26,8 +26,7 @@ def config(tmp_path):
                   'max_relative_target': 1.0,
                   'cameras': {'front': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/camera',
                                         'width': 640, 'height': 480, 'fps': 30}}},
-        'teleop': {'type': 'omx_leader', 'id': 'leader',
-                   'port': '/dev/serial/by-id/leader', 'use_degrees': False},
+        'teleop': {'type': 'omx_leader', 'id': 'leader', 'port': '/dev/serial/by-id/leader'},
         'dataset': {'repo_id': 'local/omx-pick', 'root': str(tmp_path / 'recording'),
                     'single_task': 'Put the cube in the tray', 'fps': 30,
                     'num_episodes': 5, 'episode_time_s': 30, 'reset_time_s': 15,
@@ -50,6 +49,7 @@ def test_preparation_keeps_official_config_without_connecting(module, config):
     ('robot', 'port', '/dev/ttyACM0'), ('robot', 'id', ''),
     ('robot', 'max_relative_target', None), ('robot', 'max_relative_target', float('nan')),
     ('teleop', 'port', '/dev/serial/by-id/follower'), ('teleop', 'use_degrees', True),
+    ('robot', 'use_degrees', True),
 ])
 def test_unsafe_or_unfilled_record_settings_are_rejected(module, config, section, key, value):
     config[section][key] = value

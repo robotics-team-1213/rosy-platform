@@ -18,8 +18,7 @@
   "teleop": {
     "type": "omx_leader",
     "id": "",
-    "port": "",
-    "use_degrees": false
+    "port": ""
   },
   "dataset": {
     "repo_id": "",

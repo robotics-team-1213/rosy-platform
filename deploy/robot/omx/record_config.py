@@ -38,12 +38,10 @@ def validate_config(config):
         port = _text(device.get('port'), f'{kind} port')
         if not re.fullmatch(r'/dev/serial/by-id/[^/\\\s<>]+', port):
             raise ValueError('select a persistent /dev/serial/by-id/ port')
-        if type(device.get('use_degrees')) is not bool:
-            raise ValueError('use_degrees must be explicit for both devices')
     if robot['port'] == leader['port'] or robot['id'] == leader['id']:
         raise ValueError('leader and follower must have distinct identities and ports')
-    if robot['use_degrees'] != leader['use_degrees']:
-        raise ValueError('leader and follower units must match')
+    if robot.get('use_degrees') is not False or 'use_degrees' in leader:
+        raise ValueError('OMX leader uses normalized units; follower use_degrees must be false')
     _positive(robot.get('max_relative_target'), 'max_relative_target')
     if dataset.get('push_to_hub') is not False or dataset.get('private') is not True:
         raise ValueError('record locally with push_to_hub=false and private=true')
