@@ -52,13 +52,14 @@ function grantRow(grant = null) {
     choices.replaceChildren();
     for (const [value, label] of Object.entries(CAPABILITIES[kind.value])) {
       const wrapper = document.createElement('label'), input = document.createElement('input');
-      input.type = 'checkbox'; input.value = value; input.checked = selectedCaps.includes(value);
+      input.type = 'checkbox'; input.className = 'ui-field'; input.value = value; input.checked = selectedCaps.includes(value);
       wrapper.append(input, document.createTextNode(label + ' ')); choices.append(wrapper);
     }
   };
   if (grant) { [kind.value, id.value] = grant.resource.split(':'); }
   draw(grant?.capabilities); kind.addEventListener('change', () => draw());
-  const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '자원 제거';
+  const remove = document.createElement('ui-button'); remove.setAttribute('kind', 'quiet');
+  remove.setAttribute('type', 'button'); remove.textContent = '자원 제거';
   remove.addEventListener('click', () => group.remove()); group.append(remove); $('account-grants').append(group);
 }
 function edit(row = null) {
@@ -75,7 +76,8 @@ function edit(row = null) {
 async function load() {
   rows = await request(endpoint); $('account-list').replaceChildren();
   for (const row of rows) {
-    const item = document.createElement('li'), button = document.createElement('button'); button.type = 'button';
+    const item = document.createElement('li'), button = document.createElement('ui-button');
+    button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
     button.textContent = `${row.login} · ${row.enabled ? '사용 중' : '정지됨'}`;
     button.addEventListener('click', () => edit(row)); item.append(button); $('account-list').append(item);
   }
