@@ -268,7 +268,7 @@
   --border-subtle: var(--line-10);
   --border-default: var(--line-14);
   --border-strong: var(--line-30);
-  /* D-741 — 단추와 입력의 경계. 면을 가르는 --border-default보다 진해 3:1을 넘는다. */
+  /* D-741 — 단추와 입력의 경계. 어둡게 테마에서 3:1을 넘는다. 밝게 테마에서는 2.4:1이라 쓰기 전에 값을 다시 정한다. 아직 쓰는 곳이 없다. */
   --control-line: var(--line-40);
   /* D-741 — 옆의 틀(레일, 하위 탐색, 오른쪽 칸)의 면. */
   --surface-chrome: var(--ground-raise);
