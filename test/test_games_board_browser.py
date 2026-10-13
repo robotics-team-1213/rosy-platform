@@ -766,6 +766,7 @@ def test_stalled_stop_request_recovers_for_retry(width, height):
                     # D-741: the stop is the right end of the top bar (was a full-width bottom row).
                     assert abs(layout["stop"]["right"] - layout["score"]["right"]) <= 1, (state, layout)
                     assert layout["stop"]["bottom"] <= layout["score"]["top"], (state, layout)
+                    assert layout["stop"]["width"] >= 96 and layout["stop"]["height"] >= 44, (state, layout)
                 save_temp_screenshot(page, f"games_board_stop_{state}_{width}x{height}.png")
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
@@ -825,6 +826,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
     # D-741: the stop is the right end of the top bar (was a full-width bottom row).
     assert abs(halt["right"] - fit["panels"][0]["right"]) <= 1 and halt["bottom"] <= fit["topbar"], fit
+    assert halt["right"] - halt["left"] >= 96 and halt["bottom"] - halt["top"] >= 44, fit
     assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
     assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
