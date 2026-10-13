@@ -2889,11 +2889,19 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
           const more = document.getElementById('topbar-more');
           const next = more.getClientRects().length ? more.getBoundingClientRect() : null;
           return {lines, textRight: text.right, boxRight: b.getBoundingClientRect().right,
-                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null};
+                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null,
+                  wordWidth: document.querySelector('.fleet-wordmark').getBoundingClientRect().width,
+                  brandWidth: document.querySelector('ui-brand').getBoundingClientRect().width,
+                  name: document.querySelector('ui-brand').getAttribute('aria-label')};
         }""")
         browser.close()
 
     assert errors == []
+    if width < 480:
+        # D-741 5: below 30rem the wordmark text folds to the R mark; the link keeps its name.
+        assert mark["wordWidth"] <= 1 and mark["brandWidth"] > 0, mark
+        assert mark["name"] == "Rosy Fleet 관제 홈", mark
+        return
     assert mark["lines"] == 1, mark
     assert mark["textRight"] <= mark["boxRight"] + 0.5, mark
     if mark["nextLeft"] is not None:
