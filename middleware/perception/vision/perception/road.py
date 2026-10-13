@@ -223,7 +223,7 @@ def _marking(group_indexes: list[int], groups: list[tuple[int, int]],
     if not group_indexes:
         return None
     selected = [groups[index] for index in group_indexes]
-    row = float(max((top + bottom) / 2.0 for top, bottom in selected))
+    row = float(max(bottom for _, bottom in selected))
     pixels = sum(int((bright[top:bottom + 1] > 0).sum())
                  for top, bottom in selected)
     capacity = max(1, sum(bottom - top + 1 for top, bottom in selected)

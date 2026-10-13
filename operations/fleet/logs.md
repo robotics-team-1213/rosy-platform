@@ -3459,6 +3459,12 @@
 - 증거: 문서 후속 9076d86f28 전체 CI는 Fleet 한 묶음의 1 failed/1,716 passed로 실패했다. 수정 전 원격 실제 Chromium은 다른 화면 폭에서 같은 race를 1 NEW로 재현했다. 수정 후 두 크기 2 passed/종료 0/NEW 0이며 native_games_ui가 독립 승인했다.
 - gate 변화: 선택 브라우저 회귀와 독립 검토다. 설치 7a03bf1bf08e의 이전 전체·Android CI 및 실제 사이트 증거와 구분한다. 후속 후보 전체 CI는 이어 확인하며 본인 계정 초기화 승인은 대기 중이다.
 
+## 2026-10-12 · 34b7856198 · D-725 native SIM 위치 연속성
+
+- 변경: 명시적 실행 binding을 검증한 SIM-only map_pose_port를 trip·차로 감시·위치 조회·교차로에 동일하게 주입한다. 원본 시각·좌표·수신 신선도와 CORE UTC stamp를 구분하고 입력 공백·epoch 변경을 거절한다. 실물·teach·camera·pin·formation 경로는 기존 서비스를 유지한다.
+- 증거: 독립 SOURCE APPROVE와 정상 자원 기준 원격 115 PASS/NEW 0이다. 최근 3초 이동 판정, 동일 stamp의 다른 pose 거절, binding 불변성을 포함한다.
+- gate 변화: 소스·선택 회귀만 확인했다. 실제 Gazebo producer 결속과 지도 완주는 재실행으로 확인한다. 실물 감독은 추후 확정한다.
+
 ## 2026-10-12 · f0c5e5c130 · 경로 사실 묶음과 굽이 점 단축
 
 - 변경: trip과 /route의 200 응답에 계획기별 사실 묶음을 붙였다. 호출자는 막힌 차로와 추가 초를 넘기고, 재계획은 그 값을 유지한다. ring_s에서 ring_e만 막으면 east로 우회하고, ring_e와 east를 함께 막으면 TRIP_NO_ROUTE다. /route의 0.20 m 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄인다. 링의 0.20 m 점은 그대로다.
@@ -3516,3 +3522,8 @@
 - 변경: 기존 실행 선택·Task 원장의 정확한 native 성공 및 안전 해제 증거를 재사용한다. 원문·사용자·채널·지도·권한·세대·receipt 변경을 각 모델 경계와 최종 전송 전에 거절한다. 기존 상태 조회로 이전 run과 현재 boot·owner generation을 확인하고 CORE CAS에 전달한다.
 - 증거: 최초 재현 2 NEW, live 재시작·run 소실 재현 11 NEW 뒤 원격 집중 284개 및 공개 CORE CAS 2개 통과, NEW0. 전송 전 거절은 명령 호출·native marker·점유를 남기지 않는다.
 - gate 변화: 없음. fake owner 경로의 소스 검증이며 실제 모델·보호 설치·Discord·물리 수용은 별도다.
+
+## 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
+- 변경: `fleet/server/AGENTS.md`의 옛 `web` 편집 안내를 `operations/ui/console` 정본과 설치 `fleet/server/web` mapping으로 정정했다.
+- 증거: `fleet._source_layout.console_root`, `static_routes.WEB_ROOT`와 실제 Console source holder를 읽었다. 링크/원격 검사·착지 결과는 X: `folder-guidance-p0` 세션과 Git으로 확인한다.
+- gate 변화: 없음. SQLite/auth/admission/serving은 수정하지 않았다.

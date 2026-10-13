@@ -63,12 +63,12 @@ def test_fixed_ssh_exchange_is_bounded_and_always_reaped(tmp_path,monkeypatch,fa
     import asyncio
     import sys
     from dataclasses import asdict
-    from test_channel_model_jobs import _setup
+    from test_channel_model_jobs import model_jobs
     from test_channel_model_status import status_payload
     from fleet.server.channel_model_runtime import BrokerConfig,BrokerProvider
     from rosy.decision.deliberation.status_profiles import profiles
     from rosy.decision.deliberation.profiles import BoundProfile
-    _,_,_,_,_,problem,_=_setup(tmp_path)
+    _,_,_,_,_,problem,_=model_jobs(tmp_path)
     selected=profiles('d720-v1')[0]
     raw=status_payload(problem);raw['profile_revision']=selected.profile_revision
     raw['evidence_ids']=list(problem.evidence_ids)

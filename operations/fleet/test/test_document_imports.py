@@ -25,6 +25,7 @@ SHARED = {
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
+    "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
@@ -51,10 +52,10 @@ OWN = {
         "tracking-layer.js",
         "trail-view.js",
         "site-path.js",
-        "site-layer.js",
         "confirmed-action.js",
         "camera-warp.js",
         "camera-backdrop.js",
+        "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",

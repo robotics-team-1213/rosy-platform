@@ -898,6 +898,12 @@
 - 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
 - gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
 
+## 2026-10-12 · 077d2e475 · 기존 공개 handover에 유효 CORE 주행법칙과 식별 정보 추가
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+
 ## 2026-10-12 · uncommitted · status-inputs에 유효 조향 법칙을 싣는다
 
 - 변경: schema 2 status-inputs에 `robot_id`, `core_process_id`, `line_follow_steering_law`를 더한다. 법칙은 이 프로세스가 들고 있는 LineFollowConfig의 순항, 선속도 상한, 게인, 최소 신뢰다. line_follow가 없으면 법칙은 null이다. 토큰과 개인 설정 파일은 넣지 않는다.
@@ -927,3 +933,8 @@
 - 변경: native owner 속성 조회를 캡처 예외 경계 안으로 옮긴다. 속성 누락은 전체 빈 operations이며 기존 latch·mode·state·listener를 실행한다. Fleet-loss native UUID 이벤트 기대값과 CORE 통합 시험 소유 목록도 실제 계약에 맞춘다.
 - 증거: 통합 NEW 3건과 실제 CORE owner 누락 4건의 원격 RED를 재현했다. 관련 여섯 파일의 전체 시험과 실제 native/잠금 경합 회귀를 포함한 수정 후 원격 묶음 exit 0. 구조 예산 위반 0, safety.py 208줄이다.
 - gate 변화: SOURCE 회귀 수정. 장치 동작·배포·현장 수용은 수행하지 않았다.
+
+## 2026-10-13 · 7c9547f52 · docs: correct dashboard source holder guidance
+- 변경: `core_api_web/api/AGENTS.md`의 옛 `../web` 안내를 실제 `middleware/ui/robot`과 설치 `share/dashboard` 우선순위로 정정했다.
+- 증거: `app.py::_dashboard_root`의 설치/source fallback과 source holder를 읽었다. 문서 링크 검사는 X: `folder-guidance-p0` 세션에 기록하고, committed HEAD를 원격 착지 gate에서 검증한다.
+- gate 변화: 없음. API/serving/runtime 코드는 수정하지 않았다.
