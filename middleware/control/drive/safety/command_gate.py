@@ -200,7 +200,7 @@ class CommandPolicy:
                 # those two LiDAR rules restricts it and its own stopping sweep clears this scan.
                 admitted = evaluate_command(linear, angular, replace(
                     state, command_age=0., can_rotate=True,
-                    obstacle=snapshot.forward.front_blocked_other is not False))
+                    obstacle=state.obstacle and snapshot.forward.front_blocked_other is not False))
                 if ((admitted.linear, admitted.angular, admitted.reason) == (linear, angular, 'allow')
                         and command_forward_arc_clear(snapshot.forward, linear, angular, now)):
                     result = admitted
