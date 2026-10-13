@@ -5,7 +5,7 @@ import { trafficDrawing } from "/console/assets/site-map-model.js";
 // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
 // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.
 // 테두리는 굵은 선에서 가는 선을 지운 따로 그린 판이라 밑의 실영상을 덮지 않는다.
-export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, on }) {
+export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length || drawing.signals.length);
   const status = el("map-traffic-status");
@@ -83,8 +83,7 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, on }
     }
   }
   ctx.restore();
-  // 통행권 끝에 로봇 이름 — 띠 색만으로는 어느 로봇의 블록인지 읽히지 않는다(같은 계열 색).
-  // Traffic descriptions live below the map; only geometry stays on the floor plane.
+  // Signal names stay in the readout. A zone's occupancy sentence is a chip on that zone.
   for (const stop of drawing.signals) {
     const p = toPoint(stop.x, stop.y);
     const q = toPoint(stop.x + Math.cos(stop.angle) * 0.05, stop.y + Math.sin(stop.angle) * 0.05);
@@ -97,6 +96,13 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, on }
       ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.stroke();
     }
     ctx.restore();
+  }
+  if (drawChip && ctx) {
+    for (const zone of drawing.zones) {
+      if (!zone.anchor) continue;
+      const p = toPoint(zone.anchor.x, zone.anchor.y);
+      drawChip(ctx, null, p.x, p.y, zone.label);
+    }
   }
   window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,
     convoys: drawing.convoys.length, signals: drawing.signals.length };

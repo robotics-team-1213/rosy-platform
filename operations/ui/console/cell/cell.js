@@ -399,7 +399,7 @@ $('propose').addEventListener('click', () => action(async () => {
   $('proposal').textContent = `제안 ${proposalId}\n상태 ${jobStatusLabel(result.work_status || result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = proposalId;
   clearJobSnapshot();
-  $('notice').textContent = '제안 완료 · 아래 5단계에서 운영자 승인과 진행 상태를 확인하세요.';
+  $('notice').textContent = '제안 완료 · 승인·진행에서 운영자 승인과 진행 상태를 확인하세요.';
 }));
 function renderLayout() {
   if (!layoutData) return;

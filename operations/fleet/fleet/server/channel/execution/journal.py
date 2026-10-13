@@ -13,6 +13,14 @@ from .outcomes.evidence import exact_operation, safe_proof
 from ...dispatch_admission import reserve, release
 
 
+def native_required(self, task_id):
+    """Identify native-required Tasks through the existing channel link."""
+    if self.channel_admission is None:
+        return False
+    with self.store._connect() as conn:
+        return conn.execute('SELECT 1 FROM fleet_channel_execution_steps WHERE task_id=?', (task_id,)).fetchone() is not None
+
+
 class ExecutionJournal:
     def __init__(self, jobs, task_store, *, producer_scope, admitted, environment, clock=time.time):
         if jobs.journal.path.resolve() != task_store.path.resolve():
