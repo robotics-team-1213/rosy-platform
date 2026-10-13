@@ -208,5 +208,6 @@ def load(config_path, store):
         accounts.authorize(actor, project, 'import')
         return accounts.credential(actor, connection, generation=generation, resource=resource)
 
-    imports = LearningImports(private_path('imports_root'), accounts.authorize, credential)
+    imports = LearningImports(private_path('imports_root'), accounts.authorize, credential,
+                              limits=config.get('import_limits'))
     return accounts, oauth, imports

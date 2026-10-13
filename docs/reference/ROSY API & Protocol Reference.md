@@ -3459,6 +3459,8 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 
 `/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.
 
+가져오기 작업은 파일별 `downloaded_bytes`, `partial_sha256`, 완료 `sha256`와 작업의 `reserved_bytes`를 반환한다. 부분 bytes는 검증 완료나 학습 승인이 아니다. 서버가 제공한 SHA-256과 로컬 부분 해시가 있는 파일만 같은 revision·연결 세대로 Range 재개한다. Range를 무시한 전체 응답은 덧붙이지 않고 처음부터 다시 받는다. `insufficient_space`, `storage_unavailable`, `verification_failed`, `access_revoked`, `worker_interrupted`, `import_failed`는 비밀을 포함하지 않는 실패 코드다. 저장소 실행 잠금과 남은 bytes의 논리 예약은 같은 imports root의 worker만 조정하며 파일시스템 전체의 물리 예약은 아니다. 운영자 전용 `import_limits` 설정은 웹 입력으로 변경할 수 없다.
+
 ### 학습 저장 현황과 공간 사전 점검 (D-755 후속)
 
 검수 앱 로컬 경로이며 CORE API가 아니다. 관리자가 private `--storage-config` JSON에 프로젝트와 root ID·표시 이름·용도·절대 경로를 등록한다. 협업 프로젝트와 설정의 project_id는 일치해야 한다. 협업 사용자의 view 권한을 모든 요청에서 검사하며 실제 경로·파일명은 응답하지 않는다.

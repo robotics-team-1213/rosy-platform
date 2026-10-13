@@ -6,12 +6,15 @@ only requester IDs, never sessions or provider tokens, enter persistent jobs.
 from __future__ import annotations
 
 import hashlib
-from contextlib import contextmanager
+import errno
+from contextlib import contextmanager, nullcontext
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
+import stat
 import sys
 import threading
 import time
@@ -24,6 +27,14 @@ import uuid
 MAX_FILE = 2 * 1024 ** 3
 MAX_TOTAL = 8 * 1024 ** 3
 MAX_FILES = 256
+
+
+class RangeRestart(ValueError):
+    """The provider ignored Range; never append its full response."""
+
+
+class ImportFailure(ValueError):
+    """Public, credential-free failure code."""
 
 
 def _filename(value):
@@ -56,13 +67,15 @@ class HFTransport:
             raise ValueError('unapproved provider endpoint')
         return parsed
 
-    def _open(self, url, token):
+    def _open(self, url, token, *, offset=0):
         if not isinstance(token, str) or not token or any(not 33 <= ord(c) <= 126 for c in token):
             raise ValueError('invalid provider credential')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
         for _ in range(6):
             parsed = self.check_url(url)
             headers = {'Accept-Encoding': 'identity', 'User-Agent': 'ROSY-learning-import/1'}
+            if offset:
+                headers['Range'] = f'bytes={offset}-'
             if parsed.hostname == 'huggingface.co':
                 headers['Authorization'] = 'Bearer ' + token
             try:
@@ -85,10 +98,23 @@ class HFTransport:
             raise ValueError('provider metadata too large')
         return json.loads(data)
 
-    def chunks(self, kind, repo, revision, filename, token):
+    def chunks(self, kind, repo, revision, filename, token, *, offset=0, total=None):
         url = ('https://huggingface.co/' + ('datasets/' if kind == 'dataset' else '')
                + repo + '/resolve/' + revision + '/' + urllib.parse.quote(filename, safe='/'))
-        with self._open(url, token) as response:
+        with self._open(url, token, offset=offset) as response:
+            if response.headers.get('Content-Encoding', 'identity') != 'identity':
+                raise ValueError('encoded download refused')
+            if offset and response.status == 200:
+                raise RangeRestart('provider ignored range')
+            if response.status == 206:
+                match = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+)', response.headers.get('Content-Range', ''))
+                if total is None or not match or tuple(map(int, match.groups())) != (offset, total - 1, total):
+                    raise ValueError('invalid provider range')
+            elif response.status != 200 or offset:
+                raise ValueError('invalid provider response')
+            length = response.headers.get('Content-Length')
+            if total is not None and length is not None and length != str(total - offset):
+                raise ValueError('invalid provider length')
             while True:
                 chunk = response.read(1024 ** 2)
                 if not chunk:
@@ -97,7 +123,15 @@ class HFTransport:
 
 
 class LearningImports:
-    def __init__(self, root, authorize, credential, *, transport=None):
+    def __init__(self, root, authorize, credential, *, transport=None, limits=None):
+        limits = {} if limits is None else limits
+        defaults = dict(max_file_bytes=MAX_FILE, max_total_bytes=MAX_TOTAL, reserve_bytes=1024 ** 3)
+        if (not isinstance(limits, dict) or set(limits) - defaults.keys()
+                or any(type(v) is not int or not 0 <= v <= 1024 ** 4 for v in limits.values())):
+            raise ValueError('invalid import limits')
+        self.limits = {**defaults, **limits}
+        if not 0 < self.limits['max_file_bytes'] <= self.limits['max_total_bytes']:
+            raise ValueError('invalid import limits')
         self.root = Path(root).absolute()
         self._safe(self.root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -109,12 +143,39 @@ class LearningImports:
         self._safe(self.db_path)
         with self._db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
-            for row in db.execute('SELECT id, document FROM jobs').fetchall():
-                job = json.loads(row[1])
-                if job['status'] == 'running':
-                    job.update(status='interrupted', error='worker_interrupted')
-                    self._write(db, job)
+        with self._lease() as owned:
+            if owned:
+                self._interrupt_orphans()
         os.chmod(self.db_path, 0o600)
+
+    @contextmanager
+    def _lease(self):
+        path = self.root / '.worker.lock'
+        self._safe(path)
+        with os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600), 'r+b') as stream:
+            try:
+                if os.name == 'nt':
+                    import msvcrt
+                    if os.fstat(stream.fileno()).st_size == 0:
+                        stream.write(b'0'); stream.flush()
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN): raise
+                yield False
+            else:
+                yield True
+
+    def _interrupt_orphans(self):
+        with self._db() as db:
+            for row in db.execute('SELECT document FROM jobs').fetchall():
+                job = json.loads(row[0])
+                if job['status'] == 'running':
+                    job.update(status='interrupted', error='worker_interrupted', reserved_bytes=0)
+                    self._write(db, job)
 
     @staticmethod
     def _safe(path):
@@ -128,6 +189,7 @@ class LearningImports:
         db = sqlite3.connect(self.db_path, timeout=10)
         try:
             with db:
+                db.execute('BEGIN IMMEDIATE')
                 yield db
         finally:
             db.close()
@@ -136,10 +198,10 @@ class LearningImports:
     def _write(db, job):
         db.execute('INSERT OR REPLACE INTO jobs VALUES (?, ?)', (job['id'], json.dumps(job)))
 
-    def _load(self, job_id):
+    def _load(self, job_id, db=None):
         if not isinstance(job_id, str) or not re.fullmatch('[a-f0-9]{32}', job_id):
             raise ValueError('invalid import id')
-        with self._db() as db:
+        with self._db() if db is None else nullcontext(db) as db:
             row = db.execute('SELECT document FROM jobs WHERE id=?', (job_id,)).fetchone()
         if row is None:
             raise ValueError('import not found')
@@ -202,17 +264,17 @@ class LearningImports:
         for name in files:
             item = names.get(name, {})
             size = item.get('size')
-            if type(size) is not int or not 0 <= size <= MAX_FILE:
+            if type(size) is not int or not 0 <= size <= self.limits['max_file_bytes']:
                 raise ValueError('file missing or exceeds size limit')
             expected = (item.get('lfs') or {}).get('sha256')
-            if expected is not None and not re.fullmatch('[0-9a-f]{64}', expected):
+            if expected is not None and (not isinstance(expected, str) or not re.fullmatch('[0-9a-f]{64}', expected)):
                 raise ValueError('invalid provider checksum')
             entries.append(dict(path=name, bytes=size, expected_sha256=expected))
-        if sum(item['bytes'] for item in entries) > MAX_TOTAL:
+        if sum(item['bytes'] for item in entries) > self.limits['max_total_bytes']:
             raise ValueError('import exceeds size limit')
         gated = metadata.get('gated', False) not in (False, None)
         job.update(revision=sha, files=entries, generation=cred['generation'],
-                   gated=gated, private=bool(metadata.get('private')), status='queued')
+                   gated=gated, private=bool(metadata.get('private')), status='queued', reserved_bytes=0)
         if gated and not (rights.get('gated_team_use') is True and rights.get('team_use_evidence', '').strip()):
             job['status'] = 'rights_hold'
             job['error'] = 'gated_team_use_evidence_required'
@@ -250,10 +312,11 @@ class LearningImports:
         with self.lock:
             job = self.get(actor, project_id, job_id)
             self._credentials(actor, job)
-            if job['status'] not in ('queued', 'failed', 'interrupted', 'blocked', 'cancelled'):
-                raise ValueError('import cannot retry')
-            job.update(status='queued', error=None)
             with self._db() as db:
+                job = self._load(job_id, db)
+                if job['status'] not in ('queued', 'failed', 'interrupted', 'blocked', 'cancelled'):
+                    raise ValueError('import cannot retry')
+                job.update(status='queued', error=None, reserved_bytes=0)
                 self._write(db, job)
         return job
 
@@ -263,17 +326,97 @@ class LearningImports:
             self.authorize(actor, project_id, 'import')
             if self._user(actor) != job['requester_id']:
                 raise PermissionError('requester required')
-            if job['status'] == 'completed':
-                raise ValueError('completed import cannot cancel')
-            job.update(status='cancelled', error=None)
             with self._db() as db:
+                job = self._load(job_id, db)
+                if job['status'] == 'completed':
+                    raise ValueError('completed import cannot cancel')
+                job.update(status='cancelled', error=None, reserved_bytes=0)
                 self._write(db, job)
         return job
 
-    def _checkpoint(self, actor, job):
-        if self._load(job['id'])['status'] != 'running':
+    def _checkpoint(self, actor, job, db=None):
+        current = self._load(job['id'], db)
+        if current['status'] != 'running' or current.get('attempt') != job.get('attempt'):
             raise InterruptedError('import cancelled')
         return self._credentials(actor, job)
+
+    def _progress(self, job):
+        with self._db() as db:
+            current = self._load(job['id'], db)
+            if current['status'] != 'running' or current.get('attempt') != job.get('attempt'):
+                raise InterruptedError('import cancelled')
+            self._write(db, job)
+
+    def _space(self, remaining):
+        try:
+            free = shutil.disk_usage(self.root).free
+        except OSError:
+            raise ImportFailure('storage_unavailable') from None
+        if free < remaining + self.limits['reserve_bytes'] + 1024 ** 2:
+            raise ImportFailure('insufficient_space')
+
+    def _download(self, actor, job, entry, dest, remaining):
+        self._safe(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
+        with os.fdopen(os.open(dest, flags, 0o600), 'r+b') as output:
+            info = os.fstat(output.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError('regular private file required')
+            size, digest = info.st_size, hashlib.sha256()
+            trusted = entry.get('sha256') or entry.get('partial_sha256')
+            if (size <= entry['bytes'] and entry.get('downloaded_bytes') == size and trusted
+                    and (entry.get('sha256') or entry['expected_sha256'])):
+                for chunk in iter(lambda: output.read(1024 ** 2), b''):
+                    self._checkpoint(actor, job)
+                    digest.update(chunk)
+                valid = digest.hexdigest() == trusted
+            else:
+                valid = False
+            if not valid:
+                output.seek(0); output.truncate()
+                size, digest = 0, hashlib.sha256()
+                entry.pop('sha256', None)
+            self._space(entry['bytes'] - size + remaining)
+            job['reserved_bytes'] = entry['bytes'] - size + remaining
+            self._progress(job)
+            saved, measured = size, time.monotonic()
+            try:
+                while size < entry['bytes']:
+                    cred = self._checkpoint(actor, job)
+                    options = dict(offset=size, total=entry['bytes']) if size else {}
+                    try:
+                        for chunk in self.transport.chunks(job['repo_type'], job['repo_id'], job['revision'],
+                                                           entry['path'], cred['token'], **options):
+                            self._checkpoint(actor, job)
+                            if size + len(chunk) > entry['bytes']:
+                                raise ImportFailure('verification_failed')
+                            self._space(len(chunk))
+                            output.write(chunk); digest.update(chunk); size += len(chunk)
+                            if size - saved >= 8 * 1024 ** 2 or time.monotonic() - measured >= 1:
+                                output.flush(); os.fsync(output.fileno())
+                                entry.update(downloaded_bytes=size, partial_sha256=digest.hexdigest())
+                                job['reserved_bytes'] = entry['bytes'] - size + remaining
+                                self._progress(job)
+                                saved, measured = size, time.monotonic()
+                        break
+                    except RangeRestart:
+                        if not options: raise
+                        output.seek(0); output.truncate()
+                        size, digest = 0, hashlib.sha256()
+                        self._space(entry['bytes'] + remaining)
+                if size != entry['bytes'] or (entry['expected_sha256'] is not None
+                                               and digest.hexdigest() != entry['expected_sha256']):
+                    # A bad complete prefix must not become a perpetual resume candidate.
+                    output.seek(0); output.truncate()
+                    size, digest = 0, hashlib.sha256()
+                    raise ImportFailure('verification_failed')
+                entry['sha256'] = digest.hexdigest()
+            finally:
+                output.flush(); os.fsync(output.fileno())
+                entry.update(downloaded_bytes=size, partial_sha256=digest.hexdigest())
+                job['reserved_bytes'] = entry['bytes'] - size + remaining
+                self._progress(job)
 
     @staticmethod
     def _media(stage, job):
@@ -349,20 +492,21 @@ class LearningImports:
             doc = validate_media(json.loads(sidecar.read_text(encoding='utf-8')), root=final)
             if doc['revision'] != published['media_revision']:
                 raise ValueError('published media revision mismatch')
-        with self.lock:
-            self._checkpoint(actor, job)
+        with self.lock, self._db() as db:
+            self._checkpoint(actor, job, db)
             published.pop('schema', None)
-            published.update(status='completed', error=None)
-            with self._db() as db:
-                self._write(db, published)
+            published.update(status='completed', error=None, reserved_bytes=0)
+            self._write(db, published)
 
     def run(self, job_id, actor):
-        with self.worker:
+        with self.worker, self._lease() as owned:
+            if not owned:
+                return
             with self.lock, self._db() as db:
-                job = self._load(job_id)
+                job = self._load(job_id, db)
                 if job['status'] != 'queued':
                     return
-                job['status'] = 'running'
+                job.update(status='running', attempt=uuid.uuid4().hex)
                 self._write(db, job)
             stage = self.root / '.partial' / job_id
             final = self.root / 'artifacts' / job_id
@@ -373,33 +517,17 @@ class LearningImports:
                     return
                 self._safe(stage)
                 stage.mkdir(parents=True, exist_ok=True, mode=0o700)
+                remaining = sum(row['bytes'] for row in job['files'])
                 for entry in job['files']:
-                    cred = self._checkpoint(actor, job)
+                    self._checkpoint(actor, job)
                     dest = stage / 'files' / _filename(entry['path'])
-                    self._safe(dest)
-                    dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                    digest, size = hashlib.sha256(), 0
-                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
-                    with os.fdopen(os.open(dest, flags, 0o600), 'wb') as output:
-                        for chunk in self.transport.chunks(job['repo_type'], job['repo_id'], job['revision'],
-                                                           entry['path'], cred['token']):
-                            self._checkpoint(actor, job)
-                            size += len(chunk)
-                            if size > entry['bytes']:
-                                raise ValueError('download size exceeded')
-                            digest.update(chunk)
-                            output.write(chunk)
-                        output.flush()
-                        os.fsync(output.fileno())
-                    if size != entry['bytes'] or (entry['expected_sha256'] is not None
-                                                  and digest.hexdigest() != entry['expected_sha256']):
-                        raise ValueError('download verification failed')
-                    entry['sha256'] = digest.hexdigest()
+                    remaining -= entry['bytes']
+                    self._download(actor, job, entry, dest, remaining)
                 self._checkpoint(actor, job)
                 self._media(stage, job)
-                with self.lock:
-                    self._checkpoint(actor, job)
-                    job.update(status='completed', completed_at=time.time(), error=None)
+                with self.lock, self._db() as db:
+                    self._checkpoint(actor, job, db)
+                    job.update(status='completed', completed_at=time.time(), error=None, reserved_bytes=0)
                     manifest = stage / 'manifest.json'
                     self._safe(manifest)
                     with manifest.open('w', encoding='utf-8') as output:
@@ -411,13 +539,16 @@ class LearningImports:
                     if final.exists():
                         raise ValueError('artifact already exists')
                     os.rename(stage, final)
-                    with self._db() as db:
-                        self._write(db, job)
+                    self._write(db, job)
             except Exception as exc:
                 with self.lock:
-                    current = self._load(job_id)
-                    if current['status'] != 'cancelled':
-                        current.update(status='blocked' if isinstance(exc, PermissionError) else 'failed',
-                                       error='access_revoked' if isinstance(exc, PermissionError) else 'import_failed')
-                        with self._db() as db:
+                    with self._db() as db:
+                        current = self._load(job_id, db)
+                        if current['status'] == 'running' and current.get('attempt') == job.get('attempt'):
+                            code = ('access_revoked' if isinstance(exc, PermissionError) else
+                                    str(exc) if isinstance(exc, ImportFailure) else
+                                    'insufficient_space' if isinstance(exc, OSError) and exc.errno == errno.ENOSPC
+                                    else 'import_failed')
+                            current.update(status='blocked' if isinstance(exc, PermissionError) else 'failed',
+                                           error=code, reserved_bytes=0)
                             self._write(db, current)
