@@ -11,25 +11,37 @@ import yaml
 REPOSITORY = Path(__file__).resolve().parents[3]
 MAP = REPOSITORY / 'middleware/perception/map/map_v2_fleet'
 SOURCE_SHA256 = 'cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b'
-SEGMENTS = ('east', 'ring_e', 'ring_n', 'ring_w', 'west', 'ring_w', 'ring_s', 'ring_e')
+SEGMENTS = ('ring_n', 'west:reverse', 'ring_s', 'east:reverse', 'ring_n', 'ring_w', 'ring_s', 'ring_e')
 SIM_DEVICE_IDS = ('isaac-pinky', 'isaac-pinky-a', 'isaac-pinky-b')
 
 
 def load_track():
     sys.path.insert(0, str(MAP / 'scripts'))
     from stl_scene import load_scene
-    from build_world import training_scene
+    from build_world import training_scene, caution_meshes
     scene = load_scene(MAP / '260919 MAP FILE.STL')
     if scene.source_sha256 != SOURCE_SHA256:
         raise ValueError('measured map source hash differs')
     graph = yaml.safe_load((MAP / 'training-curved/lane_graph.yaml').read_text())
     points = []
+    previous = None
+    bans = {(b['at'], b['from_edge'], b['to_edge']) for b in graph['turn_bans']}
     for name in SEGMENTS:
-        part = [tuple(p) for p in graph['segments'][name]['points']]
+        segment, _, direction = name.partition(':')
+        entry = graph['segments'][segment]
+        if direction and direction not in entry['directions']:
+            raise ValueError('lane route direction forbidden')
+        part = [tuple(p) for p in entry['points']]
+        if direction == 'reverse':
+            part.reverse()
+        start = entry['to'] if direction == 'reverse' else entry['from']
+        if previous is not None and (start, previous, segment) in bans:
+            raise ValueError('lane route turn forbidden')
         if points and math.dist(points[-1], part[0]) > .001:
             raise ValueError('lane route disconnected')
         points.extend(part if not points else part[1:])
-    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS,
+        previous = segment
+    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS, caution_meshes=caution_meshes(),
                 source_sha256=scene.source_sha256)
 
 

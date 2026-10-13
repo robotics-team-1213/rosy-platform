@@ -2,8 +2,8 @@
 
 Takes the signed tarball prepare_payload_release.py made and does what the robots' updater reads:
 
-    python tools/release/publish_payload_release.py --tarball X:/DevTemp/rosy-release-<id>/<id>.tar.gz --canary 192.168.1.202
-    python tools/release/publish_payload_release.py --release-id <id> --canary 192.168.1.202 --resume
+    python tools/release/publish_payload_release.py --tarball X:/DevTemp/rosy-release-<id>/<id>.tar.gz --canary <robot-ip>
+    python tools/release/publish_payload_release.py --release-id <id> --canary <robot-ip> --resume
     python tools/release/publish_payload_release.py --release-id <id> --withdraw --reason "canary drove badly"
 
 1. check: the tarball's own release signature (signing.verify_release_files on a temporary extract),

@@ -75,6 +75,9 @@ class MissionService:
     def next_ready(self) -> dict[str, Any] | None:
         return self.store.next_ready_mission()
 
+    def next_dispatch(self, instances: Mapping[str, str], *, after_id: str) -> dict[str, Any] | None:
+        return self.store.next_dispatch_mission(instances, after_id=after_id)
+
     def next_running(self) -> dict[str, Any] | None:
         return self.store.next_running_mission()
 

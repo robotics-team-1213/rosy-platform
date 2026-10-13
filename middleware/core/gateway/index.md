@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 5faad3583 · refactor: CORE Drive 조립 책임 분리
-- 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
-- 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전을 인계에 싣는다
-- 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
-- 2026-10-09 · uncommitted · feat(core): D-531 경로 문맥 발행
+- 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
+- 2026-10-12 · d3bd5513c · 이동 교통 감속과 실제 command SDK 정합성
+- 2026-10-12 · af76fcc5f · 관측 표식의 가까운 경계와 기존 교통 gate 검증
+- 2026-10-12 · 47ace984f2 · 내장 센서 이름과 CORE clock 전달
+- 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로

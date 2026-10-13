@@ -9,7 +9,7 @@ from __future__ import annotations
 import hmac
 import logging
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Mapping, Optional
 
@@ -25,6 +25,8 @@ _LOG = logging.getLogger(__name__)
 class SitePrincipal:
     principal_id: str
     role: str
+    password_change_required: bool = False
+    password_fingerprint: str = field(default="", compare=False, repr=False)
 
 
 def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
@@ -142,6 +144,11 @@ def build_authorize(console_token: Optional[str],
                                                              "message": "console token required"})
             principal = SitePrincipal("site-console", "operator")
         request.state.site_principal = principal
+        if (principal.password_change_required
+                and request.url.path not in {"/api/fleet/auth/session", "/api/fleet/auth/logout",
+                                             "/api/fleet/auth/change-password"}):
+            raise HTTPException(status_code=403, detail={
+                "code": "PASSWORD_CHANGE_REQUIRED", "message": "change the initial password before using Fleet"})
         # D-577 4: the AI PC reads like a viewer and writes only facts and heartbeats; it never reaches
         # a stop, a stuck answer, a trip or any robot-moving route, whatever that route's own guard is.
         if (principal.role == "ai_observer" and request.method not in ("GET", "HEAD")

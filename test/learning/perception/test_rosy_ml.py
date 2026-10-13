@@ -15,6 +15,16 @@ if str(Path(__file__).resolve().parents[3] / 'tools/perception') not in sys.path
 import rosy_ml  # noqa: E402
 
 
+def test_observe_dispatches_without_robot_configuration(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setitem(sys.modules, 'road_observation_replay',
+                        types.SimpleNamespace(execute=lambda args: calls.append(args) or 0))
+    monkeypatch.setenv('ROSY_ML_CONFIG', str(tmp_path / 'missing.yaml'))
+    assert rosy_ml.main(['observe', 'model', '--inputs', 'inputs', '--max-age-ns', '100',
+                         '--out', str(tmp_path / 'out.json')]) == 0
+    assert calls[0].model == 'model' and calls[0].max_age_ns == 100
+
+
 def _init(tmp_path, *extra, env_config=True, monkeypatch=None):
     cfg = tmp_path / "ml.yaml"
     if monkeypatch:
