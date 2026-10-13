@@ -7,6 +7,7 @@ obstacle_stop_m 0.12 / resume 0.17, path mode, cruise 0.04 m/s.
 """
 
 import math
+import struct
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,22 @@ def _step(m, points, *, error=0.0, confidence=1.0, t=T, range_min=0.05):
     m.observe_scan_points(points, received_at=t)
     decision = m.tick(t)
     return decision, m.status()
+
+
+@pytest.mark.parametrize("offset,expected", [(-0.003, "TRACKING"), (0.0, "HOLD"), (0.001, "HOLD")])
+def test_live_scan_feed_excludes_body_interior_but_keeps_outline_contacts(offset, expected):
+    from types import SimpleNamespace
+    from core.bridge.observation import front_clearance
+
+    m = _manager(lidar_forward_deg=0.0, obstacle_blind_floor=False)
+    m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=T, visible=True,
+                              error=0.0, confidence=1.0), received_at=T, source_now=T)
+    sample = dict(ranges=[LIDAR_TO_FRONT + offset] * 3, angle_min=0.0, angle_max=0.0,
+                  range_min=0.05, range_max=40.0)
+    front_clearance(SimpleNamespace(loc_mission=None, line_follow=m), sample, received_at=T)
+    decision = m.tick(T)
+    assert m.status().state == expected
+    assert (decision.linear > 0) == (expected == "TRACKING")
 
 
 # ---- derived numbers --------------------------------------------------------------------
@@ -199,6 +216,54 @@ def test_stale_ultrasonic_is_ignored():
     assert status.state == "TRACKING" and status.clearance_source is None
 
 
+@pytest.mark.parametrize("cruise", [0.04, 0.10])
+def test_blind_floor_off_lets_lane_follow_pass_a_wall_at_d591_gap(cruise):
+    """D-591: with obstacle_blind_floor off and no reaction time the stop gap is margin +
+    braking (~0.02 m at cruise), so a wall 0.048 m off the body (8kcn, 2026-10-10) no longer
+    holds; a return under 0.02 m still stops."""
+    near = _wall(0.048 + LIDAR_TO_FRONT)
+    floored = _step(_manager(), near, range_min=0.15)[1]
+    assert floored.reason == "obstacle_ahead"
+    m = _manager(cruise_speed=cruise, obstacle_blind_floor=False, obstacle_latency_s=0.0)
+    status = _step(m, near, range_min=0.15)[1]
+    assert status.state == "TRACKING"
+    assert status.stop_gap_m == pytest.approx(0.02 + cruise ** 2 / (2 * 0.5), abs=1e-4)
+    touching = _step(_manager(cruise_speed=cruise, obstacle_blind_floor=False, obstacle_latency_s=0.0),
+                     _wall(0.015 + LIDAR_TO_FRONT), range_min=0.15)[1]
+    assert touching.reason == "obstacle_ahead"
+
+
+def test_pinky_pro_turns_the_blind_floor_off():
+    raw = yaml.safe_load((REPO / "middleware/devices/pinky/profile/config/core.yaml").read_text(encoding="utf-8"))
+    assert raw["line_follow"]["obstacle_blind_floor"] is False
+    assert raw["line_follow"]["obstacle_latency_s"] == 0.0
+    assert raw["line_follow"]["obstacle_ultrasonic_half_angle_deg"] == 5.0
+
+
+def test_pinky_cruise_increases_without_widening_the_tracking_arc():
+    raw = yaml.safe_load((REPO / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"))
+    robot = yaml.safe_load((REPO / "middleware/devices/pinky/profile/config/core.yaml").read_text(encoding="utf-8"))
+    raw = _deep_merge(raw, robot)
+    config = _line_follow_config(raw["line_follow"])
+    assert config.cruise_speed == pytest.approx(0.10)
+    assert config.max_linear == pytest.approx(0.10)
+    assert config.steering_gain / config.cruise_speed == pytest.approx(0.8 / 0.04)
+    manager = _manager(**{key: getattr(config, key) for key in
+                         ("cruise_speed", "max_linear", "steering_gain")})
+    straight, _ = _step(manager, [])
+    curve, _ = _step(manager, [], error=0.1)
+    assert straight.linear == pytest.approx(0.10)
+    assert curve.angular / curve.linear == pytest.approx(-0.8 * 0.1 / (0.04 * (1 - 0.65 * 0.1)))
+
+
+def test_narrow_ultrasonic_cone_keeps_a_side_echo_off_the_path():
+    """D-591 4: a 0.10 m echo spread over +-15 deg reaches 0.026 m off-axis; at +-5 deg 0.009 m."""
+    wide = ultrasonic_points(0.10, sensor_x_m=0.0267, half_angle_deg=15.0)
+    narrow = ultrasonic_points(0.10, sensor_x_m=0.0267, half_angle_deg=5.0)
+    assert max(abs(y) for _, y in wide) == pytest.approx(0.0259, abs=1e-3)
+    assert max(abs(y) for _, y in narrow) == pytest.approx(0.0087, abs=1e-3)
+
+
 def test_the_lidar_blind_zone_floor_holds_whatever_the_ultrasonic_says():
     """Review H1: range_min 0.17 -- a return nearer than that vanishes, so stop before it does.
     No echo, a far echo or the wall's own echo never lift the floor."""
@@ -286,6 +351,266 @@ def test_memory_expires_after_the_horizon_of_motion():
     assert _step(m, [], t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
 
 
+# Pinky C1 range_min as the float32 the LaserScan carries (0.05000000074505806).
+C1_RANGE_MIN = struct.unpack("f", struct.pack("f", 0.05))[0]
+
+
+def _ring(radius, beams=640):
+    return [(radius * math.cos(2 * math.pi * i / beams), radius * math.sin(2 * math.pi * i / beams))
+            for i in range(beams)]
+
+
+def test_a_return_at_exactly_range_min_while_stationary_is_not_remembered():
+    """Gazebo 2026-10-06: returns at exactly range_min recompute a hair below it (float
+    rounding) and were remembered; standing still never ages them, so HOLD forever."""
+    m = _manager()
+    _step(m, _ring(C1_RANGE_MIN), range_min=C1_RANGE_MIN)
+    clear = _wall(0.87)
+    for index in range(40):
+        _, status = _step(m, clear, t=T + 0.1 * (index + 1), range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("TRACKING", None)   # wall past horizon
+
+
+def _approach_then_stand(range_min, post):
+    """Drive 0.04 m at a post (LiDAR frame at the start) until it is under range_min, stand."""
+    m = _manager()
+    t, travelled = T, 0.0
+    for _ in range(2):
+        seen = [p for p in [(post[0] - travelled + 0.017, post[1])]
+                if math.hypot(*p) >= range_min]
+        assert seen                                                      # still visible
+        _step(m, seen, t=t, range_min=range_min)
+        m.note_wheels(0.04, 0.0, owned=True, now=t)
+        t += 0.5
+        travelled += 0.02
+    assert math.hypot(post[0] - travelled + 0.017, post[1]) < range_min  # now invisible
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    for index in range(40):
+        _, status = _step(m, [], t=t + 0.1 * index, range_min=range_min)
+    return status
+
+
+def test_a_post_that_slipped_under_range_min_outside_the_body_holds_while_stationary():
+    """The fix must keep D-422: a real post that went under range_min on approach stays.
+    0.12 overlay: LiDAR range 0.140 -> 0.121 -> 0.102, base x 0.081 (outside the front)."""
+    status = _approach_then_stand(0.12, (0.12, 0.03))
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_standing_pinky_forgets_a_vanished_point_inside_the_body_outline():
+    """D-507 10: Pinky C1 range_min 0.05 < 0.0565 (LiDAR to the nearest body edge), so a point
+    can only vanish inside the outline (noise or contact): no memory latch, no body_gap 0.
+    C1: LiDAR range 0.070 -> 0.051 -> 0.034, base x 0.017 (inside the front 0.042)."""
+    status = _approach_then_stand(C1_RANGE_MIN, (0.05, 0.02))
+    assert status.state == "TRACKING"
+    assert status.reason != "obstacle_ahead" and status.clearance_source != "memory"
+
+
+def _remember_one(lidar_point, range_min):
+    """One scan with a return already under range_min, then 40 empty scans standing still."""
+    m = _manager()
+    _step(m, [lidar_point], range_min=range_min)
+    for index in range(40):
+        _, status = _step(m, [], t=T + 0.1 * (index + 1), range_min=range_min)
+    return status
+
+
+def test_a_point_just_past_the_tolerance_inside_range_min_is_remembered():
+    """Boundary: 2e-6 m inside range_min is inside (tolerance 1e-6 m), so it is remembered.
+    0.12 overlay: the point (base x 0.103) is outside the body outline."""
+    status = _remember_one((0.12 - 2e-6, 0.0), 0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_a_vanished_point_just_outside_the_body_outline_is_remembered_and_stops():
+    """D-507 10: 1 mm past the body front, under range_min 0.12: memory keeps it."""
+    front, lidar_x = PINKY["body_front_x_m"], PINKY["body_lidar_x_m"]
+    status = _remember_one((front + 0.001 - lidar_x, 0.0), 0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == pytest.approx(0.001, abs=1e-4)
+
+
+def test_a_vanished_point_exactly_on_the_body_outline_is_remembered_conservative():
+    """D-507 10 boundary choice: on the outline is not inside, so it is kept (and stops)."""
+    half, lidar_x = PINKY["body_half_width_m"], PINKY["body_lidar_x_m"]
+    point = (0.0 - lidar_x, half)                                        # base (0, half width)
+    assert point[0] + lidar_x == 0.0                                     # exactly on the side
+    status = _remember_one(point, 0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == 0.0
+
+
+def _enter_then_move(base_point, wheels, *, range_min=0.12):
+    """A return under range_min enters memory outside the body (two standing scans), then
+    the wheels run each twist in `wheels` for 0.5 s, then the robot stands (10 scans)."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m, t = _manager(), T
+    _step(m, [(base_point[0] - lidar_x, base_point[1])], t=t, range_min=range_min)
+    t += 0.1
+    _step(m, [], t=t, range_min=range_min)                              # remembered now
+    for linear, angular in wheels:
+        m.note_wheels(linear, angular, owned=True, now=t)
+        t += 0.5
+        _step(m, [], t=t, range_min=range_min)
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    for index in range(10):
+        _, status = _step(m, [], t=t + 0.1 * (index + 1), range_min=range_min)
+    return status
+
+
+def test_a_remembered_point_that_odometry_creeps_inside_the_body_keeps_holding():
+    """D-507 10 review HIGH: the outline check is made once, when a point enters memory.
+    Base x 0.083 enters outside; 0.06 m of creep puts it at 0.023, inside: contact, hold."""
+    status = _enter_then_move((0.083, 0.0), [(0.04, 0.0)] * 3)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == 0.0
+
+
+def test_a_remembered_point_an_in_place_turn_rotates_into_the_body_keeps_holding():
+    """Base (0.05, 0) is outside the rectangle, inside the rotation radius; a 1 rad turn
+    brings it to x 0.027, inside the rectangle. It stays held."""
+    status = _enter_then_move((0.05, 0.0), [(0.0, 1.0)] * 2)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_packaged_pinky_stops_with_a_zero_command_on_the_tick_a_real_box_comes_near():
+    """D-507 10 must not loosen D-422: with the packaged Pinky layer (URDF body, C1 range_min)
+    a box on the path, outside the body and inside the stop gap, zeroes that very tick."""
+    pinky = _merged(PINKY_LAYER)
+    m = LineFollowManager(_Events(), config=pinky, clock=lambda: T)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    lidar_to_front = pinky.body_front_x_m - pinky.body_lidar_x_m
+    far = [(lidar_to_front + 0.20, y) for y in (-0.02, 0.0, 0.02)]
+    decision, status = _step(m, far, range_min=C1_RANGE_MIN)
+    assert status.state == "TRACKING" and decision.linear > 0.0
+    near_gap = pinky.derived_stop_gap_m(min(pinky.cruise_speed, pinky.max_linear)) - 0.005
+    box = [(lidar_to_front + near_gap, y) for y in (-0.02, 0.0, 0.02)]
+    assert all(math.hypot(*p) > C1_RANGE_MIN for p in box)               # seen, not remembered
+    decision, status = _step(m, box, t=T + 0.1, range_min=C1_RANGE_MIN)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "lidar")
+    assert (decision.linear, decision.angular) == (0.0, 0.0)
+
+
+def test_a_remembered_box_outside_the_body_zeroes_the_next_tick():
+    """The box goes under range_min (0.12 overlay) outside the body: the next tick, with an
+    empty scan, is a zero command from memory."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m = _manager()
+    box = (PINKY["body_front_x_m"] + 0.03 - lidar_x, 0.0)                # LiDAR range 0.089
+    decision, _ = _step(m, [box], range_min=0.12)                        # in the band, seen
+    decision, status = _step(m, [], t=T + 0.1, range_min=0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert (decision.linear, decision.angular) == (0.0, 0.0)
+
+
+def test_returns_inside_the_body_never_enter_memory_while_moving():
+    """B9 SIM bend_3..6 (2026-10-08): moving at C1 range_min, side-wall returns near range_min
+    shifted under it by odometry and latched HOLD memory, body_gap 0. They are inside the
+    outline, so memory stays empty on every scan, whatever the motion."""
+    m = _manager()
+    t = T
+    for k in range(30):
+        _step(m, _ring(C1_RANGE_MIN + 0.002), t=t, range_min=C1_RANGE_MIN)
+        m.note_wheels(0.04, 0.4 if k % 2 else -0.4, owned=True, now=t)
+        t += 0.1
+        with m._lock:
+            assert m._near_memory == (), k
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    _, status = _step(m, _wall(0.87), t=t + 0.1, range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("TRACKING", None)
+
+
+def test_memory_outside_the_body_expires_only_after_the_horizon_of_wheel_motion():
+    """A remembered point beside the body (base (0, 0.06), outside half width 0.05655) stays
+    under range_min 0.12 while the robot turns in place about the base. Turning counts body
+    motion at the rotation radius: kept until obstacle_path_horizon_m, forgotten after."""
+    m = _manager()
+    lidar_x, radius = PINKY["body_lidar_x_m"], PINKY["body_rotation_radius_m"]
+    t = T
+    _step(m, [(0.0 - lidar_x, 0.06)], t=t, range_min=0.12)
+    _step(m, [], t=t + 0.1, range_min=0.12)
+    with m._lock:
+        assert len(m._near_memory) == 1
+    t += 0.1
+    turned = 0.0
+    for _ in range(100):
+        m.note_wheels(0.0, 0.5, owned=True, now=t)
+        t += 0.2
+        turned += 0.1
+        _step(m, [], t=t, range_min=0.12)
+        with m._lock:
+            kept = len(m._near_memory)
+        if turned * radius <= 0.30 - 1e-3:
+            assert kept == 1, turned
+        elif turned * radius > 0.30 + 1e-3:
+            break
+    else:
+        pytest.fail("the turn never passed the horizon")
+    assert kept == 0
+
+
+def test_c1_blind_disc_lies_inside_the_packaged_pinky_body():
+    """D-507 10 rests on this: with the packaged URDF body every point the C1 cannot see
+    (closer than range_min to the LiDAR) is strictly inside the outline. A body or LiDAR
+    change that breaks it makes the memory matter again on Pinky; re-review D-507 10 then."""
+    from core_common.robot_body import inside_body
+
+    pinky = _merged(PINKY_LAYER)
+    outline = (pinky.body_front_x_m, pinky.body_rear_x_m, pinky.body_half_width_m,
+               pinky.body_rotation_radius_m)
+    for i in range(720):
+        a = 2 * math.pi * i / 720
+        x = pinky.body_lidar_x_m + C1_RANGE_MIN * math.cos(a)
+        y = C1_RANGE_MIN * math.sin(a)
+        assert inside_body(x, y, *outline, strict=True), (x, y)
+
+
+def test_a_point_that_enters_memory_inside_the_body_is_dropped_contact_accepted():
+    """D-507 10 residual (safety review MEDIUM): range_min 0.12 reaches past the body. A
+    return seen 0.062 m ahead of the front, then 0.07 m of travel in one scan gap (0.14 m/s,
+    0.5 s), lands inside the body on entry: contact, dropped by design, not remembered."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m = _manager()
+    point = (0.104 - lidar_x, 0.0)                                       # LiDAR range 0.121
+    _step(m, [point], range_min=0.12)
+    m.note_wheels(0.14, 0.0, owned=True, now=T)
+    _, status = _step(m, [], t=T + 0.5, range_min=0.12)                 # base x 0.034: inside
+    with m._lock:
+        assert m._near_memory == ()
+    assert status.clearance_source != "memory"
+
+
+def test_a_lidar_whose_range_min_reaches_past_the_body_remembers_as_before():
+    """D-507 10: synthetic body (front 0.10, rear -0.10, half 0.08, R 0.13, LiDAR at the base)
+    and range_min 0.25. A post that vanishes outside the body still stops from memory."""
+    geometry = dict(body_lidar_x_m=0.0, body_rear_x_m=-0.10, body_rotation_radius_m=0.13,
+                    body_half_width_m=0.08, body_front_x_m=0.10, body_ultrasonic_x_m=None)
+    m = _manager(**geometry)
+    post, t = (0.26, 0.03), T
+    _step(m, [post], t=t, range_min=0.25)                               # LiDAR range 0.262
+    m.note_wheels(0.04, 0.0, owned=True, now=t)
+    t += 0.5                                                             # 0.02 m on: range 0.242
+    _, status = _step(m, [], t=t, range_min=0.25)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == pytest.approx(0.26 - 0.02 - 0.10, abs=2e-3)
+    assert _step(_manager(**geometry), [], t=t, range_min=0.25)[1].state == "TRACKING"
+
+
+def test_range_min_ring_then_turn_in_place_does_not_latch_memory():
+    """D-507 10 flipped the old fail-closed latch (sim2real G-07): an in-place turn moves a
+    range_min ring about the base origin, not the LiDAR, so part of it lands mm inside
+    range_min; with range_min 0.05 all of it is inside the body outline, so it is dropped."""
+    m = _manager()
+    _step(m, _ring(C1_RANGE_MIN), range_min=C1_RANGE_MIN)
+    m.note_wheels(0.0, 0.5, owned=True, now=T)
+    _step(m, _ring(C1_RANGE_MIN), t=T + 0.2, range_min=C1_RANGE_MIN)   # turned 0.1 rad
+    m.note_wheels(0.0, 0.0, owned=True, now=T + 0.2)
+    clear = _wall(0.87)
+    for index in range(40):
+        _, status = _step(m, clear, t=T + 0.3 + 0.1 * index, range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("TRACKING", None)
+
+
 def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
     """Review M5: with range_min 0.15 the straight stop is where the LiDAR would lose the wall."""
     world = [(x - 0.017, y) for x, y in _wall(0.152)]                    # base frame
@@ -335,6 +660,119 @@ def test_sweep_uses_the_safety_clipped_twist():
     assert _step(m, post, error=-0.3)[1].reason == "obstacle_ahead"
 
 
+def _core_curve_manager(*, max_l=.1, max_a=.8, **overrides):
+    from types import SimpleNamespace
+    from core.drive.line_follow import bind_motion_envelope
+    from core_features.traffic_policy import TrafficPolicyMode
+
+    m = _manager(**overrides)
+    traffic = SimpleNamespace(mode=TrafficPolicyMode.ENFORCED,
+                              configuration=lambda: {"active": {"proceed_speed_scale": 0.5}})
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=max_l, max_angular=max_a))
+    bind_motion_envelope(m, safety=safety, traffic_policy=traffic)
+    return m
+
+
+def test_core_normal_camera_checks_its_curve_but_other_mode_gap_keeps_legacy_family():
+    post = [(0.017, 0.07)]
+    m = _core_curve_manager()
+    decision, status = _step(m, post, error=-.3)
+    assert status.state == "TRACKING" and decision.linear > 0.
+    gap, stop, _ = m.obstacle_gap(decision.linear, decision.angular, now=T)
+    assert gap is not None and gap < stop
+
+
+def test_leg10_critical_beam_does_not_stop_an_unblocked_normal_camera_curve():
+    # Leg10 sim55.4 beam591; sensor-origin point, mount translation is applied once by CORE.
+    point = [(0.07126481320667923 + .017, -0.04552029150062982)]
+    m = _core_curve_manager(cruise_speed=.1, max_linear=.1, steering_gain=2.,
+                            obstacle_path_horizon_m=.4, obstacle_latency_s=0.,
+                            obstacle_blind_floor=False)
+    decision, status = _step(m, point, error=-.059712345293685666, confidence=.6)
+    assert decision.linear == pytest.approx(.036968729829196315)
+    assert status.state == "TRACKING" and status.body_gap_m > status.stop_gap_m
+
+
+def test_core_curve_scope_still_stops_an_actual_body_collision():
+    m = _core_curve_manager(obstacle_blind_floor=False)
+    decision, status = _step(m, _wall(.07), error=-.3)
+    assert decision.linear == 0. and status.reason == "obstacle_ahead"
+
+
+@pytest.mark.parametrize("linear_scale,angular_scale", [(1., 2.), (2., 2.)])
+def test_core_curve_scope_rejects_a_changed_final_curve(monkeypatch, linear_scale, angular_scale):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_apply_recovery",
+                        lambda now, decision: replace(decision, linear=decision.linear * linear_scale,
+                                                       angular=decision.angular * angular_scale))
+    decision, status = _step(m, [], error=-.3)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason) == ("HOLD", "motion_unconfirmed")
+
+
+@pytest.mark.parametrize("max_l,max_a", [(.005, .8), (.1, .05), (0., .8)])
+def test_core_curve_scope_keeps_the_checked_speed_when_caps_increase_later(monkeypatch, max_l, max_a):
+    m = _core_curve_manager(max_l=max_l, max_a=max_a)
+    cap = [max_l, max_a]
+    m._motion_envelope_provider = lambda: (*cap, .15)
+
+    def raise_cap(now, decision):
+        cap[:] = [.1, .8]
+        return decision
+
+    monkeypatch.setattr(m, "_apply_recovery", raise_cap)
+    decision, status = _step(m, [], error=-.3)
+    scale = min(1., max_l / .0322, max_a / .24)
+    assert (decision.linear, decision.angular) == pytest.approx((.0322 * scale, .24 * scale))
+    assert status.linear == pytest.approx(.0322 * scale)
+
+
+def test_core_curve_scope_accepts_common_slowdown_and_does_not_reuse_the_previous_tick(monkeypatch):
+    from dataclasses import replace
+
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_crosswalk_gate", lambda now, decision: replace(
+        decision, linear=decision.linear * .5, angular=decision.angular * .5))
+    first, _ = _step(m, [], error=-.3)
+    second, _ = _step(m, [], error=.2, t=T + .1)
+    assert (first.linear, first.angular) == pytest.approx((.0161, .12))
+    assert (second.linear, second.angular) == pytest.approx((.0174, -.08))
+    stale = m.tick(T + 1.)
+    assert (stale.linear, stale.angular) == (0., 0.)
+
+
+@pytest.mark.parametrize("confidence", [.35, .350000001])
+def test_core_curve_scope_never_turns_zero_or_tiny_intent_into_cruise(confidence):
+    m = _core_curve_manager()
+    decision, _ = _step(m, [], error=0., confidence=confidence)
+    assert decision.linear == pytest.approx(.04 * (confidence - .35) / .65, abs=1e-15)
+    assert decision.angular == 0.
+
+
+def test_core_curve_scope_accepts_lane_return_tracking_passthrough(monkeypatch):
+    m = _core_curve_manager()
+    monkeypatch.setattr(m, "_apply_lane_return", lambda now, decision: decision)
+    decision, status = _step(m, [], error=-.3)
+    assert (decision.linear, decision.angular) == pytest.approx((.0322, .24))
+    assert status.state == "TRACKING"
+
+
+@pytest.mark.parametrize("direction", [1., -1.])
+def test_core_nontracking_sweep_covers_the_static_common_clip_curve(direction):
+    m = _core_curve_manager(max_a=.01)
+    point = [(direction * .052 + .017, direction * .078)]
+    m.observe_body_points(point, range_min=.05, received_at=T)
+    m.observe_scan_points(point, received_at=T)
+    # A LINE manoeuvre (.08, .8) becomes (.001, .01), rather than (.08, .01).
+    actual_gap = body_path_gap([(.052, .078)], linear=.001, angular=.01,
+                               min_travel_m=.08, **BODY)
+    assert actual_gap is not None and actual_gap < .08
+    with m._lock:
+        assert not m._sweep_clear(T, direction * .08, .8)
+
+
 def test_an_unreadable_motion_envelope_fails_closed():
     m = _manager()
 
@@ -366,7 +804,7 @@ def _merged(*overlays):
     return _line_follow_config(config["line_follow"])
 
 
-PINKY_LAYER = _yaml(REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "core.yaml")
+PINKY_LAYER = _yaml(REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "core.yaml")
 
 
 def test_packaged_layers_leave_the_stop_unset_and_know_the_body():
@@ -376,7 +814,27 @@ def test_packaged_layers_leave_the_stop_unset_and_know_the_body():
     assert not default.body_stop_known
     pinky = _merged(PINKY_LAYER)
     assert pinky.body_stop_known and not pinky.obstacle_override
+    assert pinky.obstacle_mode == "path"
     assert pinky.body_front_x_m == 0.04205 and pinky.body_ultrasonic_x_m == 0.0267
+
+
+def test_pinky_drives_past_a_return_off_the_path_and_stops_on_the_path():
+    """A sector stop holds for any return inside 0.20 m and ±20°. The packaged
+    path stop holds only when the body would meet the return on the commanded path."""
+    pinky = _merged(PINKY_LAYER)
+    m = LineFollowManager(_Events(), config=pinky, clock=lambda: T)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    # 10 cm to the side and 0.16 m from the LiDAR: inside the old 0.20 m sector
+    # once the heading swings it into ±20°, and clear of the body half-width.
+    assert _step(m, [(0.16, 0.10)])[1].state == "TRACKING"
+    # Straight ahead, still more than 10 cm in front of the body. Sector would
+    # hold (0.17 m < 0.20 m); the body gap is past the stop gap.
+    ahead = 0.11 + (pinky.body_front_x_m - pinky.body_lidar_x_m)
+    assert _step(m, [(ahead, 0.0)], t=T + 0.1)[1].state == "TRACKING"
+    stop = pinky.derived_stop_gap_m(min(pinky.cruise_speed, pinky.max_linear))
+    close = (stop - 0.01) + (pinky.body_front_x_m - pinky.body_lidar_x_m)
+    held = _step(m, [(close, 0.0)], t=T + 0.2)[1]
+    assert (held.state, held.reason) == ("HOLD", "obstacle_ahead")
 
 
 def test_old_overlay_keeps_its_lidar_origin_meaning():

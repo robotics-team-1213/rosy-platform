@@ -1,0 +1,31 @@
+# D-364 §3: NOMINAL camera geometry for the Pinky Pro OV5647 front camera.
+# Estimated from 4981 real teleop frames (2026-09-19 track, 320x240, 8 fps):
+# fx from 54 crosswalk frames (RMS 1.08 px), horizon row from 1707 lane
+# vanishing points (median 80.3, robust sd 2.6 px), height from crosswalk
+# pitch / wall height / lane spacing (63.7-69.4 mm). Principal point assumed
+# centred. This is NOT a validated homography profile: line_observer_node
+# uses it only with camera_ground_source NOMINAL + allow_nominal_ground, and
+# CORE accepts NOMINAL-ground lane evidence only under a driver hold (D-344).
+# D-397: pitch_rad, height_m and x_offset_m are the URDF nominal
+# (geometry.yaml camera.*, front_camera_link at cam_tilt_deg 8; drift-tested),
+# refined per robot by an accepted camera_profile calibration record (D-47
+# addendum store). Measured: pitch 8-11.8 deg, height fits 0.0575-0.062 m.
+width: 320
+height: 240
+fx: 281.6
+cx: 160.0
+cy: 120.0
+pitch_rad: 0.139626        # 8.0 deg down (URDF nominal); horizon row = cy - fx*tan(pitch) = 80.4
+height_m: 0.06343          # URDF nominal lens height above the floor
+x_offset_m: 0.03317        # URDF nominal lens offset ahead of base_link
+max_range_m: 0.6
+# D-468 projection uncertainty of this URDF nominal (lane containment uncertainty_m): the
+# widest measured deviation from it including the fits' own bands, D-47 calibration table /
+# D-379 track fits. An accepted camera_profile record replaces the first three with its bands.
+pitch_uncertainty_rad: 0.066323  # 3.8 deg: nominal 8.0 vs 11.8 fitted (session 20260930T133221Z)
+height_uncertainty_m: 0.01093    # nominal 0.06343 vs 0.0575 -0.005 band (8kcn track fit)
+roll_uncertainty_rad: 0.047124   # 2.7 deg: nominal 0 vs room-wall -0.8 -1.9 band (8kcn: -1.5)
+# Lateral error of the lane edge detector in image pixels. NOT validated on this 320x240
+# camera (2 px is the Gazebo figure); 3 px is a conservative assumption, above the robust
+# sd 2.6 px of the 1707 lane vanishing points this profile's horizon came from.
+detector_lateral_px: 3.0

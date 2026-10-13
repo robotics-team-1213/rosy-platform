@@ -1,0 +1,26 @@
+# Extra Gazebo sensors bridged only with launch_sim.launch.xml sim_sensors:=true:
+# the model's IMU (description rosy_gz.urdf.xacro, rad/s, gravity included) and the
+# three down-facing IR floor rays that scripts/sim_ir_floor.py turns into ir_sensor/range.
+- ros_topic_name: "imu_raw"
+  gz_topic_name: "imu_raw"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "ir_sim/left"
+  gz_topic_name: "ir/left"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "ir_sim/mid"
+  gz_topic_name: "ir/mid"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "ir_sim/right"
+  gz_topic_name: "ir/right"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS

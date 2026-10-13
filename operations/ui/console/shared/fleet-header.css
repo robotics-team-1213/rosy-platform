@@ -1,0 +1,98 @@
+/* D-540 2 — Rosy Fleet 공통 머리. 관제·설치·보정·현장 지도·Cell 네 문서가 같은 마크업과 이 시트를 쓴다.
+   문서 시트(styles.css, site-map.css, cell.css)는 머리를 칠하지 않는다. CSP: 클래스와 id만. */
+
+/* 머리는 창 모서리에 붙는다 — 현장 지도·Cell에 남아 있던 브라우저 기본 8px 여백이 비상 정지 자리를 옮기지 않게 한다. */
+body { margin: 0; }
+.fleet-header { position: sticky; top: 0; z-index: 10; }
+.fleet-header ui-topbar { box-sizing: border-box; }
+
+/* 관제 토큰 입력 — 얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
+.token { width: 11rem; }
+#console-token[hidden], #token-save[hidden] { display: none; }
+/* 현장 지도·Cell 시트의 전역 `input { width: 100% }`가 머리의 "이 브라우저 기억" 칸을 늘이지 않게 한다. */
+ui-topbar input[type="checkbox"] { width: auto; }
+
+/* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 상세 절차는 화면 낭독기에 남긴다. */
+.estop {
+  min-width: var(--target-irreversible);
+  min-height: var(--target-irreversible);
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.estop .ui-icon {
+  width: calc(var(--target-irreversible) * 0.55);
+  height: calc(var(--target-irreversible) * 0.55);
+  flex: none;
+}
+.estop span { white-space: nowrap; }
+.estop small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+#estop[disabled][reason] > small:not([data-reason]) { display: none; }
+
+/* D-658: four roles own the header; connection details have their own fold. */
+ui-topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "identity status actions safety";
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+}
+.fleet-header-identity { grid-area: identity; min-width: 0; }
+.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+#development-badge { flex: none; min-width: max-content; overflow: visible; }
+#user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
+/* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
+.fleet-header-actions { grid-area: actions; position: relative; display: flex; align-items: center; gap: var(--space-1); }
+.fleet-header-actions [hidden] { display: none; }
+#fleet-login:not([hidden]),
+#fleet-account > summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
+.fleet-account-panel .password-login-who { flex-wrap: wrap; }
+.fleet-account-panel [data-login="principal"] { display: none; }
+.fleet-header-safety { grid-area: safety; justify-self: end; }
+#topbar-more { display: inline-flex; max-width: 100%; }
+.header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+.topbar-extra {
+  display: none;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.topbar-extra[data-open="true"] { display: flex; }
+#console-token { flex: 1 1 10rem; width: auto; min-width: 0; }
+@media (width < 64rem) {
+  ui-topbar ui-brand small { display: none; }
+  #estop small { display: none; }
+}
+@media (width < 48rem) {
+  ui-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "identity safety" "status actions";
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+  .fleet-header-identity { container-type: inline-size; }
+  ui-topbar ui-brand b { line-height: var(--leading-flat); }
+  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
+  .fleet-header-actions { justify-content: flex-end; gap: 0; }
+  #estop { gap: var(--space-1); }
+  #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
+}

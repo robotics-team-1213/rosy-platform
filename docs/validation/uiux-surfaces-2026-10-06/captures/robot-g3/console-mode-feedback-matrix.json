@@ -1,0 +1,36 @@
+[
+  {
+    "viewport": "1366x768",
+    "image": "operator-console-mode-feedback-1366x768.png",
+    "posts": [
+      {
+        "path": "/api/v1/mode",
+        "body": {
+          "mode": "MANUAL"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "action": "수동 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.",
+    "mode": "현재 모드: 대기"
+  },
+  {
+    "viewport": "390x844",
+    "image": "operator-console-mode-feedback-390x844.png",
+    "posts": [
+      {
+        "path": "/api/v1/mode",
+        "body": {
+          "mode": "MANUAL"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "action": "수동 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.",
+    "mode": "현재 모드: 대기"
+  }
+]

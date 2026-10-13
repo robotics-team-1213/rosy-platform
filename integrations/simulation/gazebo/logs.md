@@ -238,3 +238,173 @@
 - 증거: null 수명 원본 제공 1 passed (2.54s), 기존 키보드 탭과 경기 보드 2 passed (4.54s). X 제공 null 거리 정리 제거 변이가 이전 2.0m를 남겨 실제 단언 RED, 동일 원본 제공 GREEN·제품 SHA256 불변을 확인했다.
 - gate 변화: SOURCE/LOCAL 읽기 전용 뷰어이며 Gazebo/장치/물리 gate는 움직이지 않는다.
 - 결정: D-439 Task5. 미수신을 측정 0으로 표시하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(scripts): D-426 T5 sim base command watchdog
+
+- 변경: `scripts/command_watchdog.py` 추가 — CORE와 별도 수명의 ROS 노드. 최신 cmd_vel을 구독·재발행하다 0.30 monotonic s 만료 시 base 입력을 0으로 만든다. CORE의 operational cmd_vel writer를 늘리지 않는다(재발행은 시뮬 base 입력에만). 순수 판정(`gate`)은 호스트 시험이 돌리고 rclpy 배선은 얇다. clock pause에도 만료 작동(판정은 monotonic). 시계 역행은 stale 명령이 아니라 0으로 처리.
+- 증거: test/test_command_watchdog.py 8개 계약 — 무명령 즉시 0·신선 명령 통과·0.30 s 경계·clock pause 만료·시계 역행 0·CORE kill 경로 0.29/0.31 s 분기·--help·rclpy 부재 시 안내 후 exit 3.
+- gate 변화: SOURCE/LOCAL(순수 판정). 실제 Gazebo 회차에서의 bridge 수명·프로세스 크래시 정지는 T6이 증명한다(bridge 자체 사망 시 actuator 정지 보장은 별도 한계).
+- 결정: bridge는 CORE의 명령 흐름에 의존하지만 죽지 않는 한 CORE 사망을 0.30 s 안에 base 정지로 바꾼다(D-426 결정 5).
+
+## 2026-10-05 · uncommitted · feat(launch): D-426 T1 run_spec — 검증 runner 소유 실행 입력
+
+- 변경: `gz_multi.launch.py`에 `run_spec` 인자 추가(645→538줄, D-362 예산 유지를 위해 비-launch 부품을 `gz_multi_parts.py`로 분리 — 브리지 매핑·CORE 오버라이드·robots.yaml·run_spec 판독). 검증 runner(`tools/validation/fleet_gazebo/run.py`)가 run별로 만든 CORE 오버레이·robots.yaml·GZ_PARTITION을 런치가 그대로 소비한다 — 런치가 예약·토큰을 새로 만들지 않는다(불일치는 곧 READY 거절 사유). run_spec 이 없으면 기존 자체 생성 동작(임시 디렉터리·개발 토큰)이 그대로다. 필수 필드 누락·오버레이 부재는 즉시 실패.
+- 증거: `test/test_gz_multi_run_spec.py` 3개(빈 spec 레거시·필드 누락 RuntimeError·로봇별 오버레이 부재/존재). Windows skip, Linux CI에서 실행. `test_gz_multi_core.py` 기존 회귀 통과(분리 후 `_core_config` 등 import 별칭 유지). 크기 판정 시험 통과(538 < 600).
+- gate 변화: 없음(SOURCE). 실제 Gazebo 실행·ROS-SIM은 T6 회차 뒤.
+- 결정: D-426 T1의 런치 절반. 예약·manifest·READY 판정은 runner 쪽 `preflight.py`(test/test_fleet_gazebo_run_contracts.py 12개).
+
+## 2026-10-05 · uncommitted · fix(sim): D-426 T1 domain 적용과 예약 preflight
+
+- 변경: runner 명세의 정수 ROS domain을 참여 프로세스 앞에서 적용하고 Gazebo/Fleet 안내 명령에 같은 환경을 넣었다. robots/prefix·명세 namespace와 CORE 오버레이의 identity/loopback API 포트 불일치는 거부한다. 명세 없는 기존 경로는 domain을 변경하지 않는다.
+- 예약: 기존 run manifest의 결정적 profile을 검증하고 최대 256개 기록의 충돌 및 실제 loopback listener 점유를 확인한다. 손상된 기록은 실패하고 stale 기록은 보존한다. 계획 snapshot이며 수동 launch까지 유지되는 포트 lease·동시 planner 배타 예약의 증거는 아니다.
+- 검증: 최초 누락 회귀 4 FAIL, 손상된 예약 회귀 4 FAIL을 실제 소스로 재현했다. 기존 전체 Gazebo 시험의 blanket ROS_DOMAIN_ID 금지는 D-114의 같은 run/여러 namespace 원칙을 유지하면서 명세 domain action으로 정확히 바꿨다. 최종 결과는 별도 영수증에 기록한다. ROS 의존 시험 skip은 CI에서 확인하며 실제 SIM/장치/주행은 실행하지 않았다.
+- gate 변화: D-426 실제 ROS-SIM 수용은 계속 미검증이다. 기존 단일 로봇 회차 증거를 이번 다중 격리 수용으로 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(sim): T5 명령·시계와 수동 SIM 경계
+
+- 변경: watchdog의 비유한 시각·잘못된 만료·비유한/비평면/0.15 m/s·0.5 rad/s 초과 명령은 zero로 닫는다. 수동 `--sim-only` 동의, 격리 ROS domain 120~199·localhost·D426 partition, 실제 ROS context domain·namespace·remap 이후 topic을 command publisher 생성 전에 대조한다. CORE/hardware runtime mode를 SIM이라는 새 값으로 덮지 않는다. 명시 STEADY_TIME clock으로 50 ms timer를 만들고 logger에 완성된 문자열을 준다. 동시 3779 namespace 정규화와 bounded entrypoint 시험의 의도를 보존했다.
+- 검증: 실제 순수 함수·합성 ROS port를 쓰는 원래 entrypoint 반례 8+10+2 FAIL을 재현했다. 원래 watchdog/scenario와 Fleet-loss 포함 최종 71 PASS(7.38s), owned flake8 0, known_failures 0 NEW다. 동의 없는 실행은 ROS import 전에 거부하고, 유효 SIM 동의 뒤 ROS dependency를 명시 차단한 별도 subprocess는 15 s 안에 안내·exit 3을 확인했다. 최초 관련 시험 파일명 오류와 중간 formatting 실패 로그를 보존했다.
+- gate 변화: SOURCE/HOST callback wiring만. 실제 DDS·STEADY timer scheduling·Gazebo base 연결·pause 장애 주입·CORE kill·장치 publisher·실물 정지는 실행하지 않았다. 0.30 s 입력 expiry 판정과 50 ms polling·scheduling/물리 정지 지연은 구분하며 T5 회차 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · feat(sim): Gazebo IMU·IR 바닥 광선과 sim_sensors
+
+- 변경: `launch_sim.launch.xml sim_sensors:=true`(기본 false)가 둘째 bridge(`params/rosy_bridge_sim_sensors.yaml`: 모델 IMU `imu_raw`, IR 광선 셋)와 `scripts/sim_ir_floor.py`(장치 모양 `ir_sensor/range`, 바닥 2000 / 없음 0, 반사율 미모델)를 띄운다. `map_v2_fleet_real.launch.py`가 인자를 넘긴다. `config/sim_sensors_core.yaml`은 CORE overlay 조각(enforce, lidar/imu/ir, `simulation_sensors`)이다.
+- 증거: `test/test_sim_sensors.py` 6 PASS. 모델 PC D-476 2차 실행(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 절)에서 `/ir_sim/mid` 0.0127 m, `ir_sensor/range` [2000, 2000, 2000], `imu_raw` 확인.
+- gate 변화: 없음. ROS-SIM 한 대 실행이며 장치·현장 수용이 아니다.
+
+## 2026-10-06 · uncommitted · fix(sim): sim IR 값을 worker 유효 범위에 맞춤 (리뷰)
+
+- 변경: `sim_ir_floor.py` 바닥 없음 값 0 → 100(`hazard.py on_ir`은 0 < v < 4000만 유효로 받아 0은 절벽이 아니라 무효 IR이었다). 세 채널이 모두 들어오기 전에는 프레임을 내지 않는다. 채널 순서를 장치 `ir_adc_node.py`([ch2, ch1, ch0] = 좌·중·우)에 시험으로 고정했다. `sim_sensors`는 단일 로봇 전용임을 launch 주석에 적었다.
+- 증거: `test/test_sim_sensors.py` 9 PASS.
+- gate 변화: 없음.
+## 2026-10-07 · uncommitted · test(sim): D-495/D-498 교차로 회전 SIM 수용 (모델 PC)
+- 변경: 제품 코드 변경 없음. 기록 `docs/validation/d495-junction-sim-2026-10-07/`(result.md, evidence). 하네스는 sim 전용 launch 사본(IR 보정만 더함, 페이로드 `line_follow.yaml` 그대로), `d495_sim_aux.py`(참값 자세 `d495/gt`, 도색 raster로 만든 IR `ir_sensor/range`, scan/odom 멈춤 주입, odom을 `/clock`이 stamp를 지난 뒤 냄), HTTP 전용 탐침 `d495_sim_probe.py`(trip, fault).
+- 증거: 모델 PC `map_v2_fleet_real` keep 한 대, run 40개 요약. S3·S4·S8·S9 PASS, S5 부분, S1·S2 FAIL, S6 INCONCLUSIVE, S7 IR 중단 0회(점 IR 한계). 로봇 기본값(`recovery_local_enabled: true`, enforce 없음)에서는 차선 주행이 출발하지 않는다.
+- gate 변화: 없음. ROS-SIM 한 대, 장치·현장 수용 아님.
+- 결정: D-495 수용 점검표 S1–S6, D-498 S7–S9 (승격 전 남은 항목은 result.md 발견 1–9)
+- 교훈: 끝난 launch가 남긴 bridge가 odom을 같은 stamp로 겹쳐 내면 CORE PoseTrail이 끊긴다. sim 실행 스크립트는 자기 `GZ_PARTITION`의 프로세스를 모두 끝낸 뒤 띄운다. 같은 호스트의 다른 sim과는 도메인·포트·world 파일 이름까지 나눈다.
+## 2026-10-10 · uncommitted · fix(sim): SIM Fleet 공용 사이트 설정 (D-601 B)
+- 변경: `config/fleet_sim_site.yaml`(`fleet.trip.lane_camera_check: false`)을 두고 SIM에서 Fleet을 띄우는 곳 여섯(`tools/run_fleet_sim.sh`, `tools/validation/fleet_gazebo/run.py`, `tools/sim/d395_s1_bench.py`, d407 `console.sh`, lap_fleet.py 둘)이 이 파일을 읽는다. SIM 런치는 road_observer를 띄우지 않아 CORE `vision/front/status`가 언제나 `available: false`다.
+- 증거: `operations/fleet/test/test_fleet_sim_site_d601.py`(설정 적재, 여섯 곳 참조, 미리보기 없는 FakeRobot의 lane 계획 200).
+- gate 변화: 없음. SIM 실주행 재확인은 하지 않았다.
+## 2026-10-10 · 5aa301e83 · feat(sim): 카메라 SIM 런치가 앞 미리보기를 낸다 (D-605, D-601 B)
+- 변경: `map_v2_fleet_lane`·`map_v2_fleet_real`과 d495_real·closed_loop 하네스 사본이 `sim_jpeg_relay.py`(gz_sim이 `tools/`에서 설치, `use_sim_time` 없음)를 띄운다. 카메라 SIM Fleet(d407 console.sh, lap_fleet.py 둘)은 `config/fleet_sim_camera_site.yaml`(`lane_camera_check: true`), `gz_multi` Fleet 셋은 `fleet_sim_site.yaml`(`false`). `run_fleet_sim.sh`·d407 `console.sh`의 글자 그대로 `
+` 줄 이음(e789581de)을 고쳤다.
+- 증거: 모델 PC `map_v2_fleet_lane`(domain 91, port 8199): `vision/front/status` `available: true`, `source GZ`, `age_ms` 41–150, sequence 157→176(약 5 fps). `GET /api/v1/traffic` `mode DISABLED` 그대로. 30 s CPU tick: 릴레이 18(코어 한 개의 0.6%), CORE 2780, gz 1602. `use_sim_time` 켠 릴레이는 20 s에 477 tick(약 24%)이었다. 테스트 `operations/fleet/test/test_fleet_sim_site_d601.py`.
+- gate 변화: 없음. 카메라 SIM에서 Fleet lane trip 실주행은 하지 않았다.
+
+## 2026-10-10 · bb6347eba · feat(sim): 곡률 학습 맵 선택
+
+- 변경: map_v2_fleet_real.launch.py의 map_variant:=training-curved가 world와 lane_graph를 같은 파생 번들에서 선택한다. 기본 실행은 기존 실물 기준 맵이다.
+- 증거: bb6347eba의 맵·그래프·런치 관련 모델 PC 원격 pytest 57 passed, known_failures 0 new/0 known. 시뮬레이터 실행·신호 준수·두 로봇 Fleet 수용은 아직 확인하지 않았다.
+- gate 변화: 없음. 파생 맵의 ROS-SIM 수용은 별도다.
+
+## 2026-10-12 · 785b46314 · feat(sim): 두 대 Gazebo의 공통 curved 맵 선택
+
+- 변경: D-676 사용자 분담에 따라 Isaac은 한 대 학습·완주, 다른 PC의 Gazebo는 두 대 Fleet 검증으로 구분한다. gz_multi의 world_name:=map_v2_fleet_curved.world가 Isaac과 같은 training-curved/worlds/map_v2_fleet_real.world를 선택한다. 시각 차선 곡률만 바뀌므로 외곽 충돌 벽의 기존 occupancy map을 공유한다. 두 대는 분리된 spawn_poses를 명시한다.
+- 증거: AI PC 원격 world_profiles 11개 PASS, known_failures0NEW. 함께 요청한 gz_multi Core/run-spec 모듈은 ROS launch import 조건이 있어 이 결과로 검증됐다고 주장하지 않는다. 두 로봇 native 실행·카메라·Fleet·완주·신호 수용은 아직 미확인이다.
+- gate 변화: 없음. 이전 단일 로봇 ROS-SIM 결과를 새 curved 두 대 수용으로 승격하지 않는다.
+
+## 2026-10-12 · 3c50387944 · feat(sim): D-676 camera 두 대 전용 launch
+
+- 요청: 모델 PC Isaac 한 대 camera/RL, 다른 PC Gazebo 두 대 actual CORE/Fleet를 같은 curved 맵으로 검증한다.
+- 변경: gz_multi는 image transport 없이 nominal camera geometry와 headless rendering만 선택한다. map_v2_fleet_multi_real 전용 launch가 runner-owned run_spec·모델 pointer를 받고 두 namespaced local image bridge·기존 line_observer·JPEG relay를 구성한다. camera Fleet은 fleet_sim_camera_site.yaml의 preview admission을 유지한다.
+- 증거: 원격65pass1skip·D601/package16pass·known_failures0NEW. AI PC ROS Jazzy에서 두 namespaced 인식/미리보기 각3노드와 CORE2개 launch graph를 확인했다. ROS pytest 모듈은 skip이며 graph 확인이 native 실행을 대신하지 않는다.
+- gate 변화: 없음. 초기 연결 구성이다. 신호/횡단보도 gate·Fleet 실행·두 대 주행/완주·RL 성공은 아직 미검증이다. 기본 gz_multi와 D-118 parameter bridge에는 생 Image를 추가하지 않았다.
+
+## 2026-10-12 · 3c50387944 · test(sim): Gazebo 두 카메라·CORE 정지 상태 연결
+
+- 변경: 제품 런타임 변경 없이 AI PC 신규 A16 환경의17개 colcon package를 빌드하고 전용camera launch로 두 로봇을 실제 headless 생성했다. 독립API·HOME·namespace·loopback DDS·run_spec를 사용하고 Fleet/주행 요청은 하지 않았다.
+- 증거: rosy_01 image310/scan387/odom1137/line310/cmd1933, rosy_02도 센서/미리보기 수신, 각 LiDAR finite640·320x240 camera·CORE publisher1개·cmd 최대0·실제 odom속도0. 원본result/사진/log/cleanup은 private/isaac/results/gazebo-a16-stationary-two-camera에 보관했다. partition에 남은 own process13개를 종료하고 residual_after0을 확인했다.
+- gate 변화: 없음. CORE runtime의 DOMAIN_ID_INVALID와 FOREIGN_NAMESPACE를 확인했다. runner run_spec120..199와 CORE Linux-safe0..101 계약이 모순이며 domain172는 ERROR다. 연결 증거일 뿐 Fleet runtime 준비/카메라 주행/교통/완주/RL 수용이 아니다. 서로다른 로봇namespace 진단과 domain allocator/validator를 계약·시험과 함께 바로잡아야 한다.
+
+
+## 2026-10-12 · eae0f59da0 · fix(sim): CORE 범위와 Gazebo 예약 도메인 일치
+
+- 변경: 검증 allocator·run_spec·sim-only watchdog 80..99, 일반 sim 20..79. CORE 0..101/localhost/partition/namespace/실제 context/monotonic expiry 유지. 기존 120..199 catalog는 거절하며 새 output_root가 필요하다.
+- 증거: 관련 원격 87PASS1SKIP·known_failures 0NEW·독립 소스 안전 검토 차단 없음. 신규 17 packages 빌드 후 실제 headless Gazebo 두 CORE domain 80, 각 320x240 camera 311·finite640 LiDAR389·odom1143·최종 publisher 한 개·명령 0 확인. ROS ERROR가 사라지고 FOREIGN_NAMESPACE 경고는 유지. 자체 partition 종료 후 잔여 0.
+- gate 변화: 정지 runtime 도메인 결함 해결. Fleet 서버·교통·주행·완주·카메라 RL 수용은 미완료. 당시 모델 PC의 Isaac 한 대 재시험은 7.6GB로 8GB 기준을 넘지 못해 SDK 기동 전 거절됐다. 이후 실제 학습은 Isaac 일지에 별도 기록한다.
+
+## 2026-10-12 · ccc7905f2 · 공유 지도 NE/SW 진입 정합성
+
+- 변경: lane_rules의 기존 TurnBan으로 NW·SE 재진입을 금지하고 두 lane_graph를 재생성했다. Fleet import·신호 접근로 검사가 금지를 보존하며 camera sim site는 cap1 roundabout과 NE·SW 신호 접근로를 설정한다. Isaac 경로는 reverse 도로로 합법적인 진입을 사용한다.
+- 증거: 두 파생 지도의 접근로·cap1·신호 plan과 실제 routing successor, native 금지 경로 거절 회귀를 추가했다. 원격 시험과 독립 안전 리뷰 결과는 후속 기록한다. 실제 Fleet A18 readback은 이전 설정에서 signals=[]·링 분리 블록을 확인한 원인 증거이며 새 설정의 성공 증거가 아니다.
+- gate 변화: 아직 없음. 새 경로 baseline/RL·네 실제 신호 표시 연결·CORE/Fleet 회전 연결·완주·교통/장애물·Gazebo 두 대·병렬 RL·실물 수용은 미완료다. 다른 경로의 R17/R21 수치를 개선 비교에 사용하지 않는다.
+
+## 2026-10-12 · a3150e7669 · 공유 지도 진입 규칙 원격 검증
+
+- 변경: NE·SW 진입/NW·SE 진출 규칙을 공유 지도·Fleet·native route에 반영했다. 독립 D-430 소스 리뷰를 통과했다.
+- 증거: 관련 6개 원격 파일 135 PASS·exit 0·known_failures NEW 0. 현장 PC 격리 pytest이며 물리 주행은 없다. lint 일지 heading 3개를 수정한 후 0 errors·28 warnings. A19 소스 전송은 Broken pipe·exit 1, 후속 SSH 두 번 timeout으로 서버를 실행하지 않았다.
+- gate 변화: SOURCE 회귀만 확인했다. 실제 신호 적재·네 표시·새 경로 baseline/RL·완주·교통 안전·두 대·병렬 학습은 미완료다. 다른 작업의 예약과 부분 전송 소스를 실행 승인으로 해석하지 않는다.
+
+## 2026-10-12 · aea25e6c15 · 최신 main 통합과 실제 Fleet 설정 readback
+
+- 변경: main 16e6fa373을 작업 브랜치에 통합했다. 기존 TurnBan·공유 지도·camera site 신호 설정을 실제 격리 Fleet 서버에서 적재 확인했다.
+- 증거: 통합 후 관련 원격 135 PASS·exit 0·NEW 0, lint 0 errors·28 warnings. A20 source archive SHA 양쪽 일치. 실제 인증 readback에서 map_v2_fleet·두 TurnBan·roundabout cap1·sig_ring NE/SW 접근로·errors=[] 확인. runner exit 0, 종료 후 독립 PID 부재·ECONNREFUSED 확인. private 원본 네 파일 hash 대조 보관.
+- gate 변화: SOURCE/설정 적재만 확인했다. 신호는 virtual occupancy, online 0/total 2이며 실제 CORE/Gazebo·grant·주행·네 표시·완주·병렬 RL 수용이 아니다. main 착지·push는 아직 하지 않았다.
+
+## 2026-10-12 · a49a754e94 · 새 합법 경로 native 평가와 Gazebo 연결 준비
+
+- 변경: 새 NE/SW 진입 ordered 경로를 기존 segmentation·CORE·frozen RL로 실제 headless 평가했다. 최신 main 통합 소스로 별도 Gazebo build/install과 두 CORE·실제 Fleet 연결 정지 시험을 준비했다.
+- 증거: R23 source 7,337 파일 실행 전후 hash 검증, SDK exit 1, 네 heading baseline/eval 완주 0/8·진행 0m. 영상 8개 ffprobe·SHA·시각 증가, 무효 camera 명령 0·최종 정지·GPU 없음·독립 runner PID 부재 확인. private 원본 56개 hash 대조 보관. A21 ROS 17 패키지 빌드 exit 0; 실행 직전 공식 sim selector는 eligible 없음·exit 1이다.
+- gate 변화: 완주/RL 개선은 HOLD다. trace의 lane_cue null·junction idle과 camera_target_unavailable을 기록했다. native Fleet 회전·공간/오차 승인·재획득과 두 대 실제 주행이 남았다. 정지 sensor/Fleet 연결 script는 준비·syntax 확인뿐이며 A21 SDK/CORE/Fleet 실행을 주장하지 않는다. 기존 안전 정지를 완화하지 않았다.
+
+## 2026-10-12 · uncommitted · 두 카메라 도로 관측 연결과 A21 실제 정지 시험
+
+- 변경: 두 namespace에 기존 road_observer_node를 연결하고 중복 preview relay를 제거했다. CORE와 map/scene 식별자를 맞췄다. simulation 지면 guard가 거절하는 GZ 값을 GAZEBO로 수정하고 실제 shared projection helper의 생성 회귀를 추가했다.
+- 증거: A21 실제 두 CORE·Fleet online 2/2, 카메라·차선·scan·odom 수신과 namespace별 최종 cmd_vel publisher CORE 하나를 확인했다. 모든 명령·최종 odom 속도 0, 종료 후 소유 프로세스·포트 부재 확인. private 원본 39개 SHA 대조 보관. roslogs/latest 절대 symlink는 안전 추출에서 제외했다. 새 도로 연결의 원격 회귀·native 실행은 아직 미확인이다.
+- gate 변화: 실제 정지 연결 증거만 추가했다. 위치 UNKNOWN, 설정 ENFORCED와 snapshot DISABLED 불일치로 교통 모드 수용은 보류다. 주행·도로 검출 정확도·신호 표시·완주·병렬 RL 개선은 미완료다.
+
+## 2026-10-12 · 493894894 · 道路 관측 연결 원격 회귀
+
+- 변경: 새 Gazebo 도로 관측 연결의 source 검토와 원격 계약 시험 결과를 기록했다.
+- 증거: 독립 Safety-Review SOURCE APPROVE. AI PC의 committed HEAD 시험은 관련 네 파일 60 PASS·exit 0, known_failures 0 new·0 known이다. 실제 projection helper에 launch params를 전달한 회귀가 포함됐다. harness lint 0 errors·28 warnings.
+- gate 변화: 원격 회귀만 통과했다. 실제 road/observation 수신·교통 endpoint 모드·preview 단일 발행과 주행 완주는 별도 미확인이다.
+
+## 2026-10-12 · d9fbc11ce · A24 두 CORE 도로 관측과 교통 설정 readback
+
+- 변경: 새 도로 관측 연결·기동 snapshot 수정을 포함한 소스를 격리 AI PC에서 빌드·실행했다. 최신 main 6c39ed8ae를 별도 통합해 f2c8b2e1f에서 관련 회귀를 다시 수행했다. 일지 충돌은 양쪽 기록을 보존하고 인덱스를 재생성했다.
+- 증거: A24 source 7,337 파일 hash 확인, 17 ROS 패키지 build exit 0, native 정지 runner exit 0. online 2/2·로봇별 road/line/image 271건·preview publisher 하나·최종 CORE publisher 하나·명령/최종 odom 속도 0. 실제 교통 API와 snapshot ENFORCED 일치. 기존 named operator pin API로 실제 Gazebo 위치 등록 후 LOCALIZED 두 대를 확인했다. 독립 PID 부재·세 포트 ECONNREFUSED·private 원본 47개 SHA 대조. 통합 f2c8b2e1f의 원격 관련 278 PASS·exit 0·known_failures NEW 0.
+- gate 변화: 도로 topic·정지 연결·활성 설정 증거만 추가했다. CORE 내부 valid 수신은 다음 sensors endpoint 확인이 필요하다. 첫 로봇 learned crosswalk 검출과 RGB road crosswalk=false의 차이, 둘째 containment uncertainty=null이 남았다. operator pin은 지속 카메라 위치 증거가 아니며 완주·교통 인식·grant·병렬 RL·실물 수용은 미완료다. A24 native는 main 통합 전 소스다.
+
+## 2026-10-12 · 8226c122f8 · IR 바닥 ray의 동일 프레임과 신선도 보존
+
+- 변경: 기존 sim_ir_floor 변환이 새 mid ray와 옛 좌우 ray를 합쳐 바닥 증거를 갱신하던 오류를 수정했다. 세 ray의 동일한 정규 timestamp·새 프레임·20Hz 한 주기 이내 source age를 확인하고 ROS clock timer에서 한 번만 발행한다. 입력 분류 함수·ADC 형식·바닥 거리·CORE motion gate는 유지한다.
+- 증거: 원격 RED로 혼합 timestamp의 floor 갱신을 재현했다. 수정된 Gazebo 전체 회귀는 318 PASS/4 SKIP/terminal exit 0이고 독립 drive_review가 202c807dc 및 8226c122f8에 SOURCE APPROVE했다. 별도 AI PC R6 정지 실행의 기존 소스에서 두 로봇 각각 세 ray의 동일 시각 514/514 프레임과 실제 IR·IMU·scan, enforce 및 junction_turn capability를 확인했다. R6는 수정 helper 실행 증거가 아니다.
+- gate 변화: SOURCE/원격 회귀와 실제 센서 연결 근거를 구분한다. R6의 첫 로봇 blocked=true는 유지했다. 새 helper의 실제 실행·유효 Fleet 통행권 아래 주행·완주·장치 수용은 별도 검증이 필요하다.
+
+## 2026-10-12 · 45e92d326 · 실제 완주 기준 실행과 조향 설정 배선
+
+- 변경: 단일 카메라 launch와 두 로봇 run_spec에서 observer가 해당 CORE와 같은 오버레이를 사용한다. 완주 기준은 docs/plans/2026-10-12-gazebo-lane-lap.md에 기록했다.
+- 증거: 기준 소스 2e29bd118의 7,503 파일과 17 ROS 패키지를 새로 빌드했다. 실제 구간은 anchor age 10.244s에 최종 0.210783m에서 stopped였고 arrived가 아니다. 기억 목표 3프레임 후 off_line/closed를 관측했다. 종료와 소스 보존을 독립 확인했다. out_of_order count는 부수 진단이었다.
+- gate 변화: 지도 완주는 HOLD다. 초기 pin은 지속 위치 관측이 아니며, SIM-only typed 위치 provider와 native 주행법칙 handover를 별도 검토 중이다. 단독 launch의 camera import 실패는 깨끗한 기준 소스에서도 재현됐다. 855eebc에서 시험 bootstrap을 고쳤고 재확인은 남았다.
+
+## 2026-10-12 · 3bafbd232 · 두 카메라 실행의 원본·곡선 지도 선택
+
+- 변경: multi_real의 map_variant는 기본 training-curved를 유지하고 원본 .을 선택할 수 있다. 기존 world catalog에 원본 real world를 등록하고 같은 선택값으로 실제 world와 두 observer의 lane_graph를 맞춘다. spawn·카메라 법칙·CORE 권한·모드·안전 기준은 유지한다.
+- 증거: 원격 ROS Jazzy descriptor RED 3개로 선택자 누락을 재현했다. 커밋 3bafbd232의 관련 원격 계약 59개는 정상 자원 기준에서 통과했고 known_failures NEW 0이다. 실제 ROS 객체에서 기본값·두 world/graph 일치·잘못된 값 거절을 확인했다. 시험 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/map-variant-green3/run-1.txt이다.
+- gate 변화: SOURCE/원격 계약 증거만 추가한다. 이 선택자로 실제 Gazebo 원본 주행·지도 완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · 2efcfe4b2 · 독립 Gazebo 시험의 CORE 설정 출처 고정
+
+- 변경: Gazebo 시험만 수집할 때도 contracts/foundation을 소스 경로에 등록한다. 기존 관측 법칙 시험이 원격 venv에 설치된 CORE 패키지와 누락된 site-packages/config 기본 파일을 읽던 문제를 고쳤다. 제품 설정 로더와 시험 실행기의 동작은 바꾸지 않았다.
+- 증거: 후보와 부모 5caaa8f8e의 전체 Gazebo 수집에서 동일한 설정 파일 누락 NEW 2를 재현했다. 수정 2efcfe4b2의 정상 AI PC 원격 전체 시험은 324 PASS/2 SKIP, terminal exit 0이다. 새 단언은 실제 config 모듈과 기본 YAML이 커밋된 foundation 출처임을 확인한다. 로그: X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/map-variant-full2/run-1.txt.
+- gate 변화: 독립 수집의 원격 회귀 증거를 추가했다. 실제 Gazebo 원본 맵 주행과 완주는 여전히 별도 검증 대상이다.
+
+## 2026-10-12 · uncommitted · 시뮬 관찰 법칙은 core_common 의존으로 선언한다
+
+- 변경: `gz_multi_parts.py`가 CORE line_follow 법칙을 읽으므로 `gz_sim/package.xml`에 `core_common` exec_depend를 선언했다.
+- 증거: 착지 라운드의 원격 시험이 `test_every_cross_package_use_is_declared`와 `test_package_xml_covers_imports`를 NEW로 보고 멈췄다. 선언 뒤 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음. 시뮬 완주와 실물 수용은 이 선언으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
+
+- 변경: map_v2_fleet 두 learned line observer에 기존 crosswalk_uncertainty_enabled를 명시했다. 검출된 횡단 구역 또는 미검출 프레임의 lookahead 거리 오차를 기존 containment에 전달한다. 이 입력은 기존 조건부 구역 수용과 IR guard 유예에 사용되므로 보고만의 변경은 아니다. CORE 횡단 gate의 활성 여부·임계값·최종 명령 권한은 변경하지 않는다.
+- 증거: 원격 RED에서 두 namespace 공통 parameter 누락을 재현했다(1 FAIL/2 PASS). 기존 GAZEBO 투영 오차는 경계 미검출 때도 존재하므로 초기 시험의 null 가정을 정정했다. 켜기 전후 lateral 오차 동일, 빈 경계 보존, crosswalk 유무별 finite positive along 오차를 검사한다. 수정 ac1a13865의 관련 원격 회귀는 AI PC에서 151 PASS, terminal exit 0, known_failures NEW 0으로 확인했다.
+- gate 변화: 수용 등급은 그대로 HOLD이며, 입력 연결은 조건부 구역 수용에 영향을 준다. 유효 구역 수용·서행/정지 정책·보행자·Fleet·완주는 실제 두 로봇 실행에서 별도로 확인한다.
+
+## 2026-10-12 · uncommitted · Validate optional ROS launch environment and normalized parameters
+
+- 변경: The test helper treats additional_env=None as an empty mapping and uses evaluate_parameters for the normalized steering-law mapping. Runtime code is unchanged.
+- 증거: CI 38239921624 gz-sim failed with TypeError. A native ROS replay then exposed KeyError in the parameter assertion. After both test fixes, AI PC Jazzy with the existing runtime venv passed 11 tests with 13 skips, exit 0, NEW 0. The remote_pytest transport and resource controls were retained; only its test shell sourced ROS and selected that existing interpreter. The ordinary ROS-free venv skipped this module.
+- gate 변화: Stationary/native test evidence only; no driving acceptance.

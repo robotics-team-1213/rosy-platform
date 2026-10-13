@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / 'learning/curation/pinky'))
 from verify_raw import compare_rows, compare_scan
-from raw_messages import stamp_ns
+from raw_messages import ir_sample, stamp_ns
 
 
 def fixture():
@@ -17,6 +17,15 @@ def fixture():
     tables = {'camera': [(1_010_000_000, {'stamp_ns': 1_000_000_000})],
               'cmd_vel': [(1_000_000_000, {'linear': .02, 'angular': -.1})]}
     return [row], tables
+
+
+def test_ir_sample_matches_the_recording_contract():
+    sys.path.insert(0, str(ROOT / "middleware/perception"))
+    from control.recording import ir_range_sample
+    samples = ([120, 800, 4095], (0, 0, 0), [1, 2], [1, 2, 4096], [-1, 0, 1],
+               [1.0, 2, 3], [True, 2, 3], "no", None)
+    for data in samples:
+        assert ir_sample(data) == ir_range_sample(data)
 
 
 def test_exact_camera_and_latest_causal_command():

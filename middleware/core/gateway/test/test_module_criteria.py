@@ -58,6 +58,9 @@ ALLOWED = Counter({
     # load_snapshot) to load; a missing provider or factory fails closed with
     # an install hint instead of an ImportError. No private field is reached.
     ("bridge/control_sensor_adapter.py", "getattr", "provider", "attr"): 1,
+    # D-468 optional provider capability: absent/error/non-boolean results
+    # deny return motion; the control package owns the hook.
+    ("bridge/control_sensor_adapter.py", "getattr", "self.policy", "'local_return_allowed'"): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
     # Accepted (core-shutdown 2026-09-23): rclpy Jazzy's MultiThreadedExecutor never
@@ -69,6 +72,21 @@ ALLOWED = Counter({
     ("bridge/ros_bridge.py", "getattr", "msg", '"goal_state"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"id"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"label"'): 1,
+    # Accepted (D-468): preserve public LaserScan angular resolution and source stamp;
+    # missing source time becomes zero and therefore cannot pass the freshness gate.
+    ("bridge/translate.py", "getattr", "msg", '"angle_increment"'): 1,
+    ("bridge/translate.py", "getattr", "msg.header", '"stamp"'): 1,
+    # Accepted: nav path metadata is optional on injected state/message doubles;
+    # absent values stay None and do not authorize motion.
+    ("bridge/observation.py", "getattr", "services.state", '"map_id"'): 1,
+    ("bridge/observation.py", "getattr", "msg", '"header"'): 1,
+    # Accepted (D-573): line-follow doubles without the crosswalk-gate property read as not
+    # asking (gate default off); the probe only gates scan forwarding, never motion.
+    # Accepted (D-555): optional public link state on the injected FleetAgent; a double without
+    # the fields reads as armed / never relinked (boot behaviour). Decides only when SAF-003
+    # counts the link, never motion.
+    ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"armed"'): 1,
+    ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"relinked_at"'): 1,
 })
 
 

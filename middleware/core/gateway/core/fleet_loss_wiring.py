@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import logging
 
+from core_common.config import fleet_link_arm_state
 from core_features.fleet_agent.agent import HEARTBEAT_PERIOD_S, fleet_link_configured
 from core_features.safety.fleet_loss import (
     DEFAULT_TIMEOUT_S,
@@ -25,9 +26,11 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
                      localization) -> FleetLossMonitor:
     """Validate the config, normalise the stored policy, and bind the monitor."""
     # One predicate with the agent (agent.fleet_link_configured): a robot has a Fleet link
-    # when its startup config carries an approved token and a site location. Decided once:
-    # a later rejected hello or stop() is a lost link, not a robot without Fleet (I1).
+    # when its config carries an approved token and a site location. Read from config, not
+    # from the agent: a later rejected hello or stop() is a lost link, not a robot without
+    # Fleet (I1). Only PUT/DELETE /fleet/link change the config at runtime (D-555 5).
     configured = fleet_link_configured(config.get("fleet") or {})
+    fallback = None
     # Fail fast only on a robot with a Fleet link; a robot without Fleet must boot
     # unaffected by Fleet-loss settings (D-419 scope) — one warning, defaults.
     try:
@@ -38,6 +41,7 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
             raise
         logger.warning("ignoring invalid SAF-003 timing on a robot without a Fleet link: %s", exc)
         timeout_s = DEFAULT_TIMEOUT_S
+        fallback = f"SAF-003 timing: {exc}"
     policy, known = normalize_policy(safety.fleet_loss_policy)
     if not known:
         logger.warning("safety.fleet_loss_policy %r is unknown; SAF-003 uses STOP",
@@ -52,9 +56,14 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
                 raise RuntimeError("robot localization is not LOCALIZED")
             nav.home(source="fleet_loss")
 
-    return FleetLossMonitor(
+    monitor = FleetLossMonitor(
         events=events,
-        link_configured=lambda: configured,
+        # D-555: after a runtime relink the link counts once the hub welcomed it, or at the
+        # latest after FLEET_LINK_ARM_GRACE_S (a link that never comes up is then lost, as at boot).
+        link_configured=lambda: (fleet_link_configured(config.get("fleet") or {})
+                                 and fleet_link_arm_state(getattr(fleet_agent, "armed", True),
+                                                          getattr(fleet_agent, "relinked_at", None),
+                                                          fleet_agent._clock()) != "pending"),
         link_connected=lambda: fleet_agent.connected,
         link_last_rx=lambda: fleet_agent.last_rx,
         # Link freshness is the heartbeat's own silence budget, not the policy timeout.
@@ -66,3 +75,6 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
         return_home=return_home,
         timeout_s=timeout_s,
     )
+    #: D-555: PUT /fleet/link refuses to arm SAF-003 on these fallback defaults.
+    monitor.config_fallback = fallback
+    return monitor

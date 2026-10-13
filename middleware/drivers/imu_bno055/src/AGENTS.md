@@ -3,6 +3,9 @@
 
 # src
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 BNO055 node implementation.

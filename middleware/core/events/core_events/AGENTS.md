@@ -3,6 +3,9 @@
 
 # core_events
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Python package for the in-process event bus (EVT-001..005) and the file audit log (LOG-001). ROS-free and framework-free, so it runs under plain pytest. CORE owns the instance; this package never publishes `/cmd_vel`.

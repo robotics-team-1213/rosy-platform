@@ -121,6 +121,34 @@ _WIFI_QR = re.compile(r"WIFI:[^\n]*?(?<![A-Za-z])P:(?P<value>(?:\\.|[^;\\\n])+)"
 # A bare high-entropy token on its own, e.g. a leaked hex API token.
 _BARE_TOKEN = re.compile(r"\b(?P<value>[A-Fa-f0-9]{40,}|[A-Za-z0-9+/]{50,}={0,2})\b")
 
+# Public cross-language transcript fixtures. This excuses only the exact
+# entropy token on its exact JSON field/path, never a credential or PEM finding.
+_PEER_VECTOR_PATH = 'middleware/ui/pilot/android/app/src/test/resources/peer-transcripts.json'
+_PEER_PUBLIC_VECTOR_VALUES = {
+    'nonce': frozenset({'01' * 32, '02' * 32}),
+    'public_key': frozenset({
+        'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC+iypgREmR8DKZo+83oOFx+SKJCeAcQBoCudNggdrhVKK5pTjj9YuYOtsux1l0lXAaRhvo2w+jtiKSbGHVdllA'}),
+    'signature': frozenset({
+        'MEUCIGj28eNNnlw4zwNwo3EYK4npeSZkJQrymIxZ+E3drcBkAiEA92Meq6XZCsVLfodbqnmAqBSxvaMR2WJsFLXEN4HvX8w'}),
+}
+_CAMERA_PEER_VECTOR_PATH = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+_CAMERA_PEER_PUBLIC_VECTOR_VALUES = {
+    'nonce': frozenset({'01' * 32, '02' * 32}),
+    'signature': frozenset({
+        'MEQCIB8WKmontsmONrEJCGMhZ+ioZLoH4cDiBfq6s6FlP99GAiBtnNpxoX+FyYb20FDkoCxWsDWlZ50nT7yzs6l+5v+VAw=='}),
+}
+
+
+def _is_public_peer_vector(path: str, line: str, value: str) -> bool:
+    allowed = {_PEER_VECTOR_PATH: _PEER_PUBLIC_VECTOR_VALUES,
+               _CAMERA_PEER_VECTOR_PATH: _CAMERA_PEER_PUBLIC_VECTOR_VALUES,
+               'test/fixtures/protocol/camera-peer.v1.json': _CAMERA_PEER_PUBLIC_VECTOR_VALUES}.get(path.replace('\\', '/'))
+    if allowed is None:
+        return False
+    field = re.fullmatch(r'\s*"(nonce|public_key|signature)":\s*"([A-Za-z0-9+/=]+)"\s*,?\s*', line)
+    return bool(field and field.group(2).rstrip('=') == value.rstrip('=')
+                and value.rstrip('=') in {item.rstrip('=') for item in allowed.get(field.group(1), frozenset())})
+
 # SubjectPublicKeyInfo for Ed25519 is public integrity material, not a secret.
 # Validate the complete DER shape rather than ignoring arbitrary base64 between
 # PEM-looking markers.
@@ -209,6 +237,11 @@ _CODE_REFERENCE = re.compile(
     r")$"
 )
 
+# Only unquoted code can call a generator with a bounded integer byte count.
+# The same text inside quotes remains a possible literal credential.
+_NUMERIC_CODE_CALL = re.compile(
+    r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\([0-9]{1,4}\)\Z')
+
 
 # The head of a call or subscript expression, not a literal: prefs.getString(,
 # created.json()[. The bare-value branch of _ASSIGNMENT stops at the first
@@ -288,9 +321,9 @@ def _call_holds_no_literal(line: str, start: int, name: str) -> bool:
     rest = line[start:]
     if not _closes_on_this_line(rest):
         return False
-    lowered = name.lower()
+    slot_names = {name.lower(), re.sub(r'(?<=[a-z0-9])(?=[A-Z])', '_', name).lower()}
     return not any(
-        not _is_placeholder(m.group(1)) and m.group(1).lower() != lowered
+        not _is_placeholder(m.group(1)) and m.group(1).lower() not in slot_names
         # A "literal" holding brackets is expression text the quote pairing
         # bridged across, not a credential: in `authorization[len("Bearer "):]
         # ... startswith("Bearer ")` the regex pairs the first string's closing
@@ -498,9 +531,24 @@ def scan_text(path: str, text: str, *,
     every repository check while protecting nothing.
     """
     findings: list[Finding] = []
+    lines = text.splitlines()
+    sha_table: tuple[int, int] | None = None
 
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(lines, start=1):
         stripped = line.strip()
+        cells = None
+        if path.lower().endswith(".md") and stripped.startswith("|") and stripped.endswith("|"):
+            cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+            if "SHA-256" in cells and number < len(lines):
+                separator = lines[number].strip()
+                if separator.startswith("|") and separator.endswith("|"):
+                    parts = [part.strip() for part in separator[1:-1].split("|")]
+                    if len(parts) == len(cells) and all(re.fullmatch(r":?-{3,}:?", part) for part in parts):
+                        sha_table = (len(cells), cells.index("SHA-256"))
+            elif sha_table and len(cells) != sha_table[0]:
+                sha_table = None
+        else:
+            sha_table = None
 
         if _PRIVATE_KEY.search(line):
             findings.append(Finding(path, number, "private-key", stripped[:120]))
@@ -525,14 +573,25 @@ def scan_text(path: str, text: str, *,
         node_id = (_PYTEST_NODE_ID.match(line)
                    if path.replace("\\", "/").endswith("test/known_failures.txt") else None)
         assignment_line = line[node_id.end():] if node_id else line
+        if path.replace('\\', '/').endswith('.kt'):
+            # Remove only a nullable String annotation before an assignment.
+            # Keep its actual default visible: a quoted credential still reports.
+            assignment_line = re.sub(
+                rf'\b([A-Za-z0-9_]*(?:{_SECRET_NAME_WORDS})[A-Za-z0-9_]*)\s*:\s*String\??\s*=',
+                r'\1 =', assignment_line, flags=re.IGNORECASE | re.VERBOSE)
         matched_assignment = False
         for match in _ASSIGNMENT.finditer(assignment_line):
             value = (match.group("quoted") or match.group("squoted")
                      or match.group("value") or match.group("call"))
             if (
                 _is_placeholder(value)
+                or (not (match.group('quoted') or match.group('squoted'))
+                    and _is_placeholder(value.rstrip(')]},:')))
                 or _TYPE_EXPRESSION.match(value)
                 or _CODE_REFERENCE.match(value.rstrip(",}"))
+                or ("(" not in value and _CODE_REFERENCE.match(value.rstrip("),}")))
+                or (not (match.group('quoted') or match.group('squoted'))
+                    and _NUMERIC_CODE_CALL.fullmatch(value))
                 or (_is_unclosed_fragment(value)
                     and _call_holds_no_literal(assignment_line, match.end(), match.group("name")))
                 or _reads_the_environment(value, assignment_line, match.end())
@@ -549,6 +608,11 @@ def scan_text(path: str, text: str, *,
             continue
 
         entropy_line = _URL.sub(" ", line)
+        if sha_table and cells and len(cells) == sha_table[0]:
+            checksum = cells[sha_table[1]].strip("`")
+            if _SHA256.fullmatch(checksum):
+                cells[sha_table[1]] = ""
+                entropy_line = _URL.sub(" ", "|".join(cells))
         if path.replace("\\", "/").endswith(_ABSORPTION_INVENTORY_SUFFIX):
             try:
                 fields = next(csv.reader([line]))
@@ -567,6 +631,8 @@ def scan_text(path: str, text: str, *,
 
         for match in _BARE_TOKEN.finditer(entropy_line):
             value = match.group("value")
+            if _is_public_peer_vector(path, line, value):
+                continue
             # Only this exact reviewed token is excused. Earlier private-key,
             # credential, PSK and QR checks remain active even on the same line.
             if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:

@@ -1,0 +1,254 @@
+{
+ "lap_01": {
+  "turn_end_dyaw_deg": -3.0,
+  "reacquire_dr_dyaw": [
+   0.022,
+   -25.4
+  ],
+  "max_dr_before_loss": 0.065,
+  "first_loss": {
+   "gt": [
+    -0.367,
+    -0.313
+   ],
+   "dr": 0.065,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_02": {
+  "turn_end_dyaw_deg": -1.4,
+  "reacquire_dr_dyaw": [
+   0.019,
+   -24.2
+  ],
+  "max_dr_before_loss": 0.064,
+  "first_loss": {
+   "gt": [
+    -0.314,
+    -0.298
+   ],
+   "dr": 0.048,
+   "reason": "tracking"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_03": {
+  "turn_end_dyaw_deg": -8.0,
+  "reacquire_dr_dyaw": [
+   0.029,
+   -29.5
+  ],
+  "max_dr_before_loss": 0.064,
+  "first_loss": {
+   "gt": [
+    -0.365,
+    -0.312
+   ],
+   "dr": 0.064,
+   "reason": "camera_line_not_visible"
+  },
+  "last_core_reason": "stuck_back_off",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_04": {
+  "turn_end_dyaw_deg": -4.3,
+  "reacquire_dr_dyaw": [
+   0.02,
+   -26.4
+  ],
+  "max_dr_before_loss": 0.07,
+  "first_loss": {
+   "gt": [
+    -0.312,
+    -0.306
+   ],
+   "dr": 0.056,
+   "reason": "camera_line_not_visible"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_05": {
+  "turn_end_dyaw_deg": -1.1,
+  "reacquire_dr_dyaw": [
+   0.02,
+   -24.3
+  ],
+  "max_dr_before_loss": 0.066,
+  "first_loss": {
+   "gt": [
+    -0.311,
+    -0.298
+   ],
+   "dr": 0.049,
+   "reason": "tracking"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_06": {
+  "turn_end_dyaw_deg": -2.1,
+  "reacquire_dr_dyaw": [
+   0.055,
+   -21.6
+  ],
+  "max_dr_before_loss": 0.059,
+  "first_loss": {
+   "gt": [
+    -0.334,
+    -0.282
+   ],
+   "dr": 0.032,
+   "reason": "tracking"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_07": {
+  "turn_end_dyaw_deg": -1.2,
+  "reacquire_dr_dyaw": [
+   0.019,
+   -24.9
+  ],
+  "max_dr_before_loss": 0.062,
+  "first_loss": {
+   "gt": [
+    -0.317,
+    -0.295
+   ],
+   "dr": 0.045,
+   "reason": "camera_line_not_visible"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "lap_08": {
+  "turn_end_dyaw_deg": -5.9,
+  "reacquire_dr_dyaw": [
+   0.023,
+   -28.1
+  ],
+  "max_dr_before_loss": 0.066,
+  "first_loss": {
+   "gt": [
+    -0.369,
+    -0.315
+   ],
+   "dr": 0.066,
+   "reason": "camera_line_not_visible"
+  },
+  "last_core_reason": "stuck_back_off",
+  "fleet": [
+   "stopped",
+   "pose"
+  ]
+ },
+ "lap_09": {
+  "turn_end_dyaw_deg": -1.3,
+  "reacquire_dr_dyaw": [
+   0.021,
+   -24.2
+  ],
+  "max_dr_before_loss": 0.067,
+  "first_loss": {
+   "gt": [
+    -0.367,
+    -0.315
+   ],
+   "dr": 0.066,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "stuck_back_off",
+  "fleet": [
+   "stopped",
+   "pose"
+  ]
+ },
+ "lap_10": {
+  "turn_end_dyaw_deg": -2.4,
+  "reacquire_dr_dyaw": [
+   0.022,
+   -24.8
+  ],
+  "max_dr_before_loss": 0.067,
+  "first_loss": {
+   "gt": [
+    -0.365,
+    -0.316
+   ],
+   "dr": 0.067,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "camera_reselection_required",
+  "fleet": [
+   "stopped",
+   "stall"
+  ]
+ },
+ "lap_11": {
+  "turn_end_dyaw_deg": -3.4,
+  "reacquire_dr_dyaw": [
+   0.026,
+   -26.3
+  ],
+  "max_dr_before_loss": 0.066,
+  "first_loss": {
+   "gt": [
+    -0.368,
+    -0.315
+   ],
+   "dr": 0.066,
+   "reason": "camera_line_not_visible"
+  },
+  "last_core_reason": "junction_unexpected",
+  "fleet": [
+   "stopped",
+   "junction_unexpected"
+  ]
+ },
+ "lap_12": {
+  "turn_end_dyaw_deg": -3.6,
+  "reacquire_dr_dyaw": [
+   0.023,
+   -25.9
+  ],
+  "max_dr_before_loss": 0.066,
+  "first_loss": {
+   "gt": [
+    -0.363,
+    -0.315
+   ],
+   "dr": 0.066,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ }
+}

@@ -3,6 +3,9 @@
 
 # harness
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The D-61 module harness: a registry of modules, each of which keeps `progress.md` (gate states with evidence) and `logs.md` (append-only change log), and a generator/linter that turns them into per-module `index.md` and the root `STATUS.md`. Design: `docs/plans/2026-09-15-module-harness-design.md`. ROS-free; standard library plus PyYAML.
@@ -11,9 +14,13 @@ The D-61 module harness: a registry of modules, each of which keeps `progress.md
 
 | File | Description |
 |------|-------------|
-| `harness.yaml` | Registry: `adr_log`, `adr_gaps` (ADR numbers deliberately absent, with reason), `status`, `stale_after_commits`, and `modules` (`name`, `path`, `tests`, `functional_kind`, `functional`). Edit it when a package is added, moved or removed |
+| `harness.yaml` | Registry: `adr_log`, `status`, `stale_after_commits`, and `modules` (`name`, `path`, `tests`, `functional_kind`, `functional`). Edit it when a package is added, moved or removed |
+| `adr_gaps.txt` | D-510: ADR numbers deliberately absent, one `D-nnn reason` line each; `merge=union`, duplicates are deduped by number. A local `refs/adr/D-nnn` reservation is never a gap; `lint` warns about one not on the branch |
+| `adr_reserve.py` | D-510: `next "<topic>"` claims the next ADR number as a create-only `refs/adr/D-nnn` ref and prints it (scans branches, remotes, worktrees; ignores numbers >20 above main's highest); `list`, `release D-nnn --reason <topic>` or `--force`. Stdlib only. Tests: `test/test_harness_contracts.py` |
 | `rosy_harness.py` | `generate` rewrites every module `index.md` and `STATUS.md`; `lint` validates and exits 1 on errors (staleness is only a warning) |
-| `platform_parts.yaml` | D-427 part manifest: every root's part, `d427_target`, wave and D-429/D-430 `concern`; `safety_modules` and `safety_anchors` (D-430 §1). Checked by `test/architecture/test_platform_parts.py` and `test_safety_separation.py` |
+| `sim2real_gaps.yaml` | sim2real gap registry (`id` G-NN, `gap`, `evidence` list of ADR ids / repo paths with optional `:lines` / `{path, branch}`, `tier` list of M R D infra, `owner`, `status` OPEN IN-PROGRESS CLOSED HOLD, `next`, `validated_by` for CLOSED). `sim2real.py` validates and renders it; `lint` runs it (`harness.yaml` `sim2real_gaps`); `generate` writes `docs/reference/sim2real-gaps.md`. Tests: `test/test_sim2real_gaps.py` |
+| `perception_gaps.yaml` | Perception blind-spot registry (`id` P-NN, `kind` miss or candidate, `spot`, `born` recording id / `device:YYYY-MM-DD` / in-repo `.md`, `evidence` as sim2real, `replay` repo path or `unbuilt`, `owner`, `status`, `next`, `validated_by` for CLOSED). A candidate is only HOLD or CLOSED. CLOSED forbids `unbuilt`. `perception_gaps.py` validates and renders it; `lint` runs it (`harness.yaml` `perception_gaps`); `generate` writes `docs/reference/perception-gaps.md`. Tests: `test/test_perception_gaps.py` |
+| `platform_parts.yaml` | D-427 part manifest: every root's part, immutable ownership ID `d427_target`, wave and D-429/D-430 `concern`; optional `layout_target` is the later physical destination (D-626), otherwise it defaults to `d427_target`. `safety_modules` and `safety_anchors` follow D-430 §1. Checked by `test/architecture/test_platform_parts.py` and `test_safety_separation.py` |
 | `safety_review.py` | D-430 §5: `python tools/harness/safety_review.py BASE HEAD [--warn-only]` fails when a non-merge commit after its `BASELINE` touches (or untags) a safety-tagged path without a `Safety-Review:` trailer. CI runs it on the PR/push range; the pre-push hook runs it as a warning |
 | `affected_tests.py` | D-436 `affected` tier, wired as `rosy_harness.py affected [--base main] [--print\|--run] [--json]`: maps `base...HEAD` plus working-tree changes to owning modules, reverse dependents (`platform_parts.yaml` `import_prefix` imports), tests naming the changed path and the guard set (`GUARD_SET`); `FULL_TRIGGERS` and unmapped files escalate to full; invocations are packed so no two test files share a basename; every suite prints why. Tests: `test/test_affected_tests.py` |
 | `run_functional.py` | Runs each module's `functional` pytest surface in isolation (`--module NAME` for one) |
@@ -22,7 +29,7 @@ The D-61 module harness: a registry of modules, each of which keeps `progress.md
 
 ### Working In This Directory
 
-- What `lint` enforces: `progress.md` front matter has `module`, `owner`, `last_verified` (quoted commit or `uncommitted`, plus date) and `gates`; gates are `SOURCE LOCAL ROS-SIM ARTIFACT DEVICE FIELD` with state `GO HOLD PARKED N/A`, and `HOLD` needs a `blocker`; ADR ids exist in the ADR log; each `logs.md` entry has date, change, evidence, gate change in order, no duplicate entry, and committed entries are never edited (append-only, checked against git history); no conflict markers or mojibake; ADR index rows and body sections match, and gaps are declared in `adr_gaps`.
+- What `lint` enforces: `progress.md` front matter has `module`, `owner`, `last_verified` (quoted commit or `uncommitted`, plus date) and `gates`; gates are `SOURCE LOCAL ROS-SIM ARTIFACT DEVICE FIELD` with state `GO HOLD PARKED N/A`, and `HOLD` needs a `blocker`; ADR ids exist in the ADR log; each `logs.md` entry has date, change, evidence, gate change in order, no duplicate entry, and committed entries are never edited (append-only, checked against git history); no conflict markers or mojibake; ADR index rows and body sections match, and gaps are declared in `adr_gaps.txt` (local `refs/adr` reservations only warn).
 - After editing any `progress.md` or `logs.md`: `generate`, then `lint`, and commit the regenerated `index.md`/`STATUS.md` (the pre-push hook refuses to push them uncommitted).
 - `progress.md/logs.md/index.md` may exist only at paths registered here (`test/architecture/test_folder_layout.py`), and every ROS package must be registered (`test_module_structure.py`).
 - D-430 §5: a commit that changes a safety-tagged path (`concern: safety` roots, `safety_modules`) or removes a safety root, module or `safety_anchors` entry needs a `Safety-Review:` trailer. A `git mv` of a safety root or module touches both paths, so D-427 wave 3 and wave 4 moves need the trailer (3b firmware, 3c `console.py` and the other Fleet stop files, 4c OMX stop files, 4d `core_features/safety` and the CORE safety modules). `safety_review.py` checks it in CI.

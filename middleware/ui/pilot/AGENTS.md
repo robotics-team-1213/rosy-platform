@@ -1,18 +1,21 @@
-<!-- Parent: ../../../src/hmi/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-29 | Updated: 2026-09-29 -->
 
 # pilot
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
-Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/pilot` 으로 서빙한다 — dashboard와 같은 D-23 임베디드 패턴. v1 조종 대상은 Pinky 주행 1대, OMX는 `drivers/registry` 확정점만 선행한다(D-296). 앱은 `/api/v1`·`/ws/*` same-origin 만 말하고 ROS를 모른다(CORE SRS §1.3).
+Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/pilot` 으로 서빙한다 — dashboard와 같은 D-23 임베디드 패턴. 웹 조종 대상은 Pinky 주행과 OMX-AI Gazebo 연습이며, Android에는 두 CORE에 독립 요청을 보내는 기존 함께 조종 화면이 있다. OMX 연습은 시뮬레이션 전용이다. 앱은 `/api/v1`·`/ws/*` same-origin 만 말하고 ROS를 모른다(CORE SRS §1.3).
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `package.xml` / `CMakeLists.txt` | ament_cmake; installs to `share/pilot` |
-| `index.html` | web_common `template.html` 기반 `ui-shell`(grammar `spatial`) |
+| `index.html` | web_common `template.html` 기반 `ui-shell`(grammar `focal`) |
 | `styles.css` | 표면 규칙만 — 색·타이포는 `tokens.css`(D-130.3) |
 | `stick.js` | 입력 → `{linear, angular}` 순수 매핑(데드존·감도 곡선·프리셋·반전) |
 | `recording.js` | D-411 로봇 녹화 순수 표시 판정(경과·크기 서식, 토글, 거부 코드, "녹화본" 시트 행·차단 사유) |
@@ -50,7 +53,7 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/ui/pilot/test middleware/core/api_web/test/test_pilot_route.py -q
+python -m pytest middleware/ui/pilot/test middleware/core/api/test/test_pilot_route.py -q
 ```
 
 ### Common Patterns
@@ -68,3 +71,9 @@ import 방향은 단방향: web_common(ui) ← client/link/stick ← screens ←
 없음 (브라우저 API 만)
 
 <!-- MANUAL: -->
+
+### UI 역할과 토큰 소비
+
+- 현재 영상·대상 신원·운전권·신선도를 먼저 보여주고, hold-to-drive 입력과 정지 및 수락 결과를 연결한다. 영상 위에 조작을 겹치지 않는다.
+- 웹 버튼은 공용 48px/14px/좌우12px를 소비하며 큰 입력 자리는 컨테이너가 소유한다. joystick/crosshair 기하는 조작 공간의 비율로 유지한다.
+- Android 일반 조작·서체·간격은 생성 `RosyMetrics`, 색은 기존 생성 `PilotColors`에서 읽는다. native 함께 조종도 각 CORE의 승인·안전·영상 신선도 검사를 유지한다.

@@ -1,0 +1,33 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "left:60"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [],
+ "gt_path_m": 0.7512,
+ "final": {
+  "t": 100.911,
+  "sim_t": 97.66,
+  "gt": [
+   -1.2712945097994608,
+   -0.5086136244088585,
+   -1.58646918551989
+  ],
+  "odom": [
+   -1.2712945097994608,
+   -0.5086136244088585,
+   -1.58646918551989,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "obstacle_ahead",
+  "keep": null,
+  "body_gap_m": 0.0379,
+  "j": "armed",
+  "jr": null
+ },
+ "capability_at_end": false
+}

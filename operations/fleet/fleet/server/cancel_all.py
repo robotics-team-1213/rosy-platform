@@ -26,6 +26,7 @@ from typing import Any, Callable, Iterator, Mapping, Optional
 from fleet.server import cancel_all_store
 from fleet.server.cancel_all_store import CANCEL_ALL_REASON, DISPATCH_OVERLAP_REASON
 from fleet.server.console_view import _error_of
+from fleet.server.goal_lease import NavigationStopped
 from fleet.swarm.transport import RobotApiError
 
 __all__ = ["CANCEL_ALL_REASON", "DISPATCH_OVERLAP_REASON", "DispatchCanceled",
@@ -113,11 +114,13 @@ class DriveCancelFence:
                 task_id=task["task_id"], attempt_id=task["attempt_id"],
                 attempt_seq=task["attempt_seq"],
             )
-        except (Exception, asyncio.CancelledError):
+        except (Exception, asyncio.CancelledError) as exc:
             # A failed or cancelled call may still have reached CORE. Re-cancel, re-raise:
             # the caller keeps its own classification (and CancelledError stays cancellation).
             if self._overlapped(seen):
                 await self._recancel(console, task, seen)
+                if isinstance(exc, NavigationStopped):
+                    raise DispatchCanceled(f"{task['robot_id']}: dispatch overlapped a cancel-all") from exc
             raise
         # 판정은 목표 응답 시점의 사실이다 — 아래 await 전에 끝낸다.
         if not self._overlapped(seen):

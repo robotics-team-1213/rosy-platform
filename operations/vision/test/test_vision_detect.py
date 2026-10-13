@@ -23,3 +23,33 @@ def test_detect_markers_decodes_jpeg_and_returns_four_pixel_corners():
 
 def test_detect_markers_returns_empty_for_invalid_jpeg():
     assert detect_markers(b"not a jpeg") == {}
+
+
+def test_detect_markers_finds_a_ten_pixel_robot_sticker_in_a_ceiling_frame():
+    # D-562: a 40 mm sticker (30 mm black) is ~10 px wide in the 1280x720 ceiling
+    # frame; the OpenCV default minMarkerPerimeterRate 0.03 misses it.
+    frame = np.full((720, 1280), 60, dtype=np.uint8)  # dark robot top
+    frame[297:313, 597:613] = 255  # white rim
+    frame[300:310, 600:610] = cv2.resize(generate_marker_image(40, 60), (10, 10),
+                                         interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    assert ok
+
+    assert set(detect_markers(encoded.tobytes())) == {40}
+
+
+def test_detect_markers_rereads_an_eight_pixel_sticker_the_full_frame_pass_rejects():
+    # D-575: on the site frame of 2026-10-09 the 9dfk sticker (id 41) was a rejected
+    # candidate in every frame; a 4x crop around the candidate decodes it.
+    frame = np.full((720, 1280), 60, dtype=np.uint8)
+    frame[293:311, 597:611] = 255  # white rim
+    frame[300:308, 600:608] = cv2.resize(generate_marker_image(41, 60), (8, 8),
+                                         interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    assert ok
+
+    found = detect_markers(encoded.tobytes())
+
+    assert set(found) == {41}
+    center = np.mean(found[41], axis=0)
+    assert np.allclose(center, (604, 304), atol=1.0)

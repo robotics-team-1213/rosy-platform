@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from robot_contracts import ROOT
-sys.path.insert(0, str(ROOT / "middleware" / "core" / "navigation"))
+sys.path.insert(0, str(ROOT / "middleware" / "control" / "drive" / "planning" / "nav2"))
 
 from navigation.profile_limits import (
     MotionLimits,
@@ -18,7 +18,7 @@ from navigation.profile_limits import (
 
 
 PROFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.hardware.yaml"
-NAV2 = ROOT / "middleware" / "core" / "navigation" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "params" / "nav2_params.yaml"
 
 
 def test_costmaps_wait_for_amcl_before_activating():
@@ -44,6 +44,17 @@ def test_factory_sim_inflation_is_wider_than_hardware_default():
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]
     factory = float(worlds["rosy_factory.world"]["inflation_radius"])
     assert factory > 0.15
+
+
+def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
+    """A carrot inside xy_goal_tolerance makes RPP rotate in place and never drive."""
+    data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
+    controller = data["controller_server"]["ros__parameters"]
+    tolerance = controller["general_goal_checker"]["xy_goal_tolerance"]
+    lookahead = controller["FollowPath"]["min_lookahead_dist"]
+    assert tolerance == 0.10
+    assert tolerance < lookahead
+    assert tolerance < 0.20
 
 
 def test_global_planner_is_smac_and_rejects_unknown():
@@ -73,7 +84,7 @@ def test_deployed_motor_defaults_match_the_hardware_profile():
 def test_pinky_profile_files_share_the_hardware_motion_ceilings():
     limits = load_motion_limits(PROFILE)
     paths = (
-        ROOT / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "profile.yaml",
+        ROOT / "middleware" / "devices" / "pinky" / "profile" / "config" / "profile.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.core.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.motor.yaml",
         ROOT / "contracts" / "foundation" / "config" / "rosy_default.yaml",

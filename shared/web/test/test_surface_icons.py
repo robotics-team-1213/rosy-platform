@@ -34,9 +34,10 @@ GLYPH_TOKEN = {
     "robot": "--robot-1",
 }
 #: D-377 2항 table: display name, English name and short name are all `Rosy <Word>`.
+#: D-487 renames the site surface to Rosy Fleet; its registry id stays `console`.
 NAMES = {
     "cam": ("Rosy Cam", "Rosy Cam", "Rosy Cam"),
-    "console": ("Rosy Console", "Rosy Console", "Rosy Console"),
+    "console": ("Rosy Fleet", "Rosy Fleet", "Rosy Fleet"),
     "robot": ("Rosy Robot", "Rosy Robot", "Rosy Robot"),
     "pilot": ("Rosy Pilot", "Rosy Pilot", "Rosy Pilot"),
 }
@@ -141,9 +142,12 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
-        "operations/fleet/fleet/server/web/index.html": "console",
+        "operations/ui/console/index.html": "console",
+        "operations/ui/console/install.html": "console",
+        "operations/ui/console/cell/cell.html": "console",
         "middleware/ui/robot/index.html": "robot",
         "middleware/ui/robot/surface.html": "robot",
+        "middleware/ui/pilot/index.html": "pilot",
     }
     for page, ident in pages.items():
         text = (registry.REPO / page).read_text(encoding="utf-8")

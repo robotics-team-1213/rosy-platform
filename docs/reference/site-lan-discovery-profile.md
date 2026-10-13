@@ -49,3 +49,5 @@ Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.loca
 모델 호스트의 `tls=none`은 SSH 인증이 없다는 뜻이 아니다. 실제 sshd 포트만 광고하고 `transport=ssh`를 필수로 검증한다. 모델 배포는 기존 승인된 논리 이름의 HostKeyAlias·known_hosts·StrictHostKeyChecking을 유지한다. TXT에는 계정·키·credential을 넣지 않는다.
 
 관제 역할 목록은 로봇 등록 목록과 분리한다. 발견, 승인 신원, 실제 접속 검증을 각각 표시하며 광고만으로 ready를 만들지 않는다. Pilot·Cam처럼 inbound listener가 없는 앱은 승인된 source/session 목록의 presence로만 나타낸다. 같은 LAN 밖은 승인 directory와 정상 DNS/profile을 사용하는 별도 경로이며 mDNS로 모든 망을 찾는다고 표시하지 않는다.
+
+LAN 밖 경로의 첫 구현은 팀 테일넷(D-477)의 MagicDNS 이름이다. 로봇은 `tag:rosy-robot` 태그로, 관제·모델 PC는 각자 태그로 tailnet에 등록되며, 실제 tailnet 이름·주소는 공개 문서에 적지 않는다(D-226). 테일넷 안의 SSH 로그인은 D-418의 키 체계를 그대로 따른다.

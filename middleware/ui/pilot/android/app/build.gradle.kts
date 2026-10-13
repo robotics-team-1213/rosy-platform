@@ -1,4 +1,8 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+val pageProbe = (findProperty("rosy.pilot.page.probe") as? String) ?: "0"
+val pageDir = (findProperty("rosy.pilot.page.dir") as? String) ?: ""
+extra["rosyTokenSource"] = "../../../../../shared/web/tokens.css"
+extra["rosyTokenPackage"] = "io.github.livsbittt.rosy.pilot"
 val nativePalette = tasks.register("generateNativePalette") {
     val canonical = file("../../../../../shared/web/tokens.css")
     val generated = layout.buildDirectory.dir("generated/pilot-palette")
@@ -28,7 +32,7 @@ val shared = tasks.register<Sync>("sharedContracts") {
     include("**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
-        "**/health/DeviceHealth.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
+        "**/health/DeviceHealth.kt", "**/health/PhoneHeat.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
     into(layout.buildDirectory.dir("generated/shared-contracts"))
 }
 val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
@@ -65,9 +69,18 @@ android {
             it.inputs.dir(layout.buildDirectory.dir("generated/pilot-assets"))
             it.systemProperty("rosy.discovery.vectors", rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath)
             it.systemProperty("rosy.pilot.assets", layout.buildDirectory.dir("generated/pilot-assets").get().asFile.absolutePath)
+            it.systemProperty("rosy.pilot.page.probe", pageProbe)
+            it.systemProperty("rosy.pilot.page.dir", pageDir)
+            // The probe stays up until the browser finishes, so a green result is not reusable.
+            if (pageProbe == "1") it.outputs.upToDateWhen { false }
+            it.systemProperty(
+                "rosy.icons.dir",
+                rootProject.file("../../../../shared/web/icons").absolutePath,
+            )
         }
     }
 }
+apply(from = "../../../../../shared/web/native-tokens.gradle")
 tasks.named("preBuild") { dependsOn(shared, screens, sharedScreenResources, nativePalette) }
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

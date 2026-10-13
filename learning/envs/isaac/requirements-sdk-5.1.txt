@@ -1,0 +1,14 @@
+# Repair a separate Isaac Sim 5.1 SDK environment; do not apply to Isaac Lab.
+filelock==3.13.1
+fsspec==2024.6.1
+markupsafe==2.1.3
+networkx==3.3
+sympy==1.13.3
+click==8.1.7
+numpy==1.26.0
+psutil==5.9.8
+typing_extensions==4.12.2
+starlette==0.45.3
+wheel==0.45.1
+typeguard==4.3.0
+torchaudio==2.7.0+cu128

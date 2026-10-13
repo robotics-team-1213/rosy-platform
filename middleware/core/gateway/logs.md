@@ -850,3 +850,224 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-05 · uncommitted · feat(core): 수신 승인용 신뢰 anchor와 보조 runtime
+
+- 변경: 기존 TLS cert/key 설정에 선택적 공용 CA를 더하고 실제 hostname·CA·leaf chain을 검증한다. device CORE는 현재 서명 release의 고정 암호화 wheel 경로만 활성화하며 ROS/learning 전역 Python과 D-189 base runtime 해시는 유지한다.
+- 증거: 실제 CA·hostname 실패와 보조 import-root·쓰기 권한·startup hook 거부를 포함한 통합 32 PASS. 호스트 시험은 native ARM import나 로봇 TLS 설치 증거가 아니다.
+- gate 변화: SOURCE/LOCAL만. 외부 client가 ROS를 직접 말하거나 최종 cmd_vel·정지·제어 lease를 우회하는 경로를 추가하지 않는다. ARTIFACT/DEVICE/FIELD 확인은 남아 있다.
+
+## 2026-10-05 · uncommitted · feat(services): D-368 vision_stream 배선
+
+- 변경: `core/services.py` `CoreServices`에 `vision_stream: DriverStreamGate` 필드(default_factory) 추가. `gateway/test/test_vision_stream.py` 추가 — core_client 팩토리로 실제 CoreServices 위에서 스트림 라우트 계약(401·409·새 sequence만·운전자 교체·연결 종료)을 검증. 무한 응답을 TestClient portal과 함께 쓰면 교착이라 생성기 직접 반복으로 검증한다(파일 머리말에 근거 기록).
+- 증거: test_vision_stream 8 PASS + 게이트 단위 5 PASS + test_api·v1 import boundary·api_web 155 PASS. known_failures 대비 신규 실패 0.
+- gate 변화: SOURCE. 로봇 위 동작(arm64 부팅·실기 영상)은 주장하지 않는다.
+
+## 2026-10-05 · uncommitted · test(pairing): 구버전 인증서 API 거절 회귀
+
+- 변경: verifier와 신규 UTC 날짜 속성이 없는 인증서 형태를 주입해 명시적 ValueError 거절을 확인한다. 유효한 인증서 검증 시험은 그대로 유지한다.
+- 증거: 수리 전 1 failed/3 passed로 검사 순서 문제를 재현했고 수리 후 관련 TLS·CI·버전 19 passed를 확인했다.
+- gate 변화: SOURCE/LOCAL 회귀 증거. DEVICE 연결 수용은 별도다.
+
+## 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
+
+- 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
+- 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
+- gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.
+
+
+## 2026-10-05 · uncommitted · fix(core): 제한 시험 STOP와 최종 제출 직렬화
+
+- 변경: 소유자가 미확정 양수 제출 의도를 먼저 영속화한 뒤, canonical SQLite `BEGIN IMMEDIATE`와 같은 소유자의 `RLock` 안에서 최종 STOP·신선도 확인부터 기존 `PinkyTwistPort.submit` 콜백까지 유지한다. 공개 `permits` 판정은 제출 권한이 아니며 production bridge는 `submit_fenced`를 사용한다. 다른 연결의 STOP·재개장은 제출 전후로 직렬화되고 잠금 실패는 양수 제출을 거부한다.
+- 증거: 실제 SQLite에서 허가 확인 뒤 확정된 STOP에도 0.04가 제출되던 회귀와 writer 중 재개장 허용 회귀 RED 2 FAIL. 동일 소유자·별도 연결의 실제 threaded STOP, 기존 bounded/cmd_vel 시험 GREEN 43 PASS 2.44초 (`X:/DevTemp/rosy-ui-ship/trial-fence/final-tests.log`). 미확정 송신·영속화 실패는 기존 정지 래치를 유지하고 양수 재시도하지 않는다.
+- gate 변화: 이 변경의 SOURCE/LOCAL 검증만. 실기 이동·제동·거리 bounds, ARM 산출물·배포·FIELD 수용은 미실행이며 기존 제한 시험은 안전 승인이나 public API/config 활성화가 아니다.
+
+## 2026-10-05 · uncommitted · test(core): D-184 제한 시험 소유 경계 복구
+
+- 변경: ledger·envelope·pose freshness·재개장 순수 정책 검사 10개를 services의 `test_bounded_trial_owner.py`로 옮겼다. 소유자 검사 helper는 실제 `submit_fenced`와 합성 callback만 사용하고 gateway를 import하지 않는다. 기존 테스트 함수 20개의 AST·단언은 모두 보존하며, bridge 최종 제출·준비 상태·미확정 응답·odometry·camera mux·STOP 경합 및 envelope 변조의 bridge 예외 처리는 gateway의 나머지 10개 함수가 검증한다. runtime·frozen 예외 목록·소유권 검사 구현은 바꾸지 않는다.
+- 증거: 정규 push의 D-184 실패를 exact RED 1 FAIL로 재현했다. 최종 소유자·gateway 제한 시험·기존 cmd_vel·D-184 검사 44 PASS/2.16초, services 단독 19 PASS/1.13초. 중간 envelope 변조 검사는 owner 예외를 bridge의 ZERO와 혼동하여 1 FAIL이었고 gateway에 원문 그대로 되돌렸다. 원본 실패와 최종 로그는 X:/DevTemp/rosy-ui-ship/trial-fence/ownership-*.log에 보존한다.
+- gate 변화: SOURCE/LOCAL 검사 배치만. runtime bytes·권한·서명·실기 bounds·장치 상태·배포 수용은 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(bridge): validate optional lane containment
+- 변경: CAMERA_LINE 원본 영상 시각과 지면 출처에 맞는 optional containment만 LineObservation에 허용한다.
+- 증거: 관련 source 입구/manager/새 계약·정책 76 PASS, 0 NEW.
+- gate 변화: 파싱 입구 추가만. 실제 pose 연결·자동 복구 명령·배포/현장 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · feat(bridge): preserve odom source identity for lane return
+- 변경: 원본 odom header·정규화 quaternion·동일 planar body frame을 검증하여 lane manager에 전달한다. 시간·자세 변환을 추정 명령 적분으로 대체하지 않는다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow/새 evidence 및 구조 검사 109 PASS, 0 NEW. 원본 rotation 무효화 세 경우를 RED로 재현하고 검증 추가 후 통과했다.
+- gate 변화: source callback 연결. 장치 설치·자동 복귀 명령·실제 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(bridge): D-468 구조 검사 정렬
+
+- 변경: 공통 odometry 브리지의 프레임 전제에서 기종명을 제거하고, 원본 헤더가 실제 관리자까지 전달되는 교차 경계 시험을 D-184 예외 목록에 근거와 함께 등록했다.
+- 증거: 동작 시험 소유 및 로봇 리터럴 계약 검사 재실행. 제어 동작 변경 없음.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(bridge): query leased current floor evidence for return
+- 변경: enforce sensor adapter에서만 LiDAR·IMU·IR 유효 기간에 묶인 현재 바닥·후보 제한 판정을 조회한다. 부분 stream 설정·shadow/off·종료·예외·비 boolean 허가는 거부한다.
+- 증거: 신규 query와 기존 adapter/구조 검사 105 PASS, 0 NEW. 독립 SOURCE/크기 검토도 105 PASS, 0 NEW.
+- gate 변화: 센서 판정 seam만. CORE swept path·바닥 경로 검증 전에는 실제 복귀 이동 공급자로 연결하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(bridge): bind D-468 motion evidence into CORE
+- Change: CORE now binds local lane-return candidates to the live enforced floor/sensor verdict and the manager's fresh full-circle LiDAR swept-body check. Unknown provider failures deny the candidate.
+- Evidence: gateway/scan/bridge integration checks 151 PASS, 0 NEW; host source only. No ROS-SIM, device, release, or field result.
+- Gate: source wiring present; deployment and physical recovery remain pending.
+
+## 2026-10-05 · uncommitted · fix(bridge): document D-468 scan provenance seams
+- Change: update the C6 seam triage for the policy capability probe and LaserScan angular/source-time fields; keep non-recovery scan mocks explicit about not requesting D-468 scans.
+- Evidence: affected gateway checks 43 PASS, 0 NEW. A broader gateway run had 2163 PASS, 17 SKIP, and two failures in these expectation/triage checks before the fixes; the full suite was not rerun afterward.
+- Gate: source and host tests only; no runtime/device/field result.
+
+## 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
+
+- 변경: `local_return_allowed`의 동적 조회를 D-468/C6 예외 목록에 명시하고, 구 공급자에 메서드가 없을 때 복귀 후보를 거부하는 검사를 추가했다.
+- 증거: C6 구조 검사와 차선 복귀 센서 검사. 최종 명령 권한 변경 없음.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(sim): simulation_sensors 플래그와 D-468 정책 시계
+
+- 변경: `control.sensor_adapter.simulation_sensors`(bool, `use_sim_time` 없으면 시작 거부)가 `resolve_safety_params(simulation=True)`로 worker에 `accept_simulation_scans`·`imu_angular_velocity_unit rad_s`·`use_sim_time`을 넘긴다(overlay 허용 키 아님). `bind_lane_return_motion(policy_clock)`: `use_sim_time`이면 D-468 바닥 증명은 worker 정책을 `time.monotonic`으로 묻고 몸 sweep은 line clock에 둔다. 장치는 플래그 없음·`policy_clock None`으로 전과 같다.
+- 증거: `test_safety_params.py`, `test_lane_return_sensors.py`, `test_control_sensor_adapter.py` 추가 시험 PASS. 모델 PC sim에서 정책 창 monotonic·`floor_observed True` 확인.
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(bridge): D-494 2 odom 콜백이 odom_pose를 채운다
+
+- 변경: `ros_bridge._on_odom`이 odom 메시지마다 `state.set_odom_pose`를 부른다. `pose` 소유 규칙(`odom_owns_pose`)은 그대로다. 시각은 ROS 헤더가 아니라 CORE 수신 벽시계다(sim time이어도 UTC로 남는다).
+- 증거: 호스트는 `ros_bridge.py`를 import하지 않는다. 상태 쪽 시험은 services `test_state_odom_pose.py`. `test_capabilities_controls.py`에 D-494 1 시험 2개 추가. gateway 2181 passed·17 skip, known_failures 0 new.
+- gate 변화: 없음. ROS-SIM·DEVICE 미확인.
+- 결정: D-494 (Proposed)
+## 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
+- 변경: `bridge/observation.py` `keep_junction`이 `line/keep_debug`의 `reason`(`junction_transverse`·`junction_fork`)과 카메라 시각(`stale_after_s` 안)을 읽어 `observe_junction`에 넘긴다. 정지 입력으로만 쓴다. `ros_bridge.py`의 기존 구독에 한 줄 붙임
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-494 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
+
+## 2026-10-07 · uncommitted · test(line_follow): D-495 bridge 로봇 기본값 켜짐 고정
+- 변경: `rosy_default.yaml` `bridge_enabled: true`(D-495). 고정 시험이 켜짐과 CORE 설정 겹으로 끄기를 확인한다. bridge는 여전히 `recovery_local_enabled`(기본 꺼짐)가 필요하다
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-495 recovery_local_enabled 기본 켜짐과 keep 증거
+- 변경: `keep_junction`이 `corner_turning`을 넘긴다. `rosy_default.yaml` `recovery_local_enabled: true`(D-495 개정). 고정 시험: 기본 켜짐, 겹으로 끄기, 끈 로봇의 `local_recovery_disabled`, 일반 기본의 `body_geometry_unset`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(bridge): D-495 검토 L3 keep_debug 문서
+- 변경: `keep_junction` docstring: 감지가 이제 회전 시작도 가르므로 0.3 s 지연 한도를 명시. `junction_reacquire_frames`·`junction_turn_lead_s` 설정 파싱
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(bridge): ControlSensorAdapter.return_proof_configured
+- 변경: `return_sensor_allowed`의 상시 조건(enforce, LiDAR·IMU·IR 필수, 바닥 정책)을 메서드로 뽑았다. `bind_lane_return_motion`이 그것을 junction_turn 능력의 근거로 넘긴다(getattr 없이, C6)
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2196 PASS·19 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-495 (Proposed) 착지 전 검토 반영
+- 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
+
+## 2026-10-08 · uncommitted · fix(bridge): 카메라 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `bridge/observation.camera_preview`가 CORE 시계보다 앞선 영상(음수 나이)을 낡은 것으로 보던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 전처럼 품질을 버리고 raw를 거절한다.
+- 증거: `test_bridge_observation.py::test_camera_capture_stamp_ahead_of_core_clock_counts_as_now_within_the_tolerance`.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(bridge): 점유 지도 수신 시 ID와 격자를 묶음
+- 변경: `_on_map`은 수신 격자와 그때의 map ID를 같이 저장한다. 이후 상태 map ID가 바뀌어도 API가 오래된 격자를 새 지도처럼 말하지 않는다.
+- 증거: `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
+- gate 변화: LOCAL 스냅숏 계약 근거 추가. DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(bridge): 경로 frame과 지도 ID 수신 근거 보존
+- 변경: `nav_msgs/Path.header.frame_id`와 수신 시 로봇 map ID를 점 좌표와 함께 스냅숏에 전달한다. 좌표계가 map이라고 확인되지 않은 경로는 로봇 지도에 그리지 않는다.
+- 증거: 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
+- gate 변화: LOCAL 경로 출처 근거 추가. DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
+
+- 변경: `GET /api/v1/system/info`에 `device_uid`를 추가하고 Pi 시리얼을 `serial_number`로 읽는 계약을 API v1.150에 기록했다. 기존 Fleet 등록 DB는 자동 변경하지 않는다.
+- 증거: 관련 CORE/계약 테스트 97 passed, 신규 실패 0; 현장 실기 API 판독은 배포 후 확인.
+- gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.
+
+## 2026-10-09 · uncommitted · feat(core): D-541 trip lease 배선
+- 변경: `core/trip_lease.py`(`TripLeaseManager` + `build_trip_lease`), `CoreServices.trip_lease`. 모드 리스너가 NAVIGATION 밖으로 가는 모든 전이에서 lease를 끝낸다(EMERGENCY는 `estop`, 나머지 `mode_left`), e-stop 리스너도 끝낸다. `halt_trip`이 만료·넘겨받기·주인 아닌 멈춤에서 IDLE로 둔다. `ros_bridge._tick_power`(5 Hz)가 `trip_lease.expire_due()`를 부른다.
+- 증거: `test/test_trip_lease.py` 만료·비상 정지·도킹 시험.
+- gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · feat(core): D-531 경로 문맥 발행
+
+- 변경: `ros_bridge`가 기본 꺼짐 설정에서 경로 문맥 토픽을 만들지 않는다. 켜면 VOLATILE/RELIABLE depth 1로 5 Hz 문맥을 발행하고 지시 소실·E-Stop·시계 역행에 clear를 보낸다. 인식 증거의 `route_context_seq`가 현재 지시와 다르면 거절한다.
+- 증거: gateway 전체 2421 passed/17 skipped, API 문서 버전 문자열 1건 실패를 수정한 뒤 관련 34 passed·`known_failures.py` 신규 실패 0. ROS 2 DDS·SIM·DEVICE는 아직 재실행하지 않았다.
+- gate 변화: D-531 P1 SOURCE 후보. 실제 주행 허가 변화 없음.
+
+## 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
+
+- 변경: 인식 콜백이 마지막 발행 seq 대신 그 순간 CORE의 지시/호 seq를 확인한다. 다른 번호의 관측은 즉시 무효화하고 교차로 감지는 버린다.
+- 증거: gateway 관련 46 passed, 독립 안전 검토, 문서/구조 36 passed. ROS 그래프는 미검증.
+- gate 변화: P1 SOURCE 후보.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전을 인계에 싣는다
+- 변경: `face_inputs_payload`가 stuck·reason·angular·junction으로 `signal`을 만든다. 없는 필드는 신호 없음.
+- 증거: `test_face_inputs.py`.
+- gate 변화: SOURCE.
+- 결정: D-583
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · refactor: CORE Drive 조립 책임 분리
+
+- 변경: D-627 core/drive의 line-follow 배선·docking/swarm 조립을 추출하고 legacy import와 CoreServices 공개 attribute·동일 객체·listener 순서를 유지했다. services.py는 481줄이다. 새 배선 Safety 추적과 앵커 4개를 등록했다.
+- 증거: 추출 전 원격 257 성공, 후보 전체 CORE와 실제 wheel 설치 2575 성공·10 skip, feature 1675 성공. 독립 Safety source 승인과 최초 구현 trailer, 현재 holder를 따르는 종료/사건 scanner 검증. 세부 결과는 docs/validation/d626-holder-migration-2026-10-11/result.md.
+- gate 변화: 없음. 기존 ROS-SIM evidence를 이 후보에 확대하지 않는다. 새 graph·ARM64·장치·현장 수용 미확인.
+
+## 2026-10-12 · uncommitted · 정지 기동 시 교통 정책 snapshot 일치
+
+- 변경: CoreServices가 교통 관리자를 생성한 직후 실제 status를 StateManager에 반영한다. 관측·주행 tick이 없어도 기본 DISABLED 값이 활성 설정을 가리지 않는다. 명령·정책 gate는 변경하지 않는다.
+- 증거: A21 설정 ENFORCED와 snapshot DISABLED 불일치를 추적했다. 기본 snapshot 초기값과 비활성 line-follow tick의 early return을 확인했다. 세 모드의 관측 없는 기동에서 API 관리자 status와 snapshot 일치·HOLD/no_road_evidence 보존 회귀를 추가했다. 원격 시험과 native 직접 readback은 아직 미확인이다.
+- gate 변화: 없음. 신호·위치·도로 증거·명령 admission과 완주 수용은 기존 기준을 유지한다.
+
+## 2026-10-12 · 077d2e475 · API 시작 전 유효 주행법칙 handover 기록
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+## 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로
+
+- 변경: `face_line_note`가 발행된 `line_follow.reason`만 본다. `crosswalk_`와 `ir_guard_crosswalk`는 횡단보도, 차선 가장자리 셋은 차선 가장자리, `stuck_yield`는 양보다. 그 이름으로 붙은 HOLD는 선 소실 주의를 내지 않는다. 각속도가 있는 양보는 기존 좌우 신호가 남는다.
+- 증거: `test_face_inputs.py`에 사유별 노트와 양보 회전·일반 HOLD 시험을 넣었다. 원격 pytest는 커밋 전이라 돌리지 않았다.
+- gate 변화: 없음.
+- 결정: D-719
+
+## 2026-10-12 · 47ace984f2 · 내장 센서 이름과 CORE clock 전달
+
+- 변경: 명시 namespace의 sensor-only SafetyNode가 CORE 전역 이름 remap에 덮이지 않도록 자체 이름만 지정한다. CORE는 실제 use_sim_time을 센서 생성에 전달하며 기존 namespace·topic remap을 유지한다.
+- 증거: 실제 Jazzy 실행을 포함한 정상 원격 115 PASS/NEW 0, 독립 SOURCE 승인이다. 별도 안전 gate 계약도 NEW 0이다. 실제 Gazebo graph에서 이 후보의 readback은 다음 실행에서 확인한다.
+- gate 변화: 없음. Leg4 실행 소스는 e6d0fe12ba이며 0.311955m 뒤 전방 제한으로 정지했다. 원본 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · af76fcc5f · 관측 표식의 가까운 경계와 기존 교통 gate 검증
+
+- 변경: 실제 road detector와 payload 변환을 통과한 두꺼운 정지선·거리 미확인 표식을 기존 CORE 교통 정책으로 검증하는 시험을 추가했다. CORE 제품 정책·모드·안전 상한은 바꾸지 않았다.
+- 증거: 중앙 거리로는 양수 APPROACH가 나왔던 RED를 가까운 경계로는 기존 stop_distance에 들어가 STOP_REQUIRED/zero가 되는 것으로 검증했다. 지평선 바로 아래 먼 표식의 거리None은 HOLD/stop_distance_unavailable을 유지한다. 정상 원격 관련 234 PASS/NEW 0이다.
+- gate 변화: SOURCE/원격 SDK 계약 증거만 추가한다. 관측 의미 분류와 실제 Gazebo 주행·완주·실물 수용은 별도 검증 대상이다.
+
+## 2026-10-12 · d3bd5513c · 이동 교통 감속과 실제 command SDK 정합성
+
+- 변경: gateway 제품 bridge는 바꾸지 않았다. static profile clip 이후의 주행 호가 공유 교통 정책·CommandManager 곡률 보존 제한을 지나 유지되고 같은 traffic 적용 값이 issued trail에 기록되는지 검증했다.
+- 증거: 정책의 이동 선속도만 줄이면 실제 SDK에서 곡률 3.2가 9.2로 바뀌는 RED가 났다. D-735 수정 뒤 관련 402개 시험은 정상 원격에서 통과했고 독립 SOURCE 승인이다. stale 또는 새 evidence/revision은 기존 적용 거절을 유지한다.
+- gate 변화: SOURCE/원격 SDK 증거만 추가한다. 실제 수정 후보 Gazebo 주행·완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
+
+- 변경: 시험만 추가한다. 카메라가 역산한 추종 오차를 실제 `LineFollowManager._steer`에 넣으면, Pinky 0.10/2.0을 포함한 불러온 법칙에서 각속도/선속도가 기하 곡률과 같다. 공백 구간의 ExpectedPath도 같은 인스턴스 법칙을 쓴다.
+- 증거: `test_line_follow_drivable_law.py`. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음.

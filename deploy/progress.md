@@ -22,7 +22,7 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433]
+adrs: [D-679, D-681, D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433, D-472]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md
@@ -47,6 +47,8 @@ plans:
   - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 ## 지금 상태
+
+- 2026-10-05 D-456: 수신 암호화 보조 payload와 claim 기반 TLS 유지보수 도구의 SOURCE/LOCAL 검사를 확인했다. CORE는 `/opt/rosy/releases`를 읽기만 한다. 실 POSIX 권한·ARM 빌드·서명된 장치 반영·LAN HTTPS 연결은 미확인으로 남긴다.
 
 - D-161 제품 기준선은 Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy다.
   D-291에 따라 `rosy-runtime.target`은 CORE와 무구동 I/O를 기본 시작한다. 구동과 navigation은 별도 승인 뒤 활성화한다.

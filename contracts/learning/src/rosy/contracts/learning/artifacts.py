@@ -11,6 +11,17 @@ def _json(doc):
                       allow_nan=False).encode("utf-8")
 
 
+def episode_profile_validators():
+    """Canonical profile dispatch; imports stay lazy to avoid validator cycles."""
+    from .omx import validate_profile as demonstration
+    from .omx_execution import validate_profile as execution
+    from .pinky import validate_profile as recording
+
+    return {"omx_demonstration_v1": demonstration,
+            "omx_policy_execution_v1": execution,
+            "pinky_recording_session_v1": recording}
+
+
 def seal(doc):
     result = json.loads(_json(doc))
     result.pop("revision", None)
@@ -83,7 +94,8 @@ def validate_episode(doc, *, root=None):
                   "task skill revisions sources streams correlations status outcome")
     for field in ("episode_id", "device", "robot_type", "clock_domain", "task"):
         _text(value[field])
-    if value["profile"] not in {"omx_demonstration_v1", "pinky_recording_session_v1", "pilot_recording_v1"}:
+    if value["profile"] not in {"omx_demonstration_v1", "omx_policy_execution_v1",
+                              "pinky_recording_session_v1", "pilot_recording_v1"}:
         raise ValueError("unknown Episode profile")
     if value["environment"] not in {"sim", "real"}:
         raise ValueError("explicit sim/real environment required")

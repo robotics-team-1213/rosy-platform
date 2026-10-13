@@ -68,3 +68,11 @@ D-231은 패키지 이름을 바꾸지 않기로 했다. 이미지·systemd 유�
 1. **실행 파일 이름의 변경 조건.** Status의 "실행 파일을 바꾸지 않는다"는 장치·배포 비용 때문이다. 그러니 `deploy/`, launch 파일, systemd 유닛, 이미지 스크립트, 운용 문서 어디에서도 부르지 않는 console script는 바꿀 수 있다. 바꿀 때는 `git grep` 결과를 커밋에 적는다. 이 조건으로 `rosy_overhead`를 `overhead`로 바꿨다. `fleet`, `games`와 같은 꼴이고 D-147의 `rosy_` 접두 금지와도 맞는다.
 2. **레지스트리 id는 `<범위>-<대상>`이다.** `console` 항목은 `hmi/dashboard` 패키지 전체(`/dashboard`, `/console`, `/setup`, `/device`)를 덮는다. 그런데 Fleet 화면도 `/console`로 서빙되므로 `robot-dashboard`로 바꿨다. 기존 `fleet-console`, `game-board`, `control-diagnostic`, `lane-live-view`와 같은 꼴이다.
 3. **앱 이름**(런처·PWA)은 D-345 §4를 따른다.
+
+### 로컬 개발 도구 범위 보충 (2026-10-05)
+
+D-459·D-461의 loopback 학습 검수 도구는 이미 표면 레지스트리의 `dev` 범위다.
+4항의 대응에 `dev`→개발을 추가하며, 제목은 `Rosy 개발 — 사진 검수`와
+`Rosy 개발 — 학습 작업`으로 같은 범위 규칙을 따른다. 본문의 Rosy Learning은
+작업 화면 표시이며 별도 런처·PWA·ROS·Android 설치 앱 등록이 아니다.
+기존 설치 앱은 D-377을 계속 따른다. 제목 metadata만 맞추며 화면 구성·기능은 바꾸지 않는다.

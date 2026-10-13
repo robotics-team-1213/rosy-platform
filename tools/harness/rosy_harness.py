@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import os
 import re
 import subprocess
@@ -26,6 +27,13 @@ from urllib.parse import quote
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
+import perception_gaps  # noqa: E402
+import sim2real  # noqa: E402
+from adr_gaps import (  # noqa: E402,F401
+    ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
+)
+
 CONFIG = Path("tools") / "harness" / "harness.yaml"
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
@@ -34,24 +42,15 @@ LOG_FIELDS = ("변경", "증거", "gate 변화")
 LOG_FIELD_ALIASES = {
     "변경": ("Change",),
     "증거": ("근거", "검증", "정적 확인", "장치 근거", "Evidence", "Local evidence"),
-    "gate 변화": ("Gate", "gate"),
+    "gate 변화": ("Gate", "gate", "gate 보류"),
 }
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
-# First exact G2 journal encoding repair: original at a720a036e, correction at
-# e4fe8107a. Both normalized entry bodies are pinned; no other edits qualify.
-# The original is retained in the private landing evidence, and the corrected
-# entry cites its source commit without claiming the lost prose was recovered.
-KNOWN_LOG_ENCODING_REPAIRS = {
-    # Exact imported SIM AID journal repair; no execution evidence inferred.
-    "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d":
-        "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556",
-    "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49":
-        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a",
-}
+# Historical reference data is separate from the generic harness implementation.
+KNOWN_LOG_ENCODING_REPAIRS = yaml.safe_load(
+    Path(__file__).with_name("log_repairs.yaml").read_text(encoding="utf-8"))
 
-ADR_ID = re.compile(r"^D-(\d+)$")
 COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")
 LOGICAL_MODULE = re.compile(r"^M\d{2}$")
 LOG_HEADING = re.compile(rf"^## (\d{{4}}-\d{{2}}-\d{{2}}) · ([0-9a-f]{{7,40}}|{UNCOMMITTED}) · (\S.*)$")
@@ -73,6 +72,18 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # 193d54401 omitted the commit field; retain history and append canonical evidence.
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
+    # 823847295 committed these two entries without the standard field labels; the
+    # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
+    "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
+    "## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)",
+    # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
+    "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
+    "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",
+    # Already committed before the missing commit placeholder was detected.
+    "## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈",
     # Both committed D-441 bodies survive the 6333f89/518edcf80 merge.
     # The latter adds a gate line; history checks still protect both bodies.
     "## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates",
@@ -338,8 +349,23 @@ def is_append_only(old: str, new: str) -> bool:
             "77 passed; known-failure comparison: 0 new, 0 known.",
         ),
     }
+    # The G2 journals at 230ccfc2a and 429e13b83 irreversibly lost Korean text.
+    # Only these exact provenance corrections may replace them; all other entries
+    # still require byte-for-byte preservation after normalization.
+    provenance_reconciliations = {
+        "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": (  # original block SHA256
+            "76178d7f01aab15760f4ed9cda9787123aeb087bf4d796eed0d203c941f7648a"  # corrected block SHA256
+        ),
+        "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d": (  # original aid block SHA256
+            "ffaaae6e3e9186866372a176a17d23985ff2f795028e6d524719942006b88cc2"  # corrected aid block SHA256
+        ),
+    }
+    new_hashes = {hashlib.sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}
     for block in old_blocks:
         if block in new_blocks:
+            continue
+        corrected_hash = provenance_reconciliations.get(hashlib.sha256(block.encode("utf-8")).hexdigest())
+        if corrected_hash is not None and corrected_hash in new_hashes:
             continue
         repaired_hash = KNOWN_LOG_ENCODING_REPAIRS.get(sha256(block.encode("utf-8")).hexdigest())
         if repaired_hash is not None and any(
@@ -389,26 +415,6 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
         bodies[match.group(1)] = match.group(2).strip()
     return AdrLog(index=index, bodies=bodies, duplicates=tuple(duplicates),
                   index_duplicates=tuple(index_duplicates))
-
-
-def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
-    errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
-    errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
-    for adr_id in sorted(set(adr.bodies) - set(adr.index), key=_adr_number):
-        errors.append(f"{adr_id}: body section missing from index")
-    for adr_id in sorted(set(adr.index) - set(adr.bodies), key=_adr_number):
-        errors.append(f"{adr_id}: index row has no body section")
-
-    present = set(adr.index) | set(adr.bodies)
-    highest = max((_adr_number(i) for i in present), default=0)
-    for number in range(1, highest + 1):
-        adr_id = f"D-{number}"
-        if adr_id not in present and adr_id not in gaps:
-            errors.append(f"{adr_id}: missing and not declared in adr_gaps")
-    for adr_id in sorted(gaps, key=_adr_number):
-        if adr_id in present:
-            errors.append(f"{adr_id}: declared gap now exists; remove it from adr_gaps")
-    return errors
 
 
 # --- rendering -------------------------------------------------------------
@@ -563,6 +569,11 @@ def generated_targets(repo: Path) -> dict[Path, str]:
         repo / m["path"] / "index.md": render_module_index(repo, m, adr, adr_path) for m in config["modules"]
     }
     targets[repo / config["status"]] = render_status(repo, config)
+    if config.get("sim2real_gaps"):
+        targets[repo / config["sim2real_table"]] = sim2real.render(sim2real.read(repo / config["sim2real_gaps"]))
+    if config.get("perception_gaps"):
+        targets[repo / config["perception_table"]] = perception_gaps.render(
+            perception_gaps.read(repo / config["perception_gaps"]))
     return targets
 
 
@@ -698,6 +709,10 @@ def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dic
     if owner is None:
         return None
     if owner["path"] == module_path:
+        if owner.get("layout_target") and owner.get("d427_target"):
+            committed = _git(repo, "show", f"{ref}:{owner['d427_target']}/logs.md")
+            if committed is not None:
+                return committed
         return _git(repo, "show", f"{ref}:{owner['legacy']}/logs.md")
     renamed = _git(repo, "log", "-1", "--follow", "-M", "--diff-filter=R", "--format=", "--name-status",
                    "HEAD", "--", rel) or ""
@@ -714,7 +729,21 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
 
     adr_text = (repo / config["adr_log"]).read_text(encoding="utf-8")
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
-    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, config.get("adr_gaps") or {})]
+    gaps, gap_errors = load_adr_gaps(repo, config)
+    errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
+    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
+    warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
+    if config.get("sim2real_gaps"):
+        registry, problem = sim2real.load(repo / config["sim2real_gaps"])
+        gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))
+        errors += [f"sim2real: {e}" for e in gap_errors]
+        warnings += [f"sim2real: {w}" for w in gap_warnings]
+    if config.get("perception_gaps"):
+        registry, problem = perception_gaps.load(repo / config["perception_gaps"])
+        spot_errors, spot_warnings = ([problem], []) if problem else perception_gaps.validate(
+            registry, repo, set(adr.index))
+        errors += [f"perception: {e}" for e in spot_errors]
+        warnings += [f"perception: {w}" for w in spot_warnings]
     governed = [(config["adr_log"], adr_text)]
     for module in config["modules"]:
         for name in ("progress.md", "logs.md"):
@@ -779,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
     parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
+    parser.add_argument("--head", help="affected: diff base...HEAD for this commit only, ignoring the"
+                                       " working tree (the pre-push hook's pushed sha)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--print", dest="action", action="store_const", const="print",
                         help="affected: print the selection (default)")
@@ -801,7 +832,8 @@ def main(argv: list[str] | None = None) -> int:
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
         return affected_tests.main(repo, args.base, args.action or "print", args.json,
-                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip),
+                                   head=args.head)
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

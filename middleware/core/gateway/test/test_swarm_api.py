@@ -85,9 +85,13 @@ def test_state_is_readable_before_any_follow(client):
 
     body = tc.get("/api/v1/swarm/state", headers=VIEWER).json()
 
-    assert body == {"role": "none", "formation": None, "active": False, "holding": False,
+    assert body["operation"] is None and body["lookup"] == "UNKNOWN"
+    assert body["quiescence"] is None and body["owner"]["owner_run_id"] is None
+    assert body["owner"]["owner_generation"] == 0
+    assert body["owner"]["boot_id"]
+    assert {k: v for k, v in body.items() if k not in ("operation", "lookup", "quiescence", "owner")} == {"role": "none", "formation": None, "active": False, "holding": False,
                     "target_robot_id": None, "source": None, "max_speed": None,
-                    "map_mismatch": None, "stream_age_s": None}
+                    "map_mismatch": None, "mode": None, "trail": None, "stream_age_s": None}
 
 
 def test_follow_and_cancel_need_an_operator_and_state_needs_a_viewer(client):

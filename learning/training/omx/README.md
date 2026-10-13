@@ -60,7 +60,16 @@ ACT의 `n_action_steps` 큐를 유지하고, queued action은 **최초 소비 �
 후보는 원frame SHA와 `camera_received_at_ns`를 함께 전달해 동일 RGB의 다른 capture와
 구별한다. 큐 출력도 원 수신 시각을 보존한다. owner의 guarded metadata capture와 실제
 immutable RGB snapshot을 맞춰야 하며 timestamp 필드 자체가 capture 신뢰를 부여하지 않는다.
-아직 trusted capture/issuer·scheduler·ROS 프로세스와의 composition은 없다.
+공통 `rosy.contracts.learning.inference`는 기존 InferenceObservation/InferenceResult
+DTO를 소유하며 이 모듈은 같은 타입을 재수출한다. owner의 명시적
+`capture_inference_input(rgb, camera)`는 guarded camera와 원 metadata·RGB의
+SHA·크기를 대조하고, 기존 잠금 안에서 원 lease·관절 입력을 고정한다.
+학습 쪽 `act_owner_capture.infer_captured`는 이 DTO와 같은 caller clock·policy
+revision만 받아 결과를 반환하며 안전 owner 타입을 import하지 않는다.
+현재 isolated caller 시험이 잠금 밖 추론과 lease 재검사·PolicyCandidate 구성을
+연결한다. 원 관측 재전달·큐 시각 갱신은 없다. 실제 제출·최종 판단은 기존
+`session.submit`에 맡긴다. 기본 runtime·명령·issuer·자동 scheduler·HOLD 해제는 없다.
+실제 trusted capture/issuer·승인된 모델의 ROS 프로세스 결선은 여전히 별도다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서
 매 관측의 첫 행동만 반환하는 별도 config/평가/PolicyArtifact를 만든다. 허용 값은 1..4이다.

@@ -18,7 +18,7 @@ import surface_registry as registry
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
 GAMES = SRC.parent / "operations" / "apps" / "games" / "games" / "web"
 
 CANVAS_FILES = [
@@ -26,15 +26,22 @@ CANVAS_FILES = [
     # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
     COMMON / "evidence.js",
     FLEET / "map-view.js",
+    FLEET / "map-datum.js",
+    FLEET / "trail-view.js",
+    FLEET / "camera-backdrop.js",
+    FLEET / "traffic-view.js",
     FLEET / "field-view.js",
     FLEET / "map-fit-view.js",
+    FLEET / "shared" / "field-warp.js",
+    FLEET / "site-map.js",
     FLEET / "console.js",
     GAMES / "board.js",
-    SRC.parent / "learning/training/perception/dataset/review_app_web/app.js",
+    SRC.parent / "learning/curation/perception/review_app_web/app.js",
+    SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")
-# canvasFont(size, family) 또는 그것을 감싼 지역 이름만 허용한다.
+# canvasFont(role, family, rasterScale) or a local role wrapper.
 FONT_SOURCES = re.compile(r"^(window\.RosyPalette\.canvasFont\(|font\(|labelFont$)")
 
 
@@ -63,11 +70,18 @@ def test_canvas_fonts_use_the_token_family_at_12px_or_more(path):
         assert "canvasFont" in local[1] or local[1].startswith("font("), local
 
 
-def test_canvas_font_reads_body_or_mono_and_floors_at_12px():
+def test_canvas_font_reads_shared_text_roles_and_family():
     source = (COMMON / "ui.js").read_text(encoding="utf-8")
     body = source.split("export function canvasFont", 1)[1].split("\n}\n", 1)[0]
     assert "getPropertyValue(`--${family}`)" in body
-    assert "Math.max(12," in body
+    assert "canvasTextSize(role)" in body
+    assert "Math.round(size * scale)" in body
+
+
+def test_numeric_canvas_text_roles_are_rejected_by_the_contract():
+    for path in CANVAS_FILES:
+        source = path.read_text(encoding="utf-8")
+        assert not re.search(r"(?:canvasFont|\bfont)\(\s*(?:\d|Math\.)", source), path
 
 
 def test_games_pitch_colours_live_in_its_stylesheet():
@@ -82,12 +96,13 @@ def test_games_pitch_colours_live_in_its_stylesheet():
 
 def test_fleet_terrain_and_legend_use_the_raster_tokens():
     view = (FLEET / "map-view.js").read_text(encoding="utf-8")
-    styles = (FLEET / "styles.css").read_text(encoding="utf-8")
+    legend = (COMMON / "components.css").read_text(encoding="utf-8")
     html = (FLEET / "index.html").read_text(encoding="utf-8")
     for kind in ("unknown", "free", "uncertain", "occupied"):
         assert f'"--raster-{kind}"' in view
-        assert re.search(rf"\.sw\.{kind} \{{ background: var\(--raster-{kind}\); \}}", styles)
-        assert f'class="sw {kind}"' in html
+        assert f'[data-swatch="{kind}"]' in legend
+        assert f"var(--raster-{kind})" in legend
+        assert f'data-swatch="{kind}"' in html
 
 
 #: 캔버스를 그리지만 위 판정을 받지 않는 파일 — 저장소 상대 경로 → 이유.

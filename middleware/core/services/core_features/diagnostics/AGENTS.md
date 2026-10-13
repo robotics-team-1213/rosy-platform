@@ -3,6 +3,9 @@
 
 # diagnostics
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 DIAG-001/002 + OBS-101 health rollup. Providers return `HealthState`; collector takes the worst.

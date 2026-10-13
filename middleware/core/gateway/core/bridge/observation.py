@@ -24,18 +24,27 @@ from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
+from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.crosswalk_gate import scan_rays
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
+from core_common.protocol.lane_containment import LaneContainmentEvidence
+from core_common.robot_body import inside_body
 
 Warn = Callable[[str], None]
 
 
 def line_observation(services, raw: str, *, source_now: float,
-                     received_at: float) -> None:
+                     received_at: float, expected_context_seq: int | None = None) -> None:
     """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
     source = None
     try:
         data = json.loads(raw)
         source = LineFollowMode(data["source"])
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            raise ValueError("route context sequence mismatch")
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
@@ -62,6 +71,8 @@ def line_observation(services, raw: str, *, source_now: float,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
             ground=data.get("ground"),
             quality_reason=quality_reason,
+            containment=(LaneContainmentEvidence.model_validate(data["containment"])
+                         if data.get("containment") is not None else None),
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)
@@ -84,6 +95,36 @@ def line_observation(services, raw: str, *, source_now: float,
             "reason": "invalid_observation",
             "detail": str(exc),
         })
+
+
+def keep_junction(services, raw: str, *, source_now: float, received_at: float,
+                  expected_context_seq: int | None = None) -> None:
+    """D-494 decision 4 / D-495: the keeper's junction HOLD reason and corner_turning flag.
+
+    A sighting HOLDs line-follow and also starts an armed D-495 bounded turn, so it gates
+    motion, not only stops: the frame must reach CORE within stale_after_s (0.3 s) of its camera
+    stamp or it is dropped here. corner_turning feeds supports_junction_turn. D-507 5: the
+    optional junction_ahead_m (base_footprint x, m) places the sighting's cross line; the marker
+    junction_ahead_v (on every frame) gates the junction_pivot capability. The keeper's strategy
+    names its corner turn (lap SIM A: CORE holds it near an expected junction)."""
+    try:
+        data = json.loads(raw)
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            return
+        reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
+        ahead, ahead_v = data.get("junction_ahead_m"), data.get("junction_ahead_v")
+        strategy = data.get("strategy")
+    except (AttributeError, TypeError, ValueError):
+        return
+    if (type(stamp) in (int, float) and math.isfinite(stamp)
+            and 0.0 <= source_now - stamp <= services.line_follow.config.stale_after_s):
+        services.line_follow.observe_junction(reason, received_at - (source_now - stamp),
+                                              corner_turning=corner is True,
+                                              ahead_m=ahead if type(ahead) in (int, float) else None,
+                                              ahead_v=ahead_v if type(ahead_v) is int else None,
+                                              strategy=strategy if type(strategy) is str else None)
 
 
 def road_observation(services, raw: str, *, source_now: float,
@@ -142,6 +183,9 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     config = line.config
     path = config.obstacle_mode == "path"
     try:
+        if line.wants_crosswalk_scan:  # D-573: every ray (no return = unknown)
+            line.observe_crosswalk_scan(scan_rays(sample, forward_deg=config.lidar_forward_deg),
+                                        range_min=_range_min(sample), received_at=received_at)
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear
         # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
         # Sector mode builds them only while a stuck can be near (review L6).
@@ -151,14 +195,37 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 max_range=max(BODY_POINTS_RANGE_M,
                               config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
                 self_mask=config.lidar_self_mask)
+            if config.body_stop_known:
+                # D-424: current returns strictly inside the body are self reflections; keep its outline.
+                points = tuple((x, y) for x, y in points if not inside_body(
+                    x + config.body_lidar_x_m, y, config.body_front_x_m, config.body_rear_x_m,
+                    config.body_half_width_m, config.body_rotation_radius_m, strict=True))
             line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
+        if line.wants_return_scan:
+            from core_common.robot_body import RobotBody
+            try:
+                body = RobotBody(front_x_m=config.body_front_x_m,
+                    rear_x_m=config.body_rear_x_m, half_width_m=config.body_half_width_m,
+                    rotation_radius_m=config.body_rotation_radius_m,
+                    lidar_x_m=config.body_lidar_x_m, lidar_forward_deg=config.lidar_forward_deg,
+                    margin_m=config.obstacle_body_margin_m)
+                evidence = _return_scan_view(sample, body=body,
+                    source_now_ns=sample.get("source_now_ns"),
+                    clearance_horizon_m=max(.15, config.obstacle_path_horizon_m),
+                    self_mask=config.lidar_self_mask)
+            except (TypeError, ValueError, OverflowError):
+                evidence = None
+            line.observe_return_scan(None if evidence is None else evidence[0],
+                source_age_s=None if evidence is None else evidence[1],
+                source_stamp_ns=None if evidence is None else evidence[2],
+                received_at=received_at)
         if path:
             line.observe_scan_points(points, received_at=received_at)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,
             half_angle_deg=config.obstacle_half_angle_deg, self_mask=config.lidar_self_mask)
-    except (KeyError, TypeError, ValueError):
+    except (AttributeError, KeyError, TypeError, ValueError):
         return
     line.observe_clearance(distance, received_at=received_at)
 
@@ -185,13 +252,13 @@ def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: 
         )
         source_age = None if source_now is None else source_now - stamp
         fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
-                        and stamp >= 0 and 0 <= source_age <= 2.)
+                        and stamp >= 0 and -SOURCE_FUTURE_TOLERANCE_S <= source_age <= 2.)
         if not fresh_source:
             metadata.pop('quality', None)
             if raw:
                 raise ValueError('raw preview source image is stale or clock is unavailable')
         else:
-            metadata['source_age_s'] = source_age
+            metadata['source_age_s'] = max(0.0, source_age)  # D-507 8: skew counts as now
         store_frame = services.vision.publish_raw if raw else services.vision.publish
         store_frame(
             bytes(msg.data),
@@ -236,7 +303,9 @@ def nav_twist(services, linear: float, angular: float) -> None:
 def nav_path(services, msg, *, warn: Warn) -> None:
     """MAP-003 plan snapshot; a malformed path is ignored, not fatal."""
     try:
-        services.maps.set_path(translate.path_points(msg))
+        services.maps.set_path(translate.path_points(msg),
+                               map_id=getattr(services.state, "map_id", None),
+                               frame_id=getattr(getattr(msg, "header", None), "frame_id", None))
     except ValueError as exc:
         warn(f"ignored nav path: {exc}")
 
@@ -290,6 +359,19 @@ def us_range(services, msg, *, received_at: float) -> None:
     value = sample["range"]
     if usable is not None or value > float(sample["max_range"]):
         services.line_follow.observe_ultrasonic(usable)
+
+
+def battery_voltage(services, voltage: float, *, received_at: float) -> None:
+    """`battery/voltage` (Float32), the product graph's only battery source (D-192 4).
+
+    It is also the `battery` sensor sample: `batt_state` is bench-only, and without
+    this `/sensors/battery` stayed 404 on every robot. Freshness comes from the
+    monitor (`BatteryMonitor.health`), so a non-finite sample is not recorded.
+    """
+    if math.isfinite(voltage):
+        services.state.set_sensor("battery", {
+            "voltage": float(voltage), "received_at": received_at, "source": "battery/voltage"})
+    battery_policy.apply_voltage(services, voltage)
 
 
 def batt_state(services, msg, *, received_at: float,

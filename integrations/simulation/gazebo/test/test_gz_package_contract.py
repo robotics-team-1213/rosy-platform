@@ -138,12 +138,12 @@ def test_integrated_acceptance_is_sequential_and_uses_measured_geometry():
 
 
 def test_gz_multi_uses_ros_gz_bridge_not_domain_bridge():
-    """D-114: 시뮬은 네임스페이스 + ros_gz_bridge. domain_bridge / ROS_DOMAIN_ID 없음."""
+    """D-114: one domain per run, namespaced robots and no domain_bridge."""
     launch = (ROOT / "launch" / "gz_multi.launch.py").read_text(encoding="utf-8")
     assert "ros_gz_bridge" in launch
     assert "parameter_bridge" in launch
     assert "domain_bridge" not in launch
-    assert "ROS_DOMAIN_ID" not in launch
+    assert 'SetEnvironmentVariable("ROS_DOMAIN_ID", str(run_spec["ros_domain_id"]))' in launch
     assert "rosy_env.sh" not in launch
 
 
@@ -170,10 +170,12 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
     """The parent owns the namespace; child launch groups must receive an empty one."""
     bringup = (
         ROOT.parents[2]
-        # D-427 wave 4c: navigation lives at middleware/core/navigation.
+        # D-427 wave 4c: navigation lives at middleware/control/drive/planning/nav2.
         / "middleware"
-        / "core"
-        / "navigation"
+        / "control"
+        / "drive"
+        / "planning"
+        / "nav2"
         / "launch"
         / "bringup_launch.xml"
     ).read_text(encoding="utf-8")

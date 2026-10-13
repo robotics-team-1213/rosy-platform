@@ -75,7 +75,8 @@ D-262의 로컬 웹 예산 스캔(`hmi/dashboard/test/test_web_budgets.py`, 600�
    `tick_motion`/`tick_collecting` 단계 분기·`report`/`finish`·인증서 영속)과 `calib_node`
    순수 함수 8개. 노드는 배선만: `startup_calibration_node.py` 584, `calib_node.py` 583.
 3. **패키지급: `fleet`·`control` 재편** — 둘 다 split 판정 유지(unscheduled), D-362 P0 실행으로
-   fleet 총계는 재판정 기록됨.
+   fleet 총계는 재판정 기록됨. 2026-10-07 재판정(38952)의 첫 web/server 경계는
+   `docs/plans/2026-10-07-fleet-site-map-web-server-seam.md`다.
 
 ### P1 — 웹 자산 — **완료**
 

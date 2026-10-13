@@ -9,14 +9,22 @@
 
 | ID | 제목 |
 |---|---|
+| D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
+| D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 |
+| D-638 | Isaac의 한 대 CPU 강화학습 진단은 운영 정책 수용과 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 
 ## 계획·결과 문서
 
 - [2026-10-04-isaac-navigation-integration-review.md](../../../docs/plans/2026-10-04-isaac-navigation-integration-review.md)
+- [2026-10-11-isaac-direction-video.md](../../../docs/plans/2026-10-11-isaac-direction-video.md)
+- [2026-10-11-isaac-map-rl.md](../../../docs/plans/2026-10-11-isaac-map-rl.md)
+- [2026-10-12-map-drive-diagnosis.md](../../../docs/plans/2026-10-12-map-drive-diagnosis.md)
+- [2026-10-12-observed-path-gap-implementation.md](../../../docs/plans/2026-10-12-observed-path-gap-implementation.md)
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [보이는 곡선과 주행 목표점 미채택을 구분한다](../../../docs/solutions/workflow-issues/visible-curve-is-not-a-missing-camera-target-2026-10-12.md)
 
 ## 시험
 
@@ -24,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
-- 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
-- 2026-10-04 · uncommitted · docs(isaac): 모델 PC의 주행·관제·적재 연계 검토
-- 2026-09-30 · uncommitted · fix(sim): isaac_sim을 D-310 target 표에 등록
-- 2026-09-30 · uncommitted · fix(sim): isaac_sim 등록 뒤끝 — functional surface·gate 정확화
+- 2026-10-12 · ba1347294 · 카메라 관측 구간 학습
+- 2026-10-12 · 0a690a83b · 카메라 종료 벌점과 실행 행동 연결
+- 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
+- 2026-10-12 · 45e92d326 · 카메라 관리자 설정과 곡률 역산 일치
+- 2026-10-12 · b98eb3fd1 · SDK 중복 바닥 충돌 제거

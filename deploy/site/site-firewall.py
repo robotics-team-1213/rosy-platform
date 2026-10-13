@@ -31,7 +31,6 @@ from pathlib import Path
 CHAIN = "ROSY-SITE-INGRESS"
 TABLE = "mangle"
 HOOK = "PREROUTING"
-PROXY_PORT = 8443  # the container port Compose publishes
 KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 IFACE = re.compile(r"^(?:[A-Za-z0-9_.-]{1,15}|[A-Za-z0-9_.-]{1,14}\+)$")
 GUIDE = "see deploy/site/README.md, 'LAN access'"
@@ -88,14 +87,39 @@ def compose_config(env_file: Path, compose_file: Path, project: str, run,
 
 
 def compose_settings(config: dict) -> dict:
-    """The proxy's published binding and the site values, as Compose resolved them."""
+    """The proxy's published binding and the site values, as Compose resolved them.
+
+    The container listens on the published port. Both sides are ROSY_SITE_HTTPS_PORT.
+    """
     ports = [entry for entry in config["services"]["proxy"].get("ports", [])
-             if entry.get("target") == PROXY_PORT]
+             if entry.get("protocol", "tcp") == "tcp" and entry.get("mode", "ingress") == "ingress"]
     if len(ports) != 1:
-        raise ConfigError(f"the proxy must publish container port {PROXY_PORT} exactly once")
+        raise ConfigError("the proxy must publish exactly one TCP port")
+    try:
+        published = int(ports[0]["published"])
+        target = int(ports[0]["target"])
+    except (KeyError, TypeError, ValueError):
+        raise ConfigError("the proxy publish must name a numeric host port and container port") from None
+    if published != target:
+        raise ConfigError(
+            f"the proxy container listens on {target}, but the published port is {published}; "
+            "both must be ROSY_SITE_HTTPS_PORT")
     extension = config.get("x-rosy-site") or {}
     secrets = config.get("secrets") or {}
+    profile = extension.get('camera_peer_profile')
+    if profile not in (None, 'rosy.camera-peer/1'):
+        raise ConfigError('unsupported configured camera peer profile')
+    command = config.get('services', {}).get('fleet', {}).get('command', [])
+    required = ('--pairing-ca','--pairing-tls-host','--tls-cert','--tls-key',
+                '--users-file','--tasks-db','--pairing-sync-token-env')
+    if profile is not None:
+        if not isinstance(command, list) or not all(isinstance(word,str) for word in command):
+            raise ConfigError('camera peer profile requires the resolved Fleet command')
+        for flag in required:
+            if command.count(flag) != 1 or command.index(flag)+1 >= len(command) or not command[command.index(flag)+1] or command[command.index(flag)+1].startswith('--'):
+                raise ConfigError('camera peer profile requires complete receiver pairing configuration')
     return {"bind": ports[0].get("host_ip") or "", "port": int(ports[0]["published"]),
+            'camera_peer': '1' if profile is not None else '0',
             "lan_iface": extension.get("lan_iface") or "",
             "allow_literal_bind": extension.get("allow_literal_bind") == "1",
             "tls_host": extension.get("tls_host") or "",
@@ -187,16 +211,12 @@ def restore_payload(ifaces: list[str]) -> str:
 
 
 def jump_rules(port: int) -> dict[tuple[str, bool], list[str]]:
-    """The published host port, plus the container port for packets routed to a container IP.
+    """One jump for the published port. The proxy listens on that same port.
 
-    The second jump is limited to non-local destinations, so a host service that happens to
-    listen on the container port is not filtered.
+    A packet to the host and a packet routed straight to the container IP share this
+    destination port, so one rule covers both. A jump for any other port is not wanted.
     """
-    rules = {(str(port), False): ["-p", "tcp", "--dport", str(port), "-j", CHAIN]}
-    if port != PROXY_PORT:
-        rules[(str(PROXY_PORT), True)] = ["-p", "tcp", "--dport", str(PROXY_PORT), "-m", "addrtype",
-                                          "!", "--dst-type", "LOCAL", "-j", CHAIN]
-    return rules
+    return {(str(port), False): ["-p", "tcp", "--dport", str(port), "-j", CHAIN]}
 
 
 def _run(argv: list[str], stdin: str | None = None) -> tuple[int, str, str]:
@@ -326,7 +346,8 @@ def write_public_env(settings: dict, path: Path) -> None:
     """The public values the host units need (bridge, advertisers), as Compose resolved them."""
     path.parent.mkdir(parents=True, exist_ok=True)
     text = (f"ROSY_SITE_TLS_HOST={settings['tls_host']}\nROSY_SITE_HTTPS_PORT={settings['port']}\n"
-            f"ROSY_SITE_PAIRING={settings.get('pairing', '0')}\n")
+            f"ROSY_SITE_PAIRING={settings.get('pairing', '0')}\n"
+            f"ROSY_SITE_CAMERA_PEER={settings.get('camera_peer', '0') if settings.get('pairing') == '1' else '0'}\n")
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as out:
         out.write(text)
     Path(out.name).chmod(0o644)

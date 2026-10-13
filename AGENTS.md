@@ -3,15 +3,18 @@
 
 # ROSY
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. middleware/perception contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet owns the Fleet console and dispatch services. Current source parts are learning, operations, middleware, contracts, integrations, and shared web, as recorded in tools/harness/platform_parts.yaml. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
+ROSY Platform connects observed world state, site orchestration, device execution, and offline learning/evaluation (ROS 2 Jazzy, first hardware Pinky Pro). This repository contains the platform's source, not only the robot workspace. CORE (`middleware/core/gateway`) owns the external API and final Base command path; OMX retains its joint/action owner. `operations/fleet` owns serving and dispatch transactions; canonical Console assets live in `operations/ui/console`, and existing advisory Decision code in `operations/decision/src/rosy/decision` (`rosy.decision`), both installed by the same Fleet distribution; `operations/world` owns current observation/odom MapPose projection, with a Fleet import alias. Action-conditioned future World prediction remains planned. The existing ROS `control` distribution remains in `middleware/perception`: sensor and vision implementations live in `sensors/sensing` and `vision/perception`, while Drive algorithms and the Nav2 backend live in `middleware/control/drive/{planning,tracking,recovery,calibration,safety}`. Legacy node composition remains under `middleware/perception/control`; its legacy final publisher (`control/safety_node.py`) must not run beside CORE. Source mapping preserves `control.*` imports and installed resources. Current source parts and all holder decisions are in `tools/harness/platform_parts.yaml` and [the folder responsibility guide](docs/reference/platform-folder-responsibilities.md). Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `README.md` | Repo overview, shared-checkout start rules (`같이 하는 깃`), colcon/sim launch, Pi 5 runtime, phase roadmap |
+| `README.md` | GitHub landing: system diagram, who-starts-where table, document map, core contracts, short robot-run section. Shared-checkout start order lives in `docs/reference/shared-checkout.md`; build/sim/test/Pi runtime in `docs/reference/developer-guide.md` |
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
@@ -27,15 +30,15 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 | Directory | Purpose |
 |-----------|---------|
-| `contracts/` | Shared ROS-free skill/motion shapes, foundation and ROS IDL; wheel folders carry `COLCON_IGNORE` |
-| `middleware/` | CORE, device apps, perception, skills, execution, drivers and robot UI |
-| `integrations/` | Robot, simulation, model and fieldbus adapters; placement and import boundaries follow the ownership manifest |
-| `shared/` | Shared web components and operator copy; contracts remain in `contracts/` |
+| `contracts/` | Shared ROS-free skill/motion shapes, foundation and ROS IDL; wheel folders carry `COLCON_IGNORE` (see `contracts/AGENTS.md`) |
+| `middleware/` | CORE, device apps, perception, skills, execution, drivers and robot UI (see `middleware/AGENTS.md`) |
+| `integrations/` | Robot, simulation, model and fieldbus adapters; placement and import boundaries follow the ownership manifest (see `integrations/AGENTS.md`) |
+| `shared/` | Shared web components and operator copy; contracts remain in `contracts/` (see `shared/AGENTS.md`) |
 | `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
-| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see each `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
-| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` |
+| `learning/` | D-427 learning part: `curation/perception/` (data and review), `registry/perception/` (artifact/provenance store and delivery), `training/perception/` (trainer), `evaluation/perception/` (replay); orchestration CLI is `tools/perception/`, `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see `learning/AGENTS.md` and each child `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
+| `operations/` | D-427 operations part (a `colcon_roots` entry): `decision/` (existing `rosy.decision`, same Fleet distribution), `ui/console/` (canonical Fleet-served assets), `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` and `operations/AGENTS.md` |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `operations/site_devices/` | Dock and signal site devices: firmware outside colcon, device contracts (see `operations/site_devices/AGENTS.md`, D-427 wave 3b) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |
@@ -46,35 +49,46 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ## For AI Agents
 
+### 모델 PC·AI PC·현장 PC 역할
+
+- **모델 PC:** `learning/`의 데이터·사람 정답·학습·독립 평가·승격 증거와 고정 모델 산출물을 맡는다. 운영 추론·Fleet 판단·장치 명령을 맡지 않는다.
+- **AI PC:** 승인된 고정 버전의 추론만 맡는다. 막힘 VLM은 출처·시각이 붙은 정체 사실만, 숙고형 모델은 Mission/Task 후보만 낸다. Fleet 원장 쓰기·admission·ROS·`cmd_vel`·장치 Action 권한은 없다.
+- **현장 PC:** `operations/fleet`가 사실을 검증하고 규칙·admission·사람 확인을 거쳐 답을 고른다. 기존 Decision 구현은 `operations/decision/src/rosy/decision`으로 분리했고 Fleet transaction과 배포를 유지한다. 후속 숙고형 모델 파이프라인의 구현 여부는 [설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)를 본다.
+- **로봇:** CORE가 장치 상태·안전을 다시 확인하고 최종 `/cmd_vel`을 단독 발행한다. 소스 경로로 실행 호스트를 추정하지 않는다(D-315). 이 역할 분담은 D-516이며, AI PC의 현장 경로는 아직 활성화되지 않았다.
+
+시험 위치도 분리한다(D-527). 개발 PC는 원격 시험을 요청하고 CI는 코드 계약과 푸시 게이트, 모델 PC는 사람 정답 기반 Laya/Kev·VLM 독립 평가와 승격 receipt, AI PC는 승인 고정 버전의 적재·GPU·loopback 스모크와 watchdog, 현장 Fleet·CORE는 그림자/장치 수용을 맡는다. AI PC 합성 재생의 일치 수치를 L0 정확도로 쓰지 않는다.
+
+상세 입력·출력, 모델 교체와 실패 처리: [Decision 모델 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md). 실제 장치 주소·계정은 공개 문서 대신 gitignored `private/`에 둔다.
+
 ### D-427 이후 공동 작업 규칙 (2026-10-04, 이동 기간 2·5항 삭제)
 
 소스 이전(D-427·D-429·D-430) 뒤에도 모든 세션이 지킨다. 이전 경로 `legacy`와 잔여 검사에는 한 release 유예를 둔다.
 
 1. **우선순위:** main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
-2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `README.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
+2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `docs/reference/shared-checkout.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
 3. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
 4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
 5. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
 
 ### 같이 하는 깃
 
-여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `README.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 README의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `docs/reference/shared-checkout.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 `docs/reference/shared-checkout.md`의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
 
 1. **작업 위치를 만든다.** 저장소 루트에서 `git status --short --branch`와 `git worktree list`를 본 다음 `git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main`을 실행한다. `<type>`은 내용과 맞는 `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 한 브랜치에는 한 주제만 둔다. worktree는 이 저장소의 `.worktrees/`에만 둔다. `.worktrees/`는 gitignore다. 공유 `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지 않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그, pytest 출력은 저장소 밖에 둔다. 실험실 PC에서는 `X:\DevTemp`다. `ListAgents`가 있으면 동료와 그 소유 경로를 본다. 백그라운드 실행기는 단계마다 자기 브랜치에 커밋한다. 그 브랜치에 40분 동안 새 커밋이 없으면 디스패처가 실행기를 확인한다.
 2. **자기 경로만 스테이징한다.** `git status --short`에서 이번 작업으로 만들거나 고친 경로만 `git add <path> ...`에 적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스 하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다. 잘못된 경로 하나가 `git add` 전체를 실패시키므로, 커밋 전에 exit code를 본다. 경로 없는 커밋 전에는 `git diff --cached --name-only`가 자신의 목록과 같아야 한다. 공유 인덱스에 동료가 이미 올려 둔 경로가 있으면, 파일이 전부 자신 것일 때만 `git commit --only <자신의 경로>`를 쓴다. `--only`는 작업 트리 내용을 기록하기 때문이다. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash`는 쓰지 않는다. 그 사이 HEAD가 동료의 커밋이 될 수 있다. `git commit -- <공유 파일>`도 쓰지 않는다. 작업 트리 전체를 가져가 동료의 행이 들어간다. 이어 쓰는 파일 `docs/reference/ROSY ADR Log.md`와 `docs/logs.md`에 동료의 미커밋 행이 있을 수 있다. 자신의 행만 `git apply --cached --unidiff-zero my-row.patch`로 올리고, `git diff --cached -- <file>`이 자신의 행만 보여 주면 끝이다. 브랜치 이름을 적는 문서는 `git branch`가 출력한 이름을 그대로 쓴다. 자신이 쓰지 않은 경로는 그대로 둔다. stash, revert, checkout, restore, reset, clean, amend, 삭제로 치우지 않는다. 루트의 추적되지 않은 `list.txt`는 로컬 메모라 커밋하지 않는다. 머지나 체크아웃이 그 파일 때문에 거절되면 파일을 그대로 두고 거절 문구를 사용자에게 알린다.
 3. **계약을 읽고 고친다.** 제품 파일을 고치기 전에 `README.md`의 「핵심 계약」과 아래 Working In This Directory를 읽는다. 외부 API, 모드, 프로토콜 필드는 SRS, API reference, ADR에 있는 것만 쓴다. 읽기가 끝난 기준은 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연 것이다.
-4. **ADR 번호는 파일을 만들기 직전에 다시 고른다.** 다른 세션이 몇 분 사이에 같은 번호를 가져간다. 조회는 세 곳이다. (1) main과 작업 트리의 `docs/adr`(`ls docs/adr`. 동료의 미추적 파일 포함)와 `git for-each-ref refs/heads`의 각 브랜치(`git ls-tree -r --name-only <branch> docs/adr`). (2) `docs/reference/ROSY ADR Log.md`의 `| D-nnn |` 행. 행이 파일보다 먼저 있을 수 있다. (3) `tools/harness/harness.yaml`의 `adr_gaps`. 예약되거나 건너뛴 번호다. 빈 번호의 다음을 쓴다. ADR 파일과 Log 행은 한 커밋이다. Log는 UTF-8 BOM과 CRLF를 유지한다. 그 다음 `python tools/harness/rosy_harness.py lint`를 돌린다. 충돌로 못 쓰게 된 번호는 이유와 함께 `adr_gaps`에 넣는다.
-5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest를 돌리고 저장소 밖의 로그와 비교한다. 실험실 PC 명령은 아래다.
+4. **ADR 번호는 파일을 만들기 직전에 도구로 선점한다.** 다른 세션이 몇 분 사이에 같은 번호를 가져간다. `python tools/harness/adr_reserve.py next "<주제>"`를 돌리고 찍힌 번호를 쓴다. 도구는 모든 브랜치와 워크트리의 `docs/adr`, Log 행, gap, `refs/adr/D-*`를 보고 그 다음 번호로 `refs/adr/D-nnn`을 만든다. 같은 ref는 한 세션만 만들 수 있다(D-510). 이 ref는 로컬에만 있어 CI는 모른다. 선점한 ADR이 이 브랜치와 같이 착지하지 않으면 push 전에 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄을 넣는다. ADR 파일과 Log 행은 한 커밋이다. Log는 UTF-8 BOM과 CRLF를 유지한다. 그 다음 `python tools/harness/rosy_harness.py lint`를 돌린다. 쓰지 않을 번호는 `python tools/harness/adr_reserve.py release D-nnn --reason "<주제>"`로 푼다. 충돌로 못 쓰게 된 번호도 이유와 함께 `tools/harness/adr_gaps.txt`에 넣는다.
+5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest를 돌리고 저장소 밖의 로그와 비교한다. pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN), AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와 `tools/land.py`가 이를 쓴다. 시험 PC가 하나도 닿지 않으면 노트북으로 넘어가지 않고 10분 동안 30초마다 다시 시도한 뒤 실패로 끝낸다(D-584). 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. `--local`과 `ROSY_TEST_LOCAL`은 오류로 거절한다. 커밋된 HEAD만 보내므로 먼저 커밋한다. Gazebo는 노트북에서 돌리지 않고 `python tools/remote/remote_pytest.py --pick sim`이 고른 PC에서 돌린다. 실험실 PC 명령은 아래다.
 
 ```bash
-python -m pytest <paths> -q -rfE -p no:cacheprovider > X:/DevTemp/<name>/run.txt
-python test/known_failures.py X:/DevTemp/<name>/run.txt
+python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name> -- <paths>
+python test/known_failures.py X:/DevTemp/<name>/run-1.txt
 ```
 
    exit 1의 `NEW`는 깨끗한 `main` 워크트리에서 달리 확인되기 전에는 그 브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서 뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
-6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본 방법은 워크트리에서 `python tools/land.py --tests auto`다. 이 도구는 아래 두 단계를 main이 멈출 때까지 되풀이하고, 테스트나 lint가 실패하면 착지하지 않으며, 푸시하지 않는다. 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
 멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
 
@@ -88,15 +102,15 @@ python test/known_failures.py X:/DevTemp/<name>/run.txt
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
 - Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
-- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
-- Hardware profile is YAML. In-tree Pinky full spec is `middleware/apps/device/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
+- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. Lab SSH targets are `private/lab-hosts.json`, copied from `tools/remote/hosts.example.json`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
+- Hardware profile is YAML. In-tree Pinky full spec is `middleware/devices/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - ROS package discovery uses the manifest `colcon_roots` across `learning/`, `operations/`, `middleware/`, `contracts/`, `integrations/`, and `shared/`. Do not reintroduce `rosy_*` or `pinky_*` package names. The CORE launch file still carries its legacy filename `rosy_core.launch.py`.
 - Dashboard screens are static files in `middleware/ui/robot`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
-- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot).
+- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot), `rosy-pinky-review` (run and check the Pinky label review app, `learning/curation/perception/tools/review_app_smoke.py`), `rosy-fast-field-test` (fastest path from a model or code change to a real Pinky drive: on-robot loop, model pointer, release in parallel).
 
 ### Testing Requirements
 
-Tiers (D-436). **This machine runs the affected tier (fast iteration) and the pre-push fast gate only. The full suite never runs locally by default; it runs on GitHub Actions runners** as a parallel matrix (`.github/workflows/ci.yml`): push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload already builds on the GitHub ARM64 runner (`build-native-payload.yml`). PR CI runs affected and goes full by itself when the selector escalates (shared foundation `src/contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` forces a local full run (avoid: 40-60 min here, and Windows lacks wheels CI installs).
+Tiers (D-436). **This machine requests affected and pre-push pytest through `tools/remote/remote_pytest.py`; pytest never runs on this laptop (D-584). The full suite runs on GitHub Actions runners** as a parallel matrix (`.github/workflows/ci.yml`): push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload already builds on the GitHub ARM64 runner (`build-native-payload.yml`). PR CI runs affected and goes full by itself when the selector escalates (shared foundation `contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` requests the full selection; do not bypass the remote runner. A mapped affected run does not discharge the CI FULL requirement.
 
 GitHub results (the full tier is never re-run locally to "check"):
 
@@ -107,7 +121,9 @@ gh run view <run-id> --log-failed                       # only the failed steps'
 gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name'
 ```
 
-Reproduce locally only the failed matrix entry's pytest invocation (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence.
+Reproduce only the failed matrix entry's pytest invocation on a remote test PC (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence.
+
+The direct pytest examples below are for CI or the selected Linux test PC. From this laptop use `python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name> -- <paths>` and compare the returned log with `test/known_failures.py`.
 
 ```bash
 # Affected tier (D-436): tests of the touched modules + reverse dependents + tests naming the
@@ -151,7 +167,7 @@ python3 -m pytest test/ -v
 # CI also: flake8 (max 120), boot smoke without slam_toolbox
 ```
 
-CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-base`, pytest, boot smoke, SaveMap type guard — all on domain-tree paths. Note: `origin` exists (`github.com/livsbittt/rosy-os.git`) and CI events fire on push and pull requests — check the latest run (`gh run list`) for current status; a local `main` that is ahead of `origin/main` has no CI evidence at all.
+CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-base`, pytest, boot smoke, SaveMap type guard — all on domain-tree paths. Note: `origin` exists (`github.com/robotics-team-1213/rosy-platform.git`) and CI events fire on push and pull requests — check the latest run (`gh run list`) for current status; a local `main` that is ahead of `origin/main` has no CI evidence at all.
 
 ### Common Patterns
 
@@ -167,8 +183,8 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api_web`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
-- `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
+- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
+- `deploy/robot/pinky_pro/Dockerfile` consumes source under `contracts/`, `middleware/`, and `shared/`. Its image-internal `/opt/rosy_ws/src/` destinations are build layout, not repository source holders; Docker/Compose are development/CI paths.
 - `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 
 ### External

@@ -1,31 +1,44 @@
 <!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-06 | Updated: 2026-09-06 -->
 
-# control/ (motion policy + mode label)
+# control.control (import and installation compatibility)
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-11
 
 ## Purpose
-Robot-frame geometry → motion policy. Pure logic, **no ROS imports** — the unit-test-covered decision layer shared by wander/safety. One concern per module.
+This directory holds `__init__.py` and this guide. The initializer preserves the existing `control.control` exports and adds the four exact source roots declared by `control/_source_layout.py` to its package path. The pure algorithm files are physically owned by Drive after D-630; they are installed once under the unchanged `control.control.*` identities.
+
+| Canonical source holder | Flat pure modules | Responsibility |
+|---|---:|---|
+| `middleware/control/drive/safety` | 15 | Candidate gates, body/sweep clearance, floor evidence, speed limits and policy handoff |
+| `middleware/control/drive/tracking` | 6 | Path following, pursuit, route and navigation-session evidence |
+| `middleware/control/drive/recovery` | 11 | Escape, recovery budgets, rotation trials and safe-trail retreat |
+| `middleware/control/drive/calibration` | 18 | Calibration profiles/certificates, startup configuration and canonical mode labels |
+
+The separate planning/grid, tracking/wander and safety/adapter packages retain `control.planning`, `control.wander` and `control.safety`. See the [current platform folder guide](../../../../docs/reference/platform-folder-responsibilities.md) and [composition guide](../AGENTS.md).
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `modes.py` | The one canonical `/robot/mode` label: 16 labels, precedence hazard > wander action > contact bands; `pick_mode()` fuses hazard bools + FSM state + `nose_on_wall()`; `NON_FORWARD_STATES` single-sources the state list; `US_NOSE_MAX_M`/`LIDAR_NOSE_MAX_M` hold the hardware cutoffs |
-| `recover.py` | Stuck/backup/escape policy + `hazard_action` (the one cliff/tilt answer: tilt always trusted, cliff only after first forward drive, rear clear → backup else spin) + `wall_first_move` + turn-sign rules `side_sign`/`ratio_sign` + `ExitSteer`/`turn_toward_sign` (escape spins the shortest way to the full-circle exit, benches failed bearings) |
-| `route.py` | Longest free straight line through sector ranges (line route, not circular) |
-| `policy_handoff.py` | `ControlPolicyProducer`: serialized sensor-state → CORE `CommandPolicy` handoff with receive/source deadlines and applied revision |
+| `Drive calibration/modes.py` | Imported as `control.control.modes`: canonical `/robot/mode` labels, hazard > action > contact > idle precedence and hardware cutoffs |
+| `Drive recovery/recover.py` | Imported as `control.control.recover`: `hazard_action`, backup/escape policy, turn signs and `ExitSteer` |
+| `Drive tracking/route.py` | Imported as `control.control.route`: longest free straight line through live sector ranges |
+| `Drive safety/policy_handoff.py` | Imported as `control.control.policy_handoff`: serialized sensor-state to CORE `CommandPolicy` handoff with receive/source deadlines and applied revision |
 
 ## For AI Agents
 
 ### Working In This Directory
-- Functions take floats/bools and return strings/floats/bools — no `rclpy`, no topics, no node state. If you need node state, the caller passes it in.
+- Edit pure logic in its actual Drive source holder. Keep ROS imports out of those algorithms and pass required node state through their existing inputs.
+- Keep this initializer's exports and the narrow source package path. `setup.py` collects the 50 flat modules into one installed `control.control` package; duplicate source names are rejected. The sdist snapshots those declared roots for an isolated rebuild.
 - `ControlPolicyProducer` is the one in-process boundary that may hold an `Observations` source and a `CommandPolicy`; call it from the sensor producer's serialized callback/timer group. It carries receive/source deadlines plus candidate-specific translation/tracking evidence and never publishes motor commands.
 - `hazard_action` is the only cliff/tilt decision home: **do not re-branch on `self.cliff`/`self.tilt` in FSM code** — call the policy.
 - Label list lives once in `modes.MODES`; `WANDER_TO_MODE` maps FSM state names → labels.
 - New labels must keep the taxonomy: hazard > action > contact > idle, subjects do not overlap.
 
 ### Testing Requirements
-- `python3 -m pytest test/test_modes.py test/test_recover.py test/test_route.py -q`
-- New policy → new pure test with boundary values (see `test_recover.py` style).
+- Run `middleware/perception/test/` through the repository's committed-HEAD remote pytest runner (D-584). Mode/recovery/route boundary tests stay in that distribution suite.
+- Source holder, installed module/provider identity, isolated sdist/wheel and map-byte checks are in `middleware/perception/test/test_responsibility_layout.py`.
 
 ### Common Patterns
 - Thresholds as module constants with hardware rationale comments (`US_NOSE_MAX_M = 0.80` — beyond ~0.8 m a US-016 echo is noise).
@@ -34,9 +47,9 @@ Robot-frame geometry → motion policy. Pure logic, **no ROS imports** — the u
 ## Dependencies
 
 ### Internal
-- Consumed by `control/wander/` (FSM + label), `control/safety/` (gate/hazard respond to the same thresholds).
+- Consumed under the existing import identities by the actual `middleware/control/drive/tracking/wander` and `middleware/control/drive/safety/adapter` implementations, the sensor provider and ROS composition adapters.
 
 ### External
-- `dataclasses`, `math` only.
+- Existing ROS-free algorithm dependencies remain declared by the `control` distribution; this compatibility initializer adds no runtime or motion authority.
 
 <!-- MANUAL: -->

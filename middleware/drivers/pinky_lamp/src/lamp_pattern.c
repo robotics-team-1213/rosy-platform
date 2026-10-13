@@ -21,6 +21,15 @@
  *   docking  magenta, 1 Hz blink, until stopped (D-380)
  *   emergency  red, 4 Hz blink, until stopped — four times faster than
  *            failed's 1 Hz, so the two reds never read alike (D-380)
+ *   recovering  amber, 1.5 Hz blink, until stopped — a hazard light while the
+ *            robot reverses or turns back into its lane (D-546)
+ *   bridging amber, breathing, 3 s period, at most 25 % brightness — the
+ *            D-476 lane-loss bridge, softer than recovering (D-546)
+ *   ask      both halves amber, 1 Hz — waiting on Fleet. Not the 4 Hz red
+ *            e-stop and not the 2 Hz cyan blocked blink
+ *   left     robot-left half amber, 1 Hz. Index 0 is the strip's first LED;
+ *            LAMP_LEFT_FIRST says that half is robot-left until someone looks
+ *   right    the other half, same blink
  *   test     red, green, blue for 1 s each, then off and exit (D-247 lamp test
  *            handed to the boot display while it owns the lamp)
  *   off      off and exit
@@ -44,6 +53,8 @@
 
 #define LAMP_GPIO 19
 #define LAMP_COUNT 8
+/* 1: indices 0..3 are robot-left. Flip to 0 if the strip is mounted the other way. */
+#define LAMP_LEFT_FIRST 1
 #define LAMP_DMA 10
 #define TICK_MS 50
 #define PEAK 255
@@ -131,6 +142,17 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = (elapsed_ms % 250) < 125 ? rgb(DIM, 0, 0) : 0;
         return 0;
     }
+    if (strcmp(pattern, "recovering") == 0) {
+        /* D-546: hazard-style amber, 1.5 Hz; caution is the same amber at 0.5 Hz. */
+        *color = (elapsed_ms % 667) < 333 ? rgb(DIM, DIM / 3, 0) : 0;
+        return 0;
+    }
+    if (strcmp(pattern, "bridging") == 0) {
+        double phase = (double)(elapsed_ms % 3000) / 3000.0;
+        int level = (int)lround(BREATH_MAX * (0.5 - 0.5 * cos(2.0 * M_PI * phase)));
+        *color = rgb(level, level / 3, 0);
+        return 0;
+    }
     if (strcmp(pattern, "test") == 0) {
         static const int steps[3][3] = {{0x30, 0, 0}, {0, 0x30, 0}, {0, 0, 0x30}};
         long step = elapsed_ms / 1000;
@@ -140,15 +162,44 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = rgb(steps[step][0], steps[step][1], steps[step][2]);
         return 0;
     }
+    if (strcmp(pattern, "identify_blue") == 0 || strcmp(pattern, "identify_amber") == 0) {
+        if (elapsed_ms >= 3000) return 1;
+        /* One dark baseline, then two seconds continuously lit; the owner restores the state. */
+        int on = elapsed_ms >= 1000;
+        *color = on ? (strcmp(pattern, "identify_blue") == 0 ? rgb(0, 0, DIM) : rgb(DIM, DIM / 3, 0)) : 0;
+        return 0;
+    }
     /* "off" */
     *color = 0;
     return 1;
 }
 
+static int zoned(const char *pattern)
+{
+    return strcmp(pattern, "left") == 0 || strcmp(pattern, "right") == 0
+        || strcmp(pattern, "ask") == 0;
+}
+
+/* Amber on one half, or both while asking Fleet. 1 Hz, same amber as caution. */
+static ws2811_return_t paint_signal(ws2811_t *lamp, const char *pattern, long elapsed_ms)
+{
+    int blink = (elapsed_ms % 1000) < 500;
+    int ask = strcmp(pattern, "ask") == 0;
+    int want_left = strcmp(pattern, "left") == 0;
+    ws2811_led_t amber = rgb(DIM, DIM / 3, 0);
+    for (int i = 0; i < LAMP_COUNT; i++) {
+        int robot_left = LAMP_LEFT_FIRST ? i < LAMP_COUNT / 2 : i >= LAMP_COUNT / 2;
+        int lit = blink && (ask || robot_left == want_left);
+        lamp->channel[0].leds[i] = lit ? amber : 0;
+    }
+    return ws2811_render(lamp);
+}
+
 static int known(const char *pattern)
 {
     static const char *names[] = {"booting", "ready", "failed", "caution", "manual", "illumination",
-                                  "navigating", "blocked", "docking", "emergency", "test", "off"};
+                                  "navigating", "blocked", "docking", "emergency", "recovering", "bridging", "test",
+                                  "identify_blue", "identify_amber", "ask", "left", "right", "off"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strcmp(pattern, names[i]) == 0) {
             return 1;
@@ -160,7 +211,7 @@ static int known(const char *pattern)
 int main(int argc, char **argv)
 {
     if (argc != 2 || !known(argv[1])) {
-        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|illumination|navigating|blocked|docking|emergency|test|off\n");
+        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|illumination|navigating|blocked|docking|emergency|recovering|bridging|test|identify_blue|identify_amber|ask|left|right|off\n");
         return 64;
     }
     const char *pattern = argv[1];
@@ -191,6 +242,16 @@ int main(int argc, char **argv)
     struct timespec tick = {0, TICK_MS * 1000000L};
     ws2811_led_t shown = 0xFFFFFFFF;
     for (long elapsed = 0; !stop_requested; elapsed += TICK_MS) {
+        if (zoned(pattern)) {
+            ret = paint_signal(&lamp, pattern, elapsed);
+            if (ret != WS2811_SUCCESS) {
+                fprintf(stderr, "lamp_pattern: ws2811_render: %s\n", ws2811_get_return_t_str(ret));
+                status = 3;
+                break;
+            }
+            nanosleep(&tick, NULL);
+            continue;
+        }
         ws2811_led_t color = 0;
         if (frame(pattern, elapsed, &color)) {
             break;

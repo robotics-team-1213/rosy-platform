@@ -3,10 +3,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
+from fleet.server.static_routes import CONSOLE_ASSETS
+
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RUN_BROWSER_TESTS=1 for Chromium')
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / 'operations/fleet/fleet/server/web'
+WEB = ROOT / 'operations/ui/console'
 
 
 @pytest.mark.parametrize('width', [390, 800, 1200])
@@ -29,6 +32,12 @@ def test_peer_picker_names_owner_navigation_and_session_lifetime(width):
                 return
             folder = ROOT / 'shared/web' if path.startswith('/common/') else WEB
             relative = path.removeprefix('/common/').removeprefix('/console/assets/')
+            if path.startswith('/console/assets/'):
+                asset = CONSOLE_ASSETS.get(relative)
+                if asset is None:
+                    route.fulfill(status=404, body='Not Found')
+                    return
+                relative = asset[0]
             target = (folder / relative).resolve()
             if not target.is_relative_to(folder.resolve()) or not target.is_file():
                 route.fulfill(status=404, body='Not Found')

@@ -1,0 +1,7 @@
+# Pinky lane segmentation 5-class model (pinky-lane-segmentation CLASSES order, D-485).
+classes:
+- {index: 0, name: background, role: background, display: 배경, color: [90, 90, 90]}
+- {index: 1, name: lane_left, role: lane_marking, display: 왼쪽 차선, color: [255, 210, 0]}
+- {index: 2, name: lane_right, role: lane_marking, display: 오른쪽 차선, color: [0, 200, 255]}
+- {index: 3, name: crosswalk, role: ignore, display: 횡단보도, color: [255, 255, 255]}
+- {index: 4, name: speed_bump, role: ignore, display: 과속방지턱, color: [255, 90, 90]}

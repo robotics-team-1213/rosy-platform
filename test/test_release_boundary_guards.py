@@ -484,6 +484,7 @@ def test_a_secret_handed_to_a_call_is_still_a_secret(line):
     'preview_secret = os.environ.get("ROSY_VISION_PREVIEW_SECRET")',
     'bearer = authorization[len("Bearer "):] if authorization else ""',
     "secret = credential_status.inner_text()",
+    'val who = call("/api/v1/auth/whoami", "GET", bearer = stored.token)',
 ])
 def test_handing_a_variable_along_is_not_a_secret(line):
     """A secret-named identifier in argument position names a variable.

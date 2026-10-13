@@ -29,10 +29,24 @@ export function assessGate({role = "viewer", capabilities = {}} = {}) {
 // 게이트 사유 원시 코드 → 운용자 문구. CORE 의 정지이듯 보류도 사실만 말한다.
 export function describeReason(code) {
   if (code.startsWith("role:")) {
-    return `운전 권한이 없습니다 (현재 역할: ${code.slice(5)})`;
+    const role = {viewer: "조회 전용", operator: "운영자", administrator: "관리자"}[code.slice(5)] ?? "확인 필요";
+    return `운전 권한이 없습니다 (현재 역할: ${role})`;
   }
   if (code.startsWith("teleop_withheld:")) {
-    return `수동 운전이 보류되었습니다 — ${code.slice("teleop_withheld:".length)}`;
+    const reason = code.slice("teleop_withheld:".length);
+    const detail = {
+      "runtime_mode:core": "하드웨어 런타임 꺼짐",
+      "drive_disabled:no_motion": "구동 꺼짐 (무동작)",
+      drive_absent: "모터 드라이버 보고 없음",
+      drive_lease_expired: "모터 준비 신호 끊김",
+      hardware_silent: "하드웨어 런타임 신호 끊김",
+      "device_state:SAFE_STOP": "정지 상태",
+      "device_state:BOOTING": "기동 중",
+      "device_state:FAULT": "고장",
+      "device_state:OFFLINE": "오프라인",
+      "device_state:UPDATING": "업데이트 중",
+    }[reason] ?? (reason.startsWith("readiness_hold:") ? "하드웨어 준비 대기" : "로봇 상태 확인 필요");
+    return `수동 운전이 보류되었습니다 — ${detail}`;
   }
   if (code === "teleop_withheld") {
     return "수동 운전이 보류되었습니다";
@@ -40,7 +54,7 @@ export function describeReason(code) {
   if (code === "drive_disabled") {
     return "구동이 꺼져 있습니다 (무동작)";
   }
-  return `진입할 수 없습니다 — ${code}`;
+  return "진입할 수 없습니다. 로봇 상태를 확인하세요";
 }
 
 // 조작 프로필: 화면이 어떤 조작부를 그릴지 정한다. 주행 기기(base)는 2 축 속도

@@ -25,13 +25,16 @@ class ScopedProfileConnection(private val profile: PilotProfile, override val ta
 
 /** HTTP approval remains bound to the selected IP. A changed address requires a fresh session. */
 class LobbySession(override val target: RobotTarget, override val secure: Boolean,
-    val expiresAt: Instant, private val candidate: Candidate, private val store: CandidateStore) : PilotConnection {
+    val expiresAt: Instant, private val candidate: Candidate, private val store: CandidateStore, private val caPem: String? = null,
+    val peerApproval: PeerRelationship? = null) : PilotConnection {
+    private val peerCa = caPem?.let { PeerTls.ca(it) }
     var onInvalidated: () -> Unit = {}
     override fun invalidateCredential() { onInvalidated() }
     override fun authorized(): Boolean = Instant.now() < expiresAt && runCatching {
+        peerCa?.checkValidity()
         store.matches(candidate, target.id)
     }.getOrDefault(false)
-    override fun client(): OkHttpClient = lobbyClient(candidate) { authorized() }
+    override fun client(): OkHttpClient = PeerTls.pinned(lobbyClient(candidate) { authorized() }, caPem)
 }
 
 fun lobbyClient(candidate: Candidate, allowed: () -> Boolean = { true }): OkHttpClient = OkHttpClient.Builder()

@@ -3,14 +3,15 @@
 contracts/foundation/config/rosy_default.yaml
 contracts/foundation/core_common/calibration_store.py
 contracts/foundation/core_common/profile.py
+contracts/foundation/core_common/protocol/connect_reason.py
 contracts/foundation/core_common/protocol/schemas.py
 middleware/ui/face/emotion/info_screen.py
 middleware/ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
-middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_api.py
-middleware/core/api_web/core_api_web/api/app.py
-middleware/core/navigation/launch/hardware.launch.py
-middleware/core/navigation/params/nav2_params.yaml
+middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
+middleware/core/api/core_api_web/api/app.py
+middleware/control/drive/planning/nav2/launch/hardware.launch.py
+middleware/control/drive/planning/nav2/params/nav2_params.yaml
 middleware/perception/config/line_follow.yaml
 middleware/perception/config/robot.yaml
 middleware/perception/control/calibration_relocation.py
@@ -21,16 +22,16 @@ middleware/perception/control/goal_escape.py
 middleware/perception/control/ir_adc_node.py
 middleware/perception/control/line_observer_node.py
 middleware/perception/control/loc_assist_node.py
-middleware/perception/control/safety/node.py
-middleware/perception/control/sensing/body.py
-middleware/perception/control/sensing/dock_tag.py
-middleware/perception/control/sensing/ir_adc.py
-middleware/perception/control/sensing/lidar.py
-middleware/perception/control/sensing/loc_objects.py
-middleware/perception/control/sensing/odometry_fit.py
-middleware/perception/control/sensing/perception/camera_controls.py
-middleware/perception/control/sensing/perception/camera_ground.py
-middleware/perception/control/wander/navigator.py
+middleware/control/drive/safety/adapter/node.py
+middleware/perception/sensors/sensing/body.py
+middleware/perception/sensors/sensing/dock_tag.py
+middleware/perception/sensors/sensing/ir_adc.py
+middleware/perception/sensors/sensing/lidar.py
+middleware/perception/sensors/sensing/loc_objects.py
+middleware/perception/sensors/sensing/odometry_fit.py
+middleware/perception/vision/perception/camera_controls.py
+middleware/perception/vision/perception/camera_ground.py
+middleware/control/drive/tracking/wander/navigator.py
 middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world
 middleware/perception/tools/device/hotpath_measure.py
@@ -58,7 +59,7 @@ middleware/perception/tools/gz/rig_rate.py
 middleware/perception/tools/gz/rig_reload_navigation.py
 middleware/perception/tools/gz/run_calibration_spaces.py
 middleware/perception/tools/gz/track_run_monitor.py
-middleware/core/services/core_features/line_follow/clearance.py
+middleware/control/drive/behaviors/line_follow/clearance.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml
 integrations/simulation/gazebo/config/worlds.yaml
 integrations/simulation/gazebo/launch/gz_multi.launch.py
@@ -69,24 +70,29 @@ integrations/simulation/gazebo/scripts/pinky_acceptance.py
 integrations/simulation/gazebo/scripts/pinky_nav2_probe.py
 integrations/simulation/gazebo/worlds/rosy_gauntlet.world
 integrations/simulation/gazebo/worlds/rosy_maze.world
+# Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
+operations/fleet/fleet/host_control.py
 operations/fleet/fleet/localization/service_logic.py
 operations/fleet/fleet/server/bays.py
 operations/fleet/fleet/server/traffic.py
 operations/fleet/fleet/server/cancel_all.py
+# D-536 guide defaults to the Pinky body geometry for its read-only clearance display.
+operations/fleet/fleet/server/guide_service.py
 # D-430 follow-up classification (2026-10-03); each entry says what it is and who should own the value.
 # (a) data-shaped Pinky constant in a descriptor builder: pinky_controls() is the Pinky controls profile (D-411 section 8); move it to the Pinky product profile.
 contracts/foundation/core_common/protocol/controls.py
 # (a) PINKY_PRO_GEOMETRY URDF nominal + DECEL_MPS2 comment (D-424); safety-tagged, no edit without safety review; geometry should be loaded from the product profile/geometry.yaml (D-397).
 contracts/foundation/core_common/robot_body.py
 # (a) imports pinky_controls (D-411) for the capabilities announce; drops out when the controls profile moves to the product profile (see controls.py).
-middleware/core/api_web/core_api_web/api/v1/system.py
+middleware/core/api/core_api_web/api/v1/system.py
 # (a) comment-only: Pinky LiDAR example numbers in a docstring (D-424); safety-tagged, left unedited pending safety review.
-middleware/perception/control/control/lidar_guard.py
+middleware/control/drive/safety/lidar_guard.py
 # (a) comment-only: Pinky LiDAR floor note (D-424); safety-tagged, left unedited pending safety review.
-middleware/perception/control/control/safety_profile.py
+middleware/control/drive/safety/safety_profile.py
 # (a) comment-only: Pinky example distances in a docstring (D-424); the values already come from config/URDF body, reword when the Pinky profile owns them.
-middleware/core/services/core_features/localization/mission.py
+middleware/control/drive/behaviors/localization/mission.py
 # D-449: exact Episode/PolicyArtifact profile discriminants and owner kind; contract identity, no actuator defaults. Move to registered product profiles when that registry is accepted.
 contracts/learning/src/rosy/contracts/learning/artifacts.py
 # D-449: preserved recording schema and Episode body validator; binds Pinky provenance only, grants no command authority. Product-profile registration remains the eventual owner.
 contracts/learning/src/rosy/contracts/learning/pinky.py
+operations/fleet/fleet/traffic/lane_traffic.py

@@ -2,9 +2,183 @@
 
 from __future__ import annotations
 
+import asyncio
+import copy
+import errno
+import math
+import socket
+import ssl
+from dataclasses import dataclass
 from typing import Optional
 
+import httpx
+
+from core_common.protocol import connect_reason
 from fleet.swarm.transport import RobotApiError
+
+# D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
+_PROTOCOL = (httpx.RemoteProtocolError,)
+
+
+class TripAware:
+    """D-494 5: ``trip_busy(robot_id)`` is True while the trip loop drives that robot.
+
+    ``trip_guard.install_trip_guard`` replaces it on the console instance; a trip robot never
+    yields (``_make_room`` finds it no bay) and is never a reassignment candidate. It also
+    wraps the console's motion and stop methods per instance (goal, formation_*,
+    line_follow_mode, cancel, estop_all): call them on the instance, not on the class.
+    """
+
+    @staticmethod
+    def trip_busy(robot_id: str) -> bool:
+        return False
+
+
+class CapabilityDisplay:
+    """Keep presentation readback bounded without changing dispatch admission.
+
+    Stale-while-revalidate (field check 2026-10-10: a 0.05/0.2 s wait turned every slow read
+    into "unknown", so the console flickered). A read older than ``refresh_s`` starts one
+    background refresh and answers the last good value with its age at once; only a first read
+    (or a kept value past ``max_age_s``) waits up to ``wait_s``. A transport failure (timeout,
+    refused, no route) keeps the last good value; a robot answer replaces it (an error answer
+    or a body that breaks ``schema`` clears it). ``max_age_s`` bounds how old a kept value may
+    still be shown (None: until a refresh succeeds or the client is replaced or removed).
+    """
+
+    def __init__(self, clients, clock, *, read_method="capabilities", schema=None,
+                 refresh_s=5.0, max_age_s=None):
+        self.clients, self.clock = clients, clock
+        self.read_method = read_method
+        self.schema = schema
+        self.refresh_s, self.max_age_s = refresh_s, max_age_s
+        self.cache = {}
+        self.identities = {}
+        self.pending = {}
+
+    def invalidate(self, robot_id):
+        self.cache.pop(robot_id, None)
+        self.identities.pop(robot_id, None)
+        task = self.pending.pop(robot_id, None)
+        if task is not None:
+            task.cancel()
+
+    async def shown(self, robot_id, wait_s=0.05):
+        client = self.clients.get(robot_id)
+        if self.identities.get(robot_id) is not client:
+            self.invalidate(robot_id)
+            self.identities[robot_id] = client
+        if client is None:
+            return None
+        cached = self.cache.get(robot_id)
+        if cached is None or self.clock() - cached[0] >= self.refresh_s:
+            task = self.pending.get(robot_id)
+            if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
+                task = asyncio.create_task(self._refresh(robot_id, client))
+                self.pending[robot_id] = task
+            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
+            # the request answers the kept value now.
+            expired = (cached is None or cached[1] is not None and self.max_age_s is not None
+                       and self.clock() - cached[0] > self.max_age_s)
+            await asyncio.wait({task}, timeout=wait_s if expired else 0)
+        return self._kept(robot_id, client)
+
+    def _kept(self, robot_id, client):
+        cached = self.cache.get(robot_id)
+        if self.clients.get(robot_id) is not client or cached is None or cached[1] is None:
+            return None
+        if self.max_age_s is not None and self.clock() - cached[0] > self.max_age_s:
+            return None
+        return copy.deepcopy(cached[1])
+
+    def age(self, robot_id):
+        client = self.clients.get(robot_id)
+        if self.identities.get(robot_id) is not client or self._kept(robot_id, client) is None:
+            return None
+        return round(max(0.0, self.clock() - self.cache[robot_id][0]), 3)
+
+    async def _refresh(self, robot_id, client):
+        try:
+            try:
+                caps = await getattr(client, self.read_method)()
+                if self.schema is not None:
+                    caps = self.schema.model_validate(caps).model_dump(mode="json")
+            except (httpx.TransportError, OSError, asyncio.TimeoutError):
+                return   # no answer: keep the last good value; its age keeps growing
+            except Exception:
+                caps = None
+            if self.clients.get(robot_id) is client:
+                shown = copy.deepcopy(caps) if isinstance(caps, dict) else None
+                self.cache[robot_id] = (self.clock(), shown)
+                self.identities[robot_id] = client
+        finally:
+            if self.pending.get(robot_id) is asyncio.current_task():
+                self.pending.pop(robot_id)
+
+    async def aclose(self):
+        tasks = list(self.pending.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@dataclass(frozen=True)
+class TripCaps:
+    """D-494 1: what a robot allows a Fleet trip (its rosy.controls/1 base_velocity)."""
+
+    kind: str
+    modes: frozenset
+    max_speed: float
+    #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
+    junction_turn: bool = False
+    #: D-507 9: the map the robot's site floor declaration covers; None when absent (older CORE) or null.
+    site_floor_map_id: Optional[str] = None
+    #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
+    junction_pivot: bool = False
+    #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
+    lane_arc: bool = False
+    #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
+    line_follow_authority: bool = False
+    line_follow_authority_required: bool = False
+    #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
+    line_follow_advice: bool = False
+    #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
+    lane_bend: bool = False
+    #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
+    trip_lease: bool = False
+    #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
+    line_camera: Optional[dict] = None
+
+
+def trip_caps(capabilities) -> Optional[TripCaps]:
+    """The base's trip fields, or None for an older image or a malformed descriptor.
+
+    Read field by field: a consumer ignores fields and drive modes it does not know
+    (rosy.controls/1), so an unknown mode is dropped, not a reason to distrust the rest.
+    """
+    controls = capabilities.get("controls") if isinstance(capabilities, dict) else None
+    items = controls.get("items") if isinstance(controls, dict) else None
+    for item in items if isinstance(items, list) else ():
+        if not isinstance(item, dict) or item.get("kind") != "base_velocity":
+            continue
+        kind, modes, speed = item.get("robot_kind"), item.get("drive_modes"), item.get("trip_max_linear")
+        if (isinstance(kind, str) and kind and isinstance(modes, list)
+                and isinstance(speed, (int, float)) and not isinstance(speed, bool)
+                and math.isfinite(speed) and speed >= 0):
+            known = frozenset(mode for mode in modes if mode in ("lane", "free"))
+            floor = item.get("site_floor_map_id")
+            line = capabilities.get("line_follow")
+            camera = line.get("camera") if isinstance(line, dict) else None
+            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
+                            site_floor_map_id=floor if isinstance(floor, str) else None,
+                            junction_pivot=item.get("junction_pivot") is True,
+                            lane_arc=item.get("lane_arc") is True,
+                            line_follow_authority=item.get("line_follow_authority") is True,
+                            line_follow_authority_required=item.get("line_follow_authority_required") is True,
+                            line_follow_advice=item.get("line_follow_advice") is True,
+                            lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
+                            line_camera=camera if isinstance(camera, dict) else None)
+    return None
 
 
 _INTERNAL_MISSION_KEYS = ("route", "settled_ticks")
@@ -48,6 +222,9 @@ def _formation_stream_evidence(stats, leader: str, assignment) -> dict:
             rate_hz=stats.follower_tx_hz.get(rid),
             sample_count=stats.follower_tx.get(rid, 0),
         )
+        hold = getattr(stats, "follower_anchor_hold", {}).get(rid)
+        if hold:   # D-581: frames flow, but they are anchor holds; the follower is not moving
+            evidence[rid]["anchor_hold"] = hold
     return evidence
 
 
@@ -62,3 +239,57 @@ def _error_of(exc: BaseException) -> dict:
     if isinstance(exc, RobotApiError):
         return {"reachable": True, "code": exc.code, "message": str(exc)}
     return {"reachable": False, "code": type(exc).__name__, "message": str(exc) or type(exc).__name__}
+
+
+def classify_link(exc: BaseException | None, *, scheme: str,
+                  address_status: str | None) -> str | None:
+    """D-499 robot link class: a closed link word, or None when the row must omit `link`.
+    The browser reads the returned word and never an exception name."""
+    if exc is None:
+        return "up"
+    if address_status == "seen_at_other_address":
+        return "moved"
+    if isinstance(exc, RobotApiError):
+        if exc.status == 401:
+            return "tls-refused"
+        return None
+    if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
+        return "protocol"
+    return "unreachable"
+
+
+def _transport_kind(exc: BaseException, scheme: str) -> str | None:
+    """D-535 closed transport vocabulary for an exception that never got an HTTP answer."""
+    chain, seen = [], exc
+    while seen is not None and len(chain) < 8:
+        chain.append(seen)
+        seen = seen.__cause__ or seen.__context__
+    for item in chain:
+        if isinstance(item, ssl.SSLCertVerificationError):
+            # OpenSSL X509_V_ERR_HOSTNAME_MISMATCH: the leaf names another host (IP instead of .local).
+            return "tls_name_mismatch" if getattr(item, "verify_code", None) == 62 else "tls_unknown_ca"
+    for item in chain:
+        if isinstance(item, socket.gaierror):
+            return "dns_failure"
+        if isinstance(item, ConnectionRefusedError):
+            return "connection_refused"
+        if isinstance(item, ssl.SSLError):
+            return "tls_handshake"
+        if isinstance(item, OSError) and item.errno in (errno.EHOSTUNREACH, errno.ENETUNREACH):
+            return "no_route"
+    if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
+        return "plain_http_to_tls"
+    return "timeout" if isinstance(exc, (httpx.TransportError, OSError, asyncio.TimeoutError)) else None
+
+
+def link_reason(exc: BaseException | None, *, scheme: str) -> dict | None:
+    """D-535 reason of a failed robot read: code, operator message, recovery action, retry."""
+    if exc is None:
+        return None
+    if isinstance(exc, RobotApiError):
+        code = connect_reason.classify(code=exc.code, http_status=exc.status) or connect_reason.HTTP_FALLBACK
+    else:
+        kind = _transport_kind(exc, scheme)
+        code = connect_reason.classify(transport=kind) if kind else connect_reason.HTTP_FALLBACK
+    retry, message, action = connect_reason.REASONS[code]
+    return {"code": code, "message": message, "action": action, "retry": retry}

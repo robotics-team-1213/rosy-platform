@@ -1,13 +1,13 @@
 /* D-204 셸 — 배치만 정한다. 색과 크기는 토큰만 쓴다(D-129, D-203). */
-html { min-height: 100%; background: var(--ground); }
+html { min-height: 100%; background: var(--surface-canvas); }
 /* Role surfaces do not load dashboard/styles.css; explicit display rules must respect hidden. */
 [hidden] { display: none !important; }
 body {
   min-width: 320px;
   min-height: 100dvh;
   margin: 0;
-  color: var(--ink);
-  background: var(--ground);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
   font: var(--weight-regular) var(--text-body)/var(--leading-copy) var(--body);
 }
 .surface-switch { display: flex; gap: var(--space-3); }
@@ -23,7 +23,7 @@ body {
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-switch a:hover { color: var(--ink); background: var(--surface-flat); }
+.surface-switch a:hover { color: var(--text-primary); background: var(--surface-flat); }
 .surface-switch a[aria-current="page"] {
   color: var(--brand-rose);
   border-color: var(--brand-rose);
@@ -40,7 +40,7 @@ body {
   font-weight: var(--weight-emphasis);
   text-underline-offset: 0.2em;
 }
-.surface-auth-link:hover { color: var(--ink); background: var(--brand-rose-wash); }
+.surface-auth-link:hover { color: var(--text-primary); background: var(--brand-rose-wash); }
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
@@ -65,7 +65,7 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-panel);
   background: var(--surface-flat);
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }
@@ -74,6 +74,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot
   gap: var(--space-4);
 }
 body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
+  container-type: inline-size;
   padding: var(--space-4);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);
@@ -85,7 +86,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    프레임만 풀어 페이지가 스크롤한다 — US-008 전에는 두 규칙이 한 조건에 묶여 열까지 접혔다. */
 @media (width >= 64rem) {
   body[data-surface="console"] .surface-main {
-    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas:
       "status status status"
       "banner banner banner"
@@ -132,6 +133,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     align-content: stretch;
     min-height: 0;
     overflow: hidden;
+    scrollbar-gutter: stable;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-template-columns: minmax(0, 1fr);
@@ -139,6 +141,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     align-content: start;
     min-height: 0;
     overflow: hidden;
+    scrollbar-gutter: stable;
   }
   body[data-surface="console"] .surface-slot[data-slot="observe"] > ui-section,
   body[data-surface="console"] .surface-slot[data-slot="act"] > .action-group-panel {
@@ -152,7 +155,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body[data-surface="console"] .surface-slot[data-slot="observe"] ui-section:has(.surface-map-frame) {
     display: grid;
-    grid-template-rows: repeat(5, min-content) minmax(0, 1fr) repeat(3, min-content);
+    grid-template-rows: repeat(4, min-content) minmax(0, 1fr) repeat(4, min-content);
     align-content: stretch;
     gap: var(--space-1);
   }
@@ -191,7 +194,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"].procedure-tasks {
     display: grid;
-    grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-track) minmax(0, 1fr);
     gap: var(--space-5);
   }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
@@ -212,10 +215,19 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] > .traffic-policy-simulation { grid-column: 1; grid-row: 3; }
 }
 
-/* D-359 §6.4 — 세로 예산: 붙박이 머리는 창 높이의 20% 이하다. 넓지 않은 창에서는 두 줄에
-   모은다 — 이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
+/* D-466 — 머리 자리는 brand | cluster | estop. D-359 §6.4의 두 줄 접기다.
+   이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
+   화면 전환은 cluster이지 사이드바가 아니다. 붙박이 머리는 창 높이의 20% 이하다.
    알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
+  body[data-surface="console"] .surface-main {
+    grid-template-areas: "status" "banner" "observe" "act" "sense";
+  }
+  body[data-surface="console"] #surface-status { grid-area: status; }
+  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
+  body[data-surface="console"] .surface-slot[data-slot="act"] { grid-area: act; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] { grid-area: observe; }
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -237,11 +249,19 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   ui-topbar { padding: var(--space-2); }
   ui-brand small { display: none; }
   /* 320px에서 화면 전환 세 링크와 비상 정지가 한 줄에 선다 — 안쪽 여백만 줄인다. */
-  .surface-switch a { padding-inline: var(--space-1); }
+  .surface-switch a { padding-inline: var(--inset-button); }
   #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); padding: var(--space-3); }
-  .surface-actions.map-layer-actions { flex-direction: row; width: 100%; }
-  .surface-actions.map-layer-actions > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--space-1); }
+  .surface-actions:is(.map-click-actions, .map-layer-actions) { flex-direction: row; width: 100%; }
+  .surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
+}
+
+@media (width < 23rem) {
+  body[data-surface="console"] .surface-map-stage {
+    position: static;
+    max-width: none;
+    margin-top: var(--space-1);
+  }
 }
 
 @media (30rem <= width < 64rem) {

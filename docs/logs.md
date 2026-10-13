@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -5735,3 +5735,2516 @@ osy-d395-s1d\`.
 - 변경: 최신 main에서 추가된 공용 components.css 814줄을 한 책임의 토큰 기반 공용 컴포넌트 스타일로 독립 검토하고 accept 판정을 기록했다. 기존 600줄 상한과 growth allowance는 유지한다. 감사 검사의 공개 SHA 상수명과 참조만 SOURCE_COMMIT으로 정정하여 값·감사 원문·대상을 보존했다.
 - 증거: 깨끗한 main 1b669c7cb에서 두 실패 재현. 관련 재검사 119 PASS 뒤 감사 문자열의 원문 보존을 바로잡고 감사·비밀값 검사 9 PASS. 추적 관련 최신 통합 776 PASS/known_failures 신규 0; Chromium 4 PASS. UI 스타일 내용이나 배치 변경 없음.
 - gate 변화: SOURCE/LOCAL 검사 정합. main 착지·push·CI·서명 후보 배포와 현장 좌표 오차는 이후 단계다.
+
+## 2026-10-05 · uncommitted · uiux(review): 필터 일치 이동과 마지막 라벨 복구
+
+- 변경: 사용자 즉시 머지·추가 개선 지시로 D-459/D-461의 반복 검수 흐름을 보완했다. 목록·선택·이전/다음·URL의 필터를 일치시키고 빈 상태 복귀를 추가했다. 마지막 라벨 수정·삭제는 현재 version CAS로 복구하며 승인을 복원하지 않는다.
+- 증거: 실제 Chromium 회귀 3개와 기존 backend 5개, 총 8 passed, known_failures 신규 0. 승인 대기 유지·새로고침·빈 상태·다른 탭 변경 보호를 확인했다. PC/모바일 4폭×dark/light 및 필터 건너뛰기·모바일 복구 총 10 검사에서 page error/가로 넘침 0, 운영 검수 rows 불변을 확인했다. 공용 controls/token/title/responsive 및 harness 계약 132 passed, 신규 0. 증거는 X:/DevTemp/pinky-review-flow-20261005에 있다. 물리 모바일·원격 CI 수용은 별도다.
+- gate 변화: 로컬 앱 개선이며 물리 모바일·장치·학습 qualification·정책 승격·CI 수용을 주장하지 않는다. 운영 승인/제외 이력 보존, 로봇 움직임·모델 활성화·push·배포 없음.
+
+## 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
+
+- 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
+- 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
+- gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.
+
+## 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
+
+- 변경: `docs/validation/p2-pedal-readiness-2026-10-04/README.md` 추가. 합격선(계량 문서 고정), 서명 payload(2026.10.04-034), 부팅 증거(arm64 러너 run 37200780702), 측정 도구, 실행 절차, 사용자가 해야 할 것(시간·승인·입회)을 한 곳에 정리. D-426 Gazebo ROS-SIM은 WSL/Linux가 필요하여 이 Windows 세션에서 실행 불가 — 착수 보류로 기록.
+- 증거: 문서만. 코드·게이트 변화 없음.
+- gate 변화: 없음.
+- 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.
+
+## 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
+
+- 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.
+- 증거: reseal한 박스 변조 거부·잘못된 승인 bool/int·legacy exact-image 중복·latest ETag 및 기존 backend/title 18 passed, known_failures 신규0. root는 실제 SSH 소비 경로에서 human 출처 누락을 재현했고 producer가 보완했다. 실제 운영 state는 아직 읽기만 수행했다.
+- gate 변화: SOURCE/LOCAL 보강. root-owned bridge/adapter의 독립 수용·실제 human pixel 승인·장치 수용·CI는 별도다. push·배포·주행·HOLD 해제 없음.
+
+## 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
+
+- 변경: POST /api/fleet/robots/{robot_id}/route 가 저장된 차선 간선 순서를 폴리라인으로 펼치고, 지도에 LOCALIZED 된 자세일 때만 약 0.20 m 앞의 점을 기존 goal 로 보낸다. 위치 블록이 없거나 odom 이면 409 ROUTE_POSE_UNTRUSTED 이고 CORE navigation/goal 을 호출하지 않는다. GoalRequest 는 {x, y, yaw} 그대로다. ADR docs/adr/D-463-fleet-lane-route.md. D-462 는 review-cycle 작업 트리의 번호라 adr_gaps 에 남겼다.
+- 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
+- gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
+- 결정: D-463 Accepted.
+
+## 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
+
+- 변경: producer helper는 v2 contract뿐 아니라 봉인된 pinky-review-receipt.json authority도 schema/digest/types로 검증하고 encoded JSON의 정확한 일치를 요구한다. Python dict의 False==0 동등성으로 변조 receipt를 수용하는 경로를 제거한다. Root consumer/adapter 경로는 고치지 않는다.
+- 증거: Root의 독립 합성 reseal 재현을 회귀로 옮겼다. 수정 전1failed/1passed 재현을 X:/DevTemp/pinky-review-cycle-20261005/receipt-red.txt에 보존하고, 수정 후 기존 snapshot/content/CAS와 receipt 두 변조 회귀를 함께 검증한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL helper 보완. 실제 export의 격리 model-PC 소비 통과는 Root 증거이며 생산 학습 서비스 전환·human pixel qualification과 별개다. push·주행·HOLD 해제·정책 권한 변경 없음.
+
+## 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
+
+- 변경: `ROSY API & Protocol Reference.md` v1.99→v1.100. §5 경로 표에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 행 추가, 카메라 preview 전송 규칙에 스트림 조항(운전자 = 마지막 수락 teleop 토큰, D-460 임대 없음·409 코드 두 종·동시 하나·새 sequence만·헤더 인증 D-193) 추가, 버전 이력 행 추가.
+- 증거: 문서와 구현(`api/v1/vision.py`, `core_features/vision/stream.py`) 동일 커밋. envelope `protocol_version` 1.0 불변(PRT-006 additive). schemas.py 신규 페이로드 없음(멀티파트는 JSON envelope 아님).
+- gate 변화: 없음.
+- 결정: D-368 §1~3·5의 CORE·클라이언트 계약 확정. §4(발행 12 fps 상향)는 로봇 측 ROS-SIM/DEVICE 사항으로 남는다.
+
+## 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호
+
+- 변경: main 병합에서 D-463(차선 경로)이 v1.100을 먼저 썼다. D-368 스트림의 이력 행·경로 표·전송 규칙 조항·문서 Version 표기를 v1.101로 옮기고, app.py 계약 표기와 세 문서 시험 핀을 같이 올렸다.
+- 증거: lint 재검사 0 error(재번호 전 append-only 위반 1건 수정 — 커밋된 앞 항목은 원문 유지).
+- gate 변화: 없음.
+- 결정: API 문서 버전 충돌은 늦게 착지한 쪽이 재번호한다.
+
+## 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.101→v1.102 재번호
+
+- 변경: 착지 직전 main이 D-456(LAN 수신 승인)로 v1.101을 썼다. D-368 스트림 표기를 v1.102로 옮기고 app.py 계약 표기와 세 문서 시험 핀을 같이 올렸다.
+- 증거: lint 재검사. 재번호 규칙은 앞 항목과 동일.
+- gate 변화: 없음.
+- 결정: 같은 규칙 지속 — 늦게 착지한 쪽이 재번호한다.
+
+## 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
+
+- 변경: 최종 producer helper는 이미 current·contract authority·receipt authority 각각을 validate_authority로 검증하고 encoded JSON을 비교한다. 독립 재현의 frame_excluded=False→0 및 original_video_verified=False→0를 봉인 contract에 적용하는 회귀를 추가했다. embedded decision digest 유지/재계산 두 경우 모두 바깥 봉인을 다시 계산해도 거부해야 한다.
+- 증거: 관련 producer/app 시험 출력은 X:/DevTemp/pinky-review-cycle-20261005/embedded-alias-exact-tests.txt에 보존한다. 기존 ignore_index255.0 및 receipt alias 회귀를 함께 실행한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL 회귀 보강만 한다. 독립 producer 통합 수용과 학습 적격성은 root/policy 검증자의 판정으로 남는다. push·모델 활성화·주행·HOLD 해제 없음.
+
+## 2026-10-05 · uncommitted · test(learning): pin receipt exclusion tombstone aliases
+
+- 변경: receipt authority의 frame_excluded=False→0를 별도 회귀로 고정했다. original_video_verified alias와 함께 embedded digest 유지/재계산 및 외부 inventory/marker 재봉인을 모두 시험한다. helper의 기존 validate_authority(receipt.authority)·encoded equality를 유지하며 root 소비자 코드는 수정하지 않는다.
+- 증거: X:/DevTemp/pinky-review-cycle-20261005/receipt-frame-excluded-tests.txt 및 최신 main 동기화 후 별도 시험 출력에 남긴다. 실제 사람 검수·이력과 기존 봉인 export는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL 회귀 보강. 모델PC 격리 소비 수용은 root 증거이며 생산 bridge/cycle 배포·학습 적격성과 별개다. push·주행·모델 활성화·HOLD 해제 없음.
+
+## 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
+
+- 변경: 독립 측정 Fleet 34211줄로 기존 split 판정을 재검토한다. reference-only 시작점의 store/routes/pure layer/view는 91/43/35/120줄이며 제한된 wiring이다. B2·UI 자원 분리 의무, +150 allowance, 개별 파일 상한은 그대로다. 시작점 인증 reset 안내도 지난 좌표를 지운다. 기존 review dataset 시험에서 BOM 세 바이트만 제거한다.
+- 증거: 최초 정상 pre-push FAST 475 passed/2 skipped/1 failed(새 P6 기록). 이전 main 9b73e91ac CI의 config_transaction child import 및 review dataset BOM 실패를 각각 재현했다. 수리 후 관련 42 passed, known_failures 신규 0. 실제 후보 CI·서명·현장 수용은 별도다.
+- gate 변화: SOURCE/LOCAL 정합 복구. 검사 무시·상한 완화·UI/UX 리팩터링·실물 주행 없음.
+
+## 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
+
+- 변경: D-464는 명시 승인된 Pinky indexed 픽셀을 원본 영상·바이트·최신 authority·촬영 component 및 실제 전체 eval version 분리 검증 후 dataset/1으로 만드는 책임을 정한다. D-379의 기존 자동 라벨과 고정 eval 신뢰 출처를 유지하며 CVAT origin으로 위장하지 않는다.
+- 증거: 새 번호 생성 직전 main/작업 트리/430 branch ADR trees, ADR Log 및 harness gaps를 조회했다. 문서 lint 결과와 계약 회귀 출력은 로컬 임시 증거로 보존한다. 실제 승인0·eval source/group 미확정은 HOLD이며 새로운 데이터 게시·학습·모델 승격을 의미하지 않는다.
+- gate 변화: 문서 계약만 기록한다. 사용자 승인된 builder 소스 구현·격리 roundtrip 및 실제 trainer admission 검증은 각각 별도 단계다.
+
+## 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
+
+- 변경: D-456 수신 TLS 검증 시험에 서명 payload와 동일한 해시 고정 crypto 집합을 CI 전용 디렉터리로 설치한다. 검증 API import와 버전 49.0.0을 실제 확인한다. 기존 런타임 pin·wheel hash를 바꾸지 않으며 API v1.104 변경 이력과 앱 설명을 일치시킨다.
+- 증거: 원격 core-domain 수집 실패는 이전 컨테이너 crypto의 verification 모듈 부재였다. 신규 CI 계약 시험의 실패를 먼저 재현했고 기존 hash 집합의 AMD64 wheel 다운로드를 검증했다. 정상 pre-push 474 passed/2 skipped/2 failed의 버전 불일치도 수리 대상으로 남긴다.
+- gate 변화: SOURCE/LOCAL 수리. 신규 원격 CI·서명 배포·기기 연결 수용은 별도다.
+
+## 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
+
+- 변경: 차선·바닥·벽 픽셀 우선, 기하/기존 모델과 로컬 분할 보완, 선택 OpenRouter 보조 판단을 D-462 검수와 D-464 builder 앞단에 연결하는 설계를 기록한다. RTX 5080 16 GB는 설계 기준이며 실제 GPU·처리량·라벨 품질은 미검증이다.
+- 증거: 생성 직전 main·작업 트리 ADR/Log와 전체 로컬 브랜치 ADR trees 및 harness adr_gaps에서 최고 번호 D-464를 확인했다. lint와 문서 계약 시험 결과는 X:/DevTemp/pixel-label-adr에 보존한다.
+- gate 변화: 설계 기록만 추가한다. 모델 설치·외부 API 호출·학습·승격·GPU/DEVICE/FIELD 수용은 별도다.
+
+## 2026-10-05 · uncommitted · test: fence app and web document ownership
+
+- 변경: Console 세 문서와 Robot 세 문서가 자기 모듈만 import하도록 `operations/fleet/test/test_document_imports.py`와 `test_panel_module_folder_matches_surface`를 고정했다. 목표와 검토 스냅샷은 `docs/plans/2026-10-05-app-web-srp.md`, `docs/assessments/2026-10-05-app-web-role-review.md`다. 새 앱, 폴더 이동, `console.teleop` 제거는 하지 않는다.
+- 증거: `enrollment.js`를 `console.js`에 넣으면 펜스가 `['enrollment.js']`로 실패하고, 되돌리면 통과한다. 제품 코드는 변하지 않았다.
+- gate 변화: 없음. 호스트 시험과 문서만이며 장치 수용은 없다.
+
+## 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
+
+- 변경: 앱·웹 SRP 계획의 검토 스냅샷을 확인 가능한 짧은 커밋 식별자로 표기한다. 긴 식별자를 고엔트로피 비밀값으로 탐지한 push 검사를 해결하며 비밀값 검출 규칙은 유지한다.
+- 증거: 기존 커밋 객체를 직접 조회했다. 비밀값 검사를 재실행하고 결과를 X:/DevTemp/rosy-ui-ship/secret-doc-sha-fix.log에 기록한다.
+- gate 변화: 없음. 문서 표기만 변경한다.
+
+
+## 2026-10-05 · uncommitted · feat(learning): indexed trainer 독립 admission D-464
+
+- 변경: 원래 sealed export와 trusted transport workspace/highwater, 원본 pixels 및 전체 eval inventory를 scratch 재구축해 저장 SHA와 대조한다. trainer는 captured train/eval/gate를 소비하고 Job/GPU 및 실제 READY marker 직전 fresh authority/TTL/source/recipe를 재확인한다. CLI boolean/build receipt는 권한이 아니다.
+- 증거: X:/DevTemp/ta에 RED12FAIL, initial24PASS, interleaving45PASS/NEW0 및 독립 정책 리뷰를 남긴다. 최종 affected/source 체크는 완료 보고서로 별도 고정한다. 실제 labels/meta 복구 후보16개는 원래2digest 일치0이어서 UNKNOWN을 유지한다.
+- gate 변화: 호스트 SOURCE/격리 검증만. 실제 마스크 승인0, eval rowbinding 결손은 HOLD이며 학습 요청/GPU/서비스 배포/모델 활성화/주행은 실행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(learning): owner admission의 더 짧은 승인 유효기간 유지
+
+- 변경: 기존 cycle의 pinned authority 유효기간과 producer owner 유효기간 중 최솟값을 transport 조회, dataset 재구축, IndexedReview에 동일하게 전달한다. 5초 정책을 90초 기본값으로 늘리지 않는다. 승인 발급자·highwater·출처·READY 조건은 그대로다.
+- 증거: X:/DevTemp/rosy-ui-ship/review-ttl에 새 경계 RED3FAIL3PASS, 수정 후 focused6PASS, 기존 관련5개 suite208PASS1SKIP50.05초 및 known_failures NEW0을 기록했다. stale20초/fresh2초, 양쪽5초/90초 설정, 느린 재구축 중 만료를 실제 synthetic admission/request 경계로 확인했다.
+- gate 변화: 호스트 SOURCE/격리 검증만. 실제 GPU·학습 요청·장치 설정·배포·모델 활성화·주행은 실행하지 않는다. 독립 소스 리뷰 후 이 수정만 커밋하며 native038/Android/배포 closure는 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · refactor(learning): 데이터셋 출처 검증 owner 분리
+
+- 변경: 674줄 review_dataset의 stable bytes·source proof·sealed eval companion 검증4함수를 review_provenance로 그대로 옮겼다. 기존 import는 re-export로 유지하고 새 owner를 trainer 입력 코드 hash에 포함한다. dataset474줄·provenance209줄이며 P6 제한·verdict 예외는 변경하지 않는다.
+- 증거: X:/DevTemp/rosy-ui-ship/review-budget에 기존 P6/새 owner 결속 RED2FAIL, 수정 후2PASS, 기존 관련5개 suite와 module_structure 전체242PASS1SKIP65.34초/NEW0을 기록했다. 네 함수 AST 동일성과 새 owner가 변경되면 학습 import/GPU 전 거절하는 경계를 확인했다.
+- gate 변화: SOURCE/격리 검증만. 승인·출처 bytes·dataset SHA·최신성·게시 규약은 유지하며 배포·native·Android·자격증명·실제 GPU/장치 실행은 변경하지 않는다. 독립 리뷰 후 이 변경만 커밋한다.
+
+## 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록
+
+- 변경: D-456에 기존 관제 encrypted enrollment의 공개 TLS binding과 단일 REST/WS endpoint owner를 기록한다. 같은 LAN의 발견 이름을 사용하고 기존 자격·발급자·만료·철회를 보존한다. static roster 중복이나 평문 fallback으로 접속 실패를 숨기지 않는다.
+- 증거: 두 로봇의 실제 038 HTTPS identity를 SSH로 확인한 CA와 호스트 이름으로 검증했다. 관제 DB에는 기존 active 승인 두 행이 있고, 기존 enrollment client는 HTTP를 재구성한다. 관련 최신 main 통합 검사는 199 passed/64.92초/NEW0이다. source companion 분리 충돌은 stable reader와 두 코드 owner fingerprint를 보존해 통합했다.
+- gate 변화: 실제 HTTPS identity와 기존 등록 상태만 확인했다. Pilot 승인·연결과 관제 HTTPS 등록 경로·새 Camera Peer 승인은 아직 수용하지 않는다. 최신 main의 bounded-trial STOP/send 경합은 독립 source 모의 실행으로 재현되어 수정 전 릴리스를 HOLD한다. 주행·정지 해제·등록 초기화는 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
+
+- 변경: 승인된 등록 ID의 공개 CA·호스트 binding을 기존 REST/WSS endpoint owner에 결속하고 동일 등록부의 transport marker로 재시작·설정 누락 때 HTTP 복귀를 거절한다. CLI의 기존 다음 옵션 전 조립 분리 조건을 이행해 586줄로 줄이고 91줄 feature builder에 지연 import·생성 순서를 보존한다. 독립 재판정에 따라 Fleet split 기록만 35606줄로 갱신하고 사라진 CLI 예외를 제거한다. 예산·허용량·기존 B2/UI 분리 대기열은 유지한다.
+- 증거: 전송 통합의 원본 관련207PASS2WindowsSKIP57.04초/NEW0, 조립 분리의 원본CLI·TLS55PASS1WindowsSKIP34.83초 및 독립 AST·구조·안전 SOURCE PASS를 기록했다. 기존 P6는35581>35137+150로 실제 RED였다. bounded-trial 경합은 별도 writer fence 수정과 원본43PASS 및 독립 양수 전송 거절 재현으로 source HOLD를 해소했다. 두 실제 TLS calibration 읽기는 활성 세션 없음으로 PASS다.
+- gate 변화: SOURCE/읽기 증거다. 새 서명 릴리스·실제 Pilot 승인/재연결·관제 HTTPS/WSS·새 Camera Peer/발열 수용은 아직 완료하지 않는다. 관제 공개 설정은 준비했지만 SSH sudo-n은 관리자 인증을 요구해 실제 적용하지 않았다. 기존 승인·발급자·키·CA·만료·주행·정지 상태는 보존한다.
+
+## 2026-10-05 · uncommitted · fix(integration): 동시 실행 기록과 정상 푸시 검사 보완
+
+- 변경: 순수 bounded-trial 시험10개를 services 소유자로 옮기고 실제 CORE writer 시험10개는 gateway에 유지한다. 기존20개 시험 본문·단언 AST를 보존하며 예외 목록은 늘리지 않는다. 공개 review SHA256은 같은 행에 종류를 표시해 비밀 검사 규칙을 유지한다. 동시 OMX 실행 기록 변경은 저장 중 권한 철회 경합을 재현한 뒤 기존 최종 fence 안에서 authority·설치 bytes·소유자·카메라 결속을 다시 검증한다.
+- 증거: 부모 통합의 원본 bounded-trial·writer·소유권44PASS1.79초, 동시 local execution 전체107PASS6.74초다. 독립 검토는 권한·소유자·모델 철회3상황 모두 전송0을 확인했다. 정상 푸시의 기본476PASS2SKIP 뒤 추가 검사는 약64%에서 오류와 함께 중단되었고 상세 실패 로그가 완성되지 않았다. X 공간 고갈을 확인했으며 실패 원인을 전부 확정하거나 NEW0으로 처리하지 않는다. 소스 트리에 생긴1바이트 lock은 X로 이동해 보존했다.
+- gate 변화: 로컬 소스 통합과 focused 검증만 완료했다. 원격 main은 기존 커밋이며 정상 푸시·정확한 후보 CI·새 서명039·실제 Pilot 승인/재연결은 미완료다. 관제 root 설정 적용과 유효한 named operator 인증도 미완료다. 자세한 경계는 docs/validation/d456-final-integration-2026-10-05/README.md에 기록한다. 주행·정지 해제·새 실기 활성화는 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(integration): 정상 푸시의 C6와 저장 공간 실패 재현
+
+- 변경: 실제 bridge 생성자에 비활성 optional guard를 선언하고 writer·odometry를 직접 field 접근으로 변경했다. 누락 field가 제한 없는 제출로 넘어가지 않으며 기존 None·실제 guard·STOP 경로를 보존한다. C6 예외·P6 예산·검사 범위는 유지한다.
+- 증거: 원본 C6 실패 재현 뒤 독립 Safety SOURCE PASS와 부모 통합101PASS/18.88초/기존 ROS 필수10SKIP/NEW0이다. 원본과 같은 명령·대상 경로로 후보83d633의10893개를 수집한 선택 재현에서 영상 저장2PASS, 다운로드는 필요1GiB 대비0.9GiB로 실제 UPDATE_INSUFFICIENT_SPACE를 확인했다. 원본 중단의 모든 후반 오류를 같은 원인으로 단정하지 않는다.
+- gate 변화: 두 실제 로봇의 기존 CA·키·HTTPS identity와 두 앱 ADB를 재확인했다. 기존 관제 named 인증은401, 새 pending은404다. 원격 push·후보 CI·서명039·앱 승인/재접속·관제 수신·새 Cam/발열은 미완료다. 상세 기록은 docs/validation/d456-push-diagnostics-2026-10-05/README.md이며 실기 연동 완료로 표시하지 않는다.
+
+## 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
+
+- 변경: 환경/입력 doctor·기존 baseline·indexed 255 import와 초안 revision·최신 승인 builder/admission·선택 SAM/외부 보조·실 GPU 파일럿을 7개 구현 task로 분해한다. 기존 색상 ZIP의 미라벨 보존 한계와 기존 앱 소유 경계를 기록한다.
+- 증거: 기존 prelabel/autolabel·Job·D-446 실행기·review_ingest/review_masks·review_dataset/learning_cycle 소스 및 D-462/D-464 계약을 확인했다. 문서 lint/계약 테스트는 X:/DevTemp/pixel-plan에 보존한다.
+- gate 변화: 구축 계획만 추가한다. 제품 구현·원격 환경 변경·외부 API·실 학습·GPU/품질 수용은 NOT_RUN이다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T1 실행 격리·preflight runner 착수
+
+- 변경: `tools/validation/fleet_gazebo/{preflight,run}.py`와 `test/test_fleet_gazebo_run_contracts.py` 추가(실패 시험 선행). run별 예약(포트·ROS domain 120–199·GZ_PARTITION·namespace)을 run_id에서 결정론 도출하고, run root 단일 사용(살아 있는/오래된 manifest 모두 거부)·root 밖 symlink 거부·world/map/profile sha256 고정·CORE 오버레이와 fleet robots.yaml의 hub_url·pairing_token 일치 검사·READY는 7개 탐침(clock/scan/odom/tf/nav2/core_http/ws_welcome) 전부 확인일 때만. run.py는 런타임 생성 토큰(운영자·페어링)으로 오버레이·robots.yaml·run_spec.yaml을 만들고 실행 명령만 출력한다(실행 배선은 T5–T6). gz_multi.launch.py에 `run_spec` 인자(러너 소유 오버레이·manifest·partition 소비).
+- 증거: test_fleet_gazebo_run_contracts 12 passed(2 skip — Windows symlink 권한), test_gz_multi_run_spec 3 + test_gz_multi_core 회귀 통과(Linux CI에서 실행), `run.py --help` exit 0, 폴더 계약 9 passed. X:/DevTemp/opencode/d426.
+- gate 변화: 없음. T1 구현이지 실제 Gazebo 회차·ROS-SIM이 아니다(T6·M01–M08 뒤).
+- 결정: WSL Ubuntu에 Jazzy+Gazebo+colcon 확인 — D-426 실행 환경 확보. T2(통신 상관)부터 이어 간다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T2 통신·결과 상관 탐침
+
+- 변경: `tools/validation/fleet_gazebo/probe.py` 추가 — 회차 기록(관측 목록)에 대한 순수 판정기. 세 판정면: (1) 세션 — WELCOME 거부·identity 충돌(DUPLICATE_IDENTITY/IDENTITY_DRIFT)·계약 불일치(PROTOCOL_UNSUPPORTED·알 수 없는 거부 코드) 분리, (2) 하달 사슬 — 시도별 수락 없는 완료·다른 attempt 결과·중복 종단·역순(종단이 근거 CORE 이벤트보다 먼저 기록)은 FAIL, 유실 투영·수락-무-종단(timeout)은 INCONCLUSIVE로 조회 대조 대상으로 남김, (3) 나이 — 원본(시뮬 시계)과 표시(monotonic) 분리, 시계 변환 불가·표본 밖은 미지(None). 판정 어휘 PASS/FAIL/NOT_RUN/INCONCLUSIVE(T3 재사용).
+- 증거: operations/fleet/test/test_gazebo_protocol_probe.py 13개 판정 계약 + test_server_traffic·test_boundaries 회귀 68 passed. 실제 wire 형태는 fleet/hub/hub.py·task_results.py·task_service.py 원문 대조.
+- gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실제 프로세스 사이 관측·ROS-SIM은 T6.
+- 결정: fake HTTP/WS는 LOCAL만 증명한다 — probe는 그 LOCAL 판정 규칙의 정본이고, T6 회차 기록이 같은 판정기를 지나야 ROS-SIM 판정이 된다.
+
+## 2026-10-05 · uncommitted · fix(validation): D-426 T2 근거 없는 PASS 거부
+
+- 변경: 통신 상관 판정은 robot+attempt·실제 goal·수락·CORE terminal mapping·시간순서를 모두 대조한다. 다른 로봇 결과, 정확한 상태와 모순되는 CORE event, 역순은 FAIL이다. goal/CORE 근거 누락과 취소 HOLD의 정산 권한 근거 부족은 INCONCLUSIVE다. 기존 Fleet의 취소 권한·실행 API는 변경하지 않았다.
+- 시계: 현재 source-clock 나이는 now의 유효한 인접 표본 보간값에서 원본 timestamp를 뺀다. 수신 지연과 구분하며 pause 때 가상의 나이를 늘리지 않는다. 표본 밖·rollback·손상·비유한 값은 unknown이다.
+- 증거: 원래 probe 계약 경로 19 FAIL과 두 로봇 중 응답 누락 1 FAIL을 재현했다. 중간 분기 오류를 고친 최종 관련 기존 traffic/boundary 포함 91 PASS(5.41s)다. 실제 프로세스 통신·SIM·기기·주행은 NOT_RUN이다.
+- gate 변화: host SOURCE/LOCAL 판정 보완만이며 실제 ROS-SIM 회차와 T3 구현은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
+
+- 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.
+- 증거: 148프레임 baseline/후보 직진 평균 절대 error 0.150088→0.051813, 튐0.014→0.007, 비가시14→21이다. 독립 코드 리뷰는 중대 결함 없음, lane test57PASS/NEW0이다. 별도7녹화2252프레임 영향과 전체 검증 결과는 docs/validation/lane-keep-regression-2026-10-05/result.md에 기록한다. 앞선 실기 정지 관측 기록도 원본 그대로 보존한다.
+- gate 변화: 직진 수치 조건은 통과하나 비가시 정답·추가 곡선/교차로·장치 source 일치·현장 R1/R2는 미검증으로 주행 HOLD다. 장치 설정·모델 hold·서비스·주행 명령을 바꾸지 않았다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T3 독립 관측기·수치 판정기
+
+- 변경: `tools/validation/fleet_gazebo/assertions.py` 추가 — 관측 기록에 대한 순수 수치 판정(도착 0.10 m/10°·정지 |v|0.01·|w|0.03 1 s 연속·footprint 경계 여유 0.10 m 중심 거리 아님·contact 0 양성 대조 통과시만 단언·빈 구간 >0.15 s 충돌 INCONCLUSIVE·map/odom 혼용·stale pose monotonic INCONCLUSIVE·pause/reset epoch 분리·성공빛무 이동·명령받지 않은 로봇 이동). 단언 기록은 관측원·단위·시계·임계값·원본 위치를 남긴다. `observer.py` 추가 — 주입 공급원 기록 계층(epoch·빈 구간·20 Hz·publisher endpoint/GID/pid 소유권 검사). 실제 gz-transport 연결은 T6 회차가 주입한다.
+- 증거: test/test_fleet_gazebo_assertions.py 15개 판정 계약(실패 시험 선행 + 변이 3종: 어긋난 목표·이동 삭제·로봇 겹침이 모두 FAIL). 회귀 run_contracts 12개 통과. URDF 접촉 센서 배선은 양성 대조와 함께 T6에서 착수한다(계획 자체 규칙 — 대조 없이 contact-0 단언 금지).
+- gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실측 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다.
+- 결정: observer truth는 Fleet/CORE 판단에 주입하지 않는다(D-426 결정 2). 이상적 오도메트리 전제는 manifest 기록 사항(T6).
+
+## 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유
+
+- 변경: `operations/fleet/fleet/server/traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 grants 표. 상태 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN, Fleet 단일 writer. (1) request는 활성 상태 전부 재할당 거부 — 시한만 지난 RESERVED도 이전 실행의 밖-비활성·정지 확인 전 재할당 금지. (2) verify_grant는 수락 측 결속(Task/attempt·robot·구간·지도 revision)·세대·만료 검증. (3) confirm_entry는 신뢰 위치가 구간 안일 때만, 만료는 경계에서 재검사(밖 정지). (4) begin_release는 신선한(≤2 s) 출구 이탈 관측+종단 실행 결과 대조, confirm_exit로만 FREE. (5) mark_unknown(링크 상실)·시간 만료만으로 FREE 아님. (6) RESERVED 60 s 초과 대기는 운영자 대조 보고(자동 후반전 금지). Fleet 크기 판정 35878 재기록.
+- 증거: test_traffic_reservations 10개 계약(동시 진입·식별자·지도 revision·위치 미확정·만료 경계·UNKNOWN 재진입 거부·시한만 지난 RESERVED·해제 근거 3종 거부·결속/세대/만료·재시작 잔존·대기 보고) + 기존 traffic·boundary·구조 포함 90 PASS.
+- gate 변화: SOURCE/LOCAL. T4 전체 수용은 HOLD — 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현(계획 T4 항목 4·5, goal 분할만으로 진입 gate 주장 불가).
+- 결정: D-426 결정 3 준수 — 통신 timeout은 공간이 비었다는 증명이 아니다.
+
+## 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
+
+- 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
+- 검증: 실제 Chromium fixture 1366×768·390×844에서 작업 순서와 라벨을 확인했다. 원본 상태·권한·확인·요청 중 잠금·암호 지우기와 API는 유지한다. 관련 브라우저 및 공용 아이콘·자산·토큰 계약 검증은 커밋 전 실행한다.
+- gate 변화: 없음. 화면 SOURCE/LOCAL 보완과 관련 검사 85 PASS이며 실제 네트워크 설정 변경·네이티브 페어링·기기 배포·현장 수용은 이 증거로 통과 처리하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
+
+- 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
+- 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
+
+## 2026-10-05 · uncommitted · fix(validation): D-426 T3 관측 누락·교차 footprint 성공 판정 차단
+
+- 변경: footprint edge 교차·접촉·포함 관계의 여유를 0으로 판정한다. 정지는 기존 1초·20Hz·최대 0.15초 간격과 두 시계의 연속 관측을 확인한다. publisher 소유권은 모든 기대 topic에 하나의 관측과 정확한 positive PID·endpoint·GID 결속을 요구하며 이름만 같거나 필수 증거가 없으면 검증되지 않는다.
+- 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
+- gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(validation): T3·Vision observer 시험 import 격리
+
+- 변경: T3 시험은 정확한 파일을 고유 private package/module ID로 불러오며 전역 `observer`·`assertions` 이름과 sys.path를 덮지 않는다. T3 observer의 package import는 상대 assertions를 쓰고 기존 standalone import는 유지한다. 판정·수집·권한 로직은 변경하지 않았다.
+- 증거: 실제 Vision observer 시험을 먼저 수집한 상태의 원래 ImportError를 재현했다. 수정 후 같은 invocation에서 Vision+T3 58 PASS(5.45s), 새 interpreter에서 기존 generic module 보존·PoseSample type identity 및 standalone import PASS를 확인했다. 최초 standalone shell quoting 오류도 로그에 보존했다. owned flake8 0이며 hook 범위·검사 예외는 바꾸지 않았다.
+- gate 변화: host collection/source 격리만. 실제 ROS/SIM·장치·endpoint 소유권·운동 수용은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
+
+- 변경: 발견·이름 조회 총 4초, NSS 스레드 4개·진행/완료 항목 64개·완료 캐시 2초로 제한한다. 같은 이름·포트 조회를 공유하고 시간 초과·호출자 루프 종료 후에도 원래 작업이 끝날 때까지 소유권을 유지한다. TLS 이름·CA·등록 정책·만료·회수 검사는 유지한다. D-432에 자원 상한과 멈춘 OS 조회를 강제 종료하지 못하는 한계를 기록했다.
+- 증거: 실제 getaddrinfo를 멈춰 원래 대기 상한 실패를 재현했다. 동시 요청·시간 초과 재시도·루프 종료·작업 상한·캐시 만료 DHCP 변경을 회귀 검증한다. 모든 fixture는 호스트 합성이며 실제 컨테이너·기기 접속은 미검증이다.
+- gate 변화: 없음. SOURCE/LOCAL 자원 경계 보완이며 현장 연동이나 제어 수용은 통과 처리하지 않는다.
+
+
+## 2026-10-05 · uncommitted · fix(learning): 터치 픽셀 허용치 직접 입력
+
+- 변경: 기존 D-359 공용 폼으로 허용치 방식을 자동 제안·직접 입력 중 선택한다. 기본 자동 제안과 Shift 입력 보조를 유지하며 직접 입력은 터치에서도 입력값을 그대로 쓴다. 로딩·저장·제외 상태의 기존 편집 잠금에 같은 선택 항목을 포함했다. OpenCV 8-bit Lab 거리 설명은 인코딩된 색 거리 휴리스틱으로 정정했으며 계산은 바꾸지 않았다.
+- 증거: 실제 Chromium touch POST에서 입력 37이 4로 바뀌는 원래 실패를 재현했다. 수정 후 원래 픽셀 브라우저 3건과 터치 자동·직접 입력 2건, flood 및 공용 폼 시험 합계 37 PASS(25.40s)다. 첫 요청 URL predicate와 완료 필드 fixture 오류, 최초 없는 시험 경로 오류는 로그에 보존했다. Node 문법·Python 오류 검사는 통과했다.
+- gate 변화: 합성 로컬 검수 자료의 UI/LOCAL 회귀만. 픽셀 승인·학습 입장·장치 전달 권한을 변경하거나 실제 태블릿 수용을 증명하지 않는다.
+
+
+## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
+
+- Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
+- Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
+- Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T6 회차 보고서 생성기·증거 골격
+
+- 변경: (1) `tools/validation/fleet_gazebo/report.py` — 회차별 verdicts.json을 읽어 result.md 공개 보고서를 쓴다. 시나리오 판정과 주행 판정을 별도 필드로 유지하고, 대표 판정은 가장 나쁜 회차(평균 상쇄 금지)이며 crash/timeout/관측 누락 회차가 하나라도 있으면 수용 GO가 아니다. M08 의도적 관측 누락은 주행 INCONCLUSIVE가 시나리오 PASS보다 우선한다. 회차가 없으면 exit 2. (2) `docs/validation/fleet-gazebo-conformance-2026-10-05/README.md` — T1–T6 구현 요약과 WSL 회차 실행 절차·남은 것 기록.
+- 증거: test/test_fleet_gazebo_report_contracts.py 7개 계약(최악 판정 대표·crash/timeout 수용 차단·시나리오/주행 분리·M08 관측 누락 우선·두 판정 열·verdicts.json 로딩·빈 디렉터리 exit 2 + 정상 작성).
+- gate 변화: 없음(SOURCE/LOCAL). 실제 WSL Gazebo 회차(M01–M08 × seed 3 × 3회)·ROS-SIM 승격은 아직 — colcon 빌드 진행 중.
+- 결정: 원본은 X:에 두고 보고서는 판정 요약·hash·재현 입력만 담는다(계획 T6 항목 4).
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
+
+- 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
+- 증거: test/test_fleet_gazebo_scenario_contracts.py 6개 계약(행렬 온전성·run 경계·주입 종류별 분리·알 수 없는 종류/범위 거부·임계값 고정·정책/정지 분리 판정 4종) + test_command_watchdog.py 8개 계약 + 기존 test_fleet_loss 31개 = 45 PASS.
+- gate 변화: SOURCE/LOCAL. 실제 장애 주입 회차·blackhole 실측·재시작 대조는 T6 WSL 회차.
+- 결정: shutdown 시험을 packet blackhole 증거로 쓰지 않는다(계획 T5 항목 1).
+
+## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+
+- 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
+- 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
+- gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+## 2026-10-05 · uncommitted · feat(fleet): preserve learning evidence in internal receiver
+- Change: stdlib export binding calculation shared with producer; captured-byte profile verification and atomic SQLite receiver/readback; wheel 0.1.8 and CI/local dependency pins aligned. No HTTP route or activation.
+- Evidence: affected 83 PASS / 1 Windows symlink SKIP / 0 NEW; independent receiver 35 PASS / 1 SKIP and packaging 13 PASS. Local wheel build and isolated import PASS; preserved native normal/revoked bundles receive, duplicate and restart PASS. X:/DevTemp/fleet-learning-receiver/.
+- Scope: SOURCE/HOST/isolated metadata only. Authentication, large-video capacity, task success, GT, production delivery and physical acceptance remain unverified.
+- gate 변화: SOURCE/HOST receiver integrity verified; DEVICE/FIELD/HUMAN GT remain HOLD.
+
+## 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
+
+- 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
+- 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
+- gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
+
+## 2026-10-05 · uncommitted · feat(learning): bind ACT input to guarded owner capture
+- Change: private return-only ACT/owner adapter freezes original joint and exact RGB capture, uses identical owner clock/policy, and preserves queued source timestamps. Inference runs outside the owner lock; no submit, scheduler, issuer or default runtime wiring.
+- Evidence: host13 PASS/1torchSKIP, actual CPU model14 PASS, independent13 PASS/1torchSKIP/0NEW. Actual CPU fixture is synthetic and uses a fixed host clock, not device timing or learned task quality. X:/DevTemp/act-owner-capture/.
+- gate 변화: SOURCE/HOST study composition verified; operational trusted capture/install/ROS/device/physical acceptance remains HOLD.
+
+## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
+
+- 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.
+- 증거: 표시명·파비콘·actionIcon·테마 선택 계약과 Fleet 페이지 서빙 시험 59 passed, 1 skipped. known_failures 0 new. Chromium 워드마크·머리 넘침 5 passed. Pilot LauncherIconParityTest 4 passed.
+- gate 변화: 없음. 호스트 시험이며 장치 수용은 없다.
+
+## 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
+
+- 변경: D-466. 머리 자리는 brand·cluster·estop이고, 절차를 고르는 열은 --sidebar-track 하나다. 로봇 절차 칸과 Fleet 설치 칸이 그 트랙을 쓴다.
+- 증거: test_chrome_layout.py와 토큰 계약 37 passed. 호스트 계약이며 장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(learning): invert guarded ACT input dependencies
+- Change: common stdlib inference DTOs and explicit owner capture_inference_input port replace the initial forbidden learning-to-safety imports. ACT reexports the same DTO types; pure infer_captured never accesses owner internals. Isolated caller composes post-lease validation and candidate creation. Contract wheel/pins 0.1.9.
+- Evidence: correction: earlier 252 PASS untracked-source run omitted new-module architecture scan. Committed scan found 2 NEW dependency failures; original failure log retained. Tracked corrected architecture/pin selection3 PASS. Final CPU17 PASS and independentSafety22 PASS/1torchSKIP/0NEW; dependency-exemption and public-anchor lists unchanged.
+- gate 변화: SOURCE/HOST/isolated numerical input only; trusted capture issuer, actual installed artifact, native inference task and physical acceptance remain HOLD.
+
+## 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
+
+- 변경: T2 및 T5 계약 테스트의 전역 Gazebo sys.path 삽입을 private exact-file 로더로 교체했다. Vision 테스트도 자기 observer 파일을 직접 읽어 원래 normal push collection 충돌을 닫는다. 판정 함수·생산 standalone CLI·hook 선택 범위는 그대로다.
+- 증거: 원래 T2-first/Vision 35 collected/1 ERROR 보존. 양방향 T2/T5/T3/Vision 각 105 PASS, fresh-process generic alias/type identity 회귀 포함. 원래 affected selector 전체 collect-only exit 0.
+- gate 변화: 없음. HOST collection 증거만이며 T3/T5 실제 ROS/SIM/물리 수용은 미실행이다.
+
+## 2026-10-05 · uncommitted · fix(ci): include learning contracts in site candidate triggers
+
+- 변경: Fleet Dockerfile이 복사하는 `contracts/learning/src/**`를 site candidate push 경로에 추가했다. 기존 이미지 소스와 trigger 일치 계약을 유지한다.
+- 증거: origin CI `37276307702`의 root-test-1of3가 누락 경로 `contracts/learning/src`로 실패했다. 수정 후 `test/test_site_candidate_workflow.py` 14 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/site-paths.txt`).
+- gate 변화: HOST 경로 계약만 PASS. 새 후보 CI와 ARM64 빌드, 장치 배포는 별도 검증한다. 자동 차선 추종과 FIELD 수용은 미실행이다.
+
+## 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
+
+- 변경: 한두 임의 PASS 회차를 GO로 표시하던 보고서를 seed 3개 ×3회 정확한 조합과 M01..M08 전체로 제한했다. 명시적 failure flags·유효 판정·실제 원본 SHA 결속이 없으면 HOLD. 주행/시나리오/최악 판정 분리는 그대로다. 새 T6 테스트도 private exact-file loader로 읽어 observer 검색 경로를 오염시키지 않는다.
+- 증거: 원래 4 FAIL/6 PASS 반례 보존 후 T6 및 T2/T3/T5/Vision 원래 회귀 127 PASS. digest 확인은 보고 입력 증거만이며 실제 실행·원본 판정 진실성을 인증하지 않는다.
+- gate 변화: 없음. HOST 보고 생성 수선만이며 실제 ROS-SIM/기기 수용은 HOLD.
+
+## 2026-10-05 · uncommitted · fix(test): 공용 확인창 종료 계약 정합
+
+- 변경: dashboard 계약 검사가 직접 native close 대신 공용 확인창이 반환하는 종료 함수를 통해 취소·확정하도록 요구한다. 종료 소유 결속도 확인하며 기존 Abort·확정 결과 검사는 유지한다.
+- 증거: 정상 푸시의 기존 문자열 계약 실패를 보존했다. dashboard 전체 27 PASS이며 실제 브라우저 종료·포커스·비상 정지 근거는 앞선 D-439 수정 검증을 유지한다.
+- gate 변화: 없음. 테스트 계약만 정합하며 제품 코드·권한·푸시 검사 범위를 바꾸지 않는다.
+
+## 2026-10-05 · uncommitted · fix(test): Python 3.12 런타임 추출 규칙 보존
+
+- 변경: HOST 시험이 추출하는 기존 런타임 메서드에 원본 future annotations compiler flag를 명시하고 호출자의 compiler flag 상속을 끊었다. 메서드 AST·범위·판정·제품 런타임은 유지한다. 학습 계약 이미지 COPY 변경 감지 수정은 동시 작업의 fcb3b0e72를 그대로 통합했다.
+- 증거: 기존 Linux CI의 TrajectoryCommand NameError를 CPython 3.12.14에서도 재현했다. 명시적 flag로 기존 8개 메서드가 로드되며 HOST 관련 56 PASS, Windows symlink 1 SKIP다. 정상 푸시 검사와 해당 SHA CI는 별도 완료 확인한다.
+- gate 변화: 없음. 실제 ROS/DDS·설치·주행 근거를 추가하지 않았다.
+
+## 2026-10-05 · uncommitted · test(execution): preserve extracted runtime annotation semantics
+
+- 변경: 동시 세션의 `df5359613` compiler flag 수정을 통합하고 독립 회귀를 추가한다. 추출한 submit의 원본 postponed annotation 문자열을 확인해 Python 3.14에서 숨었던 Python 3.12 실패를 잡는다.
+- 증거: candidate840 Fleet CI 16 FAIL을 보존했다. 호스트 red는 동일 TrajectoryCommand NameError, 명시 flag 후 관련 108 PASS·1 SKIP·0 NEW다. 새 독립 회귀도 PASS. 041은 ABI314 양쪽 PASS와 서명까지 확인했으나 활성화하지 않았다. docs/validation/line-release-2026-10-05/ci-followup.md.
+- gate 변화: HOST 회귀만 PASS. 수정된 정확한 SHA의 CI·ARM64 빌드·새 장치 배포를 다시 확인한다. 자동 차선 주행은 NOT_RUN, FIELD 수용은 HOLD다.
+
+## 2026-10-05 · uncommitted · docs(line): record signed 042 deployment and automatic HOLD
+- 변경: docs/validation/line-remote-2026-10-05/deployment.md records both installed runtimes, manual steering and actual automatic-mode API trial separately.
+- 증거: CI 37282901412 and ARM64 build 37282981358 success at 07dc89f20; both process cwd 042; eight automatic-state samples HOLD nominal_ground_requires_driver with zero velocity, then OFF/IDLE; own sessions logout 204.
+- gate 변화: DEVICE signed install verified; automatic motion and FIELD remain unverified. Console line-follow tab absent remains unresolved.
+## 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
+
+- 변경: 기본 /dashboard에서 기존 종합 화면 안내를 거두었다. #compatibility 경로와 종합 화면은 유지한다. 관제 머리의 Cell 작업 링크는 같은 주소와 격자 자리에서 조용한 버튼 면을 쓴다.
+- 증거: 머리·토큰·관제 페이지 계약 100 passed. known_failures 0 new. 호스트 시험이며 장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
+- 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
+- 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
+- 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
+- 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
+- gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
+
+## 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
+
+- 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
+- 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
+- gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.
+
+## 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
+- 변경: Record user-authorized estimated camera height/pitch operator overlay on the photographed device; preserve the earlier frozen candidate record.
+- 증거: Live parameters match 54.908mm/12.117deg; camera profile log reports operator overrides; 80 advancing frames and 501 zero commands in 10s. docs/validation/camera-board-applied-2026-10-05/result.md.
+- gate 변화: DEVICE estimated perception geometry application verified; intrinsic calibration acceptance and autonomous lane driving remain unverified.
+
+## 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
+
+- 변경: 로봇·Pilot·공용 화면 스크립트가 요소 스타일을 쓰지 않는다. 연속 값은 속성이고 스타일시트의 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나다. 확인창의 정지 구멍은 그대로 눌린다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 이동·복귀와 캔버스 팔레트 통과. 스크림 구멍은 정지 버튼을 맞춘다. 호스트·브라우저 시험이며 장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
+- 변경: 공개 포트와 프록시 수신 포트가 ROSY_SITE_HTTPS_PORT 하나다. Compose는 그 값을 호스트 포트와 컨테이너 포트에 같이 쓰고, Caddy는 {$ROSY_SITE_HTTPS_PORT}로 듣는다. 방화벽은 그 포트 점프 하나만 두고, 두 포트가 다르면 거부한다. mDNS 광고와 사용자 발견 설치도 코드 기본 포트를 두지 않는다. Fleet 8090과 Vision 8095는 컨테이너 안 수신 포트로 둔다.
+- 증거: test/test_site_firewall.py test/test_site_mdns_bridge.py test/test_site_preflight.py test/test_site_user_discovery.py test/test_site_fleet_mdns.py — 309 passed, 3 skipped. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 스택에는 아직 배포하지 않았다.
+
+## 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
+- Change: record user-confirmed straight white-boundary crossing and stop; propose synchronized recording, reviewed failure labels, geometry/control replay and closed-loop evaluation.
+- Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
+- Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.
+
+## 2026-10-05 · uncommitted · docs(adr): D-467 worktree retirement and X: scratch capacity
+
+- 변경: D-372의 병합·청결 worktree 종료 원칙을 경로·잠금·프로세스·현재 main 조상 확인으로 구체화하고, X:의 원본 증거와 재생성 임시 파일을 구분하는 용량 정리 절차를 D-467로 기록한다.
+- 증거: 병합된 깨끗한 F: worktree 35개를 Git으로 제거했다. X:의 불완전 ZIP 네 개는 자동 승인 검토가 거부해 삭제하지 않았으며 여유 용량 확보로 계산하지 않는다.
+- gate 변화: 저장소 작업 절차만 채택. 제품 런타임·기기·현장 수용 변경 없음.
+
+## 2026-10-05 · uncommitted · fix(lane): preserve source-frame departure diagnostics
+- Change: include keeper diagnostics in raw Pilot recordings and preserve them through MCAP conversion/frame extraction; no label authority or motion changes.
+- Evidence: related 206 PASS, independent 87 PASS, 0 NEW; installed annotated stationary recording yielded 149 matched frames, all zero commands. docs/validation/lane-evidence-2026-10-05/result.md.
+- Gate: SOURCE regression verified; new recorder deployment and physical departure fix/ FIELD acceptance remain unverified.
+
+## 2026-10-05 · uncommitted · feat(lane): local-first departure return decision
+- 변경: D-468 채택. 차체 침범 감지·실제 자세 복귀·센서 재탐색을 Fleet 지원보다 먼저 수행한다. 구현은 feat/lane-return.
+- 증거: docs/plans/2026-10-05-lane-return.md. 설계 결정만 사용자 승인; SOURCE/SIM/DEVICE/FIELD 검증은 별도.
+- gate 변화: ADR 결정과 실행 목표만 채택. 런타임 배포·현장 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
+- 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
+- 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 site.env에 두 키가 생기기 전에는 다음 배포가 거부된다. 아직 배포하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
+- 변경: D-468 실제 odometry/원본 영상 시각 보간·현재 차체 좌표 변환을 manager와 ROS callback에 연결했다. source-clock high-water, 원본 quaternion, 초기화 epoch와 projection uncertainty를 검증한다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow 및 구조 검사 109 PASS, 0 NEW. source/receipt 시각이 다른 무효화 후 복구 회귀 36 PASS. docs/validation/lane-return-2026-10-05/README.md.
+- gate 변화: 실제 자세 센서 경로의 SOURCE 연결만. 복귀 명령/폐루프/배포/현장 수용은 아직 없음. 장치 read-only SSH probe는 timeout.
+
+## 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
+
+- 변경: API Reference v1.106 헤더와 D-468 본문에 맞는 변경 이력 행을 추가했다.
+- 증거: 계약 버전 및 Fleet 문서 검사 36 PASS. 현장 수용은 별도다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
+
+- 변경: 팀 가이드 `docs/reference/team-guide.md`(첫날 설정, 공유 범위, 작업 방식, 작업 영역), `CONTRIBUTING.md`, PR 템플릿, CODEOWNERS, pre-push에 잘못된 작성자 이메일 거절. 저장소는 `robotics-team-1213/rosy-platform`으로 이전됨.
+- 증거: harness lint, pre-push 훅 계약 시험.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
+
+- 변경: 고정 로컬 signer가 main push CI, native unsigned build, ABI, 서명, 기존 카나리 발행을 연결한다. 개인키는 로컬에 둔다. 로봇의 MANUAL/hold/보정/claim을 해제하지 않는다.
+- 검증: 거부/재개 시험과 기존 prepare/publish/native workflow 시험. 장치 installed SHA·updater committed·내비게이션 현장 수용은 별도다.
+- gate 변화: 구현 검증 중. DEVICE/FIELD 완료로 기록하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
+
+- 변경: 차선 복귀 정책의 선택 메서드 조회가 구 공급자에서 실패 닫힘으로 동작하는 이유와 소유 경계를 분리 기준 문서에 기록했다.
+- 증거: C6 목록 동일성 및 센서 연결 검사. 장치 수용은 별도다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
+
+- 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
+- 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · uiux(docs): ROSY 디자인 목표와 현재 LOCAL 판정 경계
+
+- 변경: 현대성·사용성·정돈·구조·통일성을 상태·다음 행동·표면 문법·너비·증거 어휘로 관찰 가능한 목표에 묶었다. D-153 회차 카드에 로봇/Fleet 데스크톱·전화 캡처와 남은 G2/G3 범위를 기록했다.
+- 증거: 관련 G1 83 passed, Fleet 적합·목표 2 passed, 모바일 기본 예외·넘침 2 passed, 각각 known_failures 0 NEW. 캡처 4장은 LOCAL fixture다.
+- gate 변화: UI/UX 전체 HOLD. 다른 활성 표면의 현재 G2/G3와 장치·현장 readback은 미검증이다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 게임 보드 현재 LOCAL 캡처 추가
+
+- 변경: D-153 회차 카드에 게임 최초·진행·지연·HOLD 1280px과 지연 390px 캡처를 연결하고 관측 카드의 내용 높이 변경을 기록했다.
+- 증거: 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 관련 5 passed, known_failures 0 NEW. LOCAL PreviewServer fixture다.
+- gate 변화: 제품 UI/UX HOLD 유지. 게임 전체 상태 행렬·G3·실물 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 로봇 얼굴 LOCAL 렌더와 실물 판정 경계
+
+- 변경: 현재 정보 카드 렌더러의 첫 기동·정상·E-STOP·배터리 위험 320×240 캡처를 D-153 회차 카드에 더했다. D-433 rosy-face 호스트 시험과 실제 설치·LCD 출력의 증거 계층을 분리했다.
+- 증거: PIL 렌더러 169 passed, 캡처 1 passed, rosy-face 호스트 153 passed/1 skipped, known_failures 0 NEW. 캡처는 직접 PIL 호출이다.
+- gate 변화: 로봇 얼굴 UI/UX HOLD. D-433 Proposed, 설치·실물 LCD 판독·카드 만료 뒤 GIF 복귀는 확인되지 않았다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 60셀 보존
+
+- 변경: D-153 회차에 /setup·/device의 역할·상태·뷰포트 60셀 matrix와 PNG 66장을 연결했다. 390px 패널의 입력·행동 폭을 통일한 결과를 보존하고, 첫 시험의 닫힌 고급 작업 버튼 조회 실패를 원인과 함께 구분했다.
+- 증거: shipped disclosure 경로를 연 재실행 1 passed, 반응형·셸 18 passed, matrix 셀 60개·이미지 66개 누락 0, 페이지 오류 0·가로 넘침 0, known_failures 0 NEW.
+- gate 변화: LOCAL G2만 진전. G3 작업 독회와 실제 Host Agent/장치 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 `/setup`·`/device` 첫 기동 6셀과 두 폭의 캡처를 추가했다. 비상 정지의 렌더된 가시성 단언을 강화했다.
+- 증거: 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed와 CORE 증거 7 passed, `known_failures.py` 0 NEW. 첫 기동 셀은 페이지 오류·가로 넘침 0이다.
+- gate 변화: LOCAL 증거 확장. 제품 전체 및 장치·현장 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 열린 확인창 6장과 행동별 실행 버튼을 연결했다. 취소 뒤 캡처만 있던 G2 공백을 채웠다.
+- 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW. 확인 취소 6셀의 쓰기 요청 0, 참조 이미지 누락 0.
+- gate 변화: LOCAL 증거 확장. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 절차 G3 항목별 근거와 잔여 범위
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 웨이포인트 저장 작업의 API·화면 왕복 증거와 D-153 G3 여덟 항목의 근거·남은 판정 범위를 기록했다.
+- 증거: 390px FastAPI/Chromium 1 passed, `known_failures.py` 0 NEW, 저장 201·목록 readback·가로 넘침 0. 여덟 항목은 모두 부분 근거로 남긴다.
+- gate 변화: G3 GO 아님. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): Fleet 상태별 모바일 폭과 연결 끊김 근거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Fleet 빈 목록·서버 실패의 320/390px, 느린 응답·회복·끊김·HOLD와 오프라인 캡처를 연결했다. 오프라인 fixture를 실제 API의 `state: null` 계약에 맞췄다.
+- 증거: 기존 상태 9 passed, 모바일 상태 4 passed, 오프라인 재실행 1 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet G2 일부만 LOCAL 확인. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 객체·픽셀 편집 창 너비 통일
+
+- 변경: Rosy Learning 객체·픽셀 검수의 원본 캔버스와 inspector를 데스크톱에서 같은 폭으로 맞췄다. 390px에서는 두 창이 같은 가용 폭으로 쌓인다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1440/800/390px 캡처를 남겼다.
+- 증거: 객체 브라우저 10 passed, 픽셀 브라우저·반응형 계약 14 passed, 각 `known_failures.py` 0 NEW. 브라우저 가로 넘침 0.
+- gate 변화: 개발 도구 LOCAL 너비 근거만 추가. 제품 전체 UI/UX G3와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 조작 창 너비와 제품 표면 범위
+
+- 변경: Pilot Gazebo 연습의 영상 없는 화면에서 빈 영상 칸을 빼고 팔·그리퍼 조작 창을 같은 폭으로 맞췄다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 태블릿·전화 캡처와 등록 표면별 남은 판정 증거를 추가했다.
+- 증거: Pilot 브라우저 5 passed(카메라 있는 경로 포함), `known_failures.py` 0 NEW. 실기 명령·현장 행동을 수행하지 않았다.
+- gate 변화: Pilot LOCAL 부분 근거. 제품 전체 UI/UX G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 목표 상태 문구와 G3 독회
+
+- 변경: 안전 상태 결측·비상 정지 중 `NAVIGATING`을 물리적 주행으로 보이게 하던 Fleet 배지를 `목표 남음`으로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 확인창·안전 상태 캡처와 G3 여덟 항목의 남은 판정 범위를 기록했다.
+- 증거: Fleet 브라우저 3 passed, 서버·팔레트 60 passed, 웹 Node 134 passed, Python `known_failures.py` 0 NEW. Cam APK 로컬 빌드는 성공했지만 에뮬레이터가 ADB에 나타나지 않아 네이티브 화면은 미검증이다.
+- gate 변화: Fleet G3와 제품 전체 UI/UX, 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 최초 경기 보드 상태와 G3 독회
+
+- 변경: 정보가 없는 경기 피치에 대기·첫 연결 오류를 표시하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1280/390px 최초 캡처와 G3 여덟 항목의 근거·잔여 범위를 기록했다. Fleet 즉시 비상 정지의 결정 참조를 D-414로 바로잡았다.
+- 증거: 게임 보드 브라우저 19 passed, 게임 모듈 113 passed, `known_failures.py` 0 NEW. Stop 재시도 시험의 CSP 관찰 경합은 DOM locator로 확인한다.
+- gate 변화: LOCAL 부분 근거. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 독회
+
+- 변경: 로봇 운용의 공통 HTTP 오류 문구를 운용자용 한국어 상태와 재확인 안내로 바꿨다. 한국어 서버 사유와 오류 코드는 유지한다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선 추종·도킹·지도 캡처와 G3 부분 근거를 추가했다.
+- 증거: FastAPI/Chromium 운용 브라우저 4 passed, 고급 네트워크 작업 disclosure 확인 2 passed, 운용자 문구 18 passed. 통과 실행의 `known_failures.py`는 0 NEW다. 실패했던 전체 역할 실행 2건은 닫힌 disclosure의 숨은 버튼을 찾던 시험 오류였고, disclosure를 연 뒤 별도 재실행에서 통과했다.
+- gate 변화: 로봇 운용 LOCAL G3 부분 근거. 실제 CORE/장치 readback·현장 독회와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류 캡처
+
+- 변경: Pilot 대상 발견 실패 화면의 내부 영문 예외를 운용자 문구로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 390px 화면을 기록했다.
+- 증거: 현재 트리 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL 오류 화면 부분 근거. 제품 전체 UI/UX와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 현재 주행 화면과 전화 조작 도달성
+
+- 변경: Pilot 390px 주행 화면에서 잘리던 조작을 접근 가능하게 하고, 영상 재시도 타이머 오류를 수정했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 현재 트리 태블릿·전화 첫 화면과 전화 회전 버튼 캡처를 연결했다.
+- 증거: 영상·조작 브라우저 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. ADB 장치 목록이 비어 있어 네이티브 화면은 여전히 미검증이다.
+- gate 변화: Pilot LOCAL G2 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(face): 주행 카드와 얼굴 G3 부분 근거
+
+- 변경: 320×240 주행 카드의 저배터리 숫자를 위험 채움 위 밝은 글자로 바꾸고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 수동·내비게이션·정지 캡처와 G3 여덟 항목의 남은 판정 범위를 추가했다.
+- 증거: 현재 트리 정보·주행 카드·팔레트 71 passed, `known_failures.py` 0 NEW. 캡처는 PIL 직접 출력이다.
+- gate 변화: 로봇 얼굴 LOCAL 부분 근거. D-433 설치 LCD·현장 판독과 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 페어링 화면 너비 통일
+
+- 변경: Cam 페어링 화면의 본문 너비와 동등한 선택 버튼 너비를 정리하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 미검증 범위를 기록했다.
+- 증거: Android `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 캡처는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 화면 조작 너비
+
+- 변경: Cam 송출 화면의 짝을 이룬 조작 버튼은 같은 너비, 단독 조작 버튼은 본문 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 작업 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 연결·설정 화면 조작 너비
+
+- 변경: Cam LAN 연결과 설정 화면의 단독 조작은 본문 너비로, 설정의 뒤로·저장은 동등한 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 설치자 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 네이티브 LAN·설정 화면 부분 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Android 에뮬레이터 320px·390px/글자 130% 화면과 미검증 상태를 기록했다.
+- 증거: 현재 브랜치 debug APK 빌드·설치·실행, ADB 연결과 설정 뒤로·저장 동일 173px UI bounds 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 부분 근거. Peer·Pairing·송출 상태와 G3·실제 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 태블릿 로비 좁은 폭 복구
+
+- 변경: Pilot Shell의 좁은 가로 화면에서 로봇 목록을 전폭으로 배치해 다시 찾기·상태·기기 연결을 복구하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 네이티브 화면 결과를 기록했다.
+- 증거: Android JVM 89 passed, debug APK 빌드·에뮬레이터 3폭 캡처와 기기 대화상자 스크롤 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거. 실제 태블릿·로봇 연결·G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 400dp 확대 글자 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Pilot Shell 400dp/글자 130% 네이티브 화면 판정을 추가했다.
+- 증거: 격리 Android 에뮬레이터 캡처·UI bounds에서 제목·다시 찾기·상태·기기 버튼이 화면 안에 있음을 확인했다. 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거만 추가. 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 추가 활성 표면 평가 카드
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 학습 검수·Pilot Shell·Cam의 표면 질문, 뷰포트, G2 잔여 상태, D-153 여덟 G3 항목을 선언했다.
+- 증거: 기존 브라우저·에뮬레이터 LOCAL 캡처와 활성 표면 등록을 대조했다.
+- gate 변화: 세 표면과 제품 전체는 G2/G3 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 검수 화면 폭 복구
+
+- 변경: 객체 검수 작업 영역을 전체 가용 폭으로 펴고 자동 세로 여백을 제거했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 빈 상태 3폭 판정을 남겼다.
+- 증거: Chromium 1440·800·390px 빈 필터 화면, 복귀 동작, 13 passed와 `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 부분 근거 추가. 다른 상태·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 작업·자료 화면 위쪽 정렬
+
+- 변경: 학습 작업 목록과 자료 등록의 자동 세로 여백을 없애 머리 아래에서 시작하게 했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 두 경로 3폭 근거를 남겼다.
+- 증거: Chromium 두 경로 × 1440·800·390px 6 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2 부분 근거 추가. 실제 작업 완료 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 픽셀 검수 상태 정직성
+
+- 변경: 픽셀 필터 결과가 없을 때 이전 사진 제목·상태를 지우고 빈 선택기·이동 버튼을 숨겼다. 전체 보기 복귀는 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Chromium 1440·800·390px 캡처와 빈 상태 3 passed, 관련 픽셀 브라우저 11 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2/G3 부분 근거 추가. 전체 G2/G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 사진 없는 최초 사용 안내
+
+- 변경: 객체·픽셀 검수의 사진 0장 상태를 빈 필터와 구분하고 기존 자료 등록 화면으로 이어지는 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 두 경로 캡처·이동, 객체·픽셀 브라우저 24 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 최초 사용 G2 부분 근거 추가. 실제 등록·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 검수 연결 끊김 복구
+
+- 변경: 객체·픽셀 검수의 작업 목록 요청 실패 때 로딩·오래된 편집을 숨기고 실패 이유와 다시 불러오기 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440·390px 연결 실패 캡처, 정상 후 실패·복구 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 연결 끊김 G2 일부 추가. 지연·거부·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 버튼 너비
+
+- 변경: Cam 설정의 뒤로·저장을 전폭 두 줄로 배치해 320px/글자 200%에서 버튼 글자 줄바꿈을 복구했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 일부 추가. Pairing·Peer·송출과 실물 폰·G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 전폭 조작
+
+- 변경: Cam 대기 화면의 잘린 반폭 버튼을 전폭으로 정리하고 연결·송출 정보가 좁은 화면에서도 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 격리 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 송출 대기 G2 일부 추가. Pairing·Peer·실제 송출·실물 폰·G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 검수 조작 전폭
+
+- 변경: 객체·픽셀 검수의 편집 칸에 컨테이너 폭을 선언하고 390px 전화의 작업 버튼을 각 칸의 전폭으로 쌓았다. 표면별 24rem 경계를 `surfaces.yaml`에 이유와 함께 기록했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 전후 캡처와 Chromium 358px 측정, 객체·픽셀 폭 및 반응형 계약 15 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 픽셀 사진 이동 너비
+
+- 변경: 전화 픽셀 검수의 사진·상태 선택을 전폭으로 놓고 이전·다음 사진을 동등한 두 칸, 최신 내용 불러오기를 전폭으로 놓았다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390·320px 캡처와 Chromium 버튼 너비, 객체·픽셀 폭·반응형 계약 17 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작과 영상 면적의 경계 확인
+
+- 변경: 제품 CSS는 유지하고 Pilot 전화의 조작 칸·영상 면적 실험 결과를 UI/UX 회차에 기록했다. 390×844에서 조작 칸 높이를 키우면 영상 표시 면적이 0.126으로 줄어 기존 `>0.2` 계약 시험이 실패했다. 실험 CSS는 되돌렸고 4셀 재시험은 통과했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 실패 캡처와 X:의 전후 pytest 로그. 카메라 표시 면적을 유지한 채 조작 칸 내부 배치로 회전 발견성을 해결해야 한다.
+- gate 변화: 없음. 전화 회전 조작 발견성 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 위치 안내
+
+- 변경: Pilot 전화 주행 화면의 스틱 아래에 회전 조작 안내를 놓아 첫 화면에서 아래 조작을 알 수 있게 했다. 피벗이 없는 프로필에는 숨긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 캡처와 카메라·터치·프로필 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성
+
+- 변경: Pilot 전화에서 차선 자동 모드가 수동 회전 버튼을 숨길 때 회전 안내도 숨겼다. 수동 복귀 때 안내가 다시 보인다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 자동·수동 캡처와 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 320px 패널 동일 폭
+
+- 변경: 게임 보드의 최초·지연 320×568에서 점수·피치·관측이 같은 가용 폭을 쓰고 정지가 첫 화면에 남는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 머리 겹침 해소
+
+- 변경: 주행 머리 320px에서 제품 이름을 숨겨 「Rosy Robot」 이동과 비상 정지가 겹치지 않게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처와 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 전폭
+
+- 변경: 320px 주행 조작에서 좌·우회전 버튼을 각각 열 전폭으로 쌓아 긴 글자가 반폭 칸 밖으로 넘지 않게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 내용 폭 baseline 57/66px, 수정 후 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실기 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320×568 영상 공간 복구
+
+- 변경: Pilot 짧은 전화 화면에서 영상 높이 0 문제를 고치고, 정지·연결 사실·전진/후진·스틱은 첫 화면에 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 5폭 영상·2폭 모드 브라우저 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 두 스크롤 영역의 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 320px 운용 칸 동일 폭
+
+- 변경: 역할 셸 `/console`의 320/390px 조작·감지·관측 칸 시작점·폭과 첫 화면/하단 비상 정지를 브라우저 계약으로 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 로봇 LOCAL G2 부분 근거 추가. 실제 장치·운용자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 도구 판 정리
+
+- 변경: Pilot 320×568의 HUD 보조 설정을 기존 도구 판에 넣어 HUD 스크롤을 없앴고, 한 화면에 영상·정지·상태·기본 주행을 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 화면·도구 판, 브라우저 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 축소 피치 표식 가독성
+
+- 변경: 좁은 경기 보드에서 공·로봇·이름의 화면상 크기를 유지하고 진행 상태의 세 패널 동일 폭을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 전후 캡처, 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Game Board LOCAL G2 일부 추가. 실제 노트북 경기·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 화면 폭 전환 도구 상태
+
+- 변경: Pilot 도구 판을 연 채 전화 폭에서 넓은 폭으로 바꾸면 판·세부 내용을 닫고 설정을 현재 폭의 자리로 옮긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 현재 브랜치 D-153 G1 재실행
+
+- 변경: 최근 Pilot·게임·로봇 화면 변경을 포함한 제품 코드 `d04f764c4`에서 D-153 지정 팔레트·토큰·스타일가이드·문법·CORE 증거 시험을 다시 실행해 회차 근거를 갱신했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 실행 기록. 시각 계약 74 passed, CORE 증거 7 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: G1 LOCAL 재확인만. 선언 상태·뷰포트 G2와 실제 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
+
+- 변경: Fleet 연결 끊김 상태를 1920/390/320px에서 재생하고 예외 카드 우선순위·비상 정지 가시성·가로 넘침을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
+
+- 변경: Fleet 지연 팔로워를 1920/390/320px에서 확인하고 경고 카드 우선순위·비상 정지 가시성·가로 넘침을 계약에 남겼다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 저장 충돌 복구
+
+- 변경: 객체·픽셀 검수의 다른 탭 저장 충돌을 1440/390px에서 재생하고, 승인 차단·복구 버튼 너비·서버 revision 재조회 경로를 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 충돌 화면 4장; 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 학습 검수 LOCAL 충돌 G2 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과 가시성
+
+- 변경: Fleet 전체 주행 취소의 부분 응답·결과 미확인을 작업 버튼 옆에서 바로 읽고 로봇별 기록으로 이동하게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처, 브라우저 5 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 현장 취소·정지와 운영자 수용, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답을 첫 화면에 표시
+
+- 변경: Fleet 운용·설치 화면의 즉시 비상 정지 응답과 결과 미확인을 머리 아래에 표시하고 설치 안내의 취소·비상 정지 어휘를 구분했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실물 정지와 현장 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 관제 여백을 본문 폭에 맞춤
+
+- 변경: Fleet 운용·설치의 비상 정지 응답, 운용 준비 순서, 접속 안내를 본문 패널의 좌우 시작점과 폭에 맞췄다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1920/390/320px 운용·설치 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/fleet-width/`.
+- gate 변화: Fleet LOCAL 부분 근거 추가. 제품 전체 G2/G3와 현장 사용자 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 권한 거부와 자료 준비 결과를 작업 위치에 표시
+
+- 변경: 객체·픽셀 검수의 403을 연결 실패와 구분하고, 자료 준비 거부 이유를 버튼 옆 화면 안에 표시했다. 권한 거부 뒤 편집·자료 준비를 막고 최신 작업영역을 다시 읽으면 복구한다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 객체·픽셀 권한 캡처, 관련 브라우저 43 passed와 결과 가시성 재검사 4 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-permission/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 선언 상태 전체와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 응답 대기 중 오래된 편집 숨김
+
+- 변경: 객체·픽셀 검수의 첫 기동과 작업영역 다시 읽기에서 이전 편집을 내리고 응답 대기 상태를 표시했다. 최신 내용이 올 때까지 편집·자료 준비를 막는다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 응답 보류 브라우저 4 passed, `known_failures.py` 0 NEW. 관련 전체 실행은 46 passed/1 임의 unsafe port setup ERROR, 해당 셀 별도 재실행 1 passed다. X: `captures/learning-waiting/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 800px, 나머지 선언 상태와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 작업 목록·자료 등록의 대기와 권한 거부
+
+- 변경: `/learning`·`/catalog`에서 응답 전 입력·등록을 막고, 403 뒤 오래된 결과를 내려 접근 이유·다시 확인을 표시했다. 등록 거부의 이유는 누른 자리에서 읽게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 보류·거부 캡처. 집중 브라우저 8 passed, 두 경로 배치 회귀 6 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-pages-load/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 남은 선언 상태·실제 검수자 G3와 제품 전체는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 동등 폭
+
+- 변경: Pilot 팔의 영상 작업 공간과 조작 칸을 넓은 화면에서 1:1로 배치했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 4개 집중 브라우저, 2000×1200 너비 차이 ≤1px, X: `captures/pilot-arm-equal/`.
+- gate 변화: LOCAL 폭 근거 추가. 실제 영상·태블릿과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 편집 행동 동등 폭과 800px 상태 근거
+
+- 변경: 객체·픽셀 편집 칸의 작업 행동을 기존 24rem 컨테이너 경계 위에서 동등 폭 두 열로 배치했다. 800px의 연결 끊김·권한 거부·응답 보류·저장 충돌 상태를 캡처했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md), 두 경로 × 1440/800/390/320px 폭 브라우저 8 passed와 800px 상태 브라우저 16 passed, `known_failures.py` 0 NEW. 원본 X: `captures/learning-actions-equal/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 실제 검수 작업 완료·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 서비스 사용 불가를 연결 끊김과 구분
+
+- 변경: 네 학습 검수 경로가 HTML 503을 JSON 파싱 전에 식별해 서비스 복구 후 재시도를 안내한다. 전화 폭의 객체 검수·자료 등록 재시도는 가용 폭을 채우고 학습 목록은 실패 문구를 한 번만 표시한다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 503·기존 장애 복구 브라우저 24 passed와 390px 최종 5 passed, 각 `known_failures.py` 0 NEW. 원본 X: `captures/learning-unavailable/`.
+- gate 변화: `pinky-review` LOCAL G2 사용 불가 부분 근거 추가. 실제 서버 장애·검수 결과·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 검수 결정과 자료 준비 결과
+
+- 변경: 객체 검수의 390/320px 사진 이동 버튼을 동등한 전폭으로 쌓았다. 객체·픽셀 제외→재검수→승인→자료 준비를 합성 원본에서 재생하고 결과 캡처를 남겼다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 객체 4폭·픽셀 3폭 브라우저 7 passed, `known_failures.py` 0 NEW. 각 결정 상태 원본 X: `captures/learning-decision-result/`.
+- gate 변화: `pinky-review` LOCAL G2 결정·결과 부분 근거 추가. 실제 검수자·자료 등록·학습 수용과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(fleet): 동등한 카드 행동 폭
+
+- 변경: Fleet 로봇 카드의 동등한 행동 버튼을 같은 폭으로 맞추고, 1920px 본문 하단 5px 넘침을 제거했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 버튼 폭과 1920px 높이 검사 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
+- gate 변화: Fleet LOCAL 부분 근거를 추가했다. 제품 전체 G2/G3와 실제 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 로봇 운용 콘솔의 전방 카메라 동등 행동을 390px에서 같은 폭으로, 320px에서 각 전폭으로 맞췄다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 브라우저 2 passed, 카메라 회귀 2 passed, 반응형 계약 9 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL G2 배치 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
+
+- 변경: 게임 보드의 첫 연결 실패와 수신 후 끊김을 320/390px에서 확인하는 브라우저 계약을 추가했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태·폭 부분 근거 추가. 제품 전체 G2/G3와 실물 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux: 현재 트리 공유 UI 계약 복구
+
+- 변경: 역할 G2 목록 기록과 D-329 매트릭스를 구분하고, Fleet compact 머리·비활성 사유 계약을 현재 렌더러에 맞췄다. 호환 화면 개발 연결에는 대기 이유를 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `shared/web/test` 231 passed, 25 skipped와 브라우저 2 passed, 각 `known_failures.py` 0 NEW. 개발 연결 이유 제거 변이는 빨간 시험으로 확인했다.
+- gate 변화: G1 현재 트리 코드 계약을 회복했다. 제품 전체 G2/G3와 실물 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): 전화 연결 복구 너비와 현재 상태
+
+- 변경: 게임 보드의 320/390px 첫 실패→수신→끊김 브라우저 시나리오를 실제 재연결까지 연장했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery/` 여섯 장과 `logs/game-recovery-{green-before-mutation,mutation-red,final}.txt`; 최종 2 passed, `known_failures.py` 0 NEW. fresh 문구 분기 변이에서 2 failed, 복원 후 2 passed.
+- gate 변화: LOCAL 상태 전이·폭 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(site): 기존 PC의 mDNS 경로 재확인
+
+- 변경: 외부 PC의 `.local` 실패와 사이트 PC 자체의 실제 발견·브리지·Fleet UID 조회를 구분해 UI/UX 회차에 기록했다. 비공개 PC·로봇 주소는 공개 기록에서 뺐다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `logs/site-mdns-live/` 원본. 사이트 Avahi에 로봇 둘, 사용자 bridge의 최근 2건 전달(Fleet POST 200), Fleet UID의 `.local`·내부 이름 조회 성공, 사이트 CA 검증 HTTPS health/console 200. 호스트 자체 locator는 여러 로컬 인터페이스 주소로 인한 ambiguous 오류. 사이트 이미지 `e64815c51`와 작업 브랜치 사이 Fleet 웹 자산 12개 경로가 다르다.
+- gate 변화: SITE mDNS·서비스 도달의 부분 근거 추가. 인증된 Fleet 화면, 브랜치 설치, 현장 사용자 G3와 로봇·카메라 readback은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): compact 픽셀 사진 이동 사유 가독성
+
+- 변경: 픽셀 검수의 이전·다음 버튼을 390/320px에서 각각 작업 칸 전폭으로 쌓아 긴 비활성 이유의 좁은 줄바꿈을 풀었다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-pixel-nav-fullwidth/`와 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`. 수정 전 2 failed, 뒤 레이아웃 8 passed·픽셀 결정 4 passed·반응형 계약 9 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: 학습 도구의 LOCAL 너비·가독성 부분 근거 추가. 검수자 G3와 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+
+- 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
+- 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
+- gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-06 · uncommitted · D-472 호스트 구현
+
+- 변경: Fleet→CORE→호스트→rosy-face의 단기 LED 식별 요청과 Rosy Cam 최신 원본 프레임의 현장지도 표시를 구현했다. 색/영상만으로 robot ID나 주행 좌표를 확정하지 않는다.
+- 증거: 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. 장치 설치·현장 영상 식별은 미확인.
+- gate 변화: SOURCE/LOCAL 코드 검증. DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
+
+- 변경: README 「같이 하는 깃」(실험실 PC 경로 포함)을 `docs/reference/shared-checkout.md`로 옮기고 README에 배지·시스템 구성 다이어그램·구성 표·시작하기 표·분류별 문서 지도를 넣었다. 팀 가이드(첫날·작업 흐름·공유 범위)와 개발 가이드(시험 단계)에 mermaid 다이어그램. 참조 갱신: 루트 AGENTS, rosy-land-on-main 스킬, `test_readme_agent_start.py`.
+- 증거: affected 단계, 문서 링크 검사.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
+
+- 변경: D-473(관제 콘솔 개발 연결 모드 — 두 설정을 함께 둘 때만 같은 망 PC에 1시간 운용자 세션)과 D-474(주의점 단선에서 멈추고 Fleet 구역 허가 후 진입, 출구 이중선으로 점유 해제)를 ADR Log와 함께 기록했다.
+- 증거: 2026-10-06 실기 점검(콘솔 토큰이 시험을 막음, 9dfk만 연결, 주의점·로타리 점유 미구현).
+- gate 변화: 없음. 문서 결정이며 구현·SIM·DEVICE 수용이 아니다.
+
+## 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
+
+- 변경: Fleet `GET /api/fleet/auth/connection`·`POST /api/fleet/auth/development-session`(API Reference v1.108). `ROSY_DEPLOYMENT=development`와 `--connection-mode development`가 함께 있을 때만 같은 망(loopback·RFC1918·link-local·Tailscale) 브라우저에 1시간 메모리 운용자 세션(`development-<8hex>`, 이름 있는 운용자, 감사 기록)을 준다. 콘솔은 첫 401에서 자동 발급하고 "개발 연결 모드" 배지를 띄운다. site.env 두 키(기본 비움), README 절 추가.
+- 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
+- gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+
+## 2026-10-06 · uncommitted · docs: D-484 ADR과 실행 계획, API Ref v1.109
+
+- 변경: ADR D-484(필드 경계 자동 캘리브레이션)와 로그 행, 실행 계획 문서 추가. adr_gaps에 D-483(브랜치 `feat/pilot-lcd-approval-code` 소유) 등록. API Ref v1.109: sighting payload 선택 필드·미리보기 mode auto·site-map source 노출·헤더 값 문서화.
+- 증거: `rosy_harness.py lint` 0 error(ADR 행·본문 일치, 갭 선언). app.py 버전 표기 v1.109 동기 갱신(정렬 시험 대상).
+- gate 변화: 없음.
+## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
+
+- 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/site-deployed-unauth/`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`. `ceiling_north` sequence 26364→26390, 320/390/1920px 캡처, 배포 컨테이너 태그 재확인.
+- gate 변화: 옛 배포 빌드의 SITE 미인증 상태·카메라 프레임 부분 근거 추가. 현재 `main` 설치, 인증된 Fleet·로봇 상태, 실제 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인
+
+- 변경: `main`에 병합된 객체·픽셀 검수 화면의 1440/800/390/320px와 전화 사진 한 줄 목록을 다시 렌더했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-main-merged/` 8장과 `logs/merge-20261006/learning-main-visual.txt`. 브라우저 9 passed, `known_failures.py` 0 NEW; 320px 두 화면은 원본 크기로 확인했다.
+- gate 변화: 병합된 현재 트리의 LOCAL G2 폭 근거 추가. 실제 검수자 G3와 제품 전체 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
+
+- 변경: 픽셀 검수의 점/브러시 전환 버튼이 class 파일 없이도 활성화되던 마지막 상태 덮어쓰기를 고쳤다. G3 운영자 독회는 요청자가 맡기로 했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/pixel-disabled-fix/learning-pixels-320.png`와 `logs/merge-20261006/pixel-disabled-fix.txt`. 수정 전 집중 브라우저 1 failed, 수정 후 10 passed, `known_failures.py` 0 NEW.
+- gate 변화: 미연결 상태의 잘못된 조작 표시를 LOCAL에서 바로잡았다. 실제 운영자 결과와 현장 설치는 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): 실제 사용자 G3 독회 기록지
+
+- 변경: 요청자가 실제 사이트·장치에서 수행할 표면별 작업, D-153 여덟 항목, 빌드·값 출처·캡처 기록 칸을 회차 평가에 연결했다.
+- 근거: [실제 사용자 독회 기록지](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md)는 아직 모두 미실시다. 기존 사이트 배포와 현재 후보가 다르면 옛 배포 피드백으로만 분류한다. 문서 계약 **127 passed, 1 skipped**, `known_failures.py` **0 NEW** (X: `logs/merge-20261006/operator-worksheet-docs.txt`); harness lint 0 errors.
+- gate 변화: 판정 변화 없음. G2 선언 셀·G3 사용자 결과·적용 실물 readback이 채워질 때까지 제품 전체 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
+
+- 변경: 사용자 독회 기록지에 표면마다 복사할 8항 판정·근거 블록을 더해 실제 관찰을 채울 자리를 명확히 했다.
+- 근거: [기록 블록](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md#표면별-결과-기록-블록)은 전부 HOLD/미실시로 시작한다.
+- gate 변화: 판정 변화 없음. 사용자 관찰·현재 빌드·실물 readback은 미확인.
+
+## 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
+
+- 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
+
+- 변경: Fleet Cell의 미리보기 전·실패 상태에서 빈 팔레트 선택과 20rem 평면도를 감추고, 실제 배치가 계산됐을 때만 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`. 변경 전 320px 1 failed, 변경 뒤 320/390/1440px 관련 브라우저 4 passed, 공용 UI·토큰 계약 62 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 순서 개선. 실제 운영자 G3와 현장 장치 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+
+- 변경: Fleet 로스터의 기존 두 행동 가정 시험을 현재 세 행동과 320px 별도 전폭 행·390px 세 동등 폭 규칙에 맞췄다. 제품 스타일은 변경하지 않았다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\` 현재 트리 캡처 4장과 `fleet-mobile{,-updated}.txt`. 변경 전 320/390px 두 실패, 수정 뒤 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 합성 Fleet 화면의 현재 행동 집합·좁은 폭 근거를 갱신했다. 사이트 설치 빌드와 관제자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+
+- 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
+- gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+
+- 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+
+- 변경: D-153 명명 G1과 반응형 선언을 로컬 `main` `42f9a617f`에서 다시 실행하고 회차 평가에 결과를 고정했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-g1-current/g1.txt`; 90 passed, Starlette/anyio deprecation warning 1, `known_failures.py` 0 NEW.
+- gate 변화: 해당 커밋의 LOCAL G1 기계 계약 근거를 갱신했다. 선언 상태·폭 G2와 사용자 G3, 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
+
+- 변경: 현재 보드 320px HOLD에서 유실 이유가 피치보다 먼저 보이는 순서를 회차 카드에 명시하고, 브라우저 시험의 CSP에 걸리는 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-current/`; 전체 브라우저 28 passed/1 failed 뒤 실패 셀 1 passed, `known_failures.py` 0 NEW. 전체 재실행 통과 주장 없음.
+- gate 변화: 현 트리의 LOCAL 게임 보드 상태·폭 근거 갱신. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
+
+- 변경: 게임 보드의 시간 근거 없는 이전 형식 응답을 1280·390·320px에 확장해 전화의 동등 패널 폭·넘침·정지 가용성을 검사했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-csp-final/run.txt`에서 수정 뒤 전체 29 passed, `2026-10-07-games-unavailable/`에서 확장 3 passed와 캡처 3장, 각 `known_failures.py` 0 NEW. 확장 후 전체 31셀은 재실행하지 않았다.
+- gate 변화: 시간 근거 결측의 LOCAL 전화 폭 두 셀을 추가했다. 실제 경기·장치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): D-487 이후 관제 높이 재확인
+
+- 변경: `Rosy Fleet` 운용 문서의 1920×1080 하단 넘침 43px을 데스크톱 여백과 대형 readout margin 보정으로 해소했다. D-415 로그 8줄과 패널 너비를 유지했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-d487/`; Fleet 선별 브라우저 8 passed, 접속 전 안내 1 passed, 서버·팔레트 계약 60 passed, 웹 모듈 137 passed, 각 Python 실행의 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL G2 부분 근거. 현장 설치 SHA·장치 readback·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): 병합 뒤 roster 계측 경합 제거
+
+- 변경: 320px 로봇 행동 너비 시험에서 버튼과 부모 폭을 한 DOM 평가로 읽어, 상태 폴링의 재렌더 사이에 부모 locator가 사라지는 경합을 없앴다.
+- 증거: X: `2026-10-07-fleet-d487/post-merge-browser-final.txt` 선별 브라우저 8 passed, `post-merge-contracts.txt` 60 passed, `post-merge-node.txt` 137 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 시험 안정화. 제품 전체 HOLD는 그대로.
+
+## 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
+
+- 변경: Fleet D-487 보정이 포함된 `e9c507c2c` 코드 후보의 G1 결과를 UI/UX 회차 평가에 갱신했다.
+- 증거: X: `2026-10-07-g1-current/g1-e9c507c2c.txt`; 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거·반응형 선언 **90 passed**, `known_failures.py` 0 NEW.
+- gate 변화: 현 후보 G1 기계 계약 LOCAL 통과. 전체 G2/G3와 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
+
+- 변경: `3a6c5d43e` 코드 후보의 Fleet 브라우저 파일 전체를 재실행하고 75개 현재 PNG의 범위를 회차 평가에 기록했다.
+- 증거: X: `2026-10-07-fleet-full/run.txt`; **103 passed**, `known_failures.py` 0 NEW.
+- gate 변화: 현재 후보 LOCAL 상태 근거 강화. D-153의 상태 × 폭 전체 캡처, 사이트 설치·장치 readback·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): 예외 상태 27셀 현재 화면 재촬영
+
+- 변경: D-153 Fleet 상태 9개×선언 폭 3개의 현재 캡처에서 찾은 데스크톱 넘침 3건을 목록 내부 스크롤·예외 지도 높이·viewer 권한 안내 배치로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-g2/`; 27/27셀 계측, 데스크톱 변이 3 failed→복원 4 passed, 권한 Node 변이 1 failed→전체 137 passed, Fleet 브라우저 106 passed, G1 90 passed, Fleet 계약 60 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 부분 근거 강화. 실물/사이트·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
+
+- 변경: 검수 앱이 `--object-classes <data.yaml>`로 모델별 객체 클래스를 받고(기본은 D-423 6개), 픽셀 `classes.yaml`은 선택 `display`를 받는다. 화면은 서버 클래스셋을 쓰고 숫자키 클래스·A 승인·X 제외 단축키를 키 코드로 매핑한다. `classes/lane_lr5.yaml`(차선 모델 5클래스)과 모델 PC용 `model/export_class_names.py`를 추가했다. 클래스셋 sha는 `review-contract.json`에만 있고 `/api/decisions`에는 넣지 않았다.
+- 증거: `learning/training/perception/test/` 호스트 pytest와 브라우저 시험, `test/known_failures.py` 비교, harness lint. 결과 수치는 브랜치 착지 때 확인한다.
+- gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · docs(adr): OMX 실물 팔 활성화 조건 설계(D-496)
+
+- 변경: [D-496](adr/D-496-omx-hardware-arm-control-acceptance.md) Proposed — 실물 OMX-F 부재 상태에서 OMX-AI 스펙 기반으로 실물 팔 조종 수용 조건을 고정한다. 실측 프로필(`rosy.omx-hardware-profile.v1`) 없이는 `omx.disabled.yaml` 활성화를 금지하고, 시뮬 셀 프로필·Gazebo jaw 보정의 실물 전용을 금지하며, 수용 사다리를 BENCH→DEVICE로 둔다. 짝 설계 문서 [2026-10-07-omx-hardware-arm-enablement-design.md](plans/2026-10-07-omx-hardware-arm-enablement-design.md)가 측정 체크리스트(B0–B8)와 하드웨어 프로필 스키마, Pilot 실물 드라이버 등록 지점을 소유한다. 런타임·API·Pilot 코드 변경은 없다.
+- 증거: 근거 스펙은 2026-09-12 하드웨어 조사·`deploy/robot/omx/stack.lock.yaml`(ROBOTIS 5.1.2 rev `0a4af6a9…`)·`sim/cell_profile.yaml` 주석·`omx.disabled.yaml`·워크스테이션 런타임 계획(2026-09-26)에서 읽었다. Pilot SIM 팔 지원은 같은 날 main에서 재확인(팔 순수 시험 33 passed, Playwright omx/arm 14 passed, Android 유닛 시험+APK 번들 7자산 확인).
+- gate 변화: 없음. 문서·제안만 바뀐다. `omx` 프로필·어댑터·Pilot 게이트는 그대로.
+- 결정: D-496 Proposed. D-390 §5(실물 범위 밖)는 유지되고, 이 결정은 여는 조건만 정의한다.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
+
+- 변경: 속도·회전율을 수신 전 0으로 표시하던 HUD를 서버의 속도·배터리 증거 판정에 연결했다. 지연 수치에는 수신 나이를 붙이고 연결 끊김·결측에서는 수치를 숨긴다. 320px에서 상태 문구가 단어 중간에 잘리지 않도록 HUD 항목을 통째로 줄바꿈한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-telemetry-2026-10-07/result.md). 합성 상태 4개×폭 4개와 수신 전 상태의 브라우저 **5 passed**. D-153 명명 G1 재실행 **90 passed, 1 warning**, clean exit 0, `known_failures.py` **0 NEW**. 첫 G1 실행은 요약 뒤 종료되지 않아 중단했고, 재실행으로 확인했다. 캡처와 G1 원본은 `X:\DevTemp\pilot-telemetry-evidence\`에 둔다.
+- gate 변화: Pilot G2 일부만 채웠다. 나머지 선언 상태·폭, 실제 설치본/로봇 readback, 운전자 G3 및 제품 전체 판정은 **HOLD**.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
+
+- 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
+- gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+
+## 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
+
+- 변경: [D-499](adr/D-499-console-site-path-and-robot-link.md) Proposed. 관제 등록 로봇 칸에 사이트 경로 블록을 두고, 로봇 카드의 링크 단어는 기존 gather와 주소 판정으로만 고른다. 값은 up, unreachable, moved, tls-refused, protocol. 새 앱·새 프로브·바이트 그래프·로봇 Wi-Fi 변경은 없다.
+- 증거: 번호는 기록 직전에 main·브랜치 docs/adr, ADR Log, adr_gaps를 대조해 D-499가 비어 있었다. 분류 근거는 console.py snapshot, console_view.py _error_of, transport.py RobotApiError, address-drift.js, static_routes.py /healthz.
+- gate 변화: 없음. 문서·제안만 바뀐다.
+- 결정: D-499 Proposed.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(plan): 관제 사이트 경로와 로봇 링크 실행 계획(D-499)
+
+- 변경: [실행 계획](plans/2026-10-07-console-site-path-and-robot-link.md). D-499는 Proposed로 둔다. 화면과 API는 이 기록이 고치지 않는다.
+- 증거: 계획 파일만. 분류가 앉을 자리는 console.py snapshot, ingest_routes.address_reasons, console_routes.gathered, static_routes.py /healthz, vision-view.js refreshSources.
+- gate 변화: 없음.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제 상태 행에 로봇 링크(D-499)
+
+- 변경: `GET /api/fleet/state` 로봇 행에 선택 필드 `link`. 값은 up, unreachable, moved, tls-refused, protocol. 401이 아닌 로봇 API 오류에는 필드가 없다. 주소 상태는 기존 address_reasons 한 번이다. D-499는 Proposed다.
+- 증거: operations/fleet/test/test_link_class.py, test_link_on_snapshot.py, test_link_address_source.py, test/test_line_follow_contract_docs.py.
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제에 사이트 경로와 로봇 링크를 표시(D-499)
+
+- 변경: 등록 로봇 칸의 목록 위에 관제 경로 세 줄을 두고, 로봇 카드는 link가 문제일 때만 한 단어를 붙인다. healthz와 기존 state·vision sources 조회만 쓴다. 새 모듈은 콘솔 자산 허용 목록에 있다. D-499는 Proposed다.
+- 증거: operations/fleet/test/web/site-path.test.mjs, link-tag.test.mjs, site-path-place.test.mjs, address-drift.test.mjs (node 20 pass). operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served (2 passed).
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
+
+- 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
+- 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
+- gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
+
+- 변경: 320/390px 읽기 전용 카메라 상단의 겹침을 고치고 홈·비상 정지 행동 너비를 통일했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
+
+- 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
+
+- 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
+- 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
+- gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+
+- 변경: 시뮬레이션 팔 헤더의 오래된 게이트·직접 조종 문구를 제거하고 320px 팔·그리퍼 동등 폭을 현재 화면에서 확인했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-arm-header-2026-10-07/result.md). 관련 브라우저 6 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+
+- 변경: 천장 Rosy Cam 재조준 뒤 관제 콘솔 조감도가 저장된 추적 보정(paint-daccc3e53522)과 어긋나던 것을 2026-10-07 `/console/install` 맞춤 패널로 다시 맞춘 회차를 `docs/validation/site-camera-refit-2026-10-07/`(result.md + 스크린샷 3장)로 남겼다.
+- 증거: [회차 결과](validation/site-camera-refit-2026-10-07/result.md). 새 교정 `paint-f81a872f5cd8`이 Fleet DB `tracking_calibrations`에 활성으로 저장됐고 Fleet 재시작 2회를 넘겨 유지됨을 확인(`tracking_calibration_audit` 승인 이력). 문서 계약 시험 103 passed, 1 skipped, `known_failures.py` 0 NEW, harness lint 0 errors.
+- gate 변화: 없음. 검증 기록 추가만. 로봇 관측 0/0대에서 경로 감지가 불가한 점과 적용 교정에 렌즈 지문이 없어 렌즈 교체 가드가 약한 점은 후속 과제로 남는다.
+- 결정: 없음
+- 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
+
+## 2026-10-07 · uncommitted · docs(api): 추적 교정 낡음 자동 검사 v1.120
+- 변경: API Ref §10.6.1 — `GET /api/fleet/tracking` 출처 행의 `calibration_drift`(판정 모양·한계 0.3 m/3°·건너뛰기·초기화 규칙·콘솔 우선순위) 문서화, 이력 v1.120. `core_api_web/api/app.py` 계약 버전 문자열 동반 갱신, 버전 고정 시험 6곳 v1.120
+- 증거: `test_protocol_version_alignment.py` 3 passed, 버전 고정 관련 5파일 93 passed, known_failures 0 NEW
+- gate 변화: 없음. Robot API·envelope 1.0 변경 없음
+- 결정: 해당 없음
+## 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
+
+- 변경: SAF-005 배터리 래치(`battery_policy`·`battery_deep`)가 모드를 EMERGENCY로 바꾸지 않아 관리자 해제가 409 `not in EMERGENCY`였다. E-Stop 리스너 하나가 모든 래치를 EMERGENCY로 옮기고, E-Stop은 대기 중인 배터리 도크 복귀를 지운다(OK까지 재무장 없음). `battery/voltage`가 `battery` 센서 표본이 되고 `GET /sensors/battery`는 404 대신 `evidence`(missing/fresh/stale)를, `GET /safety/state` `battery`는 `evidence`·`sample_age_s`·`level`·`percent`를 싣는다. API Ref v1.120, SRS SAF-005 문단.
+- 근거: 8kcn 2026-10-06 실기(6.20 V 저전압 뒤 충전 8.63 V에도 래치 유지, 해제 409), 9dfk 현재 main에서도 `/sensors/battery` 404. 호스트 pytest만이며 장치 수용은 아니다.
+- gate 변화: 없음.
+- 결정: D-502(자동 해제는 고르지 않음, 관리자 해제, Deep 재래치).
+- 교훈: 래치와 모드를 따로 쓰는 경로가 있으면 해제 계약이 깨진다. 래치 쪽 리스너 한 곳에서 모드를 맞춘다.
+
+## 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 변경: `docs/validation/uiux-current-width-device-2026-10-07/result.md`의 40자리 SHA에 `commit` 접두어를 붙여 시크릿 스캐너 high-entropy-token 오탐을 해제했다(관측 내용 불변, `db006d7cf`와 같은 표기 수정). 같은 날 같은 클래스가 두 번째라 재발 방지 문서 `docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`를 남겼다 — 회차 문서에 git id를 쓸 때 `commit` 접두어(16진수는 종류 표기), 착지 전 시크릿 시험 1회 실행.
+- 증거: `test_release_boundary_guards.py::test_no_secrets_in_tracked_files` 수정 전 1 failed(해당 문서 line 3 지목) → 수정 후 통과. 이 오탐이 58커밋 push를 pre-push 훅에서 두 차례 거부했다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 오탐 하나가 공유 push 게이트를 막아 모든 세션의 푸시를 지연시킨다 — 문서 착지 전 1분 시험이 push 훅 실패를 예방한다
+
+## 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
+
+- 변경: D-504. Pilot 녹화 토픽에 `ir_sensor/range`(좌·중·우 ADC)를 더하고 API 참조 5.10 토픽 줄에 적었다. 초음파 `us_sensor/range`는 넣지 않는다. `line/keep_debug`는 이미 녹화되던 것을 그 줄에 맞췄다.
+- 증거: 구현 시험은 perception 기록. 문서 계약 시험은 이 항목을 쓴 뒤 실행.
+- gate 변화: 없음
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 머지하면서 D-504는 얼굴 애니메이션 ADR이, D-505는 상태 전환 화면 ADR이 먼저 썼다. 바닥 IR 녹화 결정은 D-506이다. 초음파 `us_sensor/range`는 넣지 않는다.
+- 증거: 직전 D-504 항목은 그 커밋 당시 번호다. ADR 파일은 `docs/adr/D-506-pilot-recording-ir-range.md`.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
+
+- 변경: Windows에서 Git Bash와 커밋된 LF hook blob을 사용하도록 교훈을 기록하고, 검증 문서의 해시 종류 표기, API 버전, Fleet 크기 판정, 독립 안전 검토 기록을 바로잡았다.
+- 증거: Windows Git Bash로 pre-push를 실행해 원래의 3개 fast gate 실패와 3개 안전 경고를 확인했다. 수정 후 선택 검사 7 passed, Fleet 검토 검사 40 passed, 양쪽 `known_failures.py` 모두 0 NEW. 전체 gate와 원격 CI는 별도 확인.
+- gate 변화: 없음.
+- 결정: D-430 안전 검토 예외는 해당 세 커밋의 소스 diff와 host 테스트 범위에 한정한다.
+- 교훈: 기본 `bash`가 WSL이면 Windows 파일의 CRLF와 `/mnt/f` 성능 때문에 pre-push 결과를 잘못 읽을 수 있다. Git Bash와 커밋 blob으로 같은 검사를 실행한다.
+
+## 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
+
+- 변경: Fleet 관제는 기존 CORE 배터리·충전·진단 근거를 출처와 나이와 함께 보여 주고 다음 조치를 안내한다. 안전 해제와 Wi-Fi 적용은 로봇 관리자 경로, 영상 설정은 카메라 소유 경로에 둔다.
+- 증거: harness lint 0 errors/23 기존 경고; 문서 계약 시험 112 passed/23 warnings, known_failures 0 NEW. SOURCE/LOCAL 문서 검증이며 DEVICE/FIELD 수용 아님.
+- gate 변화: 없음
+- 결정: D-509 Proposed
+- 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
+
+## 2026-10-07 · uncommitted · feat(tools): 착지 도구 tools/land.py
+- 변경: `python tools/land.py --tests auto`가 워크트리에서 main 머지 → 자동 해소(ADR Log 행 합집합+D-번호 정렬·BOM/CRLF 유지, `logs.md` 합집합, `adr_gaps.txt` 합집합, 생성 `index.md`·`STATUS.md`는 theirs 후 generate) → D-436 `affected` 선택 + lint → `test/known_failures.py` → `--ff-only`를 main이 멈출 때까지(기본 5회) 되풀이한다. 그 밖의 충돌은 `git merge --abort` 후 경로를 알리고, NEW 실패·lint 실패·ff 거절에서 멈춘다. main이 움직였어도 그 차이가 시험한 범위 밖이면 lint만 다시 돌린다. 푸시·stash·reset·clean은 하지 않는다. `--dry-run`, `--node`, `--browser` 지원. AGENTS.md·shared-checkout.md 6항과 `rosy-land-on-main` 스킬에 기본 방법으로 적었다.
+- 증거: `test/test_land.py` 7 passed(임시 저장소: Log 충돌 해소, 비자동 충돌 중단, 실패 시험에서 ff 안 함, 범위 밖 main 이동은 재시험 생략, 더러운 워크트리 거부, dry-run 무변경, main 체크아웃 거부). 실제 저장소 `--dry-run`이 affected 선택을 출력.
+- gate 변화: 없음
+- 결정: 없음(D-436 선택기 재사용)
+- 교훈: 2026-10-07 main이 하루 163번 움직여 손 착지가 한 브랜치에 네 번 돌았고, `tests ; git merge --ff-only` 사슬은 실패한 시험 뒤에도 착지할 수 있었다 — 착지는 실패에서 멈추는 한 도구로 한다.
+
+## 2026-10-07 · uncommitted · fix(tools): 착지 도구 리뷰 반영
+- 변경: `tools/land.py` 독립 리뷰 11건과 D-508 리뷰 1건. pytest 종료 코드 2–5에서 멈춤. main 차이가 기록 파일(docs `*.md`, `logs.md`, `index.md`, `progress.md`, `adr_gaps.txt`)뿐일 때만 재시험 생략. 자동 해소는 stage 1·2·3이 모두 있고 충돌 부분이 추가뿐일 때만 하며, `logs.md`는 줄 합집합 대신 양쪽 추가 블록을 통째로 잇는다(같은 꼬리 줄 `- 결정: 없음`이 접히지 않음). 해소 중 실패하면 `git merge --abort`. 시험한 sha로 `--ff-only` 하고 그 사이 브랜치가 움직이면 멈춤. main 체크아웃이 `refs/heads/main`인지 확인. harness가 있는데 `affected`가 실패하면 멈춤. FULL 승격은 요약에 CI 몫으로 적음. 자식 프로세스에 `PYTHONUTF8=1`. 앞 항목의 `logs.md` 합집합 설명은 이 항목이 대신한다.
+- 증거: `test/test_land.py` 21 passed(autocrlf true/false Log, 동료 미커밋 파일로 ff 거절 시 파일 보존 포함), `known_failures.py` 0 new, lint 0 error.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 줄 단위 합집합은 여러 줄 항목의 같은 줄을 하나로 접는다. 추가 전용 로그는 블록 단위로 잇는다.
+
+## 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
+
+- 변경: `.gitattributes`에 `merge=union`(ADR Log, 모든 `logs.md`, `tools/harness/adr_gaps.txt`). `adr_gaps`를 `harness.yaml`에서 줄 파일 `tools/harness/adr_gaps.txt`로 옮겼다(18줄, lint는 번호로 중복 제거, 이행 기간에 yaml도 읽음). `tools/harness/adr_reserve.py next|list|release`가 `refs/adr/D-nnn`을 create-only로 만들어 번호를 선점한다. lint는 선점 ref 번호를 gap으로 본다. `AGENTS.md`·`shared-checkout.md`·`rosy-land-on-main`·`team-guide.md`·`docs/adr/AGENTS.md`의 4단계를 이 도구로 바꿨다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 120 passed, `known_failures.py` 0 new. 임시 저장소에서 BOM·CRLF Log에 두 브랜치가 행을 더해도 충돌 없이 두 행이 남는다. `rosy_harness.py lint` 0 errors. 실제 저장소 스캔은 브랜치 723개·워크트리 289개에서 약 4초.
+- gate 변화: 없음
+- 결정: D-508 Accepted (2026-10-07, 사용자 결정)
+- 교훈: 이어 쓰기만 하는 파일의 충돌은 내장 union 드라이버로 없앨 수 있다. 번호 경합은 조회를 늘려서가 아니라 원자적 ref 생성으로 막는다.
+
+## 2026-10-07 · uncommitted · fix(harness): D-508 리뷰 반영 — logs.md는 union에서 빼고 선점 ref는 경고만
+
+- 변경: 독립 리뷰를 반영했다. union은 한 줄이 한 기록인 ADR Log와 `adr_gaps.txt`에만 둔다. union은 두 쪽이 똑같이 더한 끝줄(`- 결정: 없음` 등)을 하나로 합쳐 `logs.md` 항목을 깎으므로 `logs.md`는 계속 충돌하게 둔다. 직전 항목의 "모든 `logs.md`" union 설명은 이 항목이 바로잡는다. lint는 로컬 `refs/adr` 선점을 gap으로 보지 않고 경고만 한다(CI에는 그 ref가 없다). `adr_reserve.py`는 ref가 실제로 있을 때만 다음 번호로 넘어가고, `--remotes`도 보고, 가장 큰 번호의 출처를 찍고, main 최대보다 20 넘게 큰 번호는 경고하고 무시하며, `release`는 `--reason` 일치나 `--force`를 요구한다. D-508 본문이 D-346 4항 개정과 "중복 행이 생기면 새 상태의 행을 남긴다"를 적는다. 4단계 문구에 착지하지 않는 선점 번호를 push 전에 `adr_gaps.txt`에 넣는 규칙을 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 임시 저장소 시험: `logs.md` 두 항목 추가는 충돌하고, union으로 바꾸면 끝줄이 사라진다. Log 두 행은 충돌 없이 남고, Status 수정+행 추가는 lint 중복 행 오류가 된다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-508 Accepted 본문 개정(브랜치 안, 미착지)
+- 교훈: union 드라이버는 같은 줄을 합치므로 여러 줄 기록 파일에는 맞지 않는다. 로컬 상태로 lint를 통과시키면 CI와 결과가 갈린다.
+
+## 2026-10-07 · uncommitted · docs(adr): union 머지·번호 선점 ADR은 D-510 (D-508에서 이동)
+
+- 변경: 이 브랜치의 앞 두 항목이 D-508이라 부른 결정은 D-510이다. 브랜치가 D-508을 `refs/adr`로 선점해 두었지만, 동료 세션이 도구 없이 main에 다른 D-508(제어 고리)과 D-509를 넣었다. `adr_reserve.py next`가 D-510을 찍었고 ADR 파일·Log 행·규칙 문구·코드 주석을 옮겼다. 옛 선점은 `release D-508 --force`로 풀었다. `git merge main` 뒤 ADR Log는 union으로 충돌 없이 합쳐졌다(행 순서만 D-510, D-508, D-509). main이 지운 D-499 gap을 `adr_gaps.txt`에서도 지웠다. `adr_reserve.py` 역사 파서는 출처 줄을 NUL로 구분하고(diff `@@` 줄을 출처로 읽던 결함), lint 경고는 브랜치 최대 번호보다 작은 선점에만 낸다. D-346 Status에 4항 개정 표시를 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 옛 파서로 바꾸면 출처 시험이 `'@ -0,0 +1 @@'`로 실패한다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
+- 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
+
+## 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
+- 변경: `test/browser_harness.py`에 Chromium 차단 포트 목록(`port_util.cc` kRestrictedPorts)·`safe_listener()`·`free_port()`·`browser_tests_enabled()`를 두고 Fleet·로봇 UI·Pilot·OMX pilot-sim·검수 앱 브라우저 fixture가 port 0 대신 쓴다. 옵트인은 `ROSY_RUN_BROWSER_TESTS=1`이 정식이고 `ROSY_BROWSER_TESTS=1`도 받는다(40개 파일). CI는 `$GITHUB_ENV` 대신 매트릭스 단계가 Fleet 경로 실행에만 `ROSY_RUN_BROWSER_TESTS=1`을 주고, 같이 묶인 다른 경로는 플래그 없이 따로 돈다. `test/browser_scope.py`가 바꾼 경로를 브라우저 시험 대상으로 바꾼다. Pilot 녹화본 시트 CSS를 고쳐 `test_surfaces_do_not_repaint_shared_controls`를 통과시켰다. main에서 이미 실패하는 2건을 `test/known_failures.txt`에 올렸다. 개발 가이드 「브라우저 시험」에 현장 PC·모델 PC 전체 실행 명령 형태를 적었다.
+- 증거: 이 노트북 동적 포트 범위가 1024부터다(`netsh int ipv4 show dynamicport tcp` → 1024, 13977개). `ROSY_RUN_BROWSER_TESTS=1`만 켜고(`ROSY_BROWSER_TESTS` 없음) cell 3 passed, Fleet 콘솔 1 passed, 시작점 1 passed, 로봇 traffic policy 1 passed, 검수 1 passed, Pilot 녹화 시트 4 passed. 단위·가드 묶음 261 passed, 실패 3건은 main 1aba6c3f5에서도 실패하는 import 규칙 1건과 이 커밋 전 pilot index 재생성 2건. 출력 `X:/DevTemp/browser-infra/*.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로다(전과 같이 Fleet 브라우저 시험만 Chromium 으로 돈다). SOURCE/LOCAL은 위 대상 시험만 확인했고, 전체 브라우저 묶음은 이 노트북에서 돌리지 않았다(현장 PC·모델 PC 몫).
+- 결정: D-436(변경 범위 시험).
+- 교훈: 옵트인 환경 변수를 파일마다 직접 읽으면 이름이 갈라져 시험이 조용히 건너뛰어진다. 판정은 헬퍼 하나로 한다.
+
+## 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 변경: CI 매트릭스 단계가 Fleet 경로만 따로 `ROSY_RUN_BROWSER_TESTS=1`로 돌린다(`$GITHUB_ENV` 아님). `browser_scope.py`는 고를 시험이 없으면 exit 3, 문서 명령은 `t=$(...) && ... pytest $t`. `browser_harness.safe_http_server()`가 묶인 안전 소켓을 서버에 넣어 포트 경합을 없애고 로봇 UI·Pilot·OMX fixture가 쓴다. importorskip 만으로 돌던 브라우저 시험 5개를 옵트인 뒤로 옮겼다. known_failures 두 줄에 원인 커밋과 "remove when fixed"를 적었다. 게임 보드 `PreviewServer(port=0)`는 그대로다 — `open_page(url=...)`가 그 포트를 `--explicitly-allowed-ports`로 허용하고 `test_chromium_opens_preview_on_a_normally_blocked_port`가 6000에서 이를 증명한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 게임 보드 2 passed(차단 포트 6000 포함), OMX pilot-sim 3·peer approval·로봇 traffic policy·surface entry 2 passed(`review_browser.txt`의 server_port 누락 3건은 `safe_http_server` 수정 뒤 `review_browser2.txt` 3 passed), Pilot 좁은 시트 1 passed, 단위·CI 계약 91 passed. 파일 `X:/DevTemp/browser-infra/review_browser2.txt`·`review_unit.txt`·`pilot_sheet2.txt`·`pilot_sheet3.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로(Fleet 브라우저 시험만). 전체 브라우저 묶음은 미실행.
+- 결정: D-436.
+- 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
+
+## 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획
+
+- 변경: [실행 계획](plans/2026-10-08-site-link-repair.md). 현장 HTTP 폴링, 테일넷 8443, 꺼진 발견 광고는 기존 D-499 표시와 등록 TLS 런북, tailscale0 허용, 광고 유닛으로 고친다. 새 모니터와 스킴 자동 변경은 없다. D-499는 Proposed로 둔다. 이 기록은 현장 파일을 바꾸지 않는다.
+- 증거: 계획 문서만. 현장 진단은 실행 전이다.
+- gate 변화: 없음.
+- 결정: D-499 Proposed 유지. D-361, D-452, D-477 런북을 그대로 쓴다.
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
+
+- 변경: 같은 [실행 계획](plans/2026-10-08-site-link-repair.md). Task 4는 실패한 평문 연결을 멈추는 단계다. 반복 상태 조회가 줄었는지는 Task 8에서 기존 `gather_source`가 `hub`일 때만 본다. `rest`이면 D-361 7항은 별도 계획으로 남기고 이 계획에서 FleetAgent를 켜지 않는다.
+- 증거: 계획 문서만. 현장 진단은 실행 전이다.
+- gate 변화: 없음.
+- 결정: D-447의 열린 소켓 재사용을 확인 기준으로 쓴다. D-499는 Proposed로 둔다.
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
+- 변경: `tools/land.py`의 `logs.md` 해소에 경우 하나를 더했다. 우리 쪽이 끝에 덧붙이기만 했고 main 쪽이 기준 줄을 지우거나 바꾸지 않고 끼워 넣기만 했으면(항목 사이에 동료 항목) main 쪽을 그대로 두고 그 뒤에 우리 블록을 잇는다. 우리 쪽이 끝 덧붙이기가 아니거나 main 쪽이 기준 줄을 지우거나 바꿨으면 지금처럼 사람에게 넘긴다.
+- 증거: D-510 착지 때 main이 마지막 항목 앞에 동료 항목을 넣고 우리가 끝에 덧붙인 충돌을 도구가 "a side changed existing lines"로 거절했다. `test/test_land.py` 29 passed(중간 삽입 + 끝 덧붙이기 해소, main 쪽 삭제는 사람에게), `known_failures.py` 0 new.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: lint가 받는 항목 사이 삽입은 착지 도구도 받아야 한다. 두 규칙이 다르면 도구가 정상 이력을 막는다.
+
+## 2026-10-08 · uncommitted · D-509 관제 전원 근거
+
+- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
+- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
+
+- 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
+- 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
+
+- 변경: 객체 종류와 통로 점유 판단을 분리하고, 기존 obstacle 의미 보존·새 작업 공간 전환·픽셀 255와 role ignore 구분 및 장면별 검수 행동을 D-514에 제안.
+- 증거: ADR lint 0 error, 23 기존 모듈 경고; 문서 계약 pytest 121 passed, known_failures 0 NEW. 모델 PC·실제 승인·학습·장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · uiux(review): D-514 검수 화면과 실제 브라우저 흐름
+
+- 변경: 객체 사진 목록을 좁은 화면에서 가로 목록으로 정리하고 객체/픽셀 현재 클래스 안내·픽셀 255 승인 조건·준비 결과의 시점 표시를 추가했다. 잘못된 고정 클래스 안내를 제거했다.
+- 증거: 모델 PC /learning·객체·픽셀 화면 읽기 전용 확인(43장 대기, 승인 0). X:/DevTemp/review-taxonomy 복사 상태 브라우저에서 등록 1/중복 재등록 0, 객체 박스 추가·수정·삭제·승인 후 재접속, 미검수 255 픽셀 승인 거절, 전체 채움 후 픽셀 승인·결과 준비 확인. 390/1280 화면 캡처; 브라우저 집중 시험 2 passed, 검수 백엔드 63 passed·known_failures 0 NEW. 모델 PC 8772 미리보기의 공용 정적 파일 5개를 원본 백업 뒤 반영하고 해시·객체/픽셀 브라우저 화면을 재확인했다. 실제 검수 상태는 변경하지 않았다(43장 대기·승인0).
+- gate 변화: SOURCE/LOCAL 화면·복사 상태 검증 및 모델 PC 미리보기 적용. 실제 사람 승인·학습/장치 수용은 별도.
+
+## 2026-10-08 · uncommitted · docs(adr): D-515 관제 지도 천장 카메라 직사각형
+
+- 변경: D-515 ADR과 Log 행, 2026-10-07 천장 카메라 직사각형 실측 기록, `tools/harness/adr_gaps.txt`에 D-514(다른 브랜치 예약) 줄.
+- 증거: harness lint 0 errors.
+- gate 변화: 없음.
+- 결정: D-515 (D-513 7항의 메인 지도 실영상 회전 대체)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
+
+- 변경: `map-view.js` 크기 판정 split 903 기록, fleet 재판정 43217, 분리 계획에 camera backdrop 절 추가. `test_site_floor_declaration.py`를 외부 행동 시험 목록에 이유와 함께 추가. 주석의 Pinky 문자열 두 곳을 일반 표현으로 바꾸고 `lane_compliance.py`(PINKY_PRO 몸체 사용)를 de-Pinky 부채 목록에 추가.
+- 증거: architecture·behavior ownership·robot literal 시험 39 passed. 크기 판정은 독립 critic 에이전트가 했다.
+- gate 변화: pre-push의 4개 실패 해소 대상.
+- 결정: 없음(기존 split 계획에 절 추가)
+- 교훈: 여러 세션이 같은 웹 파일을 키우면 크기 판정이 푸시 시점에 한꺼번에 걸린다.
+
+## 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
+
+- 변경: 영상의 유효한 좌우 경계 쌍을 drivable 초안으로 채우는 연구와, 학습 녹화의 카메라·오도메트리·지도 자세·보정 증거 및 실제 로봇 어려운 장면 검수 순서를 기록했다. 10/6 두 영상의 무관측·한쪽 선·회전 구간을 재확인하고 기존 road_state shadow 추정기를 우선 재생 평가 대상으로 정했다.
+- 증거: 10/6 두 MP4·sidecar(2,487프레임/310.75초, 642프레임/80.12초)를 다시 읽고 대표 장면과 선 상태·오도메트리를 대조했다. 짧은 영상의 `both` 190프레임은 같은 차로 경계 쌍 검증 없이 정답으로 쓰지 않는다. 문서 계약 시험 121 passed, `known_failures.py` 0 NEW, harness lint 0 errors/23 기존 검증 시점 경고.
+- gate 변화: 없음. 새 라벨 승인·모델 학습·장치 추정기 동작·현장 주행은 미검증.
+- 결정: D-475의 사람 검수 drivable 정의, D-384의 shadow 추정과 D-481의 녹화 증거 게이트를 유지한다.
+
+## 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
+
+- 변경: 10/6 두 영상의 선형 명령 0과 오도메트리 위치 변화 0.5/1.2mm를 확인해 한쪽 선 기억의 전진 검증 후보에서 뺐다. 10/7의 전진 구간은 `keep_debug`가 없으므로 기존 재생에서 후보를 추출하고 사람의 같은 차로 쌍 확인을 선행하도록 계획을 고쳤다.
+- 증거: 세 독립 검토가 영상 사실, D-384 시간 추정, D-475 학습·평가 권한을 교차 비판했다. 10/7 두 sidecar의 선형 명령은 106/124, 71/83프레임에서 0이 아니고 x 변화 범위는 0.476/0.280m다. 신뢰할 양성 선 쌍은 아직 0건이며 새 장치 주행은 하지 않았다.
+- gate 변화: 없음. 10/6은 회전·벽·선 소실의 거절/정지 음성 사례로만 쓴다.
+
+## 2026-10-08 · uncommitted · docs(plan): 논문 가림·시간 지표를 ROSY 계약에 대조
+
+- 변경: OMR 논문의 가림 보류, 합성 가림, `R_F`·`R_M`, 시간 기억 아이디어를 기존 D-379·D-475·`lane_bev`·`denoise_fallback`에 맞춘 오프라인 진단 순서로 기록했다.
+- 근거: 가린 화소는 255이고 이전 경계는 불확실한 후보로만 남는다. 검수된 같은 경계 쌍이 없으면 논문 시간 지표는 계산하지 않는다. 10/6·10/7 네 영상만으로 가림 복원 성능은 입증할 수 없다.
+- gate 변화: 없음. 학습·런타임·장치 동작은 바꾸지 않았다.
+
+## 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
+
+- 변경: 루트 README·AGENTS에 모델 PC, AI PC, 현장 PC, 로봇의 역할과 권한을 기록하고 D-516 기반 Decision 파이프라인 설계를 연결했다. 후보 조사 보고서에서도 설계로 연결한다.
+- 증거: docs lint 0 errors, 문서 계약 pytest 121 passed, known_failures 0 new. 오프라인 합성 재생은 현장 모델 정확도나 활성화 증거가 아니다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(adr): 관제 웹의 위치는 문서 네 개다
+
+- 변경: D-518. 관제 웹은 operations/fleet/fleet/server/web에 두고 문서 넷(운용·설치·Cell·현장 지도)과 공유 읽기로 위치를 정했다. operations/ui/console 분리는 열지 않는다. 첫 구현은 네 엔트리의 import 울타리와 warpImage를 field-warp.js로 옮긴 것이다. site-map.js는 field-view.js를 가져오지 않는다. 하위 폴더 이동은 하지 않았다.
+- 증거: operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served, test_site_lanes_api.py — 19 passed, 1 warning. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run.txt.
+- gate 변화: 없음
+- 결정: D-518 Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더)
+- 교훈: 패키지 폴더를 옮기면 서빙 주인만 같고 문서가 서로의 모듈을 가져오는 문제는 남는다. 울타리가 위치를 먼저 고정한다.
+
+## 2026-10-08 · uncommitted · refactor(fleet): 관제 공유 읽기를 web/shared로 옮긴다
+
+- 변경: D-518의 첫 폴더 이동. 공유 읽기 아홉 파일(address-drift, authorization, poll-gate, development-auth, map-fit, vision-view, field-warp, styles.css, doc-tabs.css)을 server/web/shared로 옮겼다. 공개 URL /console/assets/<파일이름>은 유지하고 allowlist가 실제 경로를 가리킨다. 다른 문서의 ./ import는 그 URL로 바꿨다. 같은 문서의 ./ 는 그대로다.
+- 증거: document imports, server app, site lanes, node --test, palette, queues, grammar, doc tabs, canvas, chrome, token scan, disabled controls, size verdict. 117 passed, 1 known failure (site-map.js canvas contract, already listed). known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-shared.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 공개 URL을 파일 이름에 고정하면 폴더를 옮겨도 브라우저 주소가 그대로다. node 시험은 그 지정자를 파일로 푸는 훅이 필요하다.
+
+## 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다
+
+- 변경: D-518 상태, 결정 5, 결과와 ADR Log 행을 구현에 맞췄다. 공유 읽기 아홉 파일은 web/shared에 있다. Cell, 현장 지도, 설치, 운용은 web/ 바로 아래에 있고 문서마다 옮긴다. 페이지 경로와 공개 URL은 그대로다.
+- 증거: 본문이 커밋 226e90f8f(울타리, warpImage 분리)와 671a439e7(web/shared)과 같다. harness lint 0 errors.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
+
+- 변경: D-518의 Cell 폴더 이동. cell.html, cell.css, cell.js, cell-document-editor.js를 server/web/cell로 옮겼다. 페이지는 /console/cell이고 공개 URL /console/assets/<파일이름>은 유지한다. allowlist가 실제 경로를 가리키고 /console/assets/cell/cell.js는 404다.
+- 증거: document imports, doc tabs, server app, node unit tests, surface icons, dialog contract. 58 passed, 1 warning. node hook으로 /console/assets/cell-document-editor.js를 읽었다. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-cell.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · 오른쪽 경계 대체 가드 SIM 회귀
+
+- 변경: 분리된 모델 PC ROS-SIM에서 착지된 경계 가드를 로드하고, 굽이 폐루프 결과를 `docs/validation/lane-fallback-sim-2026-10-08/`에 기록했다.
+- 증거: 굽이 창 21프레임의 west edge 거리 중앙값 0.0007 m, 최대 0.0035 m; 1.4967 m 뒤 `obstacle_ahead` HOLD. 교차로 완료 0건이며 가드 발동 여부는 이 주행으로 검증되지 않았다.
+- gate 변화: 없음. 실물 R0/R1/R2 수용 전.
+- 결정: B9 자동 활성화와 `edge_left` trip 대체는 계속 보류.
+- 교훈: 굽이 통과 회귀와 한쪽 경계 대체 분기 검증은 별도 근거로 다룬다.
+
+## 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
+
+- 변경: west edge 단독 거리 진단을 모든 지도 segment의 최소 거리로 재계산해 별도 validation 기록에 남겼다.
+- 증거: 이전 SIM 487프레임 최대 0.0638 m·40 mm 초과 16프레임, 가드 적용 SIM 334프레임 최대 0.0363 m·40 mm 초과 0프레임. 서로 다른 실행이므로 개선 효과 판정은 보류한다.
+- gate 변화: 없음. 경로 지시·차체 외곽·실물 수용은 미검증.
+- 결정: west edge에서 멀어진 회전교차로 구간을 곧바로 차선 침범으로 세지 않는다.
+- 교훈: 분기 지도에서는 선택 edge와 전체 network 최소 거리를 구분한다.
+
+## 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
+
+- 변경: D-378 단계별 수용 목표와 장치 읽기 전용 관찰, TF 녹화 후보의 남은 증거 공백을 `docs/validation/lane-capture-readiness-2026-10-08/`에 기록했다.
+- 증거: `rosy_26` keep debug 39건/5초; Pilot 녹화 테스트 39 passed, known failures 0 new, harness lint 오류 0.
+- gate 변화: 없음. 실제 TF 게시·보정 revision·지도 자세·사람 검수와 실기 R0/R1/R2는 미확인.
+
+## 2026-10-08 · uncommitted · 10/7 현재 R0 재생 게이트
+
+- 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
+- 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
+- gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
+
+## 2026-10-08 · uncommitted · 차선 녹화 TF와 10/7 연속 검수 준비
+
+- 변경: 두 로봇의 전역 TF 게시·카메라 stamp 근접성을 읽기 전용으로 확인하고, 10/7 원본 207장의 빈 연속 검수 대기열을 X:에 만들어 `docs/validation/lane-tf-readback-2026-10-08/`에 기록했다.
+- 증거: 두 로봇 모두 `/tf` 19건/4초와 `/tf_static` 1건, 원본 카메라 48~49건/6초; 카메라와 최근접 odom TF stamp p95 0.0172초. 대기열 이미지 207/207 연결·해시 확인, 사람 승인 0건.
+- gate 변화: 없음. 지도 TF·승인 보정·장치 새 녹화·R0/R1/R2는 미확인.
+
+## 2026-10-08 · uncommitted · feat(site): 모델 PC 멈춤 대비
+
+- 변경: `deploy/site/install-model-pc-guard.sh`(워치독 iTCO_wdt, kernel.panic·softlockup 재부팅, ZFS zvol swap 끄고 zram 100%, 원격 점검 강제 명령과 reboot 한 줄 sudo), `install-model-guard-check.sh`·`rosy-model-guard-check`(관제 PC 10분 점검, 30분 연속 나쁘면 재부팅, 새벽 예약 재부팅 시간대 제외), 안내 `deploy/site/model-pc-guard.md`.
+- 증거: 2026-10-07 02:13 멈춤 로그(NV_ERR_NO_MEMORY, i915 Purging GPU memory, 17시간 정지), swap 32 GiB가 ZFS zvol. `test/test_model_pc_guard.py` 7 passed(모델 PC). 모델 PC `--dry-run` 확인.
+- gate 변화: 없음. 설치는 sudo 비밀번호를 아는 사람이 한 번 실행해야 한다.
+- 결정: 없음(사용자 선택: 워치독 + SSH 점검 + swap 이전)
+- 교훈: 확장자 없는 셸 스크립트는 `.gitattributes`에 `eol=lf`가 없으면 Windows `git archive`가 CRLF로 내보낸다.
+
+## 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
+
+- 변경: 재생 입력 전체를 서버 호출 전에 검증하고 세트 SHA-256을 결과에 남긴다. 호출 오류는 결과 JSON을 보존하면서 CLI 실패 코드로 올린다. AI PC Laya CPU 호출·서버 중단 시험을 `docs/validation/decision-model-replay-2026-10-08/`에 기록했다.
+- 증거: 재생 시험 3 passed, known failures 0 new. AI PC 합성 2건 중 1건 일치·오류 0; 서버 중단 2건은 예측 없음·CLI exit 1. GPU 장치 노드 부재로 GPU/VLM 지연 미측정.
+- gate 변화: 없음. 사람 정답 L0, Kev, ModelProfile 배포, Fleet/CORE·현장 수용은 미검증.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
+
+- 변경: 사용자 결정(2026-10-08)으로 케이블을 꽂은 실기 시험을 허용했다. `tools/device_test/tether.py`가 판정 파일의 `tether`(2 m/5 m, 닻 위치, 판단 근거)를 검사하고, 주행 틱마다 닻 거리와 누적 회전을 재며 `trail.jsonl`을 남긴다. 한도(케이블 − 0.3 m, ±360°)에 닿으면 line-follow OFF 확인 뒤 기록한 길을 0.03 m/s로 거꾸로 따라가 되감고 중단(종료 코드 2)한다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음. D-512는 Proposed 그대로이고 Fleet tether 감시는 후속이다.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인
+
+- 변경: 사용자 정정(2026-10-08)으로 반경을 충전기에서 잰다(`tether.charger_robot_frame`). `run.py --tether-check`가 사이트의 승인된 카메라-지도 보정으로 판정한 머리 위 프레임에 충전기, 반경 원, 로봇을 그려 `tether_check.jpg`를 남기고, 에이전트가 보고 `visual_check_ok`를 참으로 둬야 출발한다. 보정이 없거나 맞지 않으면 케이블 주행을 거부한다.
+- 증거: `python -m pytest tools/device_test/test -q` 호스트 시험(알려진 homography의 픽셀 위치, 거부 경로). 로봇은 움직이지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
+
+- 변경: 충전기를 확인한 촬영 자세에 두고 첫 주행 자세가 0.05 m·3° 넘게 다르면 중단, 되돌아가기에서 오래된 LiDAR 스캔(0.5 s)·느린 송신 간격(0.3 s) 정지와 실제 10 Hz, 보정 지도 일치(로봇 지도 또는 Fleet 활성 SiteMap), 여유 0.1 m 안 시작 거부, `trail.jsonl` phase 표시. D-395 이전 로봇(9dfk)용 픽셀 모드: 머리 위 프레임에서 고른 세 점으로 충전기를 계산한다. ADR에 되돌아가는 동안 D-422가 작동하지 않음과 두 한도 모두 되돌아감(케이블 밟음은 받아들인 위험)을 적었다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송, 알려진 homography). 로봇은 움직이지 않았다.
+- gate 변화: 없음. 겹 적용 뒤 CORE 재시작이 odom을 바꾸는지는 장치에서 확인하지 않았다.
+
+## 2026-10-08 · uncommitted · D-507 keep 제자리 회전 판정을 CORE 명령 twist로
+
+- 변경: bd0d5e791(877dab90f로 착지)의 keep 초기화가 측정 odom(|wz| > 0.15, |vx| < 0.01)으로 제자리 회전을 판정해, 느린 keep 코너(명령 v 0.0188, w 0.48, Gazebo odom vx ≈ 0.001)에서 코너 기억을 지웠다. `line_observer_node`가 keep 모드에서 CORE의 최종 `cmd_vel`(D-18 단일 발행자)을 읽기만 하고, 명령 |v| < 0.01(CORE `junction_still_linear`)이고 |w| > 0.15이며 0.3 s 안의 명령일 때만 keeper를 다시 시작한다. 측정 odom 조건은 뺐다. 느린 코너에서 odom이 정지처럼 읽히는 것이 바로 오판의 원인이고, 교차로 회전은 명령이 v = 0으로 정확히 구분한다. 노드는 608 → 607줄이다.
+- 증거: D-507 SIM 4b차 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md`, `evidence/spin_reset_log_r4b.txt`(d507-sim 워크트리). 호스트 pytest `test_keep_pivot`(느린 코너·교차로 회전·오래된 명령, 노드 게이트 식을 그대로 평가, odom으로 되돌린 변이에서 실패 확인), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test/architecture/test_module_structure.py`, known_failures 0 new. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. SIM 4b 주행 거리 회복은 모델 PC Gazebo 재실행으로 확인해야 한다.
+
+## 2026-10-08 · uncommitted · D-507 keep 명령 회전 판정 리뷰 반영
+
+- 변경: 앞 기록의 명령 |v| < 0.01(odom 정지 기준인 `junction_still_linear`)은 가장 느린 keep 명령(e=1에서 0.0108, 각속도 상한이나 v 배율이면 더 낮음)과 너무 가까워, 제자리 회전 기준을 `COMMANDED_PIVOT_LINEAR_MPS` = 1e-3으로 바꿨다. 실제 회전은 v를 정확히 0으로 명령한다. 받은 명령이 카메라 시각보다 0.3 s 넘게 늦은 keep 프레임이 30번 이어지면 한 번 경고한다(`use_sim_time` 불일치면 초기화가 조용히 꺼진다). `test/test_module_separation.py`의 `FINAL_TOPIC_EXCEPTIONS`에 이 노드의 읽기 전용 `cmd_vel` 구독 줄을 고정했다. 노드는 608줄이다.
+- 증거: 호스트 pytest `test_keep_pivot` 16개(느린 명령 0.0108, ×0.6, ×0.7, 0.002 → 초기화 없음, 기준을 0.01로 되돌리면 실패), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test_latest_only_subscriptions`, `test/test_module_separation.py` 통과. `test/architecture/`는 `test_safety_separation::test_decision_and_learning_use_only_safety_public_api` 하나가 실패하고, 같은 실패가 main 64d7a68a8에서도 난다. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-507 4 회전각: 접선 + 6° 더 돌림(잠정)
+
+- 변경: Fleet `turn_target`(`operations/fleet/fleet/routing/execute.py`)이 현(chord) 조준 대신 접선 각 `theta`에 회전 방향으로 `TURN_OVERTURN_DEG` = 6.0°를 더한 값을 보낸다. 더하는 것은 나가는 차로가 `advance_m` 안에서 회전 반대쪽으로 휠 때(`advance_m` 점으로의 현이 시작 접선보다 회전 반대쪽으로 `BEND_MIN_DEG` = 1° 넘게)뿐이고, 곧은 차로와 회전 쪽으로 휘는 차로는 접선 그대로다. 분류는 `theta`, 150° 한도·부호·0 검사는 보내는 각, `advance_m` 명시·클램프는 그대로다. 260919에서는 ring 진입(SW −120.6°, NE −108.8°)과 ring 출구(NW→SW −114.1°, SE→NE −110.0°)가 모두 해당한다. 출구 spoke도 첫 0.1 m에서 회전 반대쪽으로 휜다(현 편차 약 5.9°). D-507 4항에 개정 문장을 더했다. API 변경 없음.
+- 증거: D-507 SIM 4c차(54회, d507-sim 워크트리 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md` 「4c차 회전각」): 현 조준은 SW 5 s 유지 0/3, NE 재획득 0/3, 접선 −6°는 3/3, 3/3(−9°도 같음), 10 s 유지는 어느 각도도 없음. 호스트 pytest `operations/fleet/test/` 2704 passed, 2 failed(`test_document_imports`, `test_grammar_separation`: 콘솔 문서·시트, 이 브랜치가 고치지 않은 파일, 기준 868a4bb99에서 온 실패), known_failures 2 new(같은 둘). 부호 변이(+→−, 반대쪽 판정 뒤집기)에서 `test_routing_execute`·`test_trip_d507` 실패 확인 후 복구. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. 잠정값이라 링 추종을 고친 뒤 SIM에서 다시 잰다(보정 후보).
+
+## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
+
+- 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.
+- 증거: 226프레임, 0.5835 m 진행, 지도 west 중심선 최대 거리 0.0193 m; `camera_line_not_visible` HOLD 뒤 `reselection_required` LOST. `/cmd_vel` publisher는 CORE 하나. 굽이 통과·실물 수용은 미달.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
+
+- 변경: 독립 ROS SIM의 frame 192를 `route_a`로 재생하고, 경로에서 80 mm 벗어난 자세의 분기 보조 우회를 고친 결과와 재현 스크립트를 `docs/validation/lane-route-gap-replay-2026-10-08/`에 기록했다.
+- 증거: 원래 자세는 MEMORY 후보, 측면 오차 +0.0609 m 교란 자세는 수정 후 STOP. 기존 관련 시험 77 passed, 10 skipped.
+- gate 변화: 없음. 오프라인 SIM 프레임 후보이며 ROS 폐루프·Fleet 활성 지도·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
+
+- 변경: `line_observer_node`의 `route_a`에 녹화 영상·odom·clock 125프레임을 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08/`에 재현 스크립트와 결과를 기록했다.
+- 증거: 카메라 관측 125/125 수신, 첫 무관측 frame 192는 `visible=true`, confidence 0.6. 중복 사용 중이던 domain 83의 첫 시도는 증거에서 제외했고 전용 노드를 종료했다.
+- gate 변화: 없음. 노드 배선 증거이며 CORE 수용·Gazebo 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
+
+- 변경: 같은 굽이 영상의 frame 192 odom 위치만 80 mm 옮겨 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08b/`에 변환·재현 절차와 결과를 기록했다.
+- 증거: 관측 125/125 수신; frame 191 visible, 교란한 192 invisible(confidence 0), 원래 자세의 193 visible. 종료 뒤 전용 노드 없음.
+- gate 변화: 없음. 합성 위치 오차에 대한 관측 노드 반례이며 CORE·폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
+
+- 변경: `route_a`가 마지막 지도 조각의 끝 20 mm 앞에서 관측 후보를 끊도록 하고, 남쪽 출발 `west:r → ring_s:f` 폐루프 두 실행을 `docs/validation/lane-route-terminal-ros-sim-2026-10-08/`에 기록했다.
+- 증거: 기존 실행은 경로 끝점에서 72.5 mm 떨어져 LOST; 수정 후 실행은 18.1 mm 앞에서 HOLD 후 LOST. `/cmd_vel` publisher는 CORE 하나. 호스트 관련 시험 103 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 끝점 초과 방지만 검증. 굽이 최대 지도 중심선 편차 47.8 mm·교차로 완료 0건이므로 전체 차선 추종, 사람 승인 R0, 실물 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
+
+- 변경: `trip_runner._step_bend`가 trip hold, D-517 교통 대기(`traffic.holds`), `live.open`, CORE `executing`(교체 가능한 우리 stop 제외)일 때 `bend`를 보내지 않는다. 정지 중에는 곳(place)의 stop만 나간다. 두 단계의 송신·응답과 슬롯 검사를 `_send`, `_core_busy`로 합쳤다.
+- 증거: `test_trip_bend`·`test_trip_runner`·`test_trip_caps`·`test_lane_traffic`·`test_module_structure` 157 passed, known_failures 0 new. 새 시험 5개는 이전 코드에서 모두 실패한다. code-reviewer(opus) APPROVE.
+- gate 변화: 없음. 호스트 시험이며 CORE 굽이 의미·SIM·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
+
+- 변경: `route_a`의 선언 시작점과 Gazebo 실제 시작점을 80 mm, 50 mm 어긋나게 둔 폐루프 결과와 재현 스크립트를 `docs/validation/lane-route-start-offset-sim-2026-10-08/`에 기록했다.
+- 증거: 두 실행 모두 이동 0.0 m, `camera_line_not_visible` HOLD 후 LOST. 50 mm 실행의 `/cmd_vel` publisher는 CORE 하나였고, 원본 NPZ 해시를 기록했다.
+- gate 변화: 없음. 카메라가 선을 인식하지 못한 두 장면의 정지 증거이며 정적 `route_start` 위치 검증, Fleet 위치 권한, 실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
+
+- 변경: 기존 10/6·10/7 원본을 현 소스에서 재생하고, 정적 `route_a` 시작 위치 ±20/40/80 mm 오프라인 스윕과 +40 mm Gazebo 출발을 `docs/validation/lane-route-start-disagreement-2026-10-08/`에 기록했다.
+- 증거: 오프라인 −40 mm는 1.0468 m 주행 중 지도 중심선 편차 최대 60.0 mm, 대응 ROS-SIM은 0.0 m에서 LOST. 두 렌더링은 동일 물리 장면이 아니다.
+- gate 변화: 없음. 정적 시작 위치의 운영 권한과 사람 승인 차선 정답, 실물 수용은 계속 HOLD.
+
+## 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
+
+- 변경: 물리 카메라 설정에서 `route_a/b/ab` 시제품 follower를 생성하지 않도록 observer의 Gazebo 조건을 고정하고 `docs/validation/lane-route-prototype-admission-2026-10-08/`에 ROS 노드 확인을 기록했다.
+- 증거: 관련 호스트 181 passed, 모델 PC의 PINKY형 설정 `NoneType`·Gazebo 설정 `RouteCameraFollower` readback. 실물 장치에는 적용하지 않았다.
+- gate 변화: 없음. 활성 Fleet 지도·독립 위치 승인과 실물 수용은 별도다.
+
+## 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
+
+- 변경: observer가 route 모드의 유효 카메라 프레임마다 Gazebo 조건을 다시 검사하고 깨지면 follower를 폐기하도록 했다. `docs/validation/lane-route-prototype-lifetime-2026-10-08/`에 ROS 파라미터 변경 readback을 기록했다.
+- 증거: 모델 PC의 Gazebo `RouteCameraFollower`가 `PINKY` 변경 프레임 뒤 `NoneType`; Gazebo 복구 뒤에도 `NoneType`. 호스트 회귀 11 passed, 신규 실패 0.
+- gate 변화: 없음. 이 설정 검사는 물리 장치 신원·Fleet 위치 권한·주행 수용을 대체하지 않는다.
+
+## 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
+
+- 변경: 진짜 Fleet 서버(`create_app`, `TripRunner`, `HttpLaneJunction`)로 서쪽 길에서 NW까지 `POST /trip` 20회를 모델 PC Gazebo(도메인 88)에서 돌려 `docs/validation/lane-trip-lap-sim-2026-10-08/`에 기록했다. 지도 자세만 Gazebo 참값이다.
+- 증거: trip 완료 0/20. 모서리 16/20, 굽이 16/16, SW 회전 시작 3/16·끝 0. 원인 A(굽이 뒤 SW 교차로를 keeper가 `corner_left`로 읽어 원형 교차로 역주행) 11, B(Fleet `MANOEUVRE`에 CORE `approaching` 없음 → 다음 곳 송신이 회전을 중단) 3, C(모서리 출구 D-468 이탈 → 국소 복귀 소진 → stall) 4, D·E 각 1. Fleet은 20/20 trip을 멈추고 로봇을 세웠다(hang 0). D-422 출처 `memory` 0, `near_stop` 0.
+- gate 변화: Fleet 차선 trip은 SIM에서 HOLD. 실제 지도 자세 오차·bridge 켬·장치 수용은 미검증.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143
+
+- 변경: 새 크기 단위 `core_features/line_follow/arc/`(분리 계획 `docs/plans/2026-10-08-line-follow-arc-subpackage.md`, 판정은 독립 재판정 대기)에 `lane_arc.py`(298줄)를 두었다. `POST /line-follow/junction`의 `exit_segment`(`map_id` 필수, 범위 밖 400, `arc_enabled` 꺼짐 409 `LANE_ARC_UNAVAILABLE`), 능력 `lane_arc`, `line_follow.arc` 상태(`core_common/protocol/line_arc.py`), `pivot_basis` `segment_end`, 정지 사유 `lane_arc_*`, 이벤트 `nav.lane_arc_end_unarmed`, 지시 `aborted` `arc_mismatch`, `motion_admitted` kind `arc`·`arc_edge`(`ir_side`). 호는 회전 끝에서 열리고(ω = g·v·κ, odom 투영 길이, 시간 한도), 호 동안 keeper 사유·손실 시계·D-476·D-468·D-407·교차로 게이트를 쓰지 않는다. 끝에서 `armed` 지시는 그 자리를 축으로 실행하고, 없으면 오늘의 추종과 이벤트, 호 기록 `reason`은 `lane_arc_end_unarmed`(Fleet 작업자 계약 메모). IR 한 번 보정(유예 0.03 m, away 0.12 m + 확신 있는 clear, level은 ψ₀ + κ·s까지 상한 0.18 m). 알려진 D-491 횡단보도 구역이 호 시작 0.20 m에 걸치면 `exit_segment`를 버린다(`junction.reason` `arc_crosswalk`). 설정 `arc_enabled`(기본 false)·`arc_curvature_gain`·`arc_blind_max_m`. API Reference v1.143(v1.142는 다른 두 브랜치가 씀), 판 고정 시험(Fleet 문서 고정 4개 포함, Fleet 코드 무변경). 카메라 호 맞춤(단계 2)과 `lane_arc_entry` 검사는 하지 않았다.
+- 증거: 호스트 pytest services 1384 passed, gateway 2275 passed(17 skipped), api_web 140 passed, Fleet 판 고정 4파일 89 passed, `test/architecture` 크기 판정 외 통과 → 판정 갱신 뒤 재실행 통과, known_failures 0 new(`X:\DevTemp\d520-core\run*.txt`). 골든: `arc_enabled: false`의 틱별 결정이 main 627ae3c0c에서 만든 `test_lane_arc_off_golden.json`과 같다(246·250틱). 변이 확인: `arc` IR 허용에 left/right 추가, arc 후진 허용, 보정 횟수 검사 제거, 끝 길이 +0.05에서 각각 시험 실패 후 복구. Gazebo·실기는 하지 않았다.
+- gate 변화: 없음. 단계 1 SIM(모델 PC)과 크기 판정 두 개(`line_follow/arc` 299, `schemas.py` 1340)의 독립 재판정이 남았다.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145
+
+- 변경: 착지 전 재확인에서 feat/d517-m2-authority가 v1.143으로, feat/d517-m3-lane-convoy 워크트리가 v1.144로 올라가 있어, 이 브랜치의 API Reference 판과 변경 이력 행, 판 고정(app.py, `test/test_line_follow_contract_docs.py`, Fleet 문서 고정 시험 4개)을 v1.145로 옮겼다. 계약 내용은 같다.
+- 증거: 모든 브랜치의 API Reference 머리 판을 다시 읽음(v1.142 feat/d507-bend-odom-pass, v1.143 feat/d517-m2-authority, v1.144 d517-m3-convoy 워크트리). 판 고정 시험 재실행.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 안전 리뷰 반영과 main 병합
+
+- 변경: 안전 리뷰(APPROVE, 고칠 것 다섯) 반영. (1) 호 끝의 `armed` `stop`은 장소와 무관하게(`place_id` 없음 포함) `junction_stop`으로 선다. (2) `exit_segment`가 있는데 `stop_point`로 호를 열지 않으면 오늘처럼 기본 전진 0.10 m(D-520 2항에 한 문장 추가). (3) 호 시간 한도와 보정 한도를 각속도 한도가 남기는 속도 min(v, cap/(g·|κ|)), min(v_c, cap/(g·|κ| + b))로 잰다. (4) kind `arc`는 매 틱 확신 있는 IR clear(신선·교정·`visible: false`)만 허가한다(`_arc_ir`와 `motion_admitted` 둘 다). (5) 크기 판정 두 개를 독립 재판정 문구로 바꿨다(`line_follow/arc` 310, `schemas.py` 1340). main c06ddcad5(D-520 Fleet 8c2c4e8f0, D-507 bend, D-517 M2 통행권)를 병합했다. 호가 가진 틱도 D-517 통행권 게이트를 거친다(D-520 2항 D-517 문장). API 판은 v1.145 그대로(main v1.143, d517-m3-convoy 워크트리 v1.144).
+- 증거: 변이 확인: 다른 장소 stop을 `arc_mismatch`로 되돌리면 2개, `_arc_ir`의 확신 clear 검사를 빼면 1개, `motion_admitted`의 검사를 빼면 1개 시험이 실패한 뒤 복구. 골든은 병합한 main c06ddcad5에서 다시 만든 궤적과도 같다. 나머지 시험 결과는 다음 기록 없이 이 브랜치 보고에 있다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
+
+- 변경: main 병합 뒤 `core_features`가 12947줄로 판정 12772 +150을 넘었다. main만으로 12922(한도 그대로)이고 이 브랜치가 arc 단위 밖에 25줄(manager.py +11, model.py +14)을 더한다. 판정 행을 독립 재판정 대기 문구로 적었다.
+- 증거: services 1436 passed, gateway 2288 passed(17 skipped), api_web 139 passed 1 failed(`test_site_rooms` 자식 시간 초과, 단독 재실행 22 passed: 부하 중 시간 의존), 판 고정 89 passed, `test_module_structure` 34 passed(판정 갱신 뒤), known_failures 재확인 0 new(`X:\DevTemp\d520-core\run_final.txt`, `run_recheck.txt`).
+- gate 변화: 없음. `core_features` 독립 재판정이 남았다.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
+
+- 변경: 재검증 HIGH. 호가 도는 동안 `end_place_id` 의 `bend` 가 `armed` 되면 호 끝 `_start_turn` 을 거쳐 `_bend_step` 이 `j['bound']` 를 읽다 `KeyError` 로 `tick()` 이 깨졌다. 호가 도는 동안 `action: bend` 를 409 `JUNCTION_ARC_RUNNING` 으로 거절하고, 호 끝의 `armed` `bend` 는 `aborted`·`arc_mismatch`(지시 없는 끝)로 처리한다. API Reference v1.145 항목에 적었다. Fleet 은 호가 도는 그 차로에서 굽이를 보내지 않는다(`_step_bend`). 다만 Fleet 이 아직 호 시작을 못 본 상태에서 보내면 이 409 를 모르는 코드로 다시 던진다.
+- 증거: 단위 시험 2개(거절, 끝의 armed bend), API 시험 1개(409). 변이 확인: 거절을 빼면 2개 실패, 끝 guard 를 빼면 리뷰가 본 `KeyError: 'bound'` 로 1개 실패, 각각 복구. 골든: 병합 때의 main c06ddcad5(d5b75ff06^2)에서 다시 만든 궤적이 저장한 골든, 이 브랜치의 호 꺼짐 궤적과 같다(차이 없음, 골든 갱신 없음). services 1438 passed, gateway 관련 159 passed, api_web 140 passed(13 skipped), `test_module_structure` 와 판 고정 36 passed, known_failures 0 new(`X:\DevTemp\d520-core\run_rv.txt`).
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · Rosy Cam 원격 입회 역할 정리
+
+- 변경: D-521을 제안하고 G4/G5 런북과 Rosy Cam 운영 가이드에 원격 관찰·현장 물리 차단·영상 단절 시 HOLD를 일치시켰다. 기존 G4/G5 승인·지도 게이트와 장치 설정은 바꾸지 않았다.
+- 증거: 현장 `ceiling_north` 프레임 수신(2026-10-08, 응답 시 나이 171 ms); `rosy_26`·`rosy_60`은 모두 motor, navigation inactive, 승인 마커·지도 없음. harness lint 0 errors/23 기존 경고, 문서 계약 시험 119 passed/2 failed(로그 제목·생성 index), 수정 후 두 실패 재실행 2 passed·known_failures 0 NEW.
+- gate 변화: 없음. 카메라 연결만으로 G4/G5 또는 ROSY Web 목적지 주행을 수용하지 않는다.
+
+## 2026-10-08 · uncommitted · D-521 원격 단독 입회 수정
+
+- 변경: 사용자 결정에 따라 D-521을 Accepted로 바꾸고 G4 schema v2·G5의 별도 현장 담당자 필수 조건을 제거했다. 런북의 신원·이동 여유·영상·기존 정지 경로 확인을 일치시켰다.
+- 증거: 앞선 현장 카메라 프레임은 두 로봇을 보였지만 영상만으로 개별 ID와 케이블 주변 10 cm 이동 여유는 확정하지 못했다. 코드·장치 설정은 변경하지 않았다.
+- gate 변화: 없음. 각 로봇의 원시 G4 계측과 G5 지도·정지 증거는 아직 없다.
+
+## 2026-10-08 · uncommitted · D-522 개발 환경 원격 이동 권한
+
+- 변경: 사용자 지시에 따라 원격 단독 시험의 반복 승인 생략과 강제 진행의 범위를 D-522로 기록했다. 장치의 인증·E-Stop·CORE 정지와 몸체 신원·구역 확인은 유지한다.
+- 증거: 두 로봇의 CORE IDLE·속도 0, 최신 LiDAR·전면 영상과 Rosy Cam 영상 수신. 램프 명령 수락만으로 영상 속 로봇별 신원은 확정하지 못했다. 사이트 Fleet Web 설치 버전의 인증·tether API도 아직 목표 계약과 다르다.
+- gate 변화: 없음. 실물 이동과 G4/G5 수용은 별도 장치 증거가 필요하다.
+
+## 2026-10-08 · uncommitted · 10/6·10/7 주행영역 후보와 LiDAR 근접 대조
+
+- 변경: 네 원본 녹화 3,336프레임의 시험 drivable 면적과 신선한 정면 LiDAR 거리의 동시 발생을 계산하는 읽기 전용 분석·영수증을 [검증 기록](validation/drivable-lidar-candidate-2026-10-08/result.md)에 남겼다. 모델 출력은 평가 정답이나 조향 입력으로 쓰지 않았다.
+- 증거: 180° 기준 0.30m 이내 근접·넓은 마스크 동시 발생은 10/6 두 영상 990+271프레임, 10/7 두 영상 0+19프레임. 4개 기준 프레임은 제품 `front_sector`와 거리·유효 빔 수가 일치했다. 동일 입력 재실행 결과 해시 일치, 문서 계약 136 passed·1 skipped·NEW 0, lint 0 errors. 사람 검수 정답 0건.
+- gate 변화: 없음. LiDAR 반환은 벽 화소가 아니며, 10/7 첫 영상의 경계 실패는 근접 조건 없이도 발생했다. 주행 수용 HOLD.
+
+
+## 2026-10-08 · uncommitted · feat(decision-ask): AI PC 질의는 사실과 후보만 반환한다
+
+- 변경: D-523. leet.ai.decision_pipeline이 정체 사실과 허용 후보를 검사한다. 막힘 답, meet 주문, 네트워크, 공개 REST, Laya 기동은 없다. D-492와 D-503은 Proposed로 남는다.
+- 증거: pytest operations/fleet/test/test_decision_pipeline.py 34 passed. known_failures.py 0 new. 출력 X:\DevTemp\decision-ask\run.txt.
+- gate 변화: 없음. 현장 그림자, V0/V1, 장치 동작은 미검증.
+- 결정: D-523 Accepted (2026-10-08, 사용자 계획 승인; 내부 파서)
+- 교훈: 없음
+## 2026-10-08 · uncommitted · D-512 개정 2 램프 식별과 정책 off 알림
+
+- 변경: `run.py --tether-check`가 램프 식별(`POST /host/lamp/identify`)을 보내고 6 s 동안 머리 위 프레임을 받아, 깜빡임 덩어리가 그림의 로봇 점에서 몸 반경(회전 반경 × 1.5, 보정 축척의 px) 안에 있고 다른 곳에 센 덩어리가 없을 때만 확인을 끝낸다. 식별 없음·색 없음·약함·다른 곳·애매함은 거부, 429는 한 번 기다려 다시 요청한다. 증거는 `tether.identity`. 계획 `stop.ok_events`(`plan_rules.OK_EVENTS`, 지금은 `safety.policy_off`만)로 D-400 정책 off 알림이 중단하지 않는다. `safety.*`의 다른 이벤트는 그대로 중단이다.
+- 증거: 2026-10-08 9dfk 실행에서 다른 로봇을 9dfk로 고른 일과 램프 깜빡임 프레임(진짜 자리만 바뀜). 그 프레임에 새 판정을 대 보면 진짜 자리는 2 px로 통과, 오른쪽 아래 로봇은 거부. 모델 PC에서 `python -m pytest tools/device_test/test tools/capture/test -q`(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음.
+## 2026-10-09 · uncommitted · D-528 과노출 후보와 정답 가능성 분리
+
+- 변경: 과노출 비율은 검수 우선순위만 정하고 자동 제외를 하지 않도록 `review_quality.py`의 `--apply`를 제거했다. D-528에 사람의 정답 가능성 판단, 255 대기와 학습 승인 경계를 기록했다. 수치만으로 제외했던 v13 사진 9~23의 15장을 검수 API로 재검수 대기에 되돌렸다.
+- 증거: 모델 PC 원본 15장 확인, 검수 API 응답 15건 `reopen`/skip 0건, `/api/learning` 객체 대기 43·제외 0·픽셀 승인 0. `test_review_quality.py`는 후보 보고가 저장 결정을 바꾸지 않음을 확인했다.
+- gate 변화: 없음. v13 픽셀 승인과 원본 영상 출처 검증, 학습 admission은 아직 끝나지 않았다.
+
+## 2026-10-09 · uncommitted · D-529 역할별 시험 실행 위치
+
+- 변경: 개발 PC의 pytest 자동 fallback을 중단하고, 모델/AI PC 호스트 시험, 현장 PC Fleet·Cam, Pinky DEVICE/FIELD, GitHub full CI의 증거를 분리하는 결정 D-529를 기록했다.
+- 증거: AI PC에서 기체 ID/API 관련 호스트 시험 102개 통과; 현장 Fleet 등록 두 행의 serial_number·device_uid는 아직 비어 있다.
+- gate 변화: 문서 결정만. 원격 실행기 착지·푸시·ARM64 payload·두 로봇 배포·현장 수용은 별도 검증한다.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
+
+- 변경: 기존 정면 LiDAR 0.30 m 근접 후보를 제품 ody_path_gap의 직진 몸체 경로에 투영한 [검증 기록](validation/drivable-body-path-audit-2026-10-09/result.md)을 추가했다. 원본은 X:에 두고 코드·해시·집계만 공개 저장소에 기록했다.
+- 증거: 원본 3,336프레임 중 스캔 사용 가능 2,621프레임. 가정한 0.08 m/s 직진 정지거리 0.0384 m 이하는 0건. 10/7 둘째 영상 80번의 경로 거리 0.05097 m는 정지 기준과 0.01257 m 차이여서 안전 여유를 확정하지 못한다.
+- gate 변화: 없음. 실제 회전 경로·mount 실측·사람 정답·실물 주행 수용이 없으므로 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
+
+- 변경: Lenovo Pilot 설치 화면을 다시 촬영하고 설치 APK를 읽기 전용으로 확인했다. 현재 소스에서 Android 후보 APK를 격리 빌드해 설치본과 자산·서명을 비교한 결과를 [검증 기록](validation/uiux-pilot-tablet-reconnect-2026-10-09/result.md)에 남겼다.
+- 증거: 현재 후보 93 JVM tests PASS, UI 자산 50개 소스 일치. 설치본과 후보 자산 10개 차이, 서명 인증서 일치. 후보 에뮬레이터는 부팅 후 ADB 미등록으로 화면 캡처 실패.
+- gate 변화: 없음. 설치본 DEVICE 로비만 관찰했고 현재 후보 DEVICE G2, 사용자 G3와 현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 첫 화면 LOCAL 증거
+- 변경: `validation/uiux-fleet-map-first-2026-10-09/result.md`에 변경 전후 스크린샷 해시, 모바일 지도 시작 위치와 인증·평면 영상 검증 범위를 기록했다.
+- 증거: 현장 지도 3개 폭의 브라우저 캡처와 위치 검증, 평면 영상 좌표 표시 전용 테스트.
+- gate 변화: 없음. DEVICE/FIELD/G3는 별도 수용 전까지 HOLD.
+
+## 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
+
+- 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
+- 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
+- gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · 공개 증거 SHA-256 문맥 표기
+
+- 변경: 두 검증 기록의 원본 해시·증거 경로는 유지하고 SHA-256 문맥을 같은 줄에 명시했다.
+- 증거: 수정 전 공개 파일 비밀정보 검사 오탐 5건, 수정 후 저장소 전체 검사 1 passed·새 실패 0건.
+- gate 변화: 문서 표기만 수정했다. Lane 후보의 학습·주행 수용은 이 검사 통과와 별개로 HOLD.
+
+## 2026-10-09 · uncommitted · Fleet 지도 증거 SHA-256 문맥 표기
+
+- 변경: 병렬 착지한 현장 지도 검증 기록의 공개 PNG 해시 세 줄에 같은 줄의 SHA-256 문맥을 추가했다. 원본 해시와 경로는 보존했다.
+- 증거: 착지 검사에서 새 오탐 3건을 확인했고 해당 파일만 다시 스캔해 0건으로 낮췄다.
+- gate 변화: 문서 표기만 수정했다. 현장 배포나 Lane 주행 수용을 뜻하지 않는다.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 지도 마커 비율 LOCAL 화면 기록
+- 변경: `validation/uiux-fleet-marker-scale-2026-10-09/result.md`에 큰 화면에서 과장된 방향 마커와 변경 후 모바일·데스크톱 지도 캡처를 기록했다.
+- 증거: 1920×1080 기존 약 161.94px, 변경 후 42px 이하 검증; 브라우저 6 passed / NEW 0. 원본 캡처와 실행 로그는 X:에 둔다.
+- gate 변화: 없음. 실제 위치·주행·SLAM 및 G3 수용은 이 화면으로 입증하지 않는다.
+
+## 2026-10-09 · uncommitted · fix(fleet): D-520 호 진입 회전각을 lead 접선 대신 차로 방향으로
+- 변경: `trip_runner._step_lane`이 `exit_segment`를 싣는 회전에도 `turn_target`(들어오는 차로 끝 방향 → 나가는 차로 시작 접선, D-507 4항 lap SIM 3 개정)을 보낸다. 지금까지는 `theta`(5 cm lead 접선)를 보냈고, 260919 SW에서 그 값이 12–17° 틀려 호가 접선보다 바깥을 향해 시작했다(lap SIM 2). D-520 1항 47행 문장과 D-507 4항의 끝 문장, `test_trip_d520.py`의 기대·주석("tangent - 6 deg")을 고쳤다.
+- 증거: 모델 PC pytest(`X:\DevTemp\d520-entry\run.txt`) `test_trip_d520.py`·`test_trip_runner.py`·`test_routing_execute.py` 135 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`)에서 원 추종·기본 켬과 함께 봤다.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 APPROVE WITH NOTES(시험 이름 고침 반영, 원 추종 브랜치보다 먼저 또는 함께 착지).
+- gate 변화: 없음. DEVICE/FIELD HOLD.
+
+## 2026-10-09 · uncommitted · feat(core): D-520 호가 odom의 지도 원을 반지름 보정으로 따른다
+- 변경: `line_follow/arc/lane_arc.py`. 호를 열 때 odom에 원 하나를 놓는다. 회전 뒤면 회전 목표 yaw를 접선으로 하고, 이어지는 `straight`면 앞 호의 원을 그대로 쓴다. 매 틱 ω = g·v·κ + v·clamp(sign κ·(64·e_r + I) − 16·e_θ, ±1.5)이다. I는 150·∫e_r ds이고 |I| ≤ 1.0이며, 이어지는 호가 원과 함께 이어받는다. IR 보정의 away·level 동안 보정은 0이고 I도 쌓지 않는다. 보정 밖에서 |e_r| > 0.075 m면 `lane_arc_edge`로 선다. 원을 다시 쓰는 것은 같은 세대의 이어지는 `straight`뿐이다(안전 검토). 첫 IR `left`·`right` 판정은 원을 옮긴다(몸이 칠한 선 중심에서 0.0325 m 안쪽). `motion_admitted`, D-422 sweep, 길이·시간 한도, 멈춤 HOLD는 그대로다. 시험 6개를 새로 넣었다(곡률 0.88/1.1배로 도는 로봇이 원에서 12 mm 안, 8° 틀린 회전 끝에서 원으로 돌아옴, 보정 상한, 반지름 한도 멈춤, 이어지는 호의 원 유지, IR 판정이 원을 옮김). 피드포워드만 보던 시험 셋은 그 뜻대로 보정 없는 틱을 보거나 이득 0으로 고쳤다.
+- 증거: 모델 PC pytest `test_lane_arc.py` 77 passed(±κ 시험 포함), 앞서 `test_line_arc_api.py`·`test_line_junction.py`와 함께 151 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`).
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES(턴에서 옛 원 재사용) → 고친 뒤 APPROVE WITH NOTES.
+- gate 변화: 없음. DEVICE/FIELD HOLD(D-520 개정 2026-10-09 4항).
+
+## 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건
+- 변경: 사용자 결정(2026-10-09 "둘 다")을 D-520 끝 「개정 2026-10-09」로 적었다. 내용은 진입 회전각, odom 원 추종, 기본 켬, 장치 조건이다. `line_follow.arc_enabled` 기본을 true로 바꿨다(`rosy_default.yaml`, `model.py`). 능력 `lane_arc`는 `arc_enabled`와 `site_floor_map_id` 선언이 함께 있을 때만 참이다. 선언 없는 `arc_enabled: true`는 시작 거부 대신 능력이 거짓이다. 장치 시험 계획은 `arc_enabled`를 false로만 둘 수 있다(`plan_rules.py`). 현장 바닥을 선언하는 `d476_bridge_9dfk.yaml`에 `arc_enabled: false`를 넣었다. API Reference의 `lane_arc`·`LANE_ARC_UNAVAILABLE`·호 명령 문장을 고치고 v1.154로 올렸다(v1.153은 `feat/host-control`이 씀). 안전 검토 뒤 고침: 바닥을 선언하는 계획은 `arc_enabled: false`가 없으면 거절, `ir_guard_speed_scale` 0은 시작 거부 대신 능력 거짓.
+- 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES → 고친 뒤 APPROVE WITH NOTES. 열린 점: 계획 밖 로봇 overlay가 바닥을 선언하면 다음 payload부터 호 능력이 켜진다(개정 「남는 위험」, 8kcn·9dfk overlay는 이 세션이 읽지 않았다).
+- gate 변화: 없음. lap SIM 4는 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못했다(lap 1/12씩 0.051–0.056 m, NE 4/4 0.049–0.052 m). 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-537 두 Pinky 현장 몸체 대조
+- 변경: 인증된 로봇 Web 램프 자가 시험과 Rosy Cam 연속 프레임의 일회성 몸체 대조 계약을 D-537로 기록하고, D-472 운영 추적·D-522 이동 권한과 분리했다. 날짜별 FIELD 기록을 추가했다.
+- 증거: rosy_26 요청 58c3aba848b7af4e → 위쪽 몸체, rosy_60 요청 b3102100e354a95e → 아래쪽 몸체; 각 장치 done, 동시 영상의 다른 몸체 변화 없음. 원본은 X:/DevTemp에 보관하고 SHA-256을 날짜별 기록에 남겼다.
+- gate 변화: 현재 배치의 일회성 몸체 ID 대조 확인. Fleet named track·LCD 픽셀·Web 이동은 미확인.
+## 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
+- 변경: `validation/lane-trip-lap-sim4-2026-10-09/`에 결과와 하네스(`ring4_run.sh`·`ring4_batch.sh`·`ring4_arc.py`), 호별 참값 Δr·구간·Fleet 송신 기록을 두었다. 원시 기록은 `X:\DevTemp\lap-sim4\lap4_runs_full.tgz`다.
+- 증거: 모델 PC Gazebo(도메인 93, `rosy_ring4`, 포트 8588/8589)에서 출하 기본 겹으로 돌렸다. 비례 보정 12 lap은 12/12 완료다. 착지한 비례+적분 12 lap은 11/12 완료이고, 나머지 1회는 ring 앞 서→남 모서리의 `lane_return_fleet_required`다. NE 진입은 4/4와 4/4다. IR 보정, `lane_arc_edge`, `near_stop`은 모두 0이다. ring 호 최대 |Δr|은 lap 0.014–0.056 m이고, 각 묶음에서 1회가 0.05 m를 넘었다. NE `ring_n`은 −0.049…−0.052 m(안쪽)다.
+- gate 변화: 없음. D-520 개정 SIM 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못해 장치 조건 (1)은 열리지 않는다. 남은 원인은 원의 기준 방향(회전 목표 yaw)이 참값 접선과 다른 것이다(SW −1…−7°, NE +14–16°). 카메라 원 맞춤(단계 2)이나 지도 자세 방향이 필요하다.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
+- 변경: `validation/uiux-robot-slam-truth-2026-10-09/result.md`에 CORE 맵핑 세션 수락과 실제 SLAM 실행의 증거 경계를 기록했다. Dashboard 설정 카드가 불필요하게 늘어나지 않도록 고친 모바일·데스크톱 화면을 함께 기록했다.
+- 증거: Console 320·390·1366px와 Dashboard 390·1366px 캡처, 관련 브라우저 3 passed / NEW 0, 이미지 SHA-256.
+- gate 변화: 없음. 설치본·SLAM Toolbox 실행·지도 갱신·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
+
+- 변경: 기존 3,336프레임 smoke 출력을 세션별 연속 구간으로 재집계하고 입력 해시·frame index를 확인하는 재현 코드를 추가했다.
+- 증거: 10/6 이동 중 `none`이면서 하단 후보 면적 >50%인 최장 16·13프레임, 10/7 STOP이면서 같은 면적 조건인 13·83프레임, 10/6 keeper 한쪽 출력 168프레임과 10/7 재생 `ONE` 104프레임 구간을 특정했다.
+- gate 변화: 없음. 후보 분석만이며 사람 픽셀 정답·동일 경계 ID·실물 주행 수용은 여전히 HOLD.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
+
+- 변경: 연속 출력 구간의 시작·중간·끝 원본 프레임을 순차 디코드해 X: 접촉 시트로 대조하고 선택 index·관찰·한계를 새 검증 기록에 남겼다.
+- 증거: 10/6 한쪽 출력 110프레임 안에 굽은 선과 흰 구조물 근접 장면이 함께 있고, 10/7 STOP 83프레임에는 원형·갈림·가로 표식이 보인다. 긴 출력이나 넓은 마스크만으로 동일 경계·진입 허가를 주장할 수 없다.
+- gate 변화: 없음. AI 후보 판독이며 사람 승인 정답, 재생·SIM·DEVICE 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 변경: Pilot 조종 종료 요청부터 실제 Robot Console 지도 문서·인증 인계까지 LOCAL 연속 화면을 기록하고, 지도 없음 상태에서 현재 지도 열람을 단정하던 문구를 수정했다.
+- 증거: `validation/uiux-pilot-console-continuity-2026-10-09/result.md`. 2000×1200·390×844 전환 전후 캡처, 브라우저 4 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 정지·지도/SLAM, 설치본, DEVICE/FIELD 및 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+
+- 변경: 증명된 원본 JPEG 207장을 연속 갤러리와 공란 검수 CSV로 묶고, 입력 목록·이미지 해시를 확인하는 재현 코드를 추가했다.
+- 증거: 124+83장, CSV 207행, 이미지 해시 207건, 갤러리 링크 207개 일치. 검수 입력 칸은 모두 공란이고 모델 출력은 갤러리에 없다.
+- gate 변화: 없음. 고정 평가 세션 중복을 유지해 학습 입장을 허가하지 않았으며 사람 정답·주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · 공개 검증 기록의 커밋 해시 문맥
+
+- 변경: 두 검증 기록의 분기 기준 SHA-1을 같은 줄에서 `commit`으로 명시해 공개 무결성 값임을 분명히 했다. 관찰값과 판정은 바꾸지 않았다.
+- 증거: 저장소 비밀값 검사에서 해당 두 줄의 high-entropy 오탐이 사라지는지 재확인한다.
+- gate 변화: 없음. 검증 기록의 LOCAL·DEVICE·FIELD 판정은 그대로다.
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+
+- 변경: API가 보장하는 마지막 계획과 현재 목표 연동의 경계를 Console 경로 모양·문구에 반영하고 LOCAL 반응형 증거를 기록했다.
+- 증거: `validation/uiux-robot-last-plan-2026-10-09/result.md`. 1366·390·320px 캡처, 브라우저 1 passed / NEW 0.
+- gate 변화: 없음. 실제 경로 추종·SLAM, 설치본, DEVICE/FIELD와 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
+
+- 변경: 전화와 데스크톱 현장 지도에서 지도→경로 미리보기→운행→초안 편집 순서를 적용하고 선택형 평면 영상 도구를 접었다.
+- 증거: `validation/uiux-fleet-site-map-task-order-2026-10-09/result.md`. 320px 전후·390px·1440px 캡처, 브라우저 7 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 운행·SLAM, 설치본·DEVICE/FIELD와 전체 D-153 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · docs: GitHub 첫 화면에 인지·월드·판단 경계를 둔다
+
+- 변경: README 인지와 판단을 층·자리·지금 표로 줄이고, 아키텍처 색인 11·12행과 11·12장에 2026-10-09 경계만 남겼다. CONCEPTS에 Perception·World state·Decision candidate 용어를 더했다.
+- 증거: 워크트리 docs/github-glance. pytest test/test_readme_agent_start.py test/test_native_runtime_docs.py test/test_pi_wifi_deployment.py::test_wifi_runbook_is_linked_from_runtime_guide test/architecture/test_document_placement.py 17 passed. python tools/harness/rosy_harness.py lint 0 errors, 23 warnings(기존 last_verified). 새 상대 링크는 파일로 확인했다. generate가 docs/index.md를 다시 썼고, 그 뒤 lint도 0 errors, 23 warnings였다.
+- gate 변화: 없음. 문서 정합이며 구현·배포·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs: 10/7 경계 기억의 odom 반례 범위 측정
+
+- 변경: 원본 출처가 증명된 10/7 카메라 207장과 odom의 header stamp, 연속 자세 차이를 측정하고 같은 물리 경계 ID가 없는 한쪽 선 기억의 반례와 다음 shadow 검증을 기록했다.
+- 증거: `validation/lane-boundary-identity-2026-10-09/result.md`. 두 MCAP에서 prior odom 0.3초 이내 206/207, 최대 시각 차이 86.4 ms, 카메라 간 최대 odom 이동 7.8 mm. `evidence/measure_odom.py` 재실행으로 확인.
+- gate 변화: 없음. 사람 경계 ID·실물 이동 정답·주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 실기 learned paint 사용률과 추론 지연 진단
+
+- 변경: 10/7 MCAP의 `keep_debug` 부재와 현재 두 Pinky의 읽기 전용 카메라·CORE 경계를 조사했다. 9dfk의 live 25프레임 `denoise_fallback` 25건과 별도 모델 추론 327.7–337.4 ms를 재현 가능한 probe와 함께 기록했다.
+- 증거: `validation/learned-paint-live-2026-10-09/result.md`. 10/7 두 세션의 `--recorded-ground` 첫 프레임 거절, 현재 설치본 revision, live ROS 구독·모델 로드·`/cmd_vel` 발행자 readback을 분리했다.
+- gate 변화: 없음. 실측 보정·사람 경계 ID·실기 주행은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Pinky learned paint 지연·수명 충돌 재현
+
+- 변경: 설치 모델과 실제 영상·odom을 읽기 전용 별도 worker에 넣어 마스크 수명 충돌을 계측하고, 주행 권한을 늘리지 않는 대안의 반례와 다음 실험 기준을 기록했다.
+- 증거: `validation/learned-paint-cadence-2026-10-09/result.md`. fresh odom 50/50, `every_n=1` 0건, 영상 간격 중앙값 124.8 ms, learned 사용 0/50, 완료 추론 354.2 ms, 오류 없음.
+- gate 변화: 없음. 운영 worker 내부 원인, 사람 경계 ID, 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 굽이 SIM 페인트 출처 차이 반례
+
+- 변경: B8의 같은 Gazebo 89프레임·동일 keeper에서 threshold와 지도/참값 자세 투영 페인트를 비교해 페인트 출처가 경계 추출·STOP을 바꾸는 구간을 특정했다.
+- 증거: `validation/lane-sim-paint-source-2026-10-09/result.md`. `south_centre_lost` 15–20번 6장에서 threshold만 `bend_ahead`로 진행; 지도 투영에서는 옆 경계가 없어 `no_boundary`. 지도 투영은 벽 가림 없는 진단 후보이며 승인 정답이 아니다.
+- gate 변화: 없음. 실물 경계 ID·카메라 보정·폐루프 SIM·실기 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 짧은 경계 길이 문턱 반례 재생
+
+- 변경: SIM의 68 mm 경계를 없애는 후처리 길이 문턱을 60/70/80/100 mm로 스윕하고, SIM 89장과 기존 실물 434장의 진행·정지 차이를 분리했다.
+- 증거: `validation/lane-short-boundary-2026-10-09/result.md`. 문제의 SIM 6장 목표 중심 오차 4.5–6.2 mm; 70 mm는 그 6장을 정지시키지만 실물 `bend_expected=True`도 6장 추가 정지. 전역 길이 변경은 보류.
+- gate 변화: 없음. 사람 물리 경계 ID와 폐루프·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 짧은 경계 필터 폐루프 재검증
+
+- 변경: 현재 로컬 main `247561153`을 모델 PC에 격리 빌드하고 B9 SIM에서 60/70 mm 선 길이 조건을 각각 2회 CORE 폐루프로 비교했다.
+- 증거: `validation/lane-short-boundary-closed-loop-2026-10-09/result.md`. 기준은 교차부 횡선 뒤 2/2 HOLD, 70 mm는 교차부 명령 전 2/2 LOST. 전역 길이 증가 가설을 채택하지 않는다.
+- gate 변화: 없음. 사람 물리 경계 ID·실물 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Pinky 현장 램프 재대조와 이동 전 재확인
+
+- 변경: 인증된 램프 자가 시험과 Rosy Cam으로 정지 중 `rosy_26`·`rosy_60`의 현재 몸체 위치를 다시 대조했다.
+- 증거: [현장 재확인](validation/pinky-live-readback-2026-10-09/result.md). 두 장치 시험 `done`, 전후 영상 SHA-256, 설치 LCD 파일 해시, LiDAR 섹터 거리와 Fleet 상태를 기록했다.
+- gate 변화: 현재 위치의 일회성 몸체 대조는 확인. LCD 전면 픽셀, 안전 증거, 이동 경로 및 실제 이동은 HOLD.
+
+## 2026-10-09 · uncommitted · fix: 경로 밖 카메라 후보 중단 래치
+
+- 변경: Gazebo 전용 route_a 시제품이 지도 경로에서 크게 벗어난 자세의 카메라 ONE 후보를 내던 것을, 경계 기억·잠금 폐기와 해당 경로 실행 중단으로 바꿨다.
+- 증거: `validation/lane-route-offmap-stop-2026-10-09/result.md`. B9 저장 프레임의 80 mm 반례 두 건은 후보→STOP; 정상 자세 BOTH는 유지. route_camera 30건 통과. 기존 drift 표 미달과 실물 정답 부재는 HOLD.
+- gate 변화: 출하 keep/CORE final cmd_vel 변경 없음. 실물 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 경로 이탈의 새 카메라 관측과 폐루프 한계
+
+- 변경: 격리 ROS-SIM에서 `route_a`를 주행시키고, 새 카메라 프레임을 받는 경로 위→80 mm 이탈→복귀를 관찰했다.
+- 증거: `validation/lane-route-live-offmap-2026-10-09/result.md`. 이탈 전 가시 후보, 이탈과 복귀 뒤 비가시 후보. 정적 경로 주행은 장애물 HOLD에서 끝나 B9 경계 공백에 닿지 않았다.
+- gate 변화: 없음. 60 mm는 실험값이며 사람 GT·운영 keep·실물 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix: D-535 연결 사유 안전 검토 기록
+
+- 변경: `cd7464f32`의 Fleet 안전 태그 경로를 작성 세션과 별도로 검토하고, 빠진 `Safety-Review:` trailer의 사후 검토 예외를 해당 커밋 하나에 한정했다.
+- 증거: [독립 안전 리뷰](validation/d535-link-reason-safety-review-2026-10-09/result.md). 표시용 필드의 호출자 확인, 모델 PC 연결 사유·정지 래치·전체 취소 시험 48 passed.
+- gate 변화: D-430 CI trailer 검사에서 이 커밋만 검토 완료로 판정한다. 장치·주행 수용에는 변화 없음.
+
+## 2026-10-09 · uncommitted · docs: SIM 카메라 밝기 게이트 반례
+
+- 변경: B9 동일 시작 자세의 새 Gazebo 영상에서 첫 카메라 STOP을 40% BEV 밝기 게이트로 재현하고, 75% 격리 폐루프의 차로 이탈·장애물 HOLD를 함께 기록했다.
+- 증거: [검증 결과](validation/lane-route-wash-gate-2026-10-09/result.md). 기본값은 경계가 보이는 40.6% 프레임을 버리고 LOST; 75%는 477/477 가시 후보여도 0.304m 뒤 lane_departure HOLD.
+- gate 변화: 제품 설정·운영 keep·CORE 구동 권한 변화 없음. 사람 정답 0건, DEVICE·현장 수용 HOLD.
+
+## 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별
+
+- 변경: 75% 재실행의 85개 카메라 프레임과 GT를 재생하고, `lane_departure`가 지도 차로 이탈 판정이 아닌 중앙 IR 선 검출 사유임을 분리했다.
+- 증거: [재계측](validation/lane-route-wash-gate-2026-10-09/result.md#75-정지-지점-재계측). 정지 GT 경로 가로 오차 약 18.2mm, 원래 로그 IR `[600,2600,600]`; `route_a`에는 D-491 구간 입력이 없고 keeper 후보도 완전한 경계·불확실도 조건을 통과하지 못했다.
+- gate 변화: 없음. IR·LiDAR 정지를 해제하지 않았고 교차부 완주, DEVICE·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: SIM 벽 근처 LiDAR HOLD 원인 범위
+
+- 변경: 75% 격리 주행의 108개 원시 스캔과 CORE 상태를 맞추고, 맵 안쪽·서쪽 출발점 정지 스캔을 비교했다.
+- 증거: [LiDAR 재계측](validation/lane-route-wash-gate-2026-10-09/result.md#독립-lidar-hold). `obstacle_ahead` 시 정면 ±15° 0.381m, 측면 짧은 빔 0.065m, 정적 벽·몸 간격 약 0.053m. 개별 빔의 물체 ID는 미확정.
+- gate 변화: 없음. 몸 쓸림·IR 정지 유지, 실물 수용 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Fleet 현장 위치·SLAM 실행 상태 재검증
+
+- 변경: 현장 Fleet/Vision과 두 Pinky의 읽기 전용 상태를 대조해 [실행 증거](validation/uiux-fleet-live-runtime-2026-10-09/result.md)를 기록했다.
+- 증거: [현장 실행 판독](validation/uiux-fleet-live-runtime-2026-10-09/result.md). 카메라 추적과 장치 연결은 살아 있으나 두 로봇은 `motor` 모드, 지도·현지화·G4 승인 증거가 없다.
+- gate 변화: 없음. 지도상 실명 위치·경로 추종·SLAM·물리 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 화면 목적·인계·공간 평가 기준
+
+- 변경: D-280 디자인 철학을 Fleet 네 작업의 목적·전환·설정 범위·레이아웃 심사 규칙으로 구체화하고, 평가표와 반복 검증 절차를 기록했다.
+- 증거: D-543, `docs/plans/2026-10-09-uiux-purpose-and-layout-pipeline.md`의 Fleet SOURCE 진단. 현행 D-493 지도 비율과 D-501 네 탭은 유지한다.
+- gate 변화: 없음. UI 코드 변경, G1/G2/G3 재평가, 사용자 작업 입회, DEVICE/FIELD 수용은 후속 단계다.
+
+## 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
+
+- 변경: D-543 평가표에 관제·설치·현장 지도·Cell·접속 머리의 작업 목적, 인계, 8축 점수와 첫 실패를 기록했다.
+- 증거: 모델 PC 개발 세션의 `X:\DevTemp\fleet-ui-audit\` 24개 캡처와 `metrics.txt` (`59f8427c1`). 해당 SHA 이후 Fleet 웹 파일이 변경되어 현행 후보 G2 증거는 아니다.
+- gate 변화: 없음. 현행 SHA 재촬영, 실제 작업 완수, 접근성, DEVICE/FIELD 수용은 HOLD.
+## 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
+- 변경: D-548 Accepted(D-193 7 개정), Log 행, API reference v1.156(`auth.development_mode`, 장치 개발 토큰 예외).
+- 증거: rosy_harness lint (D-544~547 빈칸은 다른 세션 선점).
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
+- 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
+- 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
+- gate 변화: 없음(제안).
+
+## 2026-10-09 · uncommitted · docs(api): D-531 CORE 경로 문맥 P1
+
+- 변경: API reference v1.163에 `line/route_context`, 상태·능력·seq 역검증을 문서화했다. D-531 P2/P3의 인식 보조 및 경계 거부는 아직 계약만 있다.
+- 증거: services 1500 passed, contracts 856 passed/5 skipped, API 149 passed/15 skipped. gateway 전체 2421 passed/17 skipped, 문서 버전 문자열 1건 수정 뒤 집중 34 passed. harness lint 0 errors/24 기존 검증 SHA 경고. ROS-SIM·DEVICE·FIELD 수용 없음.
+- gate 변화: D-531 P1 SOURCE 후보.
+
+## 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건
+
+- 변경: D-531에서 인식 seq를 마지막 발행값 대신 현재 지시/실행 중 호와 비교하도록 명확히 했다. 호가 시작되기 전 `exit_segment`는 `junction`이고, 다른 seq의 카메라 프레임은 `invalid_observation` HOLD다. API reference v1.163 설명·문서 버전 pin을 맞췄다.
+- 증거: 독립 안전 검토, 관련 services 6·gateway 46·문서/구조 36 passed. D-168 `schemas.py` 1344줄 재판정 수용.
+- gate 변화: P1 SOURCE 후보. ROS-SIM·DEVICE·FIELD 미확인.
+
+## 2026-10-09 · uncommitted · docs(merge): D-531 v1.164와 CORE 크기 판정
+
+- 변경: D-555가 먼저 쓴 API v1.163을 보존하고 D-531을 v1.164로 옮겼다. 기존 `core_features/localization/` 835줄을 독립 크기 단위로 등록해 이전 `core_features` 증가 전 분리 조건을 이행했다. 런타임 코드 이동은 없다.
+- 증거: 독립 안전 검토, 구조 시험 34 passed, API 149 passed/15 skipped, CORE 집중 52 passed. 원격 착지 시험의 첫 시도에서 발견한 버전 pin·크기 판정 실패를 수정했다.
+- gate 변화: SOURCE 구조 판정 통과. CI 전체·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
+
+- 변경: 막힘 측정은 같은 3 운행일에 증거가 겹치되 자격·로컬 복귀·녹화·정체 검수·분모의 주인이 다르다는 검토를 assessments에 남겼다. 일반 World State와 VLM은 열지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility, 기준 c91b4c9cd. 본문 상대 링크는 파일로 확인했다. 40자 SHA는 비밀 검사가 막아서 짧은 SHA로 적었다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 재구분
+
+- 변경: 막힘 측정 검토에 같은 날의 재구분을 붙였다. 측정 표의 결정은 규칙·운용자·시간초과·스킬·장치 가드·교통 게이트이고, 자세·몸 치수·미션·연결 없음은 입력이다. 안전 한 칸은 두지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility의 D-407, D-422, D-430, D-435, D-438, D-541 본문. 첫 표는 출발로 남겼다. 재구분은 자격 발급·판단기 가동·로컬 복귀 승격·VLM·World 계약을 승인하지 않는다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-557 링 주행의 다음 증거
+- 변경: D-557 Accepted. 다음 주행 증거는 모델 PC `map_v2_fleet_real`에서 `keep`과 D-520 `exit_segment` 호 한 바퀴다. 그 기록이 가리키는 한 곳만 고친다. 바닥 로봇은 지도 프레임 LOCALIZED로 저장 링을 따를 수 있을 때까지 세워 둔다.
+- 증거: D-520이 인용한 D-507 SIM 4c차(재획득 뒤 10 s 유지 0/54). 이 커밋은 시뮬을 돌리지 않았다. `python tools/harness/rosy_harness.py lint` 0 errors, 24 warnings(기존 last_verified 지연). `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 121 passed. `known_failures` 0 new.
+- gate 변화: 없음
+- 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
+- 교훈: 없음
+
+## 2026-10-09 · uncommitted · fix(route context): 굽이 진행·재획득 단계 표시
+
+- 변경: D-531의 B9 굽이 단계가 실제 `line/route_context`에 실리도록 `bend_phase`를 추가하고 API reference를 v1.166으로 올렸다. 접근 창이 지난 뒤에는 `ahead_m` 대신 단계로 표시한다.
+- 증거: 공통 스키마·CORE 계산·인식 소비자 집중 테스트. 설정 기본값은 꺼짐.
+- gate 변화: SOURCE만. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용 대기.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 레이아웃 와이어프레임
+
+- 변경: Fleet, Robot, Pilot, Games, Learning의 16개 화면/상태에 대한 목적·역할·이동·좌우 영역·모바일 와이어프레임과 디자인 문서 작성.
+- 근거: surfaces.yaml, 화면 HTML, D-425/D-501/D-543/D-153. Fleet 좌측 레일은 D-501 개정 전 제안으로 표시.
+- gate: 설계 산출물만 작성. 런타임 적용, G1/G2/G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가
+
+- 변경: Fleet 관제 그림의 지도:개입 3:2 구도를 복원하고 활성 웹 설계 문서에 계약·모바일·상태·접근성 재평가를 추가.
+- 근거: D-493, D-501, D-543, D-153; impeccable Operate와 web interface guidelines.
+- gate: 설계 검토. 런타임 UI, 320px G2, G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs(lane): Fleet 계획과 한쪽선 주행 증거 설계
+
+- 변경: D-520 호를 중심 prior로, 동기화된 지도 자세와 확인된 한쪽 바닥선을 제한 보정 증거로 쓰는 후보를 계획에 기록했다. D-531 거부 문맥과 D-476 직선 손실 bridge의 책임을 구분했다.
+- 근거: ring lap SIM 4의 NE +14…15° 진입 오차·반지름 실패와 진입 관측성 실험, 기존 D-520·D-531·D-476 계약.
+- gate 변화: 설계 후보만. 자세·바닥선 불확실도 계측, 사람 정답, 폐루프 SIM, DEVICE 판정 대기.
+
+## 2026-10-09 · uncommitted · docs(lane): 링 진입 자세 오차 원시 로그 재계산
+
+- 변경: 기존 SIM 9회에서 첫 링 호의 지도 접선 대비 실제 방향과 오돔·참값 차이를 원시 로그로 다시 계산했다. 해시와 재현 스크립트를 새 validation 기록에 둔다.
+- 증거: NE 기본 4회 +15.497…+16.273°, 참값 기반 비교 4회 +2.905…+3.357°; 같은 시점 오돔·참값 차이 최대 1.657 mm·0.096°.
+- gate 변화: ROS-SIM 기록의 오프라인 분석. 지도 자세의 실물 오차·카메라 바닥선 정체·DEVICE·FIELD는 여전히 미검증.
+
+## 2026-10-09 · uncommitted · docs(lane): NE 호 blind 거리와 반지름 오차 교차점
+
+- 변경: 기본·참값 기반 비교 각 4회에서 링 호의 참값 반지름 오차가 25 mm·50 mm에 처음 닿는 로그상 주행 거리를 재계산했다.
+- 증거: 기본 첫 25 mm 0.1104–0.1281 m, 첫 50 mm 0.2927–0.3124 m; 비교는 둘 다 미도달. 원시 로그 해시 8개 일치.
+- gate 변화: ROS-SIM 기록의 사후 분석. 현재 `arc_blind_max_m: 1.0`의 실물 허용 근거는 아니다.
+
+## 2026-10-09 · uncommitted · docs(lane): Fleet pivot 기록 공백 확인
+
+- 변경: Fleet map-pose 조회와 trip 요약, CORE Pilot 녹화의 시각 결합 공백을 차선 보정 설계에 명시했다.
+- 증거: `MapPose.odom_stamp`와 지도 조회 응답, `trip_ports.pose_view`의 요약 필드, D-379 녹화·학습 경로를 소스에서 대조했다.
+- gate 변화: 원본 동기화·실물 오차 상한은 미확보. Fleet 계획은 prior로 유지하고 주행 보정 승격은 보류한다.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 레이아웃 적용 경로
+
+- 변경: D-501 탭을 보존하며 제품 홈·문서 이동·문서 내부 단계·선택 맥락을 분리하는 구현 경로 추가.
+- 근거: 실제 Fleet HTML/CSS와 D-493/D-501/D-543.
+- gate: 구현 방법 기록. Fleet 홈 링크 외 화면 적용과 G1/G2/G3는 별도.
+
+## 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프
+
+- 변경: 16화면의 로컬 Chromium 캡처·가로 넘침·홈·탭·정지·오류를 검증 기록으로 남겼다. 설계의 Games 보드 경로를 실제 PreviewServer `/`로 정정하고 적용 상태를 일부 코드 적용으로 갱신했다.
+- 증거: `docs/validation/active-web-visual-loop-2026-10-09/result.md`, `captures.sha256`, 원본 PNG는 `X:/DevTemp/rosy-web-visual-loop/`.
+- gate 변화: 없음. 일부 G2 셀만 확인했으며 전체 G2·G3·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
+
+- 변경: Fleet 호를 유지한 채 지도 자세·승인 바닥 경계의 제한 보정 후보, STOP·시간 출처, D-557 우선 SIM과 두 로봇 DEVICE 단계를 Proposed ADR과 실행 계획에 기록했다.
+- 증거: D-520·D-557 계약, NE 4회 진입 +15.497…+16.273°와 blind 25 mm 0.1104–0.1281 m 기존 원시 로그 분석; 모델 PC 재접속 성공 후 기존 작업공간의 `lane_arc.py`가 현 코드와 다른 것을 확인해 새 Gazebo 기준 주행은 미착수.
+- gate 변화: 설계 제안만. 새 SIM·실물 주행·보정 활성화는 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-567 진입 방향 민감도 대체 SIM
+
+- 변경: 기존 NE 4회 GT 진입 오차를 입력으로 이상적인 같은 반지름 호의 횡방향 이탈을 계산하고, 가정한 잔여 각도 ±3/5/10°와 비교했다.
+- 증거: `docs/validation/lane-parallel-correction-surrogate-2026-10-09/result.md`; 기준 +15.497…+16.273°에서는 첫 25 mm가 0.0889–0.0934 m, 최대 반지름 오차가 0.0678–0.0712 m다.
+- gate 변화: 대체 계산은 실제 센서·제어·Gazebo·실물 검증이 아니다. D-557 새 모델 PC 한 바퀴와 두 로봇 DEVICE 검증은 HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): D-557 현행 코드 한 바퀴와 차체 여유 목표
+
+- 변경: 격리 모델 PC 작업공간에 현행 D-520 코드를 설치·빌드해 Gazebo 한 바퀴를 실행하고, D-567의 합격 목표를 경계 내 차체 sweep·필요시 사전 STOP·완주 순서로 정리했다.
+- 증거: `docs/validation/lane-parallel-correction-baseline-2026-10-09/result.md`; trip `arrived`, 호 최대 반지름 오차 34/41/30 mm. SIM 충돌 상자 외접 원의 도색선 중심 여유 최소 −35.1 mm로 재계산했고, 두 실물 로봇의 측정·적용 보정과 차체 범위를 분리했다.
+- gate 변화: ROS-SIM 완주만 관측. 실제 차체 형상·도색선 허용 범위와 오차·정지 여유, 후보 병렬 보정, 두 로봇 DEVICE는 미판정/HOLD.
+
+## 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
+
+- 변경: 지도 서쪽 바깥 모서리를 SIM 전용 `bend` 장소로 넣고 기존 CORE 굽이 지시와 선택적 D-531 경로 문맥을 폐루프에서 비교했다. 제품 지도와 주행 기본 설정은 건드리지 않았다.
+- 증거: `docs/validation/lane-west-bend-candidate-2026-10-09/result.md`; U-Net 문맥 켬 2회 모두 서쪽 모서리를 지나고 1회 `arrived`, 1회 링 `arc_mismatch` 정지. 문맥 끔 2회는 모서리 통과 뒤 연결 실패 1회, 굽이 `odom` 중단 1회. SIM 차체 표본·도색 중심선 대리값은 모두 안전 승격 근거가 아니다.
+- gate 변화: 서쪽 모서리 지도 굽이 후보의 ROS-SIM 유효성만 확인. 반복 완주·승인 경계·연속 sweep·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
+
+- 변경: `convert.py --int8`를 quant_pre_process 뒤 s8 활성·채널별 s8 가중치 QDQ로 바꾸고, `--int8-fp32-nodes`(lane_seg 기본 `first_conv last_conv`, object_det 기본 없음)로 남길 fp32 노드를 고른다. 보정 메모리 상한 `CalibMaxIntermediateOutputs=7`과 그 배수 프레임 수를 하나 줄이는 처리(ORT 1.26)를 넣었다. 새 결정이 아니라 D-423 3항(보정 이미지 int8, 판정은 intake)의 매개변수다.
+- 증거: 모델 PC `~/rosy-ml/scratch/lane-int8-hf-20261009`: 챔피언 62db9403의 int8-hf 사본 lane-seg-20261009-3831b20d가 평가 집합 rosy26-heldout-wall-role-20261006에서 mIoU 0.8110(fp32 0.8109), lane_line 0.9007, drivable 0.5608. 8kcn Pi 5 `infer_mask` 2스레드 스핀 끔 80회 두 번: fp32 p50 329.8/324.9 ms, int8-hf p50 195.5/197.7 ms(p95 220.5/236.8, 부하 8–12). convert 시험 19 passed(모델 PC).
+- gate 변화: 현행 intake는 챔피언 fp32와 int8-hf 둘 다 「training dataset overlaps or cannot exclude reserved eval sources」로 떨어뜨린다(d379-auto-lanes-rosy26-v1 세션에 capture_group 없음). 이 때문에 READY 게시와 로봇 전달은 HOLD.
+
+## 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
+
+- 변경: 리뷰 반영(3e92fc7c4). `convert.py --int8`는 과제별 `INT8_RECIPES`를 쓴다. lane_seg `s8s8-pc-pre`(quant_pre_process, s8 활성, 채널별 가중치, 그래프 입력·출력 Conv fp32, 보정 상한, 상한 배수면 마지막 프레임 제외), object_det `u8s8-pt`(이전 quantize_static 기본값 그대로). 지표 `int8_recipe`, `int8_fp32_nodes`(쉼표 문자열), `int8_calibration_frames`. 2026-10-09 항목(`uncommitted`)의 커밋은 214e3fe32다. 로그는 append-only라 그 제목은 고치지 않는다.
+- 결정(사용자, 2026-10-10, 선택지 A): `d379-auto-lanes-rosy26-v1@54db2400…`의 8개 녹화 세션을 세션마다 한 촬영 묶음 `rec-<session>`으로 단정했다. 근거는 `sources[]`의 장치·시작/끝 시각(예약 평가 세션과 겹치지 않음)이다. 모델 PC 운영 store에 `d379-auto-lanes-rosy26-v1-groups@e643de1cf1f17cde3f8632d11f02717d6a54074676dde816ca6b7bc241ca7029`을 `Store.put_dataset`으로 게시했다. 이미지·마스크·conf 2811개는 원본과 바이트가 같고, manifest에는 `frames[].capture_group`과 `annotation`(annotation_of, 결정자, 날짜, 근거)만 더했다. 그래서 내용 sha는 기록 없는 증명본 58239d9e…와 다르다. int8-hf 번들 lane-seg-20261009-3831b20d만 새 revision을 가리키게 manifest를 다시 썼다(`dataset.annotation_of`). fp32 62db9403 번들은 그대로 두었다.
+- 증거: 실제 intake(`--store /srv/rosy/store`, 평가 집합 rosy26-heldout-wall-role-20261006): **PASS**, mIoU 0.8110(챔피언 62db9403 0.8109), lane_line 0.9007, drivable 0.5608, disjoint True, 예약 겹침 없음. 번들 sha: model.onnx `3831b20d…ab58d`, model_manifest.json `348ae945…f2d4c`, intake_report.json `2e2a474c…8a6a3`. 실제 모델 두 개(62db9403, 28e8454d) 모두 새 Conv 규칙으로 `/enc1/enc1.0/Conv`, `/head/Conv`가 나온다. convert 시험 27 passed(모델 PC).
+- gate 변화: 로봇 전달·READY 게시는 하지 않았다. 전달은 `deliver.py --slot paint`로 사람이 한다.
+
+## 2026-10-10 · uncommitted · uiux(pilot): 2대 공용 조이스틱 (D-590)
+
+- 변경: 로봇 목록에 `2대 함께 조종`을 넣고, 두 인증 세션·카메라를 가진 단일 조이스틱 화면을 추가했다. 공통 수동 한도와 두 카메라 신선도를 확인한 뒤 두 CORE의 MANUAL 승인이 모두 성공할 때만 무장한다. 한쪽 명령 거절·연결·영상 실패 또는 손 떼기에서는 두 로봇에 0을 요청한다. leader/follower 추종은 준비 중으로 표시한다.
+- 증거: Android debug `:app:testDebugUnitTest :app:assembleDebug` 105 tests PASS, 빌드 성공. Lenovo TB-J606F에 무선 ADB로 최신 APK 설치, `rosy_40`·`rosy_41`의 두 카메라와 단일 조이스틱 실화면 캡처(`X:/DevTemp/pilot-group-entry/pilot-group-live-final.png`). 비영 teleop은 보내지 않았다.
+- gate 변화: SOURCE와 두 카메라·화면 DEVICE 확인. 두 로봇의 동시 주행·명령 해제·한쪽 단절 물리 정지 FIELD는 별도 확인 전까지 HOLD.
+
+## 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
+
+- 변경: D-430 safety review 예외에 D-581 과거 커밋 4개를 정확한 SHA로 등록하고 독립 검토 결과를 docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md에 남겼다.
+- 증거: ae08 통합본 기준 AI PC 원격 테스트 24 passed, known_failures 0 new/0 known. 첫 커밋은 단독 거절이며 후속 epoch/hold/stream 보완을 포함한 통합본에만 이력 예외를 적용한다.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 승인과 현장 운행은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
+
+- 변경: 74b87f13b의 D-430 검토 근거를 정확한 커밋 예외와 검증 기록에 추가하고 CORE 시험 경로를 바로잡았다.
+- 증거: 독립 diff 검토에서 주석·동등한 상태 조회·릴레이 팩토리 선택 축약만 확인했다. 원격 모델 PC 집중 시험 16 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
+
+- 변경: 03d530eab의 D-430 정확한 커밋 예외와 사후 독립 검토 근거를 추가했다.
+- 증거: 작성자와 다른 통합 담당자가 앱 주입·기본 릴레이·팩토리 우선순위·조회 전용 상태를 검토했다. 모델 PC 원격 시험 55 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소하며 TRAIL SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시
+
+- 변경: Fleet이 1 s마다 로봇의 지도 좌표(로봇 LOCALIZED·map 보고, 아니면 Fleet map pose LOCALIZED/DEGRADED, 아니면 천장 카메라 CAMERA_ONLY)를 사이트 DB `fleet_robot_path`에 2 cm/30 s로 줄여 24 h 남기고 `GET /api/fleet/robots/{robot_id}/path`(API v1.177)로 준다. 콘솔 궤적은 이 기록을 그린다(최근 2분·10분·이번 운행, 로봇별, 실선/파선/점선). `localization: null` pose(odom일 수 있음)를 지도에 그리던 결함을 없앴다.
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new/0 known), 가드·버전 고정 시험 통과, 브라우저 시험 9 passed(궤적은 새로 고침 뒤에도 남음), node web 242 passed.
+- gate 변화: SOURCE만. 현장 1일 저장량·실제 로봇 표시 확인은 별도. 지도 위 로봇 아이콘의 odom 표시는 남은 일.
+## 2026-10-10 · uncommitted · feat(fleet): D-601 trip 출발이 카메라 차선 주행을 켜고 출발 자세·차선 카메라를 본다
+
+- 변경: 첫 간선이 lane인 trip 출발에서 로봇이 OFF면 모든 검사·lease·trip 열림 뒤 마지막으로 Fleet이 CAMERA_LINE을 켠다(끝에서는 언제나 OFF). 출발 정렬 검사 `TRIP_START_HEADING_MISMATCH`(20°)·`TRIP_START_OFF_LANE`, 계획 `start_check`와 콘솔 "출발 가능/방향 반대(178°)/차선 밖 5 cm", 앞 카메라 미리보기가 없으면 `TRIP_LANE_CAMERA_UNAVAILABLE`(`fleet.trip.lane_camera_check`, SIM은 false). trip_runner 시작 검사·진행 판정을 trip_admission/trip_progress로 옮김. API v1.192. 자동 제자리 정렬은 후속(CORE 목표 yaw 회전 미션 필요).
+- 증거: 모델 PC 원격 `operations/fleet/test` 통과(known_failures 0 new), 가드(module_structure·safety_separation·robot_literals·behavior_test_ownership·web_dialog·line_follow_contract_docs·harness·shared/web) 0 new(fleet 패키지 크기는 main에서 이미 known). 독립 리뷰 critic APPROVE WITH FIXES, HIGH 2·MEDIUM 1 고침.
+- gate 변화: SOURCE만. 현장(rosy_40 카메라 거절, 반대로 선 로봇, 꺼진 로봇 출발·끝) 확인과 SIM 사이트 설정 `lane_camera_check: false`는 별도.
+## 2026-10-10 · uncommitted · docs(route): D-609 계획-실행-완료 증거 파이프라인
+
+- 변경: 기존 Fleet plan_id→trip_id→lane/free 구간 실행을 단일 계약으로 묶고, 로봇 웨이포인트·Fleet via·Nav2 국소 경로의 주인을 구분했다. arrived는 Fleet 위치 판정이며 Nav2 결과·CORE 정지·물리 도착의 대체가 아님을 D-609와 ADR Log에 기록했다.
+- 증거: 코드와 D-9/D-489/D-490/D-494/D-517/D-541/D-550/D-594/D-601 계약 대조. harness lint는 동료 선점 D-602~D-608이 현재 branch에 없어 7 ERROR; 이 번호들의 소유 상태는 변경하지 않았다.
+- gate 변화: 문서 SOURCE 결정만. 종료 증거 연결 구현·ROS-SIM·DEVICE·FIELD는 별도.
+
+## 2026-10-10 · uncommitted · docs(isaac): D-606 모델 PC Isaac Lab 환경 준비
+
+- 변경: 5.1/v2.3.2 버전 핀, 별도 후보 환경, RAM·의존성·ROS·물리 정지·RL 비교 게이트를 ADR로 결정했다.
+- 증거: 모델 PC 읽기 점검에서 CUDA와 Jazzy 확인, 물리 RAM 15 GiB와 Isaac venv pip check 실패 확인. docs/validation/model-pc-isaac-rl-2026-10-10/result.md.
+- gate 변화: 없음. RL 실행·ROS-SIM은 HOLD; 실물·현장 별도.
+
+## 2026-10-10 · b4097d9a90 · feat(core,fleet): D-603 CORE rotate_to와 trip 출발 자동 정렬
+
+- 변경: CORE `POST/GET/DELETE /api/v1/motion/rotate_to`(위치 미션 종류 `rotate_to`, odom 닫힌 고리, ≤ 180°·30°/s·15 s, RobotBody 여유 거절 `ROTATE_CLEARANCE`, lease 주인 또는 이름 있는 operator), 회전 법칙 `localization/rotate_to.py` 안전 태그. Fleet `fleet.trip.auto_align`(기본 false): `TRIP_START_HEADING_MISMATCH`면 회전 → 새 sighting → 다시 검사(최대 2회). API v1.194.
+- 증거: 모델 PC 원격 pytest(CORE services·gateway, Fleet trip·transport). 독립 리뷰는 ADR Review 절.
+- gate 변화: SOURCE만. 실로봇 회전 수용·`auto_align` 켜기는 별도.
+
+## 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
+
+- 변경: `tools/capture/drivable_steer.py`(로봇 위 루프, 계산만 하는 모드/MANUAL teleop, 가장 오른쪽 갈래, RobotBody 가드)와 단위 시험, D-592 개정(호스트=로봇, 늦으면 Fleet; crop128 71edcb6d; 갈래 규칙), 검증 기록 `docs/validation/d592-drivable-steer-field-test-2026-10-10.md`.
+- 증거: 9dfk 로봇 위 추론 p50 162 ms, 프레임 나이 p50 259 ms/p95 350 ms; drive1 10.6 s·0.31 m, `drivable_low`로 선 앞 정지, 개입 없음. 원격 pytest tools/capture/test 22 passed, known_failures 0 new.
+- gate 변화: D-378 R2 첫 실물 기록만. 차선 추종 수용·로봇 런타임 조향 소스는 HOLD.
+
+## 2026-10-10 · uncommitted · feat(perception): D-612 인식 맹점 목록
+
+- 변경: 인식 맹점 목록 `tools/harness/perception_gaps.yaml`을 sim2real 목록 옆에 두었다. 한 행은 녹음 id, `device:YYYY-MM-DD`, 또는 저장소 안 기록에서 태어나고, CLOSED는 저장소에 있는 재생과 `validated_by`가 있어야 한다. candidate는 HOLD 또는 CLOSED만 된다. 첫 행은 P-01 가까운 바닥(OPEN), P-02 ignore를 길로 다시 칠함(OPEN), P-03 9dfk 구역 없음(OPEN), P-04 차선 IR은 횡단보도 선택기가 아님(HOLD)이다.
+- 증거: D-612. 행 형식은 `test/test_perception_gaps.py`가 고정한다. 원격 시험 PC 결과와 known_failures 비교는 이 커밋을 보낸 뒤의 착지 기록이다. 주행 코드와 로봇 overlay는 바꾸지 않았다.
+- gate 변화: SOURCE만. 장치 수용, 8kcn 확인, 각 행을 닫는 재생은 별도.
+
+## 2026-10-10 · 23d5baa37 · feat(fleet): 호스트 여유와 설치 작업의 서비스 제어
+
+- 변경: 가드가 이미 읽던 PC health(메모리 여유·스왑·부하·코어·가동·멈춘 유닛)를 status.json resources로 남긴다. GET /api/fleet/hosts가 읽기 전용 guard·drift를 붙인다(없거나 객체가 아니면 null). 설치·보정 작업 호스트 서비스가 그 수치를 보여주고, D-524의 닫힌 동작(10분 재부팅·취소·허용 유닛 재시작·정지)만 확인 뒤에 보낸다. 프로세스 종료와 로봇 재부팅은 없다. API v1.197. D-524·D-530·D-540은 Proposed인 채로 화면 문장만 고쳤다. 구현 9a9faf0e5, 시험 격리 23d5baa37.
+- 증거: AI PC 원격 pytest 143 passed, 2 warnings. known_failures 0 new, 0 known (X:/DevTemp/host-health/run-1.txt, HEAD 23d5baa37). 첫 실행은 AI PC에 있던 rosy-host-state status.json을 빈 값으로 기대해 1 failed였고, 없는 경로를 보게 고친 뒤 통과했다.
+- gate 변화: SOURCE만. 현장 가드 파일·Fleet 컨테이너 마운트·실제 재부팅은 하지 않았다. 화면은 현장 관제에 아직 없다.
+
+## 2026-10-10 · 48de3f65c3 · feat: D-620 교차로 Fleet 신호 질의
+
+- 변경: paired heartbeat에 교차로 요청 ID와 신호 응답을 연결. 완전 무응답 3초만 기존 CORE 우측 회전을 선택하고 명시적 red/unknown/오류/만료 답은 대기한다. 기본 꺼짐.
+- 증거: AI PC 원격 교차로·FleetAgent·hub·신호표·API·횡단보도 관련 273 passed, known_failures 0 NEW. docs/validation/junction-signal-2026-10-10/result.md 참조.
+- gate 변화: focused SOURCE/원격 계약 증거만 추가. 새 ARM64 payload/Fleet 이미지와 DEVICE/FIELD는 미확인. 기존 전역 게이트 수용을 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: ROSY 정체성·3단계 구조·world model·CORE 제어 설계와 계획
+
+- 변경: root AGENTS·제품·계약·실제 폴더를 대조해 ROSY 정체성, 의미 기반 3단계 목표 트리, 세계 상태/행동 예측/학습·평가 경계를 플랫폼 설계/계획에 기록했다. CORE 공통 운용·Drive/Arm Control·Safety·복구·곡률 책임은 별도 상세 설계/계획과 연결했다. 네 문서 모두 Proposed다.
+- 증거: 문서 링크·경로 확인, harness generate와 lint(0 errors, 25 freshness warnings). 원격 문서 계약 시험 결과는 검증 뒤 이어 기록한다.
+- gate 변화: 없음. Proposed 문서뿐이며 코드 이동·Safety 정책 변경·장치 주행·main 착지·push는 하지 않았다.
+
+## 2026-10-11 · be92428a1 · docs: 플랫폼·CORE 구조 계획의 원격 문서 계약 검증
+
+- 변경: 위 설계/계획 커밋의 원격 검증 결과를 기록했다. 제품 코드·계약·설정 변경은 없다.
+- 증거: 커밋 be92428a1을 모델 PC에 보내 `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 실행, 121 성공 표시·exit 0. known_failures는 0 NEW/0 known. 네 문서 교차 링크·시험 경로 확인 및 append-only 기준 log의 커밋 blob 보존을 확인했다.
+- gate 변화: 없음. 원격 실행의 기존 상태/검증 branch 경고는 독립 실물 수용이 아니다. 설계 문서의 목표 폴더·Prediction·world model 학습/추론은 구현·설치하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 도메인 개요 3단계·내부 책임 최대 5단계 구조안
+
+- 변경: 후속 사용자 요청에 따라 플랫폼 목표 트리를 최대 5단계로 개정했다. CORE runtime/관문, Drive·Arm 계획/제어/복구/Safety, local 실행 수명, world 상태 projection, 행동 예측 inference, world model 학습/평가를 구분하고 폴더 승격·파일 유지·보류 기준을 계획에 반영했다.
+- 증거: 현재 gateway·line-follow·OMX 모듈 안내와 기존 분리 기준 대조, tracked source 최대 5 depth inventory. 네 문서 교차 링크와 목표 트리 depth≤5 확인, harness lint 0 errors/25 기존 freshness warnings. 원격 문서 계약 결과는 후보 커밋 검증 뒤 기록한다.
+- gate 변화: 없음. Proposed 문서 개정이며 소스/실제 폴더 이동·새 패키지 생성·장치 활성화·main 착지·push는 하지 않는다.
+
+## 2026-10-11 · 179738b17 · docs: 최대 5단계 구조안 문서 계약 검증
+
+- 변경: 목표 트리·계획 개정의 검증 결과를 기록했다. 코드와 실제 디렉터리는 변경하지 않았다.
+- 증거: 해당 후보 커밋의 모델 PC 원격 network/harness 문서 계약 121 성공 표시·exit 0, known_failures 0 NEW/0 known. 문서 링크·목표 책임 depth≤5와 기존 append-only journal의 Git blob 보존을 확인했다.
+- gate 변화: 없음. 패키징·장치·물리 수용은 확인하지 않았고 기존 gate를 올리지 않는다.
+
+## 2026-10-11 · uncommitted · docs: D-625 구조 결정과 이전 도구 실행 계획
+
+- 변경: 사용자 요청에 따라 최대 5단계 책임 구조 방향을 D-625로 기록하고, 네 holder 이전표와 M0–M9 계획·참조 수정·Safety 리뷰·복구 절차를 먼저 작성했다. 도구 시험을 구현 전에 준비한다.
+- 증거: 기존 d427 mover/scanner·platform manifest 소비자 검토, API safety.py와 OMX owner/stop의 Safety 태그 확인. 도구 RED/GREEN은 후속 커밋에서 원격 검증한다.
+- gate 변화: 없음. 실제 제품 파일 이동·책임 추출·장치 활성화·main 착지·push는 수행하지 않는다.
+
+## 2026-10-11 · f2f9945c7 · docs: D-625 이전 도구 준비 검증
+
+- 변경: 네 단위의 JSON 이전표와 기본 read-only preview/선택 holder 이동 도구를 준비했다. 참조 수정은 수동이며 API·OMX Safety 단위는 자동 이동을 차단한다. 기존 scanner를 재사용하고 삭제·stash·reset·광역 staging을 넣지 않았다.
+- 증거: 구현 전 e98e0aeed의 원격 RED 12 NEW(도구 미구현), 구현/시험 보강 f2f9945c7의 모델 PC 원격 도구/harness/network 계약 144 성공 표시·exit 0, known_failures 0 NEW/0 known. synthetic 등록 worktree의 실제 이동/역이동과 충돌·dirty·stale·link·ignored·Safety 거절 검증. 실제 네 단위 preview에서 tracked byte hash/index/status 무변경, ADR Log BOM/CRLF와 committed journal append-only 보존 확인.
+- gate 변화: 없음. SOURCE/원격 도구 증거이며 실제 제품 이동·책임 추출·설치·ARM64·DEVICE·FIELD·main 착지·push는 미실행이다.
+
+## 2026-10-11 · uncommitted · docs: D-626 이전 실행 범위와 기준 검증
+
+- 변경: 후속 실행 요청에 따라 D-625 M3–M6의 package 보존 이전을 D-626으로 기록했다. 최신 main을 작업 브랜치에 병합하고 Safety/설치 보존 조건을 독립 리뷰로 확인했다.
+- 증거: 이전 전 3927f9a33의 모델 PC 원격 architecture/도구 계약 104 성공 표시·exit 0, known_failures 0 NEW/0 known. API Safety 1개·OMX Safety 5개와 Pinky deadman·Nav2 후보 출력·Docker 목적지 보존 조건을 리뷰했다. 변경 후 최종 리뷰와 시험은 각 이전 후보에서 기록한다.
+- gate 변화: 없음. 이전 실행 범위의 계약이며 실제 패키지 설치·장치·현장 수용을 올리지 않는다.
+
+## 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
+
+- 변경: 네 실제 holder 이전 및 참조·manifest·CI·설치 경로 정렬 후, CORE 도킹/군집 조립과 line-follow 배선을 drive 하위로 분리했다. 현재 책임 구조·후속 알고리즘 경계·독립 Safety 승인과 검증 결과를 문서화했다.
+- 증거: 원격 CORE/실제 Python 설치 2575 성공·10 skip, feature 1675 성공, structure/harness/Safety 272 성공, OMX 532 성공·3 skip. 각 성공 실행 known_failures 0 NEW/0 known. docs/validation/d626-holder-migration-2026-10-11/result.md 참조.
+- gate 변화: 없음. SOURCE·Python 설치 근거이며 새 Jazzy/ARM64/장치/현장·CI·main 착지·push·배포는 미확인 또는 미실행.
+
+## 2026-10-11 · uncommitted · docs(uiux): define complete operational role and token closure
+- 변경: D-639와 전체 표면 실행 계획으로 공용 토큰·조작·캔버스·native 척도·역할 및 레지스트리 폐쇄성의 목표와 완료 기준을 정한다. 실제 등록 11개 경로의 읽기 감사에서 남은 소비자 차이를 확정했다.
+- 증거: 세 독립 읽기 감사, 기존 DESIGN/D-624/D-629/D-632 계약 및 UI 실패 로그 대조. 구현·최종 원격 회귀·설치본 수용은 이 문서만으로 통과 처리하지 않는다.
+- gate 변화: 없음.
+- 결정: D-639 Accepted (2026-10-11); 목표는 구현·검증 후 완료한다.
+- 교훈: 이미 닫힌 규칙을 재작성하지 않고 실제 소비자 우회와 검사 누락을 함께 닫는다.
+## 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
+
+- 변경: 렌즈 모델 조사와 부분보드·robust 지도 등록 조사를 병행해 원논문·공식 문서와 현행 소스를 비교했다. 측정 내참수 → 바닥 등록 → 단일 inverse remap, 유효/미관측/오차 검증 영역, crop 계보와 불확실성 검증을 Proposed ADR로 기록했다.
+- 증거: docs/validation/camera-calibration-research-2026-10-11/result.md 및 docs/adr/D-633-measured-camera-calibration.md. 문헌·소스 확인이며 실측 데이터·알고리즘 구현·현장 오차 증거가 아니다. 원격 문서 계약 검증은 별도 기록한다.
+- gate 변화: 조사·설계 기록만. 기존 승인 교정·프로토콜·map_to_image·운영 지도·로봇 명령은 변경하지 않았다.
+
+## 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
+
+- 변경: D-633 조사 기록에 검증 커밋·로그·알고리즘 미검증 경계를 남겼다. Proposed 상태와 기존 교정 계약을 유지한다.
+- 증거: 원격 network/harness/document placement/folder layout 계약 137 passed(exit 0), known_failures NEW 0. 렌즈·기하 담당의 독립 문헌/설계 검토 반영.
+- gate 변화: 문서 계약 검증만. 알고리즘 구현·성능·실물 교정·배포·FIELD 승격 없음.
+
+## 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
+
+- 변경: D-635/API reference에 차선 코스·축구장·일반 지도 종류, 설명과 경기장 치수 저장 계약을 기록했다. 기존 Games 재사용과 자동 실행·Vision 축구 인식의 별도 연결 범위를 명시했다.
+- 증거: docs/validation/map-profile-purpose-2026-10-11/result.md. 원격 계약 175·Node 285·Chromium 4·DB 재개방 포함 프로필 11 passed, known_failures NEW 0, lint 오류 0.
+- gate 변화: SOURCE/원격 계약/브라우저. main 착지·push·배포·실측 경기장 교정·게임 수용은 별도다.
+
+## 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
+
+- 변경: docs/fleet-deliberation-loop에서 D-640 Proposed와 주행·암 사건 폐루프, Claude Code/OpenCode 제한 토론, 독립 평가·그림자·되돌리기 기준 및 파일별 구현 계획을 기록했다.
+- 증거: 기존 D-392/D-516/D-527/D-608/D-619/D-637와 현재 source owner, 실행기 공식 문서를 대조했다. 문서 검증은 이 커밋의 원격 계약/lint 결과로 별도 보고한다.
+- gate 변화: 없음. 실제 모델 호출·런타임 구현·배포·장치 움직임·FIELD 수용은 미실행.
+
+## 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)
+
+- 변경: docs/fleet-judgment-stages에 근거 규약, 개입/비개입/보류, 중앙 중재/결과, Discord·Slack·Telegram 알림/사람 처리, Console·독립 수용의 5개 Proposed ADR과 파일별 계획을 기록했다. D-640 모델 토론 계획의 선행 관문으로 연결했다.
+- 증거: 현재 ContextDraft 고정 점수·seen, 사건 시작 단계, 수락 tier 기반 resolved_by, stuck 결과 및 D-632 inbox를 소스로 확인했다. 외부 callback 공식 규약은 조사 근거이며 실채널 발송/처리는 실행하지 않았다. 문서 계약/lint는 이 변경의 원격 결과로 별도 보고한다.
+- gate 변화: 없음. 중앙 판단 코드·화면·알림 구현·모델 호출·배포·장치/실채널 수용은 미실행.
+
+## 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)
+
+- 변경: docs/fleet-judgment-stages에서 공통 상황평가와 World·deliberative·작업 중재·Fleet coordination을 구별하고 배포 3안을 비교했다. D-642~D-646과 D-640 계획을 0단계 이후 구현 위치 확정으로 연결했다.
+- 범위: 문서만. 같은 프로세스에서 논리 경계를 먼저 정하는 B안은 잠정 추천이며 실제 서비스 분리·실행 권한 변경·외부 발송은 없다.
+- 증거: 기존 World/Decision/Fleet 소스와 D-429·D-630 및 Proposed D-435를 확인했다. 4개 역할의 read-only 문서 검토에 actionable finding은 없고 holder/배포와 장애 격리는 미결정 관문으로 유지했다. 독립 외부 모델 검토는 jq 미설치로 시작 전 생략했다. 문서 계약 원격 검증은 커밋 뒤 별도 기록한다.
+- gate 변화: 기존 Accepted 계약과 실행 gate는 유지한다. 0단계 검토 완료 전 공통 로직 위치 확정은 HOLD이며 main 착지·push·배포는 하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
+
+- 변경: docs/fleet-judgment-stages에서 D-648 Proposed, 목표 트리·의존·단일 셀/로봇/다중 로봇·비개입 사례와 파일별 분리 계획을 작성했다. 중앙 판단 0단계 및 현재 폴더 책임 안내에 목표 문서를 연결했다.
+- 증거: 현재 World 관측 참조, Situation 사실/제안 분리, Fleet store를 쓰는 Decision tool dispatcher와 Mission/Job/claim·execution/site 소비자를 읽었다. 문서 자체의 lint와 committed-HEAD 원격 계약 결과는 별도 검증한다.
+- gate 변화: 없음. 현재 Accepted 폴더/원장·설치·writer를 유지한다. 실제 코드 이전·새 판단·모델 호출·알림·배포·main 착지·push는 미실행이다.
+
+## 2026-10-11 · uncommitted · feat: 기존 모델 기반 Isaac CAMERA_LINE 진단 (D-650)
+
+- 사용자 확정: 카메라 차선 인식·기존 line_follow·기존 인식 모델·강화학습을 함께 사용한다. D-638 경로 관측 정책과 별도 저장/평가한다.
+- 변경: D-650과 tools/sim/isaac의 고정 모델/기존 keep/manager 연결, 카메라 관측 Q 정책의 schema·model revision/SHA 검사를 추가했다. 제품 manager/API·실기 pointer·intake 기준은 변경하지 않았다.
+- 증거: 원격 camera/map-task/SDK-entrypoint60 passed/NEW0. main 098a0c0c0의 D-649 기존 Drive 소스 이동을 병합한 뒤 Isaac 전체 및 기존 drivable/model 회귀 227 passed/2 skipped/NEW0. Native 카메라 R1은 no-wall 모델의 floor_gate 설정 오류, R2는 strict 관측이 카메라 기반 off-line 복귀도 막아 종료됐다. 설정과 provenance/freshness를 수정하고 독립 소스 재검토를 받았으며 실제 완주 재시험은 별도 기록한다.
+- gate 변화: 없음. 두 대 Fleet/신호/횡단보도·실물 수용은 미확인이고 카메라 학습 정책은 HOLD다.
+
+## 2026-10-11 · uncommitted · feat: Isaac 두 대 owner 신원 분리 계약 (D-653)
+
+- 변경: 기존 단일 simulation identity를 유지하면서 두 대용 명령·카메라 이벤트·epoch·정지 격리 계약과 RED 시험을 추가했다.
+- 증거: 구현 전 AI PC 원격 시험은 기존 44 passed, 신원 인자 미지원으로 새 12 failed다. known_failures 비교에서 NEW 여부를 확인하고 구현 후 회귀를 기록한다.
+- gate 변화: 없음. 실제 두 대 Isaac 연결·camera 강화학습·Fleet/신호/횡단보도·ROS-SIM/실물은 미확인이다.
+
+## 2026-10-11 · a64806ad3 · D-652 common intervention assessment shadow implementation
+
+- 변경: immutable evidence, current owner/case/revision and bounded necessity output; Fleet and Situation share the pure adapter without new commands or wire fields.
+- 증거: remote RED 36 + 14 expected failures; focused GREEN 178 passed, NEW 0 at 0926fc4fa5. Final integration and added freshness/install checks recorded in landing receipt.
+- gate 변화: source and isolated wheel/sdist only; no push/deploy, field acceptance, notification or model activation. See docs/validation/intervention-assessment-2026-10-11.md.
+
+## 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
+
+- 변경: 공통 판단은 Situation, 현장 소비는 Fleet, 소스 구성/빌드는 tools/packaging/fleet_sources.py에 둔다. self-contained sdist와 source-image 순수 평가 closure를 함께 갱신했다.
+- 증거: 원격 책임 분리/구조/설치/source image/site candidate 57 passed, NEW 0. 이전 통합 5094 passed/217 skipped에서 발견한 크기 초과는 책임 분리로 수정하며 임계값과 실패 예외를 늘리지 않았다.
+- gate 변화: SOURCE/원격 설치 구성. 실제 Docker build, push/배포, 현장 정확도 및 D-648 후속 단계는 별도다.
+
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 설계
+
+- 변경: 사용자 합의에 따라 도로면·현재 도로 구역을 별도 인지 평가 대상으로 정리하고, 목적지에 따른 경로 선택과 주행 수용을 후속 단계로 분리했다. 독립 정답, 세션 분리, 시뮬레이션/실물 비교, 불확실 처리, 기존 drivable 의미의 전환 경계를 설계 문서에 명시했다.
+- 증거: 설계 문서와 기존 D-475/D-576/D-379 계약의 대조. 문서 lint 및 원격 계약 시험 결과는 검증 후 별도 보고한다.
+- gate 변화: 없음. 의미별 출력 구현, 평가 정답 검수, 모델 인지 승인, 장치 배포 및 주행 수용은 수행하지 않았다.
+
+## 2026-10-11 · uncommitted · docs: 책임·권한·오케스트레이션 계약과 실행 계획 (D-656)
+
+- 변경: branch `docs/responsibility-contract`에서 D-656의 논리 책임 계약과 후속 통합 계획을 기록했다. 기존 D-648/D-652·중앙 판단·모델 토론 계획의 세부를 재사용하고 실제 파일/consumer/설치/시험과 완료 관문을 단계별로 연결했다.
+- 결정: 공통 평가·모델 후보·순수 작업 규칙·현장 원장 어댑터·CORE/OMX writer·독립 평가의 책임을 구별한다. 모델 런과 작업 실행, 비개입/보류/자연 해소와 조치 성공을 구별하며 종료 writer와 Mission/claim transaction을 유지한다.
+- 증거: 현재 HEAD 063676cbcb, 기존 dispatcher/진행/목표 근거·model-turn/설치 시험 및 ADR를 읽었다. 문서 generate/lint와 커밋 HEAD 원격 계약 검증은 후속 receipt로 기록한다.
+- gate 변화: 없음. Accepted는 책임/진행 원칙이며 새 runtime 구현·모델 호출·외부 발송·운영 활성화·서비스 분산·배포/현장 수용을 뜻하지 않는다.
+
+## 2026-10-11 · uncommitted · docs: 인지 적합성과 도로 의미 분리 계약 (D-659)
+
+- 변경: branch `docs/perception-fitness-design`에서 사용자 합의 설계를 D-659 Accepted로 기록했다. 도로면·현재 구역·선택 경로의 의미, 독립 정답과 split, 시뮬레이션 입력 누설, 불확실/지연 판정 및 인지/주행 승인 경계를 구현 전 선행 조건으로 묶었다.
+- 증거: 기존 D-475/D-576/D-379/D-356과 학습·평가 소유 경로를 대조했다. ADR 번호 선점, Log BOM/CRLF 보존, generate/lint 및 커밋 HEAD 원격 계약 시험 결과는 검증 기록으로 구분한다.
+- gate 변화: 없음. 계약 수용이며 의미별 출력 구현, 실제 정답 검수·모델 평가·장치 추론 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · fb2e5e07d3 · D-657 모델 도구 어댑터와 순수 목표·진척 규칙 분리
+
+- 변경: 원장 결속 dispatcher는 Fleet, 순수 목표 증거 검증과 기존 시각/신선도/step 상태 투영은 execution/site로 분리했다. Mission 원장 전이·producer 인증·새 frame/attempt·claim/fence·transport는 기존 owner에 유지한다.
+- 증거: `fb2e5e07d3` 원격 212 passed / NEW 0, wheel/sdist/source image 구성·크기·Safety 분리 검사와 독립 소스 리뷰 승인. 두 이동 모듈 byte 동일, 시간 함수/상태 mapping AST 동일.
+- gate: 소스·설치 구성 검증. 최신 main 착지는 별도 receipt이며 FULL CI·실제 Docker build·배포·장치/현장 수용은 별도다.
+
+## 2026-10-11 · uncommitted · 인지 파이프라인 착수와 현재 구역 책임 검토
+
+- 변경: branch `feat/perception-fitness-pipeline`의 실행 계획에 도로 관측·현재 구역 추정·따라갈 구역 선택·운영 admission을 구별했다. 사용자 보완에 따라 새 segmentation 출력/manifest 계약은 책임 배치를 먼저 검토한 뒤 진행한다.
+- 증거: 착수 HEAD `8c10dd8a3`의 lane_mask, drivable_paint, World MapPose, 자문 Decision 및 Drive path_follow를 대조했다. drivable_paint의 우측 분기 선택은 인지 사실 정답과 별도 평가할 기존 주행 정책이다.
+- gate 변화: 없음. 목표/worktree/계획은 착수 근거이며 새 role, 구역 추정 구현, 모델 학습, 인지 승인·주행 활성화는 미완료다.
+
+## 2026-10-11 · c952f2a0a · 도로 구역 기준선과 추종 선택의 독립 시험
+
+- 변경: D-659 인지 평가에서 기존 연결 구역 후보와 D-597 추종 대상을 구별하는 시험을 추가했다. 연결 분기 보존, 분리 도로 제외, 가림/crop 제외와 추종용 hole filling의 차이를 검증했다. 중앙 시드 부재의 최대 영역 선택은 실제 구역 귀속 증거가 아닌 한계 사례로 추가했다.
+- 증거: 첫 시험의 부분집합 가정은 NEW 1로 실패했고 gap closing/hole filling 원인을 확인했다. 관측 화소와 채운 추종 화소를 구별한 `c952f2a0a` 원격 terminal exit 0, NEW 0. 추가 한계 사례와 최신 main 통합은 후속 검증으로 기록한다.
+- gate 변화: 없음. 합성 source 시험이며 독립 실물 정답·시뮬레이션 영상·구역 추정 승인·주행 활성화의 증거가 아니다.
+
+## 2026-10-11 · 6353771b7 · D-663 도로면 drivable과 후속 구역 로직의 의미 계보
+
+- 변경: 사용자의 도로 자체는 drivable, 현재/따라갈 구역은 로직 판단 지침을 실행 계획과 새 road_surface_v1 검수 classes에 반영했다. 선택 semantic은 classes→dataset→export→eval에 보존되고 의미 불일치·구형 strict 평가·champion 혼용과 기존 조향 슬롯의 도로면/궤적 모델 전달을 거절한다. v13의 원래 구역 의미는 별도 유지한다.
+- 증거: 최초 의미 보존/비교/전달 시험은 NEW 16으로 RED를 확인했다. 추가 template RED 후 `6353771b7` 관련 원격 builder/export/notebook/intake/delivery/manifest 회귀 terminal exit 0, NEW 0. notebook은 generator에서 재생성했다. 독립 데이터 계보의 strict 검증과 별도 도메인/구역 평가, 관측 전용 전달은 후속이다.
+- gate 변화: 없음. 새 클래스별 도로면 학습 정답 검수, 학습된 모델의 적합성·장치 관측·주행 활성화·배포는 미완료다.
+
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
+
+## 2026-10-11 · 7c0f8c93a3 · 20261010 drivable 검수 원본과 의미 확인
+
+- 변경: Desktop 패키지 두 버전과 AI PC의 후속 검수 원본을 실행 계획에 연결하고 고정 확인 기록을 추가했다. 기존 로봇 연결 구역 의미를 새 전체 도로면 정답으로 바꾸지 않는다.
+- 증거: 패키지 checksum 47/63개와 데이터 image/mask hash 2,856/5,538개 일치, 실패 0. 후속 2,769 frame 모두 human_edit/done 기록, 동일 image hash의 split 중복 0. 원본 영상 단위 분리와 독립 검수 authority는 별도 결속이 필요하다.
+- gate 변화: 없음. 새 모델 추론·학습·장치 전달·주행·현장 수용은 확인하지 않았다.
+
+## 2026-10-11 · 468ae9e5ab · 도메인별 인지 coverage와 경계 오차 집계
+
+- 변경: 도로면/구역의 실제 TP·FP·FN과 다른 구역 포함/자기 구역 누락을 도메인·조건별로 집계한다. 추론 보류와 정답 전체 255를 구별하고 전체/점수화 분모와 경계 제외/미산출 사유를 보존한다. 단위는 화소이며 결과는 진단/HOLD다.
+- 증거: 새 집계 함수 부재의 원격 RED 후 468ae9e5ab 합성 지표·구역·기존 기준선 44개 시험 terminal exit 0. known_failures와 전체 회귀는 별도 receipt로 기록한다.
+- gate 변화: 없음. 고정 dataset/모델 재생, 독립 실물/시뮬레이션 성능·장치 관측 수용은 아직 미완료다.
+
+
+## 2026-10-11 · db1b69bc0 · D-664 혼합 장치 작업 개념과 책임 검토
+
+- 변경: 장치·작업 공간·공정·작업을 구별하고 공통 읽기 화면→운반/고정 팔 인계→실물/복합 장치 수용의 단계와 반례를 Proposed ADR 및 설계에 기록했다.
+- 증거: 주행 Task와 고정 PICK_PLACE Mission의 분리, Cell의 pallet.transfer 제한을 현행 소스로 확인했다.
+- gate 변화: 없음. 런타임/API/권한/최종 writer는 변경하지 않았다. 문서 검증과 실제 협업 실행은 별도 증거다.
+
+## 2026-10-11 · 1cbe8fa67 · D-664 공통 작업 읽기 첫 구현
+
+- 변경: bounded 작업 목록 API·typed schema·SRS와 공통 Task/Mission 화면을 추가했다. principal 소유 범위, 출처별 identity/state, 목록 갱신 및 세션 상실 시 무효화, 장치·공간·업무·실행 owner 상세를 유지한다.
+- 증거: 첫 API/헤더/팔레트/기능 잠금 원격 28 passed 및 순수 JS 2 passed. 원격 브라우저와 설치 회귀에서 드러난 캡처 파일 확장자 및 추가 자산 수 fixture를 수정했다. 최종 검증 결과는 별도 receipt로 기록한다.
+- gate 변화: SOURCE 구현. 배포/현장 및 다장치 실행 수용은 아직 증명하지 않았다.
+## 2026-10-11 · 0b14fa02b0 · D-656 후속 책임 분리와 D-660~D-662 구현
+
+- 변경: 모델 원장 중재·순수 작업 규칙을 실제 소유 경로로 분리하고 현재 판단/결과 기록, 이름 있는 사람 인수, 3채널 기본 OFF outbox와 Pinky 독립 offline checker를 구현했다. API Reference v1.207 및 설치 소비 경로를 갱신했다.
+- 증거: 단위별 원격 terminal/NEW0와 독립 검토·수정은 docs/validation/responsibility-boundaries-2026-10-11/implementation.md에 기록했다. 최종 main 통합/착지는 별도 기록한다.
+- gate 변화: 소스·원격 fake/설치 계약. 팀이 새 Discord 서버/채널과 실제 정답·한계를 준비한다. 단계 3~5 운영 수용 및 단계 6은 HOLD; CI/push·배포·실제 provider/발송·실물 motion 없음.
+
+## 2026-10-11 · 7afb0e2c4f · 책임 분리 최종 원격 검증과 로컬 착지
+
+- 변경: D-661 팀 통지·사람 인수를 incidents 하위 패키지로 분리하고 최신 main의 순수 진척·지연 schema import를 통합했다. 단계별 계획·팀 인수·독립 평가·착지 증거를 기록했다.
+- 증거: 최종 AI PC 원격493 passed/0 skipped/NEW0, 독립 검토 및 tools/land.py lint/시험 통과, 로컬 main FF `7afb0e2c4f`. 상세 docs/validation/responsibility-boundaries-2026-10-11/landing.md. 이전 전체 회귀16676 성공과 당시 크기1 NEW는 최종 영향군 결과와 구별했다.
+- gate 변화: 로컬 통합 완료, push·CI·배포·실제 채널/현장 수용 없음. 팀의 Discord 준비·Pinky 검수 이후 운영 수용; 단계6 HOLD 유지.
+
+## 2026-10-11 · uncommitted · Fleet 사건 인수·알림 경로 안내 정합성
+
+- 변경: main `7afb0e2c4`의 실제 `fleet/incidents/{handoff,notifications}.py`를 전체 폴더 트리·책임표와 후속 구조 기준에 반영했다. Situation 사건 근거와 Fleet 인수·전송 원장, stuck 판단·resolver, server 인증·생명주기를 구분했다.
+- 증거: 현재 main과 상대 브랜치 SHA, 직접 import 호출자·설치 시험 및 기존 이동 계획을 읽어 대조했다. 문서 계약의 원격 시험과 lint는 이번 커밋의 검증 기록으로 별도 남긴다.
+- gate 변화: 없음. 운영 수용 HOLD와 기본 OFF 알림을 유지하며 push·배포·실제 전송·모델 호출·장치 동작을 수행하지 않는다.
+
+## 2026-10-11 · a8212d3806 · 모델 프레임 재생과 crop 정답 범위 결속
+
+- 변경: 기존 모델 로더/preprocess의 추론을 도로면/구역 평가에 연결하고, 원본 정답과 기준점 좌표를 같은 resize/crop grid로 옮긴다. crop 제외와 실제 미관측 정답을 구별하고 전체 grid coverage도 보고한다.
+- 증거: a8212d3806 원격 합성 모델/좌표·구역·기준선 55개 시험 terminal exit 0. 실제 ONNX Runtime crop/전체 영상 2개 포함; crop 제외와 원본 정답 모순 검사를 각각 제거한 실패를 확인한 뒤 복구했다. 전체 회귀/known_failures는 별도 receipt다.
+- gate 변화: 없음. 고정 dataset/모델 파일·독립 검수 결속, 실제 보정·성능·장치 전달·현장 수용은 아직 미완료다.
+
+## 2026-10-11 · uncommitted · docs(learning): Pinky 맵·Fleet 강화학습 구조 초안
+
+- 변경: `docs/plans/2026-10-11-pinky-map-fleet-rl-structure-design.md`에 기존 경로를 재사용하는 환경·학습·평가 구조, CORE 후보/최종 명령 경계, 흰 선·벽 과제, 한 대 S자부터 두 대 Fleet까지의 단계와 후속 연결을 정리했다. 사용자 요청으로 시뮬레이션·RL 실행은 중지하고 구조만 준비한다.
+- 증거: D-427·D-606, 기존 PolicyArtifact validator, Isaac helper·progress, Pinky registry의 오프라인 평가 범위를 대조했다. 새 API·owner 실행 연결·trainer 구현은 없다. lint·문서 계약 시험 결과는 이 후보 커밋의 별도 검증 기록이다.
+- gate 변화: Draft 설계만. RL 환경·정책 활성화·ROS-SIM·DEVICE/FIELD 수용은 올리지 않는다.
+
+## 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+
+- 변경: 두 사람 승인 정답과 별도 관측 입력·모델·학습 출처를 고정 버전으로 결속하고, 로봇 설정 없이 HOLD 보고서를 생성한다. 공통 관측 계약과 World 기존 import는 같은 객체를 사용한다. 새 계약 파일을 구분하는 패키지 버전·의존 pin·서명 코드 묶음의 필수 파일을 정리했다.
+- 증거: 재생 20개 합성 시험 terminal exit 0, NEW0. 승인 hash/짝 영상 검사를 제거한 2개 실패를 확인하고 복구했다. 공통 계약 이전 후 World 설치·아키텍처·학습 관련 시험 terminal exit 0, NEW0. 독립 소스 검토의 패키지 버전 문제를 수정했다. 최신 버전의 설치/전체 회귀·착지 증거는 후속 기록이다.
+- gate 변화: 없음. 실제 독립 정답·보정·물체 성능·수용 profile·장치 관측 전달과 지연/손실, 실물/시뮬레이션 성능은 HOLD다. 기존 20261010 검수 데이터의 의미와 운영 선택을 유지한다.
+
+## 2026-10-12 · 5f4040f306 · D-655 지도 없는 조사와 통합 관제 사이트 수용
+
+- 변경: 빈 조사 기준·시설·도로·카메라/relative odom 근거·CAS, 선택 로봇 기록과 대형 작업 연결, 지도 busy guard와 충돌/개입 결과 구분을 구현·통합했다. 실행 계획과 날짜 검증 기록을 최종 상태로 정리했다.
+- 증거: 착지 원격16,523 PASS/NEW0, Node312 PASS, pre-push292 PASS. exact SHA FULL CI15 jobs 및 site build 성공, 운영자 서명·사이트 updater 종료0·세 healthy image identity·교정/조사 import 확인. 실제 사이트1440/390 px 세 모드 크기 안정·선택→기록·대형 패널·로컬 시설 작성·기존 지도/profile 보존 PASS. 상세 docs/validation/2026-10-12-mapless-fleet-control.md.
+- gate 변화: 이번 기능의 사이트 설치/UI 증거를 추가했다. 로봇 두 대 오프라인으로 실물 주행·측량·대형 수용 미확인; FIELD 승격·로봇 배포·이동·E-Stop 해제 없음. 일반 외부 IP URL의 연결/TLS 문제는 별도 제한으로 유지한다.
+
+## 2026-10-12 · uncommitted · Discord 대화 작업 요청·Fleet 대응 파이프라인 점검
+
+- 변경: D-669 Proposed와 설계/구현 계획을 작성했다. 일반 관리는 Console, 위험 대응은 Discord로 협업하되 transport·기명 principal·후보·기존 작업/사건 원장·장치 writer와 목표 근거의 경계를 분리했다. 일반 Mission 동일 owner와 Cell Job 별도 approver 계약을 구분했다.
+- 증거: 현재 source/승인·인수·통지·work/progress 경로와 독립 책임 검토를 대조했다. 사용자 계정에서 지정 팀 webhook을 생성하고 승인된 연결 확인 1건 HTTP 200·메시지 ID·UI readback을 확인했다. 비공개 receipt/화면은 X 세션에 보관한다.
+- gate 변화: Discord 연결 확인만 완료했다. Fleet outbox·Bot 대화 intake·기명 principal 연결·실제 조치/목표/FIELD는 미확인이며, source 문서·원격 계약 검증은 별도 기록이다. Bot은 operator 자격을 공유하지 않고 device/provider/push/deploy를 활성화하지 않는다.
+
+## 2026-10-12 · c175120a7 · World 설치 의존성 검사 형식 정합성
+
+- 변경: 최신 통합 CI의 World wheel 시험에서 D-667 의존성 raw 문자열 비교가 실패했다. 기존 설치 시험과 같은 Requirement/canonicalize_name으로 이름·공백 표기만 정규화하고 최소 >=0.0.1, 설치 버전0.0.1, 무조건부/no-extras, import identity와 Fleet 비의존 검사를 유지했다. 패키지 의존성·관측 동작은 바꾸지 않았다.
+- 증거: 8eab47497의 site-vision-cell job 실패 subprocess line6을 확보했다. 첫 수정291c77151 원격2 PASS/NEW0 후 독립 검토가 marker/extras 엄격성을 지적해 c175120a7에 보강했다. 최종 엄격성은 착지 원격 시험과 후속 CI로 다시 확인하며 실패를 기존 실패 목록에 추가하지 않는다.
+- gate 변화: 배포5f4040f306의 사이트 수용 근거는 유지한다. 후속 main 통합 CI 실패와 시험 수정은 별도이고 실물/장치/AI 권한을 승격하지 않는다. 원본 로그는 지도 조사 X 세션의 logs/ci-8eab-site-vision-job.txt 및 logs/world-metadata-fix/에 보존한다.
+## 2026-10-12 · 40b7937fa0 · D-671 기명 Discord 접수 source
+
+- 변경: 기존 tasks DB의 별도 bounded 접수 원장, immutable Discord identity→현재 기명 operator, 전용 HMAC와 Goal/Cell producer 자격 격리, 같은 메시지 중복/수정 및 owner read를 구현했다. 순수 projection/signature holder는 Fleet wheel/sdist/source image에 함께 설치한다. Console 작업 화면은 자기 원문을 textContent로 읽고 권한 철회 시 지운다.
+- 증거: 원격 RED 모듈 없음1 NEW, manifest 누락1 NEW 및 구조 증가1 NEW를 각각 수정했다. 최신 focused44 PASS/NEW0; 실제 Chromium4 PASS/NEW0(처음4 skipped는 pass 제외). 독립 source/Safety 검토 수용, Fleet53396/app906 재측정, +150/파일 상한/기존 추출 의무 유지. 실제 기명 HTTPS cookie 로그인은 별도 후속 증거에 기록했다.
+- gate 변화: source 접수와 named Console 로그인 확인. Gateway/token/운영 identity mapping/실제 대화 수신 및 후보/승인/reply는 후속이다. Task/Mission/Job/claim/모델/장치 명령·push·image deploy는 없다. 근거: docs/validation/discord-fleet-pipeline-2026-10-12/named-login-and-intake.md.
+
+
+## 2026-10-12 · addd5a982 · 플랫폼 계정·연결·작업 UI 관례 재정리
+
+- 변경: 공식 Carbon·GOV.UK·WCAG 참고와 현재 Fleet/Robot/Pilot 소스를 대조해 계정 발견성, 우측 진입점·전용 로그인·업무 복귀, 연결/권한/장치 연결 분리, 전체 표면 적용 표와 검증 기준을 설계 제안에 정리했다. DESIGN.md에 현행 ADR과 구분된 후속 안내를 연결했다.
+- 증거: 문서/소스 조사다. 기존 관제 workflow 원격 8 PASS(addd5a982)는 보존하되 새 로그인 흐름 검증으로 사용하지 않는다. 생성 문서와 harness lint는 이번 문서 변경에 대해 확인한다.
+- gate 변화: 인증 구현·새 ADR·배포·실물 수용 없음. D-658/D-519/D-641 충돌 항목 정합화 뒤 구현한다. 현행 계약을 제안만으로 바꾸지 않는다.
+
+## 2026-10-12 · e775bdd6a · D-683 계정 발견성과 업무 복귀
+
+- 변경: 플랫폼 사용 관례 설계를 기존 인증/안전 계약과 대조해 D-683을 작성했다. 네 Fleet 문서 계정 진입점·전용 로그인·복귀·새 탭 편집 보존을 구현 후보로 기록한다.
+- 증거: Node39 PASS/독립 검토 지적 반영. 이 후보의 lint는 새 ADR 위로 번호가 올라가며 아직 이 브랜치에 없는 동료 main ADR D-674~682 공백을 보고했다. main 통합 뒤 다시 확인하며 동료 번호를 임의 gap으로 선언하지 않는다.
+- gate 변화: 구현 후보이며 새 로그인 원격 회귀·재검토·CI·서명·배포는 미확인이다.
+
+## 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
+
+- 변경: 공통 law와 기존 rule/AI 후보 선택을 연결하고 stuck 및 stalled/pose_lost 전송 직전에 현재 사건, E-stop, calibration, trip, 사람 점유를 재검사한다. offline readback은 resolved 근거로 사용하지 않는다. README에서 Fleet 통합 규칙집을 연결했다.
+- 증거: 원격 RED 8 NEW를 재현한 뒤 관련 Fleet 시험 220 PASS, NEW 0. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--024325--fleet-rulebook--cdb91d/logs/red 및 logs/green. 추가 affected guard와 독립 검토는 진행 중이다.
+- gate 변화: 브랜치 구현과 원격 범위 증거만 추가한다. main 통합, push, CI, 배포, 활성 현장 설정 및 물리 수용은 미실시다.
+
+
+## 2026-10-12 · cb7c3396c · D-674 실행 파이프라인 최종 검증
+
+- 변경: 최종 실행 코드의 검증 결과와 독립 검토를 기록한다. 런타임 코드는 추가 변경하지 않았다.
+- 증거: 최종 source cb7c3396c의 원격 affected 두 묶음 5004 PASS/254 SKIP 및 213 PASS, 각각 exit 0, NEW 0. D-674 RED 8, AI permission RED 7, 다중 로봇/제안 바인딩 RED 3을 재현한 뒤 모두 전체 Fleet 회귀에 포함해 검증했다.
+- 검토: pipeline_review가 admission 경합 수정과 3163줄 size 판정을 독립 수용했다. 기존 +150 및 ai_facts 분리 의무는 유지한다. Harness lint 0 error/27 기존 검증 시점 경고. 변경 파일 flake8은 기준 커밋에도 있던 E128/W391 5건만 남고 새 오류는 없다.
+- 근거: X:/DevTemp/projects/rosy-platform/2026-10-12--024325--fleet-rulebook--cdb91d/logs/affected/run-1.txt 및 run-2.txt.
+- gate 변화: SOURCE/원격 영향 범위 검증 완료. skipped 시험, CI 전체, main 통합, push, 배포, 현장 overlay/장치/물리 수용은 확인하지 않았다. SharedGather 최대 1 s 캐시와 CORE 최종 검사 권한을 유지한다.
+
+
+## 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결
+
+- 변경: 실행 경로별 law/후보/최종 승인/owner/접수/readback/종결을 통합 규칙집에 연결했다. Task의 실제 발행 직전 policy/attempt/fence 검사, goal/bay의 명시적 receipt와 stop generation, trip 시작 취소, 늦은 formation 무장 rollback, Mission 다중 owner의 순환 대조를 구현했다. mover 취소와 겹친 불명 bay 전송에는 보상 cancel을 요청한다.
+- 증거: source 25c036ae8의 원격 navigation/traffic/trip/Task policy/formation 324 PASS, exit 0, known_failures NEW 0/known 0. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/logs/traffic-green-3/run-1.txt. RED로 재현한 실패를 known_failures 목록에 추가하지 않았다.
+- 추가 검증: source 38f51c4c2의 접수 후 owner 거절/cancel 409/roster 변경은 UNKNOWN으로 보존한다. RED 3 NEW 뒤 원격 Task/goal/bay/traffic/policy 158 PASS, exit 0, NEW 0. 근거 logs/post-acceptance-green/run-1.txt. 이전 착지 후보 d6205067f와 최종 HEAD를 혼동하지 않으며 최종 영향 검사를 다시 수행한다.
+- 검토: pipeline_review가 최종 소스/규칙집을 승인하고 Fleet parent 53366, Console 1325줄 재판정을 독립 수용했다. 기존 package +150/Console zero-growth와 observe/server/UI 분리 의무를 유지한다.
+- 통합 추가 검증: d6205067f의 영향 시험은 4997 PASS/252 SKIP/2 NEW로 머지가 거절됐다. cancel-all 사유를 typed NavigationStopped로 보존하고 trip 시작 취소 UI 안내를 연결했다. 보상 cancel 409 RED 1 NEW 뒤 source 5f3f033a8의 원격 취소/label/goal/Task/policy 147 PASS, exit 0, NEW 0; Node site-map 29 PASS. Generic transport 오류와 CancelledError 분류는 유지한다. 최종 HEAD의 영향 gate는 다시 실행한다.
+- main 통합 guard: 64d60b3d9 원격 영향 시험은 5050 PASS/252 SKIP/1 NEW로 멈췄다. main의 gateway Path 상수가 credential 검사에 오인되어 CONFIG_PATH로 명확히 바꾸고 유일한 시험 monkeypatch를 연결했다. source 7ab44069a의 보안/gateway/opencode/relay/sandbox 원격 134 PASS, exit 0, NEW 0; 독립 검토 승인. 경로·job·권한 검사와 스캐너 기준은 유지하며 최종 영향 검사를 다시 실행한다.
+- gate 변화: SOURCE/원격 회귀/리뷰 완료. 최신 main 통합과 전체 영향 범위는 tools/land.py의 최종 gate로 별도 기록한다. CI, push, 배포, 현장 overlay 및 실제 다중 로봇/물리 수용은 미확인이다. CORE/Arm writer와 policy/AI opt-in을 유지한다.
+
+
+## 2026-10-12 · f1255e01d2 · D-673 관측 readback 일관성
+
+- 변경: 기존 snapshot·기준점·crop 검증과 연결 구역 계산을 재사용해 모순된 관측 파일을 거절한다. 추론 backend 실패는 파일 작성 전 진단 exit 2로 끝낸다.
+- 증거: 관련 원격 회귀 103 PASS / 3 SKIP, terminal exit 0, known-failures NEW0 및 독립 소스 리뷰 blocker 없음. 기존 ONNX Runtime 설치 환경의 합성 CLI/readback에서 도로면 16화소·현재 구역 8화소, 입력 보류와 matching-hash 모순 5개 거절을 확인했다.
+- 자료: 초기 drivable 검수본 1,428장의 이미지·mask 실제 해시가 일치하지만 모두 기존 2,769장에 포함된다. 전체 도로면 독립 정답으로 승격하지 않는다.
+- gate 변화: SOURCE/원격 관련 회귀와 합성 실행 검증 완료. [후속 실행 기록](validation/road-observation-readback-2026-10-12.md). 최신 main 통합·착지는 별도 최종 gate로 확인한다. 독립 인지 성능·실제 장치 전달·CI·push·배포·주행·현장 수용은 미확인이다.
+
+## 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+
+- 변경: v2 프로파일·판정 JSON·공통 요청·CLI/로컬 어댑터·독립 보정을 구현하고 모델 프로파일 전체 SHA에 보정을 고정했다. GLM 첫 호출의 영속 표식과 Pinky 전용 읽기/지속 예산 계약을 추가했다. 로컬 실행은 기본 미수용이다.
+- 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
+- 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
+- gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · daccbd38be · 모델 주도 관제 checkpoint 착지와 개선 순서
+
+- 변경: 판단 계약·provider 변환·독립 평가를 실제 하위패키지로 분리하고 기존 공개 import와 설치 경로를 유지했다. 기존 부모 크기 기준과 +150 한도는 올리지 않았다. 실패 피드백·동일 독립 세트 후보 비교·새 사건부터 적용·복귀의 후속 작업을 구체화했다.
+- 증거: tools/land.py가 최신 main을 통합한 daccbd38be의 원격 24개 관련 파일 364 passed, exit 0, known-failures NEW 0을 확인하고 로컬 main에 착지했다. AI PC 9.0GB, Model PC 7.9GB 자원 하한을 충족했다. 설치 wheel/sdist, 크기 경계, 사건 예산/관측, v2 JSON/보정/CLI/로컬과 기존 GLM 격리 경로를 포함한다.
+- 검토: responsibility_review의 독립 책임 분리 검토 및 root diff 검토를 완료했다. cancellation 시 사라진 프로세스의 ProcessLookupError 처리만 sandbox 시험에 보강했으며 production cleanup은 바꾸지 않았다.
+- gate 변화: SOURCE·원격 관련 회귀·설치 패키지·로컬 착지 완료. worker와 최종 사람 인수는 별도 구현 중이며 피드백 export·후보 승격은 실행 계획 단계다. 실제 제공자 호출·독립 품질·CI·push·배포·현장 수용은 미확인이다.
+
+## 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+
+- 변경: 승인된 Fleet 범위에서 WAIT/YIELDED 재관측 복구·동일 사건 예산·durable UNKNOWN no replay·검증된 trip 재계획을 연결했다. 상태/센서 원장, read_guard cursor 조회, 해시 재검증되는 비라벨 학습 source export와 통합 규칙집을 추가했다.
+- 증거: 관련 원격 238 passed/NEW 0, Node 52 passed, pipeline_review 독립 소스 검토 완료. 최신 main 통합 원격 5262 passed/252 skipped에서 8 NEW를 발견해 착지를 중단하고 호출자/fixture/layer/크기/공개 commit 표기를 수정했다. 최종 gate는 후속 실행 로그로 확인한다.
+- gate 변화: SOURCE 구현 증거. CI·push·배포·현장 autonomous opt-in·물리 무인 수용·실제 학습/승격은 미확인. 센서 원본/불명/결측을 정답으로 만들지 않는다.
+## 2026-10-12 · 43c8438588 · D-690 도로 인지 출처별 불확실성
+
+- 변경: branch `feat/perception-source-uncertainty`. 검증된 capture group 전체 재표집과 출처별 표본 수·coverage를 고정 재생에 연결했다.
+- 검증: 원격 관련 81 passed / 2 skipped, terminal exit 0, known-failure NEW 0. [실행 기록](validation/perception-source-uncertainty-2026-10-12.md).
+- gate 변화: SOURCE 및 원격 합성 회귀 완료. 독립 정답·물리 보정·수용 profile·장치 전달·실물/시뮬레이션 성능·CI·push·배포·주행 수용은 미확인이다. 최신 main 착지는 별도 최종 gate로 확인한다.
+
+## 2026-10-12 · d780942b9 · D-691 Rosy Cam은 요청 뒤 30초를 유지하고 대기한다
+
+- 변경: API reference v1.210. 하향 demand.wanted와 공유 벡터 stream_hold_s 30. 인증된 Rosy 미리보기 읽기가 천장 영상을 요청하고, 마지막 읽기 뒤 30초 뒤에 센서와 JPEG를 멈춘다.
+- 증거: 원격 AI PC에서 d780942b9 관련 294 passed, exit 0, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt). Cam JVM 418 passed. rosy_harness lint 0 errors. 실기 전류와 첫 프레임 지연은 측정하지 않았다.
+- gate 변화: 문서·계약 SOURCE. 착지·push·APK 설치·DEVICE/FIELD는 하지 않았다.
+## 2026-10-12 · uncommitted · D-691 심한 발열이면 천장 송출을 멈춘다
+
+- 변경: D-691 4항에 발열 정지를 넣었다. API reference v1.210 문장에 같은 기준을 적었다. 와이어는 그대로다.
+- 증거: Cam JVM 421 passed, 0 failed. S21에서 Fleet lease JPEG 순번이 1285에서 1289로 늘었고, 화면을 끈 뒤 1434가 왔다. 발열 정지와 대기 전류, 첫 프레임 지연은 기기에서 재지 않았다.
+- gate 변화: 문서 SOURCE. 착지와 배포는 이 기록 뒤에 한다.
+
+## 2026-10-12 · 0bedd7809c · D-699 관측 원장 책임과 기록 창
+
+- 변경: 실제 CORE event/관측 원장을 fleet.observe로 분리하고 기존 identity aliases·배포를 유지했다. capture UUID/sequence/monotonic/전체 roster와 기존 curation의 읽기 전용 window·JSON CLI를 연결했다.
+- 증거: 관련 17파일 원격 318 passed/NEW 0/lint, 실제 wheel 설치·isolated import/DB capture, 독립 source/merge 검토. 부모 55460/55814, observe232/362로 기존 기준을 유지했다. source commit `0bedd7809c`로 로컬 착지했다.
+- gate: SOURCE 회귀와 local landing. 넓은 통합은 6337 passed/295 skipped와 API 버전 동기화 8실패를 확인했으며 수정본 전체 CI로 부르지 않는다. 실제 모델 품질·sdist·서비스 배포·현장 수용·push와 정상 명령/모델/재발 전체 범위는 미확인이다. 다음은 실제 규칙 기준 생산·사건 연결이다.
+
+## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
+
+- 변경: pytest 7.4의 module setup hook과 충돌하던 Fleet 시험 도우미 이름 및 모든 호출자를 바꿨다. Cell 401 검사는 실제 로그인·고급 접속 안내를 기대하며 세션 초기화와 조작 잠금 단언을 유지한다. 고립 설치 의존성 검사는 PEP 508 이름·공백만 정규화하고 정확한 버전 조건·무조건 의존성을 유지한다.
+- 증거: commit 40e7287971의 G1 307 passed와 pre-push 7828 passed 이후 전체 CI 38180852375는 Fleet hook·Cell 구문·sdist Requires-Dist 문자열 차이로 실패했다. CI 도구 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0의 원격 RED 1 NEW로 실제 core-common >=0.0.1 표기를 재현했다. 수정 후 동일 도구 원격 95 passed 및 Cell 실제 Chromium 6 passed, 각 terminal exit 0/known-failures NEW 0. 로그는 X: 검증 폴더 ci-compatible-diagnostic/ci-compatible-green/ci-compatible-cell에 보존한다.
+- gate 변화: 시험 호환성 수정과 선택 원격 회귀만 확인했다. 최신 통합·전체 CI·서명·새 설치본·사람 계정 발급은 별도 확인 중이다. production 권한·기계 토큰·비밀 검사·기존 실패 목록은 변경하지 않았다.
+
+## 2026-10-12 · 1e29edaed · 최신 통합과 CI 도우미 회귀
+
+- 변경: 최신 관측 기록·채널 작업 계약을 보존하며 통합했다. 새 채널 사건 시험의 setup 도우미와 세 호출만 이름을 바꿨다. 계정 규칙 문서에 확정된 첫 변경·기본 내 계정·현재 비밀번호 검증·결과 재조회를 반영했다.
+- 증거: 최신 도구 선택 회귀 101 passed/exit 0/NEW 0. canonical G1 두 회차는 6165+4371 및 6165+4396 passed, 각 NEW 0; Node 각 318 passed. commit 03378323e를 로컬 main에 착지했다. 새 도우미는 CI 도구 원격 RED 9 NEW 후 commit 1e29edaed의 pytest 7.4 및 최신 도구에서 각각 9 passed/exit 0/NEW 0. native_games_ui가 이름 변경 AST 동등성과 문서 범위를 독립 승인했다. 출하 범위 171개 커밋의 안전 검토 기록 검사도 통과했다.
+- gate 변화: 최신 소스 통합·원격 회귀·독립 검토를 확인했다. 이 후속 도우미 변경의 착지·푸시·전체 CI·서명·설치·계정 발급은 다음 gate다. 선택적 외부 채널 설정은 현장에 없으며 활성화하지 않았다.
+
+## 2026-10-12 · 8520b77d66 · D-700 실제 Fleet 규칙 선택 근거
+
+- 변경: 실제 resolver step 반환과 Assessment를 기존 DB의 fleet.observe 원장에 결속했다. 현재 fresh RULE_ONLY 선택의 HOLD/HANDOFF만 모델 baseline으로 연결하며 WAIT·물리 명령·MIXED·stale·claim·config 변경을 임의 변환하지 않는다. SDK 0.1.10 필수 설치와 CI/local 버전 동기화를 포함한다.
+- 증거: 최신 main 통합 12개 시험 그룹 원격 621 passed/1 skipped, exit 0/NEW 0/lint, 실제 wheel·sdist 설치·기본 resolver 생성·기존 policy loader 호환과 독립 검토. commit `8520b77d66`으로 local landing. 고정 로그는 세션 `logs/rule-land-8520b77d66/run-1.txt`다.
+- gate 변화: SOURCE·설치 회귀·로컬 착지. 실제 모델 품질·전체 CI·배포·현장 수용·명령/호출/재발 전체 coverage는 미확인이다. 다음은 원장 export·독립 cohort 연결이며 전체 목표는 진행 중이다.
+
+## 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+
+- 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
+- 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
+- gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
+
+## 2026-10-12 · 7a03bf1bf08e · UI·첫 로그인 실제 사이트 설치 확인
+
+- 변경: 확정 정보 배치·로그인·기본 내 계정 구현의 실제 배포 증거를 후속 검증 문서에 기록한다. 이전 실패와 설치 관측은 보존한다.
+- 증거: 실제 pre-push 6,763 passed/종료 0/NEW 0 및 push 종료 0. 동일 SHA FULL·Cam/Pilot Android CI·사이트 후보 빌드 성공 후 서명·정식 updater 설치 완료. 실행 인증 코드 네 모듈 및 제공 자산 일곱 개·공용 client가 후보 blob과 일치한다. 실제 브라우저 네 화면 320/1366px 8조합, 로그인·제한된 프로필·첫 변경 화면 및 팀원 네 계정의 변경 전 API 거절·로그아웃을 확인했다.
+- gate 변화: Fleet 사이트 설치·초기 팀원 로그인 확인. 계정 적용 후 기존 외부 채널 매핑 충돌은 설정을 보관·중지해 복구했다. 사용자 본인 기존 계정 복구를 별도 처리한다. 외부 메시지·당사자 최종 비밀번호·실물 로봇/폰/LCD 수용·TLS 신뢰는 확인하지 않았다.
+
+## 2026-10-12 · e5f078ee02 · 지도 검토 저장 완료 관측 보완
+
+- 변경: 지도 검토 브라우저 시험의 첫 저장 PUT 성공 응답을 기다린 뒤 서버 초안을 읽는다. 기존 출처·검토 후 편집의 재검토·활성화 거절·실제 명령 없음 단언은 유지하며 제품 코드는 변경하지 않는다.
+- 증거: 문서 후속 9076d86f28 전체 CI는 Fleet 한 묶음의 1 failed/1,716 passed로 실패했다. 수정 전 원격 실제 Chromium은 다른 화면 폭에서 같은 race를 1 NEW로 재현했다. 수정 후 두 크기 2 passed/종료 0/NEW 0이며 native_games_ui가 독립 승인했다.
+- gate 변화: 선택 브라우저 회귀와 독립 검토다. 설치 7a03bf1bf08e의 이전 전체·Android CI 및 실제 사이트 증거와 구분한다. 후속 후보 전체 CI는 이어 확인하며 본인 계정 초기화 승인은 대기 중이다.
+
+## 2026-10-12 · 8977f25dad · UI 최종 CI·후속 설치 화면 확인
+
+- 변경: 전체 UI 목표·공식 규칙·표면별 증거와 후속 설치의 실제 화면·계정 현재 상태를 새 최종 검증 기록으로 연결한다. 과거 실패·승인 대기 기록은 보존한다.
+- 증거: 지도 저장 관측 수정의 통합 원격 5,433 passed/282 skipped 및 pre-push 추가 291 passed, 각 종료 0/NEW 0. commit 8977f25dad 실제 push와 전체 CI38191711128 모든 시험·최종 결과 성공. 설치 commit 6a73839f03b9의 전체 CI·서명·updater 성공, 실제 인증 코드 네 모듈·공용 client·일곱 자산 대조와 실제 Chromium 8조합 및 첫 변경·제한된 프로필의 최신 PNG 18개를 확인했다.
+- gate 변화: Fleet 설치·실제 화면·초기 팀원 네 계정 확인. 본인 운영자 계정과 기존 외부 연동 설정은 다른 작업에서 복구된 현재 상태를 읽기 전용으로 확인했다. 본인 자격을 추가 초기화하거나 외부 메시지를 보내지 않았다. 실물 매체·현장 작업·TLS 신뢰·당사자 최종 비밀번호와 실제 개인 프로필 수정은 이 증거로 완료 표시하지 않는다.
+
+## 2026-10-12 · 54cba0b3f · 보이는 곡선과 목표점 미채택을 구분한다
+
+- 변경: 사용자가 실제 맵 사진의 뚜렷한 곡선을 지적한 교훈을 workflow 문서로 기록했다. 카메라가 방향을 잃었다는 포괄적 설명 대신 RGB·segmentation·투영·현재 목표점·CORE 허용을 구분한다.
+- 증거: R31 baseline 707의 6.600000344s 실패 PNG에 흰 선이 보이며 같은 trace의 target_now_m=null·ahead_m=0·inference_error=null·CORE HOLD를 대조했다. 원본 class mask와 실제/시뮬 맵 곡률 일치는 미확인으로 명시했다. private에 원본 사진·영상·일지를 보존했다.
+- gate 변화: 없음. 설명·진단 절차의 교훈이며 곡선 주행, 정지 검사, 완주 해결을 주장하지 않는다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.
+
+## 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
+
+- 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
+- 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
+- gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-721 스테이션과 제자리 복귀 모드
+
+- 변경: 운영자가 필요한 복귀 모드를 D-721 Accepted로 정했다. 목적지는 `station`과 `outing_start`다. station은 기존 도킹 명령, 제자리는 외출 시작 시 LOCALIZED 자세 하나를 기억한 뒤 기존 내비게이션 목표다. 여섯 번째 RobotMode와 스냅샷 필드, 얼굴 줄은 넣지 않았다. SAF-003, SAF-005, DNC-006은 그대로다.
+- 증거: SAF-003, SAF-005, NAV-003, WPT-004, DNC-002, DNC-005, DNC-006과 D-28, D-419, D-502, D-688, 모드 전이표, ROBOT_MODES, NavigationManager.home() 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 정책 결정이며 발행 구현, 장치, 현장 수용은 별도다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-723 장치 범주는 능력과 최종 작성자
+
+- 변경: 청소, 팔, 다른 이동 로봇, 드론을 새 폴더나 모드로 나누지 않기로 D-723 Accepted를 적었다. 청소는 기존 `mobile_base` 위의 Fleet 미션이고 복귀는 D-721이다. 팔은 `manipulator`와 별도 작성자이고 OMX는 꺼져 있다. 드론은 비행 스택과 최종 작성자 확인 전 폴더와 공통 action API를 예약하지 않는다.
+- 증거: 비전 프로필, D-55, D-71, D-310 결정 5, D-12, D-420 Proposed, D-427, D-429, D-430, D-721, 두 어댑터 매니페스트 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 분류 결정이며 구현, 장치, 현장 수용은 별도다.
+
+## 2026-10-12 · 72c525516 · docs(sim): 원본 지도 Leg6 정지와 차선 궤적 분리
+
+- 변경: 기존 Gazebo 완주 계획에 원본 지도 Leg6의 0.346443m 이동, traffic low-confidence HOLD와 차체 paint 겹침을 기록했다. 목표 소실, 전방 차단, 최종 정지와 궤적 품질의 원인을 나눴다. 실행 제품과 안전 기준은 바꾸지 않았다.
+- 증거: 원본 Image 44개와 native 명령·road·traffic·hazard 시각 대조, 원본 정책 재생, 독립 SOURCE 리뷰. confidence 0.415625 수신 뒤 최초 native zero와 실제 HOLD를 확인했다. paint 겹침 427/1534는 정지 후 반복을 포함한다. 두 로봇 각각 LOCALIZED 228회, OFF·lease 종료·연속 정지·작업과 자기 프로세스·포트·lock 종료 및 해시 보존을 확인했다.
+- gate 변화: 없음. 원본 지도 완주·연속 차체 궤적·실물 수용은 미확인이다. Fleet 계획 속도는 실행 cap이 아니며 실제 CORE 한도와 구분한다. 바닥 마스크의 실제 STOP 삭제 반례를 유지하고 시점별 기하 비교를 후속 검증으로 둔다.
+
+## 2026-10-12 · 17148f9b0 · docs(sim): 벽 분리 두 안의 한계와 감속 궤적 비교
+
+- 변경: 바닥 마스크·두 시점 warp가 벽 바닥과 실제 STOP을 안전하게 분리하지 못하는 결과, 실제 감속 전후 궤적 비교와 고정 모델의 STOP·wall 클래스 부재를 기존 계획에 기록했다.
+- 증거: 정상 원격 자원의 원본 영상·TF·odom 재생과 독립 SOURCE 리뷰. 시각 37.209의 기록 명령 대응에서 후보/native 곡률 3.783308/7.762720, 동일 진행 거리의 첫 paint 겹침 8.8/0.4cm를 확인했다. 이는 폐루프 개선 증거가 아니다. 실제 모델 manifest·ONNX 해시는 Leg6 기록과 일치했다. 17148f9b0의 원격 harness/network 계약 시험 exit 0, known_failures NEW 0, lint 0 errors를 확인했다.
+- gate 변화: 없음. 이동 중 교통 감속의 곡률 보존 후보는 계약·실패 회귀를 먼저 수정하며, 벽 의미 인식·원본 지도 완주·실물 수용은 계속 미확인이다.
+
+## 2026-10-12 · 435eda322 · docs(sim): 통합 후보와 공개 기록의 커밋 ID
+
+- 변경: 최신 main의 steering·preview·시뮬레이션 의존성과 D-735를 작업 브랜치에 합쳤다. 충돌 해결 중 중복 observer 함수와 import를 제거했고 양쪽 로그 항목을 보존했다. 공개 계획의 커밋 ID를 기존 짧은 형식으로 정정했다. 전체 해시는 원본 실행 증거에 보존한다.
+- 증거: 병합된 Python 51개 syntax와 observer·launch·ADR BOM/CRLF·CORE startup clock 불변식 검증, lint 0 errors. D-735의 관련 원격 시험 402 PASS/NEW 0 및 독립 SOURCE 승인. 통합 전체 선택의 두 번째 원격 시험은 3718 PASS/113 SKIP, 공개 문서의 긴 Git 해시를 high-entropy 값으로 분류한 신규 실패 1개를 확인했고 문서를 고쳤다. 나머지 시험과 수정 후 검증은 진행 중이다.
+- gate 변화: 없음. Gazebo 다음 실행은 통합 시험 종료와 수정 검증 뒤 수행한다. 원본 지도 완주·벽 STOP 의미 분리·실물 수용은 미확인이다.
+
+## 2026-10-12 · 0a690a83b · D-676 카메라 종료 보상 구분
+
+- 변경: 무효 관측 학습 제외와 이미 전달한 행동의 terminal 결과 학습을 구분했다. target 상실만 연결하고 센서 오류·비학습 이동·미실행·truncation은 제외한다. 실제 CORE receipt와 episode 경계를 설계에 기록했다.
+- 증거: 원격 RED 후 Isaac·architecture 통합 exit0/NEW0. native 실험과 물리 정지·완주 증거는 별도 기록한다.
+- gate 변화: 없음. 학습 신호 수정이며 완주·Fleet·장치 수용을 뜻하지 않는다.
+
+## 2026-10-12 · uncommitted · docs(adr): D-729 바닥 한 번 뒤의 복귀
+
+- 변경: D-723의 바닥 임무를 D-729 Accepted로 순서를 정했다. 이동은 같은 맵의 기존 waypoint 목표를 차례로 가고, 복귀는 D-721의 `station` 또는 `outing_start` 하나다. 선 따라가기, 팔, 드론, 바닥 구동기 스텝은 넣지 않았다.
+- 증거: MSN-001, MSN-004, NAV-001, WPT-004, MAP-002와 D-12, D-55, D-71, D-310, D-420, D-721, D-723 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 순서 정책이며 미션 엔진, 장치, 현장 수용은 별도다.
+
+## 2026-10-12 · uncommitted · docs: 공개 트리에서 실험실 주소를 뺀다
+
+- 변경: `docs/` 배치는 `docs/AGENTS.md`와 같아 옮기지 않았다. `docs/reference/AGENTS.md`가 현재 파일과 `legacy-tools/`를 가리키게 고쳤다. 시험 PC·로봇 주소는 gitignored `private/lab-hosts.json`으로 옮기고, 추적 예시는 `tools/remote/hosts.example.json`이다. 살아 있는 도구 기본값과 운영 안내에서 그 주소·현장 SSID를 뺐다. ADR·날짜 계획·검증 기록·로그의 그날 사실은 그대로 둔다.
+- 증거: 배치 시험이 `private/lab-hosts.json` 무시와 예시 추적, 살아 있는 트리의 주소 금지를 본다. 원격 pytest는 이 기록 시점에는 아직이다.
+- gate 변화: 없음. 공개 경계이며 장치·현장 수용은 아니다.
+
+## 2026-10-12 · a94b024fb · docs(sim): Leg7 전방 정지와 속도 계약 비교
+
+- 변경: 원본 지도 Leg7의 0.319664m 이동과 LiDAR 차단을 기록했다. 곡률 수정, 현재 관측, 안전 정지, 지도 완주를 구분하고 SIM 전체 최대속도 0.1m/s 비교의 반증 조건을 적었다. 실행 제품과 실물 설정은 바꾸지 않았다.
+- 증거: 정상 AI PC의 전체 소스·새 17개 패키지 실행과 종료 readback, raw scan·TF 재생의 세 거리 오차 0, 독립 원인 검토. 실제 필터는 5세대·1.5Hz이며 전체 소비 이력은 미확인이다. 연결 복구 후 남은 원격 시험 4597 PASS/246 SKIP 및 문서 수정 검증 196 PASS, 각각 NEW 0을 확인했다.
+- gate 변화: 없음. 한 구간 주행·진단이며 원본 지도 완주, 새 속도 구성의 실행, 착지·푸시·실물 수용은 별도다.
+
+## 2026-10-12 · ab29002f6 · docs(sim): Leg8 속도 비교와 회전 여유 거절
+
+- 변경: SIM 전용 전체 0.1m/s의 실제 적용·정지 점검과 원본 지도 한 회차의 0.360837m 이동을 기록했다. 최종 zero 직전 회전 여유 거절과 후속 전방 blocked를 구분했다. 관측 목표·센서 잡음의 후속 재생을 정했으며 제품과 실물 설정은 바꾸지 않았다.
+- 증거: 정상 AI 자원의 새 17개 빌드·실제 API/SDK 한도 readback·닫힌 주행 결과, 원본 scan/TF 재생과 독립 기하 검토. 현재 속도 구성은 Leg7보다 4.12cm 더 갔으나 첫 구간을 통과하지 못했다. 이전 문서 커밋 ab29002f6의 관련 원격 시험은 220 PASS/NEW 0이다.
+- gate 변화: 없음. 원본 지도 완주·반복 재현·착지·푸시·실물 수용은 미완료다. 고정 장면 경로 예측을 실제 접촉으로 세지 않는다.
+
+## 2026-10-12 · 5206a3596 · docs(sim): 실제 ray 재생과 빔 위상 진단 설계
+
+- 변경: 실제 TF·IMU·높이·visual geometry 재생의 근접 측정 오차와 고정 빔 이상을 구분했다. 원본 센서 grid와 반빔 grid의 정지 비교를 설계했다. 모든 빔·잡음·안전 기준을 보존하며 설치 vendor와 실물 설정은 바꾸지 않았다.
+- 증거: 정상 원격 자원의 source ray 및 cube-UV 재생, 설치 rendering 버전과 upstream 원문 대조. 현재 소스 계산은 WRAP 경계 가설을 지지하지만 런타임 비교는 아직이다. 5206a3596 관련 원격 시험 220 PASS/NEW 0, lint 0 errors를 확인했다.
+- gate 변화: 없음. source 진단과 다음 실험 설계이며 제품 센서 변경·지도 완주·실물 수용은 별도다.
+
+## 2026-10-12 · 9ae7dd049 · docs(sim): 원본과 반빔의 정지 비교 종료
+
+- 변경: 두 설정의 실제 수집·전후 world 자세·Gazebo↔ROS 값 대응과 종료를 기록했다. 실패한 수집 전제와 제품 안전 기준을 구분하고 원본 실패 기록을 보존했다.
+- 증거: 정상 SIM 자원에서 각 102개 동일 header·10.098 sim초·640개 거리/강도 float32 일치, 독립 재검산과 도착 역행/중복 0. 두 경우 종료 residual 0과 전체 source/install 해시 이상 0이다. 고정 빔 80/400/560의 큰 거리 차이가 반빔에서 줄었으며 전체 ray·원본 회전 판정 비교는 후속이다. 9ae7dd049 관련 원격 시험 220 PASS/NEW 0을 확인했다.
+- gate 변화: 없음. 정지 센서 진단이며 Gazebo 제품 설정 후보·새 빌드 주행·원본 지도 완주·착지·푸시·실물 수용은 미완료다.
+
+## 2026-10-12 · uncommitted · docs: 자연어 요청을 통합 규칙집에 연결
+
+- 변경: D-728의 원문 접수·AI 후보·독립 원문 검사·최종 admission·기존 owner 예약·결과 회신 경로를 `fleet-rulebook.md`의 실제 소스 소유자로 연결했다. 정기 health의 읽기 전용 관측과 자연어 수용·설치·배포·학습 개선의 남은 검증을 구분했다.
+- 증거: 현재 `ChannelRequests`, `ConversationJobs/Worker`, `ExecutionJournal`, `ExecutionWorker`, `IntentExecution`와 기존 Task hook·transport fence를 대조했다. 문서 수정으로 모델 수용·장치 완료를 승인하지 않는다.
+- gate 변화: 없음. 자연어 실행 결과 연결·health·보호 모델 수용·실제 Discord·학습 개선은 계속 검증 대상이다.
+
+## 2026-10-12 · uncommitted · feat(fleet): optional hourly KST Discord health
+- 변경: 기본 비활성화 시간별 KST 알림, 저장소 클레임, 캐시 전용 Fleet/AI 관측 항목, 고정 채널 전송 및 설치 패키지 검증 추가.
+- 증거: ec9423fe4의 원격 71 passed, exit 0, NEW 0과 독립 SOURCE/QUALITY 검토 두 건을 확인했다. 배포와 첫 예정 시간 Discord 채널 수신 확인은 미확인.
+- gate 변화: 없음. D-733은 소스 계약만 수락; 실행 활성화, 로봇 명령, 모델 승인 없음.
+
+## 2026-10-12 · uncommitted · docs(adr): D-736 위치추종 기준점과 어둠 안내
+
+- 변경: 플릿 위치추종은 이미 보고된 SLAM·상대 좌표·천장 카메라·앞 카메라를 팔로워 기준의 점 하나로 묶고, 팔로워는 그 자취만 다시 밟는다고 D-736 Accepted로 정했다. 카메라가 어두운 장면이라 차선을 못 보면, 지도와 거리로 다음 구간을 계산해 관제 안내 문장으로 남긴다. 그 문장으로 목표·차선·군집·바퀴를 내지 않는다.
+- 증거: D-2, D-18, D-144, D-257, D-395, D-536, D-557, D-559, D-581 대조. 시험은 돌리지 않았다.
+- gate 변화: 없음. 정책이며 융합 구현, 안내 코드, 장치, 현장 수용은 별도다.
+
+## 2026-10-13 · 3afd25958 · docs(sim): Leg11 정지 원인과 CPU 비교 경계
+
+- 변경: 지도 완주 계획에 동결 c66d19b83의 Leg11 실행·최초 SDK 거절·최종 Fleet 정체 종료를 구분해 기록했다. 다음 시험은 같은 지도·모델·안전 조건에서 CPU 배정과 실제 RTF를 비교한다.
+- 증거: 새 17패키지·전체 source 7,554/install 2,726 해시 보존, 정지 점검·0.370781538m 주행·도착 false·종료 회수. 독립 동일 native 구간 재계산은 약 20 wall초에 8.738 sim초·42.3447mm 누적 이동·48.7068mm 경로 투영 변화다. 내부 Fleet progress reset 시각을 증명한 것은 아니다. a914201e8 원격 source 회귀는 877 PASS·NEW 0이다.
+- gate 변화: 없음. 단일 구간과 source 시험은 지도 완주·새 실행 반복·main 착지·push·실물 수용을 대신하지 않는다. 실물 감독은 추후 확정한다.
+
+## 2026-10-13 · 90f76dbee · docs(sim): CPU 12 비교 Leg12 종료 증거
+
+- 변경: 실행 성능 비교의 실제 결과를 기록하고 SDK 최종 zero·후속 CORE 몸 HOLD·감독 종료의 Fleet canceled를 구분했다.
+- 증거: 같은 동결 c66d19b83의 새 17패키지·정지 점검·한 회차 주행 0.367661837m·도착 false. 실제 주행 RTF는 약 0.857이며, source/install 해시와 종료 조건·진단 오류 0을 확인했다. 별도 source 문서 회귀는 최초 제목 형식의 2 NEW를 90f76dbee에서 교정한 뒤 terminal 0·NEW 0이다.
+- gate 변화: 없음. 성능 기여를 확인했지만 CPU 증가만으로 지도 완주를 해결하지 못했다. 원본 scan의 scoped/legacy 몸 경로와 SDK 거절 재생이 다음 분석이며 main 착지·push·실물 수용은 미완료다.
+
+## 2026-10-13 · uncommitted · Gazebo Leg13b 자연 HOLD 해제와 SDK 회전 거절
+
+- 변경: c66d19b83 동결 소스와 검증된 Leg12 설치를 재사용해 원격 LF 문법 검사·정지 점검·단일 제한 주행을 수행했다. 설치 baseline 2726개 불변과 추가 bytecode 6개, 지도 source cache 2개의 원본 소스 등가성을 별도 검증했다. 새 빌드로 보고하지 않는다.
+- 증거: 약 0.374787m 진행 후 Fleet stall로 종료했다. CORE 장애물 HOLD는 약 0.295초 뒤 자연 해제됐지만, 최종 native zero는 그보다 7.390초 앞서 SDK 회전 거절 직후 발생했다. 이전 감독 즉시 취소와 분리하고 기존 안전 기준·잡음·한도는 유지했다.
+- gate 변화: OFF·정지·lease·pending·프로세스·포트·자기 lock 종료 및 전체 소스/재사용 설치 해시를 확인했다. 지도 완주·독립 반복·main 착지·push·실물 수용은 미완료다. 상세는 docs/plans/2026-10-12-gazebo-lane-lap.md에 기록했다.
+
+## 2026-10-13 · bdea36dd89 · docs: Fleet AI Discord 이력의 독립 안전 검토
+
+- 변경: 기존 D-430 소급 검토 방식으로 CI에서 표기가 누락된 정확한 과거 커밋 9개의 독립 검토와 필수 후속 조건을 기록했다. baseline·분류·판정·실패 기준과 공개 이력은 유지한다.
+- 증거: 독립 ralph_quality의 정확한 diff·최종 결합 소스·후속 수정 검토, 결합 소스 원격 10,162 + 4,650 + 5,002 passed와 추가 207 passed, CORE 95·설치 91·site 30의 각 NEW 0. 실제 CI 실패 범위 전체 이력 재검사 종료 0. 도구 회귀·새 CI·서명·배포는 별도 검증한다.
+- gate 변화: 없음. 중간 snapshot의 단독 배포, 실제 Discord 응답·물리 완료·장치/현장 수용 승인이 아니다.
+
+## 2026-10-13 · 2917a9a699 · docs: 현재 설치본 기본 프로필 후속 검증
+
+- 변경: docs/validation/profile-workflow-2026-10-13/result.md에 설치 이미지, 원격 Chromium 회귀, 운영 계정 유지, read-only 프로필 메타데이터의 증거 층위를 기록했다.
+- 증거: 동일 설치 commit의 프로필/계정 화면 원격 40 passed, exit 0, NEW 0. 격리 설치 이미지의 저장·비밀번호 변경·재시작 유지·세션 무효화·권한 주입 거부 PASS.
+- gate 변화: 없음. 실제 본인 로그인 브라우저 저장은 연결 부재로 미확인이고, 운영 프로필·비밀번호는 변경하지 않았다. 실물·현장 수용은 요청에 따라 제외했다.
+
+## 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
+
+- 변경: `docs/reference/platform-folder-responsibilities.md` 앞에 편집 집 열두 개를 두었다. 기존 manifest root를 찾는 단위로 묶고, 설치 이름과 2026-10-11 소스 배치 기록은 그대로 둔다.
+- 증거: 폴더 이동과 패키지 이름 변경은 없다. 착지 도구의 lint와 영향 시험이 이 문서 변경의 검사다.
+- gate 변화: 없음. 찾기 지도이며 구현, 장치, 현장 수용은 아니다.
+
+## 2026-10-13 · uncommitted · docs: D-738 폴더 이름과 묶음 규칙
+
+- 변경: D-738을 수락했다. 디렉터리 이름은 권한 하나, 같은 역할만 한 폴더, 설치 이름은 유지, 한 커밋에 한 단계다. 폴더 책임 안내에 열 단계의 목표를 적고 모두 이동 전으로 두었다.
+- 증거: 이 커밋은 폴더를 옮기지 않는다. 규칙 문서와 ADR Log 행이다.
+- gate 변화: 없음. 이후 단계의 이동, 장치, 현장 수용은 각 단계가 따로 한다.
+
+
+## 2026-10-13 · uncommitted · Gazebo drive 역사 안전 검토 기록
+
+- 변경: D-430 기존 사후 검토 방식으로 독립 drive_review가 정확히 검토한 역사 커밋 네 SHA와 조건을 기록했다. 이력·BASELINE·검사 범위·안전 태그는 바꾸지 않았다.
+- 증거: docs/validation/gazebo-drive-safety-review-2026-10-13/result.md. 통합 회귀 17064 PASS/818 SKIP 및 pre-push 289 PASS, 모두 NEW 0 뒤 d157ccbf2 main 착지·push를 확인했다. 첫 CI는 trailer 누락으로 scope 실패·test 미실행이었다. 후속 SOURCE/원격/CI 검증은 별도다.
+- gate 변화: 역사 SOURCE 검토의 추적성만 보완한다. standalone·장치·실물·지도 완주·새 moving-arc admission은 승인하지 않는다.
+
+## 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정
+
+- 변경: 검토 표의 커밋 식별자를 12자리로 표시한다. 검토 코드의 정확한 전체 SHA와 검토 조건은 유지한다.
+- 증거: ec6f54431 pre-push 원격 검사에서 문서의 전체 Git SHA 네 개가 high-entropy-token으로 검출됐다. 516 PASS/1 NEW 뒤 표시만 수정했으며 검사 규칙은 바꾸지 않았다. 후속 원격 결과는 별도 확인한다.
+- gate 변화: 없음. 주행 코드·안전 허용·완주 수용은 바뀌지 않는다.
+
+## 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 변경: `assessments/2026-10-13-folder-responsibility-audit.md`에 우산·제품 소스·물리 잔여 폴더의 시점을 구분한 조사 보고서를 추가했다. 브랜치는 `docs/folder-responsibility-audit`다.
+- 증거: 기준 SHA 추적 파일 7,665개, manifest root 95개, 반복 basename 97종, 동일 내용 묶음 5개를 정적 확인했다. 관리 인벤토리는 worktree 250개(primary 1/task 249), task dirty 52개, HOLD 155/REVIEW 95개다. X: 세션 `2026-10-13--115930--folder-responsibility-audit--deea14`에 원자료를 남겼다.
+- gate 변화: 없음. pytest·ROS·이미지·배포·장치·현장 수용은 미실행이며, 정리/이동/삭제·착지·push도 하지 않았다. 문서 링크 검사 및 harness generate/lint는 보고서 작성 후 별도 로그로 확인한다.
+- 결정: 기존 D-738의 10단계 계획과 현재 물리 배치를 구분한다. 새 ADR나 구조 변경은 없다.
+- 교훈: 동일 basename, 설치 alias, 이력 payload, 내용이 같은 제품 구현, ignored 캐시를 서로 다른 근거로 판단한다.
+
+## 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 변경: `plans/2026-10-13-folder-responsibility-cleanup.md`에 P0 안내, P1 생성물, D-738 S1~S10, P2 proof 동등성, P3 worktree 정리의 담당 책임·실행 순서·검증·중단·되돌림을 작성했다.
+- 증거: 앞 조사 보고서와 Accepted D-738, 현행 manifest/source mapping을 연결했다. 보고서 로컬 링크 17개와 inventory/proof 동일성 PASS, harness lint 오류 0/경고 28이었다. 이번 계획의 커밋·local main 착지는 사용자 요청이며, 최종 원격 affected/known_failures/착지 결과는 X: 세션 landing 로그와 Git readback으로 확인한다.
+- gate 변화: 계획은 PLANNED. 제품 정리 구현·이동·삭제·push·배포·장치 수용은 하지 않는다.
+- 결정: 첫 실제 실행은 P0만, 구조 단계는 D-738 순서 그대로다. proof는 runtime dependency 추가보다 기존 시험의 동등성 guard를 먼저 선택한다.
+- 교훈: 조사/계획의 local main 반영과 정리 구현·실물 수용을 구분한다.
+
+## 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 변경: 폴더 조사 보고서의 Git SHA 두 곳에 `commit` 문맥을 명시했다. 검사 규칙·known_failures 목록은 바꾸지 않았다.
+- 증거: 첫 착지 원격 검사 370 passed/1 NEW(`test_no_secrets_in_tracked_files`). 원인은 보고서 3/12행의 공개 Git revision 표기였다. 기존 scan_text로 수정 전 high-entropy-token 2건, 수정 후 보고서·계획 0건을 확인했다. 이 정적 확인은 원격 재검증을 대신하지 않는다.
+- gate 변화: 첫 착지는 중단되어 main 미반영. 수정 커밋 이후 `tools/land.py --tests auto` 전체 affected/known_failures 재검증으로 다시 착지한다.
+- 결정: 비밀정보 검사 완화 없이 공개 commit 출처만 분명히 표기한다.
+
+## 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 변경: root AGENTS의 Docker source 입력과 CORE/Fleet 화면 편집 안내, 정리 계획의 P0 실행 기록을 정정했다. 제품 Git 밖의 우산 README와 archive 최상위 현재 소스 안내를 고치고 관리 도구 `InitWorktrees`로 holder AGENTS/README를 설치했다.
+- 증거: source serving/설치 mapping을 확인했다. 우산 파일 전후 복사·hash·링크 검사는 X: 세션 `2026-10-13--124414--folder-guidance-p0--4bdefe`에 보존하며 제품 변경은 브랜치 `docs/folder-guidance-p0`의 committed HEAD에서 원격 검사 후 ff-only 착지한다.
+- gate 변화: 문서 변경만. 공유 main `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 확인 근거가 없어 HOLD로 보존한다. 계획의 P1/S1~S10/P2/P3는 PLANNED다.
+- 결정: 역사 ADR/로그/payload 내부 안내는 소급 수정하지 않는다. 산출물·worktree 이동/삭제와 장치 작업·push는 이번 범위가 아니다.
+
+## 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
+- 변경: P1 결과와 분석 생성물 위치 안내를 추가하고 tools AGENTS/실행 계획을 갱신했다. 제품 Git 밖의 Graphify 생성물 4곳/418파일/34,837,896 bytes를 X: 세션 `2026-10-13--140927--folder-artifacts-p1--f5e4ef`의 export로 이관했다.
+- 증거: source 경계/reparse/tracked 상태, producer/process, exclusive-read open, 전체 source/destination hash·크기·파일 목록 안정성을 확인했다. source 부재와 CLI 조회 전후 동일성 PASS, 설치 `GRAPHIFY_OUT` X 경로 해석 PASS. 실제 bytes는 Git에 넣지 않는다.
+- gate 변화: P1 분류·확인된 Graphify 부분 이관. 나머지 15곳은 owner/참조 미확정 또는 overlay 범위로 HOLD다. user 요청에 따라 문서 commit/원격 gate/local main 착지는 이어서 실행하며 결과는 해당 X: landing 로그와 Git readback으로 확인한다.
+- 결정: `.omc`/lock/credential/overlay를 disposable cache로 확대 적용하지 않는다. source 이동·worktree 제거·push/배포/실물 수용은 미실행이다.
+
+## 2026-10-13 · 33d76482f · docs: verify and process P1 held artifacts
+- 변경: P1 HOLD 15곳의 추가 확인/처리 기록과 계획 상태를 갱신했다. Git 밖의 비활성 orphan pyc 1,715개, tool cache 76개, 시험 자료 56개를 X: 세션 `2026-10-13--154416--artifact-hold-review--8df57c`로 이관했다.
+- 증거: source 부재·비추적/reparse/producer/exclusive-open/전체 hash·크기 안정성을 확인했고, 1,847파일·42,508,179 bytes의 destination readback과 원본 부재 PASS다. 일반 orphan-cache import 거절은 X: 임시 자료의 assert로 확인했으며 bytecode 실행은 하지 않았다. Docker mount/WSL/협업 actor 이력/설치 소비자도 읽기 확인했다.
+- gate 변화: 8곳 정리/2곳 부분 정리/5곳 유지. metadata·자격 원문·참조 overlay는 보존했다. committed HEAD 원격 gate/known_failures/local main 착지는 사용자 요청에 따라 이어서 실행하고 X: landing 로그와 Git으로 확인한다.
+- 결정: credential 값·협업 본문을 공개 기록으로 복사하지 않는다. S1 및 worktree 제거·push/배포/실물 작업은 미실행이다.

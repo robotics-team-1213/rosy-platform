@@ -1,0 +1,588 @@
+"""D-438 Fleet stuck resolver core: rules first, then (phase 2) a model, then a human.
+
+Pure: the caller feeds console snapshot rows and a monotonic clock, sends the returned
+Answers and reports CORE's reply with `result`. CORE re-checks every answer (D-407 §2);
+nothing here widens a robot's local-recovery settings.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+import time
+from dataclasses import dataclass, field
+from typing import Callable, Iterable, Mapping, Optional, Union
+
+from fleet.stuck.peer_pose import _map_pose
+from fleet.stuck import pipeline
+
+#: CORE codes that mean "this answer was judged and refused": try the next candidate.
+REFUSED = "STUCK_DECISION_REFUSED"
+#: The stuck changed under us: drop this answer, re-read state.
+MISMATCH = "STUCK_ID_MISMATCH"
+#: Transport failures: one resend, then a human; uncertain YIELD is never replayed.
+TRANSPORT = ("ROBOT_UNREACHABLE", "STUCK_DECISION_OUTCOME_UNKNOWN")
+#: Causes that only ever get WAIT or BACK_AND_RETRY (D-577 1; no_motion = CORE stuck_report_s).
+LOST_LIKE = ("lane_lost", "no_motion")
+
+
+@dataclass(frozen=True)
+class ResolverConfig:
+    poll_s: float = 1.0
+    restuck_s: float = 30.0
+    rule_budget: int = 2
+    escalate_after_s: float = 60.0
+    peer_reach_m: float = 0.30
+    # Own URDF half width (0.057 m) + a peer's rotation radius (0.083 m), rounded up.
+    # ponytail: one body size for every robot; read per-robot geometry when kinds differ.
+    peer_band_half_width_m: float = 0.15
+    peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
+    #: D-577 1: R3 trusts a known Fleet map pose only while it is LOCALIZED and this fresh.
+    pose_max_age_s: float = 2.0
+    #: D-577 개정 2026-10-10: how long a stuck waits for an AI PC proposal before the rules answer.
+    ai_wait_s: float = 12.0
+
+
+@dataclass(frozen=True)
+class Answer:
+    robot_id: str
+    stuck_id: str
+    decision: str
+    rule: str
+    # D-453: one yield segment. None on WAIT / BACK_AND_RETRY / RESUME.
+    yield_m: Optional[float] = None
+    yield_turn_rad: Optional[float] = None
+    # D-577 1: R5 sends this WAIT and hands the stuck to a human in the same pass.
+    escalate: Optional[str] = None
+    realign: Optional[dict] = None
+
+
+@dataclass(frozen=True)
+class Escalate:
+    robot_id: str
+    stuck_id: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Hold(Escalate):
+    """Autonomous observation retains ownership; no human claim or implicit retry."""
+
+
+Action = Union[Answer, Escalate]
+
+
+@dataclass
+class _Chain:
+    started_at: float
+    mode: str
+    stuck_id: Optional[str] = None
+    closed_at: Optional[float] = None
+    rule_answers: int = 0
+    realign_attempts: int = 0
+    # Phase 2 (model tier) only: phase-1 rules never answer RESUME, so this stays None.
+    resume_id: Optional[str] = None                  # stuck id the resolver answered RESUME
+    retired: set = field(default_factory=set)
+    answered: set = field(default_factory=set)       # stuck ids with an answer in flight/done
+    retries: dict = field(default_factory=dict)      # stuck id -> transport resends
+    escalated: set = field(default_factory=set)      # stuck ids already escalated
+    seen_at: float = 0.0                             # when the current stuck id was first seen
+    ai_judged: set = field(default_factory=set)      # (stuck id, decision, reason) proposals judged
+    held: dict = field(default_factory=dict)         # stuck id -> R5 escalation sent (D-577 남은 항목 2)
+    observing: Optional[str] = None
+    unresolved: set = field(default_factory=set)
+
+
+def _stuck_of(row: Mapping) -> Optional[dict]:
+    lf = (row.get("state") or {}).get("line_follow") or {}
+    stuck = lf.get("stuck")
+    return stuck if isinstance(stuck, dict) and stuck.get("stuck_id") else None
+
+
+def _mode_of(row: Mapping) -> str:
+    return str(((row.get("state") or {}).get("line_follow") or {}).get("mode") or "")
+
+
+def _hold_xy(plan, painted):
+    room = next((item for item in painted.rooms if item.id == plan.room_id), None)
+    return None if room is None else room.hold_xy
+
+
+def _door_xy(plan, painted):
+    if plan.s_m is None:
+        return None
+    x, y, _tangent = painted.line(plan.edge_id).point_at(plan.s_m)
+    return (x, y)
+
+
+def _gap_target(plan, painted, x: float, y: float):
+    """Off the paint while still entering: the hold if the door is the nearest point, else the line."""
+    from fleet.meet.place import ALONG_FIRST_M, MAX_OFF_M
+
+    line = painted.line(plan.edge_id)
+    _dist, s_m, _tangent = line.project(x, y)
+    near_door = plan.s_m is not None and abs(s_m - plan.s_m) <= ALONG_FIRST_M + MAX_OFF_M
+    if plan.action == "sidestep" and near_door:
+        hold = _hold_xy(plan, painted)
+        if hold is not None:
+            return hold
+    px, py, _tangent = line.point_at(s_m)
+    return (px, py)
+
+
+class _YieldPlan:
+    """Policy direction of a yielder. The manoeuvre yaw is not a new meet heading."""
+
+    def __init__(self, edge_id: str, direction: int, action: str,
+                 room_id: Optional[str], s_m: Optional[float]) -> None:
+        self.edge_id, self.direction, self.action = edge_id, direction, action
+        self.room_id, self.s_m = room_id, s_m
+        self.returning = False
+
+
+class StuckResolver:
+    def __init__(self, config: ResolverConfig, *, painted: Optional[Callable[[], object]] = None,
+                 realign=None, wall: Callable[[], float] = time.time) -> None:
+        """``painted()`` is the active site map's ``Painted`` (D-488) or None: no meet rules."""
+        self.config = config
+        from fleet.stuck.realign import RealignConfig
+        self.realign, self._wall = realign or RealignConfig(), wall
+        self._painted = painted or (lambda: None)
+        self._warned_no_map = False
+        self._chains: dict[str, _Chain] = {}
+        self._claims: set[tuple[str, str]] = set()
+        self._pins: dict[str, str] = {}
+        self._plans: dict[str, _YieldPlan] = {}
+        self._sent_yield: dict[str, tuple] = {}
+        self.ai_verdicts: list[dict] = []            # judged AI proposals; the loop drains them to the audit
+        #: D-573 개정 2026-10-10: robot_id -> on / at a mapped crosswalk (the lane monitor's view).
+        self.at_crosswalk: Callable[[str], bool] = lambda robot_id: False
+        self.ai_first = None                          # D-610 3: `ai_first.AiFirst` (app.py), None = D-577 only
+        self.autonomous_robots: frozenset[str] = frozenset()
+        self._uncertain: set[tuple[str, str]] = set()
+
+    # ---- inputs -----------------------------------------------------------------------
+
+    def claim(self, robot_id: str, stuck_id: str) -> None:
+        """A human opened this stuck's decision (D-438 §1): the resolver stays silent."""
+        self._claims.add((robot_id, stuck_id))
+
+    def is_claimed(self, robot_id: str, stuck_id: str) -> bool:
+        return (robot_id, stuck_id) in self._claims
+
+    def sent(self, answer: Answer, now: float) -> None:
+        chain = self._chains.get(answer.robot_id)
+        if chain is None:
+            chain = self._chains[answer.robot_id] = _Chain(started_at=now, mode="")
+        chain.answered.add(answer.stuck_id)
+        if answer.decision == "REALIGN":
+            chain.realign_attempts += 1
+        if answer.rule == "R5":
+            chain.held[answer.stuck_id] = answer.escalate
+        if answer.decision == "YIELD" and answer.yield_m is not None:
+            self._sent_yield[answer.robot_id] = (
+                answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
+        if ((answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+             or answer.rule in {"ai", "model_v2"} and answer.decision != "WAIT")
+                and chain.retries.get(answer.stuck_id, 0) == 0):
+            chain.rule_answers += 1                   # a transport resend is the same answer
+        if answer.decision == "RESUME" and answer.rule != "meet" and not (    # D-610 2: a re-stuck goes back to the AI
+                answer.rule == "ai" and self.ai_first is not None and self.ai_first.on(answer.robot_id)):
+            chain.resume_id = answer.stuck_id
+
+    def result(self, answer: Answer, *, code: Optional[str]) -> Optional[Escalate]:
+        """CORE's reply: None code = accepted. Returns an escalation when one is due."""
+        chain = self._chains.get(answer.robot_id)
+        if chain is None:
+            return None
+        if answer.robot_id in self.autonomous_robots and code is None and answer.decision == "WAIT":
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, answer.escalate or "waiting")
+        if (answer.robot_id in self.autonomous_robots and code == "STUCK_DECISION_OUTCOME_UNKNOWN"
+                and answer.decision != "WAIT"):
+            self._uncertain.add((answer.robot_id, answer.stuck_id))
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
+        if code is None and answer.escalate is None:
+            if answer.decision == "RESUME" and answer.rule == "meet":
+                chain.resume_id = answer.stuck_id
+                self._plans.pop(answer.robot_id, None)
+                self._pins = {edge: yielder for edge, yielder in self._pins.items()
+                              if yielder != answer.robot_id}
+            return None
+        if code == MISMATCH:
+            return None
+        if answer.escalate is not None:               # D-577 1 R5: WAIT, then a human whatever CORE said
+            if code in TRANSPORT and chain.retries.get(answer.stuck_id, 0) == 0:
+                chain.retries[answer.stuck_id] = 1    # WAIT stops; resending it once is safe
+                chain.answered.discard(answer.stuck_id)
+                return None
+            reason = (f"core:{code}" if answer.robot_id in self.autonomous_robots and code
+                      and not answer.escalate.startswith("realign_hold:") else answer.escalate)
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, reason)
+        if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
+            return None                               # late reply from an older chain
+        if code == REFUSED:
+            # The robot is still in YIELDED. Retry the return on the next poll.
+            if answer.decision == "RESUME" and answer.rule == "meet":
+                return None
+            chain.retired.add(answer.rule)
+            chain.answered.discard(answer.stuck_id)
+            return None
+        if code in TRANSPORT and answer.decision == "REALIGN":
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
+        if code == "STUCK_DECISION_OUTCOME_UNKNOWN" and answer.decision == "YIELD":
+            # CORE may already have completed this segment. A replay can restart motion.
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
+        if code in TRANSPORT and chain.retries.get(answer.stuck_id, 0) == 0:
+            chain.retries[answer.stuck_id] = 1
+            chain.answered.discard(answer.stuck_id)
+            return None
+        return self._escalate(chain, answer.robot_id, answer.stuck_id, f"core:{code}")
+
+    # ---- decision ---------------------------------------------------------------------
+
+    def step(self, now: float, rows: Iterable[Mapping]) -> list[Action]:
+        rows = [r for r in rows if isinstance(r, Mapping) and r.get("robot_id")]
+        present = {str(r["robot_id"]) for r in rows}         # rows are the full roster
+        for rid in set(self._chains) - present:
+            del self._chains[rid]
+        self._claims = {c for c in self._claims if c[0] in present}
+        actions: list[Action] = []
+        for row in rows:
+            action = self._one(now, row, rows)
+            if action is not None:
+                actions.append(action)
+        return actions
+
+    def _one(self, now: float, row: Mapping, rows: list) -> Optional[Action]:
+        rid = str(row["robot_id"])
+        if not row.get("online", True):
+            return None
+        stuck, mode = _stuck_of(row), _mode_of(row)
+        chain = self._chains.get(rid)
+        if chain is not None and (mode and chain.mode and mode != chain.mode
+                                  and not (rid in self.autonomous_robots and stuck is not None
+                                           and chain.stuck_id == str(stuck["stuck_id"]))
+                                  or (chain.closed_at is not None
+                                      and now - chain.closed_at > self.config.restuck_s)):
+            del self._chains[rid]                  # mode changed or the window passed
+            if chain.closed_at is not None:        # a human's claim lives while its stuck is open
+                self._claims = {c for c in self._claims if c[0] != rid}
+            chain = None
+        if stuck is None:
+            self._plans.pop(rid, None)
+            if chain is not None and chain.closed_at is None:
+                chain.closed_at, chain.stuck_id = now, None
+            return None
+        sid = str(stuck["stuck_id"])
+        if chain is None:
+            chain = self._chains[rid] = _Chain(started_at=now, mode=mode)
+        elif not chain.mode:
+            chain.mode = mode
+        if chain.stuck_id != sid:
+            chain.stuck_id, chain.closed_at, chain.seen_at = sid, None, now
+            chain.observing = None
+            if chain.resume_id is not None and sid != chain.resume_id:
+                return self._escalate(chain, rid, sid, "restuck_after_resume")
+        if (rid, sid) in self._claims or sid in chain.escalated:
+            return None
+        continuation_hold = self._continuation_hold(rid, chain)
+        if continuation_hold == "core:STUCK_DECISION_OUTCOME_UNKNOWN":
+            return self._escalate(chain, rid, sid, "core:STUCK_DECISION_OUTCOME_UNKNOWN")
+        if continuation_hold is not None:
+            return None  # Preserve uncertainty and exhausted budgets even across another hold.
+        hold = pipeline.law_hold(row)
+        if hold is not None:
+            return self._escalate(chain, rid, sid, hold)
+        if now - chain.started_at > self.config.escalate_after_s:
+            return self._escalate(chain, rid, sid, "deadline")
+        if rid in self.autonomous_robots and chain.observing is not None:
+            # A changed clock is not recovery evidence; only a newly admissible candidate reopens WAIT.
+            if stuck.get("phase") == "YIELDED":
+                if chain.rule_answers >= self.config.rule_budget:
+                    return self._escalate(chain, rid, sid, "rule_budget")
+                action = self._next_segment(row, rows)
+            elif stuck.get("phase") in ("ASKING", "WAITING_CONSOLE"):
+                action = pipeline.candidate(self, now, row, stuck, rows, chain)
+            else:
+                return None
+            if not isinstance(action, Answer) or action.decision == "WAIT":
+                return action if isinstance(action, Escalate) else None
+            if action.decision in chain.unresolved:
+                return None
+            chain.answered.discard(sid)
+            chain.held.pop(sid, None)
+            chain.observing = None
+            return action
+        from fleet.stuck.lane_lost import ai_late
+
+        if sid in chain.answered:
+            ai_late(self, now, row, chain)
+            return self._next_segment(row, rows)
+        if sid in chain.held:                         # D-577 남은 항목 2: a resent R5 stays R5, never R3
+            return Answer(rid, sid, "WAIT", "R5", escalate=chain.held[sid])
+        return pipeline.candidate(self, now, row, stuck, rows, chain)
+
+    def _continuation_hold(self, rid: str, chain: _Chain) -> Optional[str]:
+        if rid in self.autonomous_robots:
+            if any(robot == rid for robot, _case in self._uncertain):
+                return "core:STUCK_DECISION_OUTCOME_UNKNOWN"
+            if chain.observing is not None and (chain.observing.startswith("core:")
+                    or chain.observing in ("rule_budget", "deadline", "ai_exhausted", "ai_oscillation")):
+                return chain.observing
+        return None
+
+    def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
+        if rid in self.autonomous_robots and not reason.startswith(("human_class:", "realign_hold:")) and (
+                reason not in ("ai_manual", "no_resolver_token")):   # D-622: a REALIGN hold goes to a human
+            if chain.observing == reason:
+                return None
+            chain.observing = reason
+            return Hold(rid, sid, reason)
+        chain.escalated.add(sid)
+        return Escalate(rid, sid, reason)
+
+    # ---- rules (D-438 §2) -------------------------------------------------------------
+
+    def _rule(self, row, stuck, rows, chain) -> Optional[tuple[str, str]]:
+        cause = stuck.get("cause")
+        peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
+        if peer is None:  # D-577 남은 항목 4: no trusted map pose; neither R1 nor a blind back-off
+            return ("R5", "WAIT", "peer_unknown")
+        if row.get("trip"):
+            # D-517 5 (M4): a trip robot gets only the stopping R1 WAIT. A back-off, yield or resume could
+            # take its body into a block the table already released behind it or never granted (D-494 14);
+            # CORE's own site-evidence retrace (D-507 6) stays local. Anything else goes to a human.
+            return ("R1", "WAIT") if peer and "R1" not in chain.retired else None
+        can_back = (bool(stuck.get("local_enabled"))
+                    and int(stuck.get("attempts") or 0) < int(stuck.get("max_attempts") or 0))
+        if peer and "meet" not in chain.retired:
+            meet = self._meet(row, rows)
+            if meet is not None:
+                return meet
+        candidates = []
+        if peer:
+            candidates.append(("R1", "WAIT"))
+        if cause == "obstacle_ahead" and not peer and can_back:
+            candidates.append(("R2", "BACK_AND_RETRY"))
+        if cause in LOST_LIKE:
+            from fleet.stuck.lane_lost import lane_lost_hold
+
+            # no_motion (2026-10-10, any zero-command reason >= stuck_report_s): R6 = R3's back-off
+            # and look again under R3's preconditions; CORE re-checks the rear (D-407 §4).
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config, painted=self._painted(),
+                                  rule="R3" if cause == "lane_lost" else "R6")
+            if hold is None:
+                return ("R3" if cause == "lane_lost" else "R6", "BACK_AND_RETRY")
+            return ("R5", "WAIT", hold)
+        if peer and can_back:
+            candidates.append(("R2", "BACK_AND_RETRY"))      # after a refused WAIT
+        for rule in candidates:
+            if rule[0] not in chain.retired:
+                return rule
+        return None
+
+    def _next_segment(self, row, rows) -> Optional[Answer]:
+        """The robot finished one segment and is holding off the resume path."""
+        stuck = _stuck_of(row)
+        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") in LOST_LIKE:
+            return None
+        meet = self._meet(row, rows)
+        if meet is None:
+            return None
+        rid = str(row["robot_id"])
+        sid = str(stuck["stuck_id"])
+        if meet[1] == "RESUME":
+            return Answer(rid, sid, "RESUME", "meet")
+        if len(meet) != 4:
+            return None
+        key = (sid, round(meet[2], 3), round(meet[3], 3))
+        if self._sent_yield.get(rid) == key:
+            return None
+        return Answer(rid, sid, "YIELD", "meet", yield_m=meet[3], yield_turn_rad=meet[2])
+
+    def _meet(self, row, rows):
+        """room_hold for poses on the painted track. None keeps R1/R2/R3."""
+        from fleet.meet import decide
+        from fleet.meet.place import project, yield_move
+        from fleet.meet.scene import Action, Order, Pin, Robot
+
+        me = _map_pose(row)
+        if me is None:
+            return None
+        painted = self._painted()
+        if painted is None:  # no active site map (D-488): R1/R2/R3 only
+            if not self._warned_no_map:
+                self._warned_no_map = True
+                logging.getLogger(__name__).warning("stuck resolver: no active site map; meet rules off")
+            return None
+        self._warned_no_map = False
+        rid = str(row["robot_id"])
+        placed: dict[str, object] = {}
+        robots: list[Robot] = []
+        for other in rows:
+            if not other.get("online", True):
+                continue
+            pose = _map_pose(other)
+            if pose is None:
+                continue
+            place = project(painted, pose[0], pose[1], pose[2])
+            if place is None:
+                continue
+            oid = str(other["robot_id"])
+            placed[oid] = place
+            plan = self._plans.get(oid)
+            if place.room_id:
+                if plan is not None and plan.room_id == place.room_id:
+                    plan.returning = True
+                else:
+                    self._plans.pop(oid, None)
+                    plan = None
+            if plan is not None and place.edge_id == plan.edge_id and not plan.returning:
+                direction, trusted = plan.direction, True
+            else:
+                direction, trusted = place.direction, place.trusted
+            robots.append(Robot(oid, place.edge_id, place.s_m, direction, trusted, room_id=place.room_id))
+        mine = placed.get(rid)
+        plan = self._plans.get(rid)
+        if mine is None:
+            if plan is None:
+                return None
+            return self._off_paint(me, plan, painted, rows, rid)
+        if plan is not None and plan.returning:
+            return self._rejoin(row, mine, plan, painted, rows, rid)
+        if not any(other != rid for other in placed):
+            return None
+        pins = tuple(Pin(edge_id, yielder) for edge_id, yielder in self._pins.items())
+        scene = painted.scene(tuple(robots), pins)
+        orders = decide("room_hold", scene)
+        self._keep_pins(scene, orders)
+        order = next(item for item in orders if item.robot_id == rid)
+        if order.action is Action.ESCALATE:
+            self._plans.pop(rid, None)
+            return ("meet", "ESCALATE")
+        plan = self._plans.get(rid)
+        if order.action in (Action.SIDESTEP, Action.RETREAT):
+            robot = next(item for item in robots if item.id == rid)
+            self._plans[rid] = _YieldPlan(
+                order.edge_id or robot.edge_id or "", robot.direction, order.action.value,
+                order.room_id, order.s_m)
+            move = yield_move(mine, order, painted)
+        elif plan is not None and mine.edge_id == plan.edge_id and not plan.returning:
+            move = yield_move(mine, Order(
+                rid, Action(plan.action), room_id=plan.room_id, edge_id=plan.edge_id, s_m=plan.s_m,
+            ), painted)
+        else:
+            self._plans.pop(rid, None)
+            move = None
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _off_paint(self, pose, plan, painted, rows, rid):
+        """A usable pose that project() rejected. The timer already ended; this xy is the rest."""
+        from fleet.meet.place import steer_toward
+
+        x, y, yaw = pose
+        if plan.returning:
+            clear = self._door_clear(plan, painted, rows, rid)
+            target = _door_xy(plan, painted) if clear else _hold_xy(plan, painted)
+        else:
+            target = _gap_target(plan, painted, x, y)
+        if target is None:
+            return ("meet", "WAIT")
+        move = steer_toward(x, y, yaw, target)
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _rejoin(self, row, mine, plan, painted, rows, rid):
+        """Back to the door, then face the stored travel direction. RESUME only on the paint."""
+        from fleet.meet.place import ALONG_FIRST_M, along_to, steer_toward
+
+        if not self._door_clear(plan, painted, rows, rid):
+            if mine.room_id:
+                return ("meet", "WAIT")
+            hold = _hold_xy(plan, painted)
+            if hold is None:
+                return ("meet", "WAIT")
+            move = steer_toward(mine.x, mine.y, mine.yaw, hold)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if mine.room_id or mine.edge_id != plan.edge_id:
+            target = _door_xy(plan, painted)
+            if target is None:
+                return ("meet", "WAIT")
+            move = steer_toward(mine.x, mine.y, mine.yaw, target)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if plan.s_m is None or abs(mine.s_m - plan.s_m) > ALONG_FIRST_M:
+            if plan.s_m is None:
+                return ("meet", "WAIT")
+            move = along_to(mine, painted, plan.s_m)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if mine.trusted and mine.direction == plan.direction:
+            if self._peer_ahead(row, rows) is not False:   # an unknown peer is present: never a blind RESUME
+                return ("meet", "WAIT")
+            return ("meet", "RESUME")
+        line = painted.line(plan.edge_id)
+        hop = 0.15 if plan.direction > 0 else -0.15
+        target_s = min(max(mine.s_m + hop, 0.0), line.length_m)
+        move = along_to(mine, painted, target_s)
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _door_clear(self, plan, painted, rows, rid) -> bool:
+        """The passer has gone past the door. An unusable pose blocks the return."""
+        from fleet.meet.place import project
+
+        if plan.s_m is None:
+            return False
+        door_x, door_y, _tangent = painted.line(plan.edge_id).point_at(plan.s_m)
+        clearance = self.config.peer_reach_m + self.config.peer_radius_m
+        for other in rows:
+            if str(other.get("robot_id")) == rid:
+                continue
+            pose = _map_pose(other)
+            if pose is None:
+                return False
+            place = project(painted, pose[0], pose[1], pose[2])
+            if place is not None and place.edge_id == plan.edge_id:
+                passed = (plan.s_m - place.s_m) * plan.direction
+                if passed <= clearance:
+                    return False
+            elif place is not None and place.room_id == plan.room_id:
+                return False
+            elif math.hypot(pose[0] - door_x, pose[1] - door_y) <= clearance:
+                return False
+        return True
+
+    def _keep_pins(self, scene, orders) -> None:
+        from fleet.meet.scene import Action, closing
+
+        kept: dict[str, str] = {}
+        for line in scene.edges:
+            group = [robot for robot in scene.robots if robot.edge_id == line.id]
+            if len(group) != 2:
+                continue
+            pair = closing(group[0], group[1])
+            if pair is None:
+                continue
+            ids = {pair[0].id, pair[1].id}
+            chosen = next((order.robot_id for order in orders
+                           if order.robot_id in ids and order.action in (Action.SIDESTEP, Action.RETREAT)), None)
+            if chosen is None and self._pins.get(line.id) in ids:
+                chosen = self._pins[line.id]
+            if chosen is not None:
+                kept[line.id] = chosen
+        self._pins = kept
+
+    def _peer_ahead(self, row, rows) -> Optional[bool]:
+        from fleet.stuck.lane_lost import peer_ahead
+
+        return peer_ahead(row, rows, self.config)
+

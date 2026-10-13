@@ -52,6 +52,16 @@ def test_rectification_rejects_non_finite_and_unknown_lease_fields():
         PreviewRectification.from_mapping({"corners": [[0, 0]], "unbounded": True})
 
 
+def test_rectification_mode_is_manual_by_default_and_auto_is_never_identity():
+    with pytest.raises(ValueError, match="mode"):
+        PreviewRectification(mode="magic")
+    auto = PreviewRectification.from_mapping({"mode": "auto"})
+    assert auto.mode == "auto"
+    assert auto.is_identity is False  # auto always asks the server for corners
+    assert PreviewRectification().mode == "manual"
+    assert PreviewRectification.from_mapping(auto.as_dict()).mode == "auto"
+
+
 def test_rectification_rejects_invalid_jpeg_without_falling_back_to_raw_bytes():
     with pytest.raises(ValueError, match="decode"):
         rectify_jpeg(b"not-a-jpeg", PreviewRectification())

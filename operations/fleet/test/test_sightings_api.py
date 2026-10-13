@@ -44,23 +44,145 @@ def _payload(**changes):
     return body
 
 
-def _client(*, with_source=True, source_token=SOURCE_TOKEN, store_path=None):
+def _field_payload(**changes):
+    body = _payload(corner_marker_ids=None, calibration_source="field_boundary")
+    body.update(changes)
+    return body
+
+
+def _client(*, with_source=True, source_token=SOURCE_TOKEN, store_path=None,
+            field_source=False):
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     endpoints = [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-rest")]
     console = FleetConsole(endpoints, [robot])
     clock = _Clock()
-    sources = [SightingSource(
-        source_id="ceiling-east",
-        token=source_token,
-        robot_ids=("rosy_01",),
-        map_id="lane-map:sha256:abc",
-        calibration_revision="ceiling-1-v2",
-        corner_marker_ids=(30, 31, 32, 33),
-    )] if with_source else []
+    if with_source and field_source:
+        sources = [SightingSource(
+            source_id="ceiling-east",
+            token=source_token,
+            robot_ids=("rosy_01",),
+            map_id="lane-map:sha256:abc",
+            calibration_revision="ceiling-1-v2",
+            corner_marker_ids=None,
+            corner_world_m=((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)),
+            calibration_source="field_boundary",
+        )]
+    elif with_source:
+        sources = [SightingSource(
+            source_id="ceiling-east",
+            token=source_token,
+            robot_ids=("rosy_01",),
+            map_id="lane-map:sha256:abc",
+            calibration_revision="ceiling-1-v2",
+            corner_marker_ids=(30, 31, 32, 33),
+        )]
+    else:
+        sources = []
     store = SightingStore(store_path) if store_path is not None else None
     service = SightingService(sources, known_robot_ids=console.robot_ids, clock=clock, store=store)
     app = create_app(console, console_token=OPERATOR_TOKEN, sightings=service)
     return TestClient(app), clock
+
+
+def test_field_boundary_source_accepts_markerless_sightings():
+    client, _ = _client(field_source=True)
+    accepted = client.post("/api/fleet/sightings", json=_field_payload(),
+                           headers={"Authorization": f"Bearer {SOURCE_TOKEN}"})
+    assert accepted.status_code == 200, accepted.text
+    row = accepted.json()
+    assert row["calibration_source"] == "field_boundary"
+    assert row["corner_marker_ids"] is None
+
+    # A marker payload on a field source is a calibration mismatch, and so is
+    # a field payload on a marker source.
+    marker_on_field = client.post("/api/fleet/sightings", json=_payload(seq=43),
+                                  headers={"Authorization": f"Bearer {SOURCE_TOKEN}"})
+    assert (marker_on_field.status_code,
+            marker_on_field.json()["detail"]["code"]) == (409, "CALIBRATION_MISMATCH")
+
+
+def test_field_payload_on_a_marker_source_is_a_calibration_mismatch():
+    client, _ = _client()
+    rejected = client.post("/api/fleet/sightings", json=_field_payload(),
+                           headers={"Authorization": f"Bearer {SOURCE_TOKEN}"})
+    assert (rejected.status_code,
+            rejected.json()["detail"]["code"]) == (409, "CALIBRATION_MISMATCH")
+
+
+def _approved_service(approved, clock):
+    source = SightingSource(source_id="ceiling-east", token=SOURCE_TOKEN, robot_ids=("rosy_01",),
+                            map_id="lane-map:sha256:abc", calibration_revision="ceiling-1-v2",
+                            corner_marker_ids=None,
+                            corner_world_m=((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)),
+                            calibration_source="field_boundary")
+    seen = []
+
+    def revision(asked):
+        seen.append(asked.source_id)
+        return approved
+
+    service = SightingService([source], known_robot_ids=["rosy_01"], clock=clock,
+                              approved_revision=revision)
+    return service, seen
+
+
+def _approved_payload(**changes):
+    body = _payload(corner_marker_ids=None, calibration_source="approved_record",
+                    calibration_revision="paint-7b220d432c2a")
+    body.update(changes)
+    return body
+
+
+def test_approved_record_sighting_passes_only_with_the_current_approved_revision():
+    """D-587 2: an identified marker projected through the approved record is a sighting
+    when its revision is the source's approved record now; otherwise CALIBRATION_MISMATCH."""
+    from core_common.protocol.sightings import SiteSightingPayload
+    auth = f"Bearer {SOURCE_TOKEN}"
+    service, seen = _approved_service("paint-7b220d432c2a", _Clock())
+    row = service.accept(auth, SiteSightingPayload(**_approved_payload()))
+    assert (row["calibration_source"], row["source_id"], seen) == (
+        "approved_record", "ceiling-east", ["ceiling-east"])
+
+    for approved, body in (("paint-000000000000", _approved_payload(captured_at=NOW - 0.05)),
+                           (None, _approved_payload(captured_at=NOW - 0.05))):
+        service, _ = _approved_service(approved, _Clock())
+        with pytest.raises(Exception) as error:
+            service.accept(auth, SiteSightingPayload(**body))
+        assert (error.value.status_code, error.value.code) == (409, "CALIBRATION_MISMATCH")
+
+    # No approved-revision provider wired: never accepted.
+    plain = SightingService(service.sources, known_robot_ids=["rosy_01"], clock=_Clock())
+    with pytest.raises(Exception) as error:
+        plain.accept(auth, SiteSightingPayload(**_approved_payload()))
+    assert error.value.code == "CALIBRATION_MISMATCH"
+
+
+def test_approved_record_payload_carries_no_corner_ids_and_keeps_the_static_check():
+    from pydantic import ValidationError
+    from core_common.protocol.sightings import SiteSightingPayload
+    with pytest.raises(ValidationError, match="approved_record sighting carries no corner"):
+        SiteSightingPayload(**_approved_payload(corner_marker_ids=[30, 31, 32, 33]))
+    # The static revision is not an approved-record revision.
+    service, _ = _approved_service("paint-7b220d432c2a", _Clock())
+    with pytest.raises(Exception) as error:
+        service.accept(f"Bearer {SOURCE_TOKEN}",
+                       SiteSightingPayload(**_approved_payload(calibration_revision="ceiling-1-v2")))
+    assert error.value.code == "CALIBRATION_MISMATCH"
+
+
+def test_field_sources_must_not_carry_corner_ids_and_need_the_world_rectangle():
+    def _service(source):
+        return SightingService([source], known_robot_ids=["rosy_01"])
+
+    with pytest.raises(ValueError, match="must not carry corner marker ids"):
+        _service(SightingSource(source_id="s", token="t", robot_ids=("rosy_01",),
+                                map_id="m", calibration_revision="r",
+                                corner_marker_ids=(30, 31, 32, 33),
+                                calibration_source="field_boundary"))
+    with pytest.raises(ValueError, match="corner_world_m"):
+        _service(SightingSource(source_id="s", token="t", robot_ids=("rosy_01",),
+                                map_id="m", calibration_revision="r",
+                                corner_marker_ids=None, calibration_source="field_boundary"))
 
 
 def test_sighting_source_can_write_derived_pose_but_cannot_read_or_command():

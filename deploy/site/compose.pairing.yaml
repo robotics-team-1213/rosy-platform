@@ -3,6 +3,8 @@
 # rosy-site-stack.service adds it from ROSY_SITE_PAIRING_COMPOSE in site.env (README, Camera pairing).
 # Compose replaces `command` and the ROSY_CREDENTIAL_PATHS value as a whole, so both are repeated
 # from compose.yaml with the pairing parts appended; test_site_pairing_deploy.py keeps them in step.
+x-rosy-site:
+  camera_peer_profile: rosy.camera-peer/1
 services:
   fleet:
     command:
@@ -13,10 +15,12 @@ services:
       - console
       - --robots
       - /run/rosy-config/robots.yaml
+      - --site-config-optional
+      - /run/rosy-config/fleet-site.yaml
       - --host
       - 0.0.0.0
       - --port
-      - "8090"
+      - "${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}"
       - --web-common
       - /opt/rosy/web-common
       - --token-env
@@ -25,8 +29,19 @@ services:
       - ROSY_SITE_DISCOVERY_TOKEN
       - --vision-preview-secret-env
       - ROSY_VISION_PREVIEW_SECRET
+      # Calibration-drift watch: Fleet reads Vision's D-375 map proposal server-side
+      # (site CA via SSL_CERT_FILE, "vision" SAN on the site leaf) every 60 s.
+      - --vision-url
+      - https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}
+      - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml
+      - --discord-intake-config-optional
+      - /run/rosy-discord/intake.json
+      - --deliberation-config-optional
+      - /run/rosy-deliberation/status.json
+      - --conversation-config-optional
+      - /run/rosy-deliberation/conversation.json
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db
@@ -46,6 +61,16 @@ services:
       - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
       - --site-lane-paint
       - /opt/rosy/maps/map_v2_fleet/road_lines.stl
+      # D-488: first active site map when the store has none (later edits live in the store).
+      - --site-map-import
+      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+      # D-555: robots get the hub credential with this site name + CA (empty = hub link off).
+      - --hub-link-hostname
+      - "${ROSY_SITE_HUB_LINK_HOSTNAME:-}"
+      - --hub-link-ca
+      - "${ROSY_SITE_HUB_LINK_CA:-}"
+      - --connection-mode
+      - "${ROSY_FLEET_CONNECTION_MODE:-paired}"
       # D-341 2: the pairing routes exist only with the site CA (never the leaf) and a TLS host.
       - --pairing-ca
       - /run/secrets/site_ca
@@ -54,6 +79,7 @@ services:
       - --pairing-sync-token-env
       - ROSY_SITE_PAIRING_SYNC_TOKEN
     environment:
+      ROSY_ENROLLED_TLS_BINDINGS_FILE: "${ROSY_SITE_ENROLLED_TLS_BINDINGS_FILE:-}"
       ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret","ROSY_SITE_PAIRING_SYNC_TOKEN":"/run/secrets/pairing_sync_token"}'
     secrets:
       - pairing_sync_token
@@ -66,12 +92,14 @@ services:
       - rosy_vision.cli
       - vision
       - --track
+      - --track-state
+      - /var/lib/rosy-vision/track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host
       - 0.0.0.0
       - --port
-      - "8095"
+      - "${ROSY_VISION_PORT:?set ROSY_VISION_PORT}"
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key
@@ -81,7 +109,7 @@ services:
       - /opt/rosy/maps/map_v2_fleet/road_lines.stl
       # D-341 12: Vision reads issued credentials from Fleet over verified HTTPS, with its own token.
       - --pairing-sync-url
-      - https://fleet:8090
+      - https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}
       - --pairing-sync-ca
       - /run/secrets/site_ca
       - --pairing-sync-token-env

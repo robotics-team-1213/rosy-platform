@@ -3,9 +3,14 @@
 
 # core_common
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The importable Python package of the `core_common` module: config loading, identity, hardware profile, capability checks, shared stdlib utilities, and the ROS-free concept domain (`domain/`). Wire schemas live in `protocol/` (own AGENTS.md). Nothing here imports rclpy or a workspace package.
+
+`observation.py` (D-667) owns immutable observation references and pure D-665 camera/anchor input validity. World compatibility imports and offline learning consume the same objects; valid metadata does not prove physical calibration or authorize driving.
 
 ## Key Files
 

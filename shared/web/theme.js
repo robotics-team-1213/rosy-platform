@@ -19,19 +19,12 @@
   var KEY = "rosy.theme";
   // 새 테마 = tokens.css의 팔레트 블록 하나 + 여기 한 줄(system 앞). system은 테마가 아니라
   // 기기 설정을 따르라는 선호다.
-  // 선택지의 얼굴은 아이콘이다(D-405 — 표준 trio: 어둡게=달, 밝게=해, 시스템=모니터.
-  // shadcn mode-toggle·GitHub·Linear와 같은 패턴). 한국어 이름은 sr-only·title로 남는다.
-  // 아이콘은 currentColor로 토큰 색을 따르고 크기는 공용 .ui-icon(components.css)이
-  // 글자 척도 value 단계로 정한다.
-  var ICONS = {
-    dark: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
-    light: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>',
-    system: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/></svg>',
-  };
+  // 선택지의 얼굴은 actionIcon 이름이다(D-405 — 어둡게=달, 밝게=해, 시스템=모니터).
+  // 한국어 이름은 sr-only·title로 남는다. 그림은 ui.js가 그리고 크기는 .ui-icon이다.
   var CHOICES = [
-    { value: "dark", label: "어둡게", icon: ICONS.dark },
-    { value: "light", label: "밝게", icon: ICONS.light },
-    { value: "system", label: "시스템", icon: ICONS.system },
+    { value: "dark", label: "어둡게", icon: "theme-dark" },
+    { value: "light", label: "밝게", icon: "theme-light" },
+    { value: "system", label: "시스템", icon: "theme-system" },
   ];
   var PREFERENCES = CHOICES.map(function (choice) { return choice.value; });
   var FALLBACK = "dark";

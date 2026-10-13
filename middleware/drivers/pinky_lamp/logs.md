@@ -83,3 +83,15 @@
 - 변경: 기존 lamp_pattern에 illumination을 추가했다. 8개 GPIO19 GRB LED에 흰색 최대 밝기를 출력하고 SIGTERM 종료 시 소등한다. 별도 GPIO 소유자는 추가하지 않았다.
 - 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-06 · uncommitted · 후면 램프 식별 패턴
+
+- 변경: 파랑·주황 1초 켬/1초 끔/1초 켬 패턴을 기존 단일 램프 헬퍼에 추가했다. rosy-face가 안전 상태를 확인하고 선점한다.
+- 증거: 호스트 Python 연계 테스트 통과. ARM64 빌드·실제 LED 색과 광량은 미검증.
+- gate 변화: DEVICE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-10 · uncommitted · feat(lamp): D-583 질문·좌·우 패턴
+- 변경: `lamp_pattern.c`에 ask(양쪽 호박 1 Hz), left, right. recovering·bridging은 유지. 왼쪽은 인덱스 0..3 (`LAMP_LEFT_FIRST`).
+- 증거: 이름 동기 시험. 실기 점등 없음.
+- gate 변화: SOURCE. DEVICE는 열림.
+- 결정: D-583

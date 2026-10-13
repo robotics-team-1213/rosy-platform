@@ -8,13 +8,15 @@
     adb reverse tcp:8642 tcp:8642
     adb shell am start -a android.intent.action.VIEW -d "http://localhost:8642/pilot/"
 
-토큰: Bearer "devtoken" 을 operator 로 받는다. 그 외 401.
+토큰: Bearer "devtoken" 을 operator 로 받는다. Bearer "devadmintoken" 을
+administrator 로 받는다(등록 코드 발급 시험용). 그 외 401.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -27,6 +29,7 @@ PILOT = Path(__file__).resolve().parents[1]          # .../middleware/ui/pilot
 WEB_COMMON = (PILOT.parents[2] / "shared") / "web"             # .../shared/web
 
 DEV_TOKEN = "devtoken"
+DEV_ADMIN_TOKEN = "devadmintoken"
 
 PILOT_MIME = {
     "styles.css": "text/css",
@@ -34,6 +37,7 @@ PILOT_MIME = {
     "client.js": "application/javascript",
     "stick.js": "application/javascript",
     "link.js": "application/javascript",
+    "peer-approval.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "drivers/omx_sim.js": "application/javascript",
@@ -84,6 +88,14 @@ CAPABILITIES = {
 STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6},
          "activity": None}
 
+
+def state_frame():
+    stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"timestamp": stamp,
+            "evidence": {channel: {"received_at": stamp, "evidence": "fresh"}
+                         for channel in ("velocity", "battery")},
+            **STATE}
+
 #: 시뮬/개발용 canned 프레임 — 토큰 색 원 하나(실 카메라가 없는 자리 표시).
 _buf = __import__("io").BytesIO()
 _img = Image.new("RGB", (160, 120), (16, 18, 20))
@@ -97,8 +109,7 @@ FRAME_SEQ = 4
 def robot_state(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"],
-            "activity": STATE["activity"]}
+    return state_frame()
 
 
 @app.post("/__test__/activity")
@@ -130,6 +141,8 @@ def _role(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth == f"Bearer {DEV_TOKEN}":
         return "operator"
+    if auth == f"Bearer {DEV_ADMIN_TOKEN}":
+        return "administrator"
     return None
 
 
@@ -253,6 +266,25 @@ TELEOP_LOG: list[dict] = []
 PAIR_CODE = "TEST-CODE"
 
 
+# 이 화면이 붙어 있는 로봇. 시험은 page.route 로 덮는다. 기본은 코드가 필요한 paired.
+CONNECTION = {"mode": "paired", "robot_id": "rosy-dev", "transport": "http"}
+
+
+@app.get("/api/v1/auth/connection")
+def connection():
+    return {"mode": CONNECTION["mode"], "robot_id": CONNECTION["robot_id"], "transport": CONNECTION["transport"]}
+
+
+@app.post("/api/v1/auth/development-session", status_code=201)
+def development_session():
+    if CONNECTION["mode"] != "development":
+        return JSONResponse({"error": {"code": "FORBIDDEN", "message": "this robot requires pairing"}},
+                            status_code=403)
+    return JSONResponse({"id": "dev-session", "token": DEV_TOKEN, "role": "operator",
+                         "label": "Pilot development session", "source": "pair-development",
+                         "expires_at": None}, status_code=201)
+
+
 @app.post("/api/v1/auth/pair", status_code=201)
 async def pair(request: Request):
     body = await request.json()
@@ -261,6 +293,19 @@ async def pair(request: Request):
                             status_code=401)
     return JSONResponse({"id": "pair-1", "token": "devtoken", "role": "operator", "label": body.get("label", ""),
                          "source": "pair-physical", "expires_at": None}, status_code=201)
+
+
+#: D-193 §5 등록 코드(CORE 와 같은 모양). 관리자만 발급한다.
+@app.post("/api/v1/auth/enrollment-codes", status_code=201)
+async def enrollment_codes(request: Request):
+    if _role(request) != "administrator":
+        return JSONResponse({"detail": "administrator required"}, status_code=403)
+    body = await request.json()
+    role = str(body.get("role", "operator"))
+    if role not in ("viewer", "operator"):
+        return JSONResponse({"detail": "role must be viewer or operator"}, status_code=400)
+    return JSONResponse({"code": "DEMO-C0DE", "code_id": "dev-enroll-1", "role": role,
+                         "expires_in_s": 300}, status_code=201)
 
 
 @app.get("/api/v1/safety/state")
@@ -313,12 +358,13 @@ async def front_evidence(request: Request):
 # Content-Length 보다 짧음)|"slow"(첫 조각 뒤 release 까지 멈춤)|"conflict"(목록과 달리 409),
 # foreign: 다른 기기가 시작한 녹화, big: 256 MB 를 넘는 녹화본. polls 는 GET /active 횟수.
 # starting: 시작이 먼저 "starting"(기록기가 아직 첫 파일을 열지 않음)이 되고, ready: true 로 recording.
+# cap: true 면 녹화기가 10분 상한(max_duration)으로 스스로 멈춘다. many: true 면 녹화본이 12개다.
 RECORDING_ID = "20261002T101500Z_rosy_dev"
 _IDLE_RECORDER = {"schema": "rosy.pilot.recording.status/1", "state": "idle", "id": None, "elapsed_s": 0.0,
                   "bytes": 0, "max_duration_s": 600, "quota_free_bytes": 10**9, "last_stop_reason": "",
                   "boot_id": "dev", "seq": 0}
 _RECORDING_DEFAULTS = {"blocker": None, "role": "operator", "archive": "ok", "big": False, "release": False,
-                       "starting": False}
+                       "starting": False, "many": False}
 _RECORDING_LIVE = {"state": "recording", "id": "20261002T102000Z_rosy_dev", "elapsed_s": 1.0, "bytes": 2048}
 RECORDINGS = {"active": dict(_IDLE_RECORDER), "owned": False, "log": [], "polls": 0, **_RECORDING_DEFAULTS}
 _RECORDING_ITEM = {"id": RECORDING_ID, "started_at": "2026-10-02T10:15:00Z", "ended_at": "2026-10-02T10:16:05Z",
@@ -366,6 +412,8 @@ async def recordings_script(request: Request):
     if body.get("foreign"):
         RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "state": "recording",
                                                "id": "20261002T103000Z_rosy_dev", "elapsed_s": 3.0, "bytes": 4096})
+    if body.get("cap"):  # 녹화기가 10분 상한에서 스스로 멈췄다
+        RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "last_stop_reason": "max_duration"})
     if body.get("ready") and RECORDINGS["active"]["state"] == "starting":
         RECORDINGS["active"] = {**_IDLE_RECORDER, **_RECORDING_LIVE}
     return {key: RECORDINGS[key] for key in _RECORDING_DEFAULTS}
@@ -379,7 +427,8 @@ def recordings_list(request: Request):
     active = RECORDINGS["active"]
     blocker = "RECORDING_BUSY" if active["state"] != "idle" else RECORDINGS["blocker"]
     item ={**_RECORDING_ITEM, "bytes": 3 * 10**8} if RECORDINGS["big"] else _RECORDING_ITEM
-    return {"active": active, "items": [item], "download_allowed": blocker is None,
+    items = [item] + [{**item, "id": f"20261001T10{n:02d}00Z_rosy_dev"} for n in range(11)]         if RECORDINGS["many"] else [item]
+    return {"active": active, "items": items, "download_allowed": blocker is None,
             "download_blocker": blocker}
 
 
@@ -467,7 +516,7 @@ async def ws_state(websocket: WebSocket):
     try:
         while True:
             STATE["mode"] = "MANUAL"
-            await websocket.send_json({"type": "state", **STATE})
+            await websocket.send_json({"type": "state", **state_frame()})
             await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         return

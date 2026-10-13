@@ -1,13 +1,39 @@
 """Perception overlay renderer (spec §4.3): what the robot saw and chose."""
 
+import json
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
+from control.sensing.perception.lane_bev import BirdsEye
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
-from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, next_publish_due, render_debug
+from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, keep_debug_payload, next_publish_due, render_debug
 from lane_sim import CAM_X, GROUND, KW, lane
 
 STRAIGHT = np.array([(-1.0, 0.0), (1.4, 0.0)])
+
+
+def test_keep_debug_records_the_effective_ground_and_preserves_decision_fields():
+    last = {"strategy": "right_only", "target_m": [0.4, 0.02]}
+    metadata = dict(paint_source_used="threshold", corner_turning=True, stamp=12.5)
+    payload = keep_debug_payload(last, GROUND, CAM_X, **metadata)
+    assert payload["strategy"] == "right_only" and payload["target_m"] == [0.4, 0.02]
+    assert all(payload[key] == value for key, value in metadata.items())
+    assert payload["ground_projection"] == {
+        "height_m": GROUND.height_m, "pitch_rad": GROUND.pitch_rad,
+        "focal_px": GROUND.focal_px, "principal_x": GROUND.principal_x,
+        "principal_y": GROUND.principal_y, "max_range_m": GROUND.max_range_m,
+        "camera_x_offset_m": CAM_X,
+    }
+    assert json.loads(json.dumps(payload))["ground_projection"]["pitch_rad"] == GROUND.pitch_rad
+    assert keep_debug_payload(last, None, CAM_X, **metadata)["ground_projection"] is None
+
+
+def test_keep_debug_takes_a_ground_label_beside_the_projection():
+    """line_observer_node passes ground=<label> in metadata (2026-10-08 crash on every frame)."""
+    payload = keep_debug_payload({}, GROUND, CAM_X, ground="nominal", stamp=1.0)
+    assert payload["ground"] == "nominal" and payload["ground_projection"]["height_m"] == GROUND.height_m
 
 
 def _frame_and_tracker():
@@ -79,6 +105,28 @@ def test_malformed_graph_does_not_raise():
     for graph in bad_graphs:
         img = render_debug(frame, t, obs, mode="centre", pose=pose, graph=graph)
         assert img.shape == (2 * PANEL_H, 2 * PANEL_W, 3)
+
+
+def test_expected_path_is_yellow_on_the_bev_panel_without_paint():
+    frame = np.zeros((32, 32), np.uint8)
+    view = BirdsEye(GROUND, 320, 240, CAM_X)
+    segment = [[0.15, 0.0], [0.40, 0.0]]
+    drawn = render_debug(frame, SimpleNamespace(last={"expected_path_m": segment}, view=view),
+                         None, mode="keep")
+    blank = render_debug(frame, SimpleNamespace(last={}, view=view), None, mode="keep")
+    bev, empty = drawn[:PANEL_H, PANEL_W:], blank[:PANEL_H, PANEL_W:]
+    yellow = (bev[:, :, 1] > 180) & (bev[:, :, 2] > 180) & (bev[:, :, 0] < 80)
+    assert int(yellow.sum()) > 0
+    assert int(empty[yellow].sum()) == 0
+
+
+def test_expected_curve_draws_the_segments_after_the_first_pair():
+    frame = np.zeros((32, 32), np.uint8)
+    view = BirdsEye(GROUND, 320, 240, CAM_X)
+    points = [[.15, 0.], [.25, 0.], [.35, .04], [.4, .08]]
+    short = render_debug(frame, SimpleNamespace(last={'expected_path_m': points[:2]}, view=view), None, mode='keep')
+    whole = render_debug(frame, SimpleNamespace(last={'expected_path_m': points}, view=view), None, mode='keep')
+    assert np.count_nonzero(whole != short) > 0
 
 
 def test_rate_limiter_survives_float_jitter_at_a_matching_rate():

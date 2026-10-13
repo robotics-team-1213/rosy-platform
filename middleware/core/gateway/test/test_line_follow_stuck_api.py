@@ -15,7 +15,7 @@ VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 REPO = Path(__file__).resolve().parents[4]
 DEFAULT = REPO / "contracts" / "foundation" / "config" / "rosy_default.yaml"
-PINKY = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "core.yaml"
+PINKY = REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "core.yaml"
 URL = "/api/v1/line-follow/stuck/decision"
 
 
@@ -107,10 +107,49 @@ def test_resume_refused_inside_stop_distance(core_client):
 
 
 def test_back_and_retry_refused_while_local_recovery_is_off(core_client):
-    client, _, stuck_id = _stuck(core_client)
+    # D-495 turned the robot default on; a robot rolled back to off still refuses.
+    off = {"line_follow": {"recovery_local_enabled": False}}
+    client, _, stuck_id = _stuck(lambda **kw: core_client(config_overrides=off, **kw))
     refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
                           headers=OPERATOR)
     assert refused.status_code == 409 and "local_recovery_disabled" in refused.text
+
+
+def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and "body_geometry_unset" in refused.text
+
+
+@pytest.mark.parametrize("elapsed, phase", [(0.1, "BACKING"), (2.7, "SETTLING")])
+def test_delayed_back_api_answer_preserves_active_recovery(core_client, elapsed, phase):
+    pinky = _yaml(PINKY)
+    pinky["line_follow"]["recovery_local_enabled"] = True
+    client, services, stuck_id = _stuck(
+        lambda **kw: core_client(config_overrides=pinky, **kw))
+    lf = services.line_follow
+    started = lf._clock()
+    rear = pinky["line_follow"]["body_lidar_x_m"] - pinky["line_follow"]["body_rear_x_m"] + 0.30
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=started)
+    body = {"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}
+    accepted = client.post(URL, json=body, headers=OPERATOR)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["outcome"] == "back"
+    now = started + elapsed
+    lf.bind_clock(lambda: now)
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=now)
+    lf.tick(now)
+    assert lf.status().stuck.phase == phase
+    until = lf._recovery._until
+    refused = client.post(URL, json=body, headers=OPERATOR)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "STUCK_DECISION_REFUSED"
+    assert "back_active" in refused.text
+    assert lf.status().stuck.phase == phase and lf.status().stuck.attempts == 1
+    assert lf._recovery._until == until
+    stopped = client.post(URL, json={**body, "decision": "WAIT"}, headers=OPERATOR)
+    assert stopped.status_code == 200 and stopped.json()["outcome"] == "hold"
 
 
 @pytest.mark.parametrize("decision, mode", [("ABORT", Mode.IDLE), ("MANUAL", Mode.MANUAL)])
@@ -130,12 +169,85 @@ def test_estop_closes_the_stuck_and_late_answers_are_refused(core_client):
     assert late.status_code == 409
 
 
+@pytest.mark.parametrize("changed", ["none", "wait", "local", "attempts"])
+def test_conditional_back_api_checks_current_episode(core_client, changed):
+    config = {"line_follow": {"recovery_local_enabled": True,
+              "body_lidar_x_m": -0.017, "body_rear_x_m": -0.076,
+              "body_rotation_radius_m": 0.08257}}
+    client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=config, **kw))
+    lf = services.line_follow
+    now = lf._clock()
+    expected = {"phase": "ASKING", "attempts": 0}
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
+    if changed == "wait":
+        assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                           headers=OPERATOR).status_code == 200
+    elif changed == "local":
+        now += 15.0
+        lf.bind_clock(lambda: now)
+    elif changed == "attempts":
+        expected["attempts"] = 1
+    lf.observe_body_points([(0.15, 0.0), (-0.359, 0.0)], range_min=0.0, received_at=now)
+    if changed == "local":
+        lf.tick(now)
+        assert lf.status().stuck.phase == "BACKING"
+    before = lf.status().stuck
+    until = lf._recovery._until
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    if changed == "none":
+        assert reply.status_code == 200, reply.text
+        assert reply.json()["outcome"] == "back"
+    else:
+        assert reply.status_code == 409 and "stuck_precondition_failed" in reply.text
+        assert lf.status().stuck == before and lf._recovery._until == until
+
+
+@pytest.mark.parametrize("expected", [
+    {"phase": "WAITING_CONSOLE", "attempts": 0}, {"phase": "ASKING", "attempts": True},
+    {"phase": "ASKING", "attempts": "0"}, {"phase": "ASKING", "attempts": -1},
+    {"phase": "ASKING"}, {"phase": "ASKING", "attempts": 0, "extra": 1},
+])
+def test_conditional_back_api_rejects_malformed_predicate(core_client, expected):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    assert reply.status_code == 400 and reply.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_conditional_back_predicate_cannot_block_human_wait(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT",
+                                  "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert reply.status_code == 400
+    assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                       headers=OPERATOR).status_code == 200
+
+
+def test_conditional_capability_requires_both_wire_handler_and_controller(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    lf = services.line_follow
+    # Old HTTP handlers dump this controller status without a wire capability assertion.
+    assert lf.status().model_dump()["stuck"]["conditional_back"] is False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
+    lf.conditional_back_supported = False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is False
+    before = lf.status().stuck
+    rejected = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+        "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert rejected.status_code == 409 and "conditional back is unsupported" in rejected.text
+    assert lf.status().stuck == before
+
+
 def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     """New keys in the default layer must not collide with an overlay (docs/solutions 2026-10-02)."""
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
                          {"line_follow": {"obstacle_escalate_s": 4.0, "lidar_forward_deg": 181.0}})
     config = _line_follow_config(merged["line_follow"])
-    assert config.recovery_local_enabled is False and config.recovery_ask_s == 15.0
+    # D-495: on by robot default; the config-less model default stays off.
+    assert config.recovery_local_enabled is True and config.recovery_ask_s == 15.0
+    rolled_back = _deep_merge(merged, {"line_follow": {"recovery_local_enabled": False}})
+    assert _line_follow_config(rolled_back["line_follow"]).recovery_local_enabled is False
     assert config.recovery_back_m == 0.08 and config.recovery_back_speed == 0.03
     assert config.recovery_rear_clear_m == 0.06 and config.recovery_max_attempts == 2
     assert config.body_geometry_known and config.body_rear_x_m == -0.076
@@ -143,16 +255,62 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     assert not generic.body_geometry_known                   # never backs off without URDF
 
 
+def test_packaged_default_backs_off_on_a_body_geometry_robot():
+    """D-495 user decision (2026-10-07): recovery_local_enabled on by default includes the D-407
+    autonomous back-off on every robot with URDF body geometry (no separate self-mask gate)."""
+    from core_features.line_follow.manager import LineFollowManager
+
+    class Events:
+        def publish(self, *args, **kwargs): pass
+
+    config = _line_follow_config(_deep_merge(_yaml(DEFAULT), _yaml(PINKY))["line_follow"])
+    assert config.recovery_local_enabled and config.body_geometry_known
+    m = LineFollowManager(Events(), config=config, clock=lambda: 0.0)
+    m.bind_recovery(console_linked=lambda: False, calibration_active=lambda: False,
+                    linear_ceiling=lambda: 0.15, preview_seq=lambda: 1)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    rear = config.body_lidar_x_m - config.body_rear_x_m + 0.30   # 0.30 m clear behind the body
+    t, back = 0.0, None
+    while t < 7.0 and (back is None or back.linear >= 0):
+        m.observe_clearance(0.15, received_at=t)
+        m.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=t)
+        m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                  error=0.0, confidence=0.9), received_at=t, source_now=t)
+        back = m.tick(t + 0.01)
+        t = round(t + 0.1, 6)
+    assert back.linear < 0 and m.status().reason == "stuck_back_off"
+
+
+def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():
+    from core_features.line_follow.model import LineFollowConfig
+    merged = _deep_merge(_yaml(DEFAULT), _yaml(PINKY))
+    config = _line_follow_config(merged["line_follow"])
+    defaults = LineFollowConfig()
+    keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
+    assert len(keys) == 13  # D-476 rev 1: bridge_arm_* (4); rev 2: arc (2); D-507 9 moved the site key
+    assert all(getattr(config, k) == getattr(defaults, k) for k in keys)
+    assert config.bridge_enabled is False
+    with pytest.raises(ValueError, match="bridge_enabled must be true or false"):
+        _line_follow_config({"bridge_enabled": "true"})
+
+
 def test_scan_bridge_feeds_self_masked_body_points():
     class LineFollow:
         config = _line_follow_config({"lidar_forward_deg": 180.0, "lidar_self_mask": [
             {"from_deg": 170, "to_deg": 180, "max_range_m": 0.2}]})
         body = None
+        return_scan = "unset"
         clearance = "unset"
         wants_body_points = True
+        wants_crosswalk_scan = False
 
         def observe_body_points(self, points, *, range_min, received_at):
             self.body = (points, range_min)
+
+        wants_return_scan = True
+
+        def observe_return_scan(self, view, *, source_age_s, source_stamp_ns, received_at):
+            self.return_scan = (view, source_age_s, source_stamp_ns)
 
         def observe_clearance(self, distance, received_at=None):
             self.clearance = distance
@@ -167,11 +325,14 @@ def test_scan_bridge_feeds_self_masked_body_points():
     ranges[180] = 0.25                   # scan 0 deg = robot rear
     ranges[175] = 0.18                   # scan -5 deg = robot +175 deg, inside the self-mask
     sample = {"ranges": ranges, "angle_min": -3.14159265, "angle_max": 3.14159265 * (n - 2) / n,
-              "range_min": 0.15, "range_max": 12.0}
+              "angle_increment": 2 * 3.14159265 / n,
+              "range_min": 0.15, "range_max": 12.0, "frame_id": "laser",
+              "source_stamp_ns": 1_000_000_000, "source_now_ns": 1_000_000_000}
     services = Services()
     observation.front_clearance(services, sample, received_at=1.0)
     points, range_min = services.line_follow.body
     assert range_min == 0.15 and len(points) == 2
+    assert services.line_follow.return_scan == (None, None, None)  # missing body geometry denies D-468
     assert min(x for x, _ in points) == pytest.approx(-0.25, abs=1e-3)
     assert services.line_follow.clearance == pytest.approx(0.30, abs=1e-3)
 
@@ -277,3 +438,64 @@ def test_principal_ref_keeps_configured_ids_and_hides_hash_prefix_ids():
     anon = principal_ref({"id": digest[:12], "digest": digest})
     assert anon.startswith("anon-") and digest[:12] not in anon
     assert principal_ref({"id": digest[:12], "digest": digest}) == anon     # stable in a run
+
+
+@pytest.mark.parametrize("decision", ["ABORT", "MANUAL"])
+def test_abort_and_manual_in_emergency_are_refused_before_the_stuck_is_consumed(
+        core_client, decision):
+    """Safety review of fix/battery-estop-latch-release: ABORT/MANUAL used to consume
+    the stuck, then fail on the mode change (EMERGENCY has no exit but release)."""
+    client, services, stuck_id = _stuck(core_client)
+    assert services.modes.transition(Mode.EMERGENCY)[0]
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": decision},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and "EMERGENCY_ACTIVE" in refused.text
+    assert services.line_follow.status().stuck.stuck_id == stuck_id
+    assert services.modes.mode is Mode.EMERGENCY
+
+
+# --- D-607 8 REALIGN ------------------------------------------------------------------------------
+
+REALIGN = {"kind": "PIVOT", "angle_rad": 0.5, "pose_stamp": 1.0, "attempt": 1, "turn_spot": True}
+
+
+def test_realign_is_off_by_default_and_not_offered(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    body = client.get("/api/v1/line-follow", headers=VIEWER).json()
+    assert "REALIGN" not in body["stuck"]["decisions"]
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN", "realign": REALIGN},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "STUCK_DECISION_REFUSED"
+    assert "realign_kind" in refused.text
+    services.state.set_velocity(0.0, 0.0)  # a live base (D-32) announces the drive control
+    caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]["items"][0]
+    assert "stuck_realign" not in caps
+
+
+def test_realign_body_belongs_to_realign_only(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    wrong = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT", "realign": REALIGN},
+                        headers=OPERATOR)
+    assert wrong.status_code == 400, wrong.text
+
+
+def test_realign_enabled_is_offered_announced_and_checked_by_core(core_client):
+    on = {"line_follow": {"stuck_realign_enabled": True, "obstacle_mode": "path", "recovery_local_enabled": True}}
+    client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=on, **kw))
+    assert "REALIGN" in client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["decisions"]
+    services.state.set_velocity(0.0, 0.0)  # a live base (D-32) announces the drive control
+    caps = client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]["items"][0]
+    assert caps["stuck_realign"] == ["PIVOT", "KTURN"]
+    unset = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN"}, headers=OPERATOR)
+    assert unset.status_code == 409 and "realign_unset" in unset.text
+    wide = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN",
+                                  "realign": {**REALIGN, "angle_rad": 2.0}}, headers=OPERATOR)
+    assert wide.status_code == 409 and "realign_angle" in wide.text
+
+
+def test_realign_is_refused_under_estop(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    services.safety.trigger_estop("test")
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "REALIGN", "realign": REALIGN},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and services.command.select_output().angular == 0.0

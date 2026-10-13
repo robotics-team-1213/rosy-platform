@@ -1,17 +1,11 @@
 """Which snapshot poses Fleet traffic and bays may use (D-395 §10, Phase 2 P2-2). Pure.
 
-A robot whose snapshot carries `localization` is trusted only when it is LOCALIZED
-with its pose in the map frame. Otherwise its pose is skipped: the robot becomes a
-wide obstacle (`UNTRUSTED_KEEP_OUT_M`) at its last trusted pose, or blocks the whole
-track when it never had one. A snapshot without `localization` (`null` or absent)
-is a robot that predates D-395: contract §3 keeps today's behaviour for it and the
-console shows "위치 상태 미보고" (open question 2, decided).
+Only LOCALIZED map-frame snapshots are trusted. Missing, null, or unreadable
+localization is UNKNOWN, never an implicit map pose. Traffic keeps out around the
+last trusted pose, or blocks the whole track when none exists. After 30 seconds
+of missing localization the cached position expires; trust never returns by timeout.
+Fleet camera/operator MapPose is a separate evidence source (D-494, D-598).
 
-A last trusted pose comes only from a LOCALIZED map snapshot, never from a legacy one
-(S2 Finding 1: a power-on odom pose read before loc_assist was up became the keep-out
-centre once the robot reported CANDIDATES). A robot that has reported localization and
-then goes null (a CORE restart) is not legacy: the console treats it as untrusted until
-it has been null for `LAPSED_GRACE_S` (`badge(..., lapsed=True)`).
 """
 
 from __future__ import annotations
@@ -25,17 +19,13 @@ from core_common.protocol.localization import LocalizationStatus, LocState, Pose
 
 TRUSTED = "trusted"
 UNTRUSTED = "untrusted"
-LEGACY = "legacy"
 
 #: Contract §3: an untrusted robot keeps this clear around its last trusted pose.
 UNTRUSTED_KEEP_OUT_M = 0.45
 
-#: A robot that reported localization and then went null stays untrusted this long before
-#: it counts as legacy again. 30 s covers a CORE restart (whose node comes back reporting)
-#: without pinning a robot whose D-395 stack was really removed forever.
+#: Missing localization expires the last trusted position after a CORE restart.
 LAPSED_GRACE_S = 30.0
 
-LEGACY_LABEL = "위치 상태 미보고"
 NEEDS_HUMAN_LABEL = "위치 확인 필요"
 STATE_LABELS = {
     LocState.UNKNOWN: "위치 모름",
@@ -59,11 +49,9 @@ def status_of(state: Optional[Mapping]) -> Optional[LocalizationStatus]:
 
 
 def classify(state: Optional[Mapping]) -> str:
-    if (state or {}).get("localization") is None:
-        return LEGACY
     status = status_of(state)
     if status is None:
-        return UNTRUSTED            # present but unreadable: never trust it
+        return UNTRUSTED
     if status.state is LocState.LOCALIZED and status.pose_frame is PoseFrame.MAP:
         return TRUSTED
     return UNTRUSTED
@@ -78,9 +66,7 @@ def _xy(state: Optional[Mapping]) -> Optional[Point]:
 
 
 def trusted_xy(state: Optional[Mapping]) -> Optional[Point]:
-    """The snapshot pose when it may become a last trusted pose (LOCALIZED, map), else None.
-
-    A legacy snapshot's pose is used live while the robot stays legacy, never stored."""
+    """The snapshot pose only when LOCALIZED in the map frame."""
     return _xy(state) if classify(state) == TRUSTED else None
 
 
@@ -112,21 +98,16 @@ def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
     """Console badge for one robot row; None when the robot is offline (no state).
 
     `view` is the localization service's per-robot view; its `needs_human` (the
-    ladder's last rung) or the robot's own flag shows "위치 확인 필요". `lapsed`: a
-    D-395 robot inside its null grace, shown untrusted rather than legacy."""
+    ladder's last rung) or the robot's own flag shows "위치 확인 필요".
+    `lapsed` is retained for callers; missing localization is always untrusted."""
     if state is None:
         return None
     verdict = classify(state)
-    if verdict == LEGACY and lapsed:
-        verdict = UNTRUSTED
-    if verdict == LEGACY:
-        return {"state": None, "pose_frame": None, "trusted": True, "legacy": True,
-                "needs_human": False, "label": LEGACY_LABEL}
     status = status_of(state)
     needs_human = bool((view or {}).get("needs_human")) or bool(status and status.needs_human)
     label = (NEEDS_HUMAN_LABEL if needs_human
              else STATE_LABELS[status.state] if status is not None else STATE_LABELS[LocState.UNKNOWN])
-    return {"state": status.state.value if status else None,
+    return {"state": status.state.value if status else LocState.UNKNOWN.value,
             "pose_frame": status.pose_frame.value if status else None,
             "trusted": verdict == TRUSTED, "legacy": False, "needs_human": needs_human,
             "label": label}

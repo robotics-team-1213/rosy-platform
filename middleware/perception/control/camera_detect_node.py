@@ -27,17 +27,20 @@ from std_msgs.msg import Bool, Float32, String
 
 from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
+from .camera_lock import CameraLockMixin
 from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
-    lock_action, lock_controls, lock_summary, static_controls)
+    RELOCK_BRIGHT_MEDIAN, RELOCK_CLIP_FRACTION, RelockWatch, static_controls)
 from .sensing.perception.camera_evidence import observation_payload
 from .sensing.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
+from .sensing.perception.camera_visibility import road_clip_stats, visibility_reason
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
-from .sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
+from .sensing.perception.v4l2_controls import (
+    freeze_v4l2_controls, unfreeze_v4l2_controls)
 
 # D-411: the Pilot recorder's latched active flag (pilot_recorder_node).
 _RECORDER_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -80,8 +83,11 @@ class _OpenCVCamera:
     def freeze_controls(self):
         return freeze_v4l2_controls(self._capture, self._cv2)
 
+    def unfreeze_controls(self):
+        unfreeze_v4l2_controls(self._capture, self._cv2)
 
-class CameraDetectNode(RegionRangeMixin, Node):
+
+class CameraDetectNode(CameraLockMixin, RegionRangeMixin, Node):
     def __init__(self):
         super().__init__('camera_detect_node')
         self.declare_parameter('width', 320)
@@ -106,6 +112,11 @@ class CameraDetectNode(RegionRangeMixin, Node):
         # anything. Settle with them on, then freeze what they chose.
         self.declare_parameter('camera_lock_enabled', True)
         self.declare_parameter('camera_settle_seconds', 2.5)
+        # The lock is not for life: see RelockWatch. 0 dwell = never re-lock.
+        self.declare_parameter('camera_relock_dwell_s', 3.0)
+        self.declare_parameter('camera_relock_min_interval_s', 30.0)
+        self.declare_parameter('camera_relock_clip_fraction', RELOCK_CLIP_FRACTION)
+        self.declare_parameter('camera_relock_bright_median', RELOCK_BRIGHT_MEDIAN)
         # Ground-plane calibration. No invented defaults: these zeros are refused
         # by ground_plane(), so an uncalibrated robot keeps reporting regions as
         # unranged instead of publishing distances nobody measured. See
@@ -180,6 +191,11 @@ class CameraDetectNode(RegionRangeMixin, Node):
         self._settle_deadline = None
         self._locked = None
         self._lock_attempts = 0
+        self._relock_watch = RelockWatch(
+            float(self.get_parameter('camera_relock_dwell_s').value),
+            float(self.get_parameter('camera_relock_min_interval_s').value),
+            float(self.get_parameter('camera_relock_clip_fraction').value),
+            float(self.get_parameter('camera_relock_bright_median').value))
         self._cam = None
         self._worker = CameraPreprocessWorker(
             CameraPreprocessProfile(
@@ -374,54 +390,28 @@ class CameraDetectNode(RegionRangeMixin, Node):
         except Exception:
             pass
 
-    def _maybe_lock(self):
-        """Freeze AE/AWB once they have settled.
-
-        The floor reference cannot mean anything while the ISP is still
-        re-deciding gains underneath it: measured, a 1.3x gain step on one
-        unchanged frame flips blocked, and a white-balance shift flips the whole
-        near band. Bounded retries so one bad metadata read at the settle instant
-        does not disable the lock for the session; after that, stay in auto and
-        say so rather than freezing on a value we do not trust.
-        """
-        if self._locked is not None:
+    def _watch_exposure(self, bgr):
+        """Re-run settle -> lock when the frozen exposure leaves the road unusable."""
+        if not self._line_controls_stable():
+            return  # settling, or never frozen: nothing here to re-lock
+        reason = visibility_reason(bgr)
+        clip, median = road_clip_stats(bgr)
+        if not self._relock_watch.update(reason, time.monotonic(), clip, median):
             return
-        action = lock_action(bool(self.get_parameter('camera_lock_enabled').value),
-                             time.monotonic(), self._settle_deadline, self._lock_attempts)
-        if action == 'wait':
+        self.get_logger().warn(f'camera exposure {reason} clip={clip:.2f} median={median:.0f} '
+                               f'under lock {self._locked}; re-locking')
+        self._locked = None
+        self._lock_attempts = 0
+        if hasattr(self._cam, 'unfreeze_controls'):
+            self._cam.unfreeze_controls()
+            self._settle_deadline = time.monotonic() + max(
+                0.0, float(self.get_parameter('camera_settle_seconds').value))
+            self.controls_pub.publish(String(data='settling'))
             return
-        if action == 'disabled':
-            self._announce_lock('auto (lock disabled by parameter)', froze=False)
-            return
-        if action == 'exhausted':
-            self._announce_lock('auto (lock unavailable after '
-                                f'{self._lock_attempts} attempts)', froze=False)
-            return
-        settle = max(0.0, float(self.get_parameter('camera_settle_seconds').value))
-        if hasattr(self._cam, 'freeze_controls'):
-            controls = self._cam.freeze_controls()
-            if controls:
-                self._announce_lock(v4l2_lock_summary(controls))
-                return
-            self._lock_attempts += 1
-            self._settle_deadline = time.monotonic() + max(0.5, settle)
-            return
-        try:
-            controls = lock_controls(self._cam.capture_metadata())
-        except Exception as exc:
-            self.get_logger().warn(f'camera metadata unreadable: {exc}')
-            controls = None
-        if controls:
-            try:
-                self._cam.set_controls(controls)
-            except Exception as exc:
-                self.get_logger().warn(f'camera lock rejected: {exc}')
-                controls = None
-        if controls is None:
-            self._lock_attempts += 1
-            self._settle_deadline = time.monotonic() + max(0.5, settle)
-            return
-        self._announce_lock(lock_summary(controls))
+        # picamera2: configure() discards controls, so a restart is the only way
+        # back to AE/AWB that never emits AeEnable (camera_controls docstring).
+        self._stop_cam()
+        self._start_cam()
 
     def _announce_lock(self, summary, froze=True):
         self._locked = summary
@@ -449,6 +439,8 @@ class CameraDetectNode(RegionRangeMixin, Node):
             self.get_logger().warn(f'capture failed: {exc}', throttle_duration_sec=2.0)
             bgr = None
         processed = self._worker.process(CameraFrame(self._frame_id, capture_stamp, bgr))
+        if bgr is not None:
+            self._watch_exposure(processed.pixels)
         self._frame_id += 1
         self.telemetry_pub.publish(String(
             data=json.dumps(processed.telemetry.as_dict(), sort_keys=True)))

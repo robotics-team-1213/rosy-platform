@@ -18,6 +18,7 @@ from fastapi import Header, HTTPException, Query
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.schemas import DiscoveryScanPayload
 from core_common.protocol.network_peers import PeerObservation
+from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 from fleet.server.address_drift import classify_addresses
 from fleet.server.policy_evidence import PolicyEvidenceError, status_code_for
@@ -128,7 +129,8 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
 
 
 def install_ingest_routes(app, *, console, console_token, hub, sightings,
-                          policy_evidence, principals, require_viewer, read_guard) -> None:
+                          policy_evidence, principals, require_viewer, read_guard,
+                          map_pose=None) -> None:
     if sightings is not None and sightings.enabled:
         if console_token is not None and sightings.uses_token(console_token):
             raise ValueError("sighting source credentials must differ from the console token")
@@ -146,14 +148,31 @@ def install_ingest_routes(app, *, console, console_token, hub, sightings,
         async def submit_sighting(body: SiteSightingPayload,
                                   authorization: Optional[str] = Header(default=None)) -> dict:
             try:
-                return sightings.accept(authorization, body)
+                row = sightings.accept(authorization, body)
             except SightingError as exc:
                 raise HTTPException(status_code=exc.status_code,
                                     detail={"code": exc.code, "message": str(exc)}) from exc
+            if map_pose is not None:   # D-494 3: only an accepted sighting anchors the map pose
+                map_pose.observe_sighting(row)
+            return row
 
         @app.get("/api/fleet/sightings", dependencies=read_guard, tags=["sightings"])
         async def sighting_readback() -> dict:
             return sightings.snapshot()
+
+        @app.post("/api/fleet/place-markers", tags=["sightings"])
+        async def submit_place_markers(body: PlaceMarkerPayload,
+                                       authorization: Optional[str] = Header(default=None)) -> dict:
+            """D-564: floor place marker poses; display and teach input only."""
+            try:
+                return sightings.accept_place_markers(authorization, body)
+            except SightingError as exc:
+                raise HTTPException(status_code=exc.status_code,
+                                    detail={"code": exc.code, "message": str(exc)}) from exc
+
+        @app.get("/api/fleet/place-markers", dependencies=read_guard, tags=["sightings"])
+        async def place_marker_readback() -> dict:
+            return sightings.place_markers_snapshot()
 
     if policy_evidence is not None:
         if console_token is not None and policy_evidence.uses_token(console_token):

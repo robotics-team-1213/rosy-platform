@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "middleware" / "ui" / "robot"
@@ -14,6 +13,9 @@ WEB = ROOT / "middleware" / "ui" / "robot"
 
 def _route_panel_test(page) -> None:
     """Load shared elements used by the dashboard shell."""
+    peer_source = (WEB / "peer-approval.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/assets/peer-approval.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=peer_source))
     ui_source = (ROOT / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
@@ -49,7 +51,7 @@ def _unmount_panel(page) -> None:
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -190,14 +192,14 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
           }});
           window.__callbacks=callbacks; window.__resolveRequest=value=>resolveRequest(value);
           callbacks['/api/v1/line-follow'].onData({mode:'IR_LINE',state:'TRACKING',confidence:.9});
-          callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}});
+          callbacks['/api/v1/system/capabilities'].onData({teleop:true,runtime:{drive:'ready'},navigation:{goal_navigation:false}});
           callbacks['/api/v1/line-follow'].onError(new Error('fixture line status unavailable'));
         }""")
         panel = page.locator("main").last
         assert "fixture line status unavailable" in panel.locator("ui-status").first.inner_text()
         assert "TRACKING" not in panel.locator("dl").inner_text()
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
-        assert "내비게이션" in panel.locator("ui-status").nth(1).inner_text()
+        assert "구동" in panel.locator("ui-status").nth(1).inner_text()
 
         page.evaluate("""() => {
           window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
@@ -206,7 +208,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         }""")
         page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
-        action = panel.locator('ui-status[role="status"]').last
+        action = panel.locator(':scope > ui-status').nth(2)
         page.evaluate("""() => {
           window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
           window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture capability unavailable'));
@@ -214,7 +216,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
         pending_feedback = action.inner_text()
         page.evaluate("window.__resolveRequest({})")
-        page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending_feedback)
+        page.wait_for_function("previous => document.querySelector('main:last-of-type > ui-status:nth-of-type(3)')?.textContent !== previous", arg=pending_feedback)
         # D-359 US-009 — the line-follow mode is spoken in Korean, never as the enum.
         assert "꺼짐" in panel.locator("ui-status").first.inner_text()
         assert "OFF" not in panel.locator("ui-status").first.inner_text()
@@ -717,7 +719,7 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
           fleet_loss_policy:'HOLD'
         })""")
 
-        token_section = page.locator("main > section.ui-readback").nth(0)
+        token_section = page.locator("main > section.ui-readback:not(:has([data-peer-list]))").nth(0)
         token_status = token_section.locator("ui-status").nth(0)
         credential_status = token_section.locator("ui-status").nth(1)
         read_status = token_section.locator("ui-status").nth(2)
@@ -734,24 +736,24 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
         # D-371: the row button opens the shared confirm dialog; its execute button deletes.
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("""document.querySelector(
-          'main > section.ui-readback ui-status[role=status]'
+          'main > section.ui-readback:not(:has([data-peer-list])) ui-status[role=status]'
         )?.textContent.includes('삭제했습니다')""")
         assert token_list.is_hidden()
         assert "delete-me" in token_status.inner_text() and "삭제했습니다" in token_status.inner_text()
         assert "fixture token list offline" in read_status.inner_text()
 
-        page.locator('main > section.ui-readback').nth(0).locator('[name="label"]').fill('new-secret')
-        page.locator('main > section.ui-readback').nth(0).locator('form').evaluate(
+        page.locator('main > section.ui-readback:not(:has([data-peer-list]))').nth(0).locator('[name="label"]').fill('new-secret')
+        page.locator('main > section.ui-readback:not(:has([data-peer-list]))').nth(0).locator('form').evaluate(
             "node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
         page.wait_for_function("""document.querySelectorAll(
-          'main > section.ui-readback'
+          'main > section.ui-readback:not(:has([data-peer-list]))'
         )[0].querySelectorAll('[role=status]')[1]?.textContent.includes('fixture-one-time-secret')""")
         secret = credential_status.inner_text()
         assert "fixture-one-time-secret" in secret
         assert "fixture token list offline" in read_status.inner_text()
         assert "CORE" in token_status.inner_text()
 
-        safety_section = page.locator("main > section.ui-readback").nth(1)
+        safety_section = page.locator('main > section.ui-readback:has([name="manual_linear"])')
         safety_form = safety_section.locator("form")
         safety_read_status = safety_section.locator("ui-status").nth(0)
         safety_action_status = safety_section.locator("ui-status").nth(1)
@@ -781,7 +783,7 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
           fleet_loss_policy:'HOLD'
         })""")
         page.wait_for_function("""document.querySelector(
-          'main > section.ui-readback:nth-of-type(2) input[name=manual_linear]'
+          'main > section.ui-readback:has(input[name=manual_linear]) input[name=manual_linear]'
         )?.value === '0.7'""")
         assert safety_form.locator('[name="manual_linear"]').input_value() == '0.7'
         assert safety_form.locator('[name="manual_angular"]').input_value() == '1.1'
@@ -838,7 +840,7 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
         _unmount_panel(page)
         assert set(page.evaluate("window.__stopped")) == {
-            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning",
+            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning", "/api/v1/navigation/state",
         }
         assert errors == []
         browser.close()
@@ -858,7 +860,7 @@ def test_console_map_actions_require_hardware_runtime():
         page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=map_source))
         page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
-        disabled = page.evaluate("""async () => {
+        page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/map.js');
           const root = document.createElement('main'); document.body.append(root);
           const callbacks = {};
@@ -867,14 +869,18 @@ def test_console_map_actions_require_hardware_runtime():
             ? {map_id:'map-a', width:2, height:2, resolution:1, origin:{x:0,y:0}, data:[0,0,0,0]}
             : {};
           window.__unmount = mount(root, {role:'operator', api, store});
+          callbacks['/api/v1/robot/state']({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},
+            localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
           callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
-          const button = root.querySelector('[data-map-click="goal"]');
-          const motor = button.disabled;
-          callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'});
-          return [motor, button.disabled];
+          window.__callbacks = callbacks;
         }""")
-        assert disabled == [True, False]
+        # Map fetch completes asynchronously; runtime authority is checked with a usable map.
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+        goal = page.locator('[data-map-click="goal"]')
+        assert goal.is_disabled()
+        page.evaluate("window.__callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'})")
+        assert goal.is_enabled()
         _unmount_panel(page)
         assert errors == []
         browser.close()
@@ -1046,6 +1052,33 @@ def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing(
         page.wait_for_timeout(20)
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"OFF"}}]
         _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+def test_line_follow_start_uses_drive_capability_without_nav2():
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844)
+        _route_panel_test(page)
+        source = (WEB / "panels/console/line-follow.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load")
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/line-follow.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks={}; window.__callbacks=callbacks;
+          mount(root,{role:'operator',store:{poll(path,ms,onData){callbacks[path]=onData;return()=>{};}},api:async()=>({})});
+          callbacks['/api/v1/line-follow']({mode:'OFF',state:'OFF'});
+          callbacks['/api/v1/system/capabilities']({teleop:true,navigation:{goal_navigation:false},runtime:{drive:'ready'}});
+        }""")
+        start = page.locator('main ui-button').nth(0)
+        assert not start.evaluate('(el)=>el.disabled')
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities']({teleop:false,navigation:{goal_navigation:true},runtime:{drive:'absent'}})")
+        assert start.evaluate('(el)=>el.disabled')
+        assert "구동" in start.get_attribute("reason")
         assert errors == []
         browser.close()
 
@@ -1262,7 +1295,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         readiness = panel.locator("#map-readiness-status")
         action = panel.locator("ui-status[role=status]").last
         initial_action = action.inner_text()
-        page.locator('[data-map-click="goal"]').click()
+        assert page.locator('[data-map-click="goal"]').is_disabled()
         page.locator("canvas").click(position={"x":30,"y":30})
         assert action.inner_text() and action.inner_text() != initial_action
         assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
@@ -1281,14 +1314,15 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
 
         page.evaluate("window.__setGrid(true); window.__intervals[10000]()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('fixture-map')")
-        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({mode:'IDLE',pose:{x:.5,y:.5,yaw:0},localization:{state:'LOCALIZED',pose_frame:'map'},evidence:{pose:{evidence:'fresh'}}})")
         page.locator('[data-map-click="goal"]').click()
-        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("canvas").press("Escape")
+        page.locator("canvas").press("Enter")
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
-        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
@@ -1300,7 +1334,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__failPost(true); window.__intervals[10000]()")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         page.locator('[data-map-click="goal"]').click()
-        page.locator("canvas").click(position={"x":45,"y":45})
+        page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")
         failed = action.inner_text()

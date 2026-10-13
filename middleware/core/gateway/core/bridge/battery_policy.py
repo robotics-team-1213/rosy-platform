@@ -57,6 +57,13 @@ def apply_voltage(services, voltage: float) -> None:
     if percent is None:
         return
 
+    # D-502: the battery return comes back only when the debounced level is OK
+    # (exit hysteresis and samples) and this reading is above warning: the level
+    # lags the first readings after a fall, which must not re-enable it.
+    if (battery.level is BatteryLevel.OK
+            and percent > services.safety.battery_policy.warning_percent):
+        services.safety.battery_return_suppressed = False
+
     services.state.set_battery(percent, voltage)
     services.state.set_battery_status(battery.status())
     services.power.on_battery_alert(battery.level.value)
@@ -69,6 +76,11 @@ def apply_voltage(services, voltage: float) -> None:
     action = services.safety.on_battery_percent(percent)
     if action == "RETURN_HOME":
         if services.nav.docking_active_provider():
+            return
+        if services.safety.battery_return_suppressed:
+            # D-502: after an e-stop the robot does not drive itself home; a
+            # critical crossing latches again until a new command moves it.
+            services.safety.trigger_estop("battery_policy")
             return
         localization = services.localization  # None on a robot without D-395
         gate = localization.gate if localization is not None else contextlib.nullcontext()

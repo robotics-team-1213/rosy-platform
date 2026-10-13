@@ -1,4 +1,5 @@
 """D-364 §2: 'keep' lane keeper on synthetic floors rendered through the NOMINAL ground."""
+import json
 import math
 from pathlib import Path
 
@@ -9,10 +10,10 @@ import yaml
 from control.sensing.perception.camera_ground import nominal_ground_plane
 from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 from control.sensing.perception.lane_keep import SIDE_X_M
-from control.sensing.perception.lane_keep_pairs import pair_conflicts
+from control.sensing.perception.lane_keep_pairs import is_pair, pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
-PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 GROUND = nominal_ground_plane(source="NOMINAL", allowed=True, width_px=320, height_px=240,
                               profile=PROFILE)
 X_OFFSET = float(PROFILE["x_offset_m"])
@@ -109,6 +110,34 @@ def test_one_line_under_the_robot_is_classified_by_ground_side():
     obs, last = _keep(_render([(0.035, 0.0)]))
     assert last["strategy"] == "left_only"
     assert last["target_m"][1] < -0.04 and obs.error > 0.02  # steer right, away from the line
+
+
+def test_tracked_side_flips_after_persistent_wrong_side():
+    # 20261005T134540Z (9dfk, frames 329-367): a boundary tracked 'left' slid
+    # under the robot to y -0.05..-0.07 and kept its stale side while the robot
+    # drove along it, so the one-sided target sat a half-width past the right
+    # tape (error pinned at +1.0 toward the next lane). A crossing is through
+    # in a frame or two; SIDE_FLIP_FRAMES of contradicting sides must hand the
+    # line back to its ground side.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    for y in (0.03, 0.01, -0.01, -0.04, -0.05, -0.05, -0.05, -0.05):
+        obs = keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+        assert obs is not None
+    last = keeper.last
+    assert last["boundaries"][0]["side"] == "right"
+    assert last["target_m"][1] > -HALF + 0.02  # target back inside the lane, not past the tape
+    assert last["error"] < -0.2  # steer left, away from the neighbour lane
+
+
+def test_momentary_cross_under_the_robot_keeps_its_side():
+    # The tracking rule exists for this: a boundary passing under the camera
+    # for a frame or two is still the boundary it was (within SIDE_FLIP_M),
+    # including one frame clearly on the other side.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    for y in (0.06, 0.02, -0.02, -0.06):
+        obs = keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+        assert obs is not None
+    assert keeper.last["boundaries"][0]["side"] == "left"
 
 
 def test_transverse_stop_line_is_ignored():
@@ -378,6 +407,76 @@ def test_lane_lines_splayed_by_the_nominal_ground_still_pair():
     assert not _conflicts(last)
 
 
+def test_outward_splay_keeps_both_boundaries_within_the_seen_lane_width():
+    # Replay: nominal projection splays the left/right lines by 27/-8 deg.
+    # Each is within the boundary heading limit; their common stretch stays
+    # a lane wide. Dropping the left line adds a rightward steering bias.
+    left = _record(0.10, 27.0, 0.10, "left")
+    right = _record(-0.111, -8.0, 0.23, "right")
+    assert is_pair(left, right, 2 * HALF, SIDE_X_M)
+    assert pair_conflicts([left], [right], HALF, SIDE_X_M) == []
+    target, strategy = _keeper()._choose([left], [right], HALF)
+    assert strategy == "both" and abs(target[1]) < 0.02
+
+
+def test_outward_splay_does_not_relax_the_seen_width_or_individual_heading():
+    right = _record(-0.111, -8.0, 0.23, "right")
+    assert not is_pair(_record(0.20, 27.0, 0.114, "left"), right, 2 * HALF, SIDE_X_M)
+    assert not is_pair(_record(0.10, 35.0, 0.10, "left"), right, 2 * HALF, SIDE_X_M)
+    # A closing chord gets no outward-splay exception.
+    left = _record(0.09, -27.0, 0.06, "left")
+    right = _record(-0.09, 8.0, 0.06, "right")
+    assert not is_pair(left, right, 2 * HALF, SIDE_X_M)
+
+
+def test_steep_crossing_near_the_path_is_not_a_lone_lane_boundary():
+    # Replay: a transverse marking projects to 61 deg, spanning both sides
+    # of the path, but its extrapolated offset is less than one lane width.
+    slope = math.tan(math.radians(61.0))
+    image = _segment(_render(), -0.121 - 0.241 * slope, slope, 0.241, 0.434)
+    obs, last = _keep(image)
+    assert obs is None and last['target_m'] is None
+    assert any(c['reason'] == 'steep_crossing' for c in last['candidates'])
+
+
+def test_short_steep_boundary_near_the_path_is_not_a_full_lane_crossing():
+    # A curve approaches the path but does not span the lane. Mere contact
+    # with the path tolerance is insufficient evidence of a transverse mark.
+    image = _segment(_render(), 0.04 - 0.22 * 1.5, 1.5, 0.20, 0.27)
+    obs, last = _keep(image)
+    assert obs is not None
+    assert not any(c['reason'] == 'steep_crossing' for c in last['candidates'])
+
+
+def test_outward_splay_requires_an_observed_common_stretch():
+    left = _record(0.10, 27.0, 0.10, "left")
+    right = _record(-0.111, -8.0, 0.05, "right")
+    shift = 0.4 * right['direction']
+    right['centre'] += shift
+    right['ends_m'] = [(np.asarray(end) + shift).tolist() for end in right['ends_m']]
+    assert not is_pair(left, right, 2 * HALF, SIDE_X_M)
+
+
+def test_crosswalk_blob_does_not_erase_a_continuous_lane_boundary():
+    # Several wide bars produce the largest RANSAC diagonal, which is a blob.
+    # The continuous left boundary is still supported by thin paint and a
+    # dark flank; it must survive the failed diagonal hypothesis.
+    image = _render([(0.09, 0.0)])
+    for centre in (-0.08, -0.02, 0.04):
+        bars = np.isfinite(X) & (X > 0.18) & (X < 0.30) & (np.abs(Y - centre) <= 0.02)
+        image[bars] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last['strategy'] == 'left_only'
+    assert abs(last['target_m'][1]) < 0.02
+
+
+def test_blob_retry_does_not_invent_a_boundary_on_a_solid_patch():
+    from control.sensing.perception.lane_keep_lines import extract_lines
+    x, y = np.meshgrid(np.arange(0.15, 0.45, 0.005), np.arange(-0.10, 0.10, 0.005))
+    fitted, blobs = extract_lines(np.column_stack((x.ravel(), y.ravel())), np.random.default_rng(0))
+    assert not fitted and blobs
+
+
 def _render_corner(line_x, open_side):
     """An L-corner: the outer boundary of the next lane runs across at
     x = line_x from the closed side's lane line toward the open side; the
@@ -417,6 +516,58 @@ def test_corner_side_needs_an_open_end_or_a_latch():
     # Both boundaries in view again clear the latch.
     keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND, lane_half_width_m=HALF)
     assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
+
+
+def test_cold_corner_without_a_side_boundary_holds():
+    # The closed-side line has left the view. A cropped crossbar alone cannot
+    # establish which physical lane the robot should turn into.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["strategy"] == "none"
+    keeper.update(_render([(HALF, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+
+
+def test_short_closed_side_fragment_cannot_seed_a_turn():
+    # 10/6 candidate: an across line plus a 61 mm edge fragment at the image border.
+    a, b = np.array([0.25, -0.128]), np.array([0.328, 0.096])
+    direction = (b - a) / np.linalg.norm(b - a)
+    transverse = [((a + b) / 2, direction, [a, b], False)]
+    keeper = LaneKeeper(corner_turning=True)
+    assert keeper._corner(transverse, HALF, [], [{"side": "left", "length_m": 0.061}]) is None
+    assert keeper._corner(transverse, HALF, [], [{"side": "left", "length_m": 0.185}]) is not None
+
+
+def test_new_short_fragment_cannot_become_a_one_side_target():
+    # A 61 mm fragment at the image border is not an established lane edge.
+    keeper = LaneKeeper()
+    line = {"side": "left", "length_m": 0.061, "y_at_side_x_m": 0.144,
+            "tracked": False, "pursuit_m": [0.25, 0.01]}
+    target, strategy = keeper._choose([line], [], HALF)
+    assert target is None and strategy == "none"
+    line["tracked"] = True
+    target, strategy = keeper._choose([line], [], HALF)
+    assert target is not None and strategy == "left_only"
+    line["tracked"] = False
+    target, strategy = keeper._choose([line], [], HALF, bend_expected=True)
+    assert target is not None and strategy == "left_only"
+
+
+def test_short_fragment_requires_a_boundary_seen_in_the_previous_image():
+    full = _render([(HALF, 0.0), (-HALF, 0.0)])
+    fragment = _render([(HALF, 0.0)])
+    fragment[np.isfinite(X) & ((X < 0.22) | (X > 0.30))] = 100
+
+    fresh = _keeper()
+    assert fresh.update(fragment, GROUND, lane_half_width_m=HALF) is None
+    assert fresh.last["strategy"] == "none"
+
+    tracked = _keeper()
+    assert tracked.update(full, GROUND, lane_half_width_m=HALF) is not None
+    obs = tracked.update(fragment, GROUND, lane_half_width_m=HALF)
+    assert obs is not None and tracked.last["strategy"] == "left_only"
+    assert tracked.last["boundaries"][0]["tracked"] is True
+    assert abs(tracked.last["target_m"][1]) < 0.03
 
 
 def test_mid_turn_keeps_turning_toward_the_new_lane():
@@ -608,3 +759,71 @@ def test_node_resets_the_keeper_after_a_camera_gap():
     text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     keep = text.split("elif mode == 'keep':", 1)[1].split("elif mode in", 1)[0]
     assert "KEEP_MAX_FRAME_GAP_S" in keep and "self._lane_keeper.reset()" in keep
+
+
+def test_junction_transverse_reports_the_line_distance_in_base_footprint_x():
+    # D-507 §5: the stop line is painted at base_link x = 0.30 (the render grid
+    # is base_link, X_OFFSET puts the camera ahead of it): the key is that x.
+    slope = np.tan(np.radians(25.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_transverse"
+    assert keeper.last["junction_ahead_m"] == pytest.approx(0.30, abs=0.03)
+    assert json.loads(json.dumps(keeper.last, default=float))["junction_ahead_m"] == keeper.last["junction_ahead_m"]
+
+
+def test_junction_fork_reports_the_diverging_branch_near_end():
+    slope = np.tan(np.radians(45.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(HALF, 0.0), (0.05 - slope * 0.22, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_fork"
+    branch = max(keeper.last["boundaries"], key=lambda b: b["heading_deg"])
+    assert keeper.last["junction_ahead_m"] == pytest.approx(min(p[0] for p in branch["ends_m"]), abs=1e-3)
+    assert 0.0 < keeper.last["junction_ahead_m"] < 0.6
+
+
+def test_no_junction_reason_carries_no_junction_ahead_key():
+    keeper = _corner_keeper()
+    keeper.update(_render(), GROUND, lane_half_width_m=HALF)  # nothing seen: no_boundary
+    assert keeper.last["reason"] == "no_boundary" and "junction_ahead_m" not in keeper.last
+    plain = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    slope = np.tan(np.radians(25.0))
+    plain.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert "junction_ahead_m" not in plain.last
+
+
+def test_every_frame_carries_the_junction_ahead_marker():
+    # D-507 §5: CORE reads junction_ahead_v to know this build reports junction_ahead_m.
+    keeper = _corner_keeper()
+    keeper.update(_render(), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["junction_ahead_v"] == 1 and "junction_ahead_m" not in keeper.last
+    slope = np.tan(np.radians(25.0))
+    keeper.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["junction_ahead_v"] == 1 and "junction_ahead_m" in keeper.last
+    assert _keep(_render([(0.0, 0.0)]))[1]["junction_ahead_v"] == 1
+
+
+def test_keep_debug_carries_bounded_ground_paint_points_without_selecting_a_boundary():
+    _, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)]))
+    points = last["paint_points_m"]
+    assert last["paint_points_v"] == 1
+    assert 8 <= len(points) <= 48
+    assert all(len(point) == 2 and 0.10 <= point[0] <= 0.40 for point in points)
+    assert any(point[1] > 0.05 for point in points)
+    assert any(point[1] < -0.05 for point in points)
+    assert len({min(11, int((point[0] - 0.10) / 0.025)) for point in points}) >= 8
+    assert all(point == [round(point[0], 3), round(point[1], 3)] for point in points)
+    assert json.loads(json.dumps(last))["paint_points_m"] == points
+    assert len(json.dumps({"paint_points_v": 1, "paint_points_m": points}).encode()) < 2048
+    assert _keep(_render())[1]["paint_points_m"] == []
+
+
+def test_right_only_fork_reports_the_diverging_branch_near_end():
+    # Mirror of the left fork: outward flips, so the branch pick must flip with it.
+    slope = np.tan(np.radians(-45.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(-HALF, 0.0), (-0.05 - slope * 0.22, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_fork"
+    branch = min(keeper.last["boundaries"], key=lambda b: b["heading_deg"])
+    assert keeper.last["junction_ahead_m"] == pytest.approx(min(p[0] for p in branch["ends_m"]), abs=1e-3)
+    assert 0.0 < keeper.last["junction_ahead_m"] < 0.6

@@ -30,7 +30,8 @@ TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
-    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions|"
+    r"ui-disclosure-row|ui-disclosure-name|ui-page-heading|ui-section-heading|ui-tooltip|ui-icon-label|ui-legend"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 # D-359 §7.4 — outline도 덧칠이다(포커스처럼 보인다). 눌림은 aria-pressed의 공용 표현이다.
@@ -81,6 +82,15 @@ def test_shared_controls_are_the_only_painted_components():
         assert f'"{name}"' in script
     assert not RAW_COLOR.findall(css), "components.css에 원시 색이 있다"
     assert not RAW_SIZE.findall(css)
+
+
+def test_component_gallery_covers_shared_variants_and_compositions():
+    gallery = (registry.REPO / "middleware/ui/robot/styleguide.html").read_text(encoding="utf-8")
+    assert set(re.findall(r'<ui-button\b[^>]*kind="([a-z]+)"', gallery)) == _kinds()
+    for name in ("ui-workspace-bar", "ui-task-row", "ui-readback"):
+        assert f'class="{name}"' in gallery
+    ids = set(re.findall(r'\bid="([^"]+)"', gallery))
+    assert set(re.findall(r'href="#([^"]+)"', gallery)) <= ids
 
 
 def test_shared_status_component_owns_accessibility_and_palette_states():
@@ -308,6 +318,51 @@ def test_surfaces_do_not_repaint_shared_controls():
             if painted:
                 offenders.append(f"{path.name} {selector.strip()[:60]} -> {painted}")
     assert not offenders, offenders
+
+
+def test_new_shared_role_classes_reject_surface_repaint(tmp_path, monkeypatch):
+    stylesheet = tmp_path / "surface.css"
+    monkeypatch.setitem(globals(), "_surface_texts", lambda: [stylesheet])
+    for role in ["ui-disclosure-row", "ui-disclosure-name", "ui-page-heading", "ui-section-heading", "ui-tooltip", "ui-icon-label", "ui-legend"]:
+        stylesheet.write_text(f".{role} {{ font-size: var(--text-display); }}", encoding="utf-8")
+        with pytest.raises(AssertionError, match=role):
+            test_surfaces_do_not_repaint_shared_controls()
+        stylesheet.write_text(f".{role} {{ margin: var(--space-3); }}", encoding="utf-8")
+        test_surfaces_do_not_repaint_shared_controls()
+
+
+def local_button_height_problems(css):
+    problems = []
+    for selector, body in RULE.findall(css):
+        if not re.search(r"(?<![\w-])(?:ui-button|button|summary)\b|\.ui-disclosure-row\b", selector):
+            continue
+        for prop, value in re.findall(r"(?<![-\w])(min-height|height|max-height|block-size)\s*:\s*([^;}]+)", body):
+            if any(float(size) > 0 for size in re.findall(r"(?<![\w.-])(\d*\.?\d+)(?:px|rem)\b", value)):
+                problems.append(f"{selector.strip()} {prop}: {value.strip()}")
+    return problems
+
+
+def test_surface_buttons_use_shared_height_roles():
+    bad = []
+    for path in _surface_texts():
+        if path.suffix == ".css":
+            css = path.read_text(encoding="utf-8")
+        elif path.suffix == ".html":
+            markup = path.read_text(encoding="utf-8")
+            blocks = re.findall(r"<style\b[^>]*>(.*?)</style>", markup, re.S)
+            blocks.extend(f"button {{ {style} }}" for style in re.findall(
+                r'<(?:ui-button|button|summary)\b[^>]*\bstyle="([^"]*)"', markup))
+            css = "\n".join(blocks)
+        else:
+            continue
+        bad.extend(f"{path.relative_to(ROOT)}: {row}" for row in local_button_height_problems(css))
+    assert bad == [], "\n".join(bad)
+
+
+def test_local_height_guard_keeps_container_geometry_and_stretch():
+    assert local_button_height_problems(".stage { min-height: 7rem; } ui-button { height: 100%; min-height: var(--target-primary); }") == []
+    assert local_button_height_problems(".stage ui-button { min-height: 7rem; }")
+    assert local_button_height_problems("summary { min-height: 44px; }")
 
 
 def test_pitch_colours_live_in_one_block():
@@ -585,7 +640,7 @@ REASON_WRITE = re.compile(r"""(?:set|remove)Attribute\(\s*["']reason["']""")
 REASON_HELPER = re.compile(r"\b(setOff|setEnabled)\(")
 DISABLE_ROOTS = (
     ROOT / "middleware" / "ui" / "robot",
-    ROOT / "operations" / "fleet" / "fleet" / "server" / "web",
+    ROOT / "operations" / "ui" / "console",
 )
 # D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (src/ 기준 경로, 줄 조각) → 이유. 새 항목은 이유를 적는다.
 # 키는 경로로 파일을 가리키고(같은 이름 파일이 여러 폴더에 있다), 조각 하나는 한 곳만 덮는다(DISABLED_SITE_COUNT).
@@ -608,7 +663,6 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
     ("middleware/ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
     ("middleware/ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("middleware/ui/robot/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
     ("middleware/ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
@@ -628,12 +682,14 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/ui/robot/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
     ("middleware/ui/robot/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
     ("middleware/ui/robot/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("operations/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
-    ("operations/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
+    ("operations/ui/console/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("operations/ui/console/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("operations/ui/console/formation.js", 'el("formation-leader").disabled = status.active;'):
+        NATIVE + " (대형 상태 태그 — 리더는 해제 뒤 바꾼다)",
+    ("operations/ui/console/shared/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("operations/ui/console/shared/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("operations/ui/console/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.
@@ -689,7 +745,9 @@ def scan_disabled(scripts):
             if text[max(0, match.start() - 9):match.start()].endswith("function "):
                 continue
             args = _call_args(text, match.end())
-            if len(args) < 3 and args[1:2] != [" true"]:
+            enabled = len(args) > 1 and ((match.group(1) == "setOff" and args[1].strip() == "false")
+                                         or (match.group(1) == "setEnabled" and args[1].strip() == "true"))
+            if len(args) < 3 and not enabled:
                 number = text.count("\n", 0, match.start()) + 1
                 snippet = lines[number - 1].strip()
                 key = next((k for k in DISABLED_WITHOUT_REASON
@@ -706,15 +764,15 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
     missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
-    fleet = ROOT / "operations" / "fleet" / "fleet" / "server" / "web"
-    lock = (fleet / "authorization.js").read_text(encoding="utf-8")
+    fleet = ROOT / "operations" / "ui" / "console"
+    lock = (fleet / "shared" / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
     # D-410 — 운용 문서(대형 잠금)와 설치 문서(카메라·보정 잠금)가 각각 자기 잠금 안내를 둔다.
     for page_name in ("index.html", "install.html"):
         page = (fleet / page_name).read_text(encoding="utf-8")
         assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 1
-        assert page.count("운용자 권한이 필요합니다</ui-status>") == page.count('class="role-lock-note"')
+        assert page.count("운영자 권한이 필요합니다</ui-status>")  # D-501 wording == page.count('class="role-lock-note"')
     stale = sorted(set(DISABLED_WITHOUT_REASON) - set(used))
     assert not missing, "사유 없는 비활성:\n" + "\n".join(missing)
     assert not stale, f"목록에 남은 옛 항목: {stale}"
@@ -722,6 +780,12 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     assert not widened, (
         "한 조각이 선언과 다른 수의 자리를 덮는다 — 새 같은 줄에는 더 긴 조각으로 제 항목을 준다: "
         f"{widened}")
+
+
+def test_disabled_scan_distinguishes_explicit_enable_from_disable():
+    assert scan_disabled([("example.js", "setOff(button, false);")])[0] == []
+    assert scan_disabled([("example.js", "setEnabled(button, true);")])[0] == []
+    assert scan_disabled([("example.js", "setOff(button, true);")])[0] == ["example.js:1 setOff without reason"]
 
 
 def test_a_copied_disabled_line_needs_its_own_entry():

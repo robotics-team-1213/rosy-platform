@@ -1,0 +1,798 @@
+{
+ "bend_1": {
+  "approach_frames": 47,
+  "approach_median_m": 0.0145,
+  "approach_max_abs_m": 0.0174,
+  "bend_counts": {
+   "junction_transverse": 2,
+   "no_boundary": 4
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.722,
+    -0.462,
+    0.872
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.72,
+    -0.46,
+    0.854
+   ],
+   "final": {
+    "t": 48.405,
+    "sim_t": 351.184,
+    "gt": [
+     -0.7204657743653564,
+     -0.46048661839818744,
+     1.006543781278995
+    ],
+    "odom": [
+     -0.7204656451783408,
+     -0.46048641530268175,
+     0.9952680843465891,
+     -1.3235814621786055e-08,
+     0.5151253404883067
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "bend_10": {
+  "approach_frames": 49,
+  "approach_median_m": 0.0145,
+  "approach_max_abs_m": 0.018,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 5
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.739,
+    -0.486,
+    0.771
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.716,
+    -0.458,
+    0.885
+   ],
+   "final": {
+    "t": 100.878,
+    "sim_t": 1112.987,
+    "gt": [
+     -1.068948965237534,
+     -0.2455576027063342,
+     -0.9727697211769873
+    ],
+    "odom": [
+     -1.0691721708389244,
+     -0.24522829515542005,
+     -0.9772254875633084,
+     0.02319832890215074,
+     0.2600007414650244
+    ],
+    "state": "TRACKING",
+    "reason": "tracking",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "idle",
+    "jr": null
+   }
+  }
+ },
+ "bend_11": {
+  "approach_frames": 46,
+  "approach_median_m": 0.0153,
+  "approach_max_abs_m": 0.0186,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 1
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.737,
+    -0.482,
+    0.792
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.718,
+    -0.462,
+    0.909
+   ],
+   "final": {
+    "t": 100.825,
+    "sim_t": 1216.342,
+    "gt": [
+     -1.0512778157809122,
+     -0.2661425223013176,
+     -0.7511761556409298
+    ],
+    "odom": [
+     -1.0512778157809122,
+     -0.2661425223013176,
+     -0.7511761556409298,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_waiting",
+    "keep": "junction_fork",
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "bend_12": {
+  "approach_frames": 52,
+  "approach_median_m": 0.0139,
+  "approach_max_abs_m": 0.0185,
+  "bend_counts": {
+   "junction_transverse": 4
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.717,
+    -0.458,
+    0.89
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.716,
+    -0.457,
+    0.888
+   ],
+   "final": {
+    "t": 100.778,
+    "sim_t": 1319.85,
+    "gt": [
+     -1.0501472807828778,
+     -0.26679646361796994,
+     -0.741818070648664
+    ],
+    "odom": [
+     -1.0501472807828778,
+     -0.26679646361796994,
+     -0.741818070648664,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_waiting",
+    "keep": "junction_fork",
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "bend_13": {
+  "approach_frames": 49,
+  "approach_median_m": 0.0145,
+  "approach_max_abs_m": 0.0181,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 3
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.743,
+    -0.486,
+    0.758
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.72,
+    -0.462,
+    0.855
+   ],
+   "final": {
+    "t": 46.552,
+    "sim_t": 1370.82,
+    "gt": [
+     -0.7185212526236875,
+     -0.46040139283052367,
+     1.175008373530072
+    ],
+    "odom": [
+     -0.7185174848302064,
+     -0.46039251289086297,
+     1.162347281921128,
+     -0.00012144199710666249,
+     0.5051652677132652
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "bend_14": {
+  "approach_frames": 49,
+  "approach_median_m": 0.0145,
+  "approach_max_abs_m": 0.0187,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 1
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.741,
+    -0.487,
+    0.756
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.722,
+    -0.464,
+    0.878
+   ],
+   "final": {
+    "t": 43.807,
+    "sim_t": 1416.964,
+    "gt": [
+     -0.7193341685757911,
+     -0.46140750826377597,
+     1.0078411708398372
+    ],
+    "odom": [
+     -0.7193341685636772,
+     -0.4614075082431245,
+     1.008356295529001,
+     2.4244049553260558e-08,
+     0.515124713312119
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "bend_15": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": "LOST_between_junctions",
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 15.927,
+    "sim_t": 1436.24,
+    "gt": [
+     -1.270995068286452,
+     0.15012688955095943,
+     -1.616170983970018
+    ],
+    "odom": [
+     -1.270995068286452,
+     0.15012688955095943,
+     -1.616170983970018,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "bend_2": {
+  "approach_frames": 48,
+  "approach_median_m": 0.0146,
+  "approach_max_abs_m": 0.019,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 5
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.745,
+    -0.487,
+    0.751
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.723,
+    -0.463,
+    0.855
+   ],
+   "final": {
+    "t": 45.716,
+    "sim_t": 399.068,
+    "gt": [
+     -0.7226405129898014,
+     -0.4629563045348472,
+     1.503942652895761
+    ],
+    "odom": [
+     -0.7226404989290873,
+     -0.46295609788081415,
+     1.4998301027538525,
+     -4.0963211174300304e-07,
+     0.515132297943729
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "bend_3": {
+  "approach_frames": 523,
+  "approach_median_m": 0.0121,
+  "approach_max_abs_m": 0.0185,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.823,
+    "sim_t": 500.386,
+    "gt": [
+     -0.819112615514137,
+     -0.4988533381660118,
+     -0.048175065531644676
+    ],
+    "odom": [
+     -0.819112615514137,
+     -0.4988533381660118,
+     -0.048175065531644676,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "bend_4": {
+  "approach_frames": 54,
+  "approach_median_m": 0.0125,
+  "approach_max_abs_m": 0.0183,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.852,
+    "sim_t": 603.309,
+    "gt": [
+     -0.749670897438145,
+     -0.4942191316957312,
+     0.41328226959382597
+    ],
+    "odom": [
+     -0.749670897438145,
+     -0.4942191316957312,
+     0.41328226959382597,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "bend_5": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.888,
+    "sim_t": 707.108,
+    "gt": [
+     -1.2714504380788911,
+     0.05954891245075579,
+     -1.5537724776611594
+    ],
+    "odom": [
+     -1.2714504380788911,
+     0.05954891245075579,
+     -1.5537724776611594,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "bend_6": {
+  "approach_frames": 508,
+  "approach_median_m": 0.0151,
+  "approach_max_abs_m": 0.0171,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.897,
+    "sim_t": 808.936,
+    "gt": [
+     -0.8992269080921631,
+     -0.4958914958144814,
+     -0.03930934369783453
+    ],
+    "odom": [
+     -0.8992269080921631,
+     -0.4958914958144814,
+     -0.03930934369783453,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "bend_7": {
+  "approach_frames": 44,
+  "approach_median_m": 0.0157,
+  "approach_max_abs_m": 0.0187,
+  "bend_counts": {
+   "junction_transverse": 4
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.718,
+    -0.46,
+    0.887
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.717,
+    -0.458,
+    0.887
+   ],
+   "final": {
+    "t": 46.008,
+    "sim_t": 858.869,
+    "gt": [
+     -0.7165101627238791,
+     -0.45824644423652605,
+     1.833869784574906
+    ],
+    "odom": [
+     -0.7165159929125949,
+     -0.45822459515172503,
+     1.8296064181598228,
+     -0.0016524298396139066,
+     0.2867860147103111
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "bend_8": {
+  "approach_frames": 47,
+  "approach_median_m": 0.0148,
+  "approach_max_abs_m": 0.0188,
+  "bend_counts": {
+   "junction_transverse": 1
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.723,
+    -0.461,
+    0.856
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.722,
+    -0.46,
+    0.858
+   ],
+   "final": {
+    "t": 99.493,
+    "sim_t": 958.731,
+    "gt": [
+     -1.0529185381333834,
+     -0.26722171044568827,
+     -0.7406668502121178
+    ],
+    "odom": [
+     -1.0529185381333834,
+     -0.26722171044568827,
+     -0.7406668502121178,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "keep": "junction_fork",
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "bend_9": {
+  "approach_frames": 47,
+  "approach_median_m": 0.0148,
+  "approach_max_abs_m": 0.0186,
+  "bend_counts": {
+   "no_boundary": 1,
+   "junction_transverse": 5
+  },
+  "first_hold": [
+   "no_boundary",
+   [
+    -0.743,
+    -0.488,
+    0.751
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.721,
+    -0.462,
+    0.878
+   ],
+   "final": {
+    "t": 48.618,
+    "sim_t": 1011.379,
+    "gt": [
+     -0.7179712727721753,
+     -0.45882639790310104,
+     1.3774699708731373
+    ],
+    "odom": [
+     -0.717966521735027,
+     -0.45880248701578386,
+     1.372150673564885,
+     -0.0016931960405563921,
+     0.4208134706077306
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "pilot": {
+  "approach_frames": 45,
+  "approach_median_m": 0.0156,
+  "approach_max_abs_m": 0.0188,
+  "bend_counts": {
+   "junction_transverse": 4
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.72,
+    -0.463,
+    0.887
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.719,
+    -0.461,
+    0.879
+   ],
+   "final": {
+    "t": 45.898,
+    "sim_t": 197.173,
+    "gt": [
+     -0.7187428543469796,
+     -0.46104241676041513,
+     1.2266272389841928
+    ],
+    "odom": [
+     -0.718729969956157,
+     -0.4610072354448248,
+     1.2121179979052144,
+     -0.0008189614440417915,
+     0.4491884607581002
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "south_c1": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 70.905,
+    "sim_t": 1507.45,
+    "gt": [
+     -1.089470823737997,
+     -0.5093006562927838,
+     -0.007538279943556852
+    ],
+    "odom": [
+     -1.089470823737997,
+     -0.5093006562927838,
+     -0.007538279943556852,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "south_c2": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 70.842,
+    "sim_t": 1580.686,
+    "gt": [
+     -0.9623634281745793,
+     -0.5090241613653671,
+     -0.005537475196908704
+    ],
+    "odom": [
+     -0.9623634281745793,
+     -0.5090241613653671,
+     -0.005537475196908704,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "south_c3": {
+  "approach_frames": 69,
+  "approach_median_m": 0.0022,
+  "approach_max_abs_m": 0.0025,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 70.833,
+    "sim_t": 1653.805,
+    "gt": [
+     -0.7673911244194508,
+     -0.506404028000717,
+     0.22793646826785185
+    ],
+    "odom": [
+     -0.7673911244194508,
+     -0.506404028000717,
+     0.22793646826785185,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ }
+}

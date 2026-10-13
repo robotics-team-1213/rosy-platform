@@ -1,7 +1,10 @@
-<!-- Parent: ../../src/contracts/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
 
 # core_common
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

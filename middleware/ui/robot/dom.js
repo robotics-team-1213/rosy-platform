@@ -123,7 +123,7 @@ export function duration(value) {
 
 export function setMeter(id, value) {
   const safe = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0;
-  elements[id]?.style.setProperty("--meter", `${safe}%`);
+  elements[id]?.setAttribute("data-meter", `${safe}%`);
 }
 
 export function rate(value) {

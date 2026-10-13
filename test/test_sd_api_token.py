@@ -32,7 +32,7 @@ SCHEMA = json.loads((ROOT / "deploy/robot/pinky_pro/sd/provision.schema.json").r
 # These are each package's *import parent* — the dir whose child is the package.
 PKG_PARENT = {
     "core": ROOT / "middleware" / "core" / "gateway",
-    "core_api_web": ROOT / "middleware" / "core" / "api_web",
+    "core_api_web": ROOT / "middleware" / "core" / "api",
     "core_common": ROOT / "contracts" / "foundation",
     "core_events": ROOT / "middleware" / "core" / "events",
     "core_features": ROOT / "middleware" / "core" / "services",

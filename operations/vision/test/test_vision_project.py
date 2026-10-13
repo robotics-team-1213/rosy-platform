@@ -41,7 +41,8 @@ def test_project_frame_preserves_lineage_and_projects_robot_pose():
     assert len(result) == 1
     sighting = result[0]
     assert sighting.robot_id == "rosy_01"
-    assert math.isclose(sighting.x, 2.0, abs_tol=1e-6)
+    # D-587 4: the robot centre is the marker centre minus the nominal mount (-0.017, 0).
+    assert math.isclose(sighting.x, 2.017, abs_tol=1e-6)
     assert math.isclose(sighting.y, 1.0, abs_tol=1e-6)
     assert math.isclose(sighting.yaw, 0.0, abs_tol=1e-6)
     assert (sighting.seq, sighting.captured_at) == (17, 1_790_000_000.5)
@@ -95,3 +96,61 @@ def test_marker_homography_needs_all_four_corners():
     homography = marker_homography(camera, _markers())
     assert homography.apply(500, 300) == pytest.approx((4.0, 2.0))
     assert marker_homography(camera, {30: _markers()[30]}) is None
+
+
+def _field_camera():
+    return CameraMap(
+        source_id="ceiling_north",
+        map_id="site-v1",
+        calibration_revision="cal-v3",
+        processor_revision="aruco-v1",
+        corner_marker_ids=None,
+        corner_world_m=((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)),
+        robot_markers={"rosy_01": 7},
+        heading_edge=(1, 2),
+        calibration_source="field_boundary",
+    )
+
+
+def test_field_camera_map_rejects_mixed_calibration_sources():
+    with pytest.raises(ValueError, match="no corner marker ids"):
+        _camera().__class__(**{**_field_camera().__dict__, "corner_marker_ids": (30, 31, 32, 33)})
+    with pytest.raises(ValueError, match="corner marker ids are required"):
+        _camera().__class__(**{**_camera().__dict__, "corner_marker_ids": None})
+    with pytest.raises(ValueError, match="calibration source"):
+        _camera().__class__(**{**_camera().__dict__, "calibration_source": "magic"})
+
+
+def test_project_frame_uses_the_field_homography_and_names_the_source():
+    from games.field.homography import fit
+
+    quad = ((100.0, 100.0), (500.0, 100.0), (500.0, 300.0), (100.0, 300.0))
+    world = ((0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0))
+    homography = fit(quad, world)
+
+    result = project_frame(_field_camera(), source_id="ceiling_north", seq=21,
+                           captured_at=1_790_000_000.5, markers={7: _markers()[7]},
+                           homography=homography)
+
+    assert len(result) == 1
+    sighting = result[0]
+    assert math.isclose(sighting.x, 2.017, abs_tol=1e-6)  # D-587 4 mount
+    assert math.isclose(sighting.y, 1.0, abs_tol=1e-6)
+    assert sighting.calibration_source == "field_boundary"
+    assert sighting.corner_marker_ids is None
+
+
+def test_project_frame_field_source_without_a_homography_publishes_nothing():
+    assert project_frame(_field_camera(), source_id="ceiling_north", seq=22,
+                         captured_at=10.0, markers={7: _markers()[7]}) == ()
+
+
+def test_project_frame_applies_the_robot_marker_yaw_offset():
+    """D-587 4: a sticker stuck turned 90 deg left is corrected by the per-robot offset."""
+    camera = CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": 90.0}})
+    sighting = project_frame(camera, source_id="ceiling_north", seq=17,
+                             captured_at=1_790_000_000.5, markers=_markers())[0]
+    assert math.isclose(sighting.yaw, -math.pi / 2, abs_tol=1e-6)
+    assert (sighting.x, sighting.y) == pytest.approx((2.0, 1.0 - 0.017))
+    with pytest.raises(ValueError, match="marker yaw offsets"):
+        CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": float("inf")}})

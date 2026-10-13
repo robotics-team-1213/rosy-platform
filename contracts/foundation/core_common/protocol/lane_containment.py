@@ -1,0 +1,58 @@
+"""D-468 optional image-bound ground boundary evidence, never a motion command."""
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class LaneBoundaryEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    side: Literal["left", "right"]
+    slope: float
+    intercept_m: float
+    observed_x_min_m: float
+    observed_x_max_m: float
+
+    @model_validator(mode="after")
+    def segment_order(self):
+        if self.observed_x_min_m >= self.observed_x_max_m:
+            raise ValueError("nonempty boundary segment required")
+        return self
+
+
+class CrosswalkExtentEvidence(BaseModel):
+    """D-491 §4: a crosswalk's near and far edge, metres ahead of base_footprint at the image stamp."""
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    near_m: float = Field(ge=0, le=1)
+    far_m: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def extent_order(self):
+        if self.near_m >= self.far_m:
+            raise ValueError("nonempty crosswalk extent required")
+        return self
+
+
+class LaneContainmentEvidence(BaseModel):
+    """Each boundary is the drivable (inner) edge of its painted line, not the paint centre.
+    uncertainty_m must bound the total lateral error of each boundary in the body frame at
+    the image stamp (projection, calibration, detection); D-468 erodes the corridor by it."""
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    stamp: float = Field(ge=0)
+    geometry_id: str = Field(min_length=1, max_length=128)
+    ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO", "ISAAC"]
+    uncertainty_m: float | None = Field(default=None, ge=0, le=1)
+    boundaries: list[LaneBoundaryEvidence] = Field(max_length=2)
+    crosswalk: CrosswalkExtentEvidence | None = None
+    # D-573 6 개정: along-track error bound (m, body frame at the image stamp) of the crosswalk near/far
+    # edges, stated on every frame the crosswalk detector ran (found or not); None = it did not run.
+    crosswalk_uncertainty_m: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def unique_sides(self):
+        if len({b.side for b in self.boundaries}) != len(self.boundaries):
+            raise ValueError("duplicate boundary side")
+        if len(self.boundaries) == 2:
+            edges = {b.side: b for b in self.boundaries}
+            if edges["left"].intercept_m <= edges["right"].intercept_m:
+                raise ValueError("crossed boundary ordering")
+        return self

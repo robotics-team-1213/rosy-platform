@@ -24,6 +24,9 @@ LEARNING_MIN_S = 10.0
 #: More foreground than this share of the track area is a light or camera change.
 SCENE_CHANGE_FRACTION = 0.30
 MAX_DETECTIONS = 16
+#: D-562 robot sticker ids (= robot number). D-575: one seen but not in robot_markers
+#: is still sent, so Fleet shows it as an unknown robot with its id.
+ROBOT_MARKER_IDS = range(40, 50)
 
 
 @dataclass(frozen=True, eq=False)

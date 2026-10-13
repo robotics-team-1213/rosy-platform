@@ -10,7 +10,7 @@ export function createTaskChooser({ tasks, beforeSelect = () => true, timeoutMs 
   const root = document.createElement("div");
   root.className = "ui-task-chooser";
   const rail = document.createElement("div");
-  rail.className = "ui-task-rail";
+  rail.className = "ui-task-rail ui-sidebar";
   rail.setAttribute("role", "tablist");
   rail.setAttribute("aria-label", "작업 선택");
   rail.setAttribute("aria-orientation", "vertical");

@@ -31,10 +31,20 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 2. **Pick the release id and build.** The format is `YYYY.MM.DD-NNN`. `NNN` continues
    across dates (012 → 013 → 014). Check `/opt/rosy/releases/` on the robot and the
    existing tags. Never reuse an id: an existing id is only re-checked, never overwritten.
+   Reserve it before any manual, delta or branch release, with the same tag `robot_cd.py`
+   uses (D-553 addendum 3); `Reference already exists` (HTTP 422) means the id is taken, take the next:
+   `gh api --method POST repos/robotics-team-1213/rosy-platform/git/refs -f ref=refs/tags/payload-reserved-<id> -f sha=$(git rev-parse origin/main)`
    ```bash
    gh workflow run build-native-payload.yml --ref main -f release_id=<id>
-   gh run watch <run-id> --exit-status --interval 30
+   # The run is titled "Pinky payload <id>"; take its id instead of reading the list by eye.
+   run=$(gh run list --workflow build-native-payload.yml -L 5 --json databaseId,displayTitle \
+         -q '.[] | select(.displayTitle=="Pinky payload <id>") | .databaseId')
+   gh run watch "$run" --exit-status --interval 10
    ```
+   Dispatch right after `git push` (the workflow builds the pushed main commit; it does not
+   wait for CI) and start step 3 in the same command line as the watch, so no turn is spent
+   between them. Release 072 lost 67 s between push and dispatch and 104 s between build
+   end and download (D-553 addendum 2).
 3. **Download, check, sign and pack with one command.** Run with `PYTHONUTF8=1` on Windows.
    ```powershell
    python tools/release/prepare_payload_release.py --run <run-id> --robot <robot-ip>
@@ -59,6 +69,24 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      the two push lines below. It never pushes.
    - Each phase prints its wall time. Release 021 (a 98 MB artifact) took 99 s to download
      and 28 s for everything else.
+3a. **Delta instead of a build (D-553 addendum 3, 4).** One command reserves the id, builds, signs and pushes to both robots at once (camera-only restart when only camera perception code changed; `--dry-run` to preview):
+   ```powershell
+   python tools/release/ship.py --base <base-id> --robots 9dfk,8kcn
+   ```
+   The pieces by hand: When the commit only changes files the payload
+   ships verbatim (Python modules, launch/config, native-runtime scripts) and both robots hold the
+   base release this PC prepared, skip steps 1-3:
+   ```powershell
+   python tools/release/make_delta_release.py --base-dir X:\DevTemp\rosy-release-<base>\x\<base> --base-tarball X:\DevTemp\rosy-release-<base>\<base>.tar.gz --release-id <new-id>
+   ```
+   It refuses C/C++/interface/package.xml/setup.py changes, added or deleted shipped files and
+   anything without a verbatim copy in the base (`--not-shipped <prefix>` for paths that never reach
+   a robot). The tarball is signed with the same key and pushed with step 5 as usual; the robot
+   rebuilds the full release from the base and activation verifies all of it. Deltas are never
+   published (D-412). A robot without that base refuses with `DELTA_BASE_MISSING`.
+   Branch builds: `gh workflow run build-native-payload.yml --ref <branch> -f release_id=<id>` works
+   too; `source-ref.txt` records the branch, and only main may be published. Hold the robot
+   (`rosy-update-hold.ps1 -Hold`) so auto-update does not replace a bench build.
 4. **Manual fallback** (the same steps by hand). The artifact folder drops dotfiles such
    as `install/.colcon_install_layout`, so signing it fails with `CHECKSUM_FILE_MISSING`.
    Sign from the tarball. The tarball has no top-level directory. Compare `ros-packages.txt`
@@ -72,10 +100,30 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    python deploy/robot/pinky_pro/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    ```
 5. **Push and activate.**
+   For an already TLS-enabled CORE, both the preview and real invocation must
+   include `-ApiTlsHost <verified-device-hostname.local> -ApiCaFile <verified-public-ca.pem>`.
+   Obtain those public values through the approved pinned device transport.
+   The default remains legacy HTTP; it does not detect or enable TLS automatically.
+   With the TLS pair set, the calibration guard verifies the CA and exact hostname
+   before sending the bearer through HTTPS. Missing credentials, certificate or
+   hostname failures, HTTP errors and malformed replies refuse the operation;
+   `-Force` overrides only an observed active session, never a failed TLS check.
    ```powershell
+   # Already TLS-enabled CORE: verified public trust values are mandatory.
+   deploy\robot\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -ApiTlsHost <verified-hostname.local> -ApiCaFile <verified-public-ca.pem> -PrintCommands
+   deploy\robot\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -ApiTlsHost <verified-hostname.local> -ApiCaFile <verified-public-ca.pem>
+   # Legacy HTTP receiver only:
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
+   # Several robots at the same time (D-553 addendum 2), one log each beside the tarball:
+   deploy\robot\pinky_pro\rosy-release-push-many.ps1 -Robot <ip-a>,<ip-b> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
+   deploy\robot\pinky_pro\rosy-release-push-many.ps1 -Robot <ip-a>,<ip-b> -Tarball <P>\<id>.tar.gz
    ```
+   - `rosy-release-push-many.ps1` runs the unchanged push once per robot, each with its own
+     claim, calibration guard, readiness check and automatic rollback, and exits 0 only when
+     every push did. It takes no TLS pair: for a TLS-enabled CORE push one robot at a time.
+     Push one robot first and the rest after you have looked (a canary) when the change
+     can break driving on both robots at once.
    - **Success** looks like `current release: <id> (previous: <old>)`, then
      `CORE runs the activated release: /opt/rosy/releases/<id>`, then `CORE readiness: PASS`.
    - `WARNING: CORE was still running the previous release after the switch ... restarted
@@ -110,9 +158,10 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      another robot's file against this address. Residual risk: this trusts known_hosts.
      Robots that share a host key (a cloned image whose keys were never regenerated)
      cannot be told apart, and a robot whose name has no plain known_hosts entry is
-     skipped (warned), not checked. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     skipped (warned in legacy HTTP; refused in explicit TLS mode), not checked.
+     HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
-     `-Force` only when you know the calibration is abandoned. No token or no answer only
+     `-Force` only when you know the calibration is abandoned. In legacy HTTP mode, no token or no answer only
      warns: `CALIBRATION CHECK SKIPPED` lists the credential files it looked for and why
      the hostname lookup failed. Treat that line as a missing safety check, not as noise.
      `-PrintCommands` skips the check.
@@ -172,7 +221,7 @@ published here.
   (rosy-pinky-9dfk, 2026.10.02-026) committed on 2026-10-02. To keep one robot off (bench
   work), write `false`:
   ```bash
-  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": false, \"repo\": \"livsbittt/rosy-os\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
+  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": false, \"repo\": \"robotics-team-1213/rosy-platform\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
   ```
   For a test or drive, put a hold on the robot instead (`rosy-update-hold.ps1 -Robot <ip> -Hold ...`).
 
@@ -180,7 +229,7 @@ published here.
   ```powershell
   python tools/release/publish_payload_release.py --tarball <P>\<id>.tar.gz --canary <canary-ip> --robot <other-ip>
   ```
-  It creates GitHub Release `payload-<id>` on `livsbittt/rosy-os` (tag on the tarball's
+  It creates GitHub Release `payload-<id>` on `robotics-team-1213/rosy-platform` (tag on the tarball's
   `source-revision.txt`) with the tarball, `rollout.json` and `rollout.json.sig`. The rollout
   names the canary by hostname (`ssh hostname`) and is signed with the release key, then
   verified before upload. An existing tag is refused; `--resume` re-attaches to it.

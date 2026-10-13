@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix(pilot): 조종하지 않는 카메라의 frame Response 보존
-- 2026-10-04 · uncommitted · fix(ui): LAN 재검색 버튼의 공용 kind 선언 정합
-- 2026-10-04 · uncommitted · fix(pilot): LAN 목록 재검색과 저장 연결 기록 보존
-- 2026-10-04 · uncommitted · feat(pilot): 로비 방 목록 — `GET /api/v1/site/rooms` 소비 (D-343 2.2-3)
-- 2026-10-04 · uncommitted · Android 로봇 검색 고착의 독립 복구
+- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동

@@ -94,7 +94,7 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
         "DeviceAllow=/dev/video0 rw", "rosy-core.service",
         "ros2 launch bringup bringup_robot.launch.py",
         "cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S}",
-        "Conflicts=rosy-navigation.service", "Restart=on-failure",
+        "Conflicts=rosy-navigation.service", "Restart=always",
     ):
         assert directive in unit
     assert "privileged" not in unit.lower()
@@ -368,6 +368,9 @@ DECLARED_WRITES = {
         # D-418: the hand-over to rosy-ssh-access.path (ssh_handoff.py REQUEST_FILE), and
         # the root helper's answer, which CORE deletes once read (RESPONSE_FILE).
         "/run/rosy/ssh-access.request", "/run/rosy/ssh-access.response",
+        # D-483: the pending peer request's approval code for rosy-face
+        # (receiver_initializer.py PEER_DISPLAY_DIR, receiver_service.py DISPLAY_FILE).
+        "/run/rosy-peer-display/approval.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-camera-healthy.service": {"/var/lib/rosy/camera"},
@@ -435,6 +438,11 @@ DECLARED_WRITES = {
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
+    # D-477: the one-shot tailnet join. The spent key leaves the provisioned
+    # file by an in-place rewrite, and the outcome lands in its StateDirectory.
+    "rosy-tailscale-join.service": {
+        "/etc/rosy/tailscale-join.json", "/var/lib/rosy/tailscale/join-result.json",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -446,6 +454,8 @@ DECLARED_READS = {
         "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
     },
     "rosy-core.service": {
+        # D-456: signed receiver crypto is loaded from immutable release payloads.
+        "/opt/rosy/releases",
         "/var/lib/rosy",       # calibration data_root, runtime probe default
         # D-432: connect to the root helper socket; CORE does not create it.
         "/run/rosy-host/ssh-pairing.sock",
@@ -462,6 +472,8 @@ DECLARED_READS = {
         "/etc/ssh",
         # D-411: lists and streams Pilot recordings; ReadOnlyPaths. CORE never writes there.
         "/var/lib/rosy/pilot-recordings",
+        # D-548: root's bench marker, only stat()ed; CORE never writes /etc/rosy.
+        "/etc/rosy/dev-mode",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -476,7 +488,8 @@ DECLARED_READS = {
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-433: also CORE's face hand-over in rosy-core's /run/rosy (0755, file 0644)
     # and the release's emotion GIFs.
-    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current"},
+    # D-483: CORE's approval-code hand-over, rosy-core:rosy-display 2750 (file 0640).
+    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current", "/run/rosy-peer-display"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
     # followed); the image defaults and the applied rosy-config policy.
     "rosy-login-code.service": {
@@ -512,11 +525,11 @@ PROGRAM_SOURCES = {
         "middleware/core/gateway",
         "middleware/core/events",
         "middleware/core/services",
-        "middleware/core/api_web",
+        "middleware/core/api",
         "contracts/foundation",
         "imported-by:middleware/core/gateway:control:middleware/perception",
     ],
-    "rosy-io.service": ["middleware/apps/device/pinky/bringup"],
+    "rosy-io.service": ["middleware/devices/pinky/bringup"],
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
@@ -527,7 +540,7 @@ PROGRAM_SOURCES = {
                             # D-411: the Pilot recorder and its session state machine.
                             "middleware/perception/control/pilot_recorder_node.py",
                             "middleware/perception/control/pilot_recording.py"],
-    "rosy-navigation.service": ["middleware/core/navigation", "middleware/apps/device/pinky/bringup"],
+    "rosy-navigation.service": ["middleware/control/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           # D-260: the rule table it imports from the release.
@@ -536,12 +549,12 @@ PROGRAM_SOURCES = {
                           "contracts/foundation/core_common/face_screen.py",
                           "middleware/ui/face/emotion/info_screen.py",
                           "middleware/ui/face/emotion/rosy_lcd.py",
-                          "middleware/apps/device/pinky/bringup/rosylib"],
+                          "middleware/devices/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
     "rosy-boot-display.service": ["contracts/foundation/core_common/robot_state.py",
                                   "middleware/ui/face/emotion/rosy_lcd.py",
-                                  "middleware/apps/device/pinky/bringup/rosylib"],
+                                  "middleware/devices/pinky/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
                                 "deploy/robot/pinky_pro/native/rosy_config.py"],
@@ -549,6 +562,8 @@ PROGRAM_SOURCES = {
     "rosy-hw-probe.service": ["deploy/robot/pinky_pro/native/rosy-hw-probe.py"],
     # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
     "rosy-hw-test.service": ["deploy/robot/pinky_pro/native/rosy-hw-test.py"],
+    # D-477: standard library only; the tailscale CLI is resolved at run time.
+    "rosy-tailscale-join.service": ["deploy/robot/pinky_pro/native/rosy-tailscale-join.py"],
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
@@ -803,6 +818,16 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     assert "d /var/lib/rosy/pilot-recordings 2750 rosy-camera rosy-core -" in rules
     assert "install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings" in customizer
     assert customizer.index("useradd --uid 963") < customizer.index("-o rosy-camera -g rosy-core")
+    # D-483: the approval-code hand-over; only CORE writes, only rosy-display's group reads.
+    assert "d /run/rosy-peer-display 2750 rosy-core rosy-display -" in rules
+    assert "-/run/rosy-peer-display" in _words(_directives("rosy-core.service"), "ReadWritePaths")
+    # A payload release never refreshes /etc/tmpfiles.d; the unit (which the image-layer sync
+    # does carry) must create the directory itself or old cards show no code (2026-10-09).
+    # Same mode/owner/group as the tmpfiles rule, read from it so the two cannot drift.
+    _d, path, mode, owner, group, _age = next(
+        line.split() for line in rules.splitlines() if line.startswith("d /run/rosy-peer-display "))
+    assert _directives("rosy-core.service")["ExecStartPre"] == [
+        f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}"]
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():

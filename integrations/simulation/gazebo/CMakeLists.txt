@@ -51,6 +51,10 @@ install(
     scripts/lane_live_view.py
     scripts/live_view_model.py
     scripts/live_view_demo.py
+    scripts/sim_ir_floor.py
+    # D-601 in SIM: front preview of camera launches. Canonical source is scripts/;
+    # preserve the installed lib/${PROJECT_NAME}/sim_jpeg_relay.py entrypoint.
+    scripts/sim_jpeg_relay.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
   DESTINATION lib/${PROJECT_NAME}

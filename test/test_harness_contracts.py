@@ -175,11 +175,15 @@ def test_logs_accept_english_field_labels():
     assert harness.validate_log(english) == []
 
 
-def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema():
-    legacy = """## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
-- 변경: one concurrent branch version
-"""
+@pytest.mark.parametrize("heading", [
+    "## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership",
+    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
+    "## 2026-10-12 · D-693 계약 설명 정렬",
+])
+def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema(heading):
+    legacy = heading + "\n- 변경: one concurrent branch version\n"
     assert harness.validate_log(legacy) == []
+    assert harness.validate_log(legacy.replace(heading, heading + " altered"))
 
 
 def test_committed_role_g2_heading_is_preserved_as_legacy():
@@ -200,6 +204,11 @@ def test_append_only_logs_accept_lowercase_english_gate_without_omitting_it():
     legacy = GOOD_LOG.replace("- gate 변화:", "- gate:")
     assert harness.validate_log(legacy) == []
     assert harness.validate_log(legacy.replace("- gate:", "- unrelated:"))
+
+
+def test_append_only_logs_accept_committed_hold_gate_label():
+    legacy = GOOD_LOG.replace("- gate 변화:", "- gate 보류:")
+    assert harness.validate_log(legacy) == []
 
 
 def test_append_only_logs_accept_static_review_as_legacy_evidence_label():
@@ -389,7 +398,9 @@ def test_every_module_log_is_valid(config):
 
 
 def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
-    assert harness.validate_adr_log(adr_log, gaps=config.get("adr_gaps") or {}) == []
+    gaps, gap_errors = harness.load_adr_gaps(ROOT, config)
+    assert gap_errors == []
+    assert harness.validate_adr_log(adr_log, gaps) == []
 
 
 def test_generated_records_are_current():
@@ -530,6 +541,27 @@ def test_append_only_follows_a_moved_module_through_legacy(tmp_path):
     assert harness._committed_log(tmp_path, base, "new/other", moved) is None
 
 
+def test_append_only_follows_a_later_layout_move_with_frozen_ownership(tmp_path):
+    git = _git_repo(tmp_path)
+    (tmp_path / "owned/pkg").mkdir(parents=True)
+    (tmp_path / "owned/pkg/logs.md").write_text(GOOD_LOG, encoding="utf-8")
+    git("add", "owned/pkg/logs.md")
+    git("commit", "-q", "-m", "ownership layout")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "current").mkdir()
+    git("mv", "owned/pkg", "current/pkg")
+    git("commit", "-q", "-m", "later layout")
+    moved = [{"path": "current/pkg", "layout_target": "current/pkg",
+              "d427_target": "owned/pkg", "legacy": "original/pkg"}]
+    committed = harness._committed_log(tmp_path, base, "current/pkg", moved)
+    assert committed == GOOD_LOG
+    edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
+    errors, warnings_ = harness._append_only_findings(
+        tmp_path, [base], "pkg", "current/pkg", edited, moved)
+    assert len(errors) == 1 and "were edited" in errors[0]
+    assert warnings_ == []
+
+
 def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):
     """A nested logs.md rewritten below git's 50 % rename similarity in the move
     commit has no traceable history; lint must say the check was skipped."""
@@ -557,3 +589,284 @@ def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):
     assert len(errors) == 1 and "were edited" in errors[0] and warnings_ == []
     # A module outside every moved root stays quiet, as before D-427.
     assert harness._append_only_findings(tmp_path, [base], "x", "brand/new", rewritten, moved) == ([], [])
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete"])
+def test_logs_only_reconcile_exact_unrecoverable_g2_record(mutation):
+    old = """## 2026-10-04 ? uncommitted ? fix(g2): reserved startup home before Cell admission
+
+- ??: G2 ?? ?? ??? ?? owner? ?? Pilot seat? ???? ???? ??? ??? ???. ??? ROS goal UUID? ?? ??? ?? ? ??? 0.5? ???? ???? seat ???reconciliation? ??? ? UDS? ????. stop/reset??? ???Fleet grant ??? ??? ???.
+- ??: r3 SDK prepare PASS ? ? Action? PHASE_RUNNER_START_UNKNOWN?? HOLD, phase goal ??? 0??? cleanup? PASS??. spawn ?? HOME_DEVIATION???? ?? gripper GRIPPER_NOT_OPEN? planner? ????? r3? ?? ??? ????? ????. ?? ?? ??? ????? exact UUID ?? RED, 10Hz ?? poll ?? RED?GREEN, ?? SQLite ??? intent ??? ????.
+- gate ??: SOURCE/LOCAL?. box16 ?? ???fault matrix??? ??????? ??? ?? HOLD/NOT_RUN, full_g2=false?. ?? ?? ??? ???? ? ????? ?????."""
+    new = """## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
+
+- Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("reserved startup", "changed startup", 1)
+    elif mutation == "new":
+        corrected = corrected.replace("Provenance correction only", "Accepted in production", 1)
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete"])
+def test_logs_only_reconcile_exact_unrecoverable_aid_record(mutation):
+    old = """## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AID deadline while allowing RPC acknowledgement
+
+- ??: attach RPC? 150ms, ?? echo? ???? ???? ?? 200ms ??? ????. ?? transport ???Boolean ????? ??? ???? ??? attach/detach? ????. positive RPC? exact-model state echo? ?? ???? ????stop/reset? ??.
+- ??: r4 ?? startup home READY 9.264s, ????? ?? ROS status4/result0, held readback ? TRANSFER ??. ?? echo? true?? service_ok=false, 106.89ms? transfer ROS goal? ??? UNKNOWN/HOLD, ?? cleanup PASS. 100ms RPC ??? ?? ?? ???? timeout? negative reply? ?? receipt??? ??? ? ??. SDK request ?? ??? Gazebo queued-ack ??? ????: https://github.com/gazebosim/gz-sim/blob/gz-sim8/src/SystemManager.cc#L340-L351 .
+- gate ??: SOURCE/LOCAL deadline ?? RED?GREEN? ??. ?? 16? ???fault matrix??? checkpoint??? ??? HOLD/NOT_RUN?? full_g2=false. ?? ??? ??? ??? ???? ? ???????? ????."""
+    new = """## 2026-10-04 · 429e13b83 · docs: record unrecoverable G2 aid journal corruption
+
+- Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("total SIM AID", "altered SIM AID", 1)
+    elif mutation == "new":
+        corrected = corrected.replace("Provenance correction only", "Accepted in production", 1)
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete", "unknown_pair"])
+def test_logs_only_reconcile_exact_committed_omx_runtime_record(mutation):
+    old = '## 2026-10-05 · feat/omx-policy-runtime-journal · 정책 세션과 원본 runtime 결선\n\n- 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.\n- 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.\n- 범위: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.'
+    new = '## 2026-10-05 · c2425e6ea · 정책 세션과 원본 runtime 결선\n\n- 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.\n- 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.\n- gate 변화: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.'
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("585 PASS", "999 PASS")
+    elif mutation == "new":
+        corrected = corrected.replace("수용 보류", "수용 완료")
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    elif mutation == "unknown_pair":
+        baseline = baseline.replace("585 PASS", "999 PASS")
+        corrected = corrected.replace("585 PASS", "999 PASS")
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+    assert harness.validate_log(new) == []
+    assert any("malformed heading" in error for error in harness.validate_log(old))
+    assert any("missing '- gate 변화:'" in error
+               for error in harness.validate_log(new.replace("- gate 변화:", "- 범위:")))
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete", "unknown_pair"])
+def test_logs_only_reconcile_exact_native_policy_callback_record(mutation):
+    old = '## 2026-10-05 · feat/omx-policy-runtime-journal · native 정책 callback 순서·실패 수렴\n\n- 변경: 원본 handle event 전달을 별도 lock으로 직렬화, acceptance 이전 cancel ACK 보존, 저장 실패 시 내부 취소 한 번으로 재귀 요청 제한. 일반 state lock은 sink I/O에서 해제한다.\n- 증거: 결정적 HOST 순서2개 및 재귀 취소1개 RED 확인 후 PASS. 실제 localhost Jazzy transport 8 PASS(기존6+정책세션2), 완료·권한철회 CANCELED 및 종료 확인. fixture는 명시적 관측2초/lease12초이며 원래50ms/500ms 실패와 구분.\n- gate: native transport/journal 결선만 확인. 실제 model inference/vendor task/Fleet grant/장치/물리 정지 및50ms 성능은 미수용. 기존 운영 설정과0.20m 전체 물리거리 제한 유지.'
+    new = '## 2026-10-05 · 8669ef8db · native 정책 callback 순서·실패 수렴\n\n- 변경: 원본 handle event 전달을 별도 lock으로 직렬화, acceptance 이전 cancel ACK 보존, 저장 실패 시 내부 취소 한 번으로 재귀 요청 제한. 일반 state lock은 sink I/O에서 해제한다.\n- 증거: 결정적 HOST 순서2개 및 재귀 취소1개 RED 확인 후 PASS. 실제 localhost Jazzy transport 8 PASS(기존6+정책세션2), 완료·권한철회 CANCELED 및 종료 확인. fixture는 명시적 관측2초/lease12초이며 원래50ms/500ms 실패와 구분.\n- gate 변화: native transport/journal 결선만 확인. 실제 model inference/vendor task/Fleet grant/장치/물리 정지 및50ms 성능은 미수용. 기존 운영 설정과0.20m 전체 물리거리 제한 유지.'
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":baseline = baseline.replace("8 PASS", "999 PASS")
+    elif mutation == "new":corrected = corrected.replace("미수용", "수용 완료")
+    elif mutation == "missing":corrected = GOOD_LOG
+    elif mutation == "other_edit":corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":corrected = new
+    elif mutation == "unknown_pair":
+        baseline = baseline.replace("8 PASS", "999 PASS")
+        corrected = corrected.replace("8 PASS", "999 PASS")
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+    assert harness.validate_log(new) == []
+    assert any("malformed heading" in error for error in harness.validate_log(old))
+
+
+# --- D-510: union merge for append-only records, adr_gaps.txt, refs/adr --------
+
+import subprocess  # noqa: E402
+
+import adr_reserve  # noqa: E402
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                          text=True, encoding="utf-8").stdout
+
+
+def _repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, "init", "-q", "-b", "main")
+    _git(path, "config", "user.email", "t@example.invalid")
+    _git(path, "config", "user.name", "t")
+    _git(path, "config", "core.autocrlf", "true")
+    return path
+
+
+def test_adr_gaps_file_dedupes_union_duplicates_and_rejects_malformed_lines():
+    gaps, errors = harness.parse_adr_gaps(
+        "﻿# comment\r\nD-7 first reason\r\nD-3\tother\r\n\r\nD-7 first reason\r\nD-7 later copy\r\nD-x bad\r\nD-9\r\n")
+    assert gaps == {"D-7": "first reason", "D-3": "other"}
+    assert errors == ["line 7: expected 'D-nnn reason', got 'D-x bad'",
+                      "line 8: expected 'D-nnn reason', got 'D-9'"]
+
+
+def test_repository_gaps_live_in_the_union_file(config):
+    assert "adr_gaps" not in config
+    gaps, errors = harness.load_adr_gaps(ROOT, config)
+    assert errors == [] and gaps
+
+
+def test_reserved_ref_is_a_warning_never_a_gap():
+    adr = harness.parse_adr_log(GOOD_ADR)  # D-3 absent
+    assert harness.validate_adr_log(adr, {}) == ["D-3: missing and not declared in adr_gaps"]
+    assert harness.reservation_warnings(adr, {}, {"D-4"}) == []  # landed: the ref is irrelevant
+    assert harness.reservation_warnings(adr, {"D-9": "skipped"}, {"D-9"}) == []
+    # D-9 is above the branch's highest (D-4), so CI would not miss it: no warning.
+    assert harness.reservation_warnings(adr, {}, {"D-3", "D-9"}) == [
+        "D-3 reserved locally (refs/adr) but not on this branch — land its ADR or add a gap line"
+        " to tools/harness/adr_gaps.txt before push"]
+
+
+def test_only_one_record_per_line_files_use_the_union_merge_driver():
+    union = ["docs/reference/ROSY ADR Log.md", "tools/harness/adr_gaps.txt"]
+    plain = ["docs/logs.md", "operations/fleet/logs.md"]
+    out = _git(ROOT, "check-attr", "merge", "--", *union, *plain)
+    assert out.splitlines() == ([f"{p}: merge: union" for p in union]
+                                + [f"{p}: merge: unspecified" for p in plain])
+
+
+def _two_appends(repo: Path, rel: str, base: str, one, two) -> subprocess.CompletedProcess:
+    """Branches one and two append to ``rel`` (or ``("replace", text)``) from main; merge one into two."""
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(base.encode())
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    for branch, text in (("one", one), ("two", two)):
+        _git(repo, "checkout", "-qb", branch, "main")
+        path.write_bytes(text[1].encode() if isinstance(text, tuple) else path.read_bytes() + text.encode())
+        _git(repo, "commit", "-qam", branch)
+    return subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", "one"],
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+def _entry(title: str) -> str:
+    return (f"\r\n## 2026-10-07 · uncommitted · {title}\r\n\r\n- 변경: {title}\r\n- 증거: t\r\n"
+            "- gate 변화: 없음\r\n- 결정: 없음\r\n- 교훈: 없음\r\n")
+
+
+def _repo_with_attributes(path: Path, extra: str = "") -> Path:
+    repo = _repo(path)
+    (repo / ".gitattributes").write_bytes((ROOT / ".gitattributes").read_bytes() + extra.encode())
+    return repo
+
+
+def test_two_logs_md_entries_appended_on_two_branches_still_conflict(tmp_path):
+    base = "# logs\r\n" + _entry("base")
+    repo = _repo_with_attributes(tmp_path / "plain")
+    result = _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two"))
+    assert result.returncode != 0 and "CONFLICT" in result.stdout + result.stderr
+
+    # Why logs.md is not union: union collapses the identical trailing lines of both entries.
+    repo = _repo_with_attributes(tmp_path / "union", "docs/logs.md merge=union\n")
+    assert _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two")).returncode == 0
+    merged = (repo / "docs/logs.md").read_bytes().decode()
+    assert merged.count("- 교훈: 없음") < 3
+
+
+def test_union_merge_keeps_both_appended_rows_with_bom_and_crlf(tmp_path):
+    repo = _repo_with_attributes(tmp_path / "u")
+    rel = "docs/reference/ROSY ADR Log.md"
+    log = repo / rel
+    result = _two_appends(repo, rel, "﻿# Log\r\n\r\n| ID | Title | Status |\r\n| D-1 | a | Accepted |\r\n",
+                          "| D-2 | b | Accepted |\r\n", "| D-3 | c | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # on two: both appended at the same spot
+    data = log.read_bytes()
+    assert data.startswith(b"\xef\xbb\xbf# Log\r\n")
+    assert b"\n" not in data.replace(b"\r\n", b"")
+    assert data.endswith(b"| D-3 | c | Accepted |\r\n| D-2 | b | Accepted |\r\n")
+    adr = harness.parse_adr_log(data.decode("utf-8"))
+    assert sorted(adr.index) == ["D-1", "D-2", "D-3"] and adr.index_duplicates == ()
+
+
+def test_union_of_a_status_edit_and_an_append_leaves_a_duplicate_row_that_lint_reports(tmp_path):
+    repo = _repo_with_attributes(tmp_path / "edit")
+    rel = "docs/reference/ROSY ADR Log.md"
+    head = "﻿# Log\r\n\r\n| ID | Title | Status |\r\n|---|---|---|\r\n"
+    base = head + "| D-1 | a | Proposed |\r\n"
+    result = _two_appends(repo, rel, base, ("replace", head + "| D-1 | a | Accepted |\r\n"),
+                          "| D-2 | b | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # union never stops
+    adr = harness.parse_adr_log((repo / rel).read_text(encoding="utf-8"))
+    assert "D-1: duplicate index row" in harness.validate_adr_log(adr, {})
+
+
+def test_adr_reserve_claims_above_every_source_and_skips_taken_refs(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path / "r")
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "D-4-x.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "reference").mkdir()
+    (repo / "docs" / "reference" / "ROSY ADR Log.md").write_text("| D-5 | a | b |\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    for branch, name in (("other", "D-6-y.md"), ("stray", "D-500-typo.md")):
+        _git(repo, "checkout", "-qb", branch, "main")
+        (repo / "docs" / "adr" / name).write_text("y\n", encoding="utf-8")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", branch)
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "other")
+    _git(repo, "branch", "-qD", "other")  # D-6 now exists only on a remote-tracking ref
+    (repo / "tools" / "harness").mkdir(parents=True)
+    (repo / "tools" / "harness" / "adr_gaps.txt").write_text("D-7 untracked gap\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+
+    seen: dict = {}  # a diff hunk header "@@ ..." must not be taken for the source ref
+    adr_reserve._from_history(seen, adr_reserve.ADDED_LINE, "--no-merges", "-p", "-U0", "--", adr_reserve.LOG)
+    assert seen[5].split(": ", 1)[0] in {"main", "stray", "origin/other"} and "| D-5" in seen[5]
+
+    assert adr_reserve.main(["next", "first topic"]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == "D-8"
+    assert "ignoring D-500 (more than 20 above main's D-5) from stray: docs/adr/D-500-typo.md" in out.err
+    assert "highest in use: D-7 from " in out.err and "adr_gaps.txt" in out.err
+    assert adr_reserve.main(["next", "second topic"]) == 0
+    assert capsys.readouterr().out.strip() == "D-9"
+
+    # A peer claimed D-10 after our scan: create-only update-ref fails, the tool moves on.
+    _git(repo, "update-ref", "refs/adr/D-10", "HEAD")
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {9: "test"})
+    assert adr_reserve.main(["next", "raced"]) == 0
+    assert capsys.readouterr().out.strip() == "D-11"
+
+    adr_reserve.main(["list"])
+    listing = capsys.readouterr().out
+    assert "D-8\t" in listing and "first topic" in listing
+    assert adr_reserve.main(["release", "D-8"]) == 1  # not proven to be ours
+    assert "reserved for 'first topic'" in capsys.readouterr().err
+    assert adr_reserve.main(["release", "D-8", "--reason", "first topic"]) == 0
+    assert capsys.readouterr().out.strip() == "released D-8 (first topic)"
+    assert adr_reserve.main(["release", "D-9", "--force"]) == 0
+    assert harness.reserved_adrs(repo) == {"D-10", "D-11"}
+    assert adr_reserve.main(["release", "D-8", "--force"]) == 1
+
+
+def test_adr_reserve_stops_when_update_ref_fails_for_another_reason(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path / "f")
+    (repo / "a").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "update-ref", "refs/adr/D-1/x", "HEAD")  # refs/adr/D-1 cannot exist beside D-1/x
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {})
+    assert adr_reserve.main(["next", "t"]) == 1
+    assert "git update-ref refs/adr/D-1 failed" in capsys.readouterr().err

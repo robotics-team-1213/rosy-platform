@@ -101,3 +101,17 @@ def test_non_mapping_profile_gives_no_profile_and_says_why(tmp_path):
     path.write_text('- 1\n- 2\n', encoding='utf-8')
     values, source = nominal_camera_profile(str(path), root=tmp_path, robot=ROBOT)
     assert values == {} and 'not a mapping' in source
+
+
+def test_intervals_come_with_the_accepted_record_only(tmp_path):
+    """D-468: the containment uncertainty reads the used record's score bands, never a candidate's."""
+    store = CalibrationStore(tmp_path)
+    bands = {'uncertainty': {'pitch_deg': 0.25, 'roll_deg': 0.5, 'height_m': 0.005}}
+    rid = store.add(ROBOT, 'camera_profile', {**FILE, 'pitch_rad': 0.20}, method='t/1', intervals=bands)
+    *_, intervals = calibrated('camera_profile', FILE, static_source='camera_nominal.yaml',
+                               root=tmp_path, robot=ROBOT, with_intervals=True)
+    assert intervals is None
+    store.set_status(ROBOT, 'camera_profile', rid, 'accepted', actor='operator')
+    values, _source, intervals = calibrated('camera_profile', FILE, static_source='camera_nominal.yaml',
+                                            root=tmp_path, robot=ROBOT, with_intervals=True)
+    assert values['pitch_rad'] == 0.20 and intervals == bands

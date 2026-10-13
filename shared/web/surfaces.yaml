@@ -35,20 +35,23 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: pinky-review
-    app_name: Rosy Learning
-    app_name_en: Rosy Learning
     api_owners: []
-    path: learning/training/perception/dataset/review_app_web
+    path: learning/curation/perception/review_app_web
     themes: [dark, light]
     surface: dev
     medium: web
+    container_breakpoints:
+      - {value: 22rem, reason: 자료 등록 폼의 좁은 칸에서 입력과 행동을 전폭으로 쌓는다.}
+      - {value: 24rem, reason: 390px 전화의 검수 칸은 358px라 공용 22rem 경계 밖이다. 검수 조작을 칸 너비로 읽고 누르게 한다.}
     breakpoints:
       - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
+      - {value: 23rem, reason: 368px 미만 전화에서 픽셀 편집 이동 버튼과 빠른 행동을 두 칸·한 칸으로 쌓아 누를 수 있게 한다.}
+      - {value: 700px, reason: 높이 700px 이하의 짧은 데스크톱 창에서 픽셀 검수 사진이 화면 안에 들어오게 한다. 40rem(640px) 프레임 높이보다 큰 1366×768 노트북 브라우저 창을 덮는다.}
     ports:
-      - {port: 8767, source: learning/training/perception/dataset/review_app.py}
-    audience: Pinky 학습 객체 라벨 검수자
-    role: 원본 사진 검수와 승인 자료 준비를 소유하는 로컬 학습 도구 (D-459)
-    owns: [pinky-object-review, pinky-review-export]
+      - {port: 8767, source: learning/curation/perception/review_app.py}
+    audience: Pinky 학습 객체·픽셀 라벨 검수자
+    role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462). Rosy Learning은 작업 화면 표시 이름이며 별도 런처·PWA·ROS·Android 앱 등록이 아니다 (D-461).
+    owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.
     baseline_reason: 최초 로컬 PC/모바일 브라우저 검증은 담당 세션의 X 드라이브 증거이며 배포 G2 기준선이 아니다.
@@ -75,15 +78,17 @@ surfaces:
       - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
     grammar: spatial
     contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - {value: 23rem, reason: 320px 화면에서 지도 조작이 지도 위에 겹치지 않도록 조작 영역을 아래로 배치한다.}
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
 
   - id: console
     api_owners: [Fleet]
-    app_name: Rosy Console
-    app_name_en: Rosy Console
-    short_name: Rosy Console
+    app_name: Rosy Fleet
+    app_name_en: Rosy Fleet
+    short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
-    path: operations/fleet/fleet/server/web
+    path: operations/ui/console
     themes: [dark, light]
     surface: site
     medium: web
@@ -95,10 +100,10 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
-      - value: 90rem
-        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
+      - value: 48rem
+        reason: D-658의 네 헤더 영역을 제품·비상정지 첫 줄과 상태·조작 둘째 줄로 배치한다. 접속 상세는 화면 폭에 관계없이 별도 펼침 영역이다.
       - value: 110rem
-        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
+        reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
@@ -163,7 +168,7 @@ surfaces:
     surface: robot
     medium: web
     ports:
-      - {port: 8088, source: middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_server.py}
+      - {port: 8088, source: middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py}
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
     owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]
@@ -172,6 +177,8 @@ surfaces:
     breakpoints:
       - value: 48rem
         reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+      - value: 22rem
+        reason: 320px 휴대폰에서 머리 이름 겹침과 제자리 회전 버튼 잘림을 막고 짧은 화면의 카메라·조작부 공간을 지키는 폭 — 390px에는 이 압축 배치를 적용하지 않는다
     raw_colours:
       - file: styles.css
         block: "[data-drive-stage]"
@@ -197,6 +204,8 @@ surfaces:
     container_breakpoints:
       - value: 22rem
         reason: 공용 부품(ui-form·ui-readout·ui-actions)이 한 열로 접히는 칸 폭 — 폰 한 열(320px 거터 안쪽)과 1366px 콘솔의 좁은 조작 열(약 23–25rem)을 가른다(D-359 §6.3)
+      - value: 48rem
+        reason: 공용 셸 본문이 한 줄로 쌓이는 칸 폭 — 오른쪽 칸 360px과 본문 최소 폭이 같이 설 수 없는 폭이다. 모든 앱이 같은 값을 쓴다(D-741 5항)
     contract_reason: >
       tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
       test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.
@@ -250,14 +259,14 @@ surfaces:
     surface: robot
     medium: native
     ports: []
-    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 목록 접속 화면
-    role: Pilot의 신뢰된 대상 발견·연결만 소유하며 조종 화면과 명령은 기존 Pilot PWA를 사용한다
+    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 접속·함께 조종
+    role: Pilot의 신뢰된 대상 발견·연결을 소유한다. 조종은 기존 Pilot PWA 또는 두 CORE에 독립 요청하는 native GroupDrive로 구현하며 manual-drive·estop의 소유자는 parent Pilot이다 (D-639).
     owns: [pilot-device-lobby]
     contracts: [token_parity]
     token_source: shared/web/tokens.css
     token_generator: middleware/ui/pilot/android/app/build.gradle.kts
     token_verification: middleware/ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
-    baseline_reason: 실제 태블릿 설치·렌더링은 D-432 장치 검증으로 기록한다; 조종 화면은 Pilot PWA 기준선을 재사용한다.
+    baseline_reason: 태블릿 발견·연결·GroupDrive는 native 장치 검증이 필요하다. PWA 기준선은 웹 조종에만 적용하며 native 두 CORE 제어의 실기 수용을 대신하지 않는다.
 
   - id: cam
     api_owners: [Fleet-pairing, Vision-ingest]
@@ -275,7 +284,9 @@ surfaces:
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
-    token_copy: operations/ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
+    token_source: shared/web/tokens.css
+    token_generator: shared/web/native-tokens.gradle
+    token_verification: operations/ui/cam/app/src/test/java/io/github/livsbittt/rosy/cam/ui/RosyColorSchemeTest.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

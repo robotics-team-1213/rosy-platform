@@ -26,9 +26,18 @@ on:
     paths:
       - deploy/site/**
       - operations/fleet/**
+      - integrations/messaging/discord/**
+      - operations/decision/**
+      - operations/ui/console/**
+      - operations/world/src/**
+      - operations/execution/src/**
+      - operations/situation/rosy_situation/__init__.py
+      - operations/situation/rosy_situation/assessment.py
+      - operations/situation/rosy_situation/snapshot_assessment.py
       - operations/vision/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
+      - contracts/learning/src/**
       - operations/apps/fleet/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml

@@ -29,6 +29,34 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-738
+- D-736
+- D-733
+- D-729
+- D-723
+- D-721
+- D-708
+- D-665
+- D-663
+- D-662
+- D-661
+- D-660
+- D-659
+- D-656
+- D-652
+- D-642
+- D-643
+- D-644
+- D-645
+- D-646
+- D-640
+- D-627
+- D-626
+- D-625
+- D-620
+- D-529
+- D-465
+- D-462
 - D-461
 - D-456
 - D-459
@@ -227,6 +255,13 @@ adrs:
 - D-453
 - D-455
 plans:
+- docs/plans/2026-10-11-core-drive-composition-first.md
+- docs/plans/2026-10-11-platform-structure-migration.md
+- docs/plans/2026-10-11-rosy-platform-identity-and-structure-design.md
+- docs/plans/2026-10-11-rosy-platform-identity-and-structure.md
+- docs/plans/2026-10-11-core-responsibility-and-driving-design.md
+- docs/plans/2026-10-11-core-responsibility-and-driving.md
+- docs/plans/2026-10-05-model-pc-pixel-label-pipeline.md
 - docs/plans/2026-10-04-d329-matrix-schema.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
 - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md
@@ -317,6 +352,10 @@ plans:
 
 ## 다음 gate
 
+- D-462는 기존 Pinky 앱의 반복 영상 등록·픽셀 독립 검수·latest decision export를 확장한다.
+  SQLite 단일 snapshot과 exact approval/class/representation binding을 호스트·Chromium에서 검증한다.
+  실제 영상-camera-CAD projection과 root-owned builder/bridge의 독립 학습 수용은 남아 있다.
+
 1. ARTIFACT/DEVICE는 deploy·rosy_core gate가 소유한다. docs가 GO로 옮기지 않는다.
 2. ADR 개별 파일 분리는 후속이며 이 Log 본문은 유지한다.
 
@@ -354,3 +393,11 @@ plans:
 - D-336 SOURCE implementation adds persisted Fleet authority epochs, configured local OMX StopLocal fanout, an OMX persistent startup-closed software latch, final-submit serialization, and named-operator/Fleet-generation/action-reconciliation re-arm checks. Failed local re-arm recloses Fleet dispatch and requests local stop rollback.
 - Verification: OMX adapter 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness tests 78 passed; harness lint 0 errors/17 freshness warnings. Fleet suite 658 passed/5 skipped with one unrelated WebSocket integration timeout at `uvicorn.Server.started`; the re-arm contract test passed alone. The isolated WebSocket retry stalled without output and was interrupted; see the execution plan for the exact boundary.
 - The Fleet OMX inventory defaults empty. Deployment UID/socket permissions, injected current-fence provider, ROS/gripper driver selection, safety-rated E-stop, physical stop readback, ROS-SIM, DEVICE, and FIELD remain unverified and disabled.
+
+## 공통 판단 책임·배포 0단계 (2026-10-11)
+
+- D-647 Proposed와 중앙 판단 계획에 논리 책임·배포·승인 경계를 선행 관문으로 추가했다. B안은 잠정 추천이며 D-435는 아직 Proposed다. 실제 분리·모델·알림·장치 시험은 미실행이다.
+
+## 공통 판단 목표 구조와 분리 계획 (2026-10-11)
+
+- D-648 Proposed와 목표 트리/의존/사례표·분리 계획을 작성했다. Situation assessment, Decision 후보, execution/site 순수 규칙, 현재 Fleet 원장 어댑터와 coordination을 구별했다. 실제 소스 이동·설치·장치 gate 변화는 없다.

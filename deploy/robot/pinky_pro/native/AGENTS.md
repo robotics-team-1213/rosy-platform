@@ -3,6 +3,9 @@
 
 # native
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 D-161 product runtime units for Ubuntu Server 24.04 arm64 with native ROS 2
@@ -24,6 +27,8 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 - Navigation requires both hardware and navigation approval markers.
 - `/etc/rosy/runtime.env` is device-specific and secret-free. The checked-in
   `rosy-runtime.env` is a template, not a usable identity.
+- `/etc/rosy/dev-mode` (D-548) is a root-made bench marker: CORE then accepts the shared
+  `rosy-dev-*` tokens (never for SSH) and `rosy-face` shows DEV. No image, card or OTA step creates it.
 - `rosy-camera.service` also reads the optional `/etc/rosy/learned-perception.env`
   (D-373; template `learned-perception.env.example`, both off). The launch file parses
   `ROSY_LEARNED_SHADOW` / `ROSY_CAPTURE` strictly; keep the values off the `ExecStart` line.
@@ -49,6 +54,14 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   `/var/lib/rosy/updates/`. It and `rosy-release-push.ps1` both hold `/run/rosy-claim`
   (`rosy_claim.py`) and share `rosy-release-unpack.sh`. Tests: `test/test_rosy_auto_update.py`,
   `test/test_rosy_claim.py`.
+
+- `rosy-tailscale-join.service` (D-477) is a one-shot root unit, condition-gated on the
+  provisioned `/etc/rosy/tailscale-join.json` (0600; absent → the robot stays LAN-only).
+  `rosy-tailscale-join.py` spends the auth key once (`tailscale up`, `--accept-dns=false`),
+  rewrites the file in place without the key, and records the outcome in
+  `/var/lib/rosy/tailscale/join-result.json`. tailscaled itself is the package unit
+  (image installs the pinned deb); D-418's SSH rules still govern every login. Test:
+  `test/test_rosy_tailscale_join.py`.
 
 ## Tests
 

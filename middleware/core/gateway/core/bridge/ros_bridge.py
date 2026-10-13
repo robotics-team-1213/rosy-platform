@@ -32,7 +32,6 @@ from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Empty, SetBool
 
 from core.bridge import (
-    battery_policy,
     display,
     docking_mode,
     goal_tracker,
@@ -46,6 +45,7 @@ from core.bridge import (
 from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
+from core.bridge.route_context import publication as route_context_publication
 from core_features.maps import occupancy_map_id
 from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
@@ -77,6 +77,7 @@ class RosBridge:
     def __init__(self, node: Node, services) -> None:
         self._node = node
         self._svc = services
+        self._bounded_trial_guard = None
         self._readiness = getattr(services, "readiness", None)
         cfg = services.config
         self._frame_prefix = str(cfg.get("robot", {}).get("frame_prefix", ""))
@@ -161,6 +162,14 @@ class RosBridge:
         # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
         self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
+        self.route_context_pub = None
+        if services.line_follow.config.route_context_enabled:
+            route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                   durability=DurabilityPolicy.VOLATILE)
+            self.route_context_pub = node.create_publisher(
+                String, "line/route_context", route_qos)
+        self._route_context_previous = None
+        self._route_context_at = float("-inf")
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -248,7 +257,8 @@ class RosBridge:
         self.docking_executor = BridgeDockingExecutor(
             self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
-            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
+            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info,
+            transport_snapshot=self._goals.transport_snapshot)
         self._svc.docking.executor = self.docking_executor
         # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
         # It must be the robot node's clock (its ttl counts from it): both nodes share
@@ -324,25 +334,33 @@ class RosBridge:
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
+        odometry.observe_bounded_trial(self, msg, sample)
+        odometry.observe_lane_return(self, msg, sample)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
-            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
+            self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
+        self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
 
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
-        battery_policy.apply_voltage(self._svc, float(msg.data))
+        observation.battery_voltage(self._svc, float(msg.data), received_at=time.time())
 
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
 
     def _on_lane_perception(self, msg: String) -> None:
+        source_now = self._node.get_clock().now().nanoseconds / 1e9
         self._svc.vision.lane_perception.accept(
             msg.data, now=time.monotonic(),
-            source_now=self._node.get_clock().now().nanoseconds / 1e9)
+            source_now=source_now)
+        observation.keep_junction(  # D-494/D-495: junction sighting (holds; starts a turn)
+            self._svc, msg.data, source_now=source_now,
+            received_at=self._line_clock(),
+            expected_context_seq=self._current_route_context_seq(source_now))
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
@@ -363,7 +381,15 @@ class RosBridge:
         # received_at runs on the line clock (sim seconds under use_sim_time).
         observation.line_observation(
             self._svc, msg.data,
-            source_now=source_now, received_at=self._line_clock())
+            source_now=source_now, received_at=self._line_clock(),
+            expected_context_seq=self._current_route_context_seq(source_now))
+
+    def _current_route_context_seq(self, ros_now: float):
+        if self.route_context_pub is None or self._svc.safety.estop:
+            return None
+        context = self._svc.line_follow.route_context(
+            ros_now=ros_now, now=self._line_clock())
+        return None if context is None else context.seq
 
     def _on_road_observation(self, msg: String) -> None:
         """Decode road evidence; invalid data invalidates an enforced lease."""
@@ -404,10 +430,17 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
-        if not self._svc.line_follow.active:
+        self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
+        if not self._svc.line_follow.active or self._svc.safety.estop:
+            self._publish_route_context(None)
             return
         now = self._line_clock()
         decision = self._svc.line_follow.tick(now)
+        if self.route_context_pub is not None:
+            ros_now = self._node.get_clock().now().nanoseconds / 1e9
+            self._publish_route_context(
+                self._svc.line_follow.route_context(ros_now=ros_now, now=now),
+                ros_now=ros_now)
         # CommandManager.select_output() ages the nav twist on time.monotonic.
         command_now = None if self._line_clock is time.monotonic else time.monotonic()
         traffic_gate.apply_line_candidate(
@@ -425,6 +458,21 @@ class RosBridge:
         self._svc.state.set_traffic_policy(traffic_status)
         self._svc.state.set_sensor(
             "traffic_policy", traffic_status.model_dump())
+
+    def _publish_route_context(self, context, *, ros_now=None) -> None:
+        if self.route_context_pub is None:
+            return
+        if ros_now is None:
+            ros_now = self._node.get_clock().now().nanoseconds / 1e9
+        message, self._route_context_previous, self._route_context_at = (
+            route_context_publication(
+                context, self._route_context_previous, self._route_context_at,
+                now=ros_now))
+        if message is not None:
+            self.route_context_pub.publish(String(data=json.dumps(message)))
+            self._svc.line_follow.set_route_context_publication(
+                context if self._route_context_previous is not None else None,
+                self._route_context_at)
 
     @staticmethod
     def _lifecycle_active(msg: TransitionEvent) -> bool:
@@ -469,7 +517,8 @@ class RosBridge:
         # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
-                      self._readiness, warn=self._node.get_logger().error)
+                      self._readiness, warn=self._node.get_logger().error,
+                      trial_guard=self._bounded_trial_guard)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
@@ -506,10 +555,11 @@ class RosBridge:
     def _on_map(self, msg: OccupancyGrid) -> None:
         try:
             grid = translate.grid_from_occupancy(msg)
-            self._svc.maps.set_map(grid)
             current = self._svc.state.map_id
-            if current is None or str(current).startswith("occupancy:"):
-                self._svc.state.set_map_id(occupancy_map_id(grid))
+            map_id = occupancy_map_id(grid) if current is None or str(current).startswith("occupancy:") else current
+            self._svc.maps.set_map(grid, map_id=map_id)
+            if map_id != current:
+                self._svc.state.set_map_id(map_id)
         except ValueError as exc:
             self._node.get_logger().warning(f"ignored occupancy map: {exc}")
 
@@ -527,6 +577,7 @@ class RosBridge:
 
     def _on_scan(self, msg: LaserScan) -> None:
         sample = translate.lidar_sample(msg, time.time())
+        sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
         self._svc.state.set_sensor("lidar", sample)
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
@@ -544,16 +595,24 @@ class RosBridge:
             voltage_topic_seen=self._voltage_topic_seen)
 
     def _tick_power(self) -> None:
-        power = self._svc.power
-        power.tick()
-        # D-321 addendum: a lapsed calibration lease emits its expiry even when
-        # no screen is reading /robot/state. Rides this timer; commands nothing.
-        self._svc.calibration.expire_due()
+        # D-550 10 Safety-Review: the SAF-003 and goal-lease stops run first, each guarded, so a
+        # fault in the power/calibration/trip-lease calls below cannot starve them.
         if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
             try:
                 self._svc.fleet_loss.tick()
             except Exception:  # a monitor fault must not stop the power timer
                 self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
+        try:  # D-550 10: a leased Fleet goal whose lease ran out is cancelled (SAF-003 cancel path)
+            self._svc.nav.expire_goal_lease()
+        except Exception:  # a lease fault must not stop the power timer
+            self._node.get_logger().error(f"goal lease tick failed:\n{traceback.format_exc()}")
+        power = self._svc.power
+        power.tick()
+        # D-321 addendum: a lapsed calibration lease emits its expiry even when
+        # no screen is reading /robot/state. Rides this timer; commands nothing.
+        self._svc.calibration.expire_due()
+        # D-541 6: a trip lease not renewed within ttl_s ends and halts the robot to IDLE.
+        self._svc.trip_lease.expire_due()
         status = power.status()
         self._svc.state.set_power(status)
 
@@ -748,6 +807,12 @@ class RosBridge:
         except Exception as exc:  # 추종 실패가 브리지 루프를 멈추면 안 된다
             self._node.get_logger().warning(f"swarm tick failed: {exc}")
 
+    def _tick_trail(self) -> None:
+        try:
+            self._svc.swarm.trail_tick(self._line_clock())
+        except Exception as exc:  # a failed tick holds (the nav twist ages out in 0.5 s)
+            self._node.get_logger().warning(f"trail tick failed: {exc}")
+
     def _tick_docking(self) -> None:
         docking = self._svc.docking
         self._dock_ticks += 1
@@ -758,6 +823,10 @@ class RosBridge:
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
     def send_goal(self, spec: NavGoalSpec, *, correlation_id: str | None = None) -> None:
+        self.send_native_goal(spec, None, correlation_id=correlation_id)
+
+    def send_native_goal(self, spec: NavGoalSpec, native_run_id,
+                         *, correlation_id: str | None = None) -> None:
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = spec.frame
         goal.pose.header.stamp = self._node.get_clock().now().to_msg()
@@ -767,7 +836,7 @@ class RosBridge:
         goal.pose.pose.orientation.w = math.cos(spec.yaw / 2.0)
         if not self.nav_client.wait_for_server(timeout_sec=0.0):
             self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
-        generation = self._goals.opening(correlation_id)
+        generation = self._goals.opening(correlation_id, native_run_id)
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(
             lambda done, gen=generation: self._goal_response_cb(done, gen))
@@ -790,6 +859,9 @@ class RosBridge:
         if handles:
             self._node.get_logger().info(
                 f"navigation cancel requested ({len(handles)} goal(s))")
+
+    def native_transport_snapshot(self):
+        return self._goals.transport_snapshot()
 
     def send_initial_pose(self, x: float, y: float, yaw: float) -> None:
         msg = PoseWithCovarianceStamped()

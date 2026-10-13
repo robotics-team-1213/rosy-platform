@@ -3,6 +3,8 @@
 // 로봇 설정이 아니라서 API를 부르지 않는다. 기본은 어둡게(관제실·현장 조명 계약).
 // 선택지(값·이름)는 theme.js `RosyTheme.choices`가 단일 출처다.
 
+import { actionIcon } from "/common/ui.js";
+
 export function mount(el) {
   const head = document.createElement("ui-head");
   const title = document.createElement("ui-text");
@@ -22,13 +24,13 @@ export function mount(el) {
     // theme.js가 누름을 받아 RosyTheme.set을 부르고 aria-pressed를 맞춘다.
     button.dataset.themeChoice = value;
     button.setAttribute("aria-pressed", value === current ? "true" : "false");
-    // D-405 — 얼굴은 아이콘, 한국어 이름은 sr-only·title로 남는다.
+    // D-405 — 얼굴은 actionIcon, 한국어 이름은 sr-only·title로 남는다.
     button.title = label;
-    button.innerHTML = icon || "";
     const name = document.createElement("span");
     name.className = "sr-only";
     name.textContent = label;
     button.append(name);
+    if (icon) actionIcon(button, icon);
     group.append(button);
   }
 

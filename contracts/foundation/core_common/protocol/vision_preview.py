@@ -20,6 +20,11 @@ _MAX_TTL_S = 120
 class PreviewRectification:
     """Bounded, serializable preview-only lens and plane settings."""
 
+    #: D-484: "manual" corners come from this lease; "auto" asks Vision to use the
+    #: field-boundary calibration's accepted quad instead (lens fields still apply).
+    #: D-560: "map" asks Vision for the top-down map plane from the approved tracking
+    #: calibration record; it carries no other field.
+    mode: str = "manual"
     fx: float = 1.0
     fy: float = 1.0
     cx: float = 0.5
@@ -35,6 +40,8 @@ class PreviewRectification:
     output_aspect: float = 0.0
 
     def __post_init__(self) -> None:
+        if self.mode not in ("manual", "auto", "map"):
+            raise ValueError("rectification mode must be manual, auto or map")
         for name in ("fx", "fy"):
             _bounded(getattr(self, name), name, 0.25, 4.0)
         for name in ("cx", "cy"):
@@ -66,10 +73,12 @@ class PreviewRectification:
     def from_mapping(cls, raw: Mapping[str, object]) -> "PreviewRectification":
         if not isinstance(raw, Mapping):
             raise ValueError("rectification settings must be an object")
-        allowed = {"fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3",
+        allowed = {"mode", "fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3",
                    "corners", "output_aspect"}
         if raw.keys() - allowed:
             raise ValueError("rectification settings contain unknown fields")
+        if raw.get("mode") == "map" and raw.keys() != {"mode"}:
+            raise ValueError("map rectification takes no other fields")
         corners = raw.get("corners", cls.corners)
         if not isinstance(corners, (tuple, list)) or any(
                 not isinstance(point, (tuple, list)) for point in corners):
@@ -79,14 +88,17 @@ class PreviewRectification:
         return cls(**values)
 
     def as_dict(self) -> dict:
-        return {"fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
+        if self.mode == "map":
+            return {"mode": "map"}
+        return {"mode": self.mode, "fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
                 "k1": self.k1, "k2": self.k2, "p1": self.p1, "p2": self.p2,
                 "k3": self.k3, "corners": [list(point) for point in self.corners],
                 "output_aspect": self.output_aspect}
 
     @property
     def is_identity(self) -> bool:
-        return (self.fx == 1 and self.fy == 1 and self.cx == 0.5 and self.cy == 0.5
+        return (self.mode == "manual"
+                and self.fx == 1 and self.fy == 1 and self.cx == 0.5 and self.cy == 0.5
                 and all(getattr(self, name) == 0 for name in ("k1", "k2", "p1", "p2", "k3"))
                 and self.corners == ((0, 0), (1, 0), (1, 1), (0, 1))
                 and self.output_aspect == 0)
@@ -114,7 +126,9 @@ class VisionLeaseSigner:
 
     def issue(self, *, principal_id: str, source_id: str, now: int | None = None,
               ttl_s: int = 60,
-              rectification: Mapping[str, object] | None = None) -> str:
+              rectification: Mapping[str, object] | None = None,
+              crop_map: tuple[float, float, float] | None = None,
+              crop_map_id: str | None = None, crop_revision: str | None = None) -> str:
         current = int(time.time()) if now is None else now
         if not isinstance(principal_id, str) or not principal_id or len(principal_id) > 96:
             raise ValueError("invalid preview principal")
@@ -126,6 +140,13 @@ class VisionLeaseSigner:
                    "scope": "frame:read", "iat": current, "exp": current + ttl_s}
         if rectification is not None:
             payload["rectification"] = PreviewRectification.from_mapping(rectification).as_dict()
+        if crop_map is not None:
+            if payload.get("rectification", {}).get("mode") != "map":
+                raise ValueError("map crop requires map rectification")
+            payload["crop_map"] = _valid_crop_map(crop_map)
+            payload["crop_map_id"] = crop_map_id
+            payload["crop_revision"] = crop_revision
+            _valid_crop_binding(payload)
         body = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
         signature = _b64(hmac.new(self._key, body.encode("ascii"), hashlib.sha256).digest())
         return f"{body}.{signature}"
@@ -156,7 +177,30 @@ class VisionLeaseSigner:
                 PreviewRectification.from_mapping(payload["rectification"])
             except (TypeError, ValueError) as exc:
                 raise VisionLeaseError("invalid rectification settings") from exc
+        if "crop_map" in payload:
+            try:
+                if payload.get("rectification", {}).get("mode") != "map":
+                    raise ValueError("map crop requires map rectification")
+                _valid_crop_map(payload["crop_map"])
+                _valid_crop_binding(payload)
+            except (TypeError, ValueError) as exc:
+                raise VisionLeaseError("invalid map crop") from exc
         return payload
+
+
+def _valid_crop_map(value: object) -> list[float]:
+    if not isinstance(value, (tuple, list)) or len(value) != 3:
+        raise ValueError("map crop needs x, y and radius")
+    x, y, radius = value
+    return [_bounded(x, "crop x", -1000.0, 1000.0), _bounded(y, "crop y", -1000.0, 1000.0),
+            _bounded(radius, "crop radius", 0.1, 2.0)]
+
+
+def _valid_crop_binding(payload: Mapping[str, object]) -> None:
+    for key in ("crop_map_id", "crop_revision"):
+        value = payload.get(key)
+        if not isinstance(value, str) or not value or len(value) > 128 or any(c.isspace() for c in value):
+            raise ValueError("map crop needs map and calibration revision")
 
 
 def _b64(value: bytes) -> str:

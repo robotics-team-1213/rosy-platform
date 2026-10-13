@@ -94,3 +94,59 @@ def test_ci_result_aggregates_the_matrix_for_branch_protection():
     assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
     script = result["steps"][-1]["run"]
     assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script
+
+
+def test_offline_wheel_install_matches_built_metadata_and_internal_dependencies():
+    import re
+    import tomllib
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    script = next(s["run"] for s in steps if s["name"] == "Build and install ROS-free platform API wheels")
+    built = {}
+    for path in re.findall(r"[a-z][a-z_/-]+/[a-z][a-z_/-]+", script):
+        metadata = ROOT / path / "pyproject.toml"
+        if metadata.is_file():
+            project = tomllib.loads(metadata.read_text(encoding="utf-8"))["project"]
+            built[project["name"]] = project
+    installed = dict(re.findall(r"(rosy-[a-z-]+)==([0-9.]+)", script))
+    assert built, "CI must build real source wheels"
+    assert installed == {name: p["version"] for name, p in built.items()}
+    for project in built.values():
+        for dependency in project.get("dependencies", []):
+            if dependency.startswith("rosy-"):
+                name, version = dependency.split("==")
+                assert installed.get(name) == version, f"offline wheelhouse missing {dependency}"
+
+
+def test_raw_numpy_tools_are_isolated_from_debian_and_keep_runtime_constraints():
+    import shlex
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    script = next(s["run"] for s in steps if s["name"] == "Install Pinky raw verification tools")
+    commands = [shlex.split(line) for line in script.replace("\\\n", " ").splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+    requirements = next(args for args in commands if "-r" in args)
+    target = requirements[requirements.index("--target") + 1]
+    assert target.startswith("/tmp/")
+    assert "-c" in requirements, "retain runtime constraints for raw tools"
+    assert 'PYTHONPATH='+target+'${PYTHONPATH:+:$PYTHONPATH}' in script
+    assert "numpy==2.2.6" in (ROOT / "learning/curation/pinky/requirements-raw.txt").read_text()
+
+
+def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    step = next((s for s in steps if s["name"] == "Install receiver TLS verification runtime"), None)
+    assert step is not None, "TLS contracts cannot use the older container cryptography"
+    script = step["run"]
+    assert "receiver-crypto-requirements.txt" in script
+    assert "--require-hashes --no-deps --only-binary=:all:" in script
+    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in script
+    assert "--target /tmp/rosy-receiver-crypto" in script
+    assert 'echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"' in script
+    assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
+    assert 'cryptography.__version__ == "50.0.0"' in script
+    assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")

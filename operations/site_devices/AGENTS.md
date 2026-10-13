@@ -1,7 +1,10 @@
-<!-- Parent: ../../AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-25 | Updated: 2026-10-03 -->
 
 # site_devices
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

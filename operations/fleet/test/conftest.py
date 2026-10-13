@@ -14,8 +14,23 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 
 # Each entry is the *outer* ROS-package dir, so the inner Python package
 # (which owns __init__.py) resolves: fleet, core_common (prod, D-126 S3),
-# core_features (test_geometry.py follow_goal cross-check only, D-60).
-for path in (SRC.parent / "operations" / "fleet", SRC.parent / "contracts" / "foundation", SRC.parent / "middleware" / "core" / "services"):
+# core_features (cross-checks only: test_geometry.py follow_goal, D-60; test_trip_runner.py CORE's
+# junction manoeuvre states).
+for path in (
+    SRC.parent / "operations" / "fleet",
+    SRC.parent / "operations" / "decision" / "src",
+    SRC.parent / "operations" / "world" / "src",
+    SRC.parent / "operations" / "execution" / "src",
+    SRC.parent / "contracts" / "foundation",
+    SRC.parent / "middleware" / "core" / "services",
+    # Cell app tests import this production dependency before test_cell_compiler.
+    SRC.parent / "operations" / "processes" / "palletizing" / "src",
+):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)
+
+# Browser tests here import test/browser_harness.py (opt-in flag, Chromium-safe ports).
+_HARNESS = str(Path(__file__).resolve().parents[3] / "test")
+if _HARNESS not in sys.path:
+    sys.path.append(_HARNESS)

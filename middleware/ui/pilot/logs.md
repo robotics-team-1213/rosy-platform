@@ -1,11 +1,13 @@
 # pilot logs
 
+
 ## 2026-09-29 · 8f4ecfe2 · feat(hmi): pilot 골격과 /pilot 라우트 (실행 계획 T1)
 - 변경: 패키지 `pilot`(ament_cmake)·`index.html`(ui-shell spatial)·`styles.css`·`core_api_web` `/pilot`·`/pilot/assets` 라우트와 MIME allowlist·`core_api_web` package.xml `pilot` 의존성. 실패 테스트 선행.
 - 증거: `test_pilot_route.py` 2 passed(404→200 확인). api_web 전체 72 passed·web_common 3 failed 는 `known_failures.py` 판정 0 new(기존 fleet 카메라 코너 스타일·system.js 결함, 2026-09-29 Windows).
 - gate 변화: SOURCE GO.
 - 결정: D-323.
 - 교훈: 없음
+
 
 ## 2026-09-29 · 434ceb0b · feat(pilot): stick.js 순수 입력 매핑 (실행 계획 T3)
 - 변경: `stick.js` — `shapeAxis`(데드존·감도 곡선·클램프·원점 대칭), `mapInput`(pad·pedals·keys), `PRESETS`(low/mid/high 클라이언트 상한). 모듈을 `pilot_assets`·CMakeLists 에 등록.
@@ -353,6 +355,11 @@
 - 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
 
+## 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+
+- Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
+- Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
+- Gate: Metadata correction only; existing physical and field gates are unchanged.
 ## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
 
 - 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
@@ -404,3 +411,461 @@
 - 변경: connect 화면의 frame fetch는 shared camera-pair 검증기에 Response를 넘겨 ok·metadata·blob 검사 소유권을 유지한다.
 - 증거: 실제 EMERGENCY JPEG 표시와 mode 변경 요청 없음의 기존 browser 시험 PASS, 독립 source/host 리뷰 APPROVE. 전체 browser 727 입력의 유일한 실패는 Robot fullscreen 시험이며 원본은 별도 보존한다.
 - gate 변화: SOURCE/LOCAL만. 실기 영상·주행·기록 또는 새 서명 payload 완료로 승격하지 않는다. D-427 개별 게이트 검증 기록 참조.
+
+## 2026-10-05 · uncommitted · feat(pilot): DEVICE GO — 사용자 실기 확인 (D-444 §2 R2)
+
+- 변경: pilot `progress.md` DEVICE 게이트 HOLD→GO. 사용자가 실기 Pinky에서 Pilot 원격 조종·페달 해제·e-stop이 실제 정지로 이어지는 것을 직접 확인했다. 정량 측정값(ms·cm)은 별도 회차에 보강한다. 증거: `docs/validation/pilot-device-user-confirmed-2026-10-05/README.md`.
+- 증거: 사용자 확인 ("건했어. pilot 는 돼", 2026-10-05). 합격선 참조: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md`.
+- gate 변화: pilot DEVICE **GO** (사용자 확인 등급). FIELD는 별개(D-454 결정 3).
+- 결정: D-444 §2 R2 충족. 사다리 P2 완료.
+## 2026-10-05 · uncommitted · feat(pairing): LAN 승인 기록과 신원 확인 재연결
+
+- 변경: 같은 LAN 목록에서 선택한 장비에 수신 승인을 요청하고 P256 키·TLS 신원 확인 뒤 기존 조종 세션으로 연결한다. 승인 기록은 일반 세션과 별도로 암호화해 보관한다. 승인 직후 연결 실패에도 기록을 남기고, 키 변경·폐기·발급자 만료 시 기록을 보존한 채 접속을 차단한다. 마지막 선택 장비의 연결 정보를 실패 화면에서도 열 수 있다.
+- 증거: 최종 Kotlin 컴파일과 실제 JVM 검사 81 PASS·0 SKIP. 승인 뒤 challenge 실패의 저장 순서와 실패한 재연결에서 기존 암호화 바이트 보존을 회귀 검사했다. 실제 Android 대화상자 표시·APK 설치·상대 화면 승인·DHCP 재연결은 아직 확인하지 않았다.
+- gate 변화: 새 페어링 변경의 SOURCE/LOCAL 증거다. 기존 D-444 사용자 실기 확인 DEVICE GO는 보존하며 이를 새 페어링 수용으로 대신하지 않는다. Bluetooth·주소 입력·개발 설정은 기본 연결 흐름에 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · refactor(pairing): 발급 세션 변수와 시험 이름 명확화
+
+- 변경: 발급된 단기 세션 변수명을 accessToken으로 명확히 하고 세 시험 이름을 줄였다. wire 필드와 검증 단언은 유지한다.
+- 증거: 세 파일의 독립 source 검토에서 이름 변경만 확인했다. 변경한 실제 snapshot의 Kotlin 컴파일과 JVM 검사 81 PASS·0 SKIP를 다시 확인했다.
+- gate 변화: SOURCE/LOCAL만. 실제 설치·LAN 승인 수용은 별도다.
+
+## 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
+
+- 변경: `vision.js`에 `createDriverStream`(fetch 스트림 + multipart 증분 파서 + fps·age 통계, 헤더 인증만·URL 토큰 없음 D-193) 추가. `drive.js` 조종 화면에서 스트림 시도 — 붙으면 폴링 정지, 끊기면 폴링 복귀 후 3 s 재시도, HUD에 `영상 Nfps · Mms` fact(1 s 초과 경고색). 주석 쌍(annotated) 캡처는 원본 짝이 필요해 raw 모드에서만 스트림. `robot-recording.js`의 미리보기 수락 경로(acceptPreview)를 폴링·스트림 공용으로 추출. `sw.js` 캐시 키 갱신.
+- 증거: `test/test_vision_stream_client.py` 3 PASS(분할 청크 재조립·몸통 분할 대기·프레임/통계/종료 폴백). pilot 전체 90 PASS. ADR이 명시한 createImageBitmap·캔버스 대신 기존 img+objectURL 파이프라인을 재사용했다 — 계약의 실질(헤더 인증·멀티파트·URL 토큰 금지)은 동일하고 녹화 캡처가 한 경로를 유지한다.
+- gate 변화: SOURCE. 실기 태블릿에서의 fps ≥ 10·지연 실측은 DEVICE 별도 회차(D-368 Validation).
+
+## 2026-10-05 · uncommitted · fix(pilot): 승인 화면 시험 서버 자산 정합
+
+- 변경: 시험 서버의 peer-approval.js 제공을 CORE·OMX 목록과 일치시킨다. 실제 앱 번들·통신 권한은 바꾸지 않는다.
+- 증거: 기존 shell 자산 불일치 실패를 수리한 뒤 관련 16 passed. 설치된 Pilot에서 같은 LAN 로봇 목록과 선택 뒤 기존 로그인 코드 창을 직접 확인했다.
+- gate 변화: SOURCE/LOCAL 및 앱 설치 관찰. 새 수신 승인·장기 재연결의 DEVICE 수용은 배포 후 별도다.
+
+## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
+
+- 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
+- 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
+
+## 2026-10-05 · uncommitted · uiux: drive geometry stays in the stylesheet
+
+- 변경: 스틱·영상 이동·확대·좌우 띠·녹화 시트·자동 의도·팔 노브가 요소 스타일 대신 속성과 typed attr()를 쓴다. 쓰이지 않던 --video-ratio는 뺐다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 화면 이동·복귀 2 viewport 통과. 노브 변환과 띠 너비는 계산값과 같다. 장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(pilot): 연동 코드 보여주기(양방향)
+
+- 변경: 기기에 화면이 없을 때 Pilot이 코드를 보여 주고 상대 기기에서 입력한다(D-193 §5 등록 코드, 기존 CORE `POST /api/v1/auth/enrollment-codes` 그대로 사용 — 새 API·모드·필드 없음). `client.js` `requestEnrollmentCode(role)`, 접속 화면의 관리자 전용 "연동 코드 보여주기"(코드 발급 → `scale="display"` 큰 표시 + 유효분 안내, 403은 권한 문구). 반대 방향(상대 화면 코드 → Pilot 입력)은 기존 폼 그대로. `sw.js` 캐시 키 갱신. 개발 서버에 canned 발급 + `devadmintoken`(administrator) 추가.
+- 증거: `python -m pytest middleware/ui/pilot/test middleware/core/api_web/test/test_pilot_route.py -q` 92 passed 73 skipped; `ROSY_RUN_BROWSER_TESTS=1 -k "show_code or gate_panel or bad_token or lobby_lists"` 4 passed(신규: 운전자는 버튼 없음·관리자는 DEMO-C0DE 표시·가로 넘침 0); known_failures NEW 0.
+- gate 변화: SOURCE 유지. ARTIFACT(새 APK 빌드·서명)·DEVICE(실 태블릿 표시·상대 기기 입력)·FIELD는 별도.
+
+## 2026-10-05 · uncommitted · feat(pilot): 보여준 코드의 남은 유효 시간 표시
+
+- 변경: 연동 코드 발급 뒤 남은 수명을 `유효 MM:SS` 카운트다운으로 같이 보여 주고, 만료 시 "다시 발급해 주세요" 안내만 바꾼다(자동 재발급 없음 — 코드 소모 없이 끝난다). 화면 재진입·재확인 때 카운트다운 타이머를 정리한다(`__enrollDispose`). 역할 문구는 조회용/운전자용으로 읽힌다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 -k show_code` 1 passed(카운트다운 진행·재발급 버튼 유지·재진입 정리); 전체 `middleware/ui/pilot/test` + `test_pilot_route` 92 passed 73 skipped, known_failures NEW 0.
+- gate 변화: SOURCE 유지. 태블릿 재설치·실기 확인은 별도.
+
+## 2026-10-05 · uncommitted · fix(pilot): 태블릿 카메라 오류 — 프록시가 X-Rosy-* 증명 헤더를 지움
+
+- 원인(실기 재현): Lenovo 태블릿의 네이티브 앱에서 "카메라 보기"가 계속 실패했다. WebView(CDP) 안에서 상태→프레임 반입을 재현한 결과 `GET /api/v1/vision/front/frame?sequence=N` 은 200인데 응답의 `X-Rosy-Camera-Source/Sequence/Captured-At/Frame-Id/Variant` 헤더가 모두 사라져 있었다. CORE는 다섯 헤더를 정상적으로 내보낸다(PC 직접 반입으로 확인). `PilotProxy.serveHttp`가 본문·Content-Range만 전달하고 나머지 헤더를 버려서, web_common `evidence.js fetchCameraPair`의 프레임 출처 검증이 항상 실패했다. PC에서 두 요청을 나눠 보내면 지연으로 409 CAMERA_FRAME_ADVANCED가 나는 별개의 정상 레이스도 확인했다(페이지 내 70 ms 주기는 200).
+- 변경: `PilotProxy.kt`에 `forwardRosyHeaders` — CORE 응답의 `x-rosy-*` 접두사 헤더를 바이트 경로와 스트리밍 경로 모두 그대로 붙인다. 같은 결함군으로 D-368 운전자 MJPEG 스트림(`multipart/x-mixed-replace`)이 본문 버퍼링 경로로 흘러 응답이 통째로 도착할 때까지 화면이 멈추던 것을 스트리밍 경로(녹화본 `x-tar`와 같은 bounded 통과)로 통과시킨다. 요청 방향·경로 검사·자격 규칙은 그대로. android README에 전달 규칙 한 줄 추가.
+- 증거: JVM 신규 시험 `cameraProvenanceHeadersReachTheBundledScreens`(MockWebServer가 다섯 헤더를 내고 프록시 응답에 그대로 오는지) — 빌드 결과는 커밋 메시지에 기록. multipart 통과는 기존 `x-tar` 스트리밍 경로의 조건 확장이라 별도 시험 없다(이 MockWebServer엔 열린 원본을 위한 chunked 오버로드가 없다). 태블릿 재설치 뒤 CDP로 헤더 도착·카메라 화면 프레임 표시를 확인할 예정.
+- gate 변화: LOCAL(프록시 결함은 JVM 시험으로 판정). 실기 태블릿 확인은 별도. main
+
+## 2026-10-05 · uncommitted · fix(pilot): 일시 연결 실패 배너가 회복 뒤에도 남던 것
+
+- 변경: 네이티브 PilotProxy가 상단 배너를 오류 문구로 바꾼 뒤 회복 신호가 없어, 일시 끊김 후 연결·영상·조종이 모두 정상이어도 TLS 또는 연결을 확인하세요 가 화면에 남았다(2026-10-05 9dfk 실주행 중 관찰 — 배너와 달리 영상 80ms·속도 명령 살아 있음). PilotProxy에 recovery 콜백을 추가: 실패를 한 번 알렸으면 다음 성공 응답에 회복을 알리고, MainActivity는 배너를 정상 연결 문구(connectedLabel)로 되돌린다. 세션 종료 시 배너 상태를 비운다.
+- 증거: JVM 신규 시험 transientFailureThenSuccessReportsFailureThenRecovery — 재시도 없는 주입 client로 첫 요청을 응답 없음(NO_RESPONSE)으로 실패시키면 502+failure 1회, 다음 성공에서 recovery 정확히 1회, 이후 성공은 중복 알림 없음. 전체 87 tests passed(빌드 2026-10-05). 설치 뒤 8kcn 재연결로 정상 배너 회귀 확인.
+- gate 변화: SOURCE/LOCAL. 실기에서 일시 끊김 유도 관찰은 별도.
+
+## 2026-10-06 · uncommitted · fix(pilot): 운영자 화면에서도 연동 코드 보여주기 항목을 보인다
+
+- 변경: 연동 코드 보여주기는 관리자만 쓸 수 있어 현장 태블릿(피어 승인 = 운영자)에는 항목 자체가 안 보였다(2026-10-06 사용자 보고). 항목은 운영자에게도 보이게 하고, 발급 요청이 CORE 403이면 관리자 코드로 전환 버튼(기존 토큰 폼 재사용)을 그 자리에 제공한다. 관리자 코드를 입력하면 세션이 교체되어 발급이 가능해진다. CORE 계약(관리자만 발급)은 그대로다. sw.js 캐시 키 갱신.
+- 증거: 브라우저 시험 갱신 - 운영자(devtoken)는 항목 표시 + 403 안내 + 전환 폼 진입, 관리자(devadmintoken)는 DEMO-C0DE 발급·카운트다운. 전체 92 passed 73 skipped, known_failures NEW 0.
+- gate 변화: SOURCE. 실기 태블릿 확인은 별도.
+
+## 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다
+
+- 변경: 사용자 결정(2026-10-06)으로 발급받은 피어 세션(만료 상한 1시간)을 PeerRelationshipVault 에 슬롯 하나로 암호화 저장하고, 재연결 때 새 발급(challenge·session POST) 없이 whoami·system/info 확인만으로 그대로 재사용한다. 만료 임박(60초 미만)·401·형식 불일치면 저장분을 지우고 기존 발급 경로로 내려간다. 승인 기억 삭제(기기·연결)는 저장 세션도 함께 지운다. 세션 수명은 서버 계약(최대 1시간) 그대로 — 저장 수명을 늘리는 것이 아니라 발급 낭비를 없앤 것. 종료 시 반납(같은 날 초안)은 재사용과 충돌해 폐기했다.
+- 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
+- gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
+
+## 2026-10-06 · 65692ce69 · fix(pilot): 만료된 승인에서 재승인 요청 경로를 연다
+
+- 원인(실기 9dfk): 저장된 승인의 사용 기한이 끝나면 PeerClient가 네트워크 없이 PeerApprovalExpired를 던지고, 화면은 "수신 장치에서 재승인을 확인하세요"라고 안내했다. 앱이 새 요청을 보내지 않으므로 수신 쪽에 확인할 것이 없어 막다른 길이었다.
+- 변경: 만료가 나면 "다시 승인 요청" 대화상자를 띄운다. 사용자가 누르면 이 태블릿의 만료 기록만 지우고(기존 "이 앱의 연결 기록 지우기"와 같은 경로) 로봇이 다시 보이는 즉시 자동 재선택해 새 요청을 보낸다. 사용자 동작 없이 요청을 보내지 않는 기존 규칙(만료 = 네트워크 0회 JVM 시험)은 그대로다.
+- 증거: JVM 89 passed. 태블릿 실기(2026-10-06 9dfk): 대화상자 표시 → 승인 요청 → 수신 승인 대기 화면(새 요청) 확인.
+- gate 변화: SOURCE/LOCAL 및 실기 관찰.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
+
+- 변경: Gazebo 팔 연습에서 영상이 없으면 빈 영상 칸 대신 조작부를 먼저 전폭으로 보이고 팔·그리퍼 창을 같은 폭으로 맞췄다. 영상이 있으면 기존 영상·조작부 병렬 배치를 유지한다.
+- 증거: 태블릿 2000×1200·1200×2000, 전화 390×844, 영상 있는 경로 포함 브라우저 5 passed, `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
+- gate 변화: LOCAL 레이아웃 근거만 추가. 운전자 G3·장치/현장 UI/UX 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류의 운용자 문구
+
+- 변경: Pilot 대상 발견 실패 화면에서 내부 영문 예외를 제거하고 연결 확인·재시도만 표시한다. 다른 알림이 갱신된 경우 그 문구는 유지한다.
+- 증거: 390×844 FastAPI/Chromium 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 보관했다.
+- gate 변화: LOCAL 오류 화면 부분 근거. 실제 Android 셸·장치 readback·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 주행 조작 도달성과 영상 재시도
+
+- 변경: 390px 주행 화면의 잘린 페달·회전 버튼을 조작 칸 안에서 접근 가능하게 하고, 영상 재시도 타이머를 `clearTimeout`으로 정리해 런타임 오류를 없앴다.
+- 증거: 현재 FastAPI/Chromium 2000×1200·1333×760·1200×2000·390×844 영상·조작 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. 첫 화면과 스크롤 후 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
+- gate 변화: LOCAL 주행 G2 부분 근거. 전화 회전 조작의 발견 가능성, 전체 선언 상태·운전자 G3·장치 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 네이티브 로비의 좁은 가로 폭
+
+- 변경: Pilot Shell의 가로 폭이 600dp 미만이면 고정 260dp 정보 칸 대신 로봇 목록을 전폭으로 놓고 태블릿 상태·기기 연결을 목록 아래에 둔다. 600dp 이상은 기존 두 칸 배치를 유지한다.
+- 증거: Android `testDebugUnitTest` 89 passed, debug APK 빌드·설치. 격리 에뮬레이터 800×600/320dpi의 변경 전 세로로 깨진 다시 찾기와 변경 후 가로 버튼·상태·기기 연결, 1200×800·2000×1200 유지 화면을 X: 캡처로 확인했다. 1200×800/글자 130%에서는 UI bounds로 제목·다시 찾기 비겹침을 확인했다. 좁은 기기 대화상자는 본문을 스크롤해 닫기에 도달했다.
+- gate 변화: Pilot Shell LOCAL G2 빈 발견·기기 상태 부분 근거. 실제 로봇·페어링·오류와 태블릿·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 작은 태블릿의 확대 글자 재판정
+
+- 변경: UI/UX 회차의 Pilot Shell 400dp 가로·글자 130% G2 셀을 채웠다.
+- 증거: 현재 APK의 800×600/320dpi 에뮬레이터에서 로봇 선택·다시 찾기·상태·빈 목록 안내·배터리·기기 연결 UI bounds가 모두 `[32,32]`–`[768,568]` 안에 있다. 캡처와 UI 계층 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 한 셀 추가. 실제 로봇 후보·페어링·오류·Lenovo 태블릿·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 안내
+
+- 변경: 전화의 고정된 주행 조작 칸에서 스틱 아래 빈 곳에 회전 조작 안내를 표시했다. 피벗이 없는 로봇 프로필에는 안내를 만들지 않는다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 390×844 전후 캡처, 카메라·조작부·기능 없는 프로필·스틱 접촉 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot 전화 LOCAL G2 부분 근거 추가. 실제 운전자에게 안내가 충분한지 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 자동 모드의 회전 안내 제거
+
+- 변경: 차선 자동 모드가 수동 회전 버튼을 숨기는 동안 전화의 회전 안내도 숨기고, 수동 복귀 때 다시 표시한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 390×844 자동·수동 캡처, 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 모드 상태 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 주행 머리 겹침
+
+- 변경: 320px 주행 화면에서 이름과 이동 버튼이 겹쳐 22rem 미만의 중복 이름을 숨겼다. 이동·비상 정지는 남긴다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 캡처, 320/390px 자동·수동 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 너비
+
+- 변경: 320px에서 제자리 좌·우회전 버튼의 내용이 반폭 칸을 넘쳐, 22rem 미만에서는 두 버튼을 조작 열 전폭으로 쌓았다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 전후 X: 캡처와 실제 내용 폭 57/66px, 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320×568 카메라·조작 균형
+
+- 변경: 짧은 전화 화면에서 HUD·조작부가 카메라 높이를 0으로 만들던 배치를 줄였다. 속도·정지·연결 사실과 기본 주행은 첫 화면에, 부가 도구와 회전은 내부 스크롤에 둔다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처. 5폭 영상 비율·비겹침·면적 계약과 2폭 모드 브라우저 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot 짧은 전화 LOCAL G2 부분 근거 추가. 실제 운전자 발견·조작 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 HUD 단일 경로
+
+- 변경: 320×568에서 모델·차선 인식·영상 맞춤/채우기를 기존 도구 판으로 옮겨 HUD 스크롤을 없앴다. 폭이 넓어지면 원래 HUD 자리로 돌아간다. 비상 정지·정지·상태와 기본 주행은 첫 화면에 남긴다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 본화면·도구 판 X: 캡처, 5폭 영상·2폭 모드·반응형 도구·기존 녹화 도구 브라우저 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실기 운전자의 도구 발견·조작 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 폭 전환 중 도구 판 닫힘
+
+- 변경: 짧은 전화와 넓은 화면 사이를 전환할 때 열린 도구 판과 모델·차선 세부 내용을 닫아, 설정이 다른 자리로 옮겨진 뒤 빈 판이 남지 않게 했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 반응형 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 전환 부분 근거 추가. 실제 전화 회전·운전자 G3와 제품 전체는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 칸 동등 폭
+
+- 변경: 영상이 있는 팔 화면의 작업 공간과 조작 칸을 1:1로 맞추고 넓은 화면에서 조작 카드가 나란히 설 공간을 확보했다.
+- 증거: [UI/UX 점검](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 2000×1200 영상 fixture 두 칸 너비 차이 ≤1px, 2000×1200·1200×2000·390×844 집중 브라우저 4 passed, `known_failures.py` 0 NEW. 캡처는 X: `captures/pilot-arm-equal/`.
+- gate 변화: Pilot LOCAL G2 폭 근거 추가. 실제 영상·태블릿 조작과 G3 및 제품 전체는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pilot-shell): 후보 행과 600dp 목록 폭
+
+- 변경: debug 전용 합성 후보·보류 행으로 기존 `PilotViews.robot`을 표시했다. 실제 로비의 한 열 경계를 600dp에서 720dp로 올리고 후보 이름에 Android 균형 줄바꿈을 적용했다.
+- 증거: 격리 Android 35 AVD 1000/600/400dp 후보 화면과 600dp 실제 빈 로비, 400dp 보류 행 스크롤 캡처를 X: `captures/pilot-candidate-preview/`에 보존했다. 600dp 두 후보 행은 같은 1136px 폭, 400dp 두 행은 같은 736px 폭이다. 현재 debug APK 빌드 성공; preview Activity는 release manifest에 없다.
+- gate 변화: Pilot Shell LOCAL G2의 합성 후보·폭 부분 근거. 실제 로봇 발견·승인/거부·재접속, Lenovo 태블릿과 사용자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot-shell): 400dp 후보 이름 판독
+
+- 변경: 480dp 미만의 후보 행에서 장식용 로봇 아이콘을 생략해 이름에 가용 폭을 돌렸다. 연결·보류와 화살표, 동일한 행 폭·접근성 이름은 유지한다.
+- 증거: 격리 Android 35 AVD 800×600/밀도 320dpi/글자 130%에서 첫 행 이름이 한 줄이고 두 후보 이름이 첫 화면에 보인다. 첫 행 높이는 284px→220px, 두 행의 UI bounds 폭은 각각 736px이다. 보류 이유는 스크롤 뒤 읽는다. 1200×800에서는 기존 아이콘과 두 행 배치를 유지한다. X: `captures/pilot-candidate-compact/`, Gradle JVM 89 passed 및 debug APK 빌드 성공.
+- gate 변화: Pilot Shell LOCAL G2의 작은 가로 태블릿 판독 근거 추가. 실제 후보·Lenovo 태블릿·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 버튼 동등 폭 검증
+
+- 변경: 기존 전화 주행 브라우저 시험에 좌/우 제자리 회전 버튼의 렌더 폭 차이 ≤1px 검사를 추가했다.
+- 증거: 현재 트리의 320×568·390×844 회전 버튼 시험 2 passed, 카메라·조작 배치와 회전 안내 7 passed, 각각 `known_failures.py` 0 NEW. 320px 원본은 X: `captures/pilot-current-320/`이다.
+- gate 변화: Pilot 320px LOCAL 폭 근거 추가. 선언 상태 전체·운전자 G3·실물 장치 readback은 HOLD다.
+## 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
+
+- 변경: "수신 장치 승인 대기" 대화상자에 "로봇 화면의 승인 코드" 입력칸(6자, 대문자, 같은 알파벳)과 "승인 코드 확인" 버튼을 둔다. `PeerClient.confirm`이 `/requests/{id}/confirm`에 `X-Request-Secret`과 함께 보내고, 결과는 기존 상태 폴링이 받아 그대로 이어간다. 틀리면 남은 시도 횟수를 보이고 대화상자를 유지하며, 404(옛 CORE)면 입력칸을 "이 로봇은 콘솔 승인만 지원합니다"로 바꾼다. 콘솔 승인 경로는 그대로다.
+- 증거: JVM 신규 3건(screenCodeConfirmApprovesThroughTheStatusPoll, wrongScreenCodeReportsRemainingAttemptsAndKeepsWaiting, olderCoreWithoutConfirmRouteIsConsoleOnly) 포함 92 passed, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-06 · uncommitted · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다
+
+- 원인(실기 9dfk, 무선 adb·WebView CDP): 운전자 보고 "로봇 녹화가 저절로 꺼짐". 로봇 manifest 두 회 모두 정확히 600 s 에서 `stop_reason: max_duration`(D-411 결정 3 의 1회 10분). 화면은 지난 녹화 칩만 바꾸고 녹화는 끝났다.
+- 변경: `recording.js` `continueRecording(wanted, active)` — 이 기기가 켜고 끄지 않은 녹화가 `max_duration` 으로 쉬면 곧바로 다음 녹화본을 시작하고 칩에 "N번째 녹화로 이어 갑니다"를 보인다. 남의 정지·쿼터·디스크·오류·조종 종료 뒤에는 잇지 않는다. `drive.js` 의 스트림 재시도 타이머를 함수로 부르던 결함도 찾았으나 main 에서 같은 결함이 따로 고쳐져(`retryTimer`) 병합 때 main 쪽을 썼다. D-411 구현 부록 19. `sw.js` 캐시 키 갱신.
+- 증거: Node 순수 시험(continueRecording 7경우), 브라우저 시험 신규 `test_robot_recording_continues_past_the_ten_minute_cap_until_stopped`(가짜 CORE `cap`) 포함 녹화 브라우저 11 passed. 전체 결과는 커밋 메시지.
+- gate 변화: SOURCE/LOCAL. 실기 10분 경계 관찰은 태블릿 재설치 뒤.
+
+## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+
+- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
+- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈
+
+- 변경: 연결 로비의 빈 목록 안내를 짧게 써 400dp·글자 130%에서 마지막 음절만 다음 줄로 밀리지 않게 했다. 발견·연결 로직은 그대로다.
+- 증거: 격리 Android 35 에뮬레이터 400/600/1000dp 캡처와 JVM 93 passed. 원본·해시는 `docs/validation/uiux-pilot-empty-copy-2026-10-07/result.md`에 있다.
+- gate 변화: LOCAL 빈 목록 G2 셀만 보강. 실물 태블릿 후보 설치·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 연결 로비 전화 폭
+
+- 변경: 320/390px에서 로봇 목록 재검색·로그인 연결 버튼을 코드 입력 칸의 가용 폭에 맞췄다.
+- 증거: `docs/validation/uiux-pilot-lobby-width-2026-10-07/result.md`; 로비·태블릿 브라우저 7 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 전화 빈 목록·실패 폭 G2 부분 근거. 전체 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 거부의 운용자 문구
+
+- 변경: 조회 전용·구동 꺼짐 게이트에서 원시 `BLOCK`, `viewer`, CORE 사유 코드를 운용자 말로 표시하고 중복·오해 가능한 기술 행을 줄였다. 판정·요청 경로는 그대로다.
+- 증거: `docs/validation/uiux-pilot-gate-denied-2026-10-07/result.md`; 거부 2상태×4폭, 브라우저 11 passed, 드라이버 8 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 거부 상태 G2 부분 근거. 다른 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · 주행 HUD 상태 용어
+
+- 변경: 링크 상태와 운전 모드를 운용자 용어로 표시하고 내부 코드는 진단용 속성에 보존.
+- 증거: docs/validation/uiux-pilot-drive-status-2026-10-07/result.md; Chromium 4개 폭 4 passed, G1 90 passed, 각 known_failures.py 0 NEW.
+- gate 변화: LOCAL 일부 G2 보강. 나머지 상태·현장 장치·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단
+
+- 변경: 소켓 상실 때 대기 명령을 비우고 이동을 0으로 덮으며, 인증된 새 상태 프레임 전까지 주행 명령을 막는다. 권한 거부·인증 재확인에도 적용.
+- 증거: docs/validation/uiux-pilot-reconnect-2026-10-07/result.md; 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: LOCAL 재연결 G2 일부 보강. 현장 장치·전체 상태×폭·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 소켓의 무응답 상태 숨김
+
+- 변경: 상태 소켓이 열린 채 프레임을 멈추고 REST 상태 조회도 실패하면 마지막 속도·배터리·모드를 숨기고 「상태 수신 없음」을 표시한다. 다음 readback에서 회복한다.
+- 증거: [LOCAL 전이](../../../docs/validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 1 failed, 수정 후 관련 브라우저 11 passed, `known_failures.py` 0 NEW. G1 결과는 회차 기록에 둔다.
+- gate 변화: Pilot 320px G2 전이 일부 보강. 실제 태블릿·로봇 및 전체 G2/G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 카메라 전화 폭
+
+- 변경: 읽기 전용 카메라 상단에서 안내와 홈·비상 정지를 분리하고 전화 폭의 두 행동을 같은 너비로 맞췄다.
+- 근거: [LOCAL 8셀](../../../docs/validation/uiux-pilot-emergency-width-2026-10-07/result.md). 관련 브라우저 12 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 정지 readback, 나머지 선언 셀, 사용자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 전화 폭
+
+- 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 머리 상태 정직성
+
+- 변경: 실제 앱과 같이 Gazebo 팔 시험 fixture의 Home·비상 정지를 숨겼고, 팔 화면에서는 오래된 접속 대기·직접 조종 부제를 숨겨 본문의 시뮬레이션 전용·조작 가능 상태와 충돌하지 않게 했다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-arm-header-2026-10-07/result.md). 수정 전 320px 1 failed, 수정 후 집중 브라우저 6 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실물 태블릿·팔 장치 readback, 다른 상태·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
+
+- 변경: 네이티브 Pilot 로비 왼쪽 열의 「기기·연결」 버튼이 아이콘 대응표에 없어(옛 이름 "태블릿"만 있음) 글자만 보였고, 세로 레이아웃 기본 폭(가득 참)이라 글자가 가운데로 밀려 테두리 없는 글자처럼 보였다. 아이콘 대응에 "기기·연결"을 더하고(ic_tablet), 버튼을 내용 폭·왼쪽 정렬로 둔다.
+- 증거: Android JVM 93 passed. Lenovo 태블릿(무선 adb)에 설치해 로비 화면에서 아이콘과 정렬 확인(2026-10-07).
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 수신 중단·회복 네 폭 LOCAL 확인
+- 변경: 상태 소켓 무응답과 REST 503/무응답의 기존 브라우저 검사를 Pilot 선언 폭 네 개로 확장.
+- 증거: 브라우저 8 passed, `known_failures.py` 0 NEW; 원본은 `X:/DevTemp/pilot-silent-widths/`.
+- gate 변화: Pilot G2 부분 근거 확대, 제품 전체 HOLD.
+- 결정: D-153.
+- 교훈: 좁은 폭만 통과해도 태블릿·가로 화면의 수신 중단 상태는 검증되지 않는다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 조작 응답 시간 출처 표시
+- 변경: 주행 HUD의 무표제 ms 값과 시한 초과에 `조작 응답`을 붙여 상태 수신 신선도와 구분.
+- 증거: 수신 중단 네 폭×두 실패 브라우저 8 passed, G1 관련 계약 35 passed, 각각 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-latency-label/`.
+- gate 변화: Pilot G2 정직성 부분 근거, 제품 전체 HOLD.
+- 결정: D-153, D-280.
+- 교훈: 요청 왕복 시간은 로봇 동작 완료나 상태 수신 시간의 근거가 아니다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 320px 카메라 면적 회복
+- 변경: 320×568 아래 배치에서 HUD 세로 간격과 여백을 줄여 카메라에 높이를 돌려줌.
+- 증거: 전체 Pilot 재검사 115 passed·1 failed(카메라 16.3%); 수정 뒤 카메라 배치 다섯 폭 5 passed, D-153 G1 90 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-camera-320/`.
+- gate 변화: Pilot G2 부분 보강. 전체 회귀·실물·G3는 HOLD.
+- 결정: D-153, D-363.
+- 교훈: 가로 넘침과 영상 비겹침만으로 전화 폭의 카메라 판독 면적을 보장하지 못한다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 변경: 병합 후 전체 재실행과 응급 카메라 집중 재실행 결과를 회차 기록에 추가.
+- 증거: 전체 브라우저 114 passed·2 timeout failed; 실패한 응급 카메라 네 폭 집중 재실행 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-camera-320/postmerge-full.txt`, `emergency-retry.txt`.
+- gate 변화: 320px 면적 결함은 집중 검사에서 해결. 전체 무오류 회귀·실물·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+
+- 변경: `BundledAssetsTest.canonicalUiAndImportsAreBundled` 번들 목록에 팔 화면 여섯 자산(`pilot/screens/arm.js`, `pilot/screens/compose.js`, `pilot/widgets/gripper.js`, `pilot/arm-stick.js`, `pilot/controls.js`, `pilot/drivers/omx_sim.js`)을 추가했다. 앱 코드와 번들 규칙(`bundleScreens` glob)은 그대로다.
+- 증거: Android JVM `:app:testDebugUnitTest` 전체 93 passed(0 failed, 0 errors, 0 skipped) — `BundledAssetsTest` 3 passed 포함. 로그는 `X:/DevTemp/pilot-bundle/`에 있다.
+- gate 변화: 없음(SOURCE 번들 시험 보강).
+- 결정: D-411.
+- 교훈: 번들 포함은 glob이 자동으로 해 줘도 "들어 있다"의 증거는 시험 목록이 별도로 자란다 — 새 화면 자산을 올릴 때 목록을 같이 올린다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
+
+- 변경: 390px 주행 HUD의 영상 보기/도구·종료 행동을 두 칸씩 정렬하고, 320px의 도구·종료도 같은 가용 폭으로 맞췄다.
+- 증거: 수정 전 3 passed·2 failed, 수정 후 관련 브라우저 17 passed, 공용 계약 92 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-hud-actions/`와 `docs/validation/uiux-pilot-hud-action-width-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 창·조작 폭 규칙.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
+
+- 변경: 로비 내용의 48rem 트랙을 태블릿에서 채우고, 코드·토큰 입력의 보이는 라벨과 짧은 힌트를 붙였다. 전화 입력·행동의 동등 전폭을 유지했다.
+- 증거: 수정 전 태블릿 두 셀 2 failed, 수정 후 빈 발견·오류 × 네 폭 4 passed(8캡처), 인접 로비 9 passed, 계약 96 passed, 성공 실행 `known_failures.py` 0 NEW. `X:/DevTemp/pilot-lobby-matrix/`, `docs/validation/uiux-pilot-lobby-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot 접속 로비 LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 폭·읽힘 규칙.
+
+## 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
+
+- 변경: 대상 조회 불가·잘못된 대상의 로컬 브라우저 시험을 Pilot 선언 네 폭으로 늘리고, 재시도·비상 정지의 첫 화면 경계와 조작 크기를 검사했다. 제품 런타임은 그대로다.
+- 증거: 8셀 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-target-matrix/`, `docs/validation/uiux-pilot-target-error-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
+
+- 변경: 네이티브 태블릿 로비에서 연결 실패 뒤 여러 로봇 카드가 남을 때, 안내 앞에 실패한 로봇 이름을 표시한다. 대상 이름이 비면 「선택한 로봇」을 쓴다. 다시 찾기·다른 로봇 선택·인증 및 주행 경로는 그대로다.
+- 증거: `X:/DevTemp/pilot-lobby-error/gradle.txt`의 Android debug APK 빌드·JVM 93 tests 성공, `test_shell_assets.py` 4 passed, `known_failures.py` 0 NEW. 현재 APK는 `X:/DevTemp/pilot-lobby-error/build/app/outputs/apk/debug/app-debug.apk`(SHA-256 `31c557905e9e5db2de6b63e6de94138f19b2c336e99da69a1703ddf715758cda`).
+- gate 변화: SOURCE·LOCAL 문구 보강. 설치된 Lenovo 화면·연결 성공/실패 실물 재현·사용자 G3는 미확인이라 Pilot UI/UX HOLD.
+- 결정: D-153 정직·어휘, D-280 중요한 것 먼저·복잡함 단순화.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 화면이 이 로봇의 연결 방식을 먼저 보여 준다
+
+- 변경: Pilot 웹 접속 화면이 `GET /api/v1/auth/connection`으로 지금 열린 로봇 이름과 paired/development를 코드 입력보다 먼저 보여 준다. development는 「개발 연결로 계속」으로 기존 `POST /api/v1/auth/development-session`을 쓰고, paired는 로봇 화면 코드를 안내한다. 다른 로봇 목록은 그 아래에 둔다. 준비·차단 요약에 로봇 이름을 넣었다.
+- 증거: 변경 전 현장 `/pilot`은 rosy_26(paired)·rosy_60(development) 모두 옆 로봇과 코드 칸만 보였다. 브라우저 시험 `connection_offer`·`development_connection` 3 passed, 인접 로비·게이트 12 passed. 고친 화면을 두 로봇의 실제 connection에 붙여 확인했다. rosy_26은 화면 코드 안내, rosy_60은 개발 연결로 운영자 게이트까지 들어가고 그 세션은 logout 204. 로봇이 서빙하는 파일은 아직 이 변경 전이다.
+- gate 변화: 접속 화면 LOCAL 보강. 로봇에 이 파일을 올리기 전에는 현장 화면이 바뀌지 않는다. DEVICE 주행 수용은 그대로다.
+- 결정: D-432, D-471. 웹 Pilot이 안드로이드 셸·로봇 콘솔과 같은 개발 연결만 연다. 새 API는 없다.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
+- 변경: `styles.css` 22rem 미만 규칙 — `[data-recordings-sheet] ui-actions` 의 sticky+`background` 를 지우고, 시트를 flex 열로 두어 `[data-recordings-list]` 만 스크롤한다. 하단 행동은 늘 보이고 표면이 공용 부품의 면을 칠하지 않는다(D-194/D-359).
+- 증거: `shared/web/test/test_shared_controls.py` 27 passed(`test_surfaces_do_not_repaint_shared_controls` 이 브랜치 수정 전 FAILED → 수정 뒤 passed, `X:/DevTemp/browser-infra/css_before.txt`·`css_after.txt`). `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py::test_robot_recording_toggle_and_sheet` 4 viewport(2000x1200·1200x2000·390x844·320x568) 4 passed(`pilot_sheet.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 태블릿·폰 화면은 미확인.
+- 결정: D-411, D-359.
+- 교훈: sticky 행동 줄은 뒤가 비쳐 면을 칠해야 한다 — 공용 부품을 칠하지 말고 스크롤 영역을 목록으로 옮긴다.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
+- 변경: 22rem 미만 시트를 `overflow-y: hidden` 대신 `auto`로 둔다(목록 밖 내용이 넘쳐도 잘리지 않게). dev_server `/__test__/recordings` 에 `many`(녹화본 12개)를 더하고 320x568 시험이 목록만 스크롤하고 닫기·다시 불러오기가 스크롤 없이 보이며 마지막 행에 닿는지 본다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1` `test_narrow_recordings_sheet_scrolls_many_rows_and_keeps_actions_visible` 1 passed(`X:/DevTemp/browser-infra/pilot_sheet3.txt`), `test_robot_recording_toggle_and_sheet` 4 viewport 4 passed(`pilot_sheet2.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 화면은 미확인.
+- 결정: D-411.
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · uiux(pilot): 긴 휴대폰 주행·회전 조작 첫 화면
+- 변경: 30rem 미만 Pilot HUD의 모델·차선·영상 설정을 기존 도구 패널로 옮겼다. 긴 휴대폰은 HUD 세로 여백을 줄이고 조작부 높이를 늘려 좌우 회전을 첫 화면에 둔다. 도구 패널은 휴대폰 폭에서 내부 스크롤한다.
+- 증거: `docs/validation/uiux-pilot-phone-turn-layout-2026-10-08/result.md`. LOCAL Chromium 2000×1200·1333×760·1200×2000·390×844·320×568 영상/조작 5건, 수동/자동 회전 2건, 도구 전환·스크롤 1건 통과. G1 관련 80 passed/1 failed(`pinky-review` 원시 색상, 공유 `main`에서도 재현).
+- gate 변화: Pilot 표면과 제품 전체 HOLD. G1 실패, 전체 G2·실기·G3 미수용.
+- 결정: D-153, D-363의 영상 비율·조작 접근 계약을 유지한다.
+
+## 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
+- 변경: 상단 `운용 지도`에서 `/console`로 이동한다. Pilot의 가짜 `지도 목표` 운전 모드를 제거하고, 주행 중 이동에는 0 속도와 소유한 MANUAL의 IDLE 요청을 기다리도록 했다. 대기 중 모드 진입·중복 클릭을 처리하고 모드 요청을 3초로 제한한다.
+- 증거: `docs/validation/uiux-pilot-map-handoff-2026-10-08/result.md`의 390×844·2000×1200 전후 PNG, 브라우저 회귀 12 passed, 셸 자산 4 passed, known_failures 0 NEW. 합성 CORE의 LOCAL 증거다.
+- gate 변화: 없음. 설치본·실기 정지 readback·D-153 전체 G2/G3·현장 독회는 HOLD.
+- 결정: D-323, D-344, D-153. 지도 읽기와 목표 실행을 구분한다.
+
+## 2026-10-08 · uncommitted · fix(pilot): 운용 지도로 같은 탭 인증 인계
+- 변경: 주행 종료 요청 뒤 Pilot 토큰을 Console의 같은 탭 세션 키에 전달한다. 이전 Console 토큰은 현재 Pilot 사용자로 교체하고 URL·영구 저장소는 쓰지 않는다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). 주행 화면과 실제 CORE Console의 모바일·데스크톱 캡처, 관련 시험 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 흐름 증거 추가. 설치 앱·실기 정지 readback·전체 G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · feat(pilot): 앱이 연 세션만 쓴다
+- 변경: Rosy Pilot 앱(`pilotShell=android`) 안에서는 주입된 세션만 쓴다. 개발 연결, 코드 입력, 연동 코드, 서비스 워커, Rosy Robot 이동, 지도 목표(`/console`)를 열지 않는다. 세션이 없거나 거절되면 앱이 다시 고르도록 안내한다.
+- 증거: Android JVM `ShellConnectionTest` 1 passed (`X:/DevTemp/pilot-app-connect/build`). 브라우저 `test_android_shell_uses_the_app_session`와 `test_android_shell_without_a_session_stays_with_the_app` 3 passed, `known_failures.py` 0 NEW. 앱 프록시를 띄운 `test_bundled_page_uses_the_app_proxy` 1 passed(81.44s): 개발 연결은 한 번이었고 주행 시작까지 갔다. `known_failures.py` 0 NEW. 로그 `X:/DevTemp/pilot-app-connect/browser.txt`, `proxy-page.txt`. adb에 붙은 기기는 없었다.
+- gate 변화: 없음. 이 파일은 로봇에 올라가기 전에는 현장 화면이 바뀌지 않는다.
+- 결정: D-432, D-471. 새 API와 새 ADR은 없다.
+- 교훈: 앱 핸드오프는 `<head>`의 일반 스크립트다. Playwright init script는 그 순서보다 먼저 실행되어 같은 시험이 되지 않는다.
+
+## 2026-10-09 · uncommitted · fix(pilot): 연결 상태와 이유를 늘 보인다 (D-483 보완)
+- 변경: 실패마다 `LinkReason`(ROBOT_UNREACHABLE·CA_UNKNOWN·APPROVAL_*·RATE_LIMITED·CORE_NOT_READY·API_VERSION_TOO_OLD 등)과 다음 행동 문구를 `LinkStatus` 한 곳에서 정한다. 승인 대기 대화상자는 요청 번호·남은 시간·두 승인 경로와 "로봇 화면에 Pair request가 없으면 릴리스가 화면 코드를 못 보인다"를 보인다. 처음 연결의 인증서 확인은 로봇 LCD의 `CA xxxx xxxx xxxx xxxx`(앞 16자리) 또는 대시보드 전체 값과 대조하게 한다. 수신기가 끝낸 요청은 `PeerEnded(state)`로 거절·만료·취소를 구분한다. 세션 바는 끊김 동안 "연결 끊김 · 로봇이 응답하지 않습니다"를 보인다.
+- 증거: Android 단위 시험 97 passed(LinkStatusTest·PeerClientTest 종료 상태·TrustedProxyTest). 실기 9dfk·8kcn(055)에서 `/run/rosy-peer-display` 부재로 LCD 코드가 뜨지 않음을 확인(CORE 경고 FileNotFoundError).
+- gate 변화: SOURCE/LOCAL. 화면 코드 경로의 DEVICE 확인은 디렉터리·CA 줄이 든 릴리스(056 이후)에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): Robot 운용 지도 같은 탭 인계 검증
+
+- 변경: Pilot 주행→0 속도·IDLE 요청→실제 CORE Console 지도 문서의 인증 인계를 한 브라우저 탭에서 검증한다. 쿼리와 지도 없음 상태를 보존한다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 2000·390px 전환 전후 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리
+
+- 변경: 운전 화면 시험은 dev_server의 토큰을, 실제 CORE 연계 시험은 `rosy_dev_auth.yaml`의 operator 토큰을 직접 사용한다. 시험 코드에 같은 값을 다시 적지 않는다.
+- 증거: 공개 저장소 비밀값 검사와 Pilot 시험 수집·관련 실행으로 확인한다.
+- gate 변화: 없음. 실제 장치 인증이나 주행 수용의 증거가 아니다.
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
+- 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
+
+## 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
+- 변경: 823847295의 "승인 코드 입력칸이 한글 키보드에서 깨졌다" 기록에 빠진 표준 항목을 보완한다. 입력칸 `VISIBLE_PASSWORD`, 코드 알파벳 필터, 완료 키 보내기, 승인 폐기(401/403/409) 재요청 대화상자.
+- 증거: 823847295 Android 단위 시험(LinkStatusTest), 8kcn 태블릿 로그 "Approval code not accepted: PeerRefused HTTP 409".
+- gate 변화: SOURCE/LOCAL. 실기 화면 코드 승인은 릴리스 056 이후 DEVICE에서 확인.
+
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
+- 변경: 키보드 옵션(한 줄·완료)을 대화상자 표시 전에 정하고, Enter는 `IME_NULL`+`KEYCODE_ENTER` 누름으로 와도 보내도록 `LinkStatus.sendsCode` 한 곳에서 판정한다. 키를 뗄 때는 보내지 않는다.
+- 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
+- gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): 브랜드에서 안전하게 접속 홈으로 복귀
+
+- 변경: 브랜드를 `/pilot` 홈 링크로 만들고 주행 중 클릭은 기존 `leaveDrive` 종료 절차를 거쳐 정지·IDLE 처리 뒤 이동한다. Gazebo 팔 연습에서는 진행 중 목표의 취소 확인 없이 이탈하지 않도록 링크를 비활성으로 표시하고 취소 안내를 남긴다.
+- 증거: 로컬 Chromium의 320/390/1200px 접속·주행, 320/1200px Gazebo 연습 캡처. 주행 홈 복귀 전 가짜 CORE의 `IDLE` 및 선속도·각속도 0 기록을 확인했다.
+- gate 변화: 없음. 실제 태블릿·로봇 readback과 G3는 별도.
+
+## 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
+
+- 변경: 접속 화면 로비의 맨 앞에 자기 방 운전 상태 라벨(`ui-tag[data-lobby-self]`)을 단다. 판정은 같은 origin의 `GET /api/v1/robot/state`만으로, MANUAL이고 `|linear| > 0.002`이면 "운전 중", 아니면 "대기"다. rooms 라우터는 다른 기기의 CoreServices를 보지 않으므로 다른 방의 운전 상태는 각 기기가 자기 화면에서 표시한다. D-460 결정 2 본문에 그 구현 정정을 적었다.
+- 증거: 브라우저 시험 2건은 `browser_tests_enabled()` 옵트인이다. 이 착지의 Chromium 실행은 하지 않았다.
+- gate 변화: 없음. 호스트 UI. 장치 화면은 릴리스 전이다.
+- 결정: D-460 결정 2.
+
+## 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
+
+- 변경: 선택한 첫 로봇을 유지한 채 두 번째 로봇을 별도 세션·프록시·WebView로 열고, 종료·배경 전환은 두 연결 모두 닫는다. 같은 localhost의 포트별 쿠키는 분리되지 않아 첫 카메라가 403이 된 실기 반례를 프록시별 쿠키 이름으로 수정했다. 두 번째 연결도 일시 실패 후 정상 응답이 오면 연결 경고를 해제한다.
+- 증거: Android unit test의 두 mock CORE 카메라·teleop 분리, 무관한 쿠키 403, 각 프록시 종료 0. Lenovo 태블릿에서 8kcn/9dfk의 두 카메라와 두 조종 화면을 동시에 열어 X:/DevTemp/projects/rosy-platform/2026-10-09--235857--pilot-dual-client--1d9963/evidence/에 캡처했다. 정상 웹소켓 종료가 연결 장애로 표시될 수 있는 경로도 구분했다.
+- gate 변화: Android SOURCE. 두 실물 로봇의 동시 주행·정지 readback은 FIELD 별도.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+
+- 변경: 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 354b55cfb native Gradle testDebugUnitTest/assembleDebug: 105 passed, 0 failed. X:/DevTemp/ui-role-devices/pilot-gradle-1.txt. 웹 browser와 실제 태블릿 수용은 별도다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동
+
+- 변경: 연결 로비의 함께 조종 설명을 기존 버튼 활성 조건과 같은 연결 가능 수·발열 상태로 갱신한다. 두 대 미만은 Wi-Fi·전원 확인/다시 찾기, 발열은 냉각 후 다시 선택, 준비된 목록은 두 대 선택/연결을 안내한다. 좁은 로비 제목에도 Pilot 역할을 남긴다.
+- 증거: `X:/DevTemp/native-ux-a1f3c9/gradle.txt`의 `:app:testDebugUnitTest :app:assembleDebug` 종료 BUILD SUCCESSFUL; 16 suites, 106 passed, 0 failed, 0 errors. `docs/validation/uiux-native-games-2026-10-12.md`에 Cam·LCD·게임 보드의 기존 역할 검토와 이번 회차 미확인 경계를 기록했다.
+- gate 변화: SOURCE/native compile/JVM 근거만. 실물 태블릿·앱 설치본·두 대 주행·정지 readback은 미확인이다.
+
+## 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+
+- 변경: 좁은 접속 헤더에서 제품 이름과 비상 정지를 첫 줄에 두고 상태와 운용 지도는 다음 줄에 둔다. 현재 로봇 연결과 로그인 입력을 최근 접속보다 먼저 둔다. 다른 주소의 기록과 잘못된 저장 자료는 연결 선택에서 제외한다. 자기 로봇의 상태 미확인, 안전 정지, 회전·자동 이동을 대기로 바꾸지 않는다. 서비스 워커 셸 캐시를 갱신한다.
+- 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
+- gate 변화: SOURCE 변경만 있으며 브라우저 캡처·실제 설치 화면·DEVICE·FIELD는 확인하지 못했다. 착지·push·배포하지 않았다.
+
+## 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+
+- 변경: 기존 공용 신선도 판정과 글자 크기 소비로 상태 근거와 좁은 머리의 읽힘을 보완했다. 오래된 토큰 정리는 잘못된 최근 접속 자료에도 유지한다.
+- 증거: 원격 Chromium 결합 회귀 039bbbffa 176 passed, 신선도·최근 접속 후속 e01abed51 27 passed, 전체 Robot 캡처 ab2f331a4 3 passed, 겹침·잘림 회귀 432e39895 8 passed, 입구 권한 한 줄 회귀 855e5b46a 3 passed. 각 종료 로그의 known_failures는 0 new/0 known이다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/logs/ 아래 browser, captures, robot-captures, visual-final, entry-final에 있다.
+- 검토: 원격 대역 CORE의 Pilot 목록 없음/읽기 실패 4뷰포트 8장과 Robot 입구·운용·작업 준비·설치 정비 320/390 캡처 8장을 받았다. Pilot 320 실패/2000 빈 상태와 Robot 네 화면 320을 직접 검토했다. 권한 글자 잘림과 상태·설명 혼합을 발견해 수정하고 다시 캡처했다.
+- gate 변화: SOURCE와 원격 Chromium 근거만 추가했다. 노트북 pytest·로컬 browser·착지·push·배포·실제 설치 화면 확인은 하지 않았다. DEVICE/FIELD와 실제 전체 UI 수용은 이 증거로 승격하지 않는다.
+
+## 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+
+- 변경: Windows 전용 batch/Java/cache 경로로 Linux에서 실행되던 앱 proxy 시험을 기존 Android CI 방식과 맞춘다. Linux는 Bash로 같은 Gradle wrapper를 실행하고 호스트 Java/SDK/cache 설정을 상속한다. probe·build·프로젝트 cache·Kotlin 상태는 같은 고유 pytest 임시 경로를 쓴다. 실제 bundled page·capability·접속/조작/자산 검사와 offline 실행을 유지한다.
+- 증거: 적정 자원 통합 후보 80a12948c에서 gradlew.bat PermissionError를 NEW로 관측했다. 파일 blob은 기준·main·후보에서 같지만 이를 기존 통과로 계산하지 않는다. Python 구문 확인은 통과했다. 기존 SDK 도구와 수락된 라이선스 상태로 Linux API 35/build-tools 34를 시험 전용 경로에 준비하며 원격 Gradle cache 예열과 실제 앱 proxy 검사는 이어 실행한다.
+- gate 변화: 시험 실행 경로 보완이다. 실제 Android 설치본·태블릿·주행 수용을 뜻하지 않는다.
+
+## 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+
+- 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
+- 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
+- gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.

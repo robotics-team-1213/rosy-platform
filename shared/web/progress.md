@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294, D-300, D-329, D-461]
+adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294, D-300, D-329, D-461, D-462, D-654]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-rosy-modern-brand-palette.md
@@ -33,6 +33,9 @@ plans:
 - 자체 `test/`가 토큰·팔레트·헤드리스·공유 조작 부품을 본다. 브라우저 버튼·글자 크기의 소스는 `components.css`와 `tokens.css`다(D-194). ament_cmake라 colcon test 배선은 없고 CI 4경로·직접 pytest로 실행한다.
 
 ## 다음 gate
+
+- 2026-10-05: 확인창 소유자의 동기 닫기와 이전 핸들 차단을 보강했다. 실제 Chromium
+  재사용·native close·취소·Abort·정지 회귀가 통과했으며 장치 수용을 뜻하지 않는다.
 
 1. 새 메뉴/페이지는 D-292에 따라 작업 질문·URL·역할·표면 소유를 먼저 정하고, 공통 셸·토큰·컴포넌트 계약에 연결한다. 표면별 레이아웃과 제품 질문은 유지한다.
 

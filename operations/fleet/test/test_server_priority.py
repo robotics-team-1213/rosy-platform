@@ -74,6 +74,7 @@ def _queued_console():
     near = SimRobot("rosy_02", (1.3, 1.05), grid)
     blocker = FakeRobot("rosy_03", map=grid,
                         state={"robot_id": "rosy_03", "navigation": "IDLE",
+                               "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                "map_id": "m1", "pose": {"x": 2.2, "y": 3.0, "yaw": 0.0}})
     console = _console(far, near, blocker)
     console._queued["rosy_01"] = {
