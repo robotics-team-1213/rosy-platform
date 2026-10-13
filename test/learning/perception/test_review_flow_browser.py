@@ -100,6 +100,22 @@ def test_command_shortcuts_do_not_run_while_typing_or_composing(browser_workspac
     expect(page.get_by_role('dialog', name='기능 검색')).not_to_be_visible()
 
 
+def test_command_search_refreshes_functions_that_finish_loading(browser_workspace):
+    page, _, expect = browser_workspace
+    pending = []
+    page.route('**/api/workspace', lambda route: pending.append(route))
+    page.goto(page.url.split('?')[0], wait_until='domcontentloaded')
+    page.keyboard.press('Control+k')
+    search = page.get_by_role('textbox', name='기능 검색어')
+    search.fill('박스 1 x0')
+    expect(page.locator('#review-command-results ui-button')).to_have_count(0)
+    pending[0].continue_()
+    expect(page.locator('#image-message')).to_be_hidden()
+    search.fill(''); search.fill('박스 1 x0')
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('spinbutton', name='박스 1 x0', exact=True)).to_be_focused()
+
+
 @pytest.mark.parametrize('field,value,message', [
     ('x0', '12', '왼쪽 좌표'),
     ('y1', '0', '아래쪽 좌표'),
