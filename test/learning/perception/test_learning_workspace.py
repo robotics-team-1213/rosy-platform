@@ -6,11 +6,12 @@ from learning_workspace import Workspace
 
 def test_owner_pipeline_hold_is_visible_without_private_inputs(tmp_path):
     from learning_workspace import read_report
-    (tmp_path / 'state.json').write_text(json.dumps({'status': 'running',
+    (tmp_path / 'state.json').write_text(json.dumps({'outcome': 'running',
         'review_autobuild': {'status': 'held', 'blockers': ['no_approved_masks']},
         'config': {'credential': 'private-value'}}))
     report = read_report(tmp_path, 'state.json')
     assert report['declared']['status'] == 'held'
+    assert 'outcome' not in report['declared']
     assert report['reasons'] == ['no_approved_masks']
     assert 'private-value' not in json.dumps(report)
 
