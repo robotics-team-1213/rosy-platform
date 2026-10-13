@@ -46,6 +46,3 @@ D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by con
 
 
 
-D-740 reserved by a separate ongoing branch; not included in the D-742 review pipeline landing; remove once its ADR lands
-D-740 feat/sdk-forward-arc-sweep에서 진행 중인 ADR이다. 그 브랜치가 착지할 때 이 줄을 지운다 (lint가 "declared gap now exists"로 알려 준다)
-D-743 다른 세션이 선점해 진행 중인 ADR이다(D-738 S1 Drive holder promotion and deployment closure). 그 브랜치가 착지할 때 이 줄을 지운다
