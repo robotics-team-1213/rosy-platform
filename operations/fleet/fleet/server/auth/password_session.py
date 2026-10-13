@@ -228,7 +228,8 @@ class PasswordSessions:
             self._refund(keys, now)
             raise LoginRateLimited()
         try:
-            account = (self._ledger.account(login) if self._ledger.active else self._logins.get(login)) if valid else None
+            account = ((self._ledger.account(login) if self._ledger.active else self._logins.get(login))
+                       if valid else None)
             ok = verify_password(password, account["password_scrypt"] if account else self._dummy_hash)
         finally:
             _SCRYPT_SLOTS.release()
@@ -486,9 +487,9 @@ def _storage_unavailable() -> HTTPException:
         "code": "SESSION_STORAGE_UNAVAILABLE", "message": "console session storage is unavailable"})
 
 
-def _set_cookie(response: Response, value: str, *, remember: bool) -> None:
+def _set_cookie(response: Response, value: str, *, remember: bool, managed: bool = False) -> None:
     response.set_cookie(COOKIE, value, max_age=int(REMEMBER_S) if remember else None,
-                        path="/", secure=True, httponly=True, samesite="strict")
+                        path="/", secure=True, httponly=True, samesite="lax" if managed else "strict")
 
 
 def _begin_audit(request: Request, task_service, principal: SitePrincipal) -> None:
@@ -553,7 +554,7 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=401, detail={
                 "code": "LOGIN_FAILED", "message": "login or password is incorrect"}) from None
         response = Response(status_code=204, headers=NO_STORE)
-        _set_cookie(response, value, remember=remember)
+        _set_cookie(response, value, remember=remember, managed=sessions._ledger.active)
         return response
 
     from fleet.server.account_routes import install_account_routes
@@ -591,7 +592,7 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         except SessionStorageUnavailable:
             raise _storage_unavailable() from None
         response = Response(status_code=204, headers=NO_STORE)
-        _set_cookie(response, replacement, remember=remember)
+        _set_cookie(response, replacement, remember=remember, managed=sessions._ledger.active)
         return response
 
     def own_profile(request: Request, principal: SitePrincipal, display_name: Optional[str] = None) -> JSONResponse:
