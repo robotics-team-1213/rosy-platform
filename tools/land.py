@@ -3,7 +3,7 @@
 Run from a topic worktree (never the shared main checkout)::
 
     python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
-                         [--node] [--browser] [--max-rounds N] [--dry-run] [--no-prune]
+                         [--node] [--browser] [--max-rounds N] [--dry-run] [--prune | --no-prune]
 
 Each round merges the current local ``main`` into the branch, auto-resolves the
 append-only/generated conflicts (ADR Log, logs.md, adr_gaps.txt, index.md,
@@ -35,7 +35,7 @@ import remote_pytest  # noqa: E402  (tools/remote: pytest on the model/AI/site P
 sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
 import land_record  # noqa: E402  (D-553 addendum 3: pre-push reuses these results)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import worktrees  # noqa: E402  (D-761: every landing sweeps finished worktrees)
+import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -438,8 +438,8 @@ def land(args) -> int:
     if dirty:
         raise Stop(f"worktree is dirty; commit or remove first:\n{dirty}")
     if not (args.no_prune or args.dry_run):
-        try:  # lossless only, and never this worktree; a sweep that fails must not stop a landing
-            worktrees.prune(wt, apply=True, quiet=True)
+        try:  # one report line; --prune applies the lossless sweep. A failure must not stop a landing
+            worktrees.sweep(wt, apply=args.prune)
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
@@ -503,9 +503,8 @@ def land(args) -> int:
             print("\n".join(["== landed (not pushed)", *summary,
                              f"rounds: {round_no}", f"commits merged onto main: {count}",
                              f"main is now {landed}"]))
-            print(f"[land] this worktree is now removable; the next land or `worktrees.py new` sweeps it after"
-                  f" {worktrees.IDLE_HOURS:.0f} idle hours. Now, from the main checkout: git -C {main_co}"
-                  f" worktree remove {wt} && git -C {main_co} branch -d {branch}")
+            print(f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
+                  f"  git worktree remove {wt}\n  git branch -d {branch}")
             return 0
         if out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved before the fast-forward; merging again")
@@ -522,7 +521,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--browser", action="store_true", help="refused: browser tests never run on this laptop (D-584)")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
-    parser.add_argument("--no-prune", action="store_true", help="skip the lossless sweep of finished worktrees")
+    parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
+    parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
     args = parser.parse_args(argv)
     try:
         return land(args)
