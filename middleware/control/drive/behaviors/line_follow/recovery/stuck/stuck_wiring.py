@@ -99,7 +99,8 @@ class StuckRecoveryMixin:
             if abs(linear) > max_linear or abs(angular) > max_angular:
                 return False
             age = now - self._return_at + self._return_source_age
-            if age < 0.0 or age > min(c.clearance_stale_s, .25):
+            # The follow path's own limit, never above 0.5 s whatever an overlay sets (review 2026-10-13).
+            if age < 0.0 or age > min(c.clearance_stale_s, .5):
                 return False
             points = self._return_view.points
             if not points or any(not all(math.isfinite(v) for v in p) for p in points):
@@ -108,10 +109,11 @@ class StuckRecoveryMixin:
                 half_width_m=c.body_half_width_m,rotation_radius_m=c.body_rotation_radius_m,
                 lidar_x_m=c.body_lidar_x_m,margin_m=c.obstacle_body_margin_m)
             horizon = min(c.obstacle_path_horizon_m, max(.15, c.recovery_back_m))
-            # Use immutable configured maxima: the live cap may have been lowered after
-            # the scan, but that cannot undo motion already performed since its source pose.
-            age_pad = c.max_linear * age + c.body_rotation_radius_m * c.max_angular * age
-            margin = c.obstacle_body_margin_m + c.derived_stop_gap_m(abs(linear))
+            # User decision 2026-10-13 (Gazebo lane lap): motion since the scan is taken as no
+            # faster than this candidate, and the body margin counts once (inside the stop gap).
+            # With the configured maxima and a second margin the lane 116 mm from a wall failed.
+            age_pad = abs(linear) * age + c.body_rotation_radius_m * abs(angular) * age
+            margin = c.derived_stop_gap_m(abs(linear))
             if abs(linear) <= 1e-6:
                 return body.rotation_reason(self._return_view, margin + age_pad) is None
             if body.unknown_blocks(self._return_view, reverse=linear < 0,
@@ -145,10 +147,19 @@ class StuckRecoveryMixin:
 
     @property
     def wants_return_scan(self) -> bool:
-        """Keep full scan evidence current throughout local lane reacquisition."""
+        """Keep full scan evidence current throughout local lane reacquisition, and while a
+        junction or bend instruction is held under the live D-400 proof: D-507 6 asks the same
+        probe for its twist, and return_body_clear refuses without this view."""
         with self._lock:
-            return (self._mode is LineFollowMode.CAMERA_LINE
-                    and self._config.recovery_local_enabled
+            if self._mode is not LineFollowMode.CAMERA_LINE:
+                return False
+            # ponytail: any held instruction, also a finished or aborted one, until the next
+            # instruction or mode change; narrow to moving states if the scan view costs CPU.
+            arc = getattr(self, '_arc', None)
+            held = self._junction is not None or (arc is not None and arc.get('state') == 'running')
+            if held and self._proof_live():
+                return True
+            return (self._config.recovery_local_enabled
                     and self._return_controller is not None
                     and self._return_controller.phase != "tracking")
 
