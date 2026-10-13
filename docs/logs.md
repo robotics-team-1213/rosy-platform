@@ -8267,3 +8267,10 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest와 브라우저 결과는 이 브랜치의 착지 보고에 둔다.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
 - 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
+
+## 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
+
+- 변경: `docs/omx-imitation-preparation`에서 [설계](plans/2026-10-14-omx-imitation-preparation-design.md)와 [실행 준비 목록](plans/2026-10-14-omx-imitation-preparation.md)을 작성했다. 리더 교시·로컬 녹화·episode 검토를 우선하고 native/SIM 단위 분리, Pilot 실물 조작 후속, private Hub revision 왕복, Spaces 읽기 전용 검토를 명시했다.
+- 증거: 기준 소스 b0f7a1896과 공식 LeRobot 0.4.4 recorder/config 및 Hugging Face 문서를 읽었다. 문서 검사 결과는 X: omx-imitation 세션에 기록한다.
+- gate 변화: 없음. 준비 문서는 구현·녹화·학습·Hub 연동·실물 수용의 증거가 아니다.
+- 결정: 새 API/ADR 승인, runtime 활성화, 자동 업로드, 외부 저장소 생성, 착지·push·배포를 수행하지 않는다.
