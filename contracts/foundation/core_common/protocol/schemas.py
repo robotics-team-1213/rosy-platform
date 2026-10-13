@@ -1145,6 +1145,13 @@ class SafetyShadowStatus(BaseModel):
     record_errors: int = 0
 
 
+class SafetyPolicyHold(BaseModel):
+    """D-400 4: enforce sensor gaps answered with HOLD since CORE start (v1.223 additive)."""
+
+    count: int = 0
+    reason: str = ""
+
+
 class SafetyPolicyStatus(BaseModel):
     """D-400: the safety policy mode CORE runs, and why (v1.71 additive)."""
 
@@ -1154,6 +1161,7 @@ class SafetyPolicyStatus(BaseModel):
     revision: str = ""
     sources: dict[str, str] = Field(default_factory=dict)
     shadow: Optional[SafetyShadowStatus] = None
+    hold: Optional[SafetyPolicyHold] = None  # enforce only
 
 
 class StateSnapshot(TripLeaseFields):
