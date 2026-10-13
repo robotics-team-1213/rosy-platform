@@ -78,6 +78,6 @@ def test_cli_case_and_output_arguments(tmp_path):
     import subprocess
     import sys
     result=subprocess.run([sys.executable,'-m','tools.sim.gazebo.calibration_spaces','open',str(tmp_path)],
-                          capture_output=True,text=True,cwd=PKG_ROOT)
+                          capture_output=True,text=True,cwd=PKG_ROOT.parents[1])
     assert result.returncode==0,result.stderr
     assert json.loads((tmp_path/'track_identity.json').read_text())['case']=='open'

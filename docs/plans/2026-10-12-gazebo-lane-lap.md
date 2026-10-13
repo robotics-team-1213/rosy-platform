@@ -457,3 +457,37 @@ Leg1–13b는 모두 0.29–0.37m에서 멈췄다. 정지 사유를 하나씩 �
 **남은 차단.** enforce에서 SDK는 제자리 회전 원을 이동 곡선에도 적용한다. 벽 옆 차로에서 2cm 치우치면 조향이 모두 0이 되고 스스로 벗어나지 못한다. 이동 곡선의 실제 sweep 검사([설계 초안](2026-10-13-camera-forward-stopping-sweep-design.md)은 `fix/gazebo-map-lap`에 있다) 또는 shadow·사이트 기준과 SIM IR 보정 연결 가운데 어느 기준으로 완주를 수용할지 정해야 한다.
 
 관찰 주의: 실행 중 `gz model -p`를 따로 부르면 자세 스트림이 0.25초 넘게 비어 SIM 자세 어댑터가 `native_gap`으로 영구 철회한다(run1).
+
+## 2026-10-13 · 물리적 한 바퀴와 남은 정지 (run14–run53)
+
+같은 실행기에서 원인을 하나씩 걷어 냈다. 수용 기준은 SDK enforce다. 여섯 브랜치가 로컬 main에 있고 푸시하지 않았다.
+
+| 원인 | 수정 | 브랜치 |
+|---|---|---|
+| SIM LiDAR 잡음이 실물의 6–30배 | σ 0.0035m, 분해능 0.001m | `fix/sim-lidar-c1-noise` |
+| 지시가 걸린 동안 몸 스캔 뷰가 비어 승인 불가 | 교차로 지시나 호가 살아 있으면 뷰 급전 | `fix/enforce-junction-scan-view` |
+| Fleet `bend_in_m`이 지연을 보상하지 않아 2cm 늦게 꺾임 | 최고 속도 × (자세 나이 + 전송 여유)만큼 앞당김 | `fix/fleet-bend-in-latency-lead` |
+| 테이프 추종기의 가짜 교차로 목격으로 `junction_unexpected` | 지도에 장소가 없으면 짧은 `straight`로 기각(한 주행 3회) | `fix/fleet-dismiss-unmapped-junction` |
+| SDK가 제자리 회전 원을 전진 곡선에도 적용 | 후보 곡선의 정지 궤적이 비면 승인(D-740) | `feat/sdk-forward-arc-sweep` |
+| 호를 로봇 자세에 붙여 출구에서 5cm 어긋남 | 호의 원을 지도에 고정(D-744), 출구 오차 약 6mm·1° | `feat/map-anchored-lane-arc` |
+
+실행기 쪽에서 맞춘 것도 있다. 서쪽·동쪽 모서리 일곱 곳을 `bend` 장소로 넣었고, 경로 위에 서 있던 rosy_01을 옮겼고, 교정되지 않은 SIM IR에 교정값을 주었다. 원형 교차로의 가상 신호는 접근 방향이 맞지 않아(`approach ""`) 진입을 내주지 않으므로 실행기에서 뺐다. 이것은 제품 결함으로 남아 있다.
+
+**결과.** run45와 run46에서 로봇이 한 바퀴를 돌고 둘째 바퀴에 들어섰다(run46 4.37m, 호 세 개 모두 `map_anchor_used`). Fleet의 `arrived`는 아직 없다. 실행의 절반쯤은 완주하지 못한다.
+
+**남은 정지와 그 원인 (run53–run56).** run37·39·42·44·48·52는 남서 교차로 앞에서 `junction_corner_hold`로 끝났다. 처음 세운 가설(W1 굽이의 코너 프레임이 2초 래치에 남는다)은 run53의 keep_debug 기록으로 버렸다. 기록이 보여 준 것은 다음이다.
+
+- 추종기는 굽이 자신의 바깥선을 교차로 선으로 읽는다. run53에서는 W2 진입 직선에서 `junction_transverse` 0.318m(꼭짓점 0.097m 너머)였고, 통과가 `waiting`으로 끝나 Fleet이 `junction_unexpected`로 주행을 끝냈다. 다음 장소가 0.84m 앞이라 Fleet의 지도 기각(0.9m 안에서는 기각하지 않음)도 걸리지 않았다.
+- W1에서는 다음 교차로 SW의 실제 선이 호 가운데에서 0.41–0.43m로 읽혀 넘겨진다. SW 앞에서 추종기는 `corner_left`를 내므로, 이 넘겨받은 목격이 없으면 `junction_corner_hold`가 난다(추정, 직접 재현하지는 않았다).
+- 수정: 굽이 자신의 바깥선은 넘기지 않는다(D-507 9항, `fix/bend-own-corner-sighting`, 로컬 main). 오버레이로 넣은 run54는 Fleet 기준 한 바퀴와 둘째 바퀴 일부, run55는 세 바퀴를 돌았다. Fleet이 한 바퀴를 센 것은 run54가 처음이다.
+- run55에서는 W3를 47° 돈 뒤에도 바깥선이 `junction_fork` 0.17m로 읽혀 `waiting`이 한 번 났고 Fleet의 기각이 한 번 쓰였다. 모양만으로는 SW의 실제 선과 갈리지 않아, 지도의 다음 선 거리로 가리는 D-754(`feat/bend-next-line-in`, Proposed, 미착지)를 만들었다.
+- run56은 둘째 바퀴 W3에서 `motion_unconfirmed`로 끝났다. CORE가 정책 시계를 읽고 0.034초 뒤 올라온 snapshot이 `snapshot_future`로 거절된 한 틱이었다. 수정: 거절되면 시계를 새로 읽어 한 번 더 묻는다(D-740 개정 2, `fix/sdk-snapshot-future-skew`, 로컬 main). SIM 구성에만 닿고 실물은 열려 있다.
+- 열린 정지: run54·55는 W2를 나온 뒤 차선이 보이지 않아 W1 굽이의 기준점을 잡지 못하고 `no_anchor`로 끝났다(굽이 간격 0.58m).
+
+**반복 주행.** 양방향 도로와 원형 교차로는 Fleet의 교통 구역이라 주행의 끝이 구역 밖으로 옮겨지고(`stop_moved LAP_END→NE`) 반복은 `TRIP_STOP_IN_ZONE`으로 거절된다. run52는 서쪽 도로를 일방통행으로 바꿔 반복 주행을 받아들이게 했다(계획 4.07m).
+
+**Isaac.** 같은 수정을 합친 소스에서 여덟 번 모두 `camera_lane_lost`였다(0.111m, 0.181m, 0m). Isaac 경로는 프로세스 안의 CORE와 주행 가능 영역 추종기를 쓰고 위 수정이 닿지 않는다.
+
+**열린 제품 결함.** 가상 신호 접근 방향, `line/lane_guide` 생산자 없음, 흰 벽을 정지선으로 읽는 도로 관측기, 칠을 보지 못하는 SIM IR, 양방향 도로에서 끝나거나 반복하는 주행을 막는 구역 규칙.
+
+관찰 주의: 원격 실행기를 기다릴 때 같은 ssh 명령 줄 안에서 `pgrep -f <스크립트>`를 쓰면 자기 자신이 잡혀 끝나지 않는다.

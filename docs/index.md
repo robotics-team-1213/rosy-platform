@@ -337,5 +337,5 @@
 - 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
 - 2026-10-14 · uncommitted · OMX native imitation preparation tools
 - 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
+- 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
 - 2026-10-13 · uncommitted · fix(review): port the D-485 acceptance defect fixes onto the restructured tree
-- 2026-10-13 · b3687f8dec · docs: record S1 source gate and bounded closing checks

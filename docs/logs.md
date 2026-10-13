@@ -8268,6 +8268,13 @@ osy-d395-s1d\`.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
 - 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
 
+## 2026-10-14 · a58c1e5d3 · 공통 학습 데이터와 다중 계정 협업 연동
+
+- 변경: 원본·라벨·시계·profile·용도별 적격성, HF 로그인/복수 계정 연결, 프로젝트 권한과 공동 검수, 고정 revision 가져오기 및 LeRobot 검증 설계를 결정했다.
+- 증거: 기존 학습 계약/OMX exporter와 공식 HF 문서를 대조했다. 문서 검사 결과는 작업 세션에 기록한다.
+- gate 변화: 설계 Accepted. OAuth·협업 UI·데이터 migration·외부 전송·학습/장치 수용은 미구현/미검증이다.
+- 결정: 기존 wire·원본을 소급 변경하지 않고 단계별 구현한다.
+
 ## 2026-10-14 · uncommitted · docs: prepare OMX imitation collection and Hugging Face workflow
 
 - 변경: `docs/omx-imitation-preparation`에서 [설계](plans/2026-10-14-omx-imitation-preparation-design.md)와 [실행 준비 목록](plans/2026-10-14-omx-imitation-preparation.md)을 작성했다. 리더 교시·로컬 녹화·episode 검토를 우선하고 native/SIM 단위 분리, Pilot 실물 조작 후속, private Hub revision 왕복, Spaces 읽기 전용 검토를 명시했다.
