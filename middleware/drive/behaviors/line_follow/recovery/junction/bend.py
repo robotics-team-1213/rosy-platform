@@ -177,10 +177,11 @@ class JunctionBendMixin:
             self._loss_started_at, self._lost_latched = None, False  # the pass owns the loss clock
             return self._junction_hold('junction_bend_blocked', decision)
         out = self._maneuver_twist(j, now, *twist, decision, 'junction_'+j['state'])
-        if j['state'] == 'aborted':
-            return out
+        if j['state'] == 'aborted' or j.get('refused_tick') == now:
+            return out  # held this tick: a second ask that passes must not confirm it (review)
         if not self.motion_admitted(now, *twist, 'bend', j['map_id']):
-            return self._abort(j, 'motion_unconfirmed', decision)
+            return self._unconfirmed(j, now, decision)
+        j.pop('refused_since', None)
         return out
 
     def _bend_own_line(self, j):
