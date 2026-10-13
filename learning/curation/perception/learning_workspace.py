@@ -72,6 +72,9 @@ def read_report(root, name, baseline=None):
             ('schema', 'status', 'outcome', 'verdict', 'promotion', 'offline_verdict', 'error', 'revision')
             if key in doc and isinstance(doc[key], (str, bool, int, float))}
         result['reasons'] = [str(reason)[:500] for reason in doc.get('reasons', [])[:20]] if isinstance(doc.get('reasons'), list) else []
+        if doc.get('result') == 'held' and isinstance(doc.get('reason'), str):
+            result['declared']['status'] = 'held'
+            result['reasons'].append(doc['reason'][:500])
         pipeline = doc.get('review_autobuild')
         if isinstance(pipeline, dict) and isinstance(pipeline.get('status'), str):
             result['declared'].pop('outcome', None)
