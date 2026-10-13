@@ -228,6 +228,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
+                                      next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as

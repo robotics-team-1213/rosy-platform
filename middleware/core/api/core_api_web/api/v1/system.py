@@ -222,6 +222,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
     # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
     # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
+    # `lane_bend_next_line` (D-754): the manager takes a bend's next_line_in_m (with lane_bend).
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
     # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `lane_arc_map_anchor` (D-744 2): the manager takes exit_segment.map_anchor (with lane_arc).
@@ -254,6 +255,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       lane_arc_map_anchor=getattr(
                                           svc.line_follow, "supports_lane_arc_map_anchor", False) is True,
                                       lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
+                                      lane_bend_next_line=getattr(
+                                          svc.line_follow, "supports_lane_bend_next_line", False) is True,
                                       route_context=(True if svc.line_follow is not None and
                                                      svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(

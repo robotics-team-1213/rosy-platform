@@ -349,7 +349,8 @@ def test_resend_while_armed_keeps_the_measured_travel():
 @pytest.mark.parametrize('turn, fields', [
     (None, {}), (95., {}), (60., {'bend_in_m': None}), (60., {'bend_tol_m': .31}),
     (60., {'bend_radius_m': .6}), (60., {'map_id': None}), (60., {'expect_in_m': .5, 'expect_tol_m': .1}),
-    (60., {'pivot_past_line_m': .1})])
+    (60., {'pivot_past_line_m': .1}), (60., {'next_line_in_m': -.01}), (60., {'next_line_in_m': 2.01}),
+    (60., {'next_line_in_m': math.nan})])
 def test_bend_needs_its_fields(turn, fields):
     rig = site_rig(**SITE)
     site_step(rig)
@@ -361,8 +362,9 @@ def test_bend_needs_its_fields(turn, fields):
 def test_bend_fields_belong_to_bend():
     rig = site_rig(**SITE)
     site_step(rig)
-    with pytest.raises(ValueError):
-        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=BEND)
+    for expect in (BEND, dict(map_id='lab-a', next_line_in_m=.5)):  # D-754: the next line too
+        with pytest.raises(ValueError):
+            rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=expect)
 
 
 def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
@@ -418,6 +420,8 @@ def test_lane_bend_capability_needs_a_basis():
     assert site_rig().m.supports_lane_bend is False        # no floor declaration, proof not live
     assert site_rig(**SITE).m.supports_lane_bend is True
     assert Rig().m.supports_lane_bend is True             # enforce proof configured
+    assert site_rig().m.supports_lane_bend_next_line is False  # D-754: with lane_bend
+    assert site_rig(**SITE).m.supports_lane_bend_next_line is True
 
 
 def test_a_pending_instruction_under_the_live_proof_asks_for_the_return_scan_view():
