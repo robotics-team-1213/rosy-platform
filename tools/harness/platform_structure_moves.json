@@ -56,7 +56,7 @@
     },
     "drive-nav2": {
       "source": "middleware/core/navigation",
-      "target": "middleware/control/drive/planning/nav2",
+      "target": "middleware/drive/planning/nav2",
       "manual_safety": false,
       "preserve": [
         "navigation ROS package identity",
@@ -74,7 +74,7 @@
     },
     "drive-behavior-line-follow": {
       "source": "middleware/core/services/core_features/line_follow",
-      "target": "middleware/control/drive/behaviors/line_follow",
+      "target": "middleware/drive/behaviors/line_follow",
       "manual_safety": true,
       "preserve": [
         "core_features.line_follow",
@@ -89,7 +89,7 @@
     },
     "drive-behavior-docking": {
       "source": "middleware/core/services/core_features/docking",
-      "target": "middleware/control/drive/behaviors/docking",
+      "target": "middleware/drive/behaviors/docking",
       "manual_safety": true,
       "preserve": [
         "core_features.docking",
@@ -104,7 +104,7 @@
     },
     "drive-behavior-navigation": {
       "source": "middleware/core/services/core_features/navigation",
-      "target": "middleware/control/drive/behaviors/navigation",
+      "target": "middleware/drive/behaviors/navigation",
       "manual_safety": true,
       "preserve": [
         "core_features.navigation",
@@ -119,7 +119,7 @@
     },
     "drive-behavior-localization": {
       "source": "middleware/core/services/core_features/localization",
-      "target": "middleware/control/drive/behaviors/localization",
+      "target": "middleware/drive/behaviors/localization",
       "manual_safety": true,
       "preserve": [
         "core_features.localization",
@@ -134,7 +134,7 @@
     },
     "drive-behavior-swarm": {
       "source": "middleware/core/services/core_features/swarm",
-      "target": "middleware/control/drive/behaviors/swarm",
+      "target": "middleware/drive/behaviors/swarm",
       "manual_safety": true,
       "preserve": [
         "core_features.swarm",
@@ -149,7 +149,7 @@
     },
     "drive-behavior-road-behaviour": {
       "source": "middleware/core/services/core_features/road_behaviour",
-      "target": "middleware/control/drive/behaviors/road_behaviour",
+      "target": "middleware/drive/behaviors/road_behaviour",
       "manual_safety": true,
       "preserve": [
         "core_features.road_behaviour",
@@ -164,7 +164,7 @@
     },
     "drive-behavior-traffic-policy": {
       "source": "middleware/core/services/core_features/traffic_policy",
-      "target": "middleware/control/drive/behaviors/traffic_policy",
+      "target": "middleware/drive/behaviors/traffic_policy",
       "manual_safety": true,
       "preserve": [
         "core_features.traffic_policy",

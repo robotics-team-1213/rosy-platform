@@ -333,7 +333,7 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     # D-427: CORE packages left src/runtime; keys stay "<role>/..." as before.
     roles = {role: repo / "middleware" / "core" / role for role in ("gateway", "services", "events")}
     roles["api_web"] = repo / "middleware/core/api"
-    roles["navigation"] = repo / "middleware/control/drive/planning/nav2"
+    roles["navigation"] = repo / "middleware/drive/planning/nav2"
     roles["sensing"] = repo / "middleware" / "perception"
     pattern = re.compile(
         r"rclpy\.(try_)?shutdown\b|\btry_shutdown\(|from rclpy(\.utilities)? import[^\n]*\bshutdown\b")

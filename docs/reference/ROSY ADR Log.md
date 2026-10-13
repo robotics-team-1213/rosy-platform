@@ -567,6 +567,7 @@
 | D-562 | 천장 마커 번호는 로봇 번호와 같다 — 로봇은 40–49번, 스티커는 40 mm, 검출기 둘레 하한 0.015 | Accepted (2026-10-09, 사용자 결정; SOURCE·호스트 테스트만, 기존 로봇 번호 바꾸기·스티커 부착은 별도 운영 단계) |
 | D-565 | TLS 로봇은 번호를 바꾼 뒤 대기 binding으로 다시 등록한다 — root 소유 binding 파일이 승인이고 CA·호스트 이름·robot_id가 모두 맞아야 등록, 아니면 `409 tls_binding_mismatch`(토큰 로그아웃) | Proposed (2026-10-09, D-562 번호 변경 뒤 현장 재등록 409에서 나온 최소 수정; 독립 보안 검토 대상, SOURCE·호스트 테스트만) |
 | D-561 | 모델 PC 검수 UI는 승인된 서명 코드 릴리스를 따라간다 | Accepted (2026-10-09, 사용자 요청; 모델 PC 자동 전환·현장 화면 검증 별도) |
+| D-571 | 모델·AI PC 시뮬레이션 준비와 여유 기반 배치: D-530 `approval=sim apt` 줄(타이머는 보고만); `tools/remote/remote_sim.py`가 D-568 배치(`sim` 하한, `~/rosy-jobs` 잠금·예약)로 고른 PC에 실행당 상한(모델 8코어 6 GB, AI 4코어 4 GB, user scope·nice)을 걸어 보냄; 관제 PC는 운영 전용으로 시뮬레이션에서 제외("관제 PC는 시뮬레이션에서 제외", 후보 아님, `--host site`·`~/rosy-jobs/site` 호스트 거절, 시뮬 이미지 없음); AI PC는 소유자 동의 설치 뒤에만, 남의 프로세스는 건드리지 않음 | Proposed (2026-10-09, 사용자 목표·결정; 2026-10-13 D-568·D-584·D-226에 맞춰 개정; 저장소 조각만, 설치는 각 PC 소유자 sudo) |
 | D-568 | 계산 PC 풀: pytest·Gazebo를 모델 PC·AI PC·현장 PC 가운데 잰 여유(코어·메모리·잠금 `~/rosy-jobs`, 하한 pytest 2코어·6 GB, sim 6코어·8 GB)로 고름; 현장 PC는 맨 뒤·Fleet 몫 2코어·4 GB 제외·CPUQuota 400%·`busy` 표시면 거절, 모든 pytest는 MemoryMax 6G+nice 15+ionice idle, `--pick sim`, 노트북 제외; D-553 4·5항 고침 | Proposed (2026-10-09, 사용자 지시; SOURCE·호스트 테스트만, 호스트 sim 설치는 별도; 현장 PC는 `~/rosy-jobs/site` 표시·uv Python 3.12) |
 | D-570 | 학습 페인트 마스크는 오돔으로 지금 프레임에 옮겨 다시 쓴다 (D-408 개정) | Proposed |
 | D-567 | Fleet 경로를 주행 기준으로 유지하고 동기화된 지도 자세·바닥 경계로 제한 보정한다 | Proposed (2026-10-09; SIM·두 로봇 DEVICE 별도) |
@@ -735,6 +736,7 @@
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
 | D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
+| D-743 | Drive holder를 한 층 올리고 설치·배포 identity를 유지한다 | Accepted |
 | D-741 | 모든 앱이 같은 자리를 쓰는 통합 셸 | Accepted |
 
 | D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |

@@ -413,7 +413,7 @@ def pack_repo(repo: Path, output: Path) -> None:
         "python/core_features": repo / "middleware" / "core" / "services" / "core_features",
         "python/core_api_web": repo / "middleware" / "core" / "api" / "core_api_web",
     }
-    behavior_root = repo / 'middleware/control/drive/behaviors'
+    behavior_root = repo / 'middleware/drive/behaviors'
     for name in ('line_follow', 'docking', 'navigation', 'localization', 'swarm',
                  'road_behaviour', 'traffic_policy'):
         mapping['python/core_features/' + name] = behavior_root / name
