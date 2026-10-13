@@ -70,7 +70,7 @@ class AccountClient:
     @contextmanager
     def transaction(self):
         try:
-            db = sqlite3.connect(self.path, timeout=10)
+            db = sqlite3.connect(self.path, timeout=1)
             db.row_factory = sqlite3.Row
             try:
                 with db:
@@ -163,7 +163,7 @@ class AccountClient:
         key = _digest(token)
         with self._verify_lock:
             checked = self._verified.get(key)
-            if checked is None or self.clock() - checked >= 20:
+            if checked is None or self.clock() - checked >= 10:
                 try:
                     self._active(token)
                     self._verified[key] = self.clock()
@@ -181,8 +181,13 @@ class AccountClient:
     def resolve(self, cookie):
         if not isinstance(cookie, str) or not 1 <= len(cookie) <= 128:
             return None
+        return self.resolve_session_id(_digest(cookie))
+
+    def resolve_session_id(self, session_id):
+        if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
+            return None
         with self.transaction() as db:
-            row = db.execute('SELECT * FROM app_account_sessions WHERE id=?', (_digest(cookie),)).fetchone()
+            row = db.execute('SELECT * FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
             if row is None:
                 return None
             try:
@@ -213,7 +218,7 @@ class AccountClient:
                         return current if current.exp > self.clock() else None
                     except AccountUnavailable:
                         return claims if claims and row['checked'] and claims.exp > self.clock() else None
-                if not row['checked'] or self.clock() - row['checked'] >= 20:
+                if not row['checked'] or self.clock() - row['checked'] >= 10:
                     try:
                         self._active(tokens['access_token'])
                         db.execute('UPDATE app_account_sessions SET checked=? WHERE id=?', (self.clock(), row['id']))

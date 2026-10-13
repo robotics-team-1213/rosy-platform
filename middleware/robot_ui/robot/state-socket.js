@@ -51,8 +51,8 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
   // first message came too late. Ask REST which: 401 there ends the session,
   // anything else is retried with backoff.
   async function verifyAfterSocketRefusal() {
-    const owner = verificationLifetime, token = session.token;
-    const current = () => owner === verificationLifetime && !owner.signal.aborted && token === session.token;
+    const owner = verificationLifetime, identity = session.authKey;
+    const current = () => owner === verificationLifetime && !owner.signal.aborted && identity === session.authKey;
     try {
       await api("/api/v1/auth/whoami", {signal: owner.signal});
     } catch (error) {

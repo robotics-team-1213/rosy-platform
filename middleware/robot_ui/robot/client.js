@@ -43,6 +43,7 @@ function storedToken() {
 export const session = {
   token: storedToken(),
   account: null,
+  get authKey() { return this.token || (this.account?.authenticated ? `${this.account.account_id}:${this.account.session_family}:${this.account.revision}` : ''); },
   get authenticated() { return Boolean(this.token || this.account?.authenticated); },
   identity: null,
   socket: null,
@@ -70,17 +71,40 @@ export const authHeaders = () => ({
 });
 
 export async function restoreAccount() {
+  const previous = session.account?.authenticated ? session.authKey : '';
   try {
     const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    session.account = response.ok ? await response.json() : null;
+    if (!response.ok) return session.account;
+    session.account = await response.json();
     if (session.account?.authenticated) {
       session.token = '';
       storageRemove(sessionStorage, SESSION_KEY);
       storageRemove(localStorage, PAIRED_KEY);
+      announceAccount(session.authKey);
     }
-  } catch { session.account = null; }
+    if (previous && previous !== session.authKey) {
+      announceAccount(session.authKey);
+      document.body.hidden = true;
+      window.location.reload();
+    }
+  } catch { /* A failed probe never opens the development login path. */ }
   return session.account;
 }
+
+function announceAccount(key) {
+  try { localStorage.setItem('rosy.account.identity', key); } catch {}
+}
+if (typeof window !== 'undefined') window.addEventListener('storage', event => {
+  if (event.key === 'rosy.account.identity' && session.account?.authenticated && event.newValue !== session.authKey) {
+    forgetToken();
+    window.dispatchEvent(new Event('rosy:account-changed'));
+    document.body.hidden = true;
+    window.location.reload();
+  }
+});
+if (typeof window !== 'undefined') window.setInterval(() => {
+  if (session.account?.enabled) restoreAccount();
+}, 10000);
 
 export function setConnection(kind, label) {
   const badge = elements["connection-badge"];
@@ -262,6 +286,7 @@ export async function logout({ signal } = {}) {
   if (session.account?.authenticated) {
     const response = await fetch('/api/account/logout', {method:'POST', signal});
     forgetToken();
+    announceAccount('');
     if (!response.ok) throw new Error('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.');
     return true;
   }
@@ -325,6 +350,7 @@ async function httpError(response) {
 
 export async function api(path, options = {}) {
   if (!session.authenticated) throw new Error("로그인이 필요합니다.");
+  const identity = session.authKey;
   const method = (options.method || "GET").toUpperCase();
   const noteOperation = (status) => {
     const detail = classifyOperation(method, path, status);
@@ -337,21 +363,28 @@ export async function api(path, options = {}) {
       headers: { ...authHeaders(), ...(options.headers || {}) },
     });
   } catch (error) { noteOperation(0); throw error; }
+  if (identity !== session.authKey) throw new Error('계정이 변경되었습니다. 화면을 다시 여세요.');
   noteOperation(response.status);
   if (!response.ok) throw await httpError(response);
   if (response.status === 204) return null;
-  return response.json();
+  const body = await response.json();
+  if (identity !== session.authKey) throw new Error('계정이 변경되었습니다. 화면을 다시 여세요.');
+  return body;
 }
 
 export async function apiMaybe(path) {
   if (!session.authenticated) return null;
+  const identity = session.authKey;
   const response = await fetch(path, { headers: authHeaders() });
+  if (identity !== session.authKey) throw new Error('계정이 변경되었습니다. 화면을 다시 여세요.');
   if (!response.ok) {
     const error = await httpError(response);
     if (response.status === 404 && error.code === "NOT_FOUND") return null;
     throw error;
   }
-  return response.json();
+  const body = await response.json();
+  if (identity !== session.authKey) throw new Error('계정이 변경되었습니다. 화면을 다시 여세요.');
+  return body;
 }
 
 export function isAdmin() {
