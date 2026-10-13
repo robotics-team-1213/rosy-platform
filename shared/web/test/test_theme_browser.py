@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fleet.server.static_routes import CONSOLE_ASSETS
 from browser_harness import browser_tests_enabled
 
 import token_themes
@@ -22,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / "middleware" / "ui" / "robot"
-FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "ui" / "console"
 HOST = "http://rosy.test"
 PALETTES = token_themes.palettes(token_themes.read())
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
@@ -48,7 +49,10 @@ def _serve(route):
     if path.startswith("/common/"):
         target = COMMON / path.removeprefix("/common/")
     elif path.startswith("/console/assets/"):
-        target = FLEET / path.removeprefix("/console/assets/")
+        entry = CONSOLE_ASSETS.get(path.removeprefix("/console/assets/"))
+        if entry is None:
+            return route.fulfill(status=404, body="")
+        target = FLEET / entry[0]
     elif path.startswith("/assets/"):
         target = DASHBOARD / path.removeprefix("/assets/")
     elif path == "/console":

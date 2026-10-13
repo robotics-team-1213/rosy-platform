@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core_common.protocol.schemas import ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS
-from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
+from rosy.decision.model_tool_contract import ModelToolCall, ModelToolResult
 
 from .sqlite_policy import configure_connection, enable_wal
 
@@ -734,6 +734,14 @@ class ProposalStore:
                     "SELECT * FROM fleet_proposals WHERE proposal_id=? AND principal_id=?",
                     (proposal_id, _text("principal_id", principal_id, limit=96)),
                 ).fetchone()
+        return self._row(row)
+
+    def get_in_transaction(self, connection, proposal_id: str) -> dict[str, Any] | None:
+        """Read current metadata without acquiring a second writer to purge expiry."""
+        row = connection.execute("SELECT * FROM fleet_proposals WHERE proposal_id=?",
+                                 (_text("proposal_id", proposal_id),)).fetchone()
+        if row is None or row['expires_at'] <= datetime.now(timezone.utc).isoformat():
+            return None
         return self._row(row)
 
     def by_request(self, *, principal_id: str, request_key: str) -> dict[str, Any] | None:

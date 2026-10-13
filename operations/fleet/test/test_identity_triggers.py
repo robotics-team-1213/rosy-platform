@@ -105,7 +105,7 @@ def _site():
     return clock, source, identity, robots, frame
 
 
-def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
+def test_tick_asks_lost_robots_silently_in_blue_only_every_thirty_seconds():
     clock, _source, identity, robots, frame = _site()
     hidden = ((1.1, 1.0, None), (2.1, 1.0, None))
     frame((1.0, 1.0, 40), (2.0, 1.0, 41))
@@ -127,13 +127,35 @@ def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
     for _ in range(80):                                        # 800 s later
         tick(10.0)
     assert asked["rosy_41"][0] == 13.0
-    # Marker still hidden: 30 s, then 2 min, then every 5 min (D-596 7).
-    assert [b - a for a, b in zip(asked["rosy_40"], asked["rosy_40"][1:])][:4] == [30.0, 120.0, 300.0, 300.0]
+    # Marker still hidden: retry every 30 s, one blue request per source.
+    assert [b - a for a, b in zip(asked["rosy_40"], asked["rosy_40"][1:])][:4] == [30.0] * 4
     assert all(quiet for _color, quiet in robots["rosy_40"].calls)
     clock.now += 0.5
-    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: the backoff restarts
+    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: no longer lost
     asyncio.run(identity.tick())
-    assert identity.triggers.backoff("rosy_40") == 1
+    assert "rosy_40" not in identity.triggers._lost_since
+
+
+def test_a_never_seen_robot_is_identified_after_thirty_seconds():
+    triggers = AutoTriggers(CONFIG)
+    snapshot = _snap([{"robot_id": "rosy_41", "status": "NO_POSE"}], [(3.0, 3.0)])
+    assert _due(triggers, 0.0, snapshot) == []
+    assert _due(triggers, 29.0, snapshot) == []
+    assert _due(triggers, 30.0, snapshot) == [("rosy_41", "periodic")]
+    assert _due(triggers, 31.0, snapshot, skip={"rosy_41"}) == []
+    assert _due(triggers, 31.0, snapshot, states={"rosy_41": {"safety": {"estop": True}}}) == []
+
+
+def test_a_timed_blue_light_can_reidentify_a_relocated_robot():
+    clock, source, identity, robots, frame = _site()
+    frame((1.0, 1.0, 40))
+    asyncio.run(identity.tick())
+    started = asyncio.run(identity.request("rosy_40", "blue"))
+    clock.now += 6.2
+    frame((3.0, 1.0, None), (4.0, 1.0, None))
+    result = _verdict(identity, source, started["request_id"], 3.0, 1.0, clock.now - 1.0,
+                      evidence={"mode": "steady", "off_on_off": True})
+    assert result["state"] == "CONFIRMED"
 
 
 def _verdict(identity, source, request_id, x, y, at, evidence=None):

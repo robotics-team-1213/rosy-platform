@@ -368,16 +368,21 @@ class TrackWorker:
         self._identity_ring = [(at, by) for at, by in self._identity_ring if captured_at - RING_S <= at < captured_at]
         if result.status != "OK":
             return
-        inverse = np.linalg.inv(geometry.as_matrix(calibration.image_to_map))
+        matrix = geometry.as_matrix(calibration.image_to_map)
+        inverse = np.linalg.inv(matrix)
+        camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
+        shrink = 1.0 if camera is None else (camera[2] - ROBOT_TOP_HEIGHT_M) / camera[2]
         scale_x = image.shape[1] / calibration.image_size[0]
         scale_y = image.shape[0] / calibration.image_size[1]
         blobs = []
         for d in result.detections:
             if d.marker_id is not None:
                 continue
-            # ponytail: floor-plane inverse, no parallax; the ring's outer radius absorbs the
-            # top-height offset. Use the lens camera model if the field measurement says so.
-            (px, py), (ex, ey) = geometry.apply(inverse, [(d.x, d.y), (d.x + d.footprint_m / 2, d.y)])
+            # Undo the detector's height correction before returning to the original image.
+            x, y = (d.x, d.y) if camera is None else (
+                camera[0] + (d.x - camera[0]) / shrink,
+                camera[1] + (d.y - camera[1]) / shrink)
+            (px, py), (ex, ey) = geometry.apply(inverse, [(x, y), (x + d.footprint_m / (2 * shrink), y)])
             if not all(math.isfinite(v) for v in (px, py, ex, ey)):
                 continue
             radius = math.hypot((ex - px) * scale_x, (ey - py) * scale_y)

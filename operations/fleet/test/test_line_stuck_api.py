@@ -21,6 +21,16 @@ from fleet.server.sighting_store import SightingStore
 from fleet.stuck.ai_facts import AiFactLog
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
+
+
+def test_current_inquiry_replaces_open_time_boundary_context():
+    board = LineStuckBoard()
+    row = {"robot_id": "r", "online": True, "state": {"line_follow": {"stuck": {
+        "stuck_id": "s", "inquiry": {"lane_boundary": {"revision": 0}}}}}}
+    board.observe([row])
+    row["state"]["line_follow"]["stuck"]["inquiry"] = {"lane_boundary": {"revision": 1}}
+    board.observe([row])
+    assert board.view("r")["inquiry"]["lane_boundary"]["revision"] == 1
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
 
@@ -41,11 +51,11 @@ def _console(robot: FakeRobot, clock=None) -> FleetConsole:
     return FleetConsole([endpoint], [robot], **({"clock": clock} if clock else {}))
 
 
-def _named_app(console: FleetConsole, tmp_path):
+def _named_app(console: FleetConsole, tmp_path, **kwargs):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     app = create_app(
         console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
-        start_task_dispatcher=False,
+        start_task_dispatcher=False, **kwargs,
         site_users={
             sha256(OPERATOR.encode()).hexdigest(): {"principal_id": "op-7", "role": "operator"},
             sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"},

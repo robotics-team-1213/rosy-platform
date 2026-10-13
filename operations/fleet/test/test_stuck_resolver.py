@@ -785,7 +785,8 @@ def test_d577_no_ai_proposal_in_time_falls_back_to_the_rules():
     r = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r.step(0.0, [_ai_row()]) == []                   # the AI PC still has its time
     assert r.step(4.0, [_ai_row()]) == []
-    assert r.step(5.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
+    assert r.step(10.1, [_ai_row()]) == []
+    assert r.step(12.1, [_ai_row()]) == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
     assert r.ai_verdicts == []
 
 

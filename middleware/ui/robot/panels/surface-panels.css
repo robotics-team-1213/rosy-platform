@@ -35,9 +35,10 @@
 .surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-link[hidden] { display: none; }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
-.surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
+.surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--surface-recessed); outline-offset: 3px; }
 .surface-map-frame canvas[data-goal-cursor] { cursor: crosshair; }
 .surface-map-stage {
+  box-sizing: border-box;
   position: absolute;
   inset: var(--space-2) var(--space-2) auto;
   display: flex;
@@ -49,12 +50,11 @@
   background: var(--scrim-solid);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);
-  color: var(--ink);
+  color: var(--text-primary);
   font: var(--weight-emphasis) var(--text-label)/var(--leading-copy) var(--body);
   pointer-events: none;
 }
-.surface-map-stage span { white-space: nowrap; }
-.surface-map-stage .surface-map-path-evidence { white-space: normal; min-width: 0; }
+.surface-map-stage span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .surface-map-frame:has(ui-empty:not([hidden])) .surface-map-stage { display: none; }
 .surface-map-readout { margin: 0; }
 .surface-map-frame:has(ui-empty:not([hidden])) canvas { height: 16rem; }
@@ -64,7 +64,7 @@
 .surface-map-overlay > ui-button { pointer-events: auto; }
 .surface-teleop-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); max-width: 24rem; touch-action: none; }
 .surface-teleop-controls ui-button { user-select: none; -webkit-user-select: none; }
-.surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--ground-deep); overflow: hidden; }
+.surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--surface-recessed); overflow: hidden; }
 .surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
 .surface-camera-frame[hidden] { display: none; }
 .surface-camera-toolbar { display: none; }
@@ -72,12 +72,12 @@ body[data-surface="console"] #vision-stage:fullscreen,
 #vision-stage:fullscreen { width: 100vw; height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 #vision-stage:fullscreen .surface-camera-frame { width: 100%; height: 100%; max-height: none; object-fit: contain; }
-#vision-stage:fullscreen .surface-camera-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: var(--space-2); padding: var(--space-2); background: var(--ground); width: 100%; box-sizing: border-box; }
+#vision-stage:fullscreen .surface-camera-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: var(--space-2); padding: var(--space-2); background: var(--surface-canvas); width: 100%; box-sizing: border-box; }
 #vision-stage:fullscreen .surface-camera-toolbar #shell-estop { order: 3; }
 #vision-stage:fullscreen .surface-camera-toolbar #shell-notice { flex: 1 1 12rem; overflow-wrap: anywhere; }
 .surface-camera-tools > summary { cursor: pointer; padding-block: var(--space-2); }
-.surface-camera-legend { font-size: var(--text-label); color: var(--ink-quiet); }
-.surface-camera-legend summary { cursor: pointer; color: var(--ink); }
+.surface-camera-legend { font-size: var(--text-label); color: var(--text-secondary); }
+.surface-camera-legend summary { cursor: pointer; color: var(--text-primary); }
 .surface-camera-legend p { margin-block: var(--space-2); }
 .surface-camera-empty { padding: var(--space-4); text-align: center; }
 .surface-camera-actions { align-items: end; }
@@ -115,7 +115,7 @@ body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 .traffic-policy-review p { margin: 0; overflow-wrap: anywhere; }
 [data-panel="setup.traffic_policy"] { gap: var(--space-5); }
 /* D-525/D-551 가상 신호 참고 — Fleet T-map 알약처럼 주황 점선 테두리와 "가상" 글자. 등 색 옆에 늘 글자가 있다. */
-.line-signal { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) var(--space-3); border: 2px dashed var(--status-warn); border-radius: var(--radius-control); background: var(--ground-deep); }
+.line-signal { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) var(--space-3); border: 2px dashed var(--status-warn); border-radius: var(--radius-control); background: var(--surface-recessed); }
 .line-signal-kind { color: var(--status-warn); font: var(--weight-emphasis) var(--text-micro)/var(--leading-flat) var(--body); }
 .line-signal-lamp { width: 0.875rem; height: 0.875rem; border-radius: 50%; border: 2px solid var(--nominal-quiet); }
 .line-signal[data-lamp="green"] .line-signal-lamp { background: var(--status-good); border-color: var(--status-good); }

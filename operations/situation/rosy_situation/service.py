@@ -34,10 +34,13 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
+
+from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
@@ -80,8 +83,14 @@ class Fleet:
         request = urllib.request.Request(self._url + path, data=data, method="GET" if body is None else "POST",
                                          headers={"Authorization": f"Bearer {self._token}",
                                                   "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
-            return json.loads(response.read())
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=self._ssl) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError:
+            raise
+        except (OSError, ValueError) as exc:
+            _LOG.warning("Fleet %s %s failed: %s", request.method, path.partition("?")[0], type(exc).__name__)
+            raise
 
     def frame(self, path: str, lease: str) -> dict:
         if not isinstance(path, str) or not re.fullmatch(r"/api/vision/sources/[A-Za-z0-9_-]+/frame", path):
@@ -130,12 +139,15 @@ class Situation:
         self._route_map: Optional[dict] = None
         from rosy_situation.incident_context import ContextDraft
         self.context_draft = ContextDraft()
+        self._assessment_samples = {}
         self.vlm = vlm
         self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="rosy-vlm")
         self._profile = None
         self._profile_task = None
         self._case_task = None
         self._case_seen: dict[str, float] = {}
+        self._case_boundary: dict[str, object] = {}
+        self._case_attempts: dict[str, tuple] = {}
         self._profile_retry_at = 0.0
 
     def owner_mode(self) -> str:
@@ -174,6 +186,8 @@ class Situation:
         snapshot = {"observed_at": self.wall()}
         for key, path in (("state", "/api/fleet/state"), ("traffic", "/api/fleet/traffic"),
                           ("line_stuck", "/api/fleet/line-stuck")):
+            if key == 'state':
+                snapshot['_state_requested_at'] = self.wall()
             snapshot[key] = self.fleet.call(path)
         try:
             snapshot["trips"] = self.fleet.call("/api/fleet/trips")
@@ -185,7 +199,7 @@ class Situation:
         except (OSError, ValueError) as exc:
             _LOG.warning("trip route read failed: %s", exc)
             snapshot["trips"], snapshot["route_map"] = {}, None
-        if any((str(row.get("robot_id") or ""), str(row.get("stuck_id") or "")) not in self.context_draft.seen
+        if any(self.context_draft.due(row, self.wall())
                for row in (snapshot["line_stuck"].get("pending") or [])):
             context = {"map": None, "cameras": {}}
             try:
@@ -256,6 +270,15 @@ class Situation:
             _LOG.warning("fleet read failed: %s", exc)
             return PERIOD_S
         self._log("input", snapshot)
+        assessments = snapshot_assessments(snapshot)
+        now = self.clock()
+        for rid, result in assessments.items():
+            signature = (result.request.case_id, result.request.owner, result.necessity, result.reason)
+            previous = self._assessment_samples.get(rid)
+            if previous is None or previous[0] != signature or now - previous[1] >= 60.0:
+                self._log('assessments', asdict(result))
+                self._assessment_samples[rid] = (signature, now)
+        self._assessment_samples = {rid: value for rid, value in self._assessment_samples.items() if rid in assessments}
         facts = self.analyzers(snapshot) + self.context_draft(snapshot)
         for fact in facts:
             self._log("facts", fact)
@@ -304,25 +327,46 @@ class Situation:
             if pid and now - self._case_seen.get(pid, float("-inf")) >= 8.0:
                 self._case_seen[pid] = now
                 case = self.fleet.call(f"/api/fleet/ai/case/{pid}")
+                boundary_revision = None
+                if case.get("kind") == "stuck":
+                    boundary = (((case.get("context") or {}).get("robot_inquiry") or {}).get("lane_boundary") or {})
+                    revision = boundary.get("revision")
+                    valid = (boundary.get("state") == "confirmed" and type(revision) is int and revision >= 0)
+                    # First inquiry establishes context; later queries need confirmed geometry change.
+                    if pid in self._case_boundary and (not valid or revision == self._case_boundary[pid]):
+                        continue
+                    boundary_revision = revision if type(revision) is int and revision >= 0 else None
+                    previous, attempts = self._case_attempts.get(pid, (boundary_revision, 0))
+                    if previous == boundary_revision and attempts >= 3:
+                        continue
                 if self.owner_mode() != "available":
                     return
                 for member in [case, *(case.get("members") or {}).values()]:
                     view = (member.get("views") or {}).get("rosy_cam") or {}
                     if view.get("frame_path"):
                         try:
-                            member["views"]["rosy_cam"] = self.fleet.frame(view["frame_path"], view["lease"])
+                            frame = self.fleet.frame(view["frame_path"], view["lease"])
+                            member["views"]["rosy_cam"] = {**frame, **{key: view[key] for key in (
+                                "target_robot_id", "map_id", "calibration_revision", "crop_map") if key in view}}
                         except (OSError, ValueError, KeyError) as exc:
                             _LOG.warning("Vision frame unavailable: %s", type(exc).__name__)
                             member["views"].pop("rosy_cam", None)
                 if self.owner_mode() != "available":
                     return
+                if case.get("kind") == "stuck":
+                    previous, attempts = self._case_attempts.get(pid, (boundary_revision, 0))
+                    self._case_attempts[pid] = (boundary_revision, attempts + 1 if previous == boundary_revision else 1)
                 proposal = self.vlm.judge(case, self.wall())
                 if proposal is not None and self.owner_mode() == "available":
                     self.fleet.call("/api/fleet/ai/proposals", proposal)
                     self._log("proposals", proposal)
+                    if case.get("kind") == "stuck":
+                        self._case_boundary[pid] = boundary_revision
                 break
         if len(self._case_seen) > 256:
             self._case_seen = {pid: at for pid, at in self._case_seen.items() if now - at < 60.0}
+            self._case_boundary = {pid: value for pid, value in self._case_boundary.items() if pid in self._case_seen}
+            self._case_attempts = {pid: value for pid, value in self._case_attempts.items() if pid in self._case_seen}
 
 
 def main() -> None:

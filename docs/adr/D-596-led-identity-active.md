@@ -1,5 +1,11 @@
 ## D-596 LED 신원 확인을 켠다 — 서 있는 로봇도, 색마다 동시에, Fleet이 스스로 요청한다
 
+### 개정 2026-10-10 — 일정 시간 연속 점등과 주기 재식별
+
+사용자 결정: "점멸말고 그러면 특정시간동안 아예 조명을 켜두는걸로 해". `fix/led-steady-reidentify`는 기존 식별 요청에서 첫 1초 꺼짐 뒤 2초 연속 점등으로 바꾼다. rosy-face의 3.5초 상한과 안전 표시 거절·선점은 유지한다. Vision `led-identity/4`는 여러 blob 중 한 트랙의 꺼짐→1초 이상 켜짐→꺼짐을 `steady`, `off_on_off: true`로 증명한다. 다중 후보·가림·프레임 손실은 거절한다. 완전한 파랑 증거에는 예상 자리 제한을 적용하지 않고, 약한 정색 폴백과 주황은 기존 제한을 유지한다.
+
+미확인 로봇의 재시도 간격은 늘어나는 30초·2분·5분에서 고정 `auto_min_interval_s`(기본 30초)로 바뀐다. 마지막 마커를 몰라도 로봇 행이 미확인이고 익명 blob이 보이면 30초 뒤 `periodic`으로 요청한다. 자동 파랑 요청은 source마다 한 대씩이다. 확인됨·요청 중·상태 불명·E-Stop·주의 표시는 제외한다. LED 확인은 여전히 지도 기준점·trip·대형 제어를 쓰지 않는다. SOURCE 검증과 실제 장치 배포·영상 판정은 별도다. [설계](../plans/2026-10-10-led-steady-reidentify-design.md).
+
 **Status:** Proposed (2026-10-10, 사용자 결정 "LED 색상이나 LED 켜짐으로 찾는 로직도 활성화하는 걸로 해"). SOURCE 변경과 호스트 테스트, 현장 프레임 재생만이다. 사이트 배포와 현장 LED 판정 수용은 이 기록이 하지 않는다.
 
 잇는 결정: [D-472](D-472-rosy-cam-map-and-lamp-identity.md)(LED 점멸 신원, 이 결정이 4항의 "동시에 한 대"와 addendum 5항의 "움직이는 로봇에 한 대씩"을 고친다) · [D-457](D-457-overhead-marker-priority-and-markerless-fallback.md)(마커 우선, 무마커 blob) · [D-539](D-539-tracking-background-survives-restart.md)·[D-547](D-547-tracking-baked-robot-guess-and-ghost-heal.md)(배경 유지, 배경에 박힌 로봇 추정과 유령 치유) · [D-433](D-433-one-face-process-owns-lcd-buzzer-lamp.md)(rosy-face가 램프 단독 소유) · [D-511](D-511-fleet-lane-compliance-watch-and-correction-cue.md)(확인 트랙의 쓰임). 폴더 구조는 바뀌지 않으므로 D-427 3항은 해당하지 않는다.
