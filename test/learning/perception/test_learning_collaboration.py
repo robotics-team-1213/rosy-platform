@@ -105,3 +105,42 @@ def test_collaboration_rejects_missing_origin(tmp_path):
             urllib.request.urlopen(req)
         assert error.value.code == 403
         assert store.get(0)['version'] == 1
+
+
+def test_project_manager_cannot_register_other_project_server_paths(tmp_path):
+    with running(tmp_path) as (url, _, store):
+        _, workspace = request(url, '/api/workspace', 'reviewer')
+        for path in ('/api/import', '/api/cad', '/api/learning/register'):
+            assert request(url, path, 'reviewer', {'path': str(tmp_path / 'another-project')},
+                           workspace['token'])[0] == 403
+
+
+def test_collaboration_binding_cannot_be_reopened_without_auth(tmp_path):
+    with running(tmp_path) as (_, _, store):
+        pass
+    with pytest.raises(ValueError, match='account configuration'):
+        make_server(store, 0)
+
+
+def test_pixel_actor_and_approval_are_preserved(tmp_path):
+    import review_masks
+    from review_app import Conflict
+    store = open_store(tmp_path)
+    import review_ingest
+    from test_review_cycle import catalog
+    folder, classes, _ = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    review = review_masks.get(store, 0)
+    # Fixtures have a full existing class binding; use the established fill path.
+    value = review_masks.update(store, 0, {'version': review['version'], 'action': 'fill',
+        'label': review['classes']['classes'][0]['index']}, Conflict, actor='alice')
+    approved = review_masks.update(store, 0, {'version': value['version'], 'action': 'approve',
+        'complete_frame_review': True, 'background_reviewed': True}, Conflict, actor='bob')
+    assert approved['status'] == 'approved'
+    import review_evidence
+    review_evidence.decisions(store)
+    store.prepare()
+    with store.connect() as db:
+        events = [json.loads(row[0]) for row in db.execute('SELECT review FROM pixel_events ORDER BY id')]
+    assert events[0]['actor'] == 'alice'
+    assert events[-1]['actor'] == 'bob'

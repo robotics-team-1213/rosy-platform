@@ -61,6 +61,9 @@ def test_fixed_revision_hash_readback_and_no_secrets(tmp_path):
     assert done['status'] == 'completed'
     assert done['revision'] == SHA
     assert done['curation_status'] == 'pending_curation'
+    assert done['eligibility']['imitation_learning']['status'] == 'blocked'
+    assert done['eligibility']['perception']['status'] == 'hold'
+    assert done['media_revision']
     assert done['files'][0]['sha256'] == hashlib.sha256(b'video').hexdigest()
     assert all(row[0] == SHA for row in transport.downloads)
     assert 'selected-secret' not in json.dumps(done)
@@ -174,4 +177,11 @@ def test_repeat_completed_request_is_idempotent(tmp_path):
     job = create(service)
     service.run(job['id'], 'alice')
     assert create(service)['id'] == job['id']
+
+
+def test_pending_worker_can_be_resubmitted_and_license_is_preserved(tmp_path):
+    service, _, _ = make(tmp_path)
+    job = create(service, rights={**RIGHTS, 'license': 'Apache-2.0'})
+    assert service.retry('alice', 'alpha', job['id'])['status'] == 'queued'
+    assert service.get('alice', 'alpha', job['id'])['rights']['license'] == 'Apache-2.0'
 

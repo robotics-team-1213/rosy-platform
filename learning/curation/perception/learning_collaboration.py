@@ -1,7 +1,6 @@
 """Optional project authorization and account/import HTTP routes for the review app."""
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import SimpleCookie
-import ipaddress
 import threading
 from urllib.parse import parse_qs, urlparse
 
@@ -21,7 +20,8 @@ def cookie(handler, name):
 class Collaboration:
     def __init__(self, accounts, store, *, oauth=None, imports=None):
         self.accounts, self.oauth, self.imports = accounts, oauth, imports
-        self.origin = getattr(accounts, 'public_origin', None)
+        self.origin = (accounts.config().get('public_origin') if hasattr(accounts, 'config')
+                       else getattr(accounts, 'public_origin', None))
         self.authority = urlparse(self.origin).netloc if self.origin else None
         if self.origin:
             parsed = urlparse(self.origin)
@@ -94,13 +94,12 @@ class Collaboration:
 
     def authorize_write(self, handler, path, body):
         principal = self.identity(handler)
+        if path in ('/api/import', '/api/cad', '/api/learning/register'):
+            raise PermissionError('project users cannot import arbitrary server filesystem paths')
         if path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
             capability = 'approve' if body.get('action') == 'approve' else 'edit'
         elif path == '/api/prepare':
             capability = 'approve'
-        elif path in ('/api/import', '/api/cad'):
-            # These legacy routes accept server filesystem paths.
-            capability = 'manage'
         elif path.startswith('/api/learning/imports/'):
             capability = 'import'
         elif path.startswith('/api/accounts/'):
@@ -133,7 +132,8 @@ class Collaboration:
 
     def post(self, handler, path, body, token):
         if path == '/api/accounts/login':
-            session, _ = self.accounts.login(body.get('username'), body.get('password'))
+            session, _ = self.accounts.login(body.get('username'), body.get('password'),
+                                              address=handler.client_address[0])
             self.set_cookie(handler, COOKIE, session)
             handler.send({'ok': True})
             return True
