@@ -19,6 +19,7 @@ COPY deploy/site/requirements-fleet.txt /opt/rosy/requirements.txt
 COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
 COPY deploy/site/site_db.py /opt/rosy/site_db.py
 COPY operations/fleet/ /opt/rosy/src/site/fleet/
+COPY integrations/messaging/discord/rosy_discord/ /opt/rosy/src/site/fleet/_source_roots/discord/rosy_discord/
 COPY operations/decision/ /opt/rosy/src/site/decision/
 COPY operations/execution/src/ /opt/rosy/src/site/execution/src/
 COPY operations/ui/console/ /opt/rosy/src/site/ui/console/

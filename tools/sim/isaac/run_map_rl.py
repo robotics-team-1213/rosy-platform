@@ -18,27 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/envs/isaa
 from prepare_urdf import REPOSITORY, validate_output_path
 from model_checks import check_urdf
 from importer_compat import import_model, reference_model
-from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints
+from drive_runtime import configure_velocity_drive, configure_passive_drive, passive_caster_joints, configure_contact_solver
 from graph_contract import robot_contract
-from map_task import load_track, MapTask, QPolicy, SimulationOwner
-
-
-def learn_transition(policy, previous, state, result):
-    if state is None:
-        return 'invalid_camera_observation'
-    if previous is None or previous[0] is None:
-        return 'no_previous_observation'
-    policy.update(*previous, result['reward'], state,
-                  terminated=result['terminated'] or result['truncated'])
-    return 'updated'
-
-
-def camera_tick(lane, now, *, gain):
-    decision = lane.manager.tick_gain(now, gain=gain)
-    state = lane.state()
-    if state is None:
-        decision = replace(decision, linear=0., angular=0.)
-    return decision, state
+from map_task import MAP, load_track, MapTask, QPolicy, SimulationOwner
+from floor_visuals import map_visual_profile, add_track_visuals, configure_ground_collision, verify_ground_collision
+from camera_checks import (camera_tick, camera_episode_usable, camera_admission_error, camera_sample_due,
+                           remember_camera_action, learn_transition, camera_snapshot_due, CameraLearningWindow)
 
 
 def episode_phases(train_episodes, *, camera, evaluation_only):
@@ -48,10 +33,6 @@ def episode_phases(train_episodes, *, camera, evaluation_only):
                                          *[('train', seed, 0.) for seed in range(train_episodes)]]
     return phases + [(phase, seed, angle) for seed, angle in evaluations
                      for phase in (('baseline', 'eval') if camera else ('eval',))]
-
-
-def camera_sample_due(frame, episode_start_frame):
-    return (frame - episode_start_frame) % 24 == 0
 
 
 def camera_route_guide(task, pose, result, stamp):
@@ -68,7 +49,8 @@ def camera_route_guide(task, pose, result, stamp):
         local_x, local_y = after[0] - centre[0], after[1] - centre[1]
     relative = lambda x, y: math.degrees(math.atan2(math.sin(math.atan2(y, x) - pose[2]),
                                                    math.cos(math.atan2(y, x) - pose[2])))
-    return (relative(dx, dy), stamp, True, relative(local_x, local_y),
+    # A route tangent alone does not prove a Fleet turn spot or the native body's sweep clearance.
+    return (relative(dx, dy), stamp, False, relative(local_x, local_y),
             result['deviation_m'], result['progress_m'])
 
 
@@ -192,26 +174,12 @@ def main():
             else:
                 configure_velocity_drive(drive)
         world = World(stage_units_in_meters=1., physics_dt=1 / 240., rendering_dt=1 / 240.)
-        world.scene.add_ground_plane(size=10., color=np.array([.3, .3, .3]), restitution=0.)
+        profile = map_visual_profile(MAP)
+        ground = world.scene.add_ground_plane(size=profile['ground_size'],
+            color=np.array(profile['ground_colour']), restitution=0.)
+        summary['ground_collision'] = configure_ground_collision(stage, ground.prim_path)
         scene = track['scene']
-        UsdGeom.Xform.Define(stage, '/World/Track')
-        for i, wall in enumerate(scene.walls):
-            cube = UsdGeom.Cube.Define(stage, f'/World/Track/wall_{i}')
-            cube.CreateSizeAttr(1.)
-            cube.AddTranslateOp().Set(Gf.Vec3d(wall.cx, wall.cy, wall.height / 2))
-            cube.AddScaleOp().Set(Gf.Vec3d(wall.size_x, wall.size_y, wall.height))
-            cube.CreateDisplayColorAttr([Gf.Vec3f(1.)])
-            UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-        for part in [dict(name='paint', triangles=scene.lines, colour=[1., 1., 1.]),
-                     *track['caution_meshes']]:
-            paint = UsdGeom.Mesh.Define(stage, '/World/Track/' + part['name'])
-            vertices = [Gf.Vec3f(*v) for t in part['triangles'] for v in t]
-            paint.CreatePointsAttr(vertices)
-            paint.CreateFaceVertexCountsAttr([3] * len(part['triangles']))
-            paint.CreateFaceVertexIndicesAttr(list(range(len(vertices))))
-            paint.CreateSubdivisionSchemeAttr('none')
-            paint.CreateDoubleSidedAttr(True)
-            paint.CreateDisplayColorAttr([Gf.Vec3f(*part['colour'])])
+        add_track_visuals(stage, track, profile)
         robot = world.scene.add(WheeledRobot(prim_path=roots[0], name='pinky',
                                wheel_dof_names=list(contract['wheel_joints']), create_robot=False))
         if args.record_video or perception is not None:
@@ -253,7 +221,14 @@ def main():
                 front_camera.set_world_pose(position=position, orientation=orientation, camera_axes='world')
 
         world.reset()
+        verify_ground_collision(stage, ground.prim_path, summary['ground_collision'])
+        solver_iterations = configure_contact_solver(robot)
         if front_camera is not None:
+            from native_scan import NativeScan
+            from core_common.robot_body import NOMINAL_BODY
+            geometry = yaml.safe_load((REPOSITORY / 'middleware/devices/pinky/profile/config/geometry.yaml').read_text())
+            scan_body = replace(NOMINAL_BODY, rotation_radius_m=geometry['footprint']['rotation_radius_sim_box_m'])
+            native_scan = NativeScan(stage)
             front_camera.initialize()
             position_front_camera()
             intrinsics = front_camera.get_intrinsics_matrix()
@@ -272,6 +247,7 @@ def main():
                 position=[0., 0., 2.], orientation=[1., 0., 0., 0.])
         stiffness, damping = robot.get_articulation_controller().get_gains()
         summary['physics'] = dict(dt_s=world.get_physics_dt(), restitution=0.,
+                                 solver_iterations=solver_iterations,
                                  dofs=robot.dof_names, stiffness=stiffness.tolist(), damping=damping.tolist())
         print('PHYSICS ' + json.dumps(summary['physics']), flush=True)
         diff = DifferentialController(name='pinky_diff', wheel_radius=contract['wheel_radius'],
@@ -285,9 +261,11 @@ def main():
         frame = 0
         epoch = 0
         power = type('DiagnosticPower', (), {'on_activity': lambda self, source: None})()
+        dispatch_receipts, cycle_warnings = [], []
 
         def send(twist):
             robot.apply_wheel_actions(diff.forward(command=np.array([twist.linear, twist.angular])))
+            dispatch_receipts.append((twist.linear, twist.angular))
 
         def read_pose():
             position, quaternion = robot.get_world_pose()
@@ -361,7 +339,9 @@ def main():
                 step()
             initial = read_pose()
             if math.dist(initial[:2], route[0]) > .015 or initial[3] >= .005 or abs(initial[4]) >= .02:
-                raise RuntimeError('reset pose or rest readback differs')
+                summary['reset_failure'] = dict(phase=phase, seed=seed, target_xy=route[0],
+                    actual_pose=initial, position_error_m=math.dist(initial[:2], route[0]))
+                raise RuntimeError('reset pose or rest readback differs: ' + json.dumps(summary['reset_failure']))
             epoch += 1
             owner.begin(epoch)
             if lane is not None:
@@ -370,7 +350,8 @@ def main():
             if front_camera is not None:
                 ground = ground_plane(camera_profile['height_m'] + float(robot.get_world_pose()[0][2]),
                     pitch, float(intrinsics[0, 0]), 160., 120., .6)
-                lane = LearnedCameraLane(perception_model, ground, camera_x=camera_profile['x_offset_m'])
+                lane = LearnedCameraLane(perception_model, ground, camera_x=camera_profile['x_offset_m'],
+                                         body=scan_body)
                 position_front_camera()
                 for _ in range(20):
                     world.render()
@@ -381,12 +362,15 @@ def main():
             wall_start = time.monotonic()
             episode_start_frame = frame
             previous = None
+            last_applied = None
+            camera_learning = CameraLearningWindow()
             frozen = policy.export() if phase == 'eval' or (perception is not None and phase == 'baseline') else None
             if phase == 'eval' and (policy.updates == 0 or not any(
                     value != 0. for values in policy.table.values() for value in values)):
                 raise RuntimeError('no measured Q-learning update; rule fallback is not trained evaluation')
             learned_steps = 0
             camera_frames = camera_visible_frames = 0
+            captured_failures = set()
             if camera is not None and (phase == 'eval' or (perception is not None and phase == 'baseline')):
                 from native_recording import NativeRecorder
                 # Initialize the native render product before accepting episode frames.
@@ -423,12 +407,18 @@ def main():
                                 lane.invalidate('invalid_native_camera')
                             else:
                                 guide = camera_route_guide(task, pose, result, world.current_time)
-                                lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
-                                    stamp=float(image['rendering_time']), source_now=world.current_time,
-                                    pose=pose[:3], guide=guide)
-                                if camera_frames == 0:
+                                if lane.observe_scan(native_scan.capture(world.current_time), body=scan_body):
+                                    lane.observe(np.ascontiguousarray(rgba[:, :, 2::-1]),
+                                        stamp=float(image['rendering_time']), source_now=world.current_time,
+                                        pose=pose[:3], guide=guide)
+                                if camera_snapshot_due(camera_frames, lane.last, captured_failures):
                                     import cv2
-                                    cv2.imwrite(str(output / f'front-camera-{epoch}-{phase}-{seed}.png'), rgba[:, :, 2::-1])
+                                    name = (f'front-camera-{epoch}-{phase}-{seed}.png' if camera_frames == 0 else
+                                            f'front-camera-failure-{epoch}-{phase}-{seed}-{camera_frames}.png')
+                                    if not cv2.imwrite(str(output / name), rgba[:, :, 2::-1]):
+                                        raise RuntimeError('native camera diagnostic frame could not be saved')
+                                    lane.last['diagnostic_frame'] = name
+                                    captured_failures.add((lane.last.get('reason'), lane.last.get('strategy')))
                             camera_frames += 1
                             camera_visible_frames += int(lane.observation is not None)
                         if lane.stamp is not None and world.current_time - lane.stamp > lane.manager.config.stale_after_s:
@@ -436,9 +426,12 @@ def main():
                         state = lane.state()
                         now = time.monotonic()
                     learning_step = None
+                    terminal_credit = None
                     if phase == 'train' and lane is None:
                         learning_step = learn_transition(policy, previous, state, result)
-                    action = 1 if phase == 'baseline' or state is None else policy.choose(state, explore=phase == 'train')
+                    action = (camera_learning.choose(policy, state, lane.last.get('source_stamp'), frame=frame,
+                              train=phase == 'train', baseline=phase == 'baseline') if lane is not None else
+                              1 if phase == 'baseline' or state is None else policy.choose(state, explore=phase == 'train'))
                     if lane is None:
                         angular = max(-.8, min(.8, angular * policy.gains[action]))
                     else:
@@ -446,9 +439,13 @@ def main():
                         speed, angular = decision.linear, decision.angular
                         if lane.manager.status().state == 'LOST' and not result['terminated']:
                             result = dict(result, terminated=True, truncated=False, complete=False,
-                                          reason='camera_lane_lost', reward=result['reward'] - 10.)
+                                          reason='camera_lane_lost', reward=result['reward'] - 10.,
+                                          camera_failure_reason=lane.last.get('reason'))
                     if phase == 'train' and lane is not None:
-                        learning_step = learn_transition(policy, previous, state, result)
+                        if state is None and result['terminated'] and result['reason'] == 'camera_lane_lost':
+                            terminal_credit = (last_applied if result.get('camera_failure_reason') ==
+                                               'camera_target_unavailable' else None)
+                        learning_step = camera_learning.learn(policy, state, result, credit=last_applied)
                     if phase == 'train':
                         counts = summary['learning_steps']
                         counts[learning_step] = counts.get(learning_step, 0) + 1
@@ -468,10 +465,18 @@ def main():
                             if not lane.manager.apply_if_current(decision, lambda _decision:
                                 owner.submit(intent, observed_at=now, now=now, preserve_curvature=True)):
                                 owner.stop()
-                    cmd_vel_cycle(command=owner, power=power, send=send)
+                    dispatch_receipts.clear()
+                    cycle_warnings.clear()
+                    cmd_vel_cycle(command=owner, power=power, send=send, warn=cycle_warnings.append)
+                    if phase == 'train' and lane is not None:
+                        last_applied = remember_camera_action(last_applied, state, action, frame,
+                            (speed, angular), dispatch_receipts, cycle_warnings, owner.halted)
                     trace.write(json.dumps(dict(frame=frame, sim_s=elapsed, wall_s=time.monotonic() - wall_start,
                                                 pose=pose, action=action, candidate=[speed, angular],
                                                 learning_step=learning_step,
+                                                camera_learning=camera_learning.last_update,
+                                                terminal_credit=terminal_credit, dispatch=dispatch_receipts,
+                                                cycle_warnings=cycle_warnings,
                                                 **({'camera': lane.last, 'line': lane.manager.status().model_dump()}
                                                    if lane is not None else {}), **result)) + '\n')
                     if result['terminated'] or result['truncated']:
@@ -488,7 +493,8 @@ def main():
             if frozen is not None:
                 episode['policy_state_sha256'] = policy_state_sha256(frozen)
             if lane is not None:
-                episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames)
+                episode.update(camera_frames=camera_frames, camera_visible_frames=camera_visible_frames,
+                               camera_usable=camera_visible_frames > 0)
             if recorder is not None:
                 # Record the true completed stop even when it falls between sample ticks.
                 for _ in range(2):
@@ -502,26 +508,35 @@ def main():
                     sha256=hashlib.sha256(recorder.path.read_bytes()).hexdigest())
                 recorder = None
             summary['episodes'].append(episode)
-            print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'baseline' and seed == 101 and saved is None:
                 baseline = result
             if frozen is not None and policy.export() != frozen:
                 raise RuntimeError('evaluation mutated policy')
-            if phase == 'eval' and learned_steps == 0:
+            if phase == 'eval' and learned_steps == 0 and lane is None:
                 raise RuntimeError('evaluation visited no learned state')
-            if lane is not None and camera_visible_frames == 0:
-                raise RuntimeError('existing model produced no usable camera lane; candidate not accepted')
-            if phase == 'eval' and perception is not None:
+            if lane is not None:
+                # Keep failed headings rejected, but measure the remaining headings after a verified stop.
+                error = camera_admission_error(phase, camera_visible_frames, learned_steps)
+                if error is not None:
+                    episode['admission_error'] = error
+            if (phase == 'eval' and perception is not None and not episode.get('admission_error')
+                    and not summary['episodes'][-2].get('admission_error')):
                 summary['camera_comparisons'].append(camera_comparison(summary['episodes'][-2], episode))
+            print('EPISODE ' + json.dumps(episode), flush=True)
             if phase == 'train':
                 (output / 'policy.json').write_text(json.dumps(policy.export(), sort_keys=True))
         summary['updates'] = policy.updates
         summary['policy_sha256'] = hashlib.sha256((output / 'policy.json').read_bytes()).hexdigest()
-        summary['full_map_complete'] = all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval')
+        summary['camera_admission_errors'] = [dict(phase=e['phase'], seed=e['seed'], error=e['admission_error'])
+                                              for e in summary['episodes'] if e.get('admission_error')]
+        summary['full_map_complete'] = (not summary['camera_admission_errors'] and
+            all(e['complete'] for e in summary['episodes'] if e['phase'] == 'eval'))
         summary['baseline_complete'] = baseline['complete'] if baseline is not None else None
         summary['final_stop'] = physical_stop()
         (output / 'result.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
         print('RESULT ' + json.dumps(summary), flush=True)
+        if summary['camera_admission_errors']:
+            raise RuntimeError('camera episode admission failed; candidate not accepted')
         if not summary['full_map_complete']:
             raise RuntimeError('held-out full-map completion failed; candidate not accepted')
     except Exception as exc:

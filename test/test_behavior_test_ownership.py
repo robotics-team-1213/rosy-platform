@@ -30,6 +30,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
+    # 2026-10-12: the steering-law commit added this file and missed this list.
+    # It drives LineFollowManager through the loaded drivable steer.
+    "middleware/core/gateway/test/test_line_follow_drivable_law.py",
     # D-507 9 CORE config seam: line_follow.site_floor_map_id parsing in gateway wiring
     # (_line_follow_config, check_bridge_floor_basis) against the core_features config.
     "middleware/core/gateway/test/test_site_floor_declaration.py",
@@ -67,6 +70,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-607 integration exercises the gateway traffic seam and feature progress watcher together.
     "middleware/core/gateway/test/test_line_follow_stuck_no_progress.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
+    # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
+    "middleware/core/gateway/test/test_native_owner_receipts.py",
+    "middleware/core/gateway/test/test_safety_stop_contention.py",
+    "middleware/core/gateway/test/test_safety_stop_receipts.py",
     "middleware/core/gateway/test/test_operational_journey.py",
     "middleware/core/gateway/test/test_power.py",
     "middleware/core/gateway/test/test_slam_reset.py",

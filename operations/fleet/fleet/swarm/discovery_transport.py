@@ -169,6 +169,8 @@ class DiscoveryTransport(httpx.AsyncBaseTransport):
         outgoing = httpx.Request(request.method, request.url.copy_with(host=address, port=port),
                                  headers=request.headers, stream=request.stream,
                                  extensions={**request.extensions, 'sni_hostname': expected.hostname})
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(outgoing)
         return await self.inner.handle_async_request(outgoing)
 
     async def aclose(self):

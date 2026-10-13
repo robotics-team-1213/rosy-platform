@@ -91,3 +91,25 @@ D-673은 정답 없는 `rosy_ml observe`의 입력/model hash 결속, exclusive 
 | 후속 주행 권한 분리 | 기존 조향 거절과 CORE final writer 계약 | 주행 활성화·배포·현장 수용은 별도 권한/증거 |
 
 이 감사는 목표 완료 판정이 아니다. 파일 진단·소스 회귀·local main 착지는 독립 성능 승인 또는 실제 장치 전달을 대신하지 않는다. 20261010 원본과 mask를 전체 도로면으로 재태깅하지 않는다.
+
+## 물체 지표·기존 detector 프레임 어댑터 (2026-10-12)
+
+D-659의 물체 정밀도·재현율 공백에 `object_fitness.py`를 추가했다. D-602 여섯 클래스의 원본 grid 박스, confidence 순서의 같은 클래스 one-to-one 매칭, 중복 FP·미검출 FN, 작은/명시적 가림 정답의 recall, 가림 미확인 분모와 추론 보류를 처리한다. 기존 ObjectDetModel의 infer만 호출하며 독립 정답은 모델 입력에 넣지 않는다. 카메라 시간/유효성 오류는 추론 전에 보류하고 모델 revision·전처리·camera profile·confidence/NMS를 남긴다. 서로 다른 결속/지표 기준의 결과를 합산하지 않는다.
+
+새 모듈과 모델 어댑터가 없을 때 각각 원격 import RED를 확인했다. 집계 결속 혼용을 거절하는 RED 5개도 재현하고 수정했다. 수정 커밋 SHA `2a6405baa4`의 원격 지표/어댑터 회귀는 33개 통과했다. 로그는 X 세션 `logs/object-fitness-red`, `object-model-red`, `object-pooling-red`, `object-pooling-green`에 보존했다. 소스 리뷰에서 집계 모델 결속 누락을 지적받아 공통 결속 보존과 bound/unbound 혼용 거절을 보완했다.
+
+이 증거는 SOURCE 수준이다. 고정 물체 검수 출판물 loader/CLI, 학습·평가 원본 closure, 인증된 가림·완전 negative 검수, 실제 고정 후보의 독립 실물/시뮬레이션 성능과 장치 관측 전달은 남아 있다. 지표 함수나 열린 모델 어댑터를 전체 물체 fitness 재생 완성으로 주장하지 않는다. 사전 수용 profile 및 물체 적합성은 HOLD이며 배포·주행을 수행하지 않았다.
+
+## D-682 고정 물체 정답 출판과 재생
+
+[D-682](../adr/D-682-fixed-object-truth-and-fitness-replay.md)에 따라 기존 evaluation workspace에 `ready/publish --target objects`를 연결했다. D-602 클래스셋, 예약 MCAP 원본과 모든 프레임의 명시적 완료된 물체 검수를 확인한다. 픽셀 pending과 물체 approved는 별개이며 빈 boxes도 전체 화면 검수 완료가 필요하다. 기존 픽셀 기본값·훈련 export 거절은 유지한다. 출판 전후 bag/metadata·실제 decoded image·검수 authority·클래스 결속을 다시 확인한다.
+
+`rosy_ml object-fitness MODEL --store STORE --eval DIR --inputs DIR --max-age-ns N --out FILE`은 로봇 설정 없이 실행된다. immutable 평가/입력/학습 버전, 원본 이미지, 물체 검수 hash·version, 모델 파일·manifest·전처리와 confidence/NMS/매칭/크기 기준을 결속한다. 후보 직접 학습 자료의 클래스 순서/역할을 확인하고 세션·capture group·실제 이미지 중복을 거절한다. 실행 후 파일과 예약을 재검증한다. 추론 엔진 실패는 진단 exit 2이며 보고서를 만들지 않고 기존 out은 덮어쓰지 않는다. 성공 exit 0도 항상 HOLD다.
+
+`240c63c9e3` 관련 원격 시험은 terminal exit 0, 65 passed / 1 skipped, known-failures NEW0다. skip은 시험 runner의 `mcap_ros2` 미설치에 따른 실제 MCAP 시험이다. 모델 PC의 기존 ML 환경에서 별도로 실행한 합성 MCAP 출판/재생은 실제 encoder/decoder와 ONNX Runtime을 사용했다. 출판한 원본 이미지로 CLI를 실행해 person TP 1, 가림 recall 1을 확인했고, 기존 out 거절(exit 2), 입력 파일 변조 거절(exit 2, 보고서 없음), 원본 bag 변경 시 재출판 proof 거절을 확인했다. 독립 리뷰에서 찾은 클래스 index·후보 학습 클래스 순서·backend 오류 반환 누락은 실패 시험으로 재현 후 수정했다.
+
+합성 실행 source archive SHA256은 `a50465a87da3cd9fff8c91b783eb545995293a60631610a116ea4ab739c7eada`, 내려받아 다시 해시 확인한 보고서 SHA256은 `a6f389d4551fdf474916b2054788ef687b7b9f6e531293ff77549114c72b1943`이다. 세션 evidence의 `synthetic-object-replay-proof-20261012.json` / `synthetic-object-replay-report-20261012.json`과 로그 `object-replay-lineage-green/run-1.txt`에 보존했다. 합성 label·상수 ONNX는 파일/실행 경로 증거이며 사람이 독립 검수한 정답이나 실제 정확도 수치가 아니다.
+
+기존 자료 추가 검색에서는 20261010 drivable 2,769장의 manifest와 human_edit/done 기록을 다시 확인했다. 구형 v11/SAM 결과 830개의 저장 mask 해시가 일치했지만 drivable 클래스와 사람 최종 승인 기록은 없었다. dataset-review-937의 검수 JSON은 비어 있었다. 전체 보이는 도로면의 독립 검수 정답은 추가로 확보하지 못했다. 검색은 bounded inventory이며 모든 외부/미연결 보관소를 확인했다는 뜻이 아니다.
+
+위 물체 loader/CLI는 구현·합성 실행 근거를 확보했다. 인증된 reviewer·live freshness·가림 검수 독립성·전체 upstream 원본 closure, 실제/시뮬레이션 독립 정답 및 성능, 물리 기준점 생산/보정, 사전 수용 profile과 실제 장치 관측 전달의 버전·지연·손실 증거는 여전히 미완료다. local integration, CI, 배포, 장치/현장 수용과 주행 활성화는 각각 별도이며 이 실행은 어느 것도 승인하지 않는다.

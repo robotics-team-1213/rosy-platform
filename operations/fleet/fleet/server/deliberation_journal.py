@@ -63,6 +63,9 @@ class DeliberationJournal:
                          (canonical(result), int(terminal), problem.subject_id, problem.case_id, problem.generation))
 
     async def run(self, problem, supervisor, providers, *, current):
+        policy_id = getattr(supervisor, 'policy_id', 'deliberation-v1')
+        if policy_id not in ('deliberation-v1', 'conditional-review-v1'):
+            raise ValueError('unsupported evaluation policy')
         def fresh():
             try:
                 return current() is True and 0 <= supervisor.clock() - problem.observed_at <= 3
@@ -72,9 +75,12 @@ class DeliberationJournal:
             return {**result, 'state': 'HOLD', 'reason': 'STALE_OR_CHANGED', 'choice': None}
         previous = await asyncio.to_thread(self.begin, problem)
         if previous is not None:
+            if previous.get('policy_id', 'deliberation-v1') != policy_id:
+                return {**previous, 'state': 'HOLD', 'reason': 'EVALUATION_POLICY_CHANGED',
+                        'choice': None, 'action_admissible': False}
             return previous if fresh() else stale(previous)
         async def record(result):
-            await asyncio.to_thread(self.write, problem, result, False)
+            await asyncio.to_thread(self.write, problem, {**result, 'policy_id': policy_id}, False)
         try:
             result = await supervisor.run(problem, providers, current=current, record=record)
         except asyncio.CancelledError:
@@ -82,5 +88,6 @@ class DeliberationJournal:
             raise
         if not fresh():
             result = stale(result)
+        result = {**result, 'policy_id': policy_id}
         await asyncio.to_thread(self.write, problem, result, True)
         return result if fresh() else stale(result)

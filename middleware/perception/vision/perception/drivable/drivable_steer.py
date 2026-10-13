@@ -25,6 +25,7 @@ DrivableSteer per camera frame: the newest way's target moved into the current p
 from __future__ import annotations
 
 import collections
+from functools import partial
 import math
 import time
 
@@ -107,7 +108,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
     out = dict(target_m=None, ahead_m=0.0, exit=None, seen_exit=None, straddle=None, both=False, exit_point_m={},
-               exit_reach_m={}, near_centre_m=None, edges_m=[])
+               exit_reach_m={}, near_centre_m=None, centre_path_m=[], edges_m=[])
     if not rows.size:
         return out
     # The way must start under the robot: floor that begins only beyond a gap is past a line
@@ -177,6 +178,18 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     out["exit_reach_m"] = {k: round(v, 3) for k, v in reach.items()}
     near = xs <= float(xs.min()) + NEAR_BAND_M
     out["near_centre_m"] = (round(float(np.median(xs[near])), 3), round(float(np.median(centre[near])), 3))
+    # Keep only the connected near observation; a row gap is not a road segment.
+    connected = [len(rows) - 1]
+    for index in range(len(rows) - 2, -1, -1):
+        if rows[index + 1] - rows[index] > 2 or not math.isfinite(xs[index]) or xs[index] <= 0:
+            break
+        connected.append(index)
+        if xs[index] - xs[connected[0]] >= LOOKAHEAD_M:
+            break
+    if len(connected) >= 2:
+        cx, cy = xs[connected], centre[connected]
+        stations = np.linspace(cx[0], cx[-1], min(32, len(connected)))
+        out['centre_path_m'] = [(float(x), float(y)) for x, y in zip(stations, np.interp(stations, cx, cy))]
     point, curvature, band = _centre_target(xs, centre, lookahead)
     if point is not None:
         out["target_m"] = (round(point[0], 3), round(point[1], 3))
@@ -211,28 +224,27 @@ def _crosses(points, tx, ty):
     return float(pts[first, 1])
 
 
-#: CORE line-follow law (rosy_default.yaml cruise 0.08). A 0.04 inverse held half the arc.
-#: angular = -STEERING_GAIN * error, linear = CRUISE * scale(confidence) * max(0.2, 1 - CURVE * |error|).
+# Legacy defaults; runtime instances use the effective CORE law.
 CORE_STEERING_GAIN, CORE_MIN_CONFIDENCE, CORE_CURVE_SLOWDOWN, CORE_CRUISE_MPS = 0.8, 0.35, 0.65, 0.08
 
 
-def error_for_k(curvature, confidence):
-    """CORE error whose command holds `curvature` (1/m, left +) at CORE_CRUISE_MPS."""
-    speed = CORE_CRUISE_MPS * max(0.0, (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE))
+def error_for_k(curvature, confidence, *, cruise_speed=CORE_CRUISE_MPS,
+                steering_gain=CORE_STEERING_GAIN, min_confidence=CORE_MIN_CONFIDENCE):
+    """Invert the loaded CORE law, preserving geometric curvature (1/m, left +)."""
+    span = 1.0 - min_confidence
+    scale = 1.0 if span == 0.0 else max(0.0, min(1.0, (confidence - min_confidence) / span))
+    speed = cruise_speed * scale
     kc = abs(curvature) * speed
-    error = kc / (CORE_STEERING_GAIN + CORE_CURVE_SLOWDOWN * kc) if speed > 0.0 else 1.0
+    error = kc / (steering_gain + CORE_CURVE_SLOWDOWN * kc) if speed > 0.0 else 1.0
     return float(-math.copysign(min(1.0, error), curvature))
 
 
-def pursuit_error(tx, ty, confidence):
-    """The keep error whose CORE command drives the arc to (tx, ty): curvature
-    k = 2y/(x^2+y^2) and w/v = k under CORE's law (CORE keeps the curvature when it caps w).
-    error = -y/half made CORE turn 5-30x tighter than the road (independent review: actual radius
-    0.025 m vs road 0.25 m in turns), cutting corners onto lines (user 2026-10-10)."""
+def pursuit_error(tx, ty, confidence, **law):
+    """Invert CORE's law for the arc k=2y/(x*x+y*y), preserving curvature under angular caps."""
     d2 = tx * tx + ty * ty
     if d2 < 1e-6:
         return 0.0
-    return error_for_k(2.0 * ty / d2, confidence)
+    return error_for_k(2.0 * ty / d2, confidence, **law)
 
 
 def _to_world(point, pose):
@@ -257,7 +269,23 @@ class DrivableSteer:
     last opening seen, the smoothed commanded curvature, and the boundary memory (way edges seen, in
     odometry) that keeps the body off lines the camera no longer sees."""
 
-    def __init__(self):
+    @classmethod
+    def from_config(cls, raw):
+        return cls(cruise_speed=min(float(raw.get('cruise_speed', CORE_CRUISE_MPS)),
+                                    float(raw.get('max_linear', .10))),
+                   steering_gain=float(raw.get('steering_gain', CORE_STEERING_GAIN)),
+                   min_confidence=float(raw.get('min_confidence', CORE_MIN_CONFIDENCE)))
+
+    def __init__(self, *, cruise_speed=CORE_CRUISE_MPS, steering_gain=CORE_STEERING_GAIN,
+                 min_confidence=CORE_MIN_CONFIDENCE):
+        if (not all(math.isfinite(v) for v in (cruise_speed, steering_gain, min_confidence))
+                or not 0. < cruise_speed <= .10 or steering_gain <= 0.
+                or not 0. < min_confidence <= 1.):
+            raise ValueError('invalid CORE steering law')
+        self.steering_law = dict(cruise_speed=cruise_speed, steering_gain=steering_gain,
+                                min_confidence=min_confidence)
+        self._error_for_k = partial(error_for_k, **self.steering_law)
+        self.pursuit_error = partial(pursuit_error, **self.steering_law)
         self._key = None
         self._target = None
         self._pivot = None
@@ -317,14 +345,21 @@ class DrivableSteer:
             if t0 is not None and pose is not None and math.hypot(pose[0] - t0[0], pose[1] - t0[1]) > CREEP_MAX_M:
                 return None, None, dict(info, strategy="none", reason="creep_heading")
             g = math.radians(ctx["ahead"])
-            return (pursuit_error(LOOKAHEAD_M * math.cos(g), LOOKAHEAD_M * math.sin(g), ONE_CONFIDENCE), ONE_CONFIDENCE,
+            return (self.pursuit_error(LOOKAHEAD_M * math.cos(g), LOOKAHEAD_M * math.sin(g), ONE_CONFIDENCE), ONE_CONFIDENCE,
                     dict(info, strategy="drivable_creep_map"))
         self._tangent_from = None
-        return pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
+        # Keep this separate from target_now_m, which changes shared realignment decisions.
+        if (target is not None and not info.get('exit_from_memory') and not info.get('exit_behind_line')
+                and pose is not None and source_pose is not None
+                and all(math.isfinite(v) for v in (*pose, *source_pose, tx, ty)) and tx > 0
+                and _crosses([_to_current(p, (0.0, 0.0, 0.0), pose) for p in self._edges], tx, ty) is None):
+            info = dict(info, observed_creep_target_m=(tx, ty), observed_creep_key=self._key)
+        return self.pursuit_error(tx, ty, ONE_CONFIDENCE), ONE_CONFIDENCE, dict(info, strategy="drivable_creep")
     def reset(self):
         """Drop latches and any expected-path coast. An exception in the node calls this."""
         self._forget_latches()
         self._expected_path = None
+        self._last_out = self._pending = None
 
     def lost(self, stamp):
         """No fresh way this frame: forget the latch only after FORGET_S without one.
@@ -531,7 +566,7 @@ class DrivableSteer:
                 and (wall_ahead_m is None or wall_ahead_m - WALL_STANDOFF_M >= PIVOT_AHEAD_M)):
             # map bridge: the camera way ends but the map lane goes straight on and no wall is near
             self._smoothed = None
-            error = pursuit_error(LOOKAHEAD_M, LOOKAHEAD_M * math.tan(math.radians(guide_deg)), ONE_CONFIDENCE)
+            error = self.pursuit_error(LOOKAHEAD_M, LOOKAHEAD_M * math.tan(math.radians(guide_deg)), ONE_CONFIDENCE)
             return error, ONE_CONFIDENCE, dict(info, strategy="drivable_map_bridge")
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
@@ -549,7 +584,7 @@ class DrivableSteer:
         curvature = 0.0 if d2 < 1e-6 else 2.0 * ty / d2
         self._smoothed = curvature if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * curvature
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
-        error = error_for_k(self._smoothed, confidence)
+        error = self._error_for_k(self._smoothed, confidence)
         length = math.hypot(tx, ty)
         if abs(self._smoothed) < 1e-3:
             shown = (length, ty)

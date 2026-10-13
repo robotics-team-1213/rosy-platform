@@ -4,6 +4,29 @@ CORE remains the final writer; loop/closed_loop own dispatch and readback.
 """
 
 
+def selection_receipt(assessment, action, *, source_sha256, config_sha256, mixed):
+    from dataclasses import asdict
+    import json
+    from fleet.stuck.resolver import Answer, Escalate, Hold
+    from rosy.contracts.learning.incident_rule import validate_rule
+    if type(mixed) is not bool or action is not None and not isinstance(action, (Answer, Escalate)):
+        raise ValueError('INVALID_ACTUAL_RULE_SELECTION')
+    request = assessment.request
+    if action is not None and (action.robot_id, action.stuck_id) != (request.subject_id, request.case_id):
+        raise ValueError('RULE_SELECTION_SCOPE_CHANGED')
+    selection = dict(kind='NONE', rule=None, decision=None, reason=None, yield_m=None, yield_turn_rad=None)
+    if isinstance(action, Answer):
+        selection.update(kind='ANSWER', rule=action.rule, decision=action.decision, reason=action.escalate,
+                         yield_m=action.yield_m, yield_turn_rad=action.yield_turn_rad)
+        mixed = mixed or action.rule == 'ai'
+    elif isinstance(action, Escalate):
+        selection.update(kind='HOLD' if isinstance(action, Hold) else 'HANDOFF', reason=action.reason)
+    return validate_rule(dict(schema='rosy.incident.rule_selection/1',
+        assessment=json.loads(json.dumps(asdict(assessment))), selection=selection,
+        source_sha256=source_sha256, config_sha256=config_sha256, strategy='MIXED' if mixed else 'RULE_ONLY',
+        verification='selected_not_executed', action_admissible=False, outcome=None))
+
+
 def law_hold(row, *, decision=None, stuck_id=None):
     """First non-overridable automatic-dispatch refusal; None permits the next stage."""
     if row is None or not row.get("online", True):
@@ -78,6 +101,8 @@ def candidate(resolver, now, row, stuck, rows, chain):
         rule = ("meet", "WAIT")  # Resume only after a completed meet segment.
     if rule is None:
         return resolver._escalate(chain, rid, sid, "no_rule")
+    if rid in resolver.autonomous_robots and rule[1] in chain.unresolved:
+        return resolver._escalate(chain, rid, sid, "unresolved:" + rule[1])
     if rule[0] == "R5":
         return Answer(rid, sid, "WAIT", "R5", escalate=f"{stuck.get('cause')}_hold:{rule[2]}")
     if chain.rule_answers >= resolver.config.rule_budget and chain.retries.get(sid) != 1:
