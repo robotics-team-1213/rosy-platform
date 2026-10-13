@@ -78,7 +78,7 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     (state/'learning-control.json').write_text('{}')
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -86,8 +86,10 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     monkeypatch.setattr(release,'check_live',lambda *args:None)
     release.install(None,'old',root,None,None,'127.0.0.1',8774,unit)
     assert '--learning-control' not in unit.read_text()
+    assert '--decisions-port' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
+    assert '--decisions-port 18774' in unit.read_text()
 
 
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
