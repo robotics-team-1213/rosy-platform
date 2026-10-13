@@ -238,10 +238,10 @@ class SafetyManager:
         self._policy_clock = time.monotonic
         self.policy_reason = ''
         #: D-400 4: a sensor gap younger than _policy_hold_s is HOLD (zero output, no latch).
-        #: policy_hold says whether the last evaluate_candidate None was one; 0 keeps every None a latch.
+        #: 0 keeps every None a latch.
         self._policy_hold_s = 0.0
         self._policy_gap_since: Optional[float] = None
-        self.policy_hold = False
+        self._policy_holding = False
         self.policy_holds = 0          # gaps answered with HOLD since start
         self.policy_hold_reason = ''   # policy_reason of the latest held tick
         self._pending_policy_failure = None
@@ -391,17 +391,22 @@ class SafetyManager:
         if self._policy_gap_since is None:
             self._policy_gap_since = at
             self.policy_holds += 1
-        self.policy_hold = 0 <= at - self._policy_gap_since < self._policy_hold_s
-        if self.policy_hold:
+        self._policy_holding = 0 <= at - self._policy_gap_since < self._policy_hold_s
+        if self._policy_holding:
             self.policy_hold_reason = self.policy_reason
-        return self.policy_hold
+        return self._policy_holding
+
+    @property
+    def policy_hold(self) -> bool:
+        """True when the last evaluate_candidate None was a HOLD, not a latch (D-400 4)."""
+        return self._policy_holding
 
     def evaluate_candidate(self, command_id: int, source: str, linear: float,
                            angular: float, now: float, scope: str = 'nav') -> Optional[tuple[float, float]]:
         """The limited command, or None: the caller latches the e-stop unless ``policy_hold`` is set."""
         if not self.policy_required:
             return linear, angular
-        self.policy_hold = False
+        self._policy_holding = False
         self.policy_reason = 'policy_unavailable'
         evaluator, revision = self._policy, self._policy_revision
         if evaluator is None:

@@ -1000,7 +1000,7 @@
 
 ## 2026-10-14 · 1e8acc5dd · D-400 4항 집행 HOLD와 정책 답 시간 상한 (API v1.223)
 
-- 변경: `safety_gate/manager.py` — `bind_policy`·`bind_control_policy`가 `stale_hold_s`(기본 0 = 전과 같음)를 받고, `evaluate_candidate`가 끊김(평가기 없음, `PolicyObservationUnavailable`, 시간 조건만 어긴 판정)을 `_policy_gap`으로 세어 `stale_hold_s` 미만이면 `policy_hold`를 세운다. `command/manager.py::_policy_output`은 `policy_hold`면 래치 없이 0을 낸다. 판정 계약(`SafetyRequest`, `SafetyDecision`, `decision_valid`, `check_decision`)은 새 `decision_fault`·`POLICY_ANSWER_BUDGET_S = 1/50`과 함께 `safety_gate/decision.py`로 옮겼다(`manager.py`가 594/600줄이었다. 지금 577줄). `manager.py`가 이름을 다시 내보낸다.
+- 변경: `safety_gate/manager.py` — `bind_policy`·`bind_control_policy`가 `stale_hold_s`(기본 0 = 전과 같음)를 받고, `evaluate_candidate`가 끊김(평가기 없음, `PolicyObservationUnavailable`, 시간 조건만 어긴 판정)을 `_policy_gap`으로 세어 `stale_hold_s` 미만이면 `policy_hold`를 세운다. `command/manager.py::_policy_output`은 `policy_hold`면 래치 없이 0을 낸다. 판정 계약(`SafetyRequest`, `SafetyDecision`, `decision_valid`, `check_decision`)은 새 `decision_fault`·`POLICY_ANSWER_BUDGET_S = 1/50`과 함께 `safety_gate/decision.py`로 옮겼다(`manager.py`가 594/600줄이었다. 지금 582줄). `manager.py`가 이름을 다시 내보낸다.
 - 증거: Gazebo run59가 부하가 걸린 PC에서 `control:policy_invalid`로 끝났다(D-740 개정 3 기록의 교훈). 원격 단위 시험 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: SOURCE·호스트 근거만 더한다. SIM 재실행과 장치 수용은 미검증이다.
 - 결정: D-400 개정(2026-10-14).
