@@ -2,6 +2,7 @@ import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
+import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
@@ -73,10 +74,11 @@ function setView(detail) {
 function enable() {
   const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
+  const invalidCoordinates = !!$('boxes').querySelector('[aria-invalid="true"]');
   const step = !ready ? 0 : frame.status!=='pending' ? 3 : !frame.review.boxes.length && (modelDrafts.length || sourceCandidates().length) ? 1 : unclassified ? 2 : 3;
   [...$('object-flow').children].forEach((item,index)=>{if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
-  $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified;
-  const reason = forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
+  $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified || invalidCoordinates;
+  const reason = forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : invalidCoordinates ? '박스 좌표 오류를 수정한 뒤 승인하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
   $('object-approval-hint').textContent = reason;
   if (reason) $('approve').setAttribute('reason',reason); else $('approve').removeAttribute('reason');
   $('exclude').disabled = locked || frame?.status === 'excluded';
@@ -273,15 +275,31 @@ function renderBoxes() {
     ['x0','y0','x1','y1'].forEach((name,j) => {
       const label=document.createElement('label'); label.textContent=name;
       const input=document.createElement('input'); input.className='ui-field'; input.type='number'; input.step='0.1'; input.min='0'; input.max=String(j%2 ? frame.source.height : frame.source.width); input.value=box.bbox_xyxy[j]; input.setAttribute('aria-label',`박스 ${i+1} ${name}`);
+      const validationMessage=()=>{
+        const value=Number(input.value), limit=Number(input.max);
+        if(input.value===''||!Number.isFinite(value))return `${name}에 좌표 숫자를 입력하세요.`;
+        if(value<0||value>limit)return `${name}은 사진 범위 0~${limit} 안의 좌표로 입력하세요.`;
+        const other=box.bbox_xyxy[(j+2)%4];
+        if(j<2&&value>=other)return `${j===0?'왼쪽':'위쪽'} 좌표 ${name}은 ${j===0?'오른쪽':'아래쪽'} 좌표 ${other}보다 작아야 합니다.`;
+        if(j>=2&&value<=other)return `${j===2?'오른쪽':'아래쪽'} 좌표 ${name}은 ${j===2?'왼쪽':'위쪽'} 좌표 ${other}보다 커야 합니다.`;
+        return '';
+      };
+      input.setAttribute('aria-describedby','error');
       input.onfocus=()=> {selected=i; paint();};
       input.oninput=()=> {
         const boxes=structuredClone(frame.review.boxes); boxes[i].bbox_xyxy[j]=Number(input.value);
         const [x0,y0,x1,y1]=boxes[i].bbox_xyxy;
         if (input.value!=='' && 0<=x0 && x0<x1 && x1<=frame.source.width && 0<=y0 && y0<y1 && y1<=frame.source.height) {
+          input.removeAttribute('aria-invalid'); error(); enable();
           coordinatePreview=boxes; paint();
         }
       };
-      input.onchange=()=>edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value)); label.append(input); coordinates.append(label);
+      input.onchange=()=>{
+        const message=validationMessage();
+        if(message){input.setAttribute('aria-invalid','true');coordinatePreview=null;paint();error(message);enable();return;}
+        input.removeAttribute('aria-invalid');error();enable();
+        if(Number(input.value)!==box.bbox_xyxy[j])edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value));
+      }; label.append(input); coordinates.append(label);
     }); row.append(coordinates); $('boxes').append(row);
   });
   enable();
@@ -432,7 +450,7 @@ document.addEventListener('keydown',event=> {
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
   const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
   if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
-  // X only excludes a pending photo; approved or excluded photos change by mouse only.
+  // X only excludes a pending photo; other decisions use the explicit reopen action.
   const decision=key==='a' ? 'approve' : key==='x' && frame?.status==='pending' ? 'exclude' : null;
   if(decision && !$(decision).disabled) {event.preventDefault(); $(decision).click();}
 });

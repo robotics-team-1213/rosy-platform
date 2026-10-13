@@ -80,6 +80,7 @@ STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
+umask 022  # the checkout keeps git modes; 0002 would leave 0664 files for mode-asserting tests
 mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
@@ -148,6 +149,7 @@ R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; CPU=$3; cd "$R/runs/$1"
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
 mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; rm -f ~/rosy-jobs/"$1".resv; shift 3
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
+umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
 exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
 """
