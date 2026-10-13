@@ -36,9 +36,9 @@
 <label class="ui-field-label">가져올 파일 — 한 줄에 하나<textarea id="files" class="ui-field" required rows="4" placeholder="videos/clip.mp4&#10;README.md"></textarea></label>
 <label class="ui-field-label">라이선스<input id="license" class="ui-field" required maxlength="200" placeholder="자료의 이용 조건"></label>
 <label class="ui-field-label">내부 이용 허가 근거<textarea id="rights-evidence" class="ui-field" required rows="2" placeholder="이용 조건 문서의 주소와 확인 내용"></textarea></label>
-<label><input id="internal-use" type="checkbox" required>이 프로젝트의 내부 이용이 허용됨을 확인했습니다.</label>
+<label class="ui-check"><input id="internal-use" class="ui-field" type="checkbox" required>이 프로젝트의 내부 이용이 허용됨을 확인했습니다.</label>
 <p class="quiet">개인에게만 승인된 제한 자료는 팀 이용 근거가 없으면 보류됩니다.</p>
-<details><summary>제한 자료의 팀 이용 허가가 있는 경우</summary><label><input id="gated-team-use" type="checkbox">팀 이용이 별도로 허용됨을 확인했습니다.</label>
+<details><summary>제한 자료의 팀 이용 허가가 있는 경우</summary><label class="ui-check"><input id="gated-team-use" class="ui-field" type="checkbox">팀 이용이 별도로 허용됨을 확인했습니다.</label>
 <label class="ui-field-label">팀 이용 허가 근거<textarea id="team-use-evidence" class="ui-field" rows="2"></textarea></label></details>
 <button class="ui-field" type="submit">접근 확인 후 가져오기</button></form></section>
 <section class="learning-section"><h2>가져오기 작업</h2><button id="reload" class="ui-field" type="button">최신 상태 확인</button><div id="imports" aria-live="polite"></div></section>
