@@ -232,7 +232,7 @@ h1 {
    스크롤해도 정지가 남는다. 스페이스 안내와 요청 결과는 같은 머리의 아랫줄이다. */
 ui-shell[grammar="focal"] ui-topbar {
   display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content;
   row-gap: var(--space-1);
 }
 
@@ -253,6 +253,9 @@ ui-shell[grammar="focal"] ui-topbar {
 #halt-status[data-state="error"] { color: var(--status-crit); }
 
 #halt { min-width: 96px; }
+#halt[hidden], #account-login[hidden], #account-logout[hidden] { display: none; }
+#account-login, #account-logout { grid-column: 4; grid-row: 1; }
+#halt { grid-column: 5; grid-row: 1; }
 
 @media (width < 64rem) {
   ui-shell[grammar="focal"] ui-topbar {
@@ -261,8 +264,9 @@ ui-shell[grammar="focal"] ui-topbar {
     column-gap: var(--space-3);
   }
 
-  #phase { margin: 0; }
-  #connection { grid-column: 1 / -1; margin: 0; }
+  #phase { grid-column: 1; grid-row: 2; margin: 0; }
+  #connection { grid-column: 2 / -1; grid-row: 2; margin: 0; }
+  #account-login, #account-logout { grid-column: 2; grid-row: 1; justify-self: end; }
   #halt { grid-column: 3; grid-row: 1; }
   .halt-note { justify-content: flex-start; }
 
