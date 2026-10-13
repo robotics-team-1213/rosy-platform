@@ -469,6 +469,14 @@ roots:
     legacy: src/site/fleet
     wave: "3c"
     import_prefix: [fleet]
+    # S8 holders: fleet/server/__init__.py extends __path__ over these folders
+    # (fleet._source_layout.SERVER_HOLDERS), so their modules stay fleet.server.<name>.
+    source_packages:
+      fleet/server/peer: fleet.server
+      fleet/server/cell: fleet.server
+      fleet/server/auth: fleet.server
+      fleet/server/console: fleet.server
+      fleet/server/ledger: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations
