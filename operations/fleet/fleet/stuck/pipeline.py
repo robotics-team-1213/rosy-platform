@@ -93,6 +93,9 @@ def candidate(resolver, now, row, stuck, rows, chain):
     if stuck.get("cause") in LOST_LIKE and resolver.at_crosswalk(rid):
         return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
     if rid in resolver.realign.robots:                # D-622: standalone REALIGN, CORE re-checks
+        held = chain.held.get(sid) or ""
+        if held.startswith("realign_hold:"):          # the hold WAIT was sent but never handed over
+            return resolver._escalate(chain, rid, sid, held)
         from fleet.stuck.realign import select
         realign, why = select(row, rows, resolver.realign, now=resolver._wall(),
                               attempt=chain.realign_attempts+1)

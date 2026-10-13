@@ -196,3 +196,27 @@ def test_realign_only_and_autonomous_only_robots_keep_their_handoff():
     resolver = StuckResolver(ResolverConfig())
     resolver.autonomous_robots = frozenset({"r1"})
     assert type(resolver._escalate(_Chain(0., ""), "r1", "s1", "lane_lost_hold:pose_unknown")) is Hold
+
+
+@pytest.mark.parametrize("code", ["STUCK_DECISION_REFUSED", "ROBOT_UNREACHABLE"])
+def test_dual_enrolled_realign_hold_survives_a_refused_or_lost_wait(code):
+    from fleet.stuck.resolver import Escalate, Hold
+    r = row()
+    r["state"]["line_follow"]["stuck"]["phase"] = "ASKING"
+    r["clearance_evidence"]["inquiry_observed_at"] = 8.
+    resolver = StuckResolver(ResolverConfig(), realign=config(), wall=lambda: 10.1)
+    resolver.autonomous_robots = frozenset({"r1"})
+    held = resolver.step(1., [r])[0]
+    resolver.sent(held, 1.)
+    action = resolver.result(held, code=code)
+    if code == "ROBOT_UNREACHABLE":               # one resend is due; an e-stop hold arrives first
+        assert action is None
+        r["state"]["safety"]["estop"] = True
+        assert type(resolver.step(2., [r])[0]) is Hold
+        r["state"]["safety"]["estop"] = False
+        r["clearance_evidence"]["inquiry_observed_at"] = 10.
+        assert select(r, [r], config(), now=10.1, attempt=1)[0] is not None
+        action = resolver.step(3., [r])[0]
+    assert type(action) is Escalate and action.reason == "realign_hold:clearance_stale"
+    r["clearance_evidence"]["inquiry_observed_at"] = 10.
+    assert resolver.step(4., [r]) == []
