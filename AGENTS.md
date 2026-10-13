@@ -8,7 +8,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. middleware/perception contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet owns the Fleet console and dispatch services. Current source parts are learning, operations, middleware, contracts, integrations, and shared web, as recorded in tools/harness/platform_parts.yaml. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
+ROSY Platform connects observed world state, site orchestration, device execution, and offline learning/evaluation (ROS 2 Jazzy, first hardware Pinky Pro). This repository contains the platform's source, not only the robot workspace. CORE (`middleware/core/gateway`) owns the external API and final Base command path; OMX retains its joint/action owner. `operations/fleet` owns serving and dispatch transactions; canonical Console assets live in `operations/ui/console`, and existing advisory Decision code in `operations/decision/src/rosy/decision` (`rosy.decision`), both installed by the same Fleet distribution; `operations/world` owns current observation/odom MapPose projection, with a Fleet import alias. Action-conditioned future World prediction remains planned. The existing ROS `control` distribution remains in `middleware/perception`: sensor and vision implementations live in `sensors/sensing` and `vision/perception`, while Drive algorithms and the Nav2 backend live in `middleware/control/drive/{planning,tracking,recovery,calibration,safety}`. Legacy node composition remains under `middleware/perception/control`; its legacy final publisher (`control/safety_node.py`) must not run beside CORE. Source mapping preserves `control.*` imports and installed resources. Current source parts and all holder decisions are in `tools/harness/platform_parts.yaml` and [the folder responsibility guide](docs/reference/platform-folder-responsibilities.md). Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
 
@@ -37,8 +37,8 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
-| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see `learning/AGENTS.md` and each child `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
-| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` and `operations/AGENTS.md` |
+| `learning/` | D-427 learning part: `curation/perception/` (data and review), `registry/perception/` (artifact/provenance store and delivery), `training/perception/` (trainer), `evaluation/perception/` (replay); orchestration CLI is `tools/perception/`, `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see `learning/AGENTS.md` and each child `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
+| `operations/` | D-427 operations part (a `colcon_roots` entry): `decision/` (existing `rosy.decision`, same Fleet distribution), `ui/console/` (canonical Fleet-served assets), `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` and `operations/AGENTS.md` |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `operations/site_devices/` | Dock and signal site devices: firmware outside colcon, device contracts (see `operations/site_devices/AGENTS.md`, D-427 wave 3b) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |
@@ -53,10 +53,10 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 - **모델 PC:** `learning/`의 데이터·사람 정답·학습·독립 평가·승격 증거와 고정 모델 산출물을 맡는다. 운영 추론·Fleet 판단·장치 명령을 맡지 않는다.
 - **AI PC:** 승인된 고정 버전의 추론만 맡는다. 막힘 VLM은 출처·시각이 붙은 정체 사실만, 숙고형 모델은 Mission/Task 후보만 낸다. Fleet 원장 쓰기·admission·ROS·`cmd_vel`·장치 Action 권한은 없다.
-- **현장 PC:** `operations/fleet`가 사실을 검증하고 규칙·admission·사람 확인을 거쳐 답을 고른다. 숙고형 코드 목표 자리는 `operations/decision`; 현재 경로와 구현 여부는 [설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)를 본다.
+- **현장 PC:** `operations/fleet`가 사실을 검증하고 규칙·admission·사람 확인을 거쳐 답을 고른다. 기존 Decision 구현은 `operations/decision/src/rosy/decision`으로 분리했고 Fleet transaction과 배포를 유지한다. 후속 숙고형 모델 파이프라인의 구현 여부는 [설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)를 본다.
 - **로봇:** CORE가 장치 상태·안전을 다시 확인하고 최종 `/cmd_vel`을 단독 발행한다. 소스 경로로 실행 호스트를 추정하지 않는다(D-315). 이 역할 분담은 D-516이며, AI PC의 현장 경로는 아직 활성화되지 않았다.
 
-시험 위치도 분리한다(D-527). 개발 로컬 PC·CI는 코드 계약과 푸시 게이트, 모델 PC는 사람 정답 기반 Laya/Kev·VLM 독립 평가와 승격 receipt, AI PC는 승인 고정 버전의 적재·GPU·loopback 스모크와 watchdog, 현장 Fleet·CORE는 그림자/장치 수용을 맡는다. AI PC 합성 재생의 일치 수치를 L0 정확도로 쓰지 않는다.
+시험 위치도 분리한다(D-527). 개발 PC는 원격 시험을 요청하고 CI는 코드 계약과 푸시 게이트, 모델 PC는 사람 정답 기반 Laya/Kev·VLM 독립 평가와 승격 receipt, AI PC는 승인 고정 버전의 적재·GPU·loopback 스모크와 watchdog, 현장 Fleet·CORE는 그림자/장치 수용을 맡는다. AI PC 합성 재생의 일치 수치를 L0 정확도로 쓰지 않는다.
 
 상세 입력·출력, 모델 교체와 실패 처리: [Decision 모델 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md). 실제 장치 주소·계정은 공개 문서 대신 gitignored `private/`에 둔다.
 
@@ -102,15 +102,15 @@ python test/known_failures.py X:/DevTemp/<name>/run-1.txt
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
 - Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
-- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
-- Hardware profile is YAML. In-tree Pinky full spec is `middleware/apps/device/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
+- This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. Lab SSH targets are `private/lab-hosts.json`, copied from `tools/remote/hosts.example.json`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
+- Hardware profile is YAML. In-tree Pinky full spec is `middleware/devices/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - ROS package discovery uses the manifest `colcon_roots` across `learning/`, `operations/`, `middleware/`, `contracts/`, `integrations/`, and `shared/`. Do not reintroduce `rosy_*` or `pinky_*` package names. The CORE launch file still carries its legacy filename `rosy_core.launch.py`.
 - Dashboard screens are static files in `middleware/ui/robot`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
-- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot), `rosy-pinky-review` (run and check the Pinky label review app, `tools/review_app_smoke.py`), `rosy-fast-field-test` (fastest path from a model or code change to a real Pinky drive: on-robot loop, model pointer, release in parallel).
+- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot), `rosy-pinky-review` (run and check the Pinky label review app, `learning/curation/perception/tools/review_app_smoke.py`), `rosy-fast-field-test` (fastest path from a model or code change to a real Pinky drive: on-robot loop, model pointer, release in parallel).
 
 ### Testing Requirements
 
-Tiers (D-436). **This machine runs the affected tier (fast iteration) and the pre-push fast gate only. The full suite never runs locally by default; it runs on GitHub Actions runners** as a parallel matrix (`.github/workflows/ci.yml`): push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload already builds on the GitHub ARM64 runner (`build-native-payload.yml`). PR CI runs affected and goes full by itself when the selector escalates (shared foundation `src/contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` forces a local full run (avoid: 40-60 min here, and Windows lacks wheels CI installs).
+Tiers (D-436). **This machine requests affected and pre-push pytest through `tools/remote/remote_pytest.py`; pytest never runs on this laptop (D-584). The full suite runs on GitHub Actions runners** as a parallel matrix (`.github/workflows/ci.yml`): push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload already builds on the GitHub ARM64 runner (`build-native-payload.yml`). PR CI runs affected and goes full by itself when the selector escalates (shared foundation `contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` requests the full selection; do not bypass the remote runner. A mapped affected run does not discharge the CI FULL requirement.
 
 GitHub results (the full tier is never re-run locally to "check"):
 
@@ -121,7 +121,9 @@ gh run view <run-id> --log-failed                       # only the failed steps'
 gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name'
 ```
 
-Reproduce locally only the failed matrix entry's pytest invocation (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence.
+Reproduce only the failed matrix entry's pytest invocation on a remote test PC (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence.
+
+The direct pytest examples below are for CI or the selected Linux test PC. From this laptop use `python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name> -- <paths>` and compare the returned log with `test/known_failures.py`.
 
 ```bash
 # Affected tier (D-436): tests of the touched modules + reverse dependents + tests naming the
@@ -181,8 +183,8 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api_web`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
-- `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
+- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
+- `deploy/robot/pinky_pro/Dockerfile` consumes source under `contracts/`, `middleware/`, and `shared/`. Its image-internal `/opt/rosy_ws/src/` destinations are build layout, not repository source holders; Docker/Compose are development/CI paths.
 - `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 
 ### External

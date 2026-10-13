@@ -7,12 +7,11 @@ sensor-data(BEST_EFFORT) 발행자와 **영원히 매칭되지 않는다**. 소�
 """
 import re
 from pathlib import Path
-
-PKG = Path(__file__).resolve().parents[1] / "control"
+from test.control_sources import source_path
 
 
 def _source(rel) -> str:
-    return (PKG / rel).read_text(encoding="utf-8")
+    return source_path(rel).read_text(encoding="utf-8")
 
 
 def test_startup_calibration_reads_sensors_with_sensor_qos():

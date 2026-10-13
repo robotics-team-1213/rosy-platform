@@ -51,7 +51,7 @@ class _Handler(SimpleHTTPRequestHandler):
                 const state = {mode:'MANUAL', evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}};
                 const store = {poll(path, _interval, success) {
                   const data = path === '/api/v1/robot/state' ? state
-                    : path === '/api/v1/system/capabilities' ? {teleop:true, navigation:{goal_navigation:true}}
+                    : path === '/api/v1/system/capabilities' ? {teleop:true, runtime:{drive:'ready'}, navigation:{goal_navigation:true}}
                     : path === '/api/v1/safety/state' ? {estop:false}
                     : path === '/api/v1/line-follow' ? {mode:'OFF',state:'OFF'}
                     : path === '/api/v1/docking/status' ? {supported:true,state:'UNDOCKED'}

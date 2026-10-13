@@ -7,8 +7,11 @@ console.py 의 gather/scatter 를 그대로 드러내는 읽기와 위임이다.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
+import math
+import sqlite3
 import time
 from functools import partial
 from typing import Callable, Literal, Optional
@@ -24,6 +27,7 @@ from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
+from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
@@ -54,6 +58,7 @@ class LineStuckDecisionRequest(BaseModel):
 class LineStuckClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    judgment_revision: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 class IncidentReviewRequest(BaseModel):
@@ -92,6 +97,8 @@ class SharedGather:
         self._snapshot: Optional[dict] = None
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
+        self.observations = None
+        self.recording_status = {"state": "disabled", "reason": "durable_database_not_configured"}
 
     def _observed_at(self, robots) -> dict:
         """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
@@ -106,6 +113,14 @@ class SharedGather:
             if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
                 gathered_at = self._tracking.now() if self._tracking is not None else None
                 snapshot = await self._console.snapshot()
+                if self.observations is not None:
+                    try:
+                        await asyncio.to_thread(self.observations.append_snapshot, snapshot["robots"],
+                                                received_at=time.time(), monotonic_now=self._console._clock())
+                    except (OSError, sqlite3.Error, ValueError):
+                        self.recording_status = {"state": "error", "reason": "observation_storage_failed"}
+                    else:
+                        self.recording_status = {"state": "recording", "reason": None}
                 if self._tracking is not None:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at,
                                                   observed=self._observed_at(snapshot["robots"]))
@@ -128,6 +143,25 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    journal = getattr(getattr(console, "hub", None), "event_store", None)
+    observation_path = answer_log_path or (journal.path if journal is not None else None)
+    if observation_path is not None:
+        from fleet.server.observation_store import ObservationStore
+        gather.observations = ObservationStore(observation_path)
+
+    @app.get("/api/fleet/observations", dependencies=read_guard, tags=["fleet-observations"])
+    def observation_history(after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
+                            robot_id: Optional[str] = Query(None, min_length=1, max_length=96)):
+        if gather.observations is None:
+            return {"observations": [], "next_cursor": after_id, "has_more": False,
+                    "recording": gather.recording_status}
+        try:
+            rows = gather.observations.read_observations(after_id=after_id, limit=limit, robot_id=robot_id)
+        except (OSError, sqlite3.Error):
+            raise HTTPException(503, detail={"code": "OBSERVATION_STORAGE_UNAVAILABLE"}) from None
+        page = rows[:limit]
+        return {"observations": page, "next_cursor": page[-1]["observation_id"] if page else after_id,
+                "has_more": len(rows) > limit, "recording": gather.recording_status}
     # D-509: CORE battery evidence goes stale after 5 s, so refresh each second off the request
     # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
@@ -142,7 +176,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         now = console._clock()
         rows = []
         for row in snapshot["robots"]:
-            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            row = {**row, "line_stuck": board.view(row["robot_id"]),
+                   "judgment": board.judgment_view(row["robot_id"])}
             if lane is not None:   # D-511 M0: the monitor's latest result, read only
                 row["lane_compliance"] = lane.view(row["robot_id"])
             observed = row.pop("_state_mono", None)
@@ -228,24 +263,44 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "observed_age_s": board.observed_age_s()}
 
     @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_evidence(robot_id: str, stuck_id: str = Query(
-            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")) -> dict:
+    async def line_stuck_evidence(robot_id: str, response: Response, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False) -> dict:
+        response.headers["Cache-Control"] = "no-store"
         # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
         # memory until the stuck closes. A failed read is not kept: the next read asks again.
         if not board.is_open(robot_id, stuck_id):
             raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
                                                          "message": f"{robot_id} has no open stuck {stuck_id}"})
-        shown = board.preview(robot_id, stuck_id)
+        shown = None if live else board.preview(robot_id, stuck_id)
         if shown is None:
             fetch = getattr(console.clients().get(robot_id), "front_frame", None)
             try:
                 if fetch is None:
                     raise RobotApiError(robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "no camera client")
-                jpeg, status = await asyncio.wait_for(fetch(), timeout=3.0)
+                started = time.monotonic()
+                jpeg, status = await asyncio.wait_for(fetch(overlay=False) if live else fetch(), timeout=3.0)
             except (RobotApiError, httpx.HTTPError, OSError, asyncio.TimeoutError) as exc:
                 raise HTTPException(status_code=404, detail={
                     "code": "STUCK_PREVIEW_UNAVAILABLE",
                     "message": getattr(exc, "code", type(exc).__name__)}) from exc
+            if not board.is_open(robot_id, stuck_id):
+                raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN", "message": f"{stuck_id} closed"})
+            if live:
+                captured = status.get("captured_at")
+                age = status.get("age_ms")
+                if (isinstance(captured, (int, float)) and not isinstance(captured, bool)
+                        and math.isfinite(captured)):
+                    age_s = time.time() - captured
+                else:
+                    age_s = (age / 1000.0 + time.monotonic() - started
+                             if isinstance(age, (int, float)) and not isinstance(age, bool) else float("nan"))
+                if not jpeg or not math.isfinite(age_s) or not 0 <= age_s <= 3.0:
+                    raise HTTPException(status_code=404, detail={"code": "STUCK_PREVIEW_UNAVAILABLE",
+                                                                 "message": "current raw frame age unknown or stale"})
+                return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": status.get("sequence"),
+                        "source": status.get("source"), "media_type": "image/jpeg", "live": True,
+                        "captured_at": captured, "age_s": round(age_s, 3),
+                        "jpeg_base64": base64.b64encode(jpeg).decode("ascii")}
             board.keep_preview(robot_id, stuck_id, jpeg, status)
             shown = board.preview(robot_id, stuck_id)
             if shown is None:   # the stuck closed while the robot answered
@@ -259,8 +314,21 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"episodes": board.episodes(limit)}
 
     @app.get("/api/fleet/incidents", dependencies=read_guard, tags=["line-stuck"])
-    def incident_reports(limit: int = Query(20, ge=1, le=100)) -> dict:
-        return {"reports": board.reports(limit), "traffic_reports": board.traffic_reports(limit)}
+    def incident_reports(limit: int = Query(20, ge=1, le=100),
+                         robot_id: Optional[str] = Query(None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_.:-]+$'),
+                         stuck_id: Optional[str] = Query(None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_.:-]+$')) -> dict:
+        if (robot_id is None) != (stuck_id is None):
+            raise HTTPException(422, detail={'code': 'INCIDENT_FILTER_PAIR_REQUIRED'})
+        return {"reports": board.reports(limit, robot_id=robot_id, stuck_id=stuck_id),
+                "traffic_reports": board.traffic_reports(limit) if robot_id is None else []}
+
+    @app.get("/api/fleet/judgments", dependencies=read_guard, tags=["line-stuck"])
+    def judgment_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {"records": board.judgments(limit)}
+
+    @app.get('/api/fleet/notifications', dependencies=read_guard, tags=['line-stuck'])
+    def notification_receipts(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        return {'records': board._log.notifications.rows(limit) if board._log is not None else []}
 
     @app.post("/api/fleet/incidents/facts/{fact_row}/review", dependencies=operator_guard,
               tags=["line-stuck"])
@@ -294,6 +362,14 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
             raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
         try:
+            if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
+                # Claim and motion admission have one order; stops never wait on this lock.
+                async with gather._lock:
+                    owner = await asyncio.to_thread(board._log.handoff.get, robot_id, body.stuck_id)
+                    if owner is not None and owner['principal_id'] != principal.principal_id:
+                        raise HTTPException(409, detail={'code': 'INCIDENT_ALREADY_CLAIMED',
+                                                        'message': 'another named operator owns this incident'})
+                    return await _forward_stuck_decision(robot_id, body, request, principal, client)
             return await _forward_stuck_decision(robot_id, body, request, principal, client)
         finally:
             runner = getattr(app.state, "trip_runner", None)
@@ -331,18 +407,44 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "answer": answer, "result": result}
 
     # D-540 9: claim stays open; the console claims before an ABORT confirm.
-    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
-              tags=["line-stuck"])
-    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
-                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+    async def claim_incident(robot_id, body, principal, *, admission=None) -> dict:
         """D-438 §1: a human opened this stuck; the resolver stops answering it."""
         if console.clients().get(robot_id) is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
         resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if body.judgment_revision is not None:
+            require_named_operator(principal)
+            if principal.principal_id == 'site-console':
+                raise HTTPException(403, detail={'code': 'OPERATOR_IDENTITY_REQUIRED'})
+            if board._log is None:
+                raise HTTPException(503, detail={'code': 'INCIDENT_JOURNAL_UNAVAILABLE'})
+            await gather()
+            async with gather._lock:
+                receipt = board.judgment_view(robot_id)
+                if (not board.is_open(robot_id, body.stuck_id) or receipt is None
+                        or judgment_revision(receipt) != body.judgment_revision):
+                    raise HTTPException(409, detail={'code': 'INCIDENT_JUDGMENT_CHANGED'})
+                # A failed journal keeps the resolver paused, without issuing an ownership receipt.
+                board._handoff_pending.add((robot_id, body.stuck_id))
+                if resolver_loop is not None:
+                    resolver_loop.claim(robot_id, body.stuck_id)
+                try:
+                    claim = await asyncio.to_thread(board._log.handoff.claim,
+                        robot_id, body.stuck_id, receipt, principal.principal_id, now=time.time(), admission=admission)
+                except ValueError as exc:
+                    raise HTTPException(409, detail={'code': str(exc)}) from exc
+            return {'robot_id': robot_id, 'stuck_id': body.stuck_id,
+                    'claimed_by': principal.principal_id, 'kind': 'incident_handoff', 'handoff': claim}
         if resolver_loop is not None:
             resolver_loop.claim(robot_id, body.stuck_id)
         return {"robot_id": robot_id, "stuck_id": body.stuck_id,
-                "claimed_by": principal.principal_id}
+                "claimed_by": principal.principal_id, 'kind': 'resolver_pause'}
+
+    app.state.claim_incident = claim_incident
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard, tags=["line-stuck"])
+    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        return await claim_incident(robot_id, body, principal)
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:

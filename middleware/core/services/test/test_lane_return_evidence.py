@@ -9,6 +9,33 @@ from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEv
 BODY = Footprint(.08, -.08, .06)
 
 
+def test_boundary_revision_ignores_motion_jitter_duplicates_and_needs_three_changed_frames():
+    from core_features.line_follow.recovery.lane_return import Boundary, Corridor, Pose
+    from core_features.line_follow.recovery.lane_return_evidence import ReturnEvidenceView
+    from dataclasses import replace
+
+    feed = LaneReturnEvidence()
+
+    def view(stamp, offset=0, camera_y=0):
+        return ReturnEvidenceView("ready", 1,
+            pose=Pose(stamp, stamp, "odom", 0, camera_y, 0),
+            corridor=Corridor(Boundary(0, .1-camera_y+offset), Boundary(0, -.1-camera_y+offset), "rig-a"),
+            source_stamp_ns=stamp)
+
+    assert feed.boundary_change(view(1))["state"] == "baseline"
+    assert feed.boundary_change(view(2, camera_y=.02))["revision"] == 0
+    assert feed.boundary_change(view(3, offset=.005))["revision"] == 0
+    candidate = view(4, offset=.03)
+    assert feed.boundary_change(candidate)["state"] == "confirming"
+    assert feed.boundary_change(candidate)["revision"] == 0
+    assert feed.boundary_change(view(5, offset=.03))["revision"] == 0
+    assert feed.boundary_change(view(6, offset=.03))["revision"] == 1
+    assert feed.boundary_change(view(7, offset=.03))["revision"] == 1
+    assert feed.boundary_change(replace(view(8), reason="lane_stale"))["state"] == "unknown"
+    assert feed.boundary_change(replace(view(9), epoch=2))["state"] == "baseline"
+    assert feed.boundary_change(view(10))["revision"] == 1
+
+
 def lane(stamp=100.05, **changes):
     raw = dict(stamp=stamp, geometry_id="rig-a", ground_source="CALIBRATED",
         uncertainty_m=.005, boundaries=[dict(side=side, slope=0., intercept_m=y,

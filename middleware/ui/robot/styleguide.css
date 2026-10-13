@@ -9,8 +9,8 @@
 body {
   margin: 0;
   padding: var(--space-5) var(--space-4) var(--space-6);
-  background: var(--ground);
-  color: var(--ink);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
   font-family: var(--body);
   font-size: var(--text-body);
   line-height: var(--leading-copy);
@@ -28,7 +28,20 @@ h1 {
   margin: 0 0 var(--space-2);
 }
 
-.intro { color: var(--ink-quiet); margin: 0; }
+.intro { color: var(--text-secondary); margin: 0; }
+
+.color-roles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.color-roles li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.color-roles code { overflow-wrap: anywhere; }
+.color-sample { display: grid; place-items: center; width: var(--space-6); height: var(--space-6); flex: none; border: 1px solid var(--border-default); border-radius: var(--radius-control); }
+.sample-canvas { background: var(--surface-canvas); }
+.sample-recessed { background: var(--surface-recessed); }
+.sample-primary { background: var(--text-primary); }
+.sample-secondary { background: var(--text-secondary); }
+.sample-subtle { border-color: var(--border-subtle); }
+.sample-default { border-color: var(--border-default); }
+.sample-strong { border-color: var(--border-strong); }
+.sample-danger { background: var(--status-crit); color: var(--text-on-danger); }
 
 main {
   max-width: 720px;
@@ -38,7 +51,7 @@ main {
 }
 
 .entry {
-  border-top: 1px solid var(--line-14);
+  border-top: 1px solid var(--border-default);
   padding-top: var(--space-4);
 }
 
@@ -50,7 +63,7 @@ h2 {
 }
 
 .rule {
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
   margin: 0 0 var(--space-3);
 }
 
@@ -65,6 +78,11 @@ h2 {
 }
 
 .type-demo { align-items: baseline; }
+.icon-inventory { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+.icon-states { align-items: flex-start; }
+.icon-tab-demo { display: flex; gap: var(--space-2); }
+.icon-states > a { display: inline-flex; align-items: center; gap: var(--space-2); }
+.icon-states > a[aria-current="page"] { text-decoration: underline; text-underline-offset: var(--space-1); }
 /* 확인 대화상자 고정 그림 — 제품의 고정 가운데 배치를 풀어 칸 안에 둔다. */
 .dialog-demo dialog.ui-confirm { position: static; z-index: auto; margin: 0; }
 
@@ -78,7 +96,7 @@ h2 {
 .gate code {
   overflow-wrap: anywhere;
   font-family: var(--mono);
-  color: var(--ink-quiet);
+  color: var(--text-secondary);
 }
 
 /* ---- 어휘 데모 -------------------------------------------------------

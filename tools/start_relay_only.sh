@@ -7,7 +7,7 @@ if pgrep -f "sim_jpeg_relay.py" > /dev/null; then
   echo "relay already running"
   exit 0
 fi
-nohup python3 /rosy/tools/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
+nohup python3 /rosy/integrations/simulation/gazebo/scripts/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
   > /tmp/rosy_relay.log 2>&1 &
 echo "relay pid $!"
 sleep 3

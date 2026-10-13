@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
-sys.path.insert(0, str(Path(__file__).parents[1] / "middleware/apps/device/omx/adapter"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "middleware/devices/omx/adapter"))
 from g2_startup import prepare_home
 
 
@@ -152,7 +152,7 @@ def test_slower_publisher_can_settle_with_duplicate_fresh_polls():
 
 def test_startup_hold_disables_real_action_submission_without_resetting_stop(tmp_path, monkeypatch):
     from g2_startup import hold_startup
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter/test"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/devices/omx/adapter/test"))
     from test_omx_action_api import _runner, _grant
     from core_common.protocol.schemas import FleetActionGrant
     from omx_adapter.action_api import ActionApi
@@ -171,7 +171,7 @@ def test_startup_hold_disables_real_action_submission_without_resetting_stop(tmp
 def test_startup_hold_keeps_existing_stop_and_readback_api_available(tmp_path, monkeypatch):
     from datetime import datetime, timezone
     from g2_startup import hold_startup
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter/test"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/devices/omx/adapter/test"))
     from test_omx_action_api import _runner, _grant
     from core_common.protocol.schemas import FleetActionGrant
     from omx_adapter.action_api import ActionApi, LocalStopApi

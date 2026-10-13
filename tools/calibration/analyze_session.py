@@ -44,8 +44,8 @@ from control.sensing.perception import camera_extrinsic as CE  # noqa: E402
 sys.path.insert(0, str(HERE))
 from student_t import t95  # noqa: E402
 
-PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
-BRINGUP_PARAMS = REPO / "middleware" / "apps" / "device" / "pinky" / "bringup" / "config" / "rosy_params.yaml"
+PROFILE_PATH = REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
+BRINGUP_PARAMS = REPO / "middleware" / "devices" / "pinky" / "bringup" / "config" / "rosy_params.yaml"
 LIDAR_X_M = CE.LIDAR_X_OFFSET_M
 METHOD = "tools/calibration/analyze_session.py/1 (ICP point-to-line, wheel LS, wall-edge camera fit)"
 WHEEL_SIGNS = (1.0, -1.0)      # Pinky Pro: the right encoder counts backwards (bringup.py)

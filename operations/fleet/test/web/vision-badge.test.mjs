@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FRAME_LATE_MS, frameBadge } from "../../fleet/server/web/shared/vision-view.js";
+import { FRAME_LATE_MS, frameBadge } from "../../../ui/console/shared/vision-view.js";
 
 test("a fresh frame reads live, never an auth-waiting label", () => {
   const raw = frameBadge({ ok: true, status: 200, ageMs: "244", rectified: false });
@@ -22,7 +22,9 @@ test("an auto-rectified frame names the field calibration (D-484)", () => {
 test("an old frame that still arrives reads late, not live", () => {
   const late = frameBadge({ ok: true, status: 200, ageMs: String(FRAME_LATE_MS + 1) });
   assert.deepEqual([late.state, late.kind], ["stale", "warn"]);
-  assert.equal(frameBadge({ ok: true, status: 200, ageMs: null }).state, "live");
+  for (const ageMs of [null, undefined, "", "NaN", "-1"]) {
+    assert.equal(frameBadge({ ok: true, status: 200, ageMs }).state, "stale");
+  }
 });
 
 test("Vision's stale header reads stopped", () => {

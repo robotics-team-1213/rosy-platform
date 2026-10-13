@@ -142,6 +142,12 @@ class CameraController(
     private var timestampSource = CaptureClock.Source.UNAVAILABLE
     private var stopped = false
 
+    /** Sensor on. A paired session turns this off before [start] when nobody is asking (D-691). */
+    private var sensorOn = true
+
+    /** JPEG uplink. Local aiming keeps the sensor without this. */
+    private var transmit = true
+
     fun start(initial: OverheadConfig, initialCameraId: String?) {
         applyValues(initial)
         cameraId = initialCameraId
@@ -150,7 +156,8 @@ class CameraController(
             if (stopped) return@addListener
             try {
                 provider = future.get()
-                bind()
+                if (sensorOn) bind()
+                else Log.i(TAG, "camera provider ready; sensor stays off until a Rosy asks or the preview opens")
             } catch (e: Exception) {
                 Log.e(TAG, "camera provider failed", e)
                 onError(e)
@@ -158,10 +165,26 @@ class CameraController(
         }, ContextCompat.getMainExecutor(context))
     }
 
+    /** Open or release the sensor, and choose whether analysis sends JPEG. Main thread. */
+    fun setCapture(sensorOn: Boolean, transmit: Boolean) {
+        if (stopped) return
+        if (this.sensorOn == sensorOn && this.transmit == transmit) return
+        this.sensorOn = sensorOn
+        this.transmit = transmit
+        if (provider == null) return
+        if (!sensorOn) {
+            releaseLighting()
+            provider?.unbindAll()
+            camera = null
+            return
+        }
+        bind()
+    }
+
     /** Applies an adapter `config`. A width change rebinds the analysis use case. */
     fun applyConfig(newConfig: OverheadConfig) {
         applyValues(newConfig)
-        if (link != null && provider != null && newConfig.width != boundWidth) bind()
+        if (link != null && provider != null && sensorOn && newConfig.width != boundWidth) bind()
     }
 
     /**
@@ -173,7 +196,7 @@ class CameraController(
     fun selectCamera(id: String?): Boolean {
         if (id == cameraId) return true
         val previous = cameraId
-        if (provider == null) {
+        if (provider == null || !sensorOn) {
             cameraId = id
             return true
         }
@@ -312,7 +335,7 @@ class CameraController(
             releaseLighting()
             cameraProvider.unbindAll()
             val epoch = generation
-            val analysis = if (link == null) null else ImageAnalysis.Builder()
+            val analysis = if (link == null || !transmit) null else ImageAnalysis.Builder()
                 .setResolutionSelector(selectorFor(target.width))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)

@@ -40,6 +40,12 @@ services:
       - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml
+      - --discord-intake-config-optional
+      - /run/rosy-discord/intake.json
+      - --deliberation-config-optional
+      - /run/rosy-deliberation/status.json
+      - --conversation-config-optional
+      - /run/rosy-deliberation/conversation.json
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db
@@ -80,6 +86,9 @@ services:
       # D-524 Service Control key, targets, known_hosts: Fleet only, outside the config dir
       # that Vision also mounts. Docker creates it empty when absent; Fleet then answers 503.
       - /etc/rosy/fleet-host-control:/run/rosy-fleet-host-control:ro
+      # Fleet-only credentials; an absent intake.json keeps Discord reception disabled.
+      - /etc/rosy/fleet-discord:/run/rosy-discord:ro
+      - /etc/rosy/fleet-deliberation:/run/rosy-deliberation:ro
       # D-530 read-only reports. Absent dirs come up empty; the hosts route then returns null.
       - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
       - /var/lib/rosy-host-state:/var/lib/rosy-host-state:ro
