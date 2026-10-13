@@ -8280,3 +8280,9 @@ osy-d395-s1d\`.
 - 변경: feat/omx-imitation-tools에 녹화 설정 검사, native reader 검토·분할, ACT 설정, private Hub 왕복 도구를 추가했다.
 - 증거: 원격 기본 70개와 별도 LeRobot 영상·분할·ACT backward/save/reload 1개 통과, NEW 0. tuple shape·leader 옵션·split backend 호환성을 수정했다.
 - gate 변화: 없음. 실물 녹화·Pilot 제어·실제 HF 업로드·Spaces 접근은 미확인이다. 실행 PC와 HF 조직은 미정이다.
+
+## 2026-10-14 · uncommitted · OMX 준비 후속 검증과 D-756 재개 조건
+
+- 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
+- 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
+- gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.

@@ -98,3 +98,5 @@ Spaces는 원본 저장소나 arm controller가 아니다. HF 계정이 정해�
 Pilot 실물 driver/API와 native owner 전환은 아직 없으며 SIM 화면을 실물에 연결하지 않는다.
 
 검증 현황은 [실행 기록](../../../docs/plans/2026-10-14-omx-imitation-preparation.md)의 구현 상태를 본다.
+공식 학습 CLI의 합성 데이터 2 step과 model/preprocessor/postprocessor 재적재까지 원격 검증했다.
+실물·실계정 작업의 보류 사유와 재개 조건은 [D-756](../../../docs/adr/D-756-omx-imitation-preparation-and-resumption-gates.md)을 따른다.

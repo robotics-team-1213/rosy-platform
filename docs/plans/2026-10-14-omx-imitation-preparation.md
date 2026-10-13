@@ -16,6 +16,8 @@ Task 1–4의 준비 도구를 구현했다: 녹화 설정 검사, native reader
 원격 기본 시험 70개와 별도 실제 LeRobot 통합 시험 1개가 통과했다. 통합 시험은 합성 RGB 영상의 저장·재독출·분할, train 통계 격리, ACT 1-step backward·저장·재로딩이다.
 실물 환경 lock·녹화·GPU 학습·실제 Hub 왕복은 미확인이다. 실행 PC와 HF 조직은 미정이며, Task 5 Pilot 실물 조작과 Task 6 Spaces 계정 접근 검증은 남아 있다.
 아래 Task는 전체 수용 기준이며, 일부 준비 구현만으로 완료 처리하지 않는다.
+후속 검증: 공식 학습 CLI로 합성 영상 train split을 CPU 2 step 학습하고 저장된 model/preprocessor/postprocessor를 재적재했다. Hub 중단·손상 응답·동일 commit 재시도도 대역 시험했다. 관련 원격 12개 통과, NEW 0.
+실물·계정 미정으로 보류한 항목과 재개 입력·완료 증거는 [D-756](../adr/D-756-omx-imitation-preparation-and-resumption-gates.md)에 기록했다.
 
 ## Task 1: 실물 녹화 구성과 환경을 고정한다
 
