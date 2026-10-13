@@ -51,3 +51,7 @@ python -m pytest middleware/core/services/test -q
 `core_common`
 
 <!-- MANUAL: -->
+
+## Current source names (D-749)
+
+`core_features/action_rules`, `safety_gate`, `preview` hold the implementation. The old decision/safety/vision entries are source facades; installed names remain `core_features.decision/safety/vision`. No second runtime implementation.
