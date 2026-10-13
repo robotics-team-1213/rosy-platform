@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception", "devices", "control"}
+           "foundation", "ros_idl", "perception", "devices", "drive"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -2266,6 +2266,7 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
         (("apps", "device", "pinky", "bringup"), "bringup", False),
         (("devices", "omx", "adapter"), "omx_adapter", True),
         (("drive", "planning", "nav2"), "navigation", True),
+        (("control", "drive", "planning", "nav2"), "navigation", False),
         (("core", "navigation"), "navigation", False),
         (("apps", "device", "omx", "adapter"), "omx_adapter", False),
         (("drivers", "imu_bno055"), "imu_bno055", True),
