@@ -41,6 +41,7 @@ MAX_PENDING_FIRST_MESSAGE = 64
 _pending_by_ip: collections.Counter[str] = collections.Counter()
 #: D-193 보안 리뷰 L2: 열린 소켓의 토큰을 이 주기로 다시 본다. 회수·만료·로그아웃이면 4401.
 REVALIDATE_S = 30.0
+ACCOUNT_REVALIDATE_S = 5.0
 
 
 def _guarded(handler):
@@ -61,13 +62,13 @@ async def _watch_token(websocket: WebSocket, svc, token_id: str) -> None:
     try:
         while True:
             account = getattr(websocket.state, 'account_auth', None)
-            await asyncio.sleep(10 if account else REVALIDATE_S)
+            await asyncio.sleep(ACCOUNT_REVALIDATE_S if account else REVALIDATE_S)
             if websocket.application_state == WebSocketState.DISCONNECTED:
                 return
             if account:
                 try:
-                    auth = await run_in_threadpool(authenticate_account, websocket,
-                                                  getattr(websocket.state, 'account_bearer', None))
+                    auth = await asyncio.wait_for(run_in_threadpool(authenticate_account, websocket,
+                                                  getattr(websocket.state, 'account_bearer', None)), timeout=8)
                     alive = auth is not None and auth.token_id == token_id and auth.allows_role(websocket.state.min_role)
                 except Exception:
                     alive = False

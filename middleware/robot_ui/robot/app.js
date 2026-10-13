@@ -78,8 +78,8 @@ export { TELEMETRY_CHANNELS } from "./telemetry.js";
 const pageScope = createPageScope();
 let authLifetime = new AbortController(), commandOwner = null;
 function authTicket() {
-  const held = authLifetime, token = session.token, page = pageScope.capture();
-  return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && token === session.authenticated && page.current()};
+  const held = authLifetime, identity = session.authKey, page = pageScope.capture();
+  return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && identity === session.authKey && page.current()};
 }
 function invalidateAuth() {
   receiverApprovals.clear();

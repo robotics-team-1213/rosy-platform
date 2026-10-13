@@ -90,7 +90,7 @@ def install_account_sessions(app):
         client = getattr(app.state, 'account_client', None)
         claims = await invoke(client.resolve, request.cookies.get(COOKIE, '')) if client else None
         return JSONResponse({'enabled': client is not None, 'authenticated': claims is not None,
-            **({'account_id': claims.sub, 'resource': claims.aud,
+            **({'account_id': claims.sub, 'session_family': claims.sid, 'revision': claims.rev, 'resource': claims.aud,
                 'capabilities': [cap for grant in claims.grants for cap in grant.capabilities]} if claims else {})}, headers=NO_STORE)
 
     @app.post('/api/account/logout')

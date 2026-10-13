@@ -12,4 +12,11 @@ test('Account session restores without putting credentials into browser storage'
   assert.equal(client.token(), '');
   assert.deepEqual(client.authHeaders(), {});
   assert.equal(values.size, 0);
+  let release;
+  globalThis.fetch = async () => ({ok:true,status:200,json:()=>new Promise(resolve=>{release=resolve;})});
+  const pending = client.api('/api/v1/robot/state');
+  await new Promise(resolve=>setImmediate(resolve));
+  client.clearToken();
+  release({private:'previous-account'});
+  await assert.rejects(pending, /계정이 변경/);
 });

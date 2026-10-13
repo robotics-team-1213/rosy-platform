@@ -5,20 +5,42 @@
 const KEY = "rosy.pilot.token";
 export let account = null;
 export const authenticated = () => Boolean(account?.authenticated || token());
+const accountKey = () => account?.authenticated ? `${account.account_id}:${account.session_family}:${account.revision}` : token();
+if (typeof window !== 'undefined') window.addEventListener('storage', event => {
+  if (event.key === 'rosy.account.identity' && account?.authenticated && event.newValue !== accountKey()) {
+    clearToken();
+    document.body.hidden = true;
+    window.location.reload();
+  }
+});
 
 export async function restoreAccount() {
   if (inPilotApp()) return null;
+  const previous = account?.authenticated ? accountKey() : '';
   try {
     const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    account = response.ok ? await response.json() : null;
-    if (account?.authenticated) sessionStorage.removeItem(KEY);
-  } catch { account = null; }
+    if (!response.ok) return account;
+    account = await response.json();
+    if (account?.authenticated) {
+      sessionStorage.removeItem(KEY);
+      try { localStorage.setItem('rosy.account.identity', accountKey()); } catch {}
+    }
+    if (previous && previous !== accountKey()) {
+      try { localStorage.setItem('rosy.account.identity', accountKey()); } catch {}
+      document.body.hidden = true;
+      window.location.reload();
+    }
+  } catch { /* A failed probe never opens the development login path. */ }
   return account;
 }
+if (typeof window !== 'undefined') window.setInterval(() => {
+  if (account?.enabled) restoreAccount();
+}, 10000);
 
 export async function accountLogout() {
   const response = await fetch('/api/account/logout', {method:'POST'});
   clearToken();
+  try { localStorage.setItem('rosy.account.identity', ''); } catch {}
   if (!response.ok) throw new Error('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.');
 }
 
@@ -53,6 +75,7 @@ export function authHeaders() {
 }
 
 export async function api(path, options = {}) {
+  const identity = accountKey();
   const {timeoutMs, ...init} = options;
   const headers = {...(init.headers ?? {})};
   if (init.body && !headers["Content-Type"]) {
@@ -69,6 +92,7 @@ export async function api(path, options = {}) {
       headers: {...headers, ...authHeaders()},
     });
     const body = await response.json().catch(() => ({}));
+    if (identity !== accountKey()) throw new Error('계정이 변경되었습니다. 화면을 다시 여세요.');
     return {status: response.status, ok: response.ok, body};
   } finally {
     if (timer) clearTimeout(timer);
