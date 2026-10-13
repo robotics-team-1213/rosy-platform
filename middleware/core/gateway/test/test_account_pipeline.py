@@ -85,8 +85,18 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     assert core.post('/api/v1/teleop', json={'linear':0,'angular':0}, headers={'Origin':str(core.base_url).rstrip('/')}).status_code == 403
     clock[0] += 270
     assert core.get('/api/account/session').json()['session_family'] == identity['session_family']
-    sessions.revoke(fleet.cookies[COOKIE])
-    clock[0] += 10
+    from starlette.websockets import WebSocketDisconnect
+    with core.websocket_connect('wss://'+urlsplit(str(core.base_url)).netloc+'/ws/state',
+                                headers={'Origin':str(core.base_url).rstrip('/')}) as ws:
+        assert 'robot_id' in ws.receive_json()
+        sessions.revoke(fleet.cookies[COOKIE])
+        clock[0] += 10
+        started = time.monotonic()
+        with pytest.raises(WebSocketDisconnect) as closed:
+            while time.monotonic()-started < 20:
+                ws.receive_json()
+        assert closed.value.code == 4401
+        assert time.monotonic()-started < 15
     assert core.get('/api/v1/auth/whoami').status_code == 401
     assert not core.get('/api/account/session').json()['authenticated']
 
