@@ -8274,3 +8274,9 @@ osy-d395-s1d\`.
 - 증거: 기준 소스 b0f7a1896과 공식 LeRobot 0.4.4 recorder/config 및 Hugging Face 문서를 읽었다. 문서 검사 결과는 X: omx-imitation 세션에 기록한다.
 - gate 변화: 없음. 준비 문서는 구현·녹화·학습·Hub 연동·실물 수용의 증거가 아니다.
 - 결정: 새 API/ADR 승인, runtime 활성화, 자동 업로드, 외부 저장소 생성, 착지·push·배포를 수행하지 않는다.
+
+## 2026-10-14 · uncommitted · OMX native imitation preparation tools
+
+- 변경: feat/omx-imitation-tools에 녹화 설정 검사, native reader 검토·분할, ACT 설정, private Hub 왕복 도구를 추가했다.
+- 증거: 원격 기본 70개와 별도 LeRobot 영상·분할·ACT backward/save/reload 1개 통과, NEW 0. tuple shape·leader 옵션·split backend 호환성을 수정했다.
+- gate 변화: 없음. 실물 녹화·Pilot 제어·실제 HF 업로드·Spaces 접근은 미확인이다. 실행 PC와 HF 조직은 미정이다.

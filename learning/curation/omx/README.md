@@ -9,6 +9,8 @@
 LeRobot 0.4.4 전용 venv를 사용한다. ROS venv에 설치하지 않는다.
 직접 의존성 후보는 `deploy/robot/omx/requirements-lerobot-record.txt`다.
 CPU 시험 환경과 GPU 학습 환경을 구분하고, 설치 후 `pip check`와 `pip freeze`를 보존한다.
+원격 CPU 통합 시험은 torch 2.7.1+cpu / torchvision 0.22.1+cpu / av 15.1.0으로 수행했다.
+검토·분할·학습 예제의 영상 backend는 `pyav`다. 이 환경의 기본 TorchCodec 경로는 검증하지 않았으므로 backend를 생략하지 않는다.
 Windows의 데이터·HF cache·로그는 X: 세션에, Linux는 선정한 호스트의 명시적 데이터 경로에 둔다.
 `HF_HOME`도 그 데이터 드라이브로 설정한다.
 
