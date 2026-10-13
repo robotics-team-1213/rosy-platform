@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PERCEPTION = ROOT / "middleware/perception/vision/perception"
 DECISION = ROOT / "middleware/core/services/core_features/decision"
-LINE = ROOT / "middleware/control/drive/behaviors/line_follow"
+LINE = ROOT / "middleware/drive/behaviors/line_follow"
 SENSING = ROOT / "middleware/perception/sensors/sensing"
 
 

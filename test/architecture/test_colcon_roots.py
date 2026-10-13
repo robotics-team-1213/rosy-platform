@@ -38,6 +38,8 @@ CONSUMERS = {
     ".github/workflows/ci.yml": r"--base-paths \$COLCON_ROOTS\b",
     ".github/workflows/arm64-rehearsal.yml": r"--base-paths \$COLCON_ROOTS\b",
     "tools/build_wsl.sh": r"--base-paths \$COLCON_ROOTS\b",
+    # D-571 headless Gazebo bench: the runner builds gz_sim over the roots.
+    "tools/remote/remote_sim.py": r"--base-paths \$COLCON_ROOTS\b",
     "deploy/robot/pinky_pro/image/build-native-payload.sh":
         r'(--base-paths "\$\{COLCON_ROOTS\[@\]\}"|--from-paths "\$\{ROSDEP_ROOTS\[@\]\}")',
     # D-553 addendum 3: the payload-builder image preinstalls rosdep's apt set for the roots.

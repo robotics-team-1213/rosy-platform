@@ -1790,3 +1790,7 @@ exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없�
 거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
 `optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
+
+## 시뮬레이션은 돌리지 않는다 (D-571)
+
+관제 PC는 운영 전용이다. 사용자 결정(2026-10-09, "관제 PC는 시뮬레이션에서 제외")에 따라 Gazebo나 다른 시뮬레이션을 이 PC에서 돌리지 않고, ROS나 시뮬 이미지도 설치하지 않는다. `tools/remote/remote_sim.py`는 이 PC를 후보에 넣지 않고 `--host site`를 거절하며, `~/rosy-jobs/site` 표시가 있는 호스트(D-568 3항)도 쓰지 않는다. 호스트 pytest는 D-568대로 맨 뒤 순서로 받는다. 시뮬레이션은 모델 PC와, 소유자가 동의한 뒤의 AI PC에서 돈다.

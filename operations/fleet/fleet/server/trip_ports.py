@@ -545,6 +545,7 @@ class LiveTrip:
         self.authority: Optional[dict] = None
         #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
         self.bends_done: set[str] = set()
+        self.dismissed = 0  # keeper sightings without a map place, answered ``straight``
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
         """``(reason, detail)`` when CORE's junction state ends the trip, else None.
