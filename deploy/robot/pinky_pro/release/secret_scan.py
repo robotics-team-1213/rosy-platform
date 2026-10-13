@@ -173,6 +173,7 @@ _URL = re.compile(r"\b(?:https?|ftp|git|ssh)://\S+")
 _PUBLIC_PATH_TOKEN = re.compile(
     r"(?i)^[a-z][a-z0-9_.-]*(?:/[a-z][a-z0-9_.-]*)+/?$"
 )
+_PATH_WORD = r"[A-Za-z0-9_./-]*"
 
 # The absorption inventory intentionally records source and destination
 # SHA-256 values. They are public provenance fields, not device credentials.
@@ -638,6 +639,14 @@ def scan_text(path: str, text: str, *,
             if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:
                 continue
             if _PUBLIC_PATH_TOKEN.fullmatch(value):
+                continue
+            # The base64 class has no "_", "." or "-", so it cuts a path such as
+            # middleware/robot_ui/pilot/... at the underscore and resumes at the
+            # next "/". Judge the whole path word the fragment sits in; a word
+            # with a digit-led segment or a "+" still fails the path shape.
+            head = re.search(_PATH_WORD + "$", entropy_line[:match.start("value")]).group(0)
+            tail = re.match(_PATH_WORD, entropy_line[match.end("value"):]).group(0)
+            if _PUBLIC_PATH_TOKEN.fullmatch(head + value + tail):
                 continue
             if _is_ed25519_public_key_body(value):
                 continue

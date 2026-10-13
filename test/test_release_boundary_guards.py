@@ -402,6 +402,18 @@ def test_scanner_ignores_public_provenance_paths_and_absorption_hashes():
     )
     assert not scan_text("docs/plans/release.md", path_line)
 
+    # An underscore cuts the base64 run, so the matcher sees only the tail
+    # "/pilot/android/..." of this path. The whole path word is what is judged.
+    tail = "pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt"
+    assert not scan_text("shared/web/surfaces.yaml", f"    token_verification: middleware/robot_ui/{tail}")
+    # The same key and the same path head do not excuse a token: a digit-led
+    # segment, a "+", or no path at all is still reported.
+    blob = "".join(("Zm9vYmFyYmF6cXV4", "MDEyMzQ1Njc4OWFi", "Y2RlZmdoaWprbG1u", "b3BxcnN0dXZ3eHl6"))
+    for value in (blob, f"middleware/robot_ui/{blob[:30]}/9{blob[30:]}",
+                  f"middleware/robot_ui/{blob[:30]}+{blob[30:]}", f"robot_ui/{tail}/" + "0f" * 20):
+        found = scan_text("shared/web/surfaces.yaml", f"    token_verification: {value}")
+        assert [f.kind for f in found] == ["high-entropy-token"], value
+
     digest = "a" * 64
     inventory_line = (
         f'"src.py","src/rosy_control/src.py","{digest}","{digest}",'
