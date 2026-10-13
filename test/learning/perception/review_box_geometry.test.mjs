@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawnBox, dragBox, hitBox } from '../dataset/review_app_web/box-geometry.mjs';
+import { drawnBox, dragBox, hitBox } from '../../../learning/curation/perception/review_app_web/box-geometry.mjs';
 
 test('draw reversed and out-of-image endpoints in original coordinates', () => {
   assert.deepEqual(drawnBox([50,40],[-10,10],320,240),[0,10,50,40]);
