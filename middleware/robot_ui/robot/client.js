@@ -42,6 +42,8 @@ function storedToken() {
 
 export const session = {
   token: storedToken(),
+  account: null,
+  get authenticated() { return Boolean(this.token || this.account?.authenticated); },
   identity: null,
   socket: null,
   socketLive: false,
@@ -64,8 +66,21 @@ export const session = {
 
 export const authHeaders = () => ({
   "Content-Type": "application/json",
-  Authorization: `Bearer ${session.token}`,
+  ...(session.token ? {Authorization: `Bearer ${session.token}`} : {}),
 });
+
+export async function restoreAccount() {
+  try {
+    const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+    session.account = response.ok ? await response.json() : null;
+    if (session.account?.authenticated) {
+      session.token = '';
+      storageRemove(sessionStorage, SESSION_KEY);
+      storageRemove(localStorage, PAIRED_KEY);
+    }
+  } catch { session.account = null; }
+  return session.account;
+}
 
 export function setConnection(kind, label) {
   const badge = elements["connection-badge"];
@@ -80,6 +95,7 @@ export function setConnection(kind, label) {
 
 /** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */
 export function rememberToken(token, { expiresAt = null, persist = false } = {}) {
+  session.account = null;
   session.token = token;
   const left = expiresAt ? Date.parse(expiresAt) - Date.now() : NaN;
   if (persist && left > 0 && left <= REMEMBER_MAX_MS) {
@@ -97,6 +113,7 @@ export function rememberToken(token, { expiresAt = null, persist = false } = {})
 
 export function forgetToken() {
   session.token = "";
+  session.account = null;
   session.identity = null;
   session.role = "";
   storageRemove(sessionStorage, SESSION_KEY);
@@ -242,6 +259,12 @@ function devFailure(status, _body, retryAfter) {
  */
 export async function logout({ signal } = {}) {
   let deleted = false;
+  if (session.account?.authenticated) {
+    const response = await fetch('/api/account/logout', {method:'POST', signal});
+    forgetToken();
+    if (!response.ok) throw new Error('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.');
+    return true;
+  }
   if (session.token) {
     try {
       await api("/api/v1/auth/logout", { method: "POST", signal });
@@ -258,6 +281,7 @@ export async function logout({ signal } = {}) {
 }
 
 const SOURCE_LABELS = {
+  account: 'Rosy Account',
   card: "카드",
   manual: "수동",
   "pair-physical": "로봇 화면 코드",
@@ -300,7 +324,7 @@ async function httpError(response) {
 }
 
 export async function api(path, options = {}) {
-  if (!session.token) throw new Error("접속 키가 필요합니다.");
+  if (!session.authenticated) throw new Error("로그인이 필요합니다.");
   const method = (options.method || "GET").toUpperCase();
   const noteOperation = (status) => {
     const detail = classifyOperation(method, path, status);
@@ -320,7 +344,7 @@ export async function api(path, options = {}) {
 }
 
 export async function apiMaybe(path) {
-  if (!session.token) return null;
+  if (!session.authenticated) return null;
   const response = await fetch(path, { headers: authHeaders() });
   if (!response.ok) {
     const error = await httpError(response);
@@ -331,5 +355,11 @@ export async function apiMaybe(path) {
 }
 
 export function isAdmin() {
+  if (session.account?.authenticated) return session.account.capabilities.includes('robot.admin');
   return session.role === "administrator";
+}
+
+export function canOperate() {
+  return session.account?.authenticated ? session.account.capabilities.includes('robot.operate')
+    : ['operator', 'administrator'].includes(session.role);
 }

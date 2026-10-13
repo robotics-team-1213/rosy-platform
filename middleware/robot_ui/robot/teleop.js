@@ -3,14 +3,15 @@
 // 자격 판정(teleopEligible)과 문구도 함께 산다. 셸은 시작·정지 지점과
 // 상태 갱신 시점(updateTeleopControls)만 부른다.
 import { setOff, setText } from "./dom.js";
-import { api, session } from "./client.js";
+import { api, session, canOperate } from "./client.js";
 import { reasonText } from "./triage.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
 import { evidenceOf, motionEvidenceBlocks } from "./telemetry.js";
 
 export function teleopEligible() {
   return Boolean(
-    session.token
+    session.authenticated
+      && canOperate()
       && session.capabilities?.teleop === true
       && session.robotState?.mode === "MANUAL"
       && session.robotState?.safety?.estop === false
@@ -20,7 +21,8 @@ export function teleopEligible() {
 
 // 사유는 teleopEligible과 같은 조건을 같은 순서로 읽는다.
 function teleopBlockReason() {
-  if (!session.token) return "로그인 필요";
+  if (!session.authenticated) return "로그인 필요";
+  if (!canOperate()) return '운전 권한 없음';
   if (session.capabilities?.teleop !== true) return "수동 운전 기능 없음";
   if (session.robotState?.mode !== "MANUAL") return "수동 모드에서만";
   if (session.robotState?.safety?.estop !== false) return "안전 상태 확인 필요";
@@ -34,7 +36,7 @@ export function updateTeleopControls() {
   document.querySelectorAll("[data-teleop]").forEach((button) => {
     setOff(button, !enabled, reason);
   });
-  if (!session.token) {
+  if (!session.authenticated) {
     setText("teleop-message", "operator 접속 키가 필요합니다.");
   } else if (session.capabilities && session.capabilities.teleop !== true) {
     // D-247 7: a runtime mode that holds the motors is not a permission problem.
@@ -125,7 +127,7 @@ const holdTicker = createHoldTicker({
   intervalMs: session.teleopIntervalMs,
   onTick: () => transmitTeleop(teleopCommand.linear, teleopCommand.angular),
   onZero: (immediate) => {
-    if (session.token) queueTerminalZero(immediate);
+    if (session.authenticated) queueTerminalZero(immediate);
   },
 });
 
