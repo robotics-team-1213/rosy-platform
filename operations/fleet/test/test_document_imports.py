@@ -25,6 +25,7 @@ SHARED = {
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
+    "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
@@ -44,17 +45,17 @@ OWN = {
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
-        "device-watch.js",  # map-stage watch: existing state tags and the stuck front frame
+        "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
         "trail-view.js",
         "site-path.js",
-        "site-layer.js",
         "confirmed-action.js",
         "camera-warp.js",
         "camera-backdrop.js",
+        "map-datum.js",  # origin axes shared by the occupancy grid and the metre site view
         "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",

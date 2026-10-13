@@ -230,6 +230,10 @@
 | D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
 | D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
 | D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -330,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-12 · uncommitted · docs(adr): D-723 장치 범주는 능력과 최종 작성자
-- 2026-10-12 · uncommitted · docs(adr): D-721 스테이션과 제자리 복귀 모드
-- 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
-- 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
-- 2026-10-12 · 54cba0b3f · 보이는 곡선과 목표점 미채택을 구분한다
+- 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정

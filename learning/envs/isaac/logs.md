@@ -268,6 +268,11 @@
 
 - 카메라 후속: 같은 커밋의 네 시작 방향 고정 정책 평가 8개 episode와 실제 영상 8개가 끝났다. 초기/각 episode/최종/cleanup 정지 11개는 모두 통과했지만 완주는 0이며 camera admission 실패로 SDK exit1이다. 정상 방향 baseline 0.110668m, eval 0.100579m 후 차선 관측 거절이며 정지 안정성 개선을 차선 추종 해결로 표현하지 않는다.
 
+## 2026-10-12 · 45e92d326 · 카메라 관리자 설정과 곡률 역산 일치
+
+- 변경: CameraLane이 기준 관리자 설정으로 DrivableSteer를 구성한다. 설정된 곡률과 명시적인 RL gain 조절을 구분한다.
+- 증거: 원격 camera 회귀 82 PASS, known_failures NEW 0이다. 기존 .04/.4 구성은 이전 gain/cruise 비율을 유지한다.
+- gate 변화: 호스트 회귀만 확인했다. 새 native Isaac SDK 실행·곡선 완주·실물 수용은 미확인이다.
 
 ## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
 
@@ -277,3 +282,21 @@
 - gate 변화: SOURCE 및 원격 회귀 증거. 실제 곡선 주행은 별도 재시험 중이며 완주·교통 규칙·Fleet·ROS-SIM·실물 수용을 승인하지 않는다. nominal arc 검사는 RL gain 적용 후 모든 경계 비횡단을 보장하지 않는다.
 
 - 실제 R39 재시험: 고정 정책으로 네 시작 방향 8회 실행, 완주 0회·정지 11회 통과·SDK exit1. 정상 방향 baseline/eval은 모두 약 0.110668m에서 camera_lane_lost였다. observed_creep 승인 경로는 이 정상 방향 실행에서 사용되지 않았다. 따라서 출처 연결 수정만으로 현재 곡선 실패가 해결됐다고 주장하지 않는다. 연속 way/누적 경계/실제 선택 목표를 추가 기록해 원인을 분리한다.
+
+## 2026-10-12 · 0a690a83b · 카메라 종료 벌점과 실행 행동 연결
+
+- 원인: camera_lane_lost 종료의 현재 state=None을 이유로 실패 보상도 누락했다. 새 원격 회귀로 재현하고 known_failures NEW 1로 기록했다.
+- 변경: 실제 CORE nonzero 전달 receipt로 확인한 episode 내 마지막 유효 행동에만 target 상실의 terminal reward를 연결한다. ZERO 구간은 기록을 유지하고 held 등 비학습 이동은 연결을 끊는다. stale·추론·scan 오류는 제외하며 invalid state bootstrap과 기억 명령 재실행은 허용하지 않는다.
+- 검증: 유효/미실행/다른 종료/외인성 오류/held 연결 차단 회귀 통과. Isaac 전체와 architecture 원격 통합은 exit0/NEW0. 기존 helper를 camera_checks에 옮겨 재노출하며 600줄 기준을 유지했다.
+- gate 변화: SOURCE/원격 회귀 증거이며 native 종료 credit·완주·독립 병렬 학습·두 대 Fleet 교통 수용은 별도다.
+
+- 실제 R41: d653def0b headless 한 대 학습6회와 고정 평가3회·baseline4회가 종료됐다. Q 갱신27,957회 중 목표 상실 terminal credit5회를 실제 확인했고, trace로 독립 재계산한 최종 Q는 저장 정책과 정확히 일치했다. 각 credit의 원래 nonzero CORE receipt·유효 state·후속 ZERO·종료 bootstrap0을 검사했다. 기록된 정지16개와 실제 영상7개를 검증했지만 전체 완주는0회이며 SDK exit1로 정책 채택은 거절했다. 병렬 학습·교통/Fleet 수용은 여전히 미완료다.
+
+## 2026-10-12 · ba1347294 · 카메라 관측 구간 학습
+
+- 근거: R41 원시 trace에서 동일 source_stamp 내 행동 변경11,055회와 ordinary Q update26,797회를 확인했다. 물리240Hz에 gamma0.95를 적용한 시간 의미를 수정 대상으로 삼았다.
+- 변경: 새 유효 stamp에서 gain 선택, 구간 보상 합산, 성공 dispatch receipt를 가진 구간만 갱신. 매 tick CORE·camera 안전 실행은 유지한다. 종료 credit은1회이며 외인성 실패·미실행 구간은 제외한다. schema2는 이전 physics-tick 정책 복원을 거절한다.
+- 검증: 첫 원격 시험은 helper 미구현 assertion으로4 setup ERROR/NEW4였다. 구현·연결 후 관련129 PASS, legacy schema 거절 추가 후 Isaac 전체와 module_structure322 PASS/1 SKIP/NEW0. runner597행. 이 시험은 SDK 실행을 포함하지 않는다.
+- 후속 검증: CORE select 실패가 warning ZERO를 보낼 때 이전 실행 연결이 남는 문제를 원격 NEW1로 재현해 수정했다. 관련133 PASS, 최신 main 반영 후 Isaac 전체와 module_structure325 PASS/1 SKIP/NEW0. 독립 소스 검토는 f2697eab11ea1f095cba02a97553fb7e611851f7의 카메라 관측 주기 변경을 승인했다.
+- 실제 R42: 같은 SHA로 headless 학습6회·baseline4회·eval3회가 종료됐다. 구간 raw reward 합계와 Q 갱신1,165회(종료6회)를 독립 재계산해 저장 정책과 정확히 일치했다. 동일 관측 행동 유지44,551회, 산출물91개 hash, 영상7개 프레임 수를 검증했다. 정지 receipt16개를 확인했으나 성공 정지 구간 전체 raw sample은 저장되지 않아 연속 정지 독립 검증과 구분한다.
+- gate 변화: 전체13회 모두 camera_lane_lost로 완주0, SDK exit1, 후보 미채택이다. 진행량 증가는 완주나 안정적인 곡선 추종 증거가 아니다. 병렬 환경·신호·횡단보도·Fleet·ROS-SIM·실물 수용은 미완료다. 원본과 독립 verifier는 private/isaac/media/2026-10-12-r42-camera-cadence에 보관했다.

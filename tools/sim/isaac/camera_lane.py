@@ -31,7 +31,7 @@ def camera_model_identity(model, *, revision, sha256):
     if (manifest.backend != 'onnx' or manifest.model_revision != revision
             or not {'lane_marking', 'drivable'} <= roles or len(chosen) != 1 or chosen[0].sha256 != sha256):
         raise ValueError('existing camera model revision/hash/roles differ')
-    identity = {'schema': 'isaac-camera-error-confidence/1', 'model_revision': revision, 'model_sha256': sha256}
+    identity = {'schema': 'isaac-camera-error-confidence/2', 'model_revision': revision, 'model_sha256': sha256}
     CameraQPolicy(17, perception=identity)
     return identity
 
@@ -40,7 +40,7 @@ class CameraQPolicy(QPolicy):
     def __init__(self, seed, *, perception):
         super().__init__(seed)
         if (not isinstance(perception, dict) or set(perception) != {'schema', 'model_revision', 'model_sha256'}
-                or perception['schema'] != 'isaac-camera-error-confidence/1'
+                or perception['schema'] != 'isaac-camera-error-confidence/2'
                 or not isinstance(perception['model_revision'], str) or not perception['model_revision']
                 or not isinstance(perception['model_sha256'], str) or len(perception['model_sha256']) != 64
                 or any(c not in '0123456789abcdef' for c in perception['model_sha256'])):
@@ -98,7 +98,7 @@ class LearnedCameraLane:
         self.worker = LearnedPaintWorker(SimpleNamespace(poll=lambda: model), clock=clock,
                                          start=False, target='drivable')
         self.keeper = LaneKeeper(camera_x_offset_m=camera_x)
-        self.steer, self.history = DrivableSteer(), OdomHistory()
+        self.steer, self.history = DrivableSteer.from_config(vars(config)), OdomHistory()
         self.frame, self.stamp, self.received_at = 0, None, None
         self.observation = None
         self.wall, self.scan_stamp_ns = None, None

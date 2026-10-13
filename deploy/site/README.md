@@ -62,6 +62,41 @@ certificate identity, config revision, and readback in the site validation
 record. These steps require the actual site host and devices for SITE/FIELD
 acceptance; local Compose checks establish only LOCAL behavior.
 
+### Operator PC: resolve the name and verify trust before login
+
+운영자는 인증서의 `ROSY_SITE_TLS_HOST`와 같은 이름으로
+`https://<site-fqdn>:8443/console`을 연다. DNS SAN만 있는 인증서에 LAN IP로
+접속하면 이름 검증이 실패한다. 브라우저의 인증서 경고를 통과시키거나
+`curl -k`로 확인한 화면은 TLS 신뢰 검증 결과로 기록하지 않는다.
+
+1. 운영 PC에서 `<site-fqdn>`이 현장 호스트의 승인된 주소로 해석되는지
+   확인한다. 현장 PC의 Avahi가 실행 중이어도 다른 PC의 `.local` 이름 해석은
+   별도로 확인해야 한다. 실패하면 LAN의 mDNS 경로를 복구하거나 관리자가
+   승인한 DNS/hosts 매핑을 설치한다. hosts를 쓰면 주소 변경 때 함께 갱신한다.
+2. 별도의 신뢰된 관리자 경로로 받은 **사이트 CA 공개 인증서**의 지문을
+   확인하고 운영 PC/브라우저의 신뢰 저장소에 등록한다. 서버 개인 키를
+   복사하거나 서버 leaf 인증서를 CA로 등록하지 않는다.
+3. Windows PowerShell에서는 `curl` 별칭 대신 `curl.exe`로 검사한다.
+   아래 두 번째 명령은 이름 해석 실패와 인증서 실패를 구분하는 진단이며,
+   브라우저 DNS 설정을 고치거나 로그인 성공을 증명하지는 않는다.
+
+   ```powershell
+   curl.exe --fail --show-error "https://<site-fqdn>:8443/api/fleet/auth/connection"
+   curl.exe --fail --show-error --resolve "<site-fqdn>:8443:<approved-site-ip>" "https://<site-fqdn>:8443/api/fleet/auth/connection"
+   ```
+
+   Schannel이 `CRYPT_E_NO_REVOCATION_CHECK`로 거부하고 해당 사설 CA에
+   폐기 목록 배포 지점이 없거나 닿지 않으면, 진단에 한해
+   `--ssl-revoke-best-effort`를 추가할 수 있다. 인증서 체인·유효기간·이름
+   검증은 유지되지만 이 결과는 완전한 폐기 상태 검증이 아니다.
+   [curl 공식 옵션 설명](https://curl.se/docs/manpage.html#--ssl-revoke-best-effort)을
+   따르고, 결과에 이 제한을 기록한다. `--ssl-no-revoke`를 기본값으로 넣지 않는다.
+4. 같은 호스트 이름으로 경고 없이 브라우저를 열고 우상단 로그인 →
+   최초 비밀번호 변경(해당 계정만) → 계정 → 내 프로필을 확인한다.
+   표시 이름 저장 후 새로고침해 값을 다시 읽는다. 비밀번호 변경과 기존
+   세션 무효화 검사는 격리된 시험 계정으로 수행하고, 팀원의 새 비밀번호를
+   시험자가 임의로 정하지 않는다. 실제 계정 검사와 격리 검사를 따로 기록한다.
+
 ## LAN access
 
 The site Caddy proxy lets a browser on a private LAN address open the camera
@@ -71,7 +106,7 @@ other state and command controls still require a site user token. Access through
 a public address retains the token requirement. This proxy exception depends
 on Fleet and Vision staying unpublished on the internal Compose network.
 
-On 2026-10-01 a site moved from 192.168.1.0/24 to 10.16.36.0/24. The proxy was
+On 2026-10-01 a site moved from one RFC1918 subnet to another. The proxy was
 published on the old interface IP, so the next start failed with "cannot
 assign requested address" and the console, cameras, robots and the discovery
 bridge went down together. The site stack therefore never names a LAN
@@ -1668,3 +1703,90 @@ Ubuntu AppArmor의 namespace 거절은 `deliberation_install`의 전용 계정·
 로컬 Qwen의 수동 호출과 Decision의 관측 부족 HOLD도 확인했다.
 [실제 수용 증거와 제한](../../docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md)을 따른다.
 운영 제공자·자동 worker·로봇 실행은 활성화하지 않았다.
+
+## 보호 대화 broker의 관리자 설치 (D-728)
+
+`install_conversation_broker.py`는 AI PC에서 root가 검토된 별도 snapshot을 설치하는 도구다.
+자연어 대화의 독립 평가와 source inventory는 같은 commit에 묶여야 한다. 현재 checkout이나
+새 installer를 평가한 source inventory에 추가하지 않는다. 설치 성공은 SSH transport와
+보호 설정의 readback이며 Discord 회신, 실행 admission, 물리 수용은 별도로 확인한다.
+
+관리자가 검토하고 SHA256을 고정한 묶음을 `/root/rosy-conversation-reviewed/<release>/`에
+복사한다. 모든 상위 디렉터리와 파일은 root 소유이며 group/other 쓰기를 허용하지 않는다.
+묶음에는 다음 파일이 필요하다.
+
+- `source/`: 평가 당시의 source 파일들. `source-manifest.json`은 `source_commit`과
+  상대 경로별 SHA256인 `files`를 가진다.
+- `semantic-evaluation-proof.json`, `semantic-evaluation-receipt.json`: Model PC 독립 평가
+  proof와 provenance receipt. 후보 자체의 진단 결과를 평가로 대체하지 않는다.
+- `ingress.pub`: 하나의 Ed25519 공개키. 개인키는 이 묶음에 넣지 않는다.
+- `dependencies.json`: `{"wheels":{"<wheel-file>.whl":"<sha256>"}}`와 `wheels/`의
+  검토된 Linux/Python 버전별 전체 wheel closure. source의 직접 요구 버전과 일치해야 한다.
+
+installer 자체도 별도 검토된 파일을 root 소유 디렉터리에 복사하고 SHA256을 확인한 뒤
+다음 명령을 실행한다. 관리자 셸에서 실행하며 암호나 SSH 개인키를 명령문에 넣지 않는다.
+
+```sh
+python3 -I -B /root/rosy-conversation-reviewed/<release>/install_conversation_broker.py \
+  /root/rosy-conversation-reviewed/<release> \
+  --manifest-sha256 <manifest-sha256> --proof-sha256 <proof-sha256> \
+  --receipt-sha256 <receipt-sha256> --public-key-sha256 <public-key-sha256> \
+  --dependencies-sha256 <dependencies-sha256>
+```
+
+`--check`는 관리자 권한·입력 SHA·wheel closure·계정·보호 상위 경로만 확인하며
+설치·semantic validator 실행·모델 적재 확인을 대신하지 않는다. 실제 설치는 root 소유
+`/opt/rosy-deliberation/conversation/<source-commit>/`와 오프라인 hashed venv를 준비한 뒤
+그 snapshot의 validator로 평가 proof를 검사한다. `rosy-deliberation` UID의 `/api/ps`
+조회로 고정 모델 digest와 context 8192만 확인한다. inference나 GLM 호출은 하지 않는다.
+
+새 config의 만료는 평가 시각부터 최대 7일이다. 기존 상태 broker·GLM credential·billing
+증거·최초 smoke spent marker는 보존한다. 등록되지 않은 기존 ingress 계정, 계정/그룹
+충돌, 외부 파일, 다른 공개키, source 변조는 거절한다. SSH ingress는 정확한
+`rosy-status-v1`·`rosy-conversation-v1`만 받아 각각 zero-argument UID wrapper로 전달한다.
+SSH/sudo/config의 기존 내용과 mode를 모두 확인하고, 변경 후 검증이나 reload 실패 시
+이번에 바꾼 파일을 원복한다. 원래 파일의 hash 이름 백업은 유지한다. 실패한 의존성 준비는
+재시도 전에 관리자가 미완성 version을 확인해야 하며 자동 삭제하지 않는다.
+
+사이트 클라이언트는 별도로 보호된 개인키, 고정 `known_hosts`, 동일 source/profile/policy
+설정이 필요하다. 설치기가 개인키를 출력하거나 사이트 client 설정을 자동 활성화하지 않는다.
+
+현장 `install-status-client.py --conversation`은 기본 D-720 설치와 별개다. root가
+`/root/rosy-conversation-reviewed/` 아래에 복사하고 해시를 확인한 config, 단일 22번
+host pin, 승인된 공개키와 독립 semantic proof를 입력한다. 기존 세 positional 인자와
+`--config-sha256`, `--known-hosts-sha256`에 `--conversation-proof`, `--proof-sha256`,
+`--public-key-sha256`을 더한다. 설정의 source/profile/policy와 proof를 대조하고,
+입증 시점으로부터 7일 이내의 유효기간만 허용한다. 원본 개인키는 기존 고정 staging
+경로에서 읽어 공개키와 일치할 때만 설치한다. `/etc/rosy/fleet-deliberation/`은
+root:10001, 0750이며 `conversation.json`, `broker.key`, `known_hosts`는 root:10001,
+0640이다. 기존 파일이 다르면 덮어쓰지 않는다. 이 단계는 이미지나 서비스를 활성화하지
+않는다. 새 설정 필드와 주기적 후속 응답 활성화는 해당 계약을 지원하는 서명 이미지의
+별도 배포 및 실제 회신 확인 뒤에 진행한다.
+
+상태·대화 client의 `ssh_port`는 생략 시 22이며, 고정 대체 포트 2222만 추가로 허용한다.
+Tailscale SSH가 tailnet의 22번을 가로채면 OpenSSH의 forced-command 설정에 도달하지 않는다.
+이 경우 관리자가 `tailscale serve --bg --tcp=2222 tcp://127.0.0.1:22`로 tailnet 안에서만
+기존 OpenSSH를 연결하고, client는 `ssh_port: 2222`와 신뢰한 host key의
+`[<host>]:2222` 항목을 쓴다. 기존 Serve 설정을 먼저 확인하며, 다른 포트·Funnel·SSH
+정책·일반 계정 권한은 바꾸지 않는다. 설치, 포트 readback, 고정 명령 시험과 실제
+Discord 회신을 각각 확인한다.
+
+기존 보호 conversation 버전을 교체할 때는 검토한 이전 CONFIG와 BROKER의 SHA256을
+`--previous-config-sha256 <sha256>`와 `--previous-broker-sha256 <sha256>`로 함께 지정한다.
+두 파일의 root 소유·mode·group·정확한 해시와, 이전 source commit의 고정 zero-argument
+wrapper를 의존성 준비·모델 조회·파일 변경 전에 확인한다. 이 두 파일만 교체 허용 목록에
+들어가며 SSH·sudo·키·GLM 정책의 교체 권한은 늘어나지 않는다. 잘못되거나 한쪽만 있는
+pin은 거절한다. 성공 뒤 동일 버전 재확인은 이전 pin을 빼고 실행한다. 이전 pin을 계속
+지정하면 현재 파일과 다르므로 거절하며, 관리자 검토 없이 새 이전값을 추정하지 않는다.
+
+SSH dispatcher는 ingress 계정이 접근할 수 있는 root 소유
+`/usr/local/libexec/rosy-model-ingress`에 둔다. 실제 broker 디렉터리의 0750과
+전용 계정의 group 격리는 유지한다. 이전 보호 디렉터리 안 dispatcher에서 옮길 때는
+그 파일의 정확한 관리 바이트·소유·mode·group을 확인한 경우에만 기존 key와 sshd의
+고정 경로를 바꾸고 이전 파일은 보존한다. 설치 완료 전 실제 ingress UID로 두 명령에
+잘못된 `{}` 요청을 보내 broker HOLD를 확인하고, 알 수 없는 명령과 추가 인자는
+exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없으면 선택 기능 미설치로
+기록하고 status 정상 경로 시험만 생략한다. conversation 정상 경로와 두 명령의 추가 인자
+거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
+`optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
+이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.

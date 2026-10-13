@@ -49,7 +49,7 @@ export function createTeachPanel(host) {
           : '기록할 로봇을 선택하세요';
     $('teach-reference').textContent = reference
       ? `조사 기준 ${reference.revision} · 시작 ${reference.origin.map(v => v.toFixed(2)).join(', ')} m · 방향 ${Math.round(reference.heading_rad * 180 / Math.PI)}° · ${reference.description}`
-      : '조사 기준 없음 · 지도 없이 시작에서 기준을 정해 저장하세요';
+      : '조사 기준 없음 · 지도 만들기에서 기준을 정해 저장하세요';
     const surveyReason = survey ? draftReason || (!reference || !draft?.revision ? '조사 기준이 있는 초안을 먼저 저장하세요' : '')
       || ($('teach-origin-confirm').checked ? '' : '로봇이 조사 시작점과 방향에 놓였는지 확인하세요') : '';
     gate('teach-start', robot || (recording ? '기록 중입니다' : '') || surveyReason);

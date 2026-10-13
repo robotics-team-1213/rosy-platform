@@ -64,7 +64,6 @@ def feedback_bundle(data):
             canonical(receipt)
             problem = Problem(**receipt['problem'])
             bound = BoundProfile(profile, problem.digest)
-            checked = judgment(problem, bound, receipt['judgment'])
             identity = dict(profile_revision=profile.profile_revision, model_revision=profile.model_revision,
                             domain=problem.domain, calibration_revision=profile.calibration_revision,
                             full_profile_sha256=digest(asdict(profile)))
@@ -77,6 +76,7 @@ def feedback_bundle(data):
                     or attempt['input_hash'] != problem.digest or attempt['observation_revision'] != problem.generation
                     or problem.digest in inputs):
                 raise ValueError('FEEDBACK_SAMPLE_IDENTITY_CHANGED')
+            checked = judgment(problem, bound, receipt['judgment'])
             if versioned:
                 evidence = CostEvidence(canonical(receipt['cost_evidence']))
                 cost = evidence.payload['marginal_cash_usd']

@@ -25,6 +25,15 @@ def model_profile(revision):
         CAPABILITIES.adapter, CAPABILITIES.domains, ('text',), 30, LIMIT, 1, 0)
 
 
+def status_capabilities():
+    return replace(CAPABILITIES, adapter='ollama-status-json-v2', domains=('fleet_status',))
+
+
+def status_model_profile(revision):
+    return replace(model_profile(revision), profile_id='ollama-status-primary',
+                   adapter=status_capabilities().adapter, domains=('fleet_status',))
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         raise ValueError('LOCAL_REDIRECT_REFUSED')
@@ -69,7 +78,7 @@ def execute(raw, remaining):
     problem = Problem(**fields)
     if digest != problem.digest or type(body['prior']) is not list or len(body['prior']) > 2:
         raise ValueError('INVALID_LOCAL_JOB')
-    profile = model_profile(body['profile_revision'])
+    profile = (status_model_profile if problem.domain == 'fleet_status' else model_profile)(body['profile_revision'])
     bound = BoundProfile(profile, problem.digest)
     missing = body['schema']['properties']['missing_evidence']['items']['enum']
     if len(missing) > 16 or len(set(missing)) != len(missing):
@@ -107,7 +116,8 @@ class OllamaTransport:
     def __init__(self, *, admission=None):
         selected = CAPABILITIES if admission is None else admission
         if (type(selected) is not AdapterCapabilities
-                or replace(selected, ready=False, isolated=False, cost_verified=False) != CAPABILITIES):
+                or replace(selected, ready=False, isolated=False, cost_verified=False)
+                not in (CAPABILITIES, status_capabilities())):
             raise ValueError('LOCAL_BACKEND_MISMATCH')
         # Runtime admission must come from host verification, never source inspection.
         self.adapter_capabilities = selected

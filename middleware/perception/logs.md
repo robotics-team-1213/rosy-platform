@@ -1499,6 +1499,17 @@
 - 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
 - gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
 
+## 2026-10-12 · 45e92d326 · 관측 곡률에 실제 CORE 주행법칙 적용
+
+- 변경: 현재·creep·기억 목표가 같은 CORE 설정의 역산법칙을 사용한다. 기본 error/confidence 전달 계약과 최종 주행 검사는 유지한다.
+- 증거: 유효 자원 기준의 원격 RED 18 FAIL 후 후보의 수학·기억 경로·무효 설정 28 PASS, 기존 관측 83 PASS, known_failures NEW 0을 확인했다. 독립 검토는 격리 SIM 범위의 SOURCE APPROVE이며 native 설정 handover는 진행 중이다.
+- gate 변화: 소스·회귀 증거만 추가했다. native 오버레이 적용·최신 전체 실행의 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · 077d2e475 · native camera의 유효 CORE 법칙 수신과 기억 초기화
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
 
 ## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
 
@@ -1508,3 +1519,33 @@
 - gate 변화: SOURCE 및 원격 회귀 증거. 실제 곡선 주행은 별도 재시험 중이며 완주·교통 규칙·Fleet·ROS-SIM·실물 수용을 승인하지 않는다. nominal arc 검사는 RL gain 적용 후 모든 경계 비횡단을 보장하지 않는다.
 
 - 실제 R39 재시험: 고정 정책으로 네 시작 방향 8회 실행, 완주 0회·정지 11회 통과·SDK exit1. 정상 방향 baseline/eval은 모두 약 0.110668m에서 camera_lane_lost였다. observed_creep 승인 경로는 이 정상 방향 실행에서 사용되지 않았다. 따라서 출처 연결 수정만으로 현재 곡선 실패가 해결됐다고 주장하지 않는다. 연속 way/누적 경계/실제 선택 목표를 추가 기록해 원인을 분리한다.
+
+## 2026-10-12 · 47ace984f2 · 내장 센서 이름 분리와 Gazebo 전방 정지 진단
+
+- 변경: 명시 namespace의 sensor-only 노드에 자체 이름 remap을 적용하고 실제 CORE clock을 전달한다. 전역 topic remap과 독립 센서 실행 의미는 유지한다.
+- 증거: 실제 Jazzy 실행을 포함한 정상 원격 115 PASS/NEW 0과 독립 SOURCE 승인이다. 수정 전 전체 소스 e6d0fe12ba의 Leg4는 0.311955m 뒤 정지했다. 실제 전방 0.130544m가 정지 기준 0.14905m보다 작아 blocked가 먼저 발행됐고 약 6ms 뒤 native 명령이 0이 됐다. 카메라는 current였으며 위치는 LOCALIZED였다. 원본 scan·TF의 소스 재생도 같은 거리를 계산했다.
+- gate 변화: 없음. 고정 lookahead 단축과 장애물 간격만으로 자동 회전을 허용하는 안은 채택하지 않는다. 안전 기준을 유지하고 관측 경로와 후보 궤적의 차이를 비교한다. 수정 후 Gazebo graph·원본 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · af76fcc5f · 도로 표식의 가까운 경계 거리
+
+- 변경: road의 일반 정지선·횡단보도는 선택된 표식의 중앙 행 대신 가장 가까운 아래쪽 경계 행으로 image_row와 검증된 지면 거리를 함께 계산한다. BEV 횡단보도의 기존 near extent, 표식 분류·confidence·차선·거리 미확인 의미와 CORE 권한은 유지한다.
+- 증거: 정상 원격 RED 9개로 두꺼운 표식의 거리 과대측정과 CORE 접근 출력을 재현했다. af76fcc5f의 관련 원격 시험 234 PASS/NEW 0은 정상 AI 자원 기준에서 완료했다. 두꺼운 표식의 가까운 경계는 기존 CORE 정지 조건으로 전달되고 미확인 거리는 HOLD를 유지한다. 원본 Leg5의 동일 lossless PNG 재측정은 STOP을 유지하며 row61/거리None에서 row122/0.429188m로 바뀐다. 원격 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-green2/run-1.txt이다.
+- gate 변화: 거리 측정 SOURCE/원격 계약 증거만 추가한다. 벽을 정지선으로 분류하는 문제를 해결했다는 뜻이 아니다. 실제 후보 Gazebo 주행·지도 완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · 946cec53d · 가까운 경계 수정의 전체 관측 회귀
+
+- 변경: 거리 수정의 전체 관측·Gazebo 계약 증거를 추가한다. 제품 소스는 af76fcc5f와 같다.
+- 증거: 독립 SOURCE 승인을 받았다. 정상 모델 PC의 전체 perception은 3158 PASS/110 SKIP, 전체 Gazebo 계약은 324 PASS/2 SKIP이며 두 로그 모두 terminal exit 0이다. 자원 기준 미달 동안 대기했고 fallback 실행은 하지 않았다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-perception/run-1.txt와 logs/road-edge-gazebo/run-1.txt이다. 관련 234개 시험에는 모듈 구조·경계와 실제 CORE 교통 gate가 포함된다.
+- gate 변화: 원격 회귀 증거만 추가한다. 원본 영상에서 여전히 벽을 STOP으로 분류하므로 의미 분류 완료·실제 수정 후보 주행·완주·실물 수용을 주장하지 않는다. 이후 주행에서는 기존 traffic APPROACH의 선속도 비율과 최종 곡률도 함께 확인해야 한다.
+
+## 2026-10-12 · uncommitted · 카메라가 CORE 유효 조향 법칙을 역산한다
+
+- 변경: 주행 중 카메라 오차는 모듈 기본 0.08/0.8이 아니라, 그 프로세스가 불러온 CORE 법칙(순항, 상한, 게인, 최소 신뢰)을 역산한다. 시뮬 관찰기는 같은 run_spec 오버레이를 읽고, 장치 카메라는 rosy-core가 쓴 status-inputs가 신선할 때만 DrivableSteer를 만든다. 법칙이 없거나 바뀌면 기억 경로를 버리고 테이프 추종으로 내려가지 않는다. 곡선 거절, ExpectedPath의 최신 거절 우선, 출발 거부는 그대로다.
+- 증거: 역산은 `error_for_k`가 신뢰 스케일과 곡선 감속을 포함한 뒤 CORE `_steer`의 곡률을 되돌리게 맞춘다. 장치 인계는 소유자, 모드, 크기, 로봇 ID, 프로세스 ID, 3초 이내의 시각을 본다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음. 출발 게이트와 10초 자세 정지는 유지한다. 시뮬 완주와 실물 수용은 이 변경만으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
+
+- 변경: `test_drivable_preview`의 가짜 steer가 `pursuit_error`를 갖는다. keep가 ExpectedPath를 만들 때 그 함수를 쓴다.
+- 증거: 착지 라운드의 `middleware/perception/test`가 `test_keep_step_puts_the_steered_way_into_keep_debug`에서 AttributeError로 멈췄다. 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음.

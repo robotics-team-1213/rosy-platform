@@ -116,10 +116,19 @@ class LineStuckAnswerLog:
             rows = connection.execute("SELECT * FROM fleet_judgment_records ORDER BY judgment_id DESC LIMIT ?", (limit,)).fetchall()
         return [{**dict(row), 'assessment': json.loads(row['assessment'])} for row in rows]
 
-    def append(self, row: dict) -> None:
+    def append(self, row: dict, *, connection=None) -> None:
+        if connection is not None:
+            if (type(connection) is not sqlite3.Connection or not connection.in_transaction
+                    or not any(item[1] == 'main' and Path(item[2]).resolve() == self.path.resolve()
+                               for item in connection.execute('PRAGMA database_list'))):
+                raise ValueError('EXISTING_STUCK_TRANSACTION_REQUIRED')
+            return self._append(connection, row)
+        with closing(self._connect()) as connection, connection: self._append(connection, row)
+
+    @staticmethod
+    def _append(connection, row):
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
-        with closing(self._connect()) as connection, connection:
-            connection.execute(
+        connection.execute(
                 """INSERT INTO fleet_line_stuck_answers (at, audit_id, robot_id, stuck_id,
                    decision, principal_id, accepted, outcome, code, message, tier, rule,
                    escalated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
