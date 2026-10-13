@@ -52,6 +52,8 @@ def test_shared_web_reaches_review_smoke_and_core_console():
     found = browser_scope.targets(["shared/web/ui.js"])
     assert "test/learning/perception/test_review_app_smoke.py" in found
     assert "middleware/core/api/test/test_d283_console_browser.py" in found
+    assert "test/test_surface_shell_browser.py" in found
+    assert "test/test_surface_shell_browser.py" in browser_scope.targets(["middleware/robot_ui/robot/web/app.js"])
 
 
 def test_empty_selection_exits_3_without_targets(capsys):
