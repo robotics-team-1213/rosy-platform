@@ -151,8 +151,12 @@ def test_tooltip_closes_when_its_owner_leaves_the_visible_surface(page, mutation
     owner.hover()
     tooltip = page.get_by_role("tooltip")
     tooltip.wait_for(state="visible")
+    described = tooltip.text_content()
     owner.evaluate(f"node => {{ {mutation}; }}")
-    tooltip.wait_for(state="hidden")
+    # Removing the owner slides the next inventory button under the resting pointer, and Chromium may hover it:
+    # the old description must be gone, while the neighbour may show its own.
+    page.wait_for_function("""text => { const tip = document.querySelector("[role=tooltip]");
+      return !tip || tip.hidden || tip.textContent !== text; }""", arg=described)
 
 
 @pytest.mark.parametrize("activation", ["mouse", "Enter", "Space"])
