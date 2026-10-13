@@ -255,10 +255,11 @@ class PasswordSessions:
                 if hits is not None and stamp in hits:
                     hits.remove(stamp)
 
-    def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None) -> str:
+    def issue(self, login: str, *, remember: bool, verified: Optional[SitePrincipal] = None,
+              replacing: Optional[str] = None) -> str:
         self._refresh_authority()
         if self._ledger.active:
-            return self._ledger.issue(login, remember, verified)
+            return self._ledger.issue(login, remember, verified, replacing)
         with self._lock:
             if (verified is not None
                     and verified.password_fingerprint != _digest(self._logins[login]["password_scrypt"])):
@@ -558,7 +559,8 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=401, detail={
                 "code": "LOGIN_FAILED", "message": "login or password is incorrect"})
         try:
-            value = sessions.issue(login, remember=remember, verified=principal)
+            value = sessions.issue(login, remember=remember, verified=principal,
+                                   replacing=request.cookies.get(COOKIE))
         except SessionStorageUnavailable:
             raise _storage_unavailable() from None
         except StalePasswordCheck:

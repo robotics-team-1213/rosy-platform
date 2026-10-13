@@ -28,11 +28,15 @@ async function identity() {
 async function perform(fn) {
   if (busy) return;
   busy = true;
-  for (const button of document.querySelectorAll('ui-button, button')) button.disabled = true;
+  for (const button of document.querySelectorAll('ui-button, button')) {
+    button.disabled = true; button.setAttribute('reason', '?? ?? ?? ?? ?');
+  }
   try { await identity(); await fn(); } catch (error) { fail(error); }
   finally {
     busy = false;
-    for (const button of document.querySelectorAll('ui-button, button')) button.disabled = false;
+    for (const button of document.querySelectorAll('ui-button, button')) {
+      button.disabled = false; button.removeAttribute('reason');
+    }
   }
 }
 function grantRow(grant = null) {
@@ -52,7 +56,7 @@ function grantRow(grant = null) {
     choices.replaceChildren();
     for (const [value, label] of Object.entries(CAPABILITIES[kind.value])) {
       const wrapper = document.createElement('label'), input = document.createElement('input');
-      input.type = 'checkbox'; input.className = 'ui-field'; input.value = value; input.checked = selectedCaps.includes(value);
+      wrapper.className = 'ui-check'; input.type = 'checkbox'; input.className = 'ui-field'; input.value = value; input.checked = selectedCaps.includes(value);
       wrapper.append(input, document.createTextNode(label + ' ')); choices.append(wrapper);
     }
   };
@@ -69,7 +73,7 @@ function edit(row = null) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
   }
   $('account-role').value = row?.role || 'viewer'; $('account-enabled').checked = row?.enabled ?? true;
-  $('account-enabled').disabled = !row; $('account-initial-password').hidden = !!row;
+  $('account-enabled').closest('label').hidden = !row; $('account-initial-password').hidden = !!row;
   $('account-password').required = !row; $('account-actions').hidden = !row;
   $('account-grants').replaceChildren(); for (const grant of row?.grants || []) grantRow(grant);
 }
