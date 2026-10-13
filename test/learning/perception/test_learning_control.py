@@ -16,6 +16,7 @@ class Systemd:
         self.invocation = ''
         self.dropins = ''
         self.command_override = None
+        self.kill_mode = 'control-group'
 
     def __call__(self, argv, **kwargs):
         assert argv[:2] == ['systemctl', '--user']
@@ -26,7 +27,8 @@ class Systemd:
                 SubState='running' if self.active else 'dead', Result='success', ExecMainStatus='0',
                 InvocationID=self.invocation, UnitFileState='enabled' if self.automatic else 'disabled',
                 FragmentPath=str(self.home / '.config/systemd/user' / unit), DropInPaths=self.dropins,
-                Triggers=self.service if timer else '')
+                Triggers=self.service if timer else '', KillMode=self.kill_mode, ExecStop='', ExecStopPost='',
+                ExecStartPre='', ExecStartPost='')
             command = next(line.partition('=')[2] for line in (self.home / '.config/systemd/user' / self.service).read_text().splitlines() if line.startswith('ExecStart='))
             values['ExecStart'] = '{ argv[]=' + (self.command_override or command) + ' ; ignore_errors=no ; }'
             return SimpleNamespace(returncode=0, stdout='\n'.join(f'{k}={v}' for k, v in values.items()))
@@ -108,7 +110,7 @@ def test_stale_invocation_and_arbitrary_action_inputs_are_refused(tmp_path):
     assert not [args for args in runner.commands if args[0] != 'show']
 
 
-@pytest.mark.parametrize('change', ['config', 'binding', 'unit', 'dropin', 'loaded'])
+@pytest.mark.parametrize('change', ['config', 'binding', 'unit', 'dropin', 'loaded', 'kill_mode'])
 def test_binding_drift_disables_actions(tmp_path, change):
     target, runner, _, config, file = control(tmp_path)
     version = target.status()['version']
@@ -116,7 +118,8 @@ def test_binding_drift_disables_actions(tmp_path, change):
     elif change == 'binding': file.write_text('{}')
     elif change == 'unit': (runner.home / '.config/systemd/user' / runner.service).write_text('ExecStart=/bin/false')
     elif change == 'dropin': runner.dropins = '/tmp/changed.conf'
-    else: runner.command_override = '/bin/sleep 99'
+    elif change == 'loaded': runner.command_override = '/bin/sleep 99'
+    else: runner.kill_mode = 'process'
     assert target.status()['available'] is False
     with pytest.raises(ValueError): target.action({'action': 'start', 'version': version})
     assert not [args for args in runner.commands if args[0] != 'show']
