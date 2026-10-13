@@ -325,12 +325,12 @@ class TripRunner(TripAdmission, TripProgress):
         live.view.update(plan=hold["plan"], map_version=hold["map_version"], segment_index=0, hold=None)
         live.graph = active[2]
         live.route_rev += 1
+        live.bends_done.clear()  # the plan is renumbered (review); D-507 addendum: a new lap drives its bends again
         if "lap_route" in hold:  # D-517 2: the operator took the changed lap
             live.lap_route = hold["lap_route"]
             live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
                                   for edge, forward, _s in hold["lap_route"])
             live.view["lap"] += 1
-            live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
         live.view["detail"]["replan_confirmed_by"] = principal_id
         sent = live.sent
         live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
@@ -632,7 +632,7 @@ class TripRunner(TripAdmission, TripProgress):
         # CORE idle, or waiting at the next junction it sighted to end the pass (lap SIM D), same seq
         finished = ours and (sent.get("done") or (sent.get("carried") and (state in ("idle", "waiting") or newer)))
         if finished or (not ours and s >= bend["s_start"]):
-            live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
+            live.bends_done.add((index, bend["place_id"]))  # finished, or passed without one: never again on this segment
             return await self._step_bend(live, index, s)
         if live.view["hold"] is not None or self.traffic.holds(live, index):
             # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
