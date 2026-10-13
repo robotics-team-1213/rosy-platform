@@ -50,6 +50,26 @@ def browser_workspace(tmp_path):
         yield value
 
 
+@pytest.mark.parametrize('field,value,message', [
+    ('x0', '12', '왼쪽 좌표'),
+    ('y1', '0', '아래쪽 좌표'),
+    ('x0', '-1', '사진 범위'),
+    ('x0', '', '숫자'),
+])
+def test_invalid_coordinate_explains_correction_without_saving(browser_workspace, field, value, message):
+    page, store, expect = browser_workspace
+    before = store.get(0)
+    input_field = page.get_by_role('spinbutton', name=f'박스 1 {field}', exact=True)
+    input_field.fill(value)
+    input_field.press('Tab')
+    expect(page.locator('#error')).to_contain_text(message)
+    expect(input_field).to_have_attribute('aria-invalid', 'true')
+    assert store.get(0) == before
+    input_field.fill(str(before['review']['boxes'][0]['bbox_xyxy'][['x0', 'y0', 'x1', 'y1'].index(field)]))
+    input_field.press('Tab')
+    expect(page.locator('#error')).to_be_hidden()
+
+
 def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})

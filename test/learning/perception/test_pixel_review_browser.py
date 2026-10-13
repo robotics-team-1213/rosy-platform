@@ -22,6 +22,28 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+@pytest.mark.parametrize('width', [1440, 1262, 390, 320])
+def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, width):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 900})
+    open_pixels(page, store, expect)
+    page.locator('#pixel-quick-classes button').nth(1).click()
+    actions = page.locator('.pixel-quick-actions')
+    for button in actions.locator('ui-button').all():
+        expect(button.locator('span:not(.ui-icon)')).to_be_visible()
+        button.scroll_into_view_if_needed()
+        assert button.evaluate('''el => {
+            const r = el.getBoundingClientRect();
+            return el.contains(document.elementFromPoint(r.right - 4, r.y + r.height / 2));
+        }''')
+    if width < 1024:
+        stage = page.locator('.pixel-stage').bounding_box()
+        tools = actions.bounding_box()
+        assert 0 <= tools['y'] - stage['y'] - stage['height'] < 240
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    assert page.locator('.pixel-quick-tools').bounding_box()['x'] < page.locator('#pixel-canvas').bounding_box()['x']
+
+
 def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
     store = open_store(tmp_path)
     with serve(store) as (page, _, expect):
