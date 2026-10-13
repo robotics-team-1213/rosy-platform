@@ -154,6 +154,7 @@ def test_http_control_requires_existing_workspace_authorization(tmp_path):
     from review_app import make_server
     from test_review_app import open_store
     from learning_control import Control
+    (tmp_path / 'reviews').mkdir()
     store = open_store(tmp_path / 'reviews')
     workspace = review_evidence.decisions(store)['workspace_id']
     file, home, _, _, runner = binding(tmp_path / 'owner', workspace)
