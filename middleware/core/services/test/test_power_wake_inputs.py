@@ -7,28 +7,18 @@ Three defects found on the live 9dfk STANDBY run are pinned here:
 * (b) the battery alert woke on every voltage sample below WARNING and pinned
   the robot ACTIVE (main already wakes only when the alert level changes; the
   cases here pin that rule);
-* (c) "command" was implicit. It is now an explicit `on_command(source)`, fed by
-  accepted command REST calls (table in core_api_web.api.command_activity) and a
-  nonzero final cmd_vel. GET / telemetry / WS subscriptions never count.
+* (c) "command" was implicit. It is now an explicit `on_command(source)`. The
+  route table and the HTTP path that feed it are tested in the gateway
+  (`test_power_command_routes.py`).
 """
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import pytest
-import yaml
-from fastapi.testclient import TestClient
 
-from core_api_web.api.app import create_app
-from core_api_web.api.command_activity import COMMAND_ROUTES, command_source
-from core_common.profile import RobotProfile, robot_config_dir
 from core_common.protocol.schemas import PowerMode
-from core.services import CoreServices
 from core_features.power.manager import PowerConfig, PowerManager, PresenceConfig
 
-CONFIG_DIR = Path(__file__).resolve().parents[4] / "contracts" / "foundation" / "config"
 NAN = float("nan")
 INF = float("inf")
 
@@ -167,98 +157,3 @@ def test_on_command_while_active_keeps_previous_wake_reason():
     mgr = PowerManager(PowerConfig(), clock=clock)
     mgr.on_command("teleop")
     assert mgr.last_wake_reason is None
-
-
-COMMANDS = [
-    ("POST", "/api/v1/teleop", "teleop"),
-    ("POST", "/api/v1/mode", "mode"),
-    ("POST", "/api/v1/navigation/goal", "navigation"),
-    ("POST", "/api/v1/navigation/home", "navigation"),
-    ("POST", "/api/v1/navigation/cancel", "navigation"),
-    ("POST", "/api/v1/motion/rotate_to", "navigation"),
-    ("POST", "/api/v1/localization/mission", "mission"),
-    ("POST", "/api/v1/docking/dock", "docking"),
-    ("PUT", "/api/v1/line-follow/mode", "line_follow"),
-    ("POST", "/api/v1/swarm/follow", "fleet_task"),
-    ("POST", "/api/v1/do", "intent"),
-]
-
-NOT_COMMANDS = [
-    ("GET", "/api/v1/robot/state"),
-    ("GET", "/api/v1/power"),
-    ("GET", "/api/v1/teleop"),
-    ("POST", "/api/v1/power/mode"),      # a sleep request must never count as activity
-    ("POST", "/api/v1/power/wake"),      # handles its own wake (reason api)
-    ("POST", "/api/v1/auth/pair"),
-    ("POST", "/api/v1/waypoints"),
-    ("PUT", "/api/v1/system/info"),
-    ("GET", "/ws/state"),
-    ("GET", "/api/v1/navigation/goal"),
-]
-
-
-@pytest.mark.parametrize("method,path,source", COMMANDS)
-def test_command_routes(method, path, source):
-    assert command_source(method, path) == source
-
-
-@pytest.mark.parametrize("method,path", NOT_COMMANDS)
-def test_non_command_routes(method, path):
-    assert command_source(method, path) is None
-
-
-def test_every_command_route_exists_in_the_app(client):
-    api, _ = client
-    import re
-    routes = {(m.upper(), path) for path, ops in api.app.openapi()["paths"].items() for m in ops}
-    for method, pattern, _source in COMMAND_ROUTES:
-        assert any(m == method and re.fullmatch(pattern, p) for m, p in routes), pattern
-
-
-@pytest.fixture
-def client():
-    config = yaml.safe_load((CONFIG_DIR / "rosy_default.yaml").read_text(encoding="utf-8"))
-    dev_auth = yaml.safe_load((CONFIG_DIR / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))
-    config["auth"] = {**config["auth"], **dev_auth["auth"]}
-    robot_dir = robot_config_dir("pinky_pro")
-    profile = RobotProfile.load(robot_dir / "profile.yaml")
-    caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
-    svc = CoreServices.build(config, profile, caps, Path(tempfile.mkdtemp()) / "waypoints.json")
-    return TestClient(create_app(config, svc)), svc
-
-
-OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
-VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
-
-
-def test_accepted_rest_command_wakes(client):
-    api, svc = client
-    svc.power.request_mode(PowerMode.STANDBY, source="test")
-    assert api.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
-    assert svc.power.mode == PowerMode.ACTIVE
-    assert svc.power.last_wake_reason == "command"
-
-
-def test_refused_command_does_not_wake(client):
-    api, svc = client
-    svc.power.request_mode(PowerMode.STANDBY, source="test")
-    assert api.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=VIEWER).status_code == 403
-    assert svc.power.mode == PowerMode.STANDBY
-
-
-def test_reads_do_not_wake(client):
-    api, svc = client
-    svc.power.request_mode(PowerMode.STANDBY, source="test")
-    for path in ("/api/v1/robot/state", "/api/v1/power"):
-        assert api.get(path, headers=VIEWER).status_code == 200
-    with api.websocket_connect("/ws/state") as ws:
-        ws.send_json({"type": "auth", "token": "rosy-dev-viewer"})
-        ws.receive_json()
-    assert svc.power.mode == PowerMode.STANDBY
-
-
-def test_operator_sleep_request_is_not_undone_by_its_own_answer(client):
-    api, svc = client
-    body = api.post("/api/v1/power/mode", json={"mode": "STANDBY"}, headers=OPERATOR).json()
-    assert body["mode"] == "STANDBY"
-    assert svc.power.mode == PowerMode.STANDBY

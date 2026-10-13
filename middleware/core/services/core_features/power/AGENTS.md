@@ -39,6 +39,8 @@ None.
 
 ```bash
 python3 -m pytest middleware/core/gateway/test/test_power.py middleware/core/gateway/test/test_battery.py -v
+# D-24 amendment / D-440: policy in services, routes + config + bridge adapters in the gateway
+python3 -m pytest middleware/core/services/test/test_power_wake_inputs.py middleware/core/services/test/test_power_device_policy.py middleware/core/gateway/test/test_power_command_routes.py middleware/core/gateway/test/test_power_device_adapters.py -v
 ```
 
 ### Common Patterns
