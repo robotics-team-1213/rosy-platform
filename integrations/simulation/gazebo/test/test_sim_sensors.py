@@ -114,7 +114,7 @@ def test_channel_order_matches_the_device_adc_node():
     ir = _ir()
     control = REPO / "middleware" / "perception" / "control"
     assert "return [values[2], values[1], values[0]]" in (control / "ir_adc_node.py").read_text(encoding="utf-8")
-    calib = (REPO / "middleware" / "perception" / "vision" / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
+    calib = (REPO / 'middleware' / 'perception' / 'front_camera' / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
     assert 'CHANNELS = ("left", "centre", "right")' in calib
     assert ir.CHANNELS == ("left", "mid", "right")
 

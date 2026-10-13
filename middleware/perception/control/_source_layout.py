@@ -9,7 +9,7 @@ DRIVE_ROOT = (PACKAGE_ROOT / "_source_roots/drive"
               else PACKAGE_ROOT.parent / "drive")
 PACKAGE_DIRS = {
     "control.sensing": PACKAGE_ROOT / "sensors/sensing",
-    "control.sensing.perception": PACKAGE_ROOT / "vision/perception",
+    "control.sensing.perception": PACKAGE_ROOT / "front_camera/perception",
     "control.planning": DRIVE_ROOT / "planning/grid",
     "control.safety": DRIVE_ROOT / "safety/adapter",
     "control.wander": DRIVE_ROOT / "tracking/wander",
@@ -18,7 +18,7 @@ FLAT_ROOTS = tuple(DRIVE_ROOT / name for name in
                    ("safety", "recovery", "tracking", "calibration"))
 RUNTIME_ROOT = DRIVE_ROOT / 'runtime'
 CONTROL_ROOTS = (PACKAGE_ROOT / 'nodes', RUNTIME_ROOT, *(PACKAGE_ROOT / name for name in
-    ('localization', 'graph_health', 'vision/object_observation',
+    ('localization', 'graph_health', 'front_camera/object_observation',
      'sensors/line_observation', 'snapshots')))
 
 

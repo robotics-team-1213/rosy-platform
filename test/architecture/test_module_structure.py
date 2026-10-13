@@ -36,7 +36,7 @@ SRC = ROOT / "src"
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
            "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
-           "foundation", "ros_idl", "perception", "devices", "drive", "robot_ui", "site_ui"}
+           "foundation", "ros_idl", "perception", "devices", "drive", "robot_ui", "site_ui", "overhead", "signal_observation"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -119,9 +119,9 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "decision/src/rosy/decision/deliberation/contracts",
               "decision/src/rosy/decision/deliberation/providers",
               "decision/src/rosy/decision/deliberation/evaluation",
-              "perception/vision/perception",
-              "perception/vision/perception/learned",
-              "perception/vision/perception/drivable")
+              "perception/front_camera/perception",
+              "perception/front_camera/perception/learned",
+              "perception/front_camera/perception/drivable")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -1147,14 +1147,14 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
-    "vision/rosy_vision/track/background_blob.py": (
+    "overhead/rosy_vision/track/background_blob.py": (
         605,
         "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
         "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
         "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
         "D-600 (584) merged, plus the hold-stops-fill guard. (independent re-judge 2026-10-10, critic: agree - 5 over on one MOG2 owner; next growth first moves BackgroundStore to track/background_store.py with a re-export, then suspect/ghost healing). ROS-free, host-testable (X5)",
     ),
-    "vision/rosy_vision/ingest.py": (
+    "overhead/rosy_vision/ingest.py": (
         825,
         "accept: re-judged 2026-10-10 at 825 (author's record, D-589 S1) when the camera/camera_state "
         "text messages joined: they ride the same per-source connection and are kept per connection "
@@ -1344,7 +1344,7 @@ SIZE_VERDICTS = {
         "LOCALIZED check feeding the lane route); verdict unchanged. "
         "The zero-growth allowance remains unchanged.",
     ),
-    "perception/vision/perception/lane.py": (
+    "perception/front_camera/perception/lane.py": (
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
@@ -1358,7 +1358,7 @@ SIZE_VERDICTS = {
         "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
         "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
-    "perception/vision/perception/lane_bev.py": (
+    "perception/front_camera/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
@@ -1487,7 +1487,7 @@ SIZE_VERDICTS = {
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
     ),
-    "perception/vision/perception/drivable": (
+    "perception/front_camera/perception/drivable": (
         810,
         "accept: keep steering from the learned drivable way (drivable_steer.py moved from learned/, "
         "drivable_keep.py, drivable_preview.py) is its own size unit inside the P1a perception unit, by the "
@@ -1505,7 +1505,7 @@ SIZE_VERDICTS = {
         "_lane_cue_spot_running, reads _cue_latch and _cue_spot_turning, interprets the plan tuple "
         "(hold | side | turn) and keeps the cue_left/cue_right steering branch. Re-judge after +150.",
     ),
-    "perception/vision/perception/learned": (
+    "perception/front_camera/perception/learned": (
         2435,
         "accept: independently re-judged at 2435 on 2026-10-12 by review_fixed_fitness at a34e14dde6 "
         "(docs/plans/2026-10-12-road-observation-primitive.md): the 16 files remain model validation, "
@@ -1520,7 +1520,7 @@ SIZE_VERDICTS = {
         "Re-judged at 1982 on 2026-10-10: drivable_steer.py (548) left for the drivable unit "
         "(drivable addendum), learned had reached 2520. Re-judge on growth past +150.",
     ),
-    "perception/vision/perception": (
+    "perception/front_camera/perception": (
         9_934,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
@@ -1952,7 +1952,7 @@ ROLE_DIR = {
     "navigation": ("drive", "planning", "nav2"),
     "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
-    "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
+    "rosy_vision": ("overhead",),  # operations/overhead (D-427 wave 3b)
     "fleet": ("fleet",),  # operations/fleet (D-427 wave 3c)
 }
 

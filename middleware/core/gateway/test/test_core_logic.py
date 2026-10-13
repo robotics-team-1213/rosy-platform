@@ -413,7 +413,7 @@ class TestD137SequenceContract:
         백엔드다(D-209, D-423 결정 2026-10-03). CORE 는 이 토픽을 발행하지 않는다.
         """
         allowed = {    # 상대 경로 -> 사유.
-            str(Path("middleware/perception/vision/object_observation/object_detector.py")):
+            str(Path("middleware/perception/front_camera/object_observation/object_detector.py")):
                 "D-423 object_detector_node: the single advisory publisher (Pi CPU int8 ONNX)",
         }
         offenders = {}
@@ -451,7 +451,7 @@ class TestD137SequenceContract:
                     named = isinstance(topic, ast.Name) and topic.id in names
                     if literal or named:
                         publishers.add(Path(os.path.relpath(path, REPO_ROOT)).as_posix())
-        assert publishers == {"middleware/perception/vision/object_observation/object_detector_node.py"}, publishers
+        assert publishers == {"middleware/perception/front_camera/object_observation/object_detector_node.py"}, publishers
 
 
 def _function_body(text: str, name: str) -> str:

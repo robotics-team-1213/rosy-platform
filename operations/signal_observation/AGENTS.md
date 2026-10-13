@@ -42,7 +42,7 @@ so it cannot become a control surface. Design:
 ### Testing Requirements
 
 ```bash
-python -m pytest operations/vision/signal_observer/test -q
+python -m pytest operations/signal_observation/test -q
 ```
 
 OpenCV(opencv-python) 필요 — Windows 호스트에서 통과를 확인했다(2026-09-22, cv2 5.0).

@@ -745,6 +745,8 @@
 | D-742 | 검수 loopback 현재 결정과 같은 PC 학습 전달 | Accepted |
 | D-745 | 학습 관리 센터의 소유 실행기 수동 제어 | Accepted |
 
+| D-748 | 앞 카메라·천장 관측·신호등 관측 source holder 구분 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

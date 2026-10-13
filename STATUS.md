@@ -17,7 +17,7 @@
 | [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | 0b14fa02b0 (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_cli](tools/perception/progress.md) | perception_cli | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [rosy_vision](operations/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [rosy_vision](operations/overhead/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_cell](operations/processes/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
 | [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
 | [cam](operations/site_ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |

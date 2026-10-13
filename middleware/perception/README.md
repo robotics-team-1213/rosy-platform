@@ -9,7 +9,7 @@ a runtime dependency.
 | Source holder | Preserved Python identity |
 |---|---|
 | `sensors/sensing` | `control.sensing` |
-| `vision/perception` | `control.sensing.perception`, including drivable/learned backends |
+| `front_camera/perception` | `control.sensing.perception`, including drivable/learned backends |
 | `../drive/{safety,tracking,recovery,calibration}` | `control.control` modules |
 | `../drive/planning/grid` | `control.planning` |
 | `../drive/safety/adapter` | `control.safety` |

@@ -53,7 +53,7 @@ Needs `onnxruntime`, `torch` and `mcap`; tests skip cleanly where one is missing
 
 ### Internal
 
-- `learning/registry/perception/store.py`, `../../../tools/perception/operator_ssh.py`, `tools/perception/rosy_ml.py` (operator CLI that wraps these), `middleware/perception/vision/perception/learned/manifest.py`
+- `learning/registry/perception/store.py`, `../../../tools/perception/operator_ssh.py`, `tools/perception/rosy_ml.py` (operator CLI that wraps these), `middleware/perception/front_camera/perception/learned/manifest.py`
 
 ### External
 

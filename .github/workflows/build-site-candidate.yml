@@ -34,7 +34,7 @@ on:
       - operations/situation/rosy_situation/__init__.py
       - operations/situation/rosy_situation/assessment.py
       - operations/situation/rosy_situation/snapshot_assessment.py
-      - operations/vision/**
+      - operations/overhead/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
       - contracts/learning/src/**

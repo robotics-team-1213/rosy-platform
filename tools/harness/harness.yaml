@@ -83,10 +83,10 @@ modules:
     functional_kind: pytest
     functional: [operations/apps/games/test]
   - name: rosy_vision
-    path: operations/vision
-    tests: [operations/vision/test]
+    path: operations/overhead
+    tests: [operations/overhead/test]
     functional_kind: pytest
-    functional: [operations/vision/test]
+    functional: [operations/overhead/test]
   - name: rosy_cell
     path: operations/processes/cell
     tests: [operations/processes/cell/test]
@@ -213,9 +213,9 @@ modules:
     functional: [test/test_dock_contract.py]
   - name: signal
     path: operations/site_devices/signal
-    tests: [test/test_signal_contract.py, operations/vision/signal_observer/test]
+    tests: [test/test_signal_contract.py, operations/signal_observation/test]
     functional_kind: host-contract
-    functional: [test/test_signal_contract.py, operations/vision/signal_observer/test]
+    functional: [test/test_signal_contract.py, operations/signal_observation/test]
   - name: docs
     path: docs
     tests: [test/test_network_topology_contracts.py, test/test_harness_contracts.py]

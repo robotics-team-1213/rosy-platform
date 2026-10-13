@@ -65,7 +65,7 @@ sys.modules.update(sentinels)
 before = list(sys.path)
 probe = runpy.run_path(str(root / 'operations/fleet/test/test_gazebo_protocol_probe.py'))
 scenarios = runpy.run_path(str(root / 'test/test_fleet_gazebo_scenario_contracts.py'))
-vision = runpy.run_path(str(root / 'operations/vision/signal_observer/test/test_observer.py'))
+vision = runpy.run_path(str(root / 'operations/signal_observation/test/test_observer.py'))
 assert sys.path == before
 assert all(sys.modules[name] is value for name, value in sentinels.items())
 assert probe['Observation'].__module__ == '_rosy_fleet_gazebo_t2_probe'
@@ -73,7 +73,7 @@ assert scenarios['Blackout'].__module__ == '_rosy_fleet_gazebo_t5_scenarios'
 assert vision['ObserverConfig'] is sys.modules[vision['make_source'].__module__].ObserverConfig
 assert hasattr(observer, 'Recorder') and not hasattr(observer, 'ObserverConfig')
 """
-    root = Path(__file__).resolve().parents[4]
+    root = Path(__file__).resolve().parents[3]
     result = subprocess.run([sys.executable, "-c", script, str(root)],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

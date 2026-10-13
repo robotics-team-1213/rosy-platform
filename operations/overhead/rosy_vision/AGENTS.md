@@ -41,7 +41,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 ### Testing Requirements
 
 ```bash
-python -m pytest operations/vision/test -q
+python -m pytest operations/overhead/test -q
 ```
 
 Key tests: `test_protocol.py`, `test_ingest.py`, `test_vision_detect.py`, `test_vision_project.py`, `test_vision_worker.py`, `test_vision_publish.py`, `test_vision_config.py`, `test_pairing_sync.py`, `test_pairing_e2e.py`, `test_preview_rectification.py`, `test_field_detect.py`, `test_map_register.py`, `test_vision_cli.py`, `test_led_identity.py`. Needs `websockets>=14`.
