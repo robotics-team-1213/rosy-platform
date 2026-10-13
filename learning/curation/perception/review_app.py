@@ -555,6 +555,27 @@ def make_server(store, port=8767, host='127.0.0.1'):
     return ThreadingHTTPServer((host, port), Handler)
 
 
+def make_decisions_server(store, port):
+    """Loopback-only readback for the owner transport; never exposes write tokens."""
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            allowed = self.headers.get('Host') in (f'127.0.0.1:{self.server.server_port}',
+                                                   f'localhost:{self.server.server_port}')
+            code = 403 if not allowed else (200 if self.path == '/api/decisions' else 404)
+            raw = json.dumps(review_evidence.decisions(store) if code == 200 else {'error': 'read-only decisions endpoint'}).encode()
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_POST(self):
+            self.send_error(405)
+
+    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', type=Path, required=True)
@@ -566,6 +587,7 @@ def main():
     parser.add_argument('--empty-training', action='store_true',
                         help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
+    parser.add_argument('--decisions-port', type=int, help='optional loopback-only current-decisions readback')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path,
@@ -586,6 +608,10 @@ def main():
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
+    readback = None
+    if args.decisions_port is not None:
+        readback = make_decisions_server(store, args.decisions_port)
+        threading.Thread(target=readback.serve_forever, daemon=True).start()
     server = make_server(store, args.port, args.host)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     try:
@@ -594,6 +620,9 @@ def main():
         pass
     finally:
         server.server_close()
+        if readback:
+            readback.shutdown()
+            readback.server_close()
 
 
 if __name__ == '__main__':

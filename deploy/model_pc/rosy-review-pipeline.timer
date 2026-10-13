@@ -1,0 +1,10 @@
+[Unit]
+Description=Process eligible review data and retain terminal attempt budgets
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+Unit=rosy-review-pipeline.service
+
+[Install]
+WantedBy=timers.target

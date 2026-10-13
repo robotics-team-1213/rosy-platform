@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh current review transport while retaining highwater
+
+[Timer]
+OnBootSec=15
+OnUnitActiveSec=10
+Unit=rosy-review-bridge.service
+
+[Install]
+WantedBy=timers.target
