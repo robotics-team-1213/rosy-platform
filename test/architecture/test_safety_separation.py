@@ -36,7 +36,7 @@ SAFETY = "safety"
 
 def test_charging_confirmation_is_safety_tagged():
     """D-443 Q8: charging evidence controls D-27 discharge-stop suppression."""
-    path = "middleware/control/drive/behaviors/docking/charging.py"
+    path = "middleware/drive/behaviors/docking/charging.py"
     assert path in _manifest()["safety_modules"]
     assert _concern_of(path) == SAFETY
 
@@ -316,7 +316,7 @@ CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
 CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
-CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/control/drive/safety/adapter/node.py"}
+CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/drive/safety/adapter/node.py"}
 OMX_SCOPE = ("middleware/devices/omx/", "integrations/robots/omx/")
 
 

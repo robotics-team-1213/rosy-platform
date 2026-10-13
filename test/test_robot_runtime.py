@@ -15,7 +15,7 @@ from robot_contracts import (
     runtime_launch_closure,
 )
 
-sys.path.insert(0, str(ROOT / "middleware" / "control" / "drive" / "planning" / "nav2"))
+sys.path.insert(0, str(ROOT / "middleware" / "drive" / "planning" / "nav2"))
 from navigation.profile_limits import load_motion_limits
 
 

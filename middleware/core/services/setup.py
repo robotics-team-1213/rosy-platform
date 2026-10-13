@@ -23,7 +23,7 @@ class HolderSource(sdist):
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         manifest = Path(base_dir) / 'core_features.egg-info/SOURCES.txt'
         text = manifest.read_text(encoding='utf-8').replace(
-            '../../control/drive/behaviors/', '_source_roots/behaviors/')
+            '../../drive/behaviors/', '_source_roots/behaviors/')
         manifest.unlink()  # Do not write through a source-manifest hard link.
         manifest.write_text(text, encoding='utf-8')
 
