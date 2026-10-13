@@ -52,7 +52,7 @@ class GroupDrive(private val context: Context, private val first: PilotConnectio
         private val base = "${if (connection.secure) "https" else "http"}://${target.host}:${target.port}"
         fun request(path: String, json: String? = null): Pair<Int, ByteArray> {
             check(connection.authorized()) { "approval expired" }
-            val builder = Request.Builder().url(base + path).header("Authorization", "Bearer ${target.credential}")
+            val builder = Request.Builder().url(base + path).header("Authorization", "Bearer ${connection.bearer()}")
             if (json != null) builder.post(json.toRequestBody("application/json".toMediaType()))
             client.newCall(builder.build()).execute().use { response ->
                 val bytes = response.body?.byteStream()?.let { MainActivity.readLimited(it, if (path.endsWith("/frame")) 2_000_000 else 65_536) } ?: ByteArray(0)
@@ -62,7 +62,7 @@ class GroupDrive(private val context: Context, private val first: PilotConnectio
         fun rawFrame(sequence: Long): ByteArray? {
             check(connection.authorized()) { "approval expired" }
             val request = Request.Builder().url("$base/api/v1/vision/front/frame?sequence=$sequence&overlay=false")
-                .header("Authorization", "Bearer ${target.credential}").build()
+                .header("Authorization", "Bearer ${connection.bearer()}").build()
             client.newCall(request).execute().use { response ->
                 if (response.code != 200) return null
                 check(response.header("Content-Type")?.startsWith("image/jpeg") == true &&

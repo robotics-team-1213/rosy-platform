@@ -17,6 +17,7 @@ data class PairingAttempt(val site: PairableSite, val session: PairingSession)
  * goes away; the server expires an abandoned request by itself (300 s pending, 120 s to confirm).
  */
 class PairingViewModel(application: Application) : AndroidViewModel(application) {
+    @Volatile private var managementEpoch = 0L
     private val settings = SettingsStore(application)
     private val mutableAttempt = MutableStateFlow<PairingAttempt?>(null)
     val attempt: StateFlow<PairingAttempt?> = mutableAttempt.asStateFlow()
@@ -25,13 +26,17 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
     fun open(site: PairableSite, deviceLabel: String, appVersion: String) {
         if (mutableAttempt.value?.site == site) return
         mutableAttempt.value?.session?.cancel()
-        val client = PairingClient(HttpPairingTransport(site), deviceLabel, appVersion, SettingsPairingStore(settings))
+        val owner = ++managementEpoch
+        val client = PairingClient(HttpPairingTransport(site), deviceLabel, appVersion, SettingsPairingStore(settings),
+            authorized = { owner == managementEpoch })
         val session = PairingSession(client, viewModelScope)
         mutableAttempt.value = PairingAttempt(site, session)
         session.start(site)
     }
 
     /** Leaves the pairing screen. An answer that is running finishes on its own ([PairingSession.cancel]). */
+    fun revokeManagement() { managementEpoch++; close() }
+
     fun close() {
         mutableAttempt.value?.session?.cancel()
         mutableAttempt.value = null
