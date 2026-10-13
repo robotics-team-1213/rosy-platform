@@ -1,25 +1,29 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "a759f1e6f", date: 2026-10-11 }
+last_verified: { commit: "764b591ed6", date: 2026-10-11 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "Latest main holder paths retained; SDK importer/headless/force-drive regression tests pass. Runtime source a759f1e6f includes main ea6d4c0a2."
+    evidence: "CORE final port and existing Drive reused by D-638 diagnostic. 764b591ed6 tools/sim/isaac ownership fix and Isaac/architecture/release/harness remote regression exit 0, 0 NEW; independent source review approved placement, native recording and frozen policy restore. Runtime revisions and source hash readback are separate in docs/validation/isaac-map-rl-2026-10-11/result.md."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"
-    evidence: "a759f1e6f remote: 4361 passed, 11 skipped, 0 NEW. Separate Jazzy render/preflight verified Pinky 17 joints/10 meshes."
+    evidence: "a759f1e6f full remote: 4361 passed, 11 skipped, 0 NEW. D-638 dc25401e61 relevant CORE/Drive/Isaac/harness regression and e0e5b38d78 Isaac regression exit 0, 0 NEW. b6a8d0d2e8 recording/restore and Drive/CORE cycle/harness regression exit 0, 0 NEW; 764b591ed6 placement/Isaac/architecture/release/harness remote regression exit 0, 0 NEW. Jazzy URDF preflight remains separate."
   ROS-SIM:
     state: HOLD
-    blocker: "Latest-main source a759f1e6f verified before/after headless 2400-frame run; SDK exit 0 without SDK Error/Traceback. Single CORE publisher, forward tracking, command-expiry physical stop and owned CORE-loss watchdog stop observed. Rotation target 0.3 rad/s measured 0.19396: tracking failed, observer/scenario exit 1. Map/STL, sensors, Nav2, two-robot Fleet and RL remain unverified; see docs/validation/isaac-latest-core-main-2026-10-11/result.md."
+    blocker: "Full ROS-SIM rotation tracking remains failed (0.3 target versus 0.19396 measured). D-638 native one-Pinky CPU Q-learning completed ordered 9.342m curved-map route; R8 full post-shutdown-fix retraining at 57ad87993f had SDK exit 0/error 0. R9 b6a8d0d2e8 frozen evaluations at four initial headings completed with native Camera recordings and physical stop, SDK exit 0/error 0. These are not ROS/Fleet or Isaac Lab acceptance. Sensors/localization, Nav2, two-robot Fleet/signals and device acceptance remain unverified. See docs/validation/isaac-map-rl-2026-10-11/result.md."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
-adrs: [D-322, D-434]
+adrs: [D-322, D-434, D-638, D-708]
 plans:
+  - docs/plans/2026-10-12-map-drive-diagnosis.md
+  - docs/plans/2026-10-12-observed-path-gap-implementation.md
   - docs/plans/2026-10-04-isaac-navigation-integration-review.md
+  - docs/plans/2026-10-11-isaac-map-rl.md
+  - docs/plans/2026-10-11-isaac-direction-video.md
 ---
 ## 2026-09-30 initial marker
 

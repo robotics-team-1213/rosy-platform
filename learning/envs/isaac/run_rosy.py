@@ -264,7 +264,8 @@ def main():
                     force_zero_wheels(og.Controller, wheel_drives)
         finally:
             command_watchdog.ACTIVE_WATCHDOG = None
-            simulation_app.close()
+            from sdk_entrypoint import close_sdk
+            close_sdk(simulation_app, headless=args.headless)
 
 
 if __name__ == "__main__":

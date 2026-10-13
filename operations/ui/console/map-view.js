@@ -19,6 +19,7 @@ import { drawGuide } from "/console/assets/guide-layer.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
+import { drawMapDatum } from "./map-datum.js";
 
 // Map label: the short id ("rosy_012" -> "012").
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
@@ -112,10 +113,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   // Declutter: a chip not `important` (and without tone) never shifts; it shows only where still free.
+  function chipFontSize(ctx) {
+    const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
+    return window.RosyPalette.canvasTextSize("micro") * Math.max(1, ctx.canvas.width / displayedWidth);
+  }
+
   function drawChip(ctx, grid, cx, cy, text, tone, important = true) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
-    const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
-    const fontSize = window.RosyPalette.canvasTextSize("micro") * Math.max(1, ctx.canvas.width / displayedWidth);
+    const fontSize = chipFontSize(ctx);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.font = font("micro", fontSize / window.RosyPalette.canvasTextSize("micro"));
@@ -439,7 +444,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). D-595: 이것은
     // 진단 경고일 뿐이다 — 그림은 수락된 보정으로 그대로 두고(폴링마다 바뀌지 않게) 경고만 얹는다.
     // 보정을 바꾸는 것은 설치·보정의 맵 고정(맞춤 → 추적 보정 적용)뿐이다.
-    const drift = calibration && view.trackingDrift ? view.trackingDrift : null;
     const cameraOn = view.displayMode === "overlay" && Boolean(calibration);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
@@ -468,22 +472,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
-    if (drift) {
-      const text = drift.origin === "server"
-        ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}).`
-        : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
-        + " 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).";
-      ctx.save();
-      ctx.font = font("label");
-      const boxWidth = ctx.measureText(text).width + 24;
-      ctx.fillStyle = css("--scrim");
-      ctx.fillRect(Math.max(4, (width - boxWidth) / 2), 8, boxWidth, 28);
-      ctx.fillStyle = css("--status-warn");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(text, width / 2, 14);
-      ctx.restore();
-    }
     const labelFont = font("micro");
 
     // 0.5 m 격자
@@ -515,63 +503,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.lineWidth = 2;
       ctx.strokeStyle = css("--series-primary");
       ctx.stroke();
-      const b = entry.bounds_m;
-      const bottom = toPx((b.min_x + b.max_x) / 2, b.min_y);
-      const right = toPx(b.max_x, (b.min_y + b.max_y) / 2);
-      const top = toPx(b.min_x, b.max_y);
-      ctx.fillStyle = css("--ink-quiet");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(`${(b.max_x - b.min_x).toFixed(2)} m`, bottom.x, bottom.y + 6);
-      ctx.save();
-      ctx.translate(right.x + 6, right.y);
-      ctx.rotate(Math.PI / 2);
-      ctx.textBaseline = "bottom"; // 회전 뒤 "bottom" 이 사각형 바깥쪽이다
-      ctx.fillText(`${(b.max_y - b.min_y).toFixed(2)} m`, 0, 0);
-      ctx.restore();
-      ctx.textAlign = "left";
-      ctx.textBaseline = "bottom";
-      const sources = (entry.sources || []).map((src) => src.source_id).join(", ");
-      ctx.fillText(`${entry.map_id} · 카메라 ${sources}`, top.x, top.y - 6);
     }
     ctx.restore();
 
-    // 축과 원점: 원점이 보이면 그 자리에, 아니면 범위 왼쪽 아래에 x/y 방향만 그린다.
-    const originVisible = bounds.min_x <= 0 && bounds.max_x >= 0
-      && bounds.min_y <= 0 && bounds.max_y >= 0;
-    const axisOrigin = originVisible ? [0, 0] : [bounds.min_x + 0.1, bounds.min_y + 0.1];
-    const axisAt = toPx(...axisOrigin);
-    const axisLen = Math.min(t.scale * 0.4, width / 8);
-    // 축은 지도 방향으로 그린다 — 실영상(호모그래피·회전)에서도 x/y 가 실제 지도 축을 가리킨다.
-    const axisTip = (dx, dy) => {
-      const p = toPx(axisOrigin[0] + dx, axisOrigin[1] + dy);
-      const span = Math.hypot(p.x - axisAt.x, p.y - axisAt.y) || 1;
-      return { x: axisAt.x + (p.x - axisAt.x) / span * axisLen, y: axisAt.y + (p.y - axisAt.y) / span * axisLen };
-    };
-    const xTip = axisTip(0.1, 0), yTip = axisTip(0, 0.1);
-    ctx.save();
-    ctx.lineWidth = 2;
-    ctx.font = labelFont;
-    ctx.textBaseline = "middle";
-    ctx.strokeStyle = css("--ink");
-    ctx.fillStyle = css("--ink");
-    ctx.beginPath();
-    ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(xTip.x, xTip.y);
-    ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(yTip.x, yTip.y);
-    ctx.stroke();
-    ctx.textAlign = "center";
-    ctx.fillText("x", xTip.x + (xTip.x - axisAt.x) / axisLen * 10, xTip.y + (xTip.y - axisAt.y) / axisLen * 10);
-    ctx.fillText("y", yTip.x + (yTip.x - axisAt.x) / axisLen * 10, yTip.y + (yTip.y - axisAt.y) / axisLen * 10);
-    if (originVisible) {
-      ctx.beginPath();
-      ctx.arc(axisAt.x, axisAt.y, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.textAlign = "right";
-      ctx.fillText("0,0", axisAt.x - 6, axisAt.y + 12);
-    }
-    ctx.restore();
+    drawMapDatum(ctx, toPx, bounds, {css});
 
     const activeMap = view.activeSiteMap?.map;
     if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
@@ -589,10 +524,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         });
         ctx.stroke();
       }
-      for (const place of activeMap.places || []) {
+      for (const [index, place] of (activeMap.places || []).entries()) {
         const p = toPx(place.x, place.y);
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(`${place.name} (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) m`, p.x + 8, p.y - 8);
+        ctx.fillText(String(index + 1), p.x + 8, p.y - 8);
       }
       ctx.restore();
     }
@@ -633,6 +568,25 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
 
   function draw() {
+    const activeMap = view.activeSiteMap?.map;
+    const places = layerOn("lanes") && view.siteMap?.maps.some(row => row.map_id === activeMap?.map_id) ? activeMap.places || [] : [];
+    const placeList = el("map-places");
+    if (placeList) {
+      placeList.hidden = !places.length;
+      placeList.replaceChildren(...places.map(place => {
+        const row = document.createElement("li");
+        row.textContent = `${place.name} · ${place.x.toFixed(2)}, ${place.y.toFixed(2)} m`;
+        return row;
+      }));
+    }
+    const calibrationStatus = el("map-calibration-status");
+    if (calibrationStatus) {
+      const drift = camera.calibration() && view.trackingDrift;
+      calibrationStatus.hidden = !drift;
+      calibrationStatus.textContent = !drift ? "" : drift.origin === "server"
+        ? `카메라 교정 어긋남(자동 검사) — 승인 교정과 새 맞춤 제안이 최대 ${Math.round(drift.distanceM * 100)} cm 어긋남(${drift.sourceId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`
+        : `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}). 맵 고정을 다시 하세요(맞춤 → 추적 보정 적용).`;
+    }
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;
@@ -668,6 +622,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     canvas.setAttribute("aria-label", view.call
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
+    drawMapDatum(ctx, (x, y) => {
+      const cell = cellOf(grid, x, y);
+      return {x: cell.cx, y: cell.cy};
+    }, {
+      min_x: grid.origin.x, min_y: grid.origin.y,
+      max_x: grid.origin.x + grid.width * grid.resolution,
+      max_y: grid.origin.y + grid.height * grid.resolution,
+    }, {css});
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
@@ -683,6 +645,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const cy = grid.height - cell.row;
       const pxPerCell = Math.max(canvas.clientWidth / grid.width, canvas.clientHeight / grid.height) || 1;
       const size = Math.min(3, 18 / pxPerCell);
+      // Chips use screen-sized type; keep their half-height clear of the marker at every grid scale.
+      const labelOffset = Math.max(size * 2.2, size + (chipFontSize(ctx) * 0.9 + CHIP_GAP) / ctx.getTransform().d);
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-pose.yaw); // 캔버스 y 가 아래로 자라므로 회전도 뒤집는다
@@ -704,11 +668,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
       ctx.restore();
       if (activeCall(robot.robot_id)) {
-        drawChip(ctx, grid, cx, cy - size * 2.2, `호출 ${robot.robot_id}`, "warn");
+        drawChip(ctx, grid, cx, cy - labelOffset, `호출 ${robot.robot_id}`, "warn");
       }
       const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
       markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
-      labels.push([cx, cy + size * 2.2, robot.robot_id]);
+      labels.push([cx, cy + labelOffset, robot.robot_id]);
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
@@ -731,13 +695,20 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
+      const cx = col + 0.5;
+      const cy = grid.height - row - 0.5;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(col + 0.5, grid.height - row - 0.5, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
       ctx.lineWidth = 0.5;
       ctx.strokeStyle = css("--series-goal");
       ctx.stroke();
       ctx.restore();
+      const world = toWorld(grid, col, row);
+      const metres = `${world.x.toFixed(2)}, ${world.y.toFixed(2)} m`;
+      drawChip(ctx, null, cx + 2, cy, metres);
+      canvas.setAttribute("aria-label", `${canvas.getAttribute("aria-label")}. ${metres}`);
+      flushChips(ctx);
     }
   }
 
@@ -824,10 +795,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     try {
       view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
       life.check();
+      view.guideUnavailable = false;
       guideGate.ok();
     } catch (err) {
       if (err.name === "AbortError") return;
-      if (guideGate.fail(err.status, err.code) === "absent") view.guide = null;
+      view.guide = null;
+      view.guideUnavailable = guideGate.fail(err.status, err.code) !== "absent";
     } finally {
       if (life.current()) guideInFlight = false;
     }

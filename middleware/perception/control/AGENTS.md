@@ -11,6 +11,8 @@ The existing `control` Python package composes ROS nodes, the sensor provider, c
 
 Five compatibility package directories preserve `control.control`, `control.sensing`, `control.planning`, `control.safety` and `control.wander`. Their initializers are active source import/build contracts. The 50 pure `control.control.*` modules have one canonical source across Drive safety (15), tracking (6), recovery (11) and calibration (18); their installed import names remain unchanged. See the [current platform folder guide](../../../docs/reference/platform-folder-responsibilities.md) and [distribution guide](../AGENTS.md).
 
+D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/control/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. Its five initializer directories contain no algorithm copies.
+
 ## Key Files
 | File | Description |
 |------|-------------|
@@ -45,7 +47,7 @@ Five compatibility package directories preserve `control.control`, `control.sens
 ## For AI Agents
 
 ### Working In This Directory
-- Top-level node adapters and provider composition stay here. New pure sensor, vision or Drive decisions belong in their canonical holder; preserve existing `control.*` imports and monkeypatch identity.
+- Sensor/provider/observation composition stays here; the four legacy Drive entry modules live in Drive runtime. New pure sensor, vision or Drive decisions belong in their canonical holder; preserve existing `control.*` imports and monkeypatch identity.
 - Keep the existing `setup.py` entry points, executor selector and `KeyboardInterrupt`-safe shutdown shape.
 - Shutdown behavior remains with the actual adapter (`middleware/control/drive/tracking/wander/node.py:stop_motors`). CORE remains the operational final `/cmd_vel` authority; the legacy writer is not activated by this folder layout.
 

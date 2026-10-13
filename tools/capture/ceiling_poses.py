@@ -11,7 +11,7 @@ the marker (camera solved from the homography + lens, as the tracker does). Row:
 {t (site clock captured_at), seq, x, y, yaw, src: "aruco", reproj_err} where reproj_err is the
 RMS deviation (m) of the four mapped corners from the marker's half-diagonal; yaw is the
 direction from the centre to the heading-edge midpoint (site config heading_edge; 0,1 measured
-forward on 8kcn 2026-10-09). learning/.../dataset/ceiling_pose.py fuses the rows with odometry.
+forward on 8kcn 2026-10-09). learning/curation/perception/ceiling_pose.py fuses the rows with odometry.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
 for _p in (REPO / "operations" / "vision", REPO / "contracts" / "foundation", REPO / "operations" / "apps" / "games",
-           REPO / "learning" / "training" / "perception" / "dataset"):
+           REPO / "learning" / "curation" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

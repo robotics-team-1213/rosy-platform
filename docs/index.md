@@ -213,6 +213,27 @@
 | D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
 | D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
 | D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
+| D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 |
+| D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 |
+| D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
+| D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
+| D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -294,6 +315,8 @@
 - [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
+- [2026-10-11-perception-fitness-pipeline.md](plans/2026-10-11-perception-fitness-pipeline.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -311,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
-- 2026-10-11 · d1f956750 · docs: 카메라 교정 조사 문서 계약 검증
-- 2026-10-11 · uncommitted · docs: 심한 렌즈 왜곡과 부분 시야 교정 조사 (D-633)
-- 2026-10-11 · uncommitted · docs(uiux): define complete operational role and token closure
-- 2026-10-11 · 5faad3583 · docs: D-626 이전과 D-627 CORE Drive 우선 분리 검증
+- 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정

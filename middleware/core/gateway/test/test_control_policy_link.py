@@ -1,6 +1,8 @@
 """Real CORE arbitration consuming the absorbed Control semantic policy."""
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
+import logging
 
 import pytest
 
@@ -47,6 +49,78 @@ def test_expired_observation_stops_a_fresh_command(linked):
     command.set_nav_twist(Twist(.1, 0.), now=10.21)
     assert command.select_output(now=10.22) == Twist()
     assert safety.estop
+
+
+def test_policy_failure_is_logged_once_after_the_zero_writer(linked, monkeypatch, caplog):
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    command, safety, modes, policy, snapshot = linked
+    command.set_nav_twist(Twist(.1, 0.), now=10.21)
+    select = command.select_output
+    monkeypatch.setattr(command, 'select_output', lambda: select(now=10.22))
+    sent = []
+    def send(out):
+        assert not caplog.records
+        sent.append(out)
+    with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
+        cmd_vel_cycle(command, SimpleNamespace(on_activity=lambda _: None), send)
+        command.announce_pending()
+    assert sent == [Twist()]
+    assert safety.estop and modes.mode is Mode.EMERGENCY
+    assert len(caplog.records) == 1
+    assert 'snapshot_expired' in caplog.text
+    assert "'observed_at': 10.0" in caplog.text
+    assert 'command=1' in caplog.text and 'now=10.22' in caplog.text
+    assert caplog.records[0].exc_info[0] is ValueError
+
+
+def test_genuine_exception_keeps_traceback_and_first_failure(linked, monkeypatch, caplog):
+    command, safety, modes, policy, snapshot = linked
+    def broken(*args, **kwargs):
+        raise RuntimeError('diagnostic-test-failure')
+    monkeypatch.setattr(policy, 'evaluate', broken)
+    safety.bind_control_policy(policy)
+    assert safety.evaluate_candidate(11, 'navigation', .1, 0., 10.1) is None
+    assert safety.evaluate_candidate(12, 'navigation', .1, 0., 10.1) is None
+    with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
+        command.announce_pending()
+    assert len(caplog.records) == 1
+    assert 'command=11' in caplog.text and 'command=12' not in caplog.text
+    assert 'diagnostic-test-failure' in caplog.text
+    assert caplog.records[0].exc_info[0] is RuntimeError
+
+
+def test_failed_zero_writer_retains_diagnostic_until_a_successful_cycle(linked, monkeypatch, caplog):
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    command, safety, modes, policy, snapshot = linked
+    command.set_nav_twist(Twist(.1, 0.), now=10.21)
+    select = command.select_output
+    monkeypatch.setattr(command, 'select_output', lambda: select(now=10.22))
+    power = SimpleNamespace(on_activity=lambda _: None)
+    def broken(out):
+        raise RuntimeError('writer failed')
+    with caplog.at_level(logging.ERROR, logger='core_features.safety.manager'):
+        with pytest.raises(RuntimeError, match='writer failed'):
+            cmd_vel_cycle(command, power, broken)
+        assert not caplog.records
+        sent = []
+        cmd_vel_cycle(command, power, sent.append)
+    assert sent == [Twist()] and safety.estop
+    assert len(caplog.records) == 1 and 'snapshot_expired' in caplog.text
+
+
+def test_failed_diagnostic_sink_cannot_escape_or_change_the_latched_zero(linked, monkeypatch):
+    command, safety, modes, policy, snapshot = linked
+    command.set_nav_twist(Twist(.1, 0.), now=10.21)
+    assert command.select_output(now=10.22) == Twist()
+    def broken(*args, **kwargs):
+        raise RuntimeError('sink failed')
+    monkeypatch.setattr(logging.getLogger('core_features.safety.manager'), 'error', broken)
+    command.announce_pending()
+    assert command.announce_errors == 1
+    assert safety.estop and modes.mode is Mode.EMERGENCY
+    assert command.select_output(now=10.23) == Twist()
+    command.announce_pending()
+    assert command.announce_errors == 1
 
 
 def test_snapshot_speed_limit_reaches_core_before_final_clip(linked):

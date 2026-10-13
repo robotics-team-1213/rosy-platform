@@ -610,6 +610,9 @@ export function actionIcon(button, name) {
     notification: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4M12 2v2",
     history: "M3 3v5h5M3 8a9 9 0 1 1-1 7M12 7v5l3 2",
     connect: "M9 15l6-6M7 13l-2 2a4 4 0 0 0 6 6l2-2M11 5l2-2a4 4 0 0 1 6 6l-2 2",
+    login: "M3 12h12M11 8l4 4-4 4M19 4v16",
+    account: "M4 6h16v12H4zM8 10h8M8 14h5",
+    logout: "M9 12h12M17 8l4 4-4 4M5 4v16",
     wifi: "M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01",
     fit: "M4 4h16v16H4zM8 8h8v8H8z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
@@ -727,6 +730,12 @@ function tooltipOwnerVisible(owner) {
   return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") &&
     owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
 }
+function overTooltip(event) {
+  if (!tooltip || tooltip.hidden) return false;
+  const box = tooltip.getBoundingClientRect();
+  return event.clientX >= box.left && event.clientX <= box.right &&
+    event.clientY >= box.top && event.clientY <= box.bottom;
+}
 function placeTooltip() {
   if (!tooltip || tooltip.hidden) return;
   if (!tooltipOwnerVisible(tooltipOwner)) { hideTooltip(); return; }
@@ -752,7 +761,6 @@ function showTooltip() {
     tooltip.id = "rosy-shared-tooltip";
     tooltip.setAttribute("role", "tooltip");
     document.body.append(tooltip);
-    tooltip.addEventListener("pointerleave", () => { tooltipHover = null; showTooltip(); });
   }
   if (tooltipOwner !== owner) hideTooltip();
   tooltipOwner = owner;
@@ -764,18 +772,32 @@ function showTooltip() {
   placeTooltip();
 }
 document.addEventListener("pointerover", event => {
-  if (tooltip?.contains(event.target)) return;
+  if (overTooltip(event)) return;
   const owner = tooltipTarget(event.target);
-  if (owner !== tooltipHover) { tooltipHover = owner; tooltipDismissed = null; showTooltip(); }
+  if (owner !== tooltipHover) {
+    tooltipHover = owner;
+    if (owner !== tooltipFocus) tooltipDismissed = null;
+    showTooltip();
+  }
 });
 document.addEventListener("pointerout", event => {
-  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || tooltip?.contains(event.relatedTarget)) return;
+  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || overTooltip(event)) return;
   tooltipHover = null; showTooltip();
+});
+// Hoverable descriptions must not take pointer events from the controls below.
+document.addEventListener("pointermove", event => {
+  if (tooltipHover && !tooltipHover.contains(event.target) && !overTooltip(event)) {
+    tooltipHover = null; showTooltip();
+  }
 });
 document.addEventListener("focusin", event => {
   tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
 });
 document.addEventListener("focusout", () => { tooltipFocus = null; tooltipDismissed = null; showTooltip(); });
+document.addEventListener("click", event => {
+  const owner = tooltipTarget(event.target);
+  if (owner) { tooltipDismissed = owner; hideTooltip(); }
+}, true);
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && tooltip && !tooltip.hidden) {
     tooltipDismissed = tooltipOwner; hideTooltip();

@@ -10,6 +10,8 @@
 
 The artifact and provenance store plus the model half of the D-356 learned-perception loop: export a trained model to ONNX, verify a returned model against the intake gate, and deliver it to a robot's shadow slot (with rollback). The delivered model runs shadow-only; activating it for driving is a separate decision.
 
+`intake_dataset.py` holds immutable dataset and training-source bindings; `intake.py` re-exports the existing helpers and EvalSetError. `store.read_fixed_manifest` refuses links and verifies manifest bytes against the content version. D-666 offline paired fitness shares these bindings without entering model delivery.
+
 ## Key Files
 
 | File | Description |

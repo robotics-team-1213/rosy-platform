@@ -8,7 +8,7 @@ register("./resolve-console-assets.mjs", import.meta.url);
 const {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, aiProposalText, chainRows, alertsDue, confirmText, decisionButtons, evidenceCaption,
   needsConfirm, outcomeText, pendingStucks, rearText, refusalText, resolverText, stuckFacts,
-  previewFresh, headingText, fleetAnswerText,
+  previewFresh, headingText, fleetAnswerText, stuckSummary, judgmentText,
 } = await import("../../../ui/console/line-stuck.js");
 
 const STUCK = {
@@ -16,7 +16,39 @@ const STUCK = {
   attempts: 0, max_attempts: 2, local_enabled: true, robot_online: true,
   front_clearance_m: 0.123, rear_clearance_m: 0.31, turn_clearance_m: null, preview_seq: 812,
 };
+
+test("autonomous hold remains observation in operator display", () => {
+  assert.match(resolverText({ escalated: "auto_hold:rule_budget" }), /자동 대기.*상태 관측/);
+});
 const byDecision = (buttons) => Object.fromEntries(buttons.map((b) => [b.decision, b]));
+
+test('judgment display refuses stale or other-case receipts', () => {
+  const receipt = {necessity: 'INTERVENE', request: {case_id: 's'}, evaluated_at: 99, valid_until: 103};
+  assert.match(judgmentText(receipt, 's', 100), /개입 필요.*실행 승인은 별도/);
+  assert.match(judgmentText(receipt, 's', 104), /보류.*갱신/);
+  assert.match(judgmentText(receipt, 'other', 100), /보류.*갱신/);
+  assert.match(judgmentText({...receipt, necessity: 'DO_NOT_INTERVENE'}, 's', 100), /개입 불필요/);
+  assert.match(judgmentText({...receipt, necessity: 'ABSTAIN'}, 's', 100), /보류/);
+});
+
+test("operator summary separates proposal, transmission, receipt and completion", () => {
+  assert.match(stuckSummary(STUCK), /멈춰 판단을 요청.*조치를 선택/);
+  assert.match(stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", tier: "ai", accepted: true}}), /AI 분석.*관제가.*로봇이 수락.*실행 완료는 별도/);
+  assert.match(stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: false, code: "EMERGENCY_ACTIVE"}}), /거절.*비상정지/);
+  assert.match(stuckSummary({...STUCK, ai_proposal: {decision: "WAIT", class: "held", verdict: "crosswalk_unknown"}}), /관제가 전달을 보류/);
+  const unknown = stuckSummary({...STUCK, ai_proposal: {decision: "UNKNOWN_WIRE_ENUM", class: "new_phase"}});
+  assert.match(unknown, /미확인/);
+  assert.doesNotMatch(unknown, /UNKNOWN_WIRE_ENUM|new_phase/);
+  const pending = stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: null, tier: "unknown_source", code: "STUCK_DECISION_OUTCOME_UNKNOWN"}});
+  assert.match(pending, /판단 주체 미확인.*전달 여부와 처리 결과가 미확인/);
+  assert.doesNotMatch(pending, /전달했습니다|영상|unknown_source/);
+  const unreachable = stuckSummary({...STUCK, fleet_answer: {decision: "RESUME", accepted: false, code: "ROBOT_UNREACHABLE"}});
+  assert.match(unreachable, /전달하지 못했습니다/);
+  assert.doesNotMatch(unreachable, /로봇이 거절/);
+  const proposalUnknown = stuckSummary({...STUCK, ai_proposal: {decision: "RESUME", class: "refused", outcome: "STUCK_DECISION_OUTCOME_UNKNOWN"}});
+  assert.match(proposalUnknown, /전달 여부와 처리 결과가 미확인/);
+  assert.doesNotMatch(proposalUnknown, /로봇이 거절/);
+});
 
 test("only robots with an open stuck are pending", () => {
   const robots = [{ robot_id: "a", line_stuck: STUCK }, { robot_id: "b", line_stuck: null },
@@ -123,6 +155,9 @@ test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /차선 추종을 중단했습니다/);
   assert.doesNotMatch(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
   assert.match(outcomeText("rosy_01", "MANUAL", {}), /CORE가 받았습니다/);
+  for (const [decision, outcome] of [['RESUME', 'resume'], ['BACK_AND_RETRY', 'back']]) {
+    assert.match(outcomeText('rosy_01', decision, {outcome}), /CORE.*수락.*로봇 상태.*확인/);
+  }
 });
 
 test("resolverText says what the Fleet resolver did, or why a human is needed", () => {

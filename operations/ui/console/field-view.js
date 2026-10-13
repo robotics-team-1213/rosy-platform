@@ -7,6 +7,7 @@ import {
   ASPECT_TOLERANCE,
 } from "./field-layers.js";
 import { multiply3, fieldToMap } from "/console/assets/map-fit.js";
+import { gridLines } from "./site-layer.js";
 import { warpImage } from "/console/assets/field-warp.js";
 import { createPlaneFeed, planeCalibration, planeCalibrationsFor } from "/console/assets/vision-view.js";
 
@@ -207,11 +208,7 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     const pxPerM = field.width / size.width;
     const pxPerMy = field.height / size.height;
     const step = [0.05, 0.1, 0.25, 0.5, 1, 2, 5].find((s) => size.width / s <= 16) || 10;
-    const inside = (lo, hi) => {
-      const out = [];
-      for (let k = Math.floor(lo / step + 1e-9) + 1; k * step < hi - 1e-9; k += 1) out.push(k * step);
-      return out;
-    };
+    const inside = (lo, hi) => gridLines(lo, hi, step).filter((v) => v > lo + 1e-9 && v < hi - 1e-9);
     ctx.save();
     if (view.layers.grid) {
       ctx.strokeStyle = tone("--line-30");
