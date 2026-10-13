@@ -250,7 +250,72 @@ def test_back_and_retry_refused_when_local_recovery_is_off():
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
 
+@pytest.mark.parametrize("origin", ["console", "ask_timeout"])
+@pytest.mark.parametrize("phase", [BACKING, SETTLING])
+def test_delayed_back_answer_cannot_restart_active_recovery(origin, phase):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    started = 1.0 if origin == "console" else 15.0
+    machine.step(_inp(started))
+    if origin == "console":
+        machine.answer(started, "stuck-1", "BACK_AND_RETRY", "operator")
+    now = started + (0.1 if phase == BACKING else 2.7)
+    action = machine.step(_inp(now))
+    assert machine.phase == phase
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="back_active") as refused:
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver")
+    assert refused.value.code == "STUCK_DECISION_REFUSED"
+    assert machine.phase == phase and machine._until == until
+    assert machine.status(now)["attempts"] == 1
+    assert machine.step(_inp(now)) == action
+    assert len(bus.named("nav.line_stuck_local_attempt")) == 1
+    assert bus.named("nav.line_stuck_answered")[-1]["accepted"] is False
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "back_active"
+    assert machine.answer(now, "stuck-1", "WAIT", "operator") == "hold"
+    assert machine.answer(now, "stuck-1", "ABORT", "operator") == "idle"
+
+
 # ---- timeout and local recovery ----------------------------------------------------
+@pytest.mark.parametrize("changed", ["wait", "local", "attempts"])
+def test_conditional_back_checks_current_phase_and_attempts(changed):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    expected = {"phase": ASKING, "attempts": 0}
+    now = 0.0
+    if changed == "wait":
+        machine.answer(now, "stuck-1", "WAIT", "operator")
+    elif changed == "local":
+        now = 15.0
+        machine.step(_inp(now))
+    else:
+        expected["attempts"] = 1
+    before = machine.status(now)
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="stuck_precondition_failed"):
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(now) == before and machine._until == until
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "stuck_precondition_failed"
+
+
+def test_conditional_back_accepts_same_asking_episode():
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    assert machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver",
+                          expected_stuck={"phase": ASKING, "attempts": 0}) == "back"
+    assert machine.status(0.0)["attempts"] == 1
+
+
+@pytest.mark.parametrize("expected", [True, {}, {"phase": ASKING, "attempts": True},
+    {"phase": ASKING, "attempts": -1}, {"phase": WAITING_CONSOLE, "attempts": 0}])
+def test_direct_conditional_back_rejects_malformed_predicate(expected):
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    with pytest.raises(AnswerRefused, match="invalid_stuck_precondition"):
+        machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(0.0)["attempts"] == 0 and machine.phase == ASKING
+
+
 def test_no_answer_within_ask_s_starts_the_back_off():
     machine, bus = _machine()
     machine.step(_inp(0.0))

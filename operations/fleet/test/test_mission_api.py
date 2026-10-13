@@ -83,7 +83,7 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True,
             enable_mission_dispatcher=False, action_transport=None,
             goal_evidence_enabled=False, mission_model_turn_worker_factory=None,
             post_action_observation_source=None, deployment_profile="production",
-            omx_cell_grant_revisions=None):
+            omx_cell_grant_revisions=None, channel_config=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path / "fleet.sqlite3"
     robot = FakeRobot("rosy_01")
@@ -135,6 +135,7 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True,
         omx_action_transport=action_transport,
         deployment_profile=deployment_profile,
         omx_cell_grant_revisions=omx_cell_grant_revisions,
+        channel_config=channel_config,
     )
     return TestClient(app), tasks, credentials
 

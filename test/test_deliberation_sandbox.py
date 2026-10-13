@@ -110,7 +110,12 @@ def test_timeout_and_cancel_reap_child_group(tmp_path, cancel):
         pid = int(pid_file.read_text())
         for _ in range(100):
             status = f'/proc/{pid}/stat'
-            if not os.path.exists(status) or open(status).read().split()[2] == 'Z':
+            try:
+                with open(status) as stream:
+                    exited = stream.read().split()[2] == 'Z'
+            except (FileNotFoundError, ProcessLookupError):
+                exited = True
+            if exited:
                 break
             await asyncio.sleep(.01)
         else:
@@ -162,3 +167,25 @@ def test_actual_user_manager_confirms_absent_generated_scope():
     from deploy.site.deliberation_sandbox import cleanup_scope
     unit = 'rosy-deliberation-' + uuid.uuid4().hex + '.scope'
     asyncio.run(cleanup_scope(unit))
+
+
+def test_sandbox_provider_forwards_pinned_opencode_version_and_closes(monkeypatch):
+    from deploy.site import deliberation_sandbox as module
+    closed = []
+    class Launcher:
+        def __init__(self, *args):
+            pass
+        async def __call__(self, *args):
+            pytest.fail('version wiring must not invoke a model')
+        def close(self):
+            closed.append(True)
+    monkeypatch.setattr(module, 'SandboxLauncher', Launcher)
+    with module.sandbox_provider(kind='opencode', executable='/pinned', executable_sha256='a'*64,
+                                 model='ollama/pinned', profile_id='local', cli_version='1.18.35') as provider:
+        assert provider.cli_version == '1.18.35'
+    assert closed == [True]
+    with pytest.raises(ValueError, match='UNSUPPORTED_OPENCODE_VERSION'):
+        with module.sandbox_provider(kind='opencode', executable='/pinned', executable_sha256='a'*64,
+                                     model='ollama/pinned', profile_id='local', cli_version='latest'):
+            pytest.fail('unsupported version must not yield a provider')
+    assert closed == [True, True]

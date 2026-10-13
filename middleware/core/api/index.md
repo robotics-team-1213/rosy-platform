@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 9fc0a88c9 · D-660/D-661 API reference alignment
-- 2026-10-11 · c9480b464 · docs: 지도 설정 계약 버전 정렬
-- 2026-10-11 · 5faad3583 · refactor: API holder 이전 검증
-- 2026-10-10 · d7f032f513 · test: D-620 API contracts verified
-- 2026-10-10 · 10955eeaa4 · docs: D-620 live API version alignment
+- 2026-10-12 · 4554e84c6e · D-732 선택적 owner 누락에도 E-Stop 유지
+- 2026-10-12 · ddbc7f64aa · D-732 정지 receipt 캡처는 잠금을 기다리지 않는다
+- 2026-10-12 · 1cbfe5314a · D-732 안전 정지 native 실행 receipt
+- 2026-10-12 · b640234986 · D-720 API 문서 버전 정합
+- 2026-10-12 · uncommitted · status-inputs에 유효 조향 법칙을 싣는다

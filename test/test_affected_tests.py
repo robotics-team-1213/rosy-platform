@@ -288,6 +288,32 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
         assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
 
 
+def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
+    # Successful main CI 38056130519: round-robin took 307/107/313 seconds.
+    costs = {
+        "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
+        "test_blocks.py": 89, "test_start_point_browser.py": 45,
+        "test_console_roles_browser.py": 28, "test_password_session.py": 28,
+        "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
+        "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
+        "test_signal_phase.py": 13, "test_trip_runner.py": 11,
+        "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
+    }
+    repo = affected.Repo.load(ROOT)
+    selection = affected.Selection("full", [])
+    matrix = affected.ci_matrix(repo, selection)["include"]
+    shards = [e for e in matrix if e["name"].startswith("fleet-")]
+    paths = [p for e in shards for inv in e["invocations"] for p in inv]
+    expected = sorted(p for p in repo.test_files if p.startswith("operations/fleet/test/"))
+    assert sorted(paths) == expected
+    loads = [sum(costs.get(PurePosixPath(p).name, 1) for inv in e["invocations"] for p in inv)
+             for e in shards]
+    assert max(loads) <= 210, loads
+    assert all(e["gating"] and e["ros"] == "none" for e in shards)
+    repo.test_files.reverse()
+    assert affected.ci_matrix(repo, selection)["include"] == matrix
+
+
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
