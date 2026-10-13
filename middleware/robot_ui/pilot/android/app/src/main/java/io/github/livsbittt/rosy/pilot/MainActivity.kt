@@ -54,6 +54,21 @@ class MainActivity : Activity() {
     }
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
+    private val accountWorker = Executors.newSingleThreadExecutor()
+    @Volatile private var accountChecking = false
+    private val accountTick = object : Runnable {
+        override fun run() {
+            if (!foreground || !accountConfigured) return
+            if (!accountChecking) {
+                accountChecking = true
+                accountWorker.execute { try {
+                    account!!.session.retryRevocations()
+                    account!!.config.resources.forEach { account!!.session.access(it) }
+                } finally { accountChecking = false } }
+            }
+            main.postDelayed(this, 10000)
+        }
+    }
     private val vault by lazy { PairingVault(this) }
     private val peerVault by lazy { PeerRelationshipVault(this) }
     private val peerUi by lazy { PeerApprovalUi(this, { AndroidPeerIdentity(this) }, peerVault) }
@@ -499,13 +514,13 @@ class MainActivity : Activity() {
         if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) pendingApprovedSleep = true
     }
     override fun onResume() {
-        super.onResume(); foreground = true
+        super.onResume(); foreground = true; main.removeCallbacks(accountTick); main.post(accountTick)
         if (!cooling.coolingRequired) screenPower.restore()
         health.start()
         if (pendingApprovedSleep) { pendingApprovedSleep = false; sleepScreen(false) } else startDiscovery()
     }
-    override fun onPause() { foreground = false; health.stop(); endSession(); super.onPause() }
-    override fun onDestroy() { endSession(); io.execute { main.post { io.shutdown() } }; super.onDestroy() }
+    override fun onPause() { foreground = false; main.removeCallbacks(accountTick); health.stop(); endSession(); super.onPause() }
+    override fun onDestroy() { accountWorker.shutdown(); endSession(); io.execute { main.post { io.shutdown() } }; super.onDestroy() }
     companion object {
         fun readLimited(input: java.io.InputStream, maximum: Int): ByteArray {
             val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
