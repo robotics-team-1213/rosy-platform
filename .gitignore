@@ -138,3 +138,7 @@ Thumbs.db
 
 # D-456: generated Fleet camera application identity; public PEM stays tracked.
 *.camera-peer.pem
+
+# D-755 filled collaboration settings and encryption keys are private.
+**/learning-collaboration.json
+**/learning-accounts.key

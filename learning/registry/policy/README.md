@@ -125,3 +125,7 @@ audit keeps a consistent ledger snapshot and includes committed WAL records; it
 does not use `immutable=1` or reserve a writer lock. SQLite may use the database's
 WAL/shared-memory sidecars for coordination. Artifact files are still validated
 from their preserved snapshots; this is an integrity audit, not operating approval.
+
+## Private Hub 동기화
+
+`hub_sync.py`는 명시적으로 고른 파일만 기존 private 저장소에 올린다. 고정 commit의 재다운로드 해시가 일치해야 receipt를 남긴다. [실행 안내](../../curation/omx/README.md)를 따른다. 모델 loader 검증·배포 승인은 별도다.
