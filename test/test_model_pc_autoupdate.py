@@ -123,8 +123,8 @@ def test_road_fitness_archive_requires_signed_observation_contract(tmp_path, key
     subprocess.run(m.bootstrap_command(sys.executable, release, probe, []), check=True)
 
 
-@pytest.mark.parametrize("path", ["middleware/control/drive/planning/nav2/node.py",
-                                  "middleware/control/drive/unknown/code.py",
+@pytest.mark.parametrize("path", ["middleware/drive/planning/nav2/node.py",
+                                  "middleware/drive/unknown/code.py",
                                   "middleware/control/arm/safety/code.py"])
 def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
     m = module()

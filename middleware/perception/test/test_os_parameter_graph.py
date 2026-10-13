@@ -46,6 +46,51 @@ class ParameterGraphTests(unittest.TestCase):
                 node.destroy_node()
             rclpy.shutdown()
 
+    def test_sensor_only_handoff_carries_forward_arc_evidence_to_core(self):
+        from control.control.command_gate import CommandPolicy
+        from control.control.lidar_guard import ForwardEvidence
+        from control.safety.node import SafetyNode
+        from control.sensing.body import BODY
+        rclpy.init(args=['--ros-args', '-r', '__ns:=/rosy_01'])
+        node = None
+        try:
+            node = SafetyNode(sensor_only=True)
+            node.refresh_profile()
+            policy = CommandPolicy(node.profile.revision)
+            node.bind_policy_handoff(policy, ('lidar',), node.profile.revision)
+            received = time.monotonic()
+            node.observations.add('lidar', received)
+            wall = [(x/200., .096) for x in range(-60, 61)]
+            node.lidar_rotation_points = wall
+            node.lidar_rotation_observed = True
+            node.lidar_rotation_reason = None
+            node.tick()
+            self.assertTrue(node.sensor_policy_published)
+            forward = policy.evaluate(.01, 0., time.monotonic())[0].forward
+            self.assertIsInstance(forward, ForwardEvidence)
+            self.assertEqual(forward.points, tuple(wall))
+            self.assertIs(forward.observed, True)
+            self.assertIs(forward.body, BODY)
+            self.assertEqual(forward.limits, (node.profile.max_linear, node.profile.max_angular))
+            self.assertEqual(forward.scan_received_at, received)
+            # The pivot verdict is not coverage: it is set exactly when this evidence is asked.
+            node.lidar_rotation_reason = 'unknown band'
+            node.tick()
+            self.assertIs(policy.evaluate(.01, 0., time.monotonic())[0].forward.observed, True)
+            # A beam without a return is an azimuth the arc may not enter.
+            node.lidar_rotation_observed = False
+            node.tick()
+            self.assertIs(policy.evaluate(.01, 0., time.monotonic())[0].forward.observed, False)
+            node.lidar_rotation_observed = True
+            # No base_footprint points (no mount TF): no evidence at all.
+            node.lidar_rotation_points = None
+            node.tick()
+            self.assertIsNone(policy.evaluate(.01, 0., time.monotonic())[0].forward)
+        finally:
+            if node is not None:
+                node.destroy_node()
+            rclpy.shutdown()
+
     def test_sensor_only_builds_tracking_evidence_from_camera_tracks_and_odom(self):
         from control.safety.node import SafetyNode
         from rclpy.parameter import Parameter

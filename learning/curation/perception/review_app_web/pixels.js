@@ -136,7 +136,7 @@ function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygo
  $('pixel-tolerance').disabled=!labelReady||tool!=='sample';
  $('pixel-save').disabled=!dirty||locked;$('pixel-discard').disabled=!dirty||busy||!!stroke;
  for(const id of ['pixel-save','pixel-discard'])$(id).reason=!dirty?'저장하지 않은 브러시 획이 없습니다.':busy||stroke?'현재 저장·편집을 마친 뒤 다시 시도하세요.':conflicted?'다른 탭에서 바뀌었습니다. 초안을 버리고 다시 불러오세요.':'';
- $('pixel-draft').textContent=hasPolygon?`영역 꼭짓점 ${polygon.length}개 · ${polygon.length<3?'3개 이상 찍으세요':'Enter로 적용하세요'}`:hasSamples?`${seeds.length}점 선택 · ${previewing?'색 영역 계산 중':sampleImage?`${samplePixels.toLocaleString()}픽셀 미리보기 · Lab 허용치 ${sampleTolerance}`:'미리보기 실패'}`:dirty?`저장하지 않은 브러시 ${draft.length}획`:!$('pixel-class').value?'먼저 픽셀 클래스를 선택하세요.':tool==='sample'?'차선 안을 클릭해 색을 선택하세요. 여러 점을 추가할 수 있습니다.':'';
+ $('pixel-draft').textContent=hasPolygon?`영역 꼭짓점 ${polygon.length}개 · ${polygon.length<3?'3개 이상 찍으세요':'Enter로 적용하세요'}`:hasSamples?`${seeds.length}점 선택 · ${previewing?'색 영역 계산 중':sampleImage?`${samplePixels.toLocaleString()}픽셀 미리보기 · Lab 허용치 ${sampleTolerance}`:'미리보기 실패'}`:dirty?`저장하지 않은 브러시 ${draft.length}획`:!$('pixel-class').value?'먼저 픽셀 클래스를 선택하세요.':tool==='sample'?'칠할 영역 안을 클릭해 색을 선택하세요. 여러 점을 추가할 수 있습니다.':'';
  if((!dirty&&!selection)&&(!$('pixel-complete').checked||!$('pixel-background').checked)){$('pixel-approve').disabled=true;$('pixel-approve').reason='사진 전체와 기본 배경을 각각 확인하세요.';}
  if(ready&&unknownPixels>0){
   const evaluation=workspace.workspace_kind==='evaluation';
