@@ -31,7 +31,7 @@ Wheel `rosy-execution-local`. Verifies an installed policy artifact against a ca
 
 ### Testing Requirements
 
-`python -m pytest middleware/execution/local/test -q`
+`python -m pytest middleware/robot_execution/local/test -q`
 
 ### Common Patterns
 

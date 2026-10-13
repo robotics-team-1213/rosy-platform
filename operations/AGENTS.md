@@ -29,7 +29,7 @@ D-427 operations part and a `colcon_roots` entry. Site orchestration and ledgers
 - Fleet consumes the robot contract. It does not modify `middleware/core/gateway` to add a field.
 - Decision uses only `rosy.decision`; there is no `fleet.ai` shim. Proposal/tool validation and the existing shared Fleet SQLite transaction remain in the same distribution.
 - Console source is `operations/ui/console`; backend source is `operations/fleet/fleet/server`. Installed resources remain `fleet/server/web`; URL, CSP and API authority stay unchanged.
-- `execution/` here is `rosy-execution`. The local policy loader is `middleware/execution/local/` (`rosy-execution-local`). Do not merge them.
+- `execution/` here is `rosy-execution`. The local policy loader is `middleware/robot_execution/local/` (`rosy-execution-local`). Do not merge them.
 - Site vision sends derived sighting JSON. It does not send JPEG to Fleet and it does not publish `/cmd_vel`.
 - World owns `src/rosy/world/state/projections/map_pose.py`; `fleet.localization.map_pose` is its identity facade. The odom `predicted` state is current-state dead reckoning, not future action-conditioned rollout.
 - The complete current manifest-root guide is [platform-folder-responsibilities.md](../docs/reference/platform-folder-responsibilities.md). Decision and Console now have actual source holders (D-637). Action-conditioned future prediction remains planned; do not create empty folders without implementation, contracts and consumers.

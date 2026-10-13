@@ -34,7 +34,7 @@ Operator applications that run with the site, not on the robot CORE process.
 ### Internal
 
 - `operations/fleet/` for the console the gateway sits in front of.
-- `operations/processes/palletizing/` and `operations/execution/`.
+- `operations/processes/palletizing/` and `operations/site_execution/`.
 
 ### External
 

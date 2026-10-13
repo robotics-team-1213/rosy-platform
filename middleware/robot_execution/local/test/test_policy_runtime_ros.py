@@ -149,13 +149,13 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
         assert source['payloads']['policy/model.bin'] == b'host-fixture'
         if with_parent:
             export_parent(tmp_path,journal,command,runner,api,parent,revoke=revoke)
-        files = ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
+        files = ['middleware/robot_execution/local/src/rosy/execution/local/'+name+'.py'
                  for name in ('omx_policy','policy_runtime','policy_source','policy_journal','policy_install')]
         files += ['contracts/learning/src/rosy/contracts/learning/artifacts.py']
         files += ['middleware/devices/omx/adapter/omx_adapter/'+name+'.py'
                   for name in ('command_owner','ros_runtime')]
         if with_parent:
-            files += ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
+            files += ['middleware/robot_execution/local/src/rosy/execution/local/'+name+'.py'
                       for name in ('policy_parent','policy_episode')]
             files += ['middleware/devices/omx/adapter/omx_adapter/'+name+'.py'
                       for name in ('policy_parent','action_store_readback','action_api',
@@ -163,8 +163,8 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent)
             files += ['contracts/learning/src/rosy/contracts/learning/'+name+'.py'
                       for name in ('omx_execution','omx_execution_intent')]
             files += ['learning/registry/policy/fleet_join.py',
-                      'middleware/execution/local/test/native_parent_chain.py',
-                      'middleware/execution/local/test/test_policy_runtime_ros.py']
+                      'middleware/robot_execution/local/test/native_parent_chain.py',
+                      'middleware/robot_execution/local/test/test_policy_runtime_ros.py']
         proof = dict(scope='isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet',
             fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
                                 poll_period_s=.01),

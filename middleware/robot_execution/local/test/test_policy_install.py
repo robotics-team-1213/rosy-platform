@@ -6,7 +6,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT/'middleware/execution/local/src'), str(ROOT/'contracts/learning/src'),
+sys.path[:0] = [str(ROOT/'middleware/robot_execution/local/src'), str(ROOT/'contracts/learning/src'),
                str(ROOT/'contracts/skill/src'), str(ROOT/'test')]
 from rosy.execution.local.policy_install import InstallBinding, load_policy
 from rosy.contracts.learning import seal

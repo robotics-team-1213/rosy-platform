@@ -25,7 +25,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
 | 8 | Fleet 원장 | `operations/fleet/fleet/server`의 mission, task, trip, admission, auth. 채널 구현은 같은 패키지의 `server/channel`. 이 행은 그 파일들을 새 디렉터리로 옮긴 상태가 아니다 |
 | 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
-| 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/execution` |
+| 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
 | 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/ui/{console,cam}`, `operations/apps`, `operations/vision` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
@@ -41,12 +41,12 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | decision | 현장 후보·모델 제안 | 10 | `operations/decision`. 설치는 Fleet 배포 |
 | safety | 공통 E-stop·배터리·Fleet 상실 | 2 | `core_features.safety` |
 | safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/safety` |
-| execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/execution/local` |
-| execution | 현장 목표·진척 | 10 | `operations/execution` |
+| execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/robot_execution/local` |
+| execution | 현장 목표·진척 | 10 | `operations/site_execution` |
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/vision` |
 | vision | 천장 관측 | 11 | `operations/vision` |
 
-`middleware/skills`와 `middleware/execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
+`middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
 
 ## 폴더 이름과 묶음
 
@@ -162,10 +162,10 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `middleware/devices/omx/agent` | wheel `rosy-app-agent`; `rosy_agent` | 이전 완료 — cell local Action 조립. site gateway/process와 통신하고 Arm owner 경계 유지 |
 | `middleware/skills/api` | wheel `rosy-skill-api`; `rosy.skills.api` | 유지 — skill API root. contracts identity를 재사용하고 robot I/O나 site scheduling을 소유하지 않음 |
 | `middleware/skills/manipulation` | wheel `rosy-skill-manipulation`; `rosy.skills.manipulation` | 유지 — manipulation skill 정의/수행 접점. Arm 장치 제어와 site process 구분 |
-| `operations/execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
-| `middleware/execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
-| `operations/execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
-| `operations/execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
+| `operations/site_execution` | wheel `rosy-execution`; 배포 metadata | 유지 — 아래 API/site 하위 root의 배포 단위. local 실행 wheel은 별도 middleware 소유 |
+| `middleware/robot_execution/local` | wheel `rosy-execution-local`; `rosy.execution.local` | 유지 — local policy loader·receipt binding. `rosy-execution`과 중복 설치하지 않음 |
+| `operations/site_execution/src/rosy/execution/api` | `rosy.execution.api` | 유지 — PlanBundle 내부 API. site producer와 현재 wheel 결합을 보존; 일반 contracts 이전은 후속 분리 보류 |
+| `operations/site_execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
 | `middleware/ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
 | `middleware/ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
 | `middleware/ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |

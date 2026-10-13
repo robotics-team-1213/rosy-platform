@@ -338,7 +338,8 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control
-  - path: operations/execution
+  - path: operations/site_execution
+    layout_target: operations/site_execution
     part: operations
     d427_target: operations/execution
     legacy: modules/execution
@@ -347,7 +348,8 @@ roots:
       Package metadata only; the api and site source subtrees below are mapped on
       their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
     concern: other
-  - path: middleware/execution/local
+  - path: middleware/robot_execution/local
+    layout_target: middleware/robot_execution/local
     part: middleware
     d427_target: middleware/execution/local
     legacy: modules/execution/src/rosy/execution/local
@@ -357,7 +359,8 @@ roots:
       Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
       unchanged. rosy-execution no longer packages it.
     concern: control
-  - path: operations/execution/src/rosy/execution/api
+  - path: operations/site_execution/src/rosy/execution/api
+    layout_target: operations/site_execution/src/rosy/execution/api
     part: operations
     d427_target: operations/execution/src/rosy/execution/api
     legacy: modules/execution/src/rosy/execution/api
@@ -367,7 +370,8 @@ roots:
       PlanBundle API is internal to the execution module (D-413 §3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
-  - path: operations/execution/src/rosy/execution/site
+  - path: operations/site_execution/src/rosy/execution/site
+    layout_target: operations/site_execution/src/rosy/execution/site
     part: operations
     d427_target: operations/execution/src/rosy/execution/site
     legacy: modules/execution/src/rosy/execution/site
@@ -788,7 +792,7 @@ safety_modules:
   - middleware/core/gateway/core/system/power.py  # D-628 battery shutdown configuration
   - middleware/core/gateway/core/drive/line_follow.py  # D-627 envelope/recovery binding
   - middleware/core/gateway/core/drive/docking.py  # D-627 docking/Nav2 mode ownership binding
-  - middleware/execution/local/src/rosy/execution/local/omx_policy.py
+  - middleware/robot_execution/local/src/rosy/execution/local/omx_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
