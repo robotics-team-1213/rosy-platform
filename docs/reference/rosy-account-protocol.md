@@ -27,7 +27,11 @@ unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail 
 |---|---|
 | GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
 | POST /api/fleet/auth/accounts | login, principal_id, role, password, grants로 계정 발급 |
+<<<<<<< HEAD
 | PATCH /api/fleet/auth/accounts/{account_id} | revision과 enabled/role/grants 중 변경값; 미지 필드 거부 |
+=======
+| PATCH /api/fleet/auth/accounts/{account_id} | revision과 active/role/grants 중 변경값; 미지 필드 거부 |
+>>>>>>> feat/account-ledger
 | POST /api/fleet/auth/accounts/{account_id}/reset-password | revision, password; 첫 변경 요구 및 이전 세션 회수 |
 | POST /api/fleet/auth/accounts/{account_id}/revoke-sessions | revision; 모든 세션 회수 |
 
@@ -63,11 +67,19 @@ refresh token은 256비트 이상 난수, DB에는 해시만 저장한다. 매 �
 
 ## 대상 접근 토큰
 
+<<<<<<< HEAD
 JWT JWS를 joserfc로 처리한다. algorithm은 Ed25519 (RFC 9864), header는
 `alg`, `typ=at+jwt`, 고정 등록 key의 `kid`다. 원격 jwk/jku/x5u header는 받지 않는다.
 claim은 `iss`, `aud`, `sub`, `sid`, `jti`, `rev`, `iat`, `exp`, `grants`만 허용한다.
 `aud`는 단일 resource이고 모든 grants는 같은 resource만 가리킨다. `sub`는 account_id,
 `sid`는 비밀이 아닌 session family, `jti`는 발급마다 고유한 난수 ID, `rev`는 양의 정수다. `iat`/`exp`는 정수 epoch이며
+=======
+JWT JWS를 joserfc로 처리한다. algorithm은 EdDSA의 Ed25519, header는
+`alg`, `typ=at+jwt`, 고정 등록 key의 `kid`다. 원격 jwk/jku/x5u header는 받지 않는다.
+claim은 `iss`, `aud`, `sub`, `sid`, `rev`, `iat`, `exp`, `grants`만 허용한다.
+`aud`는 단일 resource이고 모든 grants는 같은 resource만 가리킨다. `sub`는 account_id,
+`sid`는 비밀이 아닌 session family, `rev`는 양의 정수다. `iat`/`exp`는 정수 epoch이며
+>>>>>>> feat/account-ledger
 미래 발급·만료·0 이하 수명·300초 초과 수명을 거부한다. role rank로 권한을 확대하지 않는다.
 
 issuer/키/클라이언트 등록은 운영자가 보호된 구성으로 제공한다. signer는 서버 시작마다
