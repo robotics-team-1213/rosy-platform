@@ -1,6 +1,7 @@
 import {cssColor, clearPalette} from '/common/ui.js';
 import {showHistory} from '/history.js';
 import {reviewViewport} from '/viewport.js';
+import '/commands.js';
 const $=id=>document.getElementById(id);
 const modeBadge=document.createElement('ui-status');
 modeBadge.id='pixel-workspace-mode';
@@ -28,6 +29,14 @@ document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pi
 $('pixel-view-status').before($('pixel-coverage'));
 pixelResultNote.after(...document.querySelectorAll('.pixel-layout .review-view-bar label'));
 pixelResultNote.after($('pixel-quick-classes'));
+const pixelTools=document.querySelector('.pixel-quick-tools');
+const compactTools=matchMedia('(width < 64rem)');
+function placePixelTools(){
+ if(compactTools.matches){$('pixel-quick-classes').after(pixelTools);pixelTools.append(document.querySelector('.pixel-ribbon-nav'));}
+ else {document.querySelector('.pixel-editor-column').append(pixelTools);pixelTools.prepend(document.querySelector('.pixel-ribbon-nav'));}
+}
+compactTools.addEventListener('change',placePixelTools);
+placePixelTools();
 for(const [id,key] of [['pixel-prev','ArrowLeft'],['pixel-next','ArrowRight'],['pixel-next-pending','N'],['pixel-undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('pixel-undo').title='마지막 픽셀 수정 되돌리기 · Ctrl+Z';
 for(const [id,label] of [['pixel-prev','이전 사진'],['pixel-next','다음 사진'],['pixel-undo','마지막 픽셀 수정 되돌리기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
@@ -37,7 +46,9 @@ const states={pending:'픽셀 검수 대기',approved:'픽셀 승인',excluded:'
 const serverReasons={'known mask index required':'등록된 픽셀 클래스만 사용할 수 있습니다.','flood seed outside original image':'누른 점이 원본 사진 범위를 벗어났습니다.','bounded flood tolerance required':'비슷한 색 허용치는 0~100 사이 정수입니다.','bounded brush radius required':'브러시 반지름은 0~128 사이 정수입니다.','bounded brush points required':'브러시 획이 너무 깁니다. 나누어 그리세요.','brush point outside original image':'브러시 획이 원본 사진 범위를 벗어났습니다.','3..128 polygon points required':'영역은 꼭짓점 3~128개가 필요합니다.','polygon point outside original image':'영역 꼭짓점이 사진 밖에 있습니다.','mask encoding failed':'마스크를 저장하지 못했습니다.','no unknown pixels remain':'남은 미검수 픽셀이 없습니다.','exactly one background class required':'배경 클래스가 정확히 하나여야 합니다.','drivable outside visible lane boundary':'보이는 왼쪽 차선 바깥 또는 오른쪽 차선 바깥에 주행 가능 영역이 있습니다. 해당 픽셀을 배경이나 미검수로 수정하세요.','unknown pixel review action':'지원하지 않는 동작입니다.'};
 function readableError(message){return serverReasons[message]||message;}
 serverReasons['draft has no labels for remaining unknown pixels']='이 초안은 남은 255 영역에 제안한 라벨이 없습니다. 다른 초안을 선택하거나 직접 검수하세요.';
-let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],tool='sample',polygon=[];
+let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],tool='sample',polygon=[],keyCursor=null;
+const keyboardPosition=document.createElement('p');keyboardPosition.id='pixel-keyboard-position';keyboardPosition.className='quiet';keyboardPosition.setAttribute('role','status');keyboardPosition.hidden=true;document.querySelector('.pixel-stage').after(keyboardPosition);
+$('pixel-keys').querySelector('p').append(' 캔버스 Alt+방향키 1픽셀, Shift를 더하면 10픽셀 · Space 점/꼭짓점 · 브러시 Space를 누른 채 이동하고 놓아 획 종료.');
 let savedPixelSummary='';
 let candidatePreviewDigest='';
 const mergeCandidate=document.createElement('ui-button');mergeCandidate.id='pixel-merge-candidate';mergeCandidate.setAttribute('data-action-icon','pixels');mergeCandidate.setAttribute('kind','primary');mergeCandidate.textContent='사람 라벨 유지 · 255만 초안 보완';$('pixel-apply-candidate').before(mergeCandidate);
@@ -193,9 +204,10 @@ function paint(){if(!ready)return;const canvas=$('pixel-canvas'),ctx=canvas.getC
   const erasers=lines.filter(line=>line.label===255);if(erasers.length)eraserLines(ctx,erasers);
   if(polygon.length){ctx.beginPath();polygon.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(polygon.length>2){ctx.closePath();ctx.globalAlpha=.25;ctx.fillStyle=classColor(Number($('pixel-class').value))||cssColor('--status-warn');ctx.fill();ctx.globalAlpha=1;}ctx.setLineDash([4,3]);ctx.lineWidth=2;ctx.strokeStyle=cssColor('--ink');ctx.stroke();ctx.setLineDash([]);for(const [x,y] of polygon){ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle=cssColor('--ink');ctx.fill();}}
   const radius=Math.max(3,5*canvas.width/Math.max(1,canvas.getBoundingClientRect().width));ctx.lineWidth=Math.max(2,radius/2);for(const [x,y] of seeds){ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.fillStyle=cssColor('--ink');ctx.fill();ctx.strokeStyle=cssColor('--ground');ctx.stroke();}
+  if(keyCursor){const [x,y]=keyCursor,scale=canvas.width/Math.max(1,canvas.getBoundingClientRect().width);ctx.save();ctx.strokeStyle=cssColor('--series-primary');ctx.lineWidth=2*scale;ctx.beginPath();ctx.moveTo(x-5*scale,y);ctx.lineTo(x+5*scale,y);ctx.moveTo(x,y-5*scale);ctx.lineTo(x,y+5*scale);ctx.stroke();ctx.restore();}
 }
 async function loadVlm(index,ticket){const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');state.setAttribute('state','pending');state.textContent='현재 저장된 마스크의 AI 의견을 확인하는 중입니다.';note.textContent='';try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial)return;if(!value.available){state.textContent='아직 이 사진의 AI 확인 결과가 없습니다.';return;}if(!value.current){state.setAttribute('state','warning');state.textContent='마스크가 바뀌어 AI 의견이 오래됐습니다. 새 검사가 필요합니다.';return;}const labels={concern:'검토할 부분 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};state.setAttribute('state',value.review_blocked||value.feedback.verdict==='concern'?'warning':'ready');state.textContent=`${labels[value.feedback.verdict]} · 255 미검수 ${value.unknown_pixels.toLocaleString()}픽셀`;note.textContent=value.feedback.note;}catch{if(ticket!==serial)return;state.setAttribute('state','warning');state.textContent='AI 의견을 불러오지 못했습니다. 원본과 마스크를 직접 확인하세요.';}}
-async function select(index){const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
+async function select(index){const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
  $('review-history-summary').textContent='검수 기록을 불러오는 중…';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
    .catch(()=>{if(ticket===serial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.';});
@@ -245,10 +257,41 @@ function brushAt(event){
    brush.style.top=(event.clientY-stage.top+brush.parentElement.scrollTop)+'px';
   brush.hidden=false;
 }
-const canvas=$('pixel-canvas');canvas.onpointerdown=event=>{if(!ready||busy||conflicted||forbidden||!review.classes||!$('pixel-class').value||frame.status==='excluded'||review.status==='excluded'||event.button!==0)return;if(tool==='sample'){if(seeds.length>=32){error('선택 점은 최대 32개입니다.');return;}seeds.push(point(event));refreshSample();event.preventDefault();return;}if(tool==='polygon'){if(polygon.length>=128){error('영역 꼭짓점은 최대 128개입니다.');return;}polygon.push(point(event));paint();enable();event.preventDefault();return;}const radius=Number($('pixel-radius').value);if(!Number.isInteger(radius)||radius<0||radius>128){error('브러시 반지름은 0~128 사이 정수입니다.');return;}stroke={id:event.pointerId,points:[point(event)],radius,label:Number($('pixel-class').value)};canvas.setPointerCapture(event.pointerId);event.preventDefault();enable();paint();};
+const canvas=$('pixel-canvas');
+function canMark(){return ready&&!busy&&!conflicted&&!forbidden&&review?.classes&&$('pixel-class').value&&frame.status!=='excluded'&&review.status!=='excluded';}
+function selectPoint(position){
+ if(tool==='sample'){if(seeds.length>=32){error('선택 점은 최대 32개입니다.');return;}seeds.push(position);refreshSample();}
+ else {if(polygon.length>=128){error('영역 꼭짓점은 최대 128개입니다.');return;}polygon.push(position);paint();enable();}
+}
+// A null id is a keyboard stroke and must never request pointer capture.
+function beginStroke(id,position){
+ const radius=Number($('pixel-radius').value);if(!Number.isInteger(radius)||radius<0||radius>128){error('브러시 반지름은 0~128 사이 정수입니다.');return;}
+ stroke={id,points:[position],radius,label:Number($('pixel-class').value)};if(id!==null)canvas.setPointerCapture(id);enable();paint();
+}
+function finishStroke(id){if(!stroke||stroke.id!==id)return;const finished=stroke;stroke=null;if(id!==null&&canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);draft.push(finished);paint();enable();}
+canvas.onpointerdown=event=>{if(!canMark()||stroke||event.button!==0)return;keyCursor=null;keyboardPosition.hidden=true;if(tool==='brush')beginStroke(event.pointerId,point(event));else selectPoint(point(event));event.preventDefault();};
 canvas.onpointermove=event=>{if(!stroke){brushAt(event);return;}brush.hidden=true;if(stroke.id!==event.pointerId||stroke.points.length>=2048)return;stroke.points.push(point(event));paint();};
-canvas.onpointerup=event=>{if(!stroke||stroke.id!==event.pointerId)return;const finished=stroke;stroke=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);draft.push(finished);paint();enable();};
-function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);paint();enable();}canvas.onpointercancel=cancel;canvas.onlostpointercapture=cancel;canvas.addEventListener('pointerleave',()=>{brush.hidden=true;});
+canvas.onpointerup=event=>finishStroke(event.pointerId);
+function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(id!==null&&canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);paint();enable();}canvas.onpointercancel=cancel;canvas.onlostpointercapture=cancel;canvas.addEventListener('pointerleave',()=>{brush.hidden=true;});
+canvas.addEventListener('keydown',event=>{
+ if(event.isComposing||event.ctrlKey||event.metaKey||!ready||busy||loading||conflicted||forbidden)return;
+ const direction={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
+ if(!(event.altKey&&direction)&&event.code!=='Space')return;
+ event.preventDefault();event.stopPropagation();
+ const stage=canvas.parentElement;
+ if(stage.classList.contains('review-pan')){if(direction)stage.scrollBy(direction[0]*16*(event.shiftKey?10:1),direction[1]*16*(event.shiftKey?10:1));return;}
+ if(stroke&&stroke.id!==null)return;
+ keyCursor??=[Math.floor(frame.source.width/2),Math.floor(frame.source.height/2)];
+ if(direction){const step=event.shiftKey?10:1;keyCursor=[Math.max(0,Math.min(frame.source.width-1,keyCursor[0]+direction[0]*step)),Math.max(0,Math.min(frame.source.height-1,keyCursor[1]+direction[1]*step))];if(stroke?.id===null&&stroke.points.length<2048)stroke.points.push([...keyCursor]);}
+ else if(!event.repeat&&canMark()){if(tool==='brush'){if(!stroke)beginStroke(null,[...keyCursor]);}else selectPoint([...keyCursor]);}
+ keyboardPosition.hidden=false;keyboardPosition.textContent=`키보드 좌표 ${keyCursor.join(', ')} · 원본 ${frame.source.width} × ${frame.source.height} · Alt+방향키 이동 · Space 표시`;
+ const box=canvas.getBoundingClientRect(),view=stage.getBoundingClientRect(),x=box.left+(keyCursor[0]+.5)*box.width/frame.source.width,y=box.top+(keyCursor[1]+.5)*box.height/frame.source.height;
+ if(x<view.left||x>view.right)stage.scrollLeft+=x-(x<view.left?view.left:view.right);
+ if(y<view.top||y>view.bottom)stage.scrollTop+=y-(y<view.top?view.top:view.bottom);
+ paint();
+});
+canvas.addEventListener('keyup',event=>{if(event.code==='Space'&&stroke?.id===null){event.preventDefault();finishStroke(null);}});
+canvas.addEventListener('blur',()=>{if(stroke?.id===null)cancel();});
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){event.preventDefault();cancel();}else if(event.key==='Escape'&&polygon.length){event.preventDefault();polygon=[];paint();enable();}else if(event.key==='Escape'&&seeds.length){event.preventDefault();clearSamples();}
    if(event.code==='KeyZ'&&(event.ctrlKey||event.metaKey)&&!event.shiftKey&&!event.isComposing&&!event.target?.matches?.('input, textarea, select, [contenteditable]')&&!event.repeat&&!$('pixel-undo').disabled){event.preventDefault();$('pixel-undo').click();return;}
   // Arrow keys move between photos; number fields keep their native stepping.
@@ -273,7 +316,7 @@ function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.has
   if(key==='n'&&!$('pixel-next-pending').disabled){event.preventDefault();$('pixel-next-pending').click();return;}
   const option=/^[1-9]$/.test(key)?[...$('pixel-class').options].filter(o=>o.value!==''&&o.value!=='255')[Number(key)-1]:null;
   if(option&&!$('pixel-class').disabled){event.preventDefault();$('pixel-class').value=option.value;$('pixel-class').dispatchEvent(new Event('change'));}
-  // X only excludes a pending mask; approved or excluded ones change by mouse only.
+  // X only excludes a pending mask; other decisions use the explicit reopen action.
   const decision=key==='a'?'pixel-approve':key==='x'&&review?.status==='pending'?'pixel-exclude':null;
   if(decision&&!$(decision).disabled){event.preventDefault();$(decision).click();}
   });

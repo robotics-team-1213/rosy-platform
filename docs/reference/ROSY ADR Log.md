@@ -732,6 +732,7 @@
 | D-733 | Hourly KST Discord Fleet health subscription | Accepted (source only) |
 | D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 | Accepted |
 | D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 | Accepted |
+| D-739 | 검수 앱 기능 검색과 원본 좌표 커서 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1071,3 +1072,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 **Status:** Proposed (2026-10-12, contract review before implementation)
 
 기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).
+
+## D-739 — 검수 앱 기능 검색과 원본 좌표 커서
+
+**Status:** Accepted (2026-10-13, 사용자 단축키 요청)
+
+기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
