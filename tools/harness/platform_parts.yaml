@@ -469,6 +469,12 @@ roots:
     legacy: src/site/fleet
     wave: "3c"
     import_prefix: [fleet]
+    source_packages:
+      fleet/server/peer: fleet.server
+      fleet/server/cell: fleet.server
+      fleet/server/auth: fleet.server
+      fleet/server/console: fleet.server
+      fleet/server/ledger: fleet.server
     concern: decision
   - path: operations/fleet/fleet/observe
     part: operations
