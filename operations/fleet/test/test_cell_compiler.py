@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-for relative in ("contracts/skill/src", "operations/execution/src", "middleware/skills/api/src", "operations/processes/palletizing/src"):
+for relative in ("contracts/skill/src", "operations/site_execution/src", "middleware/skills/api/src", "operations/processes/palletizing/src"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -106,7 +106,7 @@ def test_only_cell_compiler_imports_the_palletizing_process_in_fleet():
                      else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
             if any(name.startswith("rosy.processes") for name in names):
                 importers.append(path.relative_to(fleet).as_posix())
-    assert sorted(set(importers)) == ["server/cell_compiler.py"]
+    assert sorted(set(importers)) == ["server/cell/cell_compiler.py"]
 
 
 def test_item_geometry_comes_from_the_validated_recipe():

@@ -8,7 +8,7 @@ import pytest
 from browser_harness import browser_tests_enabled, open_page
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "middleware" / "ui" / "robot"
+WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
 
 
 def _route_panel_test(page) -> None:

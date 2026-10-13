@@ -611,7 +611,7 @@ def test_the_display_shows_the_key_and_never_logs_it(tmp_path, capsys):
 
 
 def test_the_lcd_draws_the_join_qr_only_while_the_ap_is_open_and_never_logs_it(tmp_path, capsys):
-    sys.path.insert(0, str(ROOT / "middleware/ui/face"))
+    sys.path.insert(0, str(ROOT / "middleware/robot_ui/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     module = _display()
     _status(tmp_path, "CORE_READY")
@@ -723,7 +723,7 @@ def test_a_malformed_login_hand_off_shows_nothing(tmp_path, content):
 
 
 def test_the_boot_card_rows_for_the_login_line():
-    sys.path.insert(0, str(ROOT / "middleware/ui/face"))
+    sys.path.insert(0, str(ROOT / "middleware/robot_ui/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     base = {"stage": "CORE_READY", "ipv4": ["192.168.1.201"], "battery_percent": 80, "battery_voltage": 7.9}
 
@@ -796,7 +796,7 @@ def test_no_product_unit_or_launch_starts_emotion_server():
     from robot_contracts import COLCON_ROOTS
 
     launches = [launch for root in COLCON_ROOTS for launch in (ROOT / root).rglob("*.launch.py")
-                if "middleware/ui/face" not in launch.as_posix()]
+                if "middleware/robot_ui/face" not in launch.as_posix()]
     # D-427: an empty walk would pass; today the roots hold 25 *.launch.py outside the face.
     assert len(launches) >= 25, launches  # update when a launch file is legitimately removed
     for launch in launches:
@@ -918,7 +918,7 @@ def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):
     # The CI container has no Pillow; the image build runs this same render check in-image.
     pytest.importorskip("PIL")
-    monkeypatch.syspath_prepend(str(ROOT / "middleware/ui/face"))
+    monkeypatch.syspath_prepend(str(ROOT / "middleware/robot_ui/face"))
     probe = _load("probe_display_runtime_render", IMAGE / "probe-display-runtime.py")
 
     failures = probe.check_render(tmp_path)
@@ -1723,7 +1723,7 @@ def test_an_oversized_hand_over_is_not_read(tmp_path):
 
 # --- D-433: rosy-face — the situation table drives the LCD -----------------------------
 
-FACE = ROOT / "middleware/ui/face"
+FACE = ROOT / "middleware/robot_ui/face"
 WALL = 1_790_000_000.0  # any fixed wall clock; the hand-over's written_at follows it
 
 

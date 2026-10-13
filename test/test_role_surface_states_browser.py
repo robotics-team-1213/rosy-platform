@@ -12,7 +12,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RU
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "middleware" / "ui" / "robot"
+WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
 
 
 def _module_page(playwright, modules: dict[str, Path], width: int = 390):

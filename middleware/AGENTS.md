@@ -18,7 +18,7 @@ On-robot middleware. CORE (the external API and the only final `/cmd_vel` publis
 | `perception/` | ROS `control` distribution: sensors/vision implementations, node composition and thin import facades; no second operational final command publisher (see `perception/AGENTS.md`) |
 | `ui/` | Robot face, Pilot, and the CORE dashboard (see `ui/AGENTS.md`) |
 | `skills/` | ROS-free Skill wheels (see `skills/AGENTS.md`) |
-| `execution/` | Local execution evidence wheel. Not `operations/execution` (see `execution/AGENTS.md`) |
+| `execution/` | Local execution evidence wheel. Not `operations/site_execution` (see `execution/AGENTS.md`) |
 
 ## For AI Agents
 

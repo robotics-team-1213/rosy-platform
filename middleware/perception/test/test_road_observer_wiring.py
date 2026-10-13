@@ -9,7 +9,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_road_observer_has_camera_inputs_and_one_evidence_output():
-    source = (ROOT / "control/road_observer_node.py").read_text(
+    source = (ROOT / "nodes/road_observer_node.py").read_text(
         encoding="utf-8")
     assert "Image, 'camera/front'" in source
     assert "String, 'camera/controls'" in source
@@ -50,7 +50,7 @@ def test_package_and_launch_expose_road_observer():
 
 
 def test_road_observer_uses_source_header_stamp_and_validated_homography():
-    source = (ROOT / "control/road_observer_node.py").read_text(
+    source = (ROOT / "nodes/road_observer_node.py").read_text(
         encoding="utf-8")
     assert "msg.header.stamp" in source
     assert "load_homography_profile" in source
@@ -62,7 +62,7 @@ def test_road_observer_uses_source_header_stamp_and_validated_homography():
 
 
 def test_road_observer_has_an_explicit_gazebo_only_ground_mode():
-    source = (ROOT / "control/road_observer_node.py").read_text(
+    source = (ROOT / "nodes/road_observer_node.py").read_text(
         encoding="utf-8")
     assert "simulation_ground_plane" in source
     assert "camera_ground_mode" in source
@@ -76,7 +76,7 @@ def test_road_observer_has_an_explicit_gazebo_only_ground_mode():
 
 
 def test_road_observer_scene_context_is_off_and_sensing_only():
-    source = (ROOT / "control/road_observer_node.py").read_text(
+    source = (ROOT / "nodes/road_observer_node.py").read_text(
         encoding="utf-8")
     assert "SceneContextMatcher" in source
     assert "default_scene_context_store" in source
@@ -97,8 +97,8 @@ def test_road_observer_scene_context_is_off_and_sensing_only():
 
 def test_road_observer_overlays_recent_advisory_detections():
     """D-423 §2.3: vision/detections join the preview within 0.6 s; display only."""
-    source = (ROOT / "control/road_observer_node.py").read_text(encoding="utf-8")
+    source = (ROOT / "nodes/road_observer_node.py").read_text(encoding="utf-8")
     assert "String, DETECTIONS_TOPIC" in source and "TOPIC as DETECTIONS_TOPIC" in source
     assert "detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S)" in source
-    road = (ROOT / "vision/perception/road.py").read_text(encoding="utf-8")
+    road = (ROOT / "front_camera/perception/road.py").read_text(encoding="utf-8")
     assert "detections=detections" in road

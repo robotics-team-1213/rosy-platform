@@ -24,7 +24,7 @@ from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
 from fleet.server import trip_runner

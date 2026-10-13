@@ -42,7 +42,7 @@ Composition roots stay in `compose.py`. Cell compilation stays in `cell_compiler
 ### Internal
 
 - `operations/processes/palletizing/` (`rosy-palletizing`).
-- `operations/execution/` (`rosy-execution`).
+- `operations/site_execution/` (`rosy-execution`).
 
 ### External
 

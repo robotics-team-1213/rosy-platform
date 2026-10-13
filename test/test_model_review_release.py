@@ -86,7 +86,7 @@ def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
         path.write_bytes(b"source\n")
     release.check_source(source, tmp_path / "root", tmp_path / "state")
     before = release.digest_tree(source)
-    (source / "middleware/drive/safety/command_gate.py").write_bytes(b"changed\n")
+    (source / "middleware/drive/motion_limits/command_gate.py").write_bytes(b"changed\n")
     assert release.digest_tree(source) != before
 
 
@@ -145,3 +145,26 @@ def test_generated_unit_uses_exact_canonical_runtime_holders(tmp_path):
         "learning/registry/perception", "learning/curation/perception", "learning/training/perception",
     )]
     assert len(paths) == len(set(paths))
+
+@pytest.mark.parametrize("missing", [
+    "middleware/perception/localization/loc_assist.py",
+    "middleware/perception/graph_health/watch.py",
+    "middleware/perception/snapshots/capture_trigger.py",
+])
+def test_functional_holder_cannot_be_omitted_from_review_source(tmp_path, missing):
+    assert missing in release.SPLIT_REQUIRED
+    source = tmp_path / "source"
+    source_tree(source)
+    for name in ("middleware/perception/control/_source_layout.py", *release.SPLIT_REQUIRED):
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"source\n")
+    (source / missing).unlink()
+    with pytest.raises(ValueError, match="missing"):
+        release.check_source(source, tmp_path / "root", tmp_path / "state")
+
+def test_generated_unit_can_opt_in_to_private_owner_controls(tmp_path):
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'learning-control.json').write_text('{}')
+    text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
+    assert f'--learning-control {state / "learning-control.json"}' in text

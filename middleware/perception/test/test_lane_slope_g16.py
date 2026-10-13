@@ -136,7 +136,7 @@ def test_a_boundary_without_a_stated_fit_error_leaves_uncertainty_unknown(bad):
 def test_keeper_and_containment_share_one_paint_half_width():
     from control.sensing.perception import lane_containment, lane_keep_lines
     assert lane_containment.PAINT_HALF_WIDTH_M is lane_keep_lines.PAINT_HALF_WIDTH_M
-    node = (REPO / "middleware" / "perception" / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    node = (REPO / "middleware" / "perception" / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     # The node hands its validated read-only lane_paint_half_width_m to the keeper too.
     assert "paint_half_width_m=self._paint_half_width_m)" in node.split("LaneKeeper(", 1)[1].split(")\n", 1)[0] + ")"
     with pytest.raises(ValueError):

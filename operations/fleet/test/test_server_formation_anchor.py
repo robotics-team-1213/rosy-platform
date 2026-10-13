@@ -6,7 +6,7 @@ import asyncio
 import json
 
 from fakes import FakeRobot, run
-from fleet.localization.map_pose import LOCALIZED, MapPose
+from rosy.world.state.projections.map_pose import LOCALIZED, MapPose
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.swarm.anchor import anchored_relay_factory

@@ -1,32 +1,4 @@
-"""Bounded camera preview storage for observation-only dashboard use."""
+"""Source-only facade for the preserved installed identity."""
+from core_features._source_layout import load_source_package
 
-from .transport import (
-    CAMERA_TOPIC,
-    PERCEPTION_TOPIC,
-    PREVIEW_TOPIC,
-    TransportUnavailable,
-    accept_preview,
-)
-from .models import MODEL_STATUS_TOPICS, ModelStatusStore
-from .store import (
-    VisionFrame,
-    VisionFrameAdvanced,
-    VisionFrameStore,
-    VisionPullRateLimited,
-    parse_preview_format,
-)
-
-__all__ = [
-    "CAMERA_TOPIC",
-    "MODEL_STATUS_TOPICS",
-    "ModelStatusStore",
-    "PERCEPTION_TOPIC",
-    "PREVIEW_TOPIC",
-    "TransportUnavailable",
-    "accept_preview",
-    "VisionFrame",
-    "VisionFrameAdvanced",
-    "VisionFrameStore",
-    "VisionPullRateLimited",
-    "parse_preview_format",
-]
+load_source_package(globals())

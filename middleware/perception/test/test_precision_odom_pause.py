@@ -8,7 +8,7 @@ from control.control.calibration_runtime import precision_scan_required
 
 
 def method(name):
-    path = Path(__file__).parents[1]/'control/startup_calibration_node.py'
+    path = Path(__file__).parents[1]/'nodes/startup_calibration_node.py'
     cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
     function = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
     scope = {'precision_scan_required': precision_scan_required, 'math': math, 'time': NS(monotonic=lambda: 10.),
