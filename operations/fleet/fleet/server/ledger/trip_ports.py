@@ -422,11 +422,11 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
             or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
         return None
-    stamp = getattr(located, "odom_stamp", None) if caps.get("lane_bend_map_entry") else None  # D-759 2
-    return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
-            "bend_radius_m": bend["radius_m"], **({} if stamp is None else {"map_entry": {  # lane heading at the arc start
-                "yaw_rad": round(live.arc(live.view["segment_index"]).point_at(bend["s_start"])[2], 4),
-                "pose_yaw_rad": located.yaw, "odom_stamp_s": stamp}})}
+    fields = dict(map_id=active[1].map_id, bend_in_m=bend_in, bend_tol_m=_pose_tol(live, config), bend_radius_m=bend["radius_m"])
+    if caps.get("lane_bend_map_entry") and getattr(located, "odom_stamp", None) is not None:  # D-759 2: lane heading there
+        fields["map_entry"] = {"yaw_rad": round(live.arc(live.view["segment_index"]).point_at(bend["s_start"])[2], 4),
+                               "pose_yaw_rad": located.yaw, "odom_stamp_s": located.odom_stamp}
+    return fields
 
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
