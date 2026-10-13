@@ -123,6 +123,9 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             tokens.remove(resource); checked.remove(resource); save(); return null
         }
     }
+    @Synchronized fun cachedAccess(resource: String): String? = runCatching {
+        data.getJSONObject("tokens").getJSONObject(resource).getString("access_token").also { claims(it, resource) }
+    }.getOrNull()
     @Synchronized fun identity(resource: String): String? = runCatching {
         val token = data.getJSONObject("tokens").getJSONObject(resource).getString("access_token")
         val c = claims(token, resource); "${c.getString("sub")}:${c.getString("sid")}:${c.getLong("rev")}"

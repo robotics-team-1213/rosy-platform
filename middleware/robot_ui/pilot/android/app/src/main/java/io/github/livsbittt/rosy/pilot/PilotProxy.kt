@@ -177,7 +177,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         if (identityVerified) runCatching {
             client.newBuilder().callTimeout(400, TimeUnit.MILLISECONDS).retryOnConnectionFailure(false).build()
                 .newCall(Request.Builder().url("$scheme://${target.host}:${target.port}/api/v1/teleop")
-                    .header("Authorization", "Bearer ${connection.bearer()}")
+                    .header("Authorization", "Bearer ${connection.stopBearer()}")
                     .post("{\"linear\":0,\"angular\":0}".toRequestBody("application/json".toMediaTypeOrNull())).build())
                 .execute().close()
         }

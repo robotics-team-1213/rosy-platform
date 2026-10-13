@@ -15,6 +15,7 @@ interface PilotConnection {
     fun client(): OkHttpClient
     val managed: Boolean get() = false
     fun bearer(): String = target.credential
+    fun stopBearer(): String = target.credential
     fun accountContext(): JSONObject? = null
     fun logoutAccount(): Boolean = false
     fun invalidateCredential() = Unit
@@ -36,6 +37,7 @@ class LobbySession(override val target: RobotTarget, override val secure: Boolea
     private val accountIdentity = account?.identity(resource)
     override val managed get() = account != null
     override fun bearer(): String = if (managed) account!!.access(resource) ?: error("account unavailable") else target.credential
+    override fun stopBearer(): String = if (managed) account!!.cachedAccess(resource).orEmpty() else target.credential
     override fun accountContext() = account?.context(resource)
     override fun logoutAccount() = account?.logout() ?: false
     private val peerCa = caPem?.let { PeerTls.ca(it) }
