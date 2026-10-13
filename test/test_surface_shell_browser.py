@@ -82,7 +82,7 @@ def test_the_device_surface_mounts_the_events_panel(app_client):
             types = page.locator(".event-type").all_text_contents()
             assert "system.test" in types
             assert page.locator('#surface-switch a[aria-current="page"]').text_content() == "설치·정비"
-            assert page.locator("#shell-role").text_content() == "administrator"
+            assert page.locator("#shell-role").text_content() == "관리자"
             assert not errors
         finally:
             browser.close()
