@@ -3,13 +3,36 @@
 from pathlib import Path
 import os
 import shutil
+import shlex
 import subprocess
+import tomllib
 
 import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def test_ci_local_execution_wheel_pin_matches_package_metadata():
+    project = tomllib.loads((ROOT / 'middleware/execution/local/pyproject.toml').read_text(encoding='utf8'))
+    assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
+
+
+def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
+    import yaml
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Build and install ROS-free platform API wheels')
+    build, install = script.split('pip3 wheel', 1)[1].split('pip3 install', 1)
+    projects = [tomllib.loads((ROOT / token / 'pyproject.toml').read_text(encoding='utf8'))['project']
+                for token in shlex.split(build) if (ROOT / token / 'pyproject.toml').is_file()]
+    assert len(projects) >= 11
+    pins = {f"{project['name']}=={project['version']}" for project in projects}
+    for project in projects:
+        assert f"{project['name']}=={project['version']}" in install
+        for requirement in project.get('dependencies', []):
+            if requirement.startswith('rosy-'):
+                assert requirement in pins, f"{project['name']} requires an unbuilt wheel: {requirement}"
 
 
 @pytest.mark.parametrize("build_exit", [0, 42])
