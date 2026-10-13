@@ -8248,3 +8248,9 @@ osy-d395-s1d\`.
 - 증거: source 부재·비추적/reparse/producer/exclusive-open/전체 hash·크기 안정성을 확인했고, 1,847파일·42,508,179 bytes의 destination readback과 원본 부재 PASS다. 일반 orphan-cache import 거절은 X: 임시 자료의 assert로 확인했으며 bytecode 실행은 하지 않았다. Docker mount/WSL/협업 actor 이력/설치 소비자도 읽기 확인했다.
 - gate 변화: 8곳 정리/2곳 부분 정리/5곳 유지. metadata·자격 원문·참조 overlay는 보존했다. committed HEAD 원격 gate/known_failures/local main 착지는 사용자 요청에 따라 이어서 실행하고 X: landing 로그와 Git으로 확인한다.
 - 결정: credential 값·협업 본문을 공개 기록으로 복사하지 않는다. S1 및 worktree 제거·push/배포/실물 작업은 미실행이다.
+
+## 2026-10-13 · uncommitted · refactor: promote Drive source holder
+- 변경: D-743과 S1 계획에 따라 middleware/control/drive를 middleware/drive로 승격하고 source·설치·배포·시험 경로를 동기화했다.
+- 증거: X: 세션 drive-holder-s1의 217파일 manifest·SHA와 독립 리뷰·원격 시험·landing 기록을 사용한다.
+- gate 변화: source 구현. remote/NEW0/local main은 도구 실행 결과로 확인하며 배포·장치·현장 gate는 유지한다.
+- 결정: 설치 이름·d427_target·CORE writer 보존. S2~S10·push·배포는 미실행이다.

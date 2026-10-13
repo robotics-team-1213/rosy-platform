@@ -18,6 +18,8 @@
 
 근거: [조사 보고서](../assessments/2026-10-13-folder-responsibility-audit.md), Accepted [D-738](../adr/D-738-folder-one-authority.md), [현재 폴더 책임](../reference/platform-folder-responsibilities.md), [platform_parts.yaml](../../tools/harness/platform_parts.yaml). 조사 SHA `a967ab11a`는 과거 스냅샷이다. 각 작업 시작 시 최신 main에서 현재 경로와 이미 완료된 단계를 다시 확인한다. 다른 세션이 완료한 이동을 다시 실행하지 않는다.
 
+**구조 토론 후 S1:** [D-743](../adr/D-743-drive-holder-promotion.md)과 [S1 실행 계획](2026-10-13-drive-holder-s1.md)에 따라 안쪽 Drive를 middleware/drive로 승격한다. S6의 signal_observer 범위는 실행 전에 따로 확정한다. 단계 순서는 유지한다.
+
 ## 범위·책임·순서
 
 | 묶음 | 담당 책임 | 실행 순서 | 완료 결과 |
@@ -59,7 +61,7 @@
 
 | 단계 | 현재 → 목표/판정 | 반드시 보존할 경계 | 집중 검증 경로 |
 |---|---|---|---|
-| S1 | `middleware/control` → `middleware/drive` | 설치 import, CORE `core/drive` 조립은 별도 | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_folder_package_names.py` |
+| S1 | `middleware/control/drive` → `middleware/drive` (D-743) | 설치 import, CORE `core/drive` 조립은 별도 | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_folder_package_names.py` |
 | S2 | `middleware/perception/control/loc_assist.py`, `watch.py` 및 나머지 순수 판단을 출력별 기능 holder로 판정 | facts/lease/command/graph 판단을 구분; 이미 이전된 Drive runtime은 다시 옮기지 않음 | `middleware/perception/test/`의 해당 adapter·순수 판단 시험 |
 | S3 | S2 뒤 남은 `middleware/perception/control` 조립 → `middleware/perception/nodes` | `control` ROS package와 다섯 호환 설치 initializer | `middleware/perception/test/test_responsibility_layout.py`, `test/architecture/test_colcon_roots.py` |
 | S4 | `middleware/execution` → `middleware/robot_execution`; `operations/execution` → `operations/site_execution` | local policy/receipt와 site goal/progress, `rosy.execution.*` | `middleware/execution/local/test/`, `test/test_judgment_extraction.py`, gateway/palletizing 소비 시험; 이동 뒤 시험 경로로 실행 |

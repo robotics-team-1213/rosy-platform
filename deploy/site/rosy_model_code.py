@@ -77,19 +77,19 @@ JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
 SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
                        "middleware/perception/package.xml",
-                       *("middleware/control/drive/" + name + "/" for name in
+                       *("middleware/drive/" + name + "/" for name in
                          ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
 SPLIT_REQUIRED = ("middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/vision/perception/__init__.py",
-                  "middleware/control/drive/safety/command_gate.py",
-                  "middleware/control/drive/recovery/recover.py",
-                  "middleware/control/drive/tracking/path_follow.py",
-                  "middleware/control/drive/calibration/modes.py",
-                  "middleware/control/drive/planning/grid/__init__.py",
-                  "middleware/control/drive/runtime/control_node.py",
-                  "middleware/control/drive/safety/adapter/__init__.py",
-                  "middleware/control/drive/tracking/wander/__init__.py")
+                  "middleware/drive/safety/command_gate.py",
+                  "middleware/drive/recovery/recover.py",
+                  "middleware/drive/tracking/path_follow.py",
+                  "middleware/drive/calibration/modes.py",
+                  "middleware/drive/planning/grid/__init__.py",
+                  "middleware/drive/runtime/control_node.py",
+                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/tracking/wander/__init__.py")
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",

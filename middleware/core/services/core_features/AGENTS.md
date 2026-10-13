@@ -25,20 +25,20 @@ Python package of feature managers behind CORE's `CoreServices`, one subpackage 
 | `command/` | Mode and source arbitration, emotion map (see `command/AGENTS.md`) |
 | `safety/` | Safety manager and shadow evaluation (see `safety/AGENTS.md`) |
 | `state/` | State snapshot manager (see `state/AGENTS.md`) |
-| `core_features.navigation` | Drive goal/readiness facade: `middleware/control/drive/behaviors/navigation` |
+| `core_features.navigation` | Drive goal/readiness facade: `middleware/drive/behaviors/navigation` |
 | `waypoints/` | Waypoint manager (see `waypoints/AGENTS.md`) |
 | `power/` | Battery policy and power manager (see `power/AGENTS.md`) |
-| `core_features.docking` | Drive docking/parking: `middleware/control/drive/behaviors/docking` |
-| `core_features.swarm` | Robot reference-follow behavior: `middleware/control/drive/behaviors/swarm` |
+| `core_features.docking` | Drive docking/parking: `middleware/drive/behaviors/docking` |
+| `core_features.swarm` | Robot reference-follow behavior: `middleware/drive/behaviors/swarm` |
 | `diagnostics/` | Diagnostics collector (see `diagnostics/AGENTS.md`) |
 | `calibration/` | Calibration session (see `calibration/AGENTS.md`) |
-| `core_features.line_follow` | Drive lane/curvature/body proof and bounded recovery: `middleware/control/drive/behaviors/line_follow` |
+| `core_features.line_follow` | Drive lane/curvature/body proof and bounded recovery: `middleware/drive/behaviors/line_follow` |
 | `fleet_agent/` | Fleet enrolment and discovery (see `fleet_agent/AGENTS.md`) |
 | `decision/` | Shared allowed-action judgment, D-228 (see `decision/AGENTS.md`) |
-| `core_features.localization` | Drive evidence consumer, autonomy halt and bounded pose/search lifecycle: `middleware/control/drive/behaviors/localization` |
+| `core_features.localization` | Drive evidence consumer, autonomy halt and bounded pose/search lifecycle: `middleware/drive/behaviors/localization` |
 | `recovery/` | `camera_fault.py`: operator-selectable camera-fault actions; reports eligibility only, no motion |
-| `core_features.road_behaviour` | Drive road-state speed cap and branch choice: `middleware/control/drive/behaviors/road_behaviour` |
-| `core_features.traffic_policy` | Drive traffic admission and signal-evidence polling: `middleware/control/drive/behaviors/traffic_policy` |
+| `core_features.road_behaviour` | Drive road-state speed cap and branch choice: `middleware/drive/behaviors/road_behaviour` |
+| `core_features.traffic_policy` | Drive traffic admission and signal-evidence polling: `middleware/drive/behaviors/traffic_policy` |
 | `vision/` | `store.py` latest-only JPEG preview store (no backpressure), `transport.py` names the one handoff Core accepts |
 
 ## For AI Agents

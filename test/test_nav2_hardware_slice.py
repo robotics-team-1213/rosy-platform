@@ -94,7 +94,7 @@ def test_io_image_packages_nav2_and_slam_without_aux_drivers():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-    assert "COPY middleware/control/drive/planning/nav2" in dockerfile
+    assert "COPY middleware/drive/planning/nav2" in dockerfile
     assert "navigation" in dockerfile
     assert "ros-jazzy-navigation2" in dockerfile
     assert "ros-jazzy-nav2-bringup" in dockerfile
@@ -102,7 +102,7 @@ def test_io_image_packages_nav2_and_slam_without_aux_drivers():
     assert "ros-jazzy-slam-toolbox" in dockerfile
     for package in hardware_packages():
         assert package not in dockerfile, package
-    assert "!middleware/control/drive/planning/nav2/" in dockerignore
+    assert "!middleware/drive/planning/nav2/" in dockerignore
 
 
 def test_hardware_launch_composes_bringup_and_imports_nav_policy():

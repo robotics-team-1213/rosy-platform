@@ -170,7 +170,7 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
     """The parent owns the namespace; child launch groups must receive an empty one."""
     bringup = (
         ROOT.parents[2]
-        # D-427 wave 4c: navigation lives at middleware/control/drive/planning/nav2.
+        # D-427 wave 4c: navigation lives at middleware/drive/planning/nav2.
         / "middleware"
         / "control"
         / "drive"
