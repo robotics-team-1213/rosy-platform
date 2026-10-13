@@ -75,14 +75,17 @@ class Control:
 
     def _show(self, unit):
         raw = self._run('show', unit, '--property=ActiveState,SubState,Result,ExecMainStatus,InvocationID,'
-            'UnitFileState,FragmentPath,DropInPaths,Triggers,ExecStart')
+            'UnitFileState,FragmentPath,DropInPaths,Triggers,ExecStart,KillMode,ExecStartPre,ExecStartPost,ExecStop,ExecStopPost')
         value = dict(line.split('=', 1) for line in raw.splitlines() if '=' in line)
         if value.get('FragmentPath') != str(self.unit_files[unit]) or value.get('DropInPaths'):
             raise ValueError('실제 학습 서비스 binding이 변경되었습니다.')
         if unit == self.service:
             command = value.get('ExecStart', '').partition('argv[]=')[2].partition(' ;')[0].strip()
-            if command != self.command:
+            if value.get('ExecStart', '').count('argv[]=') != 1 or command != self.command:
                 raise ValueError('적재된 서비스가 소유 서명 실행기와 다릅니다.')
+            if (value.get('KillMode') != 'control-group' or
+                    any(value.get(key) for key in ('ExecStartPre', 'ExecStartPost', 'ExecStop', 'ExecStopPost'))):
+                raise ValueError('학습 중지는 추가 명령 없이 소유 control group만 종료해야 합니다.')
         elif value.get('Triggers') != self.service:
             raise ValueError('적재된 타이머의 실행 대상이 다릅니다.')
         return value
@@ -96,21 +99,27 @@ class Control:
         automatic = timer['ActiveState'] == 'active'
         state = self.out / 'state.json'
         # shortcut: bound ledger reads to 16 MiB; use a compact projection for larger histories.
-        cycles = json.loads(_bytes(state, 16 * 1024 * 1024)).get('cycles', {}) if state.exists() else {}
-        retry = not cycles or any(row.get('status') in ('pending', 'retry', 'running')
-            and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in cycles.values())
+        ledger_error = None
+        try:
+            cycles = json.loads(_bytes(state, 16 * 1024 * 1024)).get('cycles', {}) if state.exists() else {}
+            retry = not cycles or any(row.get('status') in ('pending', 'retry', 'running')
+                and type(row.get('attempts')) is int and row['attempts'] < self.max_attempts for row in cycles.values())
+        except (ValueError, KeyError, TypeError, AttributeError, OSError):
+            retry = False
+            ledger_error = '학습 실행 기록을 읽지 못했습니다. 중지는 가능하며 재시도 전에 기록을 확인하세요.'
         reasons = {'start': '실행 중이거나 자동 확인이 이미 켜져 있습니다.',
                    'stop': '현재 실행기와 자동 확인이 모두 중지되어 있습니다.',
                    'retry': '완료·품질 거절·시도 한도 소진 작업은 재시도할 수 없습니다.'}
         if active: reasons['retry'] = '실행기를 중지하거나 현재 처리가 끝난 뒤 재시도하세요.'
+        if ledger_error: reasons.update(start=ledger_error, retry=ledger_error)
         result = dict(available=True, out_path=str(self.out), automatic=automatic, active=active,
             state='stopping' if service['ActiveState'] == 'deactivating' else
                   'running' if active else 'waiting' if automatic else 'stopped',
-            can_start=not active and not automatic, can_stop=active or automatic,
-            can_retry=not active and retry, reasons=reasons)
+            can_start=not active and not automatic and not ledger_error, can_stop=active or automatic,
+            can_retry=not active and retry, reasons=reasons, error=ledger_error)
         result['version'] = hashlib.sha256(json.dumps({'service': {k: service.get(k) for k in
             ('ActiveState', 'SubState', 'Result', 'ExecMainStatus', 'InvocationID')},
-            'automatic': automatic, 'retry': retry}, sort_keys=True).encode()).hexdigest()
+            'automatic': automatic, 'retry': retry, 'ledger_valid': not ledger_error}, sort_keys=True).encode()).hexdigest()
         return result
 
     def status(self):

@@ -4,6 +4,8 @@ After=rosy-review-bridge.service
 
 [Service]
 Type=oneshot
+KillMode=control-group
+TimeoutStopSec=15
 SuccessExitStatus=3
 StandardOutput=truncate:%h/rosy-ml/review-pipeline/cycle-state/summary.json
 StandardError=journal
