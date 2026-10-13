@@ -192,12 +192,15 @@ class CommandPolicy:
                 front, rear = command_translation_bumpers(snapshot.translation, linear, angular, now)
                 state = replace(state, obstacle=state.obstacle or front, rear_blocked=state.rear_blocked or rear)
             result = evaluate_command(linear, angular, replace(state, command_age=0.))
-            if result.reason == 'trajectory_changed' and state.can_rotate is False:
-                # D-740: the pivot circle is not the body path of a moving forward arc. Admit
-                # only the unchanged twist, only when nothing else restricts it and its own
-                # stopping sweep clears this scan; any other outcome keeps the result above.
-                admitted = evaluate_command(linear, angular,
-                                            replace(state, command_age=0., can_rotate=True))
+            if (linear > 0. and angular != 0. and (result.linear, result.angular) != (linear, angular)
+                    and (state.can_rotate is False or state.obstacle)
+                    and isinstance(snapshot.forward, ForwardEvidence)):
+                # D-740: neither the pivot circle nor the straight front strip is the body path
+                # of a moving forward arc. Admit only the unchanged twist, only when nothing but
+                # those two LiDAR rules restricts it and its own stopping sweep clears this scan.
+                admitted = evaluate_command(linear, angular, replace(
+                    state, command_age=0., can_rotate=True,
+                    obstacle=snapshot.forward.front_blocked_other is not False))
                 if ((admitted.linear, admitted.angular, admitted.reason) == (linear, angular, 'allow')
                         and command_forward_arc_clear(snapshot.forward, linear, angular, now)):
                     result = admitted

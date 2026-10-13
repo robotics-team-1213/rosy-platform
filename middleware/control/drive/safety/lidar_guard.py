@@ -185,6 +185,8 @@ class ForwardEvidence:
     observed: bool
     body: object
     limits: tuple
+    #: A front block that is not the LiDAR strip (ultrasonic); None = unknown, kept as blocked.
+    front_blocked_other: bool | None = None
 
 
 def command_forward_arc_clear(evidence, linear, angular, now):
@@ -206,10 +208,10 @@ def command_forward_arc_clear(evidence, linear, angular, now):
     if not 0. <= scan_age <= .5 or not 0. <= source_age <= .5:
         return False
     from .footprint_sweep import forward_stopping_sweep_clearance
-    # The profile caps bound whatever command was issued before this one.
+    # The command before this one is taken as no faster than this candidate (D-740 rev 1).
     clearance = forward_stopping_sweep_clearance(
         evidence.points, body=evidence.body, linear=linear, angular=angular,
-        limits=evidence.limits, previous_limits=evidence.limits,
+        limits=evidence.limits, previous_limits=(linear, abs(angular)),
         scan_age=scan_age, source_age=source_age)
     return clearance is not None and clearance > 0.
 
