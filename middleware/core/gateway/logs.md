@@ -1084,4 +1084,4 @@
 
 - Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
 - Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
-- Gates: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+- gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
