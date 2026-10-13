@@ -52,6 +52,11 @@ class OAuth:
         self.accounts = accounts
         self.transport = transport or request_json
 
+    def validate_origin(self, origin):
+        cfg = self._config()
+        if not origin or cfg['redirect_uri'] != origin + '/oauth/huggingface/callback':
+            raise AccountError('OAuth callback must match public_origin + /oauth/huggingface/callback')
+
     def _config(self):
         cfg = self.accounts.config().get('oauth', {})
         uri = cfg.get('redirect_uri', '')

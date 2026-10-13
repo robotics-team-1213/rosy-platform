@@ -125,10 +125,17 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
         'password_hash': cfg['users'][1]['password_hash'], 'memberships': {'one': ['view']}})
     accounts.config_path.write_text(json.dumps(cfg))
     _, alice = accounts.login('alice', 'alice-password')
-    accounts.connect_token(alice, 'hf_team', transport=lambda _: {'id': 'team', 'name': 'team', 'type': 'user'},
+    connection = accounts.connect_token(alice, 'hf_team', transport=lambda _: {'id': 'team', 'name': 'team', 'type': 'user'},
         sharing='project', resources=['dataset:org/data'])
+    def credential(actor, project, connection_id, generation=None, resource=None):
+        accounts.authorize(actor, project, 'import')
+        return accounts.credential(actor, connection_id, generation, resource=resource)
+    imports = LearningImports(tmp_path / 'imports', accounts.authorize, credential,
+                              transport=SelectedAccountTransport())
+    imports.create(alice, 'one', connection['connection_id'], 'dataset', 'org/data', 'main',
+                   ['clip.mp4'], {'internal_use': True, 'evidence': 'fixture license'})
     folder = tmp_path / 'review'; folder.mkdir()
-    server = make_server(open_store(folder), free_port(), accounts=accounts)
+    server = make_server(open_store(folder), free_port(), accounts=accounts, imports=imports)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     url = f'http://127.0.0.1:{server.server_port}'
     try:
@@ -146,6 +153,8 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 expect(page.locator('#import-panel')).to_be_hidden()
                 expect(page.locator('summary', has_text='읽기 토큰으로 연결')).to_be_hidden()
                 expect(page.locator('#connections button')).to_have_count(0)
+                expect(page.locator('#imports')).to_contain_text('org/data')
+                expect(page.locator('#imports button')).to_have_count(0)
                 page.locator('#logout').click()
                 expect(page.locator('#login-panel')).to_be_visible()
                 expect(page.locator('#identity')).to_have_text('')
@@ -154,6 +163,7 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                 page.get_by_text('읽기 토큰으로 연결', exact=True).click()
                 expect(page.locator('#sharing option[value=project]')).to_be_disabled()
                 expect(page.locator('#connections button')).to_have_count(0)
+                expect(page.locator('#imports button')).to_have_count(0)
                 # An unavailable backend must not masquerade as a logged-out session.
                 page.route('**/api/accounts/session', lambda route: route.fulfill(
                     status=503, content_type='application/json', body='{"error":"temporarily unavailable"}'))
