@@ -42,6 +42,7 @@ def test_build_request_and_owner_admission_reach_isolated_trainer_once(tmp_path)
     assert len(list(requests.glob('*.json')))==1
     assert len(calls)==1 and calls[0]['dataset_sha']==built['dataset_revision']
     assert next(iter(state['cycles'].values()))['status']=='ready'
+    assert state['review_autobuild']['cycle_keys'] == list(state['cycles'])
     learning_cycle.run_once(config,tmp_path/'cycle',trainer_fn=train,review_pipeline=owner)
     assert len(calls)==1
     assert not list(args['store'].root.rglob('READY'))

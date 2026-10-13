@@ -980,3 +980,19 @@
 - 증거: `test/test_power_wake_inputs.py`, `test/test_power_device_policy.py`. 원격 pytest 결과는 이 브랜치의 착지 보고에 둔다.
 - gate 변화: 없음. 벤치 스위치 `power.device_policy.enabled`는 false다. 실기에서 기기를 재우거나 깨운 증거는 없다.
 - 결정: 브랜치의 배터리 "나빠지는 방향만" 웨이크는 옮기지 않았다(main이 이미 단계 변화에만 깨운다).
+## 2026-10-13 · 15f4e0932 · D-744 차로 호의 원을 지도에 고정 (API v1.221)
+
+- 변경: `exit_segment.map_anchor {centre_x_m, centre_y_m, pose_x_m, pose_y_m, pose_yaw_rad, odom_stamp_s}`를 받은 때 `authority.py::_place_map_anchor`가 odom 기록(`_odom_log`의 CORE 벽시계)에서 그 표본을 찾아 원 중심을 odom으로 옮기고, `lane_arc.py::_open_arc`가 그 원과 그 접선으로 호를 연다. 풀지 못하면(없음·비유한·2 s 초과·기록에 없음·odom epoch/frame 변경·전진 1.5 m 초과·원에서 0.075 m 초과) 오늘의 자세 기준 원이다. 능력 `lane_arc_map_anchor`, 호 기록 `map_anchor_used`. Fleet은 `routing/execute.py::exit_segment(map_pose=)`와 `trip_runner._step_lane`이 능력과 `odom_stamp`가 있을 때만 싣는다.
+- 증거: 원격(모델 PC) `middleware/core/gateway/test middleware/core/services/test` 4520 passed·10 skipped, `operations/fleet/test` 5035 passed·246 skipped, `test contracts/foundation/test` 8358 passed·1002 skipped, `known_failures` NEW 0. `test_lane_arc_map_anchor.py`: 바깥 2 cm·접선 10° 어긋남에서 지도 원으로 열고 0.37 m 호 끝 1.5 cm 이내, 1.0 m 호 끝 6.4 mm(최대 2.9 cm).
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. `line_follow/arc` 크기 단위는 460줄로 한도(310+150)에 닿았다. 다음 추가 전에 재판정이 필요하다.
+- 결정: D-744. 지도 고정점은 받은 때 odom으로 옮긴다(자세 기록이 약 2 s라 호가 열릴 때는 표본이 없다).
+- 교훈: 요청 본문의 NaN은 pydantic이 거절하지만 공용 400 응답이 그 입력을 JSON으로 싣지 못해 500이 된다(기존 결함, 이 변경 범위 밖).
+
+## 2026-10-13 · 8ce598214 · D-744 독립 리뷰 후속 (방향 문, 열 때 한도, IR 사슬, 까닭 기록)
+
+- 변경: `authority.py::_map_anchor_circle`이 호를 열 때 까닭을 고른다. 방향이 접선에서 25° 넘게 어긋나면 `heading`(`ARC_ANCHOR_MAX_HEADING_RAD`), 원에서 0.045 m 넘게 떨어지면 `radial`(`ARC_ANCHOR_MAX_RADIAL_M`, 멈춤 한도 0.075 m 아래), 앞 호가 IR 보정을 쓴 사슬이면 `ir_chain`, 경로 길이(부호 없음, `_odom_log`) 1.5 m 초과면 `carry`. `_place_map_anchor`는 받은 때 `none_sent`·`malformed`·`stale`·`future`·`no_sample`·`epoch`를 남긴다. 호 기록에 `map_anchor_reason`.
+- 증거: 원격(모델 PC) 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다. `test_line_arc_api.py::test_snapshot_odom_stamp_pairs_with_the_odom_sample_core_logged`가 `_on_odom`의 두 호출(`observe_lane_return`, `set_odom_pose`)을 실제 서비스와 실제 벽시계로 지나 스냅숏 `odom_pose.stamp`로 고정점이 놓이는 것을 본다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. `line_follow/arc` 크기 단위는 460줄 그대로다.
+- 결정: D-744 5항·6항 개정(같은 ADR). 횡단보도 사전 검사와 시계 step은 ADR 한계 5·6으로 적었다.
+- 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
+
