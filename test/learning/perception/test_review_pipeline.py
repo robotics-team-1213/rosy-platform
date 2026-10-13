@@ -325,7 +325,7 @@ def test_script_entrypoint_uses_the_canonical_owner_identity(tmp_path, monkeypat
     settings = dict(source_proof_files=args['source_proof_files'],
                     staging_parent=str(args['staging_parent']), dataset_name='indexed')
     file = tmp_path / 'owner.json'
-    file.write_text(json.dumps({'cycle': config, 'review': settings}))
+    file.write_text(json.dumps({'cycle': config, 'review': settings}, default=str))
     out = tmp_path / 'cli-state'
     monkeypatch.setattr(sys, 'argv', ['review_pipeline.py', str(file), '--out', str(out), '--once'])
     runpy.run_path(review_pipeline.__file__, run_name='__main__')
