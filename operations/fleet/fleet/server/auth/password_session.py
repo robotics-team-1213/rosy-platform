@@ -502,11 +502,15 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
                             trust_forwarded: bool) -> None:
     @app.get("/api/fleet/auth/session", tags=["fleet-auth"])
     def fleet_auth_session(request: Request, principal: SitePrincipal = Depends(authorize)) -> JSONResponse:
+        managed = ({"account_id": principal.account_id, "site_resource": principal.site_resource,
+                    "grants": [{"resource": resource, "capabilities": list(capabilities)}
+                               for resource, capabilities in principal.grants]} if principal.account_id else {})
         return JSONResponse(headers=NO_STORE, content={
             "principal_id": principal.principal_id, "role": principal.role,
             "via": getattr(request.state, "site_auth_via", "bearer"),
             "expires_at": getattr(request.state, "site_auth_expires_at", None),
             "password_change_required": principal.password_change_required,
+            **managed,
         })
 
     if sessions is None:
