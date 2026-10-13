@@ -31,7 +31,7 @@ class TrustedProxyTest {
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer private-token-value")
                     .build()).execute().use { assertEquals(200, it.code) }
                 val request = remote.takeRequest(2, TimeUnit.SECONDS)!!
                 assertEquals("robot-a.local:${remote.port}", request.getHeader("Host"))
@@ -52,7 +52,7 @@ class TrustedProxyTest {
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer private-token-value")
                     .build()).execute().use { assertEquals(502, it.code) }
                 assertNull(remote.takeRequest(200, TimeUnit.MILLISECONDS))
             } finally { proxy.stop() }
@@ -65,7 +65,7 @@ class TrustedProxyTest {
         try {
             proxy.start(5000, false)
             OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
-                .header("Cookie", "rosy-shell=${proxy.capability}").header("Origin", "https://other.local").build()).execute().use { assertEquals(403, it.code) }
+                .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Origin", "https://other.local").build()).execute().use { assertEquals(403, it.code) }
         } finally { proxy.stop() }
     }
     @Test fun websocketRelaysAuthOnlyAfterTlsAndClosesOnRevoke() {
@@ -83,13 +83,14 @@ class TrustedProxyTest {
             })); remote.start()
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store, {})
+            val failures = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val proxy = PilotProxy(config, config.robots.single(), store, { failures.add(it) })
             val browser = OkHttpClient()
             try {
                 proxy.start(5000, false)
                 val auth = "{\"token\":\"private-token-value\"}"
                 browser.newWebSocket(Request.Builder().url("${proxy.origin.replace("http:", "ws:")}/ws/control")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Origin", proxy.origin).build(), object : okhttp3.WebSocketListener() {
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Origin", proxy.origin).build(), object : okhttp3.WebSocketListener() {
                     override fun onOpen(socket: okhttp3.WebSocket, response: okhttp3.Response) { socket.send(auth) }
                 })
                 assertTrue(delivered.await(5, TimeUnit.SECONDS)); assertEquals(auth, payload.get())
@@ -97,6 +98,7 @@ class TrustedProxyTest {
                 assertNull(request.getHeader("Cookie")); assertFalse(request.path!!.contains("private-token"))
                 proxy.stop()
                 assertTrue("remote socket did not observe revoke", closed.await(3, TimeUnit.SECONDS))
+                assertTrue("intentional socket close was reported as lost link: $failures", failures.isEmpty())
             } finally { proxy.stop(); browser.dispatcher.cancelAll(); browser.connectionPool.evictAll(); browser.dispatcher.executorService.shutdown() }
         }
     }
@@ -116,7 +118,7 @@ class TrustedProxyTest {
                 proxy.start(5000, false)
                 remote.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").build()).execute().use { assertEquals(401, it.code) }
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").build()).execute().use { assertEquals(401, it.code) }
                 assertNull(remote.takeRequest(1, TimeUnit.SECONDS)!!.getHeader("Authorization"))
             } finally { proxy.stop() }
             assertNull(remote.takeRequest(100, TimeUnit.MILLISECONDS))
@@ -160,7 +162,7 @@ class TrustedProxyTest {
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/vision/front/frame?sequence=6569&overlay=false")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer private-token-value")
                     .build()).execute().use { response ->
                     assertEquals(200, response.code)
                     // evidence.js fetchCameraPair 검증이 이 다섯 헤더를 필요로 한다.
@@ -210,7 +212,7 @@ class TrustedProxyTest {
             try {
                 proxy.start(5000, false)
                 val call = { OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer private-token-value")
                     .build()).execute().use { it.code } }
                 assertEquals(502, call())   // 일시 실패 — 배너에 오류 문구
                 assertEquals(200, call())   // 회복 — 배너가 정상 문구로 돌아감
@@ -234,7 +236,7 @@ class TrustedProxyTest {
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/recordings/sample/file")
-                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer private-token-value")
                     .build()).execute().use { response -> assertEquals(200, response.code); assertArrayEquals(content, response.body!!.bytes()) }
             } finally { proxy.stop() }
         }

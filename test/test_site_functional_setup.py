@@ -23,7 +23,7 @@ def test_plan_adds_viewer_preserves_existing_and_selects_enrolled_ids():
  assert next_users['users'][0]==USERS['users'][0]
  assert next_users['users'][1]['role']=='viewer'
  assert next_config['keep']==3
- assert next_config['functional_checks'][0]['required_ids']==['robot-a','robot-b']
+ assert next_config['functional_checks'][0]['required_ids']=='enrolled'  # D-580
  assert next_config['functional_checks'][1]['required_ids']==['camera-a']
  assert 'b'*64 not in str(next_config)
 

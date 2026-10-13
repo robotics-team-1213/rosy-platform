@@ -4,6 +4,12 @@
 `rosy-contracts-learning`은 ROS·torch·LeRobot에 의존하지 않는 공용 wheel이다.
 Episode·DatasetManifest·PolicyArtifact·PromotionRecord의 구조와 파일 해시를 검증한다.
 
+D-700의 0.1.10은 `incident_rule.validate_rule()`로 실제 Fleet 규칙 선택 JSON을 검사한다. `selected_not_executed`, `action_admissible:false`, `outcome:null`을 유지하며 RULE_ONLY/MIXED·NONE/ANSWER/HOLD/HANDOFF를 구분한다. physical WAIT를 포함한 ANSWER는 reobserve/human으로 변환하지 않는다. 보정·정답·명령·현장 수용을 승인하는 SDK가 아니며 Fleet 기본 원장 사용 때문에 필수 설치 의존성이 됐다. 기존 `fleet[learning]` 설치 이름은 호환한다.
+
+D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt의 닫힌 구조와 HMAC 검증을 제공한다. 전체 프로파일·모델·보정·독립 평가/정답/한계/coverage·설치·현재 owner epoch와 유효 기간을 결속한다. 원본 평가·현장 증거와 실제 owner admission은 소비자가 별도로 검증하며 receipt 검증 자체는 실행 권한이 아니다.
+
+0.1.12는 D-622 후속으로 `validate_rule()`의 ANSWER에 `REALIGN`을 받는다. REALIGN 선택만 조작 본문의 정렬 JSON SHA-256인 `selection.realign_sha256`을 반드시 가지며 다른 선택에는 이 키가 없다. 기존 `rule_selection/1` 기록은 그대로 유효하다. 자세·각도 원문은 receipt에 복사하지 않고 REALIGN도 물리 ANSWER라 reobserve/human 기준으로 변환하지 않는다.
+
 ```python
 from rosy.contracts.learning import seal, validate_episode
 
@@ -68,3 +74,28 @@ correlations만 허용한다. schema 구조가 맞더라도 임의 상관 키는
 raw camera/inference 확인이 없어 status incomplete/task unknown을 유지한다.
 기존 demonstration 계약을 바꾸지 않으며 DatasetStore/승격/학습에는 받지 않는다.
 body/file 검증은 인증·실행 권한·장치/과제/물리 수용을 부여하지 않는다.
+# Incident handoff evidence (D-696)
+
+`incident_handoff.validate_handoff(value, scope, started_at)` validates bounded JSON only.
+`tools/incident_model_feedback.py --include-handoff` adds optional
+`rosy.incident.model_feedback/2` evidence from one read-only Fleet snapshot;
+the default remains `/1`. The recording binder's existing `--model-feedback`
+and `--failure-analysis` accept either version and retain `UNREVIEWED`.
+
+`case.handoff` separates the persistent queue, final notification rows and named
+claim record. `tables` distinguishes missing storage from present empty storage.
+`SENT` means provider acceptance; `CASE_ONLY` claims are recorded names with no
+verified identity. Raw names, route/endpoint, provider IDs, links and payloads
+are omitted. Source digests and scope binding do not prove provenance by
+themselves: independent evaluation must approve the producer artifacts separately.
+This evidence does not establish recurrence absence, command absence, model
+contribution, independent quality or physical success. No notification or model
+is called by this validator or export.
+
+## 단독 판정 모델 역할 근거 (D-698)
+
+`rosy.contracts.learning.incident_profiles.validate_primary_roles(case)`는 새로운
+`model_feedback/3`의 단독 primary 프로파일, 선언된 역할 예산과 실제 시도 역할을
+검증한다. exporter·recording binder·독립 평가가 같은 JSON 검사를 사용한다.
+출처 인증·독립 정답·실제 모델 호출·운영 수용을 승인하지 않는다.
+

@@ -4,7 +4,7 @@
 
 `rosy-pilot-fetch@.timer`는 모델 PC 사용자 세션에서 종료된 Pilot 녹화를 10분마다 확인한다. 수신은 기존 `fetch_http.py`가 CORE의 정지 판정, 장치 TLS, Operator 권한, 원본 SHA-256, MP4 변환과 조작 짝 검사를 수행한다. 이 작업은 원본·영상까지이며 픽셀 초안, 사람 승인, 학습은 별도 단계다.
 
-설치 전 모델 PC의 `~/rosy-ml/bin/fetch_http.py`와 checkout의 `learning/training/perception/dataset/bag_to_video.py`를 확인하고, 이 버전의 수신기를 모델 PC에 배치한다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, 읽기 전용 Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
+설치 전 모델 PC의 `~/rosy-ml/bin/fetch_http.py`와 checkout의 `learning/curation/perception/bag_to_video.py`를 확인하고, 이 버전의 수신기를 모델 PC에 배치한다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, 읽기 전용 Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -29,6 +29,20 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 실제 장치 주소·계정·비밀, 원본 사건, 모델 가중치와 실행 로그는 이 공개 저장소에 넣지 않는다. 현재 Model PC의 GPU 인식은 확인했으나 Decision 전용 평가 환경과 사람 정답 세트는 아직 확인되지 않아 L0은 HOLD다.
 
 ## v13 검수 앱 코드 릴리스
+
+승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`는 현재 검수 서비스가 바인딩하는 사설 IPv4다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
+
+```bash
+install -m 0755 deploy/model_pc/auto_review_release.py ~/rosy-ml/bin/auto_review_release.py
+install -m 0644 deploy/model_pc/rosy-review-release-update.{service,timer} ~/.config/systemd/user/
+printf 'REVIEW_HOST=%s\nMINIMUM_SEQUENCE=%s\n' '<model-pc-private-ip>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
+chmod 600 ~/.config/rosy/review-release.env
+systemctl --user daemon-reload
+systemctl --user start rosy-review-release-update.service
+systemctl --user enable --now rosy-review-release-update.timer
+```
+
+새 서명 후보의 자동 적용 뒤 `systemctl --user status rosy-review-release-update.service`와 `readlink -f ~/rosy-ml/review-v13-code/current`를 대조한다. 후보 발행·서명은 D-446에 따른다. 이 타이머는 `main`의 새 커밋만으로 검수 화면을 바꾸지 않는다.
 
 검수 앱은 모델 PC의 `~/rosy-ml/review-v13-code/releases/<release>/`에 완전한 실행 소스를 보존하고, 사용자 서비스 `rosy-review-v13.service`는 `~/rosy-ml/review-v13-code/current` 링크를 실행한다. 검수 기록인 `~/rosy-ml/review-v13-drivable/state`는 릴리스 밖에 둔다. 기존 런타임 폴더를 다시 풀거나 교체해도 `current`가 가리키는 화면은 바뀌지 않는다. 배포 결정은 [D-545](../../docs/adr/D-545-model-pc-review-versioned-release.md)을 따른다.
 

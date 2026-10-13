@@ -20,6 +20,11 @@ the first learn replays them instead of learning the parked robots. A different 
 frame size learns live as before; a light change since then trips SCENE_CHANGED on the first
 frame and learns live. Replay happens once per process, so that cannot loop.
 
+D-589: the kept background also carries the camera settings fingerprint it was learned under.
+When the phone reports newly applied settings, ``camera_changed`` learns again (automatic, not
+kept) and re-arms the replay, which then happens only for a file of exactly these settings. A
+file from before D-589 has no fingerprint: it replays only while no settings are known.
+
 D-547: when the background was learned with robots parked (no kept background), the learned
 background image is searched once, when the model becomes ready, for robot-sized dark compact
 blobs in the track (darkness is the max of B, G, R against the track median, so blue tape is
@@ -32,8 +37,28 @@ outside the suspect or the track median) for GHOST_CONFIRM_FRAMES frames in a ro
 left and the spot is a ghost. A one-frame occluder (hand, paper) does not count. Ghost blobs
 are never reported; on confirmation the learning frames get live floor pixels in the ghost
 zone and in every foreground blob touching it (keeping each frame's own noise), MOG2 is
-relearned from them and the suspect is dropped. Frames are collected in every learn and freed
-at ready when there are no suspects, or when the last suspect heals.
+relearned from them and the suspect is dropped.
+
+D-547 addendum: the suspect search can miss a parked robot (a cable across it, a neighbour
+touching it), so ghosts are also found without a suspect. Any foreground blob of roughly robot
+size (GHOST_SIZE_SLACK around the footprint window) whose live pixels have the floor colour
+while the learned background at the same pixels is mostly dark (robots are dark; blue squares,
+tape stripes and lighter patches are not) is a ghost candidate. Until it has been seen for
+GHOST_CONFIRM_FRAMES frames in a row near the place it first appeared it is still reported,
+with the score capped at BAKED_SCORE_MAX, so a wrong call is visible; then it is healed like a
+suspect ghost and logged with its map position. A dark robot or an occluder such as a chair is
+not floor coloured live, so it is never healed. The learning frames are kept for the whole process so
+any ghost can be healed: at most LEARNING_FRAMES frames at WORK_LONG_SIDE.
+
+D-596 1: ``hold(until)`` freezes the background for an LED identify window (frames captured up to
+``until``), so a standing, blinking robot is never learned or healed away: no learning frame is
+taken (a learn waits), a scene change drops the frame without starting a learn, no ghost is
+confirmed or healed, and a baked suspect whose spot turned foreground but not floor coloured (its
+lamp is blinking) is still reported as its guess. After the window everything runs as before.
+
+D-600: every learn leaves out the regions Fleet says robots stand on (``set_occupied``, the
+union over the learn's frames) and fills unknown floor later (robot_mask.py). The kept frames
+carry their unknown-floor mask, so a restart keeps filling; ``unknown_floor`` reports it.
 """
 
 from __future__ import annotations
@@ -48,7 +73,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from rosy_vision.track import geometry
+from rosy_vision.track import geometry, robot_mask
 from rosy_vision.track.model import (
     FOOTPRINT_MAX_M, FOOTPRINT_MIN_M, LEARNING_FRAMES, LEARNING_MIN_S, MAX_DETECTIONS,
     ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, SCENE_CHANGE_FRACTION,
@@ -97,6 +122,14 @@ GHOST_RING_COLOURS = 32
 GHOST_CONFIRM_FRAMES = 3
 #: The ghost zone (not reported, relearned) is the blob dilated by this many pixels.
 GHOST_MARGIN_PX = 4
+#: Addendum: a ghost without a suspect is a blob between these factors of the footprint window ...
+GHOST_SIZE_SLACK = (0.5, 1.5)
+#: ... whose learned background is dark (below the suspect dark level) on at least this share ...
+GHOST_BG_DARK_MIN = 0.5
+#: ... found again within this many work pixels on the next frame to keep its streak.
+GHOST_TRACK_PX = 8
+_GHOST_GROW = np.ones((2 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)  # blob -> ghost zone
+_RING_GROW = np.ones((6 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)   # blob -> outer edge of the ring
 
 
 class BackgroundStore:
@@ -105,15 +138,18 @@ class BackgroundStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
-    def save(self, revision: str, frames: list[np.ndarray]) -> None:
-        encoded = {}
+    def save(self, revision: str, frames: list[np.ndarray], unknown: np.ndarray | None = None,
+             camera: str | None = None) -> None:
+        encoded = {} if unknown is None else {"unknown": np.packbits(unknown)}  # D-600
         for index, image in enumerate(frames):
             ok, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, STORE_JPEG_QUALITY])
             if not ok:
                 raise ValueError("background frame did not encode")
             encoded[f"f{index:03d}"] = data.ravel()
-        meta = json.dumps({"revision": revision, "shape": list(frames[0].shape),
-                           "count": len(frames)}).encode("utf-8")
+        meta = {"revision": revision, "shape": list(frames[0].shape), "count": len(frames)}
+        if camera is not None:
+            meta["camera"] = camera
+        meta = json.dumps(meta).encode("utf-8")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + ".new")
         try:
@@ -126,12 +162,14 @@ class BackgroundStore:
             temporary.unlink(missing_ok=True)
             raise
 
-    def load(self, revision: str, shape: tuple[int, ...]) -> list[np.ndarray] | None:
-        """The kept frames for this revision and work size, else None (missing or unreadable)."""
+    def load(self, revision: str, shape: tuple[int, ...],
+             camera: str | None = None) -> list[np.ndarray] | None:
+        """The kept frames for this revision, work size and camera settings, else None."""
         try:
             with np.load(self.path, allow_pickle=False) as data:
                 meta = json.loads(bytes(data["meta"]).decode("utf-8"))
-                if meta.get("revision") != revision or tuple(meta.get("shape") or ()) != tuple(shape):
+                if (meta.get("revision") != revision or tuple(meta.get("shape") or ()) != tuple(shape)
+                        or meta.get("camera") != camera):
                     return None
                 frames = [cv2.imdecode(data[f"f{index:03d}"], cv2.IMREAD_COLOR)
                           for index in range(int(meta["count"]))]
@@ -142,6 +180,17 @@ class BackgroundStore:
         if not frames or any(image is None or image.shape != tuple(shape) for image in frames):
             return None
         return frames
+
+    def load_unknown(self, shape: tuple[int, ...]) -> np.ndarray | None:
+        """D-600: the kept unknown-floor mask, read right after a successful ``load``."""
+        try:
+            with np.load(self.path, allow_pickle=False) as data:
+                if "unknown" not in data:
+                    return None
+                bits = np.unpackbits(data["unknown"])[:shape[0] * shape[1]]
+        except Exception:
+            return None
+        return bits.reshape(shape[:2]).astype(bool) if bits.size == shape[0] * shape[1] else None
 
 
 class BackgroundBlobDetector:
@@ -179,10 +228,21 @@ class BackgroundBlobDetector:
         self._view: tuple = ()
         self._store = store
         self._restore_pending = store is not None  # D-539: once per process, at the first learn
+        self._camera: str | None = None  # D-589: applied camera settings fingerprint, once known
+        self._occupied: tuple = ()  # D-600: Fleet's robot regions, map (x, y, radius_m)
+        self._previous = None  # D-600: (background, dark map) of the last ready learn
+        self._hold_until = -math.inf  # D-596 1: capture time up to which the background is frozen
         self.reset()
 
     def reset(self) -> None:
         """Learn the background again from the next frames (scene change, new frame size)."""
+        if getattr(self, "_background", None) is not None:
+            self._previous = (self._background, self._bg_dark)
+        self._learn_occupied: np.ndarray | None = None  # D-600: union of the regions while learning
+        self._unknown: np.ndarray | None = None  # D-600: unknown floor (work pixels)
+        self._fill_at = -math.inf
+        self._kept = False  # D-600: this background is the kept one (saved or replayed)
+        self.unknown_floor: tuple = ()
         self._model = self._new_model()
         self._learned = 0
         self._first_at: float | None = None
@@ -190,6 +250,8 @@ class BackgroundBlobDetector:
         self._save = False  # D-539: this learn is an operator relearn to keep
         self._frames: collections.deque | None = collections.deque(maxlen=self._learning_frames)
         self._suspects: list[list] = []  # D-547: [box, blob, zone, guess, floor colours, ghost streak]
+        self._pending: list[list] = []  # D-547 addendum: unsuspected ghosts [u0, v0, streak]
+        self._background: np.ndarray | None = None  # the learned background image, while ready
 
     def _new_model(self):
         model = cv2.createBackgroundSubtractorMOG2(
@@ -197,20 +259,45 @@ class BackgroundBlobDetector:
         model.setShadowThreshold(SHADOW_TAU)
         return model
 
+    def set_occupied(self, regions) -> None:
+        """D-600: Fleet's ``occupied`` rows; read on the detection thread at the next frame."""
+        self._occupied = robot_mask.parse_regions(regions)
+
+    def hold(self, until: float) -> None:
+        """D-596 1: freeze learning and healing for frames captured up to ``until``."""
+        self._hold_until = max(self._hold_until, until)
+
     def relearn(self) -> None:
         """Operator relearn: the track is empty, so these frames are kept for restarts (D-539)."""
         self.reset()
         self._restore_pending = False
         self._save = self._store is not None
 
+    def camera_changed(self, fingerprint: str, *, first: bool = False) -> None:
+        """D-589: the camera changed (new settings, back to Vision control, a new link, or a
+        tune's confirmed lock). Learn again (an automatic reset, not an operator relearn) and
+        replay a kept background made under exactly these settings. ``first`` (the first
+        settings ever reported) only names the settings when the background is already learned.
+        An operator relearn in progress is kept, under these settings."""
+        self._camera = fingerprint
+        if first and self._ready:
+            return
+        save = self._save
+        self.reset()
+        self._previous = None  # D-600: a background from other settings cannot fill robot regions
+        self._save = save  # an operator relearn in progress is still kept
+        self._restore_pending = self._store is not None and not save
+
     def detect(self, frame: Frame, calib: Calibration) -> DetectorResult:
         image = _work_image(frame.image)
         work_height, work_width = image.shape[:2]
         calib_width, calib_height = calib.image_size
         if abs((work_width / work_height) / (calib_width / calib_height) - 1.0) > ASPECT_TOLERANCE:
+            self._pending = []
             return DetectorResult((), "CALIBRATION_REQUIRED")
         work_to_map, mask, track_px, camera = self._view_for(calib, (work_height, work_width))
         if track_px == 0:
+            self._pending = []
             return DetectorResult((), "CALIBRATION_REQUIRED")  # track out of view or beyond the horizon
         if image.shape != self._shape:
             save = self._save
@@ -219,28 +306,42 @@ class BackgroundBlobDetector:
             self._shape = image.shape
         if self._restore_pending and not self._ready and self._learned == 0:
             self._restore_pending = False
-            kept = self._store.load(calib.revision, image.shape)
+            kept = self._store.load(calib.revision, image.shape, self._camera)
             if kept is not None:
                 for background in kept:
                     self._model.apply(background, learningRate=-1)
                 self._frames.extend(kept)
-                self._ready = True
+                self._set_unknown(self._store.load_unknown(image.shape), work_to_map)
+                self._ready = self._kept = True
+                self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
+        held = frame.captured_at <= self._hold_until
+        if not self._ready and held:
+            return DetectorResult((), "LEARNING")  # D-596 1: a blinking robot must not be learned
         if not self._ready:
             self._model.apply(image, learningRate=-1)
             self._frames.append(cv2.bitwise_and(image, image, mask=self._keep_mask(mask)))
+            occupied = self._occupied_mask(work_to_map, mask, camera)
+            self._learn_occupied = occupied if self._learn_occupied is None else self._learn_occupied | occupied
             if self._first_at is None or frame.captured_at < self._first_at:
                 self._first_at = frame.captured_at  # first frame, or the clock stepped back
             self._learned += 1
             if (self._learned >= self._learning_frames
                     and frame.captured_at - self._first_at >= self._learning_min_s):
                 self._ready = True
+                if self._learn_occupied.any():  # D-600: robots on the mat are not learned
+                    self._set_unknown(robot_mask.mask_frames(self._frames, self._learn_occupied, self._previous),
+                                      work_to_map)
+                    self._rebuild()
                 if self._save:
                     self._save = False
                     try:
-                        self._store.save(calib.revision, list(self._frames))
+                        self._store.save(calib.revision, list(self._frames), self._unknown,
+                                         camera=self._camera)
+                        self._kept = True
                     except Exception as exc:  # tracking goes on; the next restart learns live
                         logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
+                self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
             return DetectorResult((), "LEARNING")
         raw = self._model.apply(image, learningRate=0)
@@ -248,9 +349,10 @@ class BackgroundBlobDetector:
         foreground = cv2.morphologyEx(cv2.bitwise_and(foreground, mask), cv2.MORPH_OPEN, _OPEN_KERNEL)
         foreground = cv2.bitwise_and(cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
         if np.count_nonzero(foreground) > self._scene_change_fraction * track_px:
-            self.reset()
+            if not held:
+                self.reset()
             return DetectorResult((), "SCENE_CHANGED")
-        found, ghosts = self._check_suspects(image, foreground) if self._suspects else ([], [])
+        found, ghosts = self._check_suspects(image, foreground, held) if self._suspects else ([], [])
         count, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, connectivity=8)
         # A ghost's foreground can reach past its zone (MOG2 edge, closing): drop whole blobs.
         skip, heals = set(), []
@@ -265,20 +367,57 @@ class BackgroundBlobDetector:
                 box = (int(rows.min()), int(rows.max()) + 1, int(cols.min()), int(cols.max()) + 1)
                 part = where[box[0]:box[1], box[2]:box[3]]
                 heals.append((box, part & _floor_like(image[box[0]:box[1], box[2]:box[3]], refs)))
-        if heals:
-            self._heal(image, heals)
+                logger.info("ghost healed suspect x=%.2f y=%.2f", _guess.x, _guess.y)
+        pending = []
         for label in range(1, count):
             if label in skip:
                 continue
-            detection = self._measure(int(stats[label, cv2.CC_STAT_AREA]), centroids[label],
-                                      work_to_map, camera)
+            pixels = int(stats[label, cv2.CC_STAT_AREA])
+            detection = self._measure(pixels, centroids[label], work_to_map, camera)
+            ghost = self._unsuspected_ghost(label, labels, stats[label], centroids[label], image, mask,
+                                            work_to_map, camera)
+            if ghost is not None:
+                u, v = centroids[label]
+                start = next((old for old in self._pending
+                              if abs(old[0] - u) <= GHOST_TRACK_PX and abs(old[1] - v) <= GHOST_TRACK_PX), None)
+                u0, v0, streak = (u, v, 1) if start is None else (start[0], start[1], start[2] + 1)
+                if streak >= GHOST_CONFIRM_FRAMES and not held:
+                    heals.append(ghost[:2])
+                    logger.info("ghost healed x=%.2f y=%.2f footprint_m=%.3f", *ghost[2])
+                    continue
+                pending.append([float(u0), float(v0), streak])
+                if detection is not None:  # unconfirmed: visible, at a guess's score
+                    detection = Detection(detection.x, detection.y, detection.footprint_m,
+                                          min(detection.score, BAKED_SCORE_MAX))
             if detection is not None:
                 found.append(detection)
+        self._pending = pending
+        filled = None
+        # D-600 fill; D-596 1: never inside an identify window (a blinking robot is not floor).
+        if self._unknown is not None and not held:
+            ready = robot_mask.fill_ready(image, self._unknown, self._occupied_mask(work_to_map, mask, camera),
+                                          self._dark_level, self._fill_streak)
+            if ready.any() and frame.captured_at - self._fill_at >= robot_mask.FILL_EVERY_S:
+                self._fill_at, filled = frame.captured_at, ready
+                heals.extend(robot_mask.heal_parts(ready))
+        if heals:
+            self._heal(image, heals)
+            self._learn_background(mask)
+            if filled is not None:
+                self._set_unknown(self._unknown & ~filled, work_to_map)
+                logger.info("unknown floor filled px=%d", int(filled.sum()))
+                if self._kept:
+                    try:  # the kept background learns the floor too
+                        self._store.save(calib.revision, list(self._frames), self._unknown,
+                                         camera=self._camera)
+                    except Exception as exc:
+                        logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
         found.sort(key=lambda item: item.score, reverse=True)
         return DetectorResult(tuple(found[:MAX_DETECTIONS]), "OK")
 
-    def _measure(self, pixels: int, centroid, work_to_map, camera) -> Detection | None:
-        """A blob of ``pixels`` work pixels at ``centroid`` as a detection; None outside the window."""
+    def _measure(self, pixels: int, centroid, work_to_map, camera, window=None) -> Detection | None:
+        """A blob of ``pixels`` work pixels at ``centroid`` as a detection; None outside the window
+        (the footprint window unless ``window`` is given)."""
         u, v = float(centroid[0]), float(centroid[1])
         points = geometry.apply(work_to_map, [[u, v], [u + 1.0, v], [u, v + 1.0]])
         if not np.all(np.isfinite(points)):
@@ -287,29 +426,40 @@ class BackgroundBlobDetector:
         area_m2 = pixels * abs(float(ax * by - ay * bx))
         shrink = 1.0 if camera is None else (camera[2] - self._robot_height_m) / camera[2]
         diameter = 2.0 * math.sqrt(area_m2 / math.pi) * shrink
-        if not self._footprint[0] <= diameter <= self._footprint[1]:
+        low, high = window or self._footprint
+        if not low <= diameter <= high:
             return None
         x, y = float(points[0][0]), float(points[0][1])
         if camera is not None:
             x, y = geometry.parallax_correct((x, y), camera, self._robot_height_m)
         return Detection(x=float(x), y=float(y), footprint_m=diameter, score=self._score(diameter))
 
+    def _learn_background(self, mask: np.ndarray) -> None:
+        """At ready and after a heal: the learned background image, its dark level and map, and
+        its floor (track) colour."""
+        background = self._model.getBackgroundImage()
+        if background is None or background.ndim != 3:
+            self._background = None
+            return
+        bright = background.max(axis=2)
+        self._dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
+        self._bg_dark = bright < self._dark_level
+        floor = (mask > 0) & ~self._bg_dark
+        self._track_colour = np.median(background[floor], axis=0) if floor.any() else np.zeros(3)
+        self._background = background
+
     def _find_baked(self, mask: np.ndarray, work_to_map, camera) -> None:
         """D-547: robot-sized dark compact blobs in the learned background become suspects."""
         self._suspects = []
-        background = self._model.getBackgroundImage()
-        if background is not None and background.ndim == 3:
+        background = self._background
+        if background is not None:
             bright = background.max(axis=2)
-            dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
-            dark = np.where((bright < dark_level) & (mask > 0), 255, 0).astype(np.uint8)
+            dark = np.where((bright < self._dark_level) & (mask > 0), 255, 0).astype(np.uint8)
             dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, _OPEN_KERNEL)
             dark = cv2.bitwise_and(cv2.morphologyEx(dark, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
             count, labels, stats, centroids = cv2.connectedComponentsWithStats(dark, connectivity=8)
             height, width = dark.shape
-            grow = np.ones((2 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
-            ring_grow = np.ones((6 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
             floor = (mask > 0) & (dark == 0)
-            track_colour = np.median(background[floor], axis=0) if floor.any() else np.zeros(3)
             for label in range(1, count):
                 pixels = int(stats[label, cv2.CC_STAT_AREA])
                 detection = self._measure(pixels, centroids[label], work_to_map, camera)
@@ -327,23 +477,53 @@ class BackgroundBlobDetector:
                 y0, x0 = max(0, top - pad), max(0, left - pad)
                 y1, x1 = min(height, top + h + pad), min(width, left + w + pad)
                 blob = labels[y0:y1, x0:x1] == label
-                zone = cv2.dilate(blob.astype(np.uint8), grow) > 0
-                ring = (cv2.dilate(blob.astype(np.uint8), ring_grow) > 0) & ~zone & floor[y0:y1, x0:x1]
-                patch = background[y0:y1, x0:x1]
-                bins, counts = np.unique(patch[ring] // 16, axis=0, return_counts=True)
-                common = bins[np.argsort(counts)[::-1][:GHOST_RING_COLOURS]] * 16 + 8
-                refs = np.vstack([track_colour, common]).astype(np.float32)
+                zone = cv2.dilate(blob.astype(np.uint8), _GHOST_GROW) > 0
+                ring = (cv2.dilate(blob.astype(np.uint8), _RING_GROW) > 0) & ~zone & floor[y0:y1, x0:x1]
+                refs = self._floor_refs(background[y0:y1, x0:x1], ring)
                 # The dark core is smaller than the robot: report the nominal footprint.
                 guess = Detection(detection.x, detection.y, _NOMINAL_M, min(detection.score, BAKED_SCORE_MAX))
                 self._suspects.append([(y0, y1, x0, x1), blob, zone, guess, refs, 0])
             if self._suspects:
                 logger.info("baked robot suspects count=%d", len(self._suspects))
-        if not self._suspects:
-            self._frames = None  # nothing to heal later
 
-    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray) -> tuple[list, list]:
+    def _floor_refs(self, background: np.ndarray, ring: np.ndarray) -> np.ndarray:
+        """Floor colours: the track median and the ring's commonest background colours."""
+        bins, counts = np.unique(background[ring] // 16, axis=0, return_counts=True)
+        common = bins[np.argsort(counts)[::-1][:GHOST_RING_COLOURS]] * 16 + 8
+        return np.vstack([self._track_colour, common]).astype(np.float32)
+
+    def _unsuspected_ghost(self, label, labels, stat, centroid, image, mask, work_to_map, camera):
+        """(box, heal mask, (x, y, footprint)) when this foreground blob is a ghost no suspect
+        covers, else None."""
+        if self._background is None:
+            return None
+        left, top, w, h, total = (int(stat[i]) for i in range(5))
+        blob = labels[top:top + h, left:left + w] == label
+        if np.count_nonzero(self._bg_dark[top:top + h, left:left + w][blob]) < GHOST_BG_DARK_MIN * total:
+            return None  # the background there was not dark: floor, paint, tape or a blue square
+        low, high = self._footprint
+        window = (GHOST_SIZE_SLACK[0] * low, GHOST_SIZE_SLACK[1] * high)
+        measured = self._measure(total, centroid, work_to_map, camera, window)
+        if measured is None:
+            return None
+        pad, (height, width) = 3 * GHOST_MARGIN_PX, labels.shape
+        y0, x0 = max(0, top - pad), max(0, left - pad)
+        y1, x1 = min(height, top + h + pad), min(width, left + w + pad)
+        blob = (labels[y0:y1, x0:x1] == label).astype(np.uint8)
+        zone = cv2.dilate(blob, _GHOST_GROW) > 0
+        background = self._background[y0:y1, x0:x1]
+        ring = ((cv2.dilate(blob, _RING_GROW) > 0) & ~zone & (mask[y0:y1, x0:x1] > 0)
+                & ~self._bg_dark[y0:y1, x0:x1])
+        live = _floor_like(image[y0:y1, x0:x1], self._floor_refs(background, ring))
+        if np.count_nonzero(live[blob > 0]) < GHOST_FLOOR_FRACTION * total:
+            return None  # a robot or an occluder is there now
+        return (y0, y1, x0, x1), zone & live, (measured.x, measured.y, measured.footprint_m)
+
+    def _check_suspects(self, image: np.ndarray, foreground: np.ndarray, held: bool = False) -> tuple[list, list]:
         """Guesses for suspects whose spot still shows the background, and (suspect, confirmed)
-        ghosts; confirmed ghosts leave the suspect list and are healed by the caller."""
+        ghosts; confirmed ghosts leave the suspect list and are healed by the caller. ``held``
+        (D-596 1): nothing is confirmed, and a spot that is not floor coloured stays a guess
+        (its blobs are skipped like a ghost's, so the lamp's own blob is not a second robot)."""
         guesses, kept, ghosts = [], [], []
         for suspect in self._suspects:
             (y0, y1, x0, x1), blob, _zone, guess, refs, streak = suspect
@@ -356,10 +536,13 @@ class BackgroundBlobDetector:
             floor = _floor_like(image[y0:y1, x0:x1], refs)
             if np.count_nonzero(floor[blob]) >= GHOST_FLOOR_FRACTION * total:
                 suspect[5] = streak + 1
-                confirmed = suspect[5] >= GHOST_CONFIRM_FRAMES
+                confirmed = suspect[5] >= GHOST_CONFIRM_FRAMES and not held
                 ghosts.append((suspect, confirmed))
                 if confirmed:
                     continue
+            elif held:
+                guesses.append(guess)
+                ghosts.append((suspect, False))
             else:
                 suspect[5] = 0  # something not floor is there now: the live path decides
             kept.append(suspect)
@@ -373,12 +556,28 @@ class BackgroundBlobDetector:
             noisy = np.clip(image[y0:y1, x0:x1] + (stack - stack.mean(axis=0)), 0, 255).astype(np.uint8)
             for frame, patch in zip(self._frames, noisy):
                 frame[y0:y1, x0:x1][where] = patch[where]
+        self._rebuild()
+        healed = np.zeros(self._frames[0].shape[:2], bool)
+        for (y0, y1, x0, x1), where in heals:
+            healed[y0:y1, x0:x1] |= where
+        # A suspect whose zone was healed by an unsuspected ghost is gone too.
+        self._suspects = [suspect for suspect in self._suspects
+                          if not healed[suspect[0][0]:suspect[0][1], suspect[0][2]:suspect[0][3]][suspect[2]].all()]
+
+    def _rebuild(self) -> None:
         self._model = self._new_model()
         for frame in self._frames:
             self._model.apply(frame, learningRate=-1)
-        logger.info("baked robot ghost healed count=%d left=%d", len(heals), len(self._suspects))
-        if not self._suspects:
-            self._frames = None
+
+    def _occupied_mask(self, work_to_map, mask: np.ndarray, camera) -> np.ndarray:
+        """D-600: work pixels of Fleet's robot regions, inside the track."""
+        return robot_mask.region_mask(self._occupied, work_to_map, mask.shape, camera,
+                                      self._robot_height_m) & (mask > 0)
+
+    def _set_unknown(self, unknown: np.ndarray | None, work_to_map) -> None:
+        self._unknown = unknown if unknown is not None and unknown.any() else None
+        self._fill_streak = None if self._unknown is None else np.zeros(self._unknown.shape, np.uint8)
+        self.unknown_floor = () if self._unknown is None else robot_mask.unknown_circles(self._unknown, work_to_map)
 
     def _keep_mask(self, mask: np.ndarray) -> np.ndarray:
         if getattr(self, "_keep_mask_for", None) is not mask:

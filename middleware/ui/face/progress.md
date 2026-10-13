@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-57, D-153, D-306, D-433, D-504]
+adrs: [D-57, D-153, D-306, D-433, D-504, D-688, D-719]
 plans:
   - docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md
   - docs/plans/2026-09-15-module-harness-design.md
@@ -30,6 +30,8 @@ plans:
 ---
 ## 지금 상태
 
+- D-719 후보: 발행된 선 추종 사유만 상황 줄의 Crosswalk, Lane edge, Yielding이 된다. 기다림 입만 두껍게 다시 그렸다. 사람 감속과 저배터리 귀환은 얼굴 핸드오버에 없어 이름을 만들지 않았다. 로컬 GIF는 fun/bored 49/768이고 잉크는 y 224 미만이다. 원격 pytest와 실물 LCD는 미확인이다.
+- D-688 후보: 같은 얼굴의 여덟 표정, 부팅 카드의 ROSY, 충전 중에는 충전기 전압이 아닌 도크 전 잔량을 상황 줄에 적는다. 호스트 렌더는 LOCAL 후보이다. 실물 LCD 거리 판독은 미확인이다.
 - D-504 브랜치 후보: 여덟 얼굴 GIF를 320×240·20프레임·100 ms로 만들고, 첫 프레임 공백과 운용 표정 실루엣 중복을 줄였다. 호스트 시험은 LOCAL 근거이며 실물 LCD 거리·각도·조도 판독은 미확인이다.
 - `set_emotion` 서비스(LCD GIF)와 PWR-003 info-card 렌더러(`info_screen.py`, ROS-free PIL)를 제공한다.
 - D-306 LCD 점검: 320×240 호스트 카드의 긴 동적 문자열은 기존 부팅 카드의 `_fit`으로 화면 안에 맞추고 말줄임을 표시한다. 부팅/AP QR/실패 캡처는 LOCAL 증거다. 실물 LCD의 거리·각도·조명 판독성은 미확인이라 DEVICE/BENCH GO가 아니다.

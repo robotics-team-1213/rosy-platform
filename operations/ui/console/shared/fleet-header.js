@@ -1,0 +1,206 @@
+// D-540 2 — the one Rosy Fleet header. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar> markup
+// (test_fleet_header.py pins it) and drive it only through this module: role words, development badge,
+// connection count, clock, the settings fold and the one E-stop rule. Each page keeps its own session probe.
+import {actionIcon} from "/common/ui.js";
+import {OPERATOR_REASON} from "/console/assets/authorization.js";
+
+export const SESSION_REASON = "접속이 필요합니다";
+const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
+const $ = id => document.getElementById(id);
+
+// Every Fleet document has one inbox entry; only the console owns its local unread state.
+function inboxButton() {
+  if ($("fleet-inbox")) return $("fleet-inbox");
+  const inbox = document.createElement("ui-button");
+  inbox.id = "fleet-inbox";
+  inbox.setAttribute("kind", "quiet");
+  inbox.setAttribute("type", "button");
+  inbox.setAttribute("aria-label", "알림 창");
+  inbox.setAttribute("data-ui-tooltip", "알림 창");
+  inbox.setAttribute("data-action-icon", "notification");
+  actionIcon(inbox, "notification");
+  $("topbar-extra").prepend(inbox);
+  inbox.addEventListener("click", () => {
+    const request = new CustomEvent("rosy:inbox", {cancelable: true});
+    if (document.dispatchEvent(request)) location.assign("/console?inbox=1");
+  });
+  return inbox;
+}
+export function showInboxCount(count) {
+  const inbox = inboxButton();
+  inbox.textContent = count ? String(count) : "";
+  inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
+  inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
+  const entry = $("topbar-more");
+  $("header-unread").textContent = String(count);
+  $("header-unread").hidden = !count;
+  actionIcon(inbox, "notification");
+  inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+}
+
+function bindThemeCycle(listen) {
+  const button = $("fleet-theme"), theme = window.RosyTheme;
+  const current = () => theme.choices.findIndex(choice => choice.value === theme.get());
+  const next = () => theme.choices[(current() + 1) % theme.choices.length];
+  function render() {
+    const choice = theme.choices[current()];
+    const label = `테마: ${choice.label} · 클릭하면 ${next().label}`;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-ui-tooltip", label);
+    button.setAttribute("data-action-icon", choice.icon);
+    actionIcon(button, choice.icon);
+  }
+  listen(button, "click", () => theme.set(next().value));
+  listen(document, "rosy:theme", render);
+  render();
+}
+
+export const roleLabel = role => ROLE[role] || "권한 없음";
+
+// The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
+// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401)
+// or a role without stop rights (403). Unknown stays live — never harder to reach than a refused press.
+export function estopReason(session) {
+  if (session === null) return SESSION_REASON;
+  if (session && session.role !== "operator") return OPERATOR_REASON;
+  return "";
+}
+
+function gateEstop(session) {
+  const estop = $("estop"), reason = estopReason(session);
+  estop.disabled = Boolean(reason);
+  if (reason) estop.setAttribute("reason", reason);
+  else estop.removeAttribute("reason");
+}
+
+// The fold opens itself when access is lost (the token field is inside) and closes again only if it did so.
+let openedForLock = false;
+export function setTopbarOpen(open) {
+  $("topbar-more").setAttribute("aria-expanded", String(open));
+  $("topbar-extra").dataset.open = String(open);
+}
+export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListener(type, fn)) {
+  inboxButton();
+  bindThemeCycle(listen);
+  const entry = $("topbar-more");
+  function summarize() {
+    const count = $("header-unread").textContent;
+    const messages = count === "—" ? "미확인 메시지 수는 관제에서 확인" : `미확인 메시지 ${count}개`;
+    const development = $("development-badge").hidden ? "" : " · 개발 연결 모드";
+    const label = `상태 센터 · 로봇 연결 ${$("online-pill").textContent} · ${messages}${development}`;
+    entry.setAttribute("aria-label", label);
+    entry.setAttribute("data-ui-tooltip", `${label} · 연결·권한·메시지 확인`);
+  }
+  new MutationObserver(summarize).observe(entry, {subtree: true, childList: true,
+    attributes: true, attributeFilter: ["hidden", "status"]});
+  summarize();
+  listen($("topbar-extra"), "keydown", event => {
+    if (event.key === "Escape") { setTopbarOpen(false); $("topbar-more").focus(); }
+  });
+  listen($("topbar-more"), "click", () => {
+    openedForLock = false;
+    setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");
+  });
+}
+
+// English role names and principal ids stay in title (D-540 2); a development session says so with its badge.
+export function showSession(identity) {
+  $('fleet-login').hidden = true;
+  $('fleet-account').hidden = false;
+  $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
+  const token = $('token-access');
+  if (token) token.open = false;
+  const tag = $("user-role"), development = identity.principal_id.startsWith("development-");
+  tag.textContent = roleLabel(identity.role);
+  tag.title = `${identity.principal_id} · ${identity.role}`;
+  tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
+  if (development) $("development-badge").hidden = false;
+  gateEstop(identity);
+  if (openedForLock) setTopbarOpen(false);
+  openedForLock = false;
+}
+
+// `refused` is false when the session probe failed for another reason (Fleet down): the words change,
+// the E-stop stays live. `fold` is false on 관제, whose connection view owns the fold.
+export function showSignedOut({fold = true, refused = true} = {}) {
+  $('fleet-account').hidden = true;
+  $('fleet-account').open = false;
+  $('fleet-login').hidden = false;
+  const tag = $("user-role");
+  tag.textContent = "인증 필요";
+  tag.removeAttribute("title");
+  tag.setAttribute("status", "crit");
+  gateEstop(refused ? null : undefined);
+  if (fold && $("topbar-more").getAttribute("aria-expanded") !== "true") {
+    setTopbarOpen(true);
+    openedForLock = true;
+  }
+}
+
+export function showFleet(fleet, robots = null) {
+  $("fleet-name").textContent = fleet.name || "사이트";
+  const pill = $("online-pill");
+  delete pill.dataset.locked;
+  // A robot answering late (link "degraded") still counts as connected on the pill.
+  const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
+  pill.textContent = `${linked}/${fleet.total}`;
+  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
+}
+
+// Pages without their own state poll (설치·보정, 현장 지도, Cell) read the count every 5 s. A 401/403 leaves
+// the pill to the page's lock words; anything else says the server is missing.
+export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
+  async function read() {
+    try {
+      const state = await request("/api/fleet/state");
+      showFleet(state.fleet, state.robots);
+    } catch (error) {
+      if (error.name === "AbortError" || error.status === 401 || error.status === 403) return;
+      const pill = $("online-pill");
+      pill.textContent = "Fleet 서버 없음";
+      pill.setAttribute("status", "crit");
+    }
+  }
+  read();
+  return interval(read, every);
+}
+
+export function tickClock() {
+  $("clock").textContent = new Date().toTimeString().slice(0, 8);
+}
+
+export function stopNotice(message = "", state = "warning") {
+  const notice = $("estop-feedback");
+  notice.textContent = message;
+  notice.hidden = !message;
+  notice.setAttribute("state", state);
+}
+
+// D-413/D-414 — one press, no confirmation, the same words on every document. `life` lets a page drop a
+// result that arrives after its scope changed; `log` and `after` are the console's extra bookkeeping.
+export function bindEstop(request, {listen = (node, type, fn) => node.addEventListener(type, fn),
+  life = () => ({check() {}}), log = () => {}, after = async () => {}} = {}) {
+  listen($("estop"), "click", async () => {
+    const task = life();
+    task.check();
+    stopNotice("비상 정지 요청 중…", "pending");
+    try {
+      const result = await request("/api/fleet/estop", {method: "POST"});
+      task.check();
+      const summary = result.total > 0
+        ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+        : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
+      stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
+      log(summary, "bad");
+      (result.robots || []).filter(robot => !robot.stopped)
+        .forEach(robot => log(`  ${robot.robot_id} 정지 요청 응답 없음 — ${robot.error?.code}`, "bad"));
+      await after();
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      stopNotice(error.status >= 500 || !error.status
+        ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
+        : `비상 정지 요청 거절 — ${error.message}`, "error");
+      log(`전체 정지 실패 — ${error.message}`, "bad");
+    }
+  });
+}

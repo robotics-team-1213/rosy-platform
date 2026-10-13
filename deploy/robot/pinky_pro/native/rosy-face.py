@@ -190,7 +190,7 @@ LAMP_TEST_S = 10.0
 # the outcome goes to this unit's own runtime directory, which rosy-hw-test reads.
 TEST_REQUEST = "run/rosy-boot/display-test.request"
 TEST_RESULT = "run/rosy-display/display-test.json"
-TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
+TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber", "identify_blue_quiet", "identify_amber_quiet")
 TEST_REQUEST_MAX_AGE_S = 30.0
 #: D-472 4: Fleet's identity window is <= 6 s from its request. rosy-hw-test passes an identify
 #: on within 1.5 s, this program must take the hand-over within IDENTIFY_REQUEST_MAX_AGE_S
@@ -739,10 +739,15 @@ class FaceDisplay:
         if robot_state is not None:
             args = (state, (core or {}).get("robot_mode") or view.get("robot_mode"),
                     (core or {}).get("nav_state") or view.get("nav_state"))
+            recovery = (core or {}).get("recovery")
+            signal = (core or {}).get("signal")
             try:
-                lamp = robot_state.lamp_pattern(*args, (core or {}).get("recovery"))
-            except TypeError:  # a core_common from before D-546 takes three arguments
-                lamp = robot_state.lamp_pattern(*args)
+                lamp = robot_state.lamp_pattern(*args, recovery, signal)
+            except TypeError:  # before the turn signal, then before D-546's recovery argument
+                try:
+                    lamp = robot_state.lamp_pattern(*args, recovery)
+                except TypeError:
+                    lamp = robot_state.lamp_pattern(*args)
         bar = None if not screen or screen["kind"] != "face" else (
             screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok", None, None)
         return types.SimpleNamespace(
@@ -780,23 +785,26 @@ class FaceDisplay:
         request = read_test_request(self.root / TEST_REQUEST, self._wall())
         if request is None or request["request_id"] == self._tested:
             return None
-        def unsafe_identity() -> bool:
+        def unsafe_identity() -> str | None:
             # D-472 5: e-stop, fault, caution or no CORE hand-over: the safety display wins.
             # The pattern is recomputed from the files (the lamp's own is None mid-blink).
+            # D-596 rev 2026-10-10: the answer is the refusal reason CORE hands on to Fleet.
             core = self._core()
             if core is None or core.get("estop") is not False or core.get("caution"):
-                return True
+                return "CORE_UNAVAILABLE" if core is None else "CAUTION_ACTIVE" if core.get("estop") is False else "ESTOP"
             view = read_view(self.root, self._battery_value)
-            return self.lamp_pattern_for(view, self.robot_state_of(view), core) not in IDENTIFY_OVER
+            pattern = self.lamp_pattern_for(view, self.robot_state_of(view), core)
+            return None if pattern in IDENTIFY_OVER else "CAUTION_ACTIVE" if pattern == "caution" else "STATE_DISPLAY"
         identifying = request["action"].startswith("identify_")
         identify_ready = identifying and self._lamp is not None and self._lamp.available(for_identify=True)
-        if identifying and (not identify_ready or unsafe_identity()):
+        refused = identifying and ("LAMP_UNAVAILABLE" if not identify_ready else unsafe_identity())
+        if refused:
             # Answered at once, so rosy-hw-test does not wait out its hand-over timeout.
             self._tested = request["request_id"]
             state = "failed" if identify_ready else "unavailable"
             write_test_result(self.root / TEST_RESULT, json.dumps(
                 {"schema": 1, "request_id": request["request_id"], "action": request["action"],
-                 "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절"},
+                 "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절", "reason": refused},
                 ensure_ascii=False, sort_keys=True) + "\n")
             return state
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
@@ -812,10 +820,10 @@ class FaceDisplay:
         if request["action"] == "buzzer":
             state, detail = self._buzzer.test()
         elif self._lamp is not None and request["action"].startswith("identify_"):
-            # Once, at accept. self._sound stays the health sound, so the next
-            # ready transition still chirps. A refused call returns before this.
-            self._buzzer.announce("call")
-            state, detail = self._lamp.identify(request["action"].removeprefix("identify_"), unsafe_identity)
+            # Once at accept, never for D-596 identify_<colour>_quiet; self._sound stays the health sound.
+            if not request["action"].endswith("_quiet"):
+                self._buzzer.announce("call")
+            state, detail = self._lamp.identify(request["action"][9:].removesuffix("_quiet"), unsafe_identity)
         elif self._lamp is not None:
             state, detail = self._lamp.test()
         else:

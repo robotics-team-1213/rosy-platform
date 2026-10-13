@@ -28,7 +28,7 @@ if __package__:
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 else:  # pragma: no cover - installed host CLI
@@ -39,7 +39,7 @@ else:  # pragma: no cover - installed host CLI
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 
@@ -59,6 +59,7 @@ class SiteUpdater:
         self.clock = clock
         self.dry_run = dry_run
         self._accepted_images = {}
+        self._functional_baseline = None
 
     # state
     def load_state(self) -> dict:
@@ -317,7 +318,16 @@ class SiteUpdater:
             if status == 200:
                 reason = self._containers_reason(env, commit)
                 if reason == '':
-                    reason = functional_reason(self.config, self.http)
+                    if self._functional_baseline is None:
+                        reason = functional_reason(self.config, self.http)
+                    else:
+                        try:
+                            observed, _ = functional_inventory(self.config, self.http)
+                            if any(not set(ids) <= set(observed.get(path, []))
+                                   for path, ids in self._functional_baseline.items()):
+                                reason = 'functional API lost previously observed IDs'
+                        except Rejected as error:
+                            reason = str(error)
                 if reason == "":
                     return True, "healthy"
             if self.clock() >= deadline:
@@ -356,7 +366,8 @@ class SiteUpdater:
             os.fsync(stream.fileno())
         state = self._state
         state['switch'] = {'previous': str(previous.resolve()), 'current': current,
-                           'commit': commit, 'tag': f'site-{commit[:12]}'}
+                           'commit': commit, 'tag': f'site-{commit[:12]}',
+                           'functional_baseline': self._functional_baseline}
         self.save_state(state)
         try:
             write_env_tag(self.paths.site_env, commit)
@@ -393,6 +404,7 @@ class SiteUpdater:
         os.replace(restored, self.paths.site_env)
         swap_link(self.paths.link, previous)
         self._restart()
+        self._functional_baseline = transaction.get('functional_baseline')
         ok, reason = self.healthy(read_env(self.paths.site_env), transaction['current'])
         log('rolled-back', commit=transaction['current'], healthy=ok, reason=reason)
         if not ok:
@@ -482,7 +494,11 @@ class SiteUpdater:
             self._verify(self.paths.link, loaded=True, expected_commit=current)
             reason = self._containers_reason(env, current)
             if not reason:
-                reason = functional_reason(self.config, self.http)
+                self._functional_baseline, missing = functional_inventory(self.config, self.http)
+                drift = {path: ids for path, ids in missing.items() if ids}
+                if drift:
+                    state['last_run']['inventory_drift'] = drift
+                    log('inventory-drift', missing=drift)
             if reason:
                 raise Rejected(reason)
             installed = state.get('installed')

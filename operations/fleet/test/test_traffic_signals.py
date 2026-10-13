@@ -41,11 +41,18 @@ def _signals(runner):
     return {row["signal_id"]: row for row in runner.traffic.view()["signals"]}
 
 
-def test_a_fresh_signal_is_all_red_with_a_stop_line_per_approach():
+def test_a_fresh_signal_is_occupancy_red_until_the_table_knows_the_zone_with_a_stop_line_per_approach():
+    """D-525 rev 6: a (re)started Fleet is in occupancy mode; its lamps are red until the first table
+    period on the active map knows the zone, then follow it (free: every approach green)."""
     runner, store, _fleet, entries = _setup()
+    before = runner.traffic._signal_view(None)[0]
+    assert before["mode"] == "occupancy" and before["occupancy"] == {"state": "unknown", "holder": None, "approach": None}
+    assert {a["lamp"] for a in before["approaches"]} == {"red"} and before["aspect"] == "all_red"
     row = _signals(runner)["sig"]
-    assert row["virtual"] and row["mode"] == "all_red" and row["aspect"] == "all_red" and row["errors"] == []
-    assert [a["approach"] for a in row["approaches"]] == entries and {a["lamp"] for a in row["approaches"]} == {"red"}
+    assert row["virtual"] and row["mode"] == "occupancy" and row["errors"] == [] and row["left_s"] is None
+    assert row["occupancy"] == {"state": "free", "holder": None, "approach": None} and row["aspect"] == "green"
+    assert [a["approach"] for a in row["approaches"]] == entries and {a["lamp"] for a in row["approaches"]} == {"green"}
+    assert all(a["left_s"] is None and a["green_in_s"] == 0.0 for a in row["approaches"])
     graph = store.active()[2]
     for approach in row["approaches"]:
         x, y, _yaw = graph.arcs[approach["approach"]].point_at(graph.arcs[approach["approach"]].length_m)
@@ -93,6 +100,42 @@ def test_the_block_table_gets_the_green_approach(monkeypatch):
         fleet.advance(0.5)
         _signals(runner)
     assert seen == [{"roundabout": frozenset()}, {"roundabout": frozenset({entries[0]})}]
+
+
+def test_occupancy_mode_gives_the_table_every_approach_and_rows_follow_the_zone(monkeypatch):
+    runner, _store, fleet, entries = _setup()
+    seen = []
+    real = blocks.step
+    monkeypatch.setattr(blocks, "step", lambda *a, **k: seen.append(k["green"]) or real(*a, **k))
+    fleet.advance(0.5)
+    _signals(runner)
+    assert seen == [{"roundabout": frozenset(entries)}], "no phase gate: capacity 1 decides"
+    traffic, plan = runner.traffic, runner.traffic._signals["sig"]
+    traffic._occupancy = {"roundabout": ("reserved", "a", entries[1])}
+    row = traffic._signal_row(plan, None)
+    assert row["occupancy"] == {"state": "reserved", "holder": "a", "approach": entries[1]} and row["aspect"] == "yellow"
+    assert {a["approach"]: a["lamp"] for a in row["approaches"]} == \
+        {e: "green" if e == entries[1] else "yellow" for e in entries}
+    traffic._occupancy = {"roundabout": ("occupied", "a", entries[1])}
+    row = traffic._signal_row(plan, None)
+    assert row["aspect"] == "all_red" and {a["lamp"] for a in row["approaches"]} == {"red"}
+    traffic.signals_all_red()                               # E-stop: all red, the occupancy no longer matters
+    traffic._occupancy = {"roundabout": ("free", None, None)}
+    row = traffic._signal_row(plan, None)
+    assert row["mode"] == "all_red" and {a["lamp"] for a in row["approaches"]} == {"red"}
+    assert traffic.signal_command("sig", "occupancy")["mode"] == "occupancy"
+    assert {a["lamp"] for a in traffic._signal_row(plan, None)["approaches"]} == {"green"}
+
+
+def test_a_plan_refused_on_the_map_stays_red_in_occupancy_mode_too(monkeypatch):
+    runner, _store, fleet, _entries = _setup(capacity=2)
+    seen = []
+    real = blocks.step
+    monkeypatch.setattr(blocks, "step", lambda *a, **k: seen.append(k["green"]) or real(*a, **k))
+    fleet.advance(0.5)
+    row = _signals(runner)["sig"]
+    assert row["mode"] == "occupancy" and row["errors"] and row["aspect"] == "all_red"
+    assert {a["lamp"] for a in row["approaches"]} == {"red"} and seen == [{"roundabout": frozenset()}]
 
 
 def test_a_trip_across_a_signal_needs_core_authority():
@@ -201,4 +244,52 @@ def test_signal_rows_carry_the_countdown_and_a_robot_sees_its_next_signal():
     assert ahead["signal_id"] == "sig" and ahead["approach"] == zone.entry and ahead["advisory"] is True
     assert ahead["distance_m"] == round(zone.d0 - 0.5, 3) and ahead["may_enter"] is False
     assert ahead["lamp"] in ("green", "red", "yellow") and "green_in_s" in ahead
+    assert ahead["mode"] == "cycle" and set(ahead["occupancy"]) == {"state", "holder", "approach"}
     assert runner.traffic.signal_ahead("nobody") is None
+
+
+def test_demand_mode_rows_show_demands_and_the_controller_age():
+    runner, _store, fleet, entries = _setup()
+    with pytest.raises(PermissionError):                       # not in demand mode yet
+        runner.traffic.signal_demand("sig", entries[1], 2.0, "robot a waiting")
+    runner.traffic.signal_command("sig", "demand")
+    row, fresh = runner.traffic.signal_demand("sig", entries[1], 2.0, "robot a waiting 0.30 m")
+    assert fresh and row["mode"] == "demand" and row["controller_age_s"] == 0.0
+    assert row["demands"] == [{"approach": entries[1], "age_s": 0.0, "reason": "robot a waiting 0.30 m"}]
+    for _ in range(3):                                         # learn the zone, then the demanded approach
+        fleet.advance(0.5)
+        runner.traffic.signal_demand("sig", entries[1], 2.0, "robot a waiting 0.30 m")
+        row = _signals(runner)["sig"]
+    assert [a["approach"] for a in row["approaches"] if a["lamp"] == "green"] == [entries[1]]
+    assert row["left_s"] is None                               # an open-ended green
+    fleet.advance(6.0)                                         # the controller went silent
+    row = _signals(runner)["sig"]
+    assert row["mode"] == "cycle" and row["alert"] == "controller_lost" and row["demands"] == []
+
+
+def test_signal_demand_route_needs_a_named_operator_demand_mode_and_a_short_ttl(tmp_path):
+    from test_trip_runner import OPERATOR, VIEWER, Ports, _app
+
+    client, tasks, store, *_rest = _app(tmp_path, Ports())
+    plan = SignalPlan("sig", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0)))
+    client.app.state.trip_runner.traffic = TrafficService(store, TripConfig(), zones={"roundabout": (RING, 1)},
+                                                          signals=[plan])
+    url = "/api/fleet/traffic/signals/sig/demand"
+    ask = {"approach": "west:fwd", "ttl_s": 2.0, "reason": "robot a waiting 0.30 m"}
+    assert client.post(url, json=ask).status_code in (401, 403)
+    assert client.post(url, json=ask, headers=VIEWER).status_code in (401, 403)
+    refused = client.post(url, json=ask, headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "SIGNAL_NOT_DEMAND"
+    assert client.post("/api/fleet/traffic/signals/sig", json={"verb": "demand"}, headers=OPERATOR).json()["mode"] == "demand"
+    for ttl in (0, -1, 5.5):
+        assert client.post(url, json={**ask, "ttl_s": ttl}, headers=OPERATOR).status_code == 422
+    assert client.post(url, json={"ttl_s": 2.0}, headers=OPERATOR).status_code == 200   # keep-alive, nobody waits
+    bad = client.post(url, json={**ask, "approach": "nope:fwd"}, headers=OPERATOR)
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "SIGNAL_APPROACH"
+    missing = client.post("/api/fleet/traffic/signals/nope/demand", json=ask, headers=OPERATOR)
+    assert missing.status_code == 404 and missing.json()["detail"]["code"] == "SIGNAL_UNKNOWN"
+    for _ in range(5):                                         # repeats every poll
+        row = client.post(url, json=ask, headers=OPERATOR).json()
+    assert row["demands"][0]["approach"] == "west:fwd"
+    audited = [r for r in tasks.store.api_audit() if r["path"] == url]
+    assert sorted(r["event_type"] for r in audited) == ["INTENT", "RESULT"]   # only the first demand, not repeats

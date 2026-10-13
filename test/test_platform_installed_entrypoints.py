@@ -7,7 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 for relative in (
-    "middleware/apps/device/omx/agent/src",
+    "middleware/devices/omx/agent/src",
     "operations/apps/fleet/src",
 ):
     path = ROOT / relative

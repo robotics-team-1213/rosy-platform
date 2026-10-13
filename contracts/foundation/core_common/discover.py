@@ -184,7 +184,7 @@ class DiscoveryCache:
             # The initial bounded window collects competing advertisements. Later
             # callers reuse live snapshots and never trigger a periodic rescan.
             initial = time.monotonic() - self._started[service_type] < timeout_s
-            while not self._closed and (initial or not self.snapshot(service_type)):
+            while not self._closed and initial:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break

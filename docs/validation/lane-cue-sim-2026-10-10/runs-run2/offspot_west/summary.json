@@ -1,0 +1,83 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "first_wrong_way_cue": {
+   "turn_deg": 178.84,
+   "turn_spot": null
+  },
+  "latch_after_cue_s": 0.06,
+  "pivots_started": 0,
+  "travel_after_latch_m": 0.0,
+  "yaw_after_latch_deg": 0.0,
+  "nonzero_cmd_after_latch": 0,
+  "still_latched_at_end": true
+ },
+ "timeline": [
+  [
+   566.869,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   569.815,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   569.928,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   570.646,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   570.77,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   571.495,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   571.602,
+   "HOLD",
+   "fleet_wrong_way"
+  ]
+ ],
+ "scenario": "s6",
+ "args": {
+  "scenario": "s6",
+  "out": "runs/offspot_west",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -1.2696,
+   0.243,
+   -1.5707963267948966
+  ],
+  "lane": 1.5707963267948966,
+  "spot": null,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": true,
+  "exact180": false,
+  "box": false,
+  "seed": 101,
+  "spot_xy": null,
+  "lane_deg": 90.0
+ },
+ "rtf": 0.95,
+ "capability_at_end": false
+}

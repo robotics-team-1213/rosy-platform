@@ -94,7 +94,7 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
         "DeviceAllow=/dev/video0 rw", "rosy-core.service",
         "ros2 launch bringup bringup_robot.launch.py",
         "cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S}",
-        "Conflicts=rosy-navigation.service", "Restart=on-failure",
+        "Conflicts=rosy-navigation.service", "Restart=always",
     ):
         assert directive in unit
     assert "privileged" not in unit.lower()
@@ -525,11 +525,11 @@ PROGRAM_SOURCES = {
         "middleware/core/gateway",
         "middleware/core/events",
         "middleware/core/services",
-        "middleware/core/api_web",
+        "middleware/core/api",
         "contracts/foundation",
         "imported-by:middleware/core/gateway:control:middleware/perception",
     ],
-    "rosy-io.service": ["middleware/apps/device/pinky/bringup"],
+    "rosy-io.service": ["middleware/devices/pinky/bringup"],
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
@@ -540,7 +540,7 @@ PROGRAM_SOURCES = {
                             # D-411: the Pilot recorder and its session state machine.
                             "middleware/perception/control/pilot_recorder_node.py",
                             "middleware/perception/control/pilot_recording.py"],
-    "rosy-navigation.service": ["middleware/core/navigation", "middleware/apps/device/pinky/bringup"],
+    "rosy-navigation.service": ["middleware/control/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           # D-260: the rule table it imports from the release.
@@ -549,12 +549,12 @@ PROGRAM_SOURCES = {
                           "contracts/foundation/core_common/face_screen.py",
                           "middleware/ui/face/emotion/info_screen.py",
                           "middleware/ui/face/emotion/rosy_lcd.py",
-                          "middleware/apps/device/pinky/bringup/rosylib"],
+                          "middleware/devices/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
     "rosy-boot-display.service": ["contracts/foundation/core_common/robot_state.py",
                                   "middleware/ui/face/emotion/rosy_lcd.py",
-                                  "middleware/apps/device/pinky/bringup/rosylib"],
+                                  "middleware/devices/pinky/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
                                 "deploy/robot/pinky_pro/native/rosy_config.py"],

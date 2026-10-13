@@ -43,6 +43,7 @@ def overhead_decision(request: Mapping, pose) -> Optional[LocalizationDecision]:
     fresh sighting counts: DEGRADED and UNKNOWN are not, and neither is any pose that is
     odom alone (a robot's own odom is what a stale-pose request says it cannot trust)."""
     if (pose is None or pose.state != "LOCALIZED" or pose.anchor_age_s is None
+            or getattr(pose, "anchor_source", None) == "operator_pin"   # D-593: a pin is not overhead
             or not 0.0 <= pose.anchor_age_s <= OVERHEAD_ANCHOR_FRESH_S):
         return None
     try:

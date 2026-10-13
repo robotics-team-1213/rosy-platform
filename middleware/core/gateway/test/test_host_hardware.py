@@ -113,7 +113,7 @@ def test_the_card_needs_a_token(tmp_path):
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("action", ["identify_blue", "identify_amber"])
+@pytest.mark.parametrize("action", ["identify_blue", "identify_amber", "identify_blue_quiet"])
 def test_the_card_shows_lamp_identify_outcome(tmp_path, action):
     _human_rows(tmp_path)
     _tested(tmp_path, action, state="unavailable")

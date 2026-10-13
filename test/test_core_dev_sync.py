@@ -26,6 +26,19 @@ NATIVE_CORE = "/opt/rosy/current/install/lib/python3.12/site-packages/core"
 NATIVE_SHARE = "/opt/rosy/current/install/share/web_common"
 
 
+def test_overlay_contains_each_moved_behavior_under_its_installed_identity(tmp_path):
+    archive = tmp_path / 'overlay.tar.gz'
+    overlay.pack_repo(ROOT, archive)
+    with tarfile.open(archive) as packed:
+        names = packed.getnames()
+        for package in ('line_follow', 'docking', 'navigation', 'localization',
+                        'swarm', 'road_behaviour', 'traffic_policy'):
+            name = 'python/core_features/' + package + '/__init__.py'
+            assert names.count(name) == 1
+            source = ROOT / 'middleware/control/drive/behaviors' / package / '__init__.py'
+            assert packed.extractfile(name).read() == source.read_bytes()
+
+
 def _tar(tmp_path: Path, members: dict[str, bytes | None]) -> Path:
     path = tmp_path / "overlay.tar"
     with tarfile.open(path, "w") as tar:

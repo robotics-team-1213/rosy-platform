@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -36,6 +37,8 @@ from control.sensing.perception.road import (  # noqa: E402
 )
 from core.bridge import traffic_gate, translate  # noqa: E402
 from core_events.events.bus import EventBus  # noqa: E402
+from core_features.command.manager import CommandManager  # noqa: E402
+from core_features.safety.manager import SpeedLimits  # noqa: E402
 from core_features.line_follow import (  # noqa: E402
     LineFollowConfig,
     LineFollowManager,
@@ -65,10 +68,15 @@ class _SyntheticGround:
 
 
 class _CommandRecorder:
-    def __init__(self):
+    def __init__(self, *, max_linear, max_angular):
         self.applied = []
+        self._safety = SimpleNamespace(limits=SpeedLimits(
+            max_linear=max_linear, max_angular=max_angular))
 
-    def set_nav_twist(self, twist, now=None):
+    # Use the production profile cap before the traffic gate judges its arc.
+    clip_line_candidate = CommandManager.clip_line_candidate
+
+    def set_nav_twist(self, twist, now=None, *, preserve_curvature=False):
         self.applied.append((float(now), twist))
 
 
@@ -260,7 +268,7 @@ def run_simulation(output_dir: Path | str) -> dict:
         clock=lambda: now[0],
         simulation_signal_control=True,
     )
-    command = _CommandRecorder()
+    command = _CommandRecorder(max_linear=0.10, max_angular=0.7)
     samples = []
     montage = []
     preview_frames = []

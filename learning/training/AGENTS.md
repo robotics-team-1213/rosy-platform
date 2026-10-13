@@ -5,13 +5,13 @@
 
 ## Purpose
 
-Offline training jobs. They run in a separate CPU environment, write a new directory on X:, and do not deploy weights to a robot.
+Offline training jobs and their input/output contracts. Each job uses its declared separate CPU/GPU environment and a new output directory; local development artifacts belong on X:. Existing remote stores retain their paths. Training does not deploy or activate robot behavior.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `perception/` | D-356 learned-loop tooling for lane and perception models (see `perception/AGENTS.md`) |
+| `perception/` | Actual trainer, recording/training jobs, review admission composition and notebook recipes (see `perception/AGENTS.md`) |
 | `omx/` | OMX ACT research on existing LeRobot exports (see `omx/AGENTS.md`) |
 | `pinky/` | Pinky recording speed-model comparison against recorded CORE output (see `pinky/AGENTS.md`) |
 
@@ -25,7 +25,7 @@ Offline training jobs. They run in a separate CPU environment, write a new direc
 
 ### Testing Requirements
 
-Each child has its own README command. Perception tests are the ones wired like the other learning packages; the ACT and Pinky jobs need their pinned CPU environments.
+Each child has its own README command and declared environment. Perception source and fixtures use the unified `test/learning/perception/` suite. Run pytest only for committed HEAD via `tools/remote/remote_pytest.py`, followed by `test/known_failures.py` (D-584); the ACT and Pinky jobs retain their pinned CPU environments.
 
 ### Common Patterns
 
@@ -36,7 +36,9 @@ Each child has its own README command. Perception tests are the ones wired like 
 ### Internal
 
 - Curated episodes from `learning/curation/`.
-- Contract shapes from `contracts/learning/`.
+- Contract shapes from `contracts/learning/src/rosy/contracts/learning/`, loaded from `contracts/learning/src`.
+- `learning/registry/perception/store.py` for shared datasets, evalsets, READY inbox and model provenance.
+- `learning/evaluation/perception/` for existing replay evaluation and `tools/perception/` for the cross-owner CLI/transport. Curation and registry implementation lives in those holders, not inside the trainer directory.
 
 ### External
 

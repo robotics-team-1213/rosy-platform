@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LinkStatusTest {
+    @Test fun togetherDriveExplainsMissingRobotsAndCoolingBeforeSelection() {
+        assertEquals(LinkStatus.groupHint(0, false), LinkStatus.groupHint(1, false))
+        assertTrue(LinkStatus.groupHint(1, false).contains("다시 찾아"))
+        assertTrue(LinkStatus.groupHint(2, false).contains("선택해 연결"))
+        assertEquals(LinkStatus.groupHint(0, true), LinkStatus.groupHint(2, true))
+        assertTrue(LinkStatus.groupHint(2, true).contains("태블릿이 식으면"))
+    }
+
     @Test fun everyFailureNamesItsReason() {
         val cases = mapOf<Throwable, LinkReason>(
             PeerApprovalExpired() to LinkReason.APPROVAL_EXPIRED,

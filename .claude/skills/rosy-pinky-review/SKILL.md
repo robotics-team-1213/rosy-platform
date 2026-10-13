@@ -7,9 +7,9 @@ description: Use when an agent must run, look at, verify, or improve the Pinky l
 
 ## Overview
 
-`learning/training/perception/dataset/review_app.py` is a PC-only stdlib server (SQLite +
+`learning/curation/perception/review_app.py` is a PC-only stdlib server (SQLite +
 static files). It needs no robot, ROS or model API, so it always runs locally. Operator
-manual: `learning/training/perception/docs/review-app.md`. This card covers how an agent
+manual: `learning/curation/perception/docs/review-app.md`. This card covers how an agent
 gets it running and judges a change with its own eyes.
 
 ## 1. Get a state you may write to
@@ -28,7 +28,7 @@ With no state, the first run needs `--source <jsonl> --human <jsonl> --images <r
 ## 2. Look before changing anything
 
 ```bash
-python tools/review_app_smoke.py --state X:/DevTemp/<name>/state --out X:/DevTemp/<name>/smoke
+python learning/curation/perception/tools/review_app_smoke.py --state X:/DevTemp/<name>/state --out X:/DevTemp/<name>/smoke
 ```
 
 It copies the state under `--out` (app startup may migrate the schema), serves the copy on a
@@ -43,7 +43,7 @@ iterating, start it in the background. Static files are re-read on every request
 browser reload picks up JS/CSS edits without restarting the server:
 
 ```bash
-python learning/training/perception/dataset/review_app.py --state X:/DevTemp/<name>/state --port 8791
+python learning/curation/perception/review_app.py --state X:/DevTemp/<name>/state --port 8791
 ```
 
 ## 3. Walk a reviewer flow (copied state only)
@@ -71,9 +71,9 @@ original image has loaded and been hash-checked.
 
 ```bash
 ROSY_RUN_BROWSER_TESTS=1 PYTHONIOENCODING=utf-8 python -m pytest \
-  learning/training/perception/test/test_review_flow_browser.py \
-  learning/training/perception/test/test_pixel_review_browser.py \
-  learning/training/perception/test/test_review_app_smoke.py \
+  test/learning/perception/test_review_flow_browser.py \
+  test/learning/perception/test_pixel_review_browser.py \
+  test/learning/perception/test_review_app_smoke.py \
   -q -rfE -p no:cacheprovider --basetemp X:/DevTemp/<name>/bt > X:/DevTemp/<name>/browser.txt
 python test/known_failures.py X:/DevTemp/<name>/browser.txt
 ```
@@ -86,7 +86,7 @@ contract suites: the test block in `review-app.md`. Run `node --test` for
 
 ## Class sets (D-485)
 
-A workspace holds one object class set and one pixel class set. For another model, make a new `--state` and pass the model's names at first start: `--object-classes <data.yaml>` (Ultralytics `names`, optional `display`/`colors`; default is the D-423 six classes). Get `data.yaml` on the model PC with `python learning/training/perception/model/export_class_names.py best.pt --out data.yaml`. The lane model's pixel classes are `learning/training/perception/classes/lane_lr5.yaml`. Hotkeys in a walkthrough: `1`-`9` class, `A` approve (after ticking `#complete`), `X` exclude (pending photos only), arrows move; they follow key codes, so Korean IME does not matter. Hotkey/class-set browser checks live in `test_pixel_review_browser.py` and `test_review_flow_browser.py` (section 4).
+A workspace holds one object class set and one pixel class set. For another model, make a new `--state` and pass the model's names at first start: `--object-classes <data.yaml>` (Ultralytics `names`, optional `display`/`colors`; default is the D-423 six classes). Get `data.yaml` on the model PC with `python learning/registry/perception/export_class_names.py best.pt --out data.yaml`. The lane model's pixel classes are `learning/curation/perception/classes/lane_lr5.yaml`. Hotkeys in a walkthrough: `1`-`9` class, `A` approve (after ticking `#complete`), `X` exclude (pending photos only), arrows move; they follow key codes, so Korean IME does not matter. Hotkey/class-set browser checks live in `test_pixel_review_browser.py` and `test_review_flow_browser.py` (section 4).
 ## Common mistakes
 
 - Approving in a test or walkthrough on the operational state turns synthetic approvals into training truth. Copy first.

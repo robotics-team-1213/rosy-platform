@@ -112,6 +112,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
 
 def engaged(console, robot_id: str, *, clock=time.monotonic) -> Optional[str]:
     """Why the robot already moves for someone else, or None (a trip start refuses then)."""
+    if robot_id in console.goal_leases.pending or robot_id in console._goal_busy:
+        return "goal_pending"
     if robot_id in console._goals:
         sent_at = getattr(console, "trip_goal_sent_at", {}).get(robot_id)
         navigating = (console._seen.get(robot_id) or {}).get("navigation") == "NAVIGATING"

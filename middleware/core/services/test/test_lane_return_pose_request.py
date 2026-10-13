@@ -3,7 +3,7 @@ import json
 import pytest
 from core_common.protocol.localization import DecisionSource, LocalizationDecision, MapPose
 from core_features.line_follow.model import LineFollowMode
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 from core_features.localization import LocalizationAssist, PoseRequests
 from test_lane_return_manager import rig, frame
 

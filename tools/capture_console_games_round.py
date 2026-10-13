@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 REPO = Path(__file__).resolve().parents[1]
 for _entry in (
     "operations/fleet",
+    "operations/world/src",
     "operations/fleet/test",
     "contracts/foundation",
     "middleware/core/services",

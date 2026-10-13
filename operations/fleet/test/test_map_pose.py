@@ -18,6 +18,32 @@ def odom(t, x=0.0, y=0.0, yaw=0.0):
     return OdomSample(x, y, yaw, T0 + t)
 
 
+def test_survey_odom_is_fresh_relative_evidence_without_an_operational_anchor():
+    tracker = MapPoseTracker('r1')
+    assert tracker.survey_odom(T0) is None
+    assert tracker.add_odom(odom(0, x=2, y=3, yaw=0.4), T0)
+    assert tracker.survey_odom(T0) == ((2, 3, 0.4), T0, 0)
+    assert tracker.pose(T0).state == UNKNOWN
+    assert tracker.odom_to_map() is None
+    assert tracker.survey_odom(T0 + 3.01) is None
+    assert tracker.survey_odom(T0 - 0.01) is None
+    assert tracker.add_odom(odom(4, x=0), T0 + 4)
+    assert tracker.survey_odom(T0 + 4) == ((0, 0, 0), T0 + 4, 1)
+    assert tracker.pose(T0 + 4).state == UNKNOWN
+
+
+def test_survey_odom_keeps_repeated_reads_and_breaks_on_reset_or_rejected_observation():
+    tracker = MapPoseTracker('r1')
+    assert tracker.add_odom(odom(0), T0)
+    assert not tracker.add_odom(odom(0), T0)
+    assert tracker.survey_odom(T0)[2] == 0
+    assert tracker.add_odom(odom(0.1, x=3), T0 + 0.1)
+    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 1)
+    assert not tracker.add_odom(odom(0.05, x=4), T0 + 0.1)
+    assert tracker.survey_odom(T0 + 0.1) == ((3, 0, 0), T0 + 0.1, 2)
+    assert tracker._epoch == 1  # rejected evidence breaks survey continuity, not operational odom
+
+
 def seen(t, x=ANCHOR[0], y=ANCHOR[1], yaw=ANCHOR[2], robot="r1", quality=None):
     return Sighting(robot, x, y, yaw, T0 + t, quality)
 
@@ -264,7 +290,10 @@ def test_config_defaults_are_the_adr_values():
 
 
 def test_map_pose_is_stdlib_only_and_never_reads_tracking():
-    path = Path(__file__).resolve().parents[1] / "fleet" / "localization" / "map_pose.py"
+    from rosy.world.state.projections import map_pose
+
+    path = Path(map_pose.__file__)
+    assert path == Path(__file__).resolve().parents[3] / "operations/world/src/rosy/world/state/projections/map_pose.py"
     names = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
@@ -365,6 +394,28 @@ def test_anchor_age_degrades_without_new_sightings():
     assert pose.state == LOCALIZED and pose.anchor_age_s == pytest.approx(9.7)
     pose = tr.pose(T0 + 12.2)
     assert pose.state == DEGRADED and pose.anchor_age_s == pytest.approx(12.0)
+
+
+def test_a_parked_robot_with_a_rarely_read_marker_localizes_again():
+    """Site 2026-10-10: rosy_40 parked, its marker read about one frame in eight; sightings came
+    more than max_anchor_age_s apart, each reset the agreement count, LOCALIZED never came back.
+    Odom stood still between them, so agreeing sightings any time apart re-localize it."""
+    tr = MapPoseTracker("r1")
+    for t in (0.0, 25.0, 50.0):                                  # 25 s apart, odom jitter only
+        for k in range(int(t * 2) - 50 if t else 0, int(t * 2) + 1):
+            tr.add_odom(odom(k / 2, x=1e-9 * k), T0 + k / 2)
+        tr.add_sighting(seen(t, x=ANCHOR[0] + 0.01), T0 + t)
+    pose = tr.pose(T0 + 50.0)
+    assert (pose.state, pose.anchor_age_s) == (LOCALIZED, pytest.approx(0.0))
+
+
+def test_a_moving_robot_still_needs_fresh_sightings_after_the_anchor_age():
+    tr = localized()
+    for i in range(1, 31):                                       # 0.3 m in 15 s, no sighting
+        tr.add_odom(odom(0.2 + 0.5 * i, x=0.01 * i), T0 + 0.2 + 0.5 * i)
+    tr.add_sighting(seen(15.2, y=ANCHOR[1] + 0.3), T0 + 15.2)   # agrees, but the bridge was 15 s
+    tr.add_odom(odom(15.3, x=0.3), T0 + 15.3)
+    assert tr.pose(T0 + 15.3).state == DEGRADED
 
 
 def test_another_map_id_starts_a_new_anchor():

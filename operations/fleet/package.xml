@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>fleet</name>
-  <version>0.1.0</version>
+  <version>0.1.4</version>
   <description>ROSY FLEET seed — formation geometry, slot assignment, reference stream relay, FOR-004 session (ROSY-FLEET-SRS-001 FOR-001~004)</description>
   <maintainer email="dev@rosy.local">rosy</maintainer>
   <license>Apache-2.0</license>
@@ -11,7 +11,7 @@
        core_common protocol modules, the shared intent grammar, and succession
        rule. This package dependency preserves colcon build order; the ROS-free
        site deployment loads the source tree without rosdep-installing CORE. -->
-  <exec_depend>core_common</exec_depend>
+  <exec_depend version_gte="0.0.2">core_common</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>web_common</exec_depend>
   <exec_depend>python3-httpx</exec_depend>

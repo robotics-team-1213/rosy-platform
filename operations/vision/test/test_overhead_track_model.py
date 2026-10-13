@@ -9,7 +9,7 @@ from rosy_vision.track.model import (
     FOOTPRINT_MAX_M, FOOTPRINT_MIN_M, ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, Calibration,
 )
 
-GEOMETRY = Path(__file__).resolve().parents[3] / "middleware/apps/device/pinky/profile/config/geometry.yaml"
+GEOMETRY = Path(__file__).resolve().parents[3] / "middleware/devices/pinky/profile/config/geometry.yaml"
 
 
 def test_robot_constants_follow_the_urdf_nominal():

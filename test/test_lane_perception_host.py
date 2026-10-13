@@ -49,6 +49,15 @@ def test_selection_preserves_geometry(config):
     assert "camera_height_m_override: 0.059" in config.overlay.read_text()
 
 
+def test_learned_selection_writes_compensated_reuse(config):
+    # D-585 2: every_n 2 without motion compensation reused 0 learned masks on device.
+    import yaml
+    config.set("learned")
+    params = yaml.safe_load(config.overlay.read_text())["/**/line_observer_node"]["ros__parameters"]
+    assert params["learned_paint_every_n"] == 4
+    assert params["learned_paint_motion_compensation"] is True
+
+
 def test_missing_model_refused(config):
     config.model_check = lambda: (_ for _ in ()).throw(ValueError("missing model"))
     before = config.overlay.read_bytes()

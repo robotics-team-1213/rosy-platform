@@ -50,7 +50,14 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
-    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")  # fixture repos never go to the test hosts
+
+    def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
+        # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
+        # already runs on one (D-584), so the inner pytest runs in the fixture worktree.
+        return [land.remote_pytest.capture([sys.executable, "-m", "pytest", *inv, *land.remote_pytest.PYTEST_TAIL],
+                                           log, cwd=repo) for inv, log in zip(invocations, logs)]
+
+    monkeypatch.setattr(land.remote_pytest, "run", fake_run)
     return main, wt
 
 
@@ -110,6 +117,12 @@ def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, s
     assert (main / "pkg/a.py").read_text() == "x = 2\n"
 
 
+def test_browser_flag_refused_not_run_locally(repos):
+    _, wt = repos
+    with pytest.raises(land.Stop, match="D-584"):
+        land.run_tests(wt, type("A", (), {"browser": True, "node": False})(), [["pkg/test"]], wt.parent, 1)
+
+
 def test_dirty_worktree_refused(repos):
     main, wt = repos
     (wt / "pkg/a.py").write_text("dirty\n")
@@ -142,6 +155,48 @@ def test_pytest_exit_without_failed_lines_stops(repos, target):
     before = git(main, "rev-parse", "HEAD")
     assert land.main(["--tests", target]) == 1
     assert git(main, "rev-parse", "HEAD") == before
+
+
+@pytest.mark.parametrize("signaled", [False, True])
+def test_remote_exit_one_without_failed_lines_stops_before_ff(repos, monkeypatch, capsys, signaled):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+
+    def interrupted_run(invocations, logs, *args, **kwargs):
+        for log in logs:
+            log.write_text("..... [ 42%]\n" + (
+                "[tailscale-ssh: process died: signal: terminated]\n" if signaled else ""),
+                           encoding="utf-8")
+        return [1] * len(invocations)  # The remote wrapper normalizes a signal to exit 1.
+
+    monkeypatch.setattr(land.remote_pytest, "run", interrupted_run)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert "not landing" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+@pytest.mark.parametrize("signaled", [False, True])
+def test_remote_exit_one_with_known_failures_lands_only_when_not_signaled(repos, monkeypatch, capsys, signaled):
+    main, wt = repos
+    nodeid = "pkg/test/test_a.py::test_a"
+    commit(wt, {"pkg/test/test_a.py": "def test_a():\n    assert False\n",
+                "test/known_failures.txt": nodeid + "  # pre-existing fixture failure\n"}, "known failure")
+    candidate = git(wt, "rev-parse", "HEAD")
+    before = git(main, "rev-parse", "HEAD")
+
+    def known_failure_run(invocations, logs, *args, **kwargs):
+        for log in logs:
+            log.write_text("F [100%]\nFAILED " + nodeid + " - AssertionError\n"
+                           + ("[tailscale-ssh: process died: signal: terminated]\n" if signaled
+                              else "1 failed in 0.01s\n"), encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", known_failure_run)
+    assert land.main(["--tests", "pkg/test"]) == int(signaled)
+    assert git(main, "rev-parse", "HEAD") == (before if signaled else candidate)
+    if signaled:
+        assert "not landing" in capsys.readouterr().err
 
 
 def no_merge_left(wt: Path) -> bool:

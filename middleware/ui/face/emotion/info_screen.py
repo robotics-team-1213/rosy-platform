@@ -478,7 +478,7 @@ def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
 
 def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
                 frame: int = 0, profile: DisplayProfile = DEFAULT_PROFILE) -> Image.Image:
-    """Boot card: name, release, stage (failed unit), address, battery, AP (and its QR).
+    """Boot card: ROSY, name, release, stage (failed unit), address, battery, AP (and its QR).
 
     D-385: while the stage is still waiting (BOOTING·PROVISIONED) the stage title
     breathes — two brightness steps at the caller's frame rate (0.5 Hz on the
@@ -489,25 +489,39 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
     width, _height = size
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
-    # D-396: Rosy 정체성 마크 — 장치 이름 옆 작은 로즈색 점. "ROSY 장미색은
-    # 이름 식별에만 쓴다"(D-277, PRODUCT.md). 부팅 카드 어디를 보고 있는지 한눈에.
-    _rose = (246, 151, 231, 255)  # --brand-rose #f697e7
-    draw.ellipse((4, 12, 12, 20), fill=_rose[:3])
-    matrix = ap_qr(payload)
-    qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)
+    # D-688: the boot card says ROSY. Rose stays the name colour (D-277).
+    # The mark breathes with the stage while the robot is still waiting.
     lines = boot_lines(payload)
     kind = str(payload.get("stage") or "BOOTING").split(":", 1)[0]
-    if profile.animation and frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED"):
+    rose = (246, 151, 231)  # --brand-rose #f697e7
+    waiting = profile.animation and frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED")
+    if waiting:
+        rose = _dim(rose)
         lines = [(slot, text, _dim(color) if slot == "stage" else color)
                  for slot, text, color in lines]
+    word_font = _font(22)
+    draw.text((8, 2), "ROSY", font=word_font, fill=rose)
+    name_left = 8 + int(draw.textlength("ROSY", font=word_font)) + 8
+    matrix = ap_qr(payload)
+    qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)
+    release_limit = width // 2 - 16
     for slot, text, color in lines:
         y, font_size = _BOOT_LAYOUT[slot]
         if slot == "release":
-            font, text = _fit(draw, text, font_size, width // 2 - 16)
+            font, text = _fit(draw, text, font_size, release_limit)
             draw.text((width - 12, y), text, font=font, fill=color, anchor="ra")
             continue
-        limit = width // 2 if slot == "name" else width - 32
-        if slot != "name" and y < qr_bottom:
+        if slot == "name":
+            release_font, release_text = _fit(
+                draw, next(item for name, item, _color in lines if name == "release"),
+                _BOOT_LAYOUT["release"][1], release_limit)
+            release_left = width - 12 - int(draw.textlength(release_text, font=release_font))
+            limit = max(48, release_left - 8 - name_left)
+            font, text = _fit(draw, text, font_size, limit)
+            draw.text((name_left, y), text, font=font, fill=color)
+            continue
+        limit = width - 32
+        if y < qr_bottom:
             limit = min(limit, qr_left - _QR_GAP - 16)
         font, text = _fit(draw, text, font_size, limit)
         if color == _CRIT:

@@ -5,6 +5,7 @@
     "components.css": "text/css",
     "template.html": "text/html",
     "template.css": "text/css",
+    "app-shell.css": "text/css",
     "core_ui_logic.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",
@@ -20,6 +21,8 @@
     "icons/pilot.svg": "image/svg+xml",
     "icons/console.svg": "image/svg+xml",
     "icons/robot.svg": "image/svg+xml",
+    "brand/mark.svg": "image/svg+xml",
+    "brand/platform.svg": "image/svg+xml",
     "task-chooser.js": "text/javascript",
     "task-chooser.css": "text/css"
   }

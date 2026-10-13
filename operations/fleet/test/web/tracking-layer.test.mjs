@@ -5,7 +5,8 @@ import {
   classifyTracking, trackingStatusLine, offsetLabel, OFFSET_WARN_M, TRACKING_STATUS_TEXT,
   preferMarkers, positionRows, displayLeaseMs, trackingDriftSample, calibrationDriftVerdict,
   rememberTrackingPoses, CALIBRATION_DRIFT_POLLS, CALIBRATION_DRIFT_M,
-} from "../../fleet/server/web/tracking-layer.js";
+  serverCalibrationDrift, effectiveDriftVerdict,
+} from "../../../ui/console/tracking-layer.js";
 
 const source = (changes = {}) => ({
   source_id: "ceiling_north", map_id: "map_v2_fleet", status: "OK",
@@ -90,16 +91,17 @@ test("a configured marker is drawn without a CORE map pose", () => {
   assert.equal(out.robots.length, 1);
   assert.equal(out.robots[0].pose, null);
   assert.equal(out.robots[0].measured, true);
-  assert.equal(offsetLabel(out.robots[0]), "rosy_01 · 마커 관측");
+  assert.equal(offsetLabel(out.robots[0]), "rosy_01");
 });
 
 test("map coordinates retain signs, metres and measured versus inferred provenance", () => {
   const out = classifyTracking({ robots: [{ robot_id: "rosy_01", status: "MARKER",
     camera: { x: -1.234, y: .456 }, pose: null, offset_m: null }],
-    unknown: [{ x: .25, y: -.5 }] });
+    unknown: [{ x: .25, y: -.5 }, { x: 1, y: 0, marker_id: 41 }] });
   assert.deepEqual(positionRows(out), [
     { name: "rosy_01", x: "-1.23", y: "0.46", basis: "마커 관측" },
     { name: "미확인 1", x: "0.25", y: "-0.50", basis: "무마커 추론 · 이름 미확정" },
+    { name: "ArUco 41", x: "1.00", y: "0.00", basis: "마커 관측 · 미등록" },
   ]);
   assert.deepEqual(positionRows(classifyTracking(null)), []);
 });
@@ -145,4 +147,46 @@ test("pose memory keeps matched poses for the next poll's stillness check", () =
   ] });
   assert.deepEqual(Object.fromEntries(poses), { rosy_01: { x: 1, y: 2 } });
   assert.equal(rememberTrackingPoses(null).size, 0);
+});
+
+test("D-600 unknown floor of every source is carried only when there is some", () => {
+  const out = classifyTracking(body({ sources: [
+    { source_id: "a", unknown_floor: [{ x: 1, y: 2, radius_m: 0.12 }, { x: "bad", y: 0, radius_m: 1 }] },
+    { source_id: "b", unknown_floor: [{ x: 3, y: 1, radius_m: 0 }] }, { source_id: "c" }] }));
+  assert.deepEqual(out.unknownFloor, [{ x: 1, y: 2, radiusM: 0.12 }]);
+  assert.equal("unknownFloor" in classifyTracking(body()), false);
+});
+
+test("the server-side calibration check reads stale source rows and keeps the worst", () => {
+  const row = (source_id, calibration_drift) => ({ source_id, calibration_drift });
+  const sources = [
+    row("ceiling_a", { state: "ok", max_move_m: 0.1, rotation_deg: 0.5 }),
+    row("ceiling_b", { state: "stale", max_move_m: 0.55, rotation_deg: 1.4, checked_at: 7 }),
+    row("ceiling_c", null),
+    row("ceiling_d", { state: "stale", max_move_m: "bad" }),
+    row("ceiling_e", { state: "stale", max_move_m: 0.4, rotation_deg: "x" }),
+    { source_id: "ceiling_f" },
+  ];
+  assert.deepEqual(serverCalibrationDrift(sources),
+    { sourceId: "ceiling_b", maxMoveM: 0.55, rotationDeg: 1.4 });
+  assert.deepEqual(serverCalibrationDrift([row("ceiling_e", sources[4].calibration_drift)]),
+    { sourceId: "ceiling_e", maxMoveM: 0.4, rotationDeg: null });
+  assert.equal(serverCalibrationDrift([row("ceiling_a", sources[0].calibration_drift)]), null);
+  assert.equal(serverCalibrationDrift([]), null);
+  assert.equal(serverCalibrationDrift(undefined), null);
+});
+
+test("a live robot-sample verdict outranks the server check; no robots falls back to it", () => {
+  const robot = { robotId: "rosy_01", distanceM: 0.9 };
+  const staleServer = [{ source_id: "ceiling_north",
+    calibration_drift: { state: "stale", max_move_m: 0.55, rotation_deg: 9 } }];
+  assert.deepEqual(effectiveDriftVerdict(robot, staleServer),
+    { origin: "robots", robotId: "rosy_01", distanceM: 0.9 });
+  assert.deepEqual(effectiveDriftVerdict(null, staleServer),
+    { origin: "server", sourceId: "ceiling_north", distanceM: 0.55, rotationDeg: 9 });
+  // 서버 판정이 ok이거나 없으면 그림도 돌아간다.
+  assert.equal(effectiveDriftVerdict(null,
+    [{ source_id: "x", calibration_drift: { state: "ok", max_move_m: 0.1 } }]), null);
+  assert.equal(effectiveDriftVerdict(null, []), null);
+  assert.equal(effectiveDriftVerdict(null, undefined), null);
 });
