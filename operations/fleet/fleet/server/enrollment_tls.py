@@ -300,6 +300,8 @@ class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):
         await self.identity(request.url, request.extensions)
         if self.before_send is not None:
             self.before_send(request)
+        from fleet.swarm.dispatch_guard import check_dispatch
+        check_dispatch(request)
         return await self.inner.handle_async_request(request)
 
     async def aclose(self) -> None:

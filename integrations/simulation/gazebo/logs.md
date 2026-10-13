@@ -372,3 +372,39 @@
 - 변경: 기존 sim_ir_floor 변환이 새 mid ray와 옛 좌우 ray를 합쳐 바닥 증거를 갱신하던 오류를 수정했다. 세 ray의 동일한 정규 timestamp·새 프레임·20Hz 한 주기 이내 source age를 확인하고 ROS clock timer에서 한 번만 발행한다. 입력 분류 함수·ADC 형식·바닥 거리·CORE motion gate는 유지한다.
 - 증거: 원격 RED로 혼합 timestamp의 floor 갱신을 재현했다. 수정된 Gazebo 전체 회귀는 318 PASS/4 SKIP/terminal exit 0이고 독립 drive_review가 202c807dc 및 8226c122f8에 SOURCE APPROVE했다. 별도 AI PC R6 정지 실행의 기존 소스에서 두 로봇 각각 세 ray의 동일 시각 514/514 프레임과 실제 IR·IMU·scan, enforce 및 junction_turn capability를 확인했다. R6는 수정 helper 실행 증거가 아니다.
 - gate 변화: SOURCE/원격 회귀와 실제 센서 연결 근거를 구분한다. R6의 첫 로봇 blocked=true는 유지했다. 새 helper의 실제 실행·유효 Fleet 통행권 아래 주행·완주·장치 수용은 별도 검증이 필요하다.
+
+## 2026-10-12 · 45e92d326 · 실제 완주 기준 실행과 조향 설정 배선
+
+- 변경: 단일 카메라 launch와 두 로봇 run_spec에서 observer가 해당 CORE와 같은 오버레이를 사용한다. 완주 기준은 docs/plans/2026-10-12-gazebo-lane-lap.md에 기록했다.
+- 증거: 기준 소스 2e29bd118의 7,503 파일과 17 ROS 패키지를 새로 빌드했다. 실제 구간은 anchor age 10.244s에 최종 0.210783m에서 stopped였고 arrived가 아니다. 기억 목표 3프레임 후 off_line/closed를 관측했다. 종료와 소스 보존을 독립 확인했다. out_of_order count는 부수 진단이었다.
+- gate 변화: 지도 완주는 HOLD다. 초기 pin은 지속 위치 관측이 아니며, SIM-only typed 위치 provider와 native 주행법칙 handover를 별도 검토 중이다. 단독 launch의 camera import 실패는 깨끗한 기준 소스에서도 재현됐다. 855eebc에서 시험 bootstrap을 고쳤고 재확인은 남았다.
+
+## 2026-10-12 · 3bafbd232 · 두 카메라 실행의 원본·곡선 지도 선택
+
+- 변경: multi_real의 map_variant는 기본 training-curved를 유지하고 원본 .을 선택할 수 있다. 기존 world catalog에 원본 real world를 등록하고 같은 선택값으로 실제 world와 두 observer의 lane_graph를 맞춘다. spawn·카메라 법칙·CORE 권한·모드·안전 기준은 유지한다.
+- 증거: 원격 ROS Jazzy descriptor RED 3개로 선택자 누락을 재현했다. 커밋 3bafbd232의 관련 원격 계약 59개는 정상 자원 기준에서 통과했고 known_failures NEW 0이다. 실제 ROS 객체에서 기본값·두 world/graph 일치·잘못된 값 거절을 확인했다. 시험 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/map-variant-green3/run-1.txt이다.
+- gate 변화: SOURCE/원격 계약 증거만 추가한다. 이 선택자로 실제 Gazebo 원본 주행·지도 완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · 2efcfe4b2 · 독립 Gazebo 시험의 CORE 설정 출처 고정
+
+- 변경: Gazebo 시험만 수집할 때도 contracts/foundation을 소스 경로에 등록한다. 기존 관측 법칙 시험이 원격 venv에 설치된 CORE 패키지와 누락된 site-packages/config 기본 파일을 읽던 문제를 고쳤다. 제품 설정 로더와 시험 실행기의 동작은 바꾸지 않았다.
+- 증거: 후보와 부모 5caaa8f8e의 전체 Gazebo 수집에서 동일한 설정 파일 누락 NEW 2를 재현했다. 수정 2efcfe4b2의 정상 AI PC 원격 전체 시험은 324 PASS/2 SKIP, terminal exit 0이다. 새 단언은 실제 config 모듈과 기본 YAML이 커밋된 foundation 출처임을 확인한다. 로그: X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/map-variant-full2/run-1.txt.
+- gate 변화: 독립 수집의 원격 회귀 증거를 추가했다. 실제 Gazebo 원본 맵 주행과 완주는 여전히 별도 검증 대상이다.
+
+## 2026-10-12 · uncommitted · 시뮬 관찰 법칙은 core_common 의존으로 선언한다
+
+- 변경: `gz_multi_parts.py`가 CORE line_follow 법칙을 읽으므로 `gz_sim/package.xml`에 `core_common` exec_depend를 선언했다.
+- 증거: 착지 라운드의 원격 시험이 `test_every_cross_package_use_is_declared`와 `test_package_xml_covers_imports`를 NEW로 보고 멈췄다. 선언 뒤 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음. 시뮬 완주와 실물 수용은 이 선언으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
+
+- 변경: map_v2_fleet 두 learned line observer에 기존 crosswalk_uncertainty_enabled를 명시했다. 검출된 횡단 구역 또는 미검출 프레임의 lookahead 거리 오차를 기존 containment에 전달한다. 이 입력은 기존 조건부 구역 수용과 IR guard 유예에 사용되므로 보고만의 변경은 아니다. CORE 횡단 gate의 활성 여부·임계값·최종 명령 권한은 변경하지 않는다.
+- 증거: 원격 RED에서 두 namespace 공통 parameter 누락을 재현했다(1 FAIL/2 PASS). 기존 GAZEBO 투영 오차는 경계 미검출 때도 존재하므로 초기 시험의 null 가정을 정정했다. 켜기 전후 lateral 오차 동일, 빈 경계 보존, crosswalk 유무별 finite positive along 오차를 검사한다. 수정 ac1a13865의 관련 원격 회귀는 AI PC에서 151 PASS, terminal exit 0, known_failures NEW 0으로 확인했다.
+- gate 변화: 수용 등급은 그대로 HOLD이며, 입력 연결은 조건부 구역 수용에 영향을 준다. 유효 구역 수용·서행/정지 정책·보행자·Fleet·완주는 실제 두 로봇 실행에서 별도로 확인한다.
+
+## 2026-10-12 · uncommitted · Validate optional ROS launch environment and normalized parameters
+
+- 변경: The test helper treats additional_env=None as an empty mapping and uses evaluate_parameters for the normalized steering-law mapping. Runtime code is unchanged.
+- 증거: CI 38239921624 gz-sim failed with TypeError. A native ROS replay then exposed KeyError in the parameter assertion. After both test fixes, AI PC Jazzy with the existing runtime venv passed 11 tests with 13 skips, exit 0, NEW 0. The remote_pytest transport and resource controls were retained; only its test shell sourced ROS and selected that existing interpreter. The ordinary ROS-free venv skipped this module.
+- gate 변화: Stationary/native test evidence only; no driving acceptance.

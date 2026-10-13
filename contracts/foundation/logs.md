@@ -642,3 +642,9 @@
 - 증거: `test_face_screen.py`에 노트 줄과 모르는 값 시험을 넣었다. 이 브랜치는 커밋 전이라 원격 pytest는 돌리지 않았다.
 - gate 변화: 없음.
 - 결정: D-719
+
+## 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
+
+- 변경: 기존 NativeReceipts에 실제 owner 잠금을 nonblocking으로 얻어 immutable receipt만 반환하는 capture를 추가한다. 경합은 명시적 실패이며 unlocked lookup이나 transport 조회가 없다.
+- 증거: 실제 owner 잠금 경합 RED 5건 후 safety/native owner·구조·설치 패키지 원격 exit 0/NEW 0. native 크기 단위 117로 기존 예산을 유지한다.
+- gate 변화: SOURCE 회귀 근거 추가. 배포·장치·현장 수용은 수행하지 않았다.

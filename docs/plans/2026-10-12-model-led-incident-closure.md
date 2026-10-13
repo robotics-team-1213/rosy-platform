@@ -16,6 +16,8 @@
 
 ### 현재 시작점과 다음 순서
 
+D-727은 `32798ee0be`로 로컬 main에 착지했다. 마지막 적격 AI PC/Model PC 원격 두 그룹은 합계 6,255 passed/313 skipped/NEW 0 및 lint다. 고정 로그는 세션 `logs/operational-receipt-land-32798ee0be-{1,2}.txt`다. 공통 서명 계약과 설치 소비자 검증까지의 source 완료이며 운영 품질 수용은 아니다. 다음은 actual 평가 원본·한계·truth·coverage의 독립 재검증, 같은 Fleet DB의 수용/폐기 epoch, 사건당 단일 physical claim, 기존 loop의 rule/model 소비 및 실제 결과 연결이다. FULL CI·실제 모델·배포·현장 수용은 별도이며 목표는 ACTIVE다.
+
 D-724는 `e8d27b00b3`로 로컬 main에 착지했고 마지막 적격 AI PC 원격 통합은 5,558 passed/282 skipped/NEW 0 및 lint다. 고정 로그는 세션 `logs/stuck-final-guard-land-e8d27b00b3.txt`다. D-727은 공통 운영 수용/폐기 서명·현재 owner binding/epoch/기간을 검증하는 SDK 0.1.11과 Fleet 0.1.3 floor·local execution 0.1.5·CI pin을 구현한 브랜치 작업이다. 초기 계약/설치/구조 99개와 source-less wheel/sdist HMAC·UTF-8·CI/문서 회귀 144개는 적격 원격 PC에서 terminal exit 0/NEW 0이며 독립 SOURCE 검토를 승인받았다. actual evaluation 원본이 HOLD이면 signed reviewed 메타도 importer가 거절해야 한다. 운영 품질·같은 DB 수용/폐기 상태·단일 claim·모델/현장 결과는 다음 구현이며 전체 목표는 ACTIVE다.
 
 D-722는 `c55c64e5d4`로 로컬 main에 착지했다. 마지막 적격 Model PC 원격 통합은 5,656 passed/282 skipped/NEW 0 및 lint이며 고정 로그는 세션 `logs/model-recovery-land-c55c64e5d4.txt`다. 후보는 비실행 기록이며 실제 운영 수용·단일 물리 claim·Fleet 제출 연결·모델/현장 결과는 남아 있다. 후속 D-724는 지원 확인 GET 뒤 POST 직전에 최종 검증 포트를 두는 소스 구현이며 관련 원격 회귀 123개, 실제 wheel/sdist 설치·문서 계약 104개는 terminal exit 0/NEW 0이다. D-724 병합은 아직 미확인이다. GLM 관리자 준비 스크립트는 존재하지만 새 설치 경로는 현재 없다. 목표는 ACTIVE이고 실제 호출은 하지 않았다.
@@ -188,6 +190,10 @@ Phase 6의 단일 사건 읽기 전용 export와 기존 녹화 feedback 연결�
 후속 브랜치 `e0666b3e3f`에서 검증된 원래 입력·판정·전체 프로파일을 원장의 실제 시도 비용과 연결하고 export 재검증을 추가했다. OpenCode GLM v2 요청·prior·응답을 공통 판정 계약에 연결하며 기존 v1 설치 경로를 유지했다. 실제 설치 패키지·모듈 책임 경계를 포함한 9개 파일 원격 통합 시험은 적격 Model PC 9GB에서 204 passed, exit 0이다. 실제 런처 비용 receipt·운영 수용 연결과 provider/독립 품질/배포/현장 증거는 별도로 남아 있다. 이 source 시험은 모델의 정확도나 현장 종결을 증명하지 않는다.
 
 ## 완료 기준
+
+D-731 후속 source는 기존 Fleet 단일 제출 소유자에 model/rule claim 소비, ROOT 명시 구성, ACK/UNKNOWN 기록과 worker 결과 확인·최종 인수를 연결한다. 별도 명령 서비스를 만들지 않는다. 정상 미개입과 CORE 정지 경로를 유지한다. 실제 독립 평가 원본 producer·설치 수용 getter·현재 프로파일 설정과 제한 실제 모델 호출·Pinky 현장 수용·승격/복귀는 별도 미완료다. source provider fixture를 실제 Qwen/GLM 호출이나 현장 정답으로 사용하지 않는다.
+
+2026-10-12 D-730 후속: 운영 수용·폐기 epoch와 단일 사건 rule/model 제출 원장을 기존 Fleet DB에 구현했다. 후보 원장은 `automation/operating`으로 책임을 옮기고 기존 import identity를 보존했다. 원격 SQLite 경합·만료·HOLD·서명 변조·기존 PENDING/UNKNOWN 차단과 실제 HttpRobotClient 최종 guard, source 없는 wheel/sdist import를 검증했다. 이 기록은 메커니즘 source 증거다. 실제 resolver/worker 소비 경로, 독립 평가 원본 producer와 설치 증거 연결은 아직 미완료이며 운영 활성화를 허용하지 않는다. AI PC의 `/opt/rosy-deliberation/review-cfcba82ddf` 설치는 재확인 시 없었고 준비 스크립트만 존재했다. 실제 Qwen/GLM 호출과 현장 결과 확인, 실패 피드백의 독립 평가·승격·복귀 수용까지 전체 목표를 닫지 않는다.
 
 최신 checkpoint: 기존 사건 원장과 resolver loop에 선택적 모델 worker를 구성하는 factory, 최종 검토 outbox 연결, GLM v2 의존성/import closure는 commit `3e2f3b9fda`로 로컬 main에 착지했다. D-685 자율 복구 변경을 함께 보존한 13개 관련 파일 원격 통합 시험은 적격 Model PC 7.3GB에서 288 passed, exit 0, known-failures 신규 실패 0건이며 lint도 통과했다. 로그는 `X:/DevTemp/land/feat-conditional-model-review/run-1-1.txt`다. 기본 비활성·같은 DB·사람 점유 차단·UNKNOWN/재발행 거부 경계를 유지한다. 위의 과거 checkpoint에서 미구현으로 적었던 factory는 이제 source 구현되었으며, 실제 서비스 설정과 수용 프로파일 연결은 여전히 남아 있다.
 

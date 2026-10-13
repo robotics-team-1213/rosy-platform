@@ -38,6 +38,10 @@ services:
       - /run/rosy-config/site-users.yaml
       - --discord-intake-config-optional
       - /run/rosy-discord/intake.json
+      - --deliberation-config-optional
+      - /run/rosy-deliberation/status.json
+      - --conversation-config-optional
+      - /run/rosy-deliberation/conversation.json
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db

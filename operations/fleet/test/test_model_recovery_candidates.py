@@ -36,7 +36,7 @@ def recovery_payload(p):
     return raw
 
 
-def setup(tmp_path, *, terminal='COMPLETED', trace=True):
+def recorded_case(tmp_path, *, terminal='COMPLETED', trace=True):
     p, selected = recovery_problem(), profile()
     b = bound(p)
     checked = judgment(p, b, recovery_payload(p))
@@ -56,7 +56,7 @@ def setup(tmp_path, *, terminal='COMPLETED', trace=True):
 
 
 def test_candidate_persists_without_charging_or_claiming_execution(tmp_path):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = recorded_case(tmp_path)
     before = store.case(scope)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     assert candidate['state'] == 'RECORDED' and candidate['action_admissible'] is False
@@ -71,7 +71,7 @@ def test_candidate_persists_without_charging_or_claiming_execution(tmp_path):
 
 
 def test_concurrent_duplicate_candidates_have_one_durable_record(tmp_path):
-    _, _, scope, journal = setup(tmp_path)
+    _, _, scope, journal = recorded_case(tmp_path)
     with ThreadPoolExecutor(2) as pool:
         results = list(pool.map(lambda _: journal.propose(scope, 'model-1', worker_id='worker'), range(2)))
     assert results[0] == results[1] and journal.candidates(scope) == (results[0],)
@@ -79,14 +79,14 @@ def test_concurrent_duplicate_candidates_have_one_durable_record(tmp_path):
 
 @pytest.mark.parametrize('terminal,trace', [('UNKNOWN', True), ('REJECTED', True), ('COMPLETED', False)])
 def test_noncompleted_or_untraced_model_cannot_propose(tmp_path, terminal, trace):
-    _, _, scope, journal = setup(tmp_path, terminal=terminal, trace=trace)
+    _, _, scope, journal = recorded_case(tmp_path, terminal=terminal, trace=trace)
     with pytest.raises(ValueError): journal.propose(scope, 'model-1', worker_id='worker')
     assert journal.candidates(scope) == ()
 
 
 @pytest.mark.parametrize('changed', ['worker', 'profile', 'owner', 'policy', 'expired', 'held', 'tampered'])
 def test_candidate_rechecks_full_scope_and_recorded_source(tmp_path, changed):
-    now, store, scope, journal = setup(tmp_path)
+    now, store, scope, journal = recorded_case(tmp_path)
     worker = 'worker'
     if changed == 'worker': worker = 'foreign'
     if changed == 'profile': scope = replace(scope, profile_sha256='a' * 64)
@@ -121,7 +121,7 @@ def test_back_tool_is_not_exposed_to_existing_read_only_problem():
 
 @pytest.mark.parametrize('changed', ['scope', 'action', 'expected_stuck', 'candidate_id', 'input_hash', 'action_admissible', 'source'])
 def test_candidate_read_revalidates_payload_and_completed_source(tmp_path, changed):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = recorded_case(tmp_path)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     with store._transaction() as conn:
         if changed == 'source':
@@ -133,7 +133,7 @@ def test_candidate_read_revalidates_payload_and_completed_source(tmp_path, chang
 
 
 def test_closed_candidate_is_historical_and_non_executable(tmp_path):
-    _, store, scope, journal = setup(tmp_path)
+    _, store, scope, journal = recorded_case(tmp_path)
     candidate = journal.propose(scope, 'model-1', worker_id='worker')
     store.close_case(scope, state='HOLD', reason='INCIDENT_HUMAN_OWNED')
     assert journal.candidates(scope) == (candidate,)
@@ -155,7 +155,7 @@ def test_recovery_context_accepts_matching_assessment_revision():
     assert observed_recovery(snapshot, 'pinky', 'lane-1', 'core:1:stamp-1') == recovery_context()
 
 
-@pytest.mark.parametrize('shutdown_during_write', [False, True])
+@pytest.mark.parametrize('shutdown_during_write', [False, True, 'submit'])
 def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, monkeypatch, shutdown_during_write):
     from fleet.incidents.automation.worker import IncidentCaseWorker
     from test_incident_case_worker import make_incident_worker, settled
@@ -173,12 +173,20 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
             providers=tuple(providers), admission=old.admission, current_profiles=lambda: current[0],
             human_owned=old.human_owned, budget=old.budget, final_handoff=old.final_handoff,
             clock=lambda: now[0], enabled=True, recovery_enabled=True)
+        submitted = []
+        async def submit(scope, attempt, problem, owner):
+            assert owner is worker and worker._fresh(problem)
+            recorded = worker.recovery_candidates.candidates(scope)
+            assert len(recorded) == 1 and recorded[0]['attempt_id'] == attempt
+            submitted.append(recorded[0])
+            return True
+        if shutdown_during_write == 'submit': worker.recovery_submit = submit
         snapshot = poll()
         snapshot['robots'][0]['state']['line_follow']['stuck'].update(recovery_context())
         snapshot['robots'][0]['state']['line_follow']['stuck']['stuck_id'] = 'lane-1'
         board.observe(snapshot['robots']); board.flush()
         entered, release = threading.Event(), threading.Event()
-        if shutdown_during_write:
+        if shutdown_during_write is True:
             original = worker.recovery_candidates.propose
             def paused(*args, **kwargs):
                 entered.set()
@@ -186,7 +194,7 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
                 return original(*args, **kwargs)
             monkeypatch.setattr(worker.recovery_candidates, 'propose', paused)
         worker.feed(snapshot)
-        if shutdown_during_write:
+        if shutdown_during_write is True:
             try:
                 assert await asyncio.to_thread(entered.wait, 3)
                 scope = store.active_scopes()[0]
@@ -205,6 +213,7 @@ def test_opt_in_worker_records_model_candidate_without_robot_dispatch(tmp_path, 
         calls = store.case(scope)['calls']
         worker.feed(snapshot); await settled(worker)
         assert store.case(scope)['calls'] == calls
+        assert len(submitted) == (1 if shutdown_during_write == 'submit' else 0)
         await worker.aclose()
     asyncio.run(run())
 

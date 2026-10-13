@@ -10,7 +10,7 @@ from test_judgment_profiles import adapter, problem, profile
 from test_model_judgment import payload
 
 
-def setup(change=None):
+def local_provider(change=None):
     selected, descriptor = profile(), adapter()
     seen = []
     async def launch(body, remaining, limit):
@@ -32,7 +32,7 @@ def setup(change=None):
 
 
 def test_generic_local_provider_consumes_shared_v2_renderer_and_parser():
-    provider, seen = setup()
+    provider, seen = local_provider()
     bound = bind_profile(problem(), provider.profile, provider.adapter, required_modalities=('text',))
     checked, cost = asyncio.run(provider(problem(), bound, (), 1, budget_usd=0))
     assert checked.choice == 'reobserve' and checked.action_admissible is False and cost == 0
@@ -42,7 +42,7 @@ def test_generic_local_provider_consumes_shared_v2_renderer_and_parser():
 
 @pytest.mark.parametrize('change', ['model', 'revision', 'cost', 'usage', 'scope', 'oversize', 'failed'])
 def test_unknown_result_or_cost_is_not_free_accepted_judgment(change):
-    provider, _ = setup(change)
+    provider, _ = local_provider(change)
     bound = bind_profile(problem(), provider.profile, provider.adapter, required_modalities=('text',))
     with pytest.raises(ValueError):
         asyncio.run(provider(problem(), bound, (), 1, budget_usd=0))
@@ -50,7 +50,7 @@ def test_unknown_result_or_cost_is_not_free_accepted_judgment(change):
 
 @pytest.mark.parametrize('change', ['descriptor', 'schema', 'cost_verified', 'scope'])
 def test_unadmitted_transport_never_called(change):
-    provider, seen = setup()
+    provider, seen = local_provider()
     bound = bind_profile(problem(), provider.profile, provider.adapter, required_modalities=('text',))
     if change == 'descriptor': provider.launch.adapter_capabilities = replace(provider.adapter, isolated=False)
     if change == 'schema': provider.launch.schema_versions = (1,)
