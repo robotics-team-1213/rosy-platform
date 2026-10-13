@@ -1,6 +1,6 @@
 # S2 Perception 기능 holder 검증
 
-상태: SOURCE 구현·독립 source/Safety/구조 검토 완료. 수정 후 원격 재검증 NOT RUN, local main 착지 HOLD.
+상태: SOURCE 구현·독립 source/Safety/구조 검토 완료. 수정 후 원격 재검증 NOT RUN. 사용자의 후속 요청에 따라 local main 머지만 수행하며 실제 착지는 Git readback으로 구분한다.
 
 14개 파일의 이동 전후 SHA-256과 전체 bytes가 같다. 기존 control.* 설치 이름과 ROS wire/CORE 최종 명령 권한을 유지한다. localization(3), graph_health(2), vision/object_observation(2), sensors/line_observation(5), snapshots(2). D-747과 실행 계획이 경계를 정한다.
 
@@ -34,3 +34,7 @@ D-745를 포함한 main d6d3addda296을 작업 브랜치에 합쳤다. 충돌한
 af7490945의 중간 재시험은 main의 관련 D-745 변경을 합치기 위해 중단했으므로 terminal PASS 증거가 아니다. 그 원격 작업의 lock 부재와 해당 cwd의 Python process 부재는 읽어 확인했으나, 잔여 임시 test directory 제거의 마지막 readback은 SSH 중단으로 확인하지 못했다. 복구 시 자기 작업 land-1-83f854만 확인·정리한다.
 
 재개 순서: 시험 PC 연결 확인 → 현재 main 합치기 → 기존 budget/ADR gap·source mapping 확인 → tools/land.py --tests auto로 정상 종료와 known_failures NEW 0 확인 → local main ff-only → 착지 SHA 기록. S3는 S2 착지 뒤에 시작한다. 브랜치 refactor/perception-judgment-s2와 등록 worktree는 재개를 위해 보존한다. CI FULL, ARM64 image, ROS transport, 장치·현장 수용은 계속 미확인이다.
+
+## 후속 사용자 지시 — local merge까지만
+
+사용자가 원격 시험 PC의 주소 또는 VPN 설정 변경을 확인하고 `merge 까지만 해`라고 지시했다. 이 후속 지시에 따라 원격 재검증을 더 시도하지 않고 tools/land.py --tests none으로 lint와 local main ff-only까지만 수행한다. push는 하지 않는다. 앞의 원격 NOT RUN·첫 후보 NEW 3 기록은 그대로 유지하며 local merge를 검증 PASS나 배포 허용으로 집계하지 않는다. 착지 성공 여부·최종 HEAD·공유 WIP 보존은 세션 evidence/landing-readback.json과 Git ancestry readback에 남긴다. 이후 원격 검증에는 변경된 시험 PC/VPN 설정 확인이 필요하다.
