@@ -122,6 +122,36 @@ def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_cl
     assert refused.status_code == 409 and "body_geometry_unset" in refused.text
 
 
+@pytest.mark.parametrize("elapsed, phase", [(0.1, "BACKING"), (2.7, "SETTLING")])
+def test_delayed_back_api_answer_preserves_active_recovery(core_client, elapsed, phase):
+    pinky = _yaml(PINKY)
+    pinky["line_follow"]["recovery_local_enabled"] = True
+    client, services, stuck_id = _stuck(
+        lambda **kw: core_client(config_overrides=pinky, **kw))
+    lf = services.line_follow
+    started = lf._clock()
+    rear = pinky["line_follow"]["body_lidar_x_m"] - pinky["line_follow"]["body_rear_x_m"] + 0.30
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=started)
+    body = {"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}
+    accepted = client.post(URL, json=body, headers=OPERATOR)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["outcome"] == "back"
+    now = started + elapsed
+    lf.bind_clock(lambda: now)
+    lf.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=now)
+    lf.tick(now)
+    assert lf.status().stuck.phase == phase
+    until = lf._recovery._until
+    refused = client.post(URL, json=body, headers=OPERATOR)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "STUCK_DECISION_REFUSED"
+    assert "back_active" in refused.text
+    assert lf.status().stuck.phase == phase and lf.status().stuck.attempts == 1
+    assert lf._recovery._until == until
+    stopped = client.post(URL, json={**body, "decision": "WAIT"}, headers=OPERATOR)
+    assert stopped.status_code == 200 and stopped.json()["outcome"] == "hold"
+
+
 @pytest.mark.parametrize("decision, mode", [("ABORT", Mode.IDLE), ("MANUAL", Mode.MANUAL)])
 def test_abort_and_manual_turn_line_follow_off(core_client, decision, mode):
     client, services, stuck_id = _stuck(core_client)
@@ -137,6 +167,76 @@ def test_estop_closes_the_stuck_and_late_answers_are_refused(core_client):
     assert services.line_follow.status().stuck is None
     late = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
     assert late.status_code == 409
+
+
+@pytest.mark.parametrize("changed", ["none", "wait", "local", "attempts"])
+def test_conditional_back_api_checks_current_episode(core_client, changed):
+    config = {"line_follow": {"recovery_local_enabled": True,
+              "body_lidar_x_m": -0.017, "body_rear_x_m": -0.076,
+              "body_rotation_radius_m": 0.08257}}
+    client, services, stuck_id = _stuck(lambda **kw: core_client(config_overrides=config, **kw))
+    lf = services.line_follow
+    now = lf._clock()
+    expected = {"phase": "ASKING", "attempts": 0}
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
+    if changed == "wait":
+        assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                           headers=OPERATOR).status_code == 200
+    elif changed == "local":
+        now += 15.0
+        lf.bind_clock(lambda: now)
+    elif changed == "attempts":
+        expected["attempts"] = 1
+    lf.observe_body_points([(0.15, 0.0), (-0.359, 0.0)], range_min=0.0, received_at=now)
+    if changed == "local":
+        lf.tick(now)
+        assert lf.status().stuck.phase == "BACKING"
+    before = lf.status().stuck
+    until = lf._recovery._until
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    if changed == "none":
+        assert reply.status_code == 200, reply.text
+        assert reply.json()["outcome"] == "back"
+    else:
+        assert reply.status_code == 409 and "stuck_precondition_failed" in reply.text
+        assert lf.status().stuck == before and lf._recovery._until == until
+
+
+@pytest.mark.parametrize("expected", [
+    {"phase": "WAITING_CONSOLE", "attempts": 0}, {"phase": "ASKING", "attempts": True},
+    {"phase": "ASKING", "attempts": "0"}, {"phase": "ASKING", "attempts": -1},
+    {"phase": "ASKING"}, {"phase": "ASKING", "attempts": 0, "extra": 1},
+])
+def test_conditional_back_api_rejects_malformed_predicate(core_client, expected):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+                                  "expected_stuck": expected}, headers=OPERATOR)
+    assert reply.status_code == 400 and reply.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_conditional_back_predicate_cannot_block_human_wait(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    reply = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT",
+                                  "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert reply.status_code == 400
+    assert client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"},
+                       headers=OPERATOR).status_code == 200
+
+
+def test_conditional_capability_requires_both_wire_handler_and_controller(core_client):
+    client, services, stuck_id = _stuck(core_client)
+    lf = services.line_follow
+    # Old HTTP handlers dump this controller status without a wire capability assertion.
+    assert lf.status().model_dump()["stuck"]["conditional_back"] is False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is True
+    lf.conditional_back_supported = False
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["stuck"]["conditional_back"] is False
+    before = lf.status().stuck
+    rejected = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY",
+        "expected_stuck": {"phase": "ASKING", "attempts": 0}}, headers=OPERATOR)
+    assert rejected.status_code == 409 and "conditional back is unsupported" in rejected.text
+    assert lf.status().stuck == before
 
 
 def test_packaged_default_plus_pinky_plus_old_overlay_parses():

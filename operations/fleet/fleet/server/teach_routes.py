@@ -31,6 +31,10 @@ class NewPlace(BaseModel):
 class StartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     robot_id: str = Field(min_length=1, max_length=96)
+    mode: Literal["map", "survey"] = "map"
+    map_id: Optional[str] = Field(default=None, min_length=1, max_length=96)
+    reference_revision: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    expected_revision: Revision = None
 
 
 class ConfirmRequest(BaseModel):
@@ -84,7 +88,8 @@ def install_teach_routes(app, *, service: TeachService, read_guard, require_name
 
     @app.post("/api/fleet/teach/start", tags=["site-map"])
     async def teach_start(body: StartRequest, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        return await guarded(lambda: service.start(body.robot_id, principal.principal_id))
+        return await guarded(lambda: service.start(body.robot_id, principal.principal_id, mode=body.mode,
+            map_id=body.map_id, reference_revision=body.reference_revision, expected_revision=body.expected_revision))
 
     @app.post("/api/fleet/teach/stop", tags=["site-map"])
     async def teach_stop(principal: SitePrincipal = Depends(require_named_operator)) -> dict:

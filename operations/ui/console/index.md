@@ -10,10 +10,11 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-655 | 지도 없는 조사 좌표·도로 시설과 통합 관제 작업 맥락 |
 
 ## 계획·결과 문서
 
-- 없음
+- [2026-10-11-mapless-fleet-control.md](../../../docs/plans/2026-10-11-mapless-fleet-control.md)
 
 ## 교훈 (docs/solutions)
 
@@ -26,5 +27,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · 92592fc2ef · uiux: 운영 요약과 사건 근거·진단 분리 (D-641)
-- 2026-10-11 · e58d7c4f52 · refactor: 사건 근거·검토 패널 소유 분리 (D-362/D-641)
+- 2026-10-12 · 5941920df7 · D-720 원문 요청의 숙고 상태 표시
+- 2026-10-12 · 438e6256a · 계정 전환 시험의 수명 조건 정정
+- 2026-10-12 · f3ba7590c · Discord 확인의 기명 계정 전환 경계
+- 2026-10-12 · 99b25e23e · D-685 최소 사람 개입과 학습 원본
+- 2026-10-12 · d002c579d · D-689 계정 화면 용어 정렬

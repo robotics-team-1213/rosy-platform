@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Wheel `rosy-app-agent` 0.1.0. ROSY agent application compositions. It depends on `rosy-integration-robot-omx` and `rosy-palletizing`. Import root is `rosy_agent`.
+Wheel `rosy-app-agent` 0.1.1. ROSY agent application compositions. It depends on `rosy-integration-robot-omx` and `rosy-palletizing`. Import root is `rosy_agent`.
 
 ## Key Files
 

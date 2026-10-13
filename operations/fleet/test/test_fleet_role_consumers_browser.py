@@ -1,6 +1,7 @@
 """Measure shared role styles on the actual Fleet consumers; no device writes."""
 
 from urllib.parse import urlparse
+import re
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -12,13 +13,12 @@ SIZES = [(1920, 1080), (1366, 768), (390, 844), (320, 568)]
 
 
 def _assert_control(control):
-    fact = control.evaluate("""node => {
-      const box = node.getBoundingClientRect(), css = getComputedStyle(node);
-      return {height:box.height, text:css.fontSize, left:css.paddingLeft, right:css.paddingRight};
-    }""")
-    assert fact["height"] >= 48, fact
-    assert fact["text"] == "14px", fact
-    assert fact["left"] == fact["right"] == "12px", fact
+    from playwright.sync_api import expect
+    # Roster refresh replaces controls; locator assertions re-resolve the live element.
+    expect(control).to_have_css("height", re.compile(r"^(?:4[89]|[5-9]\d|[1-9]\d{2,})(?:\.\d+)?px$"))
+    expect(control).to_have_css("font-size", "14px")
+    expect(control).to_have_css("padding-left", "12px")
+    expect(control).to_have_css("padding-right", "12px")
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
@@ -49,12 +49,16 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
             page.goto(origin + path)
             expect(page.locator("#user-role")).to_have_text("운영자", timeout=15000)
             page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+            if path == "/console":
+                page.locator("#robot-choice").select_option("rosy_03")
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
                 _assert_control(page.locator("#fleet-inbox"))
                 if path == "/console":
                     _assert_control(page.locator(".queue-row").first)
+                    # Current roster opens one selected robot's controls in its workspace.
+                    page.locator('[data-select-robot-id="rosy_03"]').click()
                     _assert_control(page.locator("[data-auth-focus]"))
                     page.locator("[data-auth-focus]").click()
                     expect(page.locator("#console-token")).to_be_focused()

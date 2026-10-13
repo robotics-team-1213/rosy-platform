@@ -45,6 +45,8 @@ def main():
     class_raw = args.classes.read_bytes()
     binding = {'classes': build.load_classes(args.classes, source_bytes=class_raw),
                'sha256': hashlib.sha256(class_raw).hexdigest()}
+    if not review_masks.lane_boundary_classes(binding):
+        parser.error('road_surface/1 cannot use own-road lane clipping')
     names = {item['name']: item['index'] for item in binding['classes']}
     if not {'lane_left', 'lane_right', 'drivable'} <= names.keys():
         parser.error('v13 left/right lane and drivable classes required')

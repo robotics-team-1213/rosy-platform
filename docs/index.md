@@ -219,6 +219,21 @@
 | D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
 | D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
 | D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -300,6 +315,8 @@
 - [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
 - [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
 - [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
+- [2026-10-11-perception-fitness-pipeline.md](plans/2026-10-11-perception-fitness-pipeline.md)
 - [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
 - [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
 - [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
@@ -317,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-11 · uncommitted · docs: 공통 판단 목표 구조와 분리 순서 (D-648)
-- 2026-10-11 · uncommitted · docs: 공통 판단 책임과 배포 0단계 (D-647)
-- 2026-10-11 · uncommitted · docs: Fleet 중앙 판단 선행 단계와 비개입·외부 처리 (D-642~D-646)
-- 2026-10-11 · uncommitted · docs: Fleet 범용 문제 해결과 지속 개선 설계 (D-640)
-- 2026-10-11 · 655093d8a · docs: 지도 종류와 기본 정보 관리 계약 (D-635)
+- 2026-10-13 · uncommitted · 안전 검토 표 커밋 표시 수정
+- 2026-10-13 · uncommitted · Gazebo drive 역사 안전 검토 기록
+- 2026-10-13 · uncommitted · docs: D-738 폴더 이름과 묶음 규칙
+- 2026-10-13 · uncommitted · docs: 폴더 책임 안내의 편집 집
+- 2026-10-13 · 2917a9a699 · docs: 현재 설치본 기본 프로필 후속 검증

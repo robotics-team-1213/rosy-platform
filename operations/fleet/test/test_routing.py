@@ -369,7 +369,7 @@ def test_astar_matches_an_independent_dijkstra_on_seeded_random_graphs(seed):
 
 @pytest.mark.parametrize(("start_arc", "goal", "edges"), [
     ("ring_s:fwd", "NW", ["ring_s", "ring_e", "ring_n"]),
-    ("east:fwd", "SW", ["east", "ring_e", "ring_n", "ring_w"]),
+    ("east:rev", "SW", ["east~", "ring_n", "ring_w"]),
     ("west:rev", "NE", ["west~", "ring_s", "ring_e"]),
     ("ring_n:fwd", "SE", ["ring_n", "ring_w", "ring_s"]),
     ("east:fwd", "SE", ["east"]),
@@ -380,6 +380,14 @@ def test_golden_routes_on_map_v2_fleet(start_arc, goal, edges):
     plan = plan_trip(graph, PlanRequest(1, (x, y, tangent), goal), CFG)
     assert _edges(plan) == edges
     assert plan.places[-1] == goal and plan.actions[-1] == (goal, "stop", 0.0)
+
+
+def test_map_v2_fleet_outbound_east_lane_cannot_enter_at_se():
+    graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
+    x, y, tangent = graph.arcs['east:fwd'].point_at(0.1)
+    with pytest.raises(PlanError) as error:
+        plan_trip(graph, PlanRequest(1, (x, y, tangent), 'SW'), CFG)
+    assert error.value.code == 'TRIP_NO_ROUTE'
 
 
 # ---- (e) performance ----------------------------------------------------------------

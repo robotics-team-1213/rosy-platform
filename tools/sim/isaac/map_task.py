@@ -11,24 +11,37 @@ import yaml
 REPOSITORY = Path(__file__).resolve().parents[3]
 MAP = REPOSITORY / 'middleware/perception/map/map_v2_fleet'
 SOURCE_SHA256 = 'cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b'
-SEGMENTS = ('east', 'ring_e', 'ring_n', 'ring_w', 'west', 'ring_w', 'ring_s', 'ring_e')
+SEGMENTS = ('ring_n', 'west:reverse', 'ring_s', 'east:reverse', 'ring_n', 'ring_w', 'ring_s', 'ring_e')
+SIM_DEVICE_IDS = ('isaac-pinky', 'isaac-pinky-a', 'isaac-pinky-b')
 
 
 def load_track():
     sys.path.insert(0, str(MAP / 'scripts'))
     from stl_scene import load_scene
-    from build_world import training_scene
+    from build_world import training_scene, caution_meshes
     scene = load_scene(MAP / '260919 MAP FILE.STL')
     if scene.source_sha256 != SOURCE_SHA256:
         raise ValueError('measured map source hash differs')
     graph = yaml.safe_load((MAP / 'training-curved/lane_graph.yaml').read_text())
     points = []
+    previous = None
+    bans = {(b['at'], b['from_edge'], b['to_edge']) for b in graph['turn_bans']}
     for name in SEGMENTS:
-        part = [tuple(p) for p in graph['segments'][name]['points']]
+        segment, _, direction = name.partition(':')
+        entry = graph['segments'][segment]
+        if direction and direction not in entry['directions']:
+            raise ValueError('lane route direction forbidden')
+        part = [tuple(p) for p in entry['points']]
+        if direction == 'reverse':
+            part.reverse()
+        start = entry['to'] if direction == 'reverse' else entry['from']
+        if previous is not None and (start, previous, segment) in bans:
+            raise ValueError('lane route turn forbidden')
         if points and math.dist(points[-1], part[0]) > .001:
             raise ValueError('lane route disconnected')
         points.extend(part if not points else part[1:])
-    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS,
+        previous = segment
+    return dict(scene=training_scene(scene), points=points, segments=SEGMENTS, caution_meshes=caution_meshes(),
                 source_sha256=scene.source_sha256)
 
 
@@ -170,13 +183,16 @@ class QPolicy:
 
 class SimulationOwner:
     """Private in-process diagnostic owner; never an operational POLICY API."""
-    def __init__(self):
+    def __init__(self, *, device_id='isaac-pinky'):
+        if type(device_id) is not str or device_id not in SIM_DEVICE_IDS:
+            raise ValueError('fixed simulation device identity required')
         from core_features.command.manager import CommandManager
         from core_features.command.arbitration import SourceRegistry, ModeMachine
         from core_features.safety.manager import SafetyManager, SpeedLimits, BatteryPolicy
         self.modes = ModeMachine()
         self.safety = SafetyManager(SpeedLimits(max_linear=.06, max_angular=.8), BatteryPolicy())
         self.command = CommandManager(SourceRegistry(), self.modes, self.safety)
+        self._device_id = device_id
         self.epoch = 0
         self.halted = True
         self.pending = None
@@ -198,13 +214,13 @@ class SimulationOwner:
         self.halted = True
         self.pending = None
 
-    def submit(self, intent, *, observed_at, now):
+    def submit(self, intent, *, observed_at, now, preserve_curvature=False):
         from rosy.contracts.motion import MotionIntent, MotionKind, PriorityClass
         from core_features.command.manager import Twist, ZERO
         valid = type(intent) is MotionIntent and intent.kind is MotionKind.BASE_TWIST
         if valid:
             h, p = intent.header, intent.payload
-            valid = (not self.halted and h.device_id == 'isaac-pinky' and h.source == 'learned_policy'
+            valid = (not self.halted and h.device_id == self._device_id and h.source == 'learned_policy'
                      and h.priority_class is PriorityClass.POLICY and h.envelope_ref == 'isaac-map-v1'
                      and h.state_sequence == self.epoch and h.valid_for_s <= .1
                      and dict(h.limits) == {'linear_mps': .06, 'angular_radps': .8}
@@ -215,7 +231,8 @@ class SimulationOwner:
             self.stop()
             return ZERO
         self.pending = (intent, observed_at)
-        self.command.set_nav_twist(Twist(p.linear_mps, p.angular_radps), now=now)
+        self.command.set_nav_twist(Twist(p.linear_mps, p.angular_radps), now=now,
+                                   preserve_curvature=preserve_curvature)
         return self.select_output(now=now)
 
     def select_output(self, now=None):

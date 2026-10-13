@@ -128,7 +128,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise fail(exc) from exc
 
     @app.post("/api/fleet/site-map/activate", tags=["site-map"])
-    def site_map_activate(body: ActivateRequest,
+    async def site_map_activate(body: ActivateRequest,
                           principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             return site_maps.activate(expected_revision=body.expected_revision,
