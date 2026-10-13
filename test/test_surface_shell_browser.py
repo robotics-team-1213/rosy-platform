@@ -76,7 +76,7 @@ def test_the_device_surface_mounts_the_events_panel(app_client):
             _proxy(page, client)
             page.add_init_script(script=TOKEN)
             page.goto("http://rosy.test/device", wait_until="domcontentloaded")
-            page.wait_for_selector('ui-section[data-panel="system.events"] .event-type')
+            page.wait_for_selector('ui-section[data-panel="system.events"] .event-type', state="attached")
             # Other events may also have been published while the page loaded, so
             # only require that *some* event row shows the one we published (T9-a).
             types = page.locator(".event-type").all_text_contents()
@@ -98,7 +98,7 @@ def test_a_broken_panel_stays_in_its_slot(app_client):
             page.add_init_script(script=TOKEN)
             page.goto("http://rosy.test/device", wait_until="domcontentloaded")
             page.wait_for_selector('ui-section[data-panel="broken.panel"][data-failed="true"]')
-            page.wait_for_selector('ui-section[data-panel="system.events"] ol.event-list')
+            page.wait_for_selector('ui-section[data-panel="system.events"] ol.event-list', state="attached")
             order = page.eval_on_selector_all("ui-section[data-panel]", "els => els.map(e => e.dataset.panel)")
             assert order[0] == "broken.panel" and "system.events" in order
             assert page.locator('ui-section[data-failed="true"]').count() == 1
