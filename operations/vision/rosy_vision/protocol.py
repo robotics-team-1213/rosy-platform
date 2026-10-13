@@ -169,6 +169,13 @@ def make_config(
     }
 
 
+def make_demand(wanted: bool) -> dict:
+    """Build a ``demand`` message (D-691). ``wanted`` is a JSON boolean, nothing else."""
+    if type(wanted) is not bool:
+        raise TypeError("wanted must be a bool")
+    return {"type": "demand", "wanted": wanted}
+
+
 def cert_pin(der: bytes) -> str:
     """``sha256/<base64url, no padding>`` of a certificate's DER bytes (not its SPKI; D-341 9).
 

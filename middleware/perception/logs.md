@@ -1441,3 +1441,111 @@
 - 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 원격 Perception 3028 passed, 112 skipped, 62 subtests passed, 0 NEW; 고립 설치 시험 통과.
 - gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
 - 결정: D-649
+
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
+
+## 2026-10-11 · 9fc0a88c9 · source test import precedence
+
+- 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
+- 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · 260919 진행 방향 횡단 줄무늬 관측
+
+- 변경: road.py가 GroundPlane이 있을 때 기존 D-491 crosswalk_extent와 BirdsEye로 세로 횡단 줄무늬를 찾는다. 기존 가로 표식은 우선하고 정지선·신호 판정 및 CORE gate는 유지한다.
+- 증거: A24 RGB crosswalk=false를 기록했다. 첫 카메라 프레임은 기동 pose가 없어 명목 투영의 거리 fixture를 철회하고, 정확한 25mm/120mm bars·40mm pitch를 명목 카메라에 투영한 원격 RED 1 NEW·32 PASS로 누락을 재현했다. 초기 RED는 자원 floor fallback, 교정된 RED는 AI PC 기준 충족 실행이다. 단일 정지선·차선·두 줄·옆 차로·빈 프레임 오인식 방지와 투영 없는 거리 미추정 회귀를 추가했다. 수정 후 원격 시험·native·독립 검토는 진행 중이다.
+- gate 변화: 없음. 모델·안전 권한은 변경하지 않았다. 실제 안정 카메라·좌표·오차·신호·완주·병렬 RL 수용은 남았다.
+
+## 2026-10-12 · 47601c453 · 횡단 줄무늬 원격 회귀와 A25 실제 관측
+
+- 변경: D-491 metric 횡단 관측 연결을 원격과 두 CORE·Fleet Gazebo에서 확인했다. 기동 첫 프레임의 거리 단정을 철회하고 안정된 마지막 프레임을 별도 기록했다.
+- 증거: 관련 원격 57 PASS·exit 0·NEW 0, 독립 SOURCE 승인, lint 0 errors·28 warnings. A25 17 패키지 build exit 0·native exit 0. 첫 로봇 road crosswalk=true·lens 거리 0.305m·confidence 0.6786, CORE 센서 API valid=true 두 대. 각 image/line/road 269건·preview/최종 CORE 단일 publisher·명령과 최종 odom 속도 0, online 2/2·기존 pin LOCALIZED. 독립 소유 PID 부재·세 포트 ECONNREFUSED, private 원본 50개 SHA 대조. 같은 host 30회 detector replay 중앙값 5.87/4.46ms·p95 40.62/21.45ms는 live callback 성능이 아니다.
+- gate 변화: 실제 횡단 관측과 CORE valid 수신만 확인했다. 기존 stop_line confidence 0.414 관측과 정책 HOLD는 유지했다. 횡단 서행·신호/장애물·Fleet 주행·지속 위치·unknown uncertainty·완주·병렬 RL·실물 수용은 아직 미완료다.
+
+## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
+
+- 변경: pytest 7.4의 module setup hook과 충돌하던 Fleet 시험 도우미 이름 및 모든 호출자를 바꿨다. Cell 401 검사는 실제 로그인·고급 접속 안내를 기대하며 세션 초기화와 조작 잠금 단언을 유지한다. 고립 설치 의존성 검사는 PEP 508 이름·공백만 정규화하고 정확한 버전 조건·무조건 의존성을 유지한다.
+- 증거: commit 40e7287971의 G1 307 passed와 pre-push 7828 passed 이후 전체 CI 38180852375는 Fleet hook·Cell 구문·sdist Requires-Dist 문자열 차이로 실패했다. CI 도구 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0의 원격 RED 1 NEW로 실제 core-common >=0.0.1 표기를 재현했다. 수정 후 동일 도구 원격 95 passed 및 Cell 실제 Chromium 6 passed, 각 terminal exit 0/known-failures NEW 0. 로그는 X: 검증 폴더 ci-compatible-diagnostic/ci-compatible-green/ci-compatible-cell에 보존한다.
+- gate 변화: 시험 호환성 수정과 선택 원격 회귀만 확인했다. 최신 통합·전체 CI·서명·새 설치본·사람 계정 발급은 별도 확인 중이다. production 권한·기계 토큰·비밀 검사·기존 실패 목록은 변경하지 않았다.
+
+## 2026-10-12 · 9e5ebb9c3 · 횡단 막대와 정지선 후보 구분
+
+- 변경: 기존 D-491 BEV 횡단 구역 안에서 후보 그룹의 모든 원본 행에 같은 행을 실제 샘플링한 stripe 근거가 있을 때만 그 후보를 정지선 목록에서 제외한다. 거리 불명·미관측·행 alias·실제 정지띠가 섞인 그룹은 보존한다. CORE/Fleet·신호·통행권·학습·명령 권한은 바꾸지 않았다.
+- 교훈: 연속 폭만 요구한 첫 후보는 1px 끊김 정지선을 놓쳐 독립 검토에서 폐기했다. 중앙 한 행의 근거로 전체 그룹을 제외하는 후속 후보도 실제 띠를 놓쳤다. 통합 그룹 회귀를 원격 RED 1 NEW로 재현하고 모든 행 및 실제 sample 행 일치로 보강했다.
+- 증거: 최종 source 관련 원격 227 PASS·terminal exit 0·NEW 0, 독립 SOURCE 승인. 1·2·10px 끊김, 횡단 그룹 끝의 실제 띠, 얇은 띠의 BEV 행 alias를 보존한다. 저장된 실제 두 Gazebo 프레임 offline 재생에서 가까운 횡단 막대 오인은 제외됐고 횡단 거리 0.305m·confidence 0.6786과 lane·signal은 유지됐다.
+- gate 변화: 새로운 ROS runtime·학습·주행 증거가 아니다. 화면 위쪽 108행의 거리 불명 후보는 남았으며 전체 clear 검사는 exit 1이다. 전체 오인 해소·교통 규칙 완주·실물 정지선 정확도는 아직 미완료다. private 일지에 source·이미지 hash·실패와 결과를 구분해 보관한다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.
+
+## 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
+
+- 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
+- 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
+- gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · 45e92d326 · 관측 곡률에 실제 CORE 주행법칙 적용
+
+- 변경: 현재·creep·기억 목표가 같은 CORE 설정의 역산법칙을 사용한다. 기본 error/confidence 전달 계약과 최종 주행 검사는 유지한다.
+- 증거: 유효 자원 기준의 원격 RED 18 FAIL 후 후보의 수학·기억 경로·무효 설정 28 PASS, 기존 관측 83 PASS, known_failures NEW 0을 확인했다. 독립 검토는 격리 SIM 범위의 SOURCE APPROVE이며 native 설정 handover는 진행 중이다.
+- gate 변화: 소스·회귀 증거만 추가했다. native 오버레이 적용·최신 전체 실행의 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · 077d2e475 · native camera의 유효 CORE 법칙 수신과 기억 초기화
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+
+## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
+
+- 원인: shared drivable_creep는 현재 관측·기억 목표를 함께 사용하지만 native Isaac은 관측 출처를 구분할 수 없어 모두 거절했다. 현재 영상의 목표와 누적 경계 검사를 단일 프레임 재추론만으로 대체하면 안 된다.
+- 변경: 실제 선택한 현재 목표와 관측 key를 별도 metadata로 제공한다. 유효 odom·유한 전방 목표·누적 경계 arc 검사를 통과할 때만 제공하며 native는 현재 stamp와 일치하고 전략 전환·기억 출구가 아닐 때만 받는다. shared 조향·예산·realign·ExpectedPath와 CORE 최종 명령 권한은 유지한다.
+- 증거: 원격 RED 2개로 출처 누락과 승인 실패를 재현한 뒤 관련 123개 통과/NEW 0. 실제 mask→shared steer→native 경로 및 전략 전환 거절을 포함한 Isaac·drivable·ExpectedPath 확장 회귀도 exit0/NEW0이다. 제품 소스 독립 검토는 현재 관측 출처와 native 승인 범위에 한정한다.
+- gate 변화: SOURCE 및 원격 회귀 증거. 실제 곡선 주행은 별도 재시험 중이며 완주·교통 규칙·Fleet·ROS-SIM·실물 수용을 승인하지 않는다. nominal arc 검사는 RL gain 적용 후 모든 경계 비횡단을 보장하지 않는다.
+
+- 실제 R39 재시험: 고정 정책으로 네 시작 방향 8회 실행, 완주 0회·정지 11회 통과·SDK exit1. 정상 방향 baseline/eval은 모두 약 0.110668m에서 camera_lane_lost였다. observed_creep 승인 경로는 이 정상 방향 실행에서 사용되지 않았다. 따라서 출처 연결 수정만으로 현재 곡선 실패가 해결됐다고 주장하지 않는다. 연속 way/누적 경계/실제 선택 목표를 추가 기록해 원인을 분리한다.
+
+## 2026-10-12 · 47ace984f2 · 내장 센서 이름 분리와 Gazebo 전방 정지 진단
+
+- 변경: 명시 namespace의 sensor-only 노드에 자체 이름 remap을 적용하고 실제 CORE clock을 전달한다. 전역 topic remap과 독립 센서 실행 의미는 유지한다.
+- 증거: 실제 Jazzy 실행을 포함한 정상 원격 115 PASS/NEW 0과 독립 SOURCE 승인이다. 수정 전 전체 소스 e6d0fe12ba의 Leg4는 0.311955m 뒤 정지했다. 실제 전방 0.130544m가 정지 기준 0.14905m보다 작아 blocked가 먼저 발행됐고 약 6ms 뒤 native 명령이 0이 됐다. 카메라는 current였으며 위치는 LOCALIZED였다. 원본 scan·TF의 소스 재생도 같은 거리를 계산했다.
+- gate 변화: 없음. 고정 lookahead 단축과 장애물 간격만으로 자동 회전을 허용하는 안은 채택하지 않는다. 안전 기준을 유지하고 관측 경로와 후보 궤적의 차이를 비교한다. 수정 후 Gazebo graph·원본 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · af76fcc5f · 도로 표식의 가까운 경계 거리
+
+- 변경: road의 일반 정지선·횡단보도는 선택된 표식의 중앙 행 대신 가장 가까운 아래쪽 경계 행으로 image_row와 검증된 지면 거리를 함께 계산한다. BEV 횡단보도의 기존 near extent, 표식 분류·confidence·차선·거리 미확인 의미와 CORE 권한은 유지한다.
+- 증거: 정상 원격 RED 9개로 두꺼운 표식의 거리 과대측정과 CORE 접근 출력을 재현했다. af76fcc5f의 관련 원격 시험 234 PASS/NEW 0은 정상 AI 자원 기준에서 완료했다. 두꺼운 표식의 가까운 경계는 기존 CORE 정지 조건으로 전달되고 미확인 거리는 HOLD를 유지한다. 원본 Leg5의 동일 lossless PNG 재측정은 STOP을 유지하며 row61/거리None에서 row122/0.429188m로 바뀐다. 원격 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-green2/run-1.txt이다.
+- gate 변화: 거리 측정 SOURCE/원격 계약 증거만 추가한다. 벽을 정지선으로 분류하는 문제를 해결했다는 뜻이 아니다. 실제 후보 Gazebo 주행·지도 완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · 946cec53d · 가까운 경계 수정의 전체 관측 회귀
+
+- 변경: 거리 수정의 전체 관측·Gazebo 계약 증거를 추가한다. 제품 소스는 af76fcc5f와 같다.
+- 증거: 독립 SOURCE 승인을 받았다. 정상 모델 PC의 전체 perception은 3158 PASS/110 SKIP, 전체 Gazebo 계약은 324 PASS/2 SKIP이며 두 로그 모두 terminal exit 0이다. 자원 기준 미달 동안 대기했고 fallback 실행은 하지 않았다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-perception/run-1.txt와 logs/road-edge-gazebo/run-1.txt이다. 관련 234개 시험에는 모듈 구조·경계와 실제 CORE 교통 gate가 포함된다.
+- gate 변화: 원격 회귀 증거만 추가한다. 원본 영상에서 여전히 벽을 STOP으로 분류하므로 의미 분류 완료·실제 수정 후보 주행·완주·실물 수용을 주장하지 않는다. 이후 주행에서는 기존 traffic APPROACH의 선속도 비율과 최종 곡률도 함께 확인해야 한다.
+
+## 2026-10-12 · uncommitted · 카메라가 CORE 유효 조향 법칙을 역산한다
+
+- 변경: 주행 중 카메라 오차는 모듈 기본 0.08/0.8이 아니라, 그 프로세스가 불러온 CORE 법칙(순항, 상한, 게인, 최소 신뢰)을 역산한다. 시뮬 관찰기는 같은 run_spec 오버레이를 읽고, 장치 카메라는 rosy-core가 쓴 status-inputs가 신선할 때만 DrivableSteer를 만든다. 법칙이 없거나 바뀌면 기억 경로를 버리고 테이프 추종으로 내려가지 않는다. 곡선 거절, ExpectedPath의 최신 거절 우선, 출발 거부는 그대로다.
+- 증거: 역산은 `error_for_k`가 신뢰 스케일과 곡선 감속을 포함한 뒤 CORE `_steer`의 곡률을 되돌리게 맞춘다. 장치 인계는 소유자, 모드, 크기, 로봇 ID, 프로세스 ID, 3초 이내의 시각을 본다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음. 출발 게이트와 10초 자세 정지는 유지한다. 시뮬 완주와 실물 수용은 이 변경만으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
+
+- 변경: `test_drivable_preview`의 가짜 steer가 `pursuit_error`를 갖는다. keep가 ExpectedPath를 만들 때 그 함수를 쓴다.
+- 증거: 착지 라운드의 `middleware/perception/test`가 `test_keep_step_puts_the_steered_way_into_keep_debug`에서 AttributeError로 멈췄다. 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음.

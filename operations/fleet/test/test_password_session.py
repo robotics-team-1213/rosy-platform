@@ -267,7 +267,8 @@ def test_login_routes_are_absent_without_login_accounts(tmp_path):
     assert client.post("/api/fleet/auth/logout", headers=ORIGIN).status_code == 404
     assert client.get("/api/fleet/auth/session").status_code == 401
     via_token = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()
-    assert via_token == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None}
+    assert via_token == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None,
+                         "password_change_required": False}
 
 
 # --- expiry and invalidation ---------------------------------------------------
@@ -498,3 +499,176 @@ def test_api_reference_documents_the_login_routes():
     for row in ("| POST | `/api/fleet/auth/login` |", "| POST | `/api/fleet/auth/logout` |",
                 "| GET | `/api/fleet/auth/session` |", "| v1.137 | 2026-10-08 | Additive (D-519)"):
         assert row in reference
+
+
+CHANGE = "/api/fleet/auth/change-password"
+BOOTSTRAP_PASSWORD_HASH = hash_password("alice")
+
+
+def _bootstrap(tmp_path):
+    app, _ = _app(tmp_path, logins=_accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH))
+    client = _client(app)
+    assert _login(client, password="alice").status_code == 204
+    return app, client
+
+
+def test_initial_cookie_is_restricted_before_any_fleet_read_or_command(tmp_path):
+    _, client = _bootstrap(tmp_path)
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
+    for method, path in (("get", "/api/fleet/state"), ("post", "/api/fleet/estop")):
+        response = getattr(client, method)(path, headers=ORIGIN)
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "PASSWORD_CHANGE_REQUIRED"
+    response = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert response.json()["role"] == "viewer"
+
+
+def test_password_change_replaces_cookie_revokes_other_sessions_and_survives_restart(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    sessions = app.state.password_sessions
+    old = client.cookies[COOKIE]
+    other = sessions.issue("alice", remember=True)
+    assert sessions.principal(other) is not None
+    response = client.post(CHANGE, headers=ORIGIN, json={"password": TYPED})
+    assert response.status_code == 204
+    assert client.cookies[COOKIE] != old
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is False
+    assert client.get("/api/fleet/state").status_code == 200
+    assert sessions.principal(old) is sessions.principal(other) is None
+    restarted = PasswordSessions(sessions.path, _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH))
+    assert restarted.check("restart", "alice", "alice") is None
+    assert restarted.check("restart", "alice", TYPED).principal_id == "alice"
+    assert restarted.principal(client.cookies[COOKIE])[0].password_change_required is False
+
+
+@pytest.mark.parametrize("body", [{}, {"password": "alice"}, {"password": "short"},
+                                  {"password": "x" * 1025}, {"password": 123},
+                                  {"password": TYPED, "role": "policy-admin"},
+                                  {"password": TYPED, "principal_id": "other"}])
+def test_password_change_rejects_invalid_payload_without_unlocking(tmp_path, body):
+    _, client = _bootstrap(tmp_path)
+    assert client.post(CHANGE, headers=ORIGIN, json=body).status_code == 422
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
+
+
+def test_password_change_requires_same_origin_initial_cookie_not_bearer(tmp_path):
+    _, client = _bootstrap(tmp_path)
+    for headers in ({}, {"Origin": "https://elsewhere.example"},
+                    {**ORIGIN, "Authorization": f"Bearer {TOKEN}"}):
+        assert client.post(CHANGE, headers=headers, json={"password": TYPED}).status_code == 403
+    normal = _client(_app(tmp_path / "normal")[0])
+    assert _login(normal).status_code == 204
+    assert normal.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 422
+
+
+@pytest.mark.parametrize("change", [{"principal_id": "replacement"}, {"role": "viewer"},
+                                    {"password_scrypt": hash_password("wrong")}])
+def test_changed_yaml_source_does_not_inherit_password_override(tmp_path, change):
+    app, client = _bootstrap(tmp_path)
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 204
+    source = _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH)
+    source["alice"].update(change)
+    restarted = PasswordSessions(app.state.password_sessions.path, source)
+    assert restarted.check("fresh", "alice", TYPED) is None
+    assert restarted.principal(client.cookies[COOKIE]) is None
+
+
+def test_yaml_rotation_to_effective_hash_still_invalidates_old_cookie(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    sessions = app.state.password_sessions
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 204
+    source = _accounts(password_scrypt=sessions._logins["alice"]["password_scrypt"])
+    restarted = PasswordSessions(sessions.path, source)
+    assert restarted.principal(client.cookies[COOKIE]) is None
+    checked = restarted.check("rotated", "alice", TYPED)
+    assert checked is not None and not checked.password_change_required
+    fresh = restarted.issue("alice", remember=False, verified=checked)
+    assert PasswordSessions(sessions.path, source).principal(fresh) is not None
+
+
+def test_password_change_storage_failure_preserves_initial_restriction(tmp_path, monkeypatch):
+    app, client = _bootstrap(tmp_path)
+    sessions = app.state.password_sessions
+    original = sessions._connect
+
+    def broken(**kwargs):
+        raise sqlite3.OperationalError("locked")
+    monkeypatch.setattr(sessions, "_connect", broken)
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 503
+    monkeypatch.setattr(sessions, "_connect", original)
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
+    assert sessions.check("retry", "alice", "alice") is not None
+
+
+def test_old_password_check_cannot_issue_session_after_change(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    sessions = app.state.password_sessions
+    checked = sessions.check("racer", "alice", "alice")
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 204
+    with pytest.raises(password_session_module.StalePasswordCheck):
+        sessions.issue("alice", remember=False, verified=checked)
+
+
+def test_password_change_commit_failure_rolls_back_hash_and_sessions(tmp_path, monkeypatch):
+    app, client = _bootstrap(tmp_path)
+    sessions, old = app.state.password_sessions, client.cookies[COOKIE]
+    original = sessions._connect
+
+    class CommitFailure(sqlite3.Connection):
+        def __exit__(self, *_args):
+            self.rollback()
+            raise sqlite3.OperationalError("commit unavailable")
+
+    def failing_connection(**kwargs):
+        db = sqlite3.connect(sessions.path, factory=CommitFailure)
+        db.row_factory = sqlite3.Row
+        return db
+
+    monkeypatch.setattr(sessions, "_connect", failing_connection)
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": TYPED}).status_code == 503
+    monkeypatch.setattr(sessions, "_connect", original)
+    assert sessions.principal(old)[0].password_change_required is True
+    restarted = PasswordSessions(sessions.path, _accounts(password_scrypt=BOOTSTRAP_PASSWORD_HASH))
+    assert restarted.check("after-failure", "alice", "alice") is not None
+    assert restarted.check("after-failure", "alice", TYPED) is None
+
+
+def test_password_change_stores_only_hash_and_preserves_remember(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    assert _login(client, password="alice", remember=True).status_code == 204
+    changed = client.post(CHANGE, headers=ORIGIN, json={"password": TYPED})
+    assert changed.status_code == 204
+    assert f"max-age={int(password_session_module.REMEMBER_S)}" in changed.headers["set-cookie"].lower()
+    assert TYPED.encode() not in app.state.password_sessions.path.read_bytes()
+
+
+def test_long_initial_password_cannot_be_reused(tmp_path):
+    LOGIN_ID = "teamuser"
+    HASH = hash_password(LOGIN_ID)
+    source = {LOGIN_ID: {"principal_id": "member", "role": "operator", "password_scrypt": HASH}}
+    client = _client(_app(tmp_path, logins=source)[0])
+    response = _login(client, LOGIN_ID, LOGIN_ID)
+    assert response.status_code == 204
+    assert client.post(CHANGE, headers=ORIGIN, json={"password": LOGIN_ID}).status_code == 422
+    assert client.get("/api/fleet/auth/session").json()["password_change_required"] is True
+
+
+def test_concurrent_password_changes_have_exactly_one_winner(tmp_path):
+    app, client = _bootstrap(tmp_path)
+    sessions, cookie = app.state.password_sessions, client.cookies[COOKIE]
+    barrier, results = threading.Barrier(2), []
+
+    def change():
+        barrier.wait()
+        try:
+            results.append(sessions.change_password(cookie, TYPED))
+        except password_session_module.StalePasswordCheck:
+            results.append(None)
+    threads = [threading.Thread(target=change) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+        assert not thread.is_alive()
+    assert len(results) == 2 and results.count(None) == 1
+    assert sessions.principal(next(value[0] for value in results if value is not None)) is not None

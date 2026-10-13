@@ -22,6 +22,10 @@ sha256한 값이다(`learning/registry/perception/store.py`). OS 찌꺼기(`.DS_
 
 ## 입력
 
+D-659의 새 도로면 작업은 [road_surface_v1.yaml](../../curation/perception/classes/road_surface_v1.yaml)을 검수 classes로 사용한다. `drivable`은 현재 구역이나 목적지로 좁히지 않은 가시 도로 바닥이며 칠은 별도 class, 가림/미관측은 255다. 현재 도로 구역과 따라갈 구역은 후속 로직이 판단하고 별도 정답으로 평가한다. 기존 lr6/v13 masks와 승인에 이 정의를 나중에 붙이지 않는다.
+
+D-663의 선택 `classes[].semantic`은 검수 classes·dataset·export `output.classes`에 보존된다. 의미 미확인 구형 산출물은 그대로 읽지만 strict fitness에는 사용할 수 없다. 새 전체 도로면 모델은 baseline/enhanced lane-seg 경로를 사용하며 현재 구역 전용 v13-drivable과 기존 조향 슬롯으로 전달하지 않는다. 현재 intake report는 shadow 전달 적격성이고 전체 도로면의 인지 승인과 다르다.
+
 - 데이터셋 ref `store:<name>@<content_sha>`(64자 hex). 내용 해시라 바뀌지 않는다. 받은 폴더의
   `content_sha`를 다시 계산해 ref와 다르면 학습하지 않는다(노트북 3단계가 한다).
   HF를 쓰는 팀은 HF dataset 저장소와 **commit SHA(40자 hex)**를 쓴다. 태그는 움직이므로 받지 않는다.

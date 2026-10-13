@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Optional
 
 from fleet.server.sqlite_policy import configure_connection
+from core_common.protocol.schemas import FleetJudgmentReceipt, FleetObservedClosure
+from fleet.incidents.handoff import IncidentHandoff, judgment_revision
+from fleet.incidents.notifications import NotificationOutbox
 
 
 def _resolution(answers) -> tuple:
@@ -81,11 +84,51 @@ class LineStuckAnswerLog:
                        principal_id TEXT NOT NULL, root_cause TEXT NOT NULL, note TEXT NOT NULL)""")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS fleet_ai_fact_reviews_fact ON fleet_ai_fact_reviews(fact_row)")
+            connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_records (
+                judgment_id INTEGER PRIMARY KEY AUTOINCREMENT, robot_id TEXT NOT NULL,
+                recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
+            connection.execute("CREATE INDEX IF NOT EXISTS fleet_judgment_robot ON fleet_judgment_records(robot_id, judgment_id)")
+            connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_current (
+                robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
+        self.handoff = IncidentHandoff(self)
+        self.notifications = NotificationOutbox(self)
 
-    def append(self, row: dict) -> None:
-        accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
+    def record_judgment(self, receipt: dict) -> None:
+        receipt = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode="json")
+        robot_id, now = receipt['request']['subject_id'], receipt['evaluated_at']
+        body = json.dumps(receipt, allow_nan=False, sort_keys=True)
+        def signature(value):
+            return (value['necessity'], value['reason'], value['policy_revision'],
+                    value['request'].get('case_id'), value['request'].get('owner'))
         with closing(self._connect()) as connection, connection:
-            connection.execute(
+            previous = connection.execute("SELECT recorded_at, assessment FROM fleet_judgment_records WHERE robot_id=? ORDER BY judgment_id DESC LIMIT 1", (robot_id,)).fetchone()
+            if previous is None or signature(json.loads(previous['assessment'])) != signature(receipt) or now - previous['recorded_at'] >= 60:
+                connection.execute("INSERT INTO fleet_judgment_records(robot_id, recorded_at, assessment) VALUES (?, ?, ?)", (robot_id, now, body))
+            connection.execute("INSERT INTO fleet_judgment_current VALUES (?, ?, ?) ON CONFLICT(robot_id) DO UPDATE SET recorded_at=excluded.recorded_at, assessment=excluded.assessment", (robot_id, now, body))
+            self.notifications.enqueue(connection, receipt)
+            connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
+            connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
+
+    def judgments(self, limit: int = 100) -> list[dict]:
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError('judgment limit must be between 1 and 1000')
+        with closing(self._connect()) as connection:
+            rows = connection.execute("SELECT * FROM fleet_judgment_records ORDER BY judgment_id DESC LIMIT ?", (limit,)).fetchall()
+        return [{**dict(row), 'assessment': json.loads(row['assessment'])} for row in rows]
+
+    def append(self, row: dict, *, connection=None) -> None:
+        if connection is not None:
+            if (type(connection) is not sqlite3.Connection or not connection.in_transaction
+                    or not any(item[1] == 'main' and Path(item[2]).resolve() == self.path.resolve()
+                               for item in connection.execute('PRAGMA database_list'))):
+                raise ValueError('EXISTING_STUCK_TRANSACTION_REQUIRED')
+            return self._append(connection, row)
+        with closing(self._connect()) as connection, connection: self._append(connection, row)
+
+    @staticmethod
+    def _append(connection, row):
+        accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
+        connection.execute(
                 """INSERT INTO fleet_line_stuck_answers (at, audit_id, robot_id, stuck_id,
                    decision, principal_id, accepted, outcome, code, message, tier, rule,
                    escalated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -100,6 +143,17 @@ class LineStuckAnswerLog:
                 "SELECT * FROM fleet_line_stuck_answers ORDER BY answer_id DESC LIMIT ?",
                 (limit,)).fetchall()
         return [dict(row) for row in found]
+
+    def uncertain_motion(self) -> set[tuple[str, str]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute("""SELECT DISTINCT a.robot_id, a.stuck_id
+                FROM fleet_line_stuck_answers a WHERE a.principal_id='fleet-resolver'
+                AND a.code IN ('STUCK_DECISION_OUTCOME_UNKNOWN', 'FLEET_STUCK_DISPATCH_PENDING')
+                AND a.decision != 'WAIT'
+                AND NOT EXISTS (SELECT 1 FROM fleet_line_stuck_answers r
+                    WHERE r.robot_id=a.robot_id AND r.stuck_id=a.stuck_id
+                    AND r.code='STUCK_DECISION_RECONCILED' AND r.answer_id>a.answer_id)""").fetchall()
+        return {(row["robot_id"], row["stuck_id"]) for row in rows}
 
     def open_episode(self, row: dict) -> None:
         """Open (or, after a Fleet restart, reopen) one episode. The first ``opened_at`` stays."""
@@ -125,6 +179,8 @@ class LineStuckAnswerLog:
                    WHERE robot_id = ? AND stuck_id = ?""",
                 (closed_at, close_reason, held_s_max, attempts_max, *_resolution(answers),
                  robot_id, stuck_id))
+            self.notifications.closed(connection, robot_id, stuck_id,
+                                      now=datetime.fromisoformat(closed_at).timestamp(), reason=close_reason)
 
     def close_orphans(self, closed_at: str) -> None:
         """Start-up: an episode still open was left by the previous Fleet process."""
@@ -140,16 +196,23 @@ class LineStuckAnswerLog:
                 (limit,)).fetchall()
         return [dict(row) for row in found]
 
-    def reports(self, limit: int = 100) -> list[dict]:
+    def reports(self, limit: int = 100, *, robot_id=None, stuck_id=None) -> list[dict]:
         """Read-only, source-separated incident records for operator review and offline learning."""
         with closing(self._connect()) as connection:
+            where, params = ('', []) if robot_id is None else (' WHERE robot_id=? AND stuck_id=?', [robot_id, stuck_id])
             episodes = connection.execute(
-                "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?", (limit,)).fetchall()
+                'SELECT * FROM fleet_line_stuck_episodes' + where + ' ORDER BY rowid DESC LIMIT ?',
+                (*params, limit)).fetchall()
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             reports = []
             for episode in episodes:
                 row = dict(episode)
                 robot_id, stuck_id = row["robot_id"], row["stuck_id"]
+                current = connection.execute('SELECT assessment FROM fleet_judgment_current WHERE robot_id=?',
+                                             (robot_id,)).fetchone()
+                receipt = json.loads(current['assessment']) if current else None
+                revision = (judgment_revision(receipt) if row['closed_at'] is None and receipt is not None
+                            and receipt['request'].get('case_id') == stuck_id else None)
                 answers = [dict(item) for item in connection.execute(
                     """SELECT at, decision, principal_id, accepted, outcome, code, tier, escalated
                        FROM fleet_line_stuck_answers WHERE robot_id=? AND stuck_id=? ORDER BY answer_id""",
@@ -198,7 +261,21 @@ class LineStuckAnswerLog:
                             ai.append(item)
                             if len(ai) == 3:
                                 break
+                has_answer = any(a['decision'] != 'ESCALATE' and a['accepted'] != 0 for a in answers)
+                status = 'OPEN'
+                if row['closed_at'] is not None:
+                    status = 'OBSERVATION_ENDED'
+                    if row['close_reason'] == 'cleared':
+                        status = 'CLEARANCE_OBSERVED' if has_answer else 'NATURAL_CLEARANCE'
+                closure = FleetObservedClosure(
+                    status=status, action_credit='UNVERIFIED' if has_answer else 'NONE',
+                    reason=row['close_reason'], observed_at=row['closed_at'],
+                ).model_dump(mode='json')
                 reports.append({"schema": "rosy.incident.v1", "id": f"line_stuck:{robot_id}:{stuck_id}",
+                                "closure": closure,
+                                "handoff": self.handoff.get(robot_id, stuck_id),
+                                "judgment_revision": revision,
+                                "notifications": self.notifications.rows(20, robot_id=robot_id, stuck_id=stuck_id),
                                 "stuck_id": stuck_id,
                                 "classification": "line_stuck", "robot_ids": [robot_id],
                                 "opened_at": row["opened_at"], "closed_at": row["closed_at"],

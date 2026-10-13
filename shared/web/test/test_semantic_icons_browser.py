@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 COMMON = ROOT / "shared/web"
 GALLERY = ROOT / "middleware/ui/robot"
 HOST = "http://rosy.test"
-ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect"]
+ICONS = ["fleet", "map", "install", "cell", "notification", "history", "tools", "refresh", "download", "connect",
+         "login", "account", "logout"]
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "application/javascript"}
 
 
@@ -102,7 +103,8 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
     tooltip.wait_for(state="visible")
     assert "현재 내용 다시 조회" in tooltip.inner_text()
     assert set(refresh.get_attribute("aria-describedby").split()) == {"other-evidence", "rosy-shared-tooltip"}
-    tooltip.hover()
+    box = tooltip.bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     assert tooltip.is_visible()
     page.keyboard.press("Escape")
     assert not tooltip.is_visible()
@@ -114,6 +116,31 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
       try { actionIcon(button, 'refresh'); return false; } catch (error) { return error instanceof TypeError; }
     }""")
     assert rejected
+
+
+def test_focused_description_does_not_block_another_control(page):
+    page.goto(f"{HOST}/styleguide")
+    page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")
+    page.locator("#icon-focus-demo").focus()
+    tooltip = page.get_by_role("tooltip")
+    tooltip.wait_for(state="visible")
+    box = tooltip.bounding_box()
+    description = tooltip.text_content()
+    page.evaluate("""box => {
+      const button = document.createElement('button');
+      button.id = 'under-description'; button.textContent = 'Read next item';
+      button.dataset.uiTooltip = 'A different underlying description';
+      Object.assign(button.style, {position: 'fixed', left: `${box.x}px`, top: `${box.y}px`,
+        width: `${box.width}px`, height: `${box.height}px`});
+      button.addEventListener('click', () => button.dataset.clicked = 'yes');
+      document.body.append(button);
+    }""", box)
+    control = page.locator("#under-description")
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    assert tooltip.is_visible()
+    assert tooltip.text_content() == description
+    control.click()
+    assert control.get_attribute("data-clicked") == "yes"
 
 
 @pytest.mark.parametrize("mutation", ["node.hidden = true", "node.remove()"])
@@ -171,8 +198,9 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
       stage.querySelector('#topbar-more .ui-icon-label').hidden = true;
     }""", snippets)
     tooltip = page.get_by_role("tooltip")
-    for name, target in [("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
-                         ("접속과 화면 표시", "#topbar-more")]:
+    for snippet, (name, target) in zip(snippets, [
+        ("어둡게", "[data-theme-choice='dark']"), ("영상 새로고침", "#vision-refresh"),
+        ("접속과 화면 표시", "#topbar-more")], strict=True):
         control = page.locator(f"#existing-icons {target}")
         assert control.get_attribute("data-ui-tooltip") == name
         assert control.get_attribute("title") == name
@@ -180,7 +208,7 @@ def test_existing_sr_only_and_css_hidden_icons_keep_names_and_get_keyboard_descr
         tooltip.wait_for(state="visible")
         assert tooltip.inner_text() == name
         assert control.get_attribute("aria-describedby") == "rosy-shared-tooltip"
-        assert control.get_attribute("data-icon-only") is None
+        assert control.get_attribute("data-icon-only") == ("" if 'data-icon-only=""' in snippet else None)
         assert control.evaluate("node => getComputedStyle(node).minHeight") == "48px"
     assert page.locator("#existing-icons [data-theme-choice]").get_attribute("aria-pressed") == "true"
     fallback = page.evaluate("""async () => {

@@ -2,11 +2,15 @@
 //
 import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
+import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createInboxPanel } from "./inbox.js";
+import { createWorkView } from "./work-view.js";
+import { createChannelRequestView } from "./channel-request-view.js";
 import { createIncidentView } from "./incident-view.js";
 import { createLineStuckPanel } from "./line-stuck.js";
+import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
@@ -36,12 +40,23 @@ const layoutMedia = matchMedia("(min-width: 64rem)");
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
 const MAP_PANEL = 1;
+const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
+  robots: () => view.robots,
+  canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
+  canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
+    && !motionCommandReason(view, robotId, "goal")
+    && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
+  confirm: options => confirmedAction.run(options)});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
+layoutPanels.push(el("work-overview"));
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  layoutPanels.forEach((node, index) => {
-    const parent = layoutMedia.matches ? (index === MAP_PANEL ? primary : secondary) : main;
+  const ordered = workView.active ? [el("work-overview"), document.querySelector('.console-context'),
+    ...layoutPanels.filter(node => node.id !== "work-overview" && !node.matches('.console-context'))] : layoutPanels;
+  ordered.forEach((node) => {
+    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
@@ -97,6 +112,7 @@ function markLocked(reason = "auth") {
   cancelAllNotice();
   const firstLock = !auth.locked;
   auth.locked = true;
+  workView.reset();
   connectionView.open();
   auth.role = null;
   incidents.reset();
@@ -115,7 +131,7 @@ function markLocked(reason = "auth") {
   connectionView.show(reason, auth.token);
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
-      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
+      stateLoaded: false, stateUnavailable: false, focusRobot: null, selected: null, pinning: null, cursor: null, formation: null, signals: {},
       traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
     visionView.reset(); visionView.refreshSources(); trackingView.reset();
   }
@@ -133,10 +149,10 @@ function markUnlocked() {
 }
 
 function operatorControls() {
-  // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
+  // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling)는 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
 }
 
 const view = {
@@ -147,9 +163,9 @@ const view = {
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
   robotNames: {}, // enrolled robot_id -> verified discovery hostname; presentation only
-  cardChoice: {},  // D-540 3: robot_id -> the operator's fold {open, attention}
   queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
+  focusRobot: null, // 화면에서 살펴보고 작업을 배정할 로봇; 목표 지정 arm과 별개
   cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
   formation: null,
@@ -181,12 +197,12 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if (error.status === 401 && !cameraPreview) markLocked();
+    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
     throw error;
   }
 }
 
-const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth});
+const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 
 async function refreshDispatchControl(life = pageScope.capture()) {
   life.check();
@@ -263,7 +279,8 @@ pageScope.listen(el("dispatch-rearm"), "click", async () => {
 function render() {
   const rosterBox = el("roster");
   const focused = document.activeElement;
-  const focusedCard = focused?.closest?.("#roster article");
+  const focusedCard = focused?.closest?.("#roster article, #robot-workspace article");
+  const focusedBox = focusedCard?.closest("#robot-workspace") ? el("robot-workspace") : rosterBox;
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
@@ -272,7 +289,7 @@ function render() {
   if (view.robots.length) {
     const order = [...view.robots.keys()].sort((a, b) =>
       roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
-    roster.place(rosterBox, order.map((index) => roster.card(view.robots[index], index)));
+    roster.place(rosterBox, order.map((index) => roster.summary(view.robots[index], index)));
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -288,8 +305,9 @@ function render() {
       rosterBox.replaceChildren(empty);
     }
   }
-  if (focusedId && document.activeElement !== focused) {  // a kept card (roster.place) still has it
-    const nextCard = [...rosterBox.querySelectorAll("article")]
+  roster.workspace();
+  if (focusedId && document.activeElement !== focused) {  // a kept workspace picker still has it
+    const nextCard = [...focusedBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
       ? nextCard?.querySelectorAll("ui-button, button")[focusedButton] : nextCard;
@@ -300,6 +318,7 @@ function render() {
   inbox.refresh();
   roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
+  deviceWatch.render();
   tripReplan.render();
 
   formation.fillLeaders();
@@ -360,6 +379,8 @@ async function refreshHealthz() {
 }
 pageScope.onDispose(() => {
   statePollInFlight = false;
+  view.focusRobot = null;
+  view.pinning = null;
   view.selected = null;
   view.cursor = null;
   document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close("cancel"));
@@ -536,7 +557,7 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     life.check();
-    if (auth.role !== identity.role) confirmedAction.cancel();
+    if (auth.role !== identity.role || auth.principal !== identity.principal_id) { confirmedAction.cancel(); workView.reset(); }
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     showSession(identity);
@@ -555,6 +576,7 @@ async function refreshAuthorization() {
     // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
     await Promise.allSettled([
       incidents.refresh(),
+      workView.refresh(),
       mapView.refresh(),
       refreshState(),
       refreshDispatchControl(),
@@ -565,14 +587,14 @@ async function refreshAuthorization() {
     render();
   } catch (_err) {
     if (_err.name === "AbortError") return;
-    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
+    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
   }
 }
 
 // --- 조작 ------------------------------------------------------------------
 
 // D-224 — 예외 문법의 키보드 어휘(§7.3 "keyboard-first" 의 실현).
-// ↑/↓ 로 로스터를 순회하고, Enter 로 그 로봇의 목표 지정을 누르고,
+// ↑/↓ 로 로스터를 순회하고, Enter 로 그 로봇의 작업 패널을 선택한다.
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
 pageScope.listen(document, "keydown", (event) => {
@@ -589,15 +611,16 @@ pageScope.listen(document, "keydown", (event) => {
       : cards[(idx + (event.key === "ArrowDown" ? 1 : -1) + cards.length) % cards.length];
     next.focus();
   } else if (event.key === "Enter" && cards.includes(active)) {
-    const aim = active.querySelector(".robot-actions ui-button");
-    if (aim && !aim.disabled) {
+    const choose = active.querySelector("ui-button[data-select-robot-id]");
+    if (choose && !choose.disabled) {
       event.preventDefault();
-      aim.click();
+      choose.click();
     }
   } else if (event.key === "Escape" && view.selected) {
-    const selectedCard = cards.find((c) => c.classList.contains("selected"));
-    const aim = selectedCard && selectedCard.querySelector(".robot-actions ui-button");
-    if (aim) aim.click();
+    const robotId = view.selected;
+    disarmGoal("목표 지정 취소");
+    render();
+    focusGoalButton(robotId);
   }
 });
 
@@ -606,7 +629,7 @@ async function commitGoal(col, row) {
   life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" || namedReason() ||
+  if (view.stateUnavailable || auth.role !== "operator" || namedReason() || motionCommandReason(view, view.selected, 'goal') ||
       !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
     disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
     render();
@@ -617,6 +640,7 @@ async function commitGoal(col, row) {
   const mapSnapshot = JSON.stringify([view.map.map_id, view.map.width, view.map.height, view.map.resolution, view.map.origin]);
   await confirmedAction.run({message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`, opener: el("map-canvas"),
     eligible: () => !view.stateUnavailable && view.selected === robotId && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
+      && !motionCommandReason(view, robotId, 'goal')
       && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
     request: async owner => {
   view.selected = null;
@@ -665,7 +689,7 @@ async function commitGoal(col, row) {
 
 function focusGoalButton(robotId) {
   inbox.select("status");
-  [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
+  [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
     .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
 }
 
@@ -850,11 +874,26 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
+  onSelectionChanged: () => { pinStart = null; } });
+if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
+  roster.openCard(el("robot-choice").value || null);
+  render();
+});
+view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
+view.openFormationWorkspace = () => {
+  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; pinStart = null;
+  if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
+  render();
+  inbox.select('tools');
+  const heading = el('formation-heading'); heading.tabIndex = -1;
+  heading.focus({preventScroll: false});
+};
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
+const deviceWatch = createDeviceWatch({ scope: pageScope, el, view });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason,
   openCard: (robotId) => { roster.openCard(robotId); render(); } });
@@ -898,6 +937,7 @@ function saveToken() {
 }
 
 function useToken(token) {
+  workView.reset();
   stopNotice();
   cancelAllNotice();
   pageScope.invalidate();
@@ -974,6 +1014,7 @@ mapView.refresh();
 trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
 pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);

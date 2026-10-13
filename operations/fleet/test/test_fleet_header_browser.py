@@ -8,6 +8,7 @@ session is refused and unlocks with the shared token.
 
 import copy
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -52,7 +53,8 @@ PROBE = """() => {
     overflow: document.documentElement.scrollWidth - innerWidth,
     overflowNodes: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
       .slice(0, 8).map(node => [node.tagName, node.id, node.textContent.slice(0, 30), Math.round(node.getBoundingClientRect().right)]),
-    ids: [...document.querySelectorAll('ui-topbar [id]')].map(node => node.id)};
+    // UiButton's generated reason descriptions vary with each document's current state.
+    ids: [...document.querySelectorAll('ui-topbar [id]:not([data-reason])')].map(node => node.id)};
 }"""
 
 
@@ -135,6 +137,12 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(400)
                 fact = page.evaluate(PROBE)
+                assert page.locator('ui-topbar [data-header-region]').count() == 4
+                for region in ("identity", "status", "actions", "safety"):
+                    expect(page.locator(f'[data-header-region="{region}"]')).to_be_visible()
+                assert page.locator('[data-header-region="actions"] #fleet-inbox').count() == 1
+                assert page.locator('[data-header-region="safety"] #estop').count() == 1
+                expect(page.locator('#topbar-extra')).not_to_be_visible()
                 measured[(name, width)] = fact
                 nav = page.locator(".doc-tabs").bounding_box()
                 main = page.locator("main").bounding_box()
@@ -142,6 +150,23 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 expect(footer.locator("#clock")).not_to_have_text("--:--:--")
                 expect(page.get_by_role("banner")).to_have_count(1)
                 assert page.locator(".doc-tabs a[aria-current=page]").count() == 1
+                for link in page.locator(".doc-tabs a").all():
+                    box = link.bounding_box()
+                    assert box["width"] == box["height"] == 48, (name, width, box)
+                    assert link.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    expect(link).to_have_attribute("data-ui-tooltip", link.text_content().strip())
+                more = page.locator("#topbar-more")
+                if more.is_visible():
+                    assert more.locator(".ui-icon-label").evaluate(
+                        "node => getComputedStyle(node).display === 'none' || node.getBoundingClientRect().width <= 1"
+                    )
+                inbox_text = page.locator("#fleet-inbox").text_content().strip()
+                assert not inbox_text or inbox_text.isdecimal(), inbox_text
+                expect(page.locator("#fleet-inbox")).to_have_attribute("aria-label", re.compile("알림 창"))
+                for tab in page.locator(".context-tabs [role=tab]").all():
+                    assert tab.locator(".ui-icon-label").bounding_box()["width"] <= 1
+                    assert tab.bounding_box()["height"] == 48
+                    expect(tab).to_have_attribute("data-ui-tooltip", tab.text_content().strip())
                 if width >= 1024:
                     assert nav["x"] + nav["width"] <= main["x"] + 1, (name, width, nav, main)
                 else:
@@ -164,10 +189,8 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 if width <= 390:
-                    more = page.get_by_role("button", name="접속과 화면 표시")
+                    more = page.get_by_role("button", name="화면 표시와 고급 접속")
                     expect(more).to_be_visible()
-                    if width == 390:
-                        expect(more).to_contain_text("접속")
                     more.click()
                     expect(page.locator("#theme-choice-label")).to_be_visible()
                     assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, (name, width)

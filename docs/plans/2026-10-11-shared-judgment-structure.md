@@ -1,5 +1,7 @@
 # Shared Judgment Responsibility Extraction Implementation Plan
 
+후속 통합 순서와 책임·권한 계약은 [D-656 실행 계획](2026-10-11-responsibility-authority-orchestration.md)을 따른다. 이 문서의 단계별 source/시험 세부는 재사용하며 D-652 완료 범위와 후속 미착수 범위를 구별한다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 단일 셀·로봇·다중 로봇에서 공통 필요성 평가를 재사용하고 작업/자원 승인과 실제 결과를 기존 단일 owner에 연결한다.
@@ -8,7 +10,11 @@
 
 **Tech Stack:** 기존 Python·ROS-free 참조 형식·Fleet SQLite/httpx·static source holder mapping·원격 pytest. 신규 dependency와 범용 orchestration framework는 추가하지 않는다.
 
-**Status:** Proposed. 이번 작업은 이 계획과 구조 제안 문서만 작성했다. 아래 생성/이전 파일은 구현 예정이며 새 API나 설치 완료의 증거가 아니다. D-647 0단계 수용과 D-642~D-646의 단계별 계약을 구현 전에 대조한다.
+**Status:** 단계 0/1의 내부 shadow 구현은 [D-652](../adr/D-652-intervention-assessment-shadow.md) 범위로 진행한다. 공통 필요성 평가와 기존 CORE snapshot adapter만 수용하며 D-647/D-648 전체 구조, 단계 2~4, 외부 API와 현장 활성화는 Proposed/미완료다. [구현 및 검증 기록](../validation/intervention-assessment-2026-10-11.md)에 실제 소비자와 설치 closure를 기록한다.
+
+사용자 선택(2026-10-11): 이번 병합은 판단·현장 연결·설치 책임부터 분리한다. 설치 구성의 실제 holder는 `tools/packaging/fleet_sources.py`; Fleet 메타데이터, source-layout 계산, site image COPY와 self-contained wheel/sdist를 함께 대조한다. 2/3단계 모델 도구 중재와 작업 규칙 이전은 이번 착지 범위에 넣지 않는다.
+
+후속 진행(2026-10-11): 사용자의 이어서 처리 요청에 따라 [D-657](../adr/D-657-judgment-adapter-and-pure-execution-extraction.md)에서 단계 2와 단계 3 첫 계산 단위를 별도 수용했다. dispatcher는 `fleet.server.model_feedback_dispatch`, 순수 목표 검증과 진척 시각/step 상태 투영은 `rosy.execution.site.{goal_evidence,workflow}`로 분리한다. 전체 상태 전이/복구 및 단계 4를 완료로 집계하지 않는다. [실행 계획](2026-10-11-judgment-adapter-extraction.md)과 [검증 기록](../validation/judgment-adapter-extraction-2026-10-11.md)에서 이번 단위의 실제 증거를 확인한다.
 
 ## 0. 현재 소비자와 목표 책임 검수
 Read: `operations/{world,situation,decision,execution,fleet}/AGENTS.md`, `rosy.decision` 하위 AGENTS, D-427/D-429/D-430/D-630/D-637, Proposed D-435/D-647/D-648.
@@ -52,7 +58,7 @@ Modify: `operations/fleet/fleet/server/mission_service.py`, `mission_progress.py
 Existing tests: `operations/fleet/test/test_mission_service.py`, `test_mission_store.py`, `test_mission_progress.py`, `test_mission_dispatcher.py`, `test_dispatch_admission.py`, `test_cell_job_recovery.py`, `test_cell_job_store.py`, `test/test_platform_item_pose.py`, `test/test_platform_cell_submission.py`, `test/test_structure_installed_packages.py`. 각 unit의 실제 소비자를 확인한 뒤 관련 invocation을 확정한다. 의미 전이는 전이표로, I/O/경쟁은 기존 integration suite로 검증하며 구현을 그대로 복제한 시험을 늘리지 않는다.
 
 ## 4. 중앙 처리·알림·화면·독립 수용 연결
-Modify: 위 현재 사건/작업 어댑터와 D-644 원장·결과 기록. Create only in D-645 implementation: `operations/fleet/fleet/notifications.py`와 해당 설정/시험. Console은 `operations/ui/console`의 기존 화면과 D-646 계약을 따른다.
+Modify: 위 현재 사건/작업 어댑터와 D-644 원장·결과 기록. Create only in D-645 implementation: `operations/fleet/fleet/incidents/notifications.py`와 해당 설정/시험. Console은 `operations/ui/console`의 기존 화면과 D-646 계약을 따른다.
 
 1. 권고 revision→owner 채택/보류→기존 조치 제출→수락/거절/불명→실제 목표/해소를 같은 원장으로 대조한다. 활성 Mission 없는 사건도 새 Mission을 자동 만들지 않고 같은 case owner로 처리한다.
 2. 알림 outbox는 기존 사건 transaction에서 생성하고 normal 비개입 zero-send·dedupe·expiry·부분 실패·제한 retry·재시작을 시험한다. 발송·읽음·담당 접수·실제 종료를 구별한다.

@@ -8,7 +8,7 @@ import pytest
 
 from core_common.protocol.schemas import FleetActionGrant
 from fleet.server.mission_dispatcher import MissionDispatcher
-from fleet.server.goal_evidence import GoalEvidenceError
+from rosy.execution.site.goal_evidence import GoalEvidenceError
 from fleet.server.goal_evidence_registry import GoalEvidenceProducer, GoalEvidenceRegistry
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.goal_evidence_store import GoalEvidenceStore

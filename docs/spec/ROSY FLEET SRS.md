@@ -1,6 +1,10 @@
 # ROSY FLEET Fleet Control Platform
 ## 소프트웨어 개발 요구사양서 (중앙 서버 책임)
 
+### UI-WORK-001 · 공통 작업 읽기 (D-664)
+
+Console은 주행 Task와 사용자 소유 Cell Mission을 공통 읽기 화면에서 출처별 식별자·상태·갱신 시각으로 구별해 표시한다. 담당 장치, 작업 공간, 업무 및 최종 실행 책임(CORE/OMX)을 구분한다. 제한된 최근 목록과 원장 미설정 여부를 표시하고 수락/동작 성공/목표 확인을 같은 완료 상태로 합치지 않는다. 상세는 기존 read API로 조회한다. 읽기 화면은 실행 승인 또는 새 명령을 보내지 않는다. 세션 변경 또는 읽기 실패 시 이전 목록과 상세를 무효화한다. desktop/mobile, viewer/operator, 동일 ID, 조회 실패 및 소유 범위의 수용 시험을 요구한다. [API 계약](../reference/ROSY%20API%20%26%20Protocol%20Reference.md)의 D-664 절과 typed schema가 응답 계약이다.
+
 **Document ID:** ROSY-FLEET-SRS-001
 **Version:** v1.0
 **Target Platform:** Linux Server / Docker

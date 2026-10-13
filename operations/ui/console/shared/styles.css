@@ -5,7 +5,7 @@
 .connection-guide > div { flex: 1 1 16rem; min-width: 0; }
 .connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
 .connection-guide p { margin: 0; color: var(--text-secondary); }
-.connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-button); color: var(--text-primary); }
+.connection-guide a { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #estop-feedback { margin: var(--space-2) var(--space-5) 0; }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
@@ -546,6 +546,9 @@ main {
   .queues-panel { order: 0; }
   .panel[aria-labelledby="map-heading"] { order: 1; }
   .console-context { order: 2; }
+  #fleet-main:has(#work-overview:not([hidden])) > #work-overview { order: -1; }
+  #fleet-main:has(#work-overview:not([hidden])) > .console-context { order: 0; }
+  #fleet-main:has(#work-overview:not([hidden])) > .queues-panel { order: 1; }
 }
 
 
@@ -766,8 +769,10 @@ main {
 
 
 /* D-457 관제 카메라 추적 — 상태줄과 범례. 색은 토큰만(CSP style-src 'self'). */
-.map-board { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.map-readouts { flex: 0 1 auto; min-height: 0; block-size: auto; max-block-size: 11rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); overflow: auto; margin-top: var(--space-2); }
+.map-board { flex: 1 1 auto; min-height: 12.5rem; display: flex; flex-direction: column; }
+.map-readouts, .map-options { flex: none; min-width: 0; margin-top: var(--space-2); }
+.map-readouts-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); block-size: 16rem; overflow: auto; padding-block: var(--space-3); }
+.map-options-content { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
 .map-context { min-width: 0; }
 .map-context > h3 { margin-block: var(--space-3) var(--space-2); }
 .map-place-list { margin: 0; padding-inline-start: var(--space-5); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -777,20 +782,14 @@ main {
 .tracking-bar { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 0; }
 .tracking-bar table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .tracking-bar th, .tracking-bar td { overflow-wrap: anywhere; }
-@media (width >= 64rem) and (height >= 40rem) {
-  .map-board { display: grid; grid-template-columns: minmax(0, 1fr) 14rem; grid-template-rows: minmax(0, 1fr); gap: var(--space-3); }
-  .map-readouts { max-block-size: none; margin-top: 0; grid-template-columns: minmax(0, 1fr); align-content: start; }
-}
 @media (width < 64rem), (height < 40rem) {
-  /* 펼친 좌표의 수명 만료가 지도 크기를 바꾸지 않게 한다. 기본 접힘은 내용 높이만 쓴다. */
-  .map-readouts:has(#tracking-coordinate-details[open]) { flex: 0 0 auto; block-size: 11rem; }
   #fleet-main .map-stage { flex: none; block-size: clamp(20rem, calc(100dvh - 28rem), 48rem); min-height: 20rem; }
 }
 #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
 #map-tag, #map-display-status { flex: 1 1 100%; }
 @media (width < 64rem) {
   #fleet-main .map-stage { block-size: clamp(20rem, 110vw, 30rem); }
-  .map-readouts { grid-template-columns: minmax(0, 1fr); }
+  .map-readouts-content { grid-template-columns: minmax(0, 1fr); }
 }
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
@@ -839,3 +838,32 @@ main {
   .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) #cancel-all { width: 100%; }
   .roster-block > .dispatch-control { grid-row: 3; }
 }
+
+/* D-651: one map workplane and one selected robot workspace. */
+#robot-choice { width: 100%; min-width: 0; grid-column: 1 / -1; }
+.robot-summary { padding: var(--space-2) var(--space-3); }
+.robot-summary .robot-line { width: 100%; }
+.robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); overflow-wrap: anywhere; }
+.workspace-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
+.workspace-heading h3, .workspace-heading .hint { margin: 0; font-size: var(--text-body); }
+#robot-workspace { min-width: 0; margin-top: var(--space-3); }
+#robot-workspace-empty[hidden] { display: none; }
+.trip-mode { display: grid; gap: var(--space-2); }
+.trip-mode[hidden] { display: none; }
+.console-secondary > .dispatch-control { flex-wrap: wrap; }
+.console-secondary > .dispatch-control small { white-space: normal; }
+.map-head > #map-display-mode { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+
+.robot-summary { border-bottom: 1px solid var(--border-subtle); }
+.robot-summary.selected { background: var(--surface-raised); }
+.robot-summary .robot-line { align-items: center; justify-content: space-between; }
+.robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
+.robot-list-details { margin-top: var(--space-3); }
+.work-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+#channel-requests p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.work-list ui-button { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.work-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
+.work-detail dt { color: var(--text-secondary); font-size: var(--text-label); }
+.work-detail dd { margin: 0; overflow-wrap: anywhere; }
+#work-overview[hidden], #fleet-main [aria-labelledby="map-heading"][hidden], #fleet-main [aria-labelledby="roster-heading"][hidden] { display: none !important; }

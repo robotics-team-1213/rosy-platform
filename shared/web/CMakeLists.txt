@@ -35,4 +35,10 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/icons
 )
 
+install(FILES
+  brand/mark.svg
+  brand/platform.svg
+  DESTINATION share/${PROJECT_NAME}/brand
+)
+
 ament_package()

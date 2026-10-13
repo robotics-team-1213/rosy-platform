@@ -5,9 +5,15 @@ const INCIDENT_CAUSES = {
   line_marking: "차선·바닥 표식", obstacle: "장애물", robot_fault: "로봇·센서 오류",
   localization: "위치 추정", traffic_wait: "교통 대기", unknown: "미확인",
 };
+const DELIVERY_LABEL = {PENDING: '전송 대기', SENDING: '전송 중 · 결과 미확인', SENT: '제공자 수락 · 수신 확인은 별도',
+  RETRY: '제한 재시도 대기', UNKNOWN: '전송 여부 불명 · 재전송하지 않음', FAILED: '전송 실패',
+  EXPIRED: '통지 기한 종료', SUPERSEDED: '현재 사건·담당·목적지 변경으로 취소'};
 
-export function createIncidentView({scope, el, view, call, log, auth}) {
+export function createIncidentView({scope, el, view, call, log, auth, onReports}) {
 let incidentReports = [], incidentTrafficReports = [];
+const linked = new URLSearchParams(location.search);
+const linkedRobot = linked.get('robot'), linkedIncident = linked.get('incident');
+let linkedFocused = false;
 function incidentSummary(summary, report, title) {
   const name = document.createElement("span");
   name.textContent = title;
@@ -71,8 +77,11 @@ async function refreshIncidents() {
   if (auth.locked) return;
   const status = el("incident-status");
   try {
-    const payload = await call("/api/fleet/incidents?limit=10");
+    const filter = linkedRobot && linkedIncident
+      ? `&robot_id=${encodeURIComponent(linkedRobot)}&stuck_id=${encodeURIComponent(linkedIncident)}` : '';
+    const payload = await call(`/api/fleet/incidents?limit=10${filter}`);
     incidentReports = payload.reports || [];
+    onReports(incidentReports);
     incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
     el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
@@ -104,7 +113,9 @@ async function refreshIncidents() {
       incidentLine(detail, `상태: 라인 정지 · ${report.closed_at ? "종료 기록 있음" : "종료 기록 없음"} · 교착 여부는 별도 판정합니다.`);
       incidentLine(detail, `로봇 관측: 정지 ${core.held_s_max ?? "미확인"}초 · 재시도 ${core.attempts_max ?? "미확인"}`);
       incidentLine(detail, `관제 관측: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"} · 관측 나이 ${fleet.pose_age_s ?? "미확인"}초`);
-      incidentLine(raw, `CORE 단계 ${core.phase_at_open || "미확인"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"} · 해결 ${fleet.resolved_by || "미확인"}`);
+      const closure = {OPEN: "진행 기록 · 현재 관측은 별도 확인", NATURAL_CLEARANCE: "관측상 자연 해소 · 조치 기록 없음", CLEARANCE_OBSERVED: "관측상 해소 · 조치 성공은 미검증", OBSERVATION_ENDED: "관측 종료 · 문제 해결은 미확인"}[report.closure?.status] || "해소 결과 미확인";
+      incidentLine(detail, `해소 확인: ${closure}`);
+      incidentLine(raw, `당시 CORE 단계 ${core.phase_at_open || "미확인"} · Fleet 종료 사유 ${fleet.close_reason || "미확인"} · 마지막 수락 답 주체 ${fleet.resolved_by || "미확인"}`);
       const cam = report.evidence.rosy_cam;
       incidentLine(detail, cam ? `현장 카메라: 사건 당시 관측 · 촬영 ${new Date(cam.captured_at * 1000).toLocaleString()}`
         : "Rosy Cam: 사건 시작 ±5초 관측 없음");
@@ -116,7 +127,7 @@ async function refreshIncidents() {
       const draft = ai.find(f => f.kind === "incident_context");
       if (draft) {
         const names = {line_marking: "차선 표시 또는 인식", obstacle: "전방 장애물", unknown: "원인 미확정"};
-        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 신뢰도 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
+        incidentLine(detail, `AI PC 원인 초안: ${names[draft.value.cause_draft] || "원인 미확정"} · 검증되지 않은 초안 점수 ${Math.round(draft.confidence * 100)}% · 사람 검토 필요`);
         for (const item of draft.value.support || []) incidentLine(raw, `${item.source} ${item.field}: ${JSON.stringify(item.value)}`);
         incidentLine(detail, `추가 확인: ${(draft.value.missing || []).length ? "누락된 근거가 있습니다. 개발 진단에서 항목을 확인하세요." : "누락 기록 없음"}`);
         incidentLine(raw, `누락 근거: ${(draft.value.missing || []).join(", ")}`);
@@ -127,16 +138,48 @@ async function refreshIncidents() {
         : "조치: 기록 없음");
       incidentLine(raw, `조치 필드: ${JSON.stringify(report.actions)}`);
       const latest = report.reviews.at(-1);
+      incidentLine(detail, report.handoff
+        ? `담당 인수: ${report.handoff.principal_id} · 조치 수락·해소는 별도 확인`
+        : '담당 인수: 아직 없음 · 자동 해결기 중지 요청과 구별');
+      incidentLine(detail, report.notifications?.length
+        ? `외부 알림: ${report.notifications.map(item => `${item.channel} ${item.kind === 'CLOSED' ? '종료 관측' : '검토 요청'} · ${DELIVERY_LABEL[item.state] || '전송 기록 미확인'}`).join(' / ')}`
+        : '외부 알림: 전송 기록 없음');
       incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
       if (auth.role === "operator") {
+        if (!report.closed_at && !report.handoff && report.judgment_revision) {
+          const claim = document.createElement('ui-button');
+          claim.setAttribute('kind', 'quiet');
+          claim.textContent = '이 사건 맡기';
+          claim.addEventListener('click', scope.guard(async () => {
+            claim.setAttribute('reason', '담당 인수를 기록하고 있습니다');
+            claim.disabled = true;
+            try {
+              await call(`/api/fleet/robots/${encodeURIComponent(report.robot_ids[0])}/line-stuck/claim`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({stuck_id: report.stuck_id, judgment_revision: report.judgment_revision}),
+              });
+              log('담당 인수를 기록했습니다. 조치와 해소는 별도 확인합니다.', 'good');
+              await refreshIncidents();
+            } catch (error) {
+              log(`담당 인수 미확인: ${error.message} · 현재 기록을 다시 확인하세요.`, 'bad');
+              await refreshIncidents();
+            }
+          }));
+          detail.append(claim);
+        }
         detail.append(incidentReviewForm(report,
           `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
       }
       item.append(detail);
       detail.append(raw);
       list.append(item);
+      if (!linkedFocused && report.robot_ids[0] === linkedRobot && report.stuck_id === linkedIncident) {
+        detail.open = true;
+        summary.focus();
+        linkedFocused = true;
+      }
     }
     const trafficList = el("incident-traffic-list");
     trafficList.replaceChildren();
@@ -188,6 +231,7 @@ async function refreshIncidents() {
     }
   } catch (error) {
     if (error.name === "AbortError") return;
+    onReports([]);
     status.textContent = `사건 기록을 불러오지 못했습니다: ${error.message}`;
   }
 }
@@ -207,6 +251,7 @@ scope.listen(el("incident-export"), "click", async () => {
 });
 
 function reset() {
+  onReports([]);
   incidentReports = [];
   incidentTrafficReports = [];
   el("incident-list").replaceChildren();

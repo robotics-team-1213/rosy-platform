@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-637 | Remaining Decision Console learning holders and source consumer closure |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
 
 ## 계획·결과 문서
 
