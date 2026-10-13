@@ -51,8 +51,8 @@ class BaseVelocityControl(_Wire):
     sends it only then.
     ``lane_bend`` (D-507 addendum) is true when CORE takes the junction instruction's action
     ``bend`` (``bend_in_m``, ``bend_tol_m``, ``bend_radius_m``); Fleet sends bends only then.
-    ``lane_bend_map_entry`` (D-759 2) is true when CORE takes the bend's ``map_entry``; Fleet sends
-    it only then.
+    ``lane_bend_map_entry`` (D-759 2) is true when CORE takes the bend's ``map_entry``
+    (``line_follow.bend_map_entry_enabled``, off by default, with ``lane_bend``); Fleet sends it only then.
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """

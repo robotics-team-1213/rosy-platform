@@ -1,7 +1,11 @@
 """D-494 decision 4: POST /api/v1/line-follow/junction, its gate and the snapshot field."""
 import json
+from dataclasses import replace
+
+import pytest
 
 from core.bridge import observation
+from core.line_follow_wiring import _line_follow_config
 from core_features.line_follow.manager import LineFollowMode, LineObservation
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -275,8 +279,16 @@ def test_d759_bend_map_entry_validation_and_record(core_client):
         assert client.post(URL, json={**BEND, "map_entry": entry}, headers=OPERATOR).status_code == 400
     assert client.post(URL, json={**BODY, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400
     _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).bend_map_entry_enabled is False       # off by default
+    assert _line_follow_config({"bend_map_entry_enabled": True}).bend_map_entry_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"bend_map_entry_enabled": "true"})
     assert client.post(URL, json={**BEND, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
-    assert services.line_follow._junction["map_entry"] == {"reason": "stale"}  # a stamp of 1970
+    assert lf._junction["map_entry"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, bend_map_entry_enabled=True)
+    client.post(URL, json={**BEND, "place_id": "B3", "map_entry": ENTRY}, headers=OPERATOR)
+    assert lf._junction["map_entry"] == {"reason": "stale"}  # a stamp of 1970
     junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
     assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")
     client.post(URL, json={**BEND, "place_id": "B2"}, headers=OPERATOR)
