@@ -96,3 +96,9 @@ Pilot 조작·ROS terminal/readback, complete 녹화·lease 중단, LeRobot read
 실행 준비 증거이며 live SIM 성공이 아니다. 현장 PC나 노트북으로 우회하지 않는다.
 Isaac은 USD import부터 별도 확인하며 OMX controller/camera/task와 정책의
 closed-loop 과제 성공을 준비 완료로 주장하지 않는다.
+
+후속 준비 commit `91995a99e`의 원격 계약 시험은 129 passed, NEW 0이다.
+모델 PC의 Docker 읽기 진단은 소켓 접근 거부로 실패했다. 권한이나 설치를 자동
+변경하지 않았으며 비현장 build 환경·사용 가능한 Docker context도 재개 입력에
+포함한다. 서비스의 `cpus`/`mem_limit`은 build 제한이 아니므로 이미지 build는
+전체 자원을 독점 예약한 비현장 build host에서 별도로 준비한다.

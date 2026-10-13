@@ -8330,3 +8330,9 @@ osy-d395-s1d\`.
 - 변경: 기존 Gazebo/Pilot·녹화·LeRobot·ACT·Isaac 코드를 대조하고 재현 경로를 plans/2026-10-14-omx-simulation-preparation.md에 정리했다. 최신 ROBOTIS Zenoh 안내와 고정 Jazzy/CycloneDDS의 차이, native/SIM 단위 경계를 명시했다.
 - 증거: Compose 해석·vendor 패치·모델 입력 검사 성공, 원격 baseline 19 passed. 새 live SIM은 메모리 여유 부족으로 미확인이다.
 - gate 변화: 없음. D-756 부록은 실행 재개 조건이며 장치나 정책 수용이 아니다.
+
+## 2026-10-14 · 91995a99e · OMX SIM 준비 검증·보류 기록
+
+- 변경: 계획과 D-756 부록에 129개 원격 통과, 독립 소스 리뷰, 모델 PC Docker 소켓 거부 및 별도 build 환경 필요를 기록했다.
+- 증거: NEW 0. 상세 경로는 plans/2026-10-14-omx-simulation-preparation.md에 있다.
+- gate 변화: 실제 Gazebo·Isaac USD import·정책 closed-loop·실물/HF 수용은 미확인이다.
