@@ -40,10 +40,8 @@ PACKAGE_KEPT = {
 
 
 #: Participants that are not surfaces (no `app_name`, no icon) but still take a D-377 word.
-#: D-748 2-3: the rosy_vision source holder is `operations/overhead`; the package and
-#: console-script names keep the word. `holder` replaces only the folder-name check.
 NON_SURFACE_PARTICIPANTS = [
-    {"id": "vision", "path": "operations/overhead", "holder": "overhead", "console_script": True},
+    {"id": "vision", "path": "operations/overhead", "console_script": True},
 ]
 
 
@@ -57,8 +55,7 @@ def _gradle_value(text: str, key: str) -> str | None:
     return match.group(1) if match else None
 
 
-def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True,
-                      holder: str | None = None) -> list[str]:
+def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True) -> list[str]:
     """Every way `row` breaks the D-377 naming rule; empty when it follows it."""
     word = row["id"]
     if not WORD.match(word):
@@ -70,8 +67,9 @@ def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True,
     for key in ("app_name", "app_name_en", "short_name"):
         if key in row and row[key] != display:
             problems.append(f"{key} {row[key]!r} should be {display!r}")
-    if folder.name != (holder or word):
-        problems.append(f"folder {row['path']!r} should end in {holder or word!r}")
+    holder = 'overhead' if word == 'vision' else word  # D-748 keeps the rosy_vision identity.
+    if folder.name != holder:
+        problems.append(f"folder {row['path']!r} should end in {holder!r}")
     icon = row.get("icon")
     if check_icon and (not icon or Path(icon).name != f"{word}.svg"):
         problems.append(f"icon {icon!r} should be named {word}.svg")
@@ -110,7 +108,7 @@ def test_app_identity_follows_its_role_id(row):
 
 @pytest.mark.parametrize("participant", NON_SURFACE_PARTICIPANTS, ids=lambda row: row["id"])
 def test_non_surface_participant_follows_its_role_id(participant):
-    assert identity_problems(participant, check_icon=False, holder=participant.get("holder")) == []
+    assert identity_problems(participant, check_icon=False) == []
 
 
 def test_pending_rows_exist_in_the_registry():
@@ -144,10 +142,6 @@ def test_rule_catches_each_mismatch(tmp_path):
     ros.mkdir(parents=True)
     (ros / "package.xml").write_text("<package><name>site_vision</name></package>", encoding="utf-8")
     row = {"id": "vision", "path": "operations/overhead", "icon": "icons/vision.svg"}
-    package = "package.xml <name> 'site_vision' should be 'rosy_vision'"
-    # The D-748 holder name excuses the folder only, and only when the caller passes it.
-    assert identity_problems(row, tmp_path, holder="overhead") == [package]
-    assert identity_problems(row, tmp_path) == ["folder 'operations/overhead' should end in 'vision'", package]
-    assert identity_problems(row, tmp_path, holder="ceiling")[0] == "folder 'operations/overhead' should end in 'ceiling'"
+    assert identity_problems(row, tmp_path) == ["package.xml <name> 'site_vision' should be 'rosy_vision'"]
     assert identity_problems({"id": "site-vision", "path": "x", "icon": None}, tmp_path)
     assert identity_problems({"id": "Pilot", "path": "x", "icon": None}, tmp_path)
