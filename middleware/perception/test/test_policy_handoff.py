@@ -1,7 +1,11 @@
 """The sensor producer passes real observation clocks into CORE's policy."""
 import unittest
+from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from unittest.mock import patch
 
-from control.control.command_gate import CommandPolicy, GateInputs
+from control.control.command_gate import CommandPolicy, GateInputs, GateSnapshot
 from control.control.obstacle_risk import TrackedEvidence
 from control.control.policy_handoff import ControlPolicyProducer
 from control.sensing.observation import Observations
@@ -79,6 +83,54 @@ class ControlPolicyProducerTests(unittest.TestCase):
 
 def _pair(evaluated):
     return evaluated[1].linear, evaluated[1].angular
+
+
+class PolicyUnavailableDiagnosticsTests(unittest.TestCase):
+    def setUp(self):
+        self.policy = CommandPolicy('applied')
+        self.snapshot = GateSnapshot(self.policy.session, 1, 'applied', 10., 10.2, GateInputs())
+        self.assertTrue(self.policy.update(self.snapshot))
+
+    def test_none_reasons_capture_the_evaluated_window_without_refreshing_it(self):
+        for now, reason in ((9.9, 'snapshot_future'), (10.21, 'snapshot_expired')):
+            self.assertIsNone(self.policy.evaluate(.01, 0., now))
+            detail = self.policy._take_unavailable_detail()
+            self.assertEqual(detail, dict(reason=reason, now=now, session=self.snapshot.session,
+                sequence=1, revision='applied', observed_at=10., expires_at=10.2,
+                current_sequence=1))
+            self.assertIsNone(self.policy._take_unavailable_detail())
+        self.policy.invalidate()
+        self.assertIsNone(self.policy.evaluate(.01, 0., 10.1))
+        detail = self.policy._take_unavailable_detail()
+        self.assertEqual(detail['reason'], 'snapshot_missing')
+        self.assertEqual(detail['current_sequence'], 1)
+        self.assertIsNone(detail['observed_at'])
+
+    def test_replacement_records_both_sequences_and_still_refuses_the_candidate(self):
+        from control.control.command_gate import evaluate_command
+        def replace_during_evaluation(*args):
+            self.assertTrue(self.policy.update(replace(self.snapshot, sequence=2)))
+            return evaluate_command(*args)
+        with patch('control.control.command_gate.evaluate_command', replace_during_evaluation):
+            self.assertIsNone(self.policy.evaluate(.01, 0., 10.1))
+        detail = self.policy._take_unavailable_detail()
+        self.assertEqual((detail['reason'], detail['sequence'], detail['current_sequence']),
+                         ('snapshot_changed', 1, 2))
+
+    def test_diagnostics_are_thread_local_and_success_does_not_leave_a_failure(self):
+        barrier = Barrier(2)
+        def evaluate(now):
+            self.assertIsNone(self.policy.evaluate(.01, 0., now))
+            barrier.wait(timeout=5)
+            return self.policy._take_unavailable_detail()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future = executor.submit(evaluate, 9.9)
+            expired = executor.submit(evaluate, 10.21)
+            self.assertEqual(future.result()['reason'], 'snapshot_future')
+            self.assertEqual(expired.result()['reason'], 'snapshot_expired')
+        self.assertIsNone(self.policy.evaluate(.01, 0., 10.3))
+        self.assertIsNotNone(self.policy.evaluate(.01, 0., 10.1))
+        self.assertIsNone(self.policy._take_unavailable_detail())
 
 
 class CameraEvidenceTests(unittest.TestCase):

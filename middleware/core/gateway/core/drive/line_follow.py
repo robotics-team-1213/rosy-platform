@@ -182,9 +182,8 @@ def build_line_follow(config: dict[str, Any], *, events, safety) -> LineFollowMa
 
 
 def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:
-    """D-422 review M1: what the lane twist can still become downstream. The nav safety clip
-    limits each axis; an ENFORCED traffic gate scales linear (APPROACH down to
-    APPROACH_MIN_SCALE, PROCEED by proceed_speed_scale) but not angular."""
+    """D-737: CORE LINE caps and moving traffic scaling preserve the checked curve.
+    Other clearance callers retain the D-422 legacy envelope."""
     def envelope() -> tuple[float, float, float]:
         floor = 1.0
         if traffic_policy.mode is TrafficPolicyMode.ENFORCED:
@@ -192,7 +191,7 @@ def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:
             floor = min(APPROACH_MIN_SCALE, proceed)
         return float(safety.limits.max_linear), float(safety.limits.max_angular), floor
 
-    line_follow.bind_motion_envelope(envelope)
+    line_follow.bind_motion_envelope(envelope, preserve_curvature=True)
 
 
 def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision) -> None:
