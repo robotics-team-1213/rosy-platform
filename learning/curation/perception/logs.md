@@ -36,5 +36,5 @@
 ## 2026-10-13 · f59f1b209 · test(web): 학습 검수 앱 바 소스 시험의 자리와 원격 결과 (D-741 조각 12)
 
 - 변경: 위 항목의 소스 시험을 `shared/web/test/test_app_shell_seats.py::test_review_documents_share_the_app_bar_and_the_screen_rail`로 옮겼다. `test/learning/perception`은 main(10581c1ce)에서도 원격 수집이 `control.sensing.perception` import로 멈춘다.
-- 증거: 원격 `shared/web/test` 286 passed, 49 skipped, NEW 0 (`X:\DevTempeview-app-bar\shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main에서도 같다(`X:\DevTemp\main-checkrch-main.txt`).
+- 증거: 원격 `shared/web/test` 286 passed, 49 skipped, NEW 0 (`X:/DevTemp/review-app-bar/shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
 - gate 변화: 없음. `test_review_app.py`와 브라우저 시험은 확인 못 함.
