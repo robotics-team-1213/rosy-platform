@@ -19,15 +19,19 @@ import java.util.concurrent.TimeUnit
 
 /** Private loopback origin relays the existing PWA. TLS always checks the scoped DNS identity. */
 class PilotProxy(private val connection: PilotConnection, private val assets: BundledAssets? = null,
-    private val failure: (String) -> Unit) : NanoWSD("127.0.0.1", 0) {
-    constructor(profile: PilotProfile, target: RobotTarget, candidates: CandidateStore, failure: (String) -> Unit) :
-        this(ScopedProfileConnection(profile, target, candidates), null, failure)
+    private val failure: (String) -> Unit, private val recovery: () -> Unit = {}) : NanoWSD("127.0.0.1", 0) {
+    constructor(profile: PilotProfile, target: RobotTarget, candidates: CandidateStore, failure: (String) -> Unit,
+        recovery: () -> Unit = {}) :
+        this(ScopedProfileConnection(profile, target, candidates), null, failure, recovery)
     private val target = connection.target
     private val scheme = if (connection.secure) "https" else "http"
     val capability = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+    val cookieName = "rosy-shell-${capability.take(16)}"
     val origin get() = "http://127.0.0.1:$listeningPort"
     private val client = connection.client()
     @Volatile private var identityVerified = false
+    /** 한 번 실패를 알렸으면 다음 성공 응답에서 회복을 알린다 — 오류 문구가 회복 뒤에도 남지 않게. */
+    @Volatile private var failureReported = false
     private val sockets = ConcurrentHashMap.newKeySet<Relay>()
     private val clients = ConcurrentHashMap.newKeySet<NanoHTTPD.ClientHandler>()
     private val executor = ThreadPoolExecutor(0, 12, 30, TimeUnit.SECONDS, SynchronousQueue<Runnable>())
@@ -43,7 +47,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
     }
     override fun serve(session: IHTTPSession): Response {
         val requiresApproval = session.uri.startsWith("/api/v1/") || session.uri.startsWith("/ws/") || session.uri == "/pilot/bootstrap.js"
-        if ((requiresApproval && !connection.authorized()) || !ProxyGuard("127.0.0.1:$listeningPort", capability).permits(session.headers) ||
+        if ((requiresApproval && !connection.authorized()) || !ProxyGuard("127.0.0.1:$listeningPort", capability, cookieName).permits(session.headers) ||
             !ProxyGuard.allowedPath(session.uri)) return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Connection unavailable")
         return super.serve(session)
     }
@@ -81,11 +85,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             val response = client.newCall(request).execute()
             var streaming = false
             try {
+                if (failureReported) { failureReported = false; recovery() }
                 if ((response.code == 401 && session.headers["authorization"] == "Bearer ${target.credential}") ||
                     (response.isSuccessful && session.uri == "/api/v1/auth/logout")) connection.invalidateCredential()
                 if (response.isRedirect) return reply(502, "text/plain", "Redirect refused".toByteArray())
                 val mime = response.header("Content-Type") ?: "application/octet-stream"
-                if (session.uri.startsWith("/api/v1/") && (mime.startsWith("video/") || mime.startsWith("application/octet-stream") || mime.startsWith("application/x-tar"))) {
+                if (session.uri.startsWith("/api/v1/") && (mime.startsWith("video/") || mime.startsWith("multipart/x-mixed-replace") || mime.startsWith("application/octet-stream") || mime.startsWith("application/x-tar"))) {
                     val length = response.body?.contentLength() ?: 0
                     if (length > 256L * 1024 * 1024) return reply(413, "text/plain", "Response too large".toByteArray())
                     val input = response.body?.byteStream() ?: ByteArray(0).inputStream()
@@ -104,6 +109,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     val result = if (length >= 0) newFixedLengthResponse(status, mime, bounded, length)
                         else newChunkedResponse(status, mime, bounded)
                     response.header("Content-Range")?.let { result.addHeader("Content-Range", it) }
+                    forwardRosyHeaders(response, result)
                     streaming = true
                     return secure(result)
                 }
@@ -114,10 +120,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 }
                 return reply(response.code, mime, bytes).apply {
                     response.header("Content-Range")?.let { addHeader("Content-Range", it) }
+                    forwardRosyHeaders(response, this)
                 }
             } finally { if (!streaming) response.close() }
         } catch (_: Exception) {
-            failure("TLS 또는 연결을 확인하세요")
+            failureReported = true
+            failure(LINK_LOST)
             return reply(502, "text/plain", "Trusted connection unavailable".toByteArray())
         }
     }
@@ -125,6 +133,15 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             override fun getRequestStatus() = code
             override fun getDescription() = Response.Status.lookup(code)?.description ?: "$code Upstream response"
         }
+    /** CORE가 내보내는 X-Rosy-* 증명 헤더(카메라 출처·시퀀스·변형)를 그대로 전달한다.
+     *  web_common evidence.js가 프레임 반입 검증에 쓴다 — 이 전달이 없으면 번들 화면의
+     *  카메라가 항상 "확인할 수 없음"으로 실패한다(2026-10-05 태블릿 실기 확인). */
+    private fun forwardRosyHeaders(response: okhttp3.Response, to: Response) {
+        for (name in response.headers.names()) {
+            if (!name.startsWith("x-rosy-", ignoreCase = true)) continue
+            for (value in response.headers.values(name)) to.addHeader(name, value)
+        }
+    }
     private fun reply(code: Int, mime: String, bytes: ByteArray): Response = secure(newFixedLengthResponse(
         status(code), mime, bytes.inputStream(), bytes.size.toLong()))
     private fun secure(response: Response): Response = response.apply {
@@ -159,6 +176,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
 
     private inner class Relay(session: IHTTPSession) : WebSocket(session) {
         private var upstream: okhttp3.WebSocket? = null
+        @Volatile private var closing = false
         private var ready = false
         private val pending = ArrayDeque<String>()
         private var pendingBytes = 0
@@ -180,7 +198,11 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     runCatching { send(bytes.toByteArray()) }.onFailure { disconnect() }
                 }
                 override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) {
-                    failure("TLS 또는 연결을 확인하세요"); disconnect()
+                    if (!closing) {
+                        failureReported = true
+                        failure(LINK_LOST)
+                    }
+                    disconnect()
                 }
                 override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { disconnect() }
             })
@@ -196,9 +218,12 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 pending.add(text)
             }
         }
-        override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { upstream?.cancel(); sockets.remove(this) }
+        override fun onClose(code: WebSocketFrame.CloseCode, reason: String, remote: Boolean) { closing = true; upstream?.cancel(); sockets.remove(this) }
         override fun onPong(frame: WebSocketFrame) = Unit
-        override fun onException(error: IOException) { upstream?.cancel(); sockets.remove(this) }
-        fun disconnect() { upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
+        override fun onException(error: IOException) { closing = true; upstream?.cancel(); sockets.remove(this) }
+        fun disconnect() { closing = true; upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
     }
 }
+
+/** Shown on the session bar while the robot does not answer; the next good reply restores "연결됨". */
+const val LINK_LOST = "로봇이 응답하지 않습니다. 다시 닿으면 자동으로 이어집니다. 계속되면 '로봇 목록'에서 다시 선택하세요."

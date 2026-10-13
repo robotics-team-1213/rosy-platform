@@ -10,18 +10,25 @@ from typing import Mapping
 
 import yaml
 
+from core_common.protocol.place_markers import check_place_marker_ids
+from core_common.protocol.sightings import check_marker_yaw_offsets
 from fleet.server.sightings import SightingSource
 
 _REQUIRED = {
     "source_id", "token_env", "robot_ids", "map_id",
-    "calibration_revision", "corner_marker_ids",
+    "calibration_revision",
 }
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
-    "corner_world_m", "robot_markers", "heading_edge", "credential",
+    "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
+    "calibration_source", "place_markers", "marker_yaw_offset_deg",
+    "auto_tune",  # D-589: Vision only; Fleet reads the same file and ignores it
 }
 CREDENTIAL_KINDS = ("static", "paired")
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+#: D-580: `robot_ids: enrolled` = every robot on the live roster (robots.yaml + enrolled).
+ROSTER = "enrolled"
 
 
 def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -33,8 +40,9 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         config = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise ValueError(f"cannot read sighting config {source_path}: {exc}") from exc
-    if not isinstance(config, dict) or set(config) != {"sources"} or not isinstance(config["sources"], list):
-        raise ValueError("sighting config must contain only a sources list")
+    if (not isinstance(config, dict) or "sources" not in config or set(config) - {"sources", "identity"}
+            or not isinstance(config["sources"], list)):
+        raise ValueError("sighting config must contain a sources list and optionally identity")
     if not config["sources"]:
         raise ValueError("sighting config needs at least one source")
 
@@ -65,11 +73,21 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         if not isinstance(token, str) or not token:
             raise ValueError(f"sighting token environment variable {env_name} is required")
         robot_ids = row["robot_ids"]
-        corner_ids = row["corner_marker_ids"]
-        if (not isinstance(robot_ids, list) or not robot_ids
-                or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
-            raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list")
-        if (not isinstance(corner_ids, list) or len(corner_ids) != 4
+        corner_ids = row.get("corner_marker_ids")
+        calibration_source = row.get("calibration_source", "corner_markers")
+        if calibration_source not in CALIBRATION_SOURCES:
+            raise ValueError(f"sources[{index}].calibration_source must be "
+                             f"{' or '.join(CALIBRATION_SOURCES)}")
+        if calibration_source == "field_boundary" and corner_ids is not None:
+            raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
+        if calibration_source == "field_boundary" and "corner_world_m" not in row:
+            raise ValueError(f"sources[{index}] is field_boundary and needs corner_world_m")
+        follow = robot_ids == ROSTER  # D-580
+        if not follow and (not isinstance(robot_ids, list) or not robot_ids
+                           or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
+            raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list or {ROSTER!r}")
+        if calibration_source == "corner_markers" and (
+                not isinstance(corner_ids, list) or len(corner_ids) != 4
                 or any(type(marker_id) is not int or marker_id < 0 for marker_id in corner_ids)):
             raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         corner_world_m = None
@@ -90,23 +108,36 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
                        or type(marker_id) is not int or marker_id < 0
                        for robot_id, marker_id in markers.items())):
             raise ValueError(f"sources[{index}].robot_markers must map robot ids to marker ids")
-        if set(markers) - set(robot_ids):
+        if not follow and set(markers) - set(robot_ids):
             raise ValueError(f"sources[{index}].robot_markers names robots outside robot_ids: "
                              f"{', '.join(sorted(set(markers) - set(robot_ids)))}")
         if len(set(markers.values())) != len(markers):
             raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
-        if set(markers.values()) & set(corner_ids):
+        if corner_ids is not None and set(markers.values()) & set(corner_ids):
             raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
+        try:  # D-564
+            place_markers = check_place_marker_ids(row.get("place_markers", []), corner_ids=corner_ids,
+                                                   robot_marker_ids=markers.values())
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
+        try:  # D-587 4: Vision applies the offsets; Fleet only refuses a bad file the same way.
+            check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"), None if follow else robot_ids)
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         sources.append(SightingSource(
             source_id=row["source_id"],
             token=token,
-            robot_ids=tuple(robot_ids),
+            robot_ids=() if follow else tuple(robot_ids),
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
-            corner_marker_ids=tuple(corner_ids),
+            corner_marker_ids=None if corner_ids is None else tuple(corner_ids),
             corner_world_m=corner_world_m,
-            robot_markers=tuple(markers.items()),
+            robot_markers=() if follow else tuple(markers.items()),
+            follow_roster=follow,
+            marker_overrides=tuple(markers.items()) if follow else (),
             credential=credential,
+            calibration_source=calibration_source,
+            place_markers=place_markers,
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")
@@ -120,3 +151,18 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             raise ValueError(f"sources {first.source_id} and {source.source_id} share map_id "
                              f"{source.map_id} but differ in corner_world_m")
     return sources
+
+
+def load_identity_config(path: Path | str):
+    """D-472: the optional ``identity:`` mapping of the same site YAML (IdentityConfig fields)."""
+    from fleet.server.identity import IdentityConfig
+
+    try:
+        config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"cannot read sighting config {path}: {exc}") from exc
+    try:
+        return IdentityConfig.from_mapping((config or {}).get("identity"))
+    except TypeError as exc:
+        raise ValueError(f"identity config: {exc}") from exc
+

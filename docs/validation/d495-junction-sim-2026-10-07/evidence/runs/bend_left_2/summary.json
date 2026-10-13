@@ -1,0 +1,75 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "left:60"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "left:60",
+   "result": null,
+   "sight_gt": [
+    -0.762,
+    -0.454,
+    0.069
+   ],
+   "keep_at_sight": "junction_fork",
+   "stop": {
+    "travel_after_sight_m": 0.0012,
+    "sight_to_still_sim_s": 0.354,
+    "paint_ahead_of_front_m": 0.152,
+    "state_at_still": "waiting"
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "TRACKING",
+     "reason": "tracking",
+     "sim_t": 569.034
+    },
+    {
+     "j": "waiting",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_waiting",
+     "sim_t": 569.149
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "left:60",
+     "code": 200,
+     "resp": null
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 1.1864,
+ "final": {
+  "t": 100.711,
+  "sim_t": 626.949,
+  "gt": [
+   -0.7607720670572005,
+   -0.4537147952187507,
+   0.11274312874963241
+  ],
+  "odom": [
+   -0.7607720670572005,
+   -0.4537147952187507,
+   0.11274312874963241,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_waiting",
+  "keep": null,
+  "body_gap_m": null,
+  "j": "waiting",
+  "jr": null
+ },
+ "capability_at_end": true
+}

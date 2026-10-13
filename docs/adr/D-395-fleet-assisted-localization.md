@@ -313,4 +313,19 @@ S2(4대, `docs/plans/2026-10-02-d395-s2-bench-results.md`)는 끝내지 못했�
 
 `peers`(2.0)와 `square`(3.0) 단서의 입력이 바뀌었다. S2 재실행 때 함께 확인한다. 학습 차선 그림자 근거의 면적 문턱과 히스테리시스는 D-356 그림자 전용이라 여기서 결정하지 않는다.
 
+### 개정 제안: 로봇이 청하는 위치 요청 (D-546 5–7, 미수락, 2026-10-09)
+
+[D-546](D-546-recovery-manoeuvre-signals-and-fleet-pose-request.md)이 Accepted가 되면 적용한다. 그 전에는 이 ADR이 그대로 이긴다.
+
+- CORE가 "위치를 모르겠다"는 나가는 요청 `GET /localization/request`를 더한다. lane_return이 `pose_stale`·`fleet_required`일 때 열린다. 이전 문장 "lane_return에는 연결되어 있지 않다"는 "D-546 5로 연결된다"로 바뀐다.
+- Fleet 답은 기존 `POST /localization/decision`이다. 새 `source`는 이 조각에 없다(`vlm`은 D-546 8). 로봇의 3 s 스캔 확인은 그대로다.
+- 천장 카메라 자세로 위치 요청에 답하는 길은 `--pose-request-overhead`(기본 켜짐)로 끄고 켠다. `--localization-overhead-cue`(중재기·감시 단서)는 기본 꺼짐 그대로다. 장치 기본값 꺼짐은 그대로다.
+
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).
+
+
+### 개정 2026-10-10 — 위치 미보고 신뢰 예외 제거
+
+사용자 결정: `legacy=true`로 위치를 신뢰하지 않는다. 3항의 D-395 이전 로봇 예외와 S2의 30 s 뒤 이전 로봇 복귀를 폐기한다. CORE `localization`이 누락·null·잘못된 형식이면 `UNKNOWN`, `trusted:false`, 호환 응답 필드 `legacy:false`다. 교통·bays·교착 해결기는 명시적인 `LOCALIZED` + `map` 자세만 사용한다. null 30 s 뒤 마지막 신뢰 좌표는 만료하며 위치 미확인 상태는 유지한다. `map_id`만으로 화면에 로봇의 원시 자세를 지도 좌표로 그리지 않는다.
+
+Fleet MapPose(D-494)의 보정된 카메라 sighting·운영자 핀·odom 이음은 CORE 위치 상태와 별도 출처로 유지한다. LED 신원 확인(D-596)은 영상 대상의 신원을 확인할 뿐 지도 방향이나 CORE 위치 신뢰를 확정하지 않는다(D-598). 이 개정은 자동 위치 결정이나 운행 권한을 추가하지 않는다.

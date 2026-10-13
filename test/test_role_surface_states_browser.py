@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
+
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium")
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +31,8 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
             body="<!doctype html><html><head></head><body></body></html>",
         ),
     )
-    for url, path in {"/common/ui.js": ROOT / "shared" / "web" / "ui.js", **modules}.items():
+    for url, path in {"/common/ui.js": ROOT / "shared" / "web" / "ui.js",
+                      "/common/core_ui_logic.js": ROOT / "shared" / "web" / "core_ui_logic.js", **modules}.items():
         page.route(
             f"http://rosy.test{url}",
             lambda route, _request, path=path: route.fulfill(
@@ -90,7 +93,7 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
           };
         }""")
         assert page.evaluate("window.__sharedContract") == {
-            "sizes": ["44px", "48px", "58px"],
+            "sizes": ["48px", "48px", "48px"],
             "activeSegment": "rgb(53, 56, 60)",
             "defaultRole": "status",
             "live": "polite",
@@ -151,12 +154,14 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
           window.fetch = originalFetch;
         }""")
 
-        assert page.evaluate("window.__apiErrors") == [
-            {"status": 404, "code": "NOT_FOUND", "message": "map absent"},
-            {"status": 403, "code": "FORBIDDEN", "message": "role denied"},
-            {"status": None, "code": None, "message": "network disconnected"},
-            {"status": 404, "code": None, "message": "route absent"},
+        api_errors = page.evaluate("window.__apiErrors")
+        assert [(error["status"], error["code"]) for error in api_errors] == [
+            (404, "NOT_FOUND"), (403, "FORBIDDEN"), (None, None), (404, None),
         ]
+        assert "HTTP 404" in api_errors[0]["message"] and "map absent" not in api_errors[0]["message"]
+        assert "HTTP 403" in api_errors[1]["message"] and "role denied" not in api_errors[1]["message"]
+        assert api_errors[2]["message"] == "network disconnected"
+        assert "HTTP 404" in api_errors[3]["message"] and "route absent" not in api_errors[3]["message"]
         assert page.evaluate("window.__apiMaybe") is None
         assert errors == []
         browser.close()

@@ -32,7 +32,7 @@ def test_checked_in_geometry_matches_the_urdf():
 
 def test_header_names_the_urdf_source_without_hashes():
     text = urdf_nominal.OUTPUT.read_text(encoding="utf-8")
-    assert "middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro" in text
+    assert "middleware/devices/pinky/description/urdf/rosy.urdf.xacro" in text
     assert not re.search(r"[0-9a-f]{40}", text), "no hashes: the secret scan rejects 40-hex strings"
     assert "upstream import 6455b1a9" in text
 
@@ -90,8 +90,8 @@ def test_unsupported_xacro_fails_loudly():
 G = GEOMETRY
 SRC = REPO / "src"
 SENSING = SRC.parent / "middleware" / "perception"
-BRINGUP = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup"
-PROFILE = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
+BRINGUP = SRC.parent / "middleware" / "devices" / "pinky" / "bringup"
+PROFILE = SRC.parent / "middleware" / "devices" / "pinky" / "profile" / "config"
 
 
 def _yaml(path):
@@ -139,7 +139,7 @@ def _load(name, path):
 
 def test_lidar_mount_consumers():
     yaw, forward = G["lidar"]["yaw_rad"], G["lidar"]["forward_deg"]
-    lidar = _module_constants(SENSING / "control" / "sensing" / "lidar.py", "MOUNT_YAW_DEG")
+    lidar = _module_constants(SENSING / "sensors" / "sensing" / "lidar.py", "MOUNT_YAW_DEG")
     assert lidar["MOUNT_YAW_DEG"] == 0.0                     # NOSE_YAW = pi + 0 = the URDF yaw
     assert yaw == pytest.approx(math.pi, abs=1e-6)
     params = _yaml(SENSING / "config" / "robot.yaml")["/**"]["ros__parameters"]
@@ -153,7 +153,7 @@ def test_lidar_mount_consumers():
     assert store["LIDAR_NOMINAL_DEG"] == forward
     assert _number(SENSING / "control" / "road_state_node.py",
                    r"declare_parameter\('lidar_yaw_offset_deg', ([0-9.]+)\)") == forward
-    perception = _module_constants(REPO / "learning" / "training" / "perception" / "dataset" / "geometry.py",
+    perception = _module_constants(REPO / "learning" / "curation" / "perception" / "geometry.py",
                                    "LIDAR_FORWARD_DEG", "LIDAR_HEIGHT_M", "LIDAR_X_OFFSET_M")
     assert perception == {"LIDAR_FORWARD_DEG": forward, "LIDAR_HEIGHT_M": G["lidar"]["height_m"],
                           "LIDAR_X_OFFSET_M": G["lidar"]["x_m"]}
@@ -193,7 +193,7 @@ def test_wheel_consumers():
                               "NOMINAL_WHEEL_RADIUS_M", "NOMINAL_WHEEL_SEPARATION_M", "WHEEL_TOLERANCE")
     assert (store["NOMINAL_WHEEL_RADIUS_M"], store["NOMINAL_WHEEL_SEPARATION_M"]) == (radius, separation)
     assert store["WHEEL_TOLERANCE"] == 0.10
-    gz = _text(SRC.parent / "middleware" / "apps" / "device" / "pinky" / "description" / "urdf" / "rosy_gz.urdf.xacro")
+    gz = _text(SRC.parent / "middleware" / "devices" / "pinky" / "description" / "urdf" / "rosy_gz.urdf.xacro")
     assert f"<wheel_separation>{separation}</wheel_separation>" in gz
     assert f"<wheel_radius>{radius}</wheel_radius>" in gz
     isaac = _load("isaac_graph_contract", REPO / "learning" / "envs" / "isaac" / "graph_contract.py").robot_contract("rosy_01")
@@ -210,6 +210,7 @@ def test_line_follow_stuck_body_consumers():
     # D-422: the obstacle stop measures from the body front; the ultrasonic gap from its mount.
     assert line_follow["body_front_x_m"] == G["footprint"]["front_x_m"]
     assert line_follow["body_ultrasonic_x_m"] == G["ultrasonic"]["x_m"]
+    assert line_follow["ir_row_x_m"] == G["ir"]["mid"]["x_m"]  # D-491
     assert G["ultrasonic"]["x_m"] < G["footprint"]["front_x_m"] < G["footprint"]["rotation_radius_m"]
 
 
@@ -237,24 +238,24 @@ def test_shared_robot_body_matches_geometry():
 
 
 def test_body_and_ir_consumers():
-    body = _module_constants(SENSING / "control" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
+    body = _module_constants(SENSING / "sensors" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
                              "CASTER_EXTRA", "FRONT_X")
     assert body["WHEEL_Y"] == G["wheels"]["joint_y_m"]
     assert body["WHEEL_R"] == G["wheels"]["radius_m"]
     assert body["CASTER_X"] + body["CASTER_EXTRA"] == pytest.approx(-G["caster"]["rear_x_m"], abs=1e-9)
     assert body["FRONT_X"] == G["ir"]["mid"]["x_m"]
     # LIDAR_X and ROTATION_RADIUS come from the shared body (D-424); no literal left in body.py.
-    text = _text(SENSING / "control" / "sensing" / "body.py")
+    text = _text(SENSING / "sensors" / "sensing" / "body.py")
     assert "LIDAR_X = BODY.lidar_x_m" in text and "ROTATION_RADIUS = BODY.rotation_radius_m" in text
     circumradius = max(body["WHEEL_Y"] + body["WHEEL_R"], body["CASTER_X"] + body["CASTER_EXTRA"], body["FRONT_X"])
     for config, block in (("robot.yaml", "/**"), ("auto_calib.yaml", "/**/safety_node")):
         radius = _yaml(SENSING / "config" / config)[block]["ros__parameters"]["robot_radius"]
         assert radius == pytest.approx(circumradius, abs=1e-9), config
-    model = SENSING / "control" / "sensing" / "perception" / "road_state_model.py"
+    model = SENSING / "vision" / "perception" / "road_state_model.py"
     assert _number(model, r"ir_x_m: float = ([0-9.]+)") == G["ir"]["mid"]["x_m"]
     node = SENSING / "control" / "road_state_node.py"
     assert _number(node, r"declare_parameter\('ir_half_span_m', ([0-9.]+)\)") == G["ir"]["half_span_m"]
-    replay = _module_constants(REPO / "learning" / "training" / "perception" / "road_replay.py", "IR_HALF_SPAN_M")
+    replay = _module_constants(REPO / "learning" / "evaluation" / "perception" / "road_replay.py", "IR_HALF_SPAN_M")
     assert replay["IR_HALF_SPAN_M"] == G["ir"]["half_span_m"]
 
 

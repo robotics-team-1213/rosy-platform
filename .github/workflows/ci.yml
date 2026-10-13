@@ -127,6 +127,32 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      - name: Install receiver TLS verification runtime
+        run: |
+          # D-456: load the same hashlocked receiver crypto as the signed ARM payload.
+          # Explicit compatible platforms select the existing reviewed AMD64 wheel hashes.
+          pip3 install --no-cache-dir --break-system-packages \
+            --require-hashes --no-deps --only-binary=:all: \
+            --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
+            --target /tmp/rosy-receiver-crypto \
+            -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
+          PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
+          echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Install site Vision verification runtime
+        if: contains(toJSON(matrix.invocations), 'operations/vision/test')
+        run: |
+          # Test calibration against the deployed Vision runtime, retaining ROS apt packages.
+          pip3 install --no-cache-dir --break-system-packages \
+            --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
+          echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Install Fleet browser verification tools
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test')
+        run: |
+          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt playwright
+          python3 -m playwright install --with-deps chromium
+
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
@@ -141,6 +167,7 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
 
       - name: Build and install ROS-free platform API wheels
         run: |
@@ -154,10 +181,10 @@ jobs:
           mkdir -p "$wheelhouse"
           pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            contracts/skill contracts/motion contracts/learning operations/world middleware/skills/api middleware/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx middleware/apps/device/omx/agent operations/apps/fleet
+            contracts/foundation contracts/skill contracts/motion contracts/learning operations/world middleware/skills/api middleware/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent operations/apps/fleet
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.6 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.4 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
+            core_common==0.0.2 rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.12 rosy-world==0.1.1 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.6 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.2 rosy-app-gateway==0.1.2
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
@@ -183,7 +210,7 @@ jobs:
       - name: Lint (flake8)
         if: matrix.kind == 'smoke'
         run: |
-          flake8 middleware/core/gateway/core contracts/foundation/core_common middleware/core/events/core_events middleware/core/services/core_features middleware/core/api_web/core_api_web operations/fleet/fleet operations/fleet/test integrations/simulation/gazebo/launch integrations/simulation/gazebo/scripts integrations/simulation/gazebo/test --count --max-line-length=120 --show-source --statistics || true
+          flake8 middleware/core/gateway/core contracts/foundation/core_common middleware/core/events/core_events middleware/core/services/core_features middleware/control/drive/behaviors middleware/core/api/core_api_web operations/fleet/fleet operations/fleet/test integrations/simulation/gazebo/launch integrations/simulation/gazebo/scripts integrations/simulation/gazebo/test --count --max-line-length=120 --show-source --statistics || true
 
       # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
       # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와
@@ -210,11 +237,21 @@ jobs:
           import subprocess
           import sys
 
-          status = 0
+          # 브라우저 옵트인은 Fleet 시험에만 준다(Chromium 은 Fleet 조건에서만 설치된다).
+          # 같이 묶인 다른 묶음의 브라우저 시험까지 켜지지 않게 Fleet 경로는 따로 돈다.
+          runs = []
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
+              fleet = [p for p in paths if p.startswith("operations/fleet/test")]
+              rest = [p for p in paths if p not in fleet]
+              runs += [(rest, {}), (fleet, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+          status = 0
+          for paths, extra in runs:
+              if not paths:
+                  continue
               print("::group::pytest " + " ".join(paths), flush=True)
               code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v",
-                                     "--continue-on-collection-errors"]).returncode
+                                     "--continue-on-collection-errors"],
+                                    env={**os.environ, **extra}).returncode
               print("::endgroup::", flush=True)
               if code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)

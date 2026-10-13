@@ -17,22 +17,24 @@ CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
-# 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
+# 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 and D-456 v2 pairing only.
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
 CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
-    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/v1)"),
+    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/(?:v1|v2)(?:/|\$path\b|[\"']|$))"),
     "cmd_vel": re.compile(r"cmd_vel"),
-    "estop": re.compile(r"estop", re.IGNORECASE),
+    # A word that starts with e-stop (estop, ESTOP, e_stop) or a camelCase part (sendEstop, EStop);
+    # not the letters inside another word such as CameraX CaptureRequestOptions.
+    "estop": re.compile(r"(?<![A-Za-z])(?i:e[-_]?stop)|(?<=[a-z])E[-_]?(?:stop|Stop|STOP)"),
 }
 # 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write, the
 #    D-457 detections write and own-config read, plus the D-341 12 read of paired-camera
-#    credential digests.
+#    credential digests, and the D-564 place marker write.
 VISION_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "Fleet route other than sightings or detections": re.compile(
-        r"/api/fleet/(?!sightings\b)(?!detections\b)(?!pairing/v1/credentials\b)"),
+        r"/api/fleet/(?!sightings\b)(?!detections\b)(?!place-markers\b)(?!pairing/v1/credentials\b)"),
 }
 # 3. Fleet vision routes pass the video-route regex of test_no_video_relay because they
 #    only issue a lease; the browser fetches frames from Vision directly (D-318).
@@ -78,10 +80,41 @@ def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
 
 
+def test_camera_estop_rule_matches_words_not_letters_inside_names():
+    rule = CAMERA_FORBIDDEN["estop"]
+    for text in ("estop", "ESTOP", "e_stop", "E-stop", "sendEstop()", "EStop", "val estopUrl"):
+        assert rule.search(text), text
+    for text in ("CaptureRequestOptions", "requestOptions", "setCaptureRequestOptions(x)", "bestOption"):
+        assert rule.search(text) is None, text
+
+
+def test_camera_pairing_namespace_exemption_keeps_user_routes_forbidden():
+    forbidden = CAMERA_FORBIDDEN["Fleet user API"]
+    for path in ("/api/fleet/pairing/v1/requests", "/api/fleet/pairing/v2/requests",
+                 '/api/fleet/pairing/v2$path"'):
+        assert forbidden.search(path) is None
+    for path in ("/api/fleet/robots/robot/route", "/api/fleet/users",
+                 "/api/fleet/tasks", "/api/fleet/pairing/v20/requests",
+                 "/api/fleet/pairing/v2admin", "/api/fleet/pairing/v3/requests"):
+        assert forbidden.search(path), path
+    assert CAMERA_FORBIDDEN["CORE API"].search("/api/v1/control/teleop")
+
+
+def test_camera_pairing_exception_keeps_the_version_boundary():
+    rule = CAMERA_FORBIDDEN["Fleet user API"]
+    for path in ('/api/fleet/pairing/v1/pending', '/api/fleet/pairing/v2/pending',
+                 '"/api/fleet/pairing/v2$path"', '"/api/fleet/pairing/v2"'):
+        assert rule.search(path) is None
+    for path in ('/api/fleet/pairing/v20/pending', '/api/fleet/pairing/v2extra',
+                 '/api/fleet/pairing/v2$paths', '/api/fleet/state'):
+        assert rule.search(path) is not None
+
+
 def test_vision_has_no_robot_command_and_writes_only_sightings_and_detections_to_fleet():
     assert VISION.is_dir()
     assert _hits(VISION, (".py",), VISION_FORBIDDEN) == []
     assert "/api/fleet/sightings" in (VISION / "publish.py").read_text(encoding="utf-8")
+    assert "/api/fleet/place-markers" in (VISION / "publish.py").read_text(encoding="utf-8")  # D-564
     assert "/api/fleet/detections" in (VISION / "track" / "fleet_client.py").read_text(encoding="utf-8")
 
 

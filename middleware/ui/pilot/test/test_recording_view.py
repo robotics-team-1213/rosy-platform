@@ -132,3 +132,16 @@ def test_forbidden_depends_on_what_was_refused():
     assert out[0] == "다른 기기가 시작한 녹화입니다"
     assert out[1] == out[2] == out[3] == "운전자(Operator) 권한이 필요합니다"
     assert out[4] == "로봇이 멈춘 뒤에 받을 수 있습니다"
+
+def test_continues_only_after_the_ten_minute_cap_of_a_wanted_recording():
+    out = _run_js("""const idle = (r) => ({state: 'idle', elapsed_s: 0, bytes: 0, max_duration_s: 600, last_stop_reason: r});
+    console.log(JSON.stringify([
+      m.continueRecording(true, idle('max_duration')),
+      m.continueRecording(false, idle('max_duration')),
+      m.continueRecording(true, idle('requested')),
+      m.continueRecording(true, idle('quota')),
+      m.continueRecording(true, {...idle('max_duration'), state: 'recording'}),
+      m.continueRecording(true, {...idle('max_duration'), state: 'stopping'}),
+      m.continueRecording(true, null),
+    ]))""")
+    assert out == [True, False, False, False, False, False, False]

@@ -1,0 +1,25 @@
+{
+  "schema": "rosy.mcap-candidate-review/1",
+  "status": "candidate_only_not_human_truth",
+  "source_kind": "mcap",
+  "source_readback_sha256": "ab5378c963d8a04277b155086c4655456ebb6e0e9b34154caf07b843f397c57d",
+  "video_candidate_queue_sha256": "a297fd4777a8042c24ddfc70ddb9173a14d3d9ed15631342299aa748060c3372",
+  "sessions": {
+    "20261006T082612Z_rosy_26": {
+      "frames": 2487,
+      "selected": 103,
+      "proof_sha256": "0d717c4c945751956cfa6adf7b03bceb2200f31dc00f659221365f23c61f0125",
+      "source_metadata_sha256": "c2c6c2efde2e14926dca8677780d8d2b2330ff1772545d859698904d55438988"
+    },
+    "20261006T091340Z_rosy_26": {
+      "frames": 642,
+      "selected": 75,
+      "proof_sha256": "0065de49ed338ef9a8da1e9a0a5f335c349d8bfebe3560a8ffbdcdc8aeeb366c",
+      "source_metadata_sha256": "0fabd8d4c503d32ce8765c98d5bbba73b6b6031b80740b525d22c09e52e9846a"
+    }
+  },
+  "rows": 178,
+  "human_approved_events": 0,
+  "queue_sha256": "3f636af4a5a000136f8b538bdd076aa423394621f5457e2e0e7a3662988e1fd0",
+  "gallery_sha256": "4220bff259b6c690264a7b025afa12f77a3dce7b345682091970fd9f2c079da0"
+}

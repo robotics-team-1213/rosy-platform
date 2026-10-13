@@ -96,3 +96,95 @@ SOURCE·LOCAL·CI·서명 배포·실기 두 화면 확인을 구분한다.
 근거: D-193, D-341, D-361, D-432, D-452;
 [Android Companion device pairing](https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing),
 [ADB Wi-Fi architecture](https://android.googlesource.com/platform/packages/modules/adb/+/HEAD/docs/dev/adb_wifi.md).
+
+
+## 2026-10-05 CORE 구현 slice와 남은 수용 경계
+
+공유 typed 계약은 API Reference v1.101과 `core_common.protocol.peer_pairing`에 둔다.
+기존 CORE overlay의 한 atomic commit을 사용하며 별도 SQLite를 도입하지 않는다.
+명시적 연결 기억은 실제 현재 issuer record의 nonlegacy·nondevelopment·card/manual·
+만료 없는 administrator를 `is_durable_admin`으로 확인한 경우만 persistent 관계로
+허용한다. 역할 이름만으로 영구 권한을 추론하지 않는다. 임시 issuer는 최대 168시간과
+issuer expiry를 함께 적용하고 관계와 단기 token의 수명을 분리한다.
+
+원래 issuer ID/digest/source/named principal과 client/receiver P256 key, generation을
+보관한다. 자식 token에 명시적 peer_binding을 저장하여 관계 누락/손상·폐기·issuer
+폐기·키/권한 변경에 HTTP와 live socket 모두 fail closed한다. expired/revoked 관계는
+삭제하지 않지만 status의 authorization_available을 false로 반환한다.
+
+선택적 network.tls.ca_file은 실제 TLS provisioning 소유이며 기존 listener의
+cert/key/chain/hostname 검증과 결합한다. 인증된 수신 화면의 실제 CA 지문과 D-341
+anonymous first-contact/LeafBinding/물리 비교 후에만 credential 흐름을 진행한다.
+4자리 번호는 요청 비교용이다. CORE 후보의 QR renderer, HTTP-only 기기 TLS 설치,
+Native Pilot/Fleet/Cam 결합, native ARM crypto 실행과 signed DEVICE 수용은 별도이며
+이 source slice로 전체 D-456 목표 완료를 주장하지 않는다.
+
+
+## 2026-10-05 Fleet/Cam 구현 통합과 LAN 기본 흐름
+
+사용자의 재확인에 따라 Bluetooth 없이 같은 LAN의 발견 목록에서 기기를 선택한다.
+IP 입력이나 개발 설정 가져오기를 정상 접속의 전제로 두지 않는다. 최초 상대 화면 승인과
+이후 신원 증명은 별도 단계이며 광고 목록만으로 자격이나 제어 권한을 주지 않는다.
+
+API Reference v1.103의 `rosy.camera-peer/1`은 기존 Fleet 영상 자격 소유자에 둔다.
+CORE 운영자 자격을 영상 자격으로 재사용하지 않는다. 현재 named site operator의
+명시적 연결 기억 승인, source 점유, SQLite nonce/credential 원자적 갱신과 issuer/key/
+generation 검증을 적용한다. 기억한 관계는 장기 오프라인에도 보존하지만 폐기·키 변경·
+발급자 철회는 갱신을 거부한다. 최초 CA 확인은 기존 HTTPS 물리 비교 경계이며 네 문자
+표시값은 요청 대조용이다. 네 문자만으로 서버 인증을 끝냈다고 주장하지 않는다.
+
+상대 승인 화면은 공용 선택·체크·확인 컴포넌트를 사용한다. 401/403에서는 보호 목록을
+지우고 같은 인증 epoch의 polling을 멈추며 명시적 재인증 뒤 다시 확인한다. 구형 수신기의
+404도 자동 반복을 멈춘다. 승인이나 재연결은 카메라 촬영·lease·주행·정지 해제를 시작하지 않는다.
+
+SOURCE/LOCAL 통합 후에도 Android 앱 빌드·기존 서명 업데이트·실제 두 화면 승인과
+DHCP/오프라인 복귀·발열 대응은 각각 검증해야 한다. 이 기록은 실기 완료가 아니다.
+
+### 2026-10-05 실제 릴리스 TLS 설치 경계
+
+서명된 릴리스 037의 manifest 520894바이트와 checksum 목록 383685바이트는
+일반 설정 파일의 128KiB 읽기 제한보다 컸다. 서명 검증 전후의 릴리스 메타데이터만
+유한한 4MiB 제한으로 읽는다. 설정·자격·CA 파일의 기본 제한, nofollow·소유권·
+서명·동일 소스 재확인·정지 상태·유지보수 claim 검사는 유지한다.
+
+실기에서 기존 runtime 폴더의 일반 계정 소유도 확인했다. 서명 목록과 바이트가
+일치한 기존 파일과 경로만 root 소유로 보호하고 이미 root 소유인 폐기 파일은
+보존했다. 설치 전 검사에서 거절되어 TLS 설정은 변경되지 않았으며 기존 런타임을
+복구했다. 수정 설치기를 새로 서명해 배포한 뒤 앱 승인·재접속을 다시 검증한다.
+
+실제 TLS 수신기의 LAN 광고는 `tls=required`와 설정된 `tls_host`를 함께 보낸다.
+Android는 발견 응답에서 인증서 이름을 얻지 못하면 IP로 인증을 우회하지 않고
+연결을 거절한다. boot-status 광고도 같은 규약을 따르며 유효한 단일 `.local`
+호스트 이름만 표시한다. 광고는 신원 증명의 힌트이며 인증서·수신 키 검증을 대체하지 않는다.
+
+### 2026-10-05 기존 관제 등록의 HTTPS 전환
+
+기존 encrypted enrollment를 읽는 경로가 HTTP 주소를 다시 구성하는 문제를 확인했다.
+로봇 TLS 설치와 관제 컨테이너 health 성공만으로 관제·로봇 연결을 수용하지 않는다.
+기존 등록 ID에 운영자가 승인한 공개 TLS binding을 별도 설정으로 결속한다. 설정은
+`.local` 인증서 이름·포트·CA 경로와 CA 지문만 보관하며 token·등록 권한을 담지 않는다.
+기존 encrypted credential·발급자·만료·철회·주소 검증 gate를 유지하고 static roster에
+같은 로봇을 중복 등록하지 않는다. 광고나 IP 변화만으로 binding을 교체하지 않는다.
+
+등록된 TLS 로봇은 동일한 endpoint owner로 초기 연결·재시작·갱신·로그아웃과 REST/WS를
+구성한다. CA·호스트 이름을 먼저 검증한 뒤 자격을 보내며 신뢰한 이름의 현재 LAN 주소는
+기존 bounded discovery transport로 찾는다. 설정 누락·손상·CA 변경은 평문으로
+되돌아가지 않는다. 이 binding은 승인 유효기간을 연장하거나 Fleet의 새 영구 승인
+증명 흐름을 대신하지 않는다. 실제 사이트 설정 반영과 인증된 수신 화면 승인은 별도
+DEVICE 검증이며, 기존 등록 DB에 두 승인 행이 있다는 사실만으로 완료를 주장하지 않는다.
+
+한 번 HTTPS로 결속한 기존 등록은 공개 transport marker를 같은 enrollment 저장소에
+기록한다. 별도 DB나 승인 자격을 만들지 않고 기존 encrypted row·발급자·만료를
+보존한다. 이후 설정이 사라지거나 프로세스를 재시작해도 marker가 있는 ID는 HTTP로
+복귀하지 않는다. CA 지문·origin 교체는 일반 재시작으로 승인하지 않으며, 만료·장기
+오프라인·주소 변경으로 marker를 지우지 않는다. 실제 등록 해제가 성공할 때만 같은
+저장소 경계에서 제거한다. 새 CA 승인·교체 운영은 별도 명시적 검토 대상이다.
+
+### 2026-10-05 TLS 수신기의 배포 전 읽기 검사
+
+이미 TLS를 쓰는 CORE의 calibration 검사도 같은 승인된 CA와 호스트 이름으로
+HTTPS를 검증한 뒤에만 기존 관리 자격을 보낸다. 배포·개발 동기화 호출자는 두 공개
+신뢰 인자를 명시적으로 전달하며 모든 비정상 검사 종료를 변경 전에 거절한다.
+신뢰·인증·응답 형식 실패를 Force로 우회하지 않는다. 기존 평문 수신기의 기본 경로는
+유지하지만 TLS 자동 감지나 인증 실패 뒤 HTTP 재시도는 하지 않는다. 실제 두 수신기의
+읽기 검사는 활성 calibration 없음으로 통과했으며 주행·모드·정지 상태는 변경하지 않았다.

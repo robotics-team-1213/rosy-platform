@@ -2,6 +2,9 @@
 <!-- Generated: 2026-09-07 | Updated: 2026-09-21 -->
 # web/ (web_node dashboard UI)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 Control-stack diagnostic page served by `control/web_node.py` (installed to
 `share/control/web/`). This is **not** the operator console (D-77: that is

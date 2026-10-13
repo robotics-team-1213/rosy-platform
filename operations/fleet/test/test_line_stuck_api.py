@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from hashlib import sha256
 
 import httpx
@@ -14,9 +15,22 @@ from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
-from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
+from fleet.stuck.board import LineStuckBoard
+from fleet.stuck.reports import LineStuckAnswerLog
+from fleet.server.sighting_store import SightingStore
+from fleet.stuck.ai_facts import AiFactLog
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
+
+
+def test_current_inquiry_replaces_open_time_boundary_context():
+    board = LineStuckBoard()
+    row = {"robot_id": "r", "online": True, "state": {"line_follow": {"stuck": {
+        "stuck_id": "s", "inquiry": {"lane_boundary": {"revision": 0}}}}}}
+    board.observe([row])
+    row["state"]["line_follow"]["stuck"]["inquiry"] = {"lane_boundary": {"revision": 1}}
+    board.observe([row])
+    assert board.view("r")["inquiry"]["lane_boundary"]["revision"] == 1
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
 
@@ -37,11 +51,11 @@ def _console(robot: FakeRobot, clock=None) -> FleetConsole:
     return FleetConsole([endpoint], [robot], **({"clock": clock} if clock else {}))
 
 
-def _named_app(console: FleetConsole, tmp_path):
+def _named_app(console: FleetConsole, tmp_path, **kwargs):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     app = create_app(
         console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
-        start_task_dispatcher=False,
+        start_task_dispatcher=False, **kwargs,
         site_users={
             sha256(OPERATOR.encode()).hexdigest(): {"principal_id": "op-7", "role": "operator"},
             sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"},
@@ -247,8 +261,9 @@ def test_the_console_serves_the_panel_module_and_its_shell(tmp_path):
 
     assert asset.status_code == 200 and "createLineStuckPanel" in asset.text
     assert ".style" not in asset.text   # CSP style-src 'self': classes only
-    for needle in ('id="stuck-panel"', 'id="stuck-list"', 'id="stuck-heading"'):
-        assert needle in page.text
+    # D-540 3: the answers open inside the critical queue row; there is no separate panel.
+    assert 'id="critical-list"' in page.text
+    assert 'id="stuck-panel"' not in page.text
 
 
 _REQUEST = httpx.Request("POST", "http://127.0.0.1:8080/api/v1/line-follow/stuck/decision")
@@ -305,3 +320,309 @@ def test_an_old_answer_log_gains_the_resolver_columns(tmp_path):
     new, old = log.rows()
     assert (new["tier"], new["rule"], new["escalated"]) == ("rule", "R1", None)
     assert old["stuck_id"] == "stuck-old" and old["tier"] is None
+
+
+# ---- stuck episode log (autonomy-chain step 1) -------------------------------------------
+
+
+def _online(robot_id="rosy_01", stuck=STUCK, pose=None) -> dict:
+    state = _state(stuck)
+    if pose is not None:
+        state["pose"] = {"x": pose[0], "y": pose[1], "yaw": pose[2]}
+    return {"robot_id": robot_id, "online": True, "state": state}
+
+
+class _Board(LineStuckBoard):
+    """Observe then flush, as SharedGather does (the flush runs off the event loop there)."""
+
+    def observe(self, *args, **kwargs):
+        super().observe(*args, **kwargs)
+        self.flush()
+
+
+def _episode_board(tmp_path, **kwargs):
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    wall = FakeClock()
+    return _Board(FakeClock(), log=log, wall=wall, **kwargs), log, wall
+
+
+def test_an_episode_opens_tracks_the_max_and_closes_cleared(tmp_path):
+    board, log, wall = _episode_board(tmp_path)
+    for held in (3.5, 4.5, 5.5):
+        board.observe([_online(stuck={**STUCK, "held_s": held, "attempts": 1})])
+        wall.advance(1.0)
+    board.observe([_online(stuck=None)])
+
+    [row] = log.episodes()
+    assert (row["robot_id"], row["stuck_id"], row["close_reason"], row["source"]) == (
+        "rosy_01", "stuck-abc", "cleared", "fleet_poll")
+    assert row["held_s_max"] == 5.5 and row["attempts_max"] == 1
+    assert row["cause"] == "obstacle_ahead" and row["phase_at_open"] == "ASKING"
+    assert row["local_enabled_at_open"] == 0
+    assert row["opened_at"] < row["closed_at"]
+    assert row["resolved_by"] is None and row["escalation_code"] is None
+
+
+def test_a_new_stuck_id_replaces_the_open_episode(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    board.observe([_online(stuck={**STUCK, "stuck_id": "stuck-def"})])
+    by_id = {row["stuck_id"]: row for row in log.episodes()}
+    assert by_id["stuck-abc"]["close_reason"] == "replaced"
+    assert by_id["stuck-def"]["closed_at"] is None
+
+
+def test_leaving_the_roster_closes_and_offline_keeps_open(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    board.observe([{"robot_id": "rosy_01", "online": False, "state": None}])
+    assert log.episodes()[0]["closed_at"] is None
+    board.observe([])
+    assert log.episodes()[0]["close_reason"] == "left_roster"
+
+
+def test_a_restart_closes_open_episodes_and_the_same_stuck_reopens_one_row(tmp_path):
+    board, log, wall = _episode_board(tmp_path)
+    board.observe([_online()])
+    opened_at = log.episodes()[0]["opened_at"]
+
+    wall.advance(30.0)
+    again = _Board(FakeClock(), log=LineStuckAnswerLog(log.path), wall=wall)
+    [row] = log.episodes()
+    assert row["close_reason"] == "fleet_restart" and row["closed_at"] is not None
+
+    again.observe([_online()])
+    again.observe([_online()])                      # the same opening twice: still one row
+    [row] = log.episodes()
+    assert row["closed_at"] is None and row["close_reason"] is None
+    assert row["opened_at"] == opened_at
+
+
+@pytest.mark.parametrize("answers, resolved_by, last_tier, escalation", [
+    ([("ESCALATE", None, "human", "no_resolver_token")], None, None, "no_resolver_token"),
+    ([("RESUME", False, "human", None), ("WAIT", True, "rule", None)], "rule", "rule", None),
+    ([("WAIT", None, "rule", None)], "rule_unconfirmed", "rule", None),
+    ([("ABORT", None, "human", None)], "human_unconfirmed", "human", None),
+    ([("RESUME", False, "human", None)], None, "human", None),
+])
+def test_resolved_by_comes_from_the_last_non_escalate_answer(tmp_path, answers, resolved_by,
+                                                             last_tier, escalation):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    for decision, accepted, tier, escalated in answers:
+        board.record(robot_id="rosy_01", stuck_id="stuck-abc", decision=decision,
+                     principal_id="fleet-resolver", accepted=accepted, tier=tier,
+                     escalated=escalated)
+    board.observe([_online(stuck=None)])
+    [row] = log.episodes()
+    assert (row["resolved_by"], row["last_answer_tier"], row["escalation_code"]) == (
+        resolved_by, last_tier, escalation)
+    if resolved_by == "rule":
+        assert row["resolved_principal"] == "fleet-resolver"
+
+
+@pytest.mark.parametrize("peer_pose, expected", [
+    ((0.20, 0.03, 3.14), 1),        # in the R1 band
+    ((0.80, 0.00, 3.14), 0),        # beyond reach
+])
+def test_peer_ahead_at_open_uses_the_resolver_judgement(tmp_path, peer_pose, expected):
+    from fleet.stuck.lane_lost import peer_ahead
+    from fleet.stuck.resolver import ResolverConfig
+
+    board, log, _ = _episode_board(tmp_path)
+    me = _online(pose=(0.0, 0.0, 0.0), stuck={**STUCK, "local_enabled": True})
+    peer = _online("rosy_02", stuck=None, pose=peer_pose)
+    for robot in (me, peer):                 # R1 reads D-395 trusted map poses only (D-577 남은 항목 4)
+        robot["state"]["localization"] = {"state": "LOCALIZED", "pose_frame": "map", "confidence": 1.0}
+    board.observe([me, peer])
+    row = next(r for r in log.episodes() if r["robot_id"] == "rosy_01")
+    assert row["peer_ahead_at_open"] == expected
+    assert row["peer_ahead_at_open"] == int(peer_ahead(me, [me, peer], ResolverConfig()))
+    assert row["local_enabled_at_open"] == 1
+
+
+@pytest.mark.parametrize("local, stored", [(True, 1), (False, 0), (None, None)])
+def test_local_enabled_at_open_keeps_cores_value(tmp_path, local, stored):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online(stuck={**STUCK, "local_enabled": local})])
+    assert log.episodes()[0]["local_enabled_at_open"] == stored
+
+
+def test_no_own_pose_leaves_peer_ahead_unknown_and_trip_busy_is_recorded(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online(), _online("rosy_02", stuck=None, pose=(1.0, 0.0, 0.0))])
+    assert log.episodes()[0]["peer_ahead_at_open"] is None
+    assert log.episodes()[0]["trip_busy_at_open"] is None       # no trip runner yet
+
+    board.trip_busy = lambda robot_id: robot_id == "rosy_02"
+    board.observe([_online(), _online("rosy_02")])
+    by_robot = {row["robot_id"]: row for row in log.episodes()}
+    assert by_robot["rosy_02"]["trip_busy_at_open"] == 1
+
+
+def test_the_map_pose_is_recorded_when_the_service_exists(tmp_path):
+    from fleet.localization.map_pose import MapPose
+
+    board, log, _ = _episode_board(tmp_path)
+    board.map_pose = lambda robot_id: MapPose(x=1.0, y=2.0, yaw=0.5, state="LOCALIZED",
+                                              source="sighting", dead_reckon_m=0.0, age_s=0.4)
+    board.observe([_online()])
+    row = log.episodes()[0]
+    assert (row["pose_x"], row["pose_y"], row["pose_yaw"], row["pose_state"], row["pose_age_s"]) == (
+        1.0, 2.0, 0.5, "LOCALIZED", 0.4)
+
+
+def test_episode_writes_equal_transitions_and_no_log_writes_nothing(tmp_path):
+    calls = []
+
+    class CountingLog(LineStuckAnswerLog):
+        def open_episode(self, row):
+            calls.append("open")
+            super().open_episode(row)
+
+        def close_episode(self, *args, **kwargs):
+            calls.append("close")
+            super().close_episode(*args, **kwargs)
+
+    board = _Board(FakeClock(), log=CountingLog(tmp_path / "fleet.sqlite3"))
+    for _ in range(5):
+        board.observe([_online()])
+    board.observe([_online(stuck=None)])
+    board.observe([_online(stuck=None)])
+    assert calls == ["open", "close"]
+
+    bare = _Board(FakeClock())                           # no --tasks-db: memory only, as before
+    bare.observe([_online()])
+    bare.observe([_online(stuck=None)])
+    assert bare.episodes() == []
+
+
+def test_an_old_database_without_the_episode_table_opens(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE unrelated (x INTEGER)")
+    db.close()
+    board = _Board(FakeClock(), log=LineStuckAnswerLog(path))
+    board.observe([_online()])
+    assert len(board.episodes()) == 1
+
+
+def test_episode_writes_wait_for_the_flush_and_then_are_durable_in_order(tmp_path):
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    board = LineStuckBoard(FakeClock(), log=log)
+    board.observe([_online()])
+    board.observe([_online(stuck={**STUCK, "stuck_id": "stuck-def"})])
+    board.observe([_online(stuck=None)])
+    assert log.episodes() == []                          # observe() itself never touches SQLite
+    board.flush()
+    by_id = {row["stuck_id"]: row for row in log.episodes()}
+    assert by_id["stuck-abc"]["close_reason"] == "replaced"
+    assert by_id["stuck-def"]["close_reason"] == "cleared"
+    board.flush()                                        # drained: nothing written twice
+    assert len(log.episodes()) == 2
+
+
+def test_the_shared_gather_flushes_episode_writes_in_a_worker_thread(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+
+    from fleet.server import console_routes
+
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    board = LineStuckBoard(FakeClock(), log=log)
+    threads = []
+    original = board.flush
+    board.flush = lambda: (threads.append(threading.get_ident()), original())[1]
+
+    class Console:
+        class hub:
+            class registry:
+                events_since = staticmethod(lambda _rid, _seq: ())
+
+        async def snapshot(self):
+            return {"robots": [_online()]}
+
+    gather = console_routes.SharedGather(Console(), board)
+    asyncio.run(gather())
+    assert threads and threads[0] != threading.get_ident()
+    assert [row["stuck_id"] for row in log.episodes()] == ["stuck-abc"]
+
+
+def test_episode_list_route_is_read_guarded_and_lists_recent(tmp_path):
+    robot = FakeRobot("rosy_01", state=_state())
+    client, _ = _named_app(_console(robot), tmp_path)
+    assert client.get("/api/fleet/line-stuck/episodes").status_code == 401
+    board = client.app.state.line_stuck
+    assert board.trip_busy is not None and board.map_pose is not None    # wired by the app
+    _row(client)
+    robot._state = _state(stuck=None)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    _row(client)
+    listed = client.get("/api/fleet/line-stuck/episodes?limit=5", headers=_auth(VIEWER))
+    assert listed.status_code == 200, listed.text
+    [episode] = listed.json()["episodes"]
+    assert episode["stuck_id"] == "stuck-abc" and episode["close_reason"] == "cleared"
+
+
+def test_incident_report_separates_sources_and_keeps_operator_reviews(tmp_path):
+    robot = FakeRobot("rosy_01", state=_state())
+    client, _ = _named_app(_console(robot), tmp_path)
+    assert client.get("/api/fleet/incidents").status_code == 401
+    _row(client)
+    opened = client.get("/api/fleet/line-stuck/episodes", headers=_auth(VIEWER)).json()["episodes"][0]
+    at = datetime.fromisoformat(opened["opened_at"]).timestamp()
+    SightingStore(tmp_path / "fleet.sqlite3").save_sighting({
+        "robot_id": "rosy_01", "source_id": "ceiling_north", "seq": 7,
+        "captured_at": at, "received_at": at + 0.1})
+    AiFactLog(tmp_path / "fleet.sqlite3").append([{
+        "received_at": at, "principal_id": "ai-pc", "kind": "stalled",
+        "robot_ids": ["rosy_01"], "value": {"still_s": 21}, "confidence": 0.8,
+        "evidence": {"source": "state"}, "source": "analyzer:test@1", "observed_at": at,
+        "ttl_s": 3.0, "stage": "shadow"}])
+    AiFactLog(tmp_path / "fleet.sqlite3").append([{
+        "received_at": at + 9, "principal_id": "ai-pc", "kind": "incident_context",
+        "robot_ids": ["rosy_01"], "value": {"cause_draft": "obstacle"}, "confidence": 0.35,
+        "evidence": {"stuck_id": "stuck-abc"}, "source": "analyzer:incident_context@1",
+        "observed_at": at + 9, "ttl_s": 3.0, "stage": "shadow"}, {
+        "received_at": at + 1, "principal_id": "ai-pc", "kind": "incident_context",
+        "robot_ids": ["rosy_01"], "value": {"cause_draft": "unknown"}, "confidence": 0.2,
+        "evidence": {"stuck_id": "another-stuck"}, "source": "analyzer:incident_context@1",
+        "observed_at": at + 1, "ttl_s": 3.0, "stage": "shadow"}])
+    response = client.get("/api/fleet/incidents", headers=_auth(VIEWER))
+    assert response.status_code == 200, response.text
+    [report] = response.json()["reports"]
+    assert report["classification"] == "line_stuck"
+    assert report["evidence"]["core"]["cause"] == "obstacle_ahead"
+    assert report["evidence"]["rosy_cam"]["source_id"] == "ceiling_north"
+    assert report["evidence"]["ai_facts"][0]["kind"] == "incident_context"
+    assert report["evidence"]["ai_facts"][0]["evidence"]["stuck_id"] == "stuck-abc"
+    assert report["evidence"]["ai_facts"][1]["kind"] == "stalled"
+    assert len(report["evidence"]["ai_facts"]) == 2
+    assert report["evidence"]["front_image"]["status"] == "requestable_while_open"
+    [traffic] = response.json()["traffic_reports"]
+    assert traffic["classification"] == "stalled" and traffic["evidence"]["ai_fact"]["source"] == "analyzer:test@1"
+    url = "/api/fleet/incidents/rosy_01/stuck-abc/review"
+    body = {"root_cause": "obstacle", "note": "floor box seen"}
+    assert client.post(url, json=body, headers=_auth(VIEWER)).status_code == 403
+    assert client.post(url, json={**body, "root_cause": "invented"}, headers=_auth(OPERATOR)).status_code == 422
+    assert client.post(url, json=body, headers=_auth(OPERATOR)).json() == {"reviewed": True}
+    [updated] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["reports"]
+    assert updated["reviews"][-1]["root_cause"] == "obstacle"
+    assert updated["reviews"][-1]["principal_id"] == "op-7"
+    assert client.post("/api/fleet/incidents/rosy_01/missing/review", json=body,
+                       headers=_auth(OPERATOR)).status_code == 404
+    fact_url = f"/api/fleet/incidents/facts/{traffic['evidence']['ai_fact']['fact_row']}/review"
+    assert client.post(fact_url, json=body, headers=_auth(VIEWER)).status_code == 403
+    assert client.post(fact_url, json=body, headers=_auth(OPERATOR)).json() == {"reviewed": True}
+    [reviewed] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["traffic_reports"]
+    assert reviewed["reviews"][-1]["note"] == "floor box seen"
+    assert client.post("/api/fleet/incidents/facts/99999/review", json=body,
+                       headers=_auth(OPERATOR)).status_code == 404
+    assert client.post(f"/api/fleet/incidents/facts/{'9' * 21}/review", json=body,
+                       headers=_auth(OPERATOR)).status_code == 422
+    robot._state = _state(stuck=None)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    _row(client)
+    [closed] = client.get("/api/fleet/incidents", headers=_auth(VIEWER)).json()["reports"]
+    assert closed["evidence"]["front_image"]["status"] == "not_retained"

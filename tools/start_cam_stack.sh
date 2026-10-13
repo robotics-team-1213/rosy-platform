@@ -9,7 +9,7 @@ pkill -f "sim_jpeg_relay" 2>/dev/null || true
 sleep 1
 nohup ros2 run ros_gz_bridge parameter_bridge "/rosy_01/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image" \
   > /tmp/rosy_cam_raw.log 2>&1 &
-nohup python3 /rosy/tools/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
+nohup python3 /rosy/integrations/simulation/gazebo/scripts/sim_jpeg_relay.py --ros-args -r __ns:=/rosy_01 \
   > /tmp/rosy_relay.log 2>&1 &
 sleep 8
 echo "==relay log=="

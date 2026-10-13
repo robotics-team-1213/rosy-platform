@@ -177,6 +177,7 @@
   --line-10: color-mix(in oklab, var(--ink) 10%, transparent);
   --line-14: color-mix(in oklab, var(--ink) 14%, transparent);
   --line-30: color-mix(in oklab, var(--ink) 30%, transparent);
+  --line-40: color-mix(in oklab, var(--ink) 40%, transparent);
   --line-quiet: color-mix(in oklab, var(--ink-quiet) 25%, transparent);
 
   /* status 파생 — 임계 면의 옅은 바탕과 테두리 */
@@ -200,16 +201,17 @@
   --radius-panel: 12px;
   --radius-flag: 999px;
 
-  /* 크기가 위험도를 말한다. 되돌릴 수 없는 것이 가장 크다. */
-  --target-secondary: 44px;
+  /* 모든 조작은 같은 누름 면을 쓴다. 위험은 색상과 동사로 구분한다. */
+  --target-secondary: 48px;
   --target-primary: 48px;
-  --target-irreversible: 58px;
+  --target-irreversible: 48px;
 
   /* ---- 컴포넌트 간격 역할 — 기본 척도에 연결(D-292) ------------------ */
   --inset-button: var(--space-3);
   --inset-skip-link: var(--space-2) var(--space-3);
-  --inset-button-primary: var(--space-5);
-  --inset-button-irreversible: var(--space-2) var(--space-4);
+  --inset-tooltip: var(--space-2) var(--space-3);
+  --inset-button-primary: var(--space-3);
+  --inset-button-irreversible: 0 var(--space-3);
   --inset-field: var(--space-3);
   --inset-dialog: var(--space-5);
   --gap-dialog: var(--space-4);
@@ -241,44 +243,73 @@
 
   /* 콘솔은 스크롤하지 않는다 — 남는 높이를 계산하려면 머리 높이가 토큰이어야 한다. */
   --topbar-height: 88px;
+  /* D-466 — 절차 작업을 고르는 사이드바 열. 넓은 단에서만 칸으로 쓴다. */
+  --sidebar-track: minmax(13rem, 18rem);
+  /* D-741 — 모든 앱이 같이 쓰는 자리의 치수. 표면 시트는 이 값을 다시 정하지 않는다. */
+  --appbar-height: 64px;
+  --rail-track: 72px;
+  --subnav-track: 232px;
+  --context-track: 360px;
+  --pathbar-height: 56px;
+  --inset-rail: var(--space-2);
+  --gap-rail: var(--space-1);
+  --inset-subnav: var(--space-3) var(--space-2) var(--space-4);
+  --inset-pathbar: var(--space-1) var(--space-4);
+  --gap-pathbar: var(--space-2) var(--space-3);
+  --inset-pane: var(--space-2) var(--space-4) var(--space-4);
+  --gap-pane: var(--space-3);
+
+  /* ---- 색상 역할(D-624) — 팔레트 값 대신 사용 목적을 고른다 ----------- */
+  --surface-canvas: var(--ground);
+  --surface-recessed: var(--ground-deep);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-quiet);
+  --text-on-danger: var(--ink-on-crit);
+  --border-subtle: var(--line-10);
+  --border-default: var(--line-14);
+  --border-strong: var(--line-30);
+  /* D-741 — 단추와 입력의 경계. 어둡게 테마에서 3:1을 넘는다. 밝게 테마에서는 2.4:1이라 쓰기 전에 값을 다시 정한다. 아직 쓰는 곳이 없다. */
+  --control-line: var(--line-40);
+  /* D-741 — 옆의 틀(레일, 하위 탐색, 오른쪽 칸)의 면. */
+  --surface-chrome: var(--ground-raise);
 
   /* ---- 면 — 표면이 위계다(concept 16 Law 2) ---------------------------
    * 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다.
    */
   --surface-flat: var(--ground-soft);
   --surface-raised: var(--ground-card);
-  --surface-line: var(--line-14);
+  --surface-line: var(--border-default);
   --surface-sheen: var(--line-06);
 
   /* ---- 정상 — 색이 아니다(D-82) ---------------------------------------
    * 계기의 안전 구간에는 아무것도 칠하지 않는다. status 집합은 임계에만
    * 쓰이므로, '정상'을 말할 때는 이 둘을 쓴다.
    */
-  --nominal: var(--ink);
-  --nominal-quiet: var(--ink-quiet);
+  --nominal: var(--text-primary);
+  --nominal-quiet: var(--text-secondary);
 
   /* ---- 컴포넌트 — 콘솔의 어휘 ------------------------------------------
    * 주 명령은 초록이 아니라 가장 밝은 중립이다. 초록은 경보 예산이고,
    * 정상에는 색이 없다.
    */
   --button-primary-bg: var(--ink);
-  --button-primary-ink: var(--ground);
-  --button-secondary-bg: var(--ground);
-  --button-secondary-ink: var(--ink);
+  --button-primary-ink: var(--surface-canvas);
+  --button-secondary-bg: var(--surface-canvas);
+  --button-secondary-ink: var(--text-primary);
   --button-irreversible-bg: var(--status-crit);
-  --button-irreversible-ink: var(--ink-on-crit);
+  --button-irreversible-ink: var(--text-on-danger);
 
-  --field-bg: var(--ground);
-  --field-line: var(--line-14);
+  --field-bg: var(--surface-canvas);
+  --field-line: var(--border-default);
   --field-invalid: var(--status-crit);
 
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
 
-  --flag-line: var(--line-14);
+  --flag-line: var(--border-default);
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
-  --flag-danger-ink: var(--ink-on-crit);
+  --flag-danger-ink: var(--text-on-danger);
 
   /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다. */
   --gauge-track: color-mix(in oklab, var(--ink) 8%, transparent);
@@ -307,6 +338,8 @@
   --text-value: 1.125rem;
   --text-title: 1.25rem;
   --text-display: 2rem;
+  /* Brand artwork fits its name column; operational text keeps the role scale. */
+  --brand-wordmark-size: min(var(--text-title), 14cqi);
 
   /* 대문자 라벨은 자간이 없으면 뭉친다. 한 값으로 고정한다. */
   --track-label: 0.12em;

@@ -10,16 +10,17 @@ export function createConfirmIrreversible(openLiveDialog) {
     dialog.setAttribute("aria-labelledby", text.id);
     const actions = document.createElement("ui-actions");
     const cancel = document.createElement("ui-button");
+    let close;
     cancel.setAttribute("kind", "quiet"); cancel.textContent = "취소";
-    cancel.addEventListener("click", () => dialog.close("cancel"));
+    cancel.addEventListener("click", () => close("cancel"));
     const run = document.createElement("ui-button");
     run.setAttribute("kind", "irreversible"); run.textContent = action;
-    run.addEventListener("click", () => dialog.close("confirm"));
+    run.addEventListener("click", () => close("confirm"));
     actions.append(cancel, run); dialog.append(text, actions);
     return new Promise((resolve) => {
-      const abort = () => { if (dialog.open) dialog.close("cancel"); };
+      const abort = () => close?.("cancel");
       signal?.addEventListener("abort", abort, {once: true});
-      openLiveDialog(dialog, {initialFocus: cancel, opener, onClose: value => {
+      close = openLiveDialog(dialog, {initialFocus: cancel, opener, onClose: value => {
         signal?.removeEventListener("abort", abort);
         resolve(!signal?.aborted && value === "confirm");
       }});

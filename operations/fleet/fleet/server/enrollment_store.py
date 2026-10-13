@@ -34,7 +34,7 @@ _KEY_LINE = re.compile(rb"[A-Za-z0-9+/]{43}=(\r?\n)?")
 _COLUMNS = (
     "robot_id", "hostname", "serial_number", "device_uid", "discovery_name", "address",
     "token_id", "role", "source", "expires_at", "fleet_expires_at", "warn_at",
-    "principal_id", "state",
+    "principal_id", "state", "hub_digest", "hub_host",
 )
 _UPDATABLE = (frozenset(_COLUMNS) - {"robot_id"}) | {"logout_attempted"}
 
@@ -167,11 +167,29 @@ class EnrollmentStore:
                     state TEXT NOT NULL CHECK (state IN {STATES!r}),
                     logout_attempted INTEGER NOT NULL DEFAULT 0,
                     created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL
+                    updated_at REAL NOT NULL,
+                    hub_digest TEXT,
+                    hub_host TEXT
+                );
+                CREATE TABLE IF NOT EXISTS robot_enrollment_tls (
+                    robot_id TEXT PRIMARY KEY,
+                    origin TEXT NOT NULL,
+                    ca_sha256 TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS robot_tls_renumber (
+                    hostname TEXT PRIMARY KEY,
+                    ca_sha256 TEXT NOT NULL,
+                    file_robot_id TEXT NOT NULL,
+                    robot_id TEXT NOT NULL
                 );
                 """
             )
             ensure_device_pairing_audit(connection)
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(robot_enrollments)")}
+            for column in ("hub_digest", "hub_host"):  # D-555: registers made before it
+                if column not in columns:
+                    with connection:
+                        connection.execute(f"ALTER TABLE robot_enrollments ADD COLUMN {column} TEXT")
         if os.name != "nt":
             for path in (self.path, self.path.with_name(self.path.name + "-wal"),
                          self.path.with_name(self.path.name + "-shm")):
@@ -244,6 +262,38 @@ class EnrollmentStore:
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute("DELETE FROM robot_enrollments WHERE robot_id=?", (robot_id,))
+                connection.execute("DELETE FROM robot_enrollment_tls WHERE robot_id=?", (robot_id,))
+
+    def tls_markers(self) -> dict[str, dict]:
+        with closing(self._connect()) as connection:
+            return {row['robot_id']: dict(row) for row in connection.execute(
+                'SELECT robot_id, origin, ca_sha256 FROM robot_enrollment_tls')}
+
+    def remember_tls(self, markers: list[dict]) -> None:
+        """Atomic downgrade fence only; never reseals or changes an enrolled credential."""
+        with closing(self._connect()) as connection:
+            with connection:
+                ids = {row[0] for row in connection.execute('SELECT robot_id FROM robot_enrollments')}
+                existing = {row['robot_id']: dict(row) for row in connection.execute(
+                    'SELECT robot_id, origin, ca_sha256 FROM robot_enrollment_tls')}
+                for marker in markers:
+                    if marker['robot_id'] not in ids or (marker['robot_id'] in existing
+                                                         and marker != existing[marker['robot_id']]):
+                        raise ValueError('TLS transport marker conflicts with enrolled identity')
+                connection.executemany('INSERT OR IGNORE INTO robot_enrollment_tls VALUES (?, ?, ?)',
+                                       [(m['robot_id'], m['origin'], m['ca_sha256']) for m in markers])
+
+    def tls_renumbers(self) -> dict[str, dict]:
+        """D-580: hostname -> {ca_sha256, file_robot_id, robot_id} of a binding enrolled here."""
+        with closing(self._connect()) as connection:
+            return {row['hostname']: dict(row) for row in connection.execute(
+                'SELECT hostname, ca_sha256, file_robot_id, robot_id FROM robot_tls_renumber')}
+
+    def renumber_tls(self, hostname: str, ca_sha256: str, file_robot_id: str, robot_id: str) -> None:
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute('INSERT OR REPLACE INTO robot_tls_renumber VALUES (?, ?, ?, ?)',
+                                   (hostname, ca_sha256, file_robot_id, robot_id))
 
     def audit(self, *, action: str, outcome: str, principal_id: str | None,
               target: str | None, device_kind: str = ROBOT) -> None:

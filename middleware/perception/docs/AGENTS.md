@@ -3,6 +3,9 @@
 
 # docs
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Operator-facing notes for camera ground calibration, localization, and narrow-passage navigation. Korean prose. These are package notes, not the repo governance docs in `Rosy OS/docs/`.
@@ -11,7 +14,7 @@ Operator-facing notes for camera ground calibration, localization, and narrow-pa
 
 | File | Description |
 |------|-------------|
-| `camera-ground-calibration.md` | Measure camera height/pitch/focal length so region bottom edges become meters; do not invent defaults |
+| `camera-ground-calibration.md` | Automatic stationary camera/LiDAR fitting and two-image checkerboard pose candidates replace manual height/pitch entry; thickness/intrinsics provenance stays explicit and candidates stay unapplied |
 | `localization.md` | Localization notes for the desk-maze robot |
 | `narrow-passage-navigation.md` | Narrow-passage behavior and limits |
 

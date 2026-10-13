@@ -1,10 +1,10 @@
-"""Tracked Python sources are plain UTF-8, without a byte-order mark.
+"""Active tracked Python sources are plain UTF-8, without a byte-order mark.
 
 Several guards read sources with ``ast.parse(path.read_text(encoding="utf-8"))``
 (the section 8 event catalogue, the vision boundaries). ``read_text`` keeps a
 leading U+FEFF, and ``ast.parse`` then rejects the whole file as invalid, so a
 BOM added by a Windows editor turns unrelated guards red at once. Catch it
-here, by name, instead.
+here, by name, while preserving the one frozen validation script verbatim.
 """
 
 from __future__ import annotations
@@ -26,11 +26,16 @@ def _tracked_python_files() -> list[Path]:
     return [ROOT / name for name in out.decode("utf-8").split("\0") if name]
 
 
-def test_no_tracked_python_file_starts_with_a_bom():
+def test_no_active_tracked_python_file_starts_with_a_bom():
     offenders = []
     for path in _tracked_python_files():
         if not path.is_file():
             continue
+        if path.relative_to(ROOT).as_posix() == (
+            "docs/validation/lane-1006-human-candidate-queue-2026-10-08/"
+            "evidence/build_candidates.py"
+        ):
+            continue  # frozen evidence; its recorded bytes must stay intact
         with path.open("rb") as handle:
             if handle.read(3) == BOM:
                 offenders.append(path.relative_to(ROOT).as_posix())

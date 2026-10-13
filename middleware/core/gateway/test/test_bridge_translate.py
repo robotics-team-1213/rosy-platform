@@ -85,14 +85,17 @@ def test_odom_carries_pose_and_twist():
 
 
 def test_lidar_sample_counts_the_ranges_it_copies():
-    msg = NS(header=NS(frame_id="laser"), range_min=0.15, range_max=12.0,
-             angle_min=-math.pi, angle_max=math.pi, ranges=[1.0, 2.0, 3.0])
+    msg = NS(header=NS(frame_id="laser", stamp=NS(sec=12,nanosec=34)), range_min=0.15, range_max=12.0,
+             angle_min=-math.pi, angle_max=math.pi, angle_increment=.01,
+             ranges=[1.0, 2.0, 3.0])
 
     sample = translate.lidar_sample(msg, received_at=100.0)
 
     assert sample["num_ranges"] == 3 == len(sample["ranges"])
     assert sample["frame_id"] == "laser"
+    assert sample["angle_increment"] == .01
     assert sample["received_at"] == 100.0
+    assert sample["source_stamp_ns"] == 12_000_000_034
 
 
 def test_imu_sample_reports_yaw_not_the_raw_quaternion():

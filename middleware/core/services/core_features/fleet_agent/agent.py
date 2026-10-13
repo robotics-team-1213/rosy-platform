@@ -7,9 +7,10 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
+from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload
 from core_common.link_retry import retry_delay
 from .discovery import locate_fleet, approved_profile, DiscoveryConflict, DiscoveryUnavailable
+from .heartbeat import HeartbeatLoop
 
 logger = logging.getLogger("fleet_agent")
 
@@ -82,7 +83,7 @@ def heartbeat_reply_timeout_s(fleet_cfg: dict) -> float:
     return value
 
 
-class FleetAgent:
+class FleetAgent(HeartbeatLoop):
     def __init__(self, state_manager, event_bus, config: dict, identity) -> None:
         self.state = state_manager
         self.events = event_bus
@@ -96,6 +97,8 @@ class FleetAgent:
         #: time.monotonic() of the last message received from the hub, or None.
         self.last_rx: float | None = None
         fleet_cfg = (config or {}).get("fleet") or {}
+        #: D-555: unarmed from a relink (relinked_at) to WELCOME or grace (SAF-003); boot defaults.
+        self.armed, self.relinked_at, self.config_fallback = True, None, None
         try:
             self.reply_timeout_s = heartbeat_reply_timeout_s(fleet_cfg)
         except ValueError:
@@ -106,6 +109,7 @@ class FleetAgent:
             logger.warning("ignoring invalid fleet.heartbeat_reply_timeout_s on a robot "
                            "without a Fleet link", exc_info=True)
             self.reply_timeout_s = DEFAULT_REPLY_TIMEOUT_S
+            self.config_fallback = "fleet.heartbeat_reply_timeout_s is invalid"
         #: Injectable so tests run the real loop on a scaled clock.
         self.heartbeat_period_s = HEARTBEAT_PERIOD_S
         self.link_slack_s = LINK_SLACK_S
@@ -126,6 +130,9 @@ class FleetAgent:
         self._degraded_logged_at: dict = {}
         self._stable = False
         self._end_reason = ""
+        self.junction_signal_request = lambda: None
+        self.junction_signal_answer = lambda answer: False
+        self.junction_signal_refused = False
 
     @property
     def connected(self) -> bool:
@@ -188,6 +195,15 @@ class FleetAgent:
         self.connected = False
         if self._task:
             self._task.cancel()
+
+    def relink(self, fleet_cfg: dict) -> None:
+        """D-555: swap `config["fleet"]` (SAF-003 reads it) and restart only this task."""
+        self.stop()
+        self.junction_signal_refused = False
+        self._task = self._pending = None
+        self.armed, self.relinked_at = False, self._clock()
+        self.config["fleet"] = fleet_cfg
+        self.start()
 
     def hello_payload(self, pairing_token: str) -> dict:
         """PRT-002 hello 본문. 신원은 RobotIdentity 실값에서 온다 (D-170 인접)."""
@@ -298,6 +314,7 @@ class FleetAgent:
             return f"no hello reply within {HELLO_TIMEOUT_S:g} s"
         if reply.type == EnvelopeType.ERROR:
             logger.error("Fleet hub rejected hello: %s", reply.payload.get("code"))
+            self.junction_signal_refused = True
             self.enabled = False
             return None
         if reply.type != EnvelopeType.WELCOME:
@@ -305,6 +322,7 @@ class FleetAgent:
             # that never gets there is still a lost link (and does not stamp last_rx).
             return f"unexpected hello reply {reply.type.value}"
         self.last_rx = self._clock()
+        self.armed = True
         logger.info("Fleet agent welcomed by hub")
         last_event_seq = reply.payload.get("last_event_seq", 0)
         self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]
@@ -405,6 +423,8 @@ class FleetAgent:
             except ValueError:
                 env = None
             if env is not None and env.type == EnvelopeType.HEARTBEAT:
+                if 'junction_signal' in env.payload:
+                    self.junction_signal_answer(env.payload['junction_signal'])
                 # A heartbeat reply names itself; resynchronise the queue on it so a reply
                 # the hub skipped cannot shift later attributions. Events it skipped are
                 # unanswered: they go back to the buffer.
@@ -425,12 +445,22 @@ class FleetAgent:
                 continue
             if env.type == EnvelopeType.ERROR:
                 code = env.payload.get("code")
+                if answers == EnvelopeType.HEARTBEAT:
+                    request = self.junction_signal_request()
+                    if request is not None:
+                        self.junction_signal_answer(dict(request_id=request, lamp='unknown',
+                                                         may_enter=False, reason='fleet_error'))
                 # The hub answers an EVENT payload it cannot validate with SESSION_NOT_PAIRED
                 # (hub.py `_event`), so a "fatal" code answering an EVENT is an event
                 # rejection, not a pairing failure. PAIRING_INVALID is fatal either way.
                 if code in SESSION_FATAL_ERRORS and (
                         answers == EnvelopeType.HEARTBEAT or code == "PAIRING_INVALID"):
                     logger.error("Fleet hub ended the session: %s", code)
+                    self.junction_signal_refused = True
+                    request = self.junction_signal_request()
+                    if request is not None:
+                        self.junction_signal_answer(dict(request_id=request, lamp='unknown',
+                                                         may_enter=False, reason='link_rejected'))
                     self.enabled = False
                     self.connected = False
                     await self._abort(ws)
@@ -487,33 +517,6 @@ class FleetAgent:
         # cap buffer to prevent memory leak
         if len(self._event_buffer) > 1000:
             self._event_buffer = self._event_buffer[-1000:]
-
-    async def _heartbeat_loop(self, ws) -> str:
-        import websockets
-        while self.enabled:
-            try:
-                snap = self.state.snapshot()
-                hb = HeartbeatPayload(state_snapshot=snap)
-                env = Envelope(type=EnvelopeType.HEARTBEAT, payload=hb.model_dump(mode="json"))
-                # One heartbeat outstanding at a time: clear before sending so only the
-                # reply to this one can wake us.
-                self._hb_reply.clear()
-                # One deadline over send and reply: a send held in drain also aborts.
-                await asyncio.wait_for(self._send_heartbeat(ws, env), timeout=self.reply_timeout_s)
-            except asyncio.TimeoutError:
-                logger.warning("Fleet hub did not answer a heartbeat within %.1f s; aborting",
-                               self.reply_timeout_s)
-                self.connected = False
-                await self._abort(ws)
-                return f"no heartbeat reply within {self.reply_timeout_s:g} s"
-            except websockets.exceptions.WebSocketException as exc:
-                return f"send failed ({exc})"
-            except Exception as exc:
-                logger.error("heartbeat loop error: %s", exc)
-                return f"error ({exc})"
-            self._answered += 1
-            await asyncio.sleep(self.heartbeat_period_s)
-        return "agent disabled"
 
     async def _send_heartbeat(self, ws, env: Envelope) -> None:
         await self._send(ws, env)

@@ -6,6 +6,7 @@
 // 한다 — 변환은 stick.js 한 곳에서만 한다.
 
 import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
+import {createDriverStream, STREAM_STALE_WARN_MS} from "../vision.js";
 import {createDeviceSession} from "../link.js";
 import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
@@ -21,12 +22,19 @@ import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
-import {MODE_LABEL} from "/common/core_ui_logic.js";
+import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
+const MODE_TIMEOUT_MS = 3000;
+// ponytail: 1 s detects transport silence at the default 10 Hz; use a negotiated rate if slower streams matter.
+const READBACK_GAP_MS = 2 * STATE_POLL_MS; // Server evidence still decides value freshness.
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
+const LINK_LABEL = {
+  CONNECTING: "상태 연결 중", OPEN: "상태 수신", RETRYING: "상태 재연결 중",
+  FORBIDDEN: "상태 접근 거부", OFFLINE: "상태 연결 끊김", BLOCKED: "조종 차단",
+};
 
 // `profile` comes from the device's base_velocity control (D-411 B); `unsupported` lists the
 // controls this screen cannot draw — shown, never fatal.
@@ -36,6 +44,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   setFineAllowed(profile.fine);
   const element = {};
   let engaged = false;
+  let disposed = false;
+  let engagePromise = null;
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
   // IDLE 을 보내면 남(보정 주인)의 주행을 끊는다.
   let modeHeld = false;
@@ -64,12 +74,54 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
     go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
-    manual: "[data-drive-manual]", goal: "[data-drive-goal]",
+    manual: "[data-drive-manual]",
     intent: "[data-drive-intent]", intentTarget: "[data-intent-target]",
     intentSteer: "[data-intent-steer]", controls: "[data-drive-controls]",
     calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
     calibrationReason: "[data-drive-calibration-reason]", activity: "[data-drive-fact=activity]",
   })) element[key] = root.querySelector(selector);
+
+  function showMode(mode) {
+    element.mode.textContent = operatorModeLabel(mode, "확인 필요");
+    element.mode.title = mode;
+  }
+
+  function ageText(frame, channel) {
+    const observed = Date.parse(frame?.evidence?.[channel]?.received_at);
+    const reported = Date.parse(frame?.timestamp);
+    return Number.isFinite(observed) && Number.isFinite(reported) && reported >= observed
+      ? evidenceAgeText((reported - observed) / 1000) : " · 시각 없음";
+  }
+
+  function renderTelemetry(frame) {
+    const evidence = new HeadlessState(frame);
+    const velocity = frame?.velocity;
+    const usableVelocity = typeof velocity?.linear === "number" && Number.isFinite(velocity.linear)
+      && typeof velocity?.angular === "number" && Number.isFinite(velocity.angular);
+    const velocityState = !frame ? "disconnected"
+      : usableVelocity ? evidence.evidenceOf("velocity") : "unavailable";
+    element.speed.dataset.evidence = velocityState;
+    element.turn.dataset.evidence = velocityState;
+    if (velocityState === "fresh" || velocityState === "delayed") {
+      element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
+      const turn = velocity.angular * DEG;
+      const direction = turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·";
+      element.turn.textContent = `${direction} ${Math.abs(turn).toFixed(0)}°/s`
+        + (velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : "");
+    } else {
+      element.speed.textContent = "—";
+      element.turn.textContent = velocityState === "disconnected" ? "· 속도 연결 끊김" : "· 속도 정보 없음";
+    }
+
+    const percent = frame?.battery?.percent;
+    const batteryState = !frame ? "disconnected"
+      : typeof percent === "number" && Number.isFinite(percent)
+        ? evidence.evidenceOf("battery") : "unavailable";
+    element.battery.dataset.evidence = batteryState;
+    element.battery.textContent = batteryState === "fresh" ? `${Math.round(percent)}%`
+      : batteryState === "delayed" ? `${Math.round(percent)}% · 지연${ageText(frame, "battery")}`
+      : batteryState === "disconnected" ? "배터리 연결 끊김" : "배터리 정보 없음";
+  }
 
   // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
   // 비상 정지(상단 막대)는 이 화면 밖에 있고 잠그지 않는다. 409 CALIBRATION_ACTIVE 가 최종 판정이다.
@@ -118,6 +170,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
+  let lastSocketReadbackAt = -Infinity;
   const session = createDeviceSession({
     token: token(),
     openSocket: (url) => {
@@ -131,11 +184,22 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     },
     postJson,
     whoami,
-    onState: (state) => { element.state.textContent = state; element.state.dataset.state = state; },
+    onState: (state) => {
+      element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
+      element.state.dataset.state = state;
+      element.state.title = state;
+      delete element.state.dataset.readback;
+      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+      }
+    },
     onSnapshot: (frame) => {
-      const percent = frame?.battery?.percent;
-      if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
-      if (frame?.mode) element.mode.textContent = frame.mode;
+      lastSocketReadbackAt = Date.now();
+      delete element.state.dataset.readback;
+      element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+      renderTelemetry(frame);
+      if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
     },
     onConflict: (detail) => {
@@ -144,14 +208,58 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       showBlocked(`조종이 차단되었습니다 — ${detail?.message ?? detail?.code ?? "이유를 확인하세요"}`);
     },
     onLatency: (ms, failed) => {
-      element.latency.textContent = failed ? "시한 초과" : `${Math.round(ms)}ms`;
+      element.latency.textContent = failed ? "조작 응답 시한 초과" : `조작 응답 ${Math.round(ms)}ms`;
       element.latency.dataset.slow = String(failed || ms > 250);
     },
   });
   session.open();
 
   // --- 영상: 인증 JPEG 폴링 --------------------------------------------------
-  const {capture, vision} = mountBrowserRecording({element, apiGet, authHeaders});
+  const {capture, vision, acceptPreview} = mountBrowserRecording({element, apiGet, authHeaders});
+
+  // --- D-368: 운전자 MJPEG 스트림(폴링 대체, 끊기면 자동 복귀) ----------------
+  // 운전자 판정은 서버가 한다(409 = 운전자 아님·이미 열림). 이 화면은 결과만 따른다:
+  // 스트림이 붙으면 폴링을 끊고, 끊기면 폴링으로 돌아가 잠시 뒤 다시 시도한다.
+  // 주석 쌍(annotated) 캡처는 원본 짝이 필요해 폴링만 가능하다 — raw 모드에서만 스트림.
+  const videoFact = el("span", "영상 폴링", {"data-drive-fact": "video"});
+  root.querySelector("[data-drive-facts]")?.append(videoFact);
+  let streamAlive = true;
+  let streaming = false;
+  let retryTimer = null;
+  function tryStream() {
+    if (!streamAlive || streaming) return;
+    if (capture.state().previewMode !== "raw") return;
+    stream.start(false);
+  }
+  function scheduleStreamRetry(ms = 3000) {
+    if (!streamAlive) return;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(tryStream, ms);
+  }
+  const stream = createDriverStream({
+    headers: () => authHeaders(),
+    onFrame: (url, meta) => {
+      if (!streaming) {
+        streaming = true;
+        vision.stop();   // 스트림이 붙었다 — 폴링의 대역폭을 돌려준다
+      }
+      acceptPreview(url, {blob: meta.blob, rawBlob: meta.blob, sequence: meta.seq,
+                          source: meta.source, capturedAt: meta.capturedAt, previewMode: "raw"});
+    },
+    onStats: ({fps, ageMs}) => {
+      videoFact.hidden = false;
+      videoFact.textContent = `영상 ${fps}fps${ageMs == null ? "" : ` · ${Math.round(ageMs)}ms`}`;
+      videoFact.dataset.stale = String(ageMs != null && ageMs > STREAM_STALE_WARN_MS);
+    },
+    onLost: ({status}) => {
+      streaming = false;
+      videoFact.textContent = status === 409 ? "영상 폴링 · 운전자 아님" : "영상 폴링";
+      videoFact.dataset.stale = "false";
+      vision.start();    // 폴링 복귀(D-368 §5) — start()는 이미 돌면 아무것도 안 한다
+      scheduleStreamRetry();
+    },
+  });
+  tryStream();
 
   // --- 모델(D-423 §3.6): 읽기 전용 상태, 교체는 rosy_ml CLI ------------------
   const modelPanel = document.createElement("details");
@@ -188,15 +296,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const mag = Math.hypot(dx, dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
     setStickInput(dx, -dy);        // 화면 y 는 아래가 + — 위로 밀면 전진
-    element.knob.style.transform =
-      `translate(calc(-50% + ${dx * radius * 0.62}px), calc(-50% + ${dy * radius * 0.62}px))`;
+    element.knob.setAttribute("data-knob-x", `${dx * radius * 0.62}px`);
+    element.knob.setAttribute("data-knob-y", `${dy * radius * 0.62}px`);
   }
   function releaseStick() {
     stickPointer = null;
     origin = null;
     setStickInput(0, 0);
-    element.knob.style.transform = "translate(-50%, -50%)";
-    stick.style.translate = "";
+    element.knob.removeAttribute("data-knob-x");
+    element.knob.removeAttribute("data-knob-y");
+    stick.removeAttribute("data-float-x");
+    stick.removeAttribute("data-float-y");
     stick.classList.remove("active", "floating");
   }
   stick.addEventListener("pointerdown", (event) => {
@@ -217,7 +327,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const tx = clamp(event.clientX - centre.x, column.left - rect.left, column.right - rect.right);
       const ty = clamp(event.clientY - centre.y, column.top - rect.top, column.bottom - rect.bottom);
       stick.classList.add("floating");
-      stick.style.translate = `${tx}px ${ty}px`;
+      stick.setAttribute("data-float-x", `${tx}px`);
+      stick.setAttribute("data-float-y", `${ty}px`);
     }
     applyStick(event);
   });
@@ -282,9 +393,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const response = await gate.disengage(postJson).catch(() => null);
     showBlocked(response?.status === 200 ? "정지 · 설정 중 — 다시 잡으면 수동 운전" : "정지 모드 확인 실패 — 상태를 확인하세요");
     perception.refresh();
-  });
-  element.goal.addEventListener("click", () => {
-    if (!element.goal.disabled && !perceptionPending) teardown(() => location.assign("/console"));
   });
   function takeover() {
     auto.takeover();
@@ -405,10 +513,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const fresh = profileFromBaseVelocity(base);
       announced = {max_linear: fresh.max_linear, max_angular: fresh.max_angular};
     }
-    const goalReady = caps?.body?.navigation?.goal_navigation === true;
-    element.goal.disabled = !goalReady;
-    if (goalReady) element.goal.removeAttribute("reason");
-    else element.goal.setAttribute("reason", caps?.body?.navigation?.reason || "이 기기는 목표 내비게이션을 지원하지 않습니다");
     const limits = response?.status === 200 ? response.body?.limits : null;
     if (limits || base) setServerLimits(withProfileLimits(limits));
     renderCap();
@@ -431,18 +535,23 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
   const stateTimer = setInterval(async () => {
-    const state = await apiGet("/api/v1/robot/state").catch(() => null);
-    if (!state || state.status !== 200) return;
-    const percent = state.body?.battery?.percent;
-    if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
-    if (state.body?.mode) element.mode.textContent = state.body.mode;
-    renderActivity(state.body?.activity);
-    const velocity = state.body?.velocity;
-    if (velocity) {
-      element.speed.textContent = Math.abs(Number(velocity.linear ?? 0)).toFixed(2);
-      const turn = Number(velocity.angular ?? 0) * DEG;
-      element.turn.textContent = `${turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·"} ${Math.abs(turn).toFixed(0)}°/s`;
+    const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
+    if (!state || state.status !== 200) {
+      if (Date.now() - lastSocketReadbackAt >= READBACK_GAP_MS) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+        if (session.state() === "OPEN") {
+          element.state.textContent = "상태 수신 없음";
+          element.state.dataset.readback = "silent";
+        }
+      }
+      return;
     }
+    delete element.state.dataset.readback;
+    element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+    renderTelemetry(state.body);
+    if (state.body?.mode) showMode(state.body.mode);
+    renderActivity(state.body?.activity);
   }, STATE_POLL_MS);
 
   // --- HUD 액션 --------------------------------------------------------------
@@ -456,7 +565,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   browserLabel.append(browserMode); element.browserMode = browserMode;
   browserMode.addEventListener("change", () => {
     if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
-    else { vision.stop(); vision.start(); }
+    else {
+      streaming = false;
+      stream.stop();       // 주석 쌍 모드는 스트림이 못 섬긴다 — 폴링 짝으로 갈아탄다
+      vision.stop(); vision.start();
+      if (browserMode.value === "raw") scheduleStreamRetry(500);
+      else videoFact.textContent = "영상 폴링";
+    }
   });
   const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
   shotButton.setAttribute("kind", "quiet");
@@ -546,9 +661,27 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   actionIcon(exit, "back");
   actions.append(fitButton, fillButton, toolsButton, exit);
   element.hud.append(recordingFact, actions);
+  const compactHud = window.matchMedia("(width < 30rem)");
+  const lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
+  function placeCompactTools() {
+    hideTools();
+    modelPanel.open = false;
+    lanePanel.open = false;
+    if (compactHud.matches) {
+      tools.insertBefore(modelPanel, toolsActions);
+      tools.insertBefore(lanePanel, toolsActions);
+      toolsActions.prepend(fitButton, fillButton);
+    } else {
+      element.hud.insertBefore(modelPanel, idleButton);
+      element.hud.insertBefore(lanePanel, idleButton);
+      actions.prepend(fitButton, fillButton);
+    }
+  }
+  compactHud.addEventListener("change", placeCompactTools);
+  placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    sheetHost: root, anchor: element.hud, save: saveCameraFile,
     returnFocus: toolsButton,
   });
   view.applyZoom();
@@ -583,13 +716,15 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   async function engage() {
     if (perceptionPending) return;
     hideBlocked();
-    const response = await gate.engage(postJson).catch(() => null);
+    const response = await gate.engage((path, body) => postJson(path, body, {timeoutMs: MODE_TIMEOUT_MS})).catch(() => null);
     if (response?.status === 200) {
-      engaged = true;
       modeHeld = true;
+      if (disposed) return;
+      engaged = true;
       session.resume();
       return;
     }
+    if (disposed) return;
     engaged = false;
     const detail = response?.body?.detail;
     showBlocked(`수동 모드 전환 실패 — ${detail?.message ?? detail ?? response?.status ?? "연결 없음"}`);
@@ -601,10 +736,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   function hideBlocked() {
     element.blocked.hidden = true;
   }
-  element.retake.addEventListener("click", () => engage());
-  engage();
+  element.retake.addEventListener("click", () => { engagePromise = engage(); });
+  engagePromise = engage();
 
   function teardown(after) {
+    if (disposed) return;
+    disposed = true;
     engaged = false;
     auto.release("exit");
     clearInterval(loop);
@@ -613,16 +750,23 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (capture.state().recording) capture.stop();
     robotRecording.stopIfOwned().finally(() => robotRecording.dispose());
     releaseAll();
-    session.hidden();
+    const stopped = session.hidden();
     session.close?.();
     // D-321 부록: 잡은 적 없거나 남의 보정으로 잠긴 화면은 모드를 돌려놓지 않는다 — /mode IDLE 은
     // 누구에게나 열려 있어서, 그대로 보내면 보정 주인의 MANUAL 을 끊는다.
-    if (modeHeld && !calibrationLocked) gate.disengage(postJson).catch(() => {});
-    modeHeld = false;
+    const idle = Promise.resolve(engagePromise).then(() => {
+      if (!modeHeld || calibrationLocked) return null;
+      modeHeld = false;
+      return gate.disengage((path, body) => postJson(path, body, {timeoutMs: MODE_TIMEOUT_MS})).catch(() => null);
+    });
     clearTimeout(whoamiTimer);
+    streamAlive = false;
+    clearTimeout(retryTimer);
+    stream.stop();
     vision.stop();
     models.stop();
     perception.dispose();
+    compactHud.removeEventListener("change", placeCompactTools);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);
@@ -633,6 +777,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     wakeLock?.release().catch(() => {});
     wakeLock = null;
     onExit?.();
-    if (typeof after === "function") after();
+    if (typeof after === "function") Promise.allSettled([stopped, idle]).then(after);
   }
+  return teardown;
 }

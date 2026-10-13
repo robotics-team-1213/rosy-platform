@@ -65,7 +65,8 @@ def main():
             app.update()
             frame += 1
     finally:
-        app.close()
+        from sdk_entrypoint import close_sdk
+        close_sdk(app, headless=args.headless)
 
 
 if __name__ == "__main__":

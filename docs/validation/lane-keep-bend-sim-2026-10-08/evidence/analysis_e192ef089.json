@@ -1,0 +1,340 @@
+{
+ "f_1": {
+  "approach_frames": 524,
+  "approach_median_m": 0.0127,
+  "approach_max_abs_m": 0.0179,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.998,
+    "sim_t": 131.54,
+    "gt": [
+     -0.8353073154804495,
+     -0.498309068712133,
+     -0.04683807824734384
+    ],
+    "odom": [
+     -0.8353073154804495,
+     -0.498309068712133,
+     -0.04683807824734384,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "f_2": {
+  "approach_frames": 48,
+  "approach_median_m": 0.0125,
+  "approach_max_abs_m": 0.0184,
+  "bend_counts": {
+   "junction_transverse": 5
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.721,
+    -0.466,
+    0.873
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.719,
+    -0.463,
+    0.877
+   ],
+   "final": {
+    "t": 47.127,
+    "sim_t": 182.445,
+    "gt": [
+     -0.719418304020938,
+     -0.4631796436582539,
+     1.3034358100694157
+    ],
+    "odom": [
+     -0.7194080925689483,
+     -0.4631434043233636,
+     1.2876919950900816,
+     -0.0007066176616221034,
+     0.4722221988750766
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "f_3": {
+  "approach_frames": 57,
+  "approach_median_m": 0.0147,
+  "approach_max_abs_m": 0.0199,
+  "bend_counts": {
+   "junction_transverse": 6
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.728,
+    -0.465,
+    0.849
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.726,
+    -0.464,
+    0.849
+   ],
+   "final": {
+    "t": 100.847,
+    "sim_t": 283.768,
+    "gt": [
+     -1.0510737480705912,
+     -0.2658514595453179,
+     -0.6662119880837907
+    ],
+    "odom": [
+     -1.0510737474940286,
+     -0.26585145999519805,
+     -0.6705845389869616,
+     -2.4910829478645023e-08,
+     0.19747181456052448
+    ],
+    "state": "HOLD",
+    "reason": "junction_waiting",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "f_4": {
+  "approach_frames": 45,
+  "approach_median_m": 0.0137,
+  "approach_max_abs_m": 0.0172,
+  "bend_counts": {
+   "junction_transverse": 1
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.722,
+    -0.462,
+    0.875
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.72,
+    -0.46,
+    0.866
+   ],
+   "final": {
+    "t": 100.873,
+    "sim_t": 387.248,
+    "gt": [
+     -1.0525983752815475,
+     -0.26576646227024353,
+     -0.7506029515643157
+    ],
+    "odom": [
+     -1.0525983752815475,
+     -0.26576646227024353,
+     -0.7506029515643157,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_waiting",
+    "keep": "junction_fork",
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "f_5": {
+  "approach_frames": 51,
+  "approach_median_m": 0.0144,
+  "approach_max_abs_m": 0.0186,
+  "bend_counts": {
+   "junction_transverse": 2,
+   "no_boundary": 1
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.72,
+    -0.46,
+    0.866
+   ]
+  ],
+  "probe": {
+   "result": "done",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.716,
+    -0.457,
+    0.872
+   ],
+   "final": {
+    "t": 100.887,
+    "sim_t": 491.949,
+    "gt": [
+     -1.0501197215848876,
+     -0.26715476492517876,
+     -0.7380067557467237
+    ],
+    "odom": [
+     -1.0501197215848876,
+     -0.26715476492517876,
+     -0.7380067557467237,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_waiting",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "waiting",
+    "jr": null
+   }
+  }
+ },
+ "f_6": {
+  "approach_frames": 0,
+  "approach_median_m": null,
+  "approach_max_abs_m": null,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.932,
+    "sim_t": 595.407,
+    "gt": [
+     -1.2695318914434024,
+     -0.3315204353047554,
+     -1.5870029788973097
+    ],
+    "odom": [
+     -1.2695318914434024,
+     -0.3315204353047554,
+     -1.5870029788973097,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ },
+ "f_7": {
+  "approach_frames": 48,
+  "approach_median_m": 0.0142,
+  "approach_max_abs_m": 0.0187,
+  "bend_counts": {
+   "junction_transverse": 2
+  },
+  "first_hold": [
+   "junction_transverse",
+   [
+    -0.728,
+    -0.471,
+    0.868
+   ]
+  ],
+  "probe": {
+   "result": "aborted",
+   "keep_at_sight": "junction_transverse",
+   "sight_gt": [
+    -0.727,
+    -0.47,
+    0.865
+   ],
+   "final": {
+    "t": 45.386,
+    "sim_t": 644.113,
+    "gt": [
+     -0.7262448654097047,
+     -0.46925366926030165,
+     1.2189524101548683
+    ],
+    "odom": [
+     -0.7262426946892989,
+     -0.4692478058938216,
+     1.213704475262815,
+     -0.00041142394674921945,
+     0.4876742780995647
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   }
+  }
+ },
+ "f_8": {
+  "approach_frames": 45,
+  "approach_median_m": 0.0144,
+  "approach_max_abs_m": 0.0188,
+  "bend_counts": {},
+  "first_hold": null,
+  "probe": {
+   "result": null,
+   "keep_at_sight": null,
+   "sight_gt": null,
+   "final": {
+    "t": 100.866,
+    "sim_t": 745.136,
+    "gt": [
+     -0.7449051980365141,
+     -0.48885711395481385,
+     0.5912161863063542
+    ],
+    "odom": [
+     -0.7449051980365141,
+     -0.48885711395481385,
+     0.5912161863063542,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "obstacle_ahead",
+    "keep": null,
+    "body_gap_m": 0.0,
+    "j": "armed",
+    "jr": null
+   }
+  }
+ }
+}

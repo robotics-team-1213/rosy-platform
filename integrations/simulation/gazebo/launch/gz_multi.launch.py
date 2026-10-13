@@ -29,6 +29,10 @@ if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
 from gz_multi_args import (apply_nav_composition, apply_sim_speed, nav_composition_argument,
                            optional_float as _optional_float, sim_speed_arguments)
+from gz_multi_parts import (SIM_OPERATOR_TOKEN, bridge_config as _bridge_config,
+                            core_config as _core_config, load_run_spec as _load_run_spec,
+                            robots_manifest as _robots_manifest,
+                            run_spec_overlay as _run_spec_overlay, validate_run_identity as _validate_run_identity)
 from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
                             spawn_xy, world_share_parent)
 
@@ -49,31 +53,6 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource, Python
 from launch.substitutions import LaunchConfiguration
 
 import yaml
-
-
-#: 시뮬 로봇의 API 토큰. core_common 의 개발 토큰(`config/rosy_dev_auth.yaml`)이다. D-193 7 이후
-#: 기본값에는 토큰이 없으므로 core 노드는 `ROSY_DEV_AUTH=1` 로 띄운다.
-SIM_OPERATOR_TOKEN = "rosy-dev-operator"
-
-
-def _core_config(ns: str, api_port: int) -> dict:
-    """로봇별 core 오버라이드(ROSY_CONFIG). 기본 설정 위에 병합된다.
-
-    frame_prefix 는 ROSY_NAMESPACE 환경변수가 넣으므로 여기 두지 않는다. capabilities 는
-    기본 파일이 이미 swarm.follow/lead: true 라 그대로 쓴다.
-
-    api_host 는 루프백이다. 이 코어들은 시뮬이고 유일한 클라이언트인 fleet 은 같은
-    기계에서 돈다 — 0.0.0.0 이면 개발 토큰이 붙은 N 대의 API 가 로컬 네트워크에 열린다.
-    """
-    number = ns.rsplit("_", 1)[-1]
-    return {
-        "robot": {"id": ns, "name": f"Rosy {number}"},
-        "network": {"api_host": "127.0.0.1", "api_port": api_port},
-        # 시뮬은 조속 프리셋(low/mid/high)이 의미 있도록 상한을 연다.
-        # 실기 상한은 장치 프로필/호스트 설정이 그대로 적용된다(여기는 영향 없음).
-        "max_linear": 0.6,
-        "max_angular": 2.0,
-    }
 
 
 def _slam_config(ns: str, rosy_nav_share: str) -> dict:
@@ -225,74 +204,26 @@ def _nav_config(ns: str, rosy_nav_share: str,
     return {ns: params}
 
 
-def _robots_manifest(namespaces: list, api_port_base: int) -> list:
-    """fleet CLI 가 읽는 robots.yaml 의 `robots` 목록."""
-    return [
-        {"robot_id": ns, "base_url": f"http://127.0.0.1:{api_port_base + i}",
-         "token": SIM_OPERATOR_TOKEN}
-        for i, ns in enumerate(namespaces)
-    ]
-
-
-# per-robot bridge 매핑 템플릿 (rosy_bridge.yaml 기반, prefix 적용)
-BRIDGE_TEMPLATE = [
-    # (ros_topic, gz_topic, ros_type, gz_type, direction)
-    ("scan", "scan", "sensor_msgs/msg/LaserScan", "gz.msgs.LaserScan", "GZ_TO_ROS"),
-    ("cmd_vel", "cmd_vel", "geometry_msgs/msg/Twist", "gz.msgs.Twist", "ROS_TO_GZ"),
-    ("joint_states", "joint_states", "sensor_msgs/msg/JointState", "gz.msgs.Model", "GZ_TO_ROS"),
-    ("odom", "odom", "nav_msgs/msg/Odometry", "gz.msgs.Odometry", "GZ_TO_ROS"),
-    ("odom_wheel", "odom_wheel", "nav_msgs/msg/Odometry", "gz.msgs.Odometry", "GZ_TO_ROS"),
-    ("imu_raw", "imu_raw", "sensor_msgs/msg/Imu", "gz.msgs.IMU", "GZ_TO_ROS"),
-]
-
-CLOCK_ENTRY = {
-    "ros_topic_name": "clock",
-    "gz_topic_name": "clock",
-    "ros_type_name": "rosgraph_msgs/msg/Clock",
-    "gz_type_name": "gz.msgs.Clock",
-    "direction": "GZ_TO_ROS",
-}
-
-#: TF 는 로봇마다 나누지 않는다. DiffDrive 플러그인이 `<tf_topic>/tf</tf_topic>` 로 gz 의
-#: 전역 `/tf` 에 쓰고, robot_state_publisher 도 (네임스페이스와 무관하게) ROS 의 전역
-#: `/tf` 에 쓴다. 프레임 이름은 frame_prefix 로 이미 `rosy_XX/` 가 붙어 충돌하지 않는다.
-#: 로봇별로 `rosy_XX/tf` 를 브리지하면 구독자만 생기고 발행자가 없어 odom→base_footprint
-#: 가 ROS 로 넘어오지 않는다(맵이 안 생기던 원인).
-TF_ENTRY = {
-    "ros_topic_name": "/tf",
-    "gz_topic_name": "/tf",
-    "ros_type_name": "tf2_msgs/msg/TFMessage",
-    "gz_type_name": "gz.msgs.Pose_V",
-    "direction": "GZ_TO_ROS",
-}
-
-
-def _bridge_config(namespace: str, with_clock: bool = False) -> list:
-    entries = []
-    if with_clock:
-        entries.append(dict(CLOCK_ENTRY))
-        entries.append(dict(TF_ENTRY))
-    for ros_topic, gz_topic, ros_type, gz_type, direction in BRIDGE_TEMPLATE:
-        entries.append({
-            "ros_topic_name": f"{namespace}{ros_topic}",
-            "gz_topic_name": f"{namespace}{gz_topic}",
-            "ros_type_name": ros_type,
-            "gz_type_name": gz_type,
-            "direction": direction,
-        })
-    return entries
-
-
 def _launch_setup(context):
     robots = int(LaunchConfiguration("robots").perform(context))
     prefix = LaunchConfiguration("prefix").perform(context)
     world_name = LaunchConfiguration("world_name").perform(context)
     mode = LaunchConfiguration("mode").perform(context)
     headless = LaunchConfiguration("headless").perform(context).lower() in ("true", "1")
+    nominal_camera = context.launch_configurations.get("nominal_camera", "false").lower() == "true"
     core = LaunchConfiguration("core").perform(context).lower() in ("true", "1")
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
     loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
+    # bare-context 단위 시험에서도 돌아간다: 선언되지 않은 launch configuration 은
+    # LaunchConfiguration.perform 가 아닌 dict 조회로 기본값을 받는다.
+    run_spec = _load_run_spec(context.launch_configurations.get("run_spec", ""))
+    if run_spec:
+        _validate_run_identity(run_spec, robots, prefix)
+        if not core:
+            raise RuntimeError("run_spec requires core:=true")
+        for row in run_spec["robots"]:
+            _run_spec_overlay(run_spec, row["namespace"])
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
@@ -332,6 +263,10 @@ def _launch_setup(context):
             + world_share_parent(profile, get_package_share_directory),
         )
     ]
+    if run_spec:
+        # D-426: 같은 고유 partition을 모든 Gazebo 참여 프로세스에 전달한다(계획 규칙 2).
+        actions.append(SetEnvironmentVariable("GZ_PARTITION", str(run_spec["gz_partition"])))
+        actions.append(SetEnvironmentVariable("ROS_DOMAIN_ID", str(run_spec["ros_domain_id"])))
 
     # per-robot bridge config를 런치 시점 생성 (physics_step 의 월드 사본도 여기)
     bridge_dir = tempfile.mkdtemp(prefix="rosy_gz_multi_")
@@ -344,6 +279,8 @@ def _launch_setup(context):
 
     # Gazebo 서버 (1회) — headless 여부로 GUI 분기
     server_args = f"-r -s -v4 \"{world_path}\""
+    if headless and nominal_camera:
+        server_args = f"-r -s --headless-rendering -v4 \"{world_path}\""
     actions.append(
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -375,6 +312,10 @@ def _launch_setup(context):
                 launch_arguments={
                     "namespace": ns,
                     "is_sim": "True",
+                    **({"camera_width": "320", "camera_height": "240",
+                        "cam_tilt_deg": "8", "camera_hfov": "1.0334",
+                        "cam_mount_z": "0.0495", "camera_update_rate": "8"}
+                       if nominal_camera else {}),
                 }.items(),
             )
         )
@@ -520,11 +461,18 @@ def _launch_setup(context):
         #    아래에 생기므로(ROS_LOG_DIR 기본값이 $HOME/.ros/log), 로그는 로봇마다
         #    나뉘고 런치가 끝나도 사용자의 ~/.ros 를 어지럽히지 않는다.
         if core:
-            core_home = os.path.join(bridge_dir, f"home_{ns}")
+            if run_spec:
+                # D-426 T1: 검증 runner 소유 오버레이를 그대로 쓴다(fleet.hub_url·
+                # pairing_token·auth 토큰은 runner가 run별로 만들었다). 여기서 다시
+                # 쓰지 않는다 — 토큰 불일치가 곧 READY 거절 사유이기 때문이다.
+                core_cfg = _run_spec_overlay(run_spec, ns)
+                core_home = os.path.join(run_spec["core_config_dir"], f"home_{ns}")
+            else:
+                core_home = os.path.join(bridge_dir, f"home_{ns}")
+                core_cfg = os.path.join(bridge_dir, f"rosy_{ns}.yaml")
+                with open(core_cfg, "w") as f:
+                    yaml.safe_dump(_core_config(ns, api_port_base + i - 1), f)
             os.makedirs(core_home, exist_ok=True)
-            core_cfg = os.path.join(bridge_dir, f"rosy_{ns}.yaml")
-            with open(core_cfg, "w") as f:
-                yaml.safe_dump(_core_config(ns, api_port_base + i - 1), f)
             group_actions.append(
                 Node(
                     package="core",
@@ -537,7 +485,8 @@ def _launch_setup(context):
                         "ROSY_NAMESPACE": ns,
                         "ROSY_CONFIG": core_cfg,
                         "HOME": core_home,
-                        "ROSY_DEV_AUTH": "1",  # D-193 7: dev tokens only on request
+                        # D-426: run_spec 사용 시 토큰은 오버레이 안에 있다(런타임 생성).
+                        **({} if run_spec else {"ROSY_DEV_AUTH": "1"}),
                     },
                 )
             )
@@ -545,18 +494,22 @@ def _launch_setup(context):
         actions.extend(group_actions)
 
     if core:
-        namespaces = [f"{prefix}_{i:02d}" for i in range(1, robots + 1)]
-        manifest_path = os.path.join(bridge_dir, "robots.yaml")
-        with open(manifest_path, "w") as f:
-            yaml.safe_dump({"robots": _robots_manifest(namespaces, api_port_base)}, f, sort_keys=False)
-        try:
-            # 이 파일은 운영자 토큰을 담는다. mkdtemp 은 디렉터리를 0700 으로 만들지만
-            # 파일 자체는 umask 를 따르므로, fleet 이 경고하는 것과 같은 조건을
-            # 우리가 먼저 만들지 않는다. Windows 는 이 비트를 무시한다.
-            os.chmod(manifest_path, 0o600)
-        except OSError as exc:
-            actions.append(LogInfo(msg=f"could not restrict robots.yaml permissions: {exc}"))
-        actions.append(LogInfo(msg=f"fleet robots.yaml: {manifest_path}"))
+        if run_spec:
+            # D-426: robots.yaml 은 runner가 이미 만들었다(페어링 토큰 포함). 이중 생성 금지.
+            actions.append(LogInfo(msg=f"fleet robots.yaml (runner-owned): {run_spec['fleet_manifest']}"))
+        else:
+            namespaces = [f"{prefix}_{i:02d}" for i in range(1, robots + 1)]
+            manifest_path = os.path.join(bridge_dir, "robots.yaml")
+            with open(manifest_path, "w") as f:
+                yaml.safe_dump({"robots": _robots_manifest(namespaces, api_port_base)}, f, sort_keys=False)
+            try:
+                # 이 파일은 운영자 토큰을 담는다. mkdtemp 은 디렉터리를 0700 으로 만들지만
+                # 파일 자체는 umask 를 따르므로, fleet 이 경고하는 것과 같은 조건을
+                # 우리가 먼저 만들지 않는다. Windows 는 이 비트를 무시한다.
+                os.chmod(manifest_path, 0o600)
+            except OSError as exc:
+                actions.append(LogInfo(msg=f"could not restrict robots.yaml permissions: {exc}"))
+            actions.append(LogInfo(msg=f"fleet robots.yaml: {manifest_path}"))
 
     return actions
 
@@ -573,6 +526,8 @@ def generate_launch_description():
                               description="로봇별 상위 스택. none=spawn만, nav=기존 맵 주행, "
                                           "slam=맵 작성만, slam_nav=맵을 만들면서 그 맵 위로 주행"),
         DeclareLaunchArgument("headless", default_value="false"),
+        DeclareLaunchArgument("nominal_camera", default_value="false",
+                              description="URDF nominal camera geometry; image transport belongs to a camera launch"),
         DeclareLaunchArgument("inflation_radius", default_value="",
                               description="비면 config/worlds.yaml. 숫자면 그 월드만 덮어쓴다"),
         DeclareLaunchArgument("spawn_x", default_value="",
@@ -594,5 +549,8 @@ def generate_launch_description():
         *sim_speed_arguments(),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
+        DeclareLaunchArgument("run_spec", default_value="",
+                              description="D-426 검증 runner 소유 run_spec.yaml 경로. "
+                                          "비우면 기존 자체 생성 동작(임시 디렉터리·개발 토큰)"),
         OpaqueFunction(function=_launch_setup),
     ])

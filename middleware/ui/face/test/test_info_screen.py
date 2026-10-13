@@ -298,6 +298,12 @@ class TestDriveCard:
         without, _ = self._drive(speed=None)
         assert ImageChops.difference(with_speed, without).getbbox() is not None
 
+    def test_critical_battery_uses_readable_ink_on_warning_fill(self):
+        low, _ = self._drive(battery_percent=15.0)
+        label = low.crop((260, 165, 320, 194))
+        colours = {colour for _count, colour in label.getcolors(maxcolors=1 << 16)}
+        assert _CRIT in colours and _FG in colours
+
     def test_the_card_dispatch_picks_the_drive_kind(self):
         # kind 가 카드를 고른다 — 없으면 웨이크 카드(호환). 다른 장치의 렌더러도
         # 이 계약을 따른다. 픽셀로 비교한다: 크기만 같다고 닮은 게 아니다.

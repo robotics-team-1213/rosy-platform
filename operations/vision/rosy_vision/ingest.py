@@ -17,8 +17,10 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import itertools
 import json
 import logging
+import re
 import ssl
 import time
 from collections import deque
@@ -46,7 +48,8 @@ from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_fi
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision.rectify import rectify_jpeg
+from rosy_vision.rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
+from rosy_vision.stream_demand import StreamDemand
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -58,6 +61,9 @@ STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
 # detecting, e.g. frames went stale); the phone then sees empty lists again.
 MARKER_REPORT_TTL_S = 3.0
+# D-484: a field-calibration report older than this no longer rectifies the
+# preview (the worker stopped feeding detections; show the raw frame instead).
+FIELD_REPORT_TTL_S = 5.0
 # A peer that upgrades but never sends hello is closed after this long, counted in
 # steps of _HELLO_STEP_S so a stalled event loop cannot use the peer's time up.
 HELLO_TIMEOUT_S = 5.0
@@ -86,6 +92,8 @@ _MAP_REGISTER_INTERVAL_S = 1.0
 # D-341 11: an upgrade refused because the paired-credential state is unknown asks the phone
 # to come back after one sync interval.
 _PAIRING_RETRY_AFTER_S = 2
+# D-560: a calibration revision travels in X-Frame-Calibration; anything else is no record.
+_REVISION = re.compile(r"[A-Za-z0-9._:-]{1,96}")
 
 
 @dataclass
@@ -169,11 +177,19 @@ class _Source:
     latest: LatestFrame | None = None
     # (corner ids, robot ids, monotonic report time) from the Vision worker.
     markers: tuple[tuple[int, ...], tuple[str, ...], float] | None = None
+    # D-484: the worker's last field-calibration report (dict + monotonic time).
+    field: tuple[dict, float] | None = None
     # Optional hello.lens ({"kind", "focal_mm", "hfov_deg"}); None for older apps.
     lens: dict | None = None
     # D-341: SHA-256 of a paired phone's bearer (never the bearer) and its credential id.
     credential_digest: bytes | None = None
     credential_id: str | None = None
+    # D-589: this connection's number (a reconnect gets a new one) and the phone's last
+    # valid camera_state; None until the phone reports one (older apps never do).
+    link: int = 0
+    camera_state: protocol.CameraState | None = None
+    # D-691: last demand.wanted sent on this connection. None until the first send.
+    demand_sent: bool | None = None
 
 
 class IngestServer:
@@ -217,9 +233,18 @@ class IngestServer:
         # Started on the first map proposal; tests may swap in another executor or job.
         self._map_executor: Executor | None = None
         self._map_job = map_worker.register
+        # D-560: the approved tracking record per source as the track worker last read it
+        # from Fleet ((record, the worker's map_id)), and the last map plane per source,
+        # keyed by frame identity and record revision.
+        self._plane_records: dict[str, tuple[Mapping, str]] = {}
+        self._plane_cache: dict[str, tuple[LatestFrame, str, asyncio.Future]] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
+        self._links = itertools.count(1)
+        # D-691: authorized preview reads keep the phone sending for a hold.
+        self._demand = StreamDemand()
+        self._demand_tasks: set[asyncio.Task] = set()
 
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
         return await serve(
@@ -254,6 +279,23 @@ class IngestServer:
         """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
         return getattr(self._sources.get(source), "lens", None)
 
+    def camera_link(self, source: str) -> tuple[int | None, protocol.CameraState | None]:
+        """D-589: (connection number, last valid camera_state) of ``source``; (None, None) when
+        it is not connected."""
+        src = self._sources.get(source)
+        return (None, None) if src is None else (src.link, src.camera_state)
+
+    async def send_camera(self, source: str, message: dict) -> bool:
+        """D-589: send a downlink ``camera`` text message on ``source``'s connection."""
+        src = self._sources.get(source)
+        if src is None:
+            return False
+        try:
+            await src.connection.send(json.dumps(message, separators=(",", ":")))
+        except websockets.exceptions.ConnectionClosed:
+            return False
+        return True
+
     def report_markers(self, source: str, corners_seen, robots_seen) -> None:
         """Record which configured marker ids the worker saw on ``source``'s latest frame."""
         src = self._sources.get(source)
@@ -261,6 +303,35 @@ class IngestServer:
             return
         src.markers = (tuple(sorted(set(corners_seen))), tuple(sorted(set(robots_seen))),
                        time.monotonic())
+
+    def report_field(self, source: str, report: dict) -> None:
+        """Record the worker's latest field-boundary calibration report (D-484)."""
+        src = self._sources.get(source)
+        if src is None:
+            return
+        src.field = (dict(report), time.monotonic())
+
+    def report_calibration(self, source: str, record: Mapping | None, map_id: str) -> None:
+        """Record the approved tracking calibration the track worker read from Fleet (D-560)."""
+        revision = record.get("calibration_revision") if isinstance(record, Mapping) else None
+        if isinstance(revision, str) and _REVISION.fullmatch(revision):
+            self._plane_records[source] = (record, map_id)
+        else:
+            self._plane_records.pop(source, None)
+
+    def _field_corners(self, source: str) -> tuple[tuple[tuple[float, float], ...], str] | None:
+        """Fresh auto-rectification corners and the calibration state, or None."""
+        src = self._sources.get(source)
+        report_state = getattr(src, "field", None) if src is not None else None
+        if report_state is None:
+            return None
+        report, at = report_state
+        if time.monotonic() - at > FIELD_REPORT_TTL_S:
+            return None
+        corners = report.get("corners_normalized")
+        if not isinstance(corners, list) or len(corners) != 4:
+            return None
+        return tuple(tuple(point) for point in corners), str(report.get("state", ""))
 
     def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
         if src.markers is None or time.monotonic() - src.markers[2] > MARKER_REPORT_TTL_S:
@@ -306,6 +377,8 @@ class IngestServer:
             lease = self.preview_signer.verify(bearer, source_id=source)
         except VisionLeaseError:
             return _http_response(401, b"unauthorized\n")
+        # A missing, stale, or rate-limited frame is still a request (D-691).
+        self._note_stream_request(source)
         if view == "map-proposal" and self.map_paint is None:
             return _http_response(404, b"site map paint not configured\n")
         if view == "frame":
@@ -325,12 +398,36 @@ class IngestServer:
         if view == "map-proposal":
             return await self._map_proposal_response(source, frame)
         jpeg = frame.jpeg
-        rectification_active = False
+        rectified_header = "false"
+        extra_state: dict[str, str] = {}
         if "rectification" in lease:
             try:
                 settings = PreviewRectification.from_mapping(lease["rectification"])
-                rectification_active = not settings.is_identity
-                if rectification_active:
+                if settings.mode == "map":
+                    return await self._map_plane_response(source, frame, age, lease)
+                if settings.mode == "auto":
+                    # D-484: swap the lease's corners for the calibration's accepted quad.
+                    field = self._field_corners(source)
+                    if field is None:
+                        return _http_response(200, frame.jpeg, extra={
+                            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+                            "X-Frame-Seq": str(frame.header.seq),
+                            "X-Frame-Age-Ms": str(round(age * 1000)),
+                            "X-Frame-Rectified": "false",
+                            "X-Frame-State": "field-unavailable",
+                            **_lens_header(self.source_lens(source)),
+                        })
+                    corners, calib_state = field
+                    settings = PreviewRectification(
+                        mode="manual",
+                        fx=settings.fx, fy=settings.fy, cx=settings.cx, cy=settings.cy,
+                        k1=settings.k1, k2=settings.k2, p1=settings.p1, p2=settings.p2,
+                        k3=settings.k3, corners=corners, output_aspect=settings.output_aspect)
+                    rectified_header = "auto"
+                    extra_state = {"X-Field-Calib": calib_state}
+                elif not settings.is_identity:
+                    rectified_header = "true"
+                if rectified_header != "false":
                     jpeg = rectify_jpeg(frame.jpeg, settings)
             except (TypeError, ValueError, cv2.error):
                 return _http_response(422, b"rectification failed\n",
@@ -343,7 +440,58 @@ class IngestServer:
             "X-Frame-Width": str(frame.header.width),
             "X-Frame-Height": str(frame.header.height),
             "X-Frame-Rotation-Deg": str(frame.header.rotation_deg),
-            "X-Frame-Rectified": "true" if rectification_active else "false",
+            "X-Frame-Rectified": rectified_header,
+            **extra_state,
+            **_lens_header(self.source_lens(source)),
+        })
+
+    async def _map_plane_response(self, source: str, frame: LatestFrame, age: float,
+                                  lease: Mapping | None = None) -> Response:
+        """D-560: the latest frame warped to the map plane, or 409; never the raw frame.
+
+        The warp runs off the event loop, once per (frame, record revision) for all readers.
+        """
+        reported = self._plane_records.get(source)
+        if reported is None:
+            return _plane_unavailable()
+        record, map_id = reported
+        revision = str(record.get("calibration_revision"))
+        crop_map = lease.get("crop_map") if lease else None
+        if crop_map is not None and (lease.get("crop_map_id") != map_id
+                                     or lease.get("crop_revision") != revision):
+            return _plane_unavailable()
+        cached = self._plane_cache.get(source)
+        if cached is None or cached[0] is not frame or cached[1] != revision:
+            task = asyncio.ensure_future(asyncio.to_thread(
+                map_plane_jpeg, frame.jpeg, record, source_id=source, map_id=map_id,
+                lens=self.source_lens(source)))
+            # Retrieve a failure even when no reader is left to await it (no "never retrieved" log).
+            task.add_done_callback(lambda t: t.cancelled() or t.exception())
+            cached = (frame, revision, task)
+            self._plane_cache[source] = cached
+        plane: MapPlane | None = await asyncio.shield(cached[2])
+        if plane is None:
+            return _plane_unavailable()
+        jpeg, size, bounds, rectified = plane.jpeg, plane.size, plane.bounds_m, "map"
+        if crop_map is not None:
+            cropped = await asyncio.to_thread(crop_map_plane, plane, *crop_map)
+            if cropped is None:
+                return _plane_unavailable()
+            jpeg, size, bounds = cropped
+            rectified = "map-crop"
+        min_x, min_y, max_x, max_y = bounds
+        return _http_response(200, jpeg, extra={
+            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+            "X-Frame-Seq": str(frame.header.seq),
+            "X-Frame-Age-Ms": str(round(age * 1000)),
+            "X-Frame-Captured-At": str(frame.captured_at),
+            "X-Frame-Width": str(size[0]),
+            "X-Frame-Height": str(size[1]),
+            "X-Frame-Rotation-Deg": "0",
+            "X-Frame-Rectified": rectified,
+            "X-Frame-Plane": ",".join(f"{v:.4f}" for v in (min_x, min_y, max_x, max_y, plane.px_per_m)),
+            "X-Frame-Calibration": plane.revision,
+            "X-Frame-Observed-Fraction": f"{plane_observed_fraction(plane, crop_map):.6f}",
             **_lens_header(self.source_lens(source)),
         })
 
@@ -512,7 +660,8 @@ class IngestServer:
                 return
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello),
-                      credential_digest=credential_digest, credential_id=credential_id)
+                      credential_digest=credential_digest, credential_id=credential_id,
+                      link=next(self._links))
         sensor = hello["sensor"]
         # app_version/device are free text from the phone: repr and cap them in the log.
         logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s credential=%s",
@@ -524,6 +673,7 @@ class IngestServer:
         self._field_cache.pop(source_name, None)
         self._map_cache.pop(source_name, None)
         self._map_done.pop(source_name, None)
+        self._plane_cache.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -533,6 +683,7 @@ class IngestServer:
 
         try:
             await connection.send(json.dumps(protocol.make_config(**self.config)))
+            await self._send_demand(src, force=True)
         except websockets.exceptions.ConnectionClosed:
             self._drop_if_current(source_name, connection)
             return
@@ -542,6 +693,8 @@ class IngestServer:
             async for message in connection:
                 if isinstance(message, (bytes, bytearray)):
                     self._handle_frame(src, bytes(message))
+                else:
+                    self._handle_text(src, message)
         except websockets.exceptions.ConnectionClosed:
             pass
         finally:
@@ -590,6 +743,7 @@ class IngestServer:
             self._field_cache.pop(source_name, None)
             self._map_cache.pop(source_name, None)
             self._map_done.pop(source_name, None)
+            self._plane_cache.pop(source_name, None)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:
@@ -606,8 +760,48 @@ class IngestServer:
             }
             try:
                 await src.connection.send(json.dumps(status))
+                await self._send_demand(src)
             except websockets.exceptions.ConnectionClosed:
                 return
+
+    def _note_stream_request(self, source: str) -> None:
+        """An authorized preview read asks ``source`` to send (D-691)."""
+        if not self._demand.note(source):
+            return
+        src = self._sources.get(source)
+        if getattr(src, "connection", None) is None:
+            return
+        task = asyncio.create_task(self._send_demand(src))
+        self._demand_tasks.add(task)
+        task.add_done_callback(self._demand_tasks.discard)
+
+    async def _send_demand(self, src: _Source, *, force: bool = False) -> None:
+        wanted = self._demand.wanted(src.name)
+        if not force and src.demand_sent is wanted:
+            return
+        try:
+            await src.connection.send(json.dumps(protocol.make_demand(wanted)))
+        except websockets.exceptions.ConnectionClosed:
+            return
+        src.demand_sent = wanted
+
+    def _handle_text(self, src: _Source, message: str) -> None:
+        """D-589: keep a valid ``camera_state``; any other or malformed text is ignored."""
+        if src.credential_digest is not None and self._paired_verdict(src) != "ok":
+            return
+        if len(message) > protocol.MAX_TEXT_CHARS:
+            return
+        try:
+            state = protocol.parse_camera_state(json.loads(message))
+        except (ValueError, protocol.CameraMessageError) as exc:
+            logger.debug("source %s text message ignored reason=%s", src.name,
+                         getattr(exc, "reason", "json"))
+            return
+        previous = src.camera_state
+        if previous is None or (previous.applied, previous.mode) != (state.applied, state.mode):
+            logger.info("source %s camera applied %s mode=%s seq=%d thermal=%d", src.name,
+                        state.applied.fingerprint(), state.mode, state.seq, state.thermal)
+        src.camera_state = state
 
     def _handle_frame(self, src: _Source, message: bytes) -> None:
         if src.credential_digest is not None and self._paired_verdict(src) != "ok":
@@ -662,8 +856,12 @@ def _lens_header(lens: dict | None) -> dict[str, str]:
     return {"X-Source-Lens": _lens_text(lens)} if lens else {}
 
 
+def _plane_unavailable() -> Response:
+    return _http_response(409, b"map plane unavailable\n", extra={"X-Frame-State": "plane-unavailable"})
+
+
 def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:
-    reason = {200: "OK", 401: "Unauthorized", 404: "Not Found",
+    reason = {200: "OK", 401: "Unauthorized", 404: "Not Found", 409: "Conflict",
               422: "Unprocessable Content", 429: "Too Many Requests",
               503: "Service Unavailable"}[status]
     headers = Headers({"Content-Length": str(len(body)), "X-Content-Type-Options": "nosniff",

@@ -44,3 +44,50 @@ def odom_owns_pose(map_pose_ts: float, now: float,
     구성에서는 화면에 무엇이라도 띄워야 하므로 - 폴백으로 쓴다.
     """
     return (now - map_pose_ts) >= ttl_s
+
+
+def observe_bounded_trial(bridge, msg, sample, *, now=None):
+    """Optional private trial input; original ROS clock/frame, never fake seq."""
+    guard=bridge._bounded_trial_guard
+    if guard is None:return
+    try:
+        from core_features.command.bounded_trial import BoundedTrial
+        if type(guard) is not BoundedTrial:raise ValueError('exact trial guard required')
+        stamp=msg.header.stamp
+        if type(stamp.sec) is not int or type(stamp.nanosec) is not int or not 0<=stamp.nanosec<1000000000:
+            raise ValueError('invalid original odom timestamp')
+        guard.observe(x=sample['x'],y=sample['y'],stamp_ns=stamp.sec*1000000000+stamp.nanosec,
+                      source_now_ns=bridge._node.get_clock().now().nanoseconds,
+                      frame_id=msg.header.frame_id,now=now)
+    except Exception:
+        try:guard.stop('odom_adapter_failed')
+        except Exception:pass
+
+
+def observe_lane_return(bridge, msg, sample, *, now=None):
+    """Preserve the real odom source clock; never derive travel from issued twists."""
+    line = bridge._svc.line_follow
+    try:
+        stamp = msg.header.stamp
+        if (type(stamp.sec) is not int or stamp.sec < 0 or type(stamp.nanosec) is not int
+                or not 0 <= stamp.nanosec < 1_000_000_000):
+            raise ValueError("invalid original odometry timestamp")
+        # Accepted body frames share the planar origin; other transforms need resolution.
+        # Device bringup prefixes frames as robot.frame_prefix does (rosy_26/base_footprint).
+        child = msg.child_frame_id.removeprefix(bridge._frame_prefix)
+        if child not in ("base_link", "base_footprint"):
+            raise ValueError("unresolved odometry body frame")
+        q = msg.pose.pose.orientation
+        values = (q.x, q.y, q.z, q.w)
+        if (not all(type(v) in (int, float) and math.isfinite(v) for v in values)
+                or abs(sum(v*v for v in values)-1.) > .01):
+            raise ValueError("invalid original odometry rotation")
+        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        if abs(math.atan2(math.sin(yaw-sample["yaw"]), math.cos(yaw-sample["yaw"]))) > 1e-6:
+            raise ValueError("translated yaw does not match original rotation")
+        line.observe_return_pose(stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec,
+            source_now_ns=bridge._node.get_clock().now().nanoseconds,
+            frame=msg.header.frame_id, x=sample["x"], y=sample["y"], yaw=sample["yaw"],
+            received_at=bridge._line_clock() if now is None else now)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        line.invalidate_return_pose()

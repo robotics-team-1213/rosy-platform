@@ -34,6 +34,9 @@ class Formation(str, Enum):
     V = "V"
     GRID = "GRID"
     CIRCLE = "CIRCLE"
+    #: D-559: COLUMN slots, but each follower replays the leader's driven path
+    #: (`mode="trail"`, `distance` = path distance behind the leader).
+    TRAIL = "TRAIL"
 
 
 class FormationError(ValueError):
@@ -96,6 +99,7 @@ _GENERATORS: dict[Formation, Callable[[int, float, int], list[SlotOffset]]] = {
     Formation.V: _v,
     Formation.GRID: _grid,
     Formation.CIRCLE: _circle,
+    Formation.TRAIL: _column,
 }
 
 

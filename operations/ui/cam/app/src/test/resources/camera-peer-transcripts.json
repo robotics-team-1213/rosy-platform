@@ -1,0 +1,84 @@
+{
+  "vectors": [
+    {
+      "context": "request",
+      "fields": {
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "label": "\ud604\uc7a5 \ud0dc\ube14\ub9bf \ud83d\ude00",
+        "client_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==",
+        "nonce": "0101010101010101010101010101010101010101010101010101010101010101",
+        "profile": "rosy.camera-peer/1",
+        "audience": "fleet-camera-ingest",
+        "device_kind": "overhead-camera",
+        "source_role": "camera"
+      },
+      "ascii": "{\"context\":\"request\",\"fields\":{\"audience\":\"fleet-camera-ingest\",\"client_id\":\"pilot_01\",\"client_public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==\",\"device_kind\":\"overhead-camera\",\"label\":\"\\ud604\\uc7a5 \\ud0dc\\ube14\\ub9bf \\ud83d\\ude00\",\"nonce\":\"0101010101010101010101010101010101010101010101010101010101010101\",\"profile\":\"rosy.camera-peer/1\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"source_role\":\"camera\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "9c0487f287815e1cf690a03b3d04d4277a5ae52768c86b0208fca224f7cf3734"
+    },
+    {
+      "context": "receiver-challenge",
+      "fields": {
+        "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+        "generation": 0,
+        "expires_at": "2026-10-05T00:01:00+00:00",
+        "profile": "rosy.camera-peer/1",
+        "audience": "fleet-camera-ingest",
+        "device_kind": "overhead-camera",
+        "source_role": "camera",
+        "source_id": "ceiling_north"
+      },
+      "ascii": "{\"context\":\"receiver-challenge\",\"fields\":{\"audience\":\"fleet-camera-ingest\",\"challenge_id\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"client_id\":\"pilot_01\",\"client_key_sha256\":\"5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3\",\"device_kind\":\"overhead-camera\",\"expires_at\":\"2026-10-05T00:01:00+00:00\",\"generation\":0,\"nonce\":\"0202020202020202020202020202020202020202020202020202020202020202\",\"profile\":\"rosy.camera-peer/1\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"relationship_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"source_id\":\"ceiling_north\",\"source_role\":\"camera\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "68a3371998f02091cc0a0149c95eeac0b7396eb104a753e9b670ae438c426a7e"
+    },
+    {
+      "context": "session-request",
+      "fields": {
+        "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+        "generation": 0,
+        "expires_at": "2026-10-05T00:01:00+00:00",
+        "profile": "rosy.camera-peer/1",
+        "audience": "fleet-camera-ingest",
+        "device_kind": "overhead-camera",
+        "source_role": "camera",
+        "source_id": "ceiling_north"
+      },
+      "ascii": "{\"context\":\"session-request\",\"fields\":{\"audience\":\"fleet-camera-ingest\",\"challenge_id\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"client_id\":\"pilot_01\",\"client_key_sha256\":\"5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3\",\"device_kind\":\"overhead-camera\",\"expires_at\":\"2026-10-05T00:01:00+00:00\",\"generation\":0,\"nonce\":\"0202020202020202020202020202020202020202020202020202020202020202\",\"profile\":\"rosy.camera-peer/1\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"relationship_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"source_id\":\"ceiling_north\",\"source_role\":\"camera\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "cf29066eed4a70e7d2f39d62a5a57338db6d9add42c4364022ea4215ee6c662f"
+    }
+  ],
+  "python_signature": {
+    "context": "session-request",
+    "fields": {
+      "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+      "receiver_id": "rosy_01",
+      "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+      "client_id": "pilot_01",
+      "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+      "generation": 0,
+      "expires_at": "2026-10-05T00:01:00+00:00",
+      "profile": "rosy.camera-peer/1",
+      "audience": "fleet-camera-ingest",
+      "device_kind": "overhead-camera",
+      "source_role": "camera",
+      "source_id": "ceiling_north"
+    },
+    "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY5RZfEjn0Fw9skJAOd1QucAaorwU/uRxsyKMZmfzXyg5OVEJ8Ws7AM8nMQQhizyTLvm4XMVbIo/PuMhmfVjodQ==",
+    "signature": "MEQCIB8WKmontsmONrEJCGMhZ+ioZLoH4cDiBfq6s6FlP99GAiBtnNpxoX+FyYb20FDkoCxWsDWlZ50nT7yzs6l+5v+VAw=="
+  }
+}

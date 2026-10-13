@@ -96,3 +96,16 @@ Pinky exporter는 기존 비교의 file/원본 Episode closure와 train-only 정
 원장은 숫자 기반 baseline 거절과 expert intent 미확인을 보존하고 외부 pass override를
 막는다. 학습·평가 dataset references는 원래 세션 revision을 유지한다. owner 실행·
 등록 trust·독립 과제·Fleet·DEVICE/FIELD 수용은 이 계약 보강으로 완료되지 않는다.
+
+### 구현 보강 — 2026-10-05 동일 OMX 정책 실행 Episode 초안
+
+`omx_policy_execution_v1`은 시연 profile을 대신하지 않는 별도 SOURCE/HOST 실행
+증거 profile이다. 원본 policy 설치 byte closure, lease/intent, 실제 native callback,
+검증된 기존 Action parent와 이미 존재하는 owner SQLite journal singleton 및
+ActionAPI v2 receipt를 보존한다. observation stream은 intent metadata임을 명시하고
+raw camera bytes/model inference가 없으면 incomplete/unknown/false를 유지한다.
+task unknown, skill null, action 결과와 native terminal 결과는 구분해 대조한다.
+실제 same-goal/full tuple/journal 결과를 offline Fleet export에 연결하되 해시나
+실행 원장을 인증·새 dispatch 권한·학습 GT로 승격하지 않는다. DatasetStore와
+승격은 기존 demonstration profile만 허용하며 이 실행 profile을 학습으로 받지 않는다.
+실제 설치/추론/장치/원래 timing·물리 승인은 별도이고 기존 공개 Action wire는 유지한다.

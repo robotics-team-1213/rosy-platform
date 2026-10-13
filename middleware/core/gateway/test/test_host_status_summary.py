@@ -326,7 +326,8 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     host_api.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
-    assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {"calibration_active"}
+    assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {
+        "calibration_active", "robot_id", "core_process_id", "line_follow_steering_law"}
     assert written["calibration_active"] is None  # missing service is unknown, not idle
     assert written["schema"] == 2
     assert written["battery_warning_percent"] == 25.0
@@ -452,6 +453,23 @@ def test_one_write_reads_one_snapshot(tmp_path):
     host_api.status_inputs(svc)
 
     assert CountingState.calls == 1
+
+
+def test_core_handover_exports_effective_law_without_private_credentials(tmp_path):
+    from core_common.protocol.schemas import StateSnapshot
+    from core_features.line_follow import LineFollowConfig
+    law = dict(cruise_speed=.10, max_linear=.10, steering_gain=2., min_confidence=.35)
+    config = _m1_config(tmp_path)
+    config['auth'] = dict(tokens=[dict(token='never-export')])
+    config['line_follow'] = dict(steering_gain=.8)
+    svc = SimpleNamespace(config=config, state=SnapshotState(StateSnapshot(robot_id='rosy_02')),
+        safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.)),
+        line_follow=SimpleNamespace(config=LineFollowConfig(**law)))
+    data = host_api.status_inputs(svc)
+    assert data['robot_id'] == 'rosy_02'
+    assert data['core_process_id'] == os.getpid()
+    assert data['line_follow_steering_law'] == law
+    assert 'never-export' not in json.dumps(data)
 
 
 def test_a_battery_reading_that_is_not_fresh_is_written_as_unknown(tmp_path):

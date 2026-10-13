@@ -190,11 +190,11 @@ def post_scan(devices: list[dict], *, tls_host: str, port: int, ca_file: Path,
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     # The unit gets both values from /run/rosy-site/site-public.env (written by
-    # site-firewall.py apply from `docker compose config`); the port defaults to 8443 as in Compose.
+    # site-firewall.py apply from `docker compose config`). Neither has a code default.
     parser.add_argument("--tls-host", default=os.environ.get("ROSY_SITE_TLS_HOST", ""),
                         help="site certificate DNS name (default: $ROSY_SITE_TLS_HOST)")
-    parser.add_argument("--port", default=os.environ.get("ROSY_SITE_HTTPS_PORT") or "8443",
-                        help="published site HTTPS port (default: $ROSY_SITE_HTTPS_PORT or 8443)")
+    parser.add_argument("--port", default=os.environ.get("ROSY_SITE_HTTPS_PORT", ""),
+                        help="published site HTTPS port (default: $ROSY_SITE_HTTPS_PORT)")
     parser.add_argument("--ca-file", required=True, type=Path)
     parser.add_argument("--token-file", required=True, type=Path)
     args = parser.parse_args()

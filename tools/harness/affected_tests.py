@@ -37,6 +37,7 @@ GUARD_SET = (
     "test/test_release_boundary_guards.py",
     "test/architecture/test_module_structure.py",
     "test/test_harness_contracts.py",
+    "test/test_secret_public_provenance.py",
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",
@@ -83,6 +84,21 @@ FULL_SUITES = (
 # games test_preview.py). `ros`: none (host conditions), base (/opt/ros) or
 # overlay (+ colcon install, which also builds). `gating: False` reports only.
 ROOT_SHARDS = 3
+# D-553 1: the slowest suites split by test file, like the root shards. fleet
+# alone held the CI critical path at ~580 s of a ~12 min run.
+SUITE_SHARDS = {"fleet": 4, "sensing": 2}
+# Main CI 38056130519 (2026-10-10), seconds per slow Fleet file. These only
+# choose runners; every discovered test still runs exactly once.
+# shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
+FLEET_TEST_SECONDS = {
+    "test_cell_app_browser.py": 119, "test_site_map_browser.py": 110,
+    "test_blocks.py": 89, "test_start_point_browser.py": 45,
+    "test_console_roles_browser.py": 28, "test_password_session.py": 28,
+    "test_fleet_header_browser.py": 26, "test_convoy.py": 17,
+    "test_console_card_trips_browser.py": 17, "test_model_tool_adapter_conformance.py": 13,
+    "test_signal_phase.py": 13, "test_trip_runner.py": 11,
+    "test_console_queue_inline_browser.py": 10, "test_traffic_view_browser.py": 9,
+}
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
@@ -90,26 +106,30 @@ CI_FULL_MATRIX = (
     {"name": "core-domain", "invocations": [[
         "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
         "shared/web/test", "contracts/foundation/test",
-        "middleware/apps/device/pinky/profile/test", "middleware/apps/device/omx/profile/test"]], "ros": "none"},
+        "middleware/devices/pinky/profile/test", "middleware/devices/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
-        ["operations/vision/test"], ["operations/processes/cell/test"],
+        ["operations/vision/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
+        ["operations/world/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
          "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
     {"name": "gz-sim", "invocations": [["integrations/simulation/gazebo/test"]], "ros": "overlay"},
     {"name": "hardware-safety", "invocations": [[
-        "middleware/apps/device/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
+        "middleware/devices/pinky/bringup/test", "middleware/drivers/pinky_adc/test",
         "middleware/perception/test/test_ir_adc_lock.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_flake8.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_pep257.py",
-        "--ignore=middleware/apps/device/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
 )
 
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
+# Keep path arguments below SSH/Tailscale's remote command limit. The remote
+# runner adds its script and options after this budget.
+MAX_INVOCATION_CHARS = 3000
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")
 IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*))",
                     re.MULTILINE)
@@ -155,12 +175,16 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout
 
 
-def changed_files(repo: Path, base: str) -> list[str]:
-    """Committed changes since the merge base plus staged, unstaged and untracked files."""
+def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
+    """Committed changes since the merge base plus staged, unstaged and untracked files.
+
+    With ``head`` (the pre-push hook's pushed commit): only ``base...head``, no working tree.
+    """
     names: set[str] = set()
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines())
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
-    names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
+    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head or 'HEAD'}").splitlines())
+    if head is None:
+        names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
+        names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
     return sorted(n.strip() for n in names if n.strip())
 
 
@@ -174,6 +198,8 @@ class Repo:
     tracked: list[str]
     test_files: list[str]
     _texts: dict[str, str] = field(default_factory=dict)
+    _imports: dict[str, set[str]] = field(default_factory=dict)
+    _tokens: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, root: Path) -> Repo:
@@ -197,9 +223,11 @@ class Repo:
 
     def module_for(self, path: str) -> dict | None:
         best = None
+        best_length = -1
         for module in self.modules:
-            if _under(path, module["path"]) and (best is None or len(module["path"]) > len(best["path"])):
-                best = module
+            for source in (module['path'], *module.get('source_paths', ())):
+                if _under(path, source) and len(source) > best_length:
+                    best, best_length = module, len(source)
         return best
 
     def prefixes_under(self, path: str) -> tuple[str, ...]:
@@ -214,16 +242,24 @@ class Repo:
         return tuple(dict.fromkeys(found or owner))
 
     def imports(self, path: str) -> set[str]:
+        if path in self._imports:
+            return self._imports[path]
         names: set[str] = set()
         for frm, imp in IMPORT.findall(self.text(path)):
             if frm:
                 names.add(frm)
             else:
                 names.update(n.strip().split(" ")[0] for n in imp.split(","))
+        self._imports[path] = names
         return names
 
     def imports_prefix(self, path: str, prefixes: tuple[str, ...]) -> bool:
         return any(name == p or name.startswith(p + ".") for name in self.imports(path) for p in prefixes)
+
+    def tokens(self, path: str) -> set[str]:
+        if path not in self._tokens:
+            self._tokens[path] = set(re.findall(r"[\w.-]+", self.text(path)))
+        return self._tokens[path]
 
     def test_files_under(self, path: str) -> list[str]:
         if path.endswith(".py"):
@@ -249,7 +285,8 @@ class Repo:
             needles.append(p.name)
         parts = None
         if p.name not in IGNORED_BASENAMES and p.parent.name:
-            parts = [re.compile(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])") for token in (p.name, p.parent.name)]
+            parts = (p.name, p.parent.name)
+        simple_parts = bool(parts and all(re.fullmatch(r"[\w.-]+", token) for token in parts))
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
         found = []
         for test in self.test_files:
@@ -257,7 +294,10 @@ class Repo:
                 continue
             text = self.text(test)
             if (any(n in text for n in needles) or (helper and helper in self.imports(test))
-                    or (parts and all(rx.search(text) for rx in parts))):
+                    or (parts and (all(token in self.tokens(test) for token in parts)
+                                   if simple_parts
+                                   else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
+                                            for token in parts)))):
                 found.append(test)
         return found
 
@@ -271,13 +311,15 @@ def _full_paths(repo: Repo) -> list[str]:
 
 
 def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
-    """Group test paths into pytest invocations with no duplicate test basename."""
+    """Group tests without duplicate basenames or oversized remote commands."""
     kept = [p for p in paths if not any(o != p and _under(p, o) for o in paths)]
     groups: list[tuple[list[str], set[str]]] = []
     for path in kept:
+        if len(path) + 1 > MAX_INVOCATION_CHARS:
+            raise SelectionError(f"test path exceeds remote command budget: {path}")
         names = {PurePosixPath(t).name for t in repo.test_files_under(path)} - IGNORED_BASENAMES
         for members, seen in groups:
-            if not names & seen:
+            if not names & seen and sum(len(p) + 1 for p in members) + len(path) + 1 <= MAX_INVOCATION_CHARS:
                 members.append(path)
                 seen |= names
                 break
@@ -299,6 +341,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
         add(guard, "guard set (D-436 1)")
 
     touched_modules: dict[str, dict] = {}
+    broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
         trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger:
@@ -324,6 +367,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
                 else:
                     # No test names this file: the narrowing has nothing to stand on.
                     add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
+                    broad_fallback_modules[module["name"]] = module
             else:
                 for test in tests:
                     add(test, f"module {module['name']} ({path})")
@@ -359,9 +403,18 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
-    sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.escalations:
         sel.mode = "full"
+        # CI runs the entire root suite in parallel shards for FULL. The local
+        # pre-push gate keeps the module's functional tests and all named tests,
+        # rather than repeating that 15k-test CI suite in one SSH invocation.
+        if "test" in sel.reasons and all("whole root suite" in why for why in sel.reasons["test"]):
+            sel.reasons.pop("test", None)
+            for module in broad_fallback_modules.values():
+                for test in module.get("functional") or []:
+                    add(test, f"module {module['name']} (FULL local functional)")
+    sel.local_invocations = pack(repo, sorted(sel.reasons))
+    if sel.mode == "full":
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
@@ -371,7 +424,23 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     if sel.mode == "full":
         root_tests = sorted(t for t in repo.test_files if _under(t, "test"))
-        entries = [dict(e) for e in CI_FULL_MATRIX]
+        entries = []
+        for entry in CI_FULL_MATRIX:
+            n = SUITE_SHARDS.get(entry["name"], 1)
+            files = sorted(t for t in repo.test_files if _under(t, entry["invocations"][0][0])) if n > 1 else []
+            if len(files) < n or n == 1:
+                entries.append(dict(entry))
+                continue
+            groups = [files[i::n] for i in range(n)]
+            if entry["name"] == "fleet":
+                groups, loads = [[] for _ in range(n)], [0] * n
+                for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)):
+                    i = min(range(n), key=lambda i: (loads[i], i))
+                    groups[i].append(path)
+                    loads[i] += FLEET_TEST_SECONDS.get(PurePosixPath(path).name, 1)
+                groups = [sorted(group) for group in groups]
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[groups[i]])
+                        for i in range(n)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
@@ -433,10 +502,11 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False,
 
 
 def main(repo_root: Path, base: str, mode: str, as_json: bool,
-         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = ()) -> int:
+         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = (),
+         head: str | None = None) -> int:
     repo = Repo.load(repo_root)
     try:
-        changed = changed_files(repo_root, base)
+        changed = changed_files(repo_root, base, head)
         sel = select(repo, changed)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])

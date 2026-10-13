@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from control import pilot_recording as pr
-from control.recording import finish_session, new_session
+from control.recording import finish_session, ir_range_sample, new_session
 from core_common.protocol.recording import (
     MANIFEST_NAME, RecorderStatus, RecordingManifest, recording_id_ok)
 
@@ -126,7 +126,21 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
     assert cmd[4:7] == ["ros2", "bag", "record"]
     topics = cmd[cmd.index("--topics") + 1:]
     assert topics == ["/rosy_01/camera/front/compressed", "/rosy_01/cmd_vel", "/rosy_01/odom",
-                      "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent"]
+                      "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent",
+                      "/rosy_01/line/keep_debug", "/rosy_01/ir_sensor/range",
+                      "/rosy_01/camera/telemetry", "/rosy_01/camera/calibration/status",
+                      "/rosy_01/tf", "/rosy_01/tf_static",
+                      "/tf", "/tf_static"]
+    assert "/rosy_01/us_sensor/range" not in topics
+    assert pr.pilot_bag_command("/r/s")[-2:] == ["tf", "tf_static"]
+
+
+def test_ir_range_sample_is_three_adc_counts_in_robot_order():
+    assert ir_range_sample([120, 800, 4095]) == {"left": 120, "centre": 800, "right": 4095}
+    assert ir_range_sample((0, 0, 0)) == {"left": 0, "centre": 0, "right": 0}
+    for bad in ([1, 2], [1, 2, 3, 4], [1, 2, 4096], [-1, 2, 3], [1.0, 2, 3],
+                [True, 2, 3], "120,800,400", None):
+        assert ir_range_sample(bad) is None
 
 
 def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path):
@@ -141,11 +155,28 @@ def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path
     meta = _meta(tmp_path / rid)
     assert meta['preview_mode'] == 'annotated'
     assert meta['annotation_origin'] == 'model_unreviewed'
+    assert meta['topics'][-2:] == ['/tf', '/tf_static']
     rig.write_bag(tmp_path / rid)
     rig.rec.tick()
     rig.rec.stop('requested')
     rig.finish()
     assert _manifest(tmp_path / rid).preview_mode == 'annotated'
+
+
+@pytest.mark.parametrize('preview_mode', ['raw', 'annotated'])
+def test_lane_diagnostics_survive_recording_without_annotated_preview(tmp_path, preview_mode):
+    rig = Rig(tmp_path)
+    ok, rid = rig.rec.start(preview_mode=preview_mode)
+    assert ok
+    topics = rig.cmds[-1][rig.cmds[-1].index('--topics') + 1:]
+    assert topics.count('/rosy_01/line/keep_debug') == 1
+    assert topics.count('/rosy_01/ir_sensor/range') == 1
+    assert '/rosy_01/us_sensor/range' not in topics
+    assert 'line/keep_debug' in _meta(tmp_path / rid)['topics']
+    assert 'ir_sensor/range' in _meta(tmp_path / rid)['topics']
+    if preview_mode == 'raw':
+        assert '/rosy_01/camera/preview/compressed' not in topics
+        assert _meta(tmp_path / rid)['annotation_origin'] == 'none'
 
 
 def test_raw_default_and_unknown_recording_options_cannot_add_annotations(tmp_path):

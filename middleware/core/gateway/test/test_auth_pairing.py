@@ -433,6 +433,69 @@ def test_device_mode_refuses_dev_tokens_even_with_dev_auth(robot, monkeypatch, t
         assert client.get("/api/v1/robot/state", headers=CARD).status_code == 200
 
 
+def test_device_dev_mode_marker_opens_only_the_shared_dev_tokens(robot, monkeypatch, tmp_path):
+    from core_common import config as core_config
+
+    marker = tmp_path / "dev-mode"
+    monkeypatch.setattr(core_config, "DEV_MODE_MARKER", marker)
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    monkeypatch.delenv("ROSY_DEV_AUTH", raising=False)
+    # A real device overlay lists its card token; that list must not hide the dev tokens.
+    overlay = _card_config([{"token": "plain-" + "operator-value", "role": "operator"}])
+    (tmp_path / "rosy.yaml").write_text(yaml.safe_dump(overlay), encoding="utf-8")
+
+    # D-548: no marker is D-193 7 unchanged.
+    loaded = core_config.load_config()
+    assert [item.get("id") for item in loaded["auth"]["tokens"]] == ["card01", None]
+    tc, _svc, _state, _events = robot(config_overrides={"auth": loaded["auth"]}, dev_auth=False)
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 401
+
+    marker.write_text("", encoding="ascii")
+    loaded = core_config.load_config()
+    assert [item["role"] for item in loaded["auth"]["tokens"]] == [
+        "administrator", "operator", "administrator", "operator", "viewer"]
+    tc, _svc, _state, _events = robot(config_overrides={"auth": loaded["auth"]}, dev_auth=False)
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 200
+    assert tc.get("/api/v1/robot/state", headers=DEV_VIEWER).status_code == 200
+    assert tc.get("/api/v1/robot/state", headers=bearer("plain-" + "operator-value")).status_code == 401
+    assert tc.get("/api/v1/robot/state", headers=CARD).status_code == 200
+
+    # D-548: no credential that outlives the marker, no new network, release or boot.
+    for method, path in (("post", "/api/v1/system/tokens"), ("delete", "/api/v1/system/tokens/card01"),
+                         ("post", "/api/v1/auth/enrollment-codes"), ("post", "/api/v1/host/reboot"),
+                         ("post", "/api/v1/host/network/connect"), ("post", "/api/v1/system/dds/cyclone")):
+        assert getattr(tc, method)(path, headers=DEV_ADMIN).status_code == 403, path
+    assert tc.get("/api/v1/system/tokens", headers=DEV_ADMIN).status_code == 200
+    assert tc.post("/api/v1/system/tokens", headers=CARD, json={"role": "viewer"}).status_code == 201
+    stored = (tmp_path / "rosy.yaml").read_text(encoding="utf-8")
+    assert hashlib.sha256(("rosy-dev-" + "admin").encode()).hexdigest() not in stored  # never written to /etc
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 200  # still live in memory
+
+    # A dev digest an earlier write stored is not listed twice; removing the marker closes it at once.
+    hashed = {"id": "devstored", "role": "administrator", "source": "legacy",
+              "sha256": hashlib.sha256(("rosy-dev-" + "admin").encode()).hexdigest()}
+    (tmp_path / "rosy.yaml").write_text(yaml.safe_dump(_card_config([hashed])), encoding="utf-8")
+    assert [item.get("id") for item in core_config.load_config()["auth"]["tokens"]] == [
+        "card01", "devstored", None, None]
+    marker.unlink()
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 401
+
+
+def test_device_dev_mode_publishes_a_warning(core_client, monkeypatch, tmp_path):
+    from core_api_web.api.app import create_app
+    from core_common import config as core_config
+
+    marker = tmp_path / "dev-mode"
+    marker.write_text("", encoding="ascii")
+    monkeypatch.setattr(core_config, "DEV_MODE_MARKER", marker)
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    tc, svc = core_client()
+    events: list = []
+    svc.events.subscribe(events.append)
+    create_app(svc.config, svc)
+    assert [event.type for event in events if event.type.startswith("auth.")] == ["auth.development_mode"]
+
+
 def test_device_mode_publishes_a_warning_for_refused_credentials(core_client, monkeypatch):
     monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
     from core_api_web.api.app import create_app

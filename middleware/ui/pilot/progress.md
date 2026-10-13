@@ -21,8 +21,9 @@ gates:
     evidence: "share/pilot: 서명 payload 2026.10.04-034 설치 관측. 무서명 동일 빌드(source dd159ab3361739e41c105dcef533bd0e1fd8f614)의 hosted ARM GET /pilot 200+CSP(run 37200780702, workflow source af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3). cmd는 이 역사적 벤치 재현이며 현재 통합 후보 수용을 증명하지 않는다"
     blocker: "D-444 R1의 서명 release를 탄 기기에서 GET /pilot 200+CSP는 미확인. hosted ARM 무서명 벤치는 이를 대체하지 않는다"
   DEVICE:
-    state: HOLD
-    blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
+    state: GO
+    cmd: "Pilot 브라우저에서 실기 Pinky 원격 조종·페달 해제·e-stop 확인"
+    evidence: "사용자 직접 확인 (2026-10-05, '건했어. pilot 는 돌아'). 정량 측정값 회차는 별도 보강 예정 — docs/validation/pilot-device-user-confirmed-2026-10-05 (D-444 §2 R2)"
   FIELD:
     state: N/A
 adrs: [D-323, D-365, D-366, D-390, D-411, D-432]
@@ -35,6 +36,10 @@ plans:
 ---
 
 ## 지금 상태
+
+- 2026-10-10 D-590: Android 로봇 목록에 `2대 함께 조종` 진입점을 추가했다. 두 인증 세션·두 카메라·공용 조이스틱의 SOURCE 빌드 및 JVM 시험 105건을 확인했다. Lenovo 태블릿에서 `rosy_40`·`rosy_41`의 실제 두 카메라와 조이스틱 화면을 최신 설치본으로 촬영했다(`X:/DevTemp/pilot-group-entry/pilot-group-live-final.png`). 비영 명령의 두 로봇 동시 실물 주행·단절 시 물리 정지는 FIELD HOLD다. 이 모드는 같은 명령 전송이며 leader/follower 추종(D-559)은 아니다.
+
+- 2026-10-05 D-456: Native Pilot의 LAN 선택·수신 승인·암호화 승인 기록·신원 증명 재연결은 SOURCE/LOCAL 구현과 실제 Kotlin/JVM 81 PASS를 확인했다. 새 페어링의 서명 APK·실제 승인 화면·DHCP/장기 오프라인 재접속은 미확인이다. 기존 DEVICE GO는 D-444의 사용자 확인 범위이며 새 페어링 수용을 뜻하지 않는다.
 
 - 골격 착지: `/pilot` 라우트·web_common ui-shell 표면·`stick.js` 순수 입력 매핑.
 - 앱은 같은 출처의 `/api/v1`·`/ws/*` 만 말한다(D-323, CORE SRS §1.3).

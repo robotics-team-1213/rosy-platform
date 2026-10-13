@@ -3,6 +3,9 @@
 
 # design-patterns
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Compound lessons whose invariant is a design pattern (safety state machines, liveness, fail-loud transport). Apply when implementing or reviewing the named `module:`.

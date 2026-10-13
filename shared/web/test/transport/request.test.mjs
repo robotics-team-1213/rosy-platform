@@ -54,7 +54,7 @@ for (const path of ['https://fleet.test/state', '//fleet.test/state', 'data:text
   });
 }
 
-test('caller header casing cannot replace scoped Bearer or enable redirect/cookie credentials', async () => {
+test('caller header casing cannot replace scoped Bearer, follow redirects, or send cross-origin cookies', async () => {
   let sent;
   const request = createRequest({origin, credential: () => 'scoped-token',
     fetchImpl: async (url, options) => { sent = options; return json({}); }});
@@ -62,7 +62,7 @@ test('caller header casing cannot replace scoped Bearer or enable redirect/cooki
     credentials: 'include', redirect: 'follow'});
   assert.equal(new Headers(sent.headers).get('Authorization'), 'Bearer scoped-token');
   assert.equal(new Headers(sent.headers).get('X-Trace'), 'local');
-  assert.equal(sent.credentials, 'omit');
+  assert.equal(sent.credentials, 'same-origin');
   assert.equal(sent.redirect, 'error');
 });
 

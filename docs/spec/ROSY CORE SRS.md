@@ -460,6 +460,12 @@ CORE는 `${ROSY_DATA_PATH}/battery-shutdown-request.json`에 요청을 기록한
 `rosy-lowbatt-shutdown` 유닛이 신선도를 자체 검증한 뒤 수행한다. 회복 시 파일이
 삭제되므로 유예 중 충전을 시작하면 셧다운은 철회된다.
 
+**배터리 정지의 해제 (D-502).** Critical `STOP`, 보낼 수 없는 `RETURN_HOME`, Deep의
+모터 정지는 모두 SAF-001 E-Stop이다. 모드는 EMERGENCY가 되고, 해제는 SAF-001과 같이
+Administrator의 `POST /api/v1/safety/release`뿐이다. 전압이 회복되어도 스스로 풀리지
+않는다. 해제는 정책을 끄지 않으며 Deep이 이어지면 다시 정지한다. 배터리 입력의
+결측·낡음(`missing`/`stale`)은 `GET /safety/state`와 `GET /sensors/battery`에 드러난다.
+
 **저배터리 표시.** 경보 표시는 근접 정보창과 무관하게 동작해야 한다. Warning은
 상시 주황, Critical은 빨강 1 Hz 점멸, Deep은 빨강 2 Hz 점멸이며, 절전 모드
 (`STANDBY` 포함)에서도 유지된다 — 아무도 앞에 없는 상태가 이 표시가 필요한
@@ -554,7 +560,10 @@ Navigation 중 다음 조건이 지속되면 자동으로 Goal을 취소하고 �
 - 차선 evidence는 조향 보정 입력일 뿐 최종 명령이 아니다. 출력은 Command
   Manager가 소유한다 (D-2).
 - 차선 상실이 설정 시간(기본 3초)을 넘기면 정지 + `nav.lane_lost` 이벤트 발행.
-  자동 재탐색 주행은 하지 않는다(재개는 운용자 또는 상위 목표 책임).
+  기본 경로의 재개는 운용자 또는 상위 목표 책임이다. D-468 차선 이탈 복구가
+  활성화되고 신선한 자세·경계·충돌/바닥 증거와 제어 권한이 충족되면 CORE가
+  제한된 로컬 복귀·재탐색·동일 차로 검증을 먼저 수행한다. 선이 보임만으로
+  재개하지 않으며, 로컬 후보 소진 후에 Fleet 지원을 요청한다. 구현·장치 수용은 별도다.
 - 차선 추종 중 최고 속도는 0.10 m/s로 고정한다(SAF-004 상한과 별도의 모드 캡).
 
 ## 10.1 Swarm 지원 (로봇측 군집 모드)
@@ -566,12 +575,14 @@ Navigation 중 다음 조건이 지속되면 자동으로 Goal을 취소하고 �
 
 Swarm 추종은 별도 cmd_vel 소스가 아니라 **Navigation Manager의 이동 목표 스트림**(moving goal)으로 투입된다(Nav2 장애물 회피 그대로 활용). 모드는 `NAVIGATION`을 유지하고 상태로 군집 역할을 노출한다(SWM-006). v2에서 로컬 추종 컨트롤러(pure-pursuit) 소스로 대체 가능하도록 CMD-001 소스 등록 인터페이스를 예약한다.
 
+D-559 가 그 v2 훅을 `mode: trail` 로 구현한다: 리더가 지나간 자취를 팔로워 CORE 가 pure pursuit 로 조향해 `swarm` 소스(NAVIGATION 등급)로 NAVIGATION 슬롯에 넣는다. SAF-004 클리핑·D-400 정책·D-422 몸체 정지를 지나고, 그 동안 Nav2 twist 는 버린다. 기본(`offset`)은 위 moving goal 그대로다.
+
 ### SWM-002 Follow 프리미티브
 
 다음 원자 명령을 지원한다.
 
 ```text
-POST /api/v1/swarm/follow    # {target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source}
+POST /api/v1/swarm/follow    # {target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members, mode}
 POST /api/v1/swarm/cancel
 GET  /api/v1/swarm/state
 ```
@@ -579,6 +590,7 @@ GET  /api/v1/swarm/state
 - v1 구현: 목표 갱신 ≤2 Hz moving-goal Nav2 (속도 ≤0.2 m/s 군집 운용에 충분)
 - 종료 조건: cancel / 스트림 단결(`stream_timeout_ms`, 기본 1000 ms) → HOLD
 - SAF-004 속도 상한·NAV-006 stuck 감지가 그대로 적용된다
+- `mode: trail`(D-559): `distance` 는 자취 위 경로 거리, `lateral` 은 0. 자취에서 0.30 m 벗어나거나 리더·자기 pose 가 map 프레임이 아니거나 D-422 몸체 정지가 걸리면 HOLD, 스트림 단절은 위와 같이 HOLD 다
 
 ### SWM-007 참조 소스 추상화 (분산 진화 훅, D-21)
 

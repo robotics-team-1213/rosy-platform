@@ -1,0 +1,78 @@
+[
+  {
+    "surface": "line_follow",
+    "viewport": "1366x768",
+    "image": "operator-console-line-follow-1366x768.png",
+    "posts": [
+      {
+        "method": "PUT",
+        "path": "/api/v1/line-follow/mode",
+        "body": {
+          "mode": "IR_LINE"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "readback": "차선 추종 상태를 읽지 못했습니다: 서버가 요청을 처리하지 못했습니다 (HTTP 503). 상태를 다시 확인하세요.",
+    "action": "적외선 센서 추종 시작 요청을 CORE가 받았습니다. 현재 상태로 시작 여부를 확인하세요."
+  },
+  {
+    "surface": "docking",
+    "viewport": "1366x768",
+    "image": "operator-console-docking-1366x768.png",
+    "posts": [
+      {
+        "method": "POST",
+        "path": "/api/v1/docking/dock",
+        "body": {
+          "dock": "dock-b"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "dockReadback": "도킹 상태를 확인할 수 없어 명령을 막았습니다: 도킹 컨트롤러가 준비되지 않았습니다.",
+    "dockAction": "dock-b 도킹 요청을 CORE가 받았습니다."
+  },
+  {
+    "surface": "line_follow",
+    "viewport": "390x844",
+    "image": "operator-console-line-follow-390x844.png",
+    "posts": [
+      {
+        "method": "PUT",
+        "path": "/api/v1/line-follow/mode",
+        "body": {
+          "mode": "IR_LINE"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "readback": "차선 추종 상태를 읽지 못했습니다: 서버가 요청을 처리하지 못했습니다 (HTTP 503). 상태를 다시 확인하세요.",
+    "action": "적외선 센서 추종 시작 요청을 CORE가 받았습니다. 현재 상태로 시작 여부를 확인하세요."
+  },
+  {
+    "surface": "docking",
+    "viewport": "390x844",
+    "image": "operator-console-docking-390x844.png",
+    "posts": [
+      {
+        "method": "POST",
+        "path": "/api/v1/docking/dock",
+        "body": {
+          "dock": "dock-b"
+        }
+      }
+    ],
+    "errors": [],
+    "overflowX": 0,
+    "eStopVisible": true,
+    "dockReadback": "도킹 상태를 확인할 수 없어 명령을 막았습니다: 도킹 컨트롤러가 준비되지 않았습니다.",
+    "dockAction": "dock-b 도킹 요청을 CORE가 받았습니다."
+  }
+]

@@ -28,8 +28,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,6 +70,9 @@ fun SettingsScreen(
     development: LinkPolicy? = null,
     onDevelopmentImport: (DevelopmentBootstrap, (Boolean) -> Unit) -> Unit = { _, result -> result(false) },
     onDevelopmentRevoke: () -> Unit = {},
+    /** D-589 6: obey Vision `camera` messages; applies live, also while the camera runs. */
+    recognitionExposure: Boolean = true,
+    onRecognitionExposure: (Boolean) -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
@@ -116,14 +121,14 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .safeDrawingPadding()
-            .padding(16.dp)
+            .padding(RosyMetrics.Space4.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp),
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
         if (development != null) {
             Text(stringResource(R.string.settings_development_active, development.siteName, development.expiresAt.toString()))
-            OutlinedButton(onClick = onDevelopmentRevoke, enabled = !locked) {
+            OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onDevelopmentRevoke, enabled = !locked, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
                 Text(stringResource(R.string.settings_development_revoke))
             }
         }
@@ -132,9 +137,27 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
         LensSection(lens, backCameras, running = locked, onLens = onLens)
+        // The whole row is one checkbox for touch and TalkBack, labelled by its text.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .toggleable(value = recognitionExposure, role = Role.Checkbox, onValueChange = onRecognitionExposure)
+                .padding(vertical = RosyMetrics.Space1.dp),
+        ) {
+            Checkbox(checked = recognitionExposure, onCheckedChange = null)
+            Text(stringResource(R.string.settings_recognition_exposure))
+        }
+        Text(
+            stringResource(R.string.settings_recognition_exposure_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
-        OutlinedButton(
+        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
             enabled = !locked,
+            modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth(),
             onClick = {
                 discovery.stop()
                 overheadServices = emptyList()
@@ -165,7 +188,7 @@ fun SettingsScreen(
                 }
             } else {
                 overheadServices.forEach { service ->
-                    OutlinedButton(
+                    OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
                         onClick = {
                             host = service.tlsHost
                             port = service.port.toString()
@@ -175,7 +198,7 @@ fun SettingsScreen(
                             invalid = null
                             saved = false
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.settings_mdns_overhead, service.name, service.tlsHost, service.port))
                     }
@@ -192,7 +215,7 @@ fun SettingsScreen(
                 }
             } else {
                 pairable.forEach { service ->
-                    Button(onClick = { onPairRequest(service) }, enabled = development == null, modifier = Modifier.fillMaxWidth()) {
+                    Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onPairRequest(service) }, enabled = development == null, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
                         Text(stringResource(R.string.pairing_request_site, service.name))
                     }
                 }
@@ -215,12 +238,14 @@ fun SettingsScreen(
 
         OutlinedTextField(
             value = link,
+            textStyle = MaterialTheme.typography.bodySmall,
+            shape = MaterialTheme.shapes.extraSmall,
             onValueChange = { link = it },
             label = { Text(stringResource(R.string.settings_link)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedButton(
+        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
             onClick = {
                 if (link.trimStart().startsWith("{")) {
                     runCatching { DevelopmentBootstrap.parse(link) }
@@ -252,6 +277,7 @@ fun SettingsScreen(
                 saved = false
             },
             enabled = link.isNotBlank() && !locked && development == null && !importingDevelopment,
+            modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth(),
         ) {
             Text(stringResource(R.string.settings_link_apply))
         }
@@ -268,6 +294,8 @@ fun SettingsScreen(
         Field(port, { port = it; saved = false }, R.string.settings_port, invalid == "port", KeyboardType.Number)
         OutlinedTextField(
             value = token,
+            textStyle = MaterialTheme.typography.bodySmall,
+            shape = MaterialTheme.shapes.extraSmall,
             onValueChange = { token = it; saved = false },
             label = { Text(stringResource(R.string.settings_token)) },
             isError = invalid == "token",
@@ -277,7 +305,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp)) {
             Checkbox(
                 checked = secure,
                 onCheckedChange = {
@@ -305,10 +333,11 @@ fun SettingsScreen(
         invalid?.let { CritMessage(invalidText(it)) }
         if (saved) Text(stringResource(R.string.settings_saved), color = MaterialTheme.colorScheme.primary)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
-            Button(
+        Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onBack, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) { Text(stringResource(R.string.settings_back)) }
+            Button(contentPadding = RosyButtonPadding, shape = RosyButtonShape,
                 enabled = !locked && development == null,
+                modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth(),
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
@@ -345,12 +374,12 @@ private fun LensSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .selectable(selected = lens == choice, role = Role.RadioButton, onClick = { onLens(choice) })
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = RosyMetrics.Space1.dp),
             ) {
                 RadioButton(selected = lens == choice, onClick = null)
                 Text(
                     stringResource(if (choice == LensChoice.WIDE) R.string.settings_lens_wide else R.string.settings_lens_standard),
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = RosyMetrics.Space2.dp),
                 )
             }
         }
@@ -375,6 +404,8 @@ private fun Field(
 ) {
     OutlinedTextField(
         value = value,
+        textStyle = MaterialTheme.typography.bodySmall,
+        shape = MaterialTheme.shapes.extraSmall,
         onValueChange = onChange,
         label = { Text(stringResource(label)) },
         isError = isError,

@@ -27,6 +27,7 @@ SCHEMA = "rosy.recording.session/1"
 # Must equal control.sensing.perception.learned.shadow.TOPIC (not imported
 # here: that package pulls numpy/cv2; a test asserts the two stay equal).
 SHADOW_TOPIC = "perception/learned/shadow"
+KEEP_DEBUG_TOPIC = "line/keep_debug"  # source-image diagnostics, never training labels
 SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"  # == shadow.SHADOW_SCHEMA
 
 # camera/front is the raw sensor_msgs/Image published by
@@ -38,15 +39,26 @@ SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"  # == shadow.SHADOW_SCHEMA
 # (ODOM_PUB_TOPIC_NAME).
 CAMERA_TOPIC = "camera/front"
 COMPRESSED_CAMERA_TOPIC = CAMERA_TOPIC + "/compressed"
+CAMERA_TELEMETRY_TOPIC = "camera/telemetry"
+CAMERA_GROUND_STATUS_TOPIC = "camera/calibration/status"
+# The camera republishes ground status every 2 s. Older evidence cannot describe a frame.
+CAMERA_GROUND_STATUS_MAX_AGE_NS = 2_500_000_000
 # scan is the LiDAR sensor_msgs/LaserScan; extract.py attaches the latest scan
 # logged at or before each frame (no future leakage, D-356 clock rule), the
 # input of LiDAR-projected wall labels (D-373 decision 9, D-379): the LiDAR
 # sees walls, never floor paint.
 SCAN_TOPIC = "scan"
 ODOM_TOPIC = "odom"
+# Floor IR reflectance: std_msgs/UInt16MultiArray of three raw 12-bit ADC counts
+# in robot order (left, centre, right) on ir_sensor/range. Pilot bags keep this.
+# The forward ultrasonic range is us_sensor/range and is not this topic.
+IR_RANGE_TOPIC = "ir_sensor/range"
+IR_RANGE_CHANNELS = ("left", "centre", "right")
+_IR_ADC_MAX = 4095
 # Topics learning/training/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
-SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)
+SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC,
+               KEEP_DEBUG_TOPIC, CAMERA_GROUND_STATUS_TOPIC)
 
 # The camera unit's StateDirectory (D-373 decision 1): no new write path.
 DEFAULT_ROOT = "/var/lib/rosy/camera/recordings"
@@ -54,16 +66,16 @@ DEFAULT_ROOT = "/var/lib/rosy/camera/recordings"
 # Snapshot ring buffer, sized for SNAPSHOT_SECONDS of the compressed stream
 # (D-136: 60 s, on the robot only). Per 125 ms camera period: a 320x240 JPEG at
 # quality 85 is ~10-15 KB on a textured floor, budgeted at 20 KB; the side
-# topics (shadow, line/observation, cmd_vel, odom) stay under 4 KB together;
+# topics (shadow, line/observation, keep_debug, cmd_vel, odom, status) are budgeted at 8 KB;
 # scan adds up to 8 KB (10 Hz, ~720 beams of float32 ranges and intensities).
 # rosbag2 double-buffers the cache, so the resident cost is about twice this.
 SNAPSHOT_FRAME_BUDGET_BYTES = 20_000
 SNAPSHOT_SCAN_BUDGET_BYTES = 8_000
-SNAPSHOT_SIDE_BUDGET_BYTES = 4_000 + SNAPSHOT_SCAN_BUDGET_BYTES
+SNAPSHOT_SIDE_BUDGET_BYTES = 8_000 + SNAPSHOT_SCAN_BUDGET_BYTES
 SNAPSHOT_FPS = 8
 SNAPSHOT_SECONDS = 60
 SNAPSHOT_CACHE_BYTES = ((SNAPSHOT_FRAME_BUDGET_BYTES + SNAPSHOT_SIDE_BUDGET_BYTES)
-                        * SNAPSHOT_FPS * SNAPSHOT_SECONDS)  # 15,360,000 bytes
+                        * SNAPSHOT_FPS * SNAPSHOT_SECONDS)  # 17,280,000 bytes
 SNAPSHOT_REQUESTS = ".snapshot-requests"
 SNAPSHOT_CACHE_PREFIX = ".snapshot-cache-"
 SNAPSHOT_NODE_SUFFIX = "snapshot_recorder"
@@ -75,6 +87,32 @@ def snapshot_node_name(namespace: str = "") -> str:
     the node name: /rosy_01 -> /rosy_01_snapshot_recorder/snapshot."""
     ns = "_".join(p for p in namespace.strip("/").split("/") if p)
     return f"{ns or 'rosy'}_{SNAPSHOT_NODE_SUFFIX}"
+
+
+def ir_range_sample(data):
+    """{left, centre, right} raw ADC counts, or None when `data` is not those three.
+
+    Counts are the 12-bit ADC reading (0 = no reflection, 4095 = saturated). A bool,
+    float, or any other length is not a sample: callers drop it instead of guessing.
+    """
+    try:
+        values = list(data)
+    except TypeError:
+        return None
+    if len(values) != 3:
+        return None
+    sample = {}
+    for name, value in zip(IR_RANGE_CHANNELS, values):
+        if isinstance(value, (bool, float, str)):
+            return None
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        if number < 0 or number > _IR_ADC_MAX:
+            return None
+        sample[name] = number
+    return sample
 
 
 def record_topics(camera_topic: str = CAMERA_TOPIC) -> tuple:

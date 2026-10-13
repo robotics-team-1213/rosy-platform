@@ -114,9 +114,9 @@ def test_reason_codes_map_to_operator_korean():
       registry.driverFor('pinky_core').describeReason('anything_else'),
     ]));
     """) == [
-        "운전 권한이 없습니다 (현재 역할: viewer)",
-        "수동 운전이 보류되었습니다 — drive_disabled:no_motion",
+        "운전 권한이 없습니다 (현재 역할: 조회 전용)",
+        "수동 운전이 보류되었습니다 — 구동 꺼짐 (무동작)",
         "수동 운전이 보류되었습니다",
         "구동이 꺼져 있습니다 (무동작)",
-        "진입할 수 없습니다 — anything_else",
+        "진입할 수 없습니다. 로봇 상태를 확인하세요",
     ]

@@ -11,6 +11,7 @@ import stat
 from pathlib import Path
 
 import pytest
+import yaml
 
 launch = pytest.importorskip("launch")
 if not hasattr(launch, "LaunchContext"):
@@ -152,7 +153,7 @@ def _core_nodes(actions, context):
 def _env(node, context) -> dict:
     # Node → ExecuteLocal.process_description (launch.descriptions.Executable) .additional_env:
     # [(key_substitutions, value_substitutions), ...]
-    return {_text(k, context): _text(v, context) for k, v in node.process_description.additional_env}
+    return {_text(k, context): _text(v, context) for k, v in (node.process_description.additional_env or [])}
 
 
 def test_core_true_adds_one_core_per_robot_with_distinct_ports_and_homes():
@@ -184,6 +185,83 @@ def test_core_false_adds_no_core():
     mod = _module()
     actions, context = _setup(mod, core="false")
     assert not _core_nodes(actions, context)
+
+
+def test_nominal_camera_keeps_transport_outside_multi_and_renders_headlessly():
+    from launch.actions import IncludeLaunchDescription
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", nominal_camera="true")
+    assert '--headless-rendering' in _gz_server_args(actions, context)
+    assert _named(actions, context, 'image_bridge') == []
+    uploads = []
+    for action in actions:
+        if isinstance(action, IncludeLaunchDescription):
+            location = _text(action.launch_description_source._LaunchDescriptionSource__location, context)
+            if location.endswith('upload_robot.launch.py'):
+                uploads.append(dict(action.launch_arguments))
+    assert len(uploads) == 2
+    for args in uploads:
+        assert _text(args['camera_width'], context) == '320'
+        assert _text(args['camera_height'], context) == '240'
+        assert _text(args['cam_tilt_deg'], context) == '8'
+
+
+def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch, tmp_path):
+    import yaml
+    from launch.actions import OpaqueFunction
+    spec = importlib.util.spec_from_file_location('multi_real', LAUNCH.parent / 'map_v2_fleet_multi_real.launch.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, 'get_package_share_directory', lambda name: str(LAUNCH.parents[1]))
+    actions = mod.generate_launch_description().entities
+    context = LaunchContext()
+    context.launch_configurations['learned_lane_pointer'] = '/pinned/model-pointer.txt'
+    reservations = []
+    for index, ns in enumerate(('rosy_01', 'rosy_02')):
+        port = 31961 + index
+        reservations.append(dict(namespace=ns, api_port=port))
+        (tmp_path / f'core_{ns}.yaml').write_text(yaml.safe_dump(dict(
+            robot=dict(id=ns), network=dict(api_host='127.0.0.1', api_port=port),
+            line_follow=dict(cruise_speed=.08 + .01*index))), encoding='utf-8')
+    run_spec = tmp_path / 'run-spec.yaml'
+    run_spec.write_text(yaml.safe_dump(dict(run_id='law-test', core_config_dir=str(tmp_path),
+        fleet_manifest='robots.yaml', hub_url='http://127.0.0.1', gz_partition='law-test',
+        ros_domain_id=89, robots=reservations)), encoding='utf-8')
+    context.launch_configurations['run_spec'] = str(run_spec)
+    for action in tuple(actions):
+        if isinstance(action, OpaqueFunction):
+            actions.extend(action.execute(context))
+    for executable in ('image_bridge', 'line_observer_node', 'road_observer_node'):
+        nodes = _named(actions, context, executable)
+        assert len(nodes) == 2
+        assert {_text(n._Node__node_namespace, context).strip('/') for n in nodes} == {'rosy_01', 'rosy_02'}
+    observers = _named(actions, context, 'line_observer_node')
+    assert all('ROSY_CONFIG' not in _env(n, context) for n in observers)
+    for index, node in enumerate(observers):
+        # The mocked share dir has no control/config/line_follow.yaml, so do not
+        # evaluate the yaml parameter. The law dict is already the last element.
+        from launch_ros.utilities import evaluate_parameters
+        law = evaluate_parameters(context, [node._Node__parameters[-1]])[0]
+        assert law['core_cruise_speed'] == pytest.approx(.08+.01*index)
+        assert {k for k in law if str(k).startswith('core_')} == {
+            'core_cruise_speed', 'core_max_linear', 'core_steering_gain', 'core_min_confidence'}
+    assert _named(actions, context, 'sim_jpeg_relay.py') == []  # Road observer owns each front preview.
+    assert _named(actions, context, 'core') == []  # COREs belong to the included multi launch.
+
+
+def test_observer_law_loader_preserves_launch_environment_and_excludes_secrets(tmp_path, monkeypatch):
+    import sys
+    import yaml
+    sys.path.insert(0, str(LAUNCH.parent))
+    from gz_multi_parts import observer_steering_law
+    overlay = tmp_path/'core.yaml'
+    overlay.write_text(yaml.safe_dump(dict(line_follow=dict(cruise_speed=.06, steering_gain=1.7),
+        auth=dict(tokens=[dict(token='never-forward-to-camera')]))), encoding='utf-8')
+    monkeypatch.setenv('ROSY_CONFIG', '/caller-private.yaml')
+    law = observer_steering_law(str(overlay))
+    assert law['core_cruise_speed'] == .06 and law['core_steering_gain'] == 1.7
+    assert set(law) == {'core_'+key for key in ('cruise_speed','max_linear','steering_gain','min_confidence')}
+    assert os.environ['ROSY_CONFIG'] == '/caller-private.yaml'
 
 
 def test_slam_start_waits_for_sensor_startup_in_wall_time():
@@ -327,6 +405,32 @@ def _set_env(actions, context):
     from launch.actions import SetEnvironmentVariable
     return {_text(a.name, context): _text(a.value, context)
             for a in actions if isinstance(a, SetEnvironmentVariable)}
+
+
+def test_validation_domain_is_delivered_before_all_participants(tmp_path):
+    import yaml
+    from launch.actions import SetEnvironmentVariable, IncludeLaunchDescription
+    spec = {"run_id": "d426-test", "core_config_dir": str(tmp_path),
+            "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
+            "gz_partition": "d426-test", "ros_domain_id": 80,
+            "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
+    (tmp_path / "core_rosy_01.yaml").write_text(yaml.safe_dump({
+        "robot": {"id": "rosy_01"}, "network": {"api_host": "127.0.0.1", "api_port": 31001}}),
+        encoding="utf-8")
+    path = tmp_path / "run_spec.yaml"
+    path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    actions, context = _setup(_module(), robots="1", run_spec=str(path))
+    applied = False
+    for action in actions:
+        if isinstance(action, SetEnvironmentVariable):
+            action.execute(context)
+            if _text(action.name, context) == "ROS_DOMAIN_ID":
+                applied = True
+        elif isinstance(action, (IncludeLaunchDescription, Node, TimerAction)):
+            assert applied and context.environment["ROS_DOMAIN_ID"] == "80"
+    assert applied and _set_env(actions, context)["GZ_PARTITION"] == "d426-test"
+    legacy, context = _setup(_module(), robots="1", core="false")
+    assert "ROS_DOMAIN_ID" not in _set_env(legacy, context)
 
 
 def test_launch_defaults_keep_the_catalog_world_and_the_software_renderer():

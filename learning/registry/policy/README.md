@@ -1,5 +1,19 @@
 # 정책 metadata 원장
 
+## 판정 모델 보정 원장
+
+D-706·D-707의 `ReasoningRegistry`는 행동 정책 stage와 별도의 reasoning snapshot·table·hash chain을 같은 소유자와 SQLite에서 관리한다. 생성/재검증은 Decision 순수 evaluation이 맡고 registry는 명시적으로 주입된 validator 포트를 사용한다. learning에서 운영 Decision을 직접 import하지 않는다. 설치 책임자는 기존 `tools/decision_calibration.py --candidate`가 생산한 자료와 신뢰 설정을 공급한다.
+
+Python API는 `register(candidate_file)`, `candidate(revision)`, `history()`, `approve(revision, receipt, expected_head=...)`, `revoke(...)`, `approved_artifacts()`다. `register`의 반환값은 후보 revision이며 같은 후보는 이력을 늘리지 않는다. 매 조회에서 원본 보정 자료 재계산·seal·snapshot·상태 table·chain·과거 receipt의 현재 key/kind 신뢰를 재검증한다. output은 F:에 만들지 않는다.
+
+별도 주입한 trusted principal의 최소 32-byte key와 `reasoning_calibration` 또는 `reasoning_revocation` scope를 사용한다. `receipt_payload(candidate, kind, head)`가 서명 대상의 정확한 candidate/profile/domain/calibration digest/head/verdict를 반환한다. 서명 key는 원장·후보·CLI 출력에 기록하지 않는다. 운영 키·검증자를 설치하거나 서명하는 명령은 추가하지 않았다. 테스트 receipt는 합성 자료다.
+
+offline PASS만 승인할 수 있으며 HOLD·FAIL 보관이 승인을 뜻하지 않는다. 폐기하면 승인 map에서 제거하고 같은 calibration revision의 다른 digest를 동시에 승인하지 않는다. 승인 map은 D-705 읽기 전용 보정 포트의 자료일 뿐, action admission·field acceptance·운영 current/previous profile·새 사건 적용 권한은 아니다. 실제 Fleet 포트 공급과 사건별 revision 전환은 후속 작업이다.
+
+아래 행동 policy의 metadata promotion과 판정 보정 승인을 혼용하지 않는다.
+
+D-709의 root composition `tools.incident_reasoning.registry_calibration_config(config, registry, domain=...)`가 승인 원장과 기존 Fleet app의 incident_model_config를 연결한다. `approved_candidate(profile_json, domain)`는 현재 승인된 정확한 후보만 반환한다. 보정 읽기는 사건의 남은 시간 안에서 off-loop로 처리하고, 완료 뒤 claim·freshness를 다시 확인한다. 기존 설정을 활성화하거나 포트를 덮어쓰지 않는다. 실제 설치 trust·Model PC 원장 전달과 운영 profile 전환은 아직 별도다.
+
 D-449 Proposed의 offline 정책 원장이다. SQLite BEGIN IMMEDIATE 트랜잭션,
 FULL synchronous, 파일 snapshot, canonical event hash chain과 단계 CAS를 사용한다.
 register는 실제 policy 파일/정규화/평가 bytes를 다시 검증해 원장 내부로 복사한다.
@@ -68,6 +82,14 @@ receipt.instance_id가 모두 일치할 때만 mission/step/request/epoch/genera
 키 없음·여러 키·불일치·terminal 결과 충돌은 binding=null의 unmatched로 남긴다.
 Episode outcome evidence의 상대 경로는 원래 Episode root에 속하며 export 디렉터리의
 파일로 해석하지 않는다. source archive는 Episode revision으로 별도 보존해야 한다.
+출력은 같은 디렉터리의 임시 파일에 완전히 쓰고 fsync한 뒤, 배타적 hard link로
+게시한다. 저장 실패나 게시 전 입력 변경은 최종 파일을 남기지 않으며, 경쟁
+게시자의 파일은 덮어쓰지 않는다. 예외 처리 시 자기 임시 파일만 지운다. 프로세스가
+강제 종료되면 임시 파일이 남을 수 있지만, 최종 경로에는 부분 JSON을 게시하지
+않는다. hard link를 지원하지 않는 파일시스템에서는 게시를 거절한다. 이 동작은
+전원 손실 뒤 디렉터리 메타데이터의 내구성이나 Fleet 수신 확인을 보장하지 않는다.
+POSIX에서는 임시 파일의 소유자 전용 권한을 유지한다. 다른 계정의 receiver에
+전달하려면 기존 운영 전달 경로에서 별도 읽기 권한과 수신 증거를 확인해야 한다.
 
 task outcome/judge와 policy null을 보존한다. receipt.state=SUCCEEDED가 독립 과제
 성공이나 policy 실행 증거를 만들지 않는다. 구조 검증·해시는 receipt 진위나 Fleet
@@ -83,6 +105,12 @@ journal/driver goal을 보존된 owner receipt와 다시 비교한다. profile �
 같은 action/attempt의 다른 generation으로 우회하지 않는다. 구체 검증은
 `docs/validation/omx-owner-receipt-provenance-2026-10-04.md` 참조.
 
+`omx_policy_execution_v1`은 native 정책 실행의 설치 원본/intent/callback과 실제
+owner API receipt를 보존하는 별도 evidence profile이다. Fleet export는 전용 body
+validator를 호출하고 원본 receipt 전체와 다른 watermark/state/goal/journal을 거부한다.
+정책 revision을 결과에 보존하지만 metadata-only 관측은 demonstration이나 training
+GT가 아니다. DatasetStore/승격 호환 매핑은 확대하지 않는다. 파일 해시 검증은
+Fleet 수신 원장·receipt 인증·실제 추론/task/physical 결과를 증명하지 않는다.
 
 For a read-only audit of an existing registry, use `Registry(root, read_only=True)`
 or `python learning/registry/policy/registry.py --root <root> --read-only history`

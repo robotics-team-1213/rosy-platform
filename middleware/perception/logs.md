@@ -1,4 +1,4 @@
-# control logs
+﻿# control logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 [흡수 실행 계획](../../docs/plans/2026-09-12-rosy-control-absorption-plan.md), [흡수 결과](../../docs/plans/2026-09-12-control-absorption-results.md)와 `git log -- src/control`를 본다.
@@ -1070,3 +1070,482 @@
 - 증거: 호스트 영향 묶음에서 palette/부품 계약이 통과했으며 실제 구조 예산/API 경로 16 passed (8.21s). 부모 검증자의 GET 실패 상태 화면 검토를 사용한다.
 - gate 변화: PARKED 경계를 유지한다. 런타임 활성화·장치 접속은 하지 않았다.
 - 결정: D-439 Task5. 내부 toolbar 잘림만 줄인다.
+
+## 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
+
+- 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.
+- 증거: 148프레임 baseline/후보 직진 평균 절대 error 0.150088→0.051813, 튐0.014→0.007, 비가시14→21이다. 독립 코드 리뷰는 중대 결함 없음, lane test57PASS/NEW0이다. 별도7녹화2252프레임 영향과 전체 검증 결과는 docs/validation/lane-keep-regression-2026-10-05/result.md에 기록한다. 앞선 실기 정지 관측 기록도 원본 그대로 보존한다.
+- gate 변화: 직진 수치 조건은 통과하나 비가시 정답·추가 곡선/교차로·장치 source 일치·현장 R1/R2는 미검증으로 주행 HOLD다. 장치 설정·모델 hold·서비스·주행 명령을 바꾸지 않았다.
+## 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
+
+- 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
+- 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
+## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+
+- 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
+- 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
+- gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+
+## 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
+- 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
+- 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
+- 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
+- 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
+- gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
+
+## 2026-10-05 · uncommitted · feat(perception): emit image-bound selected lane geometry
+- 변경: keep 선택 경계의 원본 영상 시각·실제 관측 구간·rig geometry digest를 optional containment에 보낸다. projection uncertainty는 미검증이므로 null이다.
+- 증거: 생산자/keeper 시험 62 PASS, 0 NEW. geometry 변경 identity 무효화와 미선택 경계 제외를 검증했다.
+- gate 변화: 추가 센서 증거만. CALIBRATED 승격·자동 복귀 명령·장치 수용 없음.
+
+## 2026-10-05 · uncommitted · feat(safety): distinguish positive floor observation from no cliff
+- 변경: sensor-only 생산자가 신선하고 유효한 IR 관측과 cliff=false를 구분한다. 현재 바닥 증거는 LiDAR·IMU·IR 중 가장 먼저 만료되는 원본 유효 기간을 사용한다. 기존 cliff 검출·주행 제한은 보존한다.
+- 증거: 포화·누락·잘못된 원시 IR, hazard, 후보 변경, IR-only 설정에서 만료 IMU가 허용되던 사례를 시험했다. perception 47 PASS, 독립 통합/크기 검토 105 PASS, 모두 0 NEW.
+- gate 변화: 현재 센서 관측의 SOURCE 증거만. 미래 swept floor·실제 이동 공급자 연결·배포·장치 주행은 미완료다.
+## 2026-10-06 · uncommitted · fix(perception): flip a keep boundary's stale side after persistent contradiction
+- 변경: lane_keep이 경계의 추적 측면을 유지하는 규칙에 프레임 상한(SIDE_FLIP_FRAMES=4)을 두었다. 반대쪽 lateral이 AMBIGUOUS_LATERAL_M를 넘겨 상한 프레임째 이어지면 지면 기준 측면으로 되돌린다. 20261005T134540Z(9dfk) 329-367프레임에서 로봇이 왼쪽 줄 위를 따라가며 'left' 측면이 유지되어 편측 목표가 오른쪽 테이프 너머(-0.148m)에 놓이고 error가 +1.0으로 고정됐던 것을 344프레임부터 복귀시킨다. 학습 페인트는 무관(당시 threshold 소스)했다.
+- 증거: 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. 같은 녹화의 보정 기하 재생에서 포화 프레임 1289에서 1054로, 344프레임 error +1.000에서 +0.022로, 350-372프레임은 both 짝짓기·차선 복귀 조향으로 바뀌었다. 새 경계 시험 2개(영구 반대 측면 플립, 순간 횡단 보존)를 test_lane_keep.py에 추가했다.
+- gate 변화: 없음. 호스트 재생은 장치·ARM64 이미지·현장 수용을 대신하지 않는다.
+## 2026-10-06 · uncommitted · refactor(perception): split the junction HOLD policy out of lane_keep
+- 변경: lane_keep.py가 626줄로 600줄 파일 예산을 넘어(사이드 플립 수정 +27줄) lane_keep_junction.py로 교차로 HOLD 규칙(_junction, _across_path, 네 상수)를 옮겼다. 동작은 같고 호출부가 편측 판정 거리를 인자로 넘긴다. 패키지 판정 기록을 44646으로 재판정했다.
+- 증거: architecture 33 PASS(예산 포함), 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. lane_keep.py는 573줄.
+- gate 변화: 없음. 분리는 순수 이동이며 장치·현장 수용 상태는 그대로다.
+
+## 2026-10-06 · uncommitted · feat(sim): sim LiDAR 모양, accept_simulation_scans, GAZEBO 투영 불확실도
+
+- 변경: `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다(opt-in 뒤에만). `SafetyNode`의 `accept_simulation_scans`(기본 false, `use_sim_time` 필수)가 `enable_simulation_scans`를 부른다. `containment_payload`는 GAZEBO 지면에서만 `uncertainty_m = 2 × max_range / fx`를 낸다. NOMINAL·CALIBRATED는 `None` 그대로다.
+- 증거: `test_scan_acceptance.py`, `test_lane_containment_payload.py` 추가 시험 PASS.
+- gate 변화: 없음. D-468이 장치에서 쓰는 투영 불확실도는 여전히 미측정이다.
+
+## 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
+- 변경: `sensing/perception/lane_containment.py`가 NOMINAL ground의 `uncertainty_m`을 기하 오차 한계(승인된 camera_profile 기록의 band, 없으면 `camera_nominal.yaml`의 보수적 한계와 `detector_lateral_px`)로 계산. 한계 모서리·roll 7단계·검출 픽셀 ±를 정확히 투영하고 수신측 0.3 m 외삽 범위까지 덮으며 2 % 표본 여유를 둔다. 한계가 없으면 None. `calibration_store.resolve(with_intervals=True)`, `line_observer_node`가 오차를 넘긴다. 라벨은 NOMINAL 그대로(CALIBRATED를 만들지 않음, D-344 driver hold 유지)
+- 증거: `test_lane_containment_payload.py` 독립 진값(roll 21단계, 끝점별 ±px) 통과, b1b20a6ee에서는 실패. 재검토 격자 max(true−stated) 음수
+- gate 변화: 없음. SOURCE만. 8kcn 기록 값 약 26–37 mm, URDF 공칭 약 75–100 mm로 15 mm 문턱 초과 → 장치에서는 여전히 excessive로 보류
+- 결정: D-468, D-185 CPU 예산: 경계 1개당 노트북 약 0.25 ms(벡터화, 252 조합), Pi 추정 약 1.2 ms, 경계 2개·8 fps면 코어의 약 2 %
+- 교훈: 오차가 roll에 단조가 아니라 모서리만 보면 최악이 내부에 숨는다. 시험의 진값은 코드의 표본과 달라야 한다
+## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
+
+- 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
+- 증거: `test_lane_containment_payload.py` 6 PASS.
+- gate 변화: 없음.
+
+## 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
+- 변경: `camera_extrinsic.fit_camera_extrinsic(steps=)`가 미세 격자 간격을 받아 결과에 `fit_step`으로 적는다. 기본은 로봇 격자(`FINE_STEPS` 0.1° / 0.5° / 2.5 mm), PC 오프라인 적합(`tools/calibration/analyze_session.py`)만 `PC_FINE_STEPS`(0.1° / 0.1° / 1 mm, 실행당 약 170 s, 로봇 격자 18 s). `lane_containment.geometry_error`의 하한은 기록의 `intervals.fit_step`(없으면 로봇 격자)
+- 로봇 경로 출력도 바뀐다(리뷰 지적): (1) 높이를 적합할 때 높이 band를 5 mm 거친 표가 아니라 미세 표에서 잰다. band가 미세 창 끝에 닿으면 거친 band 범위를 함께 쓴다. 그래서 로봇 기록의 높이 band가 5 mm 단위에서 2.5 mm 단위로 좁아질 수 있다. 하한(로봇 격자 2.5 mm)은 그대로 적용된다. (2) 미세 높이 창을 `HEIGHT_RANGE_M` 안으로 자른다. 범위 아래 최적값(8kcn 133221Z에서 0.025 m가 recommended였다)은 이제 at_bound, not recommended. (3) `calibration_camera`가 기록 intervals에 `fit_step`을 함께 저장한다. 로봇이 PC 격자를 돌리지는 않는다(`test_camera_extrinsic.py` StepTest가 고정)
+- 증거: `test_camera_extrinsic.py` FitStepTest(뾰족한 점수 대역으로 간격·창 자르기·band), `test_lane_containment_payload.py` fit_step 하한, `test_analyze_store.py`. 8kcn 세션 5개 PC 재적합: 피치 12.52 ± 2.43°, 롤 −0.96 ± 1.24°, 높이 0.0627 ± 0.0236 m(95 %, n=5) → 후보 기록 `20261006T18485199375_0c367ced2231`(PC 미러, 미승인), 투영 불확실도 0.12–0.30 m 지지에서 약 88 mm
+- gate 변화: 없음. SOURCE만
+- 결정: D-468, D-47 addendum. G-15(D-480)
+- 교훈: 벽-모서리 점수는 높이 방향으로 들쭉날쭉하다. 한 실행의 점수 band가 아니라 실행 간 ci95가 실제 오차를 보여 준다
+## 2026-10-07 · uncommitted · fix(perception): IR 좌우 두 띠는 선 하나가 아니다(횡단보도 중앙 위상만)
+
+- 변경: `detect_ir_line`이 좌·우 채널이 모두 `min_white` 이상이고 가운데가 그보다 `min_contrast` 이상 어두우면 `None`(선 없음)을 낸다. 260919 지도의 횡단보도 두 곳은 줄무늬가 차로와 나란히 40 mm 간격이라, 중앙 주행에서 좌·우 IR이 약 12 cm 동안 줄무늬 위, 가운데 IR이 그 사이 바닥에 있다. 이전에는 무게중심 0·신뢰도 0.96이 나와 D-344 §12 IR 가드가 `centre`(`lane_departure` HOLD)로 읽었다. 25–28 mm 경계선 하나는 가운데+한쪽까지만 덮으므로 실제 이탈 신호는 그대로다. 관측 계약·CORE는 바꾸지 않았다. **남은 것:** 줄무늬는 폭 25 mm·피치 40 mm라 차로 중심에서 12.5–27.5 mm 비키면 가운데 IR만 줄무늬 위다. 이 위상은 경계선 하나가 가운데 밑에 있는 것과 IR로 구별되지 않아 가짜 `lane_departure`가 남는다. 횡단보도 구간은 별도 ADR(D-344 §12 보강 2026-10-07)에서 정한다.
+- 증거: `test_line_modes.py` 추가 3건(두 띠·역극성, 임계 경계, 한 띠 유지. 수정 전 실패 재현). 독립 리뷰가 위상 표를 0.5 mm 래스터로 확인. 횡단보도 위치·줄무늬 방향은 STL 도색 래스터로 확인(스크래치, 저장소 밖).
+- gate 변화: 없음. IR 가드는 기본 꺼짐이며 장치 IR 교정·실주행 확인은 별도다.
+
+## 2026-10-07 · uncommitted · docs(adr): 횡단보도 구간 ADR 번호는 D-491
+
+- 변경: 위 항목의 "별도 ADR"은 D-491(Proposed)이다. D-488은 main에서 다른 ADR이 먼저 썼다.
+- 증거: `rosy_harness.py lint` ADR 번호 검사.
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(map): 260919 횡단보도 구간을 lane_graph.yaml에 (D-491 §3)
+
+- 변경: `scripts/lane_graph.py`가 STL의 짧은 도색 성분(횡단보도 막대)을 20 mm 팽창으로 묶어 횡단보도마다 막대를 감싸는 사각형 하나를 `crosswalks[].polygon`(map 좌표, m)으로 낸다. 래스터 2 mm라 변은 ±2 mm다. 도색 래스터는 `paint_masks`로 `LineField`와 함께 쓴다. 두 구간: 중심 (−1.27, −0.146) 146×120 mm, (0.369, −0.510) 120×144 mm.
+- 증거: `test_lane_graph.py` 추가 1건(두 구간, 변 길이), 기존 바이트 결정성 시험 PASS.
+- gate 변화: 없음. 지도 구간을 쓰는 소비자(CORE IR 가드)는 아직 없다. CAMERA_LINE 중 CORE에는 지도 자세가 없어 이 구간은 지도 주행(D-481)·시뮬 검증용이다.
+
+## 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
+- 변경: `config/line_follow.yaml` `lane_corner_turning: true`. keep 모드 keeper의 교차로 HOLD가 기본으로 나온다(기본 `camera_lane_mode: line`에서는 효과 없음). 운영자 겹 허용 키가 아니어서 끄려면 페이로드 변경이 필요하다. 고정 시험과 주석 갱신
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
+- 변경: `line_observer_node`의 keep_debug 묶음에 `corner_turning`(파라미터 `lane_corner_turning`)을 싣는다. CORE가 교차로 회전 지원을 판정하는 근거. 배선 시험 고정
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
+- 변경: `line_follow.yaml` `camera_x_offset_m: 0.03317`(camera_nominal.yaml `x_offset_m`). REAL Gazebo launch는 이 값과 `lane_corner_turning`을 덮어쓰지 않는다(시험 고정)
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
+
+- 변경: D-491 rectangle vertices use CCW order from the smallest rounded corner across OpenCV versions. Coordinates and road geometry unchanged. D-494 gateway seam test added to the ownership registry.
+- 증거: CI 37579564087 reproduced the ownership and corner-order failures; 12 affected checks pass including reversed/rotated corner outputs; known_failures 0 NEW.
+- gate 변화: SOURCE only; no device or field acceptance.
+## 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+
+- 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.
+- 증거: `test_crosswalk_stripes.py` 4건(앞뒤 끝, 20 mm 비킴·경계와 붙은 막대, 일반 차로·가로 사다리 아님, 띠 2개·얇은 조각 아님), `test_lane_containment_payload.py` 추가 1건.
+- gate 변화: 없음. 실제 카메라 영상에서 검출 확인은 아직이다.
+
+## 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
+
+- 변경: `crosswalk_extent(grid, x_rows, y_cols)`가 |y| ≤ 0.10 m 열만 본다(옆 차로 횡단보도 제외). 흰색이 띠 3개 폭보다 적은 행은 미리 건너뛴다(Pi CPU, D-185).
+- 증거: `test_crosswalk_stripes.py` 5건(옆 차로 추가).
+- gate 변화: 없음.
+
+
+## 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
+- 변경: `containment_payload`가 keep 검출기의 칠 중심선을 칠 폭 절반(`lane_paint_half_width_m`, 기본 `PAINT_HALF_WIDTH_M` 0.0125, 260919 STL 테이프 25 mm, STL 공칭·미측정)만큼 차로 쪽으로 옮겨 보낸다. 불확실도는 칠 선분 그대로로 계산. 두 경계가 엇갈리면 경계 없음. `line_follow.yaml`·노드 파라미터 추가, STL 대조 시험
+- 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
+- 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+- 교훈: 검출기가 맞추는 선(칠 중심)과 계약이 뜻하는 선(달릴 수 있는 끝)을 이름으로 구분한다
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
+
+- 변경: `PILOT_TOPICS`에 `ir_sensor/range`만 추가. `ir_range_sample`은 좌·중·우 세 칸(0–4095)만 받는다. `bag_to_video`·`extract`·Pinky `raw_messages`가 프레임 로그 시각 이전의 최신 표본을 붙인다. `us_sensor/range`와 D-356 `SIDE_TOPICS`는 그대로다.
+- 증거: `test_pilot_recorder.py`와 `test_module_separation.py` 46 passed. `test_bag_to_video.py` IR·intent·keep 5 passed. `test_raw_derivation.py` 11 passed (2026-10-07 Windows).
+- gate 변화: 없음. 호스트 시험만. 로봇 가방을 열어 확인하지 않음.
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 위 항목의 구현은 그대로다. 번호만 D-506이다. D-504는 얼굴 애니메이션이, D-505는 상태 전환 화면이 먼저 썼다.
+- 증거: 시험 수는 위 항목과 같다.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
+- 변경: `lane_keep_lines._paint_fit`가 선의 최종 축을 원래 점 전체의 테이프 띠(칠 반폭 + 맞춤 셀)에서, 양쪽 가장자리가 보이는(`BirdsEye.seen`) 단면만, D-491 횡단보도 행을 빼고 맞춘다(화면 잘림·blob 띠 침식 제거). 경계마다 `slope_sd`를 싣고 `containment_payload`가 `uncertainty_m`에 2√2σ × (지지 + 0.3 m)를 더한다. `slope_sd`가 없으면 `uncertainty_m` None
+- 증거: `test_lane_slope_g16.py` 9건(합성 잘림·횡단보도, 불확실도, G-16 프레임 재생: 여유 21.5 / 22.0 mm vs STL 23.4, u 22.9 / 13.7 mm). perception·services containment·test/architecture는 `test/known_failures.py` 대조
+- gate 변화: 없음. SOURCE 호스트 시험만. 모델 PC 시나리오 C 재실행 남음
+- 결정: D-468 구현 메모(G-16)
+- 교훈: 외삽하는 경계는 위치 오차보다 기울기 오차를 먼저 본다. 잘린 칠은 위치는 맞아도 기울기를 기울인다
+
+## 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
+- 변경: 온전한 칠이 모자라면 찾은 조각의 축을 그대로 둔다(잘린 띠로 다시 맞추지 않음). 칠 반폭은 `lane_keep_lines.PAINT_HALF_WIDTH_M` 하나이고 노드가 `lane_paint_half_width_m`을 `LaneKeeper`에도 넘긴다(노드 604줄 그대로). `uncertainty_m`에 맞춤 중심 오차 항(`offset_sd`)을 더한다
+- 증거: `test_lane_slope_g16.py` 12건(되돌림, 중심 항, 수신기 외삽 상수 일치, 칠 반폭 하나). G-16 프레임 u 23.9 / 14.3 mm(여유 그대로). 실물 녹화 재생과 `_paint_fit` 비용은 D-468 구현 메모(G-16)
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-468 구현 메모(G-16) 보강
+- 교훈: 맞춤을 고치면 안전 근거만이 아니라 조향 축도 바뀐다. 실물 녹화 재생으로 추종 변화를 같이 잰다
+
+## 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
+- 변경: `line/keep_debug`에 프레임의 실제 GroundPlane 수치와 keeper 카메라 오프셋을 `ground_projection`으로 기록. 지면 없음은 null. 디버그 묶음 조립을 ROS 없는 `lane_debug`로 이동
+- 증거: `test_lane_debug.py`, `test_line_observer_wiring.py`, `test_module_structure.py` 69건 및 known_failures 대조 통과
+- gate 변화: 없음. 호스트 SOURCE만 확인했고 보정 승인·장치 녹화·주행 수용은 남음
+- 결정: D-364 재생 요구와 2026-10-08 영상 조사 계획의 진단 증거
+- 교훈: nominal이라는 출처 이름만으로 당시 사용된 투영 숫자를 복원할 수 없다
+
+## 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것
+- 변경: `keep_debug_payload`의 지면 투영 인자를 위치 전용 `projector`로 바꿨다. 노드가 metadata로 넘기는 `ground=<이름표>`와 같은 이름이라 첫 카메라 프레임에서 `TypeError: got multiple values for argument 'ground'`로 line_observer가 죽고 keep_debug·junction 능력이 사라졌다(2d87d53b1, D-507 SIM 2회차에서 발견)
+- 증거: `test_lane_debug.py` 14건. 새 시험은 고치기 전 코드에서 실패
+- gate 변화: 없음
+- 교훈: 디버그 묶음 조립 함수는 노드가 실제로 넘기는 키워드로 시험한다
+
+## 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
+- 변경: `keep` 모드도 `odom`을 구독한다. 신선한 odom이 제자리 회전(|wz| > 0.15 rad/s, D-495 회전 하한 0.3의 절반; |vx| < 0.01 m/s, CORE junction_still_linear)을 보이면 카메라 공백처럼 keeper를 `reset()`한다(`line_observer_node._spinning_in_place`). 직진 중 조향 반전 hold(fd4fad93c)는 그대로다. 같은 구독으로 D-408 learned paint 재사용 판정이 keep 모드에서 처음 odom을 받는다
+- 증거: `test_keep_pivot.py` 7건(회전 sweep 뒤 한 줄 링에서 목표가 나온다, 주행 중 weave와 odom 없음은 hold 유지, 변이 시험 3종 실패 확인), `test_lane_keep.py`·`test_line_observer_wiring.py`·`test_lane_paint_source.py`·`test_perception_folder.py` 120 passed 1 skipped, `test_module_structure.py` 34 passed, known_failures 0 new
+- gate 변화: 없음. 호스트 SOURCE만. D-507 SIM 3회차(모델 PC/현장 PC)에서 junction turn 뒤 `camera_line_not_visible` 정지가 사라지는지 확인이 남음
+- 결정: D-507 SIM 2회차 원인 1. no-target 프레임에서 hold를 푸는 안은 링(선 하나, 목표 있음)에 효과가 없고 R2C weave 재발을 열어 하지 않았다
+- 교훈: 끈적한 latch는 그것을 만든 원인(차체의 제자리 회전)이 사라질 때 풀리는 경로도 같이 둔다. control 패키지 크기는 45254/45254로 여유가 없다
+
+## 2026-10-08 · uncommitted · fix(control): keep 제자리 회전 reset 검토 반영 — odom twist 하나, 신선도 판정 하나
+- 변경: `_odom_wz`를 지우고 `_on_odom`이 `(vx, wz)`를 한 번 저장한다. `_paint_for`의 회전 판정도 `pose_if_fresh`(ODOM_MAX_SKEW_S 0.30 s)를 쓴다. 전에는 자체 0.5 s 창을 썼다. 노드 크기 판정은 608로 재판정했고, 남은 부담은 `docs/plans/2026-10-08-control-p1a-sensing-perception-split.md`로 넘겼다
+- 동작 변화: keep 모드가 `odom`을 구독하므로 D-408 learned paint 마스크 재사용(`learned_paint_every_n`)이 keep 모드에서 처음으로 작동한다. 영향은 `paint_source=learned`에서만 있다. 기본값 `threshold`는 영향이 없다. 전에는 odom이 없어 매 프레임 추론했다
+- 받아들인 대가: 서서 도는(vx < 0.01, |wz| > 0.15) 낮은 신뢰도 weave는 매 프레임 keeper를 다시 시작하므로 거기서는 flipping hold가 쌓이지 않는다. vx가 0.01을 넘으면 hold가 다시 무장된다. keep 조향은 항상 앞으로 가므로(1 − 0.65|e|) 정상 주행 weave는 이 경우에 들지 않는다
+- 증거: `test_keep_pivot.py` 9건(대가 시험, 오래된 twist(skew > 0.30 s)는 reset하지 않음 — `pose_if_fresh` 변이로 실패 확인), `test_lane_paint_source.py` 고정 문자열 갱신
+- gate 변화: 없음. 호스트 SOURCE만
+
+## 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사
+- 변경: `LaneEdgeFollower._pursue`가 왼쪽 목표를 낼 수 없어 오른쪽 기억을 쓰려 할 때, 가까운 창에 좌우 기억이 함께 있으면 중앙 간격을 기존 시드 범위 [1.2, 2.8] × 차로 반폭과 대조한다. 범위 밖이면 오른쪽 대체를 거절한다. 왼쪽 출력과 두 기억의 비교 창이 없는 경우는 그대로다.
+- 원인: `bw1` 굽이 첫 HOLD frame 260의 가까운 기억 간격 0.290 m는 상한 0.259 m보다 넓고, 기존 오른쪽 대체 목표의 지도 중심선 거리 0.0357 m는 명목 차체 여유를 거의 소진했다. 이는 SIM 참 자세 기반 진단이다.
+- 증거: 거짓 오른쪽 선 시험을 수정 전 실패로 확인; 정상 오른쪽 대체·65° 굽이·전체 랩을 포함한 `test_lane_edge.py` 41 passed, perception 전체 2,754 passed/108 skipped, `known_failures.py` 0 new.
+- gate 변화: 없음. SOURCE/LOCAL만. 보정된 실물 R0·R1·R2는 열림.
+
+## 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
+
+- 변경: Pilot MCAP 명령과 세션 토픽 목록에 네임스페이스 TF와 전역 `/tf`, `/tf_static`을 추가했다. 실제 게시 경로가 어느 쪽이든 원본을 보존한다.
+- 증거: `test_pilot_recorder.py` 39 passed, `known_failures.py` 0 new. 실제 게시·시각 동기·보정 revision은 별도 확인이 필요하다.
+- gate 변화: SOURCE만. 지도 투영 라벨과 실기 차선 추종 수용은 열려 있다.
+## 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
+- 변경: `lane_keep_junction._continues`(끝-시작 간격 ≤ `MAX_GAP_M`)로 이어진 칠 조각은 fork 두 가지가 아니다. 새 `lane_keep_bend`: 모서리 모양 선(경로를 가로지르고, 가까운 끝이 한쪽에 분명, 먼 끝이 기우는 쪽 차로 밖, 그쪽에 경로 교차점을 넘는 평행선 없음) 중 45°보다 가파르고 직각에서 `CORNER_SQUARE_RAD`보다 먼 선은 닫힌 쪽 경계의 굽이다. 굽이 중심선이 경로와 만나는 점이 `CORNER_LOOKAHEAD_M` 안이면 그 반경에서 추종(`bend_<side>`, 오차 상한 `CORNER_MAX_ERROR`), 밖이면 직진(`bend_ahead`). 가파른 선은 외삽 오프셋이 아니라 보이는 칠의 가까운 끝으로 편을 정하고, 앞 조각에 이어진 조각은 그 편을 받는다. `_runs_past`·`_pursuit_point`는 옮겨 `lane_keep.py` 600줄 유지. 카메라·차로 폭·이득은 그대로
+- 증거: `test_lane_keep_bend.py` 10건(B8 고정 자료 7클립: fork·flipping·corner 0, 굽이 추종, spoke `junction_transverse` 유지, 목표 참 중심선 안쪽 반폭 이내·90 % 23.5 mm 이내). perception 2747 passed. 모델 PC SIM `docs/validation/lane-keep-bend-sim-2026-10-08`: 굽이에 닿은 11/11 통과, x −0.95…−0.78 중앙 +0.014…+0.016 m, `corner_*`·`junction_fork`·`flipping` 0
+- gate 변화: 없음. SOURCE 호스트 시험 + ROS-SIM. 장치·현장 아님
+- 결정: D-507 B9
+- 교훈: 가파른 선의 SIDE_X_M 외삽 오프셋은 편을 정하지 못한다. 보이는 칠로 정한다
+
+## 2026-10-08 · e192ef089 · fix(perception): B9 독립 검토 반영
+- 변경: 닫힌 쪽 평행선이 사선의 가까운 끝을 넘어 이어지면 굽이 아님(정지선 오판 수정). 교차로 규칙을 굽이보다 먼저 판단하고, 65°를 넘는 굽이 선도 교차로 규칙에는 가로선(교차로는 닫힌 쪽 실패). 가파른 선 가까운 끝 편 정하기·편 상속·가까운 순서는 corner turning에서만(끔이면 실물 434프레임 main과 같음)
+- 증거: 새 시험 5건(60° 표시 2건은 05462b7d9에서, 끊긴 경계 교차로 3건은 5a5965e55에서 실패). 모델 PC SIM 8회: 굽이에 닿은 5/5 통과, 3회는 CORE `obstacle_ahead` memory(B4). B8 66° 사건 프레임은 한 프레임 `junction_transverse`
+- gate 변화: 없음. 착지 전 운영자 검토 필요: corner turning 켬에서 실물 프레임 119장 변화(HOLD → 주행 29, `bend_*` 69)
+- 결정: D-507 B9
+- 교훈: 한 프레임에서 굽이와 교차로 입구가 같아 보이면 교차로 쪽으로 실패하고 경로 문맥(B11)에 넘긴다
+
+## 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)
+- 변경: main 병합(`_junction`이 (사유, ahead_m)). B9 규칙 전부를 `LaneKeeper.update(..., bend_expected=False)` 뒤로. `bend_ahead`는 굽이 선 교차점 − 반폭 안으로 당기고(평활 뒤에도) 차로 쪽 경계가 없으면 HOLD. `bend_*` 평활 우회 제거. 가까운 끝 편 정하기는 반폭의 절반 이상 떨어진 끝만. 배선은 B11·B12(D-507 구현 메모)
+- 증거: 실물 라벨 434프레임 게이트 끔 main과 0 다름(게이트 켬 90 다름, HOLD → 주행 0, 주행 → HOLD 13). `test_lane_keep_bend.py` 40건(실물 2건은 데이터 없으면 건너뜀), 닫힌 고리 기운 L자 20건. perception 2782 passed. 게이트 켬 SIM 6회: 굽이 통과 0(굽이 앞 차로 경계 없는 구간에서 HOLD → LOST 4, 한 프레임 교차로 → 회전 중단 2)
+- gate 변화: 없음. 장치는 게이트 끔(호출자 없음)
+- 결정: D-507 B9. 굽이 앞 경계 없는 구간을 무엇이 메울지(B11 접근 또는 기대 창 안의 직진 허락)는 사용자 결정
+- 교훈: 한 프레임 규칙으로 SIM 굽이와 실물 벽·칠을 가를 수 없으면, 규칙을 경로 문맥 게이트 뒤에 두고 기본값은 이전 동작으로 둔다
+
+## 2026-10-08 · uncommitted · fix(perception): 양쪽 경계 미관측 시 기억 주행 후보 정지
+
+- 원인: 65° 오른쪽 굽이의 실제 왼쪽 경계를 절곡점 앞뒤 각 0.15 m 지운 호스트 폐루프에서 두 경계가 모두 미관측인데도 오래된 왼쪽 기억 목표로 잘못 좌회전했다. 정지 전 중심선 편차는 0.1518 m였다. 기존 축 정렬 0.15 m 삭제 시험은 오른쪽 굽이에서 왼쪽 화소가 계속 보였으므로 한쪽 선 소실 근거가 아니었다.
+- 변경: `LaneEdgeFollower`는 양쪽 경계가 모두 미관측이면 기억을 재획득용으로만 보관하고 관측 후보를 내지 않는다. `LaneBoundaryTracker`의 MEMORY는 한쪽 경계가 관측되지만 앞쪽 목표가 지지되지 않을 때에만 남긴다. 지도 경로 시제품은 기존 잠금·경로 정렬·기억 목표의 경로 일치를 확인한 경우만 예외다. 한쪽이 관측되는 짧은 왼쪽 굽이 공백의 RIGHT 대체는 유지한다.
+- 증거: 같은 긴 오른쪽 공백의 첫 정지 시 중심선 편차 0.0024 m, 이후 이동 0. 좌·우 짧은 공백·긴 공백, 전체 코스 첫 무관측 정지, 경계·예산·노드 배선 관련 시험 90건 및 지도 카메라·혼합 추종 관련 130건 통과. 지도 경로에서 0.06 m 벗어난 무관측 프레임은 STOP. 저장된 `bw1` 293프레임 집계와 frame 260 LEFT 후보는 변경 전후 동일했다.
+- gate 변화: 없음. SOURCE/LOCAL만. 기존 전체 코스 성공 시험은 안전상 첫 무관측 굽이 정지 시험으로 교체했다. ROS-SIM 새 폐루프, 사람 검수 R0, 실물 R1/R2는 남음.
+
+## 2026-10-08 · uncommitted · fix(perception): 지도 분기 보조의 경로 이탈 가드
+
+- 원인: `route_a`의 무관측 기억 게이트는 지도 중심선에서 0.0609 m 벗어난 자세를 거절했지만, 같은 프레임의 분기 `MANOEUVRE` 폴백이 경로 측면 오차를 확인하지 않고 주행 후보를 냈다.
+- 변경: 분기 보조 진입과 진행 중 지도 측면 오차를 기존 `AGREE_MAX_LATERAL_M`과 비교해, 초과하면 각각 STOP 또는 래치된 `MANOEUVRE_ABORT`로 처리한다.
+- 증거: 저장된 ROS SIM frame 192의 80 mm 자세 교란은 수정 전 `MANOEUVRE`, 수정 후 STOP. 원래 자세의 `MEMORY` 후보는 유지. 분기·혼합·코스 시험 77 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 없음. 오프라인 반례와 호스트 시험이며, 활성 Fleet 지도 연동·ROS SIM 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · test(perception): 남쪽 출발 굽이 재획득과 긴 페인트 공백
+
+- 변경: `west:r → ring_s:f` 남쪽 직선 출발 호스트 폐루프와 굽이 앞 0.30 m 반경 페인트 공백을 `test_route_camera.py`에 고정했다.
+- 증거: 정상 바닥은 분기 도달·올바른 방향·MEMORY 재획득, 최대 중심선 편차 0.0356 m. 긴 공백은 0.249 m 진행 뒤 LOST, 최대 편차 0.002 m. 두 시험 모두 통과.
+- gate 변화: 없음. 합성 바닥·SIM 참 자세의 호스트 검증이며 ROS 그래프, Fleet 활성 경로, 실제 벽·페인트 검수는 별도다.
+
+## 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단
+
+- 원인: `route_a`가 마지막 경로 조각 끝에서도 `near_node` 분기 manoeuvre를 시작해, 카메라 tier STOP 중 경로 마지막 점에서 72.5 mm 떨어진 위치까지 이동했다.
+- 변경: 마지막 점 20 mm 전부터 관측 후보를 반환하지 않고 진행 중 manoeuvre를 해제한다. CORE 단일 `/cmd_vel` 경계는 그대로다.
+- 증거: 끝점·15 mm 앞 단위 반례 수정 후 29 passed; hybrid·관측 연결·투어 74 passed, 10 skipped. 독립 ROS-SIM 재실행은 끝점 18.1 mm 앞 HOLD 후 LOST, 최대 중심선 편차 47.8 mm로 주행 전체는 HOLD.
+- gate 변화: 없음. 경로 끝 정지만 검증했고 활성 경로·사람 승인 정답·실물 수용은 남았다.
+
+## 2026-10-08 · uncommitted · fix(control): 정적 경로 시제품을 Gazebo 조건에 한정
+
+- 원인: `route_a/b/ab`의 정적 `route_start`는 첫 odom을 지도에 고정하지만 독립 위치 검증이 없다. −40 mm 시작 오차의 오프라인 폐루프가 지도 중심선 60 mm 편차로 주행했다.
+- 변경: observer가 Gazebo 지면 출처·simulation ground 허용·sim time을 모두 확인한 뒤에만 시제품 route follower를 만든다. 그렇지 않으면 관측 없음으로 닫는다.
+- 증거: 호스트 관련 181 passed, 신규 실패 0; 모델 PC ROS 노드에서 PINKY 조건 follower 없음, Gazebo 조건 `RouteCameraFollower` 생성. [검증 기록](../../docs/validation/lane-route-prototype-admission-2026-10-08/result.md).
+- gate 변화: 시제품 진입 제한만 확인. 실제 지도 위치 권한, Gazebo 폐루프 재검증, 실물 R1/R2는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(control): 경로 시제품의 시뮬레이션 조건 상실 폐기
+
+- 원인: 시작 때 만든 route follower는 이후 `camera_ground_source` 변경에도 유지됐다. 다음 유효 프레임에서 다른 지면 투영값을 사용할 수 있었다.
+- 변경: route 모드의 유효 프레임마다 Gazebo 조건을 재검사하고, 깨지면 follower를 폐기한다. 설정을 복구해도 노드 재시작 전에는 되살리지 않는다.
+- 증거: 재현 테스트 수정 전 1 failed, 수정 후 관련 11 passed·신규 실패 0. 모델 PC ROS 노드에서 Gazebo follower가 `PINKY` 전환 프레임 뒤 `NoneType`이 되고 재설정 후에도 유지됐다. [기록](../../docs/validation/lane-route-prototype-lifetime-2026-10-08/result.md).
+- gate 변화: 실행 중 조건 상실의 관측 폐기만 확인. 설정값은 하드웨어 증명이 아니며 운영 차선 추종은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
+
+- 원인: 10/6 원본 3,129프레임의 R0 재생은 모두 STOP이었고 공칭 또는 미승인 후보 지면을 사용했다. Pilot은 차선 관측 진단을 담지만 스냅샷은 담지 않았으며, 둘 다 카메라 보정 상태가 빠져 있었다.
+- 변경: Pilot·스냅샷에 `camera/calibration/status`, 스냅샷에 `line/keep_debug`를 저장한다. 직접 MCAP 추출과 MP4 sidecar는 카메라 상태를 과거 방향 2.5초 이내에서만 연결한다. 스냅샷 side-topic 예산은 프레임당 8 KB로 조정했다.
+- 증거: 감지 전체 2,821 passed·110 skipped·NEW 0, 녹화·변환 집중 154 passed. 학습 전체의 Bash 선택 실패 5개는 같은 `main`에서도 재현했고 Git Bash를 앞에 둔 해당 파일 11 passed. [검증 기록](../../docs/validation/lane-ground-recording-2026-10-08/result.md).
+- gate 변화: SOURCE/LOCAL 증거만 추가. `camera_detect_node`의 보정 상태와 `line_observer_node`의 실제 투영은 서로 다른 출처다. 사람 승인 정답·실물 보정·ROS 폐루프·실물 주행은 HOLD.
+
+## 2026-10-09 · uncommitted · refactor(control): P1a perception 증거 크기 단위 분리
+
+- 변경: `control/sensing/perception/`을 구조 검사에서 별도 크기 단위로 계상했다. 현재 11,035줄이며 남은 `control`은 34,446줄이다. import 경로, colcon 패키지, ROS 실행, CORE 명령 소유권은 바뀌지 않았다.
+- 검증: 구조 34 passed, 관련 perception 133 passed·1 skipped, 각각 `known_failures` 신규 0. 실기·이미지 검증은 이 계상 변경의 증거가 아니다.
+- gate 변화: 없음. D-520 곡선 카메라 맞춤과 주행영역 학습 승인은 별도 검증이다.
+- 후속 판정: 이 브랜치가 건드리지 않은 `line_observer_node.py`는 현재 632줄로 계획 당시 608줄보다 24줄 늘었다. 기존 파일 verdict 허용폭 안이지만 2단계 전에 재판정해야 한다.
+
+## 2026-10-09 · uncommitted · feat(control): CORE 경로 문맥을 keeper의 굽이 입력에 연결
+
+- 변경: keep 모드에서만 CORE `line/route_context`를 VOLATILE로 구독한다. 공통 스키마와 영상 시각 기준 미래·0.5초 경과·만료를 검사한 뒤 기대 굽이 창에서만 기존 B9 `bend_expected`를 준다. 잘못된 메시지·비움·시계 역행은 문맥을 폐기한다. 사용한 `seq`를 관측과 keep_debug에 함께 싣는다.
+- 검증: route input 6 passed(기록된 SIM 굽이 클립 포함), keeper·wiring 집중 143 passed·2 skipped, 구조 34 passed. 실물 라벨 434프레임은 로컬에 없어서 2 skipped이며 별도 재생이 필요하다.
+- gate 변화: 기본 CORE 설정 `route_context_enabled=false` 유지. SOURCE 코드 연결만 확인했으며 문맥 켬 실물 재생·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
+
+- 변경: 신선한 CORE `bend_phase`가 굽이 진행·재획득을 가리킬 때도 기존 B9 기대 굽이 규칙을 사용한다. 문맥 부재·만료 시 기존 판단으로 돌아간다.
+- 증거: `test_route_context_input.py` 집중 검사. 계약 v1.166.
+- gate 변화: SOURCE. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
+
+- 변경: `ir_overlay.py`가 `learned_paint_every_n`을 [1, 4]로 받는다(`learned_paint_threads`는 [1, 2] 그대로). `line_observer_overrides apply --paint-every-n 1..4`로 쓸 수 있다. paint_worker 게이트는 바꾸지 않았다.
+- 이유: 9dfk 실물에서 `learned_paint_every_n: 2`가 84프레임 중 0프레임에 학습 마스크를 썼다(전부 `denoise_fallback`). 카메라 8 Hz에서 every_n 2의 컷오프는 250 ms인데 Pi 5 추론은 약 240~300 ms(약 2.4프레임)다. 전에는 범위 밖 값이 overlay 전체를 건너뛰게 해 운영자가 올릴 수 없었다. D-408 ADR은 기본값 2만 적고 범위를 계약으로 두지 않는다.
+- 증거: `test_ir_overlay.py` 경계(4 허용, 5 거부). 실물 9dfk 0/84(2026-10-09), 시뮬레이션 every_n 4는 300 ms에서 50%.
+- gate 변화: SOURCE. 기본값 2는 그대로. DEVICE에서 every_n 3~4 적중률은 HOLD.
+
+## 2026-10-09 · uncommitted · feat(control): 학습 페인트 마스크 오돔 보정 재사용 (D-570)
+
+- 변경: `learned/paint_motion.py`(오돔 기록, 바닥 평면 호모그래피, 최근접 warp)를 새로 두었다. `LearnedPaintWorker.mask_for`에 `motion`·`max_age_s`·`reuse_n`·`when_idle`을 더했다. `line_observer_node`에는 `learned_paint_motion_compensation`(기본 꺼짐)·`max_age_s` 0.9·`max_dxy_m` 0.10·`max_dyaw_rad` 0.40·`cadence`를 두었다. keep_debug에 `paint_mask_age_s`·`paint_compensated`·`paint_motion_dxy_m`·`paint_motion_dyaw_rad`·`paint_fallback_reason`을 싣는다. 운영 overlay와 `line_observer_overrides`에서 보정과 cadence를 켤 수 있다.
+- 증거: 원격 pytest 6파일(새 `test_learned_paint_motion.py` 포함) 통과, known_failures 신규 0. 시뮬레이션(`test/paint_reuse_sim.py`) 300 ms·every_n 4에서 old 50 %(직진)/0 %(회전 0.32 rad/s), new 100 %/100 %이며 옮긴 IoU는 0.87/0.90이다.
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다. 재생 도구(학습 페인트+오돔), 9dfk DEVICE 사용률·CPU 측정은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): D-570 리뷰 반영 — 재사용 기록 명확화, 워커 시계 상한, idle 주기 제거
+
+- 변경: keep_debug의 `paint_compensated`·`paint_fallback_reason`을 `paint_reuse`(warped|unwarped|fresh|none)와 `paint_warp_skipped`(off|no_mask|too_old|clock_back|no_odom|motion_bound)로 바꾸었다. 옮긴 마스크도 워커 시계로 max(stale_s, max_age_s)+0.1 s 안이어야 하고, warp 뒤 40 px 조각 제거를 거친다. `max_age_s`·`max_dxy_m`·`max_dyaw_rad`는 읽기 전용이다. idle 주기(워커 상태, overlay 키, CLI 플래그)는 뺐다.
+- 증거: 보정 꺼짐에서 `_paint_for`가 D-570 이전 인자를 넘기는 시험, 원점 밖 자세의 같은 상대 움직임에서 같은 H가 나오는 시험. 시뮬레이션 300 ms·every_n 4: 직진 IoU 0.84, 회전 0.90, 사용 100 %/100 %.
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다.
+
+## 2026-10-10 · uncommitted · fix(control): 정지 경계 교체 모순에서 기억 중단
+- 변경: `lane_boundary_identity.py`가 정지 odom에서 새 좌·우 선 성분과 기억의 공통 BEV 거리 행 횡중심 이동을 비교한다. `lane_bev.py`는 20 mm 초과 시 기억을 버리고 `boundary_identity_unconfirmed`로 관측을 중단하며 코너 인계도 막는다. 기존 동선·명령 소유권은 그대로다.
+- 근거: 합성 같은 자세에서 30 mm 옮긴 단일 선이 이전 좌/우 경계로 승격되어 error +0.252/-0.218을 냈다. 수정 전 반례 시험 실패, 수정 후 `test_lane_edge.py` 전체 통과. `docs/validation/lane-stationary-boundary-identity-2026-10-10/result.md`.
+- gate 변화: SOURCE 후보. 일반 keep 모드·RoadState·ROS-SIM·장치·현장 수용은 별도이며, 동일 위치의 다른 물리 선은 카메라+odom만으로 구분되지 않는다.
+
+## 2026-10-10 · uncommitted · feat(control): keep closed-loop gap diagnostic
+- Change: Added two host closed-loop cases for the operational LaneKeeper using rendered floor paint and the CORE steering-law mirror.
+- Evidence: A 0.20 m missing left stripe on a straight is crossed; a 65 degree bend with route context stops about 0.18 m before its vertex when the parallel boundary vanishes. Related host tests: 111 passed, 2 skipped, 0 new failures.
+- Gate: HOST-SIM diagnostic only. Bend completion, ROS-SIM, device and field acceptance remain HOLD; CORE command ownership unchanged.
+
+## 2026-10-10 · uncommitted · docs(control): verify CORE bend handoff and body footprint
+- Change: Corrected the keeper gap note to the D-507/D-531 owner split and added a reproducible operational keeper plus CORE host loop and start-pose sensitivity sweep.
+- Evidence: Valid bend instruction reached reacquisition; no instruction stopped. Nominal 0.15 m radius crossed painted lane under the body on 12 ticks; 0/9 perturbed starts avoided contact. An exploratory 0.08 m radius with earlier entry avoided contact at only 1/9 starts.
+- Gate: HOST-SIM containment HOLD; no operational control or device setting changed.
+
+## 2026-10-10 · 027e69e08 · feat(control): keep 모드 learned paint를 drivable 길로 (D-597)
+- 변경: 읽기 전용 `learned_paint_target`(기본 `lane_marking`, `drivable`). `drivable`이면 paint worker가 `infer_drivable`을 불러 `learned/drivable_paint.py`가 D-566 영역(성장 제한 없음, ignore 역할은 도로)에서 로봇 아래 도로부터 위로 이어지는 길을 만들고, 갈래가 나뉘면 가장 오른쪽(D-384 2항)을 따른다. 길 양쪽 바깥에 선 폭 띠를 그려 keeper 페인트로 준다. drivable 없음·근거리 2% 미만이면 같은 추론의 lane_marking. 매니페스트 `input.crop` 지원(자르기·background로 되돌리기). keep_debug `paint_source_used: learned_drivable`, `paint_target_requested`, `paint_drivable`. 운영자 overlay 허용 키와 `--paint-target` CLI 플래그, CORE readback은 `learned_drivable`을 `learned`로 보고.
+- 증거: `test_learned_drivable_paint.py`(직선·갈래 우측·횡단보도·덮개 부족·크롭·keeper 종단 오차가 테이프 경로와 0.05 안), overlay·CLI·readback 시험. 원격 pytest 통과(현장 PC).
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다. Pi 지연, 실프레임 재생, 실물은 별도다.
+
+## 2026-10-10 · a3eed5066 · feat(control): 학습 페인트가 한 프레임 비어도 바로 돌아오지 않는다 (D-611)
+- 변경: `EvidenceModes`. `paint_source: learned`에서 마스크가 있으면 그 마스크, 없으면 바로 `denoise_fallback`. 반사 제거로 내려간 뒤 학습으로 돌아가려면 신선한 마스크 2프레임. 밝기 문턱은 폴백이 아님. 카메라 공백·keep 이탈은 래치를 비운다. drivable 길이 늦을 때의 정지는 D-597 그대로. keep_debug에 `evidence_mode`와 `evidence_rows`(횡단보도 보고, 정지선, 장애물 metric/hold, 신호 hsv).
+- 증거: 모델 PC `rosy@100.98.162.71`에서 `test_evidence_mode.py`와 `test_lane_paint_source.py` 33 passed, 1 skipped. `known_failures` NEW 0.
+- gate 변화: 없음. 장치 기본 `threshold` 유지.
+
+## 2026-10-10 · 928b3dc23 · test(control): 떼어 낸 카메라 콜백이 D-611 래치를 갖는다
+- 변경: 제품 동작은 그대로. `test_learned_paint_motion`의 가짜 노드에 `EvidenceModes`. `test_line_observer_wiring`이 소스에서 떼어 실행하는 `_on_camera` 가짜에 래치 리셋. `known_failures`에서 이제 통과하는 keep 콜백 한 줄을 뺌.
+- 증거: 모델 PC `rosy@100.98.162.71`, 커밋 `928b3dc23`, `middleware/perception/test/` 2950 passed, 112 skipped, 62 subtests, 156.97s. `known_failures` NEW 0. 직전 `d226f7f42`는 같은 스위트 8 failed, 2942 passed (가짜 노드에 `_drop_learned_paint`와 `_evidence_modes`가 없음).
+- gate 변화: 없음. 장치 기본 `threshold` 유지. 로봇 주행은 돌리지 않음.
+- 결정: D-611
+- 교훈: 노드 메서드를 AST로 떼어 실행하는 시험은 새 헬퍼를 가짜 노드에 직접 달아야 한다.
+
+## 2026-10-10 · 8dd17ab69 · uiux(preview): 카메라 미리보기가 조향에 쓴 drivable 길을 그린다
+- 변경: keep_debug가 `paint_source_used: learned_drivable`(또는 `paint_target_requested: drivable`)이면 `follow_preview`가 옛 차선 후보·경계·영역 상자·도로 표시(STOP/CROSSWALK)를 그리지 않고 `drivable_preview.draw_drivable`로 조향에 쓴 길(초록), 나머지(어둡게), 고른 출구, 목표점과 추종 호, ahead_m, 경로 사전 방향(guide_deg), 머리줄 `DRIVABLE · 전략 · e · source`, 아래 띠에 결정 사슬 1 PERCEPTION·2 STEERING과 STOPPED BY 머리글을 그린다. `keep_step`이 조향한 길을 4 px 간격 run length로 keep_debug `drivable_way`에 싣는다(추론 추가 없음, 600 run 초과면 8 px, 그래도 넘으면 생략: CORE lane_perception 16 kB 상한). 대시보드 카메라 패널은 `GET /api/v1/line-follow`로 3 CORE 관문·4 막힘·5 Fleet/AI 줄과 STOPPED BY 머리글을 보인다(`core_ui_logic.lineDecisionChain`). CORE 상태는 로봇 ROS 그래프에 없어 영상에는 1·2줄만 있다. Fleet/AI 판단 계층(ai/rule)과 lane_cue는 CORE 상태에 없어 "not reported"로 적는다.
+- 증거: `test_drivable_preview.py`, `shared/web/test/test_line_decision_chain.py`, `test_panel_copy_evidence_browser.py::test_camera_decision_chain_names_the_layer_that_stops`. 원격 pytest(모델 PC) 영향 범위 4422 통과, 실패 2건은 known_failures. 브라우저 시험은 모델 PC Chromium에서 181 통과, 실패 7건은 main 9ad37190e에서도 같은 7건. 기록 프레임 전후 그림 X:\DevTemp\preview-drivable\*_pair.jpg.
+- gate 변화: SOURCE. 장치 반영은 아직 없다.
+
+## 2026-10-10 · bb6347eba · feat(sim): map_v2_fleet 곡률 학습 파생 맵
+
+- 변경: 사용자 요청으로 training-curved 맵을 생성한다. 동쪽 S자 도색과 그래프에 같은 변형을 적용하고 외곽 사각 벽은 시각·충돌 모두 흰색 0.30 m로 둔다. 원본 STL·실물 기준 맵은 유지한다. 벽/차선 접점에 검은 간격을 만들지 않는다.
+- 증거: 모델 PC에서 선행 시험 3건의 미구현 실패를 확인한 뒤 bb6347eba의 맵·그래프·런치 관련 원격 pytest 57 passed, known_failures 0 new/0 known. Isaac/Gazebo 실행·학습·실물 주행은 이 변경의 증거가 아니다.
+- gate 변화: 없음. 파생 맵 자산·호스트 계약만 검증했다.
+
+## 2026-10-11 · fbf513a4d · refactor(perception): 센서·vision과 Drive의 의미 holder 분리 (D-630)
+
+- 변경: 기존 control.control의 순수 계산 50개를 safety 15개, recovery 11개, tracking 6개, calibration 18개로 나눴다. sensing/vision, grid planning, sensor-only Safety adapter와 wander는 해당 인지/Drive holder로 옮겼다. provider·ROS 배포와 control.* import, console script, share/control을 유지한다. source facade는 선언한 package 경로만 연결하고 설치 wheel은 기존 namespace에 한 벌을 둔다. sdist는 선언한 Drive 원본만 포함한다. map_v2_fleet와 260919 MAP FILE.STL의 계보를 유지한다.
+- 증거: 선행 구조 RED eb4535786 이후 canonical 이전 172개 파일의 원본을 독립 대조했다. 170개는 동일하고 sensing 초기화의 source 검색과 paint_localizer 리소스 lookup만 변경했다. Safety/Drive 알고리즘과 활성 sensor-only 구성은 유지한다. 원격 전체 회귀·wheel/sdist 결과는 날짜별 검증 기록에서 구분한다.
+- gate 변화: 없음. 새 후보의 ROS 실행·ARM64 이미지·장치·현장 수용은 별도다.
+
+## 2026-10-11 · 92b5cff5e · fix(control): preserve the ROS-free paint map boundary after holder moves
+- 변경: ROS edge 검사에서 기존 canonical source mapping을 사용해 이동된 안전·추종·영상 모듈까지 검사한다. PaintMap의 암묵적 ament import를 제거하고, 설치 share 경로는 기존 ROS 호출자가 전달한다. 지도 기본값과 출처는 map_v2_fleet 그대로다.
+- 증거: CI 38116968157의 두 구조 검사 실패 및 원격 재검사에서 드러난 paint_localizer ROS import를 재현했다. 수정된 HEAD의 원격 검증 후 결과를 기록한다.
+- gate 변화: 없음. 설치본·현장 주행 증거와 구분한다.
+- 결정: D-171, D-630의 기존 경계 유지.
+- 교훈: 물리 폴더 이동 후 구조 검사는 패키지 소스 매핑을 따라야 한다.
+
+## 2026-10-11 · 177e7faff · refactor: legacy Drive entry source ownership (D-649)
+- 변경: control/goal/wander/safety 진입 모듈 네 개를 Drive runtime으로 이전. 기존 control import/entrypoint/provider와 map resource 유지; source audit, runtime wheel/sdist 및 legacy 최종 writer 배제 유지.
+- 증거: docs/validation/d649-drive-boundaries-2026-10-11/result.md; 원격 Perception 3028 passed, 112 skipped, 62 subtests passed, 0 NEW; 고립 설치 시험 통과.
+- gate 변화: 장치·현장 gate 변경 없음. 로봇은 사용자 결정으로 오프라인 유지.
+- 결정: D-649
+
+## 2026-10-11 · b64dc94e0a · D-665 기준점 기반 구역 로직과 별도 인지 평가
+
+- 변경: 명시적 관측 기준점과 World 입력 유효성을 사용해 현재 구역을 산출하고 도로면/구역 정답을 따로 점수화한다. 중앙/최대 영역 대체·목적지 가지 선택·가림 채우기는 하지 않는다.
+- 증거: b64dc94e0a 원격 합성 로직·기존 기준선·World 설치 wheel 35 passed, terminal exit 0, known_failures NEW 0. 시각 불일치·잘못된 정답·invalid image의 미평가 분모도 확인했다.
+- gate 변화: 없음. 실제 투영 입력 생산자·독립 정답·coverage·장치 관측 전달은 미완료다.
+- 결정: D-665
+
+
+## 2026-10-11 · 9fc0a88c9 · source test import precedence
+
+- 변경: 소스 시험의 foundation 경로를 먼저 두어 설치 wheel의 config module 캐시 혼입을 막았다. 설치 시험은 기존 독립 subprocess에서 유지한다.
+- 증거: 통합 원격 시험에서 기본 설정 경로 불일치를 재현했다. 수정 HEAD의 재검증 대기.
+- gate 변화: 없음. 런타임·실물 보정은 변경하지 않았다.
+
+## 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+
+- 변경: ISAAC containment 출처와 같은 영상의 경계/횡단보도 정보를 기존 producer/CORE로 연결했다. GAZEBO detector 오차를 자동 상속하지 않고 현재 오차 null을 유지한다. API reference v1.210·description·changelog와 ADR D-692를 일치시킨다. envelope 1.0·실물 NOMINAL hold·최종 CORE 명령 권한을 유지한다.
+- 증거: committed-source 원격 관련 시험 100 PASS·known_failures NEW 0, 독립 안전 리뷰 차단 결함 없음. 최초 API 정합성 NEW 2는 description/changelog 수정 후 재시험했다. Windows 콘솔 cp949 예외는 UTF-8 모드로 재실행하고 원본 시험 로그를 따로 확인했다.
+- gate 변화: SOURCE 연결만 확인했다. 실제 SDK 완주·검출기 오차·회전/차선 재획득·교통/Fleet·병렬 RL·실물 수용은 미완료다. unknown bounds는 안전한 경계나 횡단 증거로 승격하지 않는다.
+
+## 2026-10-12 · uncommitted · 260919 진행 방향 횡단 줄무늬 관측
+
+- 변경: road.py가 GroundPlane이 있을 때 기존 D-491 crosswalk_extent와 BirdsEye로 세로 횡단 줄무늬를 찾는다. 기존 가로 표식은 우선하고 정지선·신호 판정 및 CORE gate는 유지한다.
+- 증거: A24 RGB crosswalk=false를 기록했다. 첫 카메라 프레임은 기동 pose가 없어 명목 투영의 거리 fixture를 철회하고, 정확한 25mm/120mm bars·40mm pitch를 명목 카메라에 투영한 원격 RED 1 NEW·32 PASS로 누락을 재현했다. 초기 RED는 자원 floor fallback, 교정된 RED는 AI PC 기준 충족 실행이다. 단일 정지선·차선·두 줄·옆 차로·빈 프레임 오인식 방지와 투영 없는 거리 미추정 회귀를 추가했다. 수정 후 원격 시험·native·독립 검토는 진행 중이다.
+- gate 변화: 없음. 모델·안전 권한은 변경하지 않았다. 실제 안정 카메라·좌표·오차·신호·완주·병렬 RL 수용은 남았다.
+
+## 2026-10-12 · 47601c453 · 횡단 줄무늬 원격 회귀와 A25 실제 관측
+
+- 변경: D-491 metric 횡단 관측 연결을 원격과 두 CORE·Fleet Gazebo에서 확인했다. 기동 첫 프레임의 거리 단정을 철회하고 안정된 마지막 프레임을 별도 기록했다.
+- 증거: 관련 원격 57 PASS·exit 0·NEW 0, 독립 SOURCE 승인, lint 0 errors·28 warnings. A25 17 패키지 build exit 0·native exit 0. 첫 로봇 road crosswalk=true·lens 거리 0.305m·confidence 0.6786, CORE 센서 API valid=true 두 대. 각 image/line/road 269건·preview/최종 CORE 단일 publisher·명령과 최종 odom 속도 0, online 2/2·기존 pin LOCALIZED. 독립 소유 PID 부재·세 포트 ECONNREFUSED, private 원본 50개 SHA 대조. 같은 host 30회 detector replay 중앙값 5.87/4.46ms·p95 40.62/21.45ms는 live callback 성능이 아니다.
+- gate 변화: 실제 횡단 관측과 CORE valid 수신만 확인했다. 기존 stop_line confidence 0.414 관측과 정책 HOLD는 유지했다. 횡단 서행·신호/장애물·Fleet 주행·지속 위치·unknown uncertainty·완주·병렬 RL·실물 수용은 아직 미완료다.
+
+## 2026-10-12 · 1546582f5 · CI 시험 도구 호환성
+
+- 변경: pytest 7.4의 module setup hook과 충돌하던 Fleet 시험 도우미 이름 및 모든 호출자를 바꿨다. Cell 401 검사는 실제 로그인·고급 접속 안내를 기대하며 세션 초기화와 조작 잠금 단언을 유지한다. 고립 설치 의존성 검사는 PEP 508 이름·공백만 정규화하고 정확한 버전 조건·무조건 의존성을 유지한다.
+- 증거: commit 40e7287971의 G1 307 passed와 pre-push 7828 passed 이후 전체 CI 38180852375는 Fleet hook·Cell 구문·sdist Requires-Dist 문자열 차이로 실패했다. CI 도구 pytest 7.4.4/setuptools 68.1.2/wheel 0.42.0의 원격 RED 1 NEW로 실제 core-common >=0.0.1 표기를 재현했다. 수정 후 동일 도구 원격 95 passed 및 Cell 실제 Chromium 6 passed, 각 terminal exit 0/known-failures NEW 0. 로그는 X: 검증 폴더 ci-compatible-diagnostic/ci-compatible-green/ci-compatible-cell에 보존한다.
+- gate 변화: 시험 호환성 수정과 선택 원격 회귀만 확인했다. 최신 통합·전체 CI·서명·새 설치본·사람 계정 발급은 별도 확인 중이다. production 권한·기계 토큰·비밀 검사·기존 실패 목록은 변경하지 않았다.
+
+## 2026-10-12 · 9e5ebb9c3 · 횡단 막대와 정지선 후보 구분
+
+- 변경: 기존 D-491 BEV 횡단 구역 안에서 후보 그룹의 모든 원본 행에 같은 행을 실제 샘플링한 stripe 근거가 있을 때만 그 후보를 정지선 목록에서 제외한다. 거리 불명·미관측·행 alias·실제 정지띠가 섞인 그룹은 보존한다. CORE/Fleet·신호·통행권·학습·명령 권한은 바꾸지 않았다.
+- 교훈: 연속 폭만 요구한 첫 후보는 1px 끊김 정지선을 놓쳐 독립 검토에서 폐기했다. 중앙 한 행의 근거로 전체 그룹을 제외하는 후속 후보도 실제 띠를 놓쳤다. 통합 그룹 회귀를 원격 RED 1 NEW로 재현하고 모든 행 및 실제 sample 행 일치로 보강했다.
+- 증거: 최종 source 관련 원격 227 PASS·terminal exit 0·NEW 0, 독립 SOURCE 승인. 1·2·10px 끊김, 횡단 그룹 끝의 실제 띠, 얇은 띠의 BEV 행 alias를 보존한다. 저장된 실제 두 Gazebo 프레임 offline 재생에서 가까운 횡단 막대 오인은 제외됐고 횡단 거리 0.305m·confidence 0.6786과 lane·signal은 유지됐다.
+- gate 변화: 새로운 ROS runtime·학습·주행 증거가 아니다. 화면 위쪽 108행의 거리 불명 후보는 남았으며 전체 clear 검사는 exit 1이다. 전체 오인 해소·교통 규칙 완주·실물 정지선 정확도는 아직 미완료다. private 일지에 source·이미지 hash·실패와 결과를 구분해 보관한다.
+
+## 2026-10-12 · afb9205c2 · D-708 관측 형상 기반 공백 추종
+
+- 변경: 방위각/직선 가설 대신 연속 중심 polyline과 실제 접선을 기억하고 current odom으로 목표를 계산한다. 마지막 독립 관측 age·누적거리·관측 구간 상한, 최신 거절/무효 기하/odom 소실의 즉시 폐기를 적용한다. Isaac held 출처는 RL state와 gain에서 제외하며 CORE 명령·권한·장애물 gate를 유지한다.
+- 증거: 원격 RED로 기하와 최신 거절 경계를 재현했다. 유효 자원 모델 PC의 afb9205c2 회귀는 498 passed/1 skipped/NEW 0, 독립 SOURCE APPROVE다. 전체 affected 초기 네 NEW는 fixture와 거버넌스 검사를 수정한 뒤 재검증한다. 노트북의 오실행은 중단·폐기했고 floor 미달 fallback은 수용에 쓰지 않았다.
+- gate 변화: SOURCE/LOCAL 구현 근거만 추가. 실제 Isaac 재실행·R29 최초 목표 소실 해결·ROS/Fleet 완주·장치/현장 수용은 미확인이다. 계획은 docs/plans/2026-10-12-observed-path-gap-implementation.md, 계약은 D-708을 참조한다.
+
+## 2026-10-12 · 831d9bdc6 · D-708 최종 원격 선택 시험
+
+- 변경: D-708 구현의 최종 원격 선택 시험과 번호/문서 검사의 수정을 기록했다. 구현 코드는 바꾸지 않았다.
+- 증거: 자원 기준을 충족한 원격 PC의 affected 두 invocation은 6,086 passed/359 skipped/terminal exit 0이며 known_failures는 각각 NEW 0이다. lint 0 errors/28 warnings와 ADR Log BOM/CRLF를 확인했다. 구현의 독립 SOURCE APPROVE 및 held에서 정책 gain 1.7과 1의 출력 일치를 검증했다.
+- gate 변화: SOURCE/LOCAL 후속 구현 검증. 실제 Isaac 재실행·R29 최초 소실 해결·이번 main 착지·push·CI·실물 수용은 아니다.
+
+## 2026-10-12 · 45e92d326 · 관측 곡률에 실제 CORE 주행법칙 적용
+
+- 변경: 현재·creep·기억 목표가 같은 CORE 설정의 역산법칙을 사용한다. 기본 error/confidence 전달 계약과 최종 주행 검사는 유지한다.
+- 증거: 유효 자원 기준의 원격 RED 18 FAIL 후 후보의 수학·기억 경로·무효 설정 28 PASS, 기존 관측 83 PASS, known_failures NEW 0을 확인했다. 독립 검토는 격리 SIM 범위의 SOURCE APPROVE이며 native 설정 handover는 진행 중이다.
+- gate 변화: 소스·회귀 증거만 추가했다. native 오버레이 적용·최신 전체 실행의 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · 077d2e475 · native camera의 유효 CORE 법칙 수신과 기억 초기화
+
+- 변경: 기존 schema2·원자 기록·0644 status-inputs에 CORE 주행법칙 4개와 robot/process 식별만 추가했다. 인증정보나 개인 설정 접근 권한은 변경하지 않는다. native 수신은 오래되거나 신뢰할 수 없는 입력을 거절하고 법칙·epoch 변경 시 조향과 기억 경로를 초기화한다.
+- 증거: 독립 SOURCE APPROVE, 유효 자원 기준의 startup/handover 183 PASS·NEW 0, 전체 관측 3,140 PASS/110 SKIP·NEW 0이다. 실제 장치 시험은 수행하지 않았다.
+- gate 변화: 소스·회귀만 확인했다. API 시작 전에 초기 기록하며 쓰기 실패의 기존 정책과 최대 3초 신선도 창은 유지한다. Gazebo 지도 완주와 실물 수용은 미확인이다.
+
+## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
+
+- 원인: shared drivable_creep는 현재 관측·기억 목표를 함께 사용하지만 native Isaac은 관측 출처를 구분할 수 없어 모두 거절했다. 현재 영상의 목표와 누적 경계 검사를 단일 프레임 재추론만으로 대체하면 안 된다.
+- 변경: 실제 선택한 현재 목표와 관측 key를 별도 metadata로 제공한다. 유효 odom·유한 전방 목표·누적 경계 arc 검사를 통과할 때만 제공하며 native는 현재 stamp와 일치하고 전략 전환·기억 출구가 아닐 때만 받는다. shared 조향·예산·realign·ExpectedPath와 CORE 최종 명령 권한은 유지한다.
+- 증거: 원격 RED 2개로 출처 누락과 승인 실패를 재현한 뒤 관련 123개 통과/NEW 0. 실제 mask→shared steer→native 경로 및 전략 전환 거절을 포함한 Isaac·drivable·ExpectedPath 확장 회귀도 exit0/NEW0이다. 제품 소스 독립 검토는 현재 관측 출처와 native 승인 범위에 한정한다.
+- gate 변화: SOURCE 및 원격 회귀 증거. 실제 곡선 주행은 별도 재시험 중이며 완주·교통 규칙·Fleet·ROS-SIM·실물 수용을 승인하지 않는다. nominal arc 검사는 RL gain 적용 후 모든 경계 비횡단을 보장하지 않는다.
+
+- 실제 R39 재시험: 고정 정책으로 네 시작 방향 8회 실행, 완주 0회·정지 11회 통과·SDK exit1. 정상 방향 baseline/eval은 모두 약 0.110668m에서 camera_lane_lost였다. observed_creep 승인 경로는 이 정상 방향 실행에서 사용되지 않았다. 따라서 출처 연결 수정만으로 현재 곡선 실패가 해결됐다고 주장하지 않는다. 연속 way/누적 경계/실제 선택 목표를 추가 기록해 원인을 분리한다.
+
+## 2026-10-12 · 47ace984f2 · 내장 센서 이름 분리와 Gazebo 전방 정지 진단
+
+- 변경: 명시 namespace의 sensor-only 노드에 자체 이름 remap을 적용하고 실제 CORE clock을 전달한다. 전역 topic remap과 독립 센서 실행 의미는 유지한다.
+- 증거: 실제 Jazzy 실행을 포함한 정상 원격 115 PASS/NEW 0과 독립 SOURCE 승인이다. 수정 전 전체 소스 e6d0fe12ba의 Leg4는 0.311955m 뒤 정지했다. 실제 전방 0.130544m가 정지 기준 0.14905m보다 작아 blocked가 먼저 발행됐고 약 6ms 뒤 native 명령이 0이 됐다. 카메라는 current였으며 위치는 LOCALIZED였다. 원본 scan·TF의 소스 재생도 같은 거리를 계산했다.
+- gate 변화: 없음. 고정 lookahead 단축과 장애물 간격만으로 자동 회전을 허용하는 안은 채택하지 않는다. 안전 기준을 유지하고 관측 경로와 후보 궤적의 차이를 비교한다. 수정 후 Gazebo graph·원본 지도 완주·실물 수용은 미확인이다.
+
+## 2026-10-12 · af76fcc5f · 도로 표식의 가까운 경계 거리
+
+- 변경: road의 일반 정지선·횡단보도는 선택된 표식의 중앙 행 대신 가장 가까운 아래쪽 경계 행으로 image_row와 검증된 지면 거리를 함께 계산한다. BEV 횡단보도의 기존 near extent, 표식 분류·confidence·차선·거리 미확인 의미와 CORE 권한은 유지한다.
+- 증거: 정상 원격 RED 9개로 두꺼운 표식의 거리 과대측정과 CORE 접근 출력을 재현했다. af76fcc5f의 관련 원격 시험 234 PASS/NEW 0은 정상 AI 자원 기준에서 완료했다. 두꺼운 표식의 가까운 경계는 기존 CORE 정지 조건으로 전달되고 미확인 거리는 HOLD를 유지한다. 원본 Leg5의 동일 lossless PNG 재측정은 STOP을 유지하며 row61/거리None에서 row122/0.429188m로 바뀐다. 원격 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-green2/run-1.txt이다.
+- gate 변화: 거리 측정 SOURCE/원격 계약 증거만 추가한다. 벽을 정지선으로 분류하는 문제를 해결했다는 뜻이 아니다. 실제 후보 Gazebo 주행·지도 완주·실물 수용은 아직 확인하지 않았다.
+
+## 2026-10-12 · 946cec53d · 가까운 경계 수정의 전체 관측 회귀
+
+- 변경: 거리 수정의 전체 관측·Gazebo 계약 증거를 추가한다. 제품 소스는 af76fcc5f와 같다.
+- 증거: 독립 SOURCE 승인을 받았다. 정상 모델 PC의 전체 perception은 3158 PASS/110 SKIP, 전체 Gazebo 계약은 324 PASS/2 SKIP이며 두 로그 모두 terminal exit 0이다. 자원 기준 미달 동안 대기했고 fallback 실행은 하지 않았다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--150326--camera-effective-law--fe7d36/logs/road-edge-perception/run-1.txt와 logs/road-edge-gazebo/run-1.txt이다. 관련 234개 시험에는 모듈 구조·경계와 실제 CORE 교통 gate가 포함된다.
+- gate 변화: 원격 회귀 증거만 추가한다. 원본 영상에서 여전히 벽을 STOP으로 분류하므로 의미 분류 완료·실제 수정 후보 주행·완주·실물 수용을 주장하지 않는다. 이후 주행에서는 기존 traffic APPROACH의 선속도 비율과 최종 곡률도 함께 확인해야 한다.
+
+## 2026-10-12 · uncommitted · 카메라가 CORE 유효 조향 법칙을 역산한다
+
+- 변경: 주행 중 카메라 오차는 모듈 기본 0.08/0.8이 아니라, 그 프로세스가 불러온 CORE 법칙(순항, 상한, 게인, 최소 신뢰)을 역산한다. 시뮬 관찰기는 같은 run_spec 오버레이를 읽고, 장치 카메라는 rosy-core가 쓴 status-inputs가 신선할 때만 DrivableSteer를 만든다. 법칙이 없거나 바뀌면 기억 경로를 버리고 테이프 추종으로 내려가지 않는다. 곡선 거절, ExpectedPath의 최신 거절 우선, 출발 거부는 그대로다.
+- 증거: 역산은 `error_for_k`가 신뢰 스케일과 곡선 감속을 포함한 뒤 CORE `_steer`의 곡률을 되돌리게 맞춘다. 장치 인계는 소유자, 모드, 크기, 로봇 ID, 프로세스 ID, 3초 이내의 시각을 본다. 원격 pytest는 이 기록 시점에는 아직 돌리지 않았다.
+- gate 변화: 없음. 출발 게이트와 10초 자세 정지는 유지한다. 시뮬 완주와 실물 수용은 이 변경만으로 승인하지 않는다.
+
+## 2026-10-12 · uncommitted · 미리보기 keep 스텁이 역산 함수를 넘긴다
+
+- 변경: `test_drivable_preview`의 가짜 steer가 `pursuit_error`를 갖는다. keep가 ExpectedPath를 만들 때 그 함수를 쓴다.
+- 증거: 착지 라운드의 `middleware/perception/test`가 `test_keep_step_puts_the_steered_way_into_keep_debug`에서 AttributeError로 멈췄다. 재시험은 이 기록 다음에 돈다.
+- gate 변화: 없음.

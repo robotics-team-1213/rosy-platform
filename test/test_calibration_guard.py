@@ -363,7 +363,7 @@ def test_a_failed_ssh_answer_is_not_used(fake_core, tmp_path):
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [], out
-    assert "CALIBRATION CHECK SKIPPED" in out and "ssh exited 255" in out
+    assert "CALIBRATION CHECK SKIPPED" in out and "sshexited255" in "".join(out.split())
 
 
 def test_a_hanging_ssh_is_killed_at_the_wall_clock_limit(fake_core, tmp_path):
@@ -374,7 +374,7 @@ def test_a_hanging_ssh_is_killed_at_the_wall_clock_limit(fake_core, tmp_path):
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [], out
-    assert "CALIBRATION CHECK SKIPPED" in out and "timed out" in out
+    assert "CALIBRATION CHECK SKIPPED" in out and "timedout" in "".join(out.split())
     assert elapsed < 30, f"the guard waited {elapsed:.0f}s for a hanging ssh"
 
 

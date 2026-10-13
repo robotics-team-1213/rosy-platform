@@ -33,7 +33,7 @@ REVISION = "b" * 40
 CANARY_IP = "192.168.1.202"
 OTHER_IP = "192.168.1.201"
 CANARY = "rosy-pinky-8kcn"
-REPO = "livsbittt/rosy-os"
+REPO = "robotics-team-1213/rosy-platform"
 START = dt.datetime(2026, 10, 1, 15, 0, 0, tzinfo=dt.timezone.utc)
 
 pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is required")
@@ -940,7 +940,7 @@ def test_ctrl_c_prints_the_resume_and_withdraw_commands(tarball, keys, tmp_path,
 
 
 @pytest.mark.parametrize("flag, value", [
-    ("--repo", "livsbittt/rosy-os;x"), ("--repo", "noslash"), ("--repo", "a/b/c"),
+    ("--repo", "robotics-team-1213/rosy-platform;x"), ("--repo", "noslash"), ("--repo", "a/b/c"),
     ("--key-name", "../evil"), ("--key-name", "a b"),
 ])
 def test_repo_and_key_name_are_validated(tarball, keys, tmp_path, flag, value):
@@ -1137,3 +1137,28 @@ def test_a_status_without_hostname_reads_as_not_run_yet(tarball, keys, tmp_path,
     out = capsys.readouterr().out
     assert "has not run yet (no status.json)" in out
     assert "not the canary" not in out and "None" not in out.split("has not run yet")[0].splitlines()[-1]
+
+
+def _with_member(source: Path, target: Path, name: str, text: str) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(source, "r:gz") as old, tarfile.open(target, "w:gz") as new:
+        for member in old.getmembers():
+            new.addfile(member, old.extractfile(member))
+        info = tarfile.TarInfo(name)
+        info.size = len(text.encode())
+        new.addfile(info, io.BytesIO(text.encode()))
+    return target
+
+
+@pytest.mark.parametrize("name, text, allowed", [
+    (".rosy-delta-base", "2026.10.01-020\n" + "a" * 64 + "\n", False),  # D-553 addendum 3: deltas are push-only
+    ("source-ref.txt", "fix/drivable-keep-lap\n", False),                # branch builds never reach D-412
+    ("source-ref.txt", "main\n", True),
+])
+def test_only_full_main_releases_can_be_published(tarball, tmp_path, name, text, allowed):
+    candidate = _with_member(tarball, tmp_path / "c" / tarball.name, name, text)
+    if allowed:
+        assert tool.read_tarball_identity(candidate) == (RELEASE_ID, REVISION)
+    else:
+        with pytest.raises(tool.PublishError):
+            tool.read_tarball_identity(candidate)

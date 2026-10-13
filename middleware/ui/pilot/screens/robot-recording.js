@@ -8,7 +8,7 @@ import {createVisionPreview} from "../vision.js";
 import {createCameraCapture, saveCameraFile} from "/common/evidence.js";
 import {api, apiBlob} from "../client.js";
 import {el, actionIcon} from "./drive-view.js";
-import {RECORDING_POLL_MS, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
+import {RECORDING_POLL_MS, continueRecording, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
 
 const NOTICE_POLLS = 5;            // 거부 사유를 HUD 칩에 남겨 두는 폴링 횟수(약 5 s)
 const REQUEST_TIMEOUT_MS = 2000;   // 폴링·시작·정지·목록 한 번의 시한
@@ -34,6 +34,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   let disposed = false;
   let notice = "";
   let noticePolls = 0;
+  let wanted = false;         // 이 기기가 켜고 아직 끄지 않았다 — 10분 상한 뒤 다음 구간으로 잇는다
+  let segment = 1;
   let sheet = null;
   let stopSheetRefresh = null;
   let refreshing = false;
@@ -59,7 +61,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     toggle.setAttribute("aria-label", view.ariaLabel);
     const actualMode = active?.preview_mode;
     const format = actualMode === "annotated" ? "원본 + 모델 표시본 · 결과는 확인용" : actualMode === "raw" ? "원본" : "저장 형식 확인 대기";
-    const text = notice || (view.recording ? `${view.detail} · ${format}` : view.detail);
+    const part = view.recording && segment > 1 ? ` · ${segment}번째 구간` : "";
+    const text = notice || (view.recording ? `${view.detail} · ${format}${part}` : view.detail);
     detail.textContent = text;
     detail.hidden = !text;
     detail.dataset.state = notice ? "refused" : (active?.state ?? "offline");
@@ -75,6 +78,12 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     active = response?.status === 200 ? (response.body?.active ?? null) : null;
     annotatedReady = response?.body?.preview_modes?.includes("annotated") === true;
     if (noticePolls > 0 && --noticePolls === 0) notice = "";
+    if (continueRecording(wanted, active)) {
+      segment += 1;
+      press(false, `10분 구간이 끝나 ${segment}번째 녹화로 이어 갑니다`);
+      return;
+    }
+    if (active?.state === "idle" || active?.state === "error") { wanted = false; segment = 1; }
     render();
   }
 
@@ -90,29 +99,34 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       notice = "";
       noticePolls = 0;
     } else {
+      if (!stopping) wanted = false;
       notice = response ? errorText(response.body?.error?.code, stopping ? "stop" : "start") : "연결 없음";
       noticePolls = NOTICE_POLLS;
     }
   }
 
-  toggle.addEventListener("click", () => {
+  function press(stopping, message = "") {
     if (pending) return;
-    pending = send(recordingView(active).recording).finally(() => {
+    wanted = !stopping;
+    pending = send(stopping).finally(() => {
       pending = null;
+      if (message && !notice) { notice = message; noticePolls = NOTICE_POLLS; }
       if (!disposed) {
         render();
         poll();
       }
     });
     render();
-  });
+  }
+
+  toggle.addEventListener("click", () => press(recordingView(active).recording));
 
   // --- "녹화본" 시트 ---------------------------------------------------------
   function placeSheet() {
     // HUD 바로 아래에 붙인다(고정 오프셋 없음). 시트는 sheetHost 기준 absolute 다.
     const below = anchor.getBoundingClientRect().bottom;
-    sheet.style.setProperty("--recordings-top", `${Math.round(below - sheetHost.getBoundingClientRect().top)}px`);
-    sheet.style.setProperty("--recordings-viewport-top", `${Math.round(below)}px`);
+    sheet.setAttribute("data-recordings-top", `${Math.round(below - sheetHost.getBoundingClientRect().top)}px`);
+    sheet.setAttribute("data-recordings-viewport-top", `${Math.round(below)}px`);
   }
 
   function onKey(event) {
@@ -276,6 +290,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     dispose() {
       download?.controller.abort();
       disposed = true;
+      wanted = false;
       stopPolling();
       closeSheet();
       modeLabel.remove();
@@ -309,6 +324,26 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
     },
   });
 
+  // Screens feed both sources (polling and the D-368 driver stream) through
+  // this one path so the browser recording capture sees a single pipeline.
+  async function acceptPreview(url, meta = {}) {
+    element.frame.src = url;
+    element.frame.hidden = false;
+    element.empty.hidden = true;
+    const image = new Image();
+    image.src = url;
+    try {
+      await image.decode();
+      let rawImage = image;
+      if (meta.previewMode === "annotated") {
+        const rawUrl = URL.createObjectURL(meta.rawBlob);
+        rawImage = new Image(); rawImage.src = rawUrl;
+        try { await rawImage.decode(); } finally { URL.revokeObjectURL(rawUrl); }
+      }
+      capture.acceptFrame({...meta, image, rawImage});
+    } catch (_error) { capture.unavailable("원본 프레임을 읽을 수 없습니다."); }
+  }
+
   const vision = createVisionPreview({
     apiGet,
     previewMode: () => capture.state().previewMode,
@@ -323,23 +358,7 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
       if (!response.ok) throw new Error(`frame ${response.status}`);
       return response;
     },
-    onFrame: async (url, meta) => {
-      element.frame.src = url;
-      element.frame.hidden = false;
-      element.empty.hidden = true;
-      const image = new Image();
-      image.src = url;
-      try {
-        await image.decode();
-        let rawImage = image;
-        if (meta.previewMode === "annotated") {
-          const rawUrl = URL.createObjectURL(meta.rawBlob);
-          rawImage = new Image(); rawImage.src = rawUrl;
-          try { await rawImage.decode(); } finally { URL.revokeObjectURL(rawUrl); }
-        }
-        capture.acceptFrame({...meta, image, rawImage});
-      } catch (_error) { capture.unavailable("원본 프레임을 읽을 수 없습니다."); }
-    },
+    onFrame: async (url, meta) => acceptPreview(url, meta),
     onUnavailable: (message) => {
       element.frame.hidden = true;
       element.empty.hidden = false;
@@ -348,5 +367,5 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
     },
   });
   vision.start();
-  return {capture, vision};
+  return {capture, vision, acceptPreview};
 }

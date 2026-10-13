@@ -3,6 +3,9 @@
 
 # release
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Release packaging and the privileged Host Agent. Modules are scripts (not an installed package). `HostAgent` is pure decision/dispatch; `host_agent_server` is POSIX transport + injected `HostCommands`. CORE talks to it over `/run/rosy/host-agent.sock`.
@@ -105,7 +108,7 @@ JSON request/response lines, schema version 1, bounded request size.
 ### Internal
 
 - Contract: `docs/reference/rosy-host-agent-contract.md`
-- Client: `middleware/core/api_web/core_api_web/api/host_agent_client.py`
+- Client: `middleware/core/api/core_api_web/api/host_agent_client.py`
 
 ### External
 

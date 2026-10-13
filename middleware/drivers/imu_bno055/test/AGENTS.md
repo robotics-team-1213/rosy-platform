@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Decoder and package-contract checks stay ROS-free on the host. Injected-bus fault tests need a Linux ARM64 ROS executable and are separate from live BNO055 acceptance. Node startup is not calibration proof.

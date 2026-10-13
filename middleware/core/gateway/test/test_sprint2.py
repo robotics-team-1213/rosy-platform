@@ -153,6 +153,21 @@ class TestNewApi:
         missing = tc.get("/api/v1/sensors/ghost", headers=VIEWER)
         assert missing.status_code == 404 and missing.json()["error"]["code"] == "NOT_FOUND"
 
+    def test_sensors_nonfinite_values_serialize_as_null(self, client):
+        tc, svc = client
+        inf, nan = float("inf"), float("nan")
+        svc.state.set_sensor("lidar", {"num_ranges": 4, "ranges": [1.5, inf, nan, -inf]})
+        svc.state.set_sensor("ultrasonic", {"range": inf, "min_range": 0.02})
+        svc.state.set_sensor("imu", {"angular_velocity_z": nan})
+        for path in ("/api/v1/sensors", "/api/v1/sensors/lidar", "/api/v1/sensors/ultrasonic",
+                     "/api/v1/sensors/imu"):
+            assert tc.get(path, headers=VIEWER).status_code == 200, path
+        lidar = tc.get("/api/v1/sensors/lidar", headers=VIEWER).json()
+        assert lidar["ranges"] == [1.5, None, None, None]
+        assert tc.get("/api/v1/sensors/ultrasonic", headers=VIEWER).json()["range"] is None
+        # the stored sample keeps inf: robot_body.scan_view reads it in-process
+        assert svc.state.get_sensor("lidar")["ranges"][1] == inf
+
     def test_slam_flow(self, client):
         tc, svc = client
         svc.state.set_velocity(0.0, 0.0)  # attached base odometry

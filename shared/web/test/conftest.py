@@ -11,7 +11,8 @@ import sys
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 _ROOTS = {
-    "core_api_web": SRC.parent / "middleware" / "core" / "api_web",
+    "fleet": SRC.parent / "operations" / "fleet",
+    "core_api_web": SRC.parent / "middleware" / "core" / "api",
     "core_features": SRC.parent / "middleware" / "core" / "services",
     "core_common": SRC.parent / "contracts" / "foundation",
 }
@@ -19,3 +20,8 @@ for _name in _ROOTS:
     _path = str(_ROOTS[_name])
     if _path not in sys.path:
         sys.path.insert(0, _path)
+
+# Browser tests here import test/browser_harness.py (opt-in flag, Chromium-safe ports).
+_HARNESS = str(Path(__file__).resolve().parents[3] / "test")
+if _HARNESS not in sys.path:
+    sys.path.append(_HARNESS)

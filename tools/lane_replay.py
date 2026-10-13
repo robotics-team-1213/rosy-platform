@@ -15,10 +15,13 @@
                 열의 하단 띠 가운데 행. 목표가 화면 밖이면 칠 위가 아니다.
   jump_rate     이웃 프레임 사이 목표가 화면 폭의 30% 넘게 튄 비율.
   none_rate     비가시(HOLD) 비율.
+  none_run_count / max_consecutive_none  연속 HOLD 구간 수 / 최장 프레임 수. 사람 정답에
+                매칭하지 않은 검출기 출력 지속성 진단이며 논문 R_F/R_M이 아니다.
 """
 from __future__ import annotations
 
 import argparse
+from itertools import groupby
 import json
 import subprocess
 import sys
@@ -37,7 +40,7 @@ from control.sensing.perception.camera_ground import nominal_ground_plane  # noq
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 
-PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
+PROFILE_PATH = REPO / "middleware" / "devices" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
 LANE_HALF_WIDTH_M = 0.0925
 
 # pilot 녹화(1332x760, 가로 배치 D-363)의 카메라 영상 전체(4:3, 머리띠는 지평선 위라 지면 계산에 안 든다).
@@ -75,7 +78,7 @@ def _nominal_ground():
 def _keep_detector(corner_turning=False):
     """'keep' 모드(LaneKeeper, D-364 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
     직전 목표로만 짧게 평활한다(실물 노드와 같은 설정). keep_corner 는 L 모서리 회전
-    (lane_corner_turning, 실물 기본 꺼짐)을 켠 것."""
+    (lane_corner_turning, D-495부터 실물 기본 켜짐)을 켠 것."""
     profile, ground = _nominal_ground()
     keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]), corner_turning=corner_turning)
 
@@ -111,6 +114,11 @@ def _centre_detector():
         return tracker.update(clock["t"], (0.0, 0.0, 0.0), img, ground,
                               lane_half_width_m=LANE_HALF_WIDTH_M)
     return detect
+
+
+def none_runs(rows, name):
+    return [sum(1 for _ in group) for missing, group in groupby(row[name] is None for row in rows)
+            if missing]
 
 
 def make_detectors(names):
@@ -191,12 +199,15 @@ def run(frames: list[Path], names: list[str], out: Path, skip_blank: bool = True
     metrics = {}
     for name in detectors:
         seen = [r[name] for r in rows if r[name] is not None]
+        missing = none_runs(rows, name)
         jumps = sum(1 for a, b in zip(rows, rows[1:])
                     if a[name] is not None and b[name] is not None
                     and abs(a[name]["error"] - b[name]["error"]) > 2 * JUMP_FRACTION)
         metrics[name] = {
             "frames": len(rows),
             "none_rate": round(1 - len(seen) / max(1, len(rows)), 3),
+            "none_run_count": len(missing),
+            "max_consecutive_none": max(missing, default=0),
             "on_line_rate": round(sum(s["on_line"] for s in seen) / max(1, len(seen)), 3),
             "on_paint_rate": round(sum(s["on_paint"] for s in seen) / max(1, len(seen)), 3),
             "jump_rate": round(jumps / max(1, len(rows) - 1), 3),

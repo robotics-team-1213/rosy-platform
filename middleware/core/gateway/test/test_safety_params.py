@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from core.safety_params import SafetyParams, resolve_safety_params
+from core.safety_params import SafetyParams, resolve_safety_params, simulation_sensors
 
 BASE = dict(lidar_forward_deg=181.5, lidar_source="calibration record r1 sha256 abc",
             caps=((0.2, 0.8), (0.15, 0.6), (0.2, 0.8)))
@@ -130,3 +130,39 @@ def test_revision_ignores_source_text():
     b = resolve_safety_params(**{**BASE, "lidar_source": "hand value"}, overlay={})
 
     assert a.revision == b.revision
+
+
+# ---- Gazebo sensor fidelity: one explicit sim flag, never inferred on the device ----
+
+SIM_KEYS = {"accept_simulation_scans": True, "imu_angular_velocity_unit": "rad_s", "use_sim_time": True}
+
+
+def test_device_parameters_carry_no_simulation_keys():
+    params = resolve_safety_params(**BASE, overlay={})
+    assert not set(SIM_KEYS) & set(params.parameters)
+    assert params.revision == resolve_safety_params(**BASE, overlay={}, simulation=False).revision
+
+
+def test_simulation_adds_the_gazebo_sensor_keys_and_changes_the_revision():
+    device = resolve_safety_params(**BASE, overlay={})
+    sim = resolve_safety_params(**BASE, overlay={}, simulation=True)
+    assert {k: sim.parameters[k] for k in SIM_KEYS} == SIM_KEYS
+    assert all(sim.sources[k] == "simulation_sensors" for k in SIM_KEYS)
+    assert sim.revision != device.revision
+
+
+@pytest.mark.parametrize("key", sorted(SIM_KEYS))
+def test_overlay_cannot_set_simulation_keys(key):
+    with pytest.raises(ValueError, match="not a safety policy parameter"):
+        resolve_safety_params(**BASE, overlay={key: SIM_KEYS[key]})
+
+
+def test_simulation_sensors_flag_is_explicit_and_needs_sim_time():
+    assert simulation_sensors({}, use_sim_time=True) is False
+    assert simulation_sensors({"mode": "enforce"}, use_sim_time=False) is False
+    assert simulation_sensors({"simulation_sensors": False}, use_sim_time=False) is False
+    assert simulation_sensors({"simulation_sensors": True}, use_sim_time=True) is True
+    with pytest.raises(ValueError, match="use_sim_time"):
+        simulation_sensors({"simulation_sensors": True}, use_sim_time=False)
+    with pytest.raises(ValueError, match="bool"):
+        simulation_sensors({"simulation_sensors": "true"}, use_sim_time=True)

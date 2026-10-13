@@ -177,6 +177,7 @@ def test_system_info_and_capabilities(client):
     assert "ros_namespace" in r.json()
     assert "ros_domain_id" in r.json()
     assert "robot_number" in r.json()
+    assert "device_uid" in r.json()
     # The default fixture is `core` mode: until odometry proves a base is
     # attached, CAP-001 withholds the hardware flags (D-32, D-161).
     r = tc.get("/api/v1/system/capabilities", headers=VIEWER)
@@ -905,3 +906,142 @@ class TestDockingSnapshot:
         for key in ("robot_id", "mode", "navigation", "pose", "velocity",
                     "battery", "safety", "power"):
             assert key in body
+
+
+# --- battery health and the battery e-stop (fix/core-battery-health) ---------
+
+def test_battery_policy_estop_enters_emergency_so_admin_release_works(client):
+    """8kcn 2026-10-06: battery_policy latched the e-stop but left the mode IDLE,
+    so `POST /safety/release` answered 409 "not in EMERGENCY" forever."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    apply_voltage(svc, 7.0)   # ~8 % (critical): RETURN_HOME cannot dispatch -> e-stop
+    assert svc.safety.estop and svc.safety.estop_source == "battery_policy"
+    assert svc.modes.mode is Mode.EMERGENCY
+    assert svc.state.snapshot().safety.estop
+    assert tc.post("/api/v1/safety/release", headers=OPERATOR).status_code == 403
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
+
+
+def test_mode_idle_cannot_leave_a_latched_emergency(client):
+    """8kcn 2026-10-10 04:25-04:30 UTC (audit seq 16, 25): battery_policy latched and
+    entered EMERGENCY, then POST /mode IDLE moved EMERGENCY->IDLE with the latch still
+    set, and POST /safety/release answered 409 "not in EMERGENCY"."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    apply_voltage(svc, 7.0)
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    r = tc.post("/api/v1/mode", json={"mode": "IDLE"}, headers=ADMIN)
+    assert r.status_code == 409
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
+
+
+def test_admin_release_recovers_a_latch_left_outside_emergency(client):
+    """Desync recovery (8kcn 2026-10-10, pre-fix CORE): latch set, mode IDLE. Release
+    still clears it for an administrator without a CORE restart."""
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.safety.trigger_estop("battery_policy")
+    svc.modes.mode = Mode.IDLE              # the state the old EMERGENCY->IDLE path left
+    assert tc.post("/api/v1/safety/release", headers=OPERATOR).status_code == 403
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
+    assert not svc.state.snapshot().safety.estop
+    # Neither latched nor EMERGENCY: still the 409 it always was.
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 409
+
+
+def test_desync_release_drops_a_return_armed_during_the_latch(client):
+    """D-502: release drops a dock return armed while latched. The desync path
+    (latch left in IDLE) must do it too, like a release from EMERGENCY."""
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.safety.trigger_estop("battery_policy")
+    svc.modes.mode = Mode.IDLE              # the state the old EMERGENCY->IDLE path left
+    svc.docking._return_pending = True      # armed while latched
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert svc.docking._return_pending is False
+
+
+def test_only_release_leaves_emergency():
+    """SAF-001: no transition() target leaves EMERGENCY; release_emergency() is the exit."""
+    from core_features.command.arbitration import Mode, ModeMachine
+    modes = ModeMachine()
+    assert modes.transition(Mode.EMERGENCY)[0]
+    for target in Mode:
+        if target is not Mode.EMERGENCY:
+            assert not modes.transition(target)[0], target
+            assert modes.mode is Mode.EMERGENCY
+    assert modes.release_emergency()[0] and modes.mode is Mode.IDLE
+
+
+def test_deep_discharge_latches_again_after_release(client):
+    """Release is an admin decision, not a battery override: DEEP stops again."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    for _ in range(12):           # one level per enter_samples, OK -> DEEP
+        apply_voltage(svc, 6.3)
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    apply_voltage(svc, 6.3)
+    assert svc.safety.estop and svc.safety.estop_source == "battery_deep"
+    assert svc.modes.mode is Mode.EMERGENCY
+
+
+def test_battery_sensor_reports_missing_then_the_voltage_topic(client):
+    """The product graph publishes `battery/voltage` only (D-192 4); `batt_state` is
+    bench-only. `/sensors/battery` was a 404 forever on every Pinky."""
+    from core.bridge import observation
+    tc, svc = client
+    missing = tc.get("/api/v1/sensors/battery", headers=VIEWER)
+    assert missing.status_code == 200
+    assert missing.json()["evidence"] == "missing" and missing.json()["voltage"] is None
+    assert tc.get("/api/v1/safety/state", headers=VIEWER).json()["battery"]["evidence"] == "missing"
+
+    observation.battery_voltage(svc, 8.3, received_at=time.time())
+    body = tc.get("/api/v1/sensors/battery", headers=VIEWER).json()
+    assert body["voltage"] == 8.3 and body["evidence"] == "fresh"
+    assert body["source"] == "battery/voltage"
+    safety = tc.get("/api/v1/safety/state", headers=VIEWER).json()["battery"]
+    assert safety["evidence"] == "fresh" and safety["level"] == "ok"
+    assert safety["percent"] is not None and safety["sample_age_s"] is not None
+
+
+def test_no_battery_return_home_after_release_latches_again_instead(client, monkeypatch):
+    """D-502 4 (review): after an admin release, a new warn->critical crossing must
+    not send the robot home on its own. It latches the e-stop again."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.battery._cfg.filter_tau_s = 0.0       # each sample is the reading
+    apply_voltage(svc, 7.0)                   # ~8 %: critical, home not dispatchable
+    assert svc.safety.estop and svc.safety.estop_source == "battery_policy"
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    homes = []
+    monkeypatch.setattr(svc.nav, "home", lambda source: homes.append(source))
+    if svc.localization is not None:
+        monkeypatch.setattr(svc.localization, "autonomy_allowed", lambda: True)
+    apply_voltage(svc, 7.37)                  # ~15 %: back above critical
+    assert not svc.safety.estop
+    apply_voltage(svc, 7.0)                   # below critical again
+    assert homes == []
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    assert svc.modes.mode is not Mode.NAVIGATION
+
+
+def test_a_reading_above_warning_restores_the_battery_return(client, monkeypatch):
+    """The suppression ends where SAF-005 is calm again, not at release."""
+    from core.bridge.battery_policy import apply_voltage
+    tc, svc = client
+    svc.battery._cfg.filter_tau_s = 0.0
+    svc.safety.trigger_estop("api:test")
+    svc.modes.release_emergency(); svc.safety.release(by="test")
+    assert svc.safety.battery_return_suppressed
+    apply_voltage(svc, 8.3)                   # well above warning
+    assert not svc.safety.battery_return_suppressed

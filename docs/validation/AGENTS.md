@@ -3,6 +3,9 @@
 
 # validation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Frozen evidence records: what was run, on which commit and artifact, and what was observed (simulation, artifact comparison, UI surface, device commissioning). A passing record here is evidence for its stated scope only; it is not device, ARM64 image, or field acceptance unless it says so.

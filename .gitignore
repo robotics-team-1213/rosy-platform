@@ -40,7 +40,8 @@ dist/
 
 # THIS REPO IS PUBLIC. Internal material (drafts, strategy, vendor documents,
 # site notes, real device addresses) goes in /private/, which never leaves this
-# machine. What moves from there into docs/ is decided by ADR.
+# machine. Lab SSH targets are private/lab-hosts.json, copied from
+# tools/remote/hosts.example.json. What moves from there into docs/ is decided by ADR.
 /private/
 /deploy/site/secrets/discovery_token
 
@@ -131,3 +132,9 @@ Thumbs.db
 # D-432 filled development trust/credential envelopes (templates remain tracked).
 **/pilot-development.json
 **/cam-development.json
+
+# D-456: exported per-device LAN TLS material is private, never a template.
+/deploy/robot/pinky_pro/release/tls-local/
+
+# D-456: generated Fleet camera application identity; public PEM stays tracked.
+*.camera-peer.pem

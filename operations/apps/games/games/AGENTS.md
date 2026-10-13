@@ -3,6 +3,9 @@
 
 # games (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Laptop game host (D-90): match loop that observes, referees, applies a policy, clamps the result and sends teleop to CORE. CORE never imports this package and final `cmd_vel` stays in CORE. Soccer is the first game; the heuristic chase is the first policy.

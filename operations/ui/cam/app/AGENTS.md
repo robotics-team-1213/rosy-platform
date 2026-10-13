@@ -3,6 +3,9 @@
 
 # app
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, OkHttp). It captures ceiling-camera JPEG frames and pushes them to the site-PC Rosy Vision receiver over `rosy-overhead/1`. Fleet never sees frames, only derived poses from Vision (D-257, D-261). Gradle wrapper, settings and version catalog live one level up in `operations/ui/cam/`.

@@ -1,4 +1,9 @@
+<!-- Parent: ../AGENTS.md -->
+
 # vision
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 Rosy Vision (D-377 id `vision`, package `rosy_vision`): `rosy-overhead/1` WebSocket ingest and CPU ArUco-to-site-map display worker (D-257, D-261). The wire names (`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`) stay unchanged (D-374 3항, D-377 4항). ROS-free, no `cmd_vel`; Fleet receives derived sighting JSON only, never JPEG. The worker does not create D-268 policy evidence or start tasks.
 
@@ -31,6 +36,7 @@ The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `operations/ui/c
 - Replacing a same-source connection never awaits the old close inline: a half-open old peer would stall the new one (review 2026-09-26). The receive queue is 1 frame and `max_size` follows `max_bytes`.
 - `captured_at` in `ingest.py` uses this process's own wall clock (`time.time()`) minus the frame's `age_ms` — the phone's clock is never trusted (design §3).
 - The worker requires all four configured map markers and a configured robot marker in one frame. `quality: null` means unmeasured and is not policy evidence. Source, map, calibration, and processor revisions must match Fleet configuration.
+- D-587: with `--track`, a robot marker in `robot_markers` that the approved D-457 record projects becomes a sighting too (`track/marker_sightings.py`, `calibration_source: approved_record`, revision = the record's). It needs the lens FOV for the parallax step (`MARKER_HEIGHT_M`) and passes the corner-geometry gate; robot pose = marker pose minus the URDF mount (LiDAR top) and the per-robot `marker_yaw_offset_deg`. A robot without an installed offset sends none. Sightings go before the detections POST. Unassigned markers and blobs never become sightings.
 - Runtime vision dependencies are installed from package metadata: `opencv-contrib-python-headless`, `numpy`, and `httpx`. `games` supplies the reviewed, ROS-free homography implementation.
 - D-318 preview rectification uses the signed Viewer lease and never changes the raw latest frame consumed by ArUco or Fleet sightings. Browser adjustments are not a measured site calibration; keep DEVICE/FIELD acceptance separate.
 

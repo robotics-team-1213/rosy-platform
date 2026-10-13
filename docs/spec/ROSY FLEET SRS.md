@@ -1,6 +1,10 @@
 # ROSY FLEET Fleet Control Platform
 ## 소프트웨어 개발 요구사양서 (중앙 서버 책임)
 
+### UI-WORK-001 · 공통 작업 읽기 (D-664)
+
+Console은 주행 Task와 사용자 소유 Cell Mission을 공통 읽기 화면에서 출처별 식별자·상태·갱신 시각으로 구별해 표시한다. 담당 장치, 작업 공간, 업무 및 최종 실행 책임(CORE/OMX)을 구분한다. 제한된 최근 목록과 원장 미설정 여부를 표시하고 수락/동작 성공/목표 확인을 같은 완료 상태로 합치지 않는다. 상세는 기존 read API로 조회한다. 읽기 화면은 실행 승인 또는 새 명령을 보내지 않는다. 세션 변경 또는 읽기 실패 시 이전 목록과 상세를 무효화한다. desktop/mobile, viewer/operator, 동일 ID, 조회 실패 및 소유 범위의 수용 시험을 요구한다. [API 계약](../reference/ROSY%20API%20%26%20Protocol%20Reference.md)의 D-664 절과 typed schema가 응답 계약이다.
+
 **Document ID:** ROSY-FLEET-SRS-001
 **Version:** v1.0
 **Target Platform:** Linux Server / Docker
@@ -270,6 +274,7 @@ Formation Parameter: Center Position / Orientation / Robot Spacing / Robot Selec
 - Parameter: Leader ID / Follow Distance / Lateral Distance / Speed Limit / Formation Type
 - `GET /api/fleet/formation`은 릴레이 관측을 `stream_evidence[robot_id]`로 제공한다. 서버는 `state`(`fresh`/`delayed`/`disconnected`/`unavailable`), `age_s`, `reason`, `stale_after_s`, `source`를 판정한다. 마지막 표본이 1초를 넘거나 두 표본 이상에서 송수신 빈도가 2 Hz 미만이면 `delayed`다. 리더의 `source=leader_rx`는 Fleet의 마지막 수신, 팔로워의 `source=follower_tx`는 Fleet의 마지막 송신이다. 송신 시간은 팔로워 수신·실행 또는 물리 추종의 증거가 아니다. `follower_last_tx_age_s`는 원시 진단 값이며 브라우저가 임계값으로 재판정하지 않는다.
 - **하이브리드 구조(D-20):** Fleet은 Leader pose 스트림(SWM-003, ≥10 Hz 수신)을 Follower들에게 WS로 릴레이(≥5 Hz)하고, Follower에는 `swarm/follow` 명령을 1회 전달한다. **폐루프 추종 계산은 로봇 탑재(SWM-002)** — Fleet은 목표를 반복 계산·전송하지 않는다.
+- **천장 카메라 기준 trail(D-581):** 로봇에 map pose 가 없어 리더 스트림이 `frame: odom` 이면, TRAIL 대형에서 Fleet은 리더 표본을 팔로워마다 그 팔로워의 odom 좌표로 바꿔 보낸다(천장 카메라 기준 map pose, API Ref §7.8 `anchor`). 기준이 없거나 낡거나 튀면 그 팔로워에게는 보내지 않고 이유를 대형 상태 `anchor` 에 남긴다. `map` 프레임 리더는 위 릴레이 그대로다.
 - 로봇 간 직접 통신은 발생하지 않는다.
 
 ### FOR-004 Formation 안전 및 동적 속도 조절

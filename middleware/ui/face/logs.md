@@ -226,3 +226,45 @@
 - 변경: 600행 파일 경계를 지키기 위해 기존 전구/흰 채움 렌더러를 emotion/light_assist.py로 분리했다. info_screen의 공개 함수와 기존 단일 화면 소유권은 유지한다.
 - 증거: native/face table/PIL 299 passed, 3 skipped.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-06 · uncommitted · uiux(face): 주행 카드 저배터리 대비와 G3 부분 독회
+
+- 변경: 주행 카드의 위험 배터리 수치를 웨이크 카드와 같은 위험 채움·밝은 글자로 그린다. 수동·내비게이션/저배터리·정지 주행 카드 세 장을 현재 320×240 렌더러에서 캡처했다.
+- 증거: 정보·주행 카드·팔레트 호스트 시험 71 passed, `known_failures.py` 0 NEW. [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 G3 여덟 항목의 부분 근거와 남은 실물 판독 범위를 기록했다.
+- gate 변화: LOCAL 렌더 부분 근거. 실제 설치 LCD·카드 전이·거리/각도/조도·사람 G3는 HOLD다.
+
+## 2026-10-07 · uncommitted · uiux(face): D-504 표정 실루엣과 재생
+
+- 변경: 여덟 GIF를 320×240·20프레임·100 ms 자산으로 만들고 `rosy-face`와 벤치 어댑터가 매 프레임을 읽게 했다. 상황표·안전 카드·10/5 fps 출력은 유지한다.
+- 증거: 기존 `basic`·`fun` 첫 프레임의 32×24 실루엣 차이 0.3%; 변경 후 다섯 운용 표정의 모든 쌍 6% 이상. 자산과 `rosy-face` 관련 호스트 시험 362 passed, 3 skipped, `known_failures.py` 0 NEW. 실제 LCD 판독은 미검증.
+- gate 변화: 없음. SOURCE/LOCAL 후보, DEVICE/FIELD 수용 전.
+
+## 2026-10-07 · uncommitted · uiux(face): D-504 LCD 표정 가장자리 보정
+
+- 변경: 얼굴을 3배 해상도에서 그린 뒤 320×240으로 줄여 눈·입의 대각선과 곡선을 부드럽게 했다. `fun`의 웃는 입도 `happy`와 더 분리했다. 런타임 규칙은 변경하지 않았다.
+- 증거: 여덟 GIF 첫 프레임에 중간색이 생겼고, 32×24 운용 실루엣 최소 차이는 6.25%다. 자산 합계 511,159 bytes. 최종 호스트 시험·lint와 실물 수용 범위는 별도 검증 기록을 따른다.
+- gate 변화: 없음. 실물 1.5 m 판독은 미확인.
+
+## 2026-10-09 · uncommitted · fix(face): Pair request 카드에 CA 줄 (D-483 보완)
+- 변경: rosy-face가 `approval.json`의 `tls_ca_sha256` 앞 16자리를 코드 줄 아래 `CA xxxx xxxx xxxx xxxx`로 그린다(`face_screen.read_peer_approval`가 소문자 64자리만 통과). Pilot의 인증서 확인 대화상자가 같은 16자리를 보인다.
+- 증거: `test_rosy_face.py` peer 카드 시험, `test_face_screen.py` 103 passed.
+- gate 변화: SOURCE. LCD 실기 확인은 다음 릴리스에서.
+
+## 2026-10-09 · uncommitted · fix(face): LCD 변경 영역만 SPI로 전송
+
+- 변경: `show_panel`이 이전 RGB565 패널과 다른 최소 사각형만 전송한다. 동일 프레임은 건너뛰고, 절전·지우기·전송 실패 뒤에는 전체 화면을 다시 보낸다. Pi 5의 64바이트 전송 상한은 유지한다.
+- 증거: 활성 기체의 기존 드라이버는 5초 동안 약 20,024회 쓰기와 1,274,921바이트를 전송해 약 1.7 fps였다. 변경 영역·절전 복귀·실패 후 재전송을 포함한 얼굴 모듈 호스트 시험 70 passed, `known_failures.py` 0 NEW.
+- gate 변화: SOURCE/LOCAL 후보. 개선 속도와 LCD 픽셀 판독은 설치 후 DEVICE에서 측정해야 한다.
+
+## 2026-10-12 · uncommitted · uiux(face): D-688 상황 줄, 충전 잔량, 표정, 부팅 ROSY
+
+- 변경: 상황 줄이 충전 잔량과 전압, 계획·도착, 선 추종·정지·소실, 낮은 잔량을 말한다. 여덟 GIF를 한 얼굴로 다시 그렸고, 부팅 카드가 ROSY를 장미색으로 보여 준다.
+- 증거: GIF 로컬 확인에서 운용 실루엣 최악 6.38%이고 잉크는 y 16 이상 224 미만이다. 부팅 카드는 기다리는 프레임만 장미색이 한 단계 어두워진다. 원격 pytest와 실물 LCD는 아직이다.
+- gate 변화: 없음. SOURCE/LOCAL 후보이다. DEVICE 거리 판독은 하지 않았다.
+
+## 2026-10-12 · uncommitted · uiux(face): D-719 기다림 입을 두껍게
+
+- 변경: 기다림 GIF만 다시 그렸다. 낮은 눈꺼풀은 그대로 두고 입은 두꺼운 처진 입이다. 나머지 일곱 GIF는 그대로다.
+- 증거: 로컬 GIF 측정에서 운용 실루엣 최악은 fun/bored 49/768(6.38%)이고, 20프레임 잉크는 y 16 이상 224 미만이다. 원격 pytest와 1.5 m LCD는 아직이다.
+- gate 변화: 없음. SOURCE 후보이다. DEVICE 거리 판독은 하지 않았다.
+- 결정: D-719

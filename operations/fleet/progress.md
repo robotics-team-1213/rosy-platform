@@ -33,7 +33,11 @@ gates:
       admission, SO_PEERCRED UDS grant/receipt, local Action journal, and one ROS
       ActionServer goal; it verifies callback acceptance, nonterminal Mission state,
       and restart UNKNOWN/no replay. It is not vendor Gazebo, physical stop/goal evidence,
-      ARTIFACT, DEVICE, or FIELD acceptance.
+      ARTIFACT, DEVICE, or FIELD acceptance. 2026-10-07 — the console bird's-eye now detects
+      a stale camera calibration (still-robot tracking offset over 0.4 m for 3 consecutive
+      polls) and falls back to the metric view with a warning instead of projecting the map
+      onto a re-aimed camera; node tracking-layer 12 passed and a mutation-proven browser
+      regression cover it (ROSY_RUN_BROWSER_TESTS=1).
     cmd: python3 -m pytest src/site/fleet/test -q
   ROS-SIM:
     state: HOLD
@@ -48,6 +52,13 @@ gates:
   FIELD:
     state: PARKED
 adrs:
+- D-693
+- D-687
+- D-679
+- D-681
+- D-684
+- D-652
+- D-620
 - D-5
 - D-10
 - D-12
@@ -88,7 +99,15 @@ adrs:
 - D-451
 - D-453
 - D-455
+- D-456
+- D-488
+- D-489
+- D-490
+- D-472
+- D-497
 plans:
+- docs/plans/2026-10-11-mapless-fleet-control.md
+- docs/plans/2026-10-11-stable-map-readouts-design.md
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
 - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
@@ -110,6 +129,13 @@ plans:
 ---
 ## 현재 상태 (2026-09-27)
 
+- 2026-10-07 D-488 M1 검토 반영: 경유지 층 A*·길이 0 간선 거절·계획 불가 지도 활성화 거절·`TRIP_PLAN_FAILED`·이름 있는 초안 저장. ADR 번호는 D-488/489/490(옛 D-484/485/486), API Ref v1.111.
+- 2026-10-07 D-488 M1(SOURCE/LOCAL): `rosy.site_map/1` 스키마·초안/활성 버전 저장·이름 있는 운영자 활성화(차선 경로 진행 중 거절)·`--site-map-import` 첫 지도, `default_graph()` 하드코딩 제거(`/route`·만남 기하가 활성 지도를 읽음), D-489/D-490 차로 단위 상태 A* 계획기와 `POST /trip` 계획 응답(실행 없음, `/trips/{id}/start` 501), `/console/site-map` 보기·초안 편집·경로 미리보기. Gazebo·실차·로봇 능력 필드·trip 실행은 M2 이후다.
+- 2026-10-07 D-494 5(SOURCE/LOCAL, 브랜치 `feat/d491-fleet-trip-loop`): 계획 본문 저장, `/trips/{plan_id}/start`·`/cancel`·`/confirm-replan`·`GET /trips`, 상태기계와 0.5 s 루프, 활성화 가드를 진행 중 trip으로 교체, 콘솔 지도 화면 운행 칸. 능력(1항)·지도 자세(3항)·교차로 API(4항) 제공자는 형제 브랜치가 착지한 뒤 연결한다. 기본 연결은 `TRIP_ROBOT_CAPS_UNKNOWN`으로 시작을 거절한다. Gazebo·실차는 미실행.
+- 2026-10-05 CLI 구조 후속: 기존 Mission·Cell·evidence·카메라 pairing·등록 TLS 생성 본문을 91줄 console builder로 옮겼다. optional imports, 기존 CLI 거절·alias, enrollment load→roster sync 및 한 번의 create_app 조립은 유지한다. CLI는 652→586줄이다. 기존 CLI/TLS 55 passed/Windows symlink 1 skipped와 본문 AST 동등·새 interpreter의 비활성 optional dependency 미로드를 확인했다. 런타임 권한·배포·기기 gate는 바꾸지 않았다.
+
+- 2026-10-05 D-456 등록 TLS 전송: 기존 암호화 등록 ID만 공개 origin·CA DER 지문에 묶어 HTTPS/WSS 발견 주소를 인증한다. 주소·ciphertext·principal·만료는 바꾸지 않는다. 공개 downgrade 방지 기록은 설정 누락·교체·재시작에도 남으며, 정상 로그아웃이 확인된 등록 행 삭제에만 함께 지운다. 관련 기존 회귀 206 passed/Windows 파일 권한·symlink 2 skipped, 마지막 새 테스트 23 passed/symlink 1 skipped, 독립 tail 5 passed와 SOURCE Safety 검토를 기록했다. TLS marker·CA·신원·WSS·await 경계 6개 실제 소스 변이는 각각 RED 뒤 원본 GREEN으로 확인했다. 실제 사이트 관리자 설정·TLS/WSS handshake·장기 승인 갱신·운용 수용은 별도다.
+
 - D-306의 Fleet 목표 지정 개선으로 지도에 키보드 좌표 선택, 대상·좌표 확인, 취소 후 포커스 복귀를 추가했다. 브라우저 회귀 18건과 확인 계약 3건을 LOCAL에서 검증했다. 지도 1920/390/320 상태별 G2 판정과 실물 이동은 아직 별도다.
 - Formation geometry(FOR-001), slot assignment(FOR-002), relay(D-31), formation session(FOR-004), 그리고 SiteHub의 HELLO/HEARTBEAT/EVENT 수집과 REST scatter(D-59)는 CORE API 경계를 유지한다. Browser/SiteHub는 DDS/ROS에 직접 연결하지 않는다.
 - G-S3 신호등 연동은 상태 수집과 명령 표시를 제공하지만 안전 인터록은 아니다. CORE의 로컬 stop/safety 책임을 대체하지 않는다.
@@ -120,6 +146,10 @@ plans:
 - D-413 Task 7 재생 checkpoint에서 Fleet과 OMX SQLite를 각각 다시 열었다. 로컬 수락 뒤 submit 응답을 잃은 경우 Fleet은 같은 Action/attempt를 조회하고 재제출하지 않으며, 늦은 `SUCCEEDED`만으로 `HOLD`나 자원 점유를 풀지 않는다. 독립적인 새 카메라·그리퍼 증거가 목표를 확인하면 완료한다. Fleet 이벤트 watermark와 Action phase journal 전진도 함께 확인했다. 재생 계약 1건, Fleet 1371 passed/7 skipped, OMX ActionStore 23 passed. Gazebo/Jazzy는 이 호스트에서 실행하지 않았다.
 
 ## 다음 gate
+
+- 2026-10-05: 목표 취소 직후 Escape·1920×1080 기본 화면 적합·카메라 미지원 중복
+  조회를 수정했다. 기존 시작점 저장·재로드·권한 변경·지도 교체 회귀를 유지했다.
+  실제 Chromium fixture 증거이며 현장 명령·연결 수용이나 기존 HOLD 해제를 뜻하지 않는다.
 
 1. Ubuntu 24.04 현장 호스트에 immutable candidate를 설치하고 Docker/Compose, 재부팅 복구, loaded image ID, TLS/FQDN/firewall 및 RTX 5080 driver를 확인한다.
 2. 실제 CORE와 천장 phone을 연결해 pairing/authentication, reconnect, event/task correlation, timestamp/freshness 및 sighting 품질을 관찰·기록한다.
@@ -134,3 +164,11 @@ plans:
 - 관제 UI 가 로봇 `cmd_vel`·DDS 에 붙지 않는다(설계 §6). 내리는 것은 원자 액션뿐이다.
 - `map` 프레임을 로봇별로 접두하지 않는다. CORE 가 `map` 고정으로 pose 를 읽고 목표를 받는다(`ros_bridge._map_frame`).
 - `core`를 이 패키지에서 수정하지 않는다. 로봇 계약에 없는 것은 API Ref 사이클의 finding이지 로컬 patch가 아니다.
+
+### 2026-10-10 D-623 current image and recovery context
+
+SOURCE implemented; remote verification pending. No Fleet REALIGN activation or field motion proof.
+
+### 2026-10-12 D-685 최소 사람 개입과 학습 원본
+
+승인된 autonomous_robots의 WAIT/완료 YIELD 재관측, 같은 사건 예산 유지, UNKNOWN durable freeze와 정확한 CORE 사건 종료 확인, 범위 내 검증된 trip 재계획을 구현했다. SharedGather refresh의 센서/state 원장을 bounded durable 저장하고 read_guard 조회와 hash export로 AI 학습 원본을 준비한다. labels/model activation은 자동 생성하지 않는다. 7c0e4f049 원격 238 pass/NEW 0 및 Node 52 pass; 최종 최신 main 착지 gate 별도. SOURCE 증거이며 설치·실기·FIELD gate는 유지한다.

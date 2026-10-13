@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import sqlite3
@@ -14,6 +15,7 @@ from core_common.protocol.schemas import (
     EnvelopeType,
     EventMessage,
     HeartbeatPayload,
+    JunctionSignalAnswer,
     HelloPayload,
     PROTOCOL_VERSION,
     SwarmFollowParams,
@@ -69,6 +71,8 @@ class SiteHub:
         # link unavailable for that robot; never fall back to the REST token.
         self._tokens = {e.robot_id: e.fleet_pairing_token for e in endpoints
                         if e.fleet_pairing_token is not None}
+        #: D-555: enrolled robots' hub credentials, SHA-256 hex only (no plaintext here).
+        self._digests: dict[str, str] = {}
         self._clients = clients if clients is not None else {}
         self._paired: set[str] = set()
         # robot_id -> the socket session that last completed HELLO for it.
@@ -77,6 +81,7 @@ class SiteHub:
         self._fleet_name = fleet_name
         self.event_store = event_store
         self.event_callback = event_callback
+        self.junction_signal = None  # D-620: synchronous cached signal lookup, no robot control
         self._event_projection_cursor = 0
 
     def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
@@ -92,10 +97,25 @@ class SiteHub:
             raise ValueError("pairing token must be non-empty")
         self._tokens[robot_id] = token
 
+    def set_pairing_digest(self, robot_id: str, digest: str | None) -> None:
+        """D-555: accept HELLO whose token hashes to ``digest``. None revokes and unpairs."""
+        previous = self._digests.get(robot_id)
+        if digest is not None:
+            self._digests[robot_id] = digest
+            if previous is None or previous == digest:
+                return
+        else:
+            self._digests.pop(robot_id, None)
+        # Revoked or rotated: a socket welcomed with the old credential is no longer paired.
+        self._paired.discard(robot_id)
+        if self._sessions.pop(robot_id, None) is not None:
+            self.registry.record(robot_id).online = False
+
     def drop(self, robot_id: str) -> None:
         """SiteRoster only: forget the robot's client, pairing and live session."""
         self._clients.pop(robot_id, None)
         self._tokens.pop(robot_id, None)
+        self._digests.pop(robot_id, None)
         self._paired.discard(robot_id)
         self._sessions.pop(robot_id, None)
         self.registry.record(robot_id).online = False
@@ -164,9 +184,14 @@ class SiteHub:
             return _error("PROTOCOL_UNSUPPORTED", "hello protocol major is not supported")
         if session is not None and session.robot_id not in (None, hello.robot_id):
             return _error("PAIRING_INVALID", "session is bound to another robot")
+        presented = hello.pairing_token.encode()
+        digest = self._digests.get(hello.robot_id)
         expected = self._tokens.get(hello.robot_id)
-        if expected is None or not hmac.compare_digest(
-                expected.encode(), hello.pairing_token.encode()):
+        if digest is not None:  # D-555: constant-time compare of digests
+            valid = hmac.compare_digest(digest.encode(), hashlib.sha256(presented).hexdigest().encode())
+        else:
+            valid = expected is not None and hmac.compare_digest(expected.encode(), presented)
+        if not valid:
             return _error("PAIRING_INVALID", "unknown robot or token")
             
         # Check UUID duplicates
@@ -204,6 +229,9 @@ class SiteHub:
         try:
             payload = HeartbeatPayload.model_validate(envelope.payload)
         except Exception:
+            if session is not None and session.robot_id is not None:
+                # A refused heartbeat ends the last good one's freshness: the gather reads REST (D-447).
+                self.registry.record(session.robot_id).last_heartbeat_monotonic = None
             return _error("SESSION_NOT_PAIRED", "hello first")
         robot_id = payload.state_snapshot.robot_id
         if session is not None and session.robot_id is None:
@@ -218,7 +246,18 @@ class SiteHub:
         row.snapshot = payload.state_snapshot
         # D-447: gather freshness reads this stamp — heartbeat arrival, hub-side clock.
         row.last_heartbeat_monotonic = time.monotonic()
-        return Envelope(type=EnvelopeType.HEARTBEAT, payload={})
+        reply = {}
+        if payload.junction_signal_request is not None:
+            try:
+                signal = self.junction_signal(robot_id) if self.junction_signal is not None else None
+                answer = JunctionSignalAnswer(request_id=payload.junction_signal_request,
+                    **(signal or dict(lamp='unknown', may_enter=False, reason='signal_unavailable')))
+            except Exception:  # A lookup failure is an explicit unknown, never silent permission.
+                _LOGGER.exception("junction signal lookup failed for %s", robot_id)
+                answer = JunctionSignalAnswer(request_id=payload.junction_signal_request,
+                                              lamp='unknown', may_enter=False, reason='signal_lookup_failed')
+            reply['junction_signal'] = answer.model_dump()
+        return Envelope(type=EnvelopeType.HEARTBEAT, payload=reply)
 
     def _event(self, envelope: Envelope, session: HubSession | None) -> Envelope:
         try:

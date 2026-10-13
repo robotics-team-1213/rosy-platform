@@ -1,0 +1,46 @@
+{
+ "rows": 88,
+ "loss": {
+  "t": 1.952,
+  "sim_t": 15.431000000000001,
+  "state": "HOLD",
+  "reason": "camera_line_not_visible",
+  "gt": [
+   -0.579711744711742,
+   -0.07232733922996443,
+   1.3668008902262403
+  ],
+  "odom": [
+   -0.579711744711742,
+   -0.07232733922996443,
+   1.3668008902262403
+  ]
+ },
+ "sequence": [
+  {
+   "t": 1.952,
+   "sim_t": 15.431000000000001,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible"
+  },
+  {
+   "t": 5.022,
+   "sim_t": 18.413,
+   "state": "LOST",
+   "reason": "camera_reselection_required"
+  }
+ ],
+ "lost_after_loss_sim_s": 2.982,
+ "min_wall_gap_after_loss_m": 0.4668,
+ "min_scan_after_loss_m": 0.4665,
+ "gt_m_loss_to_end_of_run": 0.0,
+ "final": {
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "gt": [
+   -0.579711744711742,
+   -0.07232733922996443,
+   1.3668008902262403
+  ]
+ }
+}

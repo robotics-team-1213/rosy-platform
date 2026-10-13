@@ -3,6 +3,9 @@
 
 # dock
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Charging-dock firmware and the ROSY-DOCK-001 agent contract. The microcontroller exists first to **not energise bare floor contacts** without a load; current reporting is secondary. The robot polls `GET /status`; the dock never initiates a connection (local-first, no inbound robot API).
@@ -47,7 +50,7 @@ Contract in README; implementation in `firmware/rosy_dock/rosy_dock.ino`; client
 
 ### Internal
 
-- `middleware/core/services/core_features/docking/agent.py`
+- `middleware/control/drive/behaviors/docking/agent.py`
 - Design: `docs/plans/2026-09-02-docking-station-design.md`
 
 ### External

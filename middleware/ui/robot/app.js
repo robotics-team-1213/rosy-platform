@@ -1,3 +1,4 @@
+import { createReceiverApprovals } from "./peer-approval.js";
 // 대시보드 셸 — 세션·인증·연결 생명주기와 화면 바인딩. 상태 렌더는
 // telemetry.js, 수동 조종은 teleop.js, 상태 소켓은 state-socket.js가 가진다
 // (D-362 P1 분할; 임포트 방향은 여전히 dom ← client ← settings ← 셸 한 방향).
@@ -23,6 +24,8 @@ import {
   api,
   apiMaybe,
   authHeaders,
+  connectionOffer,
+  developmentSession,
   expiryLabel,
   forgetToken,
   isAdmin,
@@ -48,6 +51,7 @@ import {
 import {
   TELEMETRY_CHANNELS,
   lineFollow,
+  lineFollowStartReady,
   renderCapabilityPanels,
   renderEvents,
   renderFormationHero,
@@ -77,6 +81,7 @@ function authTicket() {
   return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && token === session.token && page.current()};
 }
 function invalidateAuth() {
+  receiverApprovals.clear();
   authLifetime.abort(); authLifetime = new AbortController(); commandOwner = null;
   stateSocket.stop(); clearInterval(session.refreshTimer); session.refreshTimer = null;
   clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;
@@ -103,6 +108,10 @@ async function runConfirmed(message, opener, eligible, run, fail, pending = () =
   finally { clearPending(); owner.signal.removeEventListener("abort", clearPending); if (commandOwner === owner) commandOwner = null; }
 }
 
+const goalPoseReady = () => session.robotState && new HeadlessState(session.robotState).isFresh("pose")
+  && (session.robotState.localization == null || (session.robotState.localization.state === "LOCALIZED"
+    && session.robotState.localization.pose_frame === "map"));
+
 const fieldMap = createFieldMap({
   canvas: elements["map-canvas"],
   empty: elements["map-empty"],
@@ -111,15 +120,24 @@ const fieldMap = createFieldMap({
   api,
   apiMaybe,
   captureLifetime: authTicket,
+  onlyActivePath: true,
   getPose: () => session.robotState?.pose,
-  getNavigation: () => session.robotState?.navigation,
+  getDisplayPose: () => new HeadlessState(session.robotState).isFresh("pose")
+    && session.robotState?.localization?.state === "LOCALIZED"
+    && session.robotState.localization.pose_frame === "map" ? session.robotState.pose : null,
+  getCurrentMapId: () => session.robotState?.map_id,
+  getNavigation: () => session.robotState?.mode !== "SAFE_STOP"
+    && new HeadlessState(session.robotState).isFresh("navigation") && goalPoseReady()
+    ? session.robotState.navigation : null,
   // v1.21: the server says which snapshots exist; asking for a missing one is
   // a 404 in the console. Absent block (older CORE): ask as before.
   getMapSources: () => session.capabilities?.runtime?.maps,
-  canGoal: () => session.capabilities?.navigation?.goal_navigation === true
-    && new HeadlessState(session.robotState).isFresh("pose"),
-  goalReason: () => session.capabilities?.navigation?.goal_navigation !== true
-    ? "내비게이션을 쓸 수 없음" : "위치 증거 확인 필요",
+  canGoal: (mode) => session.capabilities?.navigation?.goal_navigation === true
+    && (mode !== "goal" || (session.robotState?.mode !== "SAFE_STOP" && goalPoseReady())),
+  goalReason: (mode) => session.capabilities?.navigation?.goal_navigation !== true
+    ? "내비게이션을 쓸 수 없음" : mode === "goal" && session.robotState?.mode === "SAFE_STOP"
+      ? "안전 정지 중 주행 목표 불가" : mode === "goal" && !goalPoseReady()
+        ? "위치 추정 확인 후 가능" : "",
   setAction: (text) => announceAction( text),
 });
 
@@ -170,7 +188,8 @@ function renderRobotState(state) {
   // 동안 표시한다. 내비게이션이 끝나면 지운다.
   const navGoal = elements["navigation-goal"];
   if (navGoal) {
-    const active = ["PLANNING", "NAVIGATING"].includes(state.navigation);
+    const active = ["PLANNING", "NAVIGATING"].includes(state.navigation)
+      && new HeadlessState(state).isFresh("navigation") && goalPoseReady() && state.mode !== "SAFE_STOP";
     if (active && session.lastGoal) {
       navGoal.textContent = `→ (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
     } else {
@@ -360,7 +379,9 @@ function renderIdentity() {
   }
 }
 
+const receiverApprovals = createReceiverApprovals({root: document.getElementById("peer-approval-panel"), api, isAdmin, captureLifetime: authTicket, runConfirmed});
 async function refreshSlowData(owner = authTicket()) {
+  receiverApprovals.refresh(owner);
   if (!owner.current()) return;
   const required = [
     [api("/api/v1/system/runtime"), renderRuntime],
@@ -424,6 +445,10 @@ function signOut(message) {
   setConnection("unknown", "인증 대기");
   setText("auth-notice", message);
   elements["auth-drawer"].classList.add("open");
+  // 로그아웃 뒤에는 개발 연결 모드를 다시 확인해 보여준다.
+  devEntryChecked = false;
+  elements["dev-connect-row"].hidden = true;
+  revealDevelopmentEntry();
 }
 
 function showConnectionError(error) {
@@ -484,6 +509,49 @@ pageScope.listen(elements["auth-form"], "submit", async (event) => {
 });
 
 let codeRetryTimer = null;
+
+// D-432/D-471: 개발 연결 모드 로봇은 로그인 서랍에 코드 없는 입장을 보여준다.
+let devEntryChecked = false;
+async function revealDevelopmentEntry() {
+  if (devEntryChecked || session.token) return;
+  devEntryChecked = true;
+  const offer = await connectionOffer();
+  if (!offer || session.token || !pageScope.capture().current()) return;
+  elements["dev-connect-row"].hidden = false;
+}
+let devRetryTimer = null;
+pageScope.listen(elements["dev-connect"], "click", async () => {
+  if (elements["dev-connect"].disabled) return;
+  invalidateAuth();
+  const lifetime = authLifetime;
+  setText("dev-message", "개발 연결 확인 중…");
+  setEnabled("dev-connect", false, "개발 연결 확인 중");
+  let identity = null;
+  try {
+    identity = await developmentSession({signal: AbortSignal.any([lifetime.signal, pageScope.signal])});
+  } catch (error) {
+    if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
+    setText("dev-message", error.message || "로봇에 닿지 못했습니다.");
+    setEnabled("dev-connect", false, error.message || "잠시 후 다시 시도할 수 있습니다.");
+    clearTimeout(devRetryTimer);
+    devRetryTimer = setTimeout(() => {
+      if (lifetime === authLifetime && !lifetime.signal.aborted && pageScope.capture().current()) setEnabled("dev-connect", true);
+    }, (error.retryAfter || 0) * 1000);
+    return;
+  }
+  if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
+  const owner = authTicket();
+  setEnabled("dev-connect", true);
+  stopVisionPreview("카메라 재인증 중");
+  try {
+    if (!await connect(owner)) return;
+    setText("dev-message", `${identity.role} 로 로그인했습니다 · ${expiryLabel(identity.expires_at)}`);
+  } catch (error) {
+    if (!owner.current()) return;
+    setText("dev-message", `로그인은 되었지만 연결하지 못했습니다: ${error.message}`);
+    showConnectionError(error);
+  }
+});
 
 pageScope.listen(elements["code-form"], "submit", async (event) => {
   event.preventDefault();
@@ -597,7 +665,7 @@ document.querySelectorAll("[data-line-mode]").forEach((button) => {
     };
     const fail = error => announceAction(`차선 추종 변경 실패: ${error.message}`);
     if (mode !== "OFF") await runConfirmed(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`, button,
-      () => !lineFollow.pending && session.capabilities?.navigation?.goal_navigation === true && session.robotState?.safety?.estop !== true, run, fail, pending, "line");
+      () => !lineFollow.pending && lineFollowStartReady(), run, fail, pending, "line");
     else {
       if (commandOwner?.kind === "line") commandOwner = null;
       const owner = authTicket(), role = session.role, active = () => owner.current() && role === session.role; pending(true);
@@ -825,4 +893,4 @@ pageScope.interval(() => setText("clock", new Date().toLocaleTimeString("ko-KR",
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));
 
 if (session.token) restoreConnection();
-else elements["auth-drawer"].classList.add("open");
+else { elements["auth-drawer"].classList.add("open"); revealDevelopmentEntry(); }

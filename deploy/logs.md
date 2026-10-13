@@ -2117,12 +2117,10 @@
 - 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
 - gate 변화: 없음.
 
-
 ## 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
 - Change: bind a 50 ms timer on the existing ROS node to owner.advance_pending and destroy it at shutdown. The accepted owner uses the durable workflow for phase/gripper gates; no new owner, thread, grant or retry path is created.
 - Evidence: actual owner host regression 38 passed; integrated owner/compiler/boundaries 23 passed; independent review 38 passed plus updated restart suite 5 passed. Semantic removal mutation fails ACCEPTED versus SUCCEEDED and is restored. Production flake8 and quick96 pass; harness lint0errors/26 existing freshness warnings. Installed owner/workflow wheel imports and pip check pass.
 - Gate: SOURCE/LOCAL only. ROS runtime/timer and Gazebo were not executed; Fleet fence/seat integration and full recipe acceptance remain open.
-
 
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.
@@ -2142,7 +2140,6 @@
 - 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
 - gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
 - 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.
-
 
 ## 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
 
@@ -2178,6 +2175,7 @@
 - Change: chmod public Fleet/overhead advertisement XML to 0644 before atomic rename. NamedTemporaryFile defaults to 0600; that hides the XML from unprivileged Avahi even though the metadata is public. Keep credentials and TLS trust out of the advertisement.
 - Evidence: the actual new POSIX regression ran against streamed source on a Linux host; before the fix it failed at the pre-rename 0644 assertion, after the fix both Fleet and overhead passed with umask 0077 and an existing 0600 file. Scratch files were automatically removed; no operational files changed.
 - Gate: SOURCE/LOCAL fix only. Parent coordinator owns persistent publisher installation, advertiser restart and device discovery/readback.
+
 ## 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
 
 - 변경: Fleet 이미지에 libnss-mdns와 `.local` 우선 NSS 조회를 포함하고 실행 중인 호스트 Avahi 디렉터리를 읽기 전용으로 연결한다. 일반 Docker DNS는 유지하고 누락 경로는 자동 생성하지 않는다. 고정 IP 없이 hostname/TLS 검증을 보존한다.
@@ -2257,12 +2255,12 @@
 - 증거: 실제 GitHub 출처 증명에서 cp949 디코딩 오류를 재현했다. 실제 자식 프로세스의 UTF-8 JSON·오류 출력을 읽는 회귀가 기존 코드에서 RED, 수정 후 자동 서명 suite 16 passed다. Linux 관련 suite 78 passed/0 skipped. 수정 코드로 실제 GitHub manifest digest와 main 계보 검증이 통과했다. 검증 중 서명·업로드는 수행하지 않았다. X:/DevTemp/rosy-autosign-provenance-preflight/receipt.json, X:/DevTemp/rosy-rereview-linux-encoding-final.txt.
 - gate 변화: 기존 gate 유지. push를 중단하고 수정본 독립 검토와 필수 push 검사를 다시 진행한다. 예약 작업은 검토한 수정본 배치 전까지 비활성화했다.
 
-
 ## 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+
 ## 2026-10-04 · uncommitted · fix(sim): 실제 pytest 수집 후 vendor probe 시작
 
 - 변경: 지정한 단일 generation-change 시험을 plugin autoload 없이 collect-only로 확인한 뒤 Gazebo를 시작한다. 시험은 자체 rclpy executor를 가지며 launch_testing fixture를 사용하지 않는다. 기존 network/hardware 거절과 command 경계는 유지했다.
@@ -2270,12 +2268,12 @@
 - gate 변화: ROS-SIM HOLD 유지. 준비·spawn·수집·실행·semantic 수용·cleanup을 구분한다. full G2 및 실제 로봇 수용 증거가 아니다.
 - 교훈: Python module import 통과는 외부 pytest plugin이 개입한 실제 collection의 증거가 아니다. 수집이 실패하면 simulation을 시작하지 않고, 실패 로그와 정리 결과를 모두 보존한다.
 
-
 ## 2026-10-04 · uncommitted · verify(sim): 모델 PC vendor fault retry 통과
 
 - 변경: 새 retry 증거를 기존 실패 기록과 분리해 보존했다. source와 실제 실행 probe의 SHA-256이 일치한다.
 - 증거: 실제 Gazebo exact node 1 collected, 1 passed in 6.62s. goal 접수·generation 변경·local latch·취소 callback과 시험의 parent HOLD/phase CANCELED/cancel ack/Fleet HOLD/stale grant 거절 assertions 통과. outer exit 0, cleanup exit 0, owned container absent true. source/harness 89 passed/13 기존 warnings. 독립 원격 증거 검토 완료.
 - gate 변화: 해당 vendor generation-change fault만 실제 ROS-SIM 증거를 추가한다. full 16-box G2·두 팔레트/층·Isaac 주행·실물 수용은 계속 미완료다.
+
 ## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
 
 - 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
@@ -2323,6 +2321,7 @@
 - 변경: 병렬 main의 SSH pairing unit과 차선 Host Agent 설치·target 의존성·닫힌 명령 검증을 함께 보존했다. 두 PartOf unit을 릴리스 전환의 동기 종료 목록에 포함하고 중복 allowlist 초기화를 제거했다.
 - 증거: 독립 native/API 병합 검사 191 passed; 통합 native/API 검사 162 passed, 7 skipped. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
 - gate 변화: SOURCE/LOCAL. 기존 서명 ARM64 후보와 이번 병합 SHA는 별개이며 새 배포·서비스 실행·실기 조명·주행은 미검증.
+
 ## 2026-10-04 · uncommitted · D-446 remote integration after source migration
 
 - Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
@@ -2334,6 +2333,7 @@
 - Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
 - Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
 - gate 변화: None. Remote CI and migrated-source device activation remain separate.
+
 ## 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
 
 - 변경: 검토된 93f66072c 후보를 일회성 설치 대상으로 고정하고, 이미 받은 후보를 서명·manifest 해시 검증 후 재사용했다. 기존 등록 키로 서명한 최초 설치와 후속 a24b6ca8a 후보의 자동 갱신을 완료했다.
@@ -2345,12 +2345,12 @@
 - 변경: canonical 여섯 역할의 host scan은 전체12초/1MiB/64개로 제한한다. 실제 SSH listener 광고와 Fleet zeroconf pin을 추가하고 기존 서명·가입·CA·배포 guard를 유지한다.
 - 증거: model199 PASS/22 platform SKIP, scanner Linux11 PASS, metadata/host source independent review PASS. network-peer-discovery-2026-10-04 validation records.
 - gate 변화: SOURCE/LOCAL focused; 실제 model 설치·signed candidate·container UID LAN 수락은 별도.
+
 ## 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
 
 - Change: Reconcile the verified actual signed installation before selection; add locked hold/resume with interrupted recovery first; check running Compose configuration hashes and read-only/nonprivileged roots; require exact-main CI and ci-result before automatic signing; add optional authenticated read-only Fleet state/Vision source gates.
 - Evidence: Original updater failed all 10 new behavior cases; initial signer failed all 8 CI cases. Updated isolated Linux updater/signer/verifier suites 108 passed, zero skipped. Real Docker Compose v5.6.0 matched the generated hash to a separately created, never-started container and detected a changed command; cleanup succeeded. Credentials, malformed holds and rollback behavior are covered. Final independent review APPROVE (45 passed, 43 Windows skips, zero new failures); affected/fast gates follow before commit.
 - gate 변화: SOURCE/LOCAL evidence only. Reviewed privileged updater and signing-station copies require separate installation; current site runtime does not yet include this follow-up. Camera listing is not advancing-frame or physical acceptance evidence.
-
 
 ## 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
 
@@ -2364,22 +2364,24 @@
 - 증거: 서비스 경로 회귀 RED 후 관련 호스트53pass, 독립47pass. 관제 운영 venv에서 실제 JSONL 생성/fsync와 installer dry-run exit0. 운영 venv에는 pytest가 없어 첫 회귀 실행 실패를 보존했다. 별도 source 후보의 해시를 확인했으며 관리자 설치는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL 보강. 실제 systemd 서비스 실행·관리자 설치·로봇 shadow/rollback·DEVICE/FIELD는 미검증이다.
 
-
 ## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
 
 - Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
 - Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
 - Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
+
 ## 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
 
 - Change: Move private run subdirectory provisioning into fresh_evidence and create uds/omx_cell_sim_01 before starting the owner. Preserve the UnixActionServer service-manager requirement, existing grants and failed-run receipts.
 - Evidence: Actual isolated Gazebo controllers and Fleet started, but the owner IPC thread failed because its parent was absent; readiness timed out before proposal/admission. Child groups and container removal were verified. Host directory regression failed before correction; 16 tests passed afterward with one explicit AF_UNIX host skip. Independent review reran the 16 tests. Model-PC Linux reproduced the original kernel bind failure and verified corrected bind, connect, data roundtrip, 0700 parent mode and reuse refusal.
 - gate 변화: SOURCE/LOCAL provisioning only. Prepare SDK import passed, but actual box16 placement remains HOLD; fault matrix, manual sheet runtime and physical acceptance remain NOT_RUN. Fresh retry uses the existing image and does not replay the previous run.
+
 ## 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
 
 - 변경: Cam의 정본 Gradle 8.11.1 wrapper에 matrix별 --project-dir를 전달한다. 별도 wrapper가 없는 Pilot도 같은 unit task를 실행하며 JDK 17·테스트 범위를 유지한다.
 - 증거: 실제 shell wrapper와 Java 실행 경계의 프로젝트/JAR/task 전달 2 PASS, 독립 source 리뷰 PASS. 통합 담당자 launcher 및 관련 Fleet 계약 24 PASS. 실제 Gradle 실행은 다음 원격 CI의 별도 증거다.
 - gate 변화: SOURCE/LOCAL launcher 검증; 원격 Android CI·APK·DEVICE 수락은 별도다.
+
 ## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
 
 - 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
@@ -2398,6 +2400,7 @@
 - 변경: 커밋 230ccfc2a의 reserved Pilot admission을 통한 G2 시작 home 준비를 반영했다. 병합 중 발견한 인코딩 손상 원문은 X:/DevTemp/rosy-learning-audit-20261004/g2-imported-journal-original.txt에 보존했다. 복구 불가능한 원문을 실행 증거로 사용하지 않는다.
 - 증거: 해당 커밋의 Independent-Review는 48 passed·1 Unix-host skip이며 실제 ROS-SIM 재시도는 pending이다. 통합 담당자의 G2 startup·ports 검사 26 passed·1 skipped. SOURCE/HOST 근거만 보존한다.
 - gate 변화: box16 전체 실행·fault matrix·수동 간지·물리 수용은 HOLD/NOT_RUN이며 full_g2=false다. 실제 주행·HOLD 해제는 수행하지 않았다.
+
 ## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
@@ -2411,11 +2414,13 @@
 - 검토와 현재 상태: 초기 UNKNOWN LocalStop을 우회하는 자동 제출과 homing 중 StopLocal IPC 부재가 독립 검토에서 확인됐다. 통합 fallback은 자동 home을 제출하지 않고 ActionRunner를 비활성화하며 기존 stop·상태 조회 IPC만 제공한다. STARTUP_AUTHORIZATION_REQUIRED HOLD를 기록하고 runner는 rearm·admit 전에 종료한다. stop latch 초기화·자동 rearm·Pilot HTTP 제어는 하지 않는다.
 - 증거: 기존 측정 helper 10개를 보존했고 실제 ActionApi·LocalStop 기반 fallback 회귀 2건은 gate-noop RED 뒤 적용본 G2 12 PASS였다. 적용 통합 소스의 G2·camera boot guard·native systemd 전체 세 파일은 206 PASS·기존 Windows POSIX signal 1 SKIP·NEW 0이었다. 독립 fallback SPEC·Quality·Safety 검토는 PASS다.
 - gate 변화: SOURCE/LOCAL 보완만 확인했다. 자동 startup 실행에는 명시적 승인·열린 세대의 최종 run_if_open fence·정확한 startup goal 취소 연결이 필요하다. box16 배치·fault matrix·실제 startup·물리 장치 수용은 HOLD/NOT_RUN이며 full_g2=false를 유지한다.
+
 ## 2026-10-04 · uncommitted · fix(g2): SIM AID 승인 응답의 전체 시간 한도 유지
 
 - 변경: 429e13b83의 SIM AID attach 요청 한도를 150ms로 조정하고 상태 echo 확인까지의 전체 200ms 한도를 유지한다. detach도 publish 시간을 포함해 남은 시간만 기다린다. transport 결과와 Boolean 응답을 따로 기록하며 한도를 넘긴 echo는 확인 성공으로 쓰지 않는다. 요청 재실행·stop 초기화·승인 확장은 없다.
 - 증거: 병합 원문의 인코딩 손상 항목은 X:/DevTemp/rosy-ui-ship/g2-aid-imported-journal-original.txt에 보존했다. 복구할 수 없는 실행 관측 문장은 현재 증거로 사용하지 않는다. 해당 source와 독립 host 검사를 대조하며 실제 ROS·장비 실행은 확인하지 않았다.
 - gate 변화: SOURCE/HOST 범위의 시간 한도 보완이다. 통합 G2 startup은 HOLD를 유지하며 box16·fault matrix·실제 startup·물리 수용은 HOLD/NOT_RUN이다. full_g2=false이며 자동 rearm이나 동작 제출은 하지 않는다.
+
 ## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 
 - 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).
@@ -2428,6 +2433,48 @@
 - 변경: 실제 공개 git commit/tree와 이미 검토한 normalized journal 무결성 digest14개 행의 path/line SHA/value를 기존 public_provenance 정본에 추가했다. 일반 credential shape·알 수 없는 entropy·변경된 행은 계속 검출한다. scanner 규칙/전역 예외는 늘리지 않는다.
 - 증거: normal pre-push의13개 공개 해시 진단과 같은 알려진 hash가 있는1개 추가 행을 확인했다. 40자 값은 실제 git object의 commit/tree다. 정확한 결속·stale/변경/credential 거부 회귀와 protocol/event/rooms 포함114 PASS로 검사했다.
 - gate 변화: SOURCE/LOCAL 출처 정합. 실제 signing key·장치 자격은 읽거나 변경하지 않았다.
+
+## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
+
+- Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
+
+## 2026-10-04 · uncommitted · D-441 dedicated functional verification setup
+
+- Change: Add config-only viewer provisioning with protected token, existing principal and Fleet group-access preservation, signed-runtime preflight, guarded Fleet restart, atomic journal recovery and exact timer-state restoration. GET gates select durable enrolled identities and configured Vision sources; no robot command or enrollment reset.
+- Evidence: Initial plan regressions 5 failed before implementation. Isolated Linux setup tests 22 passed, with actual bytes/modes/fsync and simulated root ownership only. Checksum, concurrent-edit and principal-collision mutations each caused the intended test failure. Windows API/helper checks pass; POSIX recovery tests run separately on Linux.
+- gate 변화: SOURCE/LOCAL evidence only. Root installation and live viewer readback remain separate; listing does not establish advancing frames or physical robot acceptance. Legacy camera marker references require physical identity confirmation before roster cleanup.
+
+## 2026-10-04 · uncommitted · D-441 functional activation and CI delivery repair
+
+- Change: Activated the independently reviewed config-only setup with a dedicated viewer; retained existing users and enrollment. Repaired pre-existing CI blockers and removed the new setup test's BOM so exact-main CI can gate automatic signing again.
+- Evidence: Installer exit 0; viewer Fleet/Vision GET 200; two JPEG sequences advanced with 160/520ms frame ages. Enrollment readback unchanged, three managed containers healthy, timer enabled/active and no recovery journal. The following scheduled updater cycle finished idle after configured functional checks. Isolated setup 22 passed; CI repair selection 94 passed, Isaac 24 passed and Node 3 passed; independent review APPROVE with 151 Python passes, 15 explicit POSIX skips and 3 Node passes.
+- gate 변화: Config activation and read-only runtime evidence only. Remote CI/merge/new image delivery are separate. Second robot power and physical marker identity remain unverified; no motion or E-Stop reset was used.
+
+## 2026-10-04 · uncommitted · fix(ci): reconcile exact corrupted journal provenance
+
+- Change: Replace only the unrecoverable G2 journal block from 230ccfc2a with explicit source provenance. The history guard permits only the exact original/replacement block hash pair; encoding and unrelated history guards remain active. Refresh the native image-sync size verdict from 1020 to 1021 for the existing b9f884623 unit allowlist line, retaining the required future split and zero growth allowance.
+- Evidence: Exact-pair acceptance initially failed before implementation; all six mutation variants pass after correction. Harness and selection suites 98 passed. Architecture and image-sync suites 104 passed, 6 platform skips. Independent review approved both narrowly scoped corrections.
+- Gate: SOURCE/LOCAL only; no native runtime or physical acceptance is inferred.
+
+## 2026-10-04 · 429e13b83 · docs: record unrecoverable G2 aid journal corruption
+
+- Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
+
+## 2026-10-04 · uncommitted · fix(ci): align wheel closure and portable Android build outputs
+
+- Change: Build/install the existing learning1.6 dependency and local execution1.4 wheel; shadow pinned NumPy2.2.6 without uninstalling Debian files before unchanged raw tools. Send Android build and Kotlin state to RUNNER_TEMP in CI while retaining approved Windows X defaults. Add a real learning ABI diagnostic; no test or constraint is bypassed.
+- Evidence: Main387b and PR run37205556518 reproduced stale local0.1.0 and Debian NumPy RECORD failures. Four regression failures before repair; final13passed. Built and resolved12 actual offline wheels outside source. Disposable ROS Jazzy amd64 container passed NumPy/Torch roundtrip and OpenCV resize with versions2.2.6/4.12.0/2.7.1+cpu. Independent scope review APPROVE.
+- Gate: SOURCE/LOCAL and CI environment repair only; final GitHub CI and signed site candidate delivery remain pending. Installer5dbbe7 unchanged; physical marker identity HOLD.
+
+## 2026-10-04 · uncommitted · fix(ci): avoid legacy xunit alias in ACT test helper
+
+- Change: Rename only the ACT inference test helper and seven calls from setup to _build_inference_case. CI pytest7.4.4 treated setup as its legacy module callback; preserve every assertion, production code, dependency and pytest hook.
+- Evidence: PR CI37207709987 reached actual tests: all other gating suites passed, but learning had14 setup errors. Same-version Ubuntu reproduction14errors before repair; afterward both pytest7.4.4 and local8.4.2 passed23tests with one existing optional native skip. Independent exact-diff review APPROVE.
+- Gate: Test harness compatibility only; final GitHub CI and signed delivery pending. No learning runtime or device acceptance claim.
 
 ## 2026-10-05 · uncommitted · fix(discovery): 같은 LAN Model 발견에 설치된 Avahi D-Bus 사용
 
@@ -2446,3 +2493,270 @@
 - 변경: 다른 세션의 최신 main을 작업 브랜치에 병합하고 검토된 Model 발견·CI 변경을 보존했다. 사용자 승인 범위의 연결·앱 검증 기록을 추가한다.
 - 증거: 통합본의 관련 host 검사에서 67 PASS와 Android launcher 1건의 10초 subprocess 관측 시간 초과를 확인했다. launcher 두 건을 재검사해 2 PASS, known_failures NEW 0을 확인했다. 실제 Gradle의 compileDebugKotlin·compileDebugUnitTestKotlin·testDebugUnitTest가 Pilot 58 PASS·Cam 341 PASS·SKIP 0으로 끝났으며 두 작업의 Kotlin 상태 경로가 명시한 독립 X 경로임을 확인했다. Android 증거는 f27 시작 시점의 추적 파일 snapshot이고 이후 병합된 web connect.js를 포함한 앱 배포 증거는 아니다. 현재 실기 SSH 읽기에서는 CORE active, TLS 설정 없음·광고 none을 확인했으며 인증서·설정·토큰을 바꾸지 않았다.
 - gate 변화: SOURCE/LOCAL 통합·컴파일 확인. generic 승인·신원 증명 client/server는 별도 미통합 후보이며 HTTPS 최초 신원 확인·새 SHA CI·서명 배포·장비 재연결은 미완료다. Bluetooth·개발 모드·주소 입력을 일반 연결 흐름에 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(provenance): preserve reviewed source-line bindings
+
+- Change: restore the four main-reviewed journal digest lines exactly, including their source text, rather than changing approved provenance metadata. Add the existing provenance inventory and mutation suite to the always-on affected guard set so a source/comment edit cannot leave stale bindings undetected locally. No digest pair, scanner rule or credential exception changed.
+- Evidence: GitHub root-test-1of3 isolated one stale-binding failure among1393 passes and118 skips; local repaired provenance/scanner/harness suites93 passed. All other GitHub test jobs and Android passed. Independent review and final hook follow.
+- gate 변화: source integrity repair only; deployed code remains the signed existing candidate until final green CI and delivery.
+
+
+## 2026-10-05 · uncommitted · fix(ci): integrate reviewed site checks with current main
+
+- Change: preserve both parents exact journals and unchanged installer; retain main isolated raw-tool directory and Android scratch paths with ABI/argv checks. Keep new review interactions while restoring the registered developer-surface title contract, and update the Fleet header assertion for its existing cell column without changing stop behavior. No app-identity exception or credential/scanner policy change.
+- Evidence: prior topic full Linux CI37213888882 and Android37213888884 passed; concurrent main d77 has legacy ACT-helper, app-identity and stale header failures. Scoped integration193 passed, exact journal unions validated and independently approved. Final push and exact CI remain pending.
+- gate 변화: local source integration only; actual signed candidate delivery follows final green CI.
+
+
+## 2026-10-05 · uncommitted · fix(test): bound Windows wrapper startup without weakening argv checks
+
+- Change: allow60 seconds only for Git Bash startup on Windows in the Android fake-Java launcher test; Linux remains10 seconds, and all jar/project/build/Kotlin/unit-task assertions remain intact. Retain main independently-reviewed ACT helper, Fleet cell/stop header assertions and local review-tool classification. Production workflows, updater restart limits and robot authority are unchanged.
+- Evidence: preceding hook had3238 passes/259 skips and exactly2 Windows10-second subprocess timeouts. Same environment reproduced1 pass/1 timeout; corrected launcher2 passed, with independent2-pass verification and approval. Final normal hook and exact CI follow.
+- gate 변화: host test reliability repair only; no production acceptance claim.
+## 2026-10-05 · uncommitted · feat(pairing): 서명 payload의 수신 암호화와 TLS 유지보수
+
+- 변경: D-456 CORE 수신 승인에 필요한 hash-locked 암호화 wheel을 서명 release의 읽기 전용 보조 경로에 설치한다. 기존 base Python pins는 유지한다. root 전용 TLS 도구는 검증된 현재 release·유효한 유지보수 claim·정지된 runtime에서만 기존 설정을 보존하며 실행한다.
+- 증거: TLS 도구 Linux 검사 30 PASS·DrvFS 권한 검사 1 SKIP, 최종 hostname 보완 검사 3 PASS. native 패키징 관련 263 PASS·1 SKIP 뒤 읽기 경로 분류와 새 스크립트 실행 비트 누락을 수정하고 실패 두 건을 재검사해 2 PASS. 실 POSIX 소유권·ARM 빌드·장치 TLS 설치는 아직 확인하지 않았다.
+- gate 변화: 이번 변경의 SOURCE/LOCAL 증거만 추가한다. 서명 배포와 실제 LAN 접속은 미완료다.
+## 2026-10-05 · uncommitted · fix(pairing): 실제 자격 검사를 유지하는 source 분류 보완
+
+- 변경: 닫힌 숫자 인자의 코드 호출은 따옴표 없는 참조만 인정한다. Kotlin nullable String 선언의 실제 기본값을 검사하며 camel/snake 슬롯은 정확한 이름만 허용한다. 공개 P256 시험 벡터는 한 경로·필드·정확한 값의 entropy 토큰만 예외로 두고 자격·개인키 검사는 유지한다.
+- 증거: 첫 정상 push는 474 PASS·2 SKIP·2 FAIL로 중단됐다. 독립 검사에서 따옴표 안 호출과 임의 underscore 슬롯의 과도한 허용을 확인해 고쳤고 실제 negative 검사 7 PASS다. 수정 전 실패와 중간 검사 원본은 보존했다. 최종 release/event/API 통합 및 정상 push 검사는 이어서 확인한다.
+- gate 변화: SOURCE/LOCAL 수정이며 CI·서명 배포·DEVICE를 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(release): ARM 수신 암호화 입력 잠금 해시 수정
+
+- 변경: receiver_crypto 요구사항 잠금값을 Linux checkout의 Git LF 파일 SHA-256으로 고친다. Windows CRLF checkout에서 계산한 값 때문에 실제 ARM 빌드가 거부한 원인을 바로잡는다. 라이브러리 버전·wheel 해시·require-hashes·빌더의 원시 파일 해시 검증은 유지한다.
+- 증거: 정확한 0548d2a00 ARM 실행의 실패를 원본 로그로 보존했다. Git LF 474바이트와 Windows CRLF 483바이트 차이를 독립 대조했다. 신규 Linux 바이트 회귀 검사는 수정 전 1 failed, 수정 후 관련 native payload·CI 의존성 검사 27 passed/7.58s다.
+- gate 변화: SOURCE/LOCAL. 이전 ARM 실패 결과물은 배포하지 않는다. 수정 소스의 원격 검사·ARM 빌드·서명·실기 검증은 이어서 수행한다.
+
+## 2026-10-05 · uncommitted · fix(discovery): 사용자 검색 서비스의 검증된 카메라 기능 표시
+
+- 변경: 일반 계정 검색 서비스가 명시적으로 설정한 카메라 페어링 기능을 표시할 수 있게 한다. 기존 CA와 인증서 이름으로 제한된 HTTPS 신원 응답을 검사하고, 설치 전과 광고 시작 전에 저장된 수신 신원과 다시 대조한다. 기본 기능 비활성화와 기존 자격·CA를 보존하며 광고만으로 승인하지 않는다.
+- 증거: 독립 원본 검사 36 passed/1 기존 POSIX skip, 작성자 관련 검사 156 passed/3 기존 skip, 변경 두 경로 비밀값 검사 0 findings. 병합한 학습 승인·native payload 검사도 짧은 X 경로에서 152 passed/1 skip다. 긴 Windows 임시 경로의 쓰기 실패는 원본 로그로 남겼으며 긴 경로 지원 완료로 표시하지 않는다.
+- gate 변화: SOURCE/LOCAL. 실제 관제는 서명된 0548d2a00으로 갱신해 세 서비스 정상·HTTPS 정상과 Fleet 실행 계정의 두 로봇 이름 해석을 확인했다. 현재 실제 카메라 신원 경로는 설정 비활성화로 404이며 새 광고도 이를 거부한다. 관리자 설정과 기존 운영자 로그인이 필요한 승인·재접속은 아직 미검증이다.
+
+## 2026-10-05 · uncommitted · fix(release): 실제 서명 목록 크기에 맞춘 TLS 설치 읽기 경계
+
+- 변경: D-456 서명 설치기의 일반 파일 기본 128KiB 제한은 유지하고 릴리스 manifest·checksum·서명 전후 비교에만 유한한 4MiB 제한을 적용한다. 경로·소유권·서명·claim·정지·동일 소스·기존 CA 보호는 유지한다.
+- 증거: 정확한 8a0929575의 ARM 빌드 성공, 두 로봇 각각 314개 ABI 일치, 2913개 서명 파일 검증, 실제 037 배포와 CORE 준비 성공. 실제 TLS 설치 전 검사는 일반 계정 소유 경로와 manifest 520894바이트/SHA256SUMS 383685바이트를 거절했다. 서명과 일치하는 기존 76파일·5경로만 root 소유로 보호했고 기존 root 소유 폐기 파일을 보존했다. 설정을 바꾸기 전 거절됐으므로 런타임을 복구하고 claim을 해제했다. 수정본의 실제 POSIX/OpenSSL 회귀 검사 32 passed/1 기존 skip, 크기 경계·일반 설정 기본 제한·4MiB 초과 거절을 포함한다.
+- gate 변화: SOURCE/LOCAL. 로봇 037 배포는 확인했지만 TLS·앱 승인·기억된 관계 재접속과 관제 카메라 승인은 아직 미검증이다. 서명 소스를 우회하는 파일 덮어쓰기로 실기 연결을 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): TLS 인증서 이름을 포함하는 로봇 검색 광고
+
+- 변경: D-456 boot-status가 공개 설정의 TLS 호스트 이름을 상태와 LAN TXT 광고에 전달한다. TLS 필수 모드에서 유효한 단일 `.local` 호스트만 표시하며 IP·외부 도메인·빈 이름·일반 HTTP의 TLS 이름 광고를 거절한다. 광고로 자격을 발급하거나 인증서 검증을 우회하지 않는다.
+- 증거: 실제 두 로봇의 정확한 ca1484c5b 서명 릴리스 038 배포·TLS 설치·CORE 준비 통과. 기존 운영자 기록을 보존했다. 관제의 실제 multicast 응답은 HTTPS 필수지만 인증서 이름 필드가 빠졌고 Tablet Pilot은 secure_host_missing으로 거절했다. 회귀 검사 수정 전 1 failed/0.21s, 최종 boot-status/state/TLS 관련 Windows 53 passed/3 기존 POSIX skip/0.82s. 기존 Cam의 승인된 ceiling_north 연결은 실제 앱에서 2.5–3.0fps 송출과 정지됨/0.0fps 복귀를 확인했다. 마커 인식은 수신기에서 보고되지 않았다.
+- gate 변화: SOURCE/LOCAL 및 명시된 038 TLS·기존 Cam 송출 DEVICE 증거. 새 검색 필드의 서명 배포 후 실제 Pilot 승인·기억된 관계 재접속과 관제 신규 Camera Peer 승인은 별도다.
+
+## 2026-10-05 · uncommitted · fix(release): 비공개 TLS 환경을 읽는 준비 상태 검사
+
+- 변경: 기존 운영자 sudo 경로로 설치된 bounded CORE 준비 검사를 실행해 root 소유 0600 runtime.env의 TLS·포트 설정을 읽는다. 파일 권한·sudoers·SSH 신원·서명·claim·교정 가드와 주행 권한은 유지한다. 두 교정 테스트의 PowerShell 경고 줄바꿈만 정규화하며 인증 미전송과 종료·시간 제한 단언은 유지한다.
+- 증거: 기존 실제 push는 환경 파일 읽기 거절을 기록했다. TLS 전환 뒤 평문 기본값 검사는 정상 CORE도 거절할 수 있으므로 준비 계획을 수정했다. 수정 전 계획 회귀 1 failed/0.74s; 실제 push·claim·교정 관련 99 passed와 경고 줄바꿈 2 failed 원본을 보존했다. 같은 두 교정 검사에서 문자 의미와 가드를 유지한 정규화 뒤 2 passed/8.82s다. 독립 안전 검토가 변경 범위와 기존 교정 실행 소스 무변경을 확인했다.
+- gate 변화: SOURCE/LOCAL. 두 로봇의 038 TLS 준비는 별도 운영자 경로에서 이미 확인했다. 수정된 정규 배포 경로의 다음 서명 릴리스 검증은 이어서 수행한다.
+
+## 2026-10-05 · uncommitted · fix(release): TLS 보정 확인 전 인증서 검증과 실패 시 배포 거절
+
+- 변경: 운영자가 공개 CA·호스트를 확인한 뒤 `-ApiTlsHost`·`-ApiCaFile`을 함께 지정하면 보정 가드는 stdlib HTTPS helper의 실제 CA·호스트 검증 완료 후에만 Bearer를 보낸다. 토큰은 비공개 stdin JSON으로만 전달하며 응답 크기·소켓·프로세스 시간을 제한하고 리다이렉트·인증 실패·잘못된 응답을 거부한다. 로그에는 세션 ID·토큰 대신 제한된 보정 메타데이터만 남긴다. 두 CORE 재시작 도구는 모든 비영 종료를 거부하며 Force는 확인된 활성 세션만 기존 정책대로 재정의한다. 기존 HTTP 기본값은 TLS 자동 감지가 아니다.
+- 증거: 새 보안 경로 미지원 RED 1 FAIL. 실제 로컬 TLS 서버와 기존 보정·release push·dev sync 네 suite 129 PASS/104.76초. 잘못된 CA·호스트에서 Authorization 미전송, idle·active 3·Force, 401/403·리다이렉트·시간 초과·응답 크기·누락된 credential·paired parameter·두 caller의 원격 쓰기 전 거부를 확인했다. 엄격 JSON의 중복·scalar session 추가 검사 2 PASS/2.92초. 변경된 소스·검사 5개 파일 secret scan 0 findings. 원본 실패 및 최종 로그는 X:/DevTemp/rosy-ui-ship/cal-tls에 보존한다.
+- gate 변화: SOURCE/LOCAL만. 실제 로봇의 인증서·보정 상태 조회·서명 배포·재시작은 이번 작업에서 실행하지 않았다. 이미 TLS를 사용하는 로봇의 다음 정규 배포는 검증된 공개 CA와 hostname을 명시해야 하며 인증서 검증 생략이나 HTTP fallback은 없다.
+
+## 2026-10-06 · uncommitted · fix(release): 변수 참조를 비밀값으로 오인하지 않기
+
+- 변경: 비밀 탐지기가 함수 호출의 닫는 괄호가 붙은 dotted 변수 참조를 실제 값으로 오인하던 규칙을 바로잡았다. 완결된 함수 호출과 리터럴 검사는 그대로 유지한다.
+- 증거: Pilot 세션 재사용 코드의 오탐을 재현한 검사와 전체 추적 파일 비밀 검사가 통과했다. 로봇 런타임 변경은 없다.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(site): 페어링 구성에도 LAN 카메라 보기 적용
+
+- 변경: 사이트 기본 Compose와 페어링 오버레이가 같은 --lan-camera-proxy 실행 인수를 갖게 해 페어링 모드에서도 사설망 카메라 보기 경계를 유지한다.
+- 증거: test_site_pairing_deploy.py 13 PASS. 현장 이미지 설치와 카메라 영상 확인은 아직 별도다.
+- gate 변화: LOCAL 검증만 추가.
+
+## 2026-10-06 · uncommitted · feat(deploy): D-477 테일넷 조인 — 유닛·이미지 deb·개인화·site 안내
+
+- 변경: `rosy-tailscale-join.service`(+헬퍼)가 프로비전된 일회용 auth key를 소진해 로봇을 팀 테일넷에 태그로 가입시킨다. 이미지에 고정(sha256) tailscale deb와 의존성(iptables, iproute2)·tailscaled 활성화를 추가했다. 개인화 번들에 선택 `tailscale` 섹션이 들어가고 첫 부팅이 `/etc/rosy/tailscale-join.json`(0600)을 쓴다. site 방화벽·README·SSH 안내·테일넷 운영 런북(`docs/deployment/tailnet-remote-access.md`)에 `tailscale0` 경로를 문서화했다.
+- 증거: test_rosy_tailscale_join.py·test_image_customization_contract.py·test_sd_personalization.py·test_first_boot_provisioning.py 신규 포함 1411+ passed(affected --run, known_failures 0 new). 잠금 목록·스크럽·영수증 지문 변이로 빨강 확인. tailscale 1.102.5 arm64 deb는 실제 다운로드 해시로 검증(85315e74…). 장치(TWIN·DEVICE) 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(model): D-497 카메라 지도 작업을 서명된 모델 PC 실행기에 연결
+
+- 변경: 기존 D-446 잠금·서명·환경 지문·실행 영수증을 유지하고, 카메라 지도 entrypoint와 필요한 Vision 파일 세 개만 후보에 포함한다. 이전 후보 생성과 복귀를 유지하며 고정 controller 선행 갱신과 전용 키 경계를 문서화했다.
+- 증거: 관련 pytest 54 passed, 26 skipped; known_failures NEW 0. Linux 격리 실행에서 실제 entrypoint --help import PASS. 관제 설치 ed006ce92cc4832619dc96d4d0e00f779b439ec9의 서명·이미지·서비스 상태와 실제 S21 지도 생성(12 places, 10 lanes), Fleet 초안 저장·조회 일치를 확인했다. 모델 PC는 연결되지 않아 설치·실행은 미확인이다.
+- gate 변화: 모델 PC SOURCE/LOCAL 증거 추가. 관제 카메라 지도 초안의 DEVICE 증거만 추가하며, 지도 FIELD 수용·활성화와 모델 PC DEVICE는 미확인이다. 기존 Pi 이미지 gate는 유지한다.
+
+## 2026-10-07 · uncommitted · feat(site): site-users.yaml 원자적 관리 CLI와 재시작 게이트
+
+- 변경: `deploy/site/site_users.py` 추가 — `list`/`add --principal --role --token-stdin`/`remove`/`validate`. 토큰은 표준입력으로만 받아 sha256 다이제스트만 저장하고 argv·로그에 남지 않는다. add·remove는 임시 파일+`os.replace` 원자적 쓰기 뒤 쓴 bytes를 다시 파싱·형태 검증(Fleet `load_site_users`와 같은 규칙: users 단일 키, principal_id/role/token_sha256 정확히, 64자 소문자 hex, 중복 금지, 빈 목록 금지)하며 실패 시 원본을 그대로 둔다. 마지막 사용자 제거·중복 principal·토큰 재사용을 거부하고, root 실행 때 `root:10001` 0440을 직접 적용, 아니면 `chown 0:10001 … && chmod 440 …` 안내를 출력한다. `validate`은 내용에 더해 권한 비트(타인 접근·그룹 쓰기 금지)와 소유 그룹을 검사해 config-reload 감시 컨테이너의 재시작 전 게이트로 쓰게 했다. 감시 컨테이너(/reload.py) 원본은 저장소에 없어 현장 전용으로 확인 — README 「Prepare an Ubuntu host」에 CLI 사용법과 2026-10-07 root:101 오소유 크래시 루프 사고의 운영 주의(수동 복원 금지, 재시작 전 validate 게이트)를 문서화했다. `deploy/site/AGENTS.md` Key Files·시험 목록에 반영.
+- 증거: test/test_site_users_cli.py 신규 27 passed — 추가→list→제거 왕복(Fleet 실제 로더로 적재 확인), 잘못된 role 화이트리스트 거부, 빈·공백 토큰 거부, 손상 YAML·잘못된 형태 거부 시 원본 불변·임시 파일 잔존 없음, 중복 principal·다이제스트 재사용 거부, 마지막 사용자 제거 거부, dry-run 무변경, 소유권 안내 출력, validate 게이트(내용+권한+그룹). 변이 증명: role 화이트리스트(CLI·FILE 양층)·digest 정규식·마지막 사용자 거부를 각각 깨뜨려 빨강 확인 후 원복. site 일괄 pytest 407 passed 2 skipped(test_site_users_cli 포함 14 파일 + test_document_placement), known_failures 0 new.
+- gate 변화: 없음. 현장 감시 컨테이너에 validate 게이트 적용 여부는 별도 확인 사항.
+- 결정: 없음 (D-276 파일 계약 유지, CLI role은 사람 세 역할로 제한 — service 행은 Cell 흐름 소유)
+- 교훈: 원자적 쓰기는 내용 무결성만 지킨다. 오소유(root:101) 사고는 쓰기 후 소유권 적용·검사가 없으면 그대로 재시작 루프로 이어진다 — 재시작 감시자는 "바뀌었으니 재시작"이 아니라 "검증 통과했으니 재시작"이어야 한다.
+
+## 2026-10-07 · uncommitted · feat(site): Fleet 컨테이너가 Vision 맞춤 제안을 읽어 교정 낡음 감시
+- 변경: `deploy/site/compose.yaml` fleet 서비스에 `--vision-url https://vision:$ROSY_VISION_PORT`(사이트 CA는 fleet 컨테이너의 기존 SSL_CERT_FILE, site leaf의 vision SAN 검증). 주기는 기본 60 s 켬(끄려면 `--calibration-drift-interval-s 0`)
+- 증거: `test/test_site_calibration_drift_deploy.py` 신규 2 passed(compose 핀·CLI 플래그 파싱). 변이 증명: compose의 vision-url 값을 바꾸면 적색, 복원 초록
+- gate 변화: 없음
+- 결정: 해당 없음
+- 교훈: 없음
+## 2026-10-07 · uncommitted · fix(release): push 게이트 해제 — D-502 수선 쌍 provenance 등록과 line-follow 핀 갱신
+- 변경: 두 push 게이트 실패를 해제했다. (1) `tools/harness/log_repairs.yaml`에 오늘 `eee9d5bdc`(D-502)가 추가한 저널 블록 쌍이 공개 출처 목록에 미등록이라 high-entropy-token 오탐으로 push를 막았다 — `public_provenance.json` records에 해당 줄 sha256(`e0d8cd9c…`)과 두 값을 기존 네 쌍과 같은 reason 양식으로 등록했다. (2) 동료의 API Ref v1.120 반영에 line-follow 문서 핀이 v1.119으로 남아 `test_api_reference_documents_line_follow_endpoints_and_snapshot`이 실패했다 — 핀을 v1.120으로 올렸다(PRT-006 "같은 변경에서 핀 갱신" 절차의 사후 보강).
+- 증거: `test_no_secrets_in_tracked_files`·`test_secret_public_provenance.py` 전체·`test_line_follow_contract_docs.py` 전체 **18 passed**, `known_failures.py` 0 NEW. provenance JSON 재파싱 확인(records 102, 마지막이 새 레코드).
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: provenance는 JSONL이 아니라 하나의 JSON 문서다 — 줄 단위 추가가 아니라 records 배열 안에 넣어야 하며, 무작정 append는 "Extra data"로 스캐너 자체를 죽인다. 하루에 같은 오탐 클래스가 세 번(log_repairs 미등록 포함) 나왔다 — 회차 문서·수선 표를 쓰는 세션은 착지 전 시크릿 시험 1회(`docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`)를 돌려야 한다
+
+## 2026-10-08 · uncommitted · feat(face): D-472 식별 점멸 — 움직이는 로봇, 안전 거절, 6 s 상한
+- 변경: `rosy-face`가 식별 점멸을 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다. E-Stop·EMERGENCY·고장·주의·booting·blocked·CORE 인계 없음이면 결과 파일에 `failed`를 바로 쓰고 거절하며, 점멸 중 그렇게 되면 끊는다. 인계 요청은 1 s, 점멸은 3.5 s에 끝낸다. `rosy-hw-test`는 1.5 s보다 오래된 식별 요청을 버린다. 요청부터 끝까지 6 s 이내
+- 증거: `test/test_rosy_face.py`·`test/test_hw_test.py` 호스트 시험(거절·중단·기한·요청 나이). 실제 LED·ARM64 배포 없음
+- gate 변화: 없음. DEVICE/FIELD 미확인, D-430 Safety-Review 미수령
+- 결정: D-472 addendum 5항
+
+## 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리
+- 변경: 식별 점멸 helper가 SIGKILL 뒤에도 끝나지 않으면 한 번 기록하고 상태 패턴 갱신으로 넘어간다(예외로 face 루프를 끊지 않음)
+- 증거: `test_rosy_face.py` 등 267 passed, known_failures 0 NEW. 새 시험은 수정 전 코드에서 실패
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE, DEVICE/FIELD 미확인
+
+## 2026-10-08 · uncommitted · AI PC 오프라인 Decision watchdog
+
+- 변경: `deploy/ai_pc/`에 systemd 사용자 GPU 점검 타이머와 수동 활성화 Laya loopback 서비스를 추가했다. AI PC에서 linger와 GPU 타이머를 켰고 Laya 자동 시작은 꺼 두었다.
+- 증거: 두 번의 GPU 점검이 드라이버 부재를 exit 9로 기록했다. Laya GPU 서비스는 preflight에서 거부됐고 포트 8000은 닫혔다. 별도 CPU 서버에서 합성 2건을 5회 재생해 호출 오류 0을 확인했다(`docs/validation/decision-ai-pc-watchdog-2026-10-08/`).
+- gate 변화: 없음. GPU 복구, 사람 라벨 L0, 고정 ModelProfile 및 현장 Fleet/CORE 수용은 미검증.
+
+## 2026-10-09 · uncommitted · docs(decision): split model test hosts
+
+- 변경: 모델 PC 독립 L0, AI PC 승인 버전 스모크, 개발 로컬 PC 계약 검사와 현장 수용을 ADR·계획·호스트 안내에 분리.
+- 증거: 문서 lint·관련 계약 시험은 착지 전 확인; 모델 PC 모델 평가와 AI PC GPU 스모크는 HOLD.
+- gate 변화: 없음.
+
+## 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
+
+- 변경: 세 PC의 새벽 재부팅 유닛(관제 06:08, 모델 06:03, AI 05:58)과 관제 PC Docker 갱신 유닛·스크립트를 실제 파일 그대로 `deploy/{site,model_pc,ai_pc}/host-state/`에 옮겼다. `deploy/hosts/common/rosy-host-state`(역할별 설치, `--dry-run` diff, 30분 드리프트 점검은 safe만 수정). `rosy-model-guard-check`를 `deploy/site/rosy-host-guard`로 일반화(모델 PC·AI PC·로봇, N → 유닛 재시작 → 2N → 재부팅, 새벽 창 제외, 실행은 D-524 도우미).
+- 증거: 모델 PC `test/test_host_state.py`·`test/test_host_guard.py` 25 passed. 모델 PC에서 읽기 전용 `install model --dry-run`: 새벽 재부팅 파일 일치, 워치독·panic 설정 없음을 보고.
+- gate 변화: 없음. 실제 PC 설치·활성화 없음(sudo·승인 필요). D-524 착지 뒤 도우미 줄이 채워진다.
+
+## 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
+
+- 변경: D-545에 따라 모델 PC 검수 앱에 불변 코드 릴리스, current 링크, DB 외부 경로, 서비스 재시작 후 HTTP 확인과 실패 복구 절차를 추가했다.
+- 증거: 모델 PC Linux 설치기 시험 2 passed; 실제 기존 코드에서 state/를 제외해 studio-d538-20261009 릴리스로 전환; rosy-review-v13.service active, ExecStart는 current 경유, /api/workspace와 /pixels 응답. 실제 브라우저에서 객체 43장 목록과 픽셀 검수·제외 상태를 읽었다. 사람 승인 동작은 실행하지 않았다.
+- gate 변화: 없음. 새 코드의 자동 전송과 검수 승인·학습 반영은 별도 검증이다.
+## 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
+- 변경: `rosy-face`가 `/etc/rosy/dev-mode`를 보면 얼굴 띠 앞에 `DEV `(띠가 없으면 `DEV MODE`), 상태 카드 줄 앞에 `DEV `.
+- 증거: test/test_rosy_face.py.
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · fix(site): 비밀을 설정 디렉터리 밖으로, Vision은 카메라 파일만 (D-524 보안 검토)
+- 변경: Vision이 `/etc/rosy/site` 전체 대신 `site-cameras.yaml`만 마운트. 기본 비밀 경로 `/etc/rosy/site-secrets`(.env.example, mdns-bridge·model-watch 유닛, preflight, functional setup, rosy_ml). `migrate-site-secrets.sh`. D-524 결정 11, README.
+- 증거: test_host_control.py::test_vision_cannot_reach_fleet_secrets (원격 pytest 결과는 커밋 메시지·보고).
+- gate 변화: SOURCE. 실제 사이트 PC는 건드리지 않았다. 현장 이전(스크립트 실행·재시작)은 열림.
+## 2026-10-09 · a909b0e71 · feat(sd): 자동 로봇 번호는 40–49의 가장 작은 빈 번호 (D-562)
+- 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
+- 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
+- gate 변화: SOURCE.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 램프
+- 변경: 표시 기록이 없는 옛 설치에서 `rosy-face`는 신호 인자를 먼저 부르고, 없으면 복구 인자, 없으면 세 인자로 돌아간다.
+- 증거: `test_rosy_face.py` 혼합 설치 시험.
+- gate 변화: SOURCE.
+- 결정: D-583
+
+## 2026-10-10 · uncommitted · feat: AI PC local Qwen inference
+
+- Change: User-authorized loopback Ollama service with shared tested model digest, f16 KV cache and bounded single-model concurrency; model-PC relay retired after local GPU check.
+- Evidence: remote inquiry regression 164 passed, 0 NEW before final timestamp enrichment; final remote checks and live readback follow.
+- Gate: SOURCE; deployment and model accuracy are separate evidence.
+
+## 2026-10-12 · c21b8bea0c · fix: deliberation host admission
+
+- 변경: root 소유 전용 bwrap/AppArmor 설치, 단독 system 계정의 설치·preflight 공통 검증, 실제 자식 종료·cgroup readback, 수집된 scope 정리 확인.
+- 증거: 원격 회귀·구조 검사 66 passed, NEW 0. `docs/validation/deliberation-host-admission-2026-10-12/result.md`.
+- gate 변화: SOURCE 검증. 양쪽 SSH 계정 sudo가 암호를 요구하여 관리자 설치·HOST PASS는 미확인. 운영 제공자·장치·Discord 활성화는 수행하지 않았다.
+
+## 2026-10-12 · uncommitted · fix: sandbox PWD preflight
+
+- 변경: 실제 관리자 설치 후 PWD 때문에 실패한 환경 검사에서 PWD=/tmp만 허용하고 PATH도 고정값으로 검증한다. 다른 변수·HOME/PATH/PWD 경로 변경은 거절한다.
+- 증거: 사용자 AI PC 출력은 환경 검사 외 12개 경계 true, 최초 HOST 결과는 HOLD. 원격 RED에서 정상 PWD 오거절과 변경 PATH 오수용을 재현했다. 수정 후 시험·실제 재실행은 후속 증거로 기록한다.
+- gate 변화: HOST PASS 미확인 유지. 관리자 설치 완료 출력은 확인했으나 모델·장치 수용으로 승격하지 않는다.
+
+## 2026-10-12 · b78edf399 · D-675 Fleet-only Discord private config
+
+- 변경: 정식 Compose에 optional intake 경로와 Fleet-only 읽기 mount 추가; absent OFF, malformed fail closed.
+- 증거: RED3NEW 후 원격138 PASS/NEW0, 독립 source/Safety 검토 승인.
+- gate 변화: source만 수용. 기존 CI/signature/updater gate 유지, unsigned runtime 교체/push/장치 명령 없음.
+
+## 2026-10-12 · 742a72bed9 · verify: host acceptance and local Qwen
+
+- 변경: 실제 HOST 수용 결과와 수동 Qwen 스모크 증거를 기록하고 현재 수용 안내를 갱신했다.
+- 증거: 팀 관리자 preflight 13개 true / PASS_HOST_OFFLINE_ONLY. 기존 적재 digest의 로컬 Qwen 실제 strict JSON 응답 및 기존 Supervisor HOLD / UNRESOLVED_OBJECTION / calls=1 확인. `docs/validation/deliberation-host-admission-2026-10-12/local-qwen-smoke.md`.
+- gate 변화: 전용 호스트 OFFLINE 경계와 수동 모델 transport 확인. 운영 제공자 admission, 독립 모델 평가·실제 Pinky·FIELD는 미확인 유지. OpenCode CLI 수용은 병렬 작업으로 분리한다.
+
+## 2026-10-12 · 4ebcb80c86 · fix: pinned OpenCode CLI compatibility
+
+- 변경: OpenCode 1.18.35는 --pure로 고정 번역, 기존2.0.22는 유지, 다른 버전 거절. 호스트 주입에서 버전을 전달하며 생성 실패 때도 snapshot을 닫는다.
+- 증거: 병렬 작업 원격 48 passed, NEW 0, 독립 검토 blocker 없음. `docs/plans/2026-10-12-opencode-cli-admission.md`.
+- gate 변화: SOURCE 확인. 실제 sandbox CLI version/help와 최소 제공자 연결·token cap 검수는 후속 단계다. --pure를 도구/설정 격리 수용으로 해석하지 않는다.
+
+## 2026-10-12 · 4c47e3823e · D-679/D-681 조건부 검토와 모델 주도 종결 목표
+
+- 변경: 동일 사건의 Fleet 기준과 Qwen 의견 불일치를 제한된 GLM 검토로 연결하고 기존 정책과 cached 결과 교차 사용을 거부한다. 설치·실행 경계를 분리하고 모델 교체·확률 보정·자동 처리·최종 사람 인수·개선의 통합 목표를 기록했다.
+- 증거: 원격 통합 146 passed, exit 0, NEW 0; 마지막 통합 실행은 자원 하한 fallback 경고가 있어 성능 증거로 쓰지 않는다. docs/validation/deliberation-host-admission-2026-10-12/conditional-review.md.
+- gate 변화: SOURCE/원격 논리만 확인했다. 실제 Fleet 기준 선택 생산자·격리 SDK/모델 호출·독립 보정·자동 처리·배포·현장 수용은 미확인이다. Discord는 담당 세션 작업이다.
+
+## 2026-10-12 · 8709923045 · verify: GLM 응답 모델 결속과 독립 검토
+
+- 변경: upstream 모델 ID와 assistant 역할이 고정 요청과 다르면 결과 재작성 전에 거부한다.
+- 증거: 새 3개 RED 확인 후 통합 149 passed, exit 0, NEW 0; opencode_admission 독립 검토에서 blocker 해소. model-binding-green/run-1.txt. 자원 하한 fallback 경고는 유지되므로 운영 성능 증거가 아니다.
+- gate 변화: SOURCE/원격 검증만 확인. 실제 호출·영속 사용 표식·배포·자동 처리·독립 보정·현장 수용은 미확인 유지.
+
+
+## 2026-10-12 · 7ab44069a · gateway 구성 경로와 credential 값 구분
+
+- 변경: main 통합의 secret guard가 Path 상수 SECRET을 credential 값으로 오인해 CONFIG_PATH로 바꾸고 시험 호출자를 연결한다. 구성 파일 경로·job secret_path·읽기 권한·NOFOLLOW 검사는 유지한다. 스캐너 예외와 실제 비밀 값은 추가하지 않는다.
+- 증거: release boundary/gateway/opencode/relay/sandbox 원격 134 PASS, exit 0, known_failures NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-12--032529--fleet-pipeline-complete--04dc41/logs/gateway-guard-green/run-1.txt. pipeline_review가 호출자와 보안 동작 보존을 수용했다.
+- gate 변화: SOURCE/원격 회귀 근거만 추가한다. 배포·런타임 credential readback은 수행하지 않았다.
+
+## 2026-10-12 · 79febfdbe2 · D-681/D-684 판정 계약과 사건 관측 경계
+
+- 변경: v2 프로파일·판정 JSON·공통 요청·CLI/로컬 어댑터·독립 보정을 구현하고 모델 프로파일 전체 SHA에 보정을 고정했다. GLM 첫 호출의 영속 표식과 Pinky 전용 읽기/지속 예산 계약을 추가했다. 로컬 실행은 기본 미수용이다.
+- 증거: 통합 239 passed와 wheel/sdist·로컬 회귀 34 passed, exit 0, NEW 0. 두 실행은 자원 하한 fallback이며 지연·용량 수용이 아니다. 여유 호스트 component 145/82/94 passed는 범위 중복으로 합산하지 않는다. versioned-judgment.md에 근거를 기록했다.
+- 검토: v2 판정·CLI의 독립 검토에서 중요 blocker 없음. 로컬 격리 표식 blocker를 수정했으며 최종 통합 검사를 수행한다.
+- gate 변화: SOURCE/원격 논리·설치 패키지 증거. 실제 SDK/GLM·Qwen v2·독립 현장 보정·운영 루프·배포·현장 수용은 미확인이다. Discord 설정은 담당 세션 작업이다.
+
+## 2026-10-12 · 5572a09d5 · 운영 PC TLS 접속 안내와 계정 후속 검사
+
+- 변경: 인증서 이름·DNS·공개 CA 등록·Schannel 폐기 정보 오류를 분리하고 계정 재조회 절차를 안내했다.
+- 증거: account-tls-2026-10-12/result.md. 원격 계정/프로필 Chromium 포함 104 passed, exit 0, NEW 0. 실제 설치 이미지의 네트워크 없는 임시 DB 계정 수명주기 PASS; 실제 HTTPS 8개 응답 200, 이름 불일치/신뢰 CA 없는 연결 거부.
+- gate 변화: 실제 개인 계정 브라우저와 운영 PC 자동 DNS/완전한 폐기 상태는 미확인. 실물·현장 수용은 요청에 따라 제외했다. 운영 계정 비밀번호·개인 프로필은 변경하지 않았다.
+
+## 2026-10-12 · 5941920df7 · D-720 보호 상태 브로커 설치 준비
+- 변경: 별도 root-reviewed SHA source snapshot·전용 forced-command ingress/key/host pin·immutable backups·정확한 root-owned 파일 경계를 준비했다. GLM credential/spent marker는 복사·초기화하지 않는다.
+- 증거: pipeline_review scoped source 승인. source/model/structured Qwen conformance와 GLM 별도 status/billing/offline sandbox 증거가 실제 설치 gate다.
+- gate 변화: 검토 가능한 설치 소스만 승인. 관리자 실행·서명 Fleet 배포·런타임 왕복은 아직 미확인이다.
+
+## 2026-10-12 · a60550e41 · conversation broker 관리자 설치
+
+- 변경: 독립 평가 source·proof·receipt·공개키와 오프라인 wheel closure를 SHA로 결속하는 관리자 설치기를 추가한다. 기존 status/GLM 상태를 보존하고 정확한 두 SSH 명령만 전달한다. 설정·SSH 검증 실패는 이번 파일 변경을 원복한다.
+- 증거: 보호 경계·tamper·의존성 pin·계정 충돌·멱등·전체 설치 단계 실패/원복을 원격 시험했다. 관리자 실제 설치와 live Discord 수용은 별도다.
+- gate 변화: 없음. 설치 SOURCE와 시뮬레이션 증거이며 활성화·현장 수용은 주장하지 않는다.
+
+## 2026-10-12 · a5925d7ae · D-728 이전 턴 의미 평가 동결
+
+- 변경: 고정 평가를 38개로 확장하고 실제 이전 턴 형태의 입력 8개를 포함한다. 수용 문맥·CHAT·상태·미수용·UNKNOWN·철회·타인·지도 변경을 구분하고 순서·원문·전체 명령 인자 및 추론 소스 해시를 검증한다.
+- 증거: 보호 평가 입력·문맥·명령·순서 변조 거절을 포함한 원격 집중 검증 통과. 합성 의미 입력은 운영 실행 증거가 아니다.
+- gate 변화: 없음. 새 소스 고정 snapshot과 독립 실제 모델 38개 평가를 받기 전 기존 보호 브로커에 새 입력을 활성화하지 않는다.
+
+## 2026-10-12 · 7ead3df40 · 보호 conversation 버전의 검토된 교체
+
+- 변경: 이전 config와 고정 wrapper의 SHA256을 함께 검증한 경우에만 두 파일 교체를 허용한다. 의존성·모델 조회·상태 변경 전 거절하며 기존 원자 교체·백업·원복을 재사용한다.
+- 증거: 이전 버전 설치 뒤 새 버전 교체, 잘못된·누락된·단독 pin, 외부 wrapper, 동일 버전 재확인, 실패 시 이전 두 파일 원복을 원격 검증했다. 관련 82개 통과·NEW 0.
+- gate 변화: SOURCE만. 실제 관리자 교체·보호 설정 readback·Discord 수용은 별도다.
+
+## 2026-10-12 · d905c939b · ingress dispatcher 경로 접근 복구
+
+- 변경: 실제 SSH exit 126의 원인인 보호 broker 상위 디렉터리 접근 실패를 해소한다. dispatcher만 공개 root 소유 libexec 경로에 두고 이전 관리 key/sshd 경로의 정확한 바이트만 교체한다. 기존 보호 디렉터리·group·이전 dispatcher는 유지한다.
+- 증거: 원격 Linux 권한 재현, 관리 경로 이전·외부 파일 거부·원복과 ingress UID의 두 명령 및 추가 인자 거절 검증을 포함한 90개 통과·NEW 0.
+- gate 변화: SOURCE만. 관리자 복구 실행·현장 SSH 및 Discord 수용은 별도다.
+
+## 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리
+
+- 변경: 실제 진단에서 D-720 status wrapper/config가 모두 없음을 확인했다. 두 파일이 없을 때 status 정상 경로 시험만 생략하고 conversation 및 알 수 없는 명령·추가 인자 거절은 항상 검사한다. 기존 status는 보호 metadata와 HOLD를 검증하며 변경하지 않는다. 실패에는 제한된 경로·종료 코드·출력을 남긴다.
+- 증거: 선택 status 미설치 재현 RED 뒤, 미설치·기존 설치·원복·보호 경계 원격 91개 통과·NEW 0.
+- gate 변화: SOURCE만. 새 관리자 복구 및 실제 conversation 회신은 별도 확인한다.

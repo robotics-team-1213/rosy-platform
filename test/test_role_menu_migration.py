@@ -174,3 +174,23 @@ def test_console_surface_contains_operator_docking_actions():
     assert {"/api/v1/docking/status", "/api/v1/docking/docks", "/api/v1/docking/dock",
             "/api/v1/docking/undock", "/api/v1/docking/cancel"} <= set(
                 __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+
+
+def test_panel_module_folder_matches_surface():
+    """A panel file lives in the folder of the surface that mounts it."""
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    folder_surface = {
+        "console": "console",
+        "setup": "setup",
+        "host": "device",
+        "system": "device",
+    }
+    for panel in manifest["panels"]:
+        parts = Path(panel["module"]).parts
+        assert parts[0] == "panels", panel["id"]
+        folder = parts[1]
+        assert folder in folder_surface, panel["id"]
+        assert panel["surface"] == folder_surface[folder], panel["id"]
+    teleop = next(panel for panel in manifest["panels"] if panel["id"] == "console.teleop")
+    assert teleop["surface"] == "console"
+    assert teleop["module"] == "panels/console/teleop.js"

@@ -110,3 +110,67 @@ def test_rectified_preview_warps_only_the_served_copy_of_latest_frame():
     assert response.headers["X-Frame-Rectified"] == "true"
     assert corrected.shape[:2] == (128, 128)
     assert server.latest_frame("ceiling-north").jpeg == raw
+
+
+def _auto_server_with_reported_field(state="calibrated", corners=None):
+    image = np.zeros((120, 160, 3), dtype=np.uint8)
+    image[:, :80] = (10, 20, 230)
+    image[:, 80:] = (230, 20, 10)
+    ok, encoded = cv2.imencode(".jpg", image)
+    assert ok
+    raw = encoded.tobytes()
+    server = _server_with_frame(time.time())
+    server._sources["ceiling-north"].latest.jpeg = raw
+    if corners is not None:
+        server.report_field("ceiling-north", {
+            "version": "field-calib/1", "state": state, "reason": "ok",
+            "confidence": 0.9, "corners": [[16.0, 12.0]] * 4,
+            "corners_normalized": corners, "orientation": 0,
+        })
+    return server, raw
+
+
+def test_auto_preview_rectifies_with_the_worker_reported_quad():
+    server, raw = _auto_server_with_reported_field(
+        corners=[[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]])
+    token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north",
+                                        rectification={"mode": "auto"})
+
+    response = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+    corrected = cv2.imdecode(np.frombuffer(response.body, dtype=np.uint8), cv2.IMREAD_COLOR)
+
+    assert response.status_code == 200
+    assert response.headers["X-Frame-Rectified"] == "auto"
+    assert response.headers["X-Field-Calib"] == "calibrated"
+    # Automatic aspect follows the reported quad (128x96), unlike the manual test's forced 1:1.
+    assert corrected.shape[:2] == (96, 128)
+    assert server.latest_frame("ceiling-north").jpeg == raw
+
+
+def test_auto_preview_without_a_fresh_field_report_serves_the_raw_frame():
+    server, raw = _auto_server_with_reported_field(corners=None)
+    token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north",
+                                        rectification={"mode": "auto"})
+
+    response = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+
+    assert response.status_code == 200
+    assert response.body == raw
+    assert response.headers["X-Frame-Rectified"] == "false"
+    assert response.headers["X-Frame-State"] == "field-unavailable"
+
+
+def test_auto_preview_ignores_an_expired_field_report():
+    server, raw = _auto_server_with_reported_field(
+        corners=[[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]])
+    # Age the report past FIELD_REPORT_TTL_S: the worker stopped feeding detections.
+    server._sources["ceiling-north"].field = (
+        server._sources["ceiling-north"].field[0], time.monotonic() - 60.0)
+    token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north",
+                                        rectification={"mode": "auto"})
+
+    response = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+
+    assert response.status_code == 200
+    assert response.body == raw
+    assert response.headers["X-Frame-Rectified"] == "false"

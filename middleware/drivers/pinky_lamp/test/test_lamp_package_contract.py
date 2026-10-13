@@ -46,3 +46,17 @@ def test_the_state_pattern_helper_is_built_and_matches_d260():
     for pattern in ("booting", "ready", "failed", "caution", "test", "off"):
         assert f'"{pattern}"' in source, pattern
     assert "rclcpp" not in source and "SIGTERM" in source
+
+
+def test_the_recovery_patterns_are_amber_edges_and_listed_in_known_and_usage():
+    # D-546: hazard amber, 1.5 Hz = 333 ms on / 333 ms off; the quiet bridge breathes.
+    source = (ROOT / "src" / "lamp_pattern.c").read_text(encoding="utf-8")
+    recovering = source[source.index('strcmp(pattern, "recovering") == 0'):]
+    assert "(elapsed_ms % 667) < 333 ? rgb(DIM, DIM / 3, 0) : 0" in recovering.split("return 0;")[0]
+    assert "(elapsed_ms % 3000) / 3000.0" in source[source.index('"bridging") == 0'):]
+    known = source[source.index("static int known"):source.index("int main")]
+    usage = source[source.index("usage: lamp_pattern"):]
+    for name in ("recovering", "bridging", "identify_blue", "identify_amber"):
+        assert f'"{name}"' in known or name in known, name
+        assert name in usage.split("\n")[0], name
+

@@ -128,6 +128,7 @@
 - gate 변화: ARTIFACT HOLD 유지.
 - 결정: 기존 IDN-003 응답 사용.
 - 교훈: DDS 번호는 설치 신원에서 파생되므로 일반 설정 폼에서 임의 수정하면 안 된다.
+
 ## 2026-09-26 · uncommitted · feat(hmi): stabilize mobile /console topbar and capture current shell
 
 - 변경: 390px topbar를 브랜드/E-stop, 화면 전환, 역할/안내의 분리된 행으로 정렬한다. D-280 기준선에 현재 `/console` LOCAL 캡처 측정과 desktop no-scroll/act 밀도 HOLD를 기록한다.
@@ -233,6 +234,7 @@
 - 증거: 1366×900 visible Chromium에서 `/dashboard` 표시, 첫 Tab이 skip-link에 도달; page error 0, scroll width 1366. screenshot: X:\DevTemp\rosy-surface-d300-visible-dashboard.png.
 - gate 변화: SOURCE/LOCAL 유지. API는 test fixture mock이며 실물 장치 확인은 아니다.
 - 결정: D-300.
+
 ## 2026-09-27 · uncommitted · fix(ui): clarify role-screen spatial and procedure layouts
 
 - 변경: 카메라를 상태 열로 옮기고 지도 관측 영역의 잘림을 없앴다. 절차 화면은 패널 래퍼로 그룹을 구분하고 모바일 입력의 6px 넘침을 수정했다. 조작 탭은 선택된 하나만 Tab 순서에 남긴다.
@@ -353,34 +355,36 @@
 - 증거: 지정 브라우저 회귀 54 passed (240.87초). 최신 checkout에서 관리자 `/setup` 캡처를 1366×768 및 390×844로 다시 생성했다. `pageErrors=[]`, 두 화면 `overflowX=0`, 첫 페이지/API 응답 200. 캡처는 `X:\DevTemp\rosy-dashboard-browser-validation\administrator-setup-1366x768.png` 및 `administrator-setup-390x844.png`에 있다.
 - gate 변화: 최신 checkout 기준 SOURCE/LOCAL GO. 이는 fixture 기반 로컬 UI evidence다. ARTIFACT, 실제 장치 readback, 현장 수용은 별도 HOLD다.
 
-
 ## 2026-09-28 - uiux/mobile-acceptance - test: verify localization pending action state
 
 - Change: Added panel regression for capability polling during pending initial-pose and SLAM-start actions, including lock and duplicate-POST checks. Refreshed administrator `/setup` full-shell captures at 1366x768 and 390x844.
 - Evidence: Panel Chromium suite 14 passed. Role G2 5 passed; 60 cells, overflow 0, pageerror 0, E-stop visible 60/60, canceled confirmation POST 0. Screenshots and matrix JSON are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. `git diff --check` passed.
 - Gate: SOURCE/LOCAL browser regression and captures checked for `b3d8e6cd`. Actual pose/SLAM readback, physical E-stop, G3, D-153, D-255, DEVICE/FIELD remain HOLD.
 
-
 ## 2026-09-28 - uiux/device-security-feedback-evidence - fix: clear stale token list after mutation refresh failure
 
 - Change: Token list reload failures after successful token create/delete now use the shared unavailable handler, clearing and hiding the old inventory while keeping create/delete outcome and the one-time secret in separate status regions. Added regression for token polling, mutation refresh, safety polling, dirty form preservation, save locking, and CORE PUT response values.
 - Evidence: Focused security regression 1 passed; full panel Chromium suite 15 passed. Current-main G2 5 passed, 60 cells, overflow/pageerror 0, E-stop visible 60/60, confirmation-cancel POST 0. Admin `/device` captures at 1366x768 and 390x844 are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. Impeccable `[]`; `git diff --check` passed.
 - Gate: SOURCE/LOCAL follow-up verified. Actual Host Agent, physical safety readback/E-stop, G3 and broader D-153 DEVICE/FIELD remain HOLD.
+
 ## 2026-09-28 · uncommitted · fix(device): separate host capability and inventory readback
 
 - 변경: 관리자 `/device` 시스템 패널에서 CORE capability 요약과 상세 인벤토리 조회 상태를 따로 표시한다. 한 조회의 성공/실패가 다른 조회 상태를 덮지 않게 하고, capability·인벤토리·호스트 런타임·로봇 신원 조회가 실패하면 해당 영역의 이전 값을 지워 현재값으로 오인하지 않게 한다.
 - 정적 확인: 런타임·신원·capability·inventory GET 성공/실패 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀와 새 관리자 `/device` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 Host Agent 및 장치 readback은 별도다.
+
 ## 2026-09-28 · uncommitted · fix(console): keep mode request feedback visible
 
 - 변경: `/console` 운전 모드의 현재 readback, Navigation capability, 모드 변경 결과를 각각 표시한다. 1초 모드 폴링이 요청 접수/오류를 덮지 않으며 capability 조회 결과도 별도 영역에서 확인한다. 모드 요청 문구는 접수와 실제 현재 모드 readback을 구분한다.
 - 정적 확인: 상태·capability 폴링과 모드 POST의 화면 갱신 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 로봇의 실제 모드 전환은 별도다.
+
 ## 2026-09-28 · uncommitted · fix(console): separate teleop readiness and action feedback
 
 - 변경: `/console` 수동 운전에서 readiness 설명과 주행/정지 결과를 분리했다. state·capability·safety·commissioning 조회 실패 원인을 readiness 영역에 유지하고, 성공 readback이 복구되면 갱신한다. 상태 폴링이 2초 제한 정지·연결 끊김 정지·명령 전송 결과를 덮지 않는다.
 - 정적 확인: 홀드 시작/정지 및 네 상태 조회 성공·실패의 UI 갱신 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀와 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 장치 이동과 안전 readback은 별도다.
+
 ## 2026-09-28 · uncommitted · fix(console): fail closed on stale lane-follow state
 
 - 변경: `/console` 차선 추종에서 상태 조회 오류 시 이전 모드 정보를 지우고 시작·중지 조작을 잠근다. 현재 모드 readback, Navigation capability, 요청 결과를 나눠 폴링이 조작 결과를 덮지 않게 했다. 요청 접수는 실제 추종 시작/중지 readback과 구분한다.
@@ -392,6 +396,7 @@
 - 변경: `/console` 도킹 상태, 도크 목록, 명령 결과를 독립 표시한다. 도킹 상태 GET 실패 시 이전 상태를 지우고 명령을 잠근다. 요청 중에는 1초 readback 폴링이 버튼을 다시 활성화하지 않으며, 도크 목록 갱신은 사용자가 고른 위치를 유지한다.
 - 정적 확인: docking status/list/command의 pending·실패·복구 UI 경로를 검토하고 `git diff --check`, Impeccable detector를 실행한다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 도킹 장치 readback은 별도다.
+
 ## 2026-09-28 · uncommitted · fix(console): separate map readback and action outcomes
 
 - 변경: `/console` 지도에서 로봇 상태·Navigation·실행 모드 조회는 독립 readiness 상태로 표시하고, map-status는 지도 데이터 freshness만 담당한다. 상태 폴링 오류가 지도 조회 문구를 덮지 않는다. 초기 자세·주행 목표 요청의 접수/실패는 별도 action status에 남아 지도 주기 갱신에 의해 지워지지 않는다.
@@ -642,6 +647,7 @@
 - gate 변화: 없음.
 - 결정: D-371 Refinement(2026-09-30).
 - 교훈: 옛 /dashboard는 정지가 운용 뷰에만 있어 점검 뷰의 설정 목록에서 대화상자를 열면 정지가 화면에 없다(이번 변경 전부터). 대화상자는 정지를 inert로 만들지 않지만, 뷰 전환 탭은 열린 동안 막힌다 — Esc로 닫고 운용 뷰로 간다.
+
 ## 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
 
 - 변경: `index.html`·`surface.html`에 `<link rel="icon" type="image/svg+xml" href="/common/icons/robot-dashboard.svg">`를 더했다. 제목(`Rosy 로봇 — 대시보드`)은 이미 이름표와 같아 바꾸지 않았다.
@@ -649,7 +655,6 @@
 - gate 변화: 없음.
 - 결정: D-358 2·3항.
 - 교훈: 없음.
-
 
 ## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 
@@ -739,7 +744,6 @@
 - 증거: test_dashboard_package.py 2신규 (마커·스켈레톤).
 - gate 변화: 없음.
 
-
 ## 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리
 
 - 변경: console-detail.css의 var(--muted/--paper/--radius-1) → --ink-quiet/--ink-on-crit/--radius-control(존재하지 않는 토큰 참조였음). skeleton 펄스·액션 페이드 제거로 D-220 회복 — 기다림은 조용한 뮤트 대시, 숨김은 점프 컷(레거시 시험 핀 2건 갱신, 깨져 있던 디밍 계약 시험도 초록). overview·pose-evidence·operations·triage·telemetry·vision이 EVIDENCE_LABEL/evidenceAgeText로 말을 만든다. styleguide.css의 죽은 .demo-* 부품 재구현 삭제(견본은 실제 ui-* 요소).
@@ -757,7 +761,6 @@
 - 증거: 실제 브라우저 확대/초점·수신 대기·범례·모바일 overflow 3 passed; viewport/layout 브라우저 10 passed. 기존 camera capture 5 passed.
 - 한계: 저장된 테스트 영상/브라우저 검증과 로봇 실시간 배포는 별도. 전원이 꺼진 로봇에는 아직 반영하지 않음.
 - gate 변화: 없음. LOCAL 브라우저 증거 추가; DEVICE/FIELD 미승격.
-
 
 ## 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
 - 변경: 확대 카메라 높이를 100dvh로 수정해 모바일 주소창 변경과 D-359 높이 규칙을 반영.
@@ -794,14 +797,12 @@
 - gate 변화: 없음.
 - 미증명: 실기 텔레옵. 비전 신선도 판정은 바꾸지 않았다.
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 로그인 코드 표시는 4자리이며 기존 8자리 입력은 호환한다. endpoint/역할/명령 owner는 유지한다.
 - 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
-
 
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
@@ -833,6 +834,7 @@
 - 변경: 기존 카메라 품질 경고에 과노출 안내를 추가했다. JPEG 수신 상태와 차선 판정 가능 여부는 별도로 표시하며 원본 픽셀은 바꾸지 않는다.
 - 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
 - gate 변화: SOURCE/LOCAL. No device writes or motion.
+
 ## 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
 
 - 변경: `/setup` 5개·`/device` 7개 작업을 매니페스트 순서의 작업 선택기와 한 작업 영역으로 배치한다. 모든 허용 패널을 유지해 입력·결과를 보존하며, `beforeHide` 거부·오류·시간 초과는 현재 작업을 유지한다. 화면 종료는 진행 중 선택을 무효화하고 선택기를 잠근 뒤 제한 시간 안에 확인한다. 종료는 단일 실행이며 성공 때만 리스너·패널·폴링 scope를 닫는다. 운용 조작 그룹의 정지 확인은 유지한다.
@@ -943,3 +945,328 @@
 - 변경: compatibility shell은 app import 동안 inert로 보호하고, panel fixture의 store.state/dom.js와 G2 직접 action status 선택을 실제 인터페이스에 맞췄다. 카메라 fullscreen 시험은 같은 owned controls 조건의 bounded wait 2줄만 추가했다.
 - 증거: 초기화 보호 baseline/mutation RED 뒤 관련 5건·Dashboard 전체 79건 PASS. 실제 fullscreen 이벤트 지연 RED/수정 GREEN/복원 차단 RED와 정상 panel 전체 21건·NEW 0. 기존 정지 호출·피드백·identity·focus 단언을 유지했고 독립 리뷰 APPROVE.
 - gate 변화: 이 입력의 SOURCE/LOCAL 후속 증거. 전체 browser 727 입력은 314 passed/1 failed 원본이며 새 전체 PASS나 DEVICE 완료를 부여하지 않는다. `docs/validation/d427-source-migration/wave5-named-gate-coverage-2026-10-04.md` 참조.
+
+## 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+
+- Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
+- Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
+- Gate: Metadata correction only; existing physical and field gates are unchanged.
+## 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
+
+- 변경: 정상 /device 보안 절차와 기존 대시보드에 공용 수신 승인 컴포넌트를 연결한다. 요청 이름·4문자 확인값·역할·키와 공용 CA 확인값을 표시하고 명시 승인/거절·연결 기억·처리 결과를 제공한다. 세션/표면 lifetime이 끝나면 늦은 응답과 쓰기를 취소한다.
+- 증거: 실제 Chromium에서 공용 dialog와 승인 컴포넌트 3 PASS; 서버·저장소 통합 32 PASS. 브라우저 fixture는 실제 상대 화면이나 LAN TLS 수용이 아니다. 공용 tokens/components와 같은 출처 API·CSP를 사용한다.
+- gate 변화: 이 컴포넌트 SOURCE/LOCAL 증거. 기기 승인은 자동 조종·정지 해제·mode 변경을 시작하지 않는다. 실제 앱과 로봇 화면의 최초 승인·오프라인 재연결은 별도 확인한다.
+
+## 2026-10-05 · uncommitted · fix(robot): shared receiver consent touch target
+
+- Change: Wrap the existing remember checkbox in label.ui-check so the common component supplies its accessible touch area. Approval requests, explicit consent and control authority are unchanged.
+- Evidence: The actual shared-controls guard failed before the class and passed afterwards. Real Chromium consent/cancel/owner-loss tests and integrated D-368 stream suites passed: 20 tests, 13.50 seconds. This is SOURCE/LOCAL evidence, not device pairing acceptance.
+- gate 변화: SOURCE/LOCAL follow-up only. Receiver consent and control authority remain unchanged; actual device pairing is separate.
+
+## 2026-10-05 · uncommitted · fix(ui): 연결 승인 공용 속성 계약 복구
+
+- 변경: 연결 기억 checkbox label에 ui-check를 지정하고 승인/거절 버튼 kind를 동등한 명시 분기로 쓴다. 기능·권한·화면 구성은 유지한다.
+- 증거: 깨끗한 main의 동일 peer-approval.js에서 발생한 공용 guard 두 실패의 원인이다. 시작점 영향 검증에 포함한 공용 guard와 기존 승인 브라우저 회귀를 포함해 149 passed, known_failures 신규 0.
+- gate 변화: SOURCE/LOCAL 계약 복구. 장치 승인·UI/UX 개편 수용 주장 없음.
+
+## 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
+
+- 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
+- 검증: 실제 Chromium fixture 1366×768·390×844에서 작업 순서와 라벨을 확인했다. 원본 상태·권한·확인·요청 중 잠금·암호 지우기와 API는 유지한다. 관련 브라우저 및 공용 아이콘·자산·토큰 계약 검증은 커밋 전 실행한다.
+- gate 변화: 없음. 화면 SOURCE/LOCAL 보완과 관련 검사 85 PASS이며 실제 네트워크 설정 변경·네이티브 페어링·기기 배포·현장 수용은 이 증거로 통과 처리하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(ui): Wi-Fi 라벨 변수의 비밀값 검사 오인 해소
+
+- 변경: 암호 값이 아닌 라벨 DOM 노드의 이름을 accessLabel로 명확하게 한다. 비밀값 검사 규칙·표시·DOM 구조·동작은 유지한다.
+- 증거: 영향 검사에서 해당 라벨 대입을 credential로 보고한 실패를 확인했다. 비밀값 검사와 관련 동작 검사를 다시 실행한다.
+- gate 변화: 없음. SOURCE 검사 보완이며 실제 기기 수용은 별도다.
+
+## 2026-10-05 · uncommitted · fix(dashboard): 차선 추종 시작 조건을 구동 준비에 맞춤
+
+- 변경: D-344 MOVE 계약에 맞춰 Nav2 대신 teleop와 runtime.drive ready를 읽는다. OFF 정지와 확인 대화상자는 유지한다.
+- 증거: motor ready/Nav2 absent 회귀의 red→green, 독립 브라우저 3 PASS와 패널/API 36 PASS. 실제 9dfk 원격 수동 직진과 keeper 관측은 docs/validation/line-remote-2026-10-05/result.md에 기록한다.
+- gate 변화: SOURCE 수정과 장치 수동 직진·keeper 관측 확인. 자동 차선 주행은 NOT_RUN이며 FIELD 수용은 보류한다.
+
+## 2026-10-05 · uncommitted · uiux: drop the compatibility link from the default entry
+
+- 변경: 기본 입구는 로그인과 역할 화면만 안내한다. #compatibility 종합 화면은 그대로 연다.
+- 증거: 호스트 계약 100 passed, known_failures 0 new. 브라우저·장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · uiux: meter and map cursor stay in the stylesheet
+
+- 변경: 게이지 폭은 data-meter 속성이고, 목표를 둘 수 있는 지도 캔버스는 data-goal-cursor로 십자 커서를 낸다.
+- 증거: 호스트 계약 178 passed, 72 skipped, known_failures 0 new. Chromium에서 40% 게이지가 80px이다. 브라우저·장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(dashboard): 개발 모드 로봇은 코드 없는 입장, 관리자는 임시 SSH 비밀번호를 화면에서 확인
+
+- 변경: 개발 연결 모드(D-432) 로봇을 열면 로그인 서랍에 코드 없이 1시간 운전자 세션을 받는 '개발 연결로 계속'을 보여준다(프로덕션 paired 모드로선 누르는 경로가 없다). 대시보드 보안 패널에 임시 SSH 비밀번호 구역을 추가해 administrator가 분(1~60)을 정해 발급·표시·회수한다(응답 No-Store, 모듈이 저장하지 않음). 엔트리 경로는 dashboard-entry.js, 호환 경로는 app.js가 같은 두 기능을 보여준다.
+- 증거: 브라우저 신규 시험 test_development_entry_logs_in_without_a_code — 코드 폼 병행 표시, 한 번의 POST로 세션, 목적지 영역 전환. test_dashboard_browser 전체 79 passed 1 known. react중 노 --check 3 파일 통과.
+- gate 변화: SOURCE/LOCAL. 실기(8kcn, 모드 학장 driver) 검증은 별도.
+
+## 2026-10-06 · uncommitted · uiux: 모바일 운용 조작을 관측보다 먼저 배치
+
+- 변경: `uiux/rosy-operate-quality`에서 64rem 미만 운용 화면의 배너 다음에 조작, 로봇 상태·카메라, 지도를 순서대로 둔다. 데스크톱의 감지·관측·조작 3영역과 상단 비상 정지는 유지한다. 역할 G2 시험의 현재 폴더 import 경로를 바로잡고 캡처 위치를 환경 변수로 지정할 수 있게 했다.
+- 증거: 390×844 조작 위치가 수정 전 y=1013에서 수정 후 y=149로 올라갔다. 레이아웃·헤더 예산 브라우저 11 passed, 실제 FastAPI fixture의 운전 모드 피드백 1 passed, 각각 known_failures 0 new. 캡처는 X: 세션 evidence에 둔다.
+- gate 변화: 없음. 이는 모바일 조작 발견성의 LOCAL 개선이며 화면 전체의 현대성·가독성, G3 사람 평가, 실기 수용은 여전히 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 영역 너비 통일
+
+- 변경: 데스크톱 운용 화면의 감지·관측·조작 세 영역을 같은 폭으로 맞췄다. 모바일은 각 영역이 전체 가용 폭을 사용한다.
+- 증거: 레이아웃·뷰포트 브라우저 11 passed, 실제 FastAPI fixture 운전 모드 캡처 1 passed, 동일 너비 단언 1 passed, known_failures 0 new. 1366×768에서 조작 잘림과 문서 스크롤 없음.
+- gate 변화: LOCAL UI 증거만 추가. D-153 G3 사람 평가 및 장치·현장 수용은 미완료.
+
+## 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 절차 60셀 현재 캡처
+
+- 변경: 작업 패널을 너비 컨테이너로 만들어 390px에서 입력·행동이 같은 폭을 쓴다. 역할 절차 G2 시험이 닫힌 고급 네트워크 작업을 실제 UI처럼 연 뒤 지연·연결 끊김·결측에서 비활성 버튼을 확인하고 작업 패널 6장을 별도로 저장한다.
+- 증거: 현재 FastAPI/Chromium 60셀 1 passed, 반응형·셸 브라우저 18 passed, 390px 웨이포인트 입력·행동 너비 차 ≤1px, 페이지 오류·가로 넘침 0, 확인 취소 POST 0, known_failures 0 NEW, Impeccable 검사 새 경고 0. 이미지 66장과 matrix.json을 2026-10-06 검증 회차에 보존했다.
+- gate 변화: LOCAL G2 증거만 추가. 절차의 현장 사용성 G3 및 실제 Host Agent·장치 readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 첫 기동 셀 확인
+
+- 변경: `/setup`·`/device` 첫 기동 6셀의 현재 캡처를 보존하고, G2 비상 정지 단언에 렌더된 너비 확인을 더했다. 숨겨진 0폭 요소가 화면 안 좌표로 오판되지 않는다.
+- 증거: FastAPI/Chromium 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed, CORE 증거 7 passed, `known_failures.py` 모두 0 NEW. 첫 기동 1366/390px의 비상 정지·상태 대기·가로 넘침 0을 캡처했다.
+- gate 변화: LOCAL G1/G2 증거. G3 현장 작업 독회와 실제 장치 readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 확인창 실행 이름과 열린 상태 캡처
+
+- 변경: 작업 준비의 SLAM 세 행동과 관리자 호스트 작업 확인 버튼에 선택한 행동 이름을 표시한다. 절차 G2는 확인창이 열린 1366/390px 6장을 기록하고 취소 뒤 쓰기 0을 유지한다.
+- 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW, 페이지 오류·가로 넘침 0. 맵핑·롤백 모바일 확인창에서 비상 정지가 보인다.
+- gate 변화: LOCAL 확인·취소 증거. 실제 장치 실행과 G3 전체 판정은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용자 웨이포인트 작업 왕복 확인
+
+- 변경: 390px `/setup`에서 운용자 이름 입력→FastAPI 201 저장→목록 readback까지 한 작업을 브라우저 시험으로 재생했다.
+- 증거: 1 passed, `known_failures.py` 0 NEW, 저장 POST 한 번, 입력 초기화·화면 목록·비상 정지 확인, 페이지 오류·가로 넘침 0. LOCAL 캡처를 UI/UX 회차에 보존했다.
+- gate 변화: G3 표면 질문의 한 작업 근거. 나머지 절차·실물 위치 정확도·현장 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 재생
+
+- 변경: HTTP 오류의 영문 전용 상세를 운용자용 한국어 상태·다음 확인으로 바꾸고, 한국어 서버 사유는 유지한다. 차선 추종 시험 fixture에 실제 구동 준비 필드를 넣고 닫힌 고급 네트워크 작업은 UI로 열어 검증한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선/도킹·지도 근거 1366/390px 캡처와 4개 매트릭스를 보존했다. 해당 브라우저 4 passed, 장비 disclosure 2 passed, 운용자 어휘 18 passed, `known_failures.py` 0 NEW.
+- gate 변화: 운용 G3 부분 근거. 실제 로봇 readback·사용자 독회와 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 320px 역할 셸 동일 폭
+
+- 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
+
+- 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 기본·호환 경로 브라우저 2 passed. 이유 제거 변이에서 호환 경로 실패, 복원 뒤 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 현재 트리의 공유 UI 계약 실패 해소에 기여. 실제 장치·현장 G2/G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
+
+- 변경: 운용 화면의 로봇 상태 목록이 첫 CORE 상태를 받기 전 비어 보이지 않도록 「로봇 상태를 확인하는 중입니다」를 표시한다. 수신·오류 때 기존 값/오류로 교체한다.
+- 증거: 독립 패널에서 대기·수신·오류 전환과 390px 전폭 메시지 1 passed, 역할 셸 320/390px 2 passed, 공용 반응형 9 passed, 공용 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 대기·오류 패널 캡처는 X: `captures/robot-overview-panel/`이다.
+- gate 변화: 로봇 운용 LOCAL 첫 상태 부분 근거. 실제 CORE 스트림·장치와 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
+
+- 변경: 대기·오류 메시지를 `<dl>` 밖의 `ui-status`로 옮기고, 수신된 라벨·값이 있을 때만 `<dl>`을 보인다. 오류 때 오래된 보정 칩도 제거한다.
+- 증거: 390px 대기·오류 캡처 X: `captures/robot-overview-semantic/`; 전환·폭·`role=status` 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 의미 구조와 폭 근거 보정. 실제 CORE·장치 readback 및 G3는 HOLD다.
+
+## 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
+
+- 변경: wide 고정 프레임에서 감지·지도·조작 세 열에 같은 스크롤바 자리를 예약한다. 콘솔 셸 시험이 실제 패널 폭을 검사한다.
+- 증거: `docs/validation/uiux-robot-column-width-2026-10-07/result.md`; 1280px 네 패널 폭 차이 15.01→0.01px, 역할 셸 브라우저 9 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 동등 폭 G2 부분 근거. 전체 상태·실물·운영자 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 중심 운용 화면
+
+- 변경: 모바일 지도 → 조작 → 감지 순서, 지도 경로·로봇 마커 가독성, 최신 상태 기반 주행·위치 추정·SLAM 기능 표기. 지도 조작 제한 사유는 지도 아래에 둔다.
+- 증거: [검토 기록](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-stage/`의 1366×768·390×844 LOCAL 캡처. 지도·레이아웃 11 passed, 최종 뷰포트·지도 3 passed, 각 `known_failures.py` 0 NEW. 넓은 회귀에서 남은 차선 추종 1건은 변경 전 공유 main에서도 동일하게 실패.
+- gate 변화: 로봇 운용 LOCAL 지도 가독성 근거 추가. 현재 이미지·실기 경로·사용자 G3 및 전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 운용 폭별 문서·초점 순서 일치
+
+- 변경: 모바일 지도→조작→감지, 데스크톱 감지→지도→조작의 보이는 순서에 맞춰 셸 슬롯 DOM 순서를 동기화한다. 폭 전환 때 패널 안 키보드 초점을 복원한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). 실제 CORE fixture의 1366×768·390×844 캡처와 320×568 오류 캡처, 순서·초점 3 passed, 모바일 뷰포트 2 passed. 추가 레이아웃 13 passed/2 failed는 공유 main에서 같은 `/setup` 시험 2건 실패로 재현.
+- gate 변화: LOCAL 접근 순서 부분 근거. 실물·G3·전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 위치 추정 불확실 시 목표·표시 정합성
+
+- 변경: 지도 목표는 최신 pose와 `LOCALIZED/map` 확인 뒤에만 허용한다. 초기 위치 설정은 복구 조작으로 유지한다. `SUSPECT`에서는 계획 경로·현재 좌표를 숨기고 지도와 로봇 요약에 위치 확인 필요를 표시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/goal-gate/navigation-stage/`의 정상 2폭·SUSPECT 모바일 캡처. 브라우저·지도 3 passed, 추가 요약·오류·패키지 회귀 21 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태 전환과 목표 버튼 근거 추가. 장치 pose·주행 readback, 전체 G2와 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 표시 지도 ID와 로봇 ID 대조
+
+- 변경: 지도와 로봇의 `map_id`가 충돌하면 두 좌표 버튼을 막고 불일치를 알린다. 다른 지도 위에 경로·로봇·목표 마커를 겹치지 않으며 ID 일치 뒤 복구한다. 기존 `/dashboard`도 공용 지도 비교를 쓴다. CORE 점유 지도는 수신 ID를 격자와 함께 저장한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/map-identity/navigation-stage/`의 두 폭 정상·불일치 캡처. 관련 Chromium·패키지 21 passed, CORE 지도 스냅숏 11 passed, 각 `known_failures.py` 0 NEW. 추가 패널 묶음 21 passed/1 failed는 공유 main에서도 재현한 차선 추종 확인 시험이다.
+- gate 변화: LOCAL 지도 정합성 부분 근거. 서버 경로 시각·목표 식별, 실물 readback, 전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 수신 근거 표시
+
+- 변경: 지도 위 계획 경로를 CORE 수신 나이·경로 지도 ID·좌표계가 확인될 때만 그린다. HUD는 마지막 수신 나이를 표시하고 근거가 없거나 다른 지도·좌표계이면 이유를 표시한다. 주행 상태 전환 시 이전 선을 지우고 늦은 HTTP 응답은 무시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/path-provenance/navigation-stage/`의 두 폭 정상·경로 ID 불일치와 모바일 odom 캡처. CORE 지도·브리지 41 passed, 화면 브라우저·패키지 21 passed.
+- gate 변화: LOCAL 경로 출처·레이아웃 부분 근거. 현재 목표 식별과 실물·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
+
+- 변경: 지도 HUD는 capability와 CORE 맵핑 세션을 구분하고 조회 실패를 확인 불가로 남긴다. 상태 네 항목을 자동 줄바꿈으로 배치해 지도 상단 가림을 줄였다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/slam-session-final/navigation-stage/`의 1366×768·390×844 세션 활성/대기/조회 실패 캡처. Chromium 1 passed, 계약·패키지 24 passed, `impeccable detect` `[]`.
+- gate 변화: LOCAL 부분 근거. 장치·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 끝 방향 표시
+
+- 변경: 지도에 마지막 수신 계획 경로의 끝 방향 화살표를 그린다. 좌표·지도 근거가 없으면 경로와 함께 숨기며 현재 목표나 실제 주행 방향으로 주장하지 않는다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/route-direction/navigation-stage/`의 모바일·데스크톱 및 불일치 캡처. 브라우저 2 passed, 새 실패 0, `impeccable detect` `[]`.
+- gate 변화: LOCAL 경로 방향 가독성 근거. 실제 추종과 장치·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 HUD의 지연·단절 증거 분리
+
+- 변경: 내비게이션·위치 추정의 지연 나이를 표시하고 단절·정보 없음을 구분한다. 주행 상태가 확인되지 않으면 마지막 계획 경로 선을 숨기고 이유를 우선 표시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-evidence/navigation-stage/`의 2폭×3상태 캡처. Chromium 1 passed, 지도·패키지 20 passed, 새 실패 0.
+- gate 변화: LOCAL G2 일부 셀 보강. 실물·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
+
+- 변경: SAFE_STOP을 지도 HUD·로봇 카드에 우선 표시하고 목표 버튼과 계획 경로를 막는다. 초기 위치 설정은 기존 별도 조건을 유지한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: 같은 세션 `evidence/navigation-evidence/navigation-stage/`의 1366×768·390×844 안전 정지 캡처. Chromium 1 passed, 패키지 19 passed, 새 실패 0. 확장 회귀 묶음은 멈춰 중단했고 통과로 세지 않는다.
+- gate 변화: LOCAL G2 안전 정지 셀 보강. 장치·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
+
+- 변경: 최신 `NAVIGATING` 보고와 `SUSPECT` 위치 추정이 겹치면 HUD에 `주행 중 보고 · 위치 확인 필요`를 함께 보여 준다. 목표와 계획 경로 차단은 유지한다.
+- 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 두 폭 캡처와 `logs/navigation-status-honesty-final.txt` (Chromium 1 passed, 신규 실패 0, 매트릭스 브라우저 오류 0).
+- gate 변화: LOCAL 상태 해석 보강. 실물 이동·장치·현장 수용은 HOLD.
+
+## 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
+
+- 변경: API Ref 최신 v1.145와 맵핑 세션·경로 근거를 v1.146으로 결합했다. CORE API·서비스 로그 양쪽과 생성 목차를 보존했다.
+- 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 post-main-merge 두 폭 캡처, 계약·지도·패키지 76 passed, Chromium 1 passed, 신규 실패 0, lint 0 error.
+- gate 변화: LOCAL 결합 후보. 실제 로봇·운영자 G3·FIELD는 HOLD.
+
+## 2026-10-08 · 5ee382a0f · API Ref v1.147 충돌 정리
+
+- 변경: 공유 main의 Fleet convoy v1.146 행을 보존하고 로봇 맵핑 세션·경로 근거 행을 v1.147로 옮겼다. `app.py` 설명·버전 핀을 함께 맞췄다.
+- 증거: [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). v1.147 계약 시험 5 passed, known_failures 0 NEW (`logs/v147-contract.txt`). 이전 v1.146 결합 테스트는 버전 표기 전의 근거로 남긴다.
+- gate 변화: SOURCE 계약 버전 재조정. 장치·현장 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 레이어를 지도 아래로 배치
+
+- 변경: 모바일 지도 작업 버튼은 지도 위에 유지하고 레이어 선택을 지도 아래로 옮겼다. 데스크톱 지도 높이 그리드는 새 순서에 맞췄다.
+- 증거: [첫 화면 배치 검증](../../../docs/validation/uiux-robot-map-first-2026-10-08/result.md). 390×844·1366×768 Chromium 캡처, 지도 상태 시험 1 passed, 패키지 19 passed, 새 실패 0.
+- gate 변화: 해당 LOCAL 배치 셀 확인. 전체 G2·G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 320px 지도와 상태 가독성
+
+- 변경: 320px 지도 작업 버튼을 한 줄에 두고 상태 HUD를 지도 아래로 배치해 로봇·경로 가림을 없앴다. 더 넓은 폭의 HUD 위치는 유지했다.
+- 증거: [320px 지도 검증](../../../docs/validation/uiux-robot-map-320-2026-10-08/result.md). 세 폭 Chromium 캡처, 지도 시험 1 passed, 패키지 19 passed, 새 실패 0.
+- gate 변화: 320px LOCAL 배치 셀 추가 확인. 전체 G2·G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 격자와 경로의 실제 축척 보존
+
+- 변경: 지도를 캔버스에 같은 축척으로 맞추고 남는 여백의 좌표 선택·전송을 막았다. 점유·비용·경로·로봇 마커가 같은 변환을 쓴다.
+- 증거: [지도 축척 검증](../../../docs/validation/uiux-robot-map-metric-2026-10-08/result.md). 320×568·390×844·1366×768 Chromium 캡처, 지도 좌표 시험 2 passed와 Console 세 폭 상태 시험 1 passed.
+- gate 변화: LOCAL 축척 셀 확인. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 화면의 차선 추종 구동 관문 일치
+
+- 변경: `/dashboard`의 추종 선택과 확인창 재검사를 Nav2 목표 기능 대신 구동 준비·운용자 권한·비상 정지 상태에 맞췄다. `/console` 차선 추종과 D-344 보강 7항의 구분을 따른다.
+- 증거: [차선 추종 구동 조건 검증](../../../docs/validation/uiux-line-follow-gate-2026-10-08/result.md). 두 폭 전후 캡처, 새 시험 2 passed, 관련 회귀 5 passed·0 NEW. 별도 옛 인증·지도 시험은 기존 main에서도 동일하게 실패한다.
+- gate 변화: 해당 LOCAL 흐름 확인. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · test(robot): 인증·지도 회귀에 유효한 합성 지도
+
+- 변경: `/dashboard`의 인증 교체·페이지 이탈 시험에 10×10 격자 지도를 제공한다. 비어 있던 `/api/v1/map` 응답 때문에 현재 지도 검증이 목표 확인창을 올바르게 막던 시험 불일치를 해소했다. 제품 동작은 변경하지 않았다.
+- 증거: [인증·지도 확인창 회귀 복구](../../../docs/validation/uiux-compat-auth-map-fixture-2026-10-08/result.md). 390×844·1366×768 확인창 캡처, 대상 2 passed, 지도 인접 묶음 5 passed, 0 NEW.
+- gate 변화: LOCAL 회귀 근거 복구. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
+
+- 변경: `/dashboard`의 주행 목표·로봇 마커·경로 표시를 위치 추정, 증거 freshness, 안전 정지에 맞춰 `/console`과 일치시켰다. 초기 자세 설정은 위치 회복을 위해 유지한다.
+- 증거: [기존 Dashboard 지도 위치 추정 검증](../../../docs/validation/uiux-legacy-map-localization-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 24 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 조작 열 차단 이유 적합성
+
+- 변경: `/dashboard`의 저속 직접 제어 버튼이 `NAVIGATION`에서 차단 이유를 표시할 때 1366px 조작 열 밖으로 넘치던 문제를 해결했다. 차단 이유가 있는 상태만 2열로 배치한다.
+- 증거: [조작 열 적합성 검증](../../../docs/validation/uiux-dashboard-act-fit-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 28 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 ARTIFACT/DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): Console 지도 미수신 상태 정합성
+
+- 변경: Console 지도에 `runtime.maps` 기능 근거를 연결하고, 지도가 아직 없을 때 설정 의무를 단정하지 않는 안내로 고쳤다.
+- 증거: [실제 CORE 지도 미수신 화면](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 390×844·1366×768 캡처, 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 시나리오 근거 추가. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 현재 내비게이션 지도 상태 재검증과 좌표 행 정리
+
+- 변경: 지도 G2 fixture의 `runtime.maps`를 제공하는 지도와 일치시켜 지연·단절 캡처 중 지도가 사라지지 않게 했다. Console의 선택 좌표 행은 실제 선택 동안만 보이며 Esc 해제 뒤 숨긴다.
+- 증거: [현재 Console 내비게이션 화면 재검증](../../../docs/validation/uiux-nav-current-g2-2026-10-09/result.md). 320·390·1366px, 정상 등 15행 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 지도 상태 매트릭스 근거 보강. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
+
+- 변경: Console과 기존 Dashboard에서 맵핑 세션 수락을 실제 SLAM 실행·지도 갱신과 구별했다. 데스크톱 현장 설정 카드가 같은 행 높이로 늘어나지 않게 했다.
+- 증거: [맵핑 세션 화면 검증](../../../docs/validation/uiux-robot-slam-truth-2026-10-09/result.md). 320·390·1366px Console, 390·1366px Dashboard 캡처; 관련 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 표시 근거 보강. 설치 이미지·실제 SLAM·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
+
+- 변경: 지도 데이터가 없을 때 현재 지도를 볼 수 있다고 단정하지 않도록 Robot Console의 비하드웨어 모드 안내를 바로잡았다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 390·2000px 실제 CORE 자산 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 빈 지도 설명 근거 보강. 지도·SLAM 실제 실행과 DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
+- 변경: 로그인 전 렌더가 개발 연결 버튼을 무조건 드러내던 동작을 고쳤다. CORE의 `/api/v1/auth/connection`이 `development`를 반환할 때만 기존 조회 경로가 버튼을 연다.
+- 증거: 모델 PC Chromium에서 paired 회귀 시험 수정 전 1 failed, 수정 후 paired·development·호환 경로 3 passed. 실기기 설치본은 별도 배포가 필요하다.
+- gate 변화: SOURCE UI 수정. 로봇 설치본·브라우저 신뢰 저장소·DEVICE/FIELD는 미확인.
+
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+
+- 변경: 마지막 수신 계획을 화살표 없는 점선으로 그리고 경과 시간과 현재 목표 일치 미확인을 Console에 보인다. 좁은 화면에서는 상태 문구를 줄바꿈한다.
+- 증거: [마지막 계획 경로 화면](../../../docs/validation/uiux-robot-last-plan-2026-10-09/result.md). 320·390·1366px CORE Console 캡처; 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 계획 경로 표시 근거 보강. 현재 목표 연동·실제 추종, 설치본·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
+- 변경: 기체 ID의 일회성 몸체 대조를 위해 기존 CORE host/hardware/test 램프 자가 시험을 설치·정비 패널에 연결했다. 관리자와 장치 상태를 확인한 뒤 요청 ID가 같은 장치 결과만 표시하고, 완료를 물리 신원 확인으로 표현하지 않는다.
+- 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
+- gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.
+
+## 2026-10-10 · uncommitted · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
+
+- 변경: Console 차선 추종 패널이 `GET /api/v1/line-follow`의 `advice`(D-525/D-551)를 "가상" 주황 점선 칩으로 보인다. 등 점과 함께 글자로 녹색/황색/적색, 남은 초·녹색까지 초(정확하지 않으면 ≥), 정지선까지 거리, "통과 허가는 관제 authority(통행권)" 문구를 쓴다. CORE가 준 `expires_in_s`가 지나거나 상태 읽기가 실패하면 "신호 정보 없음"이고 지난 녹색을 남기지 않는다. API 변화 없음.
+- 증거: `test/test_line_signal_advice_browser.py`(문구·점선 테두리·만료·읽기 실패·모르는 등).
+- gate 변화: SOURCE 표시만(J3). 로봇 얼굴/LCD 한 줄은 face-inputs 전달이 필요해 이번에 하지 않았다. 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
+
+- Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
+- Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
+- Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+
+- 변경: 공용 버튼 inset 소비와 갤러리 제목/접힘 행을 연결하고 의미 기반 readout·현재 절차 fixture를 정리했다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
+- 증거: 통합 32860ffe1의 원격 토큰/규격/반응형 104 passed, X:/DevTemp/ui-role-static-final/run-1.txt. Robot 최종 browser는 통합 검증에 연결한다.
+- gate 변화: SOURCE/native compile 또는 원격 계약 근거만. 설치본·DEVICE·FIELD는 별도 확인한다.
+
+## 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+
+- 변경: 접속 권한의 주어를 명시하고 일시적인 화면 구성 읽기 실패에 키보드 재시도를 제공한다. 기존 패널과 비상 정지 권한을 유지한다.
+- 검증: 관련 브라우저 회귀를 추가했다. 원격 시험 PC 기본 주소의 자원 probe는 모두 연결되지 않았다. 커밋된 HEAD의 원격 재시도와 종료 결과를 별도 기록한다.
+- gate 변화: SOURCE 변경만 있으며 브라우저 캡처·실제 설치 화면·DEVICE·FIELD는 확인하지 못했다. 착지·push·배포하지 않았다.
+
+## 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+
+- 변경: 기존 공용 신선도 판정과 글자 크기 소비로 상태 근거와 좁은 머리의 읽힘을 보완했다. 오래된 토큰 정리는 잘못된 최근 접속 자료에도 유지한다.
+- 증거: 원격 Chromium 결합 회귀 039bbbffa 176 passed, 신선도·최근 접속 후속 e01abed51 27 passed, 전체 Robot 캡처 ab2f331a4 3 passed, 겹침·잘림 회귀 432e39895 8 passed, 입구 권한 한 줄 회귀 855e5b46a 3 passed. 각 종료 로그의 known_failures는 0 new/0 known이다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--020319--robot-pilot-ux--7d7d85/logs/ 아래 browser, captures, robot-captures, visual-final, entry-final에 있다.
+- 검토: 원격 대역 CORE의 Pilot 목록 없음/읽기 실패 4뷰포트 8장과 Robot 입구·운용·작업 준비·설치 정비 320/390 캡처 8장을 받았다. Pilot 320 실패/2000 빈 상태와 Robot 네 화면 320을 직접 검토했다. 권한 글자 잘림과 상태·설명 혼합을 발견해 수정하고 다시 캡처했다.
+- gate 변화: SOURCE와 원격 Chromium 근거만 추가했다. 노트북 pytest·로컬 browser·착지·push·배포·실제 설치 화면 확인은 하지 않았다. DEVICE/FIELD와 실제 전체 UI 수용은 이 증거로 승격하지 않는다.

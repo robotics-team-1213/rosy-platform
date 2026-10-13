@@ -1,0 +1,7 @@
+# Fleet map readability on compact screens — LOCAL
+
+The D-493 map-first console was replayed with fixture API responses at 1920×1080, 390×844, and 320×568. The nine states were fresh, delayed, disconnected, safety unavailable, empty roster, first response pending, state error, SAFE_STOP, and viewer role. Before the change, all 27 cells had no page errors or horizontal overflow, but the 320px map's 400px backing raster was reduced into a roughly 237px display box. Its map labels were difficult to read. The regression check failed at a backing/display ratio of 1.689.
+
+The occupancy canvas now chooses its backing scale from the displayed box and device pixel ratio. The same 27 cells passed after the change: no page errors or horizontal overflow, D-493's desktop 3:2 map/right-column ratio, equal map/roster panel widths on phones, visible emergency stop, expected state text, blocked goals for unavailable/stopped/viewer states, and no desktop vertical overflow. The 320px capture shows readable map labels and distance chips. Focused browser and D-493 checks passed 16/16 with `known_failures.py` reporting 0 NEW.
+
+Original captures, JSON measurements, red/green checks, and validator output are under `X:/DevTemp/projects/rosy-platform/2026-10-07--fleet-g2-d493-refresh/`; the final 27 images are in `raster-after/`. These are synthetic LOCAL states. Site installation, real camera/robot readback, the remaining G2 transitions, and the user's G3 operator walkthrough remain HOLD.

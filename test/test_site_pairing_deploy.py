@@ -44,7 +44,8 @@ def test_base_compose_has_no_pairing_so_default_behaviour_is_unchanged(base):
 
 
 def test_overlay_only_touches_fleet_and_vision(overlay):
-    assert set(overlay) == {"services", "secrets"}
+    assert set(overlay) == {"services", "secrets", "x-rosy-site"}
+    assert overlay["x-rosy-site"] == {"camera_peer_profile": "rosy.camera-peer/1"}
     assert set(overlay["services"]) == {"fleet", "vision"}
 
 
@@ -73,7 +74,7 @@ def test_fleet_enables_pairing_with_the_site_ca_and_tls_host(overlay):
 
 def test_vision_syncs_over_https_with_the_site_ca(overlay):
     flags = _flags(overlay["services"]["vision"]["command"])
-    assert flags["--pairing-sync-url"] == "https://fleet:8090"
+    assert flags["--pairing-sync-url"] == "https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}"
     assert flags["--pairing-sync-ca"] == "/run/secrets/site_ca"
     assert flags["--pairing-sync-token-env"] == SYNC_ENV
     assert "site_ca" in _load("compose.yaml")["services"]["vision"]["secrets"]

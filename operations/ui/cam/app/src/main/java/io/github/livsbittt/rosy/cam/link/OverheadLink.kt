@@ -71,6 +71,8 @@ data class LinkStatus(
     val sentQuality: Int? = null,
     /** Last adapter `status` of the current connection; null until one arrives or after a drop. */
     val site: ServerMessage.Status? = null,
+    /** D-691. Null until this connection sends `demand`, and again after the link drops. */
+    val wanted: Boolean? = null,
 )
 
 /** Sensor facts reported in `hello`. Updated by the camera once it knows the real resolution. */
@@ -105,6 +107,7 @@ class OverheadLink(
     private val device: String,
     private val resolver: SiteResolver? = null,
     private val client: OkHttpClient = defaultClient(pairing.pin, resolver?.let { SiteDns(pairing.host, it) }),
+    private val credentialProvider: CredentialProvider? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -137,12 +140,22 @@ class OverheadLink(
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
 
+    /** D-589: called on the OkHttp thread for each well-formed `camera` message of the current connection. */
+    @Volatile
+    var onCamera: ((ServerMessage.Camera) -> Unit)? = null
+
+    /** Last `camera_state` published; sent now when connected and again after every hello. */
+    @Volatile
+    private var cameraState: String? = null
+
     // Guarded by lock.
     private var socket: WebSocket? = null
     private var generation = 0
     private var running = false
     private var started = false
     private var reconnectJob: Job? = null
+    private var credentialJob: Job? = null
+    private var expiryJob: Job? = null
     private var seq = 0L
     private var sentCount = 0L
 
@@ -174,6 +187,8 @@ class OverheadLink(
             generation++
             reconnectJob?.cancel()
             reconnectJob = null
+            credentialJob?.cancel(); credentialJob = null
+            expiryJob?.cancel(); expiryJob = null
             ws = socket
             socket = null
         }
@@ -192,6 +207,8 @@ class OverheadLink(
             if (!running) return
             reconnectJob?.cancel()
             reconnectJob = null
+            credentialJob?.cancel(); credentialJob = null
+            expiryJob?.cancel(); expiryJob = null
             ws = socket
             socket = null
             generation++
@@ -242,6 +259,17 @@ class OverheadLink(
         return true
     }
 
+    /** D-589 5: sends [json] (`camera_state`) if streaming and keeps it for the next connection's hello. */
+    fun publishCameraState(json: String) {
+        // Under the lock that onOpen also holds while it turns STREAMING and sends the cached state: each state goes
+        // out exactly once per connection, and never before hello.
+        synchronized(lock) {
+            cameraState = json
+            val ws = socket ?: return
+            if (_status.value.state == LinkState.STREAMING) ws.send(json)
+        }
+    }
+
     private fun connect() {
         val gen: Int
         synchronized(lock) {
@@ -250,13 +278,40 @@ class OverheadLink(
             seq = 0
         }
         _status.update { it.copy(state = LinkState.CONNECTING) }
+        if (credentialProvider != null) {
+            val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                try {
+                    val renewed = credentialProvider.renew { isCurrent(gen) }
+                    require(renewed.pairing.host == pairing.host && renewed.pairing.port == pairing.port && renewed.pairing.source == pairing.source &&
+                        renewed.pairing.pin == pairing.pin && renewed.pairing.secure == pairing.secure && renewed.expiresAt > java.time.Instant.now())
+                    if (!isCurrent(gen)) return@launch
+                    openSocket(gen, renewed.pairing)
+                    synchronized(lock) {
+                        if (isCurrent(gen)) expiryJob = scope.launch {
+                            delay(java.time.Duration.between(java.time.Instant.now(), renewed.expiresAt.minusSeconds(60)).toMillis().coerceAtLeast(1000))
+                            if (isCurrent(gen)) reconnect()
+                        }
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) { }
+                catch (failure: Exception) {
+                    val denied = failure is CredentialDenied || failure is IllegalArgumentException
+                    onLost(gen, if (denied) LinkError.Unauthorized else LinkError.Network(failure.javaClass.simpleName), denied)
+                }
+            }
+            synchronized(lock) { if (isCurrent(gen)) { credentialJob = job; job.start() } else job.cancel() }
+            return
+        }
+        openSocket(gen, pairing)
+    }
+
+    private fun openSocket(gen: Int, authorized: PairingUri) {
+        if (!isCurrent(gen)) return
         val request = Request.Builder()
-            .url(pairing.wsUrl)
-            .header("Authorization", "Bearer ${pairing.token}")
+            .url(authorized.wsUrl)
+            .header("Authorization", "Bearer ${authorized.token}")
             .build()
-        val ws = client.newWebSocket(request, Listener(gen))
         synchronized(lock) {
-            if (gen == generation && running) socket = ws else ws.cancel()
+            if (gen == generation && running) socket = client.newWebSocket(request, Listener(gen))
         }
     }
 
@@ -267,6 +322,7 @@ class OverheadLink(
         synchronized(lock) {
             if (!running || gen != generation) return
             socket = null
+            expiryJob?.cancel(); expiryJob = null
             generation++
             if (fatal) {
                 running = false
@@ -279,7 +335,7 @@ class OverheadLink(
             }
         }
         Log.w(TAG, "link lost: $error fatal=$fatal")
-        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null) }
+        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null, wanted = null) }
     }
 
     private fun refreshCounters() {
@@ -304,7 +360,10 @@ class OverheadLink(
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             Log.i(TAG, "connected to ${pairing.wsUrl}")
-            _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+            synchronized(lock) {
+                _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+                cameraState?.let { webSocket.send(it) }
+            }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -324,6 +383,17 @@ class OverheadLink(
                     Log.w(TAG, "invalid server message (${msg.reason}): $text")
                     _status.update { it.copy(error = LinkError.InvalidConfig(msg.reason)) }
                 }
+                is ServerMessage.Camera -> {
+                    Log.i(TAG, "camera $msg")
+                    onCamera?.invoke(msg)
+                }
+                is ServerMessage.BadCamera -> Log.w(TAG, "ignored bad camera message (${msg.reason}): $text")
+                is ServerMessage.Demand -> {
+                    backoff.reset()
+                    Log.i(TAG, "demand wanted=${msg.wanted}")
+                    _status.update { it.copy(wanted = msg.wanted) }
+                }
+                is ServerMessage.BadDemand -> Log.w(TAG, "ignored bad demand message (${msg.reason}): $text")
                 is ServerMessage.Unknown -> Log.d(TAG, "ignored message type ${msg.type}")
             }
         }

@@ -10,14 +10,19 @@ from typing import Mapping
 
 import yaml
 
+from core_common.protocol.place_markers import check_place_marker_ids
+from core_common.protocol.sightings import check_marker_yaw_offsets
 from rosy_vision.project import CameraMap
 
 _REQUIRED = {
     "source_id", "token_env", "fleet_base_url", "robot_ids",
-    "map_id", "calibration_revision", "processor_revision", "corner_marker_ids",
+    "map_id", "calibration_revision", "processor_revision",
     "corner_world_m", "robot_markers",
 }
-_ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential"}
+_ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
+                        "corner_marker_ids", "calibration_source",
+                        "place_markers", "marker_yaw_offset_deg", "auto_tune"}
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
@@ -30,6 +35,9 @@ class VisionSourceConfig:
     sighting_token: str
     fleet_base_url: str
     credential: str = "static"
+    #: D-589 6: Vision tunes this camera's exposure for recognition (needs --track); false
+    #: sends no camera messages and the phone follows its own D-544 settings.
+    auto_tune: bool = True
 
 
 def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -81,11 +89,14 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             secrets.append(token_value)
         robot_ids = row["robot_ids"]
         robot_markers = row["robot_markers"]
-        if (not isinstance(robot_ids, list) or not robot_ids
+        # D-580: `robot_ids: enrolled` follows Fleet's roster; robot_markers are then overrides.
+        if robot_ids == "enrolled":
+            robot_ids = list(robot_markers) if isinstance(robot_markers, dict) else []
+        elif (not isinstance(robot_ids, list) or not robot_ids
                 or any(not isinstance(robot_id, str) or not robot_id.strip() for robot_id in robot_ids)
-                or len(set(robot_ids)) != len(robot_ids)
-                or not isinstance(robot_markers, dict)
-                or set(robot_markers) - set(robot_ids)):
+                or len(set(robot_ids)) != len(robot_ids)):
+            raise ValueError(f"sources[{index}] robot_markers must be a subset of unique robot_ids")
+        if not isinstance(robot_markers, dict) or set(robot_markers) - set(robot_ids):
             raise ValueError(f"sources[{index}] robot_markers must be a subset of unique robot_ids")
         if not isinstance(row["fleet_base_url"], str) or not row["fleet_base_url"].strip():
             raise ValueError(f"sources[{index}].fleet_base_url is required")
@@ -93,21 +104,51 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         if not isinstance(corners, list) or len(corners) != 4:
             raise ValueError(f"sources[{index}].corner_world_m must contain four x/y pairs")
         world_points = tuple(tuple(float(value) for value in point) for point in corners)
+        calibration_source = row.get("calibration_source", "corner_markers")
+        if calibration_source not in CALIBRATION_SOURCES:
+            raise ValueError(f"sources[{index}].calibration_source must be "
+                             f"{' or '.join(CALIBRATION_SOURCES)}")
+        if calibration_source == "field_boundary" and "corner_marker_ids" in row:
+            raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
+        if calibration_source == "corner_markers" and "corner_marker_ids" not in row:
+            raise ValueError(f"sources[{index}] needs corner_marker_ids for corner_markers")
+        if calibration_source == "corner_markers":
+            marker_ids = row["corner_marker_ids"]
+            if (not isinstance(marker_ids, list) or len(marker_ids) != 4
+                    or any(type(marker_id) is not int or marker_id < 0 for marker_id in marker_ids)):
+                raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         heading_edge = tuple(row.get("heading_edge", (0, 1)))
+        try:  # D-564
+            place_markers = check_place_marker_ids(
+                row.get("place_markers", []), corner_ids=row.get("corner_marker_ids"),
+                robot_marker_ids=robot_markers.values())
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
+        try:  # D-587 4
+            yaw_offsets = check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"),
+                                                   None if row["robot_ids"] == "enrolled" else robot_ids)
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         camera = CameraMap(
             source_id=row["source_id"],
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
             processor_revision=row["processor_revision"],
-            corner_marker_ids=tuple(row["corner_marker_ids"]),
+            corner_marker_ids=tuple(row["corner_marker_ids"]) if "corner_marker_ids" in row else None,
             corner_world_m=world_points,
             robot_markers=dict(robot_markers),
             heading_edge=heading_edge,
+            calibration_source=calibration_source,
+            place_markers=place_markers,
+            marker_yaw_offset_deg=yaw_offsets,
         )
+        auto_tune = row.get("auto_tune", True)
+        if type(auto_tune) is not bool:
+            raise ValueError(f"sources[{index}].auto_tune must be true or false")
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
         source_ids.add(camera.source_id)
         phone_token = secrets[0] if credential == "static" else None
         configs.append(VisionSourceConfig(camera, phone_token, secrets[-1], row["fleet_base_url"],
-                                          credential))
+                                          credential, auto_tune))
     return configs

@@ -17,7 +17,7 @@ def import_model(api, execute, urdf: Path, output_dir: Path, robot_type: str) ->
             raise RuntimeError("Incomplete modern URDF importer API")
         options = dict(urdf_path=str(urdf.resolve()), usd_path=str(output_dir), robot_type=robot_type,
                        fix_base=False if robot_type == "Wheeled" else None,
-                       merge_fixed_joints=False, collision_from_visuals=False)
+                       merge_fixed_joints=robot_type == "Wheeled", collision_from_visuals=False)
         if robot_type == "Wheeled":
             options.update(joint_target_type={".*wheel_joint": "velocity"},
                            override_joint_stiffness={".*wheel_joint": 0.0})
@@ -29,7 +29,8 @@ def import_model(api, execute, urdf: Path, output_dir: Path, robot_type: str) ->
         if not success or config is None:
             raise RuntimeError("Legacy URDF importer configuration failed")
         # These documented 5.1 properties are mandatory. Unknown SDK shapes fail.
-        properties = dict(merge_fixed_joints=False, collision_from_visuals=False,
+        # Separate massless fixed reference bodies destabilize Pinky's articulation.
+        properties = dict(merge_fixed_joints=robot_type == "Wheeled", collision_from_visuals=False,
                           import_inertia_tensor=True, fix_base=robot_type == "Manipulator", make_default_prim=True)
         for name, value in properties.items():
             if not hasattr(config, name):

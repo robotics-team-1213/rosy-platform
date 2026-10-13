@@ -110,6 +110,7 @@ async def _run_pipeline(config_path):
                 "sensor": {"width": 600, "height": 400, "rotation_deg": 0},
             }))
             assert json.loads(await phone.recv()) == protocol.make_config()
+            assert json.loads(await phone.recv()) == protocol.make_demand(False)
             worker = VisionWorker(source_id=SOURCE_ID, ingest=ingest,
                                   camera=vision_config.camera,
                                   publisher=publisher)

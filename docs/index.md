@@ -206,6 +206,34 @@
 | D-458 | 학습 앱·웹 공통 작업 화면과 결과 확인 경계 |
 | D-459 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
+| D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
+| D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
+| D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-625 | ROSY 의미 기반 책임 구조와 단계별 폴더 이전 |
+| D-626 | D-625 holder 이전 실행과 패키지·Safety 식별 보존 |
+| D-627 | CORE Drive 조립 책임의 첫 분리: line-follow 배선과 docking/swarm 조립을 core/drive로 묶고 공통 authority·listener 순서·legacy import 유지 |
+| D-640 | Fleet 범용 문제 해결 오케스트레이션과 지속 개선 |
+| D-642 | Fleet 판단 1단계 사건 근거와 현재 상태 규약 |
+| D-643 | Fleet 판단 2단계 개입 비개입과 판단 보류 기준 |
+| D-644 | Fleet 판단 3단계 중앙 중재와 조치 결과 규약 |
+| D-645 | Fleet 판단 4단계 외부 알림과 사람 처리 파이프라인 |
+| D-646 | Fleet 판단 5단계 관제 표시와 독립 수용 및 개선 인계 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-656 | 상황 판단·작업 실행·모델 숙고의 책임과 권한 경계 |
+| D-659 | 도로면·현재 도로 구역의 인지 적합성과 주행 수용을 분리한다 |
+| D-660 | Fleet 현재 판단 영수증과 관측 종료를 구분한다 |
+| D-661 | Fleet 이름 있는 사건 인수와 팀 알림 outbox |
+| D-662 | Pinky 독립 판단 평가 프로파일과 팀 검수 관문 |
+| D-663 | 도로 라벨의 의미 버전을 보존하고 다른 의미의 평가·전달을 거절한다 |
+| D-665 | 관측 도로면의 기준점 기반 현재 구역과 독립 평가 입력을 분리한다 |
+| D-708 | 관측한 차선 형상을 오돔으로 옮겨 제한된 공백을 잇는다 |
+| D-721 | 스테이션과 제자리로 돌아오는 복귀 모드가 필요하다 |
+| D-723 | 청소와 팔과 비행체는 새 폴더 없이 장치 능력과 최종 작성자로 나눈다 |
+| D-729 | 바닥 한 번은 가르친 웨이포인트를 차례로 간 뒤 D-721 목적지로 끝난다 |
+| D-733 | Hourly KST Discord Fleet health subscription |
+| D-736 | 플릿 위치추종은 묶은 기준점 하나를 다시 밟고, 어두운 길은 관제 문장으로만 안내한다 |
+| D-738 | 폴더 이름은 권한 하나이고, 같은 역할만 한 폴더에 둔다 |
 
 ## 계획·결과 문서
 
@@ -283,6 +311,15 @@
 - [2026-10-04-d443-signal-supervision.md](plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
+- [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
+- [2026-10-11-core-drive-composition-first.md](plans/2026-10-11-core-drive-composition-first.md)
+- [2026-10-11-core-responsibility-and-driving-design.md](plans/2026-10-11-core-responsibility-and-driving-design.md)
+- [2026-10-11-core-responsibility-and-driving.md](plans/2026-10-11-core-responsibility-and-driving.md)
+- [2026-10-11-perception-fitness-design.md](plans/2026-10-11-perception-fitness-design.md)
+- [2026-10-11-perception-fitness-pipeline.md](plans/2026-10-11-perception-fitness-pipeline.md)
+- [2026-10-11-platform-structure-migration.md](plans/2026-10-11-platform-structure-migration.md)
+- [2026-10-11-rosy-platform-identity-and-structure-design.md](plans/2026-10-11-rosy-platform-identity-and-structure-design.md)
+- [2026-10-11-rosy-platform-identity-and-structure.md](plans/2026-10-11-rosy-platform-identity-and-structure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -297,8 +334,8 @@
 
 ## 최근 기록
 
-- 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
-- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
-- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
-- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
-- 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance
+- 2026-10-13 · 33d76482f · docs: verify and process P1 held artifacts
+- 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
+- 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup

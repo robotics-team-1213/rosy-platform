@@ -1,0 +1,44 @@
+{
+ "rec_01": {
+  "turn_end_dyaw_deg": -2.0,
+  "reacquire_dr_dyaw": [
+   0.016,
+   -24.8
+  ],
+  "max_dr_before_loss": 0.069,
+  "first_loss": {
+   "gt": [
+    -0.359,
+    -0.318
+   ],
+   "dr": 0.069,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "stuck_back_off",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ },
+ "rec_02": {
+  "turn_end_dyaw_deg": -2.0,
+  "reacquire_dr_dyaw": [
+   0.017,
+   -25.1
+  ],
+  "max_dr_before_loss": 0.065,
+  "first_loss": {
+   "gt": [
+    -0.365,
+    -0.314
+   ],
+   "dr": 0.065,
+   "reason": "lane_edge_right"
+  },
+  "last_core_reason": "junction_corner_hold",
+  "fleet": [
+   "stopped",
+   "junction_corner_hold"
+  ]
+ }
+}

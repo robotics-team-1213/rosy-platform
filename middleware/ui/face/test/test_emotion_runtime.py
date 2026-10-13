@@ -103,7 +103,7 @@ def _capture(image, name):
 
 def test_live_node_renders_at_lcd_resolution_then_returns_to_intent(face):
     node, clock = face
-    assert node.gif_frames[0].size == (1000, 750)  # actual shipped asset
+    assert node.gif_frames[0].size == (320, 240)  # actual shipped asset
 
     _send(node)
     assert node.info_image.size == (320, 240)

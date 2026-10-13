@@ -3,6 +3,9 @@
 
 # adr
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 One Markdown file per Architecture Decision Record (about 400 files, `D-1` to roughly `D-409`). Each file holds the body of one decision; the index table (ID, title, Status) lives in `docs/reference/ROSY ADR Log.md`. Records preserve why a decision was made, not how the code looks now.
@@ -24,7 +27,7 @@ Body sections are Status, Context, Decision, Consequences (some add Alternatives
 ### Working In This Directory
 
 - ADRs are append-only. Never rewrite an accepted decision: mark it `Superseded by D-<m>` and write a new ID.
-- Take the next free number from the ADR Log index; concurrent sessions have collided before, so re-check just before committing. Intentional gaps are declared in `adr_gaps` in `tools/harness/harness.yaml`.
+- Reserve the number right before writing with `python tools/harness/adr_reserve.py next "<topic>"` (D-510; it creates `refs/adr/D-nnn`, one winner per number). Intentional gaps are one `D-nnn reason` line each in `tools/harness/adr_gaps.txt`.
 - Every ADR needs a row in `docs/reference/ROSY ADR Log.md` with the same title and Status, and the log must be updated in the same change.
 - Accepted does not mean implemented or device-accepted; say so in the body when it matters.
 - Internal or strategy material goes in the gitignored `private/`, not in an ADR (public repo).

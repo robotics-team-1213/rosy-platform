@@ -10,6 +10,8 @@ param(
     [string]$Backend,
     [switch]$Force,
     [string]$ApiToken = "",
+    [string]$ApiTlsHost = "",
+    [string]$ApiCaFile = "",
     [int]$ApiPort = 8080
 )
 
@@ -52,10 +54,11 @@ $remote = "${PiUser}@${PiHost}"
 # D-321 addendum: the overlay apply restarts rosy-core; do not cut a calibration short.
 & (Join-Path $repoRoot "deploy/robot/pinky_pro/rosy-calibration-guard.ps1") -Robot $PiHost `
     -Action "a CORE dev overlay sync (CORE restart)" -ApiPort $ApiPort -ApiToken $ApiToken `
-    -RosyUser $PiUser -Force:$Force
+    -RosyUser $PiUser -ApiTlsHost $ApiTlsHost -ApiCaFile $ApiCaFile -Force:$Force
 if ($LASTEXITCODE -eq 3) {
     throw "CORE dev overlay sync refused: a calibration session is active on $PiHost. Pass -Force to override."
 }
+if ($LASTEXITCODE -ne 0) { throw "CORE dev overlay sync refused: calibration check failed." }
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     & python -B (Join-Path $repoRoot "deploy/robot/pinky_pro/dev/core_dev_overlay.py") pack --repo $repoRoot --output $archive

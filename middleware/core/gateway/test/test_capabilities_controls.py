@@ -1,5 +1,9 @@
 """D-411 B: CORE announces Pinky's controls from adapter provides (or teleop)."""
 
+import dataclasses
+
+import pytest
+
 from core_common.domain.adapters import AdapterManifest, AdapterRegistry
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -71,3 +75,103 @@ def test_withheld_teleop_drops_the_drive_control(core_client):
     client, svc = _live_core(core_client)
     svc.capability._data["teleop"] = False
     assert _controls(client)["items"] == []
+
+
+def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
+    from core_common.profile import DEFAULT_ROBOT
+
+    client, svc = _live_core(core_client)
+    (base,) = _controls(client)["items"]
+    assert base["robot_kind"] == (svc.config.get("robot") or {}).get("model", DEFAULT_ROBOT)
+    limits = svc.safety.limits
+    assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear,
+                                          svc.line_follow.config.max_linear)
+    assert base["junction_turn"] is False              # no live keep-mode evidence yet
+    assert base["junction_pivot"] is False             # D-507 2: no keep_debug junction_ahead_m yet
+    assert base["line_follow_authority"] is True       # D-517 4: the manager enforces an authority
+    assert base["line_follow_authority_required"] is False  # config line_follow.authority_required off
+    assert base["line_follow_advice"] is True          # D-525: advice stored and shown, display only
+    lf = svc.line_follow
+    lf._config = dataclasses.replace(lf._config, authority_required=True)
+    assert _controls(client)["items"][0]["line_follow_authority_required"] is True
+    lf._config = dataclasses.replace(lf._config, authority_required=False)
+    assert base["lane_bend"] is False                  # D-507 addendum: no basis a bend could use
+    lf = svc.line_follow  # D-495: a fresh keep_debug frame with corner_turning on
+    lf.observe_junction("no_boundary", lf._clock(), corner_turning=True)
+    assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
+    lf.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
+    assert _controls(client)["items"][0]["junction_turn"] is True
+    assert _controls(client)["items"][0]["lane_bend"] is True  # enforce proof configured
+    lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
+    assert _controls(client)["items"][0]["junction_pivot"] is False
+    lf.observe_junction("no_boundary", lf._clock(), ahead_v=1)       # fresh marker
+    assert _controls(client)["items"][0]["junction_pivot"] is True
+    lf.observe_junction("no_boundary", lf._clock() - 3.0, ahead_v=1)  # older than 2 s
+    assert _controls(client)["items"][0]["junction_pivot"] is False
+    navigation = svc.capability._data.setdefault("navigation", {})
+    navigation["goal_navigation"] = False
+    assert _controls(client)["items"][0]["drive_modes"] == ["lane"]
+    svc.config.setdefault("robot", {})["model"] = "other_base"
+    svc.line_follow = None
+    (base,) = _controls(client)["items"]
+    assert base["robot_kind"] == "other_base" and base["drive_modes"] == []
+    assert base["junction_turn"] is False and base["junction_pivot"] is False
+    assert base["line_follow_authority"] is False
+    assert base["line_follow_advice"] is False
+    assert base["line_follow_authority_required"] is False
+    assert base["lane_bend"] is False
+    assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
+
+
+def test_d491_free_mode_needs_live_goal_navigation(core_client, monkeypatch):
+    from core_api_web.api.v1 import system
+
+    client, svc = _live_core(core_client)
+    monkeypatch.setattr(system, "withhold_hardware_flags", lambda data, _reasons: data)
+    svc.capability._data.setdefault("navigation", {})["goal_navigation"] = True
+    assert _controls(client)["items"][0]["drive_modes"] == ["lane", "free"]
+    assert _controls(client)["items"][0]["goal_lease"] is True  # D-550 10: with goal navigation
+    svc.capability._data["navigation"]["goal_navigation"] = False
+    assert "goal_lease" not in _controls(client)["items"][0]
+
+
+@pytest.mark.parametrize("model", ["Pinky", "pinky-pro", "p" * 65, 7])
+def test_d491_unusable_robot_model_omits_robot_kind_not_a_500(core_client, model):
+    client, svc = _live_core(core_client)
+    svc.config.setdefault("robot", {})["model"] = model
+    (base,) = _controls(client)["items"]
+    assert "robot_kind" not in base and "lane" in base["drive_modes"]
+
+
+def test_d491_nan_odom_does_not_fail_the_state_api(core_client):
+    client, svc = core_client()
+    svc.state.set_odom_pose(0.5, 0.25, 0.0)
+    svc.state.set_odom_pose(float("nan"), 0.0, 0.0)
+    response = client.get("/api/v1/robot/state", headers=VIEWER)
+    assert response.status_code == 200
+    assert response.json()["odom_pose"]["x"] == 0.5
+
+
+def test_d604_line_camera_reports_the_front_preview_store(core_client):
+    import time
+
+    client, svc = _live_core(core_client)
+
+    def camera():
+        response = client.get("/api/v1/system/capabilities", headers=VIEWER)
+        return response.json()["line_follow"]["camera"]
+
+    assert camera() == {"available": False, "age_ms": None, "source": "NONE"}  # no frame yet
+    now = time.monotonic()
+    svc.vision.publish(b"\xff\xd8f\xff\xd9", captured_at=1.0, received_at=now,
+                       frame_id="front_camera_link", source="ROSY")
+    fresh = camera()
+    assert fresh["available"] is True and fresh["source"] == "DEVICE" and fresh["age_ms"] >= 0
+    assert fresh["available"] is svc.vision.status()["available"]  # one source with front/status
+    svc.vision.publish(b"\xff\xd8g\xff\xd9", captured_at=2.0, received_at=now - 60.0,
+                       frame_id="front_camera_link", source="GAZEBO")
+    stale = camera()
+    assert stale["available"] is False and stale["source"] == "GAZEBO" and stale["age_ms"] >= 59_000
+    assert (_controls(client)["items"][0]["drive_modes"][0] == "lane")  # drive_modes unchanged
+    svc.line_follow = None
+    assert "line_follow" not in client.get("/api/v1/system/capabilities", headers=VIEWER).json()

@@ -117,3 +117,11 @@ def test_the_node_latches_visible_per_stream_before_publishing():
     assert camera.index("self._visible.update(") < camera.index("shadow_payload(")
     swap = camera[camera.index("if model.model_revision != self._logged_revision"):camera.index("self._busy = True")]
     assert "self._visible = VisibleHysteresis()" in swap
+
+
+def test_the_node_logs_the_d558_model_version_beside_the_revision():
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    swap = src[src.index("if model.model_revision != self._logged_revision"):src.index("self._busy = True")]
+    assert "'model_version'" in swap and "f' ({version})' if version" in swap

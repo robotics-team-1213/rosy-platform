@@ -8,8 +8,9 @@ import pytest
 from core_features.line_follow.clearance import (body_clearances, self_mask_from_config,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowConfig
-from core_features.line_follow.stuck_recovery import (ASKING, BACKING, SETTLING, WAITING_CONSOLE,
-                                                      AnswerRefused, ForwardTrail, StuckInput,
+from core_features.line_follow.recovery.stuck.trail import ForwardTrail
+from core_features.line_follow.recovery.stuck.stuck_recovery import (ASKING, BACKING, SETTLING, WAITING_CONSOLE,
+                                                      AnswerRefused, StuckInput,
                                                       StuckRecovery)
 
 
@@ -42,6 +43,24 @@ def _inp(now, **kw):
     return StuckInput(**base)
 
 
+@pytest.mark.parametrize("decision", ["RESUME", "BACK_AND_RETRY", "YIELD"])
+@pytest.mark.parametrize("answer_at", [2., -.1, math.nan, math.inf])
+def test_moving_answer_rejects_stale_or_invalid_snapshot_clock(decision, answer_at):
+    machine, bus = _machine()
+    machine.step(_inp(0., turn_m=.3))
+    kwargs = {"yield_m": .1, "yield_turn_rad": .3} if decision == "YIELD" else {}
+    with pytest.raises(AnswerRefused):
+        machine.answer(answer_at, machine.stuck_id, decision, "operator", **kwargs)
+    assert machine.status(0.)["attempts"] == 0
+
+
+@pytest.mark.parametrize("decision", ["WAIT", "MANUAL", "ABORT"])
+def test_stopping_answer_remains_available_with_old_snapshot(decision):
+    machine, _ = _machine()
+    machine.step(_inp(0.))
+    assert machine.answer(100., machine.stuck_id, decision, "operator") in ("hold", "manual", "idle")
+
+
 # ---- opening -------------------------------------------------------------------------
 def test_no_cause_passes_and_opens_nothing():
     machine, bus = _machine()
@@ -52,13 +71,19 @@ def test_no_cause_passes_and_opens_nothing():
 def test_opens_once_per_stuck_with_unique_id_and_asks_console():
     machine, bus = _machine()
     assert machine.step(_inp(0.0, front_band_m=0.18, preview_seq=7)).kind == "hold"
-    assert machine.step(_inp(1.0)).kind == "hold"
+    assert machine.step(_inp(2.0)).kind == "hold"           # current evidence when RESUME arrives
     opened = bus.named("nav.line_stuck_opened")
     assert len(opened) == 1 and opened[0]["stuck_id"] == "stuck-1"
     assert opened[0]["cause"] == "obstacle_ahead" and opened[0]["preview_seq"] == 7
     assert opened[0]["front_clearance_m"] == 0.18 and opened[0]["rear_clearance_m"] == 0.30
     asked = bus.named("nav.line_stuck_asked")
     assert asked[0]["local_fallback_s"] == 15.0 and machine.phase == ASKING
+    inquiry = opened[0]["inquiry"]
+    assert inquiry["version"] == "situation-inquiry-v1" and inquiry["problem_id"] == "stuck-1"
+    assert inquiry["observations"]["scan_age_s"] == 0.05
+    assert inquiry["requested_output"] == "assessment_and_direction"
+    assert inquiry["execution_authority"] == "CORE_recheck_required"
+    assert asked[0]["inquiry"] == inquiry
     machine.answer(2.0, "stuck-1", "RESUME", "operator")
     machine.step(_inp(10.0, cause="lane_lost"))
     assert machine.stuck_id == "stuck-2"
@@ -104,10 +129,11 @@ def test_wait_holds_and_never_falls_back_to_local():
 def test_resume_refused_with_an_object_inside_stop_distance():
     machine, bus = _machine()
     machine.step(_inp(0.0, front_band_m=0.15))
+    machine.step(_inp(1.0, front_band_m=0.15))              # fresh scan still sees the object
     with pytest.raises(AnswerRefused) as refused:
         machine.answer(1.0, "stuck-1", "RESUME", "operator")
     assert refused.value.code == "STUCK_DECISION_REFUSED" and machine.stuck_id == "stuck-1"
-    machine.step(_inp(2.0, front_band_m=0.22))               # between stop and resume: allowed
+    machine.step(_inp(3.0, front_band_m=0.22))               # fresh scan between stop and resume: allowed
     assert machine.answer(3.0, "stuck-1", "RESUME", "operator") == "resume"
     assert machine.stuck_id is None
     assert bus.named("nav.line_stuck_closed")[0]["reason"] == "console_resume"
@@ -116,6 +142,7 @@ def test_resume_refused_with_an_object_inside_stop_distance():
 def test_yield_turns_then_creeps_and_holds_when_the_cause_clears():
     machine, _bus = _machine()
     machine.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    machine.step(_inp(1.0, turn_m=0.10, front_band_m=0.10))
     assert machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                           yield_m=0.30, yield_turn_rad=0.6) == "yield"
     turning = machine.step(_inp(1.1, turn_m=0.10, front_band_m=0.10))
@@ -136,6 +163,7 @@ def test_yield_turns_then_creeps_and_holds_when_the_cause_clears():
 def test_active_yield_cannot_restart_or_extend_a_segment(turn_rad, replacement):
     machine, bus = _machine()
     machine.step(_inp(0.0, turn_m=0.10, front_band_m=0.40))
+    machine.step(_inp(1.0, turn_m=0.10, front_band_m=0.40))
     machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                    yield_m=0.30, yield_turn_rad=turn_rad)
     before = machine.step(_inp(1.1, turn_m=0.10, front_band_m=0.40))
@@ -159,11 +187,13 @@ def test_active_yield_cannot_restart_or_extend_a_segment(turn_rad, replacement):
 def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():
     blocked, _bus = _machine()
     blocked.step(_inp(0.0, turn_m=None, front_band_m=0.10))
+    blocked.step(_inp(1.0, turn_m=None, front_band_m=0.10))
     with pytest.raises(AnswerRefused) as refused:
         blocked.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.6)
     assert "turn_blocked" in str(refused.value)
     clear, _bus = _machine()
     clear.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    clear.step(_inp(1.0, turn_m=0.10, front_band_m=0.10))
     assert clear.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
                         yield_m=0.30, yield_turn_rad=0.6) == "yield"
 
@@ -171,14 +201,17 @@ def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():
 def test_yield_crawl_stops_inside_the_stop_distance_and_the_next_segment_can_start():
     machine, _bus = _machine()
     machine.step(_inp(0.0, front_band_m=0.40))
+    machine.step(_inp(1.0, front_band_m=0.40))
     machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
     assert machine.step(_inp(1.1, front_band_m=0.05)).kind == "hold"
     assert machine.phase == "WAITING_CONSOLE"
     again, _bus = _machine()
     again.step(_inp(0.0, turn_m=0.10, front_band_m=0.40))
+    again.step(_inp(1.0, turn_m=0.10, front_band_m=0.40))
     again.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
     again.step(_inp(11.0, turn_m=0.10, front_band_m=0.40))
     assert again.phase == "YIELDED"
+    again.step(_inp(12.0, turn_m=0.10, front_band_m=0.40))    # a new scan, same finished segment
     assert again.answer(12.0, "stuck-1", "YIELD", "stuck_resolver",
                         yield_m=0.32, yield_turn_rad=0.4) == "yield"
     assert again.phase == "TURNING"
@@ -202,6 +235,7 @@ def test_manual_and_abort_close_the_stuck(decision, outcome):
 def test_back_and_retry_runs_the_back_off_now():
     machine, bus = _machine()
     machine.step(_inp(0.0))
+    machine.step(_inp(1.0))
     assert machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator") == "back"
     action = machine.step(_inp(1.05))
     assert action.kind == "back" and action.linear == pytest.approx(-0.03)
@@ -211,11 +245,77 @@ def test_back_and_retry_runs_the_back_off_now():
 def test_back_and_retry_refused_when_local_recovery_is_off():
     machine, _ = _machine(recovery_local_enabled=False)
     machine.step(_inp(0.0))
+    machine.step(_inp(1.0))
     with pytest.raises(AnswerRefused):
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
 
+@pytest.mark.parametrize("origin", ["console", "ask_timeout"])
+@pytest.mark.parametrize("phase", [BACKING, SETTLING])
+def test_delayed_back_answer_cannot_restart_active_recovery(origin, phase):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    started = 1.0 if origin == "console" else 15.0
+    machine.step(_inp(started))
+    if origin == "console":
+        machine.answer(started, "stuck-1", "BACK_AND_RETRY", "operator")
+    now = started + (0.1 if phase == BACKING else 2.7)
+    action = machine.step(_inp(now))
+    assert machine.phase == phase
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="back_active") as refused:
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver")
+    assert refused.value.code == "STUCK_DECISION_REFUSED"
+    assert machine.phase == phase and machine._until == until
+    assert machine.status(now)["attempts"] == 1
+    assert machine.step(_inp(now)) == action
+    assert len(bus.named("nav.line_stuck_local_attempt")) == 1
+    assert bus.named("nav.line_stuck_answered")[-1]["accepted"] is False
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "back_active"
+    assert machine.answer(now, "stuck-1", "WAIT", "operator") == "hold"
+    assert machine.answer(now, "stuck-1", "ABORT", "operator") == "idle"
+
+
 # ---- timeout and local recovery ----------------------------------------------------
+@pytest.mark.parametrize("changed", ["wait", "local", "attempts"])
+def test_conditional_back_checks_current_phase_and_attempts(changed):
+    machine, bus = _machine()
+    machine.step(_inp(0.0))
+    expected = {"phase": ASKING, "attempts": 0}
+    now = 0.0
+    if changed == "wait":
+        machine.answer(now, "stuck-1", "WAIT", "operator")
+    elif changed == "local":
+        now = 15.0
+        machine.step(_inp(now))
+    else:
+        expected["attempts"] = 1
+    before = machine.status(now)
+    until = machine._until
+    with pytest.raises(AnswerRefused, match="stuck_precondition_failed"):
+        machine.answer(now, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(now) == before and machine._until == until
+    assert bus.named("nav.line_stuck_answered")[-1]["reason"] == "stuck_precondition_failed"
+
+
+def test_conditional_back_accepts_same_asking_episode():
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    assert machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver",
+                          expected_stuck={"phase": ASKING, "attempts": 0}) == "back"
+    assert machine.status(0.0)["attempts"] == 1
+
+
+@pytest.mark.parametrize("expected", [True, {}, {"phase": ASKING, "attempts": True},
+    {"phase": ASKING, "attempts": -1}, {"phase": WAITING_CONSOLE, "attempts": 0}])
+def test_direct_conditional_back_rejects_malformed_predicate(expected):
+    machine, _ = _machine()
+    machine.step(_inp(0.0))
+    with pytest.raises(AnswerRefused, match="invalid_stuck_precondition"):
+        machine.answer(0.0, "stuck-1", "BACK_AND_RETRY", "stuck_resolver", expected_stuck=expected)
+    assert machine.status(0.0)["attempts"] == 0 and machine.phase == ASKING
+
+
 def test_no_answer_within_ask_s_starts_the_back_off():
     machine, bus = _machine()
     machine.step(_inp(0.0))
@@ -304,6 +404,7 @@ def test_max_attempts_then_console_only_without_another_timeout():
     assert machine.phase == WAITING_CONSOLE
     assert bus.named("nav.line_stuck_asked")[-1]["local_fallback_s"] is None
     assert machine.step(_inp(t + 60.0)).kind == "hold"
+    assert machine.step(_inp(t + 61.0)).kind == "hold"       # fresh scan cannot restore attempts
     with pytest.raises(AnswerRefused):
         machine.answer(t + 61.0, "stuck-1", "BACK_AND_RETRY", "operator")
 
@@ -548,6 +649,9 @@ def test_refused_back_and_retry_answer_carries_the_judged_scan():
     machine, bus = _machine()
     machine.step(_inp(0.0, rear_blind_m=0.09, trail_m=0.15, trail_yaw_deg=14.6,
                       trail_age_s=20.1))
+    # The answer receives a new scan; its measured forward trail is still 20.1 seconds old.
+    machine.step(_inp(1.0, rear_blind_m=0.09, trail_m=0.15, trail_yaw_deg=14.6,
+                      trail_age_s=20.1))
     with pytest.raises(AnswerRefused):
         machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator", "a1b2c3d4e5f6")
     answered = bus.named("nav.line_stuck_answered")[-1]
@@ -555,3 +659,28 @@ def test_refused_back_and_retry_answer_carries_the_judged_scan():
     assert (answered["trail_m"], answered["trail_yaw_deg"], answered["trail_age_s"],
             answered["rear_blind_m"]) == (0.15, 14.6, 20.1, 0.09)
     assert answered["principal_ref"] == "a1b2c3d4e5f6" and "token_id" not in answered
+
+
+def test_repeated_require_operator_asks_once_per_stuck():
+    # D-468 lane return calls this every tick while fleet_required; one ask per opening.
+    machine, bus = _machine()
+    for i in range(20):
+        machine.require_operator(_inp(i * 0.05, cause="lane_lost"))
+    assert len(bus.named("nav.line_stuck_opened")) == 1
+    asked = bus.named("nav.line_stuck_asked")
+    assert [a["reason"] for a in asked] == ["local_candidates_exhausted"]
+    assert asked[0]["local_fallback_s"] is None and machine.phase == WAITING_CONSOLE
+    assert len({a["stuck_id"] for a in asked}) == 1
+
+
+def test_fleet_required_refuses_back_and_retry():
+    decision, kw = "BACK_AND_RETRY", {}
+    machine, bus = _machine()
+    machine.require_operator(_inp(0.0, cause="lane_lost"))
+    with pytest.raises(AnswerRefused):
+        machine.answer(0.1, "stuck-1", decision, "operator", **kw)
+    machine.require_operator(_inp(0.2, cause="lane_lost"))
+    answered = bus.named("nav.line_stuck_answered")
+    assert answered[-1]["accepted"] is False and answered[-1]["reason"] == "lane_return_fleet_required"
+    assert machine.phase == WAITING_CONSOLE and not bus.named("nav.line_stuck_local_attempt")
+    assert len(bus.named("nav.line_stuck_asked")) == 1

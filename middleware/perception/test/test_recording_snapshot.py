@@ -53,6 +53,7 @@ def test_record_topics_choose_the_camera_stream():
     assert record_topics(COMPRESSED_CAMERA_TOPIC) == (
         COMPRESSED_CAMERA_TOPIC, *SIDE_TOPICS)
     assert "odom" in SIDE_TOPICS
+    assert "line/keep_debug" in SIDE_TOPICS
     assert COMPRESSED_CAMERA_TOPIC == "camera/front/compressed"
 
 
@@ -348,7 +349,8 @@ def test_topics_use_the_jazzy_topics_flag(tmp_path):
                 snapshot_bag_command(tmp_path / "c", namespace="rosy_01", node_name="n")):
         i = cmd.index("--topics")
         assert all(t.startswith("/rosy_01/") for t in cmd[i + 1:])
-        assert len(cmd[i + 1:]) == 6  # camera, 4 side topics (incl. scan), odom
+        assert len(cmd[i + 1:]) == 8  # camera, motion and lane evidence, ground status
+        assert cmd[i + 1:].count('/rosy_01/camera/calibration/status') == 1
 
 
 

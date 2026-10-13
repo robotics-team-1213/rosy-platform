@@ -16,6 +16,7 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-544 | 천장 카메라(Rosy Cam)는 나쁜 조명을 스스로 재고 노출 보정만 한정된 범위에서 고친다 — 기본 꺼짐, 폰이 닫는 고리, 기하 보정은 건드리지 않는다 |
 
 ## 계획·결과 문서
 
@@ -33,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · Cam 송출 화면의 운영 정보 우선 표시
-- 2026-10-04 · uncommitted · D-427 preserve remote Cam changes
-- 2026-10-04 · uncommitted · fix(cam): 필요할 때만 요청하는 촬영 조명
-- 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인
-- 2026-10-04 · uncommitted · feat(cam): 시간 제한 자동 조명과 송출 사진 저장·공유
+- 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
+- 2026-10-12 · d780942b9 · feat(cam): D-691 요청이 끊긴 뒤 30초 유지
+- 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
+- 2026-10-10 · uncommitted · fix(cam): D-589 S2 재리뷰 반영
+- 2026-10-10 · uncommitted · fix(cam): D-589 S2 독립 리뷰 반영

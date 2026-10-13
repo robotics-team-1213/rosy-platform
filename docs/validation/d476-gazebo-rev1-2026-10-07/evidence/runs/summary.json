@@ -1,0 +1,1246 @@
+{
+ "A_corner_1": {
+  "rtf": 0.997,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 619,
+   "HOLD obstacle_ahead": 80,
+   "HOLD camera_line_not_visible": 22,
+   "LOST camera_reselection_required": 39
+  },
+  "gt_start": [
+   -1.269549999999995,
+   0.24254999999999977,
+   -1.5707999999999052
+  ],
+  "gt_end": [
+   -0.7597210092426245,
+   -0.43283803028896556,
+   0.5432511690929279
+  ],
+  "gt_path_m": 1.1851,
+  "loss": {
+   "t": 95.618,
+   "sim_t": 388.89,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.7597275782999824,
+    -0.4328419277559367,
+    0.5342739980538139
+   ],
+   "odom": [
+    -0.7597446247590488,
+    -0.4328519625995564,
+    0.5303488053442351
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.998,
+  "min_wall_gap_after_loss_m": 0.1044,
+  "min_scan_after_loss_m": 0.1151,
+  "line_stuck_asked_per_id": {
+   "stuck-777e576f34df": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.7597210092426245,
+    -0.43283803028896556,
+    0.5432511690929279
+   ]
+  }
+ },
+ "A_round_1": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 13,
+   "HOLD junction_waiting": 22,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 37
+  },
+  "gt_start": [
+   -0.5850000000000001,
+   -0.11999999999999975,
+   1.5708000000000022
+  ],
+  "gt_end": [
+   -0.579746297281212,
+   -0.07304673701342393,
+   1.3617350520468114
+  ],
+  "gt_path_m": 0.0474,
+  "loss": null,
+  "bridges": [],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": null,
+  "min_scan_after_loss_m": null,
+  "line_stuck_asked_per_id": {
+   "stuck-d4be244d8403": 2
+  },
+  "junction_post": null,
+  "final": null
+ },
+ "B_round_1": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 13,
+   "HOLD junction_waiting": 23,
+   "LOST camera_reselection_required": 39
+  },
+  "gt_start": [
+   -0.5850000000000001,
+   -0.11999999999999975,
+   1.5708000000000022
+  ],
+  "gt_end": [
+   -0.5797409923229463,
+   -0.07283394884922326,
+   1.3662827801542319
+  ],
+  "gt_path_m": 0.0476,
+  "loss": null,
+  "bridges": [],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": null,
+  "min_scan_after_loss_m": null,
+  "line_stuck_asked_per_id": {
+   "stuck-022eb4c7c440": 2
+  },
+  "junction_post": null,
+  "final": null
+ },
+ "B_straight_1": {
+  "rtf": 1.001,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 13,
+   "HOLD junction_waiting": 1,
+   "HOLD camera_line_not_visible": 21,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 38
+  },
+  "gt_start": [
+   -0.5850002396366496,
+   -0.11999999652329513,
+   1.5708070099583764
+  ],
+  "gt_end": [
+   -0.579620974430797,
+   -0.072239615564666,
+   1.3613804806598315
+  ],
+  "gt_path_m": 0.0482,
+  "loss": {
+   "t": 2.048,
+   "sim_t": 40.65,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.579620974430797,
+    -0.072239615564666,
+    1.3613804806598315
+   ],
+   "odom": [
+    -0.579620974430797,
+    -0.072239615564666,
+    1.3613804806598315
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.802,
+  "min_wall_gap_after_loss_m": 0.4667,
+  "min_scan_after_loss_m": 0.4669,
+  "line_stuck_asked_per_id": {
+   "stuck-bfbc5e9ea344": 2
+  },
+  "junction_post": {
+   "t": 1.89,
+   "sim_t": 40.492,
+   "reply": [
+    200,
+    {
+     "accepted": true,
+     "junction_seq": 1,
+     "state": "armed"
+    }
+   ]
+  },
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.579620974430797,
+    -0.072239615564666,
+    1.3613804806598315
+   ]
+  }
+ },
+ "B_straight_2": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 13,
+   "HOLD junction_waiting": 1,
+   "HOLD camera_line_not_visible": 21,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 38
+  },
+  "gt_start": [
+   -0.5849997769588711,
+   -0.1200000032541035,
+   1.5707934758230222
+  ],
+  "gt_end": [
+   -0.5794858055556732,
+   -0.07310251342860426,
+   1.3601405301015494
+  ],
+  "gt_path_m": 0.0473,
+  "loss": {
+   "t": 2.048,
+   "sim_t": 54.938,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.5794858055556732,
+    -0.07310251342860426,
+    1.3601405301015494
+   ],
+   "odom": [
+    -0.5794858055556732,
+    -0.07310251342860426,
+    1.3601405301015494
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.745,
+  "min_wall_gap_after_loss_m": 0.4657,
+  "min_scan_after_loss_m": 0.4774,
+  "line_stuck_asked_per_id": {
+   "stuck-36298289ed92": 2
+  },
+  "junction_post": {
+   "t": 1.899,
+   "sim_t": 54.786,
+   "reply": [
+    200,
+    {
+     "accepted": true,
+     "junction_seq": 2,
+     "state": "armed"
+    }
+   ]
+  },
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.5794858055556732,
+    -0.07310251342860426,
+    1.3601405301015494
+   ]
+  }
+ },
+ "B_straight_3": {
+  "rtf": 1.003,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 13,
+   "HOLD junction_waiting": 1,
+   "HOLD camera_line_not_visible": 21,
+   "LOST camera_reselection_required": 39
+  },
+  "gt_start": [
+   -0.5849999434205212,
+   -0.12000000074500805,
+   1.5707983423659349
+  ],
+  "gt_end": [
+   -0.5796217303888047,
+   -0.07227878269592279,
+   1.361100299095499
+  ],
+  "gt_path_m": 0.0481,
+  "loss": {
+   "t": 2.058,
+   "sim_t": 69.134,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.5796217303888047,
+    -0.07227878269592279,
+    1.361100299095499
+   ],
+   "odom": [
+    -0.5796217303888047,
+    -0.07227878269592279,
+    1.361100299095499
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.852,
+  "min_wall_gap_after_loss_m": 0.4666,
+  "min_scan_after_loss_m": 0.4821,
+  "line_stuck_asked_per_id": {
+   "stuck-0b784f1deee4": 2
+  },
+  "junction_post": {
+   "t": 1.917,
+   "sim_t": 68.982,
+   "reply": [
+    200,
+    {
+     "accepted": true,
+     "junction_seq": 3,
+     "state": "armed"
+    }
+   ]
+  },
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.5796217303888047,
+    -0.07227878269592279,
+    1.361100299095499
+   ]
+  }
+ },
+ "C_corner_1": {
+  "rtf": 1.0,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 597,
+   "HOLD obstacle_ahead": 53,
+   "HOLD camera_line_not_visible": 24,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 38
+  },
+  "gt_start": [
+   -1.2695502595766712,
+   0.24255000380303088,
+   -1.5708075979733815
+  ],
+  "gt_end": [
+   -0.7680215577001984,
+   -0.4373819933055744,
+   0.5318492321543122
+  ],
+  "gt_path_m": 1.1798,
+  "loss": {
+   "t": 11.099,
+   "sim_t": 131.627,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2690641669182676,
+    0.15714213013396494,
+    -1.4954864236469476
+   ],
+   "odom": [
+    -1.2690641663175888,
+    0.15714212216640172,
+    -1.4949306272906686
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 80.096,
+  "min_wall_gap_after_loss_m": 0.0421,
+  "min_scan_after_loss_m": 0.058,
+  "line_stuck_asked_per_id": {
+   "stuck-017f15cd7508": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.7680215577001984,
+    -0.4373819933055744,
+    0.5318492321543122
+   ]
+  }
+ },
+ "C_corner_2": {
+  "rtf": 1.0,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "HOLD obstacle_ahead": 2,
+   "TRACKING tracking": 52,
+   "HOLD camera_line_not_visible": 23,
+   "LOST camera_reselection_required": 39
+  },
+  "gt_start": [
+   -1.2695486896980683,
+   0.24255003869846262,
+   -1.570762538990942
+  ],
+  "gt_end": [
+   -1.2700447389657843,
+   0.15383132166386082,
+   -1.5809300177587913
+  ],
+  "gt_path_m": 0.0887,
+  "loss": {
+   "t": 7.517,
+   "sim_t": 228.7,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2700447389657843,
+    0.15383132166386082,
+    -1.5809300177587913
+   ],
+   "odom": [
+    -1.2700447389657843,
+    0.15383132166386082,
+    -1.5809300177587913
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 3.061,
+  "min_wall_gap_after_loss_m": 0.0729,
+  "min_scan_after_loss_m": 0.0633,
+  "line_stuck_asked_per_id": {
+   "stuck-07acef51beb1": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2700447389657843,
+    0.15383132166386082,
+    -1.5809300177587913
+   ]
+  }
+ },
+ "C_corner_3": {
+  "rtf": 0.998,
+  "ticks": {
+   "TRACKING tracking": 54,
+   "HOLD obstacle_ahead": 1420
+  },
+  "gt_start": [
+   -1.2695502443235498,
+   0.24254999956717405,
+   -1.5708071784893123
+  ],
+  "gt_end": [
+   -1.269922524738824,
+   0.1700224695830956,
+   -1.600192659894825
+  ],
+  "gt_path_m": 0.0725,
+  "loss": null,
+  "bridges": [],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": null,
+  "min_scan_after_loss_m": null,
+  "line_stuck_asked_per_id": {
+   "stuck-67cda251115e": 2
+  },
+  "junction_post": null,
+  "final": null
+ },
+ "Cb_corner_1": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 232,
+   "HOLD obstacle_ahead": 17,
+   "HOLD camera_line_not_visible": 25,
+   "LOST camera_reselection_required": 43
+  },
+  "gt_start": [
+   -1.26955,
+   0.24254999999999974,
+   -1.5708000000000022
+  ],
+  "gt_end": [
+   -0.7670031001509583,
+   -0.4364278460770076,
+   0.5685128387156706
+  ],
+  "gt_path_m": 1.1793,
+  "loss": {
+   "t": 29.806,
+   "sim_t": 40.516,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.7670038600195648,
+    -0.4364283200405395,
+    0.5572924243608813
+   ],
+   "odom": [
+    -0.7670095880851182,
+    -0.4364318736201066,
+    0.5539753057796127
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.961,
+  "min_wall_gap_after_loss_m": 0.1,
+  "min_scan_after_loss_m": 0.1111,
+  "line_stuck_asked_per_id": {
+   "stuck-84312b03161f": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.7670031001509583,
+    -0.4364278460770076,
+    0.5685128387156706
+   ]
+  }
+ },
+ "Cb_corner_2": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 103,
+   "HOLD obstacle_ahead": 1150
+  },
+  "gt_start": [
+   -1.26955,
+   0.2425499999999997,
+   -1.570799999999991
+  ],
+  "gt_end": [
+   -1.2700791527294895,
+   -0.36977286014669575,
+   -1.5960752562876452
+  ],
+  "gt_path_m": 0.6124,
+  "loss": null,
+  "bridges": [],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": null,
+  "min_scan_after_loss_m": null,
+  "line_stuck_asked_per_id": {
+   "stuck-acfdecd719ba": 2
+  },
+  "junction_post": null,
+  "final": null
+ },
+ "Cb_corner_3": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 225,
+   "HOLD obstacle_ahead": 12,
+   "HOLD camera_line_not_visible": 25,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 43
+  },
+  "gt_start": [
+   -1.26955,
+   0.24254999999999974,
+   -1.5708000000000006
+  ],
+  "gt_end": [
+   -0.7630104020337316,
+   -0.43112036397268383,
+   0.584169611572286
+  ],
+  "gt_path_m": 1.1833,
+  "loss": {
+   "t": 28.349,
+   "sim_t": 235.122,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -0.763023831257132,
+    -0.4311290310351398,
+    0.5709852331244445
+   ],
+   "odom": [
+    -0.7630295437818243,
+    -0.4311326937912582,
+    0.5695794066492154
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.975,
+  "min_wall_gap_after_loss_m": 0.1048,
+  "min_scan_after_loss_m": 0.1203,
+  "line_stuck_asked_per_id": {
+   "stuck-b5d86e86f880": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -0.7630104020337316,
+    -0.43112036397268383,
+    0.584169611572286
+   ]
+  }
+ },
+ "D_off_1": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 26,
+   "HOLD obstacle_ahead": 5,
+   "HOLD camera_line_not_visible": 23,
+   "LOST camera_reselection_required": 39
+  },
+  "gt_start": [
+   -1.2695499999999997,
+   -0.04999999999999977,
+   1.5708000000000022
+  ],
+  "gt_end": [
+   -1.2694296360041786,
+   -0.024328308950365495,
+   1.5651531511204342
+  ],
+  "gt_path_m": 0.0257,
+  "loss": {
+   "t": 4.361,
+   "sim_t": 67.848,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2694296360041786,
+    -0.024328308950365495,
+    1.5651531511204342
+   ],
+   "odom": [
+    -1.2694296360041786,
+    -0.024328308950365495,
+    1.5651531511204342
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 3.117,
+  "min_wall_gap_after_loss_m": 0.0735,
+  "min_scan_after_loss_m": 0.0588,
+  "line_stuck_asked_per_id": {
+   "stuck-de0537d66d00": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2694296360041786,
+    -0.024328308950365495,
+    1.5651531511204342
+   ]
+  }
+ },
+ "D_on_1": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 21,
+   "HOLD obstacle_ahead": 2,
+   "HOLD lane_bridge_motion_unconfirmed": 1,
+   "HOLD camera_line_not_visible": 21,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 37
+  },
+  "gt_start": [
+   -1.2695499999999997,
+   -0.04999999999999977,
+   1.5708000000000022
+  ],
+  "gt_end": [
+   -1.2695238020737214,
+   -0.024752573936463487,
+   1.5713978740177925
+  ],
+  "gt_path_m": 0.0252,
+  "loss": {
+   "t": 3.353,
+   "sim_t": 14.246,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2695238020737214,
+    -0.024752573936463487,
+    1.5713978740177925
+   ],
+   "odom": [
+    -1.2695238020737214,
+    -0.024752573936463487,
+    1.5713978740177925
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.852,
+  "min_wall_gap_after_loss_m": 0.0739,
+  "min_scan_after_loss_m": 0.0605,
+  "line_stuck_asked_per_id": {
+   "stuck-ee8190e20743": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2695238020737214,
+    -0.024752573936463487,
+    1.5713978740177925
+   ]
+  }
+ },
+ "D_on_2": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 29,
+   "HOLD camera_line_not_visible": 22,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 38
+  },
+  "gt_start": [
+   -1.2695499211265113,
+   -0.04999999998302974,
+   1.5707976808418322
+  ],
+  "gt_end": [
+   -1.2694427262609442,
+   -0.016396545967728417,
+   1.5684063385780969
+  ],
+  "gt_path_m": 0.0336,
+  "loss": {
+   "t": 4.081,
+   "sim_t": 30.518,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2694427262609442,
+    -0.016396545967728417,
+    1.5684063385780969
+   ],
+   "odom": [
+    -1.2694427262609442,
+    -0.016396545967728417,
+    1.5684063385780969
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.948,
+  "min_wall_gap_after_loss_m": 0.0738,
+  "min_scan_after_loss_m": 0.0617,
+  "line_stuck_asked_per_id": {
+   "stuck-6394f5bf6d3b": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2694427262609442,
+    -0.016396545967728417,
+    1.5684063385780969
+   ]
+  }
+ },
+ "D_on_3": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 32,
+   "HOLD obstacle_ahead": 9,
+   "HOLD camera_line_not_visible": 18,
+   "LOST camera_reselection_required": 38
+  },
+  "gt_start": [
+   -1.2695501788424959,
+   -0.05000000006609299,
+   1.570805254901062
+  ],
+  "gt_end": [
+   -1.269484238585087,
+   -0.01966563199703555,
+   1.570957535286393
+  ],
+  "gt_path_m": 0.0303,
+  "loss": {
+   "t": 5.376,
+   "sim_t": 48.291,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.269484238585087,
+    -0.01966563199703555,
+    1.570957535286393
+   ],
+   "odom": [
+    -1.269484238585087,
+    -0.01966563199703555,
+    1.570957535286393
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.692,
+  "min_wall_gap_after_loss_m": 0.0739,
+  "min_scan_after_loss_m": 0.0605,
+  "line_stuck_asked_per_id": {
+   "stuck-d407ee6a35cd": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.269484238585087,
+    -0.01966563199703555,
+    1.570957535286393
+   ]
+  }
+ },
+ "Db_on_1": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 38,
+   "RECOVERING lane_bridge": 3,
+   "HOLD junction_waiting": 461
+  },
+  "gt_start": [
+   -1.2695499999999997,
+   -0.04999999999999977,
+   1.5708000000000022
+  ],
+  "gt_end": [
+   -1.2678054933886407,
+   0.11351962326674836,
+   1.5283607888084207
+  ],
+  "gt_path_m": 0.1636,
+  "loss": {
+   "t": 0.838,
+   "sim_t": 11.676,
+   "state": "RECOVERING",
+   "reason": "lane_bridge",
+   "gt": [
+    -1.2693762472101184,
+    -0.016995015288365795,
+    1.5610603774457987
+   ],
+   "odom": [
+    -1.2693868156831825,
+    -0.018114971107076543,
+    1.5616316158116734
+   ]
+  },
+  "bridges": [
+   {
+    "enter_t": 0.838,
+    "enter_gt": [
+     -1.2693762472101184,
+     -0.016995015288365795,
+     1.5610603774457987
+    ],
+    "ticks": 3,
+    "sim_s": 0.361,
+    "odom_m": 0.0249,
+    "gt_m": 0.0236,
+    "end": "TRACKING tracking",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0728,
+    "min_scan_m": 0.07313736528158188
+   }
+  ],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": 0.0654,
+  "min_scan_after_loss_m": 0.0523,
+  "line_stuck_asked_per_id": {},
+  "junction_post": null,
+  "final": {
+   "state": "HOLD",
+   "reason": "junction_waiting",
+   "gt": [
+    -1.2678054933886407,
+    0.11351962326674836,
+    1.5283607888084207
+   ]
+  }
+ },
+ "Db_on_2": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 79,
+   "RECOVERING lane_bridge": 18,
+   "HOLD obstacle_ahead": 3,
+   "HOLD camera_line_not_visible": 7,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 42
+  },
+  "gt_start": [
+   -1.2695503966934107,
+   -0.050000005695032095,
+   1.5708116055293726
+  ],
+  "gt_end": [
+   -1.2722982509503176,
+   0.4365747411299106,
+   1.5814084617138886
+  ],
+  "gt_path_m": 0.4866,
+  "loss": {
+   "t": 0.945,
+   "sim_t": 76.158,
+   "state": "RECOVERING",
+   "reason": "lane_bridge",
+   "gt": [
+    -1.2694783825168954,
+    -0.012583382033671285,
+    1.5670156505556074
+   ],
+   "odom": [
+    -1.2694850763784136,
+    -0.014343368927998788,
+    1.5669722898631013
+   ]
+  },
+  "bridges": [
+   {
+    "enter_t": 0.945,
+    "enter_gt": [
+     -1.2694783825168954,
+     -0.012583382033671285,
+     1.5670156505556074
+    ],
+    "ticks": 3,
+    "sim_s": 0.357,
+    "odom_m": 0.0268,
+    "gt_m": 0.0251,
+    "end": "TRACKING tracking",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0736,
+    "min_scan_m": 0.07352066785097122
+   },
+   {
+    "enter_t": 9.898,
+    "enter_gt": [
+     -1.271041797711565,
+     0.31818140368474346,
+     1.5814084617452255
+    ],
+    "ticks": 15,
+    "sim_s": 1.782,
+    "odom_m": 0.1176,
+    "gt_m": 0.1184,
+    "end": "HOLD obstacle_ahead",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0707,
+    "min_scan_m": 0.05000000074505806
+   }
+  ],
+  "lost_after_loss_sim_s": 11.91,
+  "min_wall_gap_after_loss_m": 0.0707,
+  "min_scan_after_loss_m": 0.05,
+  "line_stuck_asked_per_id": {
+   "stuck-6536e542ee54": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2722982509503176,
+    0.4365747411299106,
+    1.5814084617138886
+   ]
+  }
+ },
+ "Db_on_3": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 32,
+   "RECOVERING lane_bridge": 3,
+   "HOLD junction_waiting": 465
+  },
+  "gt_start": [
+   -1.2695497108760594,
+   -0.05000000000250155,
+   1.5707914987677285
+  ],
+  "gt_end": [
+   -1.2697227596030787,
+   0.09898159391653515,
+   1.5172440895057824
+  ],
+  "gt_path_m": 0.149,
+  "loss": {
+   "t": 0.709,
+   "sim_t": null,
+   "state": "RECOVERING",
+   "reason": "lane_bridge",
+   "gt": [
+    -1.2694441888816739,
+    -0.02580182327007792,
+    1.5655781661165717
+   ],
+   "odom": null
+  },
+  "bridges": [
+   {
+    "enter_t": 0.709,
+    "enter_gt": [
+     -1.2694441888816739,
+     -0.02580182327007792,
+     1.5655781661165717
+    ],
+    "ticks": 3,
+    "sim_s": null,
+    "odom_m": 0,
+    "gt_m": 0.0285,
+    "end": "TRACKING tracking",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0731,
+    "min_scan_m": null
+   }
+  ],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": 0.0697,
+  "min_scan_after_loss_m": 0.05,
+  "line_stuck_asked_per_id": {},
+  "junction_post": null,
+  "final": {
+   "state": "HOLD",
+   "reason": "junction_waiting",
+   "gt": [
+    -1.2697227596030787,
+    0.09898159391653515,
+    1.5172440895057824
+   ]
+  }
+ },
+ "Db_straight_1": {
+  "rtf": 0.999,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 7,
+   "HOLD camera_line_not_visible": 25,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 43
+  },
+  "gt_start": [
+   -1.269549687784847,
+   -0.05000000739535767,
+   1.5707909511487288
+  ],
+  "gt_end": [
+   -1.2694597567414012,
+   -0.0141850415573512,
+   1.5720701019131849
+  ],
+  "gt_path_m": 0.0358,
+  "loss": {
+   "t": 0.962,
+   "sim_t": 296.479,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible",
+   "gt": [
+    -1.2694597567414012,
+    -0.0141850415573512,
+    1.5720701019131849
+   ],
+   "odom": [
+    -1.2694596803743976,
+    -0.014244994812384826,
+    1.5720701019126038
+   ]
+  },
+  "bridges": [],
+  "lost_after_loss_sim_s": 2.984,
+  "min_wall_gap_after_loss_m": 0.0739,
+  "min_scan_after_loss_m": 0.0594,
+  "line_stuck_asked_per_id": {
+   "stuck-edbda58f0598": 2
+  },
+  "junction_post": null,
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2694597567414012,
+    -0.0141850415573512,
+    1.5720701019131849
+   ]
+  }
+ },
+ "Db_straight_2": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING camera_no_observation": 1,
+   "TRACKING tracking": 32,
+   "RECOVERING lane_bridge": 3,
+   "HOLD junction_waiting": 38,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 31
+  },
+  "gt_start": [
+   -1.2695503513299344,
+   -0.05000000002126683,
+   1.5708103303008796
+  ],
+  "gt_end": [
+   -1.2707419890918235,
+   0.0950063520265738,
+   1.5598204802344224
+  ],
+  "gt_path_m": 0.145,
+  "loss": {
+   "t": 0.808,
+   "sim_t": 309.625,
+   "state": "RECOVERING",
+   "reason": "lane_bridge",
+   "gt": [
+    -1.2694215047471633,
+    -0.02161063227448084,
+    1.5639563495327313
+   ],
+   "odom": [
+    -1.269428774717073,
+    -0.02273060866527371,
+    1.5646076060571277
+   ]
+  },
+  "bridges": [
+   {
+    "enter_t": 0.808,
+    "enter_gt": [
+     -1.2694215047471633,
+     -0.02161063227448084,
+     1.5639563495327313
+    ],
+    "ticks": 3,
+    "sim_s": 0.352,
+    "odom_m": 0.0267,
+    "gt_m": 0.0265,
+    "end": "TRACKING tracking",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0729,
+    "min_scan_m": 0.07898754626512527
+   }
+  ],
+  "lost_after_loss_sim_s": 6.687,
+  "min_wall_gap_after_loss_m": 0.0718,
+  "min_scan_after_loss_m": 0.0617,
+  "line_stuck_asked_per_id": {
+   "stuck-603d0a59da45": 2
+  },
+  "junction_post": {
+   "t": 2.127,
+   "sim_t": 310.946,
+   "reply": [
+    200,
+    {
+     "accepted": true,
+     "junction_seq": 1,
+     "state": "armed"
+    }
+   ]
+  },
+  "final": {
+   "state": "LOST",
+   "reason": "camera_reselection_required",
+   "gt": [
+    -1.2707419890918235,
+    0.0950063520265738,
+    1.5598204802344224
+   ]
+  }
+ },
+ "Db_straight_3": {
+  "rtf": 0.998,
+  "ticks": {
+   "WAITING no_observation": 1,
+   "TRACKING tracking": 33,
+   "RECOVERING lane_bridge": 2,
+   "HOLD junction_waiting": 42,
+   "LOST reselection_required": 1,
+   "LOST camera_reselection_required": 27
+  },
+  "gt_start": [
+   -1.269549863071101,
+   -0.05000000170964772,
+   1.5707959896235737
+  ],
+  "gt_end": [
+   -1.2710383566512231,
+   0.09535636417187847,
+   1.5563302140150215
+  ],
+  "gt_path_m": 0.1454,
+  "loss": {
+   "t": 0.838,
+   "sim_t": null,
+   "state": "RECOVERING",
+   "reason": "lane_bridge",
+   "gt": [
+    -1.2694737799080509,
+    -0.01756833298809841,
+    1.5696457484958293
+   ],
+   "odom": null
+  },
+  "bridges": [
+   {
+    "enter_t": 0.838,
+    "enter_gt": [
+     -1.2694737799080509,
+     -0.01756833298809841,
+     1.5696457484958293
+    ],
+    "ticks": 2,
+    "sim_s": null,
+    "odom_m": 0,
+    "gt_m": 0.017,
+    "end": "TRACKING tracking",
+    "max_linear": 0.08,
+    "min_wall_gap_m": 0.0738,
+    "min_scan_m": null
+   }
+  ],
+  "lost_after_loss_sim_s": null,
+  "min_wall_gap_after_loss_m": 0.0713,
+  "min_scan_after_loss_m": 0.0617,
+  "line_stuck_asked_per_id": {
+   "stuck-7ca1d9a821cb": 2
+  },
+  "junction_post": {
+   "t": 4.321,
+   "sim_t": 329.953,
+   "reply": [
+    409,
+    {
+     "error": {
+      "code": "JUNCTION_ALREADY_DONE",
+      "message": "straight at gap-north already ran; send the next place",
+      "detail": null
+     }
+    }
+   ]
+  },
+  "final": {
+   "state": "HOLD",
+   "reason": "junction_waiting",
+   "gt": [
+    -1.2710383566512231,
+    0.09535636417187847,
+    1.5563302140150215
+   ]
+  }
+ }
+}

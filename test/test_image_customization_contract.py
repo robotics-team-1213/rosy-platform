@@ -28,6 +28,29 @@ def test_ros_apt_source_package_is_exactly_pinned():
     assert ros["apt_source_sha256"] == "0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5"
 
 
+def test_tailscale_deb_is_pinned_and_installed_after_its_dependencies():
+    # D-477: one checksummed upstream deb; its hard dependency (iptables)
+    # comes from the locked Ubuntu suites before dpkg -i, wiringpi-style.
+    lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    ts = lock["tailscale"]
+
+    assert ts["url"] == (
+        "https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_"
+        f"{ts['version']}_arm64.deb"
+    )
+    assert len(ts["sha256"]) == 64 and ts["sha256"] != ts.get("size")
+    assert 'TAILSCALE_URL="$(lock_value tailscale url)"' in source
+    assert '"$ACTUAL_TAILSCALE_SHA" == "$TAILSCALE_SHA"' in source
+    assert "iptables" in source and "iproute2" in source
+    apt_install = source.index("apt-get install -y --no-install-recommends")
+    dpkg = source.index("dpkg -i /tmp/tailscale.deb")
+    assert apt_install < dpkg
+    # The daemon unit ships in the deb; the customizer enables it beside the
+    # D-477 join helper.
+    assert "tailscaled.service" in source
+
+
 def test_customizer_installs_native_ros_and_never_product_docker():
     source = CUSTOMIZER.read_text(encoding="utf-8")
     build = (IMAGE / "build-image.sh").read_text(encoding="utf-8")
@@ -1011,8 +1034,8 @@ def test_vendor_preparation_refuses_a_used_destination(tmp_path):
 
 
 def test_the_bringup_launch_includes_the_driver_the_image_builds():
-    launch = (ROOT / "middleware/apps/device/pinky/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
-    package = (ROOT / "middleware/apps/device/pinky/bringup/package.xml").read_text(encoding="utf-8")
+    launch = (ROOT / "middleware/devices/pinky/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
+    package = (ROOT / "middleware/devices/pinky/bringup/package.xml").read_text(encoding="utf-8")
     assert "get_package_share_directory('sllidar_ros2')" in launch
     assert "'sllidar_c1_launch.py'" in launch
     assert "<exec_depend>sllidar_ros2</exec_depend>" in package
@@ -1173,7 +1196,7 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     snippet = source[start:end]
     script = ('fail() { echo "FAIL $*" >&2; exit 1; }\n'
               'chroot() { shift; printf "%s\n" "$@"; }\n'
-              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/middleware/apps/device/pinky/bringup)\n' + snippet)
+              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/middleware/devices/pinky/bringup)\n' + snippet)
 
     completed = subprocess.run([_BASH, "-c", script, _posix(CUSTOMIZER)],
                                capture_output=True, text=True, check=False)
@@ -1183,7 +1206,7 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     assert args[:3] == ["rosdep", "install", "--from-paths"]
     assert "-r" in args and "--ignore-src" in args
     assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
-    bringup = (ROOT / "middleware/apps/device/pinky/bringup/package.xml").read_text(encoding="utf-8")
+    bringup = (ROOT / "middleware/devices/pinky/bringup/package.xml").read_text(encoding="utf-8")
     assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup
 
 

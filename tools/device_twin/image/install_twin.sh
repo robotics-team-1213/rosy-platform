@@ -41,7 +41,8 @@ for unit in rosy-release-recover.service rosy-sd-provision.service rosy-core.ser
             rosy-config.service rosy-network.service rosy-login-code.service rosy-hw-probe.service \
             rosy-hw-probe.path rosy-hw-test.service rosy-hw-test.path rosy-auto-update.service \
             rosy-auto-update.timer rosy-ssh-access.service rosy-ssh-access.path rosy-ssh-access-boot.service \
-            rosy-ssh-password-expire.service rosy-ssh-password-expire.timer; do
+            rosy-ssh-password-expire.service rosy-ssh-password-expire.timer \
+            rosy-tailscale-join.service; do
     install -m 0644 "$NATIVE/$unit" "/etc/systemd/system/$unit"
 done
 install -m 0644 "$CTX/twin/image/rosy-first-boot.service" /etc/systemd/system/rosy-first-boot.service
@@ -99,7 +100,7 @@ install -d -m 0755 /opt/twin
 install -m 0755 "$CTX/twin/image/twin-control" /usr/local/bin/twin-control
 install -m 0755 "$CTX/twin/image/sandbox_probe.py" /opt/twin/sandbox_probe.py
 # D-418: CORE's hand-over module from HEAD, driven by twin-ssh-request as rosy-core.
-install -m 0644 "$SRC/middleware/core/api_web/core_api_web/api/v1/ssh_handoff.py" /opt/twin/ssh_handoff.py
+install -m 0644 "$SRC/middleware/core/api/core_api_web/api/v1/ssh_handoff.py" /opt/twin/ssh_handoff.py
 install -m 0755 "$CTX/twin/image/twin-ssh-request" /usr/local/bin/twin-ssh-request
 # The probe unit is the real rosy-auto-update.service with only ExecStart swapped.
 sed 's#^ExecStart=.*#ExecStart=/usr/bin/python3 -I -B /opt/twin/sandbox_probe.py#' \

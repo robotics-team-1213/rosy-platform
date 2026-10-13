@@ -17,6 +17,7 @@
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 
 ## 계획·결과 문서
 
@@ -36,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
-- 2026-10-04 · uncommitted · feat(protocol): 공개 LAN rooms typed snapshot
-- 2026-10-04 · uncommitted · D-452 역할 발견과 승인 directory 계약
-- 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
-- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+- 2026-10-12 · ddbc7f64aa · D-732 native receipt nonblocking capture
+- 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유의 상황 줄
+- 2026-10-12 · fa75953dfe · feat(isaac): D-692 카메라 경계 관측 계약
+- 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
+- 2026-10-11 · 9fc0a88c9 · D-660 Fleet judgment DTO holder

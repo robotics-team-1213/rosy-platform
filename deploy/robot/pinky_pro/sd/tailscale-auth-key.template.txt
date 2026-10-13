@@ -1,0 +1,13 @@
+# D-477 테일넷 조인 auth key 템플릿 — 이 파일은 양식이며 비밀이 아니다.
+#
+# 실제 키는 이 파일을 복사해 저장소 밖 비공개 위치에 둔다(공개 저장소다):
+#   private/tailscale-auth-key.txt   (gitignored, D-226)
+# 키는 Tailscale 관리 콘솔(키 발급 화면)에서 만든다:
+#   종류: auth key / 태그 사전 승인(tag:rosy-robot 포함) / 재사용 여부는 운영 정책대로
+# 만료·회수는 발급 화면에서 한다. 키는 첫 부팅 번들의 tailscale 섹션으로만
+# 전달되고(first boot 후 /etc/rosy/tailscale-join.json에서 곧 소멸),
+# 영수증·로그에는 지문만 남는다.
+#
+# 아래 한 줄 외에는 아무것도 적지 않는다(공백·빈 줄 없이):
+
+tskey-auth-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX

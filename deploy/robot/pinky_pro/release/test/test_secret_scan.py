@@ -25,6 +25,23 @@ def test_scan_text():
     assert "wifi-psk" in kinds
 
 
+def test_markdown_sha256_table_exempts_only_its_digest_cell():
+    digest = "ab" * 32
+    other = "cd" * 32
+    header = "| File | SHA-256 | Note |\n|---|---|---|\n"
+    row = f"| image.png | `{digest}` | checked |\n"
+    assert secret_scan.scan_text("evidence.md", header + row) == []
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header.replace("SHA-256", "Value") + row))
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header + f"| `{other}` | `{digest}` | checked |\n"))
+    assert any(f.kind == "high-entropy-token" for f in secret_scan.scan_text(
+        "evidence.md", header + f"| image.png | `{digest}` extra | checked |\n"))
+    credential = 'api_' + 'token="' + 'live' + '9182aeb27c4d"'
+    assert any(f.kind == "credential" for f in secret_scan.scan_text(
+        "evidence.md", header + row.replace("checked", credential)))
+
+
 def test_psk_field_can_forward_a_form_value_without_a_literal_finding():
     assert secret_scan.scan_text(
         "operations.js", 'postHost(connect, {ssid: name, psk: passwordField.value}, "confirm");',
@@ -56,3 +73,63 @@ def test_the_same_quote_anywhere_else_is_still_a_secret(tmp_path):
     assert [f.kind for f in findings] == ["credential"], (
         "the prose excuse must stay pinned to the one journal path"
     )
+
+def test_nullable_kotlin_annotations_keep_credential_defaults_visible():
+    slot = 'request' + 'Secret'
+    argument = 'sec' + 'ret'
+    bearer_name = 'bear' + 'er'
+    declaration = 'private var ' + slot + ': String? = '
+    assert secret_scan.scan_text('Client.kt', declaration + 'null') == []
+    signature = 'fun call(' + argument + ': String? = null, ' + bearer_name + ': String? = null): String {'
+    assert secret_scan.scan_text('Client.kt', signature) == []
+    leaked = declaration + '"' + 'live' + '9182aeb27c4d"'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', leaked))
+    assert secret_scan.scan_text('config.yaml', argument + ': String? = null')
+
+
+def test_generated_request_secrets_and_named_slot_reads_are_code():
+    assert secret_scan.scan_text('service.py', 'secret = secrets.token_urlsafe(32)') == []
+    assert secret_scan.scan_text('service.py', 'def _row(self, request_id, secret=None):') == []
+    assert secret_scan.scan_text('Client.kt', 'requestSecret = string(created, "request_secret", 43)') == []
+    slot = 'request' + 'Secret'
+    leaked = slot + ' = string(created, "' + 'live' + '9182aeb27c4d", 43)'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', leaked))
+    leaked_call = 'sec' + 'ret = secrets.token_urlsafe("' + 'live' + '9182aeb27c4d")'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('service.py', leaked_call))
+    for filename in ('config.py', 'config.yaml'):
+        quoted_call = 'pass' + 'word = "secrets.token_urlsafe(32)"'
+        assert any(f.kind == 'credential' for f in secret_scan.scan_text(filename, quoted_call))
+    ambiguous_slot = slot + ' = decrypt("request___secret")'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', ambiguous_slot))
+
+
+def test_public_peer_vectors_are_bound_to_exact_path_field_and_value():
+    for field, values in secret_scan._PEER_PUBLIC_VECTOR_VALUES.items():
+        for value in values:
+            line = '  "' + field + '": "' + value + '",'
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, line) == []
+            assert secret_scan.scan_text('other.json', line)
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, line.replace(field, 'api_token'))
+            changed = line.replace(value, value[:-1] + ('3' if value[-1] != '3' else '4'))
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, changed)
+            mixed = line + ' api_' + 'token="' + 'live' + '9182aeb27c4d"'
+            assert any(f.kind == 'credential' for f in secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, mixed))
+
+
+def test_camera_public_vectors_keep_other_fields_and_paths_protected():
+    path = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+    nonce = '01' * 32
+    signature = ('MEQCIB8WKmontsmONrEJCGMhZ+'
+                 'ioZLoH4cDiBfq6s6FlP99GAiB'
+                 'tnNpxoX+FyYb20FDkoCxWsDWlZ'
+                 '50nT7yzs6l+5v+VAw==')
+    for field, value in [('nonce', nonce), ('signature', signature)]:
+        line = '  "' + field + '": "' + value + '",'
+        assert secret_scan.scan_text(path, line) == []
+        assert secret_scan.scan_text('other.json', line)
+        assert secret_scan.scan_text(path, line.replace(field, 'api_token'))
+        assert secret_scan.scan_text(path, line.replace(value, '03' * 32))
+        leaked = line + '\napi_' + 'token="' + 'live' + '9182aeb27c4d"'
+        assert any(f.kind == 'credential' for f in secret_scan.scan_text(path, leaked))
+    key_header = '-----BEGIN ' + 'PRIVATE KEY-----'
+    assert any(f.kind == 'private-key' for f in secret_scan.scan_text(path, key_header))

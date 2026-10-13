@@ -1,0 +1,294 @@
+{
+ "scenario": "fault",
+ "inject": "box_turn",
+ "then": "resend",
+ "plan": [
+  "right:-110/0.0"
+ ],
+ "injected": {
+  "sim_t": 224.137,
+  "gt": [
+   -0.654999989264639,
+   -0.4319999871315392,
+   0.7704871254616668
+  ],
+  "state": "turning",
+  "turned_deg": 20.0
+ },
+ "cmd_before_inject": {
+  "sim_t": 224.121,
+  "lin": 0.0,
+  "ang": -0.6
+ },
+ "first_zero_cmd_after": {
+  "sim_t": 224.262,
+  "lin": 0.0,
+  "ang": 0.0
+ },
+ "zero_cmd_latency_s": 0.125,
+ "resend": {
+  "code": 200,
+  "resp": {
+   "accepted": true,
+   "junction_seq": 7,
+   "state": "armed"
+  },
+  "seq": [
+   {
+    "t": 14.809,
+    "sim_t": 226.379,
+    "gt": [
+     -0.6551564869265547,
+     -0.4320993345274319,
+     0.5178551147081024
+    ],
+    "odom": [
+     -0.6551564869265547,
+     -0.4320993345274319,
+     0.5178551147081024,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "aborted",
+    "jr": "near_stop"
+   },
+   {
+    "t": 14.925,
+    "sim_t": 226.488,
+    "gt": [
+     -0.6550511035238007,
+     -0.43203928509086387,
+     0.5180655790385221
+    ],
+    "odom": [
+     -0.6550912024433629,
+     -0.4320621375791221,
+     0.517953945477174,
+     0.007513771813745178,
+     0.009683227780954446
+    ],
+    "state": "TRACKING",
+    "reason": "tracking",
+    "keep": null,
+    "body_gap_m": null,
+    "j": "armed",
+    "jr": null
+   },
+   {
+    "t": 15.493,
+    "sim_t": 227.019,
+    "gt": [
+     -0.6511405222434193,
+     -0.42940443504594844,
+     0.7227052576458154
+    ],
+    "odom": [
+     -0.6512026604205012,
+     -0.42945847343419186,
+     0.7099210456928151,
+     0.004308275867563477,
+     0.5773957496633763
+    ],
+    "state": "RECOVERING",
+    "reason": "junction_stopping",
+    "keep": "junction_transverse",
+    "body_gap_m": null,
+    "j": "turning",
+    "jr": null
+   },
+   {
+    "t": 16.068,
+    "sim_t": 227.564,
+    "gt": [
+     -0.6510608187779666,
+     -0.4293324538427603,
+     0.7994415362296339
+    ],
+    "odom": [
+     -0.6510608187779666,
+     -0.4293324538427603,
+     0.7994415362296339,
+     0.0,
+     0.0
+    ],
+    "state": "RECOVERING",
+    "reason": "junction_turning",
+    "keep": "junction_transverse",
+    "body_gap_m": null,
+    "j": "turning",
+    "jr": null
+   },
+   {
+    "t": 19.998,
+    "sim_t": 231.352,
+    "gt": [
+     -0.6516728799389712,
+     -0.42885839759349165,
+     -0.759351502850522
+    ],
+    "odom": [
+     -0.6516728799389712,
+     -0.42885839759349165,
+     -0.759351502850522,
+     0.0,
+     0.0
+    ],
+    "state": "HOLD",
+    "reason": "camera_line_not_visible",
+    "keep": "no_boundary",
+    "body_gap_m": 0.1323,
+    "j": "reacquiring",
+    "jr": null
+   },
+   {
+    "t": 23.117,
+    "sim_t": 234.343,
+    "gt": [
+     -0.6516728799389712,
+     -0.42885839759349165,
+     -0.759351502850522
+    ],
+    "odom": [
+     -0.6516728799389712,
+     -0.42885839759349165,
+     -0.759351502850522,
+     0.0,
+     0.0
+    ],
+    "state": "LOST",
+    "reason": "reselection_required",
+    "keep": "no_boundary",
+    "body_gap_m": 0.1453,
+    "j": "unresolved",
+    "jr": null
+   }
+  ],
+  "last": {
+   "t": 23.117,
+   "sim_t": 234.343,
+   "gt": [
+    -0.6516728799389712,
+    -0.42885839759349165,
+    -0.759351502850522
+   ],
+   "odom": [
+    -0.6516728799389712,
+    -0.42885839759349165,
+    -0.759351502850522,
+    0.0,
+    0.0
+   ],
+   "state": "LOST",
+   "reason": "reselection_required",
+   "keep": "no_boundary",
+   "body_gap_m": 0.1453,
+   "j": "unresolved",
+   "jr": null
+  }
+ },
+ "final_vs_entry_target_deg": 2.32,
+ "final_turned_from_entry_deg": -107.68,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-110/0.0",
+   "result": "aborted",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": 34.82,
+    "error_vs_target_gt_deg": 80.65,
+    "turned_gt_deg": -29.35,
+    "turned_odom_deg": -29.26,
+    "state_after": "aborted",
+    "reason_after": "near_stop",
+    "turn_s": 1.29
+   },
+   "at_done": {
+    "gt": [
+     -0.655,
+     -0.432,
+     0.608
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "near_stop",
+    "lane_offset_m": 0.002,
+    "heading_vs_lane_deg": -29.1
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "WAITING",
+     "reason": "no_observation",
+     "sim_t": 222.864
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 222.988
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 223.199
+    },
+    {
+     "j": "aborted",
+     "jr": "near_stop",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 224.275
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-110/0.0",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0059,
+ "final": {
+  "t": 23.117,
+  "sim_t": 234.343,
+  "gt": [
+   -0.6516728799389712,
+   -0.42885839759349165,
+   -0.759351502850522
+  ],
+  "odom": [
+   -0.6516728799389712,
+   -0.42885839759349165,
+   -0.759351502850522,
+   0.0,
+   0.0
+  ],
+  "state": "LOST",
+  "reason": "reselection_required",
+  "keep": "no_boundary",
+  "body_gap_m": 0.1453,
+  "j": "unresolved",
+  "jr": null
+ },
+ "capability_at_end": true
+}

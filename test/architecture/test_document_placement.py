@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # D-226 table "gitignore로 막는 것": sample paths that must never be committable.
 MUST_IGNORE = [
+    "deploy/site/state/fleet.sqlite3.camera-peer.pem",
+    "deploy/robot/pinky_pro/release/tls-local/ca.key",
+    "deploy/robot/pinky_pro/release/tls-local/leaf.key",
+    "deploy/robot/pinky_pro/release/tls-local/managed.json",
     'private/development/rosy_01/key.pem',
     'pilot-development.json',
     'cam-development.json',
@@ -37,10 +41,16 @@ MUST_IGNORE = [
     ".worktrees/topic/README.md",
     "fleet.sqlite3",
     "deploy/site/secrets/discovery_token",
+    # D-477: the operator's real tailnet join key lives in private/; the
+    # tracked form is the sd template beside the bundle tooling.
+    "private/tailscale-auth-key.txt",
+    "private/lab-hosts.json",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
 MUST_TRACK = [
+    "deploy/site/camera-peer-identity.template.yaml",
+    "deploy/robot/pinky_pro/release/native-tls.template.yaml",
     'tools/development-link.example.yaml',
     "deploy/robot/pinky_pro/.env.example",
     "deploy/site/discovery-token.template.txt",
@@ -48,15 +58,27 @@ MUST_TRACK = [
     "deploy/robot/pinky_pro/native/rosy-diag",
     "deploy/robot/pinky_pro/sd/rosy-config.template.yaml",
     "deploy/robot/pinky_pro/sd/provision.schema.json",
+    "deploy/robot/pinky_pro/sd/tailscale-auth-key.template.txt",
     "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
     "operations/vision/signal_observer/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
+    "tools/remote/hosts.example.json",
 ]
+
+# Live lab endpoints. Historical ADR, plan, validation, assessment, and log
+# rows keep the day's facts (D-226). These trees are what a clone still follows.
+_LAB_ENDPOINTS = (
+    "100.98.162.71",
+    "100.108.76.123",
+    "100.82.51.8",
+    "1213_device",
+)
+_LAB_ROBOT_LAN = ("192.168.1.201", "192.168.1.202")
 
 # DESIGN.md is the shared visual guide D-359 §8 places at the repo root.
 ROOT_FILES = {
     ".dockerignore", ".gitattributes", ".gitignore",
-    "AGENTS.md", "CONCEPTS.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
+    "AGENTS.md", "CONCEPTS.md", "CONTRIBUTING.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.
@@ -120,3 +142,40 @@ def test_module_roots_carry_only_the_listed_documents():
         if path not in MODULE_ROOT_EXCEPTIONS:
             stray.append(path)
     assert stray == []
+
+
+def _living_public_text(path: str) -> bool:
+    """Operator-facing copies. Records (ADR log, logs.md) stay out of this scan."""
+    if path.endswith("/logs.md") or path in {"deploy/logs.md", "docs/reference/ROSY ADR Log.md"}:
+        return False
+    if path in {"README.md", "AGENTS.md", "CONTRIBUTING.md"}:
+        return True
+    if path.startswith("tools/") and "/test/" not in f"/{path}" and path.endswith((".py", ".md", ".json")):
+        return True
+    if path.startswith("deploy/") and path.endswith(".md"):
+        return True
+    if path.startswith("learning/") and "/docs/" in path and path.endswith(".md"):
+        return True
+    return path.startswith((
+        "docs/deployment/", "docs/reference/", "docs/solutions/", "docs/spec/",
+    )) and path.endswith((".md", ".json"))
+
+
+def test_living_trees_do_not_name_lab_endpoints():
+    hits = []
+    for path in _tracked():
+        if not _living_public_text(path):
+            continue
+        text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
+        hits.extend(f"{path}: {token}" for token in _LAB_ENDPOINTS if token in text)
+    assert hits == []
+
+
+def test_tool_sources_do_not_name_lab_robot_addresses():
+    hits = []
+    for path in _tracked():
+        if not (path.startswith("tools/") and path.endswith(".py") and "/test/" not in f"/{path}"):
+            continue
+        text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
+        hits.extend(f"{path}: {token}" for token in _LAB_ROBOT_LAN if token in text)
+    assert hits == []

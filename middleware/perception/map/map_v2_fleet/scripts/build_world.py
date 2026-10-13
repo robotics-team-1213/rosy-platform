@@ -11,6 +11,7 @@ import argparse
 import importlib.util
 import math
 import struct
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -253,15 +254,100 @@ def _tape_xml(walls) -> str:
 """
 
 
+def training_point(point):
+    """Smoothly deepen the east S-bend, leaving outer paint and junctions fixed."""
+    x, y, *rest = point
+    if not 0.30 < x < 1.20 or abs(y) >= 0.40:
+        return tuple(point)
+    t = (x - 0.30) / 0.90
+    fade = max(0.0, (abs(y) - 0.20) / 0.20)
+    weight = 1.0 - fade * fade * (3.0 - 2.0 * fade)
+    shift = -0.06 * math.sin(2.0 * math.pi * t) * math.sin(math.pi * t) ** 2
+    return (x, y + weight * shift, *rest)
+
+
+def _training_triangles(triangle):
+    xs, ys = [p[0] for p in triangle], [p[1] for p in triangle]
+    if max(xs) <= 0.30 or min(xs) >= 1.20 or min(ys) >= 0.40 or max(ys) <= -0.40:
+        return [triangle]
+    # Subdivide long CAD faces so the curved paint follows the graph between vertices.
+    if max(math.dist(triangle[i], triangle[(i + 1) % 3]) for i in range(3)) <= 0.015:
+        return [tuple(training_point(p) for p in triangle)]
+    a, b, c = triangle
+    ab, bc, ca = [tuple((u + v) / 2 for u, v in zip(p, q))
+                  for p, q in ((a, b), (b, c), (c, a))]
+    return [t for child in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca))
+            for t in _training_triangles(child)]
+
+
+def training_scene(scene):
+    lines = tuple(t for triangle in scene.lines for t in _training_triangles(triangle))
+    return replace(scene, lines=lines, triangle_count=len(lines) + scene.wall_triangle_count,
+                   walls=tuple(replace(w, height=REAL_WALL_HEIGHT_M) for w in scene.walls))
+
+
+def caution_meshes():
+    """Shared visual-only warning paint, independent of white lane/crosswalk paint."""
+    rules = yaml.safe_load(RULES.read_text(encoding="utf-8"))['caution_markers']
+    width, depth = rules['size']
+    if not all(math.isfinite(v) and v > 0 for v in (width, depth)) or width <= 2 * depth:
+        raise ValueError('warning patch must have finite width greater than twice depth')
+    parts = []
+    for marker in rules['placements']:
+        cx, cy = marker['centre']
+        yaw = math.radians(marker['yaw_deg'])
+        if marker['id'] not in ('NE', 'NW', 'SW', 'SE') or not all(math.isfinite(v) for v in (cx, cy, yaw)):
+            raise ValueError('invalid warning placement')
+        c, s = math.cos(yaw), math.sin(yaw)
+        for colour, z in (('black', .002), ('orange', .0025)):
+            rgb = rules[colour + '_colour']
+            if len(rgb) != 3 or not all(math.isfinite(v) and 0 <= v <= 1 for v in rgb):
+                raise ValueError('invalid warning colour')
+            # A broad diagonal orange band between black ends, as in the real recording.
+            half = width / 2 if colour == 'black' else width / 4
+            quad = [(-half, -depth / 2), (half, -depth / 2),
+                    (half, depth / 2), (-half, depth / 2)]
+            vertices = []
+            for x, y in quad:
+                x += y if colour == 'orange' else 0
+                vertices.append((cx + c * x - s * y, cy + s * x + c * y, z))
+            parts.append(dict(id=marker['id'], name=f"caution_{marker['id']}_{colour}",
+                              colour=rgb, triangles=[tuple(vertices[i] for i in face)
+                                                     for face in ((0, 1, 2), (0, 2, 3))]))
+    return parts
+
+
+def _caution_xml():
+    return ''.join(f'''    <model name="{part['name']}">
+      <static>true</static><link name="link"><visual name="paint">
+        <geometry><mesh><uri>{MESH_URI.replace('road_lines', part['name'])}</uri></mesh></geometry>
+        <material><ambient>{' '.join(map(str, part['colour']))} 1</ambient>
+          <diffuse>{' '.join(map(str, part['colour']))} 1</diffuse></material>
+      </visual></link>
+    </model>
+''' for part in caution_meshes())
+
+
 def world_xml(scene, line_colour: str, profile: str = "default") -> str:
     floor, paint = COLOURS[line_colour]
-    if profile == "real":
+    mesh_uri = MESH_URI
+    geometry_note = "STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping."
+    if profile in ("real", "training"):
         floor, paint = REAL_FLOOR_RGBA, REAL_PAINT_RGBA
-        walls = "".join(_wall_xml(i, w, REAL_WALL_HEIGHT_M, REAL_WALL_MATERIAL)
+        material = REAL_WALL_MATERIAL
+        extra = _carpet_xml()
+        if profile == "training":
+            paint = "1 1 1 1"
+            material = "<ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse>"
+            mesh_uri = MESH_URI.replace("/meshes/", "/training-curved/meshes/")
+            geometry_note = "Training derivative: stronger east S-bend; not the measured physical map."
+        else:
+            extra += _tape_xml(scene.walls)
+        walls = "".join(_wall_xml(i, w, REAL_WALL_HEIGHT_M, material)
                         for i, w in enumerate(scene.walls))
-        extra = _carpet_xml() + _tape_xml(scene.walls)
-        note = ("\n  Real profile (D-364 5): carpet texture, white 0.30 m walls, "
-                "blue seam tape.")
+        note = ("\n  Real profile (D-364 5): carpet texture, white 0.30 m walls, blue seam tape."
+                if profile == "real" else
+                "\n  Training: white 0.30 m walls and white paint; no artificial dark separation.")
         scene_xml = "    <scene><background>0.35 0.30 0.30 1</background></scene>\n\n"
     else:
         walls = "".join(_wall_xml(i, w) for i, w in enumerate(scene.walls))
@@ -270,7 +356,7 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
 <!-- MAP v2 fleet / 260919 — generated by scripts/build_world.py. Do not edit.
   Source: 260919 MAP FILE.STL sha256 {scene.source_sha256}
   Envelope {scene.size_x:.3f} x {scene.size_y:.3f} m, centred at the origin.
-  STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
+  {geometry_note}
   Lane paint is visual-only; the perimeter ring is the only collision.
   dock_tag_7: the stage-3 parking marker (visual-only wedge face).
   reference_square_A/B: floor reference squares from lane_rules.yaml (visual-only).
@@ -300,21 +386,21 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
         </collision>
         <visual name="visual">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+          <geometry><plane><normal>0 0 1</normal><size>5 5</size></plane></geometry>
           <material><ambient>{floor}</ambient><diffuse>{floor}</diffuse></material>
         </visual>
       </link>
     </model>
 
-{extra}{_reference_squares_xml()}    <model name="road_lines">
+{extra}{_reference_squares_xml()}{_caution_xml()}    <model name="road_lines">
       <static>true</static>
       <pose>0 0 0.001 0 0 0</pose>
       <link name="link">
         <visual name="paint">
-          <geometry><mesh><uri>{MESH_URI}</uri></mesh></geometry>
+          <geometry><mesh><uri>{mesh_uri}</uri></mesh></geometry>
           <material><ambient>{paint}</ambient><diffuse>{paint}</diffuse></material>
         </visual>
       </link>
@@ -334,6 +420,8 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
 
 def build(source: Path, out: Path, line_colour: str = "bright") -> None:
     scene = _scene_module().load_scene(source)
+    for part in caution_meshes():
+        write_mesh(part['triangles'], out / 'meshes' / (part['name'] + '.stl'))
     write_mesh(scene.lines, out / "meshes" / "road_lines.stl")
     write_tag_texture(out / "textures" / f"dock_tag_{DOCK_TAG_ID}.png")
     world = out / "worlds" / "map_v2_fleet.world"
@@ -342,6 +430,19 @@ def build(source: Path, out: Path, line_colour: str = "bright") -> None:
     write_carpet_texture(out / "textures" / "carpet_grey.png")
     (out / "worlds" / "map_v2_fleet_real.world").write_text(
         world_xml(scene, "bright", "real"), encoding="utf-8", newline="\n")
+    training = out / "training-curved"
+    write_mesh(training_scene(scene).lines, training / "meshes" / "road_lines.stl")
+    (training / "worlds").mkdir(parents=True, exist_ok=True)
+    (training / "worlds" / "map_v2_fleet_real.world").write_text(
+        world_xml(scene, "bright", "training"), encoding="utf-8", newline="\n")
+    graph = yaml.safe_load((BUNDLE / "lane_graph.yaml").read_text(encoding="utf-8"))
+    east = graph["segments"]["east"]
+    east["points"] = [[round(v, 4) for v in training_point(p)] for p in east["points"]]
+    east["length_m"] = round(sum(math.dist(a, b) for a, b in zip(east["points"][:-1], east["points"][1:])), 4)
+    (training / "lane_graph.yaml").write_text(
+        "# Generated by scripts/build_world.py: curved training derivative, not the physical map.\n"
+        + yaml.safe_dump(graph, sort_keys=True, default_flow_style=None, width=100),
+        encoding="utf-8", newline="\n")
 
 
 def main(argv=None) -> int:

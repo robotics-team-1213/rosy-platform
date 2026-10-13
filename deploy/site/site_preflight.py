@@ -29,7 +29,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 # One private env file for the stack, Compose and (through site-firewall.py apply) the host units.
 DEFAULT_ENV_FILE = "/etc/rosy/site/site.env"
-DEFAULT_SECRETS_DIR = "/etc/rosy/site/secrets"
+# Pre-migration hosts keep it under the config dir until migrate-site-secrets.sh has run.
+DEFAULT_SECRETS_DIR = ("/etc/rosy/site-secrets" if os.path.isdir("/etc/rosy/site-secrets")
+                       else "/etc/rosy/site/secrets")
 DEFAULT_UNITS = ("rosy-overhead-advertise.service", "rosy-fleet-advertise.service")
 FULLCHAIN_FIX = ("build it with `cat site.crt site-ca.crt > site-fullchain.crt` and point the "
                  "site_cert secret at that file (deploy/site/README.md)")

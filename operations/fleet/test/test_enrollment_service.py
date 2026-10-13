@@ -398,8 +398,10 @@ def test_moving_robot_address_change_raises_an_alarm_and_holds_overlapping_traff
     core = FakeCore(navigation="NAVIGATING", pose=(0.0, 0.0), path=corridor)
     cores = {PINNED: core, MOVED: FakeCore()}
     crossing = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "navigation": "IDLE",
+                                           "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                            "pose": {"x": 1.5, "y": 2.0, "yaw": 0.0}})
     apart = FakeRobot("rosy_02", state={"robot_id": "rosy_02", "navigation": "IDLE",
+                                        "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                         "pose": {"x": 0.0, "y": 20.0, "yaw": 0.0}})
     service, network, console, discovery, _, _ = build(tmp_path, cores, static=(crossing, apart))
     discovery.replace_scan([scan_row()])
@@ -433,6 +435,7 @@ def test_formation_member_gets_a_stop_then_the_formation_is_dissolved(tmp_path):
     class Session:
         state = "RUNNING"
         assignment = {"rosy_09": object()}
+        follower_ids = frozenset({"rosy_09"})
 
     order = []
 
@@ -527,7 +530,7 @@ def test_restart_puts_enrolled_robots_back_without_a_code(tmp_path):
     again.load()
     assert "rosy_09" in console2.robot_ids
     run(console2.snapshot())
-    assert network2.paths() == ["/api/v1/robot/state"]
+    assert network2.paths() == ["/api/v1/robot/state", "/api/v1/system/capabilities"]
 
 
 def test_wrong_key_at_restart_is_a_runtime_state_only(tmp_path):
@@ -622,6 +625,7 @@ def test_a_stale_formation_flag_does_not_end_a_new_formation(tmp_path):
 
         def __init__(self, members):
             self.assignment = {rid: object() for rid in members}
+            self.follower_ids = frozenset(members)
 
     stops = []
 

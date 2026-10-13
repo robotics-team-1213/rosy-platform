@@ -6,7 +6,7 @@ import pytest
 
 from core_common.calibration_store import CalibrationStore
 from core_common.robot_body import (PINKY_PRO, PINKY_PRO_GEOMETRY, RobotBody, from_geometry,
-                                    resolve_body, stop_gap_m)
+                                    inside_body, resolve_body, stop_gap_m)
 
 B = PINKY_PRO
 
@@ -70,6 +70,13 @@ def test_rotation_needs_rho_plus_margin_in_base_frame():
     assert B.can_rotate(front.points, 0.02)
 
 
+def test_nominal_body_selection_refuses_unknown_robot_kinds():
+    from core_common.robot_body import nominal_body_for, NOMINAL_BODY
+
+    assert nominal_body_for("pinky_pro") is NOMINAL_BODY
+    assert nominal_body_for("unrecognized") is None
+
+
 def test_body_validation_refuses_a_rotation_radius_below_the_extent():
     with pytest.raises(ValueError):
         RobotBody(front_x_m=0.04, rear_x_m=-0.08, half_width_m=0.05, rotation_radius_m=0.07,
@@ -116,3 +123,12 @@ def test_rear_unknown_never_clears_the_sweep_front_needs_a_real_echo():
     assert B.unknown_blocks(front, ultrasonic_m=0.05)                     # echo nearer than the band
     corner = B.scan_view(_scan({180 + 40: math.inf}, range_min=0.15))     # 40 deg off: outside the cone
     assert B.unknown_blocks(corner, ultrasonic_m=0.5)
+
+
+def test_strict_outline_leaves_the_boundary_outside():
+    """D-507 10: the open outline (memory entry) keeps a point on the edge outside."""
+    outline = (B.front_x_m, B.rear_x_m, B.half_width_m, B.rotation_radius_m)
+    for point in ((B.front_x_m, 0.0), (0.0, B.half_width_m), (B.rear_x_m, 0.0)):
+        assert inside_body(*point, *outline) and not inside_body(*point, *outline, strict=True)
+    assert inside_body(0.0, 0.0, *outline, strict=True)
+    assert not inside_body(B.front_x_m + 1e-6, 0.0, *outline, strict=True)

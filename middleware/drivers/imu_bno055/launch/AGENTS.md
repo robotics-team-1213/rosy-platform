@@ -3,6 +3,9 @@
 
 # launch
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Optional launch for the BNO055 driver only. Not part of default Rosy OS bringup until ARM64 sensor and localization gates pass.

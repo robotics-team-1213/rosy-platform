@@ -329,7 +329,7 @@ export const confirmIrreversible = createConfirmIrreversible(openLiveDialog);
 // * 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겨(조상의 쌓임 맥락을 벗어남)
 //   닫히면 제자리로 돌아간다. 만들어 넘긴 대화상자는 닫히면 지운다.
 // aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
-// 닫기는 dialog.close(value)로 한다. onClose(returnValue, { byStop })가 정리 뒤에 불린다.
+// 반환한 close(value)는 즉시 정리한다. native close도 같은 정리를 거친다.
 const ALWAYS_LIVE = "[data-always-live]";
 const DIALOG_FOCUSABLE = "input:not([type=hidden]), select, textarea, button, ui-button, a[href], [tabindex]:not([tabindex='-1'])";
 
@@ -341,7 +341,7 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   scrim.setAttribute("aria-hidden", "true");
 
   const inerted = new Set();
-  let byStop = false;
+  let byStop = false, finished = false;
   const liveNodes = () => [...document.querySelectorAll(ALWAYS_LIVE)];
   const shown = (node) => node.getClientRects().length > 0 && !node.disabled;
   // 살릴 노드(정지·대화상자)의 조상 사슬만 타고 내려가며 곁가지를 inert로 만든다.
@@ -364,15 +364,17 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
     const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(r => {
       return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
     });
-    scrim.style.clipPath = holes.length
+    const polygon = holes.length
       ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, ${holes.join(", ")}, 0 0)`
       : "";
+    if (polygon) scrim.setAttribute("data-clip", polygon);
+    else scrim.removeAttribute("data-clip");
   };
   const observer = new MutationObserver(() => { seal(); punch(); });
   const onKey = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      dialog.close("cancel");
+      close("cancel");
       return;
     }
     if (event.key !== "Tab") return;
@@ -387,10 +389,13 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   const onClick = (event) => {
     if (!event.target.closest?.(ALWAYS_LIVE)) return;
     byStop = true;
-    dialog.close("cancel");
+    close("cancel");
   };
 
-  dialog.addEventListener("close", () => {
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    dialog.removeEventListener("close", onNativeClose);
     observer.disconnect();
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("click", onClick, true);
@@ -406,7 +411,10 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
       if (back?.isConnected && typeof back.focus === "function") back.focus();
     }
     onClose?.(dialog.returnValue, { byStop });
-  }, { once: true });
+  };
+  const close = value => { if (finished) return; if (dialog.open) dialog.close(value); finish(); };
+  const onNativeClose = () => { if (!dialog.open) finish(); };
+  dialog.addEventListener("close", onNativeClose);
   document.body.append(scrim, dialog);
   seal();
   punch();
@@ -418,6 +426,7 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   dialog.returnValue = "";
   dialog.show();
   (initialFocus || [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].find(shown))?.focus();
+  return close;
 }
 
 // D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어
@@ -431,6 +440,21 @@ const colourCache = new Map();
 const fontCache = new Map();
 let colourProbe = null;
 let colourRaster = null;
+let colourSheet = null;
+
+function probeColourValue(name) {
+  if (name.startsWith("--")) return /^--[A-Za-z0-9_-]+$/.test(name) ? `var(${name})` : "";
+  if (!name || /[{};<>\\]|\/\*|\*\//.test(name)) return "";
+  return name;
+}
+
+function paintColourProbe(value) {
+  if (!colourSheet) {
+    colourSheet = new CSSStyleSheet();
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, colourSheet];
+  }
+  colourSheet.replaceSync(`[data-rosy-colour-probe] { color: ${value}; }`);
+}
 
 function probeElement() {
   if (!colourProbe || !colourProbe.isConnected) {
@@ -461,10 +485,10 @@ export function readColour(name) {
   const declared = isToken
     ? getComputedStyle(document.documentElement).getPropertyValue(name).trim()
     : name;
-  if (declared) {
+  const painted = probeColourValue(name);
+  if (declared && painted) {
     const probe = probeElement();
-    probe.style.color = "";
-    probe.style.color = isToken ? `var(${name})` : name;
+    paintColourProbe(painted);
     const resolved = getComputedStyle(probe).color;
     const ctx = rasterContext();
     ctx.clearRect(0, 0, 1, 1);
@@ -491,13 +515,40 @@ export function cssColor(name) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-/** `--body`·`--mono` 글꼴로 된 캔버스 font. 글자는 12px 아래로 내려가지 않는다. */
-export function canvasFont(size, family = "body") {
+/** Canvas typography reads the same role and family as DOM text; scale is raster geometry. */
+export function canvasTextSize(role = "micro") {
+  if (!["micro", "label", "body", "value", "title", "display"].includes(role)) {
+    throw new TypeError(`Unknown canvas text role: ${role}`);
+  }
+  if (fontCache.has(`size:${role}`)) return fontCache.get(`size:${role}`);
+  if (!getComputedStyle(document.documentElement).getPropertyValue(`--text-${role}`).trim()) {
+    throw new Error(`Missing canvas text token: --text-${role}`);
+  }
+  const probe = document.createElement("span");
+  probe.hidden = true;
+  probe.dataset.rosyFontProbe = "";
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`[data-rosy-font-probe] { font-size: var(--text-${role}); }`);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  document.documentElement.append(probe);
+  const size = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((entry) => entry !== sheet);
+  if (!Number.isFinite(size) || size <= 0) throw new Error(`Missing canvas text token: --text-${role}`);
+  fontCache.set(`size:${role}`, size);
+  return size;
+}
+
+export function canvasFont(role = "micro", family = "body", displayScale = 1) {
+  const size = canvasTextSize(role);
+  if (!["body", "mono"].includes(family)) throw new TypeError(`Unknown canvas font family: ${family}`);
+  const scale = Number(displayScale);
+  if (!Number.isFinite(scale) || scale <= 0) throw new RangeError("Canvas display scale must be positive");
   if (!fontCache.has(family)) {
     const stack = getComputedStyle(document.documentElement).getPropertyValue(`--${family}`).trim();
     fontCache.set(family, stack || (family === "mono" ? "monospace" : "sans-serif"));
   }
-  return `${Math.max(12, Math.round(Number(size) || 12))}px ${fontCache.get(family)}`;
+  return `${Math.max(1, Math.round(size * scale))}px ${fontCache.get(family)}`;
 }
 
 export function clearPalette() {
@@ -506,7 +557,7 @@ export function clearPalette() {
 }
 
 document.addEventListener("rosy:theme", clearPalette);
-window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, clear: clearPalette };
+window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, canvasTextSize, clear: clearPalette };
 
 // D-359 US-008 — 자간 토큰은 라틴 대문자 라벨용이다. 한글은 음절 하나가 이미 한
 // 글자 칸이라 0.06–0.12em을 더하면 "점유  지도"처럼 띄어 읽힌다. 페이지가 모두
@@ -548,11 +599,51 @@ hangulObserver.observe(document.documentElement, { childList: true, characterDat
 markHangulTree(document.documentElement);
 
 // Shared labeled action icons. Keep handlers and button semantics on the original element.
+// A string draws one stroke. An array draws one path per entry so a filled mark can sit
+// on a stroked outline. .sr-only stays a screen-reader label and is not copied into the visible span.
 export function actionIcon(button, name) {
   const paths = {
+    fleet: "M9 9h6v6H9zM3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4zM7 7l2 2M15 9l2-2M7 17l2-2M15 15l2 2",
+    map: "M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16M15 5v16",
+    install: "M4 13h16v8H4zM12 2v12M8 10l4 4 4-4M8 17h8",
+    cell: "M3 3h18v18H3zM7 17v-4l5-6 5 4M7 13l5 4M12 7h.01M17 11h.01",
+    notification: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4M12 2v2",
+    history: "M3 3v5h5M3 8a9 9 0 1 1-1 7M12 7v5l3 2",
+    connect: "M9 15l6-6M7 13l-2 2a4 4 0 0 0 6 6l2-2M11 5l2-2a4 4 0 0 1 6 6l-2 2",
+    login: "M3 12h12M11 8l4 4-4 4M19 4v16",
+    account: "M4 6h16v12H4zM8 10h8M8 14h5",
+    logout: "M9 12h12M17 8l4 4-4 4M5 4v16",
+    wifi: "M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01",
     fit: "M4 4h16v16H4zM8 8h8v8H8z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
     tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",
+    settings: "M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4",
+    "theme-dark": "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
+    "theme-light": [
+      {d: "M12,8 A4,4 0 1,1 12,16 A4,4 0 1,1 12,8 Z"},
+      {d: "M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"},
+    ],
+    "theme-system": [
+      {d: "M5 4H19A2 2 0 0 1 21 6V14A2 2 0 0 1 19 16H5A2 2 0 0 1 3 14V6A2 2 0 0 1 5 4Z"},
+      {d: "M8.5 20h7M12 16v4"},
+    ],
+    estop: [
+      {d: "M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z"},
+      {d: "M9 8H15A1 1 0 0 1 16 9V15A1 1 0 0 1 15 16H9A1 1 0 0 1 8 15V9A1 1 0 0 1 9 8Z", fill: "currentColor", stroke: "none"},
+    ],
+    pose: [
+      {d: "M12,5 A7,7 0 1,1 12,19 A7,7 0 1,1 12,5 Z"},
+      {d: "M12 2v3M12 19v3M2 12h3M19 12h3"},
+    ],
+    yaw: [
+      {d: "M12,3 A9,9 0 1,1 12,21 A9,9 0 1,1 12,3 Z"},
+      {d: "m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"},
+    ],
+    battery: [
+      {d: "M4.5 8H16.5A1.5 1.5 0 0 1 18 9.5V14.5A1.5 1.5 0 0 1 16.5 16H4.5A1.5 1.5 0 0 1 3 14.5V9.5A1.5 1.5 0 0 1 4.5 8Z"},
+      {d: "M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"},
+    ],
+    safety: "M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z",
     back: "M15 5l-7 7 7 7",
     refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M18 17a7 7 0 0 1-12 1l-2-2",
     download: "M12 3v12M7 10l5 5 5-5M4 17v4h16v-4",
@@ -561,17 +652,163 @@ export function actionIcon(button, name) {
     reverse: "M12 4v16M5 13l7 7 7-7",
     left: "M4 8h9a7 7 0 0 1 7 7v4M9 3L4 8l5 5",
     right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
+    check: "M4 12l5 5L20 6",
+    plus: "M12 4v16M4 12h16",
+    minus: "M4 12h16",
+    hand: "M8 12V6a1.5 1.5 0 0 1 3 0v4-1V4a1.5 1.5 0 0 1 3 0v6-1V6a1.5 1.5 0 0 1 3 0v5l.5-1a1.5 1.5 0 0 1 2.5 1.5L17 20H9l-5-7a1.5 1.5 0 0 1 2.5-1.5z",
+    trash: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6",
+    undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2",
+    pencil: "M4 20l4-.8L20 7l-3-3L4.8 16zM15 6l3 3",
+    image: "M4 4h16v16H4zM7 16l4-4 3 3 3-4 3 4M8 8h.01",
+    contrast: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 3v18",
+    robot: "M4 9h16v9H4zM7 9V6l3-2h4l3 2v3M8 18v2M16 18v2M8 13h.01M16 13h.01",
+    cone: "M9 4h6l4 15H5zM3 20h18M8 13h8",
+    "traffic-light": "M8 2h8v20H8zM12 6h.01M12 12h.01M12 18h.01",
+    sign: "M5 3h14v11H5zM12 14v7M7 21h10",
+    "person-feet": "M7 4c-2 2-2 5-1 7l3 1 1-7zM14 10c-1 2-1 5 1 7l3-1c1-3 0-5-2-7zM5 15l5 1M14 20l5-1",
+    person: "M12 3a2 2 0 1 0 .01 0M8 22l1.5-7L7 11l5-2 5 2-2.5 4L16 22",
+    obstacle: "M12 3 21 20H3zM12 9v5M12 17h.01",
+    next: "M4 12h16m-7-7 7 7-7 7",
+    list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+    box: "M4 4h16v16H4zM9 9h6v6H9z",
+    area: "M4 18 8 5l12 3-3 12zM4 18h.01M8 5h.01M20 8h.01M17 20h.01",
+    pixels: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+    folder: "M3 7V5h7l2 2h9v12H3z",
   };
-  if (!paths[name]) throw new RangeError(`Unknown action icon: ${name}`);
+  const spec = paths[name];
+  if (!spec) throw new RangeError(`Unknown action icon: ${name}`);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
     "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
-  const path = document.createElementNS(svg.namespaceURI, "path");
-  path.setAttribute("d", paths[name]); svg.append(path);
-  const label = document.createElement("span");
+  for (const part of Array.isArray(spec) ? spec : [{d: spec}]) {
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", part.d);
+    if (part.fill) path.setAttribute("fill", part.fill);
+    if (part.stroke) path.setAttribute("stroke", part.stroke);
+    svg.append(path);
+  }
   const details = [...button.querySelectorAll(":scope > small")];
-  label.textContent = [...button.childNodes].filter(node => node.nodeType === 3 ||
-    (node.nodeType === 1 && !node.matches(".ui-icon, small"))).map(node => node.textContent).join("");
-  button.replaceChildren(svg, label, ...details);
+  const quiet = [...button.querySelectorAll(":scope > .sr-only")];
+  const visible = [...button.childNodes].filter(node => node.nodeType === 3 ||
+    (node.nodeType === 1 && !node.matches(".ui-icon, small, .sr-only"))).map(node => node.textContent).join("").trim();
+  const children = [svg];
+  if (visible) {
+    const label = document.createElement("span");
+    label.className = "ui-icon-label";
+    label.textContent = visible;
+    children.push(label);
+  }
+  button.replaceChildren(...children, ...quiet, ...details);
+  const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
+  if (button.hasAttribute("data-icon-only")) {
+    if (!label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
+  }
+  // 기존 title 설명도 키보드에서 제공한다. 명시 설명과 원래 이름·라벨은 보존한다.
+  if (!button.hasAttribute("data-ui-tooltip")) {
+    const explanation = button.getAttribute("title") || ((button.hasAttribute("data-icon-only") || !visible) ? label : "");
+    if (explanation) button.setAttribute("data-ui-tooltip", explanation);
+  }
   return button;
+}
+
+// D-641: 공용 설명은 문서 위에 띄워 가로 탐색의 overflow에도 잘리지 않는다.
+// 이름과 선택 상태는 원래 조작에 남고 설명은 명령이나 권한을 만들지 않는다.
+let tooltip, tooltipOwner, tooltipHover, tooltipFocus, tooltipDismissed;
+function hideTooltip() {
+  if (tooltipOwner) {
+    const ids = (tooltipOwner.getAttribute("aria-describedby") || "").split(/\s+/).filter(id => id && id !== "rosy-shared-tooltip");
+    if (ids.length) tooltipOwner.setAttribute("aria-describedby", ids.join(" "));
+    else tooltipOwner.removeAttribute("aria-describedby");
+  }
+  if (tooltip) tooltip.hidden = true;
+  tooltipOwner = null;
+}
+function tooltipTarget(node) {
+  return node instanceof Element ? node.closest("[data-ui-tooltip]") : null;
+}
+function tooltipOwnerVisible(owner) {
+  return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") &&
+    owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
+}
+function overTooltip(event) {
+  if (!tooltip || tooltip.hidden) return false;
+  const box = tooltip.getBoundingClientRect();
+  return event.clientX >= box.left && event.clientX <= box.right &&
+    event.clientY >= box.top && event.clientY <= box.bottom;
+}
+function placeTooltip() {
+  if (!tooltip || tooltip.hidden) return;
+  if (!tooltipOwnerVisible(tooltipOwner)) { hideTooltip(); return; }
+  const rect = tooltipOwner.getBoundingClientRect(), box = tooltip.getBoundingClientRect();
+  const inset = parseFloat(getComputedStyle(tooltip).paddingTop);
+  const x = Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2));
+  const below = rect.bottom + inset;
+  const y = Math.max(inset, below + box.height <= innerHeight - inset ? below : rect.top - box.height - inset);
+  for (const [axis, value] of [["x", x], ["y", y]]) {
+    const key = `data-ui-tip-${axis}`, next = value.toFixed(2);
+    if (tooltip.getAttribute(key) !== next) tooltip.setAttribute(key, next);
+  }
+}
+function showTooltip() {
+  const owner = tooltipHover || tooltipFocus;
+  if (!tooltipOwnerVisible(owner) || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) {
+    hideTooltip();
+    return;
+  }
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "ui-tooltip";
+    tooltip.id = "rosy-shared-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.append(tooltip);
+  }
+  if (tooltipOwner !== owner) hideTooltip();
+  tooltipOwner = owner;
+  tooltip.textContent = owner.getAttribute("data-ui-tooltip");
+  const ids = new Set((owner.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+  ids.add(tooltip.id);
+  owner.setAttribute("aria-describedby", [...ids].join(" "));
+  tooltip.hidden = false;
+  placeTooltip();
+}
+document.addEventListener("pointerover", event => {
+  if (overTooltip(event)) return;
+  const owner = tooltipTarget(event.target);
+  if (owner !== tooltipHover) {
+    tooltipHover = owner;
+    if (owner !== tooltipFocus) tooltipDismissed = null;
+    showTooltip();
+  }
+});
+document.addEventListener("pointerout", event => {
+  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || overTooltip(event)) return;
+  tooltipHover = null; showTooltip();
+});
+// Hoverable descriptions must not take pointer events from the controls below.
+document.addEventListener("pointermove", event => {
+  if (tooltipHover && !tooltipHover.contains(event.target) && !overTooltip(event)) {
+    tooltipHover = null; showTooltip();
+  }
+});
+document.addEventListener("focusin", event => {
+  tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
+});
+document.addEventListener("focusout", () => { tooltipFocus = null; tooltipDismissed = null; showTooltip(); });
+document.addEventListener("click", event => {
+  const owner = tooltipTarget(event.target);
+  if (owner) { tooltipDismissed = owner; hideTooltip(); }
+}, true);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && tooltip && !tooltip.hidden) {
+    tooltipDismissed = tooltipOwner; hideTooltip();
+  }
+});
+window.addEventListener("resize", placeTooltip);
+document.addEventListener("scroll", placeTooltip, true);
+new MutationObserver(placeTooltip).observe(document.documentElement, {
+  subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden"],
+});
+
+for (const button of document.querySelectorAll("[data-action-icon]")) {
+  if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
 }

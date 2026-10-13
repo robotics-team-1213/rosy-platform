@@ -92,8 +92,12 @@ def test_vision_writes_detections_and_reads_only_its_own_config(tmp_path):
         assert accepted.status_code == 200, accepted.text
         assert accepted.json() == {"accepted": True, "source_id": "ceiling_north", "seq": 41, "status": "OK"}
         config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN))
-        assert config.json() == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                 "calibration": None, "relearn_seq": 0}
+        occupied = config.json().pop("occupied")
+        assert [(row["x"], row["basis"]) for row in occupied] == [(1.2345, "blob"), (2.5, "blob")]  # D-600
+        assert {**config.json(), "occupied": None} == {
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet", "calibration": None, "relearn_seq": 0,
+            "robot_markers": {}, "identity_challenge": None,  # D-472: no open LED request
+            "identity_challenges": [], "occupied": None}  # D-596, D-600
         assert client.get("/api/fleet/detections/config").status_code == 401
         assert client.get("/api/fleet/tracking", headers=_auth(SOURCE_TOKEN)).status_code == 401
         assert client.post("/api/fleet/calibrations", json=APPROVAL,
@@ -142,9 +146,34 @@ def test_bad_approval_bodies_are_refused(tmp_path):
                              ({**APPROVAL, "extra": 1}, 422),
                              ({**APPROVAL, "map_to_image": [0.0] * 9}, 422),
                              ({**APPROVAL, "source_id": "nope"}, 404),
-                             ({**APPROVAL, "map_id": "other_map"}, 409)]:
+                             ({**APPROVAL, "map_id": "other_map"}, 409),
+                             # D-457: 콘솔이 찍는 렌즈 지문도 모양 검사를 지난다.
+                             ({**APPROVAL, "lens": {"kind": "standard"}}, 422),
+                             ({**APPROVAL, "lens": {"kind": "Standard", "focal_mm": 5.4,
+                                                    "hfov_deg": 66.9}}, 422),
+                             ({**APPROVAL, "lens": {"kind": "standard", "focal_mm": 5.4,
+                                                    "hfov_deg": 66.9, "zoom": 2}}, 422)]:
             response = client.post("/api/fleet/calibrations", json=body, headers=_auth(OPERATOR_TOKEN))
             assert response.status_code == status, (body, response.text)
+
+
+def test_an_applied_fit_keeps_its_live_frame_lens(tmp_path):
+    """D-457 1: '추적 보정 적용' 본문의 렌즈(라이브 프레임 X-Source-Lens)가 기록에 그대로 남는다."""
+    lens = {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+    with _client(tmp_path) as client:
+        approved = client.post("/api/fleet/calibrations", json={**APPROVAL, "lens": lens},
+                               headers=_auth(OPERATOR_TOKEN))
+        assert approved.status_code == 200, approved.text
+        stamped = approved.json()
+        assert stamped["lens"] == lens
+        listing = client.get("/api/fleet/calibrations", headers=_auth(VIEWER_TOKEN)).json()
+        assert listing["calibrations"][0]["lens"] == lens
+        config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN)).json()
+        assert config["calibration"]["lens"] == lens
+        # 같은 맞춤이라도 렌즈가 없으면 다른 기록이다 — 개정이 렌즈를 따라간다.
+        bare = client.post("/api/fleet/calibrations", json=APPROVAL, headers=_auth(OPERATOR_TOKEN))
+        assert bare.json()["lens"] is None
+        assert bare.json()["calibration_revision"] != stamped["calibration_revision"]
 
 
 def test_tracking_pairs_the_console_state_with_detections(tmp_path):
@@ -157,14 +186,14 @@ def test_tracking_pairs_the_console_state_with_detections(tmp_path):
     assert [(row["x"], row["y"]) for row in snap["unknown"]] == [(2.5, 1.0)]
 
 
-def test_state_is_aged_from_before_the_robot_reads(tmp_path):
+def test_state_uses_its_own_read_time_after_a_slow_gather(tmp_path):
     clock = _Clock()
     with _client(tmp_path, clock=clock, delay_s=2.5) as client:
         assert client.get("/api/fleet/state", headers=_auth(VIEWER_TOKEN)).status_code == 200
         client.post("/api/fleet/detections", json=_detections(captured_at=clock.now - 0.1),
                     headers=_auth(SOURCE_TOKEN))
         snap = client.get("/api/fleet/tracking", headers=_auth(VIEWER_TOKEN)).json()
-    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "NO_POSE")]
+    assert [(row["robot_id"], row["status"]) for row in snap["robots"]] == [("rosy_01", "MATCHED")]
 
 
 def test_relearn_is_an_operator_action(tmp_path, caplog):
@@ -174,7 +203,8 @@ def test_relearn_is_an_operator_action(tmp_path, caplog):
         assert client.post("/api/fleet/tracking/relearn", json=body,
                            headers=_auth(VIEWER_TOKEN)).status_code == 403
         response = client.post("/api/fleet/tracking/relearn", json=body, headers=_auth(OPERATOR_TOKEN))
-        assert response.json() == {"source_id": "ceiling_north", "relearn_seq": 1}
+        assert response.json() == {"source_id": "ceiling_north", "relearn_seq": 1,
+                                   "occupied": 0, "unlocated": ["rosy_01"]}  # D-600
         assert client.post("/api/fleet/tracking/relearn", json={"source_id": "nope"},
                            headers=_auth(OPERATOR_TOKEN)).status_code == 404
         assert client.get("/api/fleet/detections/config",
@@ -194,7 +224,8 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
             if any(word in path for word in ("detections", "tracking", "calibrations"))}
     assert ours == {"/api/fleet/detections", "/api/fleet/detections/config", "/api/fleet/tracking",
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
-                    "/api/fleet/calibrations/{source_id}"}
+                    "/api/fleet/calibrations/{source_id}",
+                    "/api/fleet/detections/identity", "/api/fleet/tracking/identity"}  # D-472
 
 
 def test_tracking_needs_the_sighting_sources():

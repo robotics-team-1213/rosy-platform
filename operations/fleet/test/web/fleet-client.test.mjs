@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFleetClient} from '../../../../shared/web/fleet-client.js';
-import {createPollGate} from '../../fleet/server/web/poll-gate.js';
+import {createPollGate} from '../../../ui/console/shared/poll-gate.js';
 
 function clientFor(status, body) {
   const calls = [];
@@ -23,15 +23,15 @@ test('success and empty bodies retain the Console contract', async () => {
 test('401 retains the login message and exposes status for the document lock', async () => {
   const {client, calls} = clientFor(401, {detail: 'unauthorized'});
   await assert.rejects(client('/api/fleet/state'), error =>
-    error.status === 401 && error.message === '관제 토큰이 필요합니다 — 상단에 입력하고 접속을 누르세요');
+    error.status === 401 && error.message === '관제 인증이 필요합니다 — 로그인하거나 고급 접속을 확인하세요');
   assert.equal(calls.length, 1);
 });
 
 for (const [body, message, code] of [
   [{detail: {message: 'operator required', code: 'OPERATOR_REQUIRED'}}, 'operator required', 'OPERATOR_REQUIRED'],
   [{detail: {code: 'NOT_FOUND'}}, 'NOT_FOUND', 'NOT_FOUND'],
-  [{detail: 'unavailable'}, 'HTTP 503', undefined],
-  [null, 'HTTP 503', undefined],
+  [{detail: 'unavailable'}, '관제 서버 응답을 확인하지 못했습니다. 연결을 확인한 뒤 현재 상태를 다시 조회하세요.', undefined],
+  [null, '관제 서버 응답을 확인하지 못했습니다. 연결을 확인한 뒤 현재 상태를 다시 조회하세요.', undefined],
 ]) {
   test(`Fleet detail interpretation: ${message}`, async () => {
     const {client, calls} = clientFor(503, body);
@@ -76,3 +76,36 @@ test('abort propagates without being converted to an authentication failure', as
     {name: 'AbortError'});
   assert.equal(sent, 0);
 });
+
+test('lost network explains readback and never replays a command', async () => {
+  let sent = 0;
+  const failure = new TypeError('Failed to fetch');
+  const client = createFleetClient({origin: 'https://fleet.test',
+    fetchImpl: async () => { sent += 1; throw failure; }});
+  await assert.rejects(client('/api/fleet/estop', {method: 'POST'}), error =>
+    error === failure && /관제 연결을 확인하지 못했습니다/.test(error.message)
+      && /현재 상태를 다시 조회/.test(error.message) && error.status === undefined);
+  assert.equal(sent, 1);
+});
+
+test('null abort reason remains the original cancellation without sending', async () => {
+  const controller = new AbortController();
+  controller.abort(null);
+  let sent = 0;
+  const client = createFleetClient({origin: 'https://fleet.test',
+    fetchImpl: async () => { sent += 1; return new Response('{}'); }});
+  await assert.rejects(client('/api/fleet/estop', {method: 'POST', signal: controller.signal}),
+    reason => reason === null);
+  assert.equal(sent, 0);
+});
+
+for (const failure of [Object.freeze(new TypeError('Failed to fetch')),
+  new DOMException('NetworkError when attempting to fetch resource.', 'NetworkError')]) {
+  test(`immutable ${failure.name} remains the original network failure without replay`, async () => {
+    let sent = 0;
+    const client = createFleetClient({origin: 'https://fleet.test',
+      fetchImpl: async () => { sent += 1; throw failure; }});
+    await assert.rejects(client('/api/fleet/estop', {method: 'POST'}), reason => reason === failure);
+    assert.equal(sent, 1);
+  });
+}

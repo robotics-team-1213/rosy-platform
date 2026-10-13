@@ -331,3 +331,74 @@ def test_sd_writer_passes_the_verified_release_to_the_bundle_creator():
     call = next(line for line in text.splitlines() if "& $PythonExe $bundleTool" in line)
     assert "--release-root $releaseRoot --public-key $ReleasePublicKey" in call
     assert text.index("$releaseRoot = Split-Path -Parent $ImageSignaturePath") < text.index(call)
+
+
+# --- D-477: the one-time tailnet join key rides the bundle. ---------------------
+
+
+def test_bundle_carries_the_tailnet_join_and_the_receipt_keeps_only_a_fingerprint():
+    key = "tskey-auth-" + "k7m4tailnet01"
+    bundle = _bundle(tailscale_auth_key=key)
+
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(bundle)
+    assert bundle["tailscale"] == {"auth_key": key, "tags": ["tag:rosy-robot"]}
+    assert validate_provision_bundle(bundle)["tailscale"]["tags"] == ["tag:rosy-robot"]
+    receipt = create_provision_receipt(bundle)
+    rendered = json.dumps(receipt, sort_keys=True)
+    assert key not in rendered
+    assert receipt["tailscale"]["tags"] == ["tag:rosy-robot"]
+    assert re.fullmatch(r"[0-9a-f]{16}", receipt["tailscale"]["key_fingerprint"])
+
+
+def test_tailscale_tags_are_deduplicated_and_bad_input_is_refused_without_echoing_the_key():
+    key = "tskey-auth-" + "k7m4tailnet01"
+    bundle = _bundle(
+        tailscale_auth_key=key,
+        tailscale_tags=["tag:rosy-robot", "tag:bench", "tag:rosy-robot"],
+    )
+    assert bundle["tailscale"]["tags"] == ["tag:bench", "tag:rosy-robot"]
+    for bad in (
+        {"tailscale_auth_key": "tskey-auth-short"},
+        {"tailscale_auth_key": key, "tailscale_tags": ["tag:Not-Allowed"]},
+        {"tailscale_auth_key": key, "tailscale_tags": []},
+        {"tailscale_tags": ["tag:rosy-robot"]},
+    ):
+        with pytest.raises(ValueError) as caught:
+            _bundle(**bad)
+        assert key not in str(caught.value)
+
+
+def test_bundle_cli_accepts_the_tailnet_key_on_stdin_and_never_echoes_it(tmp_path):
+    key = "tskey-auth-" + "k7m4tailnet02"
+    output = tmp_path / "provision.json"
+    receipt = tmp_path / "provision-receipt.json"
+    request = {
+        "device_uid": "9d40feaa-871f-4fd3-975a-a704e82d3af9",
+        "device_name": "rosy-pinky-k7m4",
+        "model": "pinky_pro",
+        "release_id": "2026.09.22-001",
+        "robot_number": 1,
+        "requested_preset": "hardware",
+        "country_code": "KR",
+        "ssid": "fixture-ssid",
+        "wifi_passphrase": "fixture-private-passphrase",
+        "fleet_endpoint": "https://fleet.fixture.invalid:8443",
+        "fleet_trust_profile": "site-ca-2026",
+        "pairing_required": False,
+        "core_api_" + "token": "Rq" * 21 + "_",
+        "core_api_" + "token_id": "0a1b2c3d4e5f",
+        "tailscale_auth_key": key,
+        "tailscale_tags": ["tag:bench"],
+    }
+
+    completed = subprocess.run(
+        [sys.executable, str(BUNDLE_CLI), "--output", str(output), "--receipt", str(receipt)],
+        input=json.dumps(request), capture_output=True, text=True, check=False, timeout=60,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads(output.read_text(encoding="utf-8"))
+    assert bundle["tailscale"] == {"auth_key": key, "tags": ["tag:bench"]}
+    rendered = completed.stdout + completed.stderr + receipt.read_text(encoding="utf-8")
+    assert key not in rendered

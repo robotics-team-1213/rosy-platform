@@ -3,6 +3,9 @@
 
 # formation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Pure FOR-001/002 functions: named formations → slot offsets, and a swappable slot assigner. No transport, no asyncio, no ROS. Output is numbers a follower can pass to `follow_goal`.
@@ -41,7 +44,7 @@ Dataclasses + enums. Input numbers, output numbers. Follower pose is leader head
 
 ### Internal
 
-- Spacing rationale cites `middleware/core/navigation/params/nav2_params.yaml`
+- Spacing rationale cites `middleware/control/drive/planning/nav2/params/nav2_params.yaml`
 - Slot offsets feed `core.navigation.swarm.follow_goal` (contract, not an import)
 
 ### External
