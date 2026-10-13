@@ -65,6 +65,8 @@ def digest_tree(source: Path) -> str:
 
 
 def unit_contents(current: Path, state: Path, python: Path, host: str, port: int) -> str:
+    if not 1 <= port <= 55535:
+        raise ValueError('review port must leave room for its loopback decisions port')
     dataset = current / "learning/curation/perception"
     paths = (
         current / "middleware/perception",

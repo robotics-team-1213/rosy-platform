@@ -72,6 +72,11 @@ def read_report(root, name, baseline=None):
             ('schema', 'status', 'outcome', 'verdict', 'promotion', 'offline_verdict', 'error', 'revision')
             if key in doc and isinstance(doc[key], (str, bool, int, float))}
         result['reasons'] = [str(reason)[:500] for reason in doc.get('reasons', [])[:20]] if isinstance(doc.get('reasons'), list) else []
+        pipeline = doc.get('review_autobuild')
+        if isinstance(pipeline, dict) and isinstance(pipeline.get('status'), str):
+            result['declared']['status'] = pipeline['status'][:100]
+            if isinstance(pipeline.get('blockers'), list):
+                result['reasons'].extend(str(reason)[:500] for reason in pipeline['blockers'][:20])
         result['steps'] = [{'name': str(key)[:100], 'status': str(value.get('status', 'unknown'))[:100],
                             'error': str(value.get('error', ''))[:500]}
                            for key, value in list(doc.get('steps', {}).items())[:40] if isinstance(value, dict)] if isinstance(doc.get('steps'), dict) else []
