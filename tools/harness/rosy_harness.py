@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-
 import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import worktrees  # noqa: E402  (ADRNUM: tools/worktrees.py, the .worktrees/ cap warning)
+import worktrees  # noqa: E402  (D-761: tools/worktrees.py, the .worktrees/ cap warning)
 from adr_gaps import (  # noqa: E402,F401
     ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
 )

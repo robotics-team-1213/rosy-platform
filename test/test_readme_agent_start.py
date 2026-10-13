@@ -13,7 +13,7 @@ README = ROOT / "README.md"
 SHARED = ROOT / "docs" / "reference" / "shared-checkout.md"
 AGENTS = ROOT / "AGENTS.md"
 
-WORKTREE = "git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main"
+WORKTREE = "python tools/worktrees.py new <짧은이름> <type>/<topic>"  # D-761: the gateway, not a bare add
 
 
 def _readme_section(text: str) -> str:
@@ -53,6 +53,8 @@ def test_agents_md_records_the_shared_checkout_commands():
     section = _agents_section(AGENTS.read_text(encoding="utf-8"))
 
     assert WORKTREE in section
+    assert "python tools/worktrees.py prune --snapshot --idle-hours 72 --apply" in section
+    assert "git worktree lock" in section
     assert "git add -A" in section
     assert "git diff --cached --name-only" in section
     assert "git commit --only" in section

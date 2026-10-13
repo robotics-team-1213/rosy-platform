@@ -1,4 +1,4 @@
-"""Keep ``.worktrees/`` from piling up: one gateway to create, one sweep to remove.
+"""Keep ``.worktrees/`` from piling up: one gateway to create, one sweep to remove (D-761).
 
 Usage (from the main checkout or any worktree of the repository)::
 

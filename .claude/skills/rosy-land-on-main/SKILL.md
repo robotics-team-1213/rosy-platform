@@ -19,8 +19,15 @@ shared `main` checkout. A path you did not write belongs to another session.
 ```bash
 cd F:\Dev\Control\Robot\Rosy\rosy-platform
 git status --short --branch; git worktree list
-git worktree add --relative-paths .worktrees/<short-name> -b <type>/<topic> main
+python tools/worktrees.py new <short-name> <type>/<topic>     # not a bare `git worktree add`
+python tools/worktrees.py status                              # every worktree with a verdict
 ```
+
+- `new` (D-761) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`), sweeps finished worktrees
+  (clean, merged into `main`, not locked, idle 12 h), then refuses at 40 worktrees and prints
+  `python tools/worktrees.py prune --snapshot --idle-hours 72 --apply`. `--snapshot` tags uncommitted
+  work as `archive/<date>/wip/<name>` before removing and keeps unmerged branches.
+  `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
 - `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `X:\DevTemp`.
 - Check `ListAgents` (when available) for peers and what they own.
@@ -103,7 +110,11 @@ digraph land {
    and try `--ff-only` again. There is no `--no-ff` landing.
 3. If git refuses because a peer's uncommitted file would be overwritten: leave that file.
    Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
-4. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
+4. `tools/land.py` sweeps finished worktrees when it starts (`--no-prune` skips it). A landed worktree
+   goes with its branch at the next `land` or `new` once it has been idle 12 h; to remove it now, in the
+   main checkout: `git worktree remove .worktrees/<short-name>` then `git branch -d <branch>`. A branch
+   you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
+5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
    Local main ahead of `origin/main` has no CI evidence.
 
 ## Red flags — stop
