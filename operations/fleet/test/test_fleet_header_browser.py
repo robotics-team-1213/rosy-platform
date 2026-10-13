@@ -234,12 +234,10 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert x + w <= width and y + h <= height and y < 0.2 * height, (name, width, fact)
                 assert width - (x + w) <= 32, (name, width, fact)  # right top corner
                 expect(more).to_be_visible()
-                if width >= 1440:
-                    assert fact["rows"] == 1, (name, width, fact)
-                elif width >= 1024:
-                    assert fact["rows"] <= 2, (name, width, fact)
-                else:
-                    assert fact["header"] <= 0.2 * height, (name, width, fact)
+                # D-741 5: 앱 바는 320px까지 한 줄이고 높이는 --appbar-height(64px)다.
+                assert fact["rows"] == 1, (name, width, fact)
+                assert fact["header"] <= 64 + 1, (name, width, fact)
+                assert fact["header"] <= 0.2 * height, (name, width, fact)
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
             page.locator("#fleet-inbox").click()

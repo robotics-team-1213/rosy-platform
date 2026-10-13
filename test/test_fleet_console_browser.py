@@ -2512,7 +2512,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
-    assert layout["headerRows"] <= 2, layout  # 48rem 아래의 두 줄은 한 줄 접힘 Task에서 한 줄이 된다.
+    assert layout["headerRows"] == 1, layout  # D-741 5: one row down to 320px.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
         # D-741 3: the clock lives in the app bar and folds below 48rem; the robot count sits in the map head.
