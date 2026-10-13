@@ -38,9 +38,13 @@ class Collaboration:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='learning-import') if imports else None
         self.slots = threading.BoundedSemaphore(4)
         self.tasks = {}
+        self.retries = {}
+        self.closing = False
         self.lock = threading.Lock()
 
     def shutdown(self):
+        with self.lock:
+            self.closing = True
         if self.pool:
             self.pool.shutdown(wait=True, cancel_futures=True)
 
@@ -121,7 +125,10 @@ class Collaboration:
         if job['status'] != 'queued':
             return
         with self.lock:
+            if self.closing:
+                raise ValueError('import service is stopping')
             if job['id'] in self.tasks:
+                self.retries[job['id']] = (job, principal)
                 return
             if not self.slots.acquire(blocking=False):
                 raise ValueError('가져오기 대기열이 가득 찼습니다. 잠시 후 재시도하세요.')
@@ -129,9 +136,18 @@ class Collaboration:
             self.tasks[job['id']] = future
 
         def done(_):
+            following = None
             with self.lock:
-                self.tasks.pop(job['id'], None)
-                self.slots.release()
+                retry = self.retries.pop(job['id'], None)
+                if retry and not self.closing:
+                    # Keep the same queue slot until the requested retry finishes.
+                    following = self.pool.submit(self.imports.run, job['id'], retry[1])
+                    self.tasks[job['id']] = following
+                else:
+                    self.tasks.pop(job['id'], None)
+                    self.slots.release()
+            if following:
+                following.add_done_callback(done)
         future.add_done_callback(done)
 
     def post(self, handler, path, body, token):
