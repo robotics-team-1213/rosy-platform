@@ -81,6 +81,28 @@ token은 exp까지만 유효하며, 검증 실패 token을 새로 허용하지 �
 
 ## 운영 활성화와 검증
 
+### 앱 수신 세션
+
+CORE의 Robot·Pilot 웹은 같은 origin의 `/api/account/login?return=/pilot` 또는
+`return=/dashboard`로 시작하고 `/api/account/callback`에서 state/PKCE를 확인한다.
+`GET /api/account/session`은 enabled/authenticated/account_id/resource/capabilities만
+반환한다. `POST /api/account/logout`은 same-origin 요청만 받으며 로컬 세션과
+중앙 family를 회수한다. 중앙 장애면 로컬 로그아웃 후 암호화된 회수 대기열을
+재시도하고 503으로 미완료 사실을 알린다. 재접속을 권한 복구로 처리하지 않는다.
+
+앱 쿠키 `rosy_app_account`는 256비트 opaque 값이며 HttpOnly/Secure/SameSite=Lax,
+`Path=/`다. DB에는 쿠키 해시와 암호화된 access/refresh만 둔다. callback의
+단기 흐름 쿠키도 동일 속성이며 state·verifier·허용된 로컬 복귀 경로에 결속한다.
+unsafe REST와 쿠키 WebSocket handshake는 정확한 same-origin을 요구한다.
+CORE의 중앙 계정은 `robot.read`/`robot.operate`/`robot.admin`을 각각 검사한다.
+중앙 계정으로 회수와 무관하게 남는 legacy token·enrollment를 발급하지 않는다.
+
+수신 설정은 `auth.account_client_file`이 가리키는 보호된 JSON 파일이다.
+필드는 issuer, client_id, resource, callback, public_key_files(kid→PEM 경로),
+encryption_key_file(Fernet key 경로), session_db이며 운영 비밀을 기본 설정에 넣지 않는다.
+resource는 해당 호스트의 실제 robot identity와 일치해야 한다. 설정이 없으면 기존
+명시적 local recovery를 유지하며, 설정이 잘못되면 시작을 거부한다.
+
 중앙 ledger bootstrap은 지정한 기존 admin login과 site_id를 명시해야 한다.
 운영 계정을 자동 선택하지 않는다. authority URL·키·client callback·기존 identity와
 learning user의 명시적 매핑이 준비되기 전에는 통합 설치 완료라고 표시하지 않는다.

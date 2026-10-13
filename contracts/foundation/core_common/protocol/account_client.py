@@ -58,6 +58,8 @@ class AccountClient:
                     id TEXT PRIMARY KEY,state TEXT,verifier BLOB,target TEXT,expires REAL);
                 CREATE TABLE IF NOT EXISTS app_account_sessions (
                     id TEXT PRIMARY KEY,tokens BLOB,checked REAL,expires REAL);
+                CREATE TABLE IF NOT EXISTS app_account_revocations (
+                    id TEXT PRIMARY KEY,tokens BLOB);
             ''')
 
     @contextmanager
@@ -131,7 +133,7 @@ class AccountClient:
             raise AccountDenied('Invalid flow encryption key') from None
         tokens = self.post('token', {'grant_type': 'authorization_code', 'client_id': self.client_id,
             'code': code, 'redirect_uri': self.callback, 'code_verifier': verifier})
-        claims = self._validate_tokens(tokens)
+        self._validate_tokens(tokens)
         self._active(tokens['access_token'])
         session = secrets.token_urlsafe(32)
         with self.transaction() as db:
@@ -170,21 +172,30 @@ class AccountClient:
                     try:
                         renewed = self.post('token', {'grant_type': 'refresh_token', 'client_id': self.client_id,
                                                      'refresh_token': tokens['refresh_token']})
-                        current = self._validate_tokens(renewed)
-                        self._active(renewed['access_token'])
-                        tokens, claims = renewed, current
-                        db.execute('UPDATE app_account_sessions SET tokens=?,checked=? WHERE id=?',
-                            (self.cipher.encrypt(json.dumps(tokens).encode()), self.clock(), row['id']))
-                        return claims
                     except AccountUnavailable:
-                        return claims
-                if self.clock() - row['checked'] >= 20:
+                        # The authority may have consumed refresh before the connection failed.
+                        db.execute('DELETE FROM app_account_sessions WHERE id=?', (row['id'],))
+                        return None
+                    current = self._validate_tokens(renewed)
+                    if claims and (current.sub, current.sid) != (claims.sub, claims.sid):
+                        raise AccountDenied('Renewal changed identity')
+                    db.execute('UPDATE app_account_sessions SET tokens=?,checked=0 WHERE id=?',
+                        (self.cipher.encrypt(json.dumps(renewed).encode()), row['id']))
+                    try:
+                        self._active(renewed['access_token'])
+                        db.execute('UPDATE app_account_sessions SET tokens=?,checked=? WHERE id=?',
+                            (self.cipher.encrypt(json.dumps(renewed).encode()), self.clock(), row['id']))
+                        return current if current.exp > self.clock() else None
+                    except AccountUnavailable:
+                        return claims if claims and row['checked'] and claims.exp > self.clock() else None
+                if not row['checked'] or self.clock() - row['checked'] >= 20:
                     try:
                         self._active(tokens['access_token'])
                         db.execute('UPDATE app_account_sessions SET checked=? WHERE id=?', (self.clock(), row['id']))
                     except AccountUnavailable:
-                        pass  # Only a previously verified token can survive until its signed expiry.
-                return claims
+                        if not row['checked']:
+                            return None
+                return claims if claims.exp > self.clock() else None
             except (ValueError, InvalidToken, KeyError, TypeError):
                 db.execute('DELETE FROM app_account_sessions WHERE id=?', (row['id'],))
                 return None
@@ -194,10 +205,19 @@ class AccountClient:
             return
         with self.transaction() as db:
             row = db.execute('SELECT tokens FROM app_account_sessions WHERE id=?', (_digest(cookie),)).fetchone()
+            if row:
+                db.execute('INSERT OR REPLACE INTO app_account_revocations VALUES(?,?)', (_digest(cookie), row['tokens']))
             db.execute('DELETE FROM app_account_sessions WHERE id=?', (_digest(cookie),))
-        if row:
+        self.retry_revocations()
+
+    def retry_revocations(self):
+        with self.transaction() as db:
+            rows = db.execute('SELECT * FROM app_account_revocations LIMIT 16').fetchall()
+        for row in rows:
             try:
                 tokens = json.loads(self.cipher.decrypt(row['tokens']))
                 self.post('revoke', {'token': tokens['refresh_token']})
             except (InvalidToken, ValueError, KeyError):
                 raise AccountDenied('Invalid local session') from None
+            with self.transaction() as db:
+                db.execute('DELETE FROM app_account_revocations WHERE id=?', (row['id'],))
