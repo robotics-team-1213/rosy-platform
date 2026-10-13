@@ -3,6 +3,37 @@ import hashlib
 import contextlib
 import io
 import json
+
+
+def test_local_transport_delivers_real_sealed_bundle_and_persists_highwater(tmp_path):
+    source = tmp_path / 'source'; source.mkdir()
+    value = current(); folder = bundle(source, value)
+    destination = tmp_path / 'received'
+    config = {'source': str(source), 'peer': 'local', 'remote_reviews': str(destination),
+              'transport': 'local', 'interval_s': 3, 'max_attempts': 2,
+              'authority': {'endpoint': 'http://127.0.0.1:8767/api/decisions', 'workspace_id': WORKSPACE}}
+    state = review_bridge.run_once(config, tmp_path / 'bridge', current_fetcher=lambda _: value)
+    assert state['current_authority']['status'] == 'verified'
+    snapshot = json.loads((destination / '.authority/current.json').read_text())
+    assert snapshot['authority'] == value
+    assert snapshot['revision'] == state['current_authority']['revision']
+    key = next(iter(state['steps']))
+    assert (destination / key / 'AUTHORITY_COMPLETE').read_bytes() == (folder / 'AUTHORITY_COMPLETE').read_bytes()
+    again = review_bridge.run_once(config, tmp_path / 'bridge', current_fetcher=lambda _: value)
+    assert len(again['steps']) == 1
+    assert len([p for p in destination.iterdir() if not p.name.startswith('.')]) == 1
+    (destination / key / 'AUTHORITY_COMPLETE').write_text('tampered')
+    with pytest.raises(ValueError):
+        review_bridge.publish_local(folder, key, config, tmp_path / 'bridge')
+
+
+def test_local_transport_refuses_destination_symlink(tmp_path):
+    actual = tmp_path / 'actual'; actual.mkdir()
+    destination = tmp_path / 'linked'; destination.symlink_to(actual, target_is_directory=True)
+    config = {'remote_reviews': str(destination)}
+    with pytest.raises(ValueError):
+        review_bridge.publish_current_local({}, config, tmp_path)
+    assert list(actual.iterdir()) == []
 from pathlib import Path
 import sys
 import shutil
