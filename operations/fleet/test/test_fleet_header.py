@@ -26,15 +26,18 @@ def test_header_ids_and_one_sheet():
     for name in DOCS:
         page, header = _header(name)
         for element_id in ("console-token", "token-save", "user-role", "password-login", "token-access",
-                           "fleet-theme", "development-badge", "online-pill", "topbar-more", "estop"):
+                           "fleet-theme", "development-badge", "online-pill", "topbar-more", "estop",
+                           "clock", "link-state"):
             assert f'id="{element_id}"' in header, (name, element_id)
         # The old site-map/Cell identity row is gone; one id names one thing on every document.
         for retired in ('id="session"', 'id="credential"', 'id="connect"', "site-access", "cell-access"):
             assert retired not in page, (name, retired)
         assert page.count('id="estop"') == 1, name
         assert 'class="fleet-shell"' in page and 'class="fleet-workspace"' in page, name
-        assert re.search(r'<footer[^>]*class="fleet-footer".*?id="clock"', page, re.S), name
-        assert 'id="clock"' not in header, name
+        # D-741 3: 푸터는 없다. 시계는 앱 바의 연결 자리에 있고, 푸터의 알림 링크는 머리의 알림 단추가 대신한다.
+        assert "<footer" not in page and "fleet-footer" not in page and "관제 알림" not in page, name
+        status = header.split('data-header-region="status"', 1)[1].split('data-header-region="actions"', 1)[0]
+        assert status.index('id="link-state"') < status.index('id="clock"'), name
         assert '/console/assets/fleet-header.css' in page, name
 
 
@@ -75,3 +78,4 @@ def test_document_sheets_do_not_paint_the_header():
     for sheet in ("shared/styles.css", "site-map.css", "cell/cell.css"):
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
+    assert ".fleet-footer" not in (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")

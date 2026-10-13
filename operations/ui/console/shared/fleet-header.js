@@ -8,6 +8,31 @@ export const SESSION_REASON = "접속이 필요합니다";
 const ROLE = {operator: "운영자", viewer: "보기 전용", "policy-admin": "정책 관리자"};
 const $ = id => document.getElementById(id);
 
+// D-741 3 — 브라우저와 Fleet 사이의 연결. 답이 오면 실시간, LATE_MS 넘게 새 답이 없으면 지연,
+// 요청이 닿지 않았거나 서버가 5xx로 답하면 연결 끊김이다. 401·403은 서버가 답한 것이라 실시간이다.
+// 로봇과의 연결은 여기 것이 아니다. 그것은 관제 화면의 연결 수와 로봇 카드가 말한다.
+const LINK = {wait: ["연결 대기", "neutral"], live: ["실시간", "neutral"], late: ["지연", "warn"], down: ["연결 끊김", "crit"]};
+export const LATE_MS = 12000;  // 5초 조회 두 번을 놓치고 2초
+let answeredAt = null, linkFailed = false;
+export function linkState(now = Date.now()) {
+  if (linkFailed) return "down";
+  if (answeredAt === null) return "wait";
+  return now - answeredAt > LATE_MS ? "late" : "live";
+}
+function paintLink(now) {
+  const tag = $("link-state"), state = linkState(now);
+  if (tag.dataset.link === state) return;
+  tag.dataset.link = state;
+  tag.textContent = LINK[state][0];
+  tag.setAttribute("status", LINK[state][1]);
+}
+export function noteLink(error = null, now = Date.now()) {
+  if (error?.name === "AbortError") return;
+  linkFailed = Boolean(error) && !(typeof error.status === "number" && error.status < 500);
+  if (!linkFailed) answeredAt = now;
+  paintLink(now);
+}
+
 // Every Fleet document has one inbox entry; only the console owns its local unread state.
 function inboxButton() {
   if ($("fleet-inbox")) return $("fleet-inbox");
@@ -153,8 +178,10 @@ export function watchFleet(request, {every = 5000, interval = setInterval} = {})
   async function read() {
     try {
       const state = await request("/api/fleet/state");
+      noteLink();
       showFleet(state.fleet, state.robots);
     } catch (error) {
+      noteLink(error);
       if (error.name === "AbortError" || error.status === 401 || error.status === 403) return;
       const pill = $("online-pill");
       pill.textContent = "Fleet 서버 없음";
@@ -166,7 +193,9 @@ export function watchFleet(request, {every = 5000, interval = setInterval} = {})
 }
 
 export function tickClock() {
-  $("clock").textContent = new Date().toTimeString().slice(0, 8);
+  const now = Date.now();
+  $("clock").textContent = new Date(now).toTimeString().slice(0, 8);
+  paintLink(now);  // 답이 끊긴 채 시간이 가면 이 틱이 지연으로 바꾼다
 }
 
 export function stopNotice(message = "", state = "warning") {

@@ -25,6 +25,8 @@
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     </div>
     <div class="fleet-link-status" data-header-region="status" role="group" aria-label="관제 상태">
+      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <ui-text id="clock" scale="value">--:--:--</ui-text>
       <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="상태 센터: 연결·권한·메시지 확인">
         <span class="header-status-item"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
         <span class="header-status-item"><span data-action-icon="notification" data-icon-only="" aria-label="미확인 메시지"></span><span id="header-unread" aria-hidden="true">—</span></span>
@@ -150,7 +152,6 @@
   </main>
   </div>
   </div>
-  <footer class="fleet-footer" aria-label="운영 정보"><span>현재 시각</span><ui-text id="clock" scale="value">--:--:--</ui-text><a href="/console?inbox=1" data-action-icon="notification" data-icon-only="">관제 알림</a></footer>
 </ui-shell>
 </body>
 </html>

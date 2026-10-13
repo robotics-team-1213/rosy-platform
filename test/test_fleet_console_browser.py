@@ -2512,14 +2512,13 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
-    assert layout["headerRows"] <= 2, layout  # D-641: identity/connection and status/inbox, clock in footer.
+    assert layout["headerRows"] <= 2, layout  # 48rem 아래의 두 줄은 한 줄 접힘 Task에서 한 줄이 된다.
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        # D-641/D-668: compact header keeps the status center and theme on one row; the clock belongs to the flow footer.
+        # D-741 3: the clock lives in the app bar and folds below 48rem; the status center and theme share a row.
         status, inbox = layout["status"], layout["inbox"]
         assert min(status["bottom"], inbox["bottom"]) - max(status["top"], inbox["top"]) > 1, layout
-        assert layout["clock"]["height"] > 0, layout
-        assert layout["clock"]["top"] >= layout["stop"]["bottom"], layout
+        assert layout["clock"]["height"] == 0, layout
         assert layout["stopScopeHidden"], layout
         # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
         assert layout["stopVerb"] == "비상 정지", layout
@@ -2576,7 +2575,7 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
             expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
             token: shown('#console-token'), theme: shown('#fleet-theme'), role: shown('#user-role'),
             status: shown('#online-pill'), clock: shown('#clock'),
-            clockInFooter: !!document.querySelector('footer.fleet-footer #clock'),
+            footer: !!document.querySelector('footer'),
             clockInHeader: !!document.querySelector('ui-topbar #clock')};
         }"""
         folded = page.evaluate(probe)
@@ -2595,8 +2594,8 @@ def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height
     stop = folded["stop"]
     assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
     assert folded["expanded"] == "false" and not folded["token"] and folded["theme"] and not folded["role"], folded
-    assert folded["status"] and folded["clock"] and folded["clockInFooter"], folded
-    assert not folded["clockInHeader"], folded
+    assert folded["status"] and not folded["clock"] and not folded["footer"], folded
+    assert folded["clockInHeader"], folded
     assert folded["stop"]["height"] >= 48 and folded["more"]["height"] >= 48, folded
     assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
     assert opened["overflow"] <= 0, opened
