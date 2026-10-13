@@ -32,7 +32,7 @@ def test_activation_preserves_effective_password_profile_and_identity(tmp_path):
     value = cookie(active, password="my changed secret")
     context = active.account_context(value)
     assert context["account_id"] and context["session_family"] != value
-    assert context["grants"] == [{"resource": "site:test-site", "capabilities": ["accounts.manage"]}]
+    assert context["grants"] == [{"resource": "site:test-site", "capabilities": ["fleet.read", "accounts.manage"]}]
     assert active.profile(value)["display_name"] == "Alice Example"
     restarted = PasswordSessions(path, {})
     assert restarted.account_context(value)["account_id"] == context["account_id"]
