@@ -88,11 +88,11 @@ def test_real_provider_known_cost_rejection_reviews_only_the_original_case(tmp_p
 
 @pytest.mark.parametrize('kind', ['local', 'claude', 'opencode'])
 def test_existing_direct_provider_call_keeps_value_error_on_invalid_judgment(kind):
-    from test_versioned_local import setup
+    from test_versioned_local import local_provider
     from test_versioned_cli import make_cli_provider
     from test_judgment_profiles import bind_profile, problem
     if kind == 'local':
-        provider, _ = setup('scope')
+        provider, _ = local_provider('scope')
         target = problem()
         bound = bind_profile(target, provider.profile, provider.adapter, required_modalities=('text',))
     else:

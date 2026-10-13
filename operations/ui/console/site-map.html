@@ -32,9 +32,9 @@
     </div>
     <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 접속">
     <ui-button kind="quiet" id="topbar-more" data-icon-only="" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="화면 표시와 고급 접속" title="화면 표시와 고급 접속" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
-    <a id="fleet-login" class="fleet-account-trigger" href="/console/login">로그인</a>
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
     <details id="fleet-account" hidden>
-      <summary class="fleet-account-trigger">계정</summary>
+      <summary class="ui-disclosure-row" data-action-icon="account">계정</summary>
       <div class="fleet-account-panel">
         <p id="fleet-account-identity"></p>
         <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
@@ -78,15 +78,16 @@
     <nav class="task-nav" aria-label="현장 지도 작업">
       <a href="#map-heading">지도 보기</a>
       <a href="#survey-heading">지도 만들기</a>
+      <a href="#profile-heading">지도 설정</a>
       <a href="#trip-heading">경로 미리보기</a>
       <a href="#run-heading">운행 확인</a>
-      <a href="#edit-heading">지도 편집</a>
-      <a href="#teach-heading">가르치기</a>
+      <a href="#edit-heading">초안 편집</a>
+      <a href="#teach-heading">지도 가르치기</a>
     </nav>
     <ui-text id="notice" role="status" aria-live="polite">접속하면 활성 지도와 초안을 읽습니다. 경로 미리보기는 로봇을 움직이지 않습니다.</ui-text>
     <ui-section aria-labelledby="map-heading">
       <ui-head>
-        <h1 class="ui-page-heading" id="map-heading">지도</h1>
+        <h1 class="ui-page-heading" id="map-heading">지도 보기</h1>
         <label class="inline">보기 <select class="ui-field" id="map-source" aria-label="보는 지도">
           <option value="active">활성 지도</option><option value="draft">초안</option><option value="profile">저장된 지도 설정</option>
         </select></label>
@@ -116,7 +117,7 @@
       </details>
     </ui-section>
     <ui-section aria-labelledby="survey-heading">
-      <ui-head><h2 class="ui-section-heading" id="survey-heading">지도 없이 시작</h2></ui-head>
+      <ui-head><h2 class="ui-section-heading" id="survey-heading">지도 만들기</h2></ui-head>
       <ui-text id="survey-reference" role="status">조사 기준 없음</ui-text>
       <details id="survey-setup">
         <summary class="ui-disclosure-row">시작점·방향·축척 설정</summary>
@@ -210,7 +211,7 @@
         <ol id="trip-actions" aria-label="교차로 동작"></ol>
       </ui-section>
       <ui-section aria-labelledby="run-heading">
-        <ui-head><h2 class="ui-section-heading" id="run-heading">운행</h2></ui-head>
+        <ui-head><h2 class="ui-section-heading" id="run-heading">운행 확인</h2></ui-head>
         <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
         <a id="trip-console-link" href="/console">운행은 관제의 로봇 카드에서</a>
       </ui-section>

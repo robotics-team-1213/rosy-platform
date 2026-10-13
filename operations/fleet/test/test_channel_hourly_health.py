@@ -61,7 +61,7 @@ class FakeGather:
         pytest.fail("hourly health must not force a Fleet gather")
 
 
-def setup(tmp_path, now, rows, *, sender=None, enabled=True, ai=None):
+def hourly(tmp_path, now, rows, *, sender=None, enabled=True, ai=None):
     db = tmp_path / "fleet.sqlite3"
     with sqlite3.connect(db) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS fleet_tasks (status TEXT NOT NULL)")
@@ -95,7 +95,7 @@ def test_report_uses_cached_per_robot_freshness_and_only_observed_sensor_values(
          "state": {"safety": {"estop": False}, "battery": {"percent": 91},
                    "evidence": {"safety": {"evidence": "fresh"}, "battery": {"evidence": "stale"}}}},
     ]
-    health, _, _, _ = setup(tmp_path, now, rows,
+    health, _, _, _ = hourly(tmp_path, now, rows,
                             ai=SimpleNamespace(status=lambda: {"state": "present", "owner_mode": "owner_busy",
                                                                "age_s": 0.8}))
 
@@ -114,7 +114,7 @@ def test_report_uses_cached_per_robot_freshness_and_only_observed_sensor_values(
 
 def test_report_marks_missing_or_stale_collection_unknown(tmp_path):
     now = at(9)
-    health, _, _, _ = setup(tmp_path, now, [], enabled=True)
+    health, _, _, _ = hourly(tmp_path, now, [], enabled=True)
     assert "\uc218\uc9d1 recent" in render(health)
     health.gather.gathered_at = 0
     health.gather._snapshot = None
@@ -125,7 +125,7 @@ def test_report_marks_missing_or_stale_collection_unknown(tmp_path):
 
 def test_report_bounds_large_roster_and_discloses_omitted_robots(tmp_path):
     now = at(9)
-    health, _, _, _ = setup(tmp_path, now, [])
+    health, _, _, _ = hourly(tmp_path, now, [])
     health.console._robots = [f"robot-{index:03}-" + "x" * 80 for index in range(100)]
     report = render(health)
     assert len(report) <= 2000
@@ -138,7 +138,7 @@ def test_report_rejects_default_and_stale_safety_or_battery_facts(tmp_path):
              "state": {"safety": {"estop": False}, "battery": {"percent": 0},
                        "evidence": {"safety": {"evidence": "unavailable"},
                                     "battery": {"evidence": "stale"}}}}]
-    health, _, _, _ = setup(tmp_path, now, rows)
+    health, _, _, _ = hourly(tmp_path, now, rows)
     report = render(health)
     assert "0%" not in report
     assert "E-stop released" not in report
@@ -147,7 +147,7 @@ def test_report_rejects_default_and_stale_safety_or_battery_facts(tmp_path):
 
 def test_slow_task_count_read_does_not_block_event_loop(tmp_path):
     now = at(9)
-    health, _, _, _ = setup(tmp_path, now, [])
+    health, _, _, _ = hourly(tmp_path, now, [])
     loop_thread = threading.get_ident()
     entered, release, responsive = threading.Event(), threading.Event(), threading.Event()
     reader_threads = []
@@ -186,8 +186,8 @@ def test_slow_task_count_read_does_not_block_event_loop(tmp_path):
 def test_two_workers_share_one_durable_claim_and_nonce(tmp_path):
     now, entered, release = at(9), asyncio.Event(), asyncio.Event()
     sender = FakeSender(entered=entered, release=release)
-    first, _, _, _ = setup(tmp_path, now, [], sender=sender)
-    second, _, _, _ = setup(tmp_path, now, [], sender=sender)
+    first, _, _, _ = hourly(tmp_path, now, [], sender=sender)
+    second, _, _, _ = hourly(tmp_path, now, [], sender=sender)
 
     async def run():
         owner = asyncio.create_task(first.run_once())
@@ -209,8 +209,8 @@ def test_two_workers_share_one_durable_claim_and_nonce(tmp_path):
 def test_startup_recovery_does_not_clobber_a_live_worker_claim(tmp_path):
     now, entered, release = at(9), asyncio.Event(), asyncio.Event()
     sender = FakeSender(entered=entered, release=release)
-    first, journal, _, _ = setup(tmp_path, now, [], sender=sender)
-    second, _, _, _ = setup(tmp_path, now, [], sender=sender)
+    first, journal, _, _ = hourly(tmp_path, now, [], sender=sender)
+    second, _, _, _ = hourly(tmp_path, now, [], sender=sender)
 
     async def run():
         owner = asyncio.create_task(first.run_once())
@@ -231,8 +231,8 @@ def test_late_confirmed_send_is_recorded_after_recovery_without_replay(tmp_path)
     provider_id = "100000000000000005"
     sender = FakeSender({"state": "SENT", "provider_id": provider_id},
                         entered=entered, release=release)
-    first, journal, _, _ = setup(tmp_path, now, [], sender=sender)
-    second, _, _, _ = setup(tmp_path, now, [], sender=sender)
+    first, journal, _, _ = hourly(tmp_path, now, [], sender=sender)
+    second, _, _, _ = hourly(tmp_path, now, [], sender=sender)
 
     async def run():
         owner = asyncio.create_task(first.run_once())
@@ -250,7 +250,7 @@ def test_late_confirmed_send_is_recorded_after_recovery_without_replay(tmp_path)
 
 
 def test_mid_hour_start_skips_slot_without_backlog_then_sends_next_boundary(tmp_path):
-    health, _, sender, _ = setup(tmp_path, at(9, 0, 1), [])
+    health, _, sender, _ = hourly(tmp_path, at(9, 0, 1), [])
     health.task_counts = lambda: pytest.fail("off-hour scans must not build a health report")
     asyncio.run(health.run_once())
     assert sender.calls == []
@@ -267,7 +267,7 @@ def test_mid_hour_start_skips_slot_without_backlog_then_sends_next_boundary(tmp_
 def test_only_known_rate_limit_retries_inside_the_bounded_window(tmp_path):
     now = [at(9)]
     sender = FakeSender({"state": "RETRY", "provider_id": None})
-    health, _, _, _ = setup(tmp_path, now[0], [], sender=sender)
+    health, _, _, _ = hourly(tmp_path, now[0], [], sender=sender)
     health.clock = lambda: now[0]
 
     asyncio.run(health.run_once())
@@ -289,7 +289,7 @@ def test_only_known_rate_limit_retries_inside_the_bounded_window(tmp_path):
 
 def test_restart_after_claim_is_unknown_and_never_replayed(tmp_path):
     now = at(9)
-    health, journal, sender, _ = setup(tmp_path, now, [])
+    health, journal, sender, _ = hourly(tmp_path, now, [])
     claim = health.claim(now)
     assert claim is not None
 
@@ -307,7 +307,7 @@ def test_restart_after_claim_is_unknown_and_never_replayed(tmp_path):
 def test_route_change_during_publish_is_unknown_and_cannot_replay_to_new_channel(tmp_path):
     now, release = at(9), asyncio.Event()
     sender = FakeSender(release=release)
-    health, journal, _, _ = setup(tmp_path, now, [], sender=sender)
+    health, journal, _, _ = hourly(tmp_path, now, [], sender=sender)
     async def run():
         sending = asyncio.create_task(health.run_once())
         while not sender.calls:
@@ -326,7 +326,7 @@ def test_route_change_during_publish_is_unknown_and_cannot_replay_to_new_channel
 
 def test_publisher_route_must_match_the_durable_claim_scope(tmp_path):
     now = at(9)
-    health, journal, sender, _ = setup(tmp_path, now, [])
+    health, journal, sender, _ = hourly(tmp_path, now, [])
     journal.config = config(channel=OTHER_CHANNEL)
     asyncio.run(health.run_once())
     assert sender.calls == []
@@ -339,7 +339,7 @@ def test_publisher_route_must_match_the_durable_claim_scope(tmp_path):
 def test_unknown_delivery_is_terminal_even_after_time_jump(tmp_path):
     now = [at(9)]
     sender = FakeSender({"state": "UNKNOWN", "provider_id": None})
-    health, _, _, _ = setup(tmp_path, now[0], [], sender=sender)
+    health, _, _, _ = hourly(tmp_path, now[0], [], sender=sender)
     health.clock = lambda: now[0]
 
     asyncio.run(health.run_once())
@@ -353,7 +353,7 @@ def test_unknown_delivery_is_terminal_even_after_time_jump(tmp_path):
 
 def test_clock_rewind_cannot_repeat_a_sent_hour_and_forward_jump_skips_backlog(tmp_path):
     now = [at(9)]
-    health, _, sender, _ = setup(tmp_path, now[0], [])
+    health, _, sender, _ = hourly(tmp_path, now[0], [])
     health.clock = lambda: now[0]
 
     asyncio.run(health.run_once())

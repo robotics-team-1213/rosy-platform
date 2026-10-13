@@ -268,6 +268,11 @@
 
 - 카메라 후속: 같은 커밋의 네 시작 방향 고정 정책 평가 8개 episode와 실제 영상 8개가 끝났다. 초기/각 episode/최종/cleanup 정지 11개는 모두 통과했지만 완주는 0이며 camera admission 실패로 SDK exit1이다. 정상 방향 baseline 0.110668m, eval 0.100579m 후 차선 관측 거절이며 정지 안정성 개선을 차선 추종 해결로 표현하지 않는다.
 
+## 2026-10-12 · 45e92d326 · 카메라 관리자 설정과 곡률 역산 일치
+
+- 변경: CameraLane이 기준 관리자 설정으로 DrivableSteer를 구성한다. 설정된 곡률과 명시적인 RL gain 조절을 구분한다.
+- 증거: 원격 camera 회귀 82 PASS, known_failures NEW 0이다. 기존 .04/.4 구성은 이전 gain/cruise 비율을 유지한다.
+- gate 변화: 호스트 회귀만 확인했다. 새 native Isaac SDK 실행·곡선 완주·실물 수용은 미확인이다.
 
 ## 2026-10-12 · d67b191d4 · 현재 카메라 저속 목표의 출처 구분
 
