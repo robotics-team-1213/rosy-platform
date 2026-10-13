@@ -10,8 +10,13 @@ from dataclasses import dataclass
 
 from core_features.safety.velocity import finite_velocity
 
-#: Longest the in-process policy may take to answer one request, in seconds.
-POLICY_ANSWER_BUDGET_S = .01
+#: Longest the in-process policy may take to answer one request, in seconds: one period of the
+#: loop that asks. CORE's sole cmd_vel timer runs at 50 Hz (D-2; ``core.bridge.ros_bridge``,
+#: ``create_timer(1.0 / 50.0, self._publish_cmd_vel)``, pinned by ``test_bridge_timers.py``) and an
+#: answer must be applied to the tick it judged. It was a literal 10 ms, which is the D-400 6 G-sim
+#: performance gate (eval_ms p99), not a safety bound. The age of the EVIDENCE is bounded
+#: separately by the lease terms in ``decision_fault`` (D-400 revision 2026-10-14).
+POLICY_ANSWER_BUDGET_S = 1.0 / 50.0
 
 
 @dataclass(frozen=True)

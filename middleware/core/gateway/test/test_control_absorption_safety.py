@@ -68,7 +68,7 @@ def test_policy_exception_stops_output():
 
 def test_policy_over_budget_cannot_authorize_delayed_output():
     command, safety, modes = setup_safety(decision)
-    ticks = iter([1., 1.02])
+    ticks = iter([1., 1.03])
     safety._policy_clock = lambda: next(ticks)
     assert command.select_output(now=10.01) == Twist()
     assert safety.estop
