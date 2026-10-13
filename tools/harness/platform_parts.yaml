@@ -164,8 +164,14 @@ roots:
     legacy: src/runtime/services
     wave: "4d"
     import_prefix: [core_features]
+    source_packages:
+      core_features: core_features
+      core_features/action_rules: core_features.decision
+      core_features/safety_gate: core_features.safety
+      core_features/preview: core_features.vision
     concern: control
-  - path: middleware/core/services/core_features/safety
+  - path: middleware/core/services/core_features/safety_gate
+    layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
     d427_target: middleware/core/services/core_features/safety
     legacy: src/runtime/services/core_features/safety
@@ -173,7 +179,8 @@ roots:
     import_prefix: [core_features.safety]
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
-  - path: middleware/core/services/core_features/decision
+  - path: middleware/core/services/core_features/action_rules
+    layout_target: middleware/core/services/core_features/action_rules
     part: middleware
     d427_target: middleware/core/services/core_features/decision
     legacy: src/runtime/services/core_features/decision
@@ -227,17 +234,17 @@ roots:
     wave: none
     import_prefix: [control.control, control.planning, control.wander]
     source_packages:
-      safety: control.control
+      motion_limits: control.control
       recovery: control.control
       tracking: control.control
       calibration: control.control
       planning/grid: control.planning
-      safety/adapter: control.safety
+      motion_limits/adapter: control.safety
       tracking/wander: control.wander
     concern: control
     note: D-630 Drive algorithms; installed by the existing control distribution.
-  - path: middleware/drive/safety
-    layout_target: middleware/drive/safety
+  - path: middleware/drive/motion_limits
+    layout_target: middleware/drive/motion_limits
     part: middleware
     d427_target: middleware/control/drive/safety
     wave: none

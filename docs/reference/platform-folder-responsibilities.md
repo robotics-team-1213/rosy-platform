@@ -40,7 +40,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | decision | 장치 로컬 허용 동작 | 2 | `core_features.decision` |
 | decision | 현장 후보·모델 제안 | 10 | `operations/decision`. 설치는 Fleet 배포 |
 | safety | 공통 E-stop·배터리·Fleet 상실 | 2 | `core_features.safety` |
-| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/safety` |
+| safety | 동작 후보의 속도·바닥 검사 | 4 | `middleware/drive/motion_limits` |
 | execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/robot_execution/local` |
 | execution | 현장 목표·진척 | 10 | `operations/site_execution` |
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/front_camera` |
@@ -142,14 +142,14 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `contracts/motion` | wheel `rosy-contracts-motion`; `rosy.contracts.motion` | 유지 — Motion Intent·DeviceControlPort 형식. Pinky writer binding 소비; 전 producer admission 완료로 해석하지 않음 |
 | `middleware/core/gateway` | ROS `core`; `core` | 분리 완료 — CORE 조립·ROS bridge. 내부 `drive`와 `system/power`로 기존 조립 추출; 외부 attribute·기존 service listener 상대 순서 유지 |
 | `middleware/core/services` | ROS `core_features`; `core_features` | 유지 — 기존 feature manager·알고리즘. Drive 기능은 line_follow/navigation/localization/docking/swarm의 실제 owner에 남음 |
-| `middleware/core/services/core_features/safety` | `core_features.safety` | 유지 — CORE 공통 E-stop·person·battery·fleet-loss 보호. Drive 전용 sweep proof와 구분 |
-| `middleware/core/services/core_features/decision` | `core_features.decision` | 유지 — 장치 local lane/router/allowed-action 규칙. Fleet의 deliberative decision과 구분 |
+| `middleware/core/services/core_features/safety_gate` | `core_features.safety` | 유지 — CORE 공통 E-stop·person·battery·fleet-loss 보호. Drive 전용 sweep proof와 구분 |
+| `middleware/core/services/core_features/action_rules` | `core_features.decision` | 유지 — 장치 local lane/router/allowed-action 규칙. Fleet의 deliberative decision과 구분 |
 | `middleware/core/events` | ROS `core_events`; `core_events` | 유지 — CORE/Fleet의 event bus·audit 형식과 연결 |
 | `middleware/core/api` | ROS `core_api_web`; `core_api_web` | 이전 완료 — 기존 api_web 배포/import명 유지, API·WebSocket·UI 제공 소스 holder만 간소화 |
 | `middleware/drive/planning/nav2` | ROS `navigation`; `navigation` | 이전 완료 — Nav2 launch/config/backend. CORE goal facade·취소 세대·최종 command 경계 유지 |
 | `middleware/perception` | ROS `control`; `control`, `control.sensing`, `control.sensing.perception` | 분리 완료 — sensors/vision 소스와 node 조립·recorder·map resource. Drive 구현은 별도 holder; 하나의 기존 배포 패키지로 설치 |
 | `middleware/drive` | 기존 ROS `control` 배포의 `control.control`, `control.planning`, `control.wander` | 분리 완료 — tracking/recovery/calibration과 grid planning. node/provider 소비자와 기존 relative import·monkeypatch identity 유지 |
-| `middleware/drive/safety` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
+| `middleware/drive/motion_limits` | 기존 ROS `control` 배포의 `control.control.*`, `control.safety` | 분리 완료 — actuation·speed·command gate·floor/body/sweep 정책, sensor-only adapter. 별도 final writer 없음 |
 | `middleware/drivers/imu_bno055` | ROS `imu_bno055` | 유지 — IMU I/O. 장치 bringup이 소비; 지각 판단이나 작업 dispatch를 소유하지 않음 |
 | `middleware/drivers/pinky_adc` | ROS `sensor_adc` | 유지 — Pinky ADC I/O. IR 등 센서 소비자 연결 |
 | `middleware/drivers/pinky_lamp` | ROS `lamp_control` | 유지 — Pinky lamp I/O. 장치 UI/bringup 소비 |

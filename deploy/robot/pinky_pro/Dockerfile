@@ -143,7 +143,7 @@ COPY middleware/drive/planning/nav2 /opt/rosy_ws/src/runtime/navigation
 COPY middleware/devices/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/devices/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
-COPY middleware/drive/safety /opt/rosy_ws/src/runtime/drive/safety
+COPY middleware/drive/motion_limits /opt/rosy_ws/src/runtime/drive/motion_limits
 COPY middleware/drive/recovery /opt/rosy_ws/src/runtime/drive/recovery
 COPY middleware/drive/tracking /opt/rosy_ws/src/runtime/drive/tracking
 COPY middleware/drive/calibration /opt/rosy_ws/src/runtime/drive/calibration

@@ -40,7 +40,7 @@ D-747 moves location assist/status to `../localization`, graph health to `../gra
 |-----------|---------|
 | `control/` | Initializer and guide for the preserved `control.control` identity; pure modules live in Drive safety/tracking/recovery/calibration (see [control/AGENTS.md](control/AGENTS.md)) |
 | `planning/` | Source initializer facade for `middleware/drive/planning/grid`; installed as `control.planning` |
-| `safety/` | Source initializer facade for `middleware/drive/safety/adapter`; installed as `control.safety` |
+| `safety/` | Source initializer facade for `middleware/drive/motion_limits/adapter`; installed as `control.safety` |
 | `sensing/` | Source initializer facade for `middleware/perception/sensors/sensing`; its `control.sensing.perception` child lives in `middleware/perception/front_camera/perception` |
 | `wander/` | Source initializer facade for `middleware/drive/tracking/wander`; installed as `control.wander` |
 

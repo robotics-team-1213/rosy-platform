@@ -34,12 +34,12 @@ SOURCE_MODULES = {
     "sensors/sensing/lidar.py": "control.sensing.lidar",
     "front_camera/perception/lane.py": "control.sensing.perception.lane",
     "front_camera/perception/learned/road_observation.py": "control.sensing.perception.learned.road_observation",
-    "../drive/safety/command_gate.py": "control.control.command_gate",
+    "../drive/motion_limits/command_gate.py": "control.control.command_gate",
     "../drive/recovery/recover.py": "control.control.recover",
     "../drive/tracking/path_follow.py": "control.control.path_follow",
     "../drive/calibration/calibration.py": "control.control.calibration",
     "../drive/planning/grid/goals.py": "control.planning.goals",
-    "../drive/safety/adapter/gate.py": "control.safety.gate",
+    "../drive/motion_limits/adapter/gate.py": "control.safety.gate",
     "../drive/tracking/wander/motion.py": "control.wander.motion",
 }
 
@@ -74,7 +74,7 @@ def test_ros_source_audit_includes_moved_adapter_once(tmp_path):
     _run(str(PACKAGE / "tools/audit_ros_names.py"), "--output", str(output), cwd=tmp_path)
     with output.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
-    assert any(row["source"] == "middleware/drive/safety/adapter/node.py"
+    assert any(row["source"] == "middleware/drive/motion_limits/adapter/node.py"
                for row in rows)
     keys = [(row["source"], row["line"], row["kind"], row["expression"]) for row in rows]
     assert len(keys) == len(set(keys))
@@ -86,7 +86,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
     source = tmp_path / "source/middleware/perception"
     shutil.copytree(PACKAGE, source, ignore=shutil.ignore_patterns(
         "__pycache__", "*.egg-info", "build", "dist"))
-    for relative in ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
+    for relative in ("motion_limits", "recovery", "tracking", "calibration", "planning/grid", "runtime"):
         shutil.copytree(MIDDLEWARE / "drive" / relative,
                         source.parent / "drive" / relative)
     dist = tmp_path / "dist"
@@ -112,7 +112,7 @@ def test_sdist_alone_builds_one_installed_copy_with_provider_identity(tmp_path):
         for name in ('control_node', 'goal_node', 'wander_node', 'safety_node'):
             assert names.count('control/' + name + '.py') == 1
             assert not (PACKAGE / 'control' / (name + '.py')).exists()
-        for group in ("safety", "recovery", "tracking", "calibration"):
+        for group in ("motion_limits", "recovery", "tracking", "calibration"):
             for path in (MIDDLEWARE / "drive" / group).glob("*.py"):
                 assert names.count("control/control/" + path.name) == 1
                 assert sum(name.startswith("control/control/") and name.endswith("/" + path.name)

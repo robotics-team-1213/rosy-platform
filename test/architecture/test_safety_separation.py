@@ -316,7 +316,7 @@ CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
 CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
-CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/drive/safety/adapter/node.py"}
+CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/drive/motion_limits/adapter/node.py"}
 OMX_SCOPE = ("middleware/devices/omx/", "integrations/robots/omx/")
 
 

@@ -80,7 +80,7 @@ SPLIT_CODE_PREFIXES = ("middleware/perception/nodes/", "middleware/perception/lo
                        "middleware/perception/sensors/", "middleware/perception/front_camera/",
                        "middleware/perception/package.xml",
                        *("middleware/drive/" + name + "/" for name in
-                         ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
+                         ("motion_limits", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
 SPLIT_REQUIRED = (
                   'middleware/perception/nodes/calib_node.py',
                   'middleware/perception/nodes/calibrated_values.py',
@@ -135,13 +135,13 @@ SPLIT_REQUIRED = (
                   "middleware/perception/package.xml",
                   "middleware/perception/sensors/sensing/__init__.py",
                   "middleware/perception/front_camera/perception/__init__.py",
-                  "middleware/drive/safety/command_gate.py",
+                  "middleware/drive/motion_limits/command_gate.py",
                   "middleware/drive/recovery/recover.py",
                   "middleware/drive/tracking/path_follow.py",
                   "middleware/drive/calibration/modes.py",
                   "middleware/drive/planning/grid/__init__.py",
                   "middleware/drive/runtime/control_node.py",
-                  "middleware/drive/safety/adapter/__init__.py",
+                  "middleware/drive/motion_limits/adapter/__init__.py",
                   "middleware/drive/tracking/wander/__init__.py")
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)

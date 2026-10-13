@@ -1273,7 +1273,7 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "drive/safety/adapter/node.py": (
+    "drive/motion_limits/adapter/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -1979,7 +1979,7 @@ def _declared(name: str) -> set:
 
 def _files(name: str, suffixes):
     holders = (ROOT / "middleware/drive" / holder for holder in
-               ("calibration", "recovery", "safety", "tracking", "planning/grid", "runtime")) if name == "control" else ()
+               ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")) if name == "control" else ()
     if name == 'core_features':
         holders = (ROOT / 'middleware/drive/behaviors',)
     if name == "fleet":
