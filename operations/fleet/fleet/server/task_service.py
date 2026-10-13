@@ -14,6 +14,8 @@ from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
+from fleet.server.channel.execution.journal import native_required
+from fleet.server.channel.execution.outcomes.task_receipt import bind_native_task_result
 from fleet.swarm.transport import RobotApiError
 
 
@@ -36,6 +38,11 @@ class FleetTaskService:
         self._policy_evidence = policy_evidence
         self._max_evidence_age_s = max_evidence_age_s
         self._clock = clock
+        self.channel_admission = None
+        self.core_events = None
+
+    bind_native_receipt = bind_native_task_result
+    native_required = native_required
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
@@ -130,9 +137,11 @@ class FleetTaskService:
                 or task["status"] != "QUEUED" or task["dispatch_phase"] != "DISPATCHING"):
             raise HubError("COMMAND_REJECTED", "task no longer owns the dispatch attempt")
         reason = None
-        if not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
+        if self.channel_admission is not None:
+            reason = self.channel_admission(task_id)
+        if reason is None and not self.store.dispatch_generation_is_current(task["dispatch_generation"]):
             reason = "STOP_GENERATION_CHANGED_BEFORE_SEND"
-        elif task["source"] == "policy":
+        elif reason is None and task["source"] == "policy":
             reason = self._policy_admission_reason(task["evidence"]["evidence_id"], robot_id=task["robot_id"])
             if reason is None and not self.POLICY_DISPATCH_ENABLED:
                 reason = "POLICY_NOT_ACCEPTED"
@@ -165,8 +174,16 @@ class FleetTaskService:
             raw_receipt = await dispatch(attempt)
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")
+            self.bind_native_receipt(task['task_id'], attempt['attempt_id'], task['robot_id'], raw_receipt)
+            native_receipt = self.store.get_task(task['task_id']).get('receipt') or {}
+            if native_receipt.get('native_required') and not native_receipt.get('operation'):
+                return self.store.transition(task['task_id'], 'UNKNOWN', actor_id=task['actor_id'],
+                                             source=task['source'], reason='NATIVE_ACK_IDENTITY_UNKNOWN')
             accepted = raw_receipt.get("accepted")
             if raw_receipt.get("queued") is True:
+                if (self.store.get_task(task['task_id']).get('receipt') or {}).get('operation'):
+                    return self.store.transition(task['task_id'], 'UNKNOWN', actor_id=task['actor_id'],
+                                                 source=task['source'], reason='NATIVE_TRAFFIC_RESULT_PENDING')
                 dispatch_attempted = raw_receipt.get("dispatch_attempted") is True
                 cancel_confirmed = raw_receipt.get("cancel_confirmed") is True
                 if dispatch_attempted and not cancel_confirmed:
@@ -192,6 +209,7 @@ class FleetTaskService:
             if accepted is True and raw_receipt.get("queued") is not True:
                 receipt = {key: raw_receipt[key] for key in ("accepted", "queued")
                            if key in raw_receipt and isinstance(raw_receipt[key], bool)}
+                receipt.update(self.store.get_task(task['task_id']).get('receipt') or {})
                 return self.store.transition(task["task_id"], "ACCEPTED", actor_id=task["actor_id"],
                                              source=task["source"], receipt=receipt)
             # The legacy console may report a memory-only traffic queue after sending/canceling.
@@ -252,6 +270,8 @@ class FleetTaskService:
             robot_id=robot_id, event_id=event_id, seq=seq,
             event_type=event_type, correlation_id=correlation_id,
             source=source if isinstance(source, str) else None,
+            run_id=data.get('run_id'), boot_id=data.get('boot_id'),
+            error_code=data.get('error_code'),
         )
 
     def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:

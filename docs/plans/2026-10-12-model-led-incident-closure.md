@@ -191,6 +191,10 @@ Phase 6의 단일 사건 읽기 전용 export와 기존 녹화 feedback 연결�
 
 ## 완료 기준
 
+D-731 후속 source는 기존 Fleet 단일 제출 소유자에 model/rule claim 소비, ROOT 명시 구성, ACK/UNKNOWN 기록과 worker 결과 확인·최종 인수를 연결한다. 별도 명령 서비스를 만들지 않는다. 정상 미개입과 CORE 정지 경로를 유지한다. 실제 독립 평가 원본 producer·설치 수용 getter·현재 프로파일 설정과 제한 실제 모델 호출·Pinky 현장 수용·승격/복귀는 별도 미완료다. source provider fixture를 실제 Qwen/GLM 호출이나 현장 정답으로 사용하지 않는다.
+
+2026-10-12 D-730 후속: 운영 수용·폐기 epoch와 단일 사건 rule/model 제출 원장을 기존 Fleet DB에 구현했다. 후보 원장은 `automation/operating`으로 책임을 옮기고 기존 import identity를 보존했다. 원격 SQLite 경합·만료·HOLD·서명 변조·기존 PENDING/UNKNOWN 차단과 실제 HttpRobotClient 최종 guard, source 없는 wheel/sdist import를 검증했다. 이 기록은 메커니즘 source 증거다. 실제 resolver/worker 소비 경로, 독립 평가 원본 producer와 설치 증거 연결은 아직 미완료이며 운영 활성화를 허용하지 않는다. AI PC의 `/opt/rosy-deliberation/review-cfcba82ddf` 설치는 재확인 시 없었고 준비 스크립트만 존재했다. 실제 Qwen/GLM 호출과 현장 결과 확인, 실패 피드백의 독립 평가·승격·복귀 수용까지 전체 목표를 닫지 않는다.
+
 최신 checkpoint: 기존 사건 원장과 resolver loop에 선택적 모델 worker를 구성하는 factory, 최종 검토 outbox 연결, GLM v2 의존성/import closure는 commit `3e2f3b9fda`로 로컬 main에 착지했다. D-685 자율 복구 변경을 함께 보존한 13개 관련 파일 원격 통합 시험은 적격 Model PC 7.3GB에서 288 passed, exit 0, known-failures 신규 실패 0건이며 lint도 통과했다. 로그는 `X:/DevTemp/land/feat-conditional-model-review/run-1-1.txt`다. 기본 비활성·같은 DB·사람 점유 차단·UNKNOWN/재발행 거부 경계를 유지한다. 위의 과거 checkpoint에서 미구현으로 적었던 factory는 이제 source 구현되었으며, 실제 서비스 설정과 수용 프로파일 연결은 여전히 남아 있다.
 
 AI PC의 임시 비특권 환경에서 해시 고정 wheel의 오프라인 설치, pip 의존성 검사, v2 import/codec probe가 exit 0과 `PASS_V2_IMPORT_CODEC_ONLY`로 끝났다. 모델 호출은 0회이며 root 설치·서비스 계정 격리·실제 제공자·과금·독립 품질·현장 수용을 증명하지 않는다. 설치 묶음과 실제 확인 범위는 [import closure 기록](../validation/deliberation-host-admission-2026-10-12/versioned-import-closure.md)에 둔다. 다음 작업은 상세 비용 증거를 공통 사건 원장에 연결하고, 실제 Fleet 비교 기준과 수용된 제공자·보정 프로파일을 구성하는 것이다. Discord 설정은 담당 세션이 유지한다. 목표는 아직 진행 중이며 푸시·운영 활성화는 수행하지 않았다.

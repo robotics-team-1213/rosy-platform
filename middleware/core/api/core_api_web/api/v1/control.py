@@ -6,8 +6,9 @@ import logging
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from uuid import UUID
 
-from core_api_web.api.v1.common import apply_mode, operator, require_calibration_owner, require_kept
+from core_api_web.api.v1.common import apply_mode, operator, require_calibration_owner, require_kept, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -26,6 +27,9 @@ class ModeRequest(BaseModel):
 class TeleopRequest(BaseModel):
     linear: float = 0.0
     angular: float = 0.0
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
 
 
 @control_router.post("/mode")
@@ -52,9 +56,15 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
         code = exc.code if isinstance(exc, ApiError) else "CAPABILITY_NOT_SUPPORTED"
         svc.command.note_intent(body.linear, body.angular, "manual", False, code)
         raise
-    accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
+    receipt = []
+    accepted, code = svc.command.teleop(
+        body.linear, body.angular, source="manual",
+        correlation_id=body.correlation_id,
+        expected_boot_id=body.expected_boot_id,
+        expected_owner_generation=body.expected_owner_generation,
+        receipt_sink=receipt.append)
     if not accepted:
-        raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,
+        raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE", "OWNER_GENERATION_CHANGED") else 400,
                        f"teleop rejected: {code}")
     try:
         svc.pilot_recording.on_teleop(auth.token_id)   # D-411: another driver ends the recording
@@ -66,4 +76,11 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
     except Exception:  # noqa: BLE001 - same rule: an accepted command never 500s on a hook
         svc.vision_stream.hook_errors += 1
         _log.exception("driver stream seat-change hook failed")
-    return {"accepted": True}
+    return {"accepted": True, "operation": receipt[0].model_dump(mode="json")}
+
+
+@control_router.get("/teleop/state")
+def teleop_state(_: AuthContext = Depends(viewer),
+                 svc: CoreServicesLike = Depends(get_services),
+                 run_id: UUID | None = None):
+    return svc.command.native_readback(run_id)

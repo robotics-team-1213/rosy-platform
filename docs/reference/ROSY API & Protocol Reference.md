@@ -1,8 +1,8 @@
-# ROSY API & Protocol Reference
+﻿# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.219
+**Version:** v1.220
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -11,6 +11,39 @@
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.220 CORE native outcome ports (D-732)
+
+`POST /api/v1/safety/stop`은 본문 없는 Viewer 호출과 `{estop:true}`를 유지하고 `operations:NativeOperation[]`을 추가한다. 각 native owner(nav/home, dock/undock, follow, teleop)의 기존 잠금을 기다리지 않고 획득하여 stop 직전 current nonterminal run과 boot를 따로 캡처한다. 잠금 경합이나 캡처 실패는 전체 `operations:[]`로 남기고 기존 E-Stop latch를 먼저 적용한다. backend·transport·중첩 잠금 조회는 이 선택적 캡처에 넣지 않는다. 정지 listener 이후에도 같은 nonblocking 경계에서 캡처한 UUID만 읽는다. 첫 terminal은 그대로 반환하며 잠금 경합·lookup UNKNOWN·prune·재부팅·readback 실패에서는 원래 pending receipt를 보존한다. 다른 최신 run이나 terminal 이력을 대신 넣지 않는다. 선택적 증거 읽기는 E-Stop을 늦추지 않는다. 빈 목록은 ACK뿐이며 물리적 정지 성공이 아니다. site stop은 `robots[].result.operations`에 로봇별 목록을 그대로 유지한다.
+
+`operations`는 owner별로 순차 캡처한 정지 직전의 best-effort snapshot이다. 캡처와 latch 사이의 동시 owner 변경을 포함하는 전체 실행 목록이나 로봇의 물리적 정지 증명이 아니다.
+
+Fleet channel stop step의 receipt는 `stop_outcomes:[{robot_id, operation:NativeOperation, outcome?:NativeOperation, quiescence?:NativeQuiescence}]`로 각 run을 보존한다. `operation`은 원래 캡처한 식별자, `outcome`은 변경할 수 없는 첫 terminal, `quiescence`는 같은 로봇·boot·run의 새 owner readback이다. 모든 캡처 run에 exact terminal과 RPC 시작부터 step CAS까지 2초 이내의 quiescence가 있어야 step을 CANCELED로 닫는다. 빌린 claim을 해제하거나 다음 동작을 진행하지 않으며 SAFE_RELEASED나 물리적 정지를 주장하지 않는다. 누락·빈 목록·부분 site ACK는 유한한 HOLD/ACK-only로 끝낸다. native 식별자 없는 idle cancel/follow_cancel ACK도 유한한 HOLD이며, 이후 계획을 진행하지 않는다.
+
+SOURCE 계약 검토 중이다. 배포·장치 수용과 구분한다. CORE의 기존 실행 owner와 최종 cmd_vel 권한, envelope protocol_version 1.0을 유지한다.
+
+| 기존 명령 | 선택적 추가 본문 | 승인 응답 추가 필드 / owner |
+| --- | --- | --- |
+| POST `/api/v1/navigation/goal` | 기존 correlation_id/lease_ttl_s 유지 | `operation`, NavigationManager 승인 잠금에서 캡처 |
+| POST `/api/v1/navigation/home` | `{correlation_id?: string(1..128), lease_ttl_s?: finite number(0,5]}`; lease는 CID 필요; 본문 생략 유지 | `operation`, 기존 goal에 kind=home으로 전달하여 단 하나의 run 생성 |
+| POST `/api/v1/docking/dock` | 기존 dock + `correlation_id?: string(1..128)` | 기존 DockingStatus + captured `operation` |
+| POST `/api/v1/docking/undock` | `{correlation_id?: string(1..128)}`; 본문 생략 유지 | 기존 DockingStatus + captured `operation` |
+| POST `/api/v1/swarm/follow` | 기존 SwarmFollowParams + `correlation_id?: string(1..128)` | 기존 응답 + captured `operation` |
+| POST `/api/v1/teleop` | 기존 linear/angular + `correlation_id?: string(1..128)` | 기존 accepted + captured `operation`; 단발 watchdog pulse이며 거리 달성은 아님 |
+
+`operation`은 CORE 생성 UUID `run_id`, process UUID `boot_id`, kind(navigate/home/dock/undock/follow/teleop), 선택적 correlation_id, phase(SUBMITTED/RUNNING/TERMINAL), result(null/SUCCEEDED/FAILED/CANCELED/PREEMPTED/EXPIRED), reason(null 또는 최대64자 고정 uppercase machine code)를 갖는다. SUBMITTED/RUNNING은 result=null, TERMINAL은 result 필수다. admission 거절은 기존 오류이며 operation을 생성하지 않는다. CID 재사용도 새 native run이다. CID는 admission·멱등·retry 권한이 아니다. API는 잠금 밖 최신 상태를 재조회하여 원래 RPC receipt를 만들지 않는다.
+
+GET `/api/v1/navigation/state`, `/api/v1/docking/status`, `/api/v1/swarm/state` 및 새 viewer GET `/api/v1/teleop/state`에 선택적 UUID query `run_id`를 추가한다. query가 없으면 현재 또는 가장 최근 operation, 있으면 정확히 일치하는 current/최근32 terminal만 반환한다. `lookup:FOUND|UNKNOWN`과 `operation`을 추가하며 missing/pruned/reboot identity는 UNKNOWN/null이다. 최신 다른 run으로 대체하지 않는다. 기존 snapshot 필드를 유지한다. 기존 event/audit 포트는 같은 run_id/boot_id를 포함한 종결 이벤트를 전달한다. 감사 보존은 기존30일/no per-event fsync와 FleetCoreEventStore 규칙을 따른다. 영구 실행 복원·자동 재발행은 하지 않는다.
+
+readback `quiescence`는 `boot_id`, `owner_run_id:null|UUID`, `requested_run_id:UUID`, `observed_at:UTC`, boolean `admitting`, `pending_submission`, `actuating_callback`, `lease_active`, `quiescent`를 갖는다. 실제 native owner와 transport generation의 잠금 경계에서 읽으며 요청 run이 동일 boot의 retained terminal, 현재 owner 없음, 네 실행 가능성 모두 false일 때만 quiescent=true다. 조회 identity나 자료가 없으면 null이다. 일반 IDLE·0 velocity·만료된 lease 시각만으로 증명하지 않는다. Fleet의 exact robot/boot/run/claim generation CAS에만 사용한다. SAFE_RELEASED는 완료나 후속 이동 권한이 아니다.
+
+proof에 단조 증가 `owner_generation`과 `transport_generation`을 포함한다. 승인·취소·종결·lease 변경과 backend pending/handle/callback 변경이 generation을 증가시킨다. 각 잠금의 전후 generation이 변하지 않은 관측만 proof로 반환한다. Fleet의 RPC 시작부터 local SAFE_RELEASE CAS까지 monotonic 최대2초로 제한한다. remote owner와 Fleet DB의 원자적 transaction을 주장하지 않는다. 이후 새 motion은 새 readback·원문·현재 권한·CORE gate를 다시 검증한다.
+
+위 명령의 선택적 `expected_owner_generation: nonnegative integer`는 `expected_boot_id: UUID`와 함께만 사용할 수 있다. 기존 owner의 실제 승인 잠금 또는 Mode commit 안에서 side effect 전에 비교하여 불일치면409 `OWNER_GENERATION_CHANGED`다. fields가 없으면 legacy admission 동작을 유지한다. Fleet는 SAFE_RELEASE 이후 새 motion에 최신 native CAS를 사용하고 다른 owner/mode/lease 배타 gate도 유지한다. proof나 종결 receipt 자체가 motion grant가 되지 않는다.
+
+readback의 항상 존재하는 `owner` 객체는 현재 `boot_id:UUID`, `owner_generation:nonnegative integer`, `owner_run_id:null|UUID`를 반환한다. lookup UNKNOWN/empty first boot에도 제공하되 unknown run의 quiescence를 증명하지 않는다. expected epoch 검증부터 mode 전환·제출까지 실제 승인 구간에 결속하고 기존 실제 잠금 순서(docking owner→mode, mode listener는 lock 밖)를 보존한다. mode 변경 전 owner 잠금에서 CAS와 admitting reservation을 확정하고 mode 전환은 owner lock 밖에서 수행하며 실제 제출 구간에서 같은 reservation을 다시 검증한다. 경쟁 취소는 reservation을 철회해 제출을 막는다. 처음 CAS가 불일치한 요청은 mode를 바꾸지 않는다.
+
+native terminal은 첫 확정 이후 불변이다. backend 거절 FAILED/BACKEND_REJECTED, 알려진 backend 오류 FAILED/BACKEND_ERROR, lease 만료 EXPIRED/LEASE_EXPIRED, 명시적 취소 CANCELED/CANCELED, 안전 취소 CANCELED/SAFETY_STOP, stuck FAILED/STUCK으로 구분한다. 제출·결과 exception의 전달 여부가 불명이면 nonterminal/result=null, reason=BACKEND_RESULT_UNKNOWN을 유지한다. UNKNOWN은 lookup/evidence 분류이며 phase가 아니다. 검증된 owner 실패만 BACKEND_ERROR로 종결하고 통신 불명을 성공·실패로 바꾸지 않는다. navigation callback은 actual backend generation에 캡처한 identity를 사용한다. 도킹·undock 성공과 취소는 별개이며 충전 관측이 terminal을 다시 쓰지 않는다. follow hold는 RUNNING, re-follow 이전 run은 PREEMPTED다. 별도 현재 권한의 cancel/stop은 실제 닫은 이전 run receipt를 반환하며 concurrent 새 run으로 대체하지 않는다. watchdog 종료는 teleop EXPIRED이며 물리 거리 성과가 아니다. 원래 grant 만료·철회 뒤에도 terminal을 읽어 원장에 확정할 수 있지만 새 명령은 발행할 수 없다. 기존 manager 반환형·keyword 없는 executor·auth/capability/localization/calibration/readiness/mode/CORE writer/E-stop 해제 금지 계약을 유지한다.
 
 ### v1.219 경로 사실 묶음 (D-726)
 
@@ -26,6 +59,10 @@
 trip의 선택 `blocked_edges`(차로 id, 최대 32, 중복 없음)와 `extra_cost`(차로 id → 0 이상 유한 초, 최대 32)는 그 계획에 들어간다. 없는 차로 id는 422 `TRIP_UNKNOWN_EDGE`와 `detail.edge`다. 막힌 차로 옆에 다른 차로가 있으면 그 경로를 반환하고, 남은 차로가 없으면 기존 422 `TRIP_NO_ROUTE`다. 재계획은 이 차단을 교통 차단과 합치고 비용을 유지한다. 빈 값은 오늘과 같은 경로다. `context`는 실행 plan 안에 넣지 않고 plan 옆에 기록한다.
 
 `/route`의 다음 점은 보통 0.20 m다. 그 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄이며, 0.10 m 장치 목표 공보다는 길다. 남은 거리가 0.12 m 이하면 끝을 유지한다. 링의 0.20 m 현은 차체 여유 안이라 줄이지 않는다. 이 단축은 점 목표만 해당하고 차로 운행의 선 추종이나 링 주행 수용을 바꾸지 않는다. `holds`는 `complete`, `step_m`, `chord_m`, `body_clear_m`, `body_inside`, `s_m`이다. envelope 1.0과 CORE API는 유지한다.
+
+### v1.219 Discord 읽기 전용 숙고 결과 (D-720)
+
+선택 private broker 설정과 기존 기명 Discord 접수·회신이 구성된 경우 `GET /api/fleet/channel-requests/{request_id}/deliberation`은 원문 소유 operator에게 `ChannelModelResult`를 반환한다. 설정 부재·작업 부재는 404, 원문 계정·채널 소유권 변경은 403이다. 필드는 request_id, state(PENDING/RUNNING/ANSWERED/HOLD/UNKNOWN/SUPERSEDED), profile_set_hash, input_hash, created_at, deadline, completed_at, result, action_admissible(false)다. result는 bound 모델 ID·판단·비용 증빙 또는 보류 사유이며 실행·목표 수용이 아니다. 원문을 CORE 사건으로 승격하지 않고 fleet_status/READ_ONLY_QUERY 및 channel 범위 읽기 tool만 허용한다. 영속 호출 예약·UNKNOWN 재호출 금지·현재 관측/계정/profile 재검증·결과와 Discord outbox 원자 기록을 지킨다. 최초 활성화 이전 요청은 재생하지 않는다. 보호된 숙고 모델·비용·host 증빙 없이는 HOLD이며 GLM 최초 1회 spent marker는 배포·rollback에도 유지한다.
 
 ### v1.218 CORE 조건부 막힘 답 (D-718)
 
@@ -852,6 +889,8 @@ STOP_REQUIRED | WAIT_SIGNAL | PROCEED | HOLD` 다. `ENFORCED`에서는 stale,
 정지선에서는 신호색과 무관하게 먼저 완전 정지와 dwell을 완료한 뒤, 신뢰도
 기준을 통과한 `GREEN`만 `PROCEED`를 허용한다. `MONITOR_ONLY`는 같은 판정을
 표시하지만 주행 후보를 변경하지 않는다. `junction_rule`은 v1.54 additive다.
+2026-10-12(D-735): ENFORCED FOLLOW/APPROACH/PROCEED의 이동 후보는 선속도와
+각속도에 같은 감속 비율을 적용한다. 선속도 0의 제자리 회전은 기존 각속도를 유지한다.
 `signal_controlled`(기본)는 위 동작 그대로다. `stop_and_go`는 무신호 교차로
 선언이다 — 완전 정지와 dwell을 마친 뒤 신호가 관측되지 않으면
 `PROCEED / unsignalized_proceed`로 `proceed_speed_scale` 속도로 진입하고,
@@ -1163,9 +1202,9 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `calibration.session_ended` | info | 로봇 | `{session_id, kind, owner, by, duration_s}` — `by` 는 끝낸 토큰 id(Admin 강제 해제면 owner 와 다름) (v1.68) |
 | `calibration.session_expired` | warning | 로봇 | `{session_id, kind, owner, ttl_s}` — `ttl_s` 안에 heartbeat 가 없어 lease 가 풀림. 보정 도구가 죽었거나 링크가 끊겼다는 신호 (v1.68) |
 | `nav.started` | info | 로봇 | `{goal, by, correlation_id}` — `goal` 은 `{x, y, yaw}`; Fleet가 dispatch 시도 ID를 보낸 경우 그 값, 아니면 `null` |
-| `nav.completed` | info | 로봇 | `{correlation_id}` — 동일 dispatch 시도 ID 또는 `null` |
-| `nav.failed` | error | 로봇 | `{error_code, correlation_id}` — 동일 dispatch 시도 ID 또는 `null` |
-| `nav.canceled` | info | 로봇 | `{source, correlation_id}` — 로컬 취소 요청을 냈다는 뜻이며 액션 완료나 물리 정지를 증명하지 않는다 |
+| `nav.completed` | info | 로봇 | `{correlation_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 추가 `run_id`, `boot_id`가 붙는다 |
+| `nav.failed` | error | 로봇 | `{error_code, correlation_id}` — 동일 dispatch 시도 ID 또는 `null`; native goal 종결이면 추가 `run_id`, `boot_id`가 붙는다 |
+| `nav.canceled` | info | 로봇 | `{source, correlation_id, run_id, boot_id}` — 로컬 취소 요청을 냈다는 뜻이며 액션 완료나 물리 정지를 증명하지 않는다. native goal이면 정확한 run/boot ID가 붙는다 |
 | `nav.stuck` | error | 로봇 | `{timeout_s}` — NAV-006 무진척 판정 시간(초) |
 | `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음. CAMERA_LINE은 D-407 개정 2026-10-10에 따라 차선이 다시 보이면 같은 모드로 이어 감, `nav.lane_reacquired`) |
 | `nav.lane_reacquired` | info | 로봇 | `{mode, frames, since_s}` — D-407 개정 2026-10-10: CAMERA_LINE `LOST`(`camera_reselection_required`)가 `line_follow.lost_resume_frames`(3)개 연속 신선·확신 프레임이 `lost_resume_s`(1.0 s) 넘게 이어지고 앞 물체 정지가 없으며 IR 감시가 비어 있을 때 풀려 같은 모드로 이어 감(재선택 없음). `lost_auto_resume: false`면 옛 잠금 (v1.181) |
@@ -1198,6 +1237,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `battery.deep` | critical | 로봇 | `{percent, voltage, dwell_s}` — D-27 딥 방전. 모터가 서고 셧다운 센티넬이 무장된다 |
 | `battery.shutdown_request_failed` | error | 로봇 | `{path, error, armed}` — D-27 셧다운 센티넬을 쓰지 못했다. 딥배터리 보호가 무장되지 않았다는 뜻이므로 조용히 넘어가면 안 된다 |
 | `command.rejected` | warning | 로봇 | `{source, reason}` |
+| `native.operation.terminal` | info | 로봇 | `{run_id, boot_id, kind, correlation_id, result, reason}` — 단발 teleop의 첫 native 종결. mode 이탈·안전 정지·watchdog 만료 후 기존 감사 포트로 전달된다 (D-732, v1.220) |
 | `recording.started` | info | 로봇 | `{id, owner}` — D-411 §5.10 Pilot 로봇 녹화가 시작됐다. `owner` 는 시작한 토큰 id (v1.83) |
 | `recording.stopped` | info | 로봇 | `{id, by, reason}` — D-411 녹화 끝. `by` 는 정지한 토큰 id 또는 `null`(CORE 가드·녹화기 쪽 종료). `reason` ∈ `operator`·`link_lost`·`seat_changed`·`max_duration`·`quota`·`disk_full`·`recorder_exit`·`requested`·`shutdown`·`recovered` (v1.83) |
 | `waypoint.created/updated/deleted` | info | 로봇 | `{name}` |
@@ -1218,15 +1258,15 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `localization.mission` | info | 로봇 | `{phase, kind, reason, elapsed_s, travelled_m, turned_rad}` — D-395 P2-7 미션이 시작했거나(`phase: started`, `reason: null`) 끝났다(`phase: done`\|`aborted`, `reason` 은 `POST /localization/mission` 의 끝 사유). 같은 내용이 ROS `localization/mission` 으로 로봇 sensing 노드에 가서 다시 탐색하게 한다 (v1.73) |
 | `motion.rotate_to` | info | 로봇 | `{delta_deg, yaw_odom, tol_deg, max_rate_dps, timeout_s, lease_owner, operator_name, by}` — D-603 회전 요청을 받았다 (v1.194) |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
-| `docking.docked` | info | 로봇 | `{dock_id}` |
+| `docking.docked` | info | 로봇 | `{dock_id}` — dock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
 | `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
-| `docking.undocked` | info | 로봇 | `{}` |
-| `docking.canceled` | info | 로봇 | `{dock_id}` |
+| `docking.undocked` | info | 로봇 | `{}` — undock native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason`가 붙는다 (D-732) |
+| `docking.canceled` | info | 로봇 | `{dock_id}` — 닫힌 dock/undock의 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason` (D-732) |
 | `docking.retry` | warning | 로봇 | `{reason, attempt}` — 접근 재시도 |
 | `docking.reseat` | warning | 로봇 | `{reason, attempt}` — 접점 재착좌 |
-| `docking.failed` | error | 로봇 | `{reason, dock_id}` — 종착이며 스스로 재시도하지 않는다 (D-28) |
+| `docking.failed` | error | 로봇 | `{reason, dock_id}` — 종착이며 스스로 재시도하지 않는다. native 종결이면 추가 `run_id`, `boot_id`, `kind`, `result`, `native_reason` (D-28/D-732) |
 | `docking.return_started` | warning | 로봇 | `{dock_id, reason}` — SAF-005 저배터리 복귀 |
 | `mission.assigned` | info | Fleet | `{mission_id, robot_id}` |
 | `mission.started` | info | Fleet | `{mission_id}` |
@@ -1236,7 +1276,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `pairing.requested/approved/revoked` | warning | Fleet | `{robot_id}` |
 | `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, mode, reference_source, by}` — `mode` 는 D-559 (`offset`\|`trail`) |
 | `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) \| D-559 trail (v1.170): `trail_lost`(자취에서 0.30 m 넘게 벗어났거나 리더가 표본 사이에 0.3 m + SAF-004 `max_linear` × 경과 시간(최대 1.5 m)보다 멀리 건너뜀, follow 를 다시 걸 때까지 유지) \| `reference_frame_not_map` \| `own_pose_not_map` \| `own_pose_stale`(자기 pose 가 0.5 s 넘게 갱신되지 않음 — map 자취는 map pose, D-581 Fleet 기준 자취는 `odom_pose`) \| `obstacle`(D-422 몸체 정지, 멈춘 판정의 재개 거리를 넘어야 다시 간다) \| `obstacle_sensor_stale` \| D-581 (v1.176): `reference_anchor_invalid`(`anchor` 표본이 이 로봇 몫이 아니거나 `frame: odom` 이 아님) \| `reference_frame_changed`(map 자취에 Fleet 기준 표본, 또는 그 반대 — follow 를 다시 걸 때까지 유지) \| `anchor_withheld`(Fleet 이 `anchor_hold` 정지 표본을 보냄, 스트림 유지) |
-| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.72) \| `trail_join_too_far`(D-559, v1.170) |
+| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by, run_id, boot_id, kind, result, native_reason}` — D-732 native follow 종결 ID·결과 포함. `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.72) \| `trail_join_too_far`(D-559, v1.170) |
 | `swarm.succession` | warning | 로봇 | `{leader, dead, role, by}` — 명단이 공유된 대형에서 리더(`dead`)를 잃은 팔로워가 follow 를 끝내고 낸다. `leader` 는 `next_leader` 규칙이 고른 다음 리더(없으면 `null`), `role` 은 이 로봇의 새 역할, `by`: `followers` |
 
 ---
@@ -2880,7 +2920,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. envelope 1.0 유지. |
+| v1.220 | 2026-10-12 | Additive (D-732): CORE native owner outcome receipts for navigation/home, dock/undock, follow and one teleop pulse; exact bounded readback, conservative quiescence and paired owner-generation CAS. Fleet Task/channel receipts preserve exact operation and separate outcome, safe_released and quiescence evidence. Existing command ownership and envelope 1.0 remain. |
+| v1.219 | 2026-10-12 | Additive (D-726): trip과 `/route` 200 응답의 `context` 사실 묶음, trip 선택 `blocked_edges`·`extra_cost`와 422 `TRIP_UNKNOWN_EDGE`, 재계획이 그 맥락을 유지, `/route` 점 목표가 차체 여유 밖으로 나가는 현에서만 0.12 m까지 단축. 빈 값의 경로는 동일. Additive (D-720): optional owner-bound read-only channel deliberation result; immutable receipt/profile/source observation, durable reservation, UNKNOWN no replay and existing Discord outbox. No action grant. envelope 1.0 유지. |
 | v1.218 | 2026-10-12 | Additive (D-718): optional closed ASKING/attempts precondition for BACK_AND_RETRY; checked under CORE manager lock, mismatch refuses without restarting recovery. Envelope 1.0 unchanged. |
 | v1.217 | 2026-10-12 | Additive (D-699): optional Fleet observation capture identity, sequence, monotonic clock and complete roster; retained coverage does not establish command, model or outcome truth. |
 | v1.216 | 2026-10-12 | Merge (D-691): integrate authorized preview demand and phone cooling with the v1.215 named Console and Discord contracts; preserve all prior revision rows and CORE authority. |
@@ -3321,6 +3362,10 @@ Mission/Cell Job은 기존 owner/proposer/독립 approver 규약을 유지한다
 
 private `replies_enabled`는 strict bool이며 기본false다. true는 Bot 자격을 요구하고 기존 Fleet lifecycle 안에서만 접수 회신을 처리한다. 회신은 원래 채널·message에 묶이며 immutable 접수와 atomic intent, bounded retry, UNKNOWN 복구를 사용한다. 실제 작업 결과 회신과 위험 사건 대응은 각각 source·배포·실제 수용 증거를 확인한다. WS protocol_version 1.0은 유지한다.
 
+## Fleet private configuration: hourly KST Discord health (D-733, source only)
+
+`hourly_health_enabled` is a strict boolean and defaults to false. When enabled, Fleet posts one cached-facts health summary to the configured Discord channel at each KST hour boundary. A durable SQLite slot claim prevents duplicate sends across workers and restarts; startup skips missed slots, known 429/connect failures have a bounded retry window, and ambiguous delivery is not retried. The report contains per-robot cache freshness and observed safety/battery facts, Fleet collection time, active/HOLD/UNKNOWN Task counts, and the actual AI observer heartbeat. Missing or stale facts are unknown; a heartbeat does not establish model admission. It does not issue robot commands, invoke a model, force a Fleet gather, or attach a synthetic human message reference. Default-off source configuration and tests do not prove deployment or actual Discord delivery; first due-hour channel readback remains required.
+
 ## v1.210 Discord 기명 요청 접수 (D-671, source only)
 
 `POST /api/fleet/channel-requests/discord`는 전용 transport 인증만 받는다. `X-ROSY-Timestamp`는 epoch-second 정수 문자열, `X-ROSY-Signature`는 전용 secret으로 timestamp + ASCII `.` + raw UTF-8 body에 계산한 HMAC-SHA256 소문자 hex다. 서버 시각과 차이 60초 초과 또는 잘못된 서명은401다. 일반 bearer/cookie는 transport 인증을 대신하지 않는다. raw body 최대8192 bytes(초과413), unknown field/형식 오류422다.
@@ -3353,3 +3398,25 @@ Trip start preserves its stop generation across capability, pose/alignment, and 
 `--tasks-db` 또는 기존 `--events-db`가 있을 때 같은 durable journal에 기록한다. SharedGather의 실제 refresh마다 기록하며 cache 반환은 재기록하지 않는다. 저장 없음은 recording.state `disabled`, 성공은 `recording`, 실패는 `error/observation_storage_failed`로 노출한다. 조회 저장 장애는 503 `OBSERVATION_STORAGE_UNAVAILABLE`다. 기록 실패가 E-stop/기존 상태 읽기를 차단하지 않는다. 새 원장 보존은 최대 30일/100000행, 한 행 64KiB이며 대용량 카메라/scan 원본은 기존 기기 녹화로 보존한다. 오래된 원장 전체를 보존한다고 주장하지 않는다.
 
 오프라인 `learning/curation/pinky/fleet_observations.py <database> <new-output-on-X> [--robot-id ID]`는 SQLite read snapshot을 JSONL/해시 manifest로 내보내고 다시 검증한다. 신규 출력만 만들며 원본과 기존 출력은 변경하지 않는다. schema `rosy.fleet-observations/1`은 학습 준비 원본으로 `train_eligible:false`, `labels:null`, `action_outcome:not_inferred`다. 실제 센서/행동 학습은 기존 device recording → Pinky Episode/원본 검증 → DatasetManifest/registry → 독립 평가/승격 경로에서 수행한다. Fleet 목표와 AI 선택은 CORE 실제 출력/정답 라벨이 아니다. 이벤트·Task·Mission·stuck 원장의 ID와 시간/시계 근거를 함께 대조하고 모호한 연결을 확정하지 않는다.
+
+### D-732 Fleet native outcome projection
+
+The existing Task `receipt` and channel execution step `receipt_json` preserve the first
+CORE `operation` unchanged. Optional `outcome` is an exact `NativeOperation` readback;
+its first terminal result is immutable. Optional `safe_released:true` and `quiescence`
+record a bounded fresh readback and an exact local claim CAS, independently of result.
+Only `SUCCEEDED` together with safe release permits a channel step to become COMPLETED
+and reach another step's original admission checks. `RUNNING` follow/HOLD retains its
+resource; watchdog EXPIRED, PREEMPTED, CANCELED and FAILED are not goal success.
+Stop steps own no motion claim: exact terminal plus fresh quiescence closes them as
+CANCELED with `quiescence`, without `safe_released`, releasing another owner, or
+advancing the plan. Site E-stop preserves each provided native `operation` in its
+robot-associated `robots[]` receipt; RPC acknowledgement alone is not physical stop.
+Channel steps additionally expose the persisted `caller_cid` used by that dispatch.
+Task `receipt.native_required:true` records that native identity was required before
+send; a missing ACK leaves UNKNOWN and cannot use legacy CID-only projection. Explicit
+legacy Task attempts without native identity keep their existing event projection.
+New channel native commands carry the paired current CORE boot/owner-generation CAS.
+Read-only closure preserves immutable original-request linkage after expiry/withdrawal;
+current authorization still controls delivery and access. A revoked recipient's reply
+intent may be SUPERSEDED while result evidence remains in the existing Fleet database.

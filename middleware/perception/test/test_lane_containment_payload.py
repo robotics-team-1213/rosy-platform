@@ -33,6 +33,19 @@ def test_isaac_does_not_inherit_gazebo_detector_error():
     assert gazebo['uncertainty_m'] > 0 and gazebo['crosswalk_uncertainty_m'] > 0
 
 
+@pytest.mark.parametrize('crosswalk', [None, (.1, .2)])
+def test_gazebo_crosswalk_bound_is_reported_even_without_a_detected_zone(crosswalk):
+    keeper = {'boundaries': [], 'crosswalk': crosswalk}
+    enabled = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033,
+                                  crosswalk_uncertainty=True)
+    disabled = containment_payload(keeper, ground(), stamp=1., source='GAZEBO', camera_x=.033)
+    assert math.isfinite(enabled['crosswalk_uncertainty_m']) and enabled['crosswalk_uncertainty_m'] > 0
+    assert 'crosswalk_uncertainty_m' not in disabled
+    assert enabled['uncertainty_m'] == disabled['uncertainty_m']
+    assert enabled['boundaries'] == []  # Enabling the bound does not invent a lane boundary.
+    assert ('crosswalk' in enabled) is (crosswalk is not None)
+
+
 def test_payload_preserves_original_image_and_measured_support():
     keeper = {"boundaries": [dict(selected=True, side="left",
                 ends_m=[[.2,.1],[.4,.12]])]}

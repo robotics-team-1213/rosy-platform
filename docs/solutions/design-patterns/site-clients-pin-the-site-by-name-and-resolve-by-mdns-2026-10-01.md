@@ -16,7 +16,7 @@ tags: [mdns, nsd, dns-sd, site-link, d-391, d-341, d-370, tls-pin, rosy-cam, sam
 # Site clients pin the site by name and CA, resolve its address by mDNS on every connect, and say when the Wi-Fi is the wrong one
 
 ## Context
-On 2026-10-01 the site access point (BSSID `c8:bf:4c:…`, 192.168.1.0/24, where the robots were) vanished from scans. Another AP broadcasting the same SSID `1213_device` (locally administered BSSID `32:63:6b:…`, 10.16.36.0/24, no robots) took over. The site PC and a tablet silently joined it.
+On 2026-10-01 the site access point (one BSSID prefix, one RFC1918 subnet, where the robots were) vanished from scans. Another AP broadcasting the same SSID (a locally administered BSSID prefix, a different RFC1918 subnet, no robots) took over. The site PC and a tablet silently joined it.
 - Rosy Cam stored the site PC's IP from the pairing link. After the change it could only say "unreachable".
 - The site PC's IP had also moved, so every paired phone would have needed a new link.
 - The same class of failure hit earlier that day: the PC's Wi-Fi dropped while a wired network came up, and the compose proxy lost its bind address.
@@ -46,7 +46,7 @@ Store the site's **identity**, not its **address**. Look the address up at conne
 - Not Fleet → robot CORE (plain HTTP, enrolled address), which D-370 5.3 keeps as the stated exception.
 
 ## Examples
-- **Device test, Lenovo TB-J606F (Android 11, API 30), 2026-10-01.** Paired by name (`rosyov://<tls_host>:<port>/?…&tls=1&pin=sha256/…`). With the site PC moved from 192.168.1.102 to 10.16.36.17 and a bench advertiser running, the app showed "주소: 10.16.36.17 (자동 찾기로 찾음)" and streamed at about 2.5 fps with no re-pair.
+- **Device test, Lenovo TB-J606F (Android 11, API 30), 2026-10-01.** Paired by name (`rosyov://<tls_host>:<port>/?…&tls=1&pin=sha256/…`). With the site PC moved from `<old-site-ip>` to `<new-site-ip>` and a bench advertiser running, the app showed "주소: <new-site-ip> (자동 찾기로 찾음)" and streamed at about 2.5 fps with no re-pair.
 - **Unadvertised name.** It showed the `not_discovered` text with the current subnet and gateway compared against the pairing subnet.
 - **Bench caveats:**
   - A Windows site PC has no avahi, and inbound 5353 was firewalled with no admin rights, so the bench advertiser (python-zeroconf) had to re-announce every 2 s instead of answering queries.

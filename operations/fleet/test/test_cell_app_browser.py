@@ -304,7 +304,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
 
     page, _, _ = browser_site
     expect(page.locator("#cell-purpose")).to_contain_text("레시피와 셀 문서를 준비")
-    expect(page.locator("#cell-purpose")).to_contain_text("5단계")
+    expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
         status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
     open_token_access(page)

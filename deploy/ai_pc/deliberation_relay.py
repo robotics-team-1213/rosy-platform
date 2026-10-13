@@ -5,6 +5,8 @@ import socket
 from contextlib import closing
 
 LIMIT = 16384
+CLIENT_HEADERS = ('user-agent', 'x-opencode-session', 'x-opencode-project', 'x-opencode-request',
+                  'x-opencode-client', 'x-opencode-version', 'x-opencode-session-id', 'x-opencode-project-id')
 
 
 class UnixConnection(http.client.HTTPConnection):
@@ -32,7 +34,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if len(body) != size:
                 raise ValueError('RELAY_REQUEST_REFUSED')
             with closing(UnixConnection('localhost', timeout=30)) as upstream:
-                upstream.request('POST', '/v1/chat/completions', body, {'Content-Type': 'application/json'})
+                headers = {name: value for name, value in self.headers.items() if name.lower() in CLIENT_HEADERS}
+                if any(len(value) > 512 or any(ord(c) < 32 or ord(c) > 126 for c in value) for value in headers.values()):
+                    raise ValueError('RELAY_CLIENT_METADATA_REFUSED')
+                upstream.request('POST', '/v1/chat/completions', body, {**headers, 'Content-Type': 'application/json'})
                 response = upstream.getresponse()
                 raw = response.read(LIMIT + 1)
                 if len(raw) > LIMIT:

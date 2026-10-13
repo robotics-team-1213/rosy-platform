@@ -135,3 +135,12 @@ class CoreEventStore:
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
         return configure_connection(connection)
+
+    def native_events(self, robot_id: str, boot_id: str, run_id: str) -> list[dict]:
+        """Read exact native evidence even when the callback cursor passed it before ACK."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute('''SELECT payload_json FROM core_event_audit WHERE robot_id=?
+                AND json_extract(payload_json, '$.data.boot_id')=?
+                AND json_extract(payload_json, '$.data.run_id')=? ORDER BY audit_id LIMIT 200''',
+                (robot_id, str(boot_id), str(run_id))).fetchall()
+        return [json.loads(row[0]) for row in rows]
