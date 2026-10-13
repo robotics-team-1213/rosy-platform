@@ -184,8 +184,12 @@ function Test-LocalReleaseSignature([string]$Directory, [string]$PublicKey) {
 import json, sys
 sys.path.insert(0, r'$signingDir')
 from pathlib import Path
-from signing import verify_release_files
-rejections = verify_release_files(Path(r'$Directory'), Path(r'$PublicKey'))
+from signing import DELTA_MARKER, verify_delta_files, verify_release_files
+root = Path(r'$Directory')
+# D-553 addendum 3: a delta carries only changed files; the device rebuilds
+# and verify()s the full release on activation.
+check = verify_delta_files if (root / DELTA_MARKER).is_file() else verify_release_files
+rejections = check(root, Path(r'$PublicKey'))
 # dict(...) rather than a {"key": ...} literal: embedded double quotes do not
 # survive PowerShell's argv join to a native exe on Windows (they are eaten
 # before python -c ever sees them), which this line proved the hard way when

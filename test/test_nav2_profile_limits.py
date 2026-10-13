@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from robot_contracts import ROOT
-sys.path.insert(0, str(ROOT / "middleware" / "core" / "navigation"))
+sys.path.insert(0, str(ROOT / "middleware" / "control" / "drive" / "planning" / "nav2"))
 
 from navigation.profile_limits import (
     MotionLimits,
@@ -18,7 +18,7 @@ from navigation.profile_limits import (
 
 
 PROFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.hardware.yaml"
-NAV2 = ROOT / "middleware" / "core" / "navigation" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "middleware" / "control" / "drive" / "planning" / "nav2" / "params" / "nav2_params.yaml"
 
 
 def test_costmaps_wait_for_amcl_before_activating():
@@ -84,7 +84,7 @@ def test_deployed_motor_defaults_match_the_hardware_profile():
 def test_pinky_profile_files_share_the_hardware_motion_ceilings():
     limits = load_motion_limits(PROFILE)
     paths = (
-        ROOT / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "profile.yaml",
+        ROOT / "middleware" / "devices" / "pinky" / "profile" / "config" / "profile.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.core.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.motor.yaml",
         ROOT / "contracts" / "foundation" / "config" / "rosy_default.yaml",

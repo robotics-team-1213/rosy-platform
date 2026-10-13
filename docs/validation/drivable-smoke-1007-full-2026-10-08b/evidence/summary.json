@@ -1,0 +1,52 @@
+{
+  "status": "candidate_proxy_not_ground_truth",
+  "model_revision": "lane-seg-20261007-b389d6a0",
+  "model_sha256": "b389d6a0690fec9bfa5f5a2db1f0ada56eb68ea58b0e747ff9afa3a028a6b145",
+  "frames": 207,
+  "sessions": {
+    "143038": {
+      "frames": 124,
+      "level_counts": {
+        "STOP": 13,
+        "TRACK": 111
+      },
+      "boundary_tier_counts": {
+        "BOTH": 20,
+        "ONE": 104
+      },
+      "near_drivable_fraction": {
+        "min": 0.46266276041666665,
+        "median": 0.793505859375,
+        "max": 0.93837890625
+      },
+      "stop_frames_with_near_drivable_over_half": 13,
+      "stop_frames": 13,
+      "adjacent_raw_iou": {
+        "min": 0.852274503673597,
+        "median": 0.9675941492938803
+      },
+      "frames_below_two_percent": 0
+    },
+    "143211": {
+      "frames": 83,
+      "level_counts": {
+        "STOP": 83
+      },
+      "boundary_tier_counts": {
+        "STOP": 83
+      },
+      "near_drivable_fraction": {
+        "min": 0.5524739583333333,
+        "median": 0.739453125,
+        "max": 0.8354166666666667
+      },
+      "stop_frames_with_near_drivable_over_half": 83,
+      "stop_frames": 83,
+      "adjacent_raw_iou": {
+        "min": 0.7942610462163535,
+        "median": 0.9591203903609822
+      },
+      "frames_below_two_percent": 0
+    }
+  }
+}

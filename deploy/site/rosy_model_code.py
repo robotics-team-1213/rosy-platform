@@ -25,23 +25,83 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
-PREFIX = "learning/training/perception/"
-CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+PREFIX = "tools/perception/"
+LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/perception/",
+                          "learning/training/perception/", "learning/evaluation/perception/", PREFIX)
+LEGACY_LEARNING_PREFIXES = ("learning/training/perception/", "tools/perception/")
+LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
+                     PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
+                     "learning/curation/perception/review_app.py",
+                     "learning/training/perception/train_job.py",
+                     "learning/evaluation/perception/road_replay.py",
+                     "learning/curation/perception/classes/lane_lr5.yaml",
+                     "learning/curation/perception/classes/lane_lr6_drivable.yaml",
+                     "learning/curation/perception/classes/object_review_obstacle_v1.yaml",
+                     "learning/curation/perception/review_app_web/index.html",
+                     "learning/curation/perception/review_app_web/pixels.html")
+CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
 #: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;
-#: every other name resolves under PREFIX.
+#: aliases retain existing job names while resolving to exact signed canonical files.
 JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/vision/rosy_vision/lane_map.py"}
+JOB_ENTRY_POINTS.update({'dataset/' + name: 'learning/curation/perception/' + name
+                         for name in ('autolabel.py', 'bag_to_video.py', 'build.py', 'catalog.py',
+                             'ceiling_pose.py', 'class_sets.py', 'clip_lane_draft.py', 'edge_capture.py',
+                             'edge_capture_session.py', 'edge_review.py', 'edge_review_return.py',
+                             'extract.py', 'fetch_http.py', 'frames.py', 'geometry.py', 'harvest.py',
+                             'incident_feedback.py', 'labels.py', 'lane_derived_drivable.py',
+                             'lane_failure.py', 'lane_failure_loop.py', 'learning_workspace.py',
+                             'map_projected_drivable.py', 'mcap_proof.py', 'media_pipeline.py', 'object_boxes.py',
+                             'pixel_label_job.py', 'prelabel.py', 'publish.py', 'qwen_points.py',
+                             'qwen_review_completion.py', 'reclaim.py', 'review_app.py', 'review_eval_bootstrap.py',
+                             'review_evidence.py', 'review_ingest.py', 'review_masks.py', 'review_pack.py',
+                             'review_quality.py', 'review_return.py', 'road_draft.py', 'sam3_road_draft.py',
+                             'shrink_session.py', 'stuck_markers.py', 'vision_review_drafts.py',
+                             'vlm_mask_feedback.py',)})
+JOB_ENTRY_POINTS.update({'model/' + name: 'learning/registry/perception/' + name
+                         for name in ('bench_backends.py', 'compare_backends.py', 'convert.py', 'deliver.py',
+                             'delivery_journal.py', 'drivable_versions.py', 'export_class_names.py',
+                             'export_ncnn.py', 'export_ncnn_lane.py', 'export_onnx.py', 'intake.py',
+                             'intake_eval_gate.py', 'peer_targets.py', 'sign_model.py', 'slot_cli.py',
+                             'watch.py', 'watch_core.py',)})
+JOB_ENTRY_POINTS.update({'training/' + name: 'learning/training/perception/' + name
+                         for name in ('capture_goal.py', 'check_manifest.py', 'drivable_head.py',
+                             'export_cell.py', 'gen_notebook.py', 'handover.py', 'job_state.py',
+                             'learning_cycle.py', 'recipes.py', 'recording_job.py', 'review_admission.py',
+                             'review_authority.py', 'review_bridge.py', 'review_dataset.py',
+                             'review_eval_companion.py', 'review_eval_package.py', 'review_migration.py',
+                             'review_pipeline.py', 'review_provenance.py', 'rosy_lane_model.py',
+                             'run_log.py', 'train_job.py',)})
+JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
-CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES)
+SPLIT_CODE_PREFIXES = ("middleware/perception/sensors/", "middleware/perception/vision/",
+                       "middleware/perception/package.xml",
+                       *("middleware/control/drive/" + name + "/" for name in
+                         ("safety", "recovery", "tracking", "calibration", "planning/grid", "runtime")))
+SPLIT_REQUIRED = ("middleware/perception/package.xml",
+                  "middleware/perception/sensors/sensing/__init__.py",
+                  "middleware/perception/vision/perception/__init__.py",
+                  "middleware/control/drive/safety/command_gate.py",
+                  "middleware/control/drive/recovery/recover.py",
+                  "middleware/control/drive/tracking/path_follow.py",
+                  "middleware/control/drive/calibration/modes.py",
+                  "middleware/control/drive/planning/grid/__init__.py",
+                  "middleware/control/drive/runtime/control_node.py",
+                  "middleware/control/drive/safety/adapter/__init__.py",
+                  "middleware/control/drive/tracking/wander/__init__.py")
+FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
+FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
+CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
+                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
-CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
+CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
-IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
+IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
                 "middleware/perception", "contracts/foundation", "operations/vision",
+                *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
               f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
@@ -208,7 +268,8 @@ def legacy_busy(roots, *, proc=Path("/proc")):
             if monitor: continue
             cwd = (entry / "cwd").resolve(strict=True)
             if (any(cwd.is_relative_to(Path(r).resolve()) for r in roots)
-                    or any(PREFIX in a or "isaac-sim" in a for a in args)):
+                    or any(any(prefix in a for prefix in (*LEARNING_CODE_PREFIXES, *LEGACY_LEARNING_PREFIXES))
+                           or "isaac-sim" in a for a in args)):
                 return f"legacy work pid {entry.name}"
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -249,12 +310,18 @@ def unpack(archive, dest):
                 with tar.extractfile(item) as src, target.open("xb") as out:
                     shutil.copyfileobj(src, out)
                 if os.name == "posix": target.chmod(0o444)
-    for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
+    for required in (*LEARNING_REQUIRED,
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
+    if (dest / "middleware/perception/control/_source_layout.py").is_file():
+        if not all((dest / name).is_file() for name in SPLIT_REQUIRED):
+            raise ValueError("missing perception or Drive source-holder dependency")
     if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
+    if (dest / FITNESS_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
+            raise ValueError("missing road-fitness observation dependency")
 
 
 def replace_link(root, target):
@@ -308,7 +375,7 @@ class Updater:
         # --help exits before training, robot access or model delivery.
         scripts = ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
                    "dataset/build.py", "dataset/review_app.py")
-        entries = [Path(source) / PREFIX / script for script in scripts]
+        entries = [job_entry(source, script)[0] for script in scripts]
         if (Path(source) / CAMERA_MAP_ENTRY).is_file():
             entries.append(Path(source) / CAMERA_MAP_ENTRY)
         for entry in entries:
@@ -436,6 +503,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
         map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                            CAMERA_MAP_ENTRY]).strip()
         paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
+        split_layout = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                                "middleware/perception/control/_source_layout.py"]).strip()
+        if not split_layout:
+            paths = tuple(p for p in paths if p not in SPLIT_CODE_PREFIXES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.
@@ -468,8 +539,17 @@ def job_entry(source, script):
     """(entry file, conflict base, conflict name, mapped path or None) for a job name.
 
     A JOB_ENTRY_POINTS name resolves to exactly its one signed file; any other name
-    only under PREFIX. '../', absolute and symlinked escapes raise ValueError."""
+    only under the CLI holder PREFIX. '../', absolute and symlinked escapes raise ValueError."""
     source = Path(source).resolve(strict=True)
+    # Existing signed releases retain their original bytes, paths and job names.
+    # New candidates require LEARNING_REQUIRED; this only resolves a retained release.
+    if script != "camera_lane_map.py" and not (source / "learning/registry/perception/watch.py").is_file():
+        for prefix in LEGACY_LEARNING_PREFIXES:
+            perception = source / prefix
+            if (perception / "model/watch.py").is_file():
+                file = (perception / script).resolve(strict=True)
+                file.relative_to(perception)
+                return file, perception, script, None
     mapped = JOB_ENTRY_POINTS.get(script) if isinstance(script, str) else None
     if mapped is not None:
         file = (source / mapped).resolve(strict=True)
@@ -495,9 +575,15 @@ def execute(config, script, args):
         source.relative_to((root / "releases").resolve())
         file, base, name, mapped = job_entry(source, script)
         if file.suffix != ".py": raise ValueError("job entry point must be a Python script")
-        local = Path(config["work_dir"]) / (PREFIX if mapped is None else "")
+        local = Path(config["work_dir"]) / (base.relative_to(source) if mapped is None else "")
         conflict = checkout_script_conflict(base, local, name)
         if conflict: raise ValueError(conflict)
+        if script != "camera_lane_map.py":
+            # Retained enrolled paths must not lose their local edit guard after a move.
+            for prefix in LEGACY_LEARNING_PREFIXES:
+                legacy = Path(config["work_dir"]) / prefix / Path(script).parent
+                conflict = checkout_script_conflict(file.parent, legacy, Path(script).name)
+                if conflict: raise ValueError(conflict)
         env_hash = Updater(root, config["key_id"], config["public_key"], config["python"]).probe_environment()
         if env_hash != state.get("environment_sha256"):
             raise ValueError("job environment differs from the activated candidate")

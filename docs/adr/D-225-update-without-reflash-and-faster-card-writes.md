@@ -113,3 +113,7 @@ D-197/D-198(Docker updater 퇴역), D-212(ARTIFACT 네이티브 경로),
 `deploy/sd/verify-media-readback.py`, `.github/workflows/build-pinky-image.yml`.
 외부 근거: Raspberry Pi `config.txt` tryboot/autoboot 문서, bmaptool README, Raspberry Pi
 "Trimming the FAT" 공지, Mender 포럼 Pi 5 + Ubuntu 24.04 스레드, Bootlin RAUC on Pi 5 글.
+
+### Addendum (2026-10-10, D-553 addendum 3)
+
+수동 push 전용으로, 서명된 델타 페이로드(바뀐 파일 + `.rosy-delta-base`)를 둔다. 로봇은 정확한 base를 복사해 전체 릴리스를 다시 만들고, 활성화는 같은 activator가 새 서명으로 전체 트리를 검사한다. `manifest.json` 키는 그대로다. 페이로드는 `source-ref.txt`(dispatch 브랜치)를 서명된 파일로 싣는다. 근거와 조건은 [D-553](D-553-cd-speed-parallel-build-and-test-pcs.md) Addendum 3에 있다.

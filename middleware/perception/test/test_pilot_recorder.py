@@ -128,6 +128,7 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
     assert topics == ["/rosy_01/camera/front/compressed", "/rosy_01/cmd_vel", "/rosy_01/odom",
                       "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent",
                       "/rosy_01/line/keep_debug", "/rosy_01/ir_sensor/range",
+                      "/rosy_01/camera/telemetry", "/rosy_01/camera/calibration/status",
                       "/rosy_01/tf", "/rosy_01/tf_static",
                       "/tf", "/tf_static"]
     assert "/rosy_01/us_sensor/range" not in topics

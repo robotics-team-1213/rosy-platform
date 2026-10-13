@@ -110,7 +110,16 @@ def test_junction_picks_the_lane_along_the_heading():
     north = sample(pose(0.98, 0.06, yaw=math.pi / 2), CROSS)
     assert north.edge_id == "cd" and north.offset_m == pytest.approx(0.02)   # left of a northbound lane
     assert sample(pose(1.5, 0.0, yaw=math.pi / 2), CROSS).edge_id is None   # across a lane
-    assert sample(pose(1.0, 0.0, yaw=math.pi), STRAIGHT).edge_id is None    # backing on a one-way lane
+    assert sample(pose(1.0, 0.0, yaw=math.pi), STRAIGHT).edge_id == "ab"   # reverse recovery stays on lane
+
+
+def test_reverse_recovery_keeps_the_same_one_way_margin_and_two_way_direction():
+    forward = sample(pose(1.0, 0.2, yaw=0.0), STRAIGHT)
+    reverse = sample(pose(1.0, 0.2, yaw=math.pi), STRAIGHT)
+    assert (forward.arc_id, reverse.arc_id) == ("ab:fwd", "ab:fwd")
+    assert reverse.margin_m == pytest.approx(forward.margin_m)
+    assert sample(pose(1.0, 0.2, yaw=math.pi / 2), STRAIGHT).edge_id is None
+    assert sample(pose(1.0, 0.05, yaw=math.pi), TWO_WAY).arc_id == "ab:rev"
 
 
 def test_config_from_mapping_refuses_bad_values():

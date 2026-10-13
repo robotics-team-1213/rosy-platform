@@ -33,6 +33,7 @@ class SimRobot(FakeRobot):
     def __init__(self, robot_id: str, xy, grid) -> None:
         super().__init__(robot_id, map=grid,
                          state={"robot_id": robot_id, "navigation": "IDLE", "map_id": "m1",
+                                "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                                 "pose": {"x": xy[0], "y": xy[1], "yaw": 0.0}})
         self._target = None
         #: 거짓이면 목표를 받아도 경로를 내지 않는다 — 계획기가 아직 늦은 상태.
@@ -69,6 +70,7 @@ class SimRobot(FakeRobot):
         assert self._target is not None, f"{self.robot_id} 는 아무 데도 가고 있지 않다"
         x, y = self._target
         self._state = {"robot_id": self.robot_id, "navigation": "ARRIVED", "map_id": "m1",
+                       "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                        "pose": {"x": x, "y": y, "yaw": 0.0}}
         self._path = []
         self._target = None
@@ -254,6 +256,7 @@ def test_a_mission_blocked_with_no_space_is_released_when_the_way_clears():
 
     # 운영자가 rosy_02 를 통로 밖으로 뺐다고 하자 (여기서는 좌표만 옮긴다).
     right._state = {"robot_id": "rosy_02", "navigation": "ARRIVED", "map_id": "m1",
+                    "localization": {"state": "LOCALIZED", "pose_frame": "map"},
                     "pose": {"x": 2.2, "y": 3.0, "yaw": 0.0}}
     row = _row(run(console.snapshot()), "rosy_01")
 
@@ -382,7 +385,8 @@ def test_a_robot_without_a_pose_is_never_ordered_to_yield():
 
     result = run(console.goal("rosy_01", 2.2, 0.6))
 
-    assert "queued" not in result
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert result["blocked_by"] == "rosy_02"
     assert _goals(right) == []
 
 

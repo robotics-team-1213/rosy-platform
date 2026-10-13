@@ -9,6 +9,8 @@
     <string name="state_stopped">정지됨</string>
     <string name="state_connecting">연결 중…</string>
     <string name="state_streaming">송출 중</string>
+    <string name="state_standby">대기 — 영상을 요청하면 다시 보냅니다</string>
+    <string name="state_thermal_pause">휴대폰이 뜨거워 송출을 멈췄습니다. 식으면 다시 보냅니다</string>
     <string name="state_disconnected">연결 끊김 — 다시 연결 중</string>
     <string name="state_preview_only">카메라 미리보기 중</string>
 
@@ -184,6 +186,21 @@
     <string name="light_disabled">조명 꺼짐 · 필요할 때 요청하세요</string>
     <string name="light_unsupported">이 렌즈는 조명 미지원 · 플래시가 필요하면 설정에서 기본 후면을 선택하세요. 촬영 범위가 달라집니다.</string>
     <string name="light_error">조명이 제한되거나 켜지지 않았습니다 · 렌즈·발열 상태를 확인하세요</string>
+    <string name="exposure_off">노출 자동 보정 꺼짐 · 기본값</string>
+    <string name="exposure_ok">노출 자동 보정 켜짐 · 정상</string>
+    <string name="exposure_over">노출 자동 보정 켜짐 · 강한 빛으로 날아감, 노출을 낮추는 중</string>
+    <string name="exposure_under">노출 자동 보정 켜짐 · 너무 어두움, 노출을 높이는 중</string>
+    <string name="exposure_enable">노출 자동 보정 켜기</string>
+    <string name="exposure_disable">노출 자동 보정 끄기</string>
+    <string name="tuning_vision">인식 자동 노출: %1$s</string>
+    <string name="tuning_locked">잠김</string>
+    <string name="tuning_adjusting">맞추는 중</string>
+    <string name="tuning_wait_local">Vision 대기 · 로컬 보정</string>
+    <string name="tuning_wait_default">Vision 대기 · 기본 노출</string>
+    <string name="tuning_disabled">인식 자동 노출 꺼짐 · 설정에서 켤 수 있음</string>
+    <string name="tuning_thermal_hold">인식 자동 노출: 폰이 뜨거워 현재 설정 유지 · %1$s</string>
+    <string name="settings_recognition_exposure">인식 자동 노출 (Vision)</string>
+    <string name="settings_recognition_exposure_note">Vision이 인식 품질을 보고 노출 보정·잠금·노출 시간 상한·안티밴딩을 맞춥니다. 화각·초점·해상도는 바꾸지 않습니다. 끄면 Vision 요청을 무시합니다.</string>
     <string name="light_enable">촬영 조명 요청</string>
     <string name="light_disable">조명 요청 취소</string>
     <string name="photo_save">현재 사진 저장</string>

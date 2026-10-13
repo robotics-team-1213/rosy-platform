@@ -79,7 +79,7 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["estop"]["right"] <= 390
 
 
-def test_mobile_console_puts_controls_before_long_sensor_and_map_panels():
+def test_mobile_console_puts_navigation_before_controls_and_camera():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = _page(browser, 390, 844)
@@ -89,7 +89,7 @@ def test_mobile_console_puts_controls_before_long_sensor_and_map_panels():
         )""")
         browser.close()
 
-    assert positions["act"] < positions["sense"] < positions["observe"]
+    assert positions["observe"] < positions["act"] < positions["sense"]
 
 
 def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():
@@ -358,3 +358,38 @@ def test_shared_readback_section_preserves_heading_gap_at_mobile_width():
     assert results[390]["overflow"] == 0
     assert results[390]["width"] <= 390
     assert results[390]["minWidth"] == "0px"
+
+
+def test_map_evidence_labels_wrap_inside_their_slot_without_hiding_stop():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844), (320, 568)):
+            page = _page(browser, width, height)
+            page.locator('[data-slot="observe"]').evaluate("""node => { node.innerHTML = `
+              <div class='surface-map-frame'><canvas></canvas>
+                <div class='surface-map-stage'>
+                  <span>주행 · 경로 계산 보고 · 위치 확인 필요</span>
+                  <span>위치 · 늦게 도착 · 12345678901234567890123456789012345678901234567890초 전</span>
+                  <span class='surface-map-path-evidence'>경로 · 지도와 경로의 기준 좌표가 다릅니다.</span>
+                </div>
+              </div>`; }""")
+            result = page.evaluate("""() => {
+              const stage = document.querySelector('.surface-map-stage');
+              const bounds = stage.getBoundingClientRect();
+              const frame = document.querySelector('.surface-map-frame').getBoundingClientRect();
+              const stop = document.querySelector('#shell-estop').getBoundingClientRect();
+              return {
+                overflow: document.documentElement.scrollWidth - innerWidth,
+                stageFits: bounds.left >= frame.left && bounds.right <= frame.right + 1,
+                labelsFit: [...stage.children].every(label => {
+                  const box = label.getBoundingClientRect();
+                  return label.scrollWidth <= label.clientWidth + 1
+                    && box.left >= bounds.left && box.right <= bounds.right + 1;
+                }),
+                stopVisible: stop.width >= 44 && stop.height >= 44
+                  && stop.left >= 0 && stop.right <= innerWidth && stop.top >= 0 && stop.bottom <= innerHeight,
+              };
+            }""")
+            assert result['overflow'] <= 0 and result['stageFits'] and result['labelsFit'] and result['stopVisible'], (width, result)
+            page.close()
+        browser.close()

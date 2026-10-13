@@ -55,6 +55,13 @@
 | D-489 | 관제 경로 계획은 방향 있는 차로 그래프에서 "차로 단위 상태"로 시간 비용 A*를 푼다 — 전역 경로는 Fleet, 국소 추종은 로봇, 다중 로봇 교통은 별도 층 |
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
+| D-652 | Common intervention necessity assessment with bounded current evidence and Fleet/Situation shadow consumers |
+| D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
+| D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-684 | Pinky 사건 재관측과 지속 예산 원장 |
+| D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
+| D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 
 ## 계획·결과 문서
 
@@ -79,6 +86,8 @@
 - [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
+- [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -90,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · 7e883f418 · refactor(fleet): D-517 trip runner split — 바퀴·정지·교통 이음매
-- 2026-10-08 · uncommitted · uiux(fleet-web): D-517 M1b 교통 층, 카드 한 줄, 예외 큐 행, 반복 운행 시작
-- 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
-- 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
-- 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
+- 2026-10-13 · 4a488ea3e · fix: D-622 REALIGN 선택 기록·보류 유지·설정 digest
+- 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
+- 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
+- 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
+- 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source

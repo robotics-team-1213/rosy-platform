@@ -52,7 +52,7 @@ def test_core_law_mirror_matches_core_defaults():
     assert value("steering_gain") == lane_bev.CORE_STEERING_GAIN
     assert value("min_confidence") == lane_bev.CORE_MIN_CONFIDENCE
     assert value("stale_after_s") == lane_bev.ODOM_MAX_SKEW_S
-    manager = ((ROOT.parents[1] / "middleware") / "core/services/core_features/line_follow/manager.py"
+    manager = ((ROOT.parents[1] / "middleware") / "control/drive/behaviors/line_follow/manager.py"
                ).read_text(encoding="utf-8")
     assert "max(0.2, 1.0 - 0.65 * abs(error))" in manager
     assert lane_bev.CORE_CURVE_SLOWDOWN == 0.65
@@ -102,11 +102,61 @@ def test_no_ground_or_no_odometry_is_no_output():
     assert all(obs is None for _, obs, _ in log)
 
 
+@pytest.mark.parametrize("jump", [(0.0, 0.08, 0.0), (0.0, 0.0, 1.0)])
+def test_odometry_jump_stops_and_does_not_reuse_boundary_memory(jump):
+    world = lane([(-1.0, 0.0), (1.5, 0.0)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    frame = world.render((0.0, 0.0, 0.0))
+    assert follower.update(0.0, (0.0, 0.0, 0.0), frame, GROUND, **KW) is not None
+    assert follower.update(0.2, jump, frame, GROUND, **KW) is None
+    assert follower.last.get("reason") == "odom_discontinuity"
+    assert follower.update(0.4, jump, frame, GROUND, **KW) is None
+
+
 def test_one_line_alone_never_seeds():
     """No lane-width pair, no memory: a lone line at +h is not trusted."""
     world = World().line([(-1.0, H), (1.5, H)])
     log, _ = drive(world, steps=10)
     assert all(obs is None for _, obs, _ in log)
+
+
+@pytest.mark.parametrize("corner_handoff", [False, True])
+def test_stationary_replacement_line_cannot_inherit_a_paired_boundary(corner_handoff):
+    """A new stripe 30 mm inward cannot be the same fixed floor line at the same odom pose."""
+    pose = (0.0, 0.0, 0.0)
+    original = lane([(-1.0, 0.0), (1.5, 0.0)])
+    replacement = World().line([(-1.0, H - 0.03), (1.5, H - 0.03)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X, corner_handoff=corner_handoff)
+    assert follower.update(0.0, pose, original.render(pose), GROUND, **KW) is not None
+    if corner_handoff:
+        follower._corner.state = "TURN"  # a pending turn must be aborted with the contradicted memory
+
+    assert follower.update(DT, pose, replacement.render(pose), GROUND, **KW) is None
+    assert follower.last.get("reason") == "boundary_identity_unconfirmed"
+    if corner_handoff:
+        assert follower.state == "EDGE"
+    # A lone replacement still cannot reseed after the contradictory memory is dropped.
+    assert follower.update(2 * DT, pose, replacement.render(pose), GROUND, **KW) is None
+
+
+def test_stationary_reobserved_boundary_keeps_the_one_side_lane():
+    pose = (0.0, 0.0, 0.0)
+    original = lane([(-1.0, 0.0), (1.5, 0.0)])
+    same_left = World().line([(-1.0, H), (1.5, H)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    assert follower.update(0.0, pose, original.render(pose), GROUND, **KW) is not None
+    assert follower.update(DT, pose, same_left.render(pose), GROUND, **KW) is not None
+    assert follower.last["source"] == "LEFT"
+
+
+def test_stationary_new_right_component_cannot_bypass_identity_check():
+    pose = (0.0, 0.0, 0.0)
+    original = lane([(-1.0, 0.0), (1.5, 0.0)])
+    replacement = World().line([(-1.0, -H + 0.03), (1.5, -H + 0.03)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    assert follower.update(0.0, pose, original.render(pose), GROUND, **KW) is not None
+    assert follower.update(DT, pose, replacement.render(pose), GROUND, **KW) is None
+    assert follower.last.get("reason") == "boundary_identity_unconfirmed"
 
 
 # --- Straight, bend, arc, crosswalk -------------------------------------------

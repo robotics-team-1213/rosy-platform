@@ -51,6 +51,7 @@ import {
 import {
   TELEMETRY_CHANNELS,
   lineFollow,
+  lineFollowStartReady,
   renderCapabilityPanels,
   renderEvents,
   renderFormationHero,
@@ -107,6 +108,10 @@ async function runConfirmed(message, opener, eligible, run, fail, pending = () =
   finally { clearPending(); owner.signal.removeEventListener("abort", clearPending); if (commandOwner === owner) commandOwner = null; }
 }
 
+const goalPoseReady = () => session.robotState && new HeadlessState(session.robotState).isFresh("pose")
+  && (session.robotState.localization == null || (session.robotState.localization.state === "LOCALIZED"
+    && session.robotState.localization.pose_frame === "map"));
+
 const fieldMap = createFieldMap({
   canvas: elements["map-canvas"],
   empty: elements["map-empty"],
@@ -115,15 +120,24 @@ const fieldMap = createFieldMap({
   api,
   apiMaybe,
   captureLifetime: authTicket,
+  onlyActivePath: true,
   getPose: () => session.robotState?.pose,
-  getNavigation: () => session.robotState?.navigation,
+  getDisplayPose: () => new HeadlessState(session.robotState).isFresh("pose")
+    && session.robotState?.localization?.state === "LOCALIZED"
+    && session.robotState.localization.pose_frame === "map" ? session.robotState.pose : null,
+  getCurrentMapId: () => session.robotState?.map_id,
+  getNavigation: () => session.robotState?.mode !== "SAFE_STOP"
+    && new HeadlessState(session.robotState).isFresh("navigation") && goalPoseReady()
+    ? session.robotState.navigation : null,
   // v1.21: the server says which snapshots exist; asking for a missing one is
   // a 404 in the console. Absent block (older CORE): ask as before.
   getMapSources: () => session.capabilities?.runtime?.maps,
-  canGoal: () => session.capabilities?.navigation?.goal_navigation === true
-    && new HeadlessState(session.robotState).isFresh("pose"),
-  goalReason: () => session.capabilities?.navigation?.goal_navigation !== true
-    ? "내비게이션을 쓸 수 없음" : "위치 증거 확인 필요",
+  canGoal: (mode) => session.capabilities?.navigation?.goal_navigation === true
+    && (mode !== "goal" || (session.robotState?.mode !== "SAFE_STOP" && goalPoseReady())),
+  goalReason: (mode) => session.capabilities?.navigation?.goal_navigation !== true
+    ? "내비게이션을 쓸 수 없음" : mode === "goal" && session.robotState?.mode === "SAFE_STOP"
+      ? "안전 정지 중 주행 목표 불가" : mode === "goal" && !goalPoseReady()
+        ? "위치 추정 확인 후 가능" : "",
   setAction: (text) => announceAction( text),
 });
 
@@ -174,7 +188,8 @@ function renderRobotState(state) {
   // 동안 표시한다. 내비게이션이 끝나면 지운다.
   const navGoal = elements["navigation-goal"];
   if (navGoal) {
-    const active = ["PLANNING", "NAVIGATING"].includes(state.navigation);
+    const active = ["PLANNING", "NAVIGATING"].includes(state.navigation)
+      && new HeadlessState(state).isFresh("navigation") && goalPoseReady() && state.mode !== "SAFE_STOP";
     if (active && session.lastGoal) {
       navGoal.textContent = `→ (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
     } else {
@@ -650,7 +665,7 @@ document.querySelectorAll("[data-line-mode]").forEach((button) => {
     };
     const fail = error => announceAction(`차선 추종 변경 실패: ${error.message}`);
     if (mode !== "OFF") await runConfirmed(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`, button,
-      () => !lineFollow.pending && session.capabilities?.navigation?.goal_navigation === true && session.robotState?.safety?.estop !== true, run, fail, pending, "line");
+      () => !lineFollow.pending && lineFollowStartReady(), run, fail, pending, "line");
     else {
       if (commandOwner?.kind === "line") commandOwner = null;
       const owner = authTicket(), role = session.role, active = () => owner.current() && role === session.role; pending(true);

@@ -146,6 +146,19 @@ class ProtocolTest {
     }
 
     @Test
+    fun demandMatchesTheVectorsAndIgnoresABadWanted() {
+        val on = Protocol.parseServerMessage(messages.getJSONObject("demand_on").toString())
+        val off = Protocol.parseServerMessage(messages.getJSONObject("demand_off").toString())
+        assertEquals(ServerMessage.Demand(true), on)
+        assertEquals(ServerMessage.Demand(false), off)
+        val extra = JSONObject(messages.getJSONObject("demand_on").toString()).put("later", 1)
+        assertEquals(ServerMessage.Demand(true), Protocol.parseServerMessage(extra.toString()))
+        assertEquals(ServerMessage.BadDemand("wanted"), Protocol.parseServerMessage("{\"type\":\"demand\"}"))
+        assertEquals(ServerMessage.BadDemand("wanted"), Protocol.parseServerMessage("{\"type\":\"demand\",\"wanted\":1}"))
+        assertEquals(ServerMessage.BadDemand("wanted"), Protocol.parseServerMessage("{\"type\":\"demand\",\"wanted\":\"true\"}"))
+    }
+
+    @Test
     fun unknownTypeIsReportedNotThrown() {
         assertEquals(ServerMessage.Unknown("pong"), Protocol.parseServerMessage("{\"type\":\"pong\"}"))
     }

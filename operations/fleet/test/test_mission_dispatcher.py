@@ -118,6 +118,53 @@ def test_admitted_mission_dispatches_one_fenced_action_and_readback_never_resubm
     assert service.get(mission["mission_id"])["status"] == "RUNNING"
 
 
+@pytest.mark.parametrize("mode", ["running", "pending", "ready", "unconfigured"])
+def test_readback_rotates_between_running_and_unresolved_owners_without_resubmit(tmp_path, mode):
+    task_store, service, _, generation = _ready_mission(tmp_path)
+    plan = _plan()
+    plan.update(source_object_id="block-2", destination_object_id="tray-2")
+    plan["source_evidence"]["object_id"] = "block-2"
+    plan["destination_evidence"]["object_id"] = "tray-2"
+    service.propose(
+        mission_id="mission-2", principal_id="operator-1", request_key="request-2",
+        workcell_id="omx-2", instance_id="omx-2-control", action_kind="PICK_PLACE", plan=plan,
+        goal_predicate={"predicate_id": "block-2-in-tray", "condition": "object_in_destination",
+                        "object_id": "block-2", "destination_id": "tray-2",
+                        "evidence_source": "camera_observation"},
+    )
+    service.admit("mission-2", actor_id="operator-1", expected_generation=generation,
+                  resources=[("workcell", "omx-2"), ("object", "block-2"), ("object", "tray-2")])
+
+    class CurrentAttemptTransport(Transport):
+        def get(self, grant):
+            self.lookups.append(grant.mission_id)
+            return {"state": "RUNNING", "receipt": _receipt(grant, "RUNNING", 2)}
+
+    transport = CurrentAttemptTransport()
+    instances = {"omx-2": "omx-2-control"}
+    if mode != "unconfigured":
+        instances["omx-1"] = "omx-1-control"
+    dispatcher = MissionDispatcher(service, task_store, transport, instances)
+    for mission_id in ("mission-1", "mission-2"):
+        if mode == "unconfigured" or mode == "ready" and mission_id == "mission-2":
+            continue
+        grant = dispatcher._grant(service.get(mission_id))
+        service.start_step(mission_id, action_id=grant.action_id, attempt_id=grant.attempt_id,
+                           expected_authority_epoch=grant.authority_epoch,
+                           expected_generation=grant.dispatch_generation,
+                           action_grant=grant.model_dump(mode="json"))
+        if mode == "pending" and mission_id == "mission-2":
+            dispatcher._record_outcome(grant, "UNKNOWN", {"reason": "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN"})
+    for _ in range(4):
+        dispatcher.dispatch_next()
+    assert set(transport.lookups) == ({"mission-2"} if mode == "unconfigured" else {"mission-1", "mission-2"})
+    assert len(transport.submissions) == (1 if mode in {"ready", "unconfigured"} else 0)
+    if transport.submissions:
+        assert transport.submissions[0].mission_id == "mission-2"
+    if mode == "unconfigured":
+        assert service.get("mission-1")["status"] == "READY"
+
+
 def test_unknown_submit_is_held_and_reconciled_without_automatic_replay(tmp_path):
     task_store, service, mission, _ = _ready_mission(tmp_path)
     transport = Transport(fail_submit=True, missing_on_get=True)

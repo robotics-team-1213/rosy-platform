@@ -18,6 +18,16 @@ SCRIPT = ROOT / "tools" / "hooks" / "pre-push"
 BASH = shutil.which("bash")
 
 
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+@pytest.mark.parametrize("owed", ["first.py\nsecond.py", "first.py\r\nsecond.py\r"])
+def test_owed_suites_accept_windows_python_line_endings(owed):
+    line = next(line for line in SCRIPT.read_text(encoding="utf-8").splitlines()
+                if "mapfile -t OWED_SUITES" in line)
+    result = subprocess.run([BASH, "-c", line + '\nprintf "%s\\0" "${OWED_SUITES[@]}"'],
+                            env={**os.environ, "OWED": owed}, capture_output=True, check=True)
+    assert result.stdout == b"first.py\0second.py\0"
+
+
 @pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
 def test_hook_clears_repository_environment_before_foreign_repo_fixtures(tmp_path):
     # Exercise the actual hook initialization against disposable real Git repos.
@@ -86,10 +96,31 @@ def test_affected_tier_runs_after_the_fast_gate():
     fast = text.index("test/test_release_boundary_guards.py")
     step = text.index("rosy_harness.py affected")
     assert fast < step, "the fast suites must stay ahead of the affected tier"
-    assert "affected --base" in text and "--run" in text
+    assert "affected --base" in text and "--json" in text
     assert "--full" not in text, "the full suite runs on GitHub runners, never in the hook"
     assert '--skip "$suite"' in text and '"${FAST_SUITES[@]}"' in text, (
         "the affected run skips the fast suites the hook already ran (review: guards ran twice)")
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
+    """2026-10-08: pytest runs on the model PC / AI PC, never directly in the hook."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert '-m pytest' not in text, "pytest goes through tools/remote/remote_pytest.py"
+    assert 'tools/remote/remote_pytest.py --sha "$PUSH_SHA"' in text
+    stdin_part = text.split("# Git exports repository-local", 1)[0].split("set -euo pipefail", 1)[1]
+    probe = stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', "") + 'echo "$PUSH_SHA"'
+    lines = (f"refs/heads/gone {'0' * 40} refs/heads/gone abc\n"  # a deletion: skipped
+             f"refs/heads/x {'1' * 40} refs/heads/x {'0' * 40}\n")
+    pushed = subprocess.run([BASH, "-c", probe, "hook", "origin", "url"], input=lines,
+                            capture_output=True, text=True, cwd=ROOT)
+    assert pushed.stdout.strip() == "1" * 40, pushed.stderr
+
+
+def test_safety_warning_checks_tip_while_ci_checks_full_range():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only' in text
+    assert "git merge-base HEAD origin/main" not in text.split("Safety-Review trailer on pushed tip")[1].split("FAST_SUITES", 1)[0]
 
 
 INSTALLER = ROOT / "tools" / "hooks" / "install.sh"

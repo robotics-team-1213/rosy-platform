@@ -37,6 +37,8 @@ def _enum(name: str) -> list[str]:
     ("MODE_LABEL", "RobotMode"),
     ("NAVIGATION_LABEL", "NavigationState"),
     ("DOCK_STATE_LABEL", "DockState"),
+    ("POWER_MODE_LABEL", "PowerMode"),
+    ("BATTERY_LEVEL_LABEL", "BatteryLevel"),
 ])
 def test_every_protocol_value_has_a_korean_word(label_map, enum):
     labels = _run(f"logic.{label_map}")

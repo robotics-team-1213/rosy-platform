@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
-- 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
-- 2026-10-07 · uncommitted · uiux(pilot): 접속 화면이 이 로봇의 연결 방식을 먼저 보여 준다
-- 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
-- 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
+- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동

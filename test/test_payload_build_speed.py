@@ -80,7 +80,8 @@ def test_the_build_installs_rosdep_apt_packages_in_one_transaction_before_rosdep
 
 
 def test_the_runner_skips_fsync_and_man_db_for_dpkg_before_any_install():
-    workflow = WORKFLOW.read_text(encoding="utf-8")
+    # D-553 addendum 3: the prerequisites install inside the payload-builder image.
+    workflow = (IMAGE / "payload-builder" / "install-ros-build-prereqs.sh").read_text(encoding="utf-8")
 
     unsafe_io = workflow.index("force-unsafe-io")
     first_install = workflow.index("apt-get install")

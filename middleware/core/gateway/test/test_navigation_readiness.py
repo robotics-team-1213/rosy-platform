@@ -130,7 +130,7 @@ def test_mapping_backend_uses_slam_readiness_instead_of_amcl(tmp_path):
 
 
 def test_navigation_state_exposes_readiness_reason_to_the_device_ui(core_client):
-    client, _services = core_client()
+    client, services = core_client()
 
     response = client.get(
         "/api/v1/navigation/state",
@@ -144,6 +144,12 @@ def test_navigation_state_exposes_readiness_reason_to_the_device_ui(core_client)
         "missing": [],
         "reason": "disabled",
     }
+    assert response.json()["mapping_active"] is False
+    services.nav.mapping_active = True
+    assert client.get(
+        "/api/v1/navigation/state",
+        headers={"Authorization": "Bearer rosy-dev-viewer"},
+    ).json()["mapping_active"] is True
 
 
 def test_navigation_request_is_rejected_before_mode_change_when_hardware_is_held(core_client):

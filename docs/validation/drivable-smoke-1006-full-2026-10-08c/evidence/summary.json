@@ -1,0 +1,92 @@
+{
+  "status": "candidate_proxy_not_ground_truth",
+  "model_revision": "lane-seg-20261007-b389d6a0",
+  "model_sha256": "b389d6a0690fec9bfa5f5a2db1f0ada56eb68ea58b0e747ff9afa3a028a6b145",
+  "frames": 3129,
+  "sessions": {
+    "082612": {
+      "frames": 2487,
+      "keeper_strategy": {
+        "none": 2483,
+        "left_only": 2,
+        "right_only": 2
+      },
+      "moving_frames": 142,
+      "fraction": {
+        "min": 0.21253255208333333,
+        "median": 0.5481119791666667,
+        "max": 0.9621744791666667
+      },
+      "over_half": 1508,
+      "below_two_percent": 0,
+      "adjacent_raw_iou": {
+        "min": 0.39626112464575153,
+        "median": 0.991406683455109
+      },
+      "by_keeper_strategy": {
+        "left_only": {
+          "frames": 2,
+          "over_half": 0,
+          "median_fraction": 0.30755208333333334
+        },
+        "none": {
+          "frames": 2483,
+          "over_half": 1506,
+          "median_fraction": 0.5481119791666667
+        },
+        "right_only": {
+          "frames": 2,
+          "over_half": 2,
+          "median_fraction": 0.748095703125
+        }
+      },
+      "moving_none_over_half": 60,
+      "moving_none": 138
+    },
+    "091340": {
+      "frames": 642,
+      "keeper_strategy": {
+        "left_only": 78,
+        "both": 190,
+        "right_only": 276,
+        "none": 98
+      },
+      "moving_frames": 159,
+      "fraction": {
+        "min": 0.5370768229166667,
+        "median": 0.7058430989583333,
+        "max": 0.8957682291666667
+      },
+      "over_half": 642,
+      "below_two_percent": 0,
+      "adjacent_raw_iou": {
+        "min": 0.7246911016509189,
+        "median": 0.9992838386249702
+      },
+      "by_keeper_strategy": {
+        "both": {
+          "frames": 190,
+          "over_half": 190,
+          "median_fraction": 0.63828125
+        },
+        "left_only": {
+          "frames": 78,
+          "over_half": 78,
+          "median_fraction": 0.6345703125
+        },
+        "none": {
+          "frames": 98,
+          "over_half": 98,
+          "median_fraction": 0.6815104166666667
+        },
+        "right_only": {
+          "frames": 276,
+          "over_half": 276,
+          "median_fraction": 0.7463541666666667
+        }
+      },
+      "moving_none_over_half": 32,
+      "moving_none": 32
+    }
+  }
+}

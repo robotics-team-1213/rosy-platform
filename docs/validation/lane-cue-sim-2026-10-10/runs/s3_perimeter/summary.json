@@ -1,0 +1,101 @@
+{
+ "verdict": "FAIL",
+ "checks": {
+  "cue_turn_signs": {
+   "+": 6,
+   "-": 1
+  },
+  "cues_refused": [],
+  "pivot_started": true,
+  "pivot_cmd_count": 117,
+  "pivot_sign_changes": 0,
+  "pivot_duration_sim_s": 2.27,
+  "pivot_end_reason": "camera_line_not_visible",
+  "latched": [],
+  "odom_turned_deg": 57.5,
+  "yaw_err_odom_deg": -117.8,
+  "yaw_err_gt_deg": -117.8,
+  "start_err_gt_deg": -175.3,
+  "pivots_started": 1,
+  "halt_turned_deg": 52.3,
+  "all_reasons_after_first_pivot": [
+   [
+    "TRACKING",
+    "fleet_wrong_way_turn"
+   ],
+   [
+    "HOLD",
+    "camera_line_not_visible"
+   ],
+   [
+    "LOST",
+    "reselection_required"
+   ],
+   [
+    "LOST",
+    "camera_reselection_required"
+   ]
+  ]
+ },
+ "timeline": [
+  [
+   416.006,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   418.876,
+   "WAITING",
+   "no_observation"
+  ],
+  [
+   418.994,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   421.258,
+   "TRACKING",
+   "fleet_wrong_way_turn"
+  ],
+  [
+   423.656,
+   "HOLD",
+   "camera_line_not_visible"
+  ],
+  [
+   426.623,
+   "LOST",
+   "reselection_required"
+  ],
+  [
+   426.771,
+   "LOST",
+   "camera_reselection_required"
+  ]
+ ],
+ "scenario": "s3",
+ "args": {
+  "scenario": "s3",
+  "out": "runs/s3_perimeter",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.4,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   -1.2696,
+   0.243,
+   -1.5707963267948966
+  ],
+  "lane": 1.5707963267948966,
+  "exact180": false,
+  "box": false,
+  "seed": 34,
+  "lane_deg": 90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

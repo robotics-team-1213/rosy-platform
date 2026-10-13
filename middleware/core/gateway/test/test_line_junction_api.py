@@ -53,10 +53,22 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
     snapshot = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]
     assert snapshot["junction"] == {"pending_action": "left", "place_id": "J2",
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
-                                    "reason": None, "pivot_basis": None}
+                                    "reason": None, "pivot_basis": None,
+                                    "signal_request_id": None, "signal_state": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
+
+
+def test_signal_query_overlay_requires_an_explicit_yaml_boolean():
+    from core.line_follow_wiring import _line_follow_config
+    import pytest
+
+    assert not _line_follow_config({}).junction_signal_enabled
+    assert _line_follow_config({'junction_signal_enabled': True}).junction_signal_enabled
+    for value in ('true', 1, None):
+        with pytest.raises(ValueError, match='junction_signal_enabled'):
+            _line_follow_config({'junction_signal_enabled': value})
 
 
 def test_expired_instruction_stops_at_a_detected_junction(core_client):
@@ -104,6 +116,15 @@ def test_keep_debug_junction_reason_feeds_the_manager(core_client):
     observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
     assert _tick(services, clock).linear == 0.0
     assert services.line_follow.status().reason == "junction_waiting"
+
+
+def test_keep_debug_strategy_reaches_the_manager(core_client):
+    """Lap SIM A: the keeper's corner turn is read from line/keep_debug (strategy)."""
+    _, services, clock = _active(core_client)
+    for strategy, expected in ((7, False), ("both", False), ("corner_left", True)):  # a corner latches
+        raw = json.dumps({"reason": None, "strategy": strategy, "stamp": 100.0})
+        observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
+        assert (services.line_follow._corner_left_at is not None) is expected, strategy
 
 
 def test_stale_or_other_keep_debug_is_not_a_sighting(core_client):
@@ -205,6 +226,39 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
     far_edge = {**D507, "place_id": "J3", "pivot_past_line_m": -0.30}  # 2026-10-08: signed
     assert client.post(URL, json=far_edge, headers=OPERATOR).json()["state"] == "armed"
+
+
+def test_lane_turn_deg_belongs_to_a_straight_with_a_window(core_client):
+    """lap SIM 2: the straight's lane heading change, for the keeper corner hold's scope."""
+    client, services, clock = _active(core_client)
+    straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1,
+                "lane_turn_deg": 52.0}
+    for bad in ({**D507, "lane_turn_deg": 10.0}, {**straight, "lane_turn_deg": 361.0},
+                {k: v for k, v in straight.items() if k not in ("expect_in_m", "expect_tol_m")}):
+        assert client.post(URL, json=bad, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
+    assert services.line_follow._junction["lane_turn"] == 52.0
+
+
+BEND = {**BODY, "action": "bend", "place_id": "B1", "turn_deg": 63.6, "map_id": "site_a",
+        "bend_in_m": 0.5, "bend_tol_m": 0.12, "bend_radius_m": 0.064}
+
+
+def test_d507_bend_fields_validation(core_client):
+    client, services, clock = _active(core_client)
+    for bad in ({"turn_deg": None}, {"turn_deg": 0}, {"turn_deg": 91}, {"map_id": None},
+                {"bend_in_m": None}, {"bend_in_m": 2.01}, {"bend_tol_m": 0.31}, {"bend_radius_m": 0.51},
+                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1}):
+        body = {k: v for k, v in {**BEND, **bad}.items() if v is not None}
+        assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
+    assert client.post(URL, json={**BODY, "bend_in_m": 0.5}, headers=OPERATOR).status_code == 400
+    refused = client.post(URL, json=BEND, headers=OPERATOR)  # no odom: the travel cannot start
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ODOM_STALE"
+    _pose(services, clock)
+    assert client.post(URL, json=BEND, headers=OPERATOR).json() == {
+        "accepted": True, "junction_seq": 1, "state": "armed"}
+    assert client.post(URL, json={**BEND, "turn_deg": -40}, headers=OPERATOR).json()["junction_seq"] == 2
 
 
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):

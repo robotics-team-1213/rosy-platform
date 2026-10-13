@@ -5,7 +5,7 @@ import pytest
 from core.bridge import traffic_gate
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
-from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
 from core_features.traffic_policy import TrafficPolicyManager
 
 GEOMETRY = dict(body_lidar_x_m=-0.017, body_rear_x_m=-0.076, body_rotation_radius_m=0.08257)
@@ -57,6 +57,17 @@ def _blocked_until_stuck(m):
     _run(m, 0.0, 5.5, front=0.15)                  # obstacle_escalate_s = 5 s
 
 
+def test_back_answer_rechecks_current_calibration_without_another_tick():
+    m, _ = _manager(linked=True)
+    _blocked_until_stuck(m)
+    current_id = m.status().stuck.stuck_id
+    _feed(m, 5.5, front=.15)
+    m.bind_recovery(calibration_active=lambda: True)
+    with pytest.raises(AnswerRefused, match="calibration_active"):
+        m.stuck_decision(current_id, "BACK_AND_RETRY", by="operator", now=5.51)
+    assert m.status().stuck.attempts == 0
+
+
 def test_obstacle_escalation_opens_one_stuck_with_body_clearances():
     m, events = _manager(linked=True)
     _blocked_until_stuck(m)
@@ -104,7 +115,10 @@ def test_no_console_backs_off_through_the_line_decision_then_resumes():
     class Command:
         twist = None
 
-        def set_nav_twist(self, twist, now=None):
+        def clip_line_candidate(self, linear, angular):
+            return linear, angular
+
+        def set_nav_twist(self, twist, now=None, *, preserve_curvature=False):
             self.twist = twist
 
         def clear_navigation(self):
@@ -152,7 +166,7 @@ def test_console_resume_lets_the_robot_approach_down_to_stop_distance():
     _run(m, 5.5, 5.8, front=0.24)                 # between stop 0.20 and resume 0.28: held
     assert m.tick(5.81).linear == 0.0
     stuck_id = m.status().stuck.stuck_id
-    assert m.stuck_decision(stuck_id, "RESUME", by="operator") == "resume"
+    assert m.stuck_decision(stuck_id, "RESUME", by="operator", now=5.81) == "resume"
     assert _run(m, 5.9, 6.2, front=0.24).linear > 0.0
     assert _run(m, 6.2, 6.5, front=0.19).linear == 0.0          # re-blocks inside stop distance
     assert m.status().reason == "obstacle_ahead"
@@ -163,7 +177,7 @@ def test_console_resume_refused_inside_stop_distance_and_late_answer_rejected():
     _blocked_until_stuck(m)
     stuck_id = m.status().stuck.stuck_id
     with pytest.raises(AnswerRefused) as refused:
-        m.stuck_decision(stuck_id, "RESUME", by="operator")
+        m.stuck_decision(stuck_id, "RESUME", by="operator", now=5.5)
     assert refused.value.code == "STUCK_DECISION_REFUSED"
     with pytest.raises(AnswerRefused) as stale:
         m.stuck_decision("stuck-old", "WAIT", by="operator")
@@ -176,7 +190,7 @@ def test_lane_lost_opens_a_stuck_and_resume_unlatches():
     _run(m, 0.5, 4.0, front=1.0, lane=False)
     assert m.status().state == "LOST"
     assert events.named("nav.line_stuck_opened")[-1]["cause"] == "lane_lost"
-    m.stuck_decision(m.status().stuck.stuck_id, "RESUME", by="operator")
+    m.stuck_decision(m.status().stuck.stuck_id, "RESUME", by="operator", now=4.0)
     assert _run(m, 4.0, 4.3, front=1.0).linear > 0.0
 
 
@@ -249,7 +263,10 @@ def test_manual_or_abort_stops_line_follow_before_any_tick_can_reopen():
 class _Command:
     twist = None
 
-    def set_nav_twist(self, twist, now=None):
+    def clip_line_candidate(self, linear, angular):
+        return linear, angular
+
+    def set_nav_twist(self, twist, now=None, *, preserve_curvature=False):
         self.twist = twist
 
     def clear_navigation(self):

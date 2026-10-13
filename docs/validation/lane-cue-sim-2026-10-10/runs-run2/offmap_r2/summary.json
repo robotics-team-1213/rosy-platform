@@ -1,0 +1,124 @@
+{
+ "verdict": "PASS",
+ "checks": {
+  "off_map_accepted": true,
+  "off_map_stamp_age_s": 4.913,
+  "latch_after_post_s": 0.11,
+  "gap_travel_m": 0.1874,
+  "hold_travel_m": 0.0,
+  "hold_yaw_deg": 0.0,
+  "nonzero_cmd_in_hold": 0,
+  "probes": {
+   "off_lane_same_epoch": {
+    "accepted": true,
+    "reason": null
+   },
+   "on_lane_other_epoch": {
+    "accepted": false,
+    "reason": "epoch_busy"
+   },
+   "on_lane_old_seq": {
+    "accepted": false,
+    "reason": "stale"
+   }
+  },
+  "latched_through_probes": true,
+  "release_accepted": {
+   "accepted": true,
+   "reason": null
+  },
+  "released": true,
+  "moved_after_release_m": 0.0978,
+  "drive_cmd_after_release_s": 0.0,
+  "latched_again": true,
+  "mode_change_cleared": true
+ },
+ "timeline": [
+  [
+   617.102,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   619.92,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   620.043,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   626.202,
+   "HOLD",
+   "fleet_off_map"
+  ],
+  [
+   634.039,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   634.686,
+   "HOLD",
+   "crosswalk_looking"
+  ],
+  [
+   636.173,
+   "TRACKING",
+   "tracking"
+  ],
+  [
+   639.292,
+   "HOLD",
+   "fleet_off_map"
+  ],
+  [
+   639.412,
+   "OFF",
+   "mode_off"
+  ],
+  [
+   639.907,
+   "WAITING",
+   "camera_no_observation"
+  ],
+  [
+   640.027,
+   "TRACKING",
+   "tracking"
+  ]
+ ],
+ "scenario": "s1",
+ "args": {
+  "scenario": "s1",
+  "out": "runs/offmap_r2",
+  "site_token": "lcsim/site_token",
+  "base": "http://127.0.0.1:8671",
+  "lat_min": 0.8,
+  "lat_max": 0.8,
+  "noise": 3.0,
+  "turn": 120.0,
+  "drop_deg": 50.0,
+  "pose": [
+   0.327,
+   0.2,
+   1.5707963267948966
+  ],
+  "lane": -1.5707963267948966,
+  "spot": null,
+  "spot_tol": 0.018,
+  "yaw_off": 0.0,
+  "camloss": 0.0,
+  "camloss_at": 60.0,
+  "prejudged": false,
+  "exact180": false,
+  "box": false,
+  "seed": 12,
+  "spot_xy": null,
+  "lane_deg": -90.0
+ },
+ "rtf": 0.96,
+ "capability_at_end": false
+}

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { linkTag } from "../../fleet/server/web/link-tag.js";
+import { linkTag } from "../../../ui/console/link-tag.js";
 
 test("only a problem link produces a tag", () => {
   assert.equal(linkTag("up"), null);
@@ -16,10 +16,12 @@ test("only a problem link produces a tag", () => {
   assert.equal(linkTag("protocol").word, "프로토콜");
   assert.match(linkTag("protocol").text, /등록된 base URL/);
   assert.equal(linkTag("protocol").focus, null);
+  assert.equal(linkTag("degraded").word, "응답 지연");
+  assert.equal(linkTag("degraded").kind, "warn");
 });
 
 test("new link files do not name transport exceptions", () => {
-  const web = new URL("../../fleet/server/web/", import.meta.url);
+  const web = new URL("../../../ui/console/", import.meta.url);
   for (const name of ["link-tag.js", "site-path.js"]) {
     const text = readFileSync(new URL(name, web), "utf8");
     for (const banned of ["RemoteProtocolError", "ConnectError", "RobotApiError", "SSLError"]) {

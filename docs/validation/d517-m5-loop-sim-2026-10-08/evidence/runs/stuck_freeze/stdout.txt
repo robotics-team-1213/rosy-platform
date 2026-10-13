@@ -1,0 +1,3 @@
+start a started None
+start b started None
+{"sim_s": 240.0, "min_gap_m": 0.4022, "min_gap_at": [12.25, "a", "b"], "contacts": 0, "overlap_periods": 0, "grant_conflicts": 0, "grants": 10, "min_convoy_gap_m": null, "resolver": [{"t": 71.0, "robot_id": "a", "trigger": "unknown", "decision": "human", "since": 1040.4999999999632}], "authority_stops": {"a": 0, "b": 1}, "ends": {"a": {"t": 40.5, "state": "stopped", "reason": "stall", "detail": {"stall_s": 20.0, "progress_m": 1.975, "stop_sent": true}}}, "lap_times_s": {"a": [], "b": []}, "max_tick_ms": 2.1033489974797703}

@@ -681,3 +681,81 @@
 - 변경: `surfaces.yaml` `console` 항목의 `app_name`·`app_name_en`·`short_name`과 `icons/console.svg` `<title>`을 `Rosy Fleet`으로. id·아이콘 파일 이름은 그대로. 워드마크 cqi 주석에서 옛 이름을 뺐다.
 - 증거: `shared/web/test/` 통과(브랜치 시험 기록).
 - gate 변화: 이름만. 소비 표면별 G2/G3는 별도다.
+
+## 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
+
+- Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
+- Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
+- Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
+
+- Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
+- Evidence: Remote checks and browser captures pending; the source review distinguishes current intervention from incident history.
+- Gate: SOURCE; no new robot command or safety authority.
+
+## 2026-10-11 · uncommitted · uiux: D-639 공용 역할 출처
+
+- Change: Canvas typography reads named text roles and raster scale; native Android builds export metrics and dark colours from canonical tokens. Shared native disclosure and heading classes own typography and interaction geometry. Registry duplicate keys and local button height literals are rejected.
+- Evidence: Committed-source remote contract, browser and Gradle exporter checks pending. Fleet/Robot/Review callers are owned by the parallel surface branches and must be integrated before the complete consumer suite.
+- Gate: SOURCE; domain geometry, icon assets, PARKED activation and robot safety authority are unchanged.
+
+## 2026-10-11 · 5071836f7 · uiux: D-641 의미 아이콘과 공용 설명
+
+- 변경: 관제·지도·설치·Cell·알림·기록·도구·새로고침·내보내기·접속의 닫힌 SVG 의미를 기존 actionIcon에 연결했다. 아이콘 단독 조작도 접근성 이름을 보존하며 hover·키보드 focus 설명, Escape 닫기, 숨김·제거된 소유자 정리를 제공한다. CSP 좌표는 typed attr()로 표현하고 설명 내부 여백은 inset-tooltip 역할을 소비한다. 실제 갤러리에 열 가지 의미와 선택·방향키·비활성 사유 견본을 추가했다.
+- 증거: 커밋 5071836f7 원격 시험 101 passed(11.17s), known_failures 0 NEW. 두 테마·1920/1366/390/320 폭의 실제 갤러리와 CSP·토큰·공용 조작·레지스트리 검사를 포함한다. 시험 PC는 strict probe에서 현장 PC 5.2 cores/9 GB로 2 cores/6 GB 하한을 충족했고 다른 두 PC는 하한 미달로 사용하지 않았다. 로그 X:/DevTemp/ui-shell-common-641/run-3.txt.
+- Gate: 공용 소스와 원격 브라우저 증거. Fleet 전체 문서 통합·CI·설치·기기·현장 수용은 이 증거로 선언하지 않는다. 기존 명령·권한·신선도 계약을 보존한다.
+
+## 2026-10-11 · 4402c5c4b · fix: 기존 아이콘 설명의 키보드 연결
+
+- gate 변화: 기존 title·접근성 이름을 hover/키보드 설명에 연결한다. 권한·조작 규격·CSP 검사 기준은 유지한다.
+
+- 변경: actionIcon이 기존 title을 공용 tooltip에 연결하고, 보이는 문구가 없는 아이콘은 접근성 이름을 설명으로 재사용한다. 명시 tooltip·라벨·선택·높이·권한은 보존한다.
+- 증거: 실제 Fleet 테마·영상 새로고침·접속 마크업의 키보드 회귀를 포함한 원격 102 passed(13.15s), known_failures 0 NEW. OMEN strict probe 22 cores/7.6 GB로 하한 충족. 로그 X:/DevTemp/ui-shell-common-641/run-4.txt. 최종 Fleet 통합·설치 수용은 별도다.
+
+## 2026-10-11 · 2a848f3c3 · fix: 공용 설명이 아래 조작의 클릭을 가로막지 않도록 수정
+
+- 변경: tooltip은 pointer 입력을 가로채지 않고 좌표로 hover 유지·이탈을 판단한다. 키보드 설명·Escape·기존 aria-describedby를 유지하며, 설명 아래 다른 버튼도 정상 클릭할 수 있다.
+- 증거: source 5da31e05cb의 CI 38126423478에서 Fleet 헤더 시험이 설명의 클릭 가로채기로 실패했다. 수정된 커밋 2a848f3c3의 원격 Chromium 검증은 15 passed(43.26s), known_failures 0 NEW다. 네 Fleet 문서와 공용 의미 아이콘의 hover·키보드·가림 회귀를 포함한다. 로그는 배포 세션의 tooltip-browser/run-1.txt에 보관했다.
+- gate 변화: 새 커밋의 통합·CI·실제 설치 수용은 별도 검증한다. 명령·권한·토큰·조작 크기와 팔레트는 변경하지 않았다.
+
+## 2026-10-11 · e7af96df9 · fix(console): 로그인 정보와 개발 표시의 공통 배치 검사
+
+- 변경: Console의 48rem 헤더 전환 기준과 이유를 표면 레지스트리에 등록하고, 이름·접속·정지 / 연결·로그인·알림의 배치를 공통 검사에 맞춘다.
+- 증거: 128b0b148d의 원격 로그인·개발 표시 검사 69개 통과. 착지 영향 검사에서 4034 passed, 469 skipped와 위 등록·배치의 누락 2개를 확인했으며 수정 커밋의 재검증은 이어 진행한다.
+- gate 변화: 기존 게이트는 유지한다. CI·배포·기기·현장 수용은 별도다.
+
+## 2026-10-11 · f62299e82 · feat: D-654 경로 R 플랫폼 심볼
+
+- 변경: 평면 SVG 정본과 플랫폼 타일을 공용 allowlist·CMake에 등록하고 ui-brand 워드마크에 같은 mask를 사용한다. 기존 장미색·글자 토큰, 역할별 앱 아이콘, 접근성 이름과 목적지를 유지한다.
+- 검증: source f62299e82의 원격 Chromium·토큰·기하·설치 계약 검사 78개가 통과했고 known_failures NEW 0이다. 두 테마, 네 Fleet 문서·여섯 폭, Cell 320px 정지 접근을 포함하며 데스크톱·모바일 캡처를 직접 확인했다. source bec3528c5의 CI에서 교체 중인 로봇 버튼을 한 번만 읽던 측정 경합이 발견돼 살아 있는 locator를 재확인하는 단언으로 수정했다. 로그는 관리 세션 rosy-brand의 logs/browser/run-1.txt다. 정확한 CI·서명 설치·native 앱 수용은 별도다.
+- gate 변화: 기존 SOURCE/LOCAL 상태는 유지한다. 새 브랜드의 원격 브라우저 증거와 정확한 SHA의 CI·설치·native 수용은 구분하며 후자는 아직 미검증이다.
+
+## 2026-10-12 · 65a7982a7 · test(ui): 실제 호출자의 아이콘 전용 속성 보존
+
+- 변경: 공용 의미 아이콘의 실제 Fleet 호출 마크업이 명시한 아이콘 전용 속성을 보존하는지 검사한다. 접근성 이름·키보드 설명·48px 누름면·테마 선택 검사는 유지한다.
+- 증거: main 629cb923d 원격 공용 회귀에서 기존 속성 없음 단언 실패를 재현했다. 수정 65a7982a7 전체 공용 회귀는 종료 exit 0이며 known_failures NEW 0이나 자원 부족 fallback이므로 적정 자원 수용으로 승격하지 않는다. 적정 자원의 통합 회귀에서 해당 의미 아이콘을 다시 확인한다.
+- gate 변화: 정확한 최종 SHA의 브라우저·CI·배포·native 실기기 수용은 별도다.
+
+## 2026-10-12 · bbc523dc6 · uiux: 전체 활성 표면 통합 검증
+
+- 변경: 기존 역할별 헤더와 본문 흐름을 검토하고 Cell 미구성 복구, Pilot 상태 근거와 연결 순서, Robot 재시도/권한 판독, Learning 작은 헤더, Android 함께 조종 안내를 통합했다.
+- 증거: 적정 자원 원격 통합 342 passed, 계약·문서 64 passed, 작은 헤더/Cell 캡처 9 passed, Robot/Pilot 단계별 176/27/3/8/3 passed, 각 known_failures NEW 0. Android 106 tests와 APK 빌드 통과. 변경 후 캡처와 기존 설치본 Fleet 8 화면 조합의 직접 검토를 docs/validation/all-ui-workflows-2026-10-12/result.md에 구분해 기록했다.
+- gate 변화: SOURCE·원격 회귀·변경 후 렌더링 근거다. 기존 설치본 확인은 새 변경의 배포 증거가 아니다. 새 main 착지·push·CI·서명 설치 및 실물 장치/현장 수용은 별도다.
+
+## 2026-10-12 · 7a0725de4 · fix(ui): 현장 복구 목표와 공용 실패 안내
+
+- 변경: 사용자가 현장 운용·오류 복구를 우선 선택해 대상→현재 근거→막힌 이유→가능 조작→실제 결과 재확인으로 목표를 정했다. impeccable context/audit/clarify와 frontend-ui-engineering으로 기존 역할·캡처·공용 계약을 평가했고, 서버/연결 실패에 현재 상태 재조회 안내를 공용 Fleet 요청 어댑터에서 제공한다.
+- 증거: Node 새 회귀 변경 전 3 FAIL, 변경 후 요청 계약 포함 33 PASS. detector 12건은 동적 이미지·계약된 탐색·누락된 경로 해석의 영향을 확인했다. docs/plans/2026-10-12-field-ui-recovery-brief.md에 평가 범위와 미확인 성능/실물 경계를 적었다. 관련 브라우저 회귀와 main 통합 재검사는 이어 실행한다.
+- gate 변화: SOURCE/Node 근거다. 사용자 main 착지·push·배포 확인 지시를 받았으며 적정 자원 시험·CI·서명 설치·실제 화면 증거를 따로 확인한다.
+
+## 2026-10-12 · 80a12948c · fix(ui): 원래 예외 보존과 복구 안내
+
+- 변경: 독립 검토에서 null 취소 이유와 수정 불가 네트워크 예외가 다른 TypeError로 바뀌는 것을 발견했다. 없는 예외를 안전하게 읽고 안내 문구를 바꿀 수 없는 예외는 원래 객체와 문구를 보존한다. 쓰기 재전송은 추가하지 않는다.
+- 증거: 원래 제품 소스에서 세 새 Node 사례가 모두 실패했고, 수정 뒤 요청 계약 포함 36 passed다. 동일 수정안의 독립 재검토에서 추가 차단 사항이 없었다. 브라우저 원격 검사는 별도로 이어 실행한다.
+- gate 변화: SOURCE/Node/독립 검토 근거다. 설치본과 실물 수용 증거는 아니다.
+
+## 2026-10-13 · 039a9efe8 · feat(web): shared app shell seats (D-741)
+
+- 변경: 자리 토큰과 `app-shell.css`를 더하고 견본 틀·스타일 갤러리·DESIGN.md에 자리를 넣었다. 어떤 제품 표면도 아직 이 자리를 쓰지 않는다.
+- 증거: 원격 `shared/web/test` 통과, `known_failures` NEW 0. 브라우저 시험과 화면 캡처는 없다.
+- gate 변화: 없음.

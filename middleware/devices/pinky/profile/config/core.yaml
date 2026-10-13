@@ -1,0 +1,75 @@
+# Pinky Pro CORE config layer (D-196 robot package). core_common.config.load_config
+# merges this file over rosy_default.yaml and under the robot's local overlay
+# (~/.rosy/rosy.yaml or ROSY_CONFIG) whenever robot.model / ROSY_ROBOT is pinky_pro,
+# so every Pinky Pro CORE gets it from the payload, not from a hand-edited overlay.
+# Only robot facts belong here; operator tuning stays in the overlay.
+
+line_follow:
+  # D-344 amendment 2026-10-10: 2.5x the 0.04 m/s pilot; keep steering/speed curvature.
+  cruise_speed: 0.10
+  max_linear: 0.10
+  steering_gain: 2.0
+  # D-344 §11 (numbered D-349 in the 2026-09-29 pilot log) front obstacle stop
+  # (+-20 deg, stop 0.20 m, resume 0.28 m): the sector is centred on this scan
+  # angle. rplidar_link is yaw pi on base_link (URDF), so scan 0 is the robot's
+  # rear and forward is 180. URDF nominal (D-397: geometry.yaml lidar.forward_deg,
+  # drift-tested): an operator-accepted lidar_mount record in the calibration
+  # store (D-47 addendum 2026-10-01, middleware/core/gateway/core/lidar_mount.py)
+  # refines it at CORE start once accepted (motion and camera measure ~181-182
+  # deg); a line_follow.lidar_forward_deg in the operator's local overlay wins
+  # over both. The plausibility window (150-210 deg, or +-15 deg of this value)
+  # is centred on 180.
+  lidar_forward_deg: 180.0
+  # D-407 body geometry for the stuck back-off (URDF nominal, D-397 geometry.yaml,
+  # drift-tested): LiDAR at lidar.x_m, body rear at caster.rear_x_m, in-place sweep
+  # footprint.rotation_radius_m (base_footprint, x forward).
+  body_lidar_x_m: -0.017
+  body_rear_x_m: -0.076
+  body_rotation_radius_m: 0.08257
+  body_half_width_m: 0.05655       # footprint.half_width_m (collision meshes)
+  # D-422 body-referenced obstacle stop: the body front is footprint.front_x_m
+  # (collision meshes; the screen mount sticks out furthest), the ultrasonic
+  # sensor sits at ultrasonic.x_m and faces forward.
+  body_front_x_m: 0.04205
+  body_ultrasonic_x_m: 0.0267
+  # D-491: the floor IR row (geometry.yaml ir.*.x_m, drift-tested). Without it the IR
+  # lane guard never rests in a crosswalk zone.
+  ir_row_x_m: 0.0295
+  # Stop on the commanded path, not on every return in the ±20° sector.
+  # A signal pole or wall more than the body half-width off that path does not
+  # hold the lane. A return the body would meet on the path still stops.
+  obstacle_mode: path
+  # D-591 (user decision 2026-10-10): lanes run beside walls, and a stop gap floored at the
+  # LiDAR range_min band (~0.04-0.09 m) held the robot at nearly every bend. The lane-follow
+  # body stop is the 0.02 m margin plus braking; returns that slip under range_min are still
+  # remembered from the twist and the ultrasonic still stops.
+  obstacle_blind_floor: false
+  obstacle_latency_s: 0.0
+  # D-591 4: one echo is spread over the whole cone; at +-15 deg a wall beside a bend read as
+  # a point inside the body width straight ahead. +-5 deg keeps the echo on the path.
+  obstacle_ultrasonic_half_angle_deg: 5.0
+  # D-573 amendment (user decision 2026-10-10 "지금 켜기"): the crosswalk gate (stop, look, cross)
+  # is on for Pinky Pro; it needs obstacle_mode: path (above) and the D-597 camera crosswalk zone.
+  crosswalk_gate_enabled: true
+  # D-511 rev 1 (user 2026-10-10): Fleet tells the robot it is off the lane / map / wrong way.
+  fleet_lane_cue_enabled: false  # inert until D-430 Safety-Review (coordinator 2026-10-10)
+  # D-344 §12 amendment (2026-10-10): a drivable pivot or sharp arc (D-597 amendment 2) commands
+  # under 0.01 m/s; the side IR steer-away only fought it (9dfk on a ring-entry speed bump).
+  ir_guard_min_linear: 0.01
+  ir_guard_back_speed: 0.02
+
+safety:
+  # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop
+  # within 0.65 s; Pinky Pro needs ~0.1-0.2 s after the watchdog fires to bring the
+  # wheels to rest, so 500 ms measured 0.61-0.72 s on 9dfk (2026-10-01). 300 ms keeps
+  # two missed 10 Hz commands of slack and lands the stop near 0.45 s.
+  teleop_timeout_ms: 300
+
+# D-411 addendum 18 stop evidence: a parked robot's velocity flips by one encoder tick per odometry
+# period. Wheel values are URDF nominal (D-397 geometry.yaml wheels.radius_m / separation_m); the
+# encoder resolution and odometry rate are the motor adapter's (bringup 30 Hz timer).
+odometry:
+  wheel_radius_m: 0.028
+  wheel_separation_m: 0.0971
+  encoder_ticks_per_rev: 4096
+  publish_hz: 30.0

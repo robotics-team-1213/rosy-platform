@@ -27,7 +27,7 @@ LEARNED = PINKY / "image" / "learned-perception-requirements.txt"
 DEVICE_REQUIREMENTS = PINKY / "image" / "device-python-requirements.txt"
 STATE_RULES = PINKY / "native" / "tmpfiles-rosy-state.conf"
 LOCK = PINKY / "image" / "inputs.lock.yaml"
-RUNNER = ROOT / "middleware" / "perception" / "control" / "sensing" / "perception" / "learned" / "runner.py"
+RUNNER = ROOT / "middleware" / "perception" / "vision" / "perception" / "learned" / "runner.py"
 PINS = {"onnxruntime": "1.30.0", "ncnn": "1.0.20260526", "flatbuffers": "25.12.19",
         "packaging": "26.3", "protobuf": "7.36.2"}
 TARGET = "/opt/rosy/learned-perception/site-packages"
@@ -118,7 +118,7 @@ def test_ncnn_is_probed_without_replacing_system_opencv():
 
 def test_the_runner_and_the_doctor_use_the_same_prefix():
     assert f'LEARNED_SITE = "{TARGET}"' in RUNNER.read_text(encoding="utf-8")
-    rosy_ml = (ROOT / "learning" / "training" / "perception" / "rosy_ml.py").read_text(encoding="utf-8")
+    rosy_ml = (ROOT / "tools" / "perception" / "rosy_ml.py").read_text(encoding="utf-8")
     assert f'LEARNED_SITE = "{TARGET}"' in rosy_ml
 
 

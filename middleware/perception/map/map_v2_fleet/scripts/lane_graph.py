@@ -224,6 +224,7 @@ def build(rules_path=RULES):
                        "direction": "ccw"},
         "nodes": {k: _round([v])[0] for k, v in sorted(nodes.items())},
         "crosswalks": crosswalks(scene),
+        "turn_bans": rules.get("turn_bans", []),
         "segments": {},
         "parking": {"road": park["road"], "spot": [round(float(v), DECIMALS) for v in park["spot"]],
                     "points": _round(spur), "length_m": round(_length(spur), DECIMALS)},

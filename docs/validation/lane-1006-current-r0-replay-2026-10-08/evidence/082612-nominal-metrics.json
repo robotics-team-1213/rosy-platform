@@ -1,0 +1,331 @@
+{
+ "frames": 2487,
+ "keep": {
+  "none_rate": 0.994,
+  "on_line_rate": 0.929,
+  "on_paint_rate": 0.0,
+  "jump_rate": 0.0,
+  "straight_mean_abs_err": 0.905
+ },
+ "road": {
+  "none_rate": 1.0,
+  "on_line_rate": 0.0,
+  "on_paint_rate": 0.0,
+  "jump_rate": 0.0,
+  "straight_mean_abs_err": null
+ },
+ "levels": {
+  "TRACK": 0.0,
+  "COAST": 0.0,
+  "SLOW": 0.0,
+  "STOP": 1.0
+ },
+ "ground_provenance": "nominal_or_override",
+ "ground_projection": null,
+ "nis_candidates": {
+  "n": 0,
+  "mean": null
+ },
+ "nis": {
+  "basis": "associated",
+  "n": 0,
+  "mean": null,
+  "above_9_21": null,
+  "by_state": {
+   "straight": {
+    "n": 0,
+    "mean": null,
+    "above_9_21": null
+   },
+   "curve": {
+    "n": 0,
+    "mean": null,
+    "above_9_21": null
+   },
+   "turning": {
+    "n": 0,
+    "mean": null,
+    "above_9_21": null
+   },
+   "stationary": {
+    "n": 0,
+    "mean": null,
+    "above_9_21": null
+   }
+  },
+  "bins": [
+   0.0,
+   1.0,
+   2.0,
+   4.0,
+   6.0,
+   9.21,
+   16.0,
+   "inf"
+  ],
+  "hist": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "tail": {
+   "basis": "pre_gate_best_association_keeper_side",
+   "n": 0,
+   "frames": 0,
+   "scope": "applied-update frames, COAST excluded",
+   "side_missing_rate": null,
+   "above_9_21": null,
+   "gated_out_rate": null
+  }
+ },
+ "d_jump_rate": 0.0,
+ "coast_survival": {
+  "0.05": {
+   "trials": 0,
+   "survived": 0,
+   "unfinished": 0,
+   "rate": null
+  },
+  "0.10": {
+   "trials": 0,
+   "survived": 0,
+   "unfinished": 0,
+   "rate": null
+  }
+ },
+ "wall_false_accept": {
+  "labelled_frames": 0,
+  "accepted": 0,
+  "on_wall": 0,
+  "rate": null
+ },
+ "hypothesis_switches_per_100_straight": 0.0,
+ "wrong_side_lock": 0,
+ "rejects": {
+  "wall": 0,
+  "nis": 0,
+  "jump": 0,
+  "width": 3,
+  "stale": 0,
+  "ambiguous": 0,
+  "keeper": 1,
+  "noise": 4
+ },
+ "reacq_counts": {
+  "pair": 0,
+  "side+ir": 0,
+  "side+learned": 0
+ },
+ "keeper": {
+  "pairs_rate": 0.0,
+  "median_heading_deg": 53.1,
+  "median_abs_heading_deg": 53.1,
+  "boundaries": 17,
+  "pair_width_m": {
+   "n": 0,
+   "median": null,
+   "ratio_to_map": null
+  },
+  "straight_heading_deg": {
+   "left": null,
+   "right": null
+  }
+ },
+ "setup": {
+  "pitch_deg": null,
+  "height_m": null,
+  "roll_deg": 0.0,
+  "lidar_forward_deg": 180.0,
+  "lidar_wall_veto": false,
+  "ir_geometry_measured": false,
+  "mode": "shadow"
+ },
+ "calibration_suspect_frames": 0,
+ "deterministic": true,
+ "estimator_sha256": "fead119103833dc15ca9e0cce18c350a2366194ef03bd8c743d79b7aaa546c50",
+ "keeper_sha256": "d43533e05ed4349ad730d5cd60a3349e493dc05d8fc3fd4ca52f5899f4e70f48",
+ "boundary_comparison": {
+  "frames": 2487,
+  "fresh_odom_frames": 2487,
+  "tiers": {
+   "BOTH": 0,
+   "ONE": 0,
+   "MEMORY": 0,
+   "STOP": 2487
+  },
+  "keep_none_boundary_output": 0,
+  "memory_before_both": 0,
+  "candidate_suppressed": 0,
+  "candidate_on_paint_rate": null,
+  "scope": "same threshold image and odometry, offline only; no learned paint or lane GT"
+ },
+ "determinism": {
+  "scope": "estimator re-run over the cached keeper outputs in one run; compare keeper_sha256 across two runs for the full pipeline",
+  "estimator_sha256": "fead119103833dc15ca9e0cce18c350a2366194ef03bd8c743d79b7aaa546c50",
+  "keeper_sha256": "d43533e05ed4349ad730d5cd60a3349e493dc05d8fc3fd4ca52f5899f4e70f48"
+ },
+ "calibration_suspect_run": false,
+ "params": {
+  "lane_width_m": 0.185,
+  "near_x_m": 0.33,
+  "ir_x_m": 0.0295,
+  "q_d_per_m": 0.08,
+  "q_phi_per_rad": 0.03,
+  "q_phi_per_m": 0.02,
+  "q_kappa_per_m": 2.0,
+  "q_w_per_m": 0.002,
+  "q_d_floor": 0.002,
+  "q_phi_floor": 0.008726646259971648,
+  "q_kappa_floor": 0.05,
+  "q_w_floor": 0.0002,
+  "kappa_pull_m": 0.3,
+  "sigma_y_m": 0.007,
+  "sigma_psi_rad": 0.0301941960595019,
+  "jitter_y_m": 0.0006,
+  "jitter_y_per_m": 0.008,
+  "jitter_y_ref_x_m": 0.25,
+  "jitter_psi_rad_m": 0.0017453292519943296,
+  "jitter_ref_length_m": 0.2,
+  "jitter_min_length_m": 0.05,
+  "dedup_min_travel_m": 0.005,
+  "dedup_min_turn_rad": 0.017453292519943295,
+  "sigma_ir_m": 0.005,
+  "learned_sigma_m": 0.03,
+  "learned_min_confidence": 0.2,
+  "learned_max_wall_fraction": 0.3,
+  "nis_2d": 9.21,
+  "nis_1d": 6.63,
+  "jump_m": 0.04,
+  "pair_width_tol_m": 0.04,
+  "pair_parallel_rad": 0.20943951023931956,
+  "lidar_wall_veto": false,
+  "mode": "shadow",
+  "ir_calibrated": false,
+  "ir_geometry_measured": false,
+  "learned_reacq_min_confidence": 0.5,
+  "learned_reacq_sigmas": 2.0,
+  "wall_distance_m": 0.05,
+  "wall_angle_rad": 0.17453292519943295,
+  "max_candidates": 4,
+  "max_hypotheses": 3,
+  "winner_margin": 2.0,
+  "noise_logl": -3.0,
+  "track_frames": 2,
+  "odom_scale": 1.08,
+  "coast_s_m": 0.1,
+  "coast_sigma_d_m": 0.03,
+  "slow_s_m": 0.25,
+  "slow_sigma_d_m": 0.05,
+  "slow_sigma_phi_rad": 0.17453292519943295,
+  "lost_after_s": 3.0,
+  "lost_margin_s": 0.5,
+  "wall_only_frames": 3,
+  "slow_gate": 1.5,
+  "reacq_gate": 2.0,
+  "reacq_frames": 3,
+  "reacq_min_travel_m": 0.01,
+  "reacq_timeout_s": 2.0,
+  "track_confidence": 0.9,
+  "coast_confidence": 0.8,
+  "slow_confidence": 0.6,
+  "sigma_d0_m": 0.1,
+  "sigma_phi0_rad": 0.3490658503988659,
+  "sigma_kappa0": 0.5,
+  "sigma_w0_m": 0.005,
+  "calib_ratio_tol": 0.1,
+  "calib_suspect_s": 2.0,
+  "odom_history_s": 2.0
+ },
+ "curve_residuals": {
+  "frames": 0,
+  "nis_mean": null,
+  "nis_p95": null,
+  "above_9_21": null,
+  "straight_nis_mean": null,
+  "blow_up": null,
+  "validated_on_curves": false
+ },
+ "coast": {
+  "rate": 0.0,
+  "episodes": 0,
+  "mean_s": 0.0,
+  "max_s": 0.0
+ },
+ "unassociated_keeper_lines": {
+  "count": 0,
+  "abs_y_m": {
+   "p10": null,
+   "median": null,
+   "p90": null
+  }
+ },
+ "extrinsic_residual": {
+  "note": "median innovation per side on straights, for the calibration record; not absorbed into R",
+  "left": {
+   "n": 0,
+   "median_nu_y_m": null,
+   "median_nu_psi_deg": null
+  },
+  "right": {
+   "n": 0,
+   "median_nu_y_m": null,
+   "median_nu_psi_deg": null
+  }
+ },
+ "gates": {
+  "on_line_le_keep": {
+   "value": 0.0,
+   "pass": true
+  },
+  "on_paint_le_keep": {
+   "value": 0.0,
+   "pass": true
+  },
+  "jump": {
+   "value": 0.0,
+   "pass": true
+  },
+  "straight_mean_abs_err": {
+   "value": null,
+   "pass": null
+  },
+  "nis_mean_by_regime": {
+   "value": {
+    "straight": null,
+    "curve": null,
+    "turning": null
+   },
+   "pass": null
+  },
+  "nis_above_9_21": {
+   "value": null,
+   "pass": null
+  },
+  "coast_survival": {
+   "value": null,
+   "pass": null
+  },
+  "wall_false_accept": {
+   "value": null,
+   "pass": null
+  },
+  "hypothesis_switches": {
+   "value": 0.0,
+   "pass": true
+  },
+  "wrong_side_lock": {
+   "value": 0,
+   "pass": true
+  },
+  "deterministic_estimator": {
+   "value": true,
+   "pass": true
+  }
+ },
+ "source": "X:\\DevTemp\\projects\\rosy-platform\\2026-10-08--045427--lane-evidence-learning--e0687b\\evidence\\recordings\\20261006T082612Z_rosy_26",
+ "validated": false
+}

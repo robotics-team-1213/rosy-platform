@@ -341,3 +341,159 @@
 - 증거: 합성 프레임 시험(일치, 두 blob, 가림, 프레임 누락, 다른 색, 설정 임계) 6건과 워커 1건. 임계값은 잠정, ceiling_north 실측 전
 - gate 변화: 없음. FIELD 실측(LED 가시성·색 분리·시각 오차) 미실시
 - 결정: D-472 addendum 6항 측정 먼저
+
+## 2026-10-09 · uncommitted · fix(vision): D-539 운영자 재학습 배경을 재시작 뒤에도 쓴다
+- 변경: `BackgroundStore`(source마다 npz 하나, JPEG q95, 트랙 밖 검게)와 `BackgroundBlobDetector.relearn()`. 운영자 재학습(Fleet `relearn_seq` 증가)의 마지막 30프레임만 revision·작업 크기와 함께 저장하고, 프로세스의 첫 학습에서 같은 revision·크기면 재생해 바로 검출한다. CLI `--track-state DIR`, compose named volume `vision_state:/var/lib/rosy-vision`
+- 원인: 2026-10-09 현장 `site-af80a5b37eec`가 09:52 자동 갱신으로 재시작하며 매트 위 두 로봇을 배경으로 배웠다(`relearn_seq` 0, 로봇 NO_POSE, 빈 곳 미확인 2개). 매일 06:08 재부팅도 같다
+- 증거: 합성 프레임 시험 6건(재시작 재생·저장본 없음·시작 학습 미저장·다른 revision·트랙 밖 0·손상 파일)과 워커 1건
+- gate 변화: 없음. 현장 배포 뒤 빈 매트 재학습 → Vision 재시작 → 주차 로봇 검출 확인 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 배경에 굳은 로봇 추측과 유령 치유
+- 변경: `BackgroundBlobDetector`가 모델이 준비될 때 학습된 배경에서 로봇 크기의 어둡고 단단한 덩어리(max(B,G,R) < 트랙 중앙값×0.6, footprint 창, solidity ≥0.8, 장단비 ≤2)를 후보로 잡는다. 그 자리가 배경과 같으면 점수 ≤0.35로 보고하고, 전경이면서 90% 이상 더 이상 어둡지 않으면 유령으로 보아 그 blob을 보고하지 않고 학습 프레임의 그 자리만 실시간 바닥으로 바꿔 MOG2를 다시 세운다. 프로토콜·`processor_revision` 변경 없음
+- 원인: 2026-10-09 현장 재시작 때 매트 위 두 로봇이 배경으로 굳어 Fleet이 rosy_26/rosy_60을 찾지 못함. D-539는 빈 매트 재학습 뒤에만 도움이 됨
+- 증거: 합성 프레임 시험 5건(굳은 로봇 추측·표지판/기둥/띠 제외·유령 치유·이동한 로봇·깨끗한 학습)과 D-539 시험 1건 기대값 변경. 실프레임 오프라인 평가(`X:\DevTemp\bg-fallback\eval.py`): A 후보 2/2 실제 로봇·24/24 검출·오차 1.1/6.1 cm, B 유령 프레임 0, C 기준선과 같음
+- gate 변화: 없음. 현장 Vision에서 실제 떠남 확인 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 리뷰 반영 — 유령 확정·전체 blob 치유·명목 footprint
+- 변경: 유령은 학습된 바닥 색(트랙 중앙값 또는 고리의 흔한 색 32개, BGR 거리 40)이 연속 3프레임일 때만 확정하고, 확정 전에는 그 자리를 보고하지 않는다. 치유는 유령 영역과 거기 닿는 전경 blob 전체의 바닥 색 픽셀을 덮는다. 추측의 footprint는 명목 0.165 m
+- 원인: 독립 리뷰가 한 프레임 가림(손·종이)이 유령으로 치유되어 로봇이 사라지는 것, 로봇의 밝은 부분이 고리로 남는 것, 추측 footprint가 어두운 부분만(0.14 m) 재는 것을 찾음
+- 증거: 합성 프레임 시험 추가(한 프레임 가림, 3프레임 확정, 덱 포함 전체 치유와 재주차, 후보 없을 때 프레임 해제, relearn/SCENE_CHANGED 후보 해제, D-539 재생 뒤 치유와 저장 파일 불변). 실프레임 평가 A·B·C 통과
+- gate 변화: 없음
+
+## 2026-10-09 · uncommitted · fix(vision): LED 확인 판정이 현장에서 늘 frames_missing이었다 (D-472)
+- 변경: 트래커가 확인 요청과 상관없이 최근 `RING_S`(창 6 s + 설정 읽기 지연 2×2 s + 1 s)의 LED 표본을 확인 색(파랑·주황)마다 모아 두고, 판정은 그 링에서 창 안 표본만 쓴다. 링은 최신 `MAX_SAMPLES`까지. 판정 규칙(`max_gap_s` 0.7 s, 창 끝 포함)은 그대로다.
+- 증거: 현장 2026-10-09 Fleet 갱신 뒤 9dfk(rosy_26) 이동 중 `identify`가 처음 수락(200)됐으나 판정은 `UNKNOWN frames_missing`. 요청은 2 s 설정 읽기로 늦게 도착하고 표본은 그때부터만 모여 창 앞이 비었다. 새 시험 `test_frames_before_the_challenge_arrives_still_fill_the_window` 포함 30 passed.
+- gate 변화: SOURCE. 현장 vision 갱신 뒤 LED 확인 matched 확인.
+
+## 2026-10-09 · uncommitted · refactor(vision): LED 링 뒤 쓰이지 않는 challenge 인자 제거
+- 변경: 링이 요청과 상관없이 표본을 모으므로 `_detect`·`_identity_sample`의 `challenge` 인자를 지웠다. `MAX_SAMPLES`가 약 5.8 fps 위에서 링 범위를 정한다는 한계를 주석으로 남겼다(독립 검증 지적).
+- 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
+- gate 변화: 없음(동작 같음).
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
+- 변경: 후보가 덮지 않는 로봇 크기(0.06–0.39 m) 전경 blob도, 실시간은 바닥 색이고 학습된 배경은 트랙 중앙값에서 멀면 유령으로 보아 보고하지 않고 같은 자리 연속 3프레임 뒤 치유한다. 학습 프레임은 프로세스 동안 보관(30장, 640×360에서 약 20 MB). 학습된 배경 캐시를 후보 검색과 분리
+- 원인: 2026-10-09 16:38 현장에서 8kcn이 떠난 자리에 유령(점수 0.89–0.95)이 남음. 15:20 학습에서 후보 검색이 그 로봇을 놓쳐 1–6항 치유가 돌지 않음
+- 증거: 합성 프레임 시험 3건(후보 없는 유령 치유, 보이는 로봇 비치유 ×3, 의자·바닥 색 종이 비치유)과 학습 프레임 보관 기대값 변경. 실프레임 D4 재현: main 유령 9/9 → 0/9, 8kcn 9/9 유지. A·B·C 변화 없음
+- gate 변화: 없음. 현장 확인 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
+- 변경: 후보 없는 유령은 학습된 배경이 절반 이상 어두울 때만(전체 프레임 지도로 먼저 거름), 확정 전에는 점수 0.35 이하로 보고, 처음 자리 기준 연속 3프레임 뒤 치유하고 지도 x/y·footprint를 로그로 남긴다. CALIBRATION_REQUIRED에서 연속 기록 지움, 치유 영역 안 후보 제거, 팽창 커널 상수화
+- 원인: 독립 리뷰가 파란 사각형 위 회색 상자가 첫 프레임부터 숨고 치유되어 치운 뒤 유령이 남는 것(S1), 확정 전 숨김, blob 16개에서 30–47 ms를 찾음
+- 증거: 합성 시험(테이프 위 색 덱 로봇, 파란 사각형 위 상자, 확정 전 0.35 보고, 의자 부분)과 각 조건 변이 시 실패 확인. 실프레임 D4/D5: 0.35 보고 2프레임 뒤 유령 0, 8kcn 9/9. A·B·C 변화 없음. blob 16개 약 9 ms
+- gate 변화: 없음
+
+## 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
+- 변경: `detect.py`가 `_detector_parameters`가 돌려준 객체에 `minMarkerPerimeterRate = 0.015`를 둔다(4.6 segfault 회피로 새 객체를 만들지 않음). 로봇 윗면이 40 mm 스티커만 받기 때문이다.
+- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:/DevTemp/marker-id-plan/run-1.txt.
+- gate 변화: SOURCE. 현장 Vision 갱신 뒤 실제 스티커로 MARKER 확인은 열림.
+
+## 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
+- 변경: lease `rectification`에 `{"mode": "map"}`(다른 필드 거절). 트래커가 Fleet에서 읽은 승인 보정 기록을 `IngestServer.report_calibration`으로 ingest에 넘기고(두 번째 Fleet 클라이언트 없음), `/frame`이 `rectify.map_plane_jpeg`로 최신 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px, 화면 밖 어두운 고정색)에 편다. 헤더 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`, 기록 없음·source·map·렌즈·비율 불일치는 409 `plane-unavailable`(원본 대체 없음). 펴기는 `asyncio.to_thread`로 이벤트 루프 밖에서 (프레임, revision)마다 한 번. API Reference §10.6.1, v1.166
+- 증거: 원격 pytest operations/vision/test 428 passed, operations/fleet/test/test_server_app.py 41 passed, known_failures 0 new. 실프레임(`ceiling_north`, `paint-7b220d432c2a`) 평면 1244×624에 활성 지도 차선 6개를 D-560 식으로 그려 도로 가운데 놓임을 눈으로 확인(X:\DevTemp\cam-map-plane-s1\plane-lanes.png)
+- gate 변화: SOURCE/LOCAL. Fleet 세 화면(S2)과 현장 확인(S4) 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167
+- 변경: main이 v1.166(D-531 굽이 단계)을 먼저 가져가 D-560 S1은 API Reference v1.167이다(위 항목의 v1.166은 v1.167로 읽는다). `X-Frame-Plane`의 `max_x`·`min_y`를 반올림한 영상 크기에서 다시 정해 사각형이 영상 크기 / `px_per_m`와 같다. `MapPlane`이 펴기에 쓴 행렬을 싣고, 헤더 식과 1e-9 m로 맞는지 시험한다. 보정 revision은 `[A-Za-z0-9._:-]{1,96}`만 받는다(헤더로 나간다). 공유 펴기 작업이 자기 실패를 회수한다. 평면은 그 source에 `--track`이 켜져 있어야 나온다는 문장을 §10.6.1과 ADR S1에 넣었다
+- 증거: 원격 pytest 결과는 이 브랜치 보고에 남긴다. 실프레임 평면 1244×624 다시 확인(X:/DevTemp/cam-map-plane-s1/plane-lanes.png)
+- gate 변화: 없음
+## 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
+- 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
+- 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
+- gate 변화: 없음(SOURCE).
+
+## 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
+- 변경: 추적 단계가 승인 보정(D-457)을 쓴 프레임에서 `robot_markers`의 마커를 네 모서리 투영 → 윗면 높이 0.125 m 시차 보정 → 모서리 기하 문턱 → URDF 부착(−0.017, 0)과 로봇별 `marker_yaw_offset_deg`로 로봇 자세를 만들어 `calibration_source: approved_record` sighting으로 보낸다(`track/marker_sightings.py`). `project_frame`도 같은 부착·오프셋을 쓴다. 같은 프레임에 이미 sighting이 나간 로봇은 다시 보내지 않는다. 렌즈 FOV가 없으면 보내지 않는다.
+- 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
+- gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
+
+## 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
+- 변경: 모든 학습(운영자 재학습·재시작·장면 변화)이 Fleet `occupied` 로봇 자리를 빼고 배운다(`track/robot_mask.py`). 이전 배경(어둡지 않은 곳) 또는 inpainting한 모르는 바닥으로 바꾸고, 모르는 바닥은 연속 3프레임 비고 어두운 픽셀 12 px 밖일 때 채운다(5 s에 한 번). 저장본이 모르는 바닥 지도를 같이 저장한다. 페이로드에 `unknown_floor`.
+- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTemp\bg-relearn\replay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
+- gate 변화: SOURCE. 현장 배포·재학습 확인 전
+
+## 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
+
+- 변경: `track/led_identity.py` `led-identity/2` — `min_off_s` 0.8, `max_off_s` 2.2, `max_gap_s` 1.1, 익명 blob 하나일 때 정색 표시(`evidence.mode: steady`). 추적 워커가 `identity_challenges`의 요청마다 판정하고, 열린 창 끝까지 `BackgroundBlobDetector.hold`로 배경을 얼린다(학습 프레임·장면 변경 재학습·유령 치유 없음, 박힌 로봇의 추정은 램프가 켜져도 유지)
+- 증거: 현장 프레임 2묶음(2026-10-10 06:47, 2.5 fps, 간격 최대 0.76 s)에 후면 빛을 그려 넣은 6 s 창 264개: 이전 값 6 `matched`(나머지 frames_missing), 새 값 264. 빛 없는 대조 0. 모델 PC pytest 통과
+- gate 변화: SOURCE. 실제 램프 가시성 미측정
+
+## 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
+- 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
+- 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.
+- gate 변화: 없음(SOURCE).
+
+## 2026-10-10 · uncommitted · feat(vision): D-589 S1 인식 점수·EV 언덕 오르기·camera/camera_state·배경 재학습 연동
+- 변경: `track/tuning.py` — 인식 점수(승인 보정 트랙 사각형 안, 작업 해상도 640). `paint_contrast`는 사이트 차선 페인트(`--map-paint` `road_lines.stl`)를 보정으로 영상에 옮겨 2 px 넓힌 띠의 밝은 절반 중앙값과 카펫(페인트를 4 px 넓힌 밖) 중앙값 차를 카펫 강건 표준편차(1.4826·MAD)로 나눈다. 승인 맞춤이 실제 선에서 1–3 px 어긋나서 띠를 쓴다. 페인트가 없으면 트랙 안 가장 밝은 3 %와 트랙 전체로 대신한다. `clip`(≥247)·`crush`(≤16), `marker_rate`(최근 10분에 본 로봇 마커 중 이 프레임에 보인 비율, 없으면 빠짐), `score` 한 식(`contrast/(contrast+1.5)`, 마커 0.3 가중, clip·crush 0.05 초과 시 크게 깎음). `Tuner`는 순수 상태 기계: 실제 EV −2.0…+1.0을 1/3 EV 단계로, `supported.ev_step`으로 보정 지수로 바꿔 보낸다. 폰이 seq를 mode `vision`으로 되돌린 뒤 4 s(처음 1 s는 AE 안정) 점수를 재고, 더 나은 쪽으로만 한 단계씩, 가장 좋은 단계에서 AE·AWB 잠금. 잠근 뒤 25 % 넘는 하락 60 s(재맞춤 최소 5분)·clip/crush 0.15 초과(즉시)·30분 탐침(±1단계). 열 ≥3 또는 `thermal_hold`면 멈추고 마지막 잠금 유지. `disabled`면 보내지 않음. 현재 설정을 20 s마다 다시 보낸다(폰은 60 s만 신선). 노출 상한 요청 33333 µs. source별 기록 `<track-state>/<source>.tuning.json`, 다음 맞춤은 마지막 잠금 EV에서 시작
+- 변경: `protocol.py` `make_camera`·`parse_camera`·`parse_camera_state`(S2 계약, 엄격 검사, 추가 키 무시). `ingest.py`가 hello 뒤 텍스트에서 유효한 `camera_state`만 연결별로 보관하고(나쁜 것·다른 type 무시, 프레임 경로 영향 없음) `send_camera`로 하향 전송. 공유 벡터는 S2 파일 그대로(`camera_example.max_exposure_us` 33333)
+- 변경: `TrackWorker`가 탐지 스레드에서 점수를 재고 루프에서 튜너를 돌린다. mode `vision`에서 `applied`가 실제로 바뀌면 `camera_changed`(자동 재학습, 운영자 재학습 경로 아님). D-539 저장본에 설정 지문(`camera`)을 넣어 같은 설정에서만 재생, 지문 없는 옛 파일은 설정을 아는 동안 불일치로 실시간 학습. 검출 payload 선택 필드 `tuning {state, score, ev, locked}`, Fleet `/api/fleet/tracking` source 행 `tuning`. `site-cameras.yaml` `auto_tune`(기본 true, false면 camera 메시지 없음, Fleet은 키를 받고 무시). API Reference v1.178(v1.177은 다른 브랜치; 뒤에 main이 v1.178을 가져가 v1.179가 됨)
+- 증거: 원격 pytest(모델 PC) operations/vision/test + 공유 벡터 계약 시험 672 passed, Fleet 추적·sightings 설정 5파일 121 passed, known_failures 0 new. 실프레임 점수(2026-10-09 `ceiling_north`, `paint-7b220d432c2a`, 하네스 X:/DevTemp/cam-auto-tune-s1/eval_score.py): bg-seq 60장 contrast 4.63·clip 0.0044·crush 0.0062·score 0.755, bg-seq3 30장 4.14·0.0070·0.0065·0.734, cam-d515-live raw 4.05·0.0033·0.0089·0.730(밝은 무리 대체는 0.748/0.733/0.726). 같은 프레임의 합성 노출 0.3–1.0배는 0.75–0.77로 평탄, 1.2배 0.17(clip 0.10), 0.15배 0(crush 0.23)
+- gate 변화: SOURCE/LOCAL. 폰 적용(S2)과 현장 맞춤→잠금 기록(S4) 전
+
+## 2026-10-10 · uncommitted · feat(vision): D-589 S1 독립 리뷰 반영 — 언덕 오르기 대신 지키며 잡고 잠그기
+- 변경: 리뷰 실프레임 근거(X:\DevTemp\cam-auto-tune-review\rev_eval.py: 날아감·뭉개짐 없는 EV 사이 점수 ±0.01, 한 번 머무는 동안 잡음 최대 0.022)로 ADR 4항이 바뀌었다. 위 항목의 언덕 오르기와 30분 탐침은 없어졌다. `Tuner`는 마지막 잠금 EV(처음 0)에서 AE를 풀고 4 s 한 번 잰 뒤 트랙 안 `clip > 0.02`이면 1/3 EV 내리고(−2.0까지), `crush > 0.05`이면 올리고(+1.0까지), 둘 다 아니면 AE·AWB를 잠근다. 떠난 단계로 돌아가지 않고 6단계 안에 끝난다. 잠근 뒤에는 (a) `clip`·`crush` > 0.15(잠글 때 이미 넘었으면 그보다 0.05 더 나빠질 때, 간격 5분에서 배로) 또는 (b) 트랙 중앙 밝기가 선형 1/2 EV 넘게 60 s 달라질 때만 다시 맞춘다. `score`·`paint_contrast`·`marker_rate`는 상태 표시용이다. 폰이 이미 마지막 잠금 설정으로 잠겨 있으면 맞추지 않고 이어 간다. seq는 무작위 u32에서 시작. 열 정지 중 폰은 그대로 두고(맞춤 도중이면 풀린 채) 식으면 다시 맞춘다. 연결 15 s 동안 `camera_state`가 없으면 상태 `unsupported`
+- 변경: 맞추는 동안 추적은 `LEARNING`을 내고 중간 단계는 배우지 않는다. 잠금 반향과 1 s 안정 뒤 한 번 `camera_changed`(지문이 맞으면 D-539 재생). 맞춤 중 운영자 재학습은 잠금 지문으로 저장된다. 맞춤 밖에서는 mode `vision`의 새 `applied`, 다른 mode에서 `vision`으로 돌아옴, 새 연결이 카메라 변경이다(같은 지문의 20 s 반향은 아님). `camera` 송신은 기다리지 않는다. `auto_tune: false`면 `tuning`을 싣지 않는다. Fleet이 `tuning` 때문에 422를 주면 한 번 빼고 다시 보내고 그 프로세스에서는 싣지 않는다. 계약 상태에 `unsupported` 추가. adr_gaps의 D-585…D-588 중복 줄 삭제. 점수 계산은 탐지기 작업 영상을 다시 쓰지 않고 따로 줄인다(프레임당 약 1 ms, 탐지기 내부를 건드리지 않으려고)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 실프레임 점수는 위 항목과 같다(점수 식 변화 없음)
+- gate 변화: 없음(SOURCE/LOCAL)
+
+## 2026-10-10 · uncommitted · fix(vision): D-589 S1 재검토 반영 — 맞춤 기한, 맞춤 중 마커, 재연결
+- 변경: 맞춤(단계와 잠금 안정)이 시작 뒤 `TUNE_DEADLINE_S` 90 s 안에 끝나지 않으면 지금 설정을 확인 없이 잠금으로 보고 한 번 다시 배운 뒤(설정을 모르면 재생 없는 초기화) 추적 정지를 푼다. 폰이 ae_lock 없이 되돌리거나 `camera_state` 없는 앱으로 연결이 바뀌어도 추적이 영원히 멈추지 않는다. 기준선은 그 뒤 첫 전체 창. 맞춤 중에는 배경 검출만 멈추고 ArUco 로봇 마커는 계속 낸다. 재연결은 `applied`(잠금 포함)가 바뀌었거나 `vision`으로 돌아올 때만 카메라 변경이다. API Reference는 main이 v1.178–v1.180을 가져가 v1.181
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.182로 다시 매김
+- 변경: main이 v1.181(D-407 개정)을 먼저 가져가 D-589 S1은 v1.182다. 앞 항목의 v1.181은 v1.182로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.182
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.184로 다시 매김
+- 변경: main이 v1.182·v1.183(D-577)을 먼저 가져가 D-589 S1은 v1.184다. 앞 항목들의 v1.181·v1.182는 v1.184로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.184
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
+- 변경: main의 D-596(LED 확인 2–3 fps, 색마다 동시 요청, 확인 창 동안 배경 얼림)·D-595(승인 기록 우선 순서)와 D-589를 합쳤다. `TrackWorker._detect`는 D-589 카메라 변경·맞춤 정지와 D-596 `hold`를 함께 받는다. 맞춤 정지 중에도 배경만 멈추고 마커는 낸다. LED 확인 창이 열린 동안에는 튜너에 측정을 넘기지 않아 맞춤 단계·다시 맞추기 판정이 일어나지 않는다(노출이 바뀌면 점멸이 가려진다). 요청 재송신은 그대로다. 배경 얼림(`hold`)은 카메라 재학습 뒤 학습도 창 뒤로 미룬다. main이 v1.184·v1.185를 가져가 D-589는 API Reference v1.186이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 다섯 파일)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 확인 창 중 맞춤 멈춤 시험 `test_no_tune_step_is_judged_while_an_led_identify_window_is_open`
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-600 로봇 자리 빼고 배경 학습)과 합치고 API v1.187
+- 변경: main의 D-600(Fleet `occupied` 로봇 자리를 빼고 배경 학습, 모르는 바닥 `unknown_floor`와 채우기)과 D-589를 합쳤다. 검출 payload는 D-600 `unknown_floor`와 D-589 `tuning`을 함께 싣고, Fleet `tracking.py` source 행도 둘 다 넘긴다. 매 단계 `set_occupied`를 먼저 하고, D-589 맞춤 정지·잠금 뒤 한 번 재학습·카메라 지문과 D-596 `hold`를 그대로 넘긴다. 그래서 잠금 뒤 재학습도 로봇 자리를 뺀 학습이다. D-539 저장본은 모르는 바닥 지도와 카메라 지문을 함께 저장하고(채울 때 다시 쓰는 저장본도 지문 유지) 같은 지문에서만 재생한다. 카메라가 바뀌어 다시 배울 때는 이전 배경(`_previous`)을 로봇 자리 채우기에 쓰지 않는다. 노출이 달라 그 배경이 맞지 않기 때문이며, 그 자리는 inpainting과 모르는 바닥 채우기로 간다. main이 v1.186을 가져가 D-589는 API Reference v1.187이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 여섯 곳)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.188로 다시 매김
+- 변경: main이 v1.187(D-407·D-577)을 먼저 가져가 D-589 S1은 v1.188이다. 앞 항목들의 버전은 v1.188로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.188
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.189로 다시 매김
+- 변경: main이 앞 번호를 먼저 가져가 D-589 S1은 v1.189다. 앞 항목들의 버전은 v1.189로 읽는다
+- 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.189
+- gate 변화: 없음
+
+## 2026-10-10 · aa37d8cb6 · fix(vision): 연속 점등 신원 판정
+- 변경: led-identity/4. 여러 blob 중 끊기지 않는 단일 트랙의 꺼짐-1초 이상 연속 켜짐-꺼짐을 판정한다. 다중 후보·짧은 반짝임·가림을 거절하고 기존 점멸/단일 blob 폴백은 유지한다.
+- 증거: 원격 회귀 테스트; 실제 천장 영상 수용은 미확인.
+- Gate: SOURCE, DEVICE/FIELD 미완료.
+
+## 2026-10-10 · b6a5370d7 · fix(vision): LED sampling restores calibrated image position
+- Symptom: LED sampling inverted a height-corrected robot point as a floor point; edge-of-image samples were displaced.
+- 변경: undo the detector's existing camera-height correction for sampling centre and diameter. Keep the original corrected map identity coordinate; no motion or identity thresholds change.
+- 증거: calibrated and uncalibrated camera, full and half resolution; two calibrated cases failed before the fix. Remote Vision suite: 613 passed, known failures 0 NEW.
+- gate 변화: SOURCE regression verified; live LED confirmation pending.
+
+## 2026-10-11 · ade31911c0 · feat(vision): 소형 측정 교정과 관측 영역
+- 변경: AprilGrid 생성·부분 관측·일반/어안 렌즈 후보·독립 바닥 등록·단일 remap과 AI advisory 형식을 추가했다. map-plane horizon/시야 밖 mask와 같은 응답의 유효 원본 비율을 표시한다. 원격 시험은 기존 Vision OpenCV 배포 pin을 사용한다.
+- 증거: docs/validation/compact-camera-calibration-2026-10-11/result.md. 원격 관련 841·Node 286·Chromium 2 passed, NEW 0. 독립 리뷰의 바닥 검증 경계 3건을 수정했다.
+- gate 변화: SOURCE/원격 합성/브라우저 증거. 운영 교정 교체·자동 AI 호출·main 착지·push·배포·실물 정확도 수용은 별도다.
+
+## 2026-10-11 · 975de95358 · D-655 카메라 도로 관측 근거
+
+- 변경: 기존 차선 추출기를 재사용하며 각 간선에 camera/observed와 교정 SHA256, CLI 원본 프레임 SHA256을 남긴다. calibration의 선택 survey는 공통 계약으로 검증하고 생성 결과 검토를 초기화한다. Fleet 초안 누적·검토가 저장을 소유하고 Vision은 운행 명령이나 operational pose를 만들지 않는다.
+- 증거: 새 원격 RED 뒤 975de95358 추출/구조 7 PASS/NEW 0. ebf05b9811 최종 카메라·marker 재검토·desktop/mobile 저장/재편집·구조 12 PASS/NEW 0. X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-review-final-retry/run-1.txt. AI PC 자원 기준 통과.
+- gate 변화: source/remote 합성. 실제 카메라 측정·모델 PC 설치·서명 배포·실물 정확도는 미확인이다. 일부 suite로 전체 last_verified를 승격하지 않는다.
+
+## 2026-10-12 · d780942b9 · feat(vision): D-691 미리보기 읽기 뒤 30초 유지
+
+- 변경: frame, field-proposal, map-proposal의 인증된 읽기가 source의 영상을 요청한다. 401과 잘못된 경로는 요청이 아니다. 프레임이 없거나 오래됐거나 429여도 요청이다. 마지막 읽기부터 30초 동안 demand.wanted를 true로 보내고, 그 시각을 포함하면 false다. 연결이 잠깐 끊겨도 유지는 남는다. Vision 내부 추적은 센서를 깨우지 않는다.
+- 증거: 원격 AI PC ai@100.108.76.123, 커밋 d780942b9, Vision·버전 핀 294 passed, exit 0, known_failures NEW 0. 로그 X:/DevTemp/cam-standby/pytest/run-1.txt.
+- gate 변화: SOURCE/원격. 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.

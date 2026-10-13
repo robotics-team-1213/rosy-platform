@@ -31,6 +31,10 @@ class NewPlace(BaseModel):
 class StartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     robot_id: str = Field(min_length=1, max_length=96)
+    mode: Literal["map", "survey"] = "map"
+    map_id: Optional[str] = Field(default=None, min_length=1, max_length=96)
+    reference_revision: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    expected_revision: Revision = None
 
 
 class ConfirmRequest(BaseModel):
@@ -48,6 +52,16 @@ class ConfirmRequest(BaseModel):
 class PlaceRequest(NewPlace):
     robot_id: str = Field(min_length=1, max_length=96)
     kind: PlaceKind = "junction"
+    expected_revision: Revision = None
+
+
+class MarkerPlaceRequest(BaseModel):
+    """D-564: a draft place at a fresh floor place marker; ``place_id`` moves an existing place."""
+    model_config = ConfigDict(extra="forbid")
+    marker_id: int = Field(ge=0, le=49, strict=True)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    kind: Optional[PlaceKind] = None
+    place_id: Optional[PlaceId] = None
     expected_revision: Revision = None
 
 
@@ -74,7 +88,8 @@ def install_teach_routes(app, *, service: TeachService, read_guard, require_name
 
     @app.post("/api/fleet/teach/start", tags=["site-map"])
     async def teach_start(body: StartRequest, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        return await guarded(lambda: service.start(body.robot_id, principal.principal_id))
+        return await guarded(lambda: service.start(body.robot_id, principal.principal_id, mode=body.mode,
+            map_id=body.map_id, reference_revision=body.reference_revision, expected_revision=body.expected_revision))
 
     @app.post("/api/fleet/teach/stop", tags=["site-map"])
     async def teach_stop(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
@@ -92,3 +107,10 @@ def install_teach_routes(app, *, service: TeachService, read_guard, require_name
         return await guarded(lambda: service.place(body.robot_id, name=body.name, kind=body.kind,
                                                    expected_revision=body.expected_revision,
                                                    principal_id=principal.principal_id))
+
+    @app.post("/api/fleet/teach/place-from-marker", tags=["site-map"])
+    async def teach_place_from_marker(body: MarkerPlaceRequest,
+                                      principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        return await guarded(lambda: service.place_from_marker(
+            body.marker_id, name=body.name, kind=body.kind, place_id=body.place_id,
+            expected_revision=body.expected_revision, principal_id=principal.principal_id))

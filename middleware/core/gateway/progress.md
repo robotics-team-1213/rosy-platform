@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "모듈 경계·흡수 소유권 계약 시험 통과 (2026-09-15, core suite와 test/ suite)"
-    cmd: "python3 -m pytest src/runtime/gateway/test/test_module_criteria.py test/test_control_absorption_package.py -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/core-source -- middleware/core/gateway/test/test_module_criteria.py test/test_control_absorption_package.py test/architecture/test_safety_separation.py -q"
   LOCAL:
     state: GO
     evidence: "1054 passed, 12 skipped (2026-09-22 Windows). D-162 scene context additive 수용(translate road_evidence, RoadEvidence 선택 필드, ros_bridge sensor snapshot) 포함 — D-137/D-151/D-152 회귀 없음"
-    cmd: "PYTHONPATH=src/runtime/gateway:src python3 -m pytest src/runtime/gateway/test -q"
+    cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/core-drive -- middleware/core/gateway/test test/test_structure_installed_packages.py -q"
   ROS-SIM:
     state: GO
     evidence: "2026-09-22 WSL Jazzy 재실행(581741e, cmd_vel_cycle·safety.watchdog·감사 로그 compaction 이후 트리): /cmd_vel Publisher count 1(node core), teleop 0.1→송신 중단 약 0.5 s 뒤 0 + safety.watchdog 감사 기록, logs/audit {events, log}, /metrics rosy_audit_* — docs/validation/ros-sim-core-2026-09-22b. SIGTERM 종료 1/6 회 rclpy context 경합 traceback(exit 1), logs.md 후속"
@@ -24,8 +24,9 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. G4 viewport·보정 상태기계 미실행"
   FIELD:
     state: PARKED
-adrs: [D-1, D-2, D-8, D-18, D-23, D-32, D-38, D-42, D-47, D-58, D-60, D-72, D-75, D-77, D-82, D-119, D-121, D-122, D-123, D-124, D-144, D-151, D-152, D-155, D-156, D-157, D-158, D-159, D-162, D-182, D-184, D-200, D-205, D-411, D-433]
+adrs: [D-1, D-2, D-8, D-18, D-23, D-32, D-38, D-42, D-47, D-58, D-60, D-72, D-75, D-77, D-82, D-119, D-121, D-122, D-123, D-124, D-144, D-151, D-152, D-155, D-156, D-157, D-158, D-159, D-162, D-182, D-184, D-200, D-205, D-411, D-433, D-620]
 plans:
+  - docs/plans/2026-10-11-core-drive-composition-first.md
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-13-control-safety-boundary.md
   - docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md

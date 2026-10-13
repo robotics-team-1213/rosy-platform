@@ -1,0 +1,6 @@
+[Unit]
+Description=Rosy team PC nightly reboot (warns 2 min ahead)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'wall "Rosy nightly reboot in 2 minutes (06:00). Save your work." ; sleep 120 ; /bin/systemctl reboot'

@@ -11,7 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 rosy \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin rosy \
-    && install -d -o 10001 -g 10001 /opt/rosy/src/site/vision \
+    && install -d -o 10001 -g 10001 /var/lib/rosy-vision /opt/rosy/src/site/vision \
        /opt/rosy/src/site/games /opt/rosy/src/contracts/foundation
 
 COPY deploy/site/requirements-vision.txt /opt/rosy/requirements.txt

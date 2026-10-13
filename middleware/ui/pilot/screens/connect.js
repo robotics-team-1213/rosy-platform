@@ -10,7 +10,10 @@ function getRecent() {
   let list = [];
   try { list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
   catch { return []; }
-  if (list.some((entry) => "token" in entry)) {
+  if (!Array.isArray(list)) return [];
+  const hadToken = list.some(entry => entry && typeof entry === "object" && "token" in entry);
+  list = list.filter(entry => entry && typeof entry.host === "string" && typeof entry.label === "string");
+  if (hadToken) {
     // 이전 판이 남긴 평문 토큰을 걷어낸다.
     list = list.map(({host, label}) => ({host, label}));
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* 저장 불가 */ }
@@ -26,10 +29,11 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
 import {createVisionPreview} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
+import {HeadlessState, EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -96,6 +100,23 @@ async function refreshLobby(host) {
     host.replaceChildren(el("ui-text", seen.size ? "다른 로봇 · 선택하면 그 로봇의 접속 화면으로 이동합니다"
       : "같은 LAN에서 발견한 다른 로봇이 없습니다", {scale: "label"}));
     if (seen.size) host.append(list, el("p", "발견 목록입니다. 선택한 로봇에서 승인·로그인을 확인합니다."));
+    // D-460 결정 2: 자기 방 운전 상태 표시 — rooms 라우터는 CoreServices에 접근하지
+    // 않으므로 여기(같은 origin)에서 mode·velocity 증거를 읽어 라벨만 단다.
+    const self = await api("/api/v1/robot/state").catch(() => null);
+    const state = self?.ok ? self.body : null;
+    const evidence = new HeadlessState(state);
+    const measured = typeof state?.mode === "string"
+      && Number.isFinite(state?.velocity?.linear) && Number.isFinite(state?.velocity?.angular);
+    const velocityEvidence = !state ? "disconnected" : measured ? evidence.evidenceOf("velocity") : "unavailable";
+    const moving = measured && (Math.abs(state.velocity.linear) > 0.002 || Math.abs(state.velocity.angular) > 0.002);
+    const stopReported = state?.mode === "SAFE_STOP" || state?.safety?.estop === true;
+    const word = stopReported
+      ? evidence.isFresh("safety") ? "안전 정지" : "안전 정지 보고 · 안전 상태 확인 불가"
+      : velocityEvidence !== "fresh" ? `속도 ${EVIDENCE_LABEL[velocityEvidence]}`
+        : moving ? (state.mode === "MANUAL" ? "운전 중" : "이동 중") : "정지 상태";
+    const tag = el("ui-tag", `이 로봇 · ${word}`, {"data-lobby-self": "",
+      "data-evidence": stopReported ? evidence.evidenceOf("safety") : velocityEvidence});
+    host.prepend(tag);
   } catch {
     host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
   } finally {
@@ -110,7 +131,7 @@ async function refreshLobby(host) {
 
 // --- 최근 접속 목록 (게임 "계속하기") ---
 function renderRecentList(root, onConnect) {
-  const recent = getRecent();
+  const recent = getRecent().filter(entry => entry.host === location.host);
   if (recent.length === 0) return null;
 
   const section = el("div", null, {"data-recent-list": ""});
@@ -120,7 +141,7 @@ function renderRecentList(root, onConnect) {
   for (const entry of recent.slice(0, 3)) {
     const row = el("div", null, {"data-recent-item": ""});
     const button = el("ui-button", entry.label || entry.host, {type: "button", "data-recent-connect": entry.host});
-    button.setAttribute("kind", "primary");
+    button.setAttribute("kind", "quiet");
     button.addEventListener("click", () => {
       // 이 탭에 토큰이 있으면 바로 확인, 없으면 코드·토큰 입력으로.
       if (token()) onConnect();
@@ -211,12 +232,13 @@ function tokenForm() {
 }
 
 function renderTokenForm(root, onConnect, message) {
+  // 앱이 연 화면은 코드·개발 연결·다른 로봇으로 다시 나가지 않는다.
+  if (inPilotApp()) {
+    renderAppSession(root);
+    return;
+  }
   const head = el("ui-head", "접속", {id: "pilot-gate-heading"});
   root.replaceChildren(head);
-
-  // 최근 접속 목록
-  const recent = renderRecentList(root, onConnect);
-  if (recent) root.append(recent);
 
   // 이 화면의 로봇이 먼저다. 옆 로봇 목록은 코드 입력 아래에 둔다.
   const offer = el("div", null, {"data-connection-offer": ""});
@@ -255,6 +277,8 @@ function renderTokenForm(root, onConnect, message) {
 
   root.append(divider, form);
   if (message) root.append(el("ui-status", message, {role: "status"}));
+  const recent = renderRecentList(root, onConnect);
+  if (recent) root.append(recent);
   const lobby = el("div", null, {"data-lobby-list": ""});
   root.append(lobby);
   refreshLobby(lobby);
@@ -324,6 +348,16 @@ function mountShowCode(root, onSwitchCredential) {
   root.__enrollDispose = stopTick;
 }
 
+function renderAppSession(root) {
+  setTag("앱");
+  notice("");
+  root.replaceChildren(
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    el("ui-status", "이 화면의 연결은 Rosy Pilot 앱이 엽니다. 위쪽 로봇 목록에서 로봇을 다시 선택하세요.",
+      {role: "status", "data-app-session": ""}),
+  );
+}
+
 function renderOffline(root, onConnect) {
   setTag("오프라인");
   notice("CORE 에 연결할 수 없습니다");
@@ -356,6 +390,10 @@ async function check(root, onReady, onEnter) {
   rememberRobot(root, offer);
   if (me.status === 401) {
     clearToken();
+    if (inPilotApp()) {
+      renderAppSession(root);
+      return;
+    }
     setTag("차단");
     notice("토큰이 유효하지 않습니다");
     renderTokenForm(root, () => check(root, onReady, onEnter), "토큰이 유효하지 않습니다. 다시 입력해 주세요.");
@@ -377,13 +415,16 @@ async function check(root, onReady, onEnter) {
     const retry = el("ui-button", "다시 시도", {type: "button"});
     retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
-    const reset = el("ui-button", "토큰 초기화", {type: "button"});
-    reset.setAttribute("kind", "segment");
-    reset.addEventListener("click", () => {
-      clearToken();
-      renderTokenForm(root, () => check(root, onReady, onEnter));
-    });
-    actions.append(retry, reset);
+    actions.append(retry);
+    if (!inPilotApp()) {
+      const reset = el("ui-button", "토큰 초기화", {type: "button"});
+      reset.setAttribute("kind", "segment");
+      reset.addEventListener("click", () => {
+        clearToken();
+        renderTokenForm(root, () => check(root, onReady, onEnter));
+      });
+      actions.append(reset);
+    }
     root.replaceChildren(
       el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
@@ -423,12 +464,14 @@ async function check(root, onReady, onEnter) {
       : "먼저 카메라를 확인하세요. 주행을 시작하면 누르는 동안만 로봇을 조종합니다.", {"data-ready-guidance": ""}),
     actions,
   );
-  // 연동 코드 보여주기: 운영자에게도 항목을 보여 준다(발급은 관리자 — 거절 시 전환 길 제공).
-  mountShowCode(root, () => {
-    clearToken();
-    renderTokenForm(root, () => check(root, onReady, onEnter),
-      "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
-  });
+  // 연동 코드는 브라우저 접속의 두 번째 연결이다. 앱은 자기 세션만 쓴다.
+  if (!inPilotApp()) {
+    mountShowCode(root, () => {
+      clearToken();
+      renderTokenForm(root, () => check(root, onReady, onEnter),
+        "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
+    });
+  }
   onReady?.({role: me.body?.role});
 }
 
@@ -492,7 +535,15 @@ export function mountConnect(root, {onReady, onEnter} = {}) {
   root.__enrollDispose?.();
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
-  root.__pilotForm = () => renderTokenForm(root, run);
+  root.__pilotForm = () => (inPilotApp() ? renderAppSession(root) : renderTokenForm(root, run));
+  if (inPilotApp()) {
+    if (!token()) {
+      renderAppSession(root);
+      return;
+    }
+    run();
+    return;
+  }
   if (!token()) {
     renderTokenForm(root, run);
     return;

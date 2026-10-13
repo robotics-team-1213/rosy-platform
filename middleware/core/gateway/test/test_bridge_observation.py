@@ -186,6 +186,26 @@ def test_camera_low_light_marker_reaches_stop_evidence_and_rejects_visible_claim
     assert _calls(calls, 'line_follow.invalidate')
 
 
+def test_camera_observation_with_foreign_route_sequence_is_rejected():
+    svc, calls = _services()
+    obs.line_observation(
+        svc, _line_payload(source='CAMERA_LINE', route_context_seq=8),
+        source_now=12.5, received_at=50., expected_context_seq=7)
+    assert not _calls(calls, 'line_follow.observe')
+    assert _calls(calls, 'line_follow.invalidate')
+
+
+def test_keeper_junction_with_foreign_route_sequence_does_not_start_turn():
+    svc, calls = _services()
+    svc.line_follow.config = SimpleNamespace(stale_after_s=.3)
+    svc.line_follow.observe_junction = _sink(calls, "line_follow.observe_junction")
+    raw = json.dumps(dict(reason="junction_fork", stamp=12.5,
+                          corner_turning=False, route_context_seq=8))
+    obs.keep_junction(svc, raw, source_now=12.5, received_at=50.,
+                      expected_context_seq=7)
+    assert not _calls(calls, "line_follow.observe_junction")
+
+
 def test_a_rejection_that_is_already_handled_does_not_clear_again():
     """`invalidate` returning False means nothing was driving, so nothing to stop."""
     svc, calls = _services()
@@ -388,6 +408,17 @@ def test_a_plan_becomes_a_point_list():
 
     assert _calls(calls, "maps.set_path")[0][1] == (
         [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}],)
+
+
+def test_plan_keeps_map_and_frame_from_receive_time():
+    svc, calls = _services()
+    svc.state.map_id = "lab-map"
+    msg = _path([(1.0, 2.0)])
+    msg.header = SimpleNamespace(frame_id="odom")
+
+    obs.nav_path(svc, msg, warn=_warn(calls))
+
+    assert _calls(calls, "maps.set_path")[0][2] == {"map_id": "lab-map", "frame_id": "odom"}
 
 
 def test_an_unreadable_plan_is_ignored_not_fatal():

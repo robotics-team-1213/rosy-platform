@@ -68,11 +68,14 @@ def test_core_kill_leaves_input_expired_within_the_bound():
 
 
 def test_cli_help_works_without_ros():
+    import os
     import subprocess
 
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8:surrogateescape"
     result = subprocess.run([sys.executable, str(SCRIPT), "--help"],
-                            capture_output=True, text=True, encoding="utf-8")
-    assert result.returncode == 0
+                            capture_output=True, text=True, encoding="utf-8", env=env)
+    assert result.returncode == 0, result.stderr
     assert "watchdog" in result.stdout or "EXPIRY_S" in result.stdout
 
 
@@ -102,7 +105,7 @@ builtins.__import__ = no_ros
 sys.argv = [sys.argv[1], "--sim-only"]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
-    env = {**os.environ, 'ROS_DOMAIN_ID': '120', 'ROS_LOCALHOST_ONLY': '1',
+    env = {**os.environ, 'ROS_DOMAIN_ID': '80', 'ROS_LOCALHOST_ONLY': '1',
            'GZ_PARTITION': 'd426-test', 'ROSY_RUNTIME_MODE': 'core'}
     result = subprocess.run([sys.executable, '-I', '-c', code, str(SCRIPT)],
                             env=env, capture_output=True, text=True, encoding='utf-8', timeout=15)
@@ -123,7 +126,7 @@ def test_invalid_clock_or_expiry_never_passes(last, now, expiry):
 def ros_boundary(monkeypatch):
     """Execute actual entrypoint callbacks with synthetic ROS ports, never DDS."""
     evidence = {'published': [], 'publisher_topics': [], 'timer': None,
-                'namespace': '/rosy_01', 'domain': 120, 'remap': None}
+                'namespace': '/rosy_01', 'domain': 80, 'remap': None}
 
     class Twist:
         def __init__(self):
@@ -157,7 +160,7 @@ def ros_boundary(monkeypatch):
     monkeypatch.setitem(sys.modules, 'rclpy.clock', clock)
     monkeypatch.setitem(sys.modules, 'geometry_msgs', SimpleNamespace())
     monkeypatch.setitem(sys.modules, 'geometry_msgs.msg', SimpleNamespace(Twist=Twist))
-    for name, value in {'ROS_DOMAIN_ID': '120', 'GZ_PARTITION': 'd426-test',
+    for name, value in {'ROS_DOMAIN_ID': '80', 'GZ_PARTITION': 'd426-test',
                         'ROS_LOCALHOST_ONLY': '1', 'ROSY_RUNTIME_MODE': 'core'}.items():
         monkeypatch.setenv(name, value)
     evidence['spin'] = lambda: None
@@ -186,7 +189,9 @@ def test_runtime_invalid_commands_zero_and_timer_is_steady(ros_boundary, monkeyp
 
 
 @pytest.mark.parametrize('setting,value', [
-    ('ROS_DOMAIN_ID', '40'), ('ROS_LOCALHOST_ONLY', '0'),
+    ('ROS_DOMAIN_ID', '40'), ('ROS_DOMAIN_ID', '79'), ('ROS_DOMAIN_ID', '100'),
+    ('ROS_DOMAIN_ID', '120'), ('ROS_DOMAIN_ID', '172'), ('ROS_DOMAIN_ID', '199'),
+    ('ROS_LOCALHOST_ONLY', '0'),
     ('GZ_PARTITION', ''), ('ROSY_RUNTIME_MODE', 'hardware'),
     ('namespace', '/'), ('consent', 'missing'),
 ])
@@ -201,8 +206,11 @@ def test_runtime_scope_fails_before_command_publisher(ros_boundary, monkeypatch,
     assert not evidence['publisher_topics'] and not evidence['published']
 
 
-def test_runtime_valid_planar_command_then_monotonic_expiry(ros_boundary, monkeypatch):
+@pytest.mark.parametrize('domain', [80, 99])
+def test_runtime_valid_planar_command_then_monotonic_expiry(ros_boundary, monkeypatch, domain):
     evidence, Twist = ros_boundary
+    evidence['domain'] = domain
+    monkeypatch.setenv('ROS_DOMAIN_ID', str(domain))
     evidence['namespace'] = '/rosy_01/'
     mod = _module()
     times = iter([100., 100.1, 100.4])
