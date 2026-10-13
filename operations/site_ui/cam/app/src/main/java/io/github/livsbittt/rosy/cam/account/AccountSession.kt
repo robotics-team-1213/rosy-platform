@@ -91,6 +91,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         val header = JSONObject(String(Base64.getUrlDecoder().decode(parts[0]), Charsets.UTF_8))
         require(header.keys().asSequence().toSet() == setOf("alg", "typ", "kid"))
         require(header.getString("alg") == "Ed25519" && header.getString("typ") == "at+jwt")
+        require(header.get("kid") is String)
         val key = config.keys[header.getString("kid")] ?: throw IllegalArgumentException("untrusted account key")
         val signer = Ed25519Signer(); signer.init(false, Ed25519PublicKeyParameters(key, 0))
         val signed = "${parts[0]}.${parts[1]}".toByteArray(Charsets.US_ASCII); signer.update(signed, 0, signed.size)

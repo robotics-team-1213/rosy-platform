@@ -81,6 +81,17 @@ class AccountSessionTest {
             } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
         }
     }
+    @Test fun refreshCannotChangeAccountIdentity() {
+        var now = 1000L
+        val session = AccountSession(trusted(), MemoryStore(), { endpoint, form ->
+            if (endpoint == "token") org.json.JSONObject().put("token_type", "Bearer")
+                .put("access_token", signed(now, subject = if (form["grant_type"] == "refresh_token") "bob" else "alice"))
+                .put("refresh_token", "f".repeat(40))
+            else org.json.JSONObject().put("active", true).put("sub", "alice").put("aud", "site:test")
+        }, {now})
+        session.complete(callback(session.begin("site:test"))); now += 320
+        assertNull(session.access("site:test")); assertNull(session.identity("site:test"))
+    }
     private fun config() = AccountConfig.parse("""{"issuer":"https://account.example.test","client_id":"native-cam","redirect_uri":"https://apps.example.test/cam/callback","resources":["site:test"],"trusted_keys":{"key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}""")
     @Test fun rejectsInsecureIssuerAndWildcardResource() {
         val text = config().issuer
