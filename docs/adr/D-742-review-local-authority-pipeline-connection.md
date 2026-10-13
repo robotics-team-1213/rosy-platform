@@ -1,0 +1,21 @@
+# D-742 검수 loopback 현재 결정과 같은 PC 학습 전달
+
+**Status:** Accepted (2026-10-13, 사용자 요청: 파이프라인 연결 및 시험)
+
+## 결정
+
+- 사설 검수 앱의 선택 `--decisions-port`는 localhost의 기존 `/api/decisions` GET만 제공한다. workspace/write token과 쓰기 API는 제공하지 않으며 Host 검사와 no-store를 유지한다. 모델 PC 검수 설치기는 화면 port+10000의 loopback 조회를 함께 설치한다.
+- 기존 review_bridge는 선택 `transport: local`에서 같은 PC의 별도 절대 경로로 v2 봉인 자료와 현재 결정을 전달한다. SSH 기본 동작은 유지한다. 링크·변조·다른 기존 자료는 거절하며 임시 복사 후 atomic replace한다. 전달 시각·revision/highwater는 동일한 bridge 원장을 통해 기록한다.
+- 기존 ReviewPipeline owner CLI를 사용한다. 승인·원본 pixels·모든 fixed eval·카메라·TTL·철회를 검증하기 전에는 데이터셋 학습 요청과 GPU 실행을 허용하지 않는다. 사람 자료가 아직 없으면 no_approved_masks로 대기한다.
+- 릴리스 source와 private config/state/store를 분리한다. D-446/D-561의 서명된 코드와 롤백을 유지한다. UI 작업 결과 연결은 읽기 표시이며 학습 권한이 아니다.
+
+## 관계와 시험
+
+| 계약 | 관계 |
+|---|---|
+| D-427/D-429 | curation/training/deploy 소유 위치와 기존 bare imports 유지 |
+| D-430 | CORE·cmd_vel·장치 admission과 별개. 주행 명령 없음 |
+| D-464 | 기존 independent IndexedReview와 persisted transport highwater 재사용 |
+| D-446/D-545/D-561 | 모델 PC 서명 릴리스·검수 상태 보존·실패 복구 유지 |
+
+원격 시험은 loopback 쓰기/Host 거절, 같은 PC 봉인 전달과 중복·변조·링크 거절, owner 수용과 TTL·철회·eval 중복을 검증한다. 격리 fixture와 실제 사람 정답/운영 학습 수용은 구별한다.
