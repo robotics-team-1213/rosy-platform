@@ -715,6 +715,7 @@
 | D-724 | 조건부 막힘 답의 지원 확인 후 최종 제출 검증 | Accepted |
 | D-735 | 이동 후보의 교통 감속 곡률 보존 | Accepted |
 | D-737 | LINE body and command curve agreement | Accepted |
+| D-740 | SDK 게이트는 전진 호를 제자리 회전 원이 아니라 그 호의 정지 궤적으로 검사한다 | Proposed |
 | D-716 | 모델 후보와 기존 단일 Fleet 복구 dispatch 연결 | Proposed |
 | D-720 | Discord 상태 질의와 읽기 전용 숙고형 연결 | Accepted |
 | D-705 | Incident 실행 책임과 운영 보정 포트 | Accepted |
