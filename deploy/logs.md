@@ -2748,3 +2748,15 @@
 - 변경: 이전 config와 고정 wrapper의 SHA256을 함께 검증한 경우에만 두 파일 교체를 허용한다. 의존성·모델 조회·상태 변경 전 거절하며 기존 원자 교체·백업·원복을 재사용한다.
 - 증거: 이전 버전 설치 뒤 새 버전 교체, 잘못된·누락된·단독 pin, 외부 wrapper, 동일 버전 재확인, 실패 시 이전 두 파일 원복을 원격 검증했다. 관련 82개 통과·NEW 0.
 - gate 변화: SOURCE만. 실제 관리자 교체·보호 설정 readback·Discord 수용은 별도다.
+
+## 2026-10-12 · d905c939b · ingress dispatcher 경로 접근 복구
+
+- 변경: 실제 SSH exit 126의 원인인 보호 broker 상위 디렉터리 접근 실패를 해소한다. dispatcher만 공개 root 소유 libexec 경로에 두고 이전 관리 key/sshd 경로의 정확한 바이트만 교체한다. 기존 보호 디렉터리·group·이전 dispatcher는 유지한다.
+- 증거: 원격 Linux 권한 재현, 관리 경로 이전·외부 파일 거부·원복과 ingress UID의 두 명령 및 추가 인자 거절 검증을 포함한 90개 통과·NEW 0.
+- gate 변화: SOURCE만. 관리자 복구 실행·현장 SSH 및 Discord 수용은 별도다.
+
+## 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리
+
+- 변경: 실제 진단에서 D-720 status wrapper/config가 모두 없음을 확인했다. 두 파일이 없을 때 status 정상 경로 시험만 생략하고 conversation 및 알 수 없는 명령·추가 인자 거절은 항상 검사한다. 기존 status는 보호 metadata와 HOLD를 검증하며 변경하지 않는다. 실패에는 제한된 경로·종료 코드·출력을 남긴다.
+- 증거: 선택 status 미설치 재현 RED 뒤, 미설치·기존 설치·원복·보호 경계 원격 91개 통과·NEW 0.
+- gate 변화: SOURCE만. 새 관리자 복구 및 실제 conversation 회신은 별도 확인한다.

@@ -3459,6 +3459,12 @@
 - 증거: 문서 후속 9076d86f28 전체 CI는 Fleet 한 묶음의 1 failed/1,716 passed로 실패했다. 수정 전 원격 실제 Chromium은 다른 화면 폭에서 같은 race를 1 NEW로 재현했다. 수정 후 두 크기 2 passed/종료 0/NEW 0이며 native_games_ui가 독립 승인했다.
 - gate 변화: 선택 브라우저 회귀와 독립 검토다. 설치 7a03bf1bf08e의 이전 전체·Android CI 및 실제 사이트 증거와 구분한다. 후속 후보 전체 CI는 이어 확인하며 본인 계정 초기화 승인은 대기 중이다.
 
+## 2026-10-12 · 34b7856198 · D-725 native SIM 위치 연속성
+
+- 변경: 명시적 실행 binding을 검증한 SIM-only map_pose_port를 trip·차로 감시·위치 조회·교차로에 동일하게 주입한다. 원본 시각·좌표·수신 신선도와 CORE UTC stamp를 구분하고 입력 공백·epoch 변경을 거절한다. 실물·teach·camera·pin·formation 경로는 기존 서비스를 유지한다.
+- 증거: 독립 SOURCE APPROVE와 정상 자원 기준 원격 115 PASS/NEW 0이다. 최근 3초 이동 판정, 동일 stamp의 다른 pose 거절, binding 불변성을 포함한다.
+- gate 변화: 소스·선택 회귀만 확인했다. 실제 Gazebo producer 결속과 지도 완주는 재실행으로 확인한다. 실물 감독은 추후 확정한다.
+
 ## 2026-10-12 · f0c5e5c130 · 경로 사실 묶음과 굽이 점 단축
 
 - 변경: trip과 /route의 200 응답에 계획기별 사실 묶음을 붙였다. 호출자는 막힌 차로와 추가 초를 넘기고, 재계획은 그 값을 유지한다. ring_s에서 ring_e만 막으면 east로 우회하고, ring_e와 east를 함께 막으면 TRIP_NO_ROUTE다. /route의 0.20 m 현이 공칭 차체를 가져온 차로 밖으로 내보내면 0.12 m까지 줄인다. 링의 0.20 m 점은 그대로다.

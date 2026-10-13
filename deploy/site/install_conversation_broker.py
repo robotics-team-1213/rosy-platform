@@ -20,7 +20,8 @@ REVIEWED = Path('/root/rosy-conversation-reviewed')
 VERSIONS = Path('/opt/rosy-deliberation/conversation')
 CONFIG = Path('/etc/rosy-deliberation/conversation.json')
 LIBEXEC = Path('/usr/local/libexec/rosy-deliberation')
-INGRESS = LIBEXEC/'model-ingress'
+PREVIOUS_INGRESS = LIBEXEC/'model-ingress'
+INGRESS = Path('/usr/local/libexec/rosy-model-ingress')
 STATUS = LIBEXEC/'status-broker'
 BROKER = LIBEXEC/'conversation-broker'
 SECURITY_FILES = (Path('/var/lib/rosy-deliberation/glm-coding-plan.json'),
@@ -32,6 +33,7 @@ OLD_SUDO = b'rosy-model-ingress ALL=(rosy-deliberation) NOPASSWD: /usr/local/lib
 NEW_SUDO = OLD_SUDO + b'rosy-model-ingress ALL=(rosy-deliberation) NOPASSWD: /usr/local/libexec/rosy-deliberation/conversation-broker ""\n'
 OLD_FORCE = 'sudo -n -u rosy-deliberation /usr/local/libexec/rosy-deliberation/status-broker'
 NEW_FORCE = str(INGRESS)
+PREVIOUS_FORCE = str(PREVIOUS_INGRESS)
 SSHD_BASE = ('Match User rosy-model-ingress\n    AuthorizedKeysFile /etc/ssh/rosy-status-authorized-keys\n'
     '    AuthenticationMethods publickey\n    PasswordAuthentication no\n    KbdInteractiveAuthentication no\n'
     '    DisableForwarding yes\n    PermitTTY no\n    ForceCommand {}\nMatch all\n')
@@ -234,7 +236,59 @@ def activate(plans, verify, reload):
 
 
 def run(*args, **kwargs):
-    return subprocess.run(args, check=True, timeout=120, **kwargs)
+    return subprocess.run(args, check=kwargs.pop('check', True), timeout=120, **kwargs)
+
+
+def previous_transport(key):
+    if not PREVIOUS_INGRESS.exists() and not PREVIOUS_INGRESS.is_symlink():
+        return (), ()
+    info = PREVIOUS_INGRESS.stat()
+    if (protected(PREVIOUS_INGRESS) != dispatcher()
+            or info.st_mode & 0o777 != 0o755 or info.st_gid != 0):
+        raise ValueError('PREVIOUS_MANAGED_INGRESS_REQUIRED')
+    return ((f'restrict,command="{PREVIOUS_FORCE}" '+key+'\n').encode(),), (SSHD_BASE.format(PREVIOUS_FORCE).encode(),)
+
+
+def optional_status(gid):
+    config = CONFIG.parent/'status.json'
+    if not STATUS.exists() and not STATUS.is_symlink():
+        if config.exists() or config.is_symlink():
+            raise ValueError('PARTIAL_STATUS_INSTALLATION_REQUIRES_REVIEW')
+        return False
+    for path, mode in ((STATUS, 0o750), (config, 0o640)):
+        if path == config and not path.exists() and not path.is_symlink():
+            continue
+        protected(path)
+        info = path.stat()
+        if info.st_mode & 0o777 != mode or info.st_gid != gid:
+            raise ValueError('PROTECTED_STATUS_INSTALLATION_REQUIRED')
+    return True
+
+
+def verify_ingress(status_installed=False):
+    # Malformed requests reach both brokers but cannot reach inference/provider dispatch.
+    cases = [('rosy-conversation-v1', (), 'CONVERSATION'),
+        ('unknown', (), None), ('rosy-conversation-v1 extra', (), None),
+        ('rosy-status-v1', ('unexpected',), None), ('rosy-conversation-v1', ('unexpected',), None)]
+    if status_installed:
+        cases.insert(0, ('rosy-status-v1', (), 'STATUS'))
+    for command, extra, expected in cases:
+        result = run('/usr/sbin/runuser', '-u', 'rosy-model-ingress', '--', str(INGRESS), *extra,
+                     check=False, capture_output=True, input=b'{}\n', cwd='/',
+                     env={'PATH':'/usr/bin:/bin', 'SSH_ORIGINAL_COMMAND':command})
+        if expected is None:
+            valid = result.returncode == 64 and not result.stdout and not result.stderr
+        else:
+            try:
+                valid = (result.returncode == 1 and not result.stderr and json.loads(result.stdout) == {
+                    'state':'HOLD', 'reason':expected+'_BROKER_NOT_ADMITTED_OR_RESULT_UNKNOWN'})
+            except (ValueError, UnicodeDecodeError):
+                valid = False
+        if not valid:
+            raise ValueError('INGRESS_EXECUTION_READBACK_FAILED '+json.dumps({
+                'command':command, 'extra_arguments':bool(extra), 'returncode':result.returncode,
+                'stdout':result.stdout[:512].decode('utf-8', errors='replace'),
+                'stderr':result.stderr[:512].decode('utf-8', errors='replace')}, sort_keys=True))
 
 
 def account_registration(helper, cfgdir):
@@ -337,7 +391,7 @@ def main(argv=None):
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
     account = helper.validated_account()
-    for path in (CONFIG.parent, LIBEXEC, KEYS.parent, SUDO.parent, SSHD.parent, VERSIONS.parent):
+    for path in (CONFIG.parent, LIBEXEC, INGRESS.parent, KEYS.parent, SUDO.parent, SSHD.parent, VERSIONS.parent):
         trusted_directory(path)
     target = VERSIONS/manifest['source_commit']
     cfg = {'source_commit':manifest['source_commit'], 'profile':proof['profile'], 'policy':proof['policy'],
@@ -349,12 +403,15 @@ def main(argv=None):
     wrapper = broker_wrapper(target)
     previous_config, previous_broker = previous_admission(
         args.previous_config_sha256, args.previous_broker_sha256, config, wrapper, account.pw_gid)
+    previous_keys, previous_sshd = previous_transport(key)
+    status_installed = optional_status(account.pw_gid)
     lock = dependencies(args.bundle, args.dependencies_sha256, contents['deploy/site/requirements-fleet.txt'])
     if args.check:
         print(json.dumps({'state':'INPUT_HASHES_CHECKED_ONLY', 'source_commit':manifest['source_commit']}))
         return 0
     # Retain exact evidence and credentials; nothing in this installer invokes the paid provider.
-    preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS, *SECURITY_FILES]
+    preserved = [CONFIG.parent/'status.json', CONFIG.parent/'status-reviewer-admission.json', STATUS,
+                 PREVIOUS_INGRESS, *SECURITY_FILES]
     before = {p:p.read_bytes() if p.exists() else None for p in preserved}
     snapshot(target, {**contents, 'semantic-evaluation-proof.json':proof_raw,
                      'semantic-evaluation-receipt.json':receipt_raw, 'requirements.lock':lock}, helper)
@@ -396,8 +453,8 @@ def main(argv=None):
     new_key = (f'restrict,command="{NEW_FORCE}" '+key+'\n').encode()
     plans = [(CONFIG,config,0o640,account.pw_gid,previous_config),
              (BROKER,wrapper,0o750,account.pw_gid,previous_broker), (INGRESS,dispatcher(),0o755,0,()),
-             (KEYS,new_key,0o644,0,(old_key,)), (SUDO,NEW_SUDO,0o440,0,(OLD_SUDO,)),
-             (SSHD,SSHD_BASE.format(NEW_FORCE).encode(),0o644,0,(SSHD_BASE.format(OLD_FORCE).encode(),))]
+             (KEYS,new_key,0o644,0,(old_key,*previous_keys)), (SUDO,NEW_SUDO,0o440,0,(OLD_SUDO,)),
+             (SSHD,SSHD_BASE.format(NEW_FORCE).encode(),0o644,0,(SSHD_BASE.format(OLD_FORCE).encode(),*previous_sshd))]
     def verify():
         run('/usr/sbin/visudo', '-cf', str(SUDO))
         run('/usr/sbin/sshd', '-t')
@@ -412,13 +469,15 @@ def main(argv=None):
         run('/usr/sbin/runuser', '-u', account.pw_name, '--', str(venv/'bin/python'), '-I', '-B', '-c',
             python_code(target, 'from deploy.ai_pc.deliberation_conversation_broker import configuration;configuration();'
                         'print("PROTECTED_CONVERSATION_CONFIGURATION_VALID")'), cwd=target, env=env)
+        verify_ingress(status_installed)
         if any((p.read_bytes() if p.exists() else None) != data for p,data in before.items()):
             raise ValueError('PRESERVED_SECURITY_STATE_CHANGED')
     for script in (wrapper, dispatcher()):
         run('/bin/sh', '-n', input=script)
     activate(plans, verify, lambda:run('/usr/bin/systemctl', 'reload', 'ssh.service'))
     print(json.dumps({'state':'INSTALLED_TRANSPORT_ONLY', 'source_commit':manifest['source_commit'],
-                      'valid_until':cfg['valid_until'], 'inference_performed':False}))
+                      'valid_until':cfg['valid_until'], 'inference_performed':False,
+                      'optional_status_transport_checked':status_installed}))
     return 0
 
 
