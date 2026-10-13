@@ -8293,3 +8293,13 @@ osy-d395-s1d\`.
 - 변경: 공식 학습 CLI·processor 재적재와 Hub 중단/손상/동일 commit 재시도 시험을 보강했다. D-756에 Pilot 실물·녹화·실데이터 학습·Hub·Spaces의 보류 사유, 필요한 입력, 완료 증거를 기록했다.
 - 증거: 8ddaf61a3 원격 후속 12개 통과, NEW 0. 실물 profile은 disabled이고 driver 값이 비어 있다. HF 조직·설치 PC는 미정이다.
 - gate 변화: 없음. 합성 CPU 학습과 Hub 대역 시험이며 실물·실계정 수용을 대체하지 않는다.
+
+## 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
+- 변경: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
+- 증거: 기준 62fbb5a13d의 인증 131개 원격 통과와 현재 계약·표면 목록을 읽고 계획했다.
+- gate 변화: 없음. 계획 문서이며 제품 구현·착지·push·배포·실계정 전환 증거가 아니다.
+
+## 2026-10-14 · uncommitted · docs: D-757 Rosy Account 통합 신원과 자동 세션
+- 변경: D-757과 ADR Log를 추가하고 D-549를 대체 상태로 표시했다. 전 앱 동일 신원·자동 인증 세션·자원별 권한·회수·이전·수용 계약을 정했다.
+- 증거: 사용자 요구와 D-519/549/686/689/755, 통합 실행 계획을 대조했다. protocol/API 상세 및 구현은 후속이다.
+- gate 변화: architecture Accepted. 제품 구현·착지·push·배포·실계정 전환·현장 수용은 미완료다.
