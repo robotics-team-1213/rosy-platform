@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+const { register } = await import("node:module");
+register("./resolve-console-assets.mjs", import.meta.url);
+const {
   localizationTag, localizationUrgent, positionTag, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
-} from "../../../ui/console/localization-badge.js";
+} = await import("../../../ui/console/localization-badge.js");
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
   needs_human: false, label: "위치 확정", ...over });

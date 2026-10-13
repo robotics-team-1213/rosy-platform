@@ -25,8 +25,7 @@ from test_docking_parking_wiring import sim_overrides
 def just_docked(core_client):
     """A parking run whose last tick has just reached DOCKED."""
     client, services = docking_robot(core_client)
-    services.docking._state = DockState.DOCKED
-    services.docking._phase = None
+    services.docking._mark_docked()
     assert services.modes.mode is Mode.DOCKING
     return client, services
 

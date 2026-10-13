@@ -54,6 +54,12 @@ def test_open_and_infer(tmp_path):
     assert r.latency_ms >= 0
 
 
+def test_missing_warning_class_stays_unavailable(tmp_path):
+    model = LaneSegModel.open(_model_dir(tmp_path), session_factory=_factory())
+    _, _, info, _ = model.infer_drivable(np.zeros((240, 320, 3), np.uint8))
+    assert 'speed_bump_mask' not in info and 'crosswalk_mask' not in info
+
+
 @pytest.mark.parametrize("semantic", ["road_surface/1", "trajectory_band/1"])
 @pytest.mark.parametrize("method", ["infer", "infer_mask", "infer_drivable", "infer_with_mask"])
 def test_legacy_inference_refuses_other_road_semantics_before_session(tmp_path, semantic, method):

@@ -114,3 +114,23 @@ def test_corrupt_imported_gain_is_not_silently_replaced(damping):
     with pytest.raises(ValueError):
         drive_runtime.configure_velocity_drive(drive, None)
     assert drive.values['stiffness'] == 625
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_contact_solver_readback_preserves_position_iterations(ignored):
+    counts = {'position': 32, 'velocity': 1}
+
+    def set_velocity(value):
+        if not ignored:
+            counts['velocity'] = value
+
+    robot = SimpleNamespace(
+        get_solver_position_iteration_count=lambda: counts['position'],
+        get_solver_velocity_iteration_count=lambda: counts['velocity'],
+        set_solver_velocity_iteration_count=set_velocity)
+    if ignored:
+        with pytest.raises(RuntimeError, match='solver readback'):
+            drive_runtime.configure_contact_solver(robot)
+    else:
+        assert drive_runtime.configure_contact_solver(robot) == {'position': 32, 'velocity': 8}
+    assert counts['position'] == 32

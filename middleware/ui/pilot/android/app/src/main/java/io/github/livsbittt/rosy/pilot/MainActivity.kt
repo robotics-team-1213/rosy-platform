@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var groupRequested = false
     private var groupDrive: GroupDrive? = null
     private var groupEntry: Button? = null
+    private lateinit var groupHint: TextView
     @Volatile private var secondaryVersion = 0L
     private var pairingDialog: AlertDialog? = null
     @Volatile private var session: LobbySession? = null
@@ -105,13 +106,14 @@ class MainActivity : Activity() {
         }
         columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-        header.addView(label("로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(label(if (compact) "Pilot · 로봇 선택" else "로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", RosyMetrics.TextBody, true).apply { setPadding(0, views.dp(RosyMetrics.Space4.toInt()), 0, views.dp(RosyMetrics.Space5.toInt())) }; list.addView(status)
         groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
         list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space4.toInt()) })
-        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", RosyMetrics.TextLabel, true))
+        groupHint = views.label(LinkStatus.groupHint(0, cooling.coolingRequired), RosyMetrics.TextLabel, true)
+        list.addView(groupHint)
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         if (compact) {
@@ -138,7 +140,9 @@ class MainActivity : Activity() {
         }
         if (web != null || opening) return
         val records = candidates.records()
-        groupEntry?.isEnabled = !cooling.coolingRequired && records.count { runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false) } >= 2
+        val reachableRobots = records.count { runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false) }
+        groupEntry?.isEnabled = !cooling.coolingRequired && reachableRobots >= 2
+        groupHint.text = LinkStatus.groupHint(reachableRobots, cooling.coolingRequired)
         reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return

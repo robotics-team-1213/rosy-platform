@@ -22,10 +22,25 @@ def task():
 def test_exact_map_lineage_and_connected_complete_route():
     track = load_track()
     assert track['source_sha256'] == 'cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b'
-    assert track['segments'] == ('east', 'ring_e', 'ring_n', 'ring_w', 'west', 'ring_w', 'ring_s', 'ring_e')
+    assert track['segments'] == ('ring_n', 'west:reverse', 'ring_s', 'east:reverse', 'ring_n', 'ring_w', 'ring_s', 'ring_e')
     assert track['points'][0] == track['points'][-1]
     assert all(w.height == .30 for w in track['scene'].walls)
     assert max(math.dist(a, b) for a, b in zip(track['points'], track['points'][1:])) < .025
+
+
+def test_isaac_uses_the_gazebo_warning_mesh_definition():
+    track = load_track()
+    from build_world import caution_meshes
+    assert track['caution_meshes'] == caution_meshes()
+    assert len(track['caution_meshes']) == 8
+
+
+def test_native_route_rejects_reentering_the_ring_at_an_exit(monkeypatch):
+    import map_task
+    for route in (('east', 'ring_e'), ('west', 'ring_w')):
+        monkeypatch.setattr(map_task, 'SEGMENTS', route)
+        with pytest.raises(ValueError, match='turn forbidden'):
+            map_task.load_track()
 
 
 def test_initial_goal_proximity_cannot_count_as_closed_loop_completion():

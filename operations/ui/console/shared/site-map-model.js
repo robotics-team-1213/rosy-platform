@@ -32,6 +32,7 @@ export function routeAttention(trip, facts, now) {
   return [{severity: 'warn', text: `: AI 경로 편차 관찰 — 허용 경계보다 ${cm} cm 밖 · 위치 확인 필요`}];
 }
 export const TRIP_ERROR_LABEL = {
+  TRIP_START_CANCELED: '출발 준비 중 정지 요청을 받았습니다 · 상태를 확인한 뒤 다시 시작하세요',
   TRIP_START_PLACE_MISMATCH: '선택한 출발 장소에 로봇이 없습니다 · 실제 위치를 확인하세요',
   TRIP_START_PLACE_MOVED: '그 장소에서는 안전하게 정지할 수 없습니다 · 다른 장소를 고르세요',
   TRIP_BODY_UNKNOWN: '로봇 차체 폭을 확인할 수 없어 출발할 수 없습니다',
@@ -40,10 +41,11 @@ export const TRIP_ERROR_LABEL = {
   TRIP_HEADING_CONFLICT: '로봇이 차로 반대 방향을 보고 있습니다 · Pilot으로 돌려 세우세요',
   TRIP_OFF_MAP: '찍은 점에서 차로 폭 두 배 안에 차로가 없습니다',
   TRIP_UNKNOWN_PLACE: '없는 주소입니다',
+  TRIP_UNKNOWN_EDGE: '지도에 없는 차로입니다',
   TRIP_NO_ROUTE: '갈 수 있는 길이 없습니다',
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
-  TRIP_POSE_UNTRUSTED: '로봇 위치가 LOCALIZED가 아닙니다',
+  TRIP_POSE_UNTRUSTED: '현장 지도 위치를 확인할 수 없습니다 · 위치와 관측 갱신을 확인하세요',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
   // D-494 5 trip start / control
@@ -127,7 +129,7 @@ export const TRIP_REASON_LABEL = {
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
-  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
+  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 현재 변경 내용을 별도로 기록한 뒤 화면을 새로고침해 최신 초안을 확인하세요. 저장하지 않은 편집은 사라집니다.',
   SITE_MAP_PROFILE_CHANGED: '다른 운영자가 프로필을 바꿨습니다. 수정한 규칙을 복사해 둔 뒤 다시 접속하세요.',
   SITE_MAP_PROFILE_LIMIT: '지도 프로필은 최대 100개입니다. 기존 프로필을 선택해 수정하세요.',
   SITE_MAP_ROUTE_ACTIVE: '운행·대형·지도 기록이 진행 중입니다 · 끝난 뒤 활성화하세요',
@@ -156,6 +158,7 @@ export const SITE_MAP_ERROR_LABEL = {
 };
 
 export function siteMapErrorText(error) {
+  if (error.code === 'PASSWORD_CHANGE_REQUIRED') return '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요';
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
   if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
@@ -195,6 +198,8 @@ export function tripErrorText(code, detail = {}) {
     return `${base} · ${startCheckText({...detail, code: 'TRIP_START_OFF_LANE'})}`;
   if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
     return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
+  if (code === 'TRIP_UNKNOWN_EDGE' && typeof detail.edge === 'string' && detail.edge)
+    return `${base} · ${detail.edge}`;
   if (code !== 'TRIP_NO_ROUTE') return base;
   const leg = Number.isInteger(detail.segment) ? ` · ${detail.segment + 1}번째 구간` : '';
   return base + leg + (detail.unblock_would_help ? ' · 막은 차로를 풀면 길이 있습니다' : '');
@@ -394,6 +399,23 @@ export function oneLapReason({active, running, start, via}) {
 // D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
 // the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
 const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
+/** Explicit CORE map localization only; an odom pose or map_id alone is insufficient. */
+export function robotMapPose(robot) {
+  const state = robot?.state, pose = state?.pose;
+  if (!pose || ![pose.x, pose.y, pose.yaw].every(Number.isFinite)) return null;
+  const frame = robot.localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? 'map' : 'odom');
+  if (frame !== 'map') return null;
+  const loc = state.localization;
+  return loc?.state === 'LOCALIZED' && loc.pose_frame === 'map' ? pose : null;
+}
+/** The guide is read-only evidence; the server still checks freshness and admission. */
+export function tripPoseReason(guide, robotId, active, corePose = null) {
+  if (!guide) return ''; // Older Fleet has no guide; server admission remains authoritative.
+  if (guide.map_version !== active?.version) return '현장 지도 위치의 지도 버전이 다릅니다 · 다시 조회하세요';
+  const pose = (guide.robots || []).find(row => row.robot_id === robotId)?.pose;
+  if (corePose || (pose?.state === 'LOCALIZED' && [pose.x, pose.y, pose.yaw].every(Number.isFinite))) return '';
+  return TRIP_ERROR_LABEL.TRIP_POSE_UNTRUSTED;
+}
 export function planTrip(request, robotId, body) {
   return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)});
 }
@@ -700,7 +722,8 @@ export function trafficAttention(traffic, robotId, clock, now) {
   const mine = resolver.find((row) => row.robot_id === robotId);
   if (Array.isArray(cycle) && cycle.includes(robotId)) {
     const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
-    const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
+    const then = mine?.reason?.startsWith("auto_hold:") ? "해결기: 자동 대기 · 상태 관측 중"
+      : mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
       : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
     const confirmed = resolver.some((row) => row.trigger === "wait_cycle");
     items.push(confirmed

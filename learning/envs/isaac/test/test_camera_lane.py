@@ -7,6 +7,14 @@ import sys
 import numpy as np
 import pytest
 
+
+@pytest.mark.parametrize("name", ["camera_tick", "camera_episode_usable", "camera_admission_error", "camera_sample_due",
+                                  "learn_transition", "remember_camera_action", "camera_snapshot_due"])
+def test_native_runner_preserves_camera_guard_exports(name):
+    import camera_checks
+    import run_map_rl
+    assert getattr(run_map_rl, name) is getattr(camera_checks, name)
+
 ROOT = Path(__file__).resolve().parents[4]
 for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
              'contracts/skill/src', 'middleware/core/services', 'middleware/core/events',
@@ -15,8 +23,227 @@ for part in ('tools/sim/isaac', 'contracts/foundation', 'contracts/motion/src',
 
 
 def perception_id():
-    return {'schema': 'isaac-camera-error-confidence/1',
+    return {'schema': 'isaac-camera-error-confidence/2',
             'model_revision': 'lane-seg-test', 'model_sha256': 'a' * 64}
+
+
+def test_physics_tick_camera_policy_cannot_restore_as_observation_policy():
+    from camera_lane import CameraQPolicy
+    current = perception_id()
+    old = CameraQPolicy(17, perception=current).export()
+    old['perception']['schema'] = 'isaac-camera-error-confidence/1'
+    with pytest.raises(ValueError, match='identity differs'):
+        CameraQPolicy.restore(old, perception=current)
+    with pytest.raises(ValueError, match='identity required'):
+        CameraQPolicy(17, perception=old['perception'])
+
+
+@pytest.mark.parametrize('mode', ['applied', 'zero', 'clipped', 'selection_failed', 'invalid', 'halted'])
+def test_terminal_credit_requires_successful_matching_core_dispatch(mode):
+    from camera_checks import remember_camera_action
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    from core_features.command.manager import Twist
+    receipts, warnings = [], []
+    def select():
+        if mode == 'selection_failed':
+            raise RuntimeError('injected selection failure')
+        return Twist(0., 0.) if mode == 'zero' else Twist(.02, .1 if mode == 'clipped' else .2)
+    command = SimpleNamespace(select_output=select, announce_pending=lambda: None)
+    power = SimpleNamespace(on_activity=lambda source: None)
+    cmd_vel_cycle(command, power, lambda twist: receipts.append((twist.linear, twist.angular)), warn=warnings.append)
+    state = None if mode == 'invalid' else (2, 1)
+    record = remember_camera_action(None, state, 3, 42, (.02, .2), receipts, warnings, mode == 'halted')
+    if mode == 'applied':
+        assert record == dict(state=(2, 1), action=3, frame=42, twist=(.02, .2))
+    else:
+        assert record is None
+
+
+def test_core_selection_failure_zero_breaks_existing_camera_interval():
+    from camera_checks import CameraLearningWindow, remember_camera_action
+    from camera_lane import CameraQPolicy
+    from core.bridge.cmd_vel import cmd_vel_cycle
+    policy = CameraQPolicy(17, perception=perception_id())
+    window = CameraLearningWindow()
+    state = (2, 1)
+    action = window.choose(policy, state, 1., frame=42, train=True)
+    result = dict(reward=.1, terminated=False, truncated=False, reason='running')
+    window.learn(policy, state, result, credit=None)
+    prior = remember_camera_action(None, state, action, 42, (.02, .2), [(.02, .2)], [], False)
+    receipts, warnings = [], []
+    def failed_select():
+        raise RuntimeError('injected failure after valid dispatch')
+    command = SimpleNamespace(select_output=failed_select, announce_pending=lambda: None)
+    cmd_vel_cycle(command, SimpleNamespace(on_activity=lambda source: None),
+                  lambda twist: receipts.append((twist.linear, twist.angular)), warn=warnings.append)
+    assert receipts == [(0., 0.)] and warnings
+    credit = remember_camera_action(prior, state, action, 43, (.02, .2), receipts, warnings, False)
+    assert credit is None
+    window.choose(policy, state, 1.1, frame=66, train=True)
+    window.learn(policy, state, result, credit=credit)
+    assert policy.updates == 0
+
+
+def test_camera_terminal_credit_survives_invalid_gap_but_not_episode_reset():
+    from camera_checks import remember_camera_action
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    record = remember_camera_action(None, (2, 1), 3, 42, (.02, .2), [(.02, .2)], [], False)
+    for frame in (43, 44):
+        record = remember_camera_action(record, None, 1, frame, (0., 0.), [(0., 0.)], [], False)
+    assert record['frame'] == 42
+    terminal = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                    camera_failure_reason='camera_target_unavailable')
+    assert learn_transition(policy, (record['state'], record['action']), None, terminal) == 'terminal_camera_loss'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == -1.5
+    record = None  # The runner resets its ledger at each episode boundary.
+    assert learn_transition(policy, record, None, terminal) == 'invalid_camera_observation'
+    assert policy.updates == 1
+
+
+@pytest.mark.parametrize('state,candidate,receipts,warnings,halted', [
+    (None, (.02, .2), [(.02, .2)], [], False),
+    ((2, 1), (.02, .2), [(.02, .1)], [], False),
+    ((2, 1), (.02, .2), [(.02, .2)], ['delivery warning'], False),
+    ((2, 1), (.02, .2), [(.02, .2)], [], True),
+])
+def test_unlearned_motion_breaks_prior_terminal_credit(state, candidate, receipts, warnings, halted):
+    from camera_checks import remember_camera_action
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    record = remember_camera_action(None, (2, 1), 3, 42, (.02, .2), [(.02, .2)], [], False)
+    record = remember_camera_action(record, state, 1, 43, candidate, receipts, warnings, halted)
+    assert record is None
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason='camera_target_unavailable')
+    assert learn_transition(policy, record, None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0
+
+
+def test_native_camera_containment_reaches_core_with_unknown_error(monkeypatch):
+    import camera_lane
+    from control.sensing.perception.camera_ground import ground_plane
+    from control.sensing.perception.lane import LaneObservation
+    model = SimpleNamespace(model_revision='lane-seg-test', infer_drivable=lambda frame:
+        (np.ones((240, 320), np.uint8), 'drivable', {'crosswalk_mask': np.zeros((240, 320), np.uint8)}, 1.))
+    lane = camera_lane.LearnedCameraLane(model, ground_plane(.06343, .139626, 281.6, 160., 120., .6),
+                                         camera_x=.03317, clock=lambda: 10.)
+    def observed(*args, **kwargs):
+        lane.keeper.last = {'boundaries': [], 'crosswalk': (.1, .2)}
+        return LaneObservation(.1, .9)
+    monkeypatch.setattr(lane.keeper, 'update', observed)
+    monkeypatch.setattr(camera_lane, 'keep_step', lambda *args: (None, False))
+    try:
+        lane.observe(np.full((240, 320, 3), 100, np.uint8), stamp=1., source_now=1., pose=(0., 0., 0.))
+        evidence = lane.manager._observation.containment
+        assert evidence.ground_source == 'ISAAC' and evidence.stamp == 1.
+        assert evidence.crosswalk.near_m == .1
+        assert evidence.uncertainty_m is None and evidence.crosswalk_uncertainty_m is None
+        assert lane.last['containment'] == evidence.model_dump()
+        lane.invalidate('camera_target_unavailable')
+        assert lane.state() is None and lane.last['model_used'] is False
+    finally:
+        lane.close()
+
+
+def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
+    import camera_lane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = camera_lane.LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    seen = []
+    original = camera_lane.keep_step
+    def capture(*args):
+        seen.append(args[8])
+        return original(*args)
+    monkeypatch.setattr(camera_lane, 'keep_step', capture)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is True
+        assert lane.manager._return_view.points == ()
+        assert len(lane.manager._return_view.unknown) == 640
+        assert lane.manager._return_source_high_water_ns == 1_000_000_000
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=1., source_now=1., pose=(0., 0., 0.))
+        assert seen == [(None, 1., {'left': None, 'right': None})]
+        assert lane.observe_scan(sample, body=NOMINAL_BODY) is False
+        assert lane.state() is None
+        stale = {**sample, 'source_stamp_ns': 2_000_000_000, 'source_now_ns': 3_000_000_000}
+        assert lane.observe_scan(stale, body=NOMINAL_BODY) is False
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('age_ns,accepted', [(0, True), (250_000_001, False), (-1_000_000, False)])
+def test_native_scan_nanosecond_rounding_does_not_discard_current_camera(age_ns, accepted):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    source_now = 241 / 240
+    stamp_ns = round(source_now * 1e9) - age_ns
+    assert source_now < round(source_now * 1e9) / 1e9
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    model = SimpleNamespace(model_revision='lane-seg-test',
+                            infer_drivable=lambda frame: (way, 'drivable', {}, 1.))
+    lane = LearnedCameraLane(model,
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317, clock=lambda: 10.)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=stamp_ns)
+    try:
+        assert lane.observe_scan(sample, body=NOMINAL_BODY)
+        lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                     stamp=source_now, source_now=source_now, pose=(0., 0., 0.))
+        assert (lane.state() is not None) is accepted
+        if not accepted:
+            assert lane.last['reason'] == 'native_scan_stale'
+    finally:
+        lane.close()
+
+
+@pytest.mark.parametrize('distance,moving', [(.5, True), (.075, False), (float('inf'), False)])
+def test_native_body_sweep_uses_the_actual_scan_and_holds_unknown(distance, moving):
+    from camera_lane import LearnedCameraLane
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.camera_ground import ground_plane
+    from native_scan import scan_sample
+    way = np.zeros((240, 320), np.uint8)
+    way[112:, 65:256] = 255
+    lane = LearnedCameraLane(SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda frame: (way, 'drivable', {}, 1.)),
+        ground_plane(.06343, .139626, 281.6, 160., 120., .6), camera_x=.03317,
+        clock=lambda: 10., body=NOMINAL_BODY)
+    sample = scan_sample(lambda ray, report: None, lambda ray: ray,
+                         robot_path='/World/Imported', stamp_ns=1_000_000_000)
+    sample['ranges'] = [distance] * 640
+    try:
+        assert lane.manager.config.body_stop_known
+        assert lane.manager.config.obstacle_mode == 'path'
+        admitted = lane.observe_scan(sample, body=NOMINAL_BODY)
+        if admitted:
+            lane.observe(np.full((240, 320, 3), 100, np.uint8),
+                         stamp=1., source_now=1., pose=(0., 0., 0.))
+        decision = lane.manager.tick_gain(10., gain=1.)
+        assert (decision.linear > 0.) is moving
+        if distance == float('inf'):
+            assert not admitted and lane.state() is None
+            assert lane.last['reason'] == 'native_scan_unknown'
+        else:
+            assert admitted and lane.manager._scan_points
+        with pytest.raises(ValueError, match='geometry differ'):
+            lane.observe_scan(sample, body=replace(NOMINAL_BODY, rotation_radius_m=.1))
+    finally:
+        lane.close()
 
 
 @pytest.mark.parametrize('yaw', [0., .4, 6.683185307179586])
@@ -29,7 +256,7 @@ def test_camera_route_guide_separates_local_tangent_from_ahead_curve(yaw):
     wrap = lambda angle: math.degrees(math.atan2(math.sin(angle), math.cos(angle)))
     assert guide[0] == pytest.approx(wrap(math.atan2(-.3, .1) - yaw))
     assert guide[3] == pytest.approx(wrap(-yaw))
-    assert guide[1:3] == (17., True)
+    assert guide[1:3] == (17., False)
     assert guide[4:] == (.012, .03)
 
 
@@ -52,6 +279,28 @@ def test_missing_camera_observation_is_not_a_learning_state():
         assert lane.state() is None
     finally:
         lane.close()
+
+
+def test_unusable_training_episode_preserves_failure_and_allows_later_valid_learning():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import camera_episode_usable, learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    assert camera_episode_usable('train', 0) is False
+    assert learn_transition(policy, ((3, 1), 1), None,
+                            dict(reward=-10., terminated=True, truncated=False)) == 'invalid_camera_observation'
+    assert policy.updates == 0 and policy.table == {}
+    assert camera_episode_usable('train', 1) is True
+    assert learn_transition(policy, ((3, 1), 1), (3, 1),
+                            dict(reward=1., terminated=True, truncated=False)) == 'updated'
+    assert policy.updates == 1
+
+
+@pytest.mark.parametrize('phase', ['baseline', 'eval'])
+def test_camera_admission_still_rejects_an_unusable_baseline_or_evaluation(phase):
+    from run_map_rl import camera_episode_usable
+    assert camera_episode_usable(phase, 1) is True
+    with pytest.raises(RuntimeError, match='candidate not accepted'):
+        camera_episode_usable(phase, 0)
 
 
 def test_learning_state_expires_with_source_age_and_processing_time():
@@ -97,6 +346,49 @@ def test_measured_terminal_transition_does_not_bootstrap_and_counts_real_update(
     result = dict(reward=-10., terminated=True, truncated=False)
     assert learn_transition(policy, ((2, 1), 3), (3, 1), result) == 'updated'
     assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
+
+
+def test_camera_loss_penalizes_last_applied_action_without_a_next_observation():
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    policy.table[(3, 1)] = [100.] * 4
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason='camera_target_unavailable')
+    assert learn_transition(policy, ((2, 1), 3), None, result) == 'terminal_camera_loss'
+    assert policy.updates == 1 and policy.table[(2, 1)][3] == pytest.approx(-1.5)
+    assert None not in policy.table and policy.table[(3, 1)] == [100.] * 4
+
+
+@pytest.mark.parametrize('previous,terminated,truncated,reason', [
+    (None, True, False, 'camera_lane_lost'),
+    ((None, 3), True, False, 'camera_lane_lost'),
+    (((2, 1), 3), False, False, 'camera_lane_lost'),
+    (((2, 1), 3), False, True, 'time_limit'),
+    (((2, 1), 3), True, True, 'camera_lane_lost'),
+    (((2, 1), 3), True, False, 'off_route'),
+])
+def test_missing_camera_terminal_credit_requires_executed_state_and_camera_loss(
+        previous, terminated, truncated, reason):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=terminated, truncated=truncated, reason=reason,
+                  camera_failure_reason='camera_target_unavailable')
+    assert learn_transition(policy, previous, None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0 and policy.table == {}
+
+
+@pytest.mark.parametrize('cause', [None, 'camera_source_stale', 'camera_processing_stale',
+    'learned_camera_unavailable', 'native_scan_unavailable', 'native_scan_unknown', 'native_scan_stale'])
+def test_sensor_failure_is_not_credited_to_steering(cause):
+    from camera_lane import CameraQPolicy
+    from run_map_rl import learn_transition
+    policy = CameraQPolicy(seed=17, perception=perception_id())
+    result = dict(reward=-10., terminated=True, truncated=False, reason='camera_lane_lost',
+                  camera_failure_reason=cause)
+    assert learn_transition(policy, ((2, 1), 3), None, result) == 'invalid_camera_observation'
+    assert policy.updates == 0 and not policy.table
 
 
 def test_camera_command_is_zero_if_observation_expires_during_core_tick(monkeypatch):
@@ -286,6 +578,97 @@ def test_existing_drivable_output_reaches_core_then_replayed_frame_stops():
     assert (stopped.linear, stopped.angular) == (0., 0.) and len(calls) == 1
 
 
+def gap_lane(frames, curvature=0.):
+    from camera_lane import LearnedCameraLane
+    from control.sensing.perception.camera_ground import ground_plane
+    ground = ground_plane(.06343, .139626, 281.6, 160., 120., .6)
+    rows, cols = np.mgrid[0:240, 0:320]
+    denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lateral = ground.height_m * (cols - 160) / denominator
+        forward = ground.height_m * (ground.focal_px * np.cos(ground.pitch_rad)
+            - (rows - 120) * np.sin(ground.pitch_rad)) / denominator + .03317
+        centre = np.zeros_like(forward) if curvature == 0. else (
+            1. - np.sqrt(1. - (curvature * forward) ** 2)) / curvature
+    way = ((denominator > 0) & (np.abs(lateral + centre) < .0925)
+        & ((forward < .45) if curvature else True)).astype(np.uint8)
+    output = [way, 'drivable']
+    model = SimpleNamespace(model_revision='lane-seg-test',
+        infer_drivable=lambda _f: (*output, {}, 1.))
+    now = [10.]
+    lane = LearnedCameraLane(model, ground, camera_x=.03317, clock=lambda: now[0])
+    image = np.full((240, 320, 3), 100, np.uint8)
+    lane.history.add(9.9, 0., 0., 0.)  # Odom is already streaming before the first image.
+    for index in range(frames):
+        now[0] = 10. + index * .1
+        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    if frames >= 3 and curvature == 0.:
+        assert lane.keeper.last.get('expected_path_state') == 'live', lane.keeper.last
+    output[:] = [np.zeros_like(way), 'lane_marking']
+    return lane, now, image, output
+
+
+@pytest.mark.parametrize('frames,continues', [(2, False), (3, True)])
+def test_camera_gap_uses_observed_geometry_without_learning(frames, continues):
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(frames)
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(.01, .01, .1))
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert (decision.linear > 0.) is continues, (lane.last, lane.keeper.last)
+    assert decision.angular < 0. if continues else decision.angular == 0.
+    assert state is None
+    lane.close()
+
+
+@pytest.mark.parametrize('curvature', [-1., 1.])
+def test_a_visible_curve_keeps_its_observed_shape_during_a_gap(curvature):
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(3, curvature=curvature)
+    assert abs(lane.keeper.last['drivable_steer']['curvature_1pm']) > .5
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert decision.linear > 0. and decision.angular * curvature > 0., lane.last
+    assert lane.last['camera_provenance'] == 'odom_expected_path'
+    assert state is None
+    assert lane.state() is None
+    boosted, boosted_state = camera_tick(lane, now[0], gain=1.7)
+    assert (boosted.linear, boosted.angular) == pytest.approx((decision.linear, decision.angular))
+    assert boosted_state is None
+    lane.close()
+
+
+@pytest.mark.parametrize('loss', ['time', 'distance', 'rewind', 'jump', 'dark', 'inference', 'stale', 'pose'])
+def test_camera_geometry_hold_stops_at_budgets_and_invalid_input(loss):
+    from run_map_rl import camera_tick
+    lane, now, image, _output = gap_lane(3)
+    now[0] += .1
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    assert camera_tick(lane, now[0], gain=1.)[0].linear > 0.
+    if loss == 'time':
+        for _ in range(25):
+            now[0] += .1
+            lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    else:
+        now[0] += .1
+        pose = (.25, 0., 0.) if loss == 'distance' else (.26, 0., 0.) if loss == 'jump' else (0., 0., 0.)
+        if loss == 'pose':
+            pose = (float('nan'), 0., 0.)
+        stamp = 10. if loss == 'rewind' else now[0] - .31 if loss == 'stale' else now[0]
+        if loss == 'dark':
+            image = np.zeros_like(image)
+        if loss == 'inference':
+            def broken(_frame):
+                raise RuntimeError('lost model')
+            lane.worker._slot.poll().infer_drivable = broken
+        lane.observe(image, stamp=stamp, source_now=now[0], pose=pose)
+    decision, state = camera_tick(lane, now[0], gain=1.)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert state is None
+    lane.close()
+
+
 def test_existing_model_revision_hash_and_roles_must_match_before_inference():
     from camera_lane import camera_model_identity
     model = SimpleNamespace(manifest=SimpleNamespace(model_revision='lane-seg-test',
@@ -316,6 +699,98 @@ def test_map_only_bridge_or_pivot_is_not_a_camera_lane(guide_deg):
     out = lane.manager.tick_gain(10., gain=1.7)
     assert lane.observation is None and (out.linear, out.angular) == (0., 0.)
     assert lane.last['reason'] == 'camera_target_unavailable'
+    assert 'camera_target' in lane.last
+    assert 'reason' in lane.last['camera_target']
+    assert 'exit_behind_line' in lane.last['camera_target']
+    assert 'centre_path_m' in lane.last['camera_target']
+    assert lane.last['camera_target']['reason'] == 'way_beyond_line'
+    assert lane.last['camera_target']['target_now_m'] is None
+    assert lane.last['camera_target']['centre_path_m'] == []
+    import json
+    json.dumps(lane.last, allow_nan=False)
+    lane.close()
+
+
+@pytest.mark.parametrize('changes,accepted', [
+    ({}, True),
+    ({'observed_creep_key': 9.0}, False),
+    ({'observed_creep_target_m': None}, False),
+    ({'observed_creep_target_m': (-.2, .05)}, False),
+    ({'observed_creep_target_m': (.2, float('nan'))}, False),
+    ({'exit_from_memory': True}, False),
+    ({'exit_behind_line': True}, False),
+    ({'switch_pending': 'drivable_centre'}, False),
+    ({'strategy': 'drivable_creep_map'}, False),
+])
+def test_only_current_observed_creep_is_admitted(monkeypatch, changes, accepted):
+    import camera_lane
+    lane, now, image, _ = gap_lane(1)
+    now[0] = 10.1
+    info = dict(strategy='drivable_creep', observed_creep_key=now[0],
+                observed_creep_target_m=(.2, .05))
+    info.update(changes)
+    def keep(*args, **kwargs):
+        args[2].update(strategy=info['strategy'], drivable_steer=info)
+        return (-.1, .6), True
+    monkeypatch.setattr(camera_lane, 'keep_step', keep)
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.))
+    if accepted:
+        assert lane.observation is not None
+        assert lane.last['camera_provenance'] == 'observed_creep'
+    else:
+        assert lane.observation is None
+        assert lane.last['reason'] == 'camera_target_unavailable'
+    lane.close()
+
+
+@pytest.mark.parametrize('prior_frames', [0, 3])
+def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_path(prior_frames):
+    lane, now, image, output = gap_lane(prior_frames)
+    now[0] += .1
+    ground = lane.ground
+    rows, cols = np.mgrid[0:240, 0:320]
+    denominator = ground.focal_px * np.sin(ground.pitch_rad) + (rows - 120) * np.cos(ground.pitch_rad)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        lateral = ground.height_m * (cols - 160) / denominator
+        forward = ground.height_m * (ground.focal_px * np.cos(ground.pitch_rad)
+            - (rows - 120) * np.sin(ground.pitch_rad)) / denominator + .03317
+    output[:] = [((denominator > 0) & (np.abs(lateral) < .06) & (forward < .17)).astype(np.uint8), 'drivable']
+    lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
+                 guide=(80., now[0], False, 0., 0., 0.))
+    if prior_frames:
+        assert lane.observation is None
+        assert lane.last['camera_target']['switch_pending'] == 'drivable_creep'
+        now[0] += .1
+        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
+                     guide=(80., now[0], False, 0., 0., 0.))
+    assert lane.last.get('camera_provenance') == 'observed_creep', lane.last
+    assert lane.keeper.last['expected_path_state'] != 'live'
+    assert lane.keeper.last['drivable_steer'].get('target_now_m') is None
+    lane.close()
+
+
+def test_camera_failure_snapshots_preserve_distinct_reasons_without_unbounded_output():
+    from run_map_rl import camera_snapshot_due
+    current = dict(reason='camera_target_unavailable', strategy='drivable_pivot_right')
+    key = (current['reason'], current['strategy'])
+    assert camera_snapshot_due(0, {}, set())
+    assert not camera_snapshot_due(1, dict(reason=None, strategy='drivable_centre'), set())
+    assert camera_snapshot_due(1, current, set())
+    assert not camera_snapshot_due(2, current, {key})
+    assert camera_snapshot_due(2, dict(reason='native_scan_unknown'), {key})
+    assert not camera_snapshot_due(3, current, {(str(i), None) for i in range(8)})
+
+
+@pytest.mark.parametrize('phase,visible,learned,expected', [
+    ('train', 0, 0, None), ('baseline', 1, 0, None), ('eval', 1, 1, None),
+    ('baseline', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 0, 0, 'existing model produced no usable camera lane'),
+    ('eval', 1, 0, 'evaluation visited no learned state'),
+])
+def test_failed_camera_heading_remains_rejected_when_later_headings_are_measured(phase, visible, learned, expected):
+    from run_map_rl import camera_admission_error
+    error = camera_admission_error(phase, visible, learned)
+    assert error is None if expected is None else expected in error
 
 
 def test_inference_wall_time_cannot_refresh_an_old_camera_frame():

@@ -87,3 +87,5 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
             instance_id=body.instance_id, candidate=compiled["candidate"],
         ), principal=service_principal)
         return proposal_resolve(result["proposal"]["proposal_id"], principal=service_principal)
+
+    return propose

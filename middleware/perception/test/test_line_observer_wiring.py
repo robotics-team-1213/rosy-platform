@@ -80,10 +80,13 @@ def test_keep_route_context_is_subscribed_and_bound_to_both_camera_outputs():
     assert "route_context_seq=route_context.seq if route_context is not None else None" in source
 
 
-def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires():
+@pytest.mark.parametrize('native_law_missing', [False, True])
+def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expires(native_law_missing):
     import json
+    import os
 
     from control.route_context_input import RouteContextInput, bend_expected
+    from control.core_law_input import refresh_drivable_law
     from control.sensing.perception.lane import LaneObservation, line_observation_payload
 
     tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
@@ -100,6 +103,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     keeper.update = update
     namespace = dict(
         Image=object, String=lambda **kw: SimpleNamespace(**kw), json=json,
+        refresh_drivable_law=refresh_drivable_law,
         image_msg_to_frame=lambda _: np.ones((16, 16, 3), np.uint8),
         visibility_reason=lambda _: 'usable', pose_if_fresh=lambda *_: None,
         _spinning_in_place=lambda _: False, KEEP_MAX_FRAME_GAP_S=0.5,
@@ -118,6 +122,8 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     node = SimpleNamespace(
         get_parameter=lambda key: SimpleNamespace(value=params[key]),
         _route_context_input=inbox, _lane_keeper=keeper, _paint_worker=None, _drivable_steer=None,
+        _native_core_law=(SimpleNamespace(read=lambda *_: None) if native_law_missing else None),
+        _drivable_required=native_law_missing,
         _cmd_twist=None, _cmd_stamp=None, _cmd_stale_frames=0, _keep_last_stamp=None,
         _ground=lambda *_: object(), _paint_for=lambda *_: (None, 'threshold'),
         _ground_label=lambda: 'NOMINAL', _ground_error=None, _paint_half_width_m=0.0125,
@@ -133,6 +139,7 @@ def test_keep_callback_binds_fresh_route_seq_to_observation_and_debug_then_expir
     assert bend_inputs == [True, False]
     assert [row.get('route_context_seq') for row in observed] == [7, None]
     assert [row['route_context_seq'] for row in debug] == [7, None]
+    assert [row['visible'] for row in observed] == [not native_law_missing] * 2
 
 
 def test_line_observer_detector_settings_are_operator_tunable():

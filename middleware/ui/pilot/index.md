@@ -36,6 +36,6 @@
 
 - 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
 - 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
-- 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
-- 2026-10-11 · uncommitted · uiux: semantic colors and shared layout (D-624)
-- 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
+- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토

@@ -352,7 +352,8 @@ def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:
             polyline=[(float(p[0]), float(p[1])) for p in segment["points"]],
             direction="two_way" if "reverse" in (segment.get("directions") or []) else "one_way",
             width_m=IMPORT_WIDTH_M, speed_cap_mps=IMPORT_SPEED_CAP_MPS, drive_mode="lane"))
-    return SiteMap(map_id=map_id, places=places, edges=edges, crosswalks=crosswalks_from_lane_graph(path))
+    return SiteMap(map_id=map_id, places=places, edges=edges, crosswalks=crosswalks_from_lane_graph(path),
+                   turn_bans=graph.get("turn_bans", []))
 
 
 def crosswalks_from_lane_graph(path: Path | str) -> list[SiteCrosswalk]:
