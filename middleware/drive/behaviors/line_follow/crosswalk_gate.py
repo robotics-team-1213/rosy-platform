@@ -265,7 +265,7 @@ class CrosswalkGate:
             # the evidence's lateral bound, drift since that image, and the edges' slope over A
             # from the heading difference between that image and the zone anchor.
             cpose, cleft, cright, unc = corridor
-            cleft, cright = lane_edges(cleft, cright, geo.lane_half_m)
+            cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
             offset = self._local(z, cpose, 0.0)[1]
             turn = abs(math.sin(cpose.yaw - z.yaw)) * (z.far + z.margin + geo.exit_m)
             pad = unc + odom_error_fraction * math.hypot(pose.x - cpose.x, pose.y - cpose.y) + turn
@@ -408,24 +408,28 @@ class CrosswalkGate:
 
 
 
-def lane_edges(left, right, half: float = CORRIDOR_HALF_M):
+def lane_edges(left, right, half: float = CORRIDOR_HALF_M, body_half: float = 0.0):
     """Seen lane edges, no wider than a lane (D-573 개정 4). Two edges further apart than the lane
     model are not the lane's (Gazebo lap 2026-10-14: the camera gave the wall bases 0.120 and 0.122 m
     either side, A's edge lay on the wall and its returns held 'person' for good): the lane width is
-    kept about their middle. Raw edges only: uncertainty, drift and slope pads go on outside this."""
+    kept about their middle. Raw edges only: uncertainty, drift and slope pads go on outside this.
+    The body that took the image stands in that lane, so the lane's middle is at most half - body_half
+    from the anchor (review: one misread far edge must not slide the lane off the body)."""
     if left is not None and right is not None and left - right > 2 * half:
-        middle = (left + right) / 2
+        reach = max(half - body_half, 0.0)
+        middle = min(max((left + right) / 2, -reach), reach)
         return middle + half, middle - half
     return left, right
 
 
-def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None) -> Zone:
+def zone_of(z: dict, range_error_fraction: float, along_default: Optional[float] = None,
+            body_half_m: float = 0.0) -> Zone:
     """A D-491 zone record with a resolved anchor as a Zone. Along the road the frame's crosswalk
     bound (D-573 6 개정), else along_default, else the lane's lateral bound (D-491 as before)."""
     a = z["anchor"]
     along = z.get("along")
     along = along if along is not None else along_default if along_default is not None else z["uncertainty"]
-    left, right = lane_edges(z.get("left"), z.get("right"))
+    left, right = lane_edges(z.get("left"), z.get("right"), body_half=body_half_m)
     return Zone(key=(z["epoch"], a.frame), x=a.x, y=a.y, yaw=a.yaw, near=z["near"], far=z["far"],
                 margin=along + range_error_fraction * z["far"], left=left, right=right, lateral=z["uncertainty"])
 
@@ -471,7 +475,7 @@ class CrosswalkGateMixin:
             if z["anchor"] is None and z["epoch"] == ev.epoch:
                 z["anchor"] = ev._image_pose(z["stamp_ns"])
             if z["anchor"] is not None:
-                out.append(zone_of(z, c.crosswalk_range_error_fraction))
+                out.append(zone_of(z, c.crosswalk_range_error_fraction, body_half_m=c.body_half_width_m))
         return out
 
     def _fresh_corridor(self, now: float):
