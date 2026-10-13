@@ -2,6 +2,7 @@ import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
+import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
@@ -449,7 +450,7 @@ document.addEventListener('keydown',event=> {
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
   const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
   if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
-  // X only excludes a pending photo; approved or excluded photos change by mouse only.
+  // X only excludes a pending photo; other decisions use the explicit reopen action.
   const decision=key==='a' ? 'approve' : key==='x' && frame?.status==='pending' ? 'exclude' : null;
   if(decision && !$(decision).disabled) {event.preventDefault(); $(decision).click();}
 });

@@ -1,4 +1,5 @@
 import '/common/ui.js';
+import '/commands.js';
 const $=id=>document.getElementById(id);
 let token,busy=false,loading=true;
 function show(id,value){$(id).textContent=value;$(id).hidden=!value;}

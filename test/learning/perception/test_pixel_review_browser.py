@@ -42,9 +42,9 @@ def test_keyboard_pixel_brush_saves_source_coordinates_and_cancels(browser_works
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.locator('#pixel-class').select_option('4')
+    page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
     page.locator('#pixel-radius').fill('0')
     page.locator('#pixel-canvas').focus()
-    page.keyboard.press('t')
     page.keyboard.down('Space')
     page.keyboard.press('Alt+ArrowRight')
     page.keyboard.up('Space')

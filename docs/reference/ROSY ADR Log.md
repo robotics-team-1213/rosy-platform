@@ -1065,3 +1065,9 @@ Status: Accepted (SOURCE contract; runtime and field acceptance separate).
 **Status:** Proposed (2026-10-12, contract review before implementation)
 
 기존 CORE owner의 native run identity, atomic receipt와 실제 terminal readback을 연결한다. 전문은 [D-732](../adr/D-732-core-native-outcome-ports.md).
+
+## D-739 — 검수 앱 기능 검색과 원본 좌표 커서
+
+**Status:** Accepted (2026-10-13, 사용자 단축키 요청)
+
+기존 버튼·검증을 재사용하는 Ctrl+K 기능 검색과 원본 픽셀 좌표 기반 키보드 점·브러시·영역 조작을 연결한다. 전문은 [D-739](../adr/D-739-review-keyboard-command-search-and-pixel-cursor.md).
