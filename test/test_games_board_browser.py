@@ -283,7 +283,10 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
                 assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, layout
                 assert layout["stop"]["bottom"] <= height and layout["stop"]["right"] <= width, layout
                 if height <= 568:
-                    assert page.locator("#lost").bounding_box()["y"] + page.locator("#lost").bounding_box()["height"] <= page.locator(".halt-row").bounding_box()["y"]
+                    # D-741: the stop moved into the sticky top bar; the reason stays below it, in the first view.
+                    lost = page.locator("#lost").bounding_box()
+                    bar = page.locator("ui-topbar").bounding_box()
+                    assert bar["y"] + bar["height"] <= lost["y"] and lost["y"] + lost["height"] <= height, (bar, lost)
             else:
                 assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
@@ -351,19 +354,29 @@ def test_missing_camera_frame_does_not_render_broken_image_placeholder():
         server.close()
 
 
-# --- D-201: 초점 문법의 적합 계약 — 정지 행은 선언 뷰포트(1280×800) 안에 있다.
+# --- D-201 적합 계약, D-741 3·4의 자리 — 정지는 앱 바의 마지막 조작이고 선언 뷰포트(1280×800) 안에 있다.
 
 GAMES_FIT_PROBE = """() => {
-  const halt = document.getElementById('halt').getBoundingClientRect();
+  const stop = document.getElementById('halt');
+  const halt = stop.getBoundingClientRect();
+  const bar = document.querySelector('ui-topbar');
+  const box = bar.getBoundingClientRect();
+  const controls = [...bar.querySelectorAll('a, button, ui-button, input, select')];
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
     halt: { top: Math.round(halt.top), bottom: Math.round(halt.bottom) },
+    inBar: stop.closest('ui-topbar') === bar && halt.top >= box.top && halt.bottom <= box.bottom,
+    last: controls.at(-1) === stop,
+    rightmost: controls.every(node => node.getBoundingClientRect().right <= halt.right + 1),
+    label: stop.textContent.trim(),
+    note: document.querySelector('.halt-note').getBoundingClientRect().toJSON(),
+    barBottom: box.bottom,
     vh: window.innerHeight,
   };
 }"""
 
 
-def test_halt_row_stays_inside_the_declared_viewport():
+def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
     """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -389,8 +402,11 @@ def test_halt_row_stays_inside_the_declared_viewport():
         f"보드가 {fit['docOverflow']}px 스크롤된다 — 초점 문법 위반(D-201): {fit}"
     )
     assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
-        f"정지 행이 뷰포트 밖이다(D-201): {fit}"
+        f"정지가 뷰포트 밖이다(D-201): {fit}"
     )
+    assert fit["inBar"] and fit["last"] and fit["rightmost"], f"정지는 앱 바의 마지막 조작이다(D-741 3): {fit}"
+    assert fit["label"] == "두 로봇 정지", fit
+    assert fit["note"]["height"] > 0 and fit["note"]["bottom"] <= fit["barBottom"], f"안내와 결과는 머리 안에 보인다: {fit}"
 
 
 def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
@@ -427,7 +443,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
                 connection: rect('#connection').toJSON(), scoreEvidence: rect('#score-evidence').toJSON(),
                 awayName: rect('#away-name').toJSON(), halt: rect('#halt').toJSON(),
                 scrollWidth: document.documentElement.scrollWidth,
-                sticky: getComputedStyle(document.querySelector('.halt-row')).position};
+                sticky: getComputedStyle(document.querySelector('ui-topbar')).position};
             }""")
             assert narrow["connection"]["top"] >= max(narrow["brand"]["bottom"], narrow["phase"]["bottom"])
             assert narrow["scoreEvidence"]["bottom"] <= narrow["awayName"]["top"]
@@ -448,12 +464,16 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             page.wait_for_timeout(100)
             scrolled = page.evaluate("""() => ({
               halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              bar: document.querySelector('ui-topbar').getBoundingClientRect().toJSON(),
               stair: document.getElementById('stair1').getBoundingClientRect().toJSON(),
               scrollWidth: document.documentElement.scrollWidth,
             })""")
             assert scrolled["scrollWidth"] <= 600
-            assert scrolled["halt"]["bottom"] >= 780
-            assert scrolled["stair"]["bottom"] <= scrolled["halt"]["top"]
+            # D-741: the bar is sticky, so the stop is still at the top after scrolling to the end,
+            # and the last line of the page is in view (nothing is parked under a bottom row).
+            assert abs(scrolled["bar"]["top"]) <= 1, scrolled
+            assert scrolled["halt"]["top"] >= 0 and scrolled["halt"]["bottom"] <= scrolled["bar"]["bottom"], scrolled
+            assert scrolled["stair"]["bottom"] <= 800, scrolled
             assert not errors
             browser.close()
     finally:
@@ -743,8 +763,9 @@ def test_stalled_stop_request_recovers_for_retry(width, height):
                 assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
                 assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, (state, layout)
                 if width <= 390:
-                    assert abs(layout["stop"]["x"] - layout["score"]["x"]) <= 1, (state, layout)
-                    assert abs(layout["stop"]["width"] - layout["score"]["width"]) <= 1, (state, layout)
+                    # D-741: the stop is the right end of the top bar (was a full-width bottom row).
+                    assert abs(layout["stop"]["right"] - layout["score"]["right"]) <= 1, (state, layout)
+                    assert layout["stop"]["bottom"] <= layout["score"]["top"], (state, layout)
                 save_temp_screenshot(page, f"games_board_stop_{state}_{width}x{height}.png")
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
@@ -802,7 +823,8 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["topbar"] <= 0.2 * height, fit
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
-    assert abs(halt["x"] - fit["panels"][0]["x"]) <= 1 and abs(halt["width"] - fit["panels"][0]["width"]) <= 1, fit
+    # D-741: the stop is the right end of the top bar (was a full-width bottom row).
+    assert abs(halt["right"] - fit["panels"][0]["right"]) <= 1 and halt["bottom"] <= fit["topbar"], fit
     assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
     assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
