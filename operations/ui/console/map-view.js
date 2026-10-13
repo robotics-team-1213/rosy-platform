@@ -19,6 +19,7 @@ import { drawGuide } from "/console/assets/guide-layer.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
+import { drawMapDatum } from "./map-datum.js";
 
 // Map label: the short id ("rosy_012" -> "012").
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
@@ -505,42 +506,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    // 축과 원점: 원점이 보이면 그 자리에, 아니면 범위 왼쪽 아래에 x/y 방향만 그린다.
-    const originVisible = bounds.min_x <= 0 && bounds.max_x >= 0
-      && bounds.min_y <= 0 && bounds.max_y >= 0;
-    const axisOrigin = originVisible ? [0, 0] : [bounds.min_x + 0.1, bounds.min_y + 0.1];
-    const axisAt = toPx(...axisOrigin);
-    const axisLen = Math.min(t.scale * 0.4, width / 8);
-    // 축은 지도 방향으로 그린다 — 실영상(호모그래피·회전)에서도 x/y 가 실제 지도 축을 가리킨다.
-    const axisTip = (dx, dy) => {
-      const p = toPx(axisOrigin[0] + dx, axisOrigin[1] + dy);
-      const span = Math.hypot(p.x - axisAt.x, p.y - axisAt.y) || 1;
-      return { x: axisAt.x + (p.x - axisAt.x) / span * axisLen, y: axisAt.y + (p.y - axisAt.y) / span * axisLen };
-    };
-    const xTip = axisTip(0.1, 0), yTip = axisTip(0, 0.1);
-    ctx.save();
-    ctx.lineWidth = 2;
-    ctx.font = labelFont;
-    ctx.textBaseline = "middle";
-    ctx.strokeStyle = css("--ink");
-    ctx.fillStyle = css("--ink");
-    ctx.beginPath();
-    ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(xTip.x, xTip.y);
-    ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(yTip.x, yTip.y);
-    ctx.stroke();
-    ctx.textAlign = "center";
-    ctx.fillText("x", xTip.x + (xTip.x - axisAt.x) / axisLen * 10, xTip.y + (xTip.y - axisAt.y) / axisLen * 10);
-    ctx.fillText("y", yTip.x + (yTip.x - axisAt.x) / axisLen * 10, yTip.y + (yTip.y - axisAt.y) / axisLen * 10);
-    if (originVisible) {
-      ctx.beginPath();
-      ctx.arc(axisAt.x, axisAt.y, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.textAlign = "right";
-      ctx.fillText("0,0", axisAt.x - 6, axisAt.y + 12);
-    }
-    ctx.restore();
+    drawMapDatum(ctx, toPx, bounds, {css});
 
     const activeMap = view.activeSiteMap?.map;
     if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
@@ -656,6 +622,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     canvas.setAttribute("aria-label", view.call
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
+    drawMapDatum(ctx, (x, y) => {
+      const cell = cellOf(grid, x, y);
+      return {x: cell.cx, y: cell.cy};
+    }, {
+      min_x: grid.origin.x, min_y: grid.origin.y,
+      max_x: grid.origin.x + grid.width * grid.resolution,
+      max_y: grid.origin.y + grid.height * grid.resolution,
+    }, {css});
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
@@ -721,13 +695,20 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
+      const cx = col + 0.5;
+      const cy = grid.height - row - 0.5;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(col + 0.5, grid.height - row - 0.5, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
       ctx.lineWidth = 0.5;
       ctx.strokeStyle = css("--series-goal");
       ctx.stroke();
       ctx.restore();
+      const world = toWorld(grid, col, row);
+      const metres = `${world.x.toFixed(2)}, ${world.y.toFixed(2)} m`;
+      drawChip(ctx, null, cx + 2, cy, metres);
+      canvas.setAttribute("aria-label", `${canvas.getAttribute("aria-label")}. ${metres}`);
+      flushChips(ctx);
     }
   }
 
