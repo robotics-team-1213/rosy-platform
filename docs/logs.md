@@ -8267,3 +8267,10 @@ osy-d395-s1d\`.
 - 증거: 원격 pytest와 브라우저 결과는 이 브랜치의 착지 보고에 둔다.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
 - 결정: `/pixels` 기본 칠 클래스를 역할로 고르는 부분은 옮기지 않았다. main의 픽셀 화면이 이미 「클래스를 선택하세요」로 명시 선택을 요구한다.
+
+## 2026-10-13 · uncommitted · docs: 묵은 브랜치 일괄 착지와 정리 기록
+
+- 변경: main에 없던 브랜치를 한 세션에서 모았다. 착지 도구로 들어간 것, 충돌·lint·크기 가드를 풀어 들어간 것, 옛 브랜치에서 지금 구조로 옮겨 들어간 것을 합쳐 이 기록 시점에 38개다. main에 이미 같은 내용이 있던 브랜치는 `archive/2026-10-13/<브랜치>` 태그를 달고 지웠고, main의 조상인 브랜치와 깨끗한 워크트리도 지웠다. 미커밋 파일이 있는 워크트리, 오늘 다른 세션이 쓰는 브랜치, 판단이 남은 브랜치는 그대로 두었다. 교훈은 `docs/solutions/workflow-issues/check-supersession-before-resolving-stale-branch-conflicts-2026-10-13.md`에 적었다.
+- 증거: 브랜치별 착지 로그와 분류표는 `X:/DevTemp/land-recent/`(summary.txt, summary2.txt, classify.txt, plan.tsv, cleanup-log.txt)에 있다. 착지마다 `tools/land.py --tests auto`의 원격 영향 시험과 lint를 통과했다. 브라우저 시험은 착지 도구가 돌리지 않아 모델 PC에서 따로 돌린 것만 확인됐다.
+- gate 변화: 없음. SOURCE와 원격 시험 증거뿐이며 장치·현장 상태는 그대로다. D-622 REALIGN과 D-571 시뮬레이션 실행기는 켜지 않았고, 실행기는 실제 PC에서 돌린 적이 없다.
+- 결정: D-556 odom 차선 보류 포팅은 착지하지 않고 `fix/lane-odom-cross-veto-port`에 둔다. 판정이 몸체가 아니라 앞쪽 선을 보고, 걸린 로봇이 Fleet에 막힘을 올리지 않기 때문이다. push는 하지 않았다.
