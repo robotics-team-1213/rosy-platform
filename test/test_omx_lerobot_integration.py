@@ -13,7 +13,7 @@ PYTHON = Path(os.environ.get('ROSY_OMX_LEROBOT_PYTHON',
 @pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
 def test_official_config_reader_and_split_roundtrip(tmp_path):
     script = r'''
-import copy, json, sys
+import copy, json, subprocess, sys
 from pathlib import Path
 import draccus
 import numpy as np
@@ -59,33 +59,28 @@ train = LeRobotDataset('local/native-fixture_train', root=out/'train', video_bac
 assert train.meta.total_episodes == 1
 assert float(train.meta.stats['action']['max'][0]) == 3.0, 'eval data leaked into train stats'
 assert (out/'split-receipt.json').is_file()
-from lerobot.configs.train import TrainPipelineConfig
-from lerobot.configs.types import FeatureType, PolicyFeature
-from lerobot.policies.act.configuration_act import ACTConfig
 from lerobot.policies.act.modeling_act import ACTPolicy
+from lerobot.policies.factory import make_pre_post_processors
 import torch
 torch.set_num_threads(2)
 training = json.loads((root/'learning/training/omx/native-act.example.json').read_text())
 training['dataset'].update(repo_id='local/native-fixture_train', root=str(out/'train'))
 training['output_dir'] = str(tmp/'training')
-train_config = draccus.decode(TrainPipelineConfig, training)
-assert train_config.policy.push_to_hub is False
-train_config.policy.input_features = {
-    'observation.state': PolicyFeature(type=FeatureType.STATE, shape=(6,)),
-    'observation.images.front': PolicyFeature(type=FeatureType.VISUAL, shape=(3,32,32))}
-train_config.policy.output_features = {'action': PolicyFeature(type=FeatureType.ACTION, shape=(6,))}
-policy = ACTPolicy(train_config.policy)
-batch = {'observation.state':torch.zeros(2,6), 'observation.images.front':torch.zeros(2,3,32,32),
-         'action':torch.zeros(2,4,6), 'action_is_pad':torch.zeros(2,4,dtype=torch.bool)}
-loss, _ = policy.forward(batch)
-assert torch.isfinite(loss)
-loss.backward()
-torch.optim.AdamW(policy.parameters(), lr=1e-4).step()
-policy.save_pretrained(tmp/'model')
-loaded = ACTPolicy.from_pretrained(tmp/'model')
+training.update(steps=2, save_freq=2, log_freq=1, batch_size=2)
+config_path = tmp/'train.json'
+config_path.write_text(json.dumps(training))
+run = subprocess.run([sys.executable, '-m', 'lerobot.scripts.lerobot_train',
+                      f'--config_path={config_path}'], capture_output=True, text=True, timeout=120)
+assert run.returncode == 0, run.stdout + '\n' + run.stderr
+model = tmp/'training/checkpoints/last/pretrained_model'
+assert (model/'policy_preprocessor.json').is_file()
+assert (model/'policy_postprocessor.json').is_file()
+loaded = ACTPolicy.from_pretrained(model)
+pre, post = make_pre_post_processors(loaded.config, pretrained_path=str(model))
+batch = next(iter(torch.utils.data.DataLoader(train, batch_size=1)))
 loaded.eval()
 with torch.no_grad():
-    action = loaded.select_action({key:value[:1] for key,value in batch.items() if key.startswith('observation.')})
+    action = post(loaded.select_action(pre(batch)))
 assert action.shape == (1,6) and torch.isfinite(action).all()
 print('OFFICIAL_CONFIG_READER_SPLIT_PASS')
 '''
