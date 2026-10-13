@@ -29,3 +29,19 @@ test("new link files do not name transport exceptions", () => {
     }
   }
 });
+
+test("D-550 8: only an unbounded verdict produces the Rule M mark, with its reason in words", async () => {
+  const { ruleMTag } = await import("../../../site_ui/console/link-tag.js");
+  for (const rule of [undefined, null, {}, { state: "idle" }, { state: "bounded", motion: "goal" }]) {
+    assert.equal(ruleMTag(rule), null);
+  }
+  const mark = ruleMTag({ state: "unbounded", motion: "lane_trip", reason: "hold_back" });
+  assert.equal(mark.word, "한도 없음");
+  assert.equal(mark.kind, "warn");
+  assert.equal(mark.text, "관제가 끊겨도 로봇이 계속 갑니다 (차로 통행권·운행 임대 없음)");
+  assert.match(ruleMTag({ state: "unbounded", reason: "rest_only" }).text, /허브 연결 없음/);
+  assert.match(ruleMTag({ state: "unbounded", reason: "policy_continue" }).text, /계속 주행/);
+  assert.match(ruleMTag({ state: "unbounded", reason: "policy_unknown" }).text, /정책 모름/);
+  assert.match(ruleMTag({ state: "unbounded", reason: "toString" }).text, /이유 모름/);
+  assert.match(ruleMTag({ state: "unbounded" }).text, /이유 모름/);
+});

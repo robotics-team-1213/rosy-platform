@@ -112,3 +112,13 @@ test("a running trip shows its live AI route deviation without a wait cycle", ()
     view.trafficTrips = [];
   }
 });
+
+test("attentionItems: D-550 8 an unbounded Fleet motion is one warn row; bounded and idle add nothing", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const rule = (rule_m) => full({ line_stuck: null, rule_m });
+  assert.deepEqual(texts(attentionItems(rule({ state: "unbounded", motion: "goal", reason: "rest_only" }))),
+    ["warn: 한도 없는 움직임 — 관제가 끊겨도 로봇이 계속 갑니다 (목표 임대 없음, 허브 연결 없음)"]);
+  assert.deepEqual(attentionItems(rule({ state: "bounded", motion: "goal", reason: null })), []);
+  assert.deepEqual(attentionItems(rule({ state: "idle", motion: null, reason: null })), []);
+  assert.deepEqual(attentionItems(rule(undefined)), []);
+});

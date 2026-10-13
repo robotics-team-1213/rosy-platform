@@ -1,6 +1,7 @@
 // 예외 큐 (Fleet 분해 3에서 roster.js로부터 옮김, D-540 단계 (d) 크기 재판정). 주의/개입 큐의
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
 import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { ruleMTag } from "./link-tag.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
@@ -177,6 +178,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
     items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
     items.push(...guideAttention(view.guide, robot.robot_id));  // D-536 coordinate guides
+    // D-550 8 / D-760 3: Fleet started a motion that no TTL or link signal bounds. Shown, not refused.
+    const unbounded = ruleMTag(robot.rule_m);
+    if (unbounded) items.push({ severity: "warn", text: `: 한도 없는 움직임 — ${unbounded.text}` });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
