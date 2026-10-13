@@ -435,3 +435,25 @@ Leg11 기록의 첫 문서 회귀는 새 로그 제목 형식 오류로 2 NEW였
 - 최초 zero는 sim77.265초, 최종 zero는 sim84.362초다. 최종 zero 8.55ms 전 SDK는 front 0.127828m > stop 0.10405m·blocked false이지만 can_rotate false였고 CORE는 TRACKING/FREE였다. 이후 SDK blocked가 true가 됐으며 종료까지 false 전환을 관측하지 못했다. CORE HOLD는 최종 zero보다 7.390 wall초 뒤, Fleet stall은 10.466 wall초 뒤다. 따라서 CORE HOLD 해제만으로 native 주행은 재개되지 않았다. 수신 순서에 근거한 원인 분리이며 내부의 정확한 소비 frame 증명은 아니다.
 - 실제 spawn heading은 west 역방향 끝 접선이다. 카메라 경계의 세계 방향 약 180도만으로 현재 몸 아래 도로가 직선이거나 로봇이 36도 잘못 정렬됐다고 단정하지 않는다. 원본 graph의 해당 구간 접선은 빠르게 변하며 출구 직선을 앞서 관측했을 가능성을 따로 평가한다. centre와 border 후보의 정지 구간 SOURCE 재생에서는 기록된 SDK GateInputs 분류를 적용한 반사실 계산이 모두 zero를 냈다. 다음 비교는 목표점 조정과 일반 곡선 명령의 실제 sweep 검증을 분리하며, 제자리 회전 검사를 단순히 끄거나 이전 거절 목표를 부활시키지 않는다.
 - OFF·정지·lease 해제·pending 0·자기 프로세스/포트/lock 종료, 소스 7,554·재사용 설치 2,732 전체 해시 이상 0과 진단 오류 0을 확인했다. 두 로봇 각 2,787개 native 샘플의 paint/wall/outside/other 겹침은 0이나 연속 접촉 없음·지도 완주·실물 수용을 증명하지 않는다. 지도 완주와 독립 반복은 아직 미완료다.
+
+## 2026-10-13 · 같은 지점 정지의 원인 분리 (run1–run13)
+
+Leg1–13b는 모두 0.29–0.37m에서 멈췄다. 정지 사유를 하나씩 고치는 대신 같은 C66 동결 소스·설치에서 한 번에 한 변수만 바꿔 13회 실행했다. 실행 폴더는 AI PC `~/rosy-test/lap-c1noise-a`, 스크립트 사본은 `X:\DevTemp\lap-c1noise\`다. 지도 완주는 아직 false다.
+
+| 실행 | 바꾼 한 가지 | 이동 | 종료 |
+|---|---|---:|---|
+| run2 | LiDAR 잡음 σ 0.02→0.0035, 분해능 0.03→0.001 | 0.431m | 교통 정책 감속 뒤 Fleet stall |
+| run3 | 교통 정책을 출하값 DISABLED로 | 0.915m | 북서 모서리 `camera_line_not_visible`, 감독이 0.2초 뒤 취소 |
+| run5 | 감독이 HOLD를 제품에 맡김 | 1.062m | 후진 복구 1회 뒤 `LOST/reselection_required` |
+| run7 | 서쪽 도로 네 모서리를 `bend` 장소로 | 0.172m | `junction_aborted/motion_unconfirmed` |
+| run13 | 지시가 걸린 동안 몸 스캔 뷰 급전 | 0.517m | 첫 bend 통과, 벽 쪽 2cm 치우친 뒤 SDK `can_rotate` 거절로 stall |
+
+1. **SIM LiDAR 잡음.** 출하 σ 0.02m는 upstream 기본값이다. 정지한 실물 C1은 0.2m 안 0.6mm, 0.5m 안 최대 3.4mm다([측정](../validation/crosswalk-core-gate-sim-2026-10-10/result.md)). SDK는 640빔의 최근접 점을 쓰므로 벽이 매 스캔 약 3σ 가깝게 읽힌다. 차로 중심과 벽은 116mm, 회전 여유는 92.6mm라 남는 23mm가 사라진다. 앞선 세 SIM은 작업공간 사본만 고쳤다. 수정 `0e81e9de5`. run5에서 `can_rotate` 거절은 1,638회 중 0회였다.
+2. **실행기의 교통 정책 ENFORCED.** 출하 SIM 설정은 DISABLED다. 이 지도에는 정지선이 없고 도로 관측기는 흰 벽 밑단을 정지선으로 읽는다(`stop_line_approach` 61회). 벽 오인식 자체는 남아 있다.
+3. **감독 스크립트의 즉시 취소.** HOLD 0.6초 뒤 차선이 다시 보였다. 제품의 판정은 CORE 복구와 Fleet 20초 stall이다.
+4. **bend 장소 없는 사이트 지도.** `--site-map-import lane_graph.yaml`은 교차점 4개만 만든다. 반경 약 6cm의 90° 모서리는 카메라만으로 돌지 못한다(2026-10-09 [서쪽 모서리 기록](../validation/lane-west-bend-candidate-2026-10-09/result.md)과 같다). 모서리 사이 직선 0.33m는 bend 선행 구간보다 짧아 도로의 모든 모서리가 bend여야 한다.
+5. **enforce 기준에서 기동 승인 불가.** CORE의 승인 함수는 `return_body_clear`도 묻는데 그 스캔 뷰는 차선 복귀 중에만 채워졌다(거절 333건 모두 뷰 없음). 수정은 `fix/enforce-junction-scan-view` `62de9e712`. 사이트 기준은 보정된 IR 판정이 필요한데 두 로봇 launch의 SIM IR은 미보정이라 `junction_turn`이 false고 Fleet이 `JUNCTION_TURN_UNSUPPORTED`로 거절한다.
+
+**남은 차단.** enforce에서 SDK는 제자리 회전 원을 이동 곡선에도 적용한다. 벽 옆 차로에서 2cm 치우치면 조향이 모두 0이 되고 스스로 벗어나지 못한다. 이동 곡선의 실제 sweep 검사([설계 초안](2026-10-13-camera-forward-stopping-sweep-design.md)은 `fix/gazebo-map-lap`에 있다) 또는 shadow·사이트 기준과 SIM IR 보정 연결 가운데 어느 기준으로 완주를 수용할지 정해야 한다.
+
+관찰 주의: 실행 중 `gz model -p`를 따로 부르면 자세 스트림이 0.25초 넘게 비어 SIM 자세 어댑터가 `native_gap`으로 영구 철회한다(run1).
