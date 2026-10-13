@@ -651,6 +651,12 @@ def test_connection_offer_names_this_robot_before_the_neighbour(tablet_page):
     assert offer.get_attribute("data-connection-mode") == "paired"
     assert offer.get_attribute("data-robot-id") == "rosy_26"
     assert page.locator("[data-connection-title]").inner_text() == "rosy_26"
+    # D-741 3: the app bar brand is the R mark, the app name, then this robot's name.
+    assert page.locator("ui-topbar ui-brand b").text_content() == "Pilot"
+    robot_name = page.locator("ui-topbar ui-brand [data-pilot-robot]")
+    assert robot_name.text_content() == "rosy_26" and robot_name.get_attribute("hidden") is None
+    controls = page.locator("ui-topbar ui-button")
+    assert controls.last.get_attribute("data-estop") is not None, "the stop is the last control in the bar"
     assert "로봇 화면에 뜬 로그인 코드" in offer.inner_text()
     assert page.locator("[data-dev-connect]").count() == 0
     text = page.locator("[data-screen=connect]").inner_text()
