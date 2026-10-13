@@ -11,8 +11,8 @@ from typing import Callable, Optional
 
 from core_common.protocol.schemas import TrafficPolicyStatus
 
-#: Slowest APPROACH linear scale (angular is not scaled): line follow's D-422 body sweep
-#: reads it to cover the tighter arc this gate can make of a lane command.
+#: D-735: slowest APPROACH scale shared by moving axes; stationary turns keep angular speed.
+#: D-422 still reads it for the conservative legacy tighter-arc family.
 APPROACH_MIN_SCALE = 0.15
 
 
@@ -469,7 +469,8 @@ class TrafficPolicyManager:
         if self._config.mode is TrafficPolicyMode.MONITOR_ONLY:
             return linear, angular
         if state in ("FOLLOW", "APPROACH", "PROCEED"):
-            return linear * scale, angular
+            # D-735: moving candidates keep curvature; stationary timed turns keep angular speed.
+            return linear * scale, angular * (scale if linear != 0.0 else 1.0)
         return 0.0, 0.0
 
     def _verdict(self, now: float):

@@ -221,6 +221,7 @@ def test_one_missed_reply_at_defaults_fires_timeout_after_last_rx():
 def test_stop_cancels_the_fleet_goal_after_the_timeout_and_reports_once():
     rig = Rig("STOP")
     rig.fleet_goal()
+    operation = rig.nav.native.current
     rig.run(1.0)
     rig.link.connected = False
     rig.run(2.8)
@@ -235,7 +236,8 @@ def test_stop_cancels_the_fleet_goal_after_the_timeout_and_reports_once():
     assert lost["goal"] == {"x": 1.0, "y": 2.0, "yaw": 0.5}
     assert lost["disconnected_s"] >= 3.0 and lost["reason"] is None
     canceled = rig.events.last("nav.canceled")
-    assert canceled == {"source": "fleet_loss", "correlation_id": "attempt-1"}
+    assert canceled == {"source": "fleet_loss", "correlation_id": "attempt-1",
+                        "run_id": str(operation.run_id), "boot_id": str(operation.boot_id)}
     rig.run(5.0)
     assert rig.events.types().count("safety.fleet_lost") == 1
     assert rig.executor.cancelled == 1

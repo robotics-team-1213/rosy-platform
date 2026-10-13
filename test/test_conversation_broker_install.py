@@ -41,6 +41,47 @@ def test_dispatcher_allows_only_two_exact_zero_argument_commands(tmp_path):
         assert p.returncode == 64
 
 
+def test_ingress_traverses_public_parent_without_broker_group(tmp_path):
+    m = module()
+    assert m.INGRESS == Path('/usr/local/libexec/rosy-model-ingress')
+    assert not m.INGRESS.is_relative_to(m.LIBEXEC)
+    if os.geteuid() == 0:
+        pytest.skip('unprivileged traversal reproduction required')
+    private = tmp_path/'protected'
+    private.mkdir()
+    blocked = private/'model-ingress'
+    accessible = tmp_path/'rosy-model-ingress'
+    for path in (blocked, accessible):
+        path.write_bytes(m.dispatcher())
+        path.chmod(0o755)
+    private.chmod(0o000)
+    try:
+        with pytest.raises(PermissionError):
+            subprocess.run([str(blocked)], check=False)
+        assert subprocess.run([str(accessible)], env={'SSH_ORIGINAL_COMMAND':'unknown'}, check=False).returncode == 64
+    finally:
+        private.chmod(0o700)
+
+
+@pytest.mark.parametrize('exitcode', [126, 127, 0])
+def test_ingress_readback_rejects_unreachable_or_unexpected_command(tmp_path,monkeypatch,exitcode):
+    import types
+    m = module()
+    calls = []
+    def run(*args, **kwargs):
+        calls.append((args,kwargs))
+        return types.SimpleNamespace(returncode=exitcode,stdout=b'',stderr=b'')
+    monkeypatch.setattr(m,'run',run)
+    with pytest.raises(ValueError,match='INGRESS_EXECUTION_READBACK_FAILED') as error:
+        m.verify_ingress()
+    detail = json.loads(str(error.value).split(' ',1)[1])
+    assert detail['command'] == 'rosy-conversation-v1' and detail['returncode'] == exitcode
+    args,kwargs = calls[0]
+    assert args[:4] == ('/usr/sbin/runuser','-u','rosy-model-ingress','--')
+    assert args[4] == str(m.INGRESS)
+    assert kwargs['input'] == b'{}\n' and kwargs['cwd'] == '/'
+
+
 def test_root_path_rejects_untrusted_owner_and_symlink(tmp_path):
     m = module()
     target = tmp_path/'file'
@@ -275,13 +316,17 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
     with pytest.raises(ValueError,match='SHA'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
 
-@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None])
+@pytest.mark.parametrize('stage', ['dependencies','model','visudo','sshd','effective','configuration','reload',None,
+    'upgrade','upgrade_missing','upgrade_wrong_config','upgrade_wrong_broker','upgrade_lone_config',
+    'upgrade_lone_broker','upgrade_malformed','upgrade_foreign_wrapper','upgrade_rollback',
+    'ingress','migration','migration_foreign','migration_rollback','no_status'])
 def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,monkeypatch,stage):
     import types
     import time
     m = module()
     for name,relative in [('REVIEWED','reviewed'),('VERSIONS','opt/conversation'),('CONFIG','etc/conversation.json'),
-        ('LIBEXEC','libexec'),('INGRESS','libexec/model-ingress'),('STATUS','libexec/status-broker'),
+        ('LIBEXEC','libexec/private'),('INGRESS','libexec/rosy-model-ingress'),
+        ('PREVIOUS_INGRESS','libexec/private/model-ingress'),('STATUS','libexec/private/status-broker'),
         ('BROKER','libexec/conversation-broker'),('KEYS','ssh/keys'),('SUDO','sudo/rules'),('SSHD','ssh/sshd')]:
         path = tmp_path/relative
         path.parent.mkdir(parents=True,exist_ok=True)
@@ -292,9 +337,13 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     security = (tmp_path/'credential', tmp_path/'spent')
     for path in security:path.write_bytes(b'unchanged private state')
     monkeypatch.setattr(m,'SECURITY_FILES',security)
-    m.STATUS.write_bytes(b'previous status owner')
+    if stage != 'no_status':
+        m.STATUS.write_bytes(b'previous status owner')
+        m.STATUS.chmod(0o750)
     status_config = m.CONFIG.parent/'status.json'
-    status_config.write_bytes(b'previous status config')
+    if stage != 'no_status':
+        status_config.write_bytes(b'previous status config')
+        status_config.chmod(0o640)
     reviewer = m.CONFIG.parent/'status-reviewer-admission.json'
     reviewer.write_bytes(b'previous protected billing evidence')
     original_stat = m.Path.stat
@@ -326,8 +375,9 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
     manifest = {'source_commit':'a'*40,'files':{k:m.sha(v) for k,v in contents.items()}}
     proof = {'profile':{'revision':'d728-semantic-v2'},'policy':{'authority':'proposal_only'},'evaluated_at':time.time()}
     monkeypatch.setattr(m,'inputs',lambda *a:(manifest,proof,contents,b'proof',b'receipt','ssh-ed25519 fixture'))
-    monkeypatch.setattr(m,'dependencies',lambda *a:b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n')
+    monkeypatch.setattr(m,'dependencies',lambda *a:(calls.append(('dependencies-read',)) or b'demo==1.0 --hash=sha256:' + b'b'*64+b'\n'))
     calls = []
+    ingress_probes = []
     failures = []
     def fake_run(*args,**kwargs):
         calls.append(args)
@@ -339,35 +389,102 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
             point = 'dependencies'
             assert '--no-index' in args and '--only-binary=:all:' in args
         if args[0] == '/usr/sbin/runuser':
-            point = 'model' if 'loaded(exchange(' in command else 'configuration'
+            point = 'ingress' if args[2] == 'rosy-model-ingress' else ('model' if 'loaded(exchange(' in command else 'configuration')
         if args[0] == '/usr/sbin/visudo':point = 'visudo'
         if args[:2] == ('/usr/sbin/sshd','-t'):point = 'sshd'
         if args[:2] == ('/usr/sbin/sshd','-T'):point = 'effective'
         if args[:2] == ('/usr/bin/systemctl','reload'):point = 'reload'
-        if point == stage and stage is not None and not failures:
+        failure_stage = ('configuration' if stage == 'upgrade_rollback' and manifest['source_commit'] == 'd'*40
+                         else 'ingress' if stage == 'migration_rollback' else stage)
+        if point == failure_stage and stage is not None and not failures:
             failures.append(point)
             raise RuntimeError('injected '+point)
         if args[:2] == ('/usr/sbin/sshd','-T'):
             return types.SimpleNamespace(stdout='\n'.join(['forcecommand '+str(m.INGRESS),'authorizedkeysfile '+str(m.KEYS),
                 'authenticationmethods publickey','pubkeyauthentication yes','passwordauthentication no','kbdinteractiveauthentication no',
                 'disableforwarding yes','permittty no']))
+        if point == 'ingress':
+            name = kwargs['env']['SSH_ORIGINAL_COMMAND']
+            ingress_probes.append((name,len(args)))
+            if stage == 'no_status' and name == 'rosy-status-v1' and len(args) == 5:
+                raise AssertionError('Absent optional status broker must not be probed')
+            reason = {'rosy-status-v1':'STATUS', 'rosy-conversation-v1':'CONVERSATION'}.get(name)
+            if reason and len(args) == 5:
+                return types.SimpleNamespace(returncode=1,stdout=json.dumps({'state':'HOLD','reason':reason+'_BROKER_NOT_ADMITTED_OR_RESULT_UNKNOWN'}).encode(),stderr=b'')
+            return types.SimpleNamespace(returncode=64,stdout=b'',stderr=b'')
         return types.SimpleNamespace(stdout='')
     monkeypatch.setattr(m,'run',fake_run)
     argv = [str(bundle)]
     for name in ('manifest','proof','receipt','public-key','dependencies'):
         argv += ['--'+name+'-sha256','b'*64]
-    if stage is None:
+    if stage and stage.startswith('migration'):
+        old_key = ('restrict,command="'+m.PREVIOUS_FORCE+'" ssh-ed25519 fixture\n').encode()
+        old_sshd = m.SSHD_BASE.format(m.PREVIOUS_FORCE).encode()
+        old_dispatcher = m.dispatcher() if stage != 'migration_foreign' else b'foreign'
+        for path,raw,mode in ((m.KEYS,old_key,0o644),(m.SSHD,old_sshd,0o644),(m.PREVIOUS_INGRESS,old_dispatcher,0o755)):
+            path.write_bytes(raw)
+            path.chmod(mode)
+        if stage == 'migration':
+            assert m.main(argv) == 0
+            assert m.NEW_FORCE.encode() in m.KEYS.read_bytes()
+            assert m.main(argv) == 0
+        else:
+            with pytest.raises((RuntimeError,ValueError)):
+                m.main(argv)
+            assert m.KEYS.read_bytes() == old_key and m.SSHD.read_bytes() == old_sshd
+            assert not m.INGRESS.exists()
+        assert m.PREVIOUS_INGRESS.read_bytes() == old_dispatcher
+    elif stage and stage.startswith('upgrade'):
+        assert m.main(argv) == 0
+        old_config,old_broker = m.CONFIG.read_bytes(),m.BROKER.read_bytes()
+        manifest['source_commit'] = 'd'*40
+        supplied = [m.sha(old_config),m.sha(old_broker)]
+        if stage == 'upgrade_wrong_config':supplied[0] = '0'*64
+        if stage == 'upgrade_wrong_broker':supplied[1] = '0'*64
+        if stage == 'upgrade_malformed':supplied[0] = 'not-a-sha'
+        if stage == 'upgrade_foreign_wrapper':
+            old_broker = b'#!/bin/sh\nexec /bin/sh\n'
+            m.BROKER.write_bytes(old_broker)
+            supplied[1] = m.sha(old_broker)
+        if stage != 'upgrade_missing':
+            if stage != 'upgrade_lone_broker':argv += ['--previous-config-sha256',supplied[0]]
+            if stage != 'upgrade_lone_config':argv += ['--previous-broker-sha256',supplied[1]]
+        calls.clear()
+        if stage in ('upgrade','upgrade_rollback'):
+            if stage == 'upgrade':
+                assert m.main(argv) == 0
+                assert json.loads(m.CONFIG.read_bytes())['source_commit'] == 'd'*40
+                assert (str(m.VERSIONS/('d'*40))).encode() in m.BROKER.read_bytes()
+                for path,raw in ((m.CONFIG,old_config),(m.BROKER,old_broker)):
+                    assert path.with_name(path.name+'.before-'+m.sha(raw)).read_bytes() == raw
+                assert m.main(argv[:-4]) == 0
+            else:
+                with pytest.raises(RuntimeError,match='injected configuration'):m.main(argv)
+                assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
+        else:
+            with pytest.raises(ValueError):m.main(argv)
+            assert calls == []
+            assert not (m.VERSIONS/('d'*40)).exists()
+            assert m.CONFIG.read_bytes() == old_config and m.BROKER.read_bytes() == old_broker
+    elif stage in (None,'no_status'):
         assert m.main(argv) == 0
         assert m.main(argv) == 0
         assert len([c for c in calls if '--require-hashes' in c]) == 1
         cfg = json.loads(m.CONFIG.read_bytes())
         assert cfg['valid_until'] == proof['evaluated_at']+7*86400
+        assert ('rosy-conversation-v1',5) in ingress_probes
+        assert ('unknown',5) in ingress_probes
+        assert ('rosy-status-v1',6) in ingress_probes and ('rosy-conversation-v1',6) in ingress_probes
+        assert (('rosy-status-v1',5) in ingress_probes) == (stage is None)
     else:
         with pytest.raises(RuntimeError,match='injected '+stage):
             m.main(argv)
         assert all(not p.exists() for p in (m.CONFIG,m.BROKER,m.INGRESS,m.KEYS,m.SUDO,m.SSHD))
     assert all(path.read_bytes() == b'unchanged private state' for path in security)
-    assert m.STATUS.read_bytes() == b'previous status owner'
-    assert status_config.read_bytes() == b'previous status config'
+    if stage == 'no_status':
+        assert not m.STATUS.exists() and not status_config.exists()
+    else:
+        assert m.STATUS.read_bytes() == b'previous status owner'
+        assert status_config.read_bytes() == b'previous status config'
     assert reviewer.read_bytes() == b'previous protected billing evidence'
     assert all('execute(' not in ' '.join(c) and '/api/chat' not in ' '.join(c) for c in calls)
