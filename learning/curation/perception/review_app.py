@@ -195,9 +195,15 @@ class ReviewStore:
         with self.connect() as db:
             events = {}
             for lane, table in (('object', 'events'), ('pixel', 'pixel_events')):
-                events[lane] = [dict(row) for row in db.execute(
-                    f'SELECT ts,action,version FROM {table} WHERE frame=? ORDER BY id DESC LIMIT 20',
-                    (index,))]
+                events[lane] = []
+                for row in db.execute(f'SELECT ts,action,version,review FROM {table} '
+                                      'WHERE frame=? ORDER BY id DESC LIMIT 20', (index,)):
+                    event = dict(row)
+                    detail = json.loads(event.pop('review'))
+                    actor = detail.get('last_actor') if lane == 'object' else detail.get('actor')
+                    if actor:
+                        event['actor'] = actor
+                    events[lane].append(event)
         return {'source': frame['source'].get('annotation_source'),
                 'object_status': frame['status'],
                 'pixel_status': review_masks.get(self, index)['status'],
@@ -597,6 +603,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 self.send({'error': '로그인 또는 프로젝트 권한을 확인하세요.'}, 403)
             except (ValueError, KeyError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)
+
+    if not collaboration:
+        return ThreadingHTTPServer((host, port), Handler)
 
     class Server(ThreadingHTTPServer):
         def server_close(self):
