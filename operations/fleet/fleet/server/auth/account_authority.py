@@ -41,7 +41,7 @@ def _https(value):
 
 class AccountAuthority:
     def __init__(self, path, *, issuer, private_key, key_id, clients,
-                 resolve_family, revoke_family, clock=time.time):
+                 resolve_family, revoke_family, clock=time.time, trusted_public_keys=None):
         from joserfc.jwk import OKPKey
         if not _https(issuer) or urlsplit(issuer).query:
             raise ValueError('invalid account issuer')
@@ -57,8 +57,13 @@ class AccountAuthority:
         self.clients, self.resolve_family, self.revoke_family = clients, resolve_family, revoke_family
         self.clock = clock
         key = OKPKey.import_key(private_key)
-        self.public_keys = {key_id: key.as_pem(private=False)}
-        self.jwks = {'keys': [key.as_dict(private=False, kid=key_id)]}
+        self.public_keys = dict(trusted_public_keys or {})
+        public = key.as_pem(private=False)
+        if key_id in self.public_keys and self.public_keys[key_id] != public:
+            raise ValueError('signing key id conflicts with trusted key')
+        self.public_keys[key_id] = public
+        self.jwks = {'keys': [OKPKey.import_key(pem).as_dict(private=False, kid=kid)
+                              for kid, pem in self.public_keys.items()]}
         with self.transaction() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS account_oauth_codes (
@@ -88,6 +93,8 @@ class AccountAuthority:
         return {**NO_STORE, 'Content-Type': 'application/json'}, json.dumps({'error': code}), status
 
     def server(self, db):
+        for table in ('account_oauth_codes', 'account_oauth_access', 'account_oauth_refresh'):
+            db.execute(f'DELETE FROM {table} WHERE expires<=?', (self.clock(),))
         validator = _Validator(self, db)
         return WebApplicationServer(validator, token_generator=validator.access_token,
                                     token_expires_in=300,
@@ -140,7 +147,8 @@ class AccountAuthority:
             return {'active': False}
         with self.transaction() as db:
             row = db.execute('SELECT * FROM account_oauth_access WHERE digest=?', (digest(token),)).fetchone()
-            if row is None or row['expires'] <= self.clock():
+            if (row is None or row['expires'] <= self.clock()
+                    or row['resource'] not in self.clients.get(row['client'], {}).get('resources', [])):
                 return {'active': False}
             context = self.resolve_family(db, row['family'])
             if context is None or context['revision'] != row['revision']:
@@ -207,7 +215,8 @@ class _Validator(RequestValidator):
              request.user['revision'], request.scopes[0], request.code_challenge, self.a.clock() + 60))
 
     def _valid_context(self, row, request):
-        if row is None or row['expires'] <= self.a.clock():
+        if (row is None or row['expires'] <= self.a.clock()
+                or row['resource'] not in self.a.clients.get(row['client'], {}).get('resources', [])):
             return False
         context = self.a.resolve_family(self.db, row['family'])
         if context is None or context['revision'] != row['revision']:
@@ -252,7 +261,7 @@ class _Validator(RequestValidator):
         context, resource = request.user, request.scopes[0]
         now = int(self.a.clock())
         return sign_access({'iss': self.a.issuer, 'aud': resource, 'sub': context['account_id'],
-            'sid': context['session_family'], 'rev': context['revision'], 'iat': now, 'exp': now + 300,
+            'sid': context['session_family'], 'jti': secrets.token_urlsafe(24), 'rev': context['revision'], 'iat': now, 'exp': now + 300,
             'grants': [g for g in context['grants'] if g['resource'] == resource]},
             self.a.private_key, key_id=self.a.key_id)
 
@@ -264,5 +273,5 @@ class _Validator(RequestValidator):
                             (digest(request.refresh_token),))
         self.db.execute('INSERT INTO account_oauth_refresh VALUES(?,?,?,?,?,?,0)',
             (digest(token['refresh_token']), client, user['session_family'], user['revision'], resource, now + 2592000))
-        self.db.execute('INSERT OR REPLACE INTO account_oauth_access VALUES(?,?,?,?,?,?)',
+        self.db.execute('INSERT INTO account_oauth_access VALUES(?,?,?,?,?,?)',
             (digest(token['access_token']), client, user['session_family'], user['revision'], resource, now + 300))

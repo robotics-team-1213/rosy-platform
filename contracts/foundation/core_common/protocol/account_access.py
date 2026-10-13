@@ -40,6 +40,7 @@ class AccountAccess(BaseModel):
     aud: str = Field(pattern=RESOURCE_PATTERN)
     sub: str = Field(pattern=r'^[A-Za-z0-9._-]{1,128}$')
     sid: str = Field(pattern=r'^[A-Za-z0-9._-]{1,128}$')
+    jti: str = Field(pattern=r'^[A-Za-z0-9._-]{16,128}$')
     rev: StrictInt = Field(ge=1)
     iat: StrictInt = Field(ge=0)
     exp: StrictInt = Field(ge=1)
@@ -69,8 +70,8 @@ def sign_access(claims: Mapping, private_key: bytes, *, key_id: str) -> str:
         key = OKPKey.import_key(private_key)
         if key.curve_name != 'Ed25519':
             raise AccessRejected('invalid signing key')
-        return jwt.encode({'alg': 'EdDSA', 'typ': 'at+jwt', 'kid': key_id},
-                          record.model_dump(), key, algorithms=['EdDSA'])
+        return jwt.encode({'alg': 'Ed25519', 'typ': 'at+jwt', 'kid': key_id},
+                          record.model_dump(), key, algorithms=['Ed25519'])
     except (JoseError, ValueError, TypeError):
         raise AccessRejected('access signing failed') from None
 
@@ -89,7 +90,7 @@ def verify_access(token: str, public_keys: Mapping[str, bytes], *, issuer: str,
             if key.curve_name != 'Ed25519' or key.is_private:
                 raise AccessRejected('invalid verification key')
             keys.append(key)
-        decoded = jwt.decode(token, KeySet(keys), algorithms=['EdDSA'])
+        decoded = jwt.decode(token, KeySet(keys), algorithms=['Ed25519'])
         if (set(decoded.header) != {'alg', 'typ', 'kid'} or decoded.header['typ'] != 'at+jwt'
                 or decoded.header['kid'] not in public_keys):
             raise AccessRejected('invalid access header')
