@@ -23,8 +23,9 @@ safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 @safety_router.post("/stop")
 def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     captured = []
-    for owner in (svc.nav, svc.docking, svc.swarm, svc.command):
+    for owner_name in ("nav", "docking", "swarm", "command"):
         try:
+            owner = getattr(svc, owner_name)
             operation = owner.capture_native_operation()
             if operation is not None:
                 captured.append((owner, operation))
