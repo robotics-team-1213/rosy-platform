@@ -785,7 +785,7 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
-    expect(page.locator("#notice")).to_contain_text("지도 없이 시작에서 기준을 정하거나")
+    expect(page.locator("#notice")).to_contain_text("지도 만들기에서 기준을 정하거나")
     expect(page.locator("#survey-new")).to_be_enabled()
     expect(page.locator("#map-viewport")).to_be_hidden()
     expect(page.locator("#save-draft")).to_be_disabled()

@@ -9,7 +9,7 @@ from fleet.server.channel_replies import ChannelReplyOutbox
 from test_channel_workflow import fixture
 
 
-def setup(tmp_path):
+def model_jobs(tmp_path):
     from fleet.server.channel_deliberation import ChannelModelJobs, status_problem
     _, journal, _, accounts, receipt = fixture(tmp_path)
     clock = [time.time()]
@@ -22,7 +22,7 @@ def setup(tmp_path):
 
 def test_job_reserves_before_send_and_reopen_cannot_replay(tmp_path):
     from fleet.server.channel_deliberation import ChannelModelJobs
-    jobs, journal, _, receipt, snapshot, p, _ = setup(tmp_path)
+    jobs, journal, _, receipt, snapshot, p, _ = model_jobs(tmp_path)
     first = jobs.stage(receipt, p, snapshot)
     assert jobs.stage(receipt, p, snapshot) == first
     request = receipt['request_id']
@@ -42,7 +42,7 @@ def test_job_reserves_before_send_and_reopen_cannot_replay(tmp_path):
 
 @pytest.mark.parametrize('change', ['owner', 'account', 'content', 'profile', 'deadline'])
 def test_changed_scope_is_refused_before_reserving_model(tmp_path, change):
-    jobs, journal, accounts, receipt, snapshot, p, clock = setup(tmp_path)
+    jobs, journal, accounts, receipt, snapshot, p, clock = model_jobs(tmp_path)
     jobs.stage(receipt, p, snapshot)
     if change == 'owner': journal.config.users[receipt['author_id']] = 'other'
     elif change == 'account': accounts['op'] = 'viewer'
@@ -58,7 +58,7 @@ def test_changed_scope_is_refused_before_reserving_model(tmp_path, change):
 
 
 def test_result_and_reply_roll_back_together_and_answer_once(tmp_path, monkeypatch):
-    jobs, journal, _, receipt, snapshot, p, _ = setup(tmp_path)
+    jobs, journal, _, receipt, snapshot, p, _ = model_jobs(tmp_path)
     jobs.stage(receipt, p, snapshot)
     jobs.reserve(receipt['request_id'], 'primary')
     original = journal.reply_outbox.enqueue
@@ -78,7 +78,7 @@ def test_result_and_reply_roll_back_together_and_answer_once(tmp_path, monkeypat
 
 def test_status_input_keeps_question_as_data_and_ignores_snapshot_secrets(tmp_path):
     from fleet.server.channel_deliberation import status_problem
-    _, _, _, receipt, snapshot, p, clock = setup(tmp_path)
+    _, _, _, receipt, snapshot, p, clock = model_jobs(tmp_path)
     assert p.goal == 'request' and p.necessity == 'READ_ONLY_QUERY'
     assert p.facts_json == '{"state":"offline"}'
     secret = {'robot_id': 'pinky', 'online': False, 'state': None, 'token': 'private', 'base_url': 'private'}
@@ -87,7 +87,7 @@ def test_status_input_keeps_question_as_data_and_ignores_snapshot_secrets(tmp_pa
 
 
 def test_late_model_cost_is_retained_after_deadline_or_owner_revocation(tmp_path):
-    jobs, journal, accounts, receipt, snapshot, p, clock = setup(tmp_path)
+    jobs, journal, accounts, receipt, snapshot, p, clock = model_jobs(tmp_path)
     jobs.stage(receipt, p, snapshot)
     attempt = jobs.reserve(receipt['request_id'], 'primary')
     clock[0] += 61
@@ -102,7 +102,7 @@ def test_late_model_cost_is_retained_after_deadline_or_owner_revocation(tmp_path
 
 def test_forged_question_cannot_keep_original_receipt_hash(tmp_path):
     from fleet.server.channel_deliberation import status_problem
-    jobs,journal,_,receipt,snapshot,_,clock=setup(tmp_path)
+    jobs,journal,_,receipt,snapshot,_,clock=model_jobs(tmp_path)
     forged={**receipt,'content':'a different question'}
     problem=status_problem(forged,snapshot,now=clock[0])
     with pytest.raises(HTTPException):jobs.stage(forged,problem,snapshot)
@@ -111,7 +111,7 @@ def test_forged_question_cannot_keep_original_receipt_hash(tmp_path):
 
 
 def test_publish_checks_observation_inside_transaction(tmp_path):
-    jobs,_,_,receipt,snapshot,p,_=setup(tmp_path)
+    jobs,_,_,receipt,snapshot,p,_=model_jobs(tmp_path)
     jobs.stage(receipt,p,snapshot)
     with pytest.raises(HTTPException):
         jobs.finish(receipt['request_id'],state='ANSWERED',result={},summary='wrong',observation_guard=lambda:False)

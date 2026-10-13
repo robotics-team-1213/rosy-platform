@@ -35,6 +35,7 @@
 - [2026-09-21-semantic-road-control-design.md](../../../docs/plans/2026-09-21-semantic-road-control-design.md)
 - [2026-09-21-semantic-road-control.md](../../../docs/plans/2026-09-21-semantic-road-control.md)
 - [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
+- [2026-10-12-gazebo-lane-lap.md](../../../docs/plans/2026-10-12-gazebo-lane-lap.md)
 - [2026-10-12-map-drive-diagnosis.md](../../../docs/plans/2026-10-12-map-drive-diagnosis.md)
 
 ## 교훈 (docs/solutions)
@@ -50,5 +51,5 @@
 - 2026-10-12 · uncommitted · Validate optional ROS launch environment and normalized parameters
 - 2026-10-12 · uncommitted · 두 카메라의 횡단보도 거리 불확실성을 전달한다
 - 2026-10-12 · uncommitted · 시뮬 관찰 법칙은 core_common 의존으로 선언한다
-- 2026-10-12 · 8226c122f8 · IR 바닥 ray의 동일 프레임과 신선도 보존
-- 2026-10-12 · d9fbc11ce · A24 두 CORE 도로 관측과 교통 설정 readback
+- 2026-10-12 · 2efcfe4b2 · 독립 Gazebo 시험의 CORE 설정 출처 고정
+- 2026-10-12 · 3bafbd232 · 두 카메라 실행의 원본·곡선 지도 선택
