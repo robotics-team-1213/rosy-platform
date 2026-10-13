@@ -70,7 +70,7 @@ def test_policy_failure_is_logged_once_after_the_zero_writer(linked, monkeypatch
     assert 'snapshot_expired' in caplog.text
     assert "'observed_at': 10.0" in caplog.text
     assert 'command=1' in caplog.text and 'now=10.22' in caplog.text
-    assert caplog.records[0].exc_info[0] is ValueError
+    assert issubclass(caplog.records[0].exc_info[0], ValueError)   # PolicyObservationUnavailable
 
 
 def test_genuine_exception_keeps_traceback_and_first_failure(linked, monkeypatch, caplog):
