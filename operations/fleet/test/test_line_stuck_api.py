@@ -461,7 +461,7 @@ def test_no_own_pose_leaves_peer_ahead_unknown_and_trip_busy_is_recorded(tmp_pat
 
 
 def test_the_map_pose_is_recorded_when_the_service_exists(tmp_path):
-    from fleet.localization.map_pose import MapPose
+    from rosy.world.state.projections.map_pose import MapPose
 
     board, log, _ = _episode_board(tmp_path)
     board.map_pose = lambda robot_id: MapPose(x=1.0, y=2.0, yaw=0.5, state="LOCALIZED",

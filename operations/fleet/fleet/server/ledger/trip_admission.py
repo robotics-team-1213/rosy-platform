@@ -12,7 +12,7 @@ import math
 
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
-from fleet.localization.map_pose import OPERATOR_PIN
+from rosy.world.state.projections.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError

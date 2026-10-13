@@ -7,7 +7,7 @@ from __future__ import annotations
 from core_common.protocol.localization import DecisionSource
 from fakes import FakeClock, FakeRobot, run
 from fleet.localization import pose_request
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.server.localization_service import LocalizationService
 
 

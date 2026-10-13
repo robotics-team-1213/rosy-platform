@@ -43,3 +43,9 @@ D-750: 60개 Fleet server 모듈을 peer/cell/auth/console/ledger source holder�
 D-751: Gazebo rigs→tools/sim/gazebo, calibration migration→tools/calibration, static ROS audit→tools/validation. 로봇 hotpath/IR 측정 2개는 기존 device holder에 남긴다. map/calibration 입력은 바꾸지 않고 package root/CWD를 명시한다.
 
 파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S9-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.
+
+## S10
+
+D-752: 모든 현행 Fleet/sim/test MapPose import를 rosy.world.state.projections.map_pose로 전환하고 Fleet identity alias를 제거했다. 구현은 World 하나, 기존 rosy-world==0.1.1 dependency와 현재상태 의미·Fleet 거래 owner는 유지한다. 외부 미등록 옛 alias 소비는 canonical import로 갱신해야 한다.
+
+파일 목록·이동 직전/직후 hash는 X 세션 2026-10-13--205210--folder-remaining--b51428/evidence/S10-moves.json에 둔다. 원격 pytest·CI·배포·장치 검증은 미실행. 단계의 실제 착지는 Git ancestry와 X readback으로 확인한다.

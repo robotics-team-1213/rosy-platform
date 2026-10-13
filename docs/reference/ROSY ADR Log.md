@@ -753,6 +753,8 @@
 
 | D-751 | 호스트 도구와 로봇 측정 source 구분 | Accepted |
 
+| D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).

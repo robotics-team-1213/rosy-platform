@@ -838,7 +838,7 @@ def _map_pose_config(args):
     """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
     import yaml
 
-    from fleet.localization.map_pose import MapPoseConfig
+    from rosy.world.state.projections.map_pose import MapPoseConfig
 
     try:
         site_config = {}
