@@ -1,0 +1,242 @@
+{
+  "threshold": {
+    "result": "arrived",
+    "reason": null,
+    "log_rows": 559,
+    "keep_frames": 520,
+    "paint_source_used": {
+      "threshold": 520
+    },
+    "paint_model_revisions": {},
+    "reason_counts": {
+      "mode_off": 53,
+      "no_observation": 1,
+      "camera_line_not_visible": 24,
+      "stuck_back_off": 10,
+      "tracking": 174,
+      "obstacle_ahead": 8,
+      "junction_bending": 56,
+      "junction_bend_blocked": 1,
+      "junction_waiting": 3,
+      "junction_approaching": 46,
+      "junction_stopping": 3,
+      "junction_turning": 37,
+      "lane_arc": 126,
+      "junction_stop": 17
+    },
+    "ring_arcs": {
+      "ring_s": {
+        "ticks": 38,
+        "max_abs_radial_error_m": 0.0237,
+        "min_proxy_clearance_m": -0.0184,
+        "negative_proxy_ticks": 27
+      },
+      "ring_e": {
+        "ticks": 52,
+        "max_abs_radial_error_m": 0.0268,
+        "min_proxy_clearance_m": -0.0214,
+        "negative_proxy_ticks": 52
+      },
+      "ring_n": {
+        "ticks": 36,
+        "max_abs_radial_error_m": 0.0186,
+        "min_proxy_clearance_m": -0.0104,
+        "negative_proxy_ticks": 19
+      }
+    },
+    "gt_first": [
+      -1.26955,
+      0.24255000000000096,
+      -1.570800000000032
+    ],
+    "gt_last": [
+      -0.50220465726777,
+      0.16329342165421745,
+      -2.274419149078309
+    ],
+    "gt_path_m": 3.6759,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "pidnet": {
+    "result": "stopped",
+    "reason": "stall",
+    "log_rows": 374,
+    "keep_frames": 371,
+    "paint_source_used": {
+      "learned": 371
+    },
+    "paint_model_revisions": {
+      "sim-pidnet-4d4cd27e": 371
+    },
+    "reason_counts": {
+      "mode_off": 80,
+      "camera_no_observation": 1,
+      "camera_line_not_visible": 77,
+      "stuck_back_off": 56,
+      "tracking": 139,
+      "camera_reselection_required": 16,
+      "stuck_resumed": 2,
+      "obstacle_ahead": 3
+    },
+    "ring_arcs": {},
+    "gt_first": [
+      -1.26955,
+      0.24255000000000096,
+      -1.570800000000032
+    ],
+    "gt_last": [
+      -1.2714347333160434,
+      -0.36656499894324057,
+      -1.5532628395564114
+    ],
+    "gt_path_m": 1.7938,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "unet": {
+    "result": "stopped",
+    "reason": "stall",
+    "log_rows": 409,
+    "keep_frames": 388,
+    "paint_source_used": {
+      "learned": 362,
+      "denoise_fallback": 26
+    },
+    "paint_model_revisions": {
+      "sim-unet-5159bea1": 362
+    },
+    "reason_counts": {
+      "mode_off": 80,
+      "no_observation": 1,
+      "camera_line_not_visible": 54,
+      "stuck_back_off": 26,
+      "tracking": 139,
+      "obstacle_ahead": 18,
+      "camera_reselection_required": 91
+    },
+    "ring_arcs": {},
+    "gt_first": [
+      -1.26955,
+      0.24255000000000096,
+      -1.570800000000032
+    ],
+    "gt_last": [
+      -1.2526464046954504,
+      -0.3916749367241478,
+      -1.400845430322408
+    ],
+    "gt_path_m": 1.6343,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "v11": {
+    "result": "arrived",
+    "reason": null,
+    "log_rows": 576,
+    "keep_frames": 557,
+    "paint_source_used": {
+      "learned": 495,
+      "denoise_fallback": 62
+    },
+    "paint_model_revisions": {
+      "lane-seg-20261006-5f5ddcd9": 495
+    },
+    "reason_counts": {
+      "mode_off": 52,
+      "camera_no_observation": 1,
+      "camera_line_not_visible": 25,
+      "stuck_back_off": 10,
+      "tracking": 173,
+      "obstacle_ahead": 14,
+      "lane_edge_left": 5,
+      "junction_bending": 56,
+      "junction_bend_blocked": 4,
+      "junction_waiting": 2,
+      "junction_stopping": 4,
+      "junction_approaching": 46,
+      "junction_turning": 35,
+      "lane_arc": 128,
+      "junction_stop": 21
+    },
+    "ring_arcs": {
+      "ring_s": {
+        "ticks": 39,
+        "max_abs_radial_error_m": 0.0456,
+        "min_proxy_clearance_m": -0.0403,
+        "negative_proxy_ticks": 37
+      },
+      "ring_e": {
+        "ticks": 55,
+        "max_abs_radial_error_m": 0.0467,
+        "min_proxy_clearance_m": -0.0413,
+        "negative_proxy_ticks": 50
+      },
+      "ring_n": {
+        "ticks": 34,
+        "max_abs_radial_error_m": 0.0404,
+        "min_proxy_clearance_m": -0.0323,
+        "negative_proxy_ticks": 31
+      }
+    },
+    "gt_first": [
+      -1.26955,
+      0.24255000000000096,
+      -1.570800000000032
+    ],
+    "gt_last": [
+      -0.4826223092318132,
+      0.1523780493924164,
+      -2.316586895050538
+    ],
+    "gt_path_m": 3.6609,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  },
+  "v13_drivable": {
+    "result": "stopped",
+    "reason": "stall",
+    "log_rows": 444,
+    "keep_frames": 429,
+    "paint_source_used": {
+      "learned": 396,
+      "denoise_fallback": 33
+    },
+    "paint_model_revisions": {
+      "v13-drivable-20261009-982b09a9": 396
+    },
+    "reason_counts": {
+      "mode_off": 79,
+      "camera_line_not_visible": 52,
+      "stuck_back_off": 31,
+      "camera_no_observation": 1,
+      "tracking": 141,
+      "obstacle_ahead": 75,
+      "camera_reselection_required": 65
+    },
+    "ring_arcs": {},
+    "gt_first": [
+      -1.26955,
+      0.24255000000000096,
+      -1.570800000000032
+    ],
+    "gt_last": [
+      -1.2648912584176093,
+      -0.3778819769877997,
+      -1.3729811147319162
+    ],
+    "gt_path_m": 1.6353,
+    "final_cmd": [
+      0.0,
+      0.0
+    ]
+  }
+}

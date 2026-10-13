@@ -168,6 +168,36 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun cameraMessagesReachTheCallbackBadOnesAreOnlyLoggedAndStateFollowsHello() {
+        val first = ServerSide()
+        val second = ServerSide()
+        server.enqueue(MockResponse().withWebSocketUpgrade(first))
+        server.enqueue(MockResponse().withWebSocketUpgrade(second))
+        val l = newLink()
+        val received = LinkedBlockingQueue<ServerMessage.Camera>()
+        l.onCamera = { received.add(it) }
+        l.start()
+        val serverSocket = first.opened.poll(5, TimeUnit.SECONDS)!!
+        assertEquals("hello", JSONObject(first.texts.poll(5, TimeUnit.SECONDS)!!).getString("type"))
+        awaitStatus(l) { it.state == LinkState.STREAMING }
+
+        serverSocket.send("""{"type":"camera","seq":1,"ev":"x","ae_lock":true,"awb_lock":true,"max_exposure_us":null,"antibanding":"auto"}""")
+        serverSocket.send("""{"type":"camera","seq":2,"ev":-1,"ae_lock":true,"awb_lock":false,"max_exposure_us":null,"antibanding":"auto"}""")
+        val msg = received.poll(5, TimeUnit.SECONDS)!!
+        assertEquals(2L, msg.seq)
+        assertEquals(null, l.status.value.error)
+        assertTrue(received.isEmpty())
+
+        val state = """{"type":"camera_state","seq":2}"""
+        l.publishCameraState(state)
+        assertEquals(state, first.texts.poll(5, TimeUnit.SECONDS))
+
+        l.reconnect()
+        assertEquals("hello", JSONObject(second.texts.poll(5, TimeUnit.SECONDS)!!).getString("type"))
+        assertEquals("the last camera_state follows every hello", state, second.texts.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun connectFailureCarriesItsKind() {
         val port = server.port
         server.shutdown()

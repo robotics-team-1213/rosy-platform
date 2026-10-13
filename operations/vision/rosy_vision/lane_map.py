@@ -332,6 +332,17 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
     full_paint = cv2.warpPerspective(full_paint, raster @ homography, size, flags=cv2.INTER_NEAREST)
     full_paint[paint_band == 0] = 0
     draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id, paint=full_paint)
+    calibration_sha = hashlib.sha256(json.dumps(calibration, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    reference_revision = "cal_" + calibration_sha[:24]
+    if calibration.get("survey") is not None:
+        from core_common.protocol.site_survey import SurveyReference
+        reference = SurveyReference.model_validate(calibration["survey"]).model_dump(mode="json")
+        reference.update(reviewed=False, review_note="")
+        draft["survey"] = reference
+        reference_revision = reference["revision"]
+    for edge in draft["edges"]:
+        edge["evidence"] = {"source": "camera", "status": "observed",
+            "reference_revision": reference_revision, "note": "calibration sha256 " + calibration_sha}
     evidence = {"generator": "camera-lanes/1", "calibration": calibration,
                 "lane_width_m": lane_width_m, "resolution_m": resolution,
                 "paint_pixels": int(np.count_nonzero(paint)), "proposal_only": True,
@@ -382,6 +393,8 @@ def main(argv=None):
         calibration = json.loads(args.calibration.read_text(encoding="utf-8-sig"))
         draft, evidence = generate_map(image, calibration, lane_width_m=args.lane_width_m, map_id=args.map_id)
         evidence["frame_sha256"] = hashlib.sha256(raw).hexdigest()
+        for edge in draft["edges"]:
+            edge["evidence"]["note"] += "; frame sha256 " + evidence["frame_sha256"]
         # Refuse replacement: an existing operator draft is not expendable scratch.
         evidence_path = args.output.with_suffix(".evidence.json")
         if args.output.exists() or evidence_path.exists():

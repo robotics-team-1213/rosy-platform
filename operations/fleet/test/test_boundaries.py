@@ -40,7 +40,9 @@ def test_arming_stays_pure_so_the_plan_can_run_before_the_relay_is_touched():
         assert not name.startswith(ARMING_FORBIDDEN), f"arming.py imports {name}"
 
 
+REPO = Path(__file__).resolve().parents[3]
 FLEET_PKG = Path(__file__).resolve().parents[1] / "fleet"
+WORLD_PROJECTION = REPO / "operations/world/src/rosy/world/state/projections/map_pose.py"
 HUB_DIR = FLEET_PKG / "hub"
 CORE_FORBIDDEN_PREFIXES = (
     "rclpy",
@@ -94,8 +96,9 @@ def test_localization_arbiter_modules_import_no_transport(module):
 
 #: D-457 5: overhead tracking is display only. Besides its own modules, only the app wiring,
 #: the console state route (which hands it robot states) and the CLI may name it.
+#: tracking_drift.py is one of its own modules (the server-side calibration-drift watch).
 TRACKING_IMPORTERS = {"server/app.py", "server/console_routes.py", "server/tracking.py",
-                      "server/tracking_routes.py", "cli.py"}
+                      "server/tracking_routes.py", "server/tracking_drift.py", "cli.py"}
 
 
 def _server_imports(source: str, stem: str) -> list[str]:
@@ -207,12 +210,16 @@ def test_map_pose_and_trip_modules_never_read_the_led_identity_binding():
     """D-511 lane compliance may judge a LED-confirmed track; MapPoseService and trips may not."""
     paths = sorted({p for pattern in IDENTITY_NEVER for p in FLEET_PKG.glob(pattern)})
     assert len(paths) >= 5                                   # the globs still find the modules
+    assert WORLD_PROJECTION.is_file()
+    paths.append(WORLD_PROJECTION)
     offenders = []
     for path in paths:
-        rel = path.relative_to(FLEET_PKG).as_posix()
+        rel = (path.relative_to(FLEET_PKG) if path.is_relative_to(FLEET_PKG)
+               else path.relative_to(REPO)).as_posix()
         assert rel not in IDENTITY_READERS, rel
         text = path.read_text(encoding="utf-8")
         offenders += [f"{rel} reads {name}" for name in _identity_reads(text)]
+        offenders += [f"{rel} imports {name}" for name in _tracking_imports(text)]
         if "confirmed_track_pose" in text:
             offenders.append(f"{rel} reads confirmed_track_pose")
     assert offenders == []

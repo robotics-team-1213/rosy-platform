@@ -13,6 +13,8 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import sys
+import shutil
+import subprocess
 
 import pytest
 import yaml
@@ -35,6 +37,41 @@ from test_image_customization_contract import _valid_root, _verify  # noqa: E402
 def _code(path: Path) -> str:
     return "\n".join(line for line in path.read_text(encoding="utf-8").splitlines()
                      if not line.lstrip().startswith("#"))
+
+
+def test_identify_light_has_a_dark_baseline_then_two_seconds_steadily_on(tmp_path):
+    compiler = shutil.which("cc")
+    if compiler is None:
+        pytest.skip("C compiler required")
+    source = (ROOT / "middleware/drivers/pinky_lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
+    pure = source[source.index("static ws2811_led_t rgb("):source.index("static int zoned(")]
+    harness = tmp_path / "lamp.c"
+    harness.write_text('''#include <math.h>
+#include <string.h>
+#include <assert.h>
+typedef unsigned int ws2811_led_t;
+#define M_PI 3.14159265358979323846
+#define DIM 0x40
+#define PEAK 255
+#define BREATH_MAX 63
+''' + pure + '''
+int main(void) {
+    const char *patterns[] = {"identify_blue", "identify_amber"};
+    for (int p = 0; p < 2; p++) {
+        ws2811_led_t color, lit;
+        assert(frame(patterns[p], 1000, &lit) == 0 && lit != 0);
+        for (int t = 0; t < 3000; t += 50) {
+            assert(frame(patterns[p], t, &color) == 0);
+            assert(color == (t < 1000 ? 0 : lit));
+        }
+        assert(frame(patterns[p], 3000, &color) == 1);
+    }
+}
+''', encoding="utf-8")
+    binary = tmp_path / "lamp"
+    compiled = subprocess.run([compiler, str(harness), "-lm", "-o", str(binary)], capture_output=True, text=True)
+    assert compiled.returncode == 0, compiled.stderr
+    subprocess.run([str(binary)], check=True, capture_output=True)
 
 
 def test_the_lock_pins_the_patch_bytes():

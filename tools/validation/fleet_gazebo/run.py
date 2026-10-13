@@ -134,7 +134,8 @@ def main(argv=None) -> int:
           f"--robots {shlex.quote(str(robots_path))} --port {reservations.console_port} "
           f"--tasks-db {shlex.quote(str(root / 'tasks.sqlite3'))} "
           f"--events-db {shlex.quote(str(root / 'events.sqlite3'))} "
-          "--site-map-import middleware/perception/map/map_v2_fleet/lane_graph.yaml")
+          "--site-map-import middleware/perception/map/map_v2_fleet/lane_graph.yaml "
+          "--site-config integrations/simulation/gazebo/config/fleet_sim_site.yaml")
     print("READY is decided by preflight probes (clock/scan/odom/tf/nav2/"
           "core_http/ws_welcome) — not by this planner.")
     return 0

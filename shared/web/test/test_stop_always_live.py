@@ -72,7 +72,7 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
                 offenders.append(f"{_rel(path)}:{line}")
     assert offenders == [], f"정지 컨트롤에 data-always-live가 없다(대화상자가 열리면 막힌다): {offenders}"
     names = {_rel(path) for path, _ in pages}
-    for page in ("middleware/ui/robot/surface.html", "middleware/ui/robot/index.html", "operations/fleet/fleet/server/web/index.html"):
+    for page in ("middleware/ui/robot/surface.html", "middleware/ui/robot/index.html", "operations/ui/console/index.html"):
         assert page in names, f"스캔이 {page}를 놓쳤다"
     assert stops >= 6, "셸·옛 대시보드·Fleet·게임·진단 정지를 모두 센다"
 
@@ -94,7 +94,7 @@ WEB_SCRIPT_ROOTS = (
     REPO / "middleware" / "ui" / "robot",
     REPO / "shared" / "web",
     REPO / "middleware" / "ui" / "pilot",
-    REPO / "operations" / "fleet" / "fleet" / "server" / "web",
+    REPO / "operations" / "ui" / "console",
     REPO / "operations" / "apps" / "games" / "games" / "web",
 )
 
@@ -116,7 +116,7 @@ def test_no_surface_script_opens_a_modal_dialog():
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
     names = {_rel(path) for path in scripts}
-    for script in ("operations/fleet/fleet/server/web/enrollment.js", "operations/fleet/fleet/server/web/camera-pairing.js",
+    for script in ("operations/ui/console/enrollment.js", "operations/ui/console/camera-pairing.js",
                    "shared/web/ui.js", "middleware/ui/pilot/app.js",
                    "middleware/ui/robot/settings.js", "operations/apps/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"

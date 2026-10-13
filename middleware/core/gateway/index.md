@@ -44,6 +44,7 @@
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 | D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
+| D-620 | 교차로 진입 전 인증된 Fleet heartbeat로 신호를 질의하고 답이 전혀 없을 때만 3초 뒤 기존 CORE 우측 90도 회전을 선택한다; 적색·미확인·만료·오류 응답은 대기, 요청 ID 상관·중복 회전 금지·CORE 입장 검사 유지, 명시적 CAMERA_LINE 감독 시험 설정 기본 꺼짐 |
 
 ## 계획·결과 문서
 
@@ -62,6 +63,7 @@
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-11-core-drive-composition-first.md](../../../docs/plans/2026-10-11-core-drive-composition-first.md)
 
 ## 교훈 (docs/solutions)
 
@@ -73,8 +75,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
-- 2026-10-09 · uncommitted · feat(core): D-531 경로 문맥 발행
-- 2026-10-09 · uncommitted · feat(core): D-541 trip lease 배선
-- 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
-- 2026-10-08 · uncommitted · fix(bridge): 경로 frame과 지도 ID 수신 근거 보존
+- 2026-10-12 · uncommitted · 카메라 곡률이 CORE 유효 법칙과 같다
+- 2026-10-12 · d3bd5513c · 이동 교통 감속과 실제 command SDK 정합성
+- 2026-10-12 · af76fcc5f · 관측 표식의 가까운 경계와 기존 교통 gate 검증
+- 2026-10-12 · 47ace984f2 · 내장 센서 이름과 CORE clock 전달
+- 2026-10-12 · uncommitted · feat(face): D-719 발행된 주행 사유를 얼굴 노트로

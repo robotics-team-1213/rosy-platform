@@ -23,7 +23,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | File | Description |
 |------|-------------|
 | `package.xml` | ament_python; `core_common` is an `exec_depend` for colcon build order only — this package's code has no ROS import (D-18, D-126) |
-| `setup.py` | Console script `fleet=fleet.cli:main` |
+| `setup.py` | Fleet metadata/entrypoint; `tools/packaging/fleet_sources.py` owns build-time composition. D-652 installs three pure `rosy_situation` files only, excluding AI service/analyzers/vision. D-657 reuses the existing external execution wheel without duplicate source packaging |
 | `fleet/formation/geometry.py` | `Formation`, `SlotOffset`, `slots()` — FOR-001, pure functions |
 | `fleet/formation/assignment.py` | `SlotAssigner` protocol, `GreedyDistanceAssigner` — FOR-002, pure functions |
 | `fleet/swarm/robots.py` | `RobotEndpoint`, `load_robots()` / `write_robots()` for `robots.yaml` (per-robot token, D-30) |
@@ -34,13 +34,14 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/hub/registry.py` | Online snapshot and event seq |
 | `fleet/hub/hub.py` | Envelope handle + scatter_estop |
 | `fleet/cli.py` | `fleet relay ...` / `formation ...` / `console ...` |
+| `fleet/incidents/handoff.py`, `incidents/notifications.py` | D-661 named human ownership and team notification journal/worker; separate from stuck resolver and final device authority |
 | `fleet/server/console.py` | `FleetConsole`: N대 상태 gather + goal/cancel/e-stop scatter. 하달한 목표를 기억하는 곳(D-12) |
 | `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
 | `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
-| `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지)와 `lane_graph.yaml` 가져오기. 순수 |
-| `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
+| `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지·D-573 횡단보도 구역)와 `lane_graph.yaml` 가져오기. 순수 |
+| `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`)와 호출자에게 넘길 사실 묶음(`brief`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
 | `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
 | `fleet/server/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
 | `fleet/traffic/lane_traffic.py` | D-517 3 (M1) `TrafficService`: 열린 trip 전부를 `fleet/traffic/blocks.py` 고정 블록 표로 계산해 `GET /api/fleet/traffic`에 보인다. 로봇에 보내지 않는다(M2). trip 루프의 교차로 보류(`holds`)와 고정 점유 갱신도 여기서 한다. 운행 블록 허가를 쓰는 곳은 이 모듈 하나다 |

@@ -138,8 +138,8 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
         return None if host(f"/var/lib/systemd/linger/{user}").exists() else f"linger off for {user}"
     if kind == "wifi-allow":
         allowed = wifi_allowed()
-        if not allowed:
-            return f"wifi-allow: {WIFI_ALLOW} is empty; nothing is turned off"
+        if not allowed:  # an empty or missing list means "not configured": nothing to enforce
+            return None
         extra = [n for n in wifi_autoconnect() if n not in allowed]
         return f"wifi autoconnect outside the allow list: {', '.join(extra)}" if extra else None
     raise SystemExit(f"unknown kind: {kind}")
@@ -311,6 +311,7 @@ def check() -> int:
     out = host(STATUS)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    # awaiting_approval is reported (status.json, journal) but is not a failure of the unit.
     return 1 if status["drift"] or status["errors"] else 0
 
 

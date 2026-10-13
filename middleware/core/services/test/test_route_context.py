@@ -55,6 +55,16 @@ def test_off_or_unmapped_instruction_never_yields_a_context():
                          odom_key=(2, "odom"), odometer=1.2) is None
 
 
+def test_bend_pass_and_reacquisition_keep_a_phase_after_approach_window():
+    bend = _junction(action="bend", bend_in=0.3, tol=0.05, turn_deg=63.0,
+                     window=None, travel=0.9)
+    for phase in ("bending", "reacquiring"):
+        context = route_context(dict(bend, state=phase), None, mono_now=10.0, ros_now=100.0,
+                                odom_key=(2, "odom"), odometer=1.2)
+        assert context.kind == "bend" and context.bend_phase == phase
+        assert context.ahead_m is None
+
+
 def test_manager_publishes_only_when_enabled_and_with_fresh_matching_pose():
     class Bus:
         def publish(self, *args, **kwargs):

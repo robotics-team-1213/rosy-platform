@@ -23,8 +23,8 @@ one-time per-card provisioning bundle.
   listed file, manifest identity and the exact `.img.xz` filename/hash with
   `verify-image-release.py`. Signature-file presence alone is never enough.
 - Tests and `-PlanOnly` must not invoke an image writer or alter physical media.
-- Omitted `-RobotNumber` is drawn at random from the registry's free slots (1-61),
-  never a fixed default (D-33). Omitted Fleet values default to
+- Omitted `-RobotNumber` takes the lowest free registry number in 40-49 (D-562: it is
+  also the ceiling marker id), never a fixed default (D-33); explicit numbers stay 1-61. Omitted Fleet values default to
   `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
   (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
 - Write a reviewed plan with the operator entry point, not a hand-made wrapper:

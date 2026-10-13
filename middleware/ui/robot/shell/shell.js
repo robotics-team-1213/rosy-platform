@@ -13,6 +13,10 @@ const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
 const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
+const retry = createNode("ui-button", "", "화면 구성 다시 불러오기");
+retry.id = "surface-retry";
+retry.setAttribute("kind", "quiet");
+retry.setAttribute("type", "button");
 const safetyStatus = document.getElementById("safety-mode-status");
 const store = createStore(api, { session });
 if (surface === "console") {
@@ -161,12 +165,18 @@ async function onManifestError(error) {
     return;
   }
   showStatus(`화면 구성을 받지 못했습니다: ${error.message}. 잠시 뒤 다시 시도합니다.`);
+  status.append(retry);
 }
 
 function refresh() {
   if (inflight) return;
   inflight = assemble().catch(onManifestError).finally(() => { inflight = null; });
 }
+
+retry.addEventListener("click", () => {
+  showStatus("화면 구성을 다시 확인하고 있습니다.");
+  refresh();
+});
 
 document.getElementById("shell-estop").addEventListener("click", async () => {
   window.dispatchEvent(new Event("rosy:stop-motion"));

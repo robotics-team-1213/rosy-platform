@@ -24,6 +24,9 @@ if [ -f "$REPO_DIR/install/setup.bash" ]; then
     echo "rosy env: workspace install sourced"
 fi
 
+# D-630: development source mode includes the World wheel skipped by colcon.
+export PYTHONPATH="$REPO_DIR/operations/world/src${PYTHONPATH:+:$PYTHONPATH}"
+
 # D-117 / D-120: 개발·시뮬도 Cyclone. FastDDS 기본값과 deprecated ROS_LOCALHOST_ONLY 를 물려받지 않는다.
 # 로봇에서는 이 파일을 source 하지 말고 rosy_env.sh 를 쓴다.
 export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"

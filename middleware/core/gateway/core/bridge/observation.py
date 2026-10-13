@@ -25,9 +25,11 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.crosswalk_gate import scan_rays
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
+from core_common.robot_body import inside_body
 
 Warn = Callable[[str], None]
 
@@ -181,6 +183,9 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     config = line.config
     path = config.obstacle_mode == "path"
     try:
+        if line.wants_crosswalk_scan:  # D-573: every ray (no return = unknown)
+            line.observe_crosswalk_scan(scan_rays(sample, forward_deg=config.lidar_forward_deg),
+                                        range_min=_range_min(sample), received_at=received_at)
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear
         # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
         # Sector mode builds them only while a stuck can be near (review L6).
@@ -190,6 +195,11 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 max_range=max(BODY_POINTS_RANGE_M,
                               config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
                 self_mask=config.lidar_self_mask)
+            if config.body_stop_known:
+                # D-424: current returns strictly inside the body are self reflections; keep its outline.
+                points = tuple((x, y) for x, y in points if not inside_body(
+                    x + config.body_lidar_x_m, y, config.body_front_x_m, config.body_rear_x_m,
+                    config.body_half_width_m, config.body_rotation_radius_m, strict=True))
             line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
         if line.wants_return_scan:
             from core_common.robot_body import RobotBody

@@ -30,9 +30,9 @@ def _installed_files() -> set[str]:
 
 def test_every_manifest_asset_exists_as_a_plain_file():
     for name in ASSETS:
-        # One level only: D-370 surface icons live in icons/, each listed by name.
+        # One level only: D-370 role icons and D-654 brand assets are listed by name.
         folder, _, base = name.rpartition("/")
-        assert folder in ("", "icons") and base and not base.startswith("."), name
+        assert folder in ("", "icons", "brand") and base and not base.startswith("."), name
         assert ".." not in name and "\\" not in name, name
         assert (WEB / name).is_file(), f"manifest names a missing file: {name}"
 

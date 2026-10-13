@@ -13,9 +13,9 @@ for package_root in (
     ROOT / "middleware/skills/api/src",
     ROOT / "middleware/skills/manipulation/src",
     ROOT / "contracts/foundation",
-    ROOT / "middleware/apps/device/omx/adapter",
+    ROOT / "middleware/devices/omx/adapter",
     ROOT / "integrations/robots/omx/src",
-    ROOT / "middleware/apps/device/omx/adapter/test",
+    ROOT / "middleware/devices/omx/adapter/test",
 ):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))

@@ -11,13 +11,19 @@ defaults from line_follow.yaml except for the declared Gazebo ground.
 
 import math
 import os
+import sys
 from typing import List
+
+_LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_parts import observer_steering_law
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -36,8 +42,10 @@ REAL_CAMERA_X_OFFSET_M = 0.03317
 def generate_launch_description():
     gz_share = get_package_share_directory("gz_sim")
     control_share = get_package_share_directory("control")
-    world = os.path.join(
-        control_share, "map", "map_v2_fleet", "worlds", "map_v2_fleet_real.world")
+    map_bundle = PathJoinSubstitution([
+        control_share, "map", "map_v2_fleet", LaunchConfiguration("map_variant")])
+    world = PathJoinSubstitution([map_bundle, "worlds", "map_v2_fleet_real.world"])
+    map_graph = PathJoinSubstitution([map_bundle, "lane_graph.yaml"])
     line_config = os.path.join(control_share, "config", "line_follow.yaml")
     default_core_overlay = os.path.join(
         gz_share, "config", "map_v2_fleet_core.yaml")
@@ -66,6 +74,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument("map_variant", default_value=".", choices=[".", "training-curved"]),
         DeclareLaunchArgument("gazebo_gui", default_value="false"),
         # The device streams 8 fps (teleop_20260919_151213).
         DeclareLaunchArgument("camera_update_rate", default_value="8"),
@@ -82,37 +91,17 @@ def generate_launch_description():
         DeclareLaunchArgument("route", default_value="[]"),
         DeclareLaunchArgument("route_start", default_value="[]"),
         simulation,
+        OpaqueFunction(function=_line_observer, kwargs={"line_config": line_config, "map_graph": map_graph}),
+        # D-601 in SIM: CORE's front preview (vision/front/status) from the Gazebo camera.
+        # Display JPEG only; no road/observation, so traffic_policy is untouched.
         Node(
-            package="control",
-            executable="line_observer_node",
-            name="line_observer_node",
+            package="gz_sim",
+            executable="sim_jpeg_relay.py",
+            name="sim_jpeg_relay",
             output="screen",
-            parameters=[line_config, {
-                "use_sim_time": True,
-                # Gazebo has no camera controls to report stable.
-                "require_camera_controls_stable": False,
-                "camera_lane_mode": ParameterValue(
-                    LaunchConfiguration("camera_lane_mode"), value_type=str),
-                "debug_overlay": ParameterValue(
-                    LaunchConfiguration("debug_overlay"), value_type=bool),
-                "debug_lane_graph": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                "lane_graph_path": os.path.join(
-                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                "route": ParameterValue(
-                    LaunchConfiguration("route"), value_type=List[str]),
-                "route_start": ParameterValue(
-                    LaunchConfiguration("route_start"), value_type=List[float]),
-                "camera_ground_source": "GAZEBO",
-                "allow_simulation_ground": True,
-                "gazebo_camera_height_m": REAL_CAMERA_HEIGHT_M,
-                "gazebo_camera_pitch_rad": math.radians(REAL_TILT_DEG),
-                "gazebo_camera_hfov_rad": REAL_HFOV_RAD,
-                "gazebo_camera_max_range_m": 0.6,
-                # lane_corner_turning and camera_x_offset_m come from the payload
-                # line_follow.yaml (D-495 SIM acceptance runs the payload values; the
-                # test pins that they equal this profile).
-            }],
+            # No use_sim_time: the frame keeps the Gazebo stamp, and a /clock
+            # subscription cost ~24% of a core against <1% without (2026-10-10).
+            remappings=[("camera/image_raw", "camera/front")],
         ),
         Node(
             package="core",
@@ -128,3 +117,38 @@ def generate_launch_description():
             "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
             "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
     ])
+
+
+def _line_observer(context, *, line_config, map_graph):
+    return [
+        Node(
+            package="control",
+            executable="line_observer_node",
+            name="line_observer_node",
+            output="screen",
+            parameters=[line_config, {
+                "use_sim_time": True,
+                # Gazebo has no camera controls to report stable.
+                "require_camera_controls_stable": False,
+                "camera_lane_mode": ParameterValue(
+                    LaunchConfiguration("camera_lane_mode"), value_type=str),
+                "debug_overlay": ParameterValue(
+                    LaunchConfiguration("debug_overlay"), value_type=bool),
+                "debug_lane_graph": map_graph,
+                "lane_graph_path": map_graph,
+                "route": ParameterValue(
+                    LaunchConfiguration("route"), value_type=List[str]),
+                "route_start": ParameterValue(
+                    LaunchConfiguration("route_start"), value_type=List[float]),
+                "camera_ground_source": "GAZEBO",
+                "allow_simulation_ground": True,
+                "gazebo_camera_height_m": REAL_CAMERA_HEIGHT_M,
+                "gazebo_camera_pitch_rad": math.radians(REAL_TILT_DEG),
+                "gazebo_camera_hfov_rad": REAL_HFOV_RAD,
+                "gazebo_camera_max_range_m": 0.6,
+                # lane_corner_turning and camera_x_offset_m come from the payload
+                # line_follow.yaml (D-495 SIM acceptance runs the payload values; the
+                # test pins that they equal this profile).
+            }, observer_steering_law(LaunchConfiguration("core_overlay").perform(context))],
+        )
+    ]

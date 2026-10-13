@@ -416,7 +416,7 @@ def test_a_ghost_needs_consecutive_frames_and_is_never_reported_meanwhile():
         assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
     assert len(detector._suspects) == 1
     assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
-    assert detector._suspects == [] and detector._frames is None
+    assert detector._suspects == [] and len(detector._frames) == 30  # kept for later ghosts
 
 
 def _robot_with_deck(image=None):
@@ -437,9 +437,9 @@ def test_the_whole_ghost_blob_is_healed_and_a_robot_parking_there_is_seen_whole(
     assert found.footprint_m == pytest.approx(2.0 * math.sqrt(22 * 22 * 1e-4 / math.pi), abs=0.003)
 
 
-def test_without_suspects_the_learning_frames_are_freed():
-    assert _learned()._frames is None
-    assert _learned(floor=_parked_robot_floor)._frames is not None
+def test_the_learning_frames_are_kept_with_or_without_suspects():
+    assert len(_learned()._frames) == 30
+    assert len(_learned(floor=_parked_robot_floor)._frames) == 30
 
 
 @pytest.mark.parametrize("how", ["relearn", "scene"])
@@ -464,5 +464,236 @@ def test_a_wrong_kept_background_is_guessed_and_healed_without_rewriting_the_sto
     assert guess.score <= BAKED_SCORE_MAX
     for index in range(GHOST_CONFIRM_FRAMES + 2):
         assert after.detect(Frame(_floor(), 101.0 + index / 3), CAL).detections == ()
-    assert after._suspects == [] and after._frames is None
+    assert after._suspects == []
     assert store.path.read_bytes() == kept
+
+
+
+# D-547 addendum: ghosts without a suspect.
+
+def _cabled_robot_floor(image=None):
+    image = _with_square(18, image=image)
+    image[141:159, 297:303] = (40, 160, 230)  # a cable splits the dark body: no suspect
+    return image
+
+
+def test_an_unconfirmed_ghost_is_reported_capped_then_healed():
+    detector = _learned(floor=_cabled_robot_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(GHOST_CONFIRM_FRAMES - 1):  # visible, at a guess's score, until confirmed
+        (seen,) = detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections
+        assert seen.score <= BAKED_SCORE_MAX and detector._model is model
+    assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
+    assert detector._model is not model  # healed
+    for index in range(3):
+        assert detector.detect(Frame(_floor(), 12.34 + index / 3), CAL).detections == ()
+    (found,) = detector.detect(Frame(_cabled_robot_floor(), 14.0), CAL).detections
+    assert found.score > BAKED_SCORE_MAX  # back on the healed spot: a live blob
+
+
+@pytest.mark.parametrize("cx", [150, 300, 450])
+def test_a_visible_robot_is_never_healed_wherever_it_stands(cx):
+    detector = _learned()
+    model = detector._model
+    for index in range(10):
+        assert len(detector.detect(Frame(_with_square(18, cx=cx), 11.0 + index / 3), CAL).detections) == 1
+    assert detector._model is model
+
+
+def _tape_floor(image=None):
+    image = _floor() if image is None else image
+    image[137:163, 260:340] = 40  # a dark tape band: long, so it is no suspect
+    return image
+
+
+def test_a_robot_with_a_coloured_deck_on_dark_tape_is_reported_and_never_healed():
+    detector = _learned(floor=_tape_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(6):
+        frame = _tape_floor()
+        frame[141:159, 291:309] = (60, 60, 120)  # not floor coloured: never a ghost
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    assert detector._model is model
+
+
+def _blue_square_floor(image=None):
+    image = _floor() if image is None else image
+    image[139:161, 289:311] = (200, 60, 20)  # a blue start square: not dark
+    return image
+
+
+def test_a_floor_coloured_box_on_a_blue_square_is_seen_and_leaves_no_phantom():
+    detector = _learned(floor=_blue_square_floor)
+    model = detector._model
+    for index in range(4):
+        frame = _blue_square_floor()
+        frame[141:159, 291:309] = 125  # a grey box on the square
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    for index in range(3):  # removed
+        assert detector.detect(Frame(_blue_square_floor(), 12.5 + index / 3), CAL).detections == ()
+    assert detector._model is model
+
+
+def test_a_large_dark_occluder_like_a_chair_is_not_healed():
+    detector = _learned(floor=_cabled_robot_floor)
+    model = detector._model
+    for index in range(10):
+        frame = _cabled_robot_floor()
+        frame[141:159, 291:309] = (20, 60, 110)  # a chair part over the spot: not floor coloured
+        frame[60:90, 420:450] = (20, 30, 40)    # and on plain floor elsewhere
+        frame[250:270, 420:440] = 140             # floor-coloured paper on plain floor
+        detector.detect(Frame(frame, 11.0 + index / 3), CAL)
+    assert detector._model is model
+
+
+# D-589: the kept background replays only under the camera settings it was learned with.
+
+LOCKED = "ev=-7;ae=1;awb=1;max_us=33333;ab=60hz"
+OTHER = "ev=-3;ae=1;awb=1;max_us=33333;ab=60hz"
+
+
+def _kept(store, camera):
+    before = BackgroundBlobDetector(store=store)
+    if camera is not None:
+        before.camera_changed(camera)
+    before.relearn()
+    _learned(before)
+    assert store.path.exists()
+
+
+def test_a_kept_background_replays_under_the_same_camera_settings(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    after = BackgroundBlobDetector(store=store)
+    after.camera_changed(LOCKED)  # the phone reports its settings before the first frame
+    result = after.detect(Frame(_parked_robot_floor(), 100.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_other_camera_settings_or_none_known_learn_live(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    other = BackgroundBlobDetector(store=store)
+    other.camera_changed(OTHER)
+    assert other.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+    unknown = BackgroundBlobDetector(store=store)
+    assert unknown.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+
+
+def test_a_background_kept_before_d589_counts_as_a_mismatch_once_settings_are_known(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, None)  # no fingerprint in the file
+    known = BackgroundBlobDetector(store=store)
+    known.camera_changed(LOCKED)
+    assert known.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"
+    unknown = BackgroundBlobDetector(store=store)  # old app, no camera_state: as before D-589
+    assert unknown.detect(Frame(_parked_robot_floor(), 100.0), CAL).status == "OK"
+
+
+def test_a_camera_change_learns_again_and_replays_a_matching_kept_background(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    detector = BackgroundBlobDetector(store=store)
+    detector.camera_changed(OTHER)
+    _learned(detector)
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(LOCKED)  # the tuner locked again at the kept settings
+    result = detector.detect(Frame(_parked_robot_floor(), 200.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_first_settings_report_after_learning_keeps_the_background():
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(LOCKED, first=True)  # only names the settings learned under
+    assert detector.detect(Frame(_floor(), 11.5), CAL).status == "OK"
+    detector.camera_changed(LOCKED)  # the same settings again, but a new link or back to Vision
+    assert detector.detect(Frame(_floor(), 12.0), CAL).status == "LEARNING"
+
+
+def test_first_settings_report_while_learning_restarts_the_learn_with_replay(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    after = BackgroundBlobDetector(store=store)
+    assert after.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"  # no settings known yet
+    after.camera_changed(LOCKED, first=True)
+    result = after.detect(Frame(_parked_robot_floor(), 101.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+
+
+def test_a_camera_change_during_an_operator_relearn_still_keeps_it(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    detector = BackgroundBlobDetector(store=store)
+    detector.camera_changed(OTHER)
+    detector.relearn()
+    detector.camera_changed(LOCKED)
+    _learned(detector)
+    assert store.path.exists()
+    replay = BackgroundBlobDetector(store=store)
+    replay.camera_changed(LOCKED)
+    assert replay.detect(Frame(_parked_robot_floor(), 100.0), CAL).status == "OK"
+
+
+# D-596 1: an LED identify window freezes the background (a standing robot blinks).
+
+def _lamp_on(image):
+    image[141:159, 291:309] = (255, 0, 0)  # the whole robot top lit blue: foreground, not floor
+    return image
+
+
+def test_a_held_window_keeps_a_blinking_baked_robot_as_its_guess():
+    detector = _learned(floor=_parked_robot_floor)
+    unheld = detector.detect(Frame(_lamp_on(_parked_robot_floor()), 11.0), CAL).detections
+    assert not any(d.score <= BAKED_SCORE_MAX for d in unheld)  # unheld: the guess is gone
+    detector.hold(20.0)
+    for index in range(6):
+        frame = _parked_robot_floor() if index % 2 else _lamp_on(_parked_robot_floor())
+        (guess,) = detector.detect(Frame(frame, 12.0 + index / 3), CAL).detections
+        assert guess.score <= BAKED_SCORE_MAX and guess.x == pytest.approx(2.995, abs=0.006)
+    assert len(detector._suspects) == 1
+
+
+def test_a_held_window_heals_no_ghost_until_it_ends():
+    detector = _learned(floor=_parked_robot_floor)
+    detector.hold(13.0)
+    for index in range(GHOST_CONFIRM_FRAMES + 2):
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+    assert len(detector._suspects) == 1  # not confirmed while held
+    assert detector.detect(Frame(_floor(), 13.5), CAL).detections == ()
+    assert detector._suspects == []      # healed on the first frame after the window
+
+
+def test_a_scene_change_in_a_held_window_starts_no_learn():
+    detector = _learned()
+    detector.hold(12.0)
+    bright = np.full((360, 640, 3), 200, np.uint8)
+    assert detector.detect(Frame(bright, 11.0), CAL).status == "SCENE_CHANGED"
+    assert detector.detect(Frame(_with_square(18), 11.34), CAL).status == "OK"
+    assert detector.detect(Frame(bright, 12.5), CAL).status == "SCENE_CHANGED"
+    assert detector.detect(Frame(_floor(), 12.84), CAL).status == "LEARNING"
+
+
+def test_no_learning_frame_is_taken_in_a_held_window():
+    detector = BackgroundBlobDetector()
+    detector.hold(5.0)
+    for index in range(10):
+        assert detector.detect(Frame(_with_square(18), index / 2), CAL).status == "LEARNING"
+    assert detector._learned == 0
+    assert detector.detect(Frame(_floor(), 5.5), CAL).status == "LEARNING"
+    assert detector._learned == 1
+
+
+def test_a_camera_change_does_not_fill_robot_regions_from_the_old_exposure():
+    """D-589 x D-600: the background of other camera settings is not a source for masked learning."""
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.reset()  # SCENE_CHANGED or operator relearn: the previous background may fill
+    assert detector._previous is not None
+    detector = _learned()
+    assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
+    detector.camera_changed(OTHER)
+    assert detector._previous is None

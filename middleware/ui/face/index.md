@@ -14,6 +14,8 @@
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 | D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
 | D-504 | 로봇 얼굴 애니메이션은 작은 LCD에서 표정의 형태를 먼저 구별하게 한다 |
+| D-688 | 얼굴 상황 줄, 충전 중 잔량 고정, 부팅 ROSY |
+| D-719 | 얼굴이 이미 아는 주행 사유와 기다림 입 |
 
 ## 계획·결과 문서
 
@@ -34,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-12 · uncommitted · uiux(face): D-719 기다림 입을 두껍게
+- 2026-10-12 · uncommitted · uiux(face): D-688 상황 줄, 충전 잔량, 표정, 부팅 ROSY
 - 2026-10-09 · uncommitted · fix(face): LCD 변경 영역만 SPI로 전송
 - 2026-10-09 · uncommitted · fix(face): Pair request 카드에 CA 줄 (D-483 보완)
 - 2026-10-07 · uncommitted · uiux(face): D-504 LCD 표정 가장자리 보정
-- 2026-10-07 · uncommitted · uiux(face): D-504 표정 실루엣과 재생
-- 2026-10-06 · uncommitted · uiux(face): 주행 카드 저배터리 대비와 G3 부분 독회

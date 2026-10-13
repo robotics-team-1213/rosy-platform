@@ -30,9 +30,10 @@ NON_PRODUCT = {
 #: D-277 — 장미색이 살아도 좋은 파일. 워드마크(ui-brand·레거시 .brand b)와
 #: 현재 위치 표식(역할 메뉴·표면 링크) 가족, 그리고 팔레트 원본.
 ROSE_FILES = {
-    "learning/training/perception/dataset/review_app_web/app.css",  # ROSY wordmark only; checked below
+    "learning/curation/perception/review_app_web/app.css",  # ROSY wordmark only; checked below
     "shared/web/tokens.css",                 # 팔레트 원본(정의)
     "shared/web/components.css",             # ui-brand 워드마크
+    "shared/web/app-shell.css",              # 레일의 현재 위치 표식(D-741, D-277 역할 메뉴)
     "middleware/ui/robot/styles.css",                  # 레거시 셸 워드마크(.brand b)
     "middleware/ui/robot/shell/shell.css",             # 역할 메뉴 위치 표식(팔레트 게이트 핀)
     "middleware/ui/robot/panels/surface-panels.css",   # 표면 링크(위치 표식 가족)
@@ -50,9 +51,58 @@ _ROSE = re.compile(r"--brand-rose(?:-wash)?\b")
 _GROUND = re.compile(r"var\((--ground-soft|--ground-card)\)")
 _FULL_VIEWPORT_VH = re.compile(r"(?<![\da-z])100vh\b")
 
+# D-624: direct paint declarations have a role; data/mix expressions keep their palette.
+COLOR_ROLES = {
+    "color": {"--ink": "--text-primary", "--ink-quiet": "--text-secondary",
+              "--ink-on-crit": "--text-on-danger"},
+    "background": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
+    "background-color": {"--ground": "--surface-canvas", "--ground-deep": "--surface-recessed"},
+    "border-color": {"--line-10": "--border-subtle", "--line-14": "--border-default",
+                     "--line-30": "--border-strong"},
+}
+
+
+def direct_colour_roles(css: str) -> list[str]:
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    bad = []
+    for prop, roles in COLOR_ROLES.items():
+        for palette, role in roles.items():
+            pattern = rf"(?<![\w-]){prop}\s*:\s*var\({palette}\)(?=\s*[;}}])"
+            if re.search(pattern, css):
+                bad.append(f"{prop}: {palette} -> {role}")
+    return bad
+
+
+def test_direct_colour_declarations_use_semantic_roles():
+    bad = []
+    for row in _web_rows():
+        for page, css in registry._style_sources(registry.REPO, row["path"]):
+            bad.extend(f"{page.relative_to(registry.REPO)}: {error}" for error in direct_colour_roles(css))
+    assert bad == [], "\n".join(bad)
+
+
+def test_semantic_colour_guard_preserves_data_and_mix_expressions():
+    assert direct_colour_roles("a { color: var(--ink); background: var(--ground); }")
+    assert direct_colour_roles("a { color: var(--text-primary); background: var(--surface-canvas); }") == []
+    assert direct_colour_roles("a { color: color-mix(in oklab, var(--ink) 80%, transparent); }") == []
+    assert direct_colour_roles("a { stroke: var(--series-primary); color: var(--status-warn); }") == []
+    assert direct_colour_roles("/* color: var(--ink); */") == []
+
+
+def test_semantic_colour_aliases_keep_existing_theme_values():
+    import token_themes
+
+    text = token_themes.read()
+    body = token_themes.derived_body(text)
+    aliases = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;", body))
+    derived = set(re.findall(r"(--[a-z0-9-]+)\s*:", body))
+    for primitive, role in {**COLOR_ROLES["color"], **COLOR_ROLES["background"], **COLOR_ROLES["border-color"]}.items():
+        assert aliases[role] == primitive
+        assert primitive in derived or all(primitive[2:] in p for p in token_themes.palettes(text).values())
+
 
 def test_review_app_rose_is_confined_to_its_wordmark():
-    path = registry.REPO / "learning/training/perception/dataset/review_app_web/app.css"
+    path = registry.REPO / "learning/curation/perception/review_app_web/app.css"
     css = path.read_text(encoding="utf-8")
     wordmark = re.search(r"(?m)^\.wordmark\s*\{([^}]*)\}", css)
     uses = _ROSE.findall(css)

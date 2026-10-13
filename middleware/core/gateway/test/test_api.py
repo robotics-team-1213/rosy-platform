@@ -925,6 +925,61 @@ def test_battery_policy_estop_enters_emergency_so_admin_release_works(client):
     assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
 
 
+def test_mode_idle_cannot_leave_a_latched_emergency(client):
+    """8kcn 2026-10-10 04:25-04:30 UTC (audit seq 16, 25): battery_policy latched and
+    entered EMERGENCY, then POST /mode IDLE moved EMERGENCY->IDLE with the latch still
+    set, and POST /safety/release answered 409 "not in EMERGENCY"."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    apply_voltage(svc, 7.0)
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    r = tc.post("/api/v1/mode", json={"mode": "IDLE"}, headers=ADMIN)
+    assert r.status_code == 409
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
+
+
+def test_admin_release_recovers_a_latch_left_outside_emergency(client):
+    """Desync recovery (8kcn 2026-10-10, pre-fix CORE): latch set, mode IDLE. Release
+    still clears it for an administrator without a CORE restart."""
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.safety.trigger_estop("battery_policy")
+    svc.modes.mode = Mode.IDLE              # the state the old EMERGENCY->IDLE path left
+    assert tc.post("/api/v1/safety/release", headers=OPERATOR).status_code == 403
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.safety.estop and svc.modes.mode is Mode.IDLE
+    assert not svc.state.snapshot().safety.estop
+    # Neither latched nor EMERGENCY: still the 409 it always was.
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 409
+
+
+def test_desync_release_drops_a_return_armed_during_the_latch(client):
+    """D-502: release drops a dock return armed while latched. The desync path
+    (latch left in IDLE) must do it too, like a release from EMERGENCY."""
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.safety.trigger_estop("battery_policy")
+    svc.modes.mode = Mode.IDLE              # the state the old EMERGENCY->IDLE path left
+    svc.docking._return_pending = True      # armed while latched
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert svc.docking._return_pending is False
+
+
+def test_only_release_leaves_emergency():
+    """SAF-001: no transition() target leaves EMERGENCY; release_emergency() is the exit."""
+    from core_features.command.arbitration import Mode, ModeMachine
+    modes = ModeMachine()
+    assert modes.transition(Mode.EMERGENCY)[0]
+    for target in Mode:
+        if target is not Mode.EMERGENCY:
+            assert not modes.transition(target)[0], target
+            assert modes.mode is Mode.EMERGENCY
+    assert modes.release_emergency()[0] and modes.mode is Mode.IDLE
+
+
 def test_deep_discharge_latches_again_after_release(client):
     """Release is an admin decision, not a battery override: DEEP stops again."""
     from core.bridge.battery_policy import apply_voltage

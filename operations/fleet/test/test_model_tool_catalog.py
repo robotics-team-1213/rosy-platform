@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fleet.ai.model_tool_catalog import (
+from rosy.decision.model_tool_catalog import (
     MODEL_TOOL_CATALOG, ToolEffectClass, provider_tool_schemas,
 )
 

@@ -10,6 +10,11 @@ Safety direction: every unsure outcome (no field, jump, aspect flip, unresolved
 orientation) means *no homography*, never a guessed one. Losing the field also
 clears the orientation, because a camera that was moved while the field was out
 of view could have rotated.
+
+D-595: the accepted quad is frozen. A re-detection inside the move gate is only a
+drift diagnostic (``drift_px``) and never replaces the quad, so the homography
+does not breathe with detection noise. Only a jump that holds (the camera moved)
+re-acquires a new quad.
 """
 
 from __future__ import annotations
@@ -65,6 +70,8 @@ class FieldCalibState:
     corners: tuple[tuple[float, float], ...] | None
     image_size: tuple[int, int]
     orientation: int | None
+    #: D-595: largest corner distance (px) of the last in-gate re-detection from the frozen quad.
+    drift_px: float | None = None
 
     def to_dict(self) -> dict:
         width, height = self.image_size
@@ -81,6 +88,7 @@ class FieldCalibState:
                                                           for x, y in self.corners],
             "corners_normalized": normalized,
             "orientation": self.orientation,
+            "drift_px": None if self.drift_px is None else round(self.drift_px, 2),
         }
 
 
@@ -117,6 +125,7 @@ class FieldCalibrator:
         self._failures = 0
         self._candidate: tuple[tuple[float, float], ...] | None = None
         self._candidate_runs = 0
+        self._drift_px: float | None = None
         self._reason = "no detection yet"
 
     # -- inputs -------------------------------------------------------------
@@ -142,7 +151,11 @@ class FieldCalibrator:
         if self._corners is None:
             self._accept(corners, detection.proposal.confidence)
         elif _max_move(self._corners, corners) <= self.move_fraction * diagonal:
-            self._accept(corners, detection.proposal.confidence)
+            # D-595: frozen quad; an in-gate re-detection is a drift diagnostic only.
+            self._drift_px = _max_move(self._corners, corners)
+            self._candidate = None
+            self._candidate_runs = 0
+            self._reason = "ok" if self._orientation is not None else "orientation unresolved"
         else:
             self._jumped(corners, diagonal, detection.proposal.confidence)
         return self._state()
@@ -222,6 +235,7 @@ class FieldCalibrator:
         self._confidence = float(confidence)
         self._candidate = None
         self._candidate_runs = 0
+        self._drift_px = 0.0
         self._reason = "ok" if self._orientation is not None else "orientation unresolved"
 
     def _jumped(self, corners, diagonal: float, confidence) -> None:
@@ -242,6 +256,7 @@ class FieldCalibrator:
                 self._reason = "re-acquired"
             self._corners = self._candidate
             self._confidence = float(confidence)
+            self._drift_px = 0.0
             self._candidate = None
             self._candidate_runs = 0
 
@@ -251,6 +266,7 @@ class FieldCalibrator:
         self._confidence = None
         self._candidate = None
         self._candidate_runs = 0
+        self._drift_px = None
         if lost:
             self._reason = "field lost"
 
@@ -262,4 +278,5 @@ class FieldCalibrator:
             corners=self._corners,
             image_size=self._image_size,
             orientation=self._orientation,
+            drift_px=self._drift_px,
         )

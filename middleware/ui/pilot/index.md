@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
-- 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
-- 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리
-- 2026-10-09 · uncommitted · uiux(pilot): Robot 운용 지도 같은 탭 인계 검증
-- 2026-10-09 · uncommitted · fix(pilot): 연결 상태와 이유를 늘 보인다 (D-483 보완)
+- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
+- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-12 · 855e5b46a · uiux: 원격 회귀와 화면 검토
+- 2026-10-12 · 3e2aa6381 · uiux: 연결 정보와 재시도 동선
+- 2026-10-12 · b3b44ca1a · uiux: Android 함께 조종 차단 이유와 다음 행동

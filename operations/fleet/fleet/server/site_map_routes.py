@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request
+import yaml
+from fastapi import Depends, HTTPException, Request, Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
-from fleet.site_map import SiteMap
+from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
 
 #: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
@@ -30,6 +31,10 @@ class DraftRequest(BaseModel):
 class ActivateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: str = Field(min_length=1, max_length=64)
+
+
+class ProfileRequest(DraftRequest, MapProfileInfo):
+    name: str = Field(min_length=1, max_length=64, pattern=r"\S")
 
 
 def invalid_errors(exc: ValidationError) -> list[dict]:
@@ -61,12 +66,48 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))
 
+    @app.get("/api/fleet/site-map/profiles", dependencies=read_guard, tags=["site-map"])
+    def site_map_profiles() -> dict:
+        return {"profiles": site_maps.profiles()}
+
+    @app.put("/api/fleet/site-map/profiles/{profile_id}", tags=["site-map"])
+    async def site_map_save_profile(request: Request,
+                                    profile_id: str = Path(pattern=r"^[A-Za-z0-9_.-]{1,64}$"),
+                                    principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            body = ProfileRequest.model_validate_json(await _bounded_body(request))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
+        try:
+            return site_maps.save_profile(profile_id, name=body.name, site_map=body.map,
+                                          info=(MapProfileInfo(kind=body.kind, description=body.description,
+                                                               soccer_field=body.soccer_field)
+                                                if body.model_fields_set & {"kind", "description", "soccer_field"}
+                                                else None),
+                                          expected_revision=body.expected_revision,
+                                          principal_id=principal.principal_id)
+        except SiteMapError as exc:
+            raise fail(exc) from exc
+
     @app.get("/api/fleet/site-map/active", dependencies=read_guard, tags=["site-map"])
     def site_map_active() -> dict:
         view = site_maps.active_view()
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
         return view
+
+    @app.get("/api/fleet/site-map/lane-graph-crosswalks", dependencies=read_guard, tags=["site-map"])
+    def site_map_lane_graph_crosswalks() -> dict:
+        """D-573 1: the import lane graph's crosswalks for the editor to merge into the draft."""
+        source = site_maps.import_source
+        if source is None:
+            raise site_map_error(404, "SITE_MAP_NO_LANE_GRAPH", "no --site-map-import lane graph is configured")
+        try:
+            crosswalks = crosswalks_from_lane_graph(source)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError) as exc:
+            raise site_map_error(422, "SITE_MAP_NO_LANE_GRAPH", f"the lane graph cannot be read: {type(exc).__name__}") from exc
+        return {"source": source.name, "crosswalks": [c.model_dump(mode="json") for c in crosswalks]}
 
     @app.get("/api/fleet/site-map/draft", dependencies=read_guard, tags=["site-map"])
     def site_map_draft() -> dict:
@@ -87,7 +128,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise fail(exc) from exc
 
     @app.post("/api/fleet/site-map/activate", tags=["site-map"])
-    def site_map_activate(body: ActivateRequest,
+    async def site_map_activate(body: ActivateRequest,
                           principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             return site_maps.activate(expected_revision=body.expected_revision,

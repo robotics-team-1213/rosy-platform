@@ -1,6 +1,7 @@
 {
-  "_doc": "rosy-overhead/1 shared test vectors (D-257, D-261). Kotlin and Python tests both read this file. Header: little-endian '<4sIIHHHH' = magic 'ROF1', seq u32, age_ms u32, width u16, height u16, rotation_deg u16, reserved u16; 20 bytes, then JPEG bytes. 'hex' is grouped by header field with single spaces; strip whitespace before decoding.",
+  "_doc": "rosy-overhead/1 shared test vectors (D-257, D-261, D-691). Kotlin and Python tests both read this file. Header: little-endian '<4sIIHHHH' = magic 'ROF1', seq u32, age_ms u32, width u16, height u16, rotation_deg u16, reserved u16; 20 bytes, then JPEG bytes. 'hex' is grouped by header field with single spaces; strip whitespace before decoding.",
   "proto": "rosy-overhead/1",
+  "stream_hold_s": 30,
   "header_size": 20,
   "frame_headers": {
     "valid": [
@@ -128,6 +129,47 @@
       ],
       "rx_fps": 2.9,
       "dropped": 0
+    },
+    "camera_example": {
+      "type": "camera",
+      "seq": 12,
+      "ev": -1,
+      "ae_lock": true,
+      "awb_lock": true,
+      "max_exposure_us": 33333,
+      "antibanding": "60hz"
+    },
+    "camera_state_example": {
+      "type": "camera_state",
+      "seq": 12,
+      "applied": {
+        "ev": -1,
+        "ae_lock": true,
+        "awb_lock": true,
+        "max_exposure_us": 33333,
+        "antibanding": "60hz",
+        "mode": "vision"
+      },
+      "supported": {
+        "ev_min": -20,
+        "ev_max": 20,
+        "ev_step": 0.1,
+        "ae_lock": true,
+        "awb_lock": true,
+        "max_exposure_us": 33333,
+        "antibanding_60hz": true
+      },
+      "exposure_us": 16000,
+      "iso": 200,
+      "thermal": 0
+    },
+    "demand_on": {
+      "type": "demand",
+      "wanted": true
+    },
+    "demand_off": {
+      "type": "demand",
+      "wanted": false
     }
   },
   "hello_lens": {

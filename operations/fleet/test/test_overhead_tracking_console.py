@@ -1,4 +1,5 @@
-"""D-457 7: the console ships the overhead tracking layer, its status line and the apply button."""
+"""D-457 7: the console ships the overhead tracking layer and its status line; install owns the apply
+button and, since D-540 5, the background relearn."""
 
 import re
 
@@ -14,6 +15,8 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
     install_page = client.get("/console/install").text
     layer = client.get("/console/assets/tracking-layer.js")
     view = client.get("/console/assets/tracking-view.js")
+    relearn = client.get("/console/assets/tracking-relearn.js")
+    install = client.get("/console/assets/install.js").text
     shell = client.get("/console/assets/console.js").text
     map_view = client.get("/console/assets/map-view.js").text
     fit_view = client.get("/console/assets/map-fit-view.js").text
@@ -21,7 +24,9 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
 
     assert layer.status_code == 200 and "classifyTracking" in layer.text
     assert view.status_code == 200
-    assert '"/api/fleet/tracking"' in view.text and '"/api/fleet/tracking/relearn"' in view.text
+    assert '"/api/fleet/tracking"' in view.text and "/tracking/relearn" not in view.text
+    assert relearn.status_code == 200 and '"/api/fleet/tracking/relearn"' in relearn.text
+    assert 'import { createTrackingRelearn } from "./tracking-relearn.js";' in install
     assert 'import { createTrackingView } from "./tracking-view.js";' in shell
     assert "trackingView.refresh()" in shell
     # The display lifetime is at most 1 s minus age and request time (D-457 6): polling must be
@@ -33,8 +38,12 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
     assert 'layerOn("tracking")' in map_view
     assert '"/api/fleet/calibrations"' in fit_view and "calibrationRequest(" in fit_view
     assert "currentLensInfo: () => currentLensInfo" in vision_view
-    for element_id in ("tracking-state", "tracking-relearn", "legend-tracking", "tracking-positions"):
+    for element_id in ("tracking-state", "legend-tracking", "tracking-positions"):
         assert f'id="{element_id}"' in page
+    # D-540 5: setup tools live in install's 카메라 설치·보정 only.
+    for element_id in ("tracking-relearn", "start-point-save", "start-point-pick"):
+        assert f'id="{element_id}"' not in page
+        assert f'id="{element_id}"' in install_page
     assert 'id="map-fit-apply"' in install_page
     assert 'data-layer="tracking"' in install_page
     assert "<script>" not in page and 'style="' not in page
@@ -43,7 +52,7 @@ def test_console_serves_the_tracking_layer_wired_into_the_map_and_shell():
 def test_tracking_assets_set_no_inline_style():
     """CSP style-src 'self': the new assets colour by class and canvas only, never el.style."""
     client = TestClient(create_app(FleetConsole([], [])))
-    for name in ("tracking-layer.js", "tracking-view.js"):
+    for name in ("tracking-layer.js", "tracking-view.js", "tracking-relearn.js"):
         response = client.get(f"/console/assets/{name}")
         assert response.status_code == 200, name
         text = response.text

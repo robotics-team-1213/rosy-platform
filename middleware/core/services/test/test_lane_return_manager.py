@@ -43,6 +43,26 @@ def scan_view(*points):
     return ScanView(tuple(points),(),.03)
 
 
+def test_core_curve_body_check_allows_real_contained_tracking():
+    from types import SimpleNamespace
+    from core.drive.line_follow import bind_motion_envelope
+    from core_features.traffic_policy import TrafficPolicyMode
+
+    r = rig(body_lidar_x_m=0., body_rotation_radius_m=.1, obstacle_mode="path")
+    manager = r[2]
+    traffic = SimpleNamespace(mode=TrafficPolicyMode.ENFORCED,
+                              configuration=lambda: {"active": {"proceed_speed_scale": .5}})
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=.01, max_angular=.8))
+    bind_motion_envelope(manager, safety=safety, traffic_policy=traffic)
+    for t in (1., 1.05, 1.1):
+        manager.observe_body_points([], range_min=.05, received_at=t)
+        manager.observe_scan_points([], received_at=t)
+        decision = frame(r, t)
+        assert 0. < decision.linear <= .01
+        assert manager.status().state == "TRACKING"
+    assert manager._return_controller.phase == "tracking"
+
+
 def test_departure_blocks_normal_forward_before_attempting_local_return():
     r=rig()
     for t in (1.,1.05,1.1): assert frame(r,t).linear>0
@@ -105,7 +125,8 @@ def test_local_return_clearance_covers_motion_since_the_measured_scan():
     _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
     manager.observe_return_scan(scan_view((.5, 0.)),source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
     assert manager.return_body_clear(1.1,.03,0.)
-    assert not manager.return_body_clear(1.5,.03,0.)
+    assert manager.return_body_clear(1.5,.03,0.)       # at the follow path's clearance_stale_s (0.5 s)
+    assert not manager.return_body_clear(1.51,.03,0.)  # older than that proves nothing
 
 
 def test_replayed_scan_stamp_cannot_refresh_receipt_age():

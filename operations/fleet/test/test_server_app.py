@@ -30,6 +30,18 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
+@pytest.mark.parametrize('path', ['/console/login', '/console/profile'])
+def test_dedicated_login_document_and_allowlisted_assets_keep_csp(path):
+    client = _client(FakeRobot('rosy_01'), token='operator-secret')
+    page = client.get(path)
+    assert page.status_code == 200
+    assert page.headers['cache-control'] == 'no-cache'
+    assert "script-src 'self'" in page.headers['content-security-policy']
+    for asset in ('login-page.js', 'profile-page.js', 'login-return.js', 'password-login.js', 'password-login.css'):
+        assert client.get('/console/assets/' + asset).status_code == 200
+    assert client.get('/console/assets/unknown-login.js').status_code == 404
+
+
 def _named_client(tmp_path, *robots: FakeRobot) -> TestClient:
     """D-540 9: moving routes need a named operator, and site-users need the task store."""
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
@@ -132,6 +144,17 @@ def test_vision_lease_accepts_only_bounded_preview_rectification():
     assert auto.status_code == 200
     assert VisionLeaseSigner("v" * 32).verify(
         auto.json()["lease"], source_id="ceiling-north")["rectification"]["mode"] == "auto"
+    # D-560: the map plane passes through as {"mode": "map"} and takes no other field.
+    plane = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"mode": "map"},
+    })
+    plane_extra = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"mode": "map", "fx": 1.0},
+    })
+    assert plane.status_code == 200
+    assert VisionLeaseSigner("v" * 32).verify(
+        plane.json()["lease"], source_id="ceiling-north")["rectification"] == {"mode": "map"}
+    assert plane_extra.status_code == 422
 
 
 def test_vision_lease_endpoint_fails_closed_when_preview_is_not_configured():
@@ -515,7 +538,7 @@ def test_console_page_and_its_assets_are_served():
     assert "ROSY FLEET" not in page.text
     assert "SITE CONSOLE" not in page.text
     # D-540 2: the site name is drawn by the shared header module for all four documents.
-    script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "shared" / "fleet-header.js").read_text(encoding="utf-8")
+    script = (Path(__file__).resolve().parents[2] / "ui" / "console" / "shared" / "fleet-header.js").read_text(encoding="utf-8")
     assert '$("fleet-name").textContent = fleet.name || "사이트";' in script
     assert client.get("/console/assets/fleet-header.js").status_code == 200
     assert client.get("/console/assets/fleet-header.css").status_code == 200
@@ -607,7 +630,7 @@ def test_every_console_module_import_is_served():
     import re
     from pathlib import Path
 
-    web = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+    web = Path(__file__).resolve().parents[2] / "ui" / "console"
     client = _client(FakeRobot("rosy_01"))
     imported = set()
     spec = re.compile(r"""from\s+['"](?:\./|/console/assets/)([\w.-]+\.js)['"]""")

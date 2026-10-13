@@ -12,6 +12,10 @@ status: STATUS.md
 # sim2real gap registry (linted) and its generated table.
 sim2real_gaps: tools/harness/sim2real_gaps.yaml
 sim2real_table: docs/reference/sim2real-gaps.md
+
+# Perception blind-spot registry (linted) and its generated table.
+perception_gaps: tools/harness/perception_gaps.yaml
+perception_table: docs/reference/perception-gaps.md
 stale_after_commits: 5
 
 # D-73: `tests` feeds generated index.md. `functional` is the module's own
@@ -29,6 +33,7 @@ modules:
     functional: [test/test_robot_runtime.py]
   - name: control
     path: middleware/perception
+    source_paths: [middleware/control/drive]
     tests: [middleware/perception/test, test/test_control_absorption_package.py]
     functional_kind: pytest
     functional: [middleware/perception/test]
@@ -37,6 +42,41 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [operations/fleet/test]
+  - name: fleet_decision
+    path: operations/decision
+    tests: [operations/fleet/test]
+    functional_kind: pytest
+    functional: [test/test_remaining_platform_installed.py]
+  - name: console_source
+    path: operations/ui/console
+    tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
+    functional_kind: pytest
+    functional: [test/test_remaining_platform_installed.py]
+  - name: perception_curation
+    path: learning/curation/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_dataset_publish.py]
+  - name: perception_registry
+    path: learning/registry/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_store.py]
+  - name: perception_training
+    path: learning/training/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_training_job.py]
+  - name: perception_evaluation
+    path: learning/evaluation/perception
+    tests: [test/learning/perception, learning/evaluation/perception/test]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_road_replay.py, learning/evaluation/perception/test]
+  - name: perception_cli
+    path: tools/perception
+    tests: [test/learning/perception]
+    functional_kind: pytest
+    functional: [test/learning/perception/test_rosy_ml.py]
   - name: games
     path: operations/apps/games
     tests: [operations/apps/games/test, test/test_rosy_games_surface.py]
@@ -70,15 +110,15 @@ modules:
     functional_kind: host-contract
     functional: [integrations/simulation/gazebo/test/test_gz_package_contract.py, integrations/simulation/gazebo/test/test_world_to_map.py, integrations/simulation/gazebo/test/test_world_profiles.py]
   - name: navigation
-    path: middleware/core/navigation
+    path: middleware/control/drive/planning/nav2
     tests: [test/test_nav2_hardware_slice.py, test/test_footprint_profiles.py, test/test_nav2_profile_limits.py, test/test_nav2_bandwidth_contracts.py, test/test_flask_launch_removed.py]
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
   - name: bringup
-    path: middleware/apps/device/pinky/bringup
-    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, middleware/apps/device/pinky/bringup/test/test_command_deadman.py, middleware/apps/device/pinky/bringup/test/test_pinky_pro_adapter.py]
+    path: middleware/devices/pinky/bringup
+    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, middleware/devices/pinky/bringup/test/test_command_deadman.py, middleware/devices/pinky/bringup/test/test_pinky_pro_adapter.py]
     functional_kind: pytest
-    functional: [middleware/apps/device/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
+    functional: [middleware/devices/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
     path: middleware/ui/face
     tests: [middleware/ui/face/test/test_info_screen.py, middleware/ui/face/test/test_info_screen_boot.py, middleware/ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
@@ -116,14 +156,15 @@ modules:
     functional: [middleware/core/events/test/test_audit.py]
   - name: core_features
     path: middleware/core/services
-    tests: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py, middleware/core/services/test/test_swarm.py, middleware/core/gateway/test/test_power.py, middleware/core/gateway/test/test_traffic_policy.py, middleware/core/services/test/test_teleop_intent.py]
+    source_paths: [middleware/control/drive/behaviors]
+    tests: [middleware/core/gateway/test, middleware/core/services/test]
     functional_kind: pytest
     functional: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py]
   - name: core_api_web
-    path: middleware/core/api_web
-    tests: [middleware/core/api_web/test]
+    path: middleware/core/api
+    tests: [middleware/core/api/test]
     functional_kind: pytest
-    functional: [middleware/core/api_web/test]
+    functional: [middleware/core/api/test]
   - name: web_common
     path: shared/web
     tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]
@@ -140,10 +181,10 @@ modules:
     functional_kind: host-contract
     functional: [middleware/ui/pilot/test/test_stick.py]
   - name: omx_adapter
-    path: middleware/apps/device/omx/adapter
-    tests: [middleware/apps/device/omx/adapter/test]
+    path: middleware/devices/omx/adapter
+    tests: [middleware/devices/omx/adapter/test]
     functional_kind: pytest
-    functional: [middleware/apps/device/omx/adapter/test]
+    functional: [middleware/devices/omx/adapter/test]
   - name: interfaces
     path: contracts/ros_idl
     tests: [contracts/ros_idl/test/test_srv_surface.py]
@@ -151,20 +192,20 @@ modules:
     functional: [contracts/ros_idl/test/test_srv_surface.py]
     artifacts: [contracts/ros_idl/srv/SetLed.srv, contracts/ros_idl/srv/SetLamp.srv, contracts/ros_idl/srv/SetBrightness.srv, contracts/ros_idl/srv/Emotion.srv]
   - name: pinky_pro
-    path: middleware/apps/device/pinky/profile
-    tests: [middleware/apps/device/pinky/profile/test]
+    path: middleware/devices/pinky/profile
+    tests: [middleware/devices/pinky/profile/test]
     functional_kind: host-contract
-    functional: [middleware/apps/device/pinky/profile/test/test_robot_package.py]
+    functional: [middleware/devices/pinky/profile/test/test_robot_package.py]
   - name: omx
-    path: middleware/apps/device/omx/profile
-    tests: [middleware/apps/device/omx/profile/test]
+    path: middleware/devices/omx/profile
+    tests: [middleware/devices/omx/profile/test]
     functional_kind: host-contract
-    functional: [middleware/apps/device/omx/profile/test/test_omx_package.py]
+    functional: [middleware/devices/omx/profile/test/test_omx_package.py]
   - name: description
-    path: middleware/apps/device/pinky/description
-    tests: [middleware/apps/device/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
+    path: middleware/devices/pinky/description
+    tests: [middleware/devices/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
     functional_kind: host-contract
-    functional: [middleware/apps/device/pinky/description/test/test_urdf_surface.py]
+    functional: [middleware/devices/pinky/description/test/test_urdf_surface.py]
   - name: dock
     path: operations/site_devices/dock
     tests: [test/test_dock_contract.py, middleware/core/services/test/test_docking.py]

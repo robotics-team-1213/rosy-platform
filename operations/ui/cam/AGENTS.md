@@ -45,3 +45,9 @@ cd operations/ui/cam; .\gradlew.bat testDebugUnitTest assembleDebug; .\gradlew.b
 ```
 
 Host contract tests (no JDK): `python -m pytest test/architecture/test_app_roles.py shared/web/test/test_surface_icons.py -q`. CI: `.github/workflows/android.yml`.
+
+### UI 역할과 생성 토큰
+
+- 설치 대상·승인·촬영 원본·프레임 송신 상태를 먼저 보여주고 설치/보정 안내와 설정을 연결한다. 로봇 명령·CORE 연결·로봇 정지 조작을 추가하지 않는다.
+- `RosyTheme`의 semantic 색 facade와 type/space/control 역할은 `shared/web/native-tokens.gradle`이 생성하는 `RosyTokenColors`/`RosyMetrics`를 소비한다. 일반 버튼은48dp·14sp·좌우12dp이며 도메인 영상/표식 기하는 유지한다.
+- 생성 시험은 실제 Kotlin 소비자 컴파일·앱 JVM 시험 및 장치 캡처를 대신하지 않는다.

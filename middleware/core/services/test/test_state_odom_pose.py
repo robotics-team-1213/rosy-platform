@@ -40,3 +40,14 @@ def test_non_finite_odom_is_dropped_and_the_previous_pose_kept():
         OdomPose(x=math.nan, y=0.0, yaw=0.0, stamp=1.0)
     with pytest.raises(ValidationError):
         state.snapshot().odom_pose.x = 1.0          # frozen
+
+
+def test_odom_sample_ages_on_the_monotonic_clock_not_the_wall_clock():
+    """D-581: a backward chrony step must not make a stale odom pose look fresh."""
+    clocks = {"wall": 1_790_000_100.0, "mono": 50.0}
+    state = StateManager(robot_id="rosy_01", clock=lambda: clocks["wall"], monotonic=lambda: clocks["mono"])
+    assert state.odom_sample() is None
+    state.set_odom_pose(0.1, 0.2, 0.3)
+    clocks["wall"] -= 30.0                       # chrony steps the wall clock back
+    clocks["mono"] += 0.8
+    assert state.odom_sample() == (0.1, 0.2, 0.3, pytest.approx(0.8))

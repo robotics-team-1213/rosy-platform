@@ -25,6 +25,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `fetch_candidate.sh` | Site host, no sudo: download a CI-built signed prerelease, check `SHA256SUMS`, join parts, stage, print the D-301 verify/load commands |
 | `auto_sign_candidates.py`, `register_auto_sign_task.ps1` | Signing PC (D-441): sign unsigned `site-*` releases after main-branch provenance and ancestry checks; Windows scheduled task registration |
 | `rosy_site_autoupdate.py`, `rosy-site-autoupdate.service`, `rosy-site-autoupdate.timer` | Site host (D-441), installed beside the verifier: install the newest signed candidate, health gate, rollback |
+| `site-maps/map_v2_fleet-v5.json` | D-525 rev 5 site map traced from the painted track; activated through the Fleet site-map draft/activate API, never read at start |
 | `site_db.py`, `site_users.py`, `secret_exec.py` | Site DB maintenance, atomic `site-users.yaml` maintenance (digest-only registry), secret-injecting exec wrapper |
 | `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
 | `rosy-site-stack.service` | systemd unit for the stack |

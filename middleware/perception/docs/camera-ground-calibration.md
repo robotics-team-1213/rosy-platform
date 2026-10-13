@@ -58,7 +58,7 @@ NOMINAL 추종의 진행 확인, 장애물 정지, 일반 보정 작업의 소�
 두께를 추정했다면 `--board-elevation-estimated`로 표시합니다. 모르면 두께 옵션을 생략합니다.
 
 ```powershell
-python tools/calibration/camera_board.py --reference X:/DevTemp/board/near.png --validation X:/DevTemp/board/far.png --camera-profile middleware/apps/device/pinky/profile/config/camera_nominal.yaml --square-mm 17 --board-elevation-mm 1 --board-elevation-estimated --output X:/DevTemp/board/candidate.json
+python tools/calibration/camera_board.py --reference X:/DevTemp/board/near.png --validation X:/DevTemp/board/far.png --camera-profile middleware/devices/pinky/profile/config/camera_nominal.yaml --square-mm 17 --board-elevation-mm 1 --board-elevation-estimated --output X:/DevTemp/board/candidate.json
 ```
 
 원본 픽셀 재투영 오차와 두 영상의 자세 일치도를 검사합니다. 종료 코드 0은 이 일치도 검사를

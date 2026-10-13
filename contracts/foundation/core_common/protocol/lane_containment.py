@@ -39,10 +39,13 @@ class LaneContainmentEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
     stamp: float = Field(ge=0)
     geometry_id: str = Field(min_length=1, max_length=128)
-    ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO"]
+    ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO", "ISAAC"]
     uncertainty_m: float | None = Field(default=None, ge=0, le=1)
     boundaries: list[LaneBoundaryEvidence] = Field(max_length=2)
     crosswalk: CrosswalkExtentEvidence | None = None
+    # D-573 6 개정: along-track error bound (m, body frame at the image stamp) of the crosswalk near/far
+    # edges, stated on every frame the crosswalk detector ran (found or not); None = it did not run.
+    crosswalk_uncertainty_m: float | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="after")
     def unique_sides(self):

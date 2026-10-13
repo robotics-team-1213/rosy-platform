@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from browser_harness import browser_tests_enabled
 
-from test_fleet_console_browser import API, _open_console as _open_base, console_url  # noqa: F401
+from test_fleet_console_browser import API, _open_console as _open_base, _open_token_access, console_url  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='optional Chromium regression')
@@ -53,15 +53,18 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         browser, page, errors = _open_console(p, api)
         page.goto(install_url(console_url), wait_until='networkidle')
         tabs = page.get_by_role('tab')
-        expect(tabs).to_have_count(4)
+        expect(tabs).to_have_count(5)
         for tab in tabs.all():
             expect(tab).to_be_enabled()
         expect(page.locator('#peer-picker')).to_be_visible()
+        choose(page, '호스트 서비스')
+        expect(page.get_by_role('tab', name='호스트 서비스', exact=True)).to_have_attribute('aria-selected', 'true')
         choose(page, '로봇 등록')
         expect(page.locator('#robot-enrollment')).to_be_visible()
         page.locator('#enroll-address').fill('192.0.2.55:8080')
         page.locator('#robot-enrollment').evaluate('node=>window.retainedEnrollment=node')
         api['/api/fleet/session'] = {'principal_id': 'reader', 'role': 'viewer'}
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_contain_text('보기 전용')  # D-540 2
         choose(page, '카메라 연결 승인')
@@ -69,8 +72,13 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         choose(page, '카메라 설치·보정')
         expect(page.locator('#camera-calibration')).to_be_visible()
         expect(page.locator('[data-corner="0"][data-axis="0"]')).to_be_disabled()
+        choose(page, '호스트 서비스')
+        expect(page.get_by_role('tab', name='호스트 서비스', exact=True)).to_have_attribute('aria-selected', 'true')
+        assert page.locator('#host-services').get_attribute('data-role-lock') is not None
+        choose(page, '카메라 설치·보정')
         assert page.locator('[role=tabpanel]:visible').count() == 1
         api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_have_text('인증 필요')
         choose(page, '로봇 등록')
@@ -144,6 +152,7 @@ def test_actual_install_viewer_chooser_navigation_and_401_clear_owner_links(cons
         choose(page, '장비 찾기')
         expect(page.locator('#peer-picker')).to_be_visible()
         api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
+        _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_have_text('인증 필요')
         expect(page.locator('#peer-list')).to_be_hidden()
@@ -168,8 +177,12 @@ def test_actual_console_identity_link_focuses_card_without_arming_or_post(consol
         page.goto(install_url(console_url), wait_until='networkidle')
         page.locator('#peer-list a').click()
         page.wait_for_function("document.activeElement?.dataset.robotId==='rosy_02'")
-        expect(page.locator('#roster article.selected')).to_have_count(0)
+        expect(page.locator("#context-status")).to_be_visible()
+        expect(page.locator('[data-context-tab="status"]')).to_have_attribute("aria-selected", "true")
+        expect(page.locator('#roster article.selected')).to_have_count(1)
+        expect(page.locator('#roster article.selected')).to_have_attribute('data-robot-id', 'rosy_02')
         expect(page.locator('#map-canvas')).to_have_class('idle')
+        expect(page.locator('#map-canvas')).to_have_attribute('tabindex', '-1')
         expect(page.locator('[data-goal-robot-id="rosy_02"]')).to_have_attribute('aria-pressed', 'false')
         assert not [method for method, _ in calls if method != 'GET']
         assert errors == []
@@ -290,6 +303,10 @@ def test_rapid_calibration_return_starts_new_owner_and_old_lease_cannot_paint(co
         choose(page, '카메라 설치·보정')
         expect(page.locator('#camera-calibration')).to_be_visible()
         page.wait_for_function('leaseRequests===2')
+        for _ in range(100):  # the page counts its fetch before Playwright hands the route to this handler
+            if len(held) == 2:
+                break
+            page.wait_for_timeout(50)
         assert len(held) == 2
         def lease(kind):
             return {'source_id': 'fixture-camera', 'lease': f'{kind}-lease',
