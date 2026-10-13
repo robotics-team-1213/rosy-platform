@@ -26,9 +26,9 @@ COMMON = ROOT / "shared" / "web"
 UI = COMMON / "ui.js"
 CONFIRMATION = COMMON / "confirmation.js"
 WEB_ROOTS = (
-    ROOT / "middleware" / "ui" / "robot",
+    ROOT / 'middleware' / 'robot_ui' / "robot",
     COMMON,
-    ROOT / "operations" / "ui" / "console",
+    ROOT / 'operations' / 'site_ui' / "console",
     ROOT / "operations" / "apps" / "games" / "games" / "web",
 )
 ROW_TAGS = {"li", "tr", "ul", "ol", "table"}
@@ -140,6 +140,6 @@ def test_the_structural_scans_catch_what_they_forbid():
         assert not BARE_VERB.search(f'el("ui-button", "", "{verb}…")'), verb
         assert not BARE_VERB.search(f'confirmIrreversible({{message: m, action: "{verb}"}})'), verb
     # the real regression: Fleet enrollment's quiet row button loses its ellipsis
-    fleet = (ROOT / "operations" / "ui" / "console" / "enrollment.js").read_text(encoding="utf-8")
+    fleet = (ROOT / 'operations' / 'site_ui' / "console" / "enrollment.js").read_text(encoding="utf-8")
     assert '"등록 해제…"' in fleet and not BARE_VERB.search(fleet)
     assert BARE_VERB.search(fleet.replace('"등록 해제…"', '"등록 해제"', 1))

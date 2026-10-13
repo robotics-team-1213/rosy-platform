@@ -9,7 +9,7 @@ SOURCE_ROOTS = {
     name: (PACKAGE_ROOT / '_source_roots' / name
            if (PACKAGE_ROOT / '_source_roots' / name).is_dir()
            else PACKAGE_ROOT.parent / relative)
-    for name, relative in (('decision', 'decision'), ('console', 'ui/console'), ('assessment', 'situation'), ('execution', 'execution'))
+    for name, relative in (('decision', 'decision'), ('console', 'site_ui/console'), ('assessment', 'situation'), ('execution', 'site_execution'))
 }
 SOURCE_ROOTS['discord'] = (PACKAGE_ROOT / '_source_roots/discord'
                           if (PACKAGE_ROOT / '_source_roots/discord').is_dir()
@@ -28,3 +28,6 @@ def console_root():
     if (PACKAGE_ROOT / 'package.xml').is_file():
         return SOURCE_ROOTS['console']
     return PACKAGE_ROOT / 'fleet/server/web'
+
+
+SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger')

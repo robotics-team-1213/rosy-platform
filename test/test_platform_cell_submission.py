@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for relative in (
     "contracts/skill/src",
-    "operations/execution/src",
+    "operations/site_execution/src",
     "middleware/skills/api/src",
 ):
     path = str(ROOT / relative)

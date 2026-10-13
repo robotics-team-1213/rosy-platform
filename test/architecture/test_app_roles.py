@@ -13,8 +13,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
-VISION = ROOT / "operations/vision/rosy_vision"
+CAMERA_APP = ROOT / "operations/site_ui/cam/app/src/main/java"
+VISION = ROOT / "operations/overhead/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
 # 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 and D-456 v2 pairing only.
@@ -144,7 +144,7 @@ def test_fleet_vision_routes_only_issue_leases_without_bytes():
 
 def test_pilot_stays_a_one_robot_surface():
     """D-370 1항: Pilot never calls Fleet — it drives one robot through that robot's CORE."""
-    pilot = ROOT / "middleware/ui/pilot"
+    pilot = ROOT / "middleware/robot_ui/pilot"
     assert pilot.is_dir()
     calls = [path.relative_to(ROOT).as_posix() for path in pilot.rglob("*")
              if path.suffix in {".js", ".html"} and "test" not in path.parts

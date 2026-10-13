@@ -27,7 +27,7 @@ None beyond the wheel source.
 
 ### Testing Requirements
 
-Importers (`contracts/motion`, `operations/execution`, `middleware/skills/api`) cover this wheel. Run those suites after a shape change.
+Importers (`contracts/motion`, `operations/site_execution`, `middleware/skills/api`) cover this wheel. Run those suites after a shape change.
 
 ### Common Patterns
 

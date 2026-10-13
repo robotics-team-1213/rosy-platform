@@ -10,21 +10,21 @@
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 8036d90c09 (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | HOLD |
-| [console_source](operations/ui/console/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [console_source](operations/site_ui/console/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_evaluation](learning/evaluation/perception/progress.md) | perception_evaluation | 0b14fa02b0 (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_cli](tools/perception/progress.md) | perception_cli | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [rosy_vision](operations/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [rosy_vision](operations/overhead/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_cell](operations/processes/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
 | [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
-| [cam](operations/ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [cam](operations/site_ui/cam/progress.md) | SITE | uncommitted (2026-10-04) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](integrations/simulation/gazebo/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](middleware/drive/planning/nav2/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](middleware/devices/pinky/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [emotion](middleware/ui/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [emotion](middleware/robot_ui/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](middleware/drivers/pinky_led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [imu_bno055](middleware/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](middleware/drivers/pinky_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -34,8 +34,8 @@
 | [core_features](middleware/core/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](middleware/core/api/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [dashboard](middleware/ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
-| [pilot](middleware/ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
+| [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
+| [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
 | [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](contracts/ros_idl/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |

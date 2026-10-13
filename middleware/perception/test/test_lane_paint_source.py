@@ -119,7 +119,7 @@ def test_learned_worker_without_a_usable_model_yields_no_mask(slot):
 
 def test_node_defaults_to_the_threshold_and_falls_back_to_denoise():
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "self.declare_parameter('paint_source', 'threshold', _READ_ONLY)" in src
     assert "'denoise_fallback'" in src and "paint_source_used=paint_used" in src
 
@@ -240,7 +240,7 @@ def test_ort_session_options_disable_spinning():
 
 def test_node_wires_the_paint_cadence_and_session_options():
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "declare_parameter('learned_paint_every_n', 2, _READ_ONLY)" in src
     assert "declare_parameter('learned_paint_threads', 1, _READ_ONLY)" in src
     assert "threads=threads, allow_spinning=False" in src and "clean_learned_mask(m, ground.horizon_row)" in src
@@ -327,7 +327,7 @@ def test_cadence_one_while_turning_infers_every_frame():
 
 def test_node_gates_reuse_on_turn_rate_and_resets_the_worker():
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "declare_parameter('learned_paint_reuse_max_wz', 0.15)" in src
     assert "abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value)" in src
     assert "self._paint_worker.reset()" in src

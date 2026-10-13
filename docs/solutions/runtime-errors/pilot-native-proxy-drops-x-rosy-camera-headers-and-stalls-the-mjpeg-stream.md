@@ -2,7 +2,7 @@
 title: 네이티브 Pilot 프록시가 X-Rosy-Camera-* 증명 헤더를 버려 카메라 보기가 영구히 실패했다
 date: 2026-10-05
 category: runtime-errors
-module: middleware/ui/pilot/android (PilotProxy.kt trusted loopback proxy) + shared/web evidence.js camera pair fetch; Lenovo field tablet WebView against the real robot
+module: middleware/robot_ui/pilot/android (PilotProxy.kt trusted loopback proxy) + shared/web evidence.js camera pair fetch; Lenovo field tablet WebView against the real robot
 problem_type: integration_issue
 component: service_layer
 severity: high
@@ -41,7 +41,7 @@ Rosy Pilot 네이티브 Android 앱의 전용 루프백 프록시 `PilotProxy`(N
 
 ## Solution
 
-수정은 branch `feat/pilot-show-code`, tip commit "fix(pilot): relay X-Rosy camera provenance headers through the native proxy"(2026-10-05) — 2026-10-05 기준 main에는 아직 착지하지 않았다(not-on-main). 고친 곳은 `middleware/ui/pilot/android/app/src/main/java/io/github/livsbittt/rosy/pilot/PilotProxy.kt` 두 군데다.
+수정은 branch `feat/pilot-show-code`, tip commit "fix(pilot): relay X-Rosy camera provenance headers through the native proxy"(2026-10-05) — 2026-10-05 기준 main에는 아직 착지하지 않았다(not-on-main). 고친 곳은 `middleware/robot_ui/pilot/android/app/src/main/java/io/github/livsbittt/rosy/pilot/PilotProxy.kt` 두 군데다.
 
 **1. `forwardRosyHeaders()` 신규 — `x-rosy-*` 헤더를 양쪽 응답 경로에 전달.** upstream 응답에서 이름이 `x-rosy-`로 시작하는(대소문자 무시) 헤더를 전부 proxied 응답에 옮긴다(PilotProxy.kt:133-138). 버퍼 바이트 경로(PilotProxy.kt:118)와 bounded 스트리밍 경로(PilotProxy.kt:107) 모두에 적용했다.
 

@@ -1,6 +1,6 @@
 """D-407 §6 / D-379: mark where a lane stuck sits inside a harvested recording.
 
-The on-robot recorder (control/recording.py) knows nothing of CORE events, and adding a
+The on-robot recorder (nodes/recording.py) knows nothing of CORE events, and adding a
 CORE -> sensing channel would be a new protocol surface. So the marker is made on the
 tooling side at harvest: CORE's event history (``GET /api/v1/events``, viewer) carries
 ``nav.line_stuck_opened`` / ``nav.line_stuck_closed`` with a wall-clock UTC ``ts``; they are

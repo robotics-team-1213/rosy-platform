@@ -600,7 +600,7 @@ def test_corner_turning_is_opt_in():
 
 
 def test_node_wires_keep_mode_on_the_labelled_ground():
-    text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    text = (PKG / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     uses_ground = text.split("def _camera_mode_uses_ground", 1)[1].split("def ", 1)[0]
     assert "'keep'" in uses_ground
     assert "self._lane_keeper.update(" in text
@@ -756,7 +756,7 @@ def test_a_washed_frame_forgets_the_tracked_sides(y):
 
 
 def test_node_resets_the_keeper_after_a_camera_gap():
-    text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    text = (PKG / "sensors/line_observation" / "line_observer_node.py").read_text(encoding="utf-8")
     keep = text.split("elif mode == 'keep':", 1)[1].split("elif mode in", 1)[0]
     assert "KEEP_MAX_FRAME_GAP_S" in keep and "self._lane_keeper.reset()" in keep
 

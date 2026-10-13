@@ -1,7 +1,7 @@
 """Ceiling robot sticker yaw offset from one straight forward drive (D-587 5).
 
 Runs inside the site Vision container (it has OpenCV and rosy_vision), or on a PC with the
-repo's operations/vision, contracts/foundation and operations/apps/games on PYTHONPATH. Needs no sighting,
+repo's operations/overhead, contracts/foundation and operations/apps/games on PYTHONPATH. Needs no sighting,
 so it works before any ``marker_yaw_offset_deg`` is installed (a robot without one sends no
 sightings, D-587 4):
 

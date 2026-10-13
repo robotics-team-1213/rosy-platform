@@ -12,15 +12,14 @@ REPO = WORLD.parents[1]
 PROJECTION = WORLD / "src/rosy/world/state/projections/map_pose.py"
 
 
-def test_world_projection_and_fleet_compatibility_have_one_identity(monkeypatch):
+def test_world_projection_and_fleet_consumers_have_one_owner(monkeypatch):
     assert PROJECTION.is_file(), "current-state MapPose implementation belongs to world"
+    assert not (REPO / "operations/fleet/fleet/localization/map_pose.py").exists()
     monkeypatch.syspath_prepend(str(WORLD / "src"))
-    monkeypatch.syspath_prepend(str(REPO / "operations/fleet"))
     projection = importlib.import_module("rosy.world.state.projections.map_pose")
-    compatibility = importlib.import_module("fleet.localization.map_pose")
-    assert compatibility is projection
-    assert compatibility.MapPoseTracker is projection.MapPoseTracker
-    assert compatibility.MapPoseConfig is projection.MapPoseConfig
+    assert projection.MapPoseTracker.__module__ == projection.__name__
+    for path in (REPO / "operations/fleet/fleet").rglob("*.py"):
+        assert "fleet.localization.map_pose" not in path.read_text(encoding="utf-8"), path
 
 
 def test_world_wheel_contains_projection_without_fleet(tmp_path):

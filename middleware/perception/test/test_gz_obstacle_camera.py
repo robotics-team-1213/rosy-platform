@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from tools.gz.obstacle_camera import add_camera
+from tools.sim.gazebo.obstacle_camera import add_camera
 
 
 def test_camera_is_rendered_sensor_and_preserves_collision_geometry():

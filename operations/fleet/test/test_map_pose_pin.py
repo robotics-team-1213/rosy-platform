@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from fleet.localization.map_pose import (BRIDGED, DEGRADED, LOCALIZED, OPERATOR_PIN, SIGHTING, UNKNOWN,
+from rosy.world.state.projections.map_pose import (BRIDGED, DEGRADED, LOCALIZED, OPERATOR_PIN, SIGHTING, UNKNOWN,
                                          MapPoseConfig, MapPoseTracker, OdomSample, Sighting)
 
 T0 = 1_800_000_000.0

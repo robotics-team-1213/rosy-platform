@@ -119,7 +119,7 @@ def test_malformed_operator_overlay_is_skipped_with_a_reason(tmp_path, text, why
 
 
 def test_operator_keys_are_declared_observer_parameters():
-    node = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    node = (ROOT / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
     for key in OPERATOR_KEYS:
         assert f"declare_parameter('{key}'" in node, key
 

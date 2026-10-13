@@ -5,8 +5,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TOKENS = ROOT / "shared" / "web" / "tokens.css"
 CHOOSER = ROOT / "shared" / "web" / "task-chooser.js"
-SHELL = ROOT / "middleware" / "ui" / "robot" / "shell" / "shell.css"
-FLEET = ROOT / "operations" / "ui" / "console" / "shared" / "styles.css"
+SHELL = ROOT / 'middleware' / 'robot_ui' / "robot" / "shell" / "shell.css"
+FLEET = ROOT / 'operations' / 'site_ui' / "console" / "shared" / "styles.css"
 # D-540 2: the four Fleet documents share one header sheet.
 FLEET_HEADER = FLEET.with_name("fleet-header.css")
 

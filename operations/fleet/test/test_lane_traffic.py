@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from fleet.localization.map_pose import MapPose
+from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.execute import ends_at_place, plan_body
 from fleet.routing.graph import build_graph
 from fleet.routing.trip import PlanRequest, plan_trip
