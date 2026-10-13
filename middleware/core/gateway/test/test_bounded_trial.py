@@ -195,7 +195,7 @@ def test_actual_bridge_requires_declared_trial_binding_before_writer(tmp_path):
     sent=[]
     bridge=SimpleNamespace(_svc=SimpleNamespace(
         command=SimpleNamespace(select_output=lambda:Twist(.04,0),announce_pending=lambda:None),
-        power=SimpleNamespace(on_activity=lambda _:None)),_send_twist=sent.append,
+        power=SimpleNamespace(on_activity=lambda _:None,motion_ready=lambda:True)),_send_twist=sent.append,
         _readiness=None,_node=SimpleNamespace(get_logger=lambda:SimpleNamespace(error=lambda _:None)))
     publish=actual_publish_method()
     with pytest.raises(AttributeError):publish(bridge)

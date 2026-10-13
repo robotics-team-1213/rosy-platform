@@ -9,8 +9,9 @@ SAF-002 정지가 늦어지지 않게 하는 규칙 두 가지:
 
 * 이벤트 발행(`announce_pending`)은 구독자를 동기로 부르고 그중 하나가 감사
   로그를 쓴다. 내보내기 앞에 두면 그 비용만큼 정지가 늦게 바퀴에 닿는다.
-* 절전 정책(`on_activity`)도 마찬가지다. 모터 경로에 개입하지 않는 관측일
-  뿐이니, 관측이 바퀴 앞에 설 이유가 없다.
+* 절전 정책의 관측(`on_activity`)도 마찬가지다. 관측이 바퀴 앞에 설 이유가
+  없다. 절전 정책이 바퀴에 미치는 것은 `motion_ready` 하나이고(D-440 5), 그
+  게이트는 값을 0 으로 누를 수만 있다.
 """
 
 from __future__ import annotations
@@ -122,12 +123,19 @@ class _Readiness(Protocol):
 def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
                   readiness: Optional[_Readiness] = None,
                   warn: Optional[Callable[[str], None]] = None,
-                  *, trial_guard=None, now=None) -> None:
+                  *, trial_guard=None, now=None,
+                  motion_ready: Optional[Callable[[], bool]] = None) -> None:
     """값을 고르고, 바퀴로 내보내고, 그 뒤에 알린다.
 
     `readiness` 가 HOLD 이면 고른 값 대신 0 을 내보낸다 — 최종 발행자는
     50 Hz 로 살아 있되, 하드웨어 그래프가 HOLD 인 동안 낡은 Nav2/수동 후보를
     흘려보내지 않는다.
+
+    `motion_ready` (D-440 5) 도 같은 준비 HOLD 다: 절전에서 깨어난 뒤 주행에
+    필요한 기기(LiDAR 등)가 준비를 확인하기 전에는 0 이다. 이 게이트는 값을 0
+    으로 누를 수만 있다 — E-stop·워치독·먹서 선택은 `select_output` 이 그대로
+    정하고, 발행과 `announce_pending` 은 매 주기 그대로 일어난다. 정확히 `True`
+    가 아니면(False, 다른 값, 예외) 준비되지 않은 것으로 본다.
 
     `send` 에는 고른 값을 **통째로** 넘긴다. `(linear, angular)` 두 개를
     자리로 넘기면 받는 쪽에서 둘을 바꿔 적어도 타입은 맞고, 그것은
@@ -147,6 +155,14 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
         return
     if readiness is not None and not readiness.is_ready():
         out = ZERO
+    gate_fault = None
+    if motion_ready is not None:
+        try:
+            ready = motion_ready() is True
+        except Exception as exc:
+            ready, gate_fault = False, exc   # warned after the wheels, like every other cost
+        if not ready:
+            out = ZERO
     port = None
     try:
         port = PinkyTwistPort(send)
@@ -197,3 +213,5 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     if guarded.payload.linear_mps != 0.0 or guarded.payload.angular_radps != 0.0:
         power.on_activity("cmd_vel")
     command.announce_pending()
+    if gate_fault is not None and warn is not None:
+        warn(f"cmd_vel motion readiness failed: {gate_fault}")

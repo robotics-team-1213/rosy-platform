@@ -530,7 +530,8 @@ class RosBridge:
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
                       self._readiness, warn=self._node.get_logger().error,
-                      trial_guard=self._bounded_trial_guard)
+                      trial_guard=self._bounded_trial_guard,
+                      motion_ready=self._svc.power.motion_ready)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
