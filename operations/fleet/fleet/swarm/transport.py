@@ -140,7 +140,8 @@ class RobotClient(Protocol):
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None,
                                   expected_stuck: dict | None = None,
-                                  before_submit: Callable[[], Awaitable[bool]] | None = None) -> dict: ...
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None,
+                                  realign: dict | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
@@ -373,7 +374,8 @@ class HttpRobotClient:
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None,
                                   expected_stuck: dict | None = None,
-                                  before_submit: Callable[[], Awaitable[bool]] | None = None) -> dict:
+                                  before_submit: Callable[[], Awaitable[bool]] | None = None,
+                                  realign: dict | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
         if before_submit is not None and (expected_stuck is None or not callable(before_submit)):
             raise ValueError("conditional request and explicit submission guard required")
@@ -391,6 +393,10 @@ class HttpRobotClient:
             body["yield_m"] = yield_m
         if yield_turn_rad is not None:
             body["yield_turn_rad"] = yield_turn_rad
+        if realign is not None:
+            if decision != "REALIGN":
+                raise ValueError("realign body requires REALIGN decision")
+            body["realign"] = realign
         # D-724: the owner binds final admission and its durable claim after the capability await.
         if before_submit is not None and await before_submit() is not True:
             raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED", "final submission guard refused")

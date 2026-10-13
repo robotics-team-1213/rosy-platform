@@ -41,6 +41,7 @@ class StuckResolverLoop:
         #: D-577 1: `MapPoseService.stuck_pose` for R3's freshness check (app.py sets it).
         self.map_pose: Callable[[str], Optional[dict]] = lambda _robot_id: None
         self.heading_review: Callable[[str], Optional[dict]] = lambda _robot_id: None
+        self.realign_evidence: Callable[[str], Optional[dict]] = lambda _robot_id: None
         self._heading_notes: dict[str, tuple] = {}
         #: D-577 7: live acting AI facts about a robot (`AiFactsBoard.acting_facts`, app.py sets it).
         self.ai_facts: Callable[[str], list] = lambda _robot_id: []
@@ -145,6 +146,12 @@ class StuckResolverLoop:
 
     def _row(self, row: dict) -> dict:
         extra = {}
+        if getattr(getattr(self._resolver, "realign", None), "robots", None):   # D-622; absent = off
+            try:
+                extra["realign_evidence"] = self.realign_evidence(row["robot_id"])
+            except Exception:  # noqa: BLE001 - absence must hold, never authorize motion
+                extra["realign_evidence"] = {"status":"observer_unavailable"}
+            extra["clearance_evidence"] = self._board.view(row["robot_id"])
         if self.trip_busy(row["robot_id"]):
             extra["trip"] = True
         pose = self.map_pose(row["robot_id"])

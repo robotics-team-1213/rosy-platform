@@ -693,6 +693,7 @@ def run_console(args: argparse.Namespace) -> None:
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
                      stuck_resolver_enrolled=stuck_resolver_enrolled,
+                     realign_config=_realign_config(args),
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
                      autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
@@ -770,6 +771,18 @@ def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
     if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
         sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
     return frozenset(ids)
+
+
+def _realign_config(args):
+    """D-622 opt-in standalone recovery; empty areas and robot list by default."""
+    import yaml
+    from fleet.stuck.realign import RealignConfig
+    try:
+        site = (yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+                if getattr(args, "site_config", None) else {})
+        return RealignConfig.from_mapping((site.get("fleet") or {}).get("stuck_resolver"))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"realign config: {exc}")
 
 
 def _trip_config(args):

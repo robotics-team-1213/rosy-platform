@@ -88,6 +88,16 @@ def candidate(resolver, now, row, stuck, rows, chain):
     rid, sid = str(row["robot_id"]), str(stuck["stuck_id"])
     if stuck.get("cause") in LOST_LIKE and resolver.at_crosswalk(rid):
         return Answer(rid, sid, "WAIT", "R5", escalate="crosswalk_human")
+    if rid in resolver.realign.robots:                # D-622: standalone REALIGN, CORE re-checks
+        from fleet.stuck.realign import select
+        realign, why = select(row, rows, resolver.realign, now=resolver._wall(),
+                              attempt=chain.realign_attempts+1)
+        if ("R9" in chain.retired or chain.rule_answers >= resolver.config.rule_budget
+                or resolver.at_crosswalk(rid)):
+            realign, why = None, "realign_budget_or_crosswalk"
+        if realign is None:
+            return Answer(rid, sid, "WAIT", "R5", escalate=f"realign_hold:{why}")
+        return Answer(rid, sid, "REALIGN", "R9", realign=realign)
     proposed = ai_answer(resolver, now, row, stuck, rows, chain)
     if proposed is not None:
         return None if proposed == "wait" else proposed
