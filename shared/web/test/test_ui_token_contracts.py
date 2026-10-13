@@ -316,7 +316,7 @@ def test_component_token_layer_exists():
         "--nominal", "--nominal-quiet",
         "--button-primary-bg", "--button-primary-ink",
         "--button-irreversible-bg", "--button-irreversible-ink",
-        "--field-bg", "--field-line", "--field-invalid",
+        "--field-bg", "--field-line", "--field-invalid", "--control-line",
         "--focus-ring", "--gauge-track", "--gauge-fill",
     }
     missing = required - declared

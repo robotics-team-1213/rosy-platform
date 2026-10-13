@@ -83,6 +83,24 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 
 서명 코드 승인·검수 DB 백업·릴리스 전환·원격 시험·실제 서비스 읽기 증거는 각각 기록한다. 테스트용 승인 fixture를 운영 정답이나 운영 모델로 승격하지 않는다. 새 camera/gate/proof 설정은 기존 원장에 덮어쓰지 않고 명시 새 cycle로 검증한다.
 
+## 학습 화면 수동 제어 (D-745)
+
+운영자가 검수 state의 `learning-control.json`을 마련하면 설치기가 `--learning-control`을 추가한다. 이 private JSON은 다음 다섯 필드만 가진다. 경로는 해당 PC의 링크 없는 절대 경로이며 workspace_id는 실제 작업대의 값을 사용한다.
+
+```json
+{
+  "schema": "rosy.learning.control/1",
+  "workspace_id": "<actual-workspace-id>",
+  "service": "rosy-review-pipeline.service",
+  "config_path": "/home/rosy/.config/rosy/review-pipeline/pipeline.json",
+  "out_path": "/home/rosy/rosy-ml/review-pipeline/cycle-state"
+}
+```
+
+먼저 기존 pipeline service/timer를 설치하고 daemon-reload한다. 서비스는 템플릿의 단일 서명 ExecStart, `KillMode=control-group`을 사용하며 추가 실행 명령이나 drop-in은 허용하지 않는다. UI는 적재된 unit과 private binding/config 원본을 재확인한다. 설정이 바뀌면 운영자가 명시적으로 다시 연결한다.
+
+Perception 결과로 out_path를 연결하면 시작·중지·재시도 버튼이 나타난다. Ctrl+K에서 같은 이름으로 실행할 수 있다. 시작은 자동 확인을 켜고, 중지는 해당 실행기의 자식 프로세스까지 중지하며, 재시도는 자동 확인을 켜지 않고 한 번 실행한다. 완료·품질 거절·시도 한도 원장은 초기화하지 않는다. 원장 읽기 오류가 있어도 검증된 실행기의 중지는 가능하다. 화면은 실제 서비스 상태와 현재 학습 결과를 다시 읽으며 요청 접수를 완료로 표시하지 않는다.
+
 ## 헤드리스 Gazebo 준비 (D-571)
 
 모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.
