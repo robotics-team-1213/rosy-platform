@@ -217,7 +217,7 @@ class PasswordSessions:
         if ok and account is not None:
             self._refund(keys, now)
             if self._ledger.active:
-                return self._ledger.principal_for(account, fingerprint=_digest(account["password_scrypt"]))
+                return self._ledger.principal_for(account, fingerprint=self._ledger.credential_revision(account))
             return SitePrincipal(account["principal_id"], account["role"],
                                  self._required[login], _digest(account["password_scrypt"]))
         return None

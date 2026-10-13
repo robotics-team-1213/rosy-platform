@@ -107,7 +107,12 @@ class AccountLedger:
     def principal_for(self, row, *, fingerprint=""):
         return SitePrincipal(row["principal_id"], row["role"], bool(row["change_required"]), fingerprint,
                              row["account_id"], tuple((g["resource"], tuple(g["capabilities"]))
-                                                     for g in json.loads(row["grants"])))
+                                                      for g in json.loads(row["grants"])))
+
+    @staticmethod
+    def credential_revision(row):
+        from fleet.server.password_session import _digest
+        return _digest(row["password_scrypt"] + "\0" + str(row["revision"]))
 
     def session_row(self, db, key):
         from fleet.server.password_session import ABSOLUTE_S, IDLE_S, REMEMBER_S, _digest
@@ -137,11 +142,11 @@ class AccountLedger:
         return value
 
     def issue(self, login, remember, verified):
-        from fleet.server.password_session import StalePasswordCheck, _digest
+        from fleet.server.password_session import StalePasswordCheck
         with self.db(write=True) as db:
             row = db.execute("SELECT * FROM rosy_accounts WHERE login=? AND enabled=1", (login,)).fetchone()
             if (row is None or verified is None or verified.account_id != row["account_id"]
-                    or verified.password_fingerprint != _digest(row["password_scrypt"])):
+                    or verified.password_fingerprint != self.credential_revision(row)):
                 raise StalePasswordCheck()
             return self.insert_session(db, row, remember)
 
@@ -181,9 +186,13 @@ class AccountLedger:
 
     def revoke_family(self, family, db=None):
         with nullcontext(db) if db is not None else self.db(write=True) as db:
+            keys = db.execute("SELECT session_sha256 FROM rosy_account_sessions WHERE session_family=?",
+                              (family,)).fetchall()
             db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 IN "
                        "(SELECT session_sha256 FROM rosy_account_sessions WHERE session_family=?)", (family,))
             db.execute("DELETE FROM rosy_account_sessions WHERE session_family=?", (family,))
+            for key in keys:
+                self.sessions._forget(key[0], revoked=True)
 
     def audit(self, db, actor, target, operation, previous, following):
         db.execute("INSERT INTO rosy_account_audit VALUES (?,?,?,?,?,?)",
@@ -253,9 +262,9 @@ class AccountLedger:
             if before["revision"] != revision:
                 raise ValueError("account revision conflict")
             updated = {**dict(before), **changes, "revision": revision + 1}
+            columns = ("role", "grants", "enabled", "password_scrypt", "change_required", "revision", "account_id")
             db.execute("UPDATE rosy_accounts SET role=?,grants=?,enabled=?,password_scrypt=?,change_required=?,"
-                       "revision=? WHERE account_id=?", tuple(updated[k] for k in
-                       ("role", "grants", "enabled", "password_scrypt", "change_required", "revision", "account_id")))
+                       "revision=? WHERE account_id=?", tuple(updated[k] for k in columns))
             managers = [r for r in db.execute("SELECT grants FROM rosy_accounts WHERE enabled=1")
                         if any(g["resource"] == "site:" + self.site_id and "accounts.manage" in g["capabilities"]
                                for g in json.loads(r[0]))]
@@ -321,7 +330,8 @@ class AccountLedger:
             if not row or row["change_required"]:
                 raise StalePasswordCheck()
             if display_name is not None:
-                db.execute("UPDATE rosy_accounts SET display_name=? WHERE account_id=?", (display_name, row["account_id"]))
+                db.execute("UPDATE rosy_accounts SET display_name=? WHERE account_id=?",
+                           (display_name, row["account_id"]))
                 row["display_name"] = display_name
             principal = row["principal_id"]
             return {"login": row["login"], "principal_id": principal, "role": row["role"],

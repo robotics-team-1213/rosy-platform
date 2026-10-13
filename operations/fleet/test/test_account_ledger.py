@@ -94,7 +94,7 @@ def test_admin_reset_and_revoke_sessions(tmp_path):
                                   password="temporary secret", grants=[])
     bob = cookie(sessions, "bob", "temporary secret")
     updated = sessions.reset_account_password(manager, row["account_id"], revision=row["revision"],
-                                               password="another temporary secret")
+                                              password="another temporary secret")
     assert sessions.principal(bob) is None
     bob = cookie(sessions, "bob", "another temporary secret")
     sessions.revoke_account_sessions(manager, row["account_id"], revision=updated["revision"])
@@ -180,6 +180,7 @@ def test_account_db_failure_only_allows_cached_estop(tmp_path, monkeypatch):
     sessions = activated(tmp_path)
     value = cookie(sessions)
     assert sessions.principal(value)
+
     def unavailable(**kwargs):
         raise sqlite3.OperationalError("locked")
     monkeypatch.setattr(sessions, "_connect", unavailable)
@@ -194,6 +195,7 @@ def test_revoked_family_cannot_fallback_to_own_cached_estop(tmp_path, monkeypatc
     family = sessions.account_context(value)["session_family"]
     assert sessions.principal(value)
     sessions.revoke_family(family)
+
     def unavailable(**kwargs):
         raise sqlite3.OperationalError("locked")
     monkeypatch.setattr(sessions, "_connect", unavailable)
