@@ -1943,7 +1943,7 @@ ROLE_DIR = {
     "omx": ("devices", "omx", "profile"),
     "omx_adapter": ("devices", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
-    "navigation": ("control", "drive", "planning", "nav2"),
+    "navigation": ("drive", "planning", "nav2"),
     "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
     "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
@@ -2265,7 +2265,7 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
         (("devices", "pinky", "profile"), "pinky_pro", True),
         (("apps", "device", "pinky", "bringup"), "bringup", False),
         (("devices", "omx", "adapter"), "omx_adapter", True),
-        (("control", "drive", "planning", "nav2"), "navigation", True),
+        (("drive", "planning", "nav2"), "navigation", True),
         (("core", "navigation"), "navigation", False),
         (("apps", "device", "omx", "adapter"), "omx_adapter", False),
         (("drivers", "imu_bno055"), "imu_bno055", True),

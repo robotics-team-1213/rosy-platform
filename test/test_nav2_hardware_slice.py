@@ -17,7 +17,7 @@ from robot_contracts import (
     hardware_packages,
 )
 
-_PKG = str(ROOT / "middleware" / "control" / "drive" / "planning" / "nav2")
+_PKG = str(ROOT / "middleware" / "drive" / "planning" / "nav2")
 if _PKG not in sys.path:
     sys.path.append(_PKG)
 
