@@ -101,7 +101,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
-    console.add_argument("--account-config", default=None, type=Path,
+    console.add_argument("--account-config", default=os.environ.get('ROSY_ACCOUNT_CONFIG') or None, type=Path,
                          help="protected Rosy Account authority JSON; requires --tasks-db")
     console.add_argument('--conversation-config-optional',default=None,type=Path,
                          help='optional independently admitted natural conversation broker config')

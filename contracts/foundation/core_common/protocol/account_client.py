@@ -138,7 +138,8 @@ class AccountClient:
             raise AccountDenied('Invalid flow encryption key') from None
         tokens = self.post('token', {'grant_type': 'authorization_code', 'client_id': self.client_id,
             'code': code, 'redirect_uri': self.callback, 'code_verifier': verifier})
-        self._validate_tokens(tokens)
+        claims = self._validate_tokens(tokens)
+        tokens['_account_sub'], tokens['_account_sid'] = claims.sub, claims.sid
         self._active(tokens['access_token'])
         session = secrets.token_urlsafe(32)
         with self.transaction() as db:
@@ -207,8 +208,9 @@ class AccountClient:
                         db.execute('DELETE FROM app_account_sessions WHERE id=?', (row['id'],))
                         return None
                     current = self._validate_tokens(renewed)
-                    if claims and (current.sub, current.sid) != (claims.sub, claims.sid):
+                    if (current.sub, current.sid) != (tokens.get('_account_sub'), tokens.get('_account_sid')):
                         raise AccountDenied('Renewal changed identity')
+                    renewed['_account_sub'], renewed['_account_sid'] = current.sub, current.sid
                     db.execute('UPDATE app_account_sessions SET tokens=?,checked=0 WHERE id=?',
                         (self.cipher.encrypt(json.dumps(renewed).encode()), row['id']))
                     try:

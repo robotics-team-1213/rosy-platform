@@ -122,7 +122,7 @@ def test_expired_refresh_cannot_change_account_identity(receiver):
     clock[0] += 301
     private, public = keys()
     client.public_keys['other-key'] = public
-    client.post = lambda *args: {'access_token':sign_access({**claims(), 'sub':'different-account',
+    client.post = lambda endpoint, fields: {'active':True} if endpoint == 'introspect' else {'access_token':sign_access({**claims(), 'sub':'different-account',
         'iat':clock[0], 'exp':clock[0]+300}, private, key_id='other-key'),
         'refresh_token':'different-refresh-token-long-enough', 'token_type':'Bearer'}
     assert client.resolve(cookie) is None

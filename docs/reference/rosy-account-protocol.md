@@ -163,5 +163,20 @@ pairing은 사람 SSO와 분리한다.
 검증 표는 원격 API/브라우저/native·CI·설치·실계정 수용을 나눠 기록한다.
 상세 구현 결과가 없는 endpoint를 활성화됐다고 간주하지 않는다.
 
+### Games와 기존 외부 연결
+
+Games 보드는 `--preview-account-config <receiver.json>`으로 같은 receiver를
+사용한다. resource는 `site:<id>`, callback은 `/api/account/callback`이며
+HTTPS reverse proxy 뒤의 loopback 서버로 연다. 등록한 HTTPS origin만 쓰기
+요청을 허용한다. `/stop`은 `games.operate`를 검사한다. 설정이 없으면 보드는
+공개 읽기 전용이며 CLI의 기존 물리 현장 정지·Ctrl+C는 그대로 유지한다.
+
+학습 연결의 소유자는 기존 user_id로 보존한다. 중앙 모드의 개인 연결 사용은
+현재 소유자의 `learning.import` 권한을 확인한다. 프로젝트 공유 연결은 해당
+generation을 승인한 중앙 subject와 session에 결속하며 매 사용/worker 단계에서
+`learning.import`와 `learning.manage`를 다시 확인한다. 기존 공유 연결은 소유자가
+한 번 다시 연결해야 한다. 승인 세션의 로그아웃·회수·만료 후에는 공유도 중단된다.
+개인 세션과 무관한 무인 프로젝트 위임을 자동 생성하지 않는다.
+
 참고: [OAuthlib 서버](https://oauthlib.readthedocs.io/en/latest/oauth2/server.html),
 [joserfc JWT](https://jose.authlib.org/en/guide/jwt/).

@@ -355,14 +355,16 @@ class Accounts:
                               (self.project_id, principal['user_id'])).fetchall()
         return [self._connection_public(row) for row in rows]
 
+    def _owner_capabilities(self, row, principal):
+        return self._user(row['owner'])['memberships'][self.project_id]
+
     def credential(self, principal, connection_id, generation=None, *, resource=None):
         principal = self.require(principal, 'import')
         with self._db() as db:
             row = db.execute('SELECT * FROM learning_connections WHERE id=? AND project_id=?', (connection_id, self.project_id)).fetchone()
         if not row or not row['active'] or (row['sharing'] == 'personal' and row['owner'] != principal['user_id']):
             raise AccountError('connection access denied')
-        owner = self._user(row['owner'])
-        owner_capabilities = owner['memberships'][self.project_id]
+        owner_capabilities = self._owner_capabilities(row, principal)
         if 'import' not in owner_capabilities or (row['sharing'] == 'project' and 'manage' not in owner_capabilities):
             raise AccountError('connection owner permission revoked')
         if generation is not None and generation != row['generation']: raise AccountError('connection generation changed')
