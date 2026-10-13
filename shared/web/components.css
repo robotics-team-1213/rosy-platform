@@ -556,6 +556,23 @@ ui-tag[status="crit"] {
   background: var(--status-crit);
 }
 
+/* D-668: values inside one summary control retain state without nested pill outlines. */
+ui-tag[variant="inline"] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+ui-tag[variant="inline"][status="crit"] { color: var(--text-primary); }
+ui-tag[variant="inline"][status="crit"]::before {
+  content: "";
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-flag);
+  background: var(--status-crit);
+}
+
 ui-text {
   font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
   color: var(--text-primary);

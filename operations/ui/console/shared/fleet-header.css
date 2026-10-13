@@ -12,13 +12,6 @@ body { margin: 0; }
 /* 현장 지도·Cell 시트의 전역 `input { width: 100% }`가 머리의 "이 브라우저 기억" 칸을 늘이지 않게 한다. */
 ui-topbar input[type="checkbox"] { width: auto; }
 
-/* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
-   이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
-.theme-choice { display: flex; align-items: center; gap: var(--space-1); }
-/* 아이콘 세그먼트도 공통 버튼의 정사각 누름 면(48px)을 지킨다. */
-.theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
-#theme-choice-label { white-space: nowrap; }
-
 /* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 상세 절차는 화면 낭독기에 남긴다. */
 .estop {
   min-width: var(--target-irreversible);
@@ -55,7 +48,7 @@ ui-topbar {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-areas: "identity status actions safety";
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
@@ -63,16 +56,17 @@ ui-topbar {
 .fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
 #development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
-.fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
+/* 계정 패널은 actions 영역의 오른쪽 끝에 맞춘다 — 테마 버튼이 계정 뒤에 있어도 좁은 화면 밖으로 나가지 않는다. */
+.fleet-header-actions { grid-area: actions; position: relative; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-actions [hidden] { display: none; }
-#fleet-login,
+#fleet-login:not([hidden]),
 #fleet-account > summary { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
-#fleet-account { position: relative; }
 .fleet-account-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; box-sizing: border-box; width: min(18rem, calc(100vw - var(--space-3) * 2)); padding: var(--space-3); background: var(--surface-raised); border: 1px solid var(--border-default); overflow-wrap: anywhere; }
 .fleet-account-panel .password-login-who { flex-wrap: wrap; }
 .fleet-account-panel [data-login="principal"] { display: none; }
 .fleet-header-safety { grid-area: safety; justify-self: end; }
-#topbar-more { display: inline-flex; }
+#topbar-more { display: inline-flex; max-width: 100%; }
+.header-status-item { display: inline-flex; align-items: center; gap: var(--space-1); }
 .topbar-extra {
   display: none;
   grid-column: 1 / -1;
@@ -84,7 +78,6 @@ ui-topbar {
 }
 .topbar-extra[data-open="true"] { display: flex; }
 #console-token { flex: 1 1 10rem; width: auto; min-width: 0; }
-.topbar-extra .theme-choice { flex-wrap: wrap; }
 @media (width < 64rem) {
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }
@@ -93,14 +86,13 @@ ui-topbar {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "identity safety" "status actions";
-    gap: var(--space-1);
+    gap: var(--space-2);
     padding: var(--space-1) var(--space-2);
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
   .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
-  .fleet-header-actions { gap: 0; }
-  .fleet-link-status ui-tag { min-height: var(--space-5); }
+  .fleet-header-actions { justify-content: flex-end; gap: 0; }
   #estop { gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
 }

@@ -114,12 +114,15 @@
                     <range>
                         <min>0.05</min>
                         <max>12.0</max>
-                        <resolution>0.03</resolution>
+                        <resolution>0.001</resolution>
                     </range>
+                    <!-- Static real C1: per-beam sigma 0.6 mm inside 0.2 m, at most 3.4 mm
+                         inside 0.5 m (docs/validation/crosswalk-core-gate-sim-2026-10-10).
+                         The safety gate takes the nearest beam, so sigma shifts every wall. -->
                     <noise>
                         <type>gaussian</type>
                         <mean>0.0</mean>
-                        <stddev>0.02</stddev>
+                        <stddev>0.0035</stddev>
                     </noise>
                 </lidar>
                 <visualize>false</visualize>

@@ -8,6 +8,8 @@ D-700의 0.1.10은 `incident_rule.validate_rule()`로 실제 Fleet 규칙 선택
 
 D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt의 닫힌 구조와 HMAC 검증을 제공한다. 전체 프로파일·모델·보정·독립 평가/정답/한계/coverage·설치·현재 owner epoch와 유효 기간을 결속한다. 원본 평가·현장 증거와 실제 owner admission은 소비자가 별도로 검증하며 receipt 검증 자체는 실행 권한이 아니다.
 
+0.1.12는 D-622 후속으로 `validate_rule()`의 ANSWER에 `REALIGN`을 받는다. REALIGN 선택만 조작 본문의 정렬 JSON SHA-256인 `selection.realign_sha256`을 반드시 가지며 다른 선택에는 이 키가 없다. 기존 `rule_selection/1` 기록은 그대로 유효하다. 자세·각도 원문은 receipt에 복사하지 않고 REALIGN도 물리 ANSWER라 reobserve/human 기준으로 변환하지 않는다.
+
 ```python
 from rosy.contracts.learning import seal, validate_episode
 
