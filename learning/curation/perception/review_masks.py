@@ -340,7 +340,7 @@ def flood_region(store, index, review, seed, tolerance):
     return flood_region_photo(photo, seed, tolerance)
 
 
-def update(store, index, body, conflict):
+def update(store, index, body, conflict, *, actor=None):
     with store.lock, store.connect() as db:
         db.execute('BEGIN IMMEDIATE')
         frame, review = store.get(index), get(store, index)
@@ -483,6 +483,8 @@ def update(store, index, body, conflict):
                    (index, version, status, path, digest, complete, background,
                     json.dumps(approval) if approval else None))
         previous = {key: review[key] for key in ('path', 'sha256', 'version')}
+        if actor:
+            previous['actor'] = actor
         previous['saved_version'] = version
         if action == 'undo':
             previous['restored_version'] = prior['version']

@@ -2760,3 +2760,9 @@
 - 변경: 실제 진단에서 D-720 status wrapper/config가 모두 없음을 확인했다. 두 파일이 없을 때 status 정상 경로 시험만 생략하고 conversation 및 알 수 없는 명령·추가 인자 거절은 항상 검사한다. 기존 status는 보호 metadata와 HOLD를 검증하며 변경하지 않는다. 실패에는 제한된 경로·종료 코드·출력을 남긴다.
 - 증거: 선택 status 미설치 재현 RED 뒤, 미설치·기존 설치·원복·보호 경계 원격 91개 통과·NEW 0.
 - gate 변화: SOURCE만. 새 관리자 복구 및 실제 conversation 회신은 별도 확인한다.
+
+## 2026-10-14 · uncommitted · OMX recorder configuration preparation
+
+- 변경: 장치를 열지 않는 설정 검사기와 LeRobot 0.4.4 녹화 예제를 추가했다. private/local-only 기본값과 normalized 단위를 검사한다.
+- 증거: 원격 기본 70개와 별도 공식 parser/reader/ACT 통합 1개 통과.
+- gate 변화: 없음. 실물 runtime과 보정·정지 수용은 별도다.
