@@ -12,13 +12,13 @@
 
 ## 0. 상태와 확정된 사용자 요구
 
-- 2026-10-14 계획. 구현·착지·push·배포·실계정 전환을 실행한 문서가 아니다.
+- 2026-10-14 구현 및 검증 진행. 아래 상태표를 기준으로 판단하며 push·배포·실계정 전환은 별도다.
 - 기준 source: `62fbb5a13d5f507ce1d42366d8018a669e8fa1d2`.
 - 사용자 확정: Fleet에 한정하지 않고 로봇·Pilot까지 통합. 후속 요청으로 학습·리뷰 등 모든 앱을 하나의 Rosy Account로 연결한다.
 - 사용자 확정: 각 앱 로그인 뒤 별도 인증 코드·토큰 붙여넣기·세션 연결 절차 없이 권한 내 기능을 바로 사용한다.
 - 감사 결과: password/session/profile/site-users/server-app 131개 원격 시험 통과, NEW 0. 실제 최신 배포 및 개인 브라우저 수용은 미확인이다.
 - D-757이 통합 신원/세션 architecture를 확정하고 D-549를 대체한다. D-519/683/686/689의 기존 구현과 D-755의 외부 계정·협업 계획을 이 문서의 출발점으로 한다.
-- 작업 브랜치: `docs/rosy-account-plan`. 다른 세션의 학습 계정 작업을 덮어쓰지 않고 착수 때 현재 main과 해당 구현을 다시 읽는다.
+- 계획 브랜치: `docs/rosy-account-plan`. 구현 브랜치: `feat/rosy-account-pipeline`. 기존 학습 계정 변경을 현재 main과 합쳐 보존한다.
 
 ## 1. 제품의 완료 상태
 
@@ -197,3 +197,34 @@ python test/known_failures.py X:/DevTemp/projects/rosy-platform/<session>/logs/a
 완료표는 SOURCE / REMOTE TEST / CI / INSTALLED / RUNTIME / USER ACCEPTANCE를 각각 기록한다. 한 앱의 성공으로 전체 완료를 선언하지 않는다. 전체 사용 앱에서 **로그인→자동 세션 연결→권한 내 업무→영속 결과 확인→회수/로그아웃**을 재현하고, 남은 예외가 있으면 해당 앱/기능을 미완료로 표시한다.
 
 이번 계획에서 추가하지 않는 것: 앱별 계정 복제, 자체 암호 알고리즘, 범용 플러그인 framework, 별도 IdP 운영, 사용자에게 보이는 토큰 복사 절차. 외부 provider 동의와 물리 등록·업무 안전 조건은 생략하지 않는다.
+
+## 7. 2026-10-14 구현·검증 기록
+
+상세 wire·설치 계약은 [Account protocol](../reference/rosy-account-protocol.md)이다.
+원격 로그는 X: `account-pipeline--063948/logs` 세션에 둔다.
+
+| 등록 surface | 로그인/권한 owner와 구현 | 검증·남은 경계 |
+|---|---|---|
+| console | Fleet durable ledger, 계정 CRUD/CAS/감사, same-origin 쿠키, 명시적 site capability | 실제 SQLite 원장·HTTPS Chromium 관리 화면 검증; 운영 이전 별도 |
+| robot | CORE AccountClient, 보호 쿠키, robot.read/operate/admin 분리 | 실제 authority→callback→API·갱신·회수·열린 WS 종료 검증 |
+| pilot | 같은 CORE 앱 쿠키, 자동 복귀·재접속·계정 교체 격리 | HTTPS Dashboard→Pilot 재로그인 없는 복귀; 물리 조작 미실행 |
+| pilot-shell | external browser PKCE, 검증 app link, Keystore 보관, native Bearer proxy | JVM·APK 및 서명 fixture 검증; 기기 app-link 수용 별도 |
+| cam | 같은 native Account, camera.manage와 기계 스트림 자격 분리 | 관리 작업 회수/지연 응답 fence; 실제 폰 수용 별도 |
+| pinky-review | 중앙 subject→기존 owner 고정, 프로젝트 capability, worker 재검증 | 공유 연결 owner 회수, 기존 provider 연결, 계정별 쓰기 CSRF·늦은 응답 차단 |
+| game-board | 같은 receiver, site games.operate와 HTTPS Origin으로 /stop 보호 | 원격 114개 Games 시험; 미설정 보드는 공개 읽기 전용 |
+| lane-live-view | /status.json·graph·run 기록 GET만 사용 | 비제품 시뮬 읽기 표면, 사용자 명령 발행 없음 |
+| control-diagnostic | D-266 PARKED 비제품 개발 도구 | 운영 활성화·중앙 로그인 표면으로 승격하지 않음 |
+| robot-face | 부팅·이름·일회 코드 표시 LCD | 입력/명령/사용자 세션 없음 |
+| web-common | 공유 UI 라이브러리 | 독립 로그인·API owner 없음 |
+
+검증 묶음: CORE web/account 관련 141개, Fleet·learning 연결 61개,
+owner/client 재검증 32개, Games 114개가 각각 원격 통과했다(중복 포함, 합산하지 않음).
+`3788d7696`의 통합 묶음 10개는 HTTPS 로그인 UI→Dashboard→Pilot SSO,
+갱신→원장 회수→WS 15초 이내 종료, Fleet 관리자 UI, learning 계정·권한·장애 복구를
+검증했다. 기존 공유 학습 연결은 소유자의 재연결로 현재 중앙 승인 session에 결속한다.
+
+실계정 변경은 하지 않았다. 기존 계정 목록·사이트 TLS 이름·tailnet 이름을 읽기 전용으로
+확인했으며 실제 주소/계정/인증서는 공개 저장소에 기록하지 않는다. 기존 LAN 인증서는
+tailnet HTTPS 이름을 포함하지 않고 443 listener·Account 설정이 없으므로 설치 수용은
+미완료다. 최종 native/착지 결과는 Git과 추가 검증 기록을 따른다. 최종 SHA CI·배포·
+Android 실제 app-link 검증·사용자 수용을 SOURCE/원격 시험으로 대체하지 않는다.
