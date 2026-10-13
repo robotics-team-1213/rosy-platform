@@ -185,7 +185,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
-                             "lane_bend": caps.lane_bend}
+                             "lane_bend": caps.lane_bend, "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
@@ -568,7 +568,7 @@ class TripRunner(TripAdmission, TripProgress):
                 and arc.get("end_place_id") == sent["place"] != live.place(index)
                 and (j.get("state"), j.get("place_id"), j.get("seq")) == ("armed", sent["place"], sent["seq"])):
             return  # map pose can cross the boundary before CORE odom ends its arc: keep the armed end-place instruction
-        if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining):
+        if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining, pose):
             return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
         if place is None or remaining > self.config.arm_distance_m:
@@ -617,7 +617,7 @@ class TripRunner(TripAdmission, TripProgress):
             return
         await self._send(live, index, action, place, stop_after, turn_deg=turn, advance_m=advance, expect=expect)
 
-    async def _step_bend(self, live: LiveTrip, index: int, s: float) -> bool:
+    async def _step_bend(self, live: LiveTrip, index: int, s: float, pose=None) -> bool:
         """D-507 addendum: True while a site-map bend on this lane is ahead (its instruction, sent
         within ``arm_distance_m`` of the arc start to a ``lane_bend`` robot, owns CORE's one slot)."""
         arc = live.junction.get("arc") or {}
@@ -633,7 +633,7 @@ class TripRunner(TripAdmission, TripProgress):
         finished = ours and (sent.get("done") or (sent.get("carried") and (state in ("idle", "waiting") or newer)))
         if finished or (not ours and s >= bend["s_start"]):
             live.bends_done.add((index, bend["place_id"]))  # finished, or passed without one: never again on this segment
-            return await self._step_bend(live, index, s)
+            return await self._step_bend(live, index, s, pose)
         if live.view["hold"] is not None or self.traffic.holds(live, index):
             # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
             # passed while held counts as passed (at most one per lap)
@@ -641,7 +641,7 @@ class TripRunner(TripAdmission, TripProgress):
         if self._core_busy(live) or bend["s_start"] - s > self.config.arm_distance_m or (
                 ours and state == "armed" and self._clock() - sent["at"] < self.config.junction_expires_s / 2):
             return True
-        fields = bend_fields(live, bend, s, self._store.active(), self.config)
+        fields = bend_fields(live, bend, s, self._store.active(), self.config, pose)  # D-759: this step's pose
         if fields is None:
             return True  # another map version: the bend is not sent and its place waits
         await self._send(live, index, "bend", bend["place_id"], None, turn_deg=round(bend["turn_deg"], 1),

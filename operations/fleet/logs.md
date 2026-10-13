@@ -3558,3 +3558,13 @@
 - 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
 - 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
 - gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · 848a9b764 · feat: D-759 굽이 지시에 map_entry를 싣는다 (API v1.224)
+- 변경: `server/ledger/trip_ports.py::bend_fields`가 `lane_bend_map_entry` 로봇에게, 이번 단계에서 로봇을 찾은 자세에 `odom_stamp`가 있을 때 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 굽이 호 시작점의 차로 방향이다. `trip_runner._step_lane`이 그 자세를 `_step_bend`로 넘긴다. `console_view.TripCaps.lane_bend_map_entry`.
+- 증거: `test_trip_bend.py`(능력과 stamp가 있을 때만 실음, 값, 그 밖의 필드는 오늘과 같음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 0 증가다(`trip_ports.py` 600줄 그대로). 그 대가로 `bend_fields`의 주석 세 줄을 한 줄로, `TripCaps`의 주석 두 줄을 필드 옆으로 옮겼다.
+
+## 2026-10-14 · 9ee82e94d · refactor: D-759 bend_fields의 map_entry 가지를 if 문으로 (검토 반영)
+- 변경: `server/ledger/trip_ports.py::bend_fields`의 중첩 `**({} if ...)`를 `fields` dict와 `if` 한 가지로 바꿨다. 보내는 값은 같다. `console_view.TripCaps`의 두 주석을 줄였다.
+- 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
