@@ -152,7 +152,11 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 assert page.locator('[data-header-region="actions"] > #topbar-more').count() == 1
                 assert page.locator('#topbar-more ui-button').count() == 0
                 expect(page.locator('#topbar-more #user-role')).to_have_text("운영자")
-                expect(page.locator('#topbar-more #user-role')).to_be_visible()
+                if width >= 480:
+                    expect(page.locator('#topbar-more #user-role')).to_be_visible()
+                else:  # 30rem 아래: 역할 글은 접히고 아래 줄의 접근 이름이 역할을 말한다
+                    expect(page.locator('#topbar-more #user-role')).to_be_hidden()
+                    expect(page.locator('#topbar-more [data-action-icon="account"]')).to_be_visible()
                 expect(page.locator('#topbar-more #development-badge')).to_have_text("개발")
                 expect(page.locator('#topbar-more')).to_have_attribute(
                     "aria-label", re.compile("계정과 접속.*운영자.*개발 연결 모드"))
