@@ -1,6 +1,8 @@
 """Optional project authorization and account/import HTTP routes for the review app."""
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import SimpleCookie
+import hashlib
+import hmac
 import threading
 from urllib.parse import parse_qs, urlparse
 
@@ -72,6 +74,9 @@ class Collaboration:
         handler.learning_principal = principal
         return principal
 
+    def csrf(self, handler, token):
+        return hmac.new(token.encode(), cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
+
     def get(self, handler, path, token):
         try:
             return self._get(handler, path, token)
@@ -98,7 +103,7 @@ class Collaboration:
             handler.extra_headers.append(('Location', target))
             handler.send(b'',303)
             return True
-        if path in ('/accounts', '/accounts.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
@@ -130,6 +135,8 @@ class Collaboration:
             return True
         if path == '/api/accounts/session':
             public = {key: principal[key] for key in ('user_id', 'project_id', 'capabilities')}
+            if self.receiver:
+                public['account_session'] = principal['_session_id']
             handler.send(dict(public, token=token, connections=self.accounts.connections(principal)))
             return True
         if path == '/api/learning/imports':

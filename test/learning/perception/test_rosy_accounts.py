@@ -58,3 +58,33 @@ def test_shared_credential_rechecks_central_owner_without_legacy_permissions(acc
     owner.permits = lambda *args:True
     records.pop(sha256(b'alice').hexdigest())
     with pytest.raises(AccountError): managed.assert_connection(bob,conn['connection_id'],conn['generation'])
+
+
+def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
+    import threading
+    from hashlib import sha256
+    from test_review_app import open_store
+    from test_learning_collaboration import request
+    from review_app import make_server
+    config = accounts.config()
+    config['account_subjects'] = {'central-alice':'alice','central-bob':'bob'}
+    records = {sha256(name.encode()).hexdigest():SimpleNamespace(sub='central-'+name,
+        aud='project:one',permits=lambda *args:True) for name in ['alice','bob']}
+    receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None)
+    managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
+    store = open_store(tmp_path/'workspace')
+    server = make_server(store,0,accounts=managed)
+    worker = threading.Thread(target=server.serve_forever,daemon=True); worker.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        status, alice = request(base,'/api/accounts/session','alice')
+        assert status == 200
+        status, bob = request(base,'/api/accounts/session','bob')
+        assert status == 200 and bob['token'] != alice['token']
+        assert bob['account_session'] != alice['account_session']
+        before = store.get(0)
+        assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},alice['token'])[0] == 403
+        assert store.get(0) == before
+        assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},bob['token'])[0] == 200
+    finally:
+        server.shutdown(); server.server_close(); worker.join()

@@ -1,6 +1,8 @@
 """Real authority ledger -> PKCE receiver -> CORE, with no robot movement."""
 import json
 import time
+import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
@@ -10,6 +12,10 @@ from cryptography.hazmat.primitives import serialization
 from fastapi.testclient import TestClient
 
 from core_common.protocol.account_client import AccountClient, AccountDenied
+
+ROOT = Path(__file__).resolve().parents[4]
+for directory in (ROOT/'operations/fleet', ROOT/'test'):
+    sys.path.insert(0, str(directory))
 
 
 @pytest.fixture
