@@ -330,7 +330,7 @@
 .mode-control {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--control-line);
   border-radius: var(--radius-control);
   overflow: hidden;
 }
@@ -344,7 +344,7 @@
 .line-follow-modes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--control-line);
   border-radius: var(--radius-control);
   overflow: hidden;
 }

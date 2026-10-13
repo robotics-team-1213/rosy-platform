@@ -167,6 +167,7 @@ class ReviewPipeline:
             logical=self._logical_key(current,folders,encoded)
             cycles=job.state.get('cycles',{})
             keys=[_signature(dict(review_inputs=logical,recipe=recipe)) for recipe in config['recipes']]
+            progress['cycle_keys']=keys
             if all(cycles.get(key,{}).get('status') in ('ready','rejected','gave_up') for key in keys):
                 progress.update(status='already_completed',logical_input_sha256=logical,
                                 authority=copy.deepcopy(revision),training_admission=False)

@@ -145,3 +145,10 @@ def test_generated_unit_uses_exact_canonical_runtime_holders(tmp_path):
         "learning/registry/perception", "learning/curation/perception", "learning/training/perception",
     )]
     assert len(paths) == len(set(paths))
+def test_generated_unit_can_opt_in_to_private_owner_controls(tmp_path):
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'learning-control.json').write_text('{}')
+    text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
+    assert f'--learning-control {state / "learning-control.json"}' in text
+
+

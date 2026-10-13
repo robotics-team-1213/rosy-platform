@@ -84,6 +84,20 @@ def read_report(root, name, baseline=None):
         result['steps'] = [{'name': str(key)[:100], 'status': str(value.get('status', 'unknown'))[:100],
                             'error': str(value.get('error', ''))[:500]}
                            for key, value in list(doc.get('steps', {}).items())[:40] if isinstance(value, dict)] if isinstance(doc.get('steps'), dict) else []
+        if isinstance(pipeline, dict) and isinstance(pipeline.get('cycle_keys'), list):
+            cycles = doc.get('cycles', {})
+            current = [cycles.get(key) for key in pipeline['cycle_keys'][:40]
+                       if isinstance(key, str)] if isinstance(cycles, dict) else []
+            phases = [row.get('status') for row in current if isinstance(row, dict)]
+            if pipeline.get('status') != 'held' and phases:
+                phase = next((phase for phase in ('running', 'retry', 'gave_up', 'rejected') if phase in phases), None)
+                if phase:
+                    result['declared']['status'] = 'failed' if phase in ('retry', 'gave_up') else phase
+                elif len(phases) == len(current) and all(phase in ('ready', 'candidate') for phase in phases):
+                    result['declared']['status'] = 'candidate' if 'candidate' in phases else 'done'
+            result['steps'].extend({'name': f'학습 {index + 1}', 'status': str(row.get('status', 'unknown'))[:100],
+                                    'error': str(row.get('error', ''))[:500]}
+                                   for index, row in enumerate(current) if isinstance(row, dict))
         metrics = doc.get('metrics', [])
         if isinstance(metrics, list):
             result['metrics'] = [{'label': row['label'][:60], 'value': row['value'],
@@ -125,6 +139,18 @@ class Workspace:
         with sqlite3.connect(self.db) as conn:
             rows = conn.execute('SELECT * FROM learning_links ORDER BY rowid DESC').fetchall()
         return [self.inspect(row) for row in rows]
+
+    def action(self, path, body, control, conflict):
+        if path == '/api/learning/register':
+            return self.register(body)
+        if path == '/api/learning/remove':
+            try:
+                return self.remove(body)
+            except ValueError as exc:
+                raise conflict(str(exc)) from exc
+        if path == '/api/learning/control' and control is not None:
+            return control.action(body)
+        raise ValueError('이 작업대에는 수동 학습 제어가 연결되어 있지 않습니다.')
 
     def image(self, identifier, name):
         with sqlite3.connect(self.db) as conn:
