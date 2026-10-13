@@ -869,9 +869,3 @@
 - 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
 - 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
 - gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
-
-## 2026-10-12 · uiux: Android 함께 조종 차단 이유와 다음 행동
-
-- 변경: 연결 로비의 함께 조종 설명을 기존 버튼 활성 조건과 같은 연결 가능 수·발열 상태로 갱신한다. 두 대 미만은 Wi-Fi·전원 확인/다시 찾기, 발열은 냉각 후 다시 선택, 준비된 목록은 두 대 선택/연결을 안내한다. 좁은 로비 제목에도 Pilot 역할을 남긴다.
-- 증거: `X:/DevTemp/native-ux-a1f3c9/gradle.txt`의 `:app:testDebugUnitTest :app:assembleDebug` 종료 BUILD SUCCESSFUL; 16 suites, 106 passed, 0 failed, 0 errors. `docs/validation/uiux-native-games-2026-10-12.md`에 Cam·LCD·게임 보드의 기존 역할 검토와 이번 회차 미확인 경계를 기록했다.
-- gate 변화: SOURCE/native compile/JVM 근거만. 실물 태블릿·앱 설치본·두 대 주행·정지 readback은 미확인이다.
