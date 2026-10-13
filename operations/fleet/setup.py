@@ -15,7 +15,7 @@ package_name = 'fleet'
 
 setup(
     name=package_name,
-    version='0.1.3',
+    version='0.1.4',
     packages=(find_packages(exclude=['test']) + list(package_dirs)
               + ['fleet.server.web.' + name for name in find_packages(where=str(roots['console']))]),
     package_dir={name: os.path.relpath(folder) for name, folder in package_dirs.items()},
