@@ -678,7 +678,7 @@ def test_wall_segments_from_scan_straight_wall():
 
 # ---------------------------------------------------------------- shadow node (static; rclpy is not on the host)
 
-NODE = __import__("pathlib").Path(__file__).resolve().parents[1] / "control" / "road_state_node.py"
+NODE = __import__("pathlib").Path(__file__).resolve().parents[1] / 'nodes' / 'road_state_node.py'
 
 
 def test_node_publishes_only_the_road_state_and_never_a_command():

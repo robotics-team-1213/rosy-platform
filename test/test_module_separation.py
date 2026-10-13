@@ -74,14 +74,14 @@ LEGACY_FINAL_PUBLISHER = (
 #: training-input capture, never a publish). Pinned read-only exception -
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
-    "middleware/perception/control/recording.py",
+    "middleware/perception/nodes/recording.py",
     'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC,',
 )
 
 #: D-411 A: the Pilot recorder's rosbag2 topic list records the CORE final
 #: command as evidence (rosbag2 subscribes; nothing is published). Same pin rule.
 PILOT_RECORDING_TOPICS = (
-    "middleware/perception/control/pilot_recording.py",
+    "middleware/perception/nodes/pilot_recording.py",
     'PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",',
 )
 

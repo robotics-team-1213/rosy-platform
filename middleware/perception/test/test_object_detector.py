@@ -188,7 +188,7 @@ def test_node_opens_models_through_the_signature_check():
 
 
 def test_lane_node_checks_signatures_warn_only_and_reports_signed():
-    source = (Path(__file__).resolve().parents[1] / 'control' / 'learned_lane_node.py').read_text(
+    source = (Path(__file__).resolve().parents[1] / 'nodes' / 'learned_lane_node.py').read_text(
         encoding='utf-8')
     assert "SignatureCheck(" in source and "enforce=False" in source
     assert "signed=self._signature.signed" in source

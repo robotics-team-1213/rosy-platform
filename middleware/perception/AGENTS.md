@@ -16,7 +16,7 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 | `STEPS.txt` | Korean operator runbook: bringup order, tuning log, LCD/web notes |
 | `package.xml` / `setup.py` | ament_python package manifest and entry points |
 | `resource/control` | ament resource marker (generated, do not edit) |
-| `learned_lane_node` / `record_session` | Console scripts (D-356). `learned_lane_node` runs a delivered ONNX model on `camera/front` and publishes shadow-only `perception/learned/shadow` (launch: `launch/learned_lane.launch.py`); `record_session` records raw `camera/front` plus evidence topics into a harvest-aware session (`control/recording.py`) |
+| `learned_lane_node` / `record_session` | Console scripts (D-356). `learned_lane_node` runs a delivered ONNX model on `camera/front` and publishes shadow-only `perception/learned/shadow` (launch: `launch/learned_lane.launch.py`); `record_session` records raw `camera/front` plus evidence topics into a harvest-aware session (`nodes/recording.py`) |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -26,7 +26,8 @@ ROS 2 Jazzy `control` distribution in **ROSY Platform** for the Pinky Pro desk-m
 |-----------|---------|
 | `localization/`, `graph_health/`, `snapshots/` | D-747 location decisions/status, graph health and snapshot trigger policies with their dedicated ROS adapters; installed as existing `control.*` |
 | `sensors/line_observation/`, `vision/object_observation/` | Line observer input validation/composition and advisory detections with their dedicated adapters; installed as existing `control.*` |
-| `control/` | Existing ROS node composition and thin source-import compatibility entries (see `control/AGENTS.md`) |
+| `nodes/` | Remaining ROS, calibration/storage, recording and provider composition; existing control.* identity |
+| `control/` | Thin source-import compatibility entries and thin source-import compatibility entries (see `control/AGENTS.md`) |
 | `sensors/` | Sensor-evidence holder. The installed package is `sensing/` (see `sensors/AGENTS.md`) |
 | `vision/perception/` | Camera/detector/learned evidence, installed as `control.sensing.perception` (see `vision/perception/AGENTS.md`) |
 | `../drive/` | Existing Drive algorithms installed by this distribution under `control.control`, `control.planning`, `control.wander`, `control.safety` (see `../drive/AGENTS.md`) |

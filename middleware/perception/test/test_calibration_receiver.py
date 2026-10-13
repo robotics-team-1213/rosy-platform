@@ -24,6 +24,6 @@ def test_discovery_must_confirm_subscriber_when_supported():
 
 
 def test_partial_calibration_and_scoped_retry_are_accepted():
-    source = Path(__file__).parents[1].joinpath('control/web_http.py').read_text(encoding='utf-8')
+    source = Path(__file__).parents[1].joinpath('nodes/web_http.py').read_text(encoding='utf-8')
     for command in ('partial_calibration', 'retry:stay:full', 'retry:return_origin:skip_motion'):
         assert command in source, command

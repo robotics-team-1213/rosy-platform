@@ -64,7 +64,7 @@ def test_switch_matches_the_unit_and_the_launch_file():
 def test_topics_and_commands_match_the_code():
     text = _text()
     trigger = (ROOT / "middleware/perception/snapshots/capture_trigger_node.py").read_text(encoding="utf-8")
-    shadow = (ROOT / "middleware/perception/control/learned_lane_node.py").read_text(encoding="utf-8")
+    shadow = (ROOT / "middleware/perception/nodes/learned_lane_node.py").read_text(encoding="utf-8")
     status = (ROOT / "middleware/perception/vision/perception/learned/status.py").read_text(
         encoding="utf-8")
     assert "'capture/request'" in trigger

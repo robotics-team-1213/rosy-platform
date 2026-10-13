@@ -30,7 +30,7 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 
 ### Working In This Directory
 
-- Do not import ROS, `core`, or emit commands. ROS composition source is `middleware/perception/control/learned_lane_node.py`; this implementation retains the `control.sensing.perception.learned` import identity.
+- Do not import ROS, `core`, or emit commands. ROS composition source is `middleware/perception/nodes/learned_lane_node.py`; this implementation retains the `control.sensing.perception.learned` import identity.
 - Weights arrive via `learning/registry/perception/deliver.py`, never committed under `src/`. `onnxruntime` is imported lazily and is not in the base device image.
 - Keep the output contract (evidence fields, `LaneObservation` sign convention, wire schemas) stable so backends stay swappable. Anything failing validation must be refused, not guessed.
 - Promotion beyond shadow is gated by the D-205 replay gate.
@@ -52,7 +52,7 @@ python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/learned -- midd
 
 ### Internal
 
-`..` perception siblings (`lane.py` convention); `middleware/perception/control/learned_lane_node.py` consumes this package.
+`..` perception siblings (`lane.py` convention); `middleware/perception/nodes/learned_lane_node.py` consumes this package.
 
 ### External
 
