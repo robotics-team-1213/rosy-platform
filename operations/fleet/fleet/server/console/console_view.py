@@ -129,11 +129,14 @@ class TripCaps:
     kind: str
     modes: frozenset
     max_speed: float
-    junction_turn: bool = False  #: D-495: the robot can turn at a junction on its own (bounded turn); absent = no
+    #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
+    junction_turn: bool = False
     #: D-507 9: the map the robot's site floor declaration covers; None when absent (older CORE) or null.
     site_floor_map_id: Optional[str] = None
-    junction_pivot: bool = False  #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent = no
-    lane_arc: bool = False  #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent = no
+    #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
+    junction_pivot: bool = False
+    #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
+    lane_arc: bool = False
     lane_arc_map_anchor: bool = False  #: D-744 2: CORE takes ``exit_segment.map_anchor``; absent = no
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
@@ -142,7 +145,8 @@ class TripCaps:
     line_follow_advice: bool = False
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent = no
     lane_bend_next_line: bool = False  #: D-754: CORE takes a bend's ``next_line_in_m``; absent = no
-    trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent = no
+    #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
+    trip_lease: bool = False
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
 
