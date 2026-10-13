@@ -1543,8 +1543,14 @@ SIZE_VERDICTS = {
         "addendum); measured after merging local main.",
     ),
     "control": (
-        35_025,
-        "split: independently re-judged at 35025 on 2026-10-13 by drive_review: 234 unique production "
+        35_183,
+        "split: independently re-judged at 35183 on 2026-10-13 by authority_review: 234 unique residual "
+        "production files; 66 registered vision files/13431 lines excluded once. Delta +158 is existing "
+        "safety kernel/admission wiring +150 and S2 mapping/setup/provenance +8; 14 source moves are "
+        "byte-identical. No new process, dependency, owner or command writer. Keep all ceilings, SIZE_UNITS, "
+        "+150 trigger and control_sensing/provider/control_safety split obligations; source structure only. "
+        "See docs/plans/2026-10-11-platform-structure-migration.md, S2 addendum. Previous verdict: "
+        "independently re-judged at 35025 on 2026-10-13 by drive_review: 234 unique production "
         "files across the perception distribution and six existing Drive holders, with Nav2 and registered "
         "vision units excluded. Growth +170 is observer law reader/assembly +87, node +4, facades/setup +14, "
         "map generator +45 and same-owner policy diagnostics +20. Four runtime nodes moved byte-identically; "

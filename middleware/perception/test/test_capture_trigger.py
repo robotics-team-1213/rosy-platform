@@ -191,12 +191,10 @@ def test_decision_has_no_command_fields():
 
 def test_capture_trigger_node_main_shuts_down_like_line_observer():
     import ast
-    from pathlib import Path
-
-    control = Path(__file__).resolve().parents[1] / "control"
+    from test.control_sources import source_path
 
     def main_src(name):
-        tree = ast.parse((control / name).read_text(encoding="utf-8"))
+        tree = ast.parse(source_path(name).read_text(encoding="utf-8"))
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
         return (ast.unparse(fn).replace("LineObserverNode", "Node")
                 .replace("CaptureTriggerNode", "Node"))
