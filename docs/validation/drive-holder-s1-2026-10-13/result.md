@@ -16,7 +16,7 @@ middleware/control/drive의 217개 추적 파일을 middleware/drive로 승격�
 
 ## 최신 main과 착지
 
-source 검사 이후 main delta는 UI 평가/SSH 안내·도구·시험과 registry/Robot UI/검수 pipeline의 동료 변경이다. Drive·Fleet와 설치 source mapping 변경이 없음을 git diff로 확인했다. 이 차이와 registry·Robot UI·검수 pipeline의 해당 시험과 현재 구조·sdist/서명/image closure를 원격 집중 재검사하고 known_failures·lint 이후 tools/land.py의 ff-only 착지로 닫는다. 범위는 SSH enroll/share, harness/document placement, module/platform/Safety 구조, Drive 설치, perception responsibility layout, model review, image closure다. 완료 결과와 최종 착지 commit은 아래 evidence의 final readback이 정본이며 이전 source 검사 SHA를 최신 metadata 검사 SHA로 바꿔 집계하지 않는다.
+source 검사 이후 main delta는 UI 평가/SSH 안내·도구·시험과 registry/Robot UI/검수 pipeline의 동료 변경이다. Drive·Fleet와 설치 source mapping 변경이 없음을 git diff로 확인했다. 이 차이와 registry·Robot UI·검수 pipeline의 해당 시험 및 구조·sdist/서명/image closure를 source candidate commit `b2ae9a5ab2`에서 원격 집중 재검사해 **1,914 passed / 255 skipped / NEW 0**을 확인했다. 이후 main의 ADR·Log·gap 및 추가 계약 테스트는 production 코드 변화가 없는 별도 gate로 검사한 뒤 tools/land.py의 ff-only 착지로 닫는다. 범위는 SSH enroll/share, harness/document placement, module/platform/Safety 구조, Drive 설치, perception responsibility layout, model review, image closure다. 완료 결과와 최종 착지 commit은 아래 evidence의 final readback이 정본이며 이전 source 검사 SHA를 최신 metadata 검사 SHA로 바꿔 집계하지 않는다.
 
 X: 세션 `2026-10-13--170627--drive-holder-s1--9b6514`의 evidence/source-manifest.json, merged-source-readback.json, independent-review.json, source-test-gate.json, landing-readback.json과 logs에 원본/새 경로·hash·크기·후속 delta·시험 exit·main readback을 보존한다. [실행 계획](../../plans/2026-10-13-drive-holder-s1.md)을 따른다.
 
