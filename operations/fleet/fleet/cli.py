@@ -101,6 +101,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
+    console.add_argument("--account-config", default=None, type=Path,
+                         help="protected Rosy Account authority JSON; requires --tasks-db")
     console.add_argument('--conversation-config-optional',default=None,type=Path,
                          help='optional independently admitted natural conversation broker config')
     console.add_argument('--deliberation-config-optional',default=None,type=Path,
@@ -433,6 +435,9 @@ def run_console(args: argparse.Namespace) -> None:
 
         site_users, site_logins = load_site_accounts(users_file)
     tasks_db = getattr(args, "tasks_db", None)
+    account_config = getattr(args, "account_config", None)
+    if account_config is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with --account-config")
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
     mission_api = bool(getattr(args, "mission_api", False))
@@ -681,6 +686,7 @@ def run_console(args: argparse.Namespace) -> None:
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, site_logins=site_logins, discovery=discovery,
+                     account_config=account_config,
                      discovery_token=discovery_token,
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
