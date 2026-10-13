@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-13 · 7c9547f52 · docs: correct console source holder guidance
 - 2026-10-12 · a5925d7ae · D-728 실제 이전 턴의 완료 문맥 결속
 - 2026-10-12 · db0037481e · D-732 native 결과와 로컬 자원 해제를 분리
 - 2026-10-12 · 8d4d752ee · D-728 original natural instructions and execution source
 - 2026-10-12 · 1164d858e · D-728 natural conversation source and remaining admission
-- 2026-10-12 · 36b51d124 · D-728 channel owner extraction

@@ -1,13 +1,11 @@
+import {bindTopbarToggle, setTopbarOpen} from "/console/assets/fleet-header.js";
+
 // Connection guidance owns presentation; authorization remains in console.js.
 export function createConnectionView({scope, el}) {
   let openedForLock = false;
-  function setTopbarOpen(open) {
-    el("topbar-more").setAttribute("aria-expanded", String(open));
-    el("topbar-extra").dataset.open = String(open);
-  }
+  bindTopbarToggle(scope.listen);
   scope.listen(el("topbar-more"), "click", () => {
     openedForLock = false;
-    setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
   });
   scope.listen(el("connection-guide-action"), "click", event => {
     openedForLock = false;

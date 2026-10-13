@@ -1,5 +1,8 @@
 # Perception evaluation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-12
+
 `road_replay.py`, `road_replay_inputs.py`, and `road_replay_metrics.py` evaluate existing recording inputs using the unchanged replay and metric contracts. Curation owns input conversion; registry owns the shared artifact/provenance store; training owns trainer jobs. D-637 moves the existing evaluation implementation while preserving bare imports, input lineage, class meanings and signatures. Evaluation does not activate a learned model or publish final commands.
 
 `road_fitness.py` (D-665/D-667) consumes full road labels, shared observation input-validity checks and perception anchor-based region geometry. `evaluate_frame` scores separate independent road/region truth masks, preserving valid/unknown truth counts even when the region abstains. Its reports are always diagnostic/HOLD until independent lineage, conditions/coverage, thresholds and device evidence are supplied. It is not a command, an approval gate or an operational consumer.

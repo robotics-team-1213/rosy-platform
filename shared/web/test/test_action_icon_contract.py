@@ -32,6 +32,6 @@ def test_fleet_documents_share_the_stop_and_chrome_icons():
         assert ">비상 정지</span>" in page
         assert "래치 · 로봇별 관리자 해제" in page
         assert 'sr-only">전체 비상 정지' not in page
-        for icon in ("settings", "theme-dark", "theme-light", "theme-system", "refresh"):
+        for icon in ("connect", "notification", "theme-dark", "refresh"):
             assert f'data-action-icon="{icon}"' in page, (name, icon)
         assert 'd="M4 7h16' not in page

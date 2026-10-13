@@ -7883,6 +7883,12 @@ osy-d395-s1d\`.
 - 증거: a8212d3806 원격 합성 모델/좌표·구역·기준선 55개 시험 terminal exit 0. 실제 ONNX Runtime crop/전체 영상 2개 포함; crop 제외와 원본 정답 모순 검사를 각각 제거한 실패를 확인한 뒤 복구했다. 전체 회귀/known_failures는 별도 receipt다.
 - gate 변화: 없음. 고정 dataset/모델 파일·독립 검수 결속, 실제 보정·성능·장치 전달·현장 수용은 아직 미완료다.
 
+## 2026-10-11 · uncommitted · docs(learning): Pinky 맵·Fleet 강화학습 구조 초안
+
+- 변경: `docs/plans/2026-10-11-pinky-map-fleet-rl-structure-design.md`에 기존 경로를 재사용하는 환경·학습·평가 구조, CORE 후보/최종 명령 경계, 흰 선·벽 과제, 한 대 S자부터 두 대 Fleet까지의 단계와 후속 연결을 정리했다. 사용자 요청으로 시뮬레이션·RL 실행은 중지하고 구조만 준비한다.
+- 증거: D-427·D-606, 기존 PolicyArtifact validator, Isaac helper·progress, Pinky registry의 오프라인 평가 범위를 대조했다. 새 API·owner 실행 연결·trainer 구현은 없다. lint·문서 계약 시험 결과는 이 후보 커밋의 별도 검증 기록이다.
+- gate 변화: Draft 설계만. RL 환경·정책 활성화·ROS-SIM·DEVICE/FIELD 수용은 올리지 않는다.
+
 ## 2026-10-12 · 1905962030 · D-666/D-667 고정 인지 진단과 공통 관측 계약
 
 - 변경: 두 사람 승인 정답과 별도 관측 입력·모델·학습 출처를 고정 버전으로 결속하고, 로봇 설정 없이 HOLD 보고서를 생성한다. 공통 관측 계약과 World 기존 import는 같은 객체를 사용한다. 새 계약 파일을 구분하는 패키지 버전·의존 pin·서명 코드 묶음의 필수 파일을 정리했다.
@@ -8204,3 +8210,35 @@ osy-d395-s1d\`.
 - 변경: 검토 표의 커밋 식별자를 12자리로 표시한다. 검토 코드의 정확한 전체 SHA와 검토 조건은 유지한다.
 - 증거: ec6f54431 pre-push 원격 검사에서 문서의 전체 Git SHA 네 개가 high-entropy-token으로 검출됐다. 516 PASS/1 NEW 뒤 표시만 수정했으며 검사 규칙은 바꾸지 않았다. 후속 원격 결과는 별도 확인한다.
 - gate 변화: 없음. 주행 코드·안전 허용·완주 수용은 바뀌지 않는다.
+
+## 2026-10-13 · a967ab11a · docs: folder duplication and responsibility audit
+- 변경: `assessments/2026-10-13-folder-responsibility-audit.md`에 우산·제품 소스·물리 잔여 폴더의 시점을 구분한 조사 보고서를 추가했다. 브랜치는 `docs/folder-responsibility-audit`다.
+- 증거: 기준 SHA 추적 파일 7,665개, manifest root 95개, 반복 basename 97종, 동일 내용 묶음 5개를 정적 확인했다. 관리 인벤토리는 worktree 250개(primary 1/task 249), task dirty 52개, HOLD 155/REVIEW 95개다. X: 세션 `2026-10-13--115930--folder-responsibility-audit--deea14`에 원자료를 남겼다.
+- gate 변화: 없음. pytest·ROS·이미지·배포·장치·현장 수용은 미실행이며, 정리/이동/삭제·착지·push도 하지 않았다. 문서 링크 검사 및 harness generate/lint는 보고서 작성 후 별도 로그로 확인한다.
+- 결정: 기존 D-738의 10단계 계획과 현재 물리 배치를 구분한다. 새 ADR나 구조 변경은 없다.
+- 교훈: 동일 basename, 설치 alias, 이력 payload, 내용이 같은 제품 구현, ignored 캐시를 서로 다른 근거로 판단한다.
+
+## 2026-10-13 · a967ab11a · docs: plan staged folder responsibility cleanup
+- 변경: `plans/2026-10-13-folder-responsibility-cleanup.md`에 P0 안내, P1 생성물, D-738 S1~S10, P2 proof 동등성, P3 worktree 정리의 담당 책임·실행 순서·검증·중단·되돌림을 작성했다.
+- 증거: 앞 조사 보고서와 Accepted D-738, 현행 manifest/source mapping을 연결했다. 보고서 로컬 링크 17개와 inventory/proof 동일성 PASS, harness lint 오류 0/경고 28이었다. 이번 계획의 커밋·local main 착지는 사용자 요청이며, 최종 원격 affected/known_failures/착지 결과는 X: 세션 landing 로그와 Git readback으로 확인한다.
+- gate 변화: 계획은 PLANNED. 제품 정리 구현·이동·삭제·push·배포·장치 수용은 하지 않는다.
+- 결정: 첫 실제 실행은 P0만, 구조 단계는 D-738 순서 그대로다. proof는 runtime dependency 추가보다 기존 시험의 동등성 guard를 먼저 선택한다.
+- 교훈: 조사/계획의 local main 반영과 정리 구현·실물 수용을 구분한다.
+
+## 2026-10-13 · c9a5a9459 · docs: label audit commit hashes as public provenance
+- 변경: 폴더 조사 보고서의 Git SHA 두 곳에 `commit` 문맥을 명시했다. 검사 규칙·known_failures 목록은 바꾸지 않았다.
+- 증거: 첫 착지 원격 검사 370 passed/1 NEW(`test_no_secrets_in_tracked_files`). 원인은 보고서 3/12행의 공개 Git revision 표기였다. 기존 scan_text로 수정 전 high-entropy-token 2건, 수정 후 보고서·계획 0건을 확인했다. 이 정적 확인은 원격 재검증을 대신하지 않는다.
+- gate 변화: 첫 착지는 중단되어 main 미반영. 수정 커밋 이후 `tools/land.py --tests auto` 전체 affected/known_failures 재검증으로 다시 착지한다.
+- 결정: 비밀정보 검사 완화 없이 공개 commit 출처만 분명히 표기한다.
+
+## 2026-10-13 · 7c9547f52 · docs: execute P0 current folder guidance
+- 변경: root AGENTS의 Docker source 입력과 CORE/Fleet 화면 편집 안내, 정리 계획의 P0 실행 기록을 정정했다. 제품 Git 밖의 우산 README와 archive 최상위 현재 소스 안내를 고치고 관리 도구 `InitWorktrees`로 holder AGENTS/README를 설치했다.
+- 증거: source serving/설치 mapping을 확인했다. 우산 파일 전후 복사·hash·링크 검사는 X: 세션 `2026-10-13--124414--folder-guidance-p0--4bdefe`에 보존하며 제품 변경은 브랜치 `docs/folder-guidance-p0`의 committed HEAD에서 원격 검사 후 ff-only 착지한다.
+- gate 변화: 문서 변경만. 공유 main `reference/AGENTS.md`, `reference/src/AGENTS.md` 삭제는 owner 의도 확인 근거가 없어 HOLD로 보존한다. 계획의 P1/S1~S10/P2/P3는 PLANNED다.
+- 결정: 역사 ADR/로그/payload 내부 안내는 소급 수정하지 않는다. 산출물·worktree 이동/삭제와 장치 작업·push는 이번 범위가 아니다.
+
+## 2026-10-13 · 5d70a4fc1 · docs: record P1 artifact disposition and X output settings
+- 변경: P1 결과와 분석 생성물 위치 안내를 추가하고 tools AGENTS/실행 계획을 갱신했다. 제품 Git 밖의 Graphify 생성물 4곳/418파일/34,837,896 bytes를 X: 세션 `2026-10-13--140927--folder-artifacts-p1--f5e4ef`의 export로 이관했다.
+- 증거: source 경계/reparse/tracked 상태, producer/process, exclusive-read open, 전체 source/destination hash·크기·파일 목록 안정성을 확인했다. source 부재와 CLI 조회 전후 동일성 PASS, 설치 `GRAPHIFY_OUT` X 경로 해석 PASS. 실제 bytes는 Git에 넣지 않는다.
+- gate 변화: P1 분류·확인된 Graphify 부분 이관. 나머지 15곳은 owner/참조 미확정 또는 overlay 범위로 HOLD다. user 요청에 따라 문서 commit/원격 gate/local main 착지는 이어서 실행하며 결과는 해당 X: landing 로그와 Git readback으로 확인한다.
+- 결정: `.omc`/lock/credential/overlay를 disposable cache로 확대 적용하지 않는다. source 이동·worktree 제거·push/배포/실물 수용은 미실행이다.

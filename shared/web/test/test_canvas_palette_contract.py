@@ -26,6 +26,7 @@ CANVAS_FILES = [
     # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
     COMMON / "evidence.js",
     FLEET / "map-view.js",
+    FLEET / "map-datum.js",
     FLEET / "trail-view.js",
     FLEET / "camera-backdrop.js",
     FLEET / "traffic-view.js",
@@ -95,12 +96,13 @@ def test_games_pitch_colours_live_in_its_stylesheet():
 
 def test_fleet_terrain_and_legend_use_the_raster_tokens():
     view = (FLEET / "map-view.js").read_text(encoding="utf-8")
-    styles = (FLEET / "shared" / "styles.css").read_text(encoding="utf-8")
+    legend = (COMMON / "components.css").read_text(encoding="utf-8")
     html = (FLEET / "index.html").read_text(encoding="utf-8")
     for kind in ("unknown", "free", "uncertain", "occupied"):
         assert f'"--raster-{kind}"' in view
-        assert re.search(rf"\.sw\.{kind} \{{ background: var\(--raster-{kind}\); \}}", styles)
-        assert f'class="sw {kind}"' in html
+        assert f'[data-swatch="{kind}"]' in legend
+        assert f"var(--raster-{kind})" in legend
+        assert f'data-swatch="{kind}"' in html
 
 
 #: 캔버스를 그리지만 위 판정을 받지 않는 파일 — 저장소 상대 경로 → 이유.
