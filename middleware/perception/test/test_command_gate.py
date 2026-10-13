@@ -160,6 +160,16 @@ def test_stops_keep_priority_over_an_admissible_forward_arc():
         assert forward_arc(.05, -.05, state=state)[0] == (0., 0., reason), state
 
 
+def test_lidar_front_strip_yields_to_a_clear_arc_sweep_but_another_front_block_does_not():
+    # D-740 rev 1: the straight front strip is not the arc's path; ultrasonic (or unknown) still blocks.
+    for can_rotate in (False, True):
+        state = {'obstacle': True, 'can_rotate': can_rotate}
+        assert forward_arc(.05, -.05, state=state, front_blocked_other=False)[0] == (.05, -.05, 'allow')
+        assert forward_arc(.05, -.05, state=state, front_blocked_other=True)[0] != (.05, -.05, 'allow')
+        assert forward_arc(.05, -.05, state=state)[0] != (.05, -.05, 'allow')
+        assert forward_arc(.03, .5, state=state, front_blocked_other=False)[0] != (.03, .5, 'allow')
+
+
 def test_clear_pivot_circle_never_consults_the_forward_arc_evidence():
     for evidence in (_DEFAULT, None):
         assert forward_arc(.03, .5, state={'can_rotate': True},

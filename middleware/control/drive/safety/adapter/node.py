@@ -754,6 +754,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
                       getattr(self, 'lidar_rotation_reason', 'no scan') is None),
             body=BODY,
             limits=(self.profile.max_linear, self.profile.max_angular),
+            front_blocked_other=bool(self.us_blocked),
         )
 
     def _tracking_policy_evidence(self, now):
