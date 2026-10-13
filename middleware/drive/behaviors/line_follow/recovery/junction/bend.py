@@ -147,7 +147,8 @@ class JunctionBendMixin:
         """'bending' and the bend's 'reacquiring': pursue the path, bounded. Locked."""
         if j['state'] == 'reacquiring':
             seen = self._junction_seen_at is not None and self._junction_seen_at >= j['phase_at']
-            ahead = self._line_ahead(now, j['pass_at'])  # lap SIM A: sighted during the pass, not yet reached
+            # lap SIM A: sighted during the pass, not yet reached (and not the bend's own outer line)
+            ahead = self._line_ahead(now, j['pass_at']) and not self._bend_own_line(j)
             if self._reacquired(j, pose) or ((seen or ahead) and abs(
                     math.remainder(pose.yaw-j['target'], math.tau)) <= REACQUIRE_HEADING_RAD):
                 self._junction_done(keep_sighting=ahead)
@@ -178,6 +179,19 @@ class JunctionBendMixin:
         if not self.motion_admitted(now, *twist, 'bend', j['map_id']):
             return self._abort(j, 'motion_unconfirmed', decision)
         return out
+
+    def _bend_own_line(self, j):
+        """The anchored sighting was read on the entry heading and its line lies past the bend's
+        vertex on the entry axis. By the map the lane turns there, so that line is the bend's own
+        outer line (Gazebo lap run53: 0.097 m past W2), not the next junction's. Locked."""
+        a, (x, y, yaw, travel) = self._junction_anchor, j['anchor']
+        pose, turn = a['pose'], math.radians(j['turn_deg'])
+        if abs(math.remainder(pose.yaw-yaw, math.tau)) > REACQUIRE_HEADING_RAD:
+            return False
+        vertex = max(0., j['bend_in']-travel)+j['radius']*math.tan(abs(turn)/2)
+        along = ((pose.x-x)*math.cos(yaw)+(pose.y-y)*math.sin(yaw)
+                 + a['ahead']*math.cos(pose.yaw-yaw))
+        return along > vertex
 
     def _bend_blocked(self, now, twist):
         """The D-422 swept body gap of this twist is at or under its restart gap."""
