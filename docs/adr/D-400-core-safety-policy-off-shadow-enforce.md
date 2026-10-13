@@ -102,3 +102,11 @@
 - 워커의 정지 거리와 봉투 문제(계획 1의 "해석 주의와 한계")는 그대로다. HOLD는 근거가 없는 동안 0을 내는 것이라 그 문제를 넓히지 않는다.
 
 **검증.** 호스트 단위 시험만이다(`test_safety_decision_check.py`, `test_control_absorption_safety.py`, `test_control_policy_link.py`, `test_control_sensor_adapter.py`, `test_safety_policy_status.py`). SIM(Gazebo 차로 주행 재실행)과 DEVICE는 하지 않았다. 34–77 ms 지연이 실제로 HOLD 한두 틱으로 끝나는지는 Gazebo에서 확인해야 한다.
+
+독립 안전 검토(2026-10-14, code-reviewer) 뒤 고친 것과 적어 둘 것:
+
+- 끊김 시계는 유효한 판정이 오거나, 증거 임대 폭(0.5초)보다 오래 묻지 않으면 새로 시작한다. 0 명령으로 서 있는 동안에는 정책을 묻지 않으므로, 교차로에서 3초 선 앞뒤의 두 지연은 서로 다른 끊김이다. 끊기지 않고 계속 묻는 죽은 센서는 전과 같이 `stale_hold_s`에 래치한다. 시계가 거꾸로 가면 래치한다.
+- "첫 판정 전"의 HOLD는 `snapshot_missing`으로만 일어난다. 평가기가 묶이기 전(`policy_unavailable`)에는 `stale_hold_s`도 아직 없어 HOLD가 없다. 준비 시간도 같은 `stale_hold_s`로 묶인다: 센서가 준비되기 2초보다 먼저 0이 아닌 명령이 계속 오면 래치한다. 설계 문서의 "준비 중 무기한 대기"와 `safety.policy_hold` 이벤트는 구현하지 않았다.
+- `snapshot_missing`은 생산자가 스스로 무효로 한 경우(잘못된 입력, 워커 개정 불일치, 필수 증거 빠짐)도 포함한다. 전에는 즉시 래치였고 이제는 HOLD 뒤 2초에 래치한다. 출력은 그동안 0이고 움직이려면 유효한 판정이 있어야 한다. 이 경우를 끊김과 가르는 일은 남아 있다.
+- 지금 HOLD 중인지를 알리는 필드는 없다(`hold.count`는 누적). 시간 초과로 난 HOLD와 래치는 경과 시간을 기록하지 않는다.
+- SIM(모델 PC, Gazebo 한 바퀴 run62): 고치기 전 `control:policy_failed` E-stop으로 둘째 바퀴에서 끝났다. 고친 코드의 SIM 실행은 아직 없다.
