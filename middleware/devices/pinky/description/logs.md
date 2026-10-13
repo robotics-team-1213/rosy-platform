@@ -82,3 +82,31 @@
 - 변경: D-626 devices/pinky/description으로 이동하며 URDF/mesh/launch/CMake/package bytes를 유지했다. 소비자와 설치 소스 경로를 정렬했다.
 - 증거: Pinky 원격 885 성공·2 skip 중 URDF surface/collision geometry 계약 포함, 독립 source 리뷰. logs는 R100 보존 뒤 추가, known_failures 0 NEW/0 known.
 - gate 변화: 없음. 새 ROS 렌더/Gazebo/ARM64/실물 geometry 수용은 미확인.
+
+## 2026-10-12 · 508334331 · fix(sim): LiDAR cubemap 경계 빔을 반 간격 이동
+
+- 변경: Gazebo LiDAR의 두 각도 끝점만 반빔 이동해 cubemap face 경계를 피한다. 640개·2pi/640 간격·비중복 한 바퀴·10Hz·잡음 0.02·TF·range·topic은 유지한다. 장치 LiDAR 설정과 vendor 파일은 바꾸지 않는다.
+- 증거: 동일 원본 지도와 정지 자세의 두 설정에서 각 102개 동일 header, 전체 거리/강도 GZ↔ROS 일치와 종료·해시 보존을 확인했다. 전체 visual ray 잔차 표준편차는 51.15→20.23mm지만 원본 회전 거절 SOURCE 재생은 7→11/102회 남았다. 모델 PC TDD RED는 기존 grid의 float32 UV=1 실패 1 NEW를 확인했으며 기존 실패로 등록하지 않았다.
+- gate 변화: 새 후보의 원격 회귀·독립 리뷰·새 전체 빌드 주행 전 SOURCE/ROS-SIM HOLD. 센서 경계 수정만으로 주행 정지·지도 완주·실물 수용이 해결됐다고 주장하지 않는다.
+
+## 2026-10-13 · c0bb0393c · verify(sim): 빔 위상 SOURCE 회귀 종료
+
+- 변경: 새 위상 SOURCE를 실제 원격 회귀와 독립 리뷰로 GO로 기록하고, 이전 LOCAL 렌더 수용과 새 설치 검증을 분리했다.
+- 증거: 정상 AI 원격에서 Gazebo/description/scan/return/Isaac URDF와 문서 경계 시험 610 PASS·7 SKIP·14 subtests·NEW 0. 독립 SOURCE 승인, 실제 source 전체 7,553개 동결·새 17개 패키지 빌드 13.1초를 확인했다.
+- gate 변화: SOURCE HOLD→GO. 새 설치 전체 해시·실제 센서 정지 점검 전 LOCAL/ROS-SIM HOLD. 빌드 뒤 연결 실패로 정지 점검·주행은 미실행이며 이전 설치/렌더 수용을 대신 쓰지 않는다.
+
+## 2026-10-13 · c0bb0393c · verify(sim): 새 설치 정지 점검과 원본 맵 Leg9 종료
+
+- 변경: 정상 연결 복구 후 실제 새 설치의 LOCAL 점검과 원본 맵 주행 결과를 기록했다. 새 센서 경계 수정과 주행 정책 실패를 구분했다.
+- 증거: source 7553·install 2726 파일 전체 해시 일치, 17개 새 패키지와 실제 640빔 halfphase·SDK 적용 프로필·CORE 최대 전진 0.1 m/s·native pose 계보·정지 명령을 확인했다. Leg9는 0.286048511 m 뒤 control:policy_failed E-stop으로 종료했다. 최초 zero 직전 compiled limits의 can_rotate는 true였다. trip 종료·lease 종료·OFF·정지·프로세스 종료와 해시 보존을 확인했다.
+- gate 변화: LOCAL HOLD→GO(새 설치 렌더·센서·정지 상태 점검 범위), ROS-SIM HOLD 유지(지도 미완주). ARTIFACT/DEVICE/FIELD 변동 없음.
+- 결정: E-stop을 해제하거나 추가 주행하지 않는다. SDK None과 evaluator 예외를 기존 정지 이후 알림 경로에서 구분한 뒤 원인을 재현한다.
+- 교훈: probe의 신선한 limits만으로 SDK 내부 관측 window의 유효성을 증명할 수 없다. 종료된 runner의 exit 0은 지도 도착을 의미하지 않는다.
+
+## 2026-10-13 · 314e06aca · verify(sim): Leg10 본체 여유 정지
+
+- 변경: 같은 원본 지도·반빔 위상·안전 조건의 새 전체 설치와 정지 점검을 거쳐 한 회차를 실행하고 결과를 분리해 기록했다.
+- 증거: 17패키지·source 7553/install 2726 해시 일치, 실제 양 CORE 단독 publisher·0 명령·이동 0·640빔·SDK/조향 법칙을 확인했다. Leg10은 0.366485589m 뒤 obstacle_ahead HOLD이며 body gap 0.0094368m < stop gap 0.0214m다. 47.766초의 일시 zero 후 양의 명령이 재개됐고 최종 zero는 54.768초다. 정책 예외·E-stop 0건, 종료5조건·lease 해제·잔존 프로세스 0·포트 닫힘·전체 해시 보존을 확인했다.
+- gate 변화: LOCAL GO, ROS-SIM HOLD 유지(지도 미완주). ARTIFACT/DEVICE/FIELD 변동 없음.
+- 결정: 실제 경로와 임계 visual ray를 독립 분석하며 이전 Leg9 예외는 미재현 상태로 남긴다. 추가 주행·E-stop 해제·안전 완화는 하지 않았다.
+- 교훈: 안전 정지의 반복 원인은 고정 빔 경계 오류와 별개로 검증해야 한다. sampled overlap 0을 미래 궤적·지도 완주 수용으로 대신하지 않는다.

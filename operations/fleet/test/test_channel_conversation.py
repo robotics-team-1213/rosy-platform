@@ -9,7 +9,7 @@ from rosy.decision.conversation.codec import (Profile, Answer, History, bounded_
     conversation_input, checked_answer, digest, source_policy)
 from fleet.server.channel.conversation.jobs import ConversationJobs
 from fleet.server.channel.conversation.worker import ConversationWorker
-from test_channel_model_jobs import setup
+from test_channel_model_jobs import model_jobs
 
 
 def environment():
@@ -35,7 +35,7 @@ def test_online_environment_normalization_is_idempotent():
 
 
 def test_full_original_multiline_question_and_only_bot_mention_removed(tmp_path):
-    _, journal, _, receipt, _, _, clock = setup(tmp_path)
+    _, journal, _, receipt, _, _, clock = model_jobs(tmp_path)
     text = '<@'+journal.config.bot_id+'> 안녕\n'+('질문 '*400)+'<@12345678901234567>'
     value = conversation_input(receipt_text(receipt, text), environment(), journal.config.bot_id, now=clock[0])
     assert value.question == text.replace('<@'+journal.config.bot_id+'>', '').strip()
@@ -44,7 +44,7 @@ def test_full_original_multiline_question_and_only_bot_mention_removed(tmp_path)
 
 @pytest.mark.parametrize('change',['principal_id','author_id','channel_id','guild_id','expired','map'])
 def test_history_never_crosses_owner_channel_expiry_or_map(tmp_path, change):
-    _, journal, _, receipt, _, _, clock = setup(tmp_path)
+    _, journal, _, receipt, _, _, clock = model_jobs(tmp_path)
     value = conversation_input(receipt, environment(), journal.config.bot_id, now=clock[0])
     h = {k:getattr(value,k) for k in ('request_id','principal_id','author_id','channel_id','guild_id','question','content_hash')}
     h |= {'answered_at':clock[0], 'environment_hash':digest(value.environment), 'kind':'CHAT', 'intent':None}
@@ -66,13 +66,13 @@ def test_history_never_crosses_owner_channel_expiry_or_map(tmp_path, change):
     answer('STATUS',evidence_refs=['robot:unknown']),
 ])
 def test_untrusted_answer_rejects_unknown_scope_facts_secrets_and_reset(tmp_path,bad):
-    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    _,journal,_,receipt,_,_,clock=model_jobs(tmp_path)
     question=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
     with pytest.raises(ValueError):checked_answer(bad,question)
 
 
 def worker_fixture(tmp_path, *, text='안녕', change=None, output=None):
-    _, journal, accounts, receipt, _, _, clock = setup(tmp_path)
+    _, journal, accounts, receipt, _, _, clock = model_jobs(tmp_path)
     updated=receipt_text(receipt,text)
     with journal._connect() as conn:
         import json
@@ -149,7 +149,7 @@ def test_local_semantic_broker_has_independent_codec():
 @pytest.mark.parametrize('kind',['CLARIFY','REFUSE'])
 def test_reason_reply_cannot_smuggle_model_device_success(tmp_path,kind):
     from rosy.decision.conversation.codec import reply
-    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    _,journal,_,receipt,_,_,clock=model_jobs(tmp_path)
     question=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
     value=checked_answer(answer(kind,response='Everything healthy, robot movement completed.',reason='SAFETY'),question)
     result=reply(value,question)
@@ -183,7 +183,7 @@ def test_invalid_input_finishes_one_hold_and_never_model_retries(tmp_path):
 
 
 def test_partial_large_catalog_declares_completeness_and_unknown_place_is_refused(tmp_path):
-    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    _,journal,_,receipt,_,_,clock=model_jobs(tmp_path)
     env=environment()
     env['map']['places_complete']=False
     env['map']['places']=[{'id':f'P{i}', 'name':f'P{i}', 'x':float(i), 'y':0.} for i in range(64)]
@@ -195,7 +195,7 @@ def test_partial_large_catalog_declares_completeness_and_unknown_place_is_refuse
 
 def test_flat_semantic_steps_map_existing_grammar_and_reject_arbitrary_parameters(tmp_path):
     from rosy.decision.conversation.codec import semantic_answer
-    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    _,journal,_,receipt,_,_,clock=model_jobs(tmp_path)
     q=conversation_input(receipt,environment(),journal.config.bot_id,now=clock[0])
     value={'kind':'CONTROL','response':'제안을 기록합니다.','steps':[
         {'verb':'navigate','robot_id':'rosy_40','place_id':'A','parameters_json':'{}'}],
@@ -217,7 +217,7 @@ def test_pending_scope_changed_on_restart_never_reinterprets_original(tmp_path):
 
 def test_fixed_conversation_provider_binds_source_profile_input_and_command(tmp_path,monkeypatch):
     from fleet.server.channel.conversation import runtime
-    _,journal,_,receipt,_,_,clock=setup(tmp_path)
+    _,journal,_,receipt,_,_,clock=model_jobs(tmp_path)
     profile=Profile(revision='d728-test')
     config=runtime.ConversationConfig(host='example',key_file='/run/rosy-deliberation/broker.key',
         known_hosts_file='/run/rosy-deliberation/known_hosts',profile=profile,source_commit='a'*40,
@@ -243,7 +243,7 @@ def test_runtime_valid_large_site_catalog_does_not_block_greetings(tmp_path):
     from types import SimpleNamespace
     from fastapi import FastAPI
     from fleet.server.channel.conversation.runtime import ConversationConfig,install_conversation
-    _,journal,_,_,_,_,_=setup(tmp_path)
+    _,journal,_,_,_,_,_=model_jobs(tmp_path)
     profile=Profile(revision='d728-test')
     config=ConversationConfig(host='example',key_file='/run/rosy-deliberation/broker.key',
         known_hosts_file='/run/rosy-deliberation/known_hosts',profile=profile,source_commit='a'*40,

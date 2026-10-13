@@ -59,8 +59,9 @@ ui-topbar {
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }
-.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
-.fleet-link-status ui-tag { box-sizing: border-box; flex: none; white-space: nowrap; }
+.fleet-link-status { grid-area: status; display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: var(--space-1); min-width: 0; overflow: hidden; }
+.fleet-link-status ui-tag { box-sizing: border-box; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+#development-badge { flex: none; min-width: max-content; overflow: visible; }
 #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); }
 .fleet-header-actions [hidden] { display: none; }
@@ -97,7 +98,7 @@ ui-topbar {
   }
   .fleet-header-identity { container-type: inline-size; }
   ui-topbar ui-brand b { line-height: var(--leading-flat); }
-  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: calc(var(--space-5) * 2 + var(--space-1)); }
+  .fleet-link-status { justify-content: flex-start; align-content: center; min-height: 0; }
   .fleet-header-actions { gap: 0; }
   .fleet-link-status ui-tag { min-height: var(--space-5); }
   #estop { gap: var(--space-1); }
