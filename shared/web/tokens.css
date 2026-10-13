@@ -177,7 +177,7 @@
   --line-10: color-mix(in oklab, var(--ink) 10%, transparent);
   --line-14: color-mix(in oklab, var(--ink) 14%, transparent);
   --line-30: color-mix(in oklab, var(--ink) 30%, transparent);
-  --line-40: color-mix(in oklab, var(--ink) 40%, transparent);
+  --line-50: color-mix(in oklab, var(--ink) 50%, transparent);
   --line-quiet: color-mix(in oklab, var(--ink-quiet) 25%, transparent);
 
   /* status 파생 — 임계 면의 옅은 바탕과 테두리 */
@@ -268,8 +268,9 @@
   --border-subtle: var(--line-10);
   --border-default: var(--line-14);
   --border-strong: var(--line-30);
-  /* D-741 — 단추와 입력의 경계. 어둡게 테마에서 3:1을 넘는다. 밝게 테마에서는 2.4:1이라 쓰기 전에 값을 다시 정한다. 아직 쓰는 곳이 없다. */
-  --control-line: var(--line-40);
+  /* D-741 10 — 단추와 입력의 경계. 잉크 50%는 다섯 바탕(ground, -deep, -raise, -soft, -card) 위에서
+     어둡게 4.20–4.76:1, 밝게 3.11–3.31:1이다(test_control_line_contrast.py). 면을 가르는 선에 쓰지 않는다. */
+  --control-line: var(--line-50);
   /* D-741 — 옆의 틀(레일, 하위 탐색, 오른쪽 칸)의 면. */
   --surface-chrome: var(--ground-raise);
 
