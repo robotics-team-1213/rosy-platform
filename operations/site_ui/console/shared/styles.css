@@ -59,7 +59,7 @@
 #inbox-messages pre, .stuck-result pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-micro); }
 
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-.ops-block > h2, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
+.ops-block > h2, .ops-block > .console-diagnostics { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
 @media (width >= 64rem) {
   .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
@@ -81,7 +81,6 @@ body {
 }
 
 /* D-406 — 설치·보정 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
-.install-tools { margin-top: var(--space-3); }
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .vision-controls select { flex: 1; min-width: 0; }
 .vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-panel); }
@@ -228,7 +227,6 @@ main {
   .console-secondary .vision-frame { max-height: 8.5rem; }
 }
 @media (width >= 110rem) {
-  .ops-block > .log-panel { grid-column: 1; }
   .ops-block > .console-diagnostics { grid-column: 2; }
 }
 /* A fixed frame needs enough height; its map uses the space left by actual controls. */
@@ -512,7 +510,6 @@ main {
 .signals:not(:has(> .signal-cards > *)) { min-height: 0; }
 
 /* D-415 — 신호등 빈 상태 */
-.signal-empty { color: var(--text-secondary); font-size: var(--text-label); padding: var(--space-2) 0; }
 
 /* D-415 — 진단 패널 */
 .console-diagnostics { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
@@ -540,9 +537,9 @@ main {
   .queues-panel { order: 0; }
   .panel[aria-labelledby="map-heading"] { order: 1; }
   .console-context { order: 2; }
-  #fleet-main:has(#work-overview:not([hidden])) > #work-overview { order: -1; }
-  #fleet-main:has(#work-overview:not([hidden])) > .console-context { order: 0; }
-  #fleet-main:has(#work-overview:not([hidden])) > .queues-panel { order: 1; }
+  #fleet-main > [data-raised] { order: -1; }
+  #fleet-main:has(> [data-raised]) > .console-context { order: 0; }
+  #fleet-main:has(> [data-raised]) > .queues-panel { order: 1; }
 }
 
 
@@ -703,6 +700,9 @@ main {
 .incident-row form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--space-2); }
 .incident-row form > * { min-width: 0; }
 @media (width < 40rem) { .incident-row form { grid-template-columns: minmax(0, 1fr); } }
+/* D-741 8 — 기록 영역: 연 사건의 원인과 조치는 오른쪽 칸에 서고, 하위 탐색이 사건과 AI 상황 사실 가운데 하나를 고른다. */
+#incident-judgment form { grid-template-columns: minmax(0, 1fr); }
+#incident-judgment:not(:empty) + .hint, .incident-panel[data-show="facts"] #incident-list, .incident-panel[data-show="incidents"] :is(h3, h3 + .hint, #incident-traffic-list) { display: none; }
 
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
@@ -816,7 +816,6 @@ main {
   .ops-block > .formation { grid-column: 1; grid-row: 2 / span 3; }
   .ops-block > .signals { grid-column: 2; grid-row: 2; }
   .ops-block > .console-diagnostics { grid-column: 2; grid-row: 3; }
-  .ops-block > .log-panel { grid-column: 2; grid-row: 4; margin: 0; }
 }
 
 .log-panel[open] > summary { display: flex; align-items: center; margin-bottom: 0; }

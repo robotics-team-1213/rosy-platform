@@ -144,6 +144,93 @@ def test_incident_report_shows_source_evidence_and_records_review(site):
         assert not errors
         browser.close()
 
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_side(site, size):
+    """D-741 8 — /console?view=records: 사건은 본문, 연 사건의 원인과 조치는 오른쪽 칸, 하위 탐색이 화면을 고른다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    def report(stuck, closed, reviews):
+        return {"id": f"line_stuck:rosy_01:{stuck}", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+                "stuck_id": stuck, "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": closed,
+                "actions": [], "reviews": reviews,
+                "evidence": {"core": {}, "fleet": {}, "rosy_cam": None, "ai_facts": [],
+                             "front_image": {"status": "not_retained"}}}
+    fact = {"id": "ai_fact:17", "classification": "stalled", "robot_ids": ["rosy_01"],
+            "opened_at": "2026-10-10T05:00:00+00:00", "actions": [], "reviews": [],
+            "evidence": {"ai_fact": {"fact_row": 17, "kind": "stalled", "source": "analyzer:traffic_watch@1",
+                                     "stage": "shadow", "confidence": 0.7, "value": {}, "evidence": {}}}}
+    done = [{"root_cause": "obstacle", "note": "상자", "principal_id": "bob"}]
+    reports = [report("open-new", None, []), report("closed-new", "2026-10-10T05:10:00+00:00", []),
+               report("closed-done", "2026-10-10T05:10:00+00:00", done)]
+    api = {**API, "/api/fleet/incidents": {"reports": reports, "traffic_reports": [fact]}}
+    answers = {"/api/fleet/incidents/rosy_01/open-new/review": (200, {"reviewed": True})}
+    posts = []
+
+    def screen(show):
+        page.goto(site + "/console?view=records" + (f"&show={show}" if show else ""))
+        page.clock.run_for(2000)
+        return page.get_by_role("navigation", name="기록 화면", exact=True)
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts, answers, size=size)
+        try:
+            nav = screen("")
+            rows = page.locator("#incident-list > li")
+            expect(rows).to_have_count(2)  # 검토할 사건: 검토 기록이 없는 둘
+            assert nav.locator("a").all_inner_texts() == ["검토할 사건", "열린 사건", "닫힌 사건", "AI 상황 사실", "관제 기록"]
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["검토할 사건"]
+            assert [text.strip() for text in page.locator('.doc-tabs a[aria-current="page"]').all_inner_texts()] == ["기록"]
+            expect(page.locator('.ui-subnav[data-area="work"]')).to_be_hidden()
+            panel, side = page.locator(".incident-panel"), page.locator("#incident-side")
+            expect(panel).to_be_visible()
+            expect(side).to_be_visible()
+            expect(side.locator(".hint")).to_be_visible()
+            expect(page.locator(".queues-panel")).to_be_visible()
+            expect(page.locator('[aria-labelledby="map-heading"]')).to_be_hidden()
+            expect(page.locator("#incident-traffic-list")).to_be_hidden()
+            assert panel.evaluate("node => !node.closest('[role=tabpanel]')")
+            assert side.evaluate("node => node.closest('[role=tabpanel]').id") == "context-evidence"
+            if size[0] >= 1024:
+                body, right = panel.bounding_box(), side.bounding_box()
+                assert body["x"] + body["width"] <= right["x"], (body, right)
+            first = rows.first
+            first.locator(":scope > details > summary").click()
+            expect(first).to_contain_text("해소 확인")
+            expect(side).to_contain_text("담당 인수: 아직 없음")
+            expect(side).to_contain_text("사람 검토: 아직 없음")
+            expect(side.locator(".hint")).to_be_hidden()
+            assert first.locator("form").count() == 0 and "사람 검토" not in first.inner_text()
+            rows.nth(1).locator(":scope > details > summary").click()  # 한 번에 한 건
+            expect(first.locator(":scope > details")).not_to_have_attribute("open", "")
+            expect(side.locator("form")).to_have_count(1)
+            first.locator(":scope > details > summary").click()
+            expect(rows.nth(1).locator(":scope > details")).not_to_have_attribute("open", "")
+            side.locator("select").select_option("obstacle")
+            side.locator("input").fill("현장 상자 확인")
+            side.locator("ui-button[type=submit]").click()
+            assert posts[-1][0] == "/api/fleet/incidents/rosy_01/open-new/review"
+            assert json.loads(posts[-1][1]) == {"root_cause": "obstacle", "note": "현장 상자 확인"}
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["height"] >= 48 and stop["y"] + stop["height"] <= size[1]
+            _shot(page, f"records-review-{size[0]}.png", full_page=True)
+            for show, count in (("open", 1), ("closed", 2)):
+                nav = screen(show)
+                expect(page.locator("#incident-list > li")).to_have_count(count)
+                assert len(nav.locator('a[aria-current="page"]').all_inner_texts()) == 1
+            nav = screen("facts")
+            expect(page.locator("#incident-traffic-list > li")).to_have_count(1)
+            expect(page.locator("#incident-list")).to_be_hidden()
+            assert nav.locator('a[aria-current="page"]').all_inner_texts() == ["AI 상황 사실"]
+            screen("log")
+            expect(page.locator("#log-panel")).to_be_visible()
+            assert page.locator("#log-panel").evaluate("node => !node.closest('[role=tabpanel]')")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert not errors
+        finally:
+            browser.close()
+
+
 # Elements that scroll on their own right now (the document is reported separately).
 SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
   const y = getComputedStyle(node).overflowY;

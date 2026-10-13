@@ -77,6 +77,23 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
     assert 'pending: ["PROPOSED"]' in work_view and "doc-tabs" not in work_view
 
 
+def test_records_area_screens_and_the_judgment_seat():
+    """D-741 8 — 사건 셋, AI 상황 사실, 관제 기록. 연 사건의 원인과 조치는 오른쪽 칸의 자리에 선다."""
+    page = _page("index.html").read_text(encoding="utf-8")
+    seat = re.search(r'<div class="ui-subnav" data-area="records" hidden><nav class="ui-subnav-nav" aria-label="기록 화면">'
+                     r'(.*?)</nav></div>', page, re.S)
+    assert seat, "the records sub-nav is hidden until the address picks the area"
+    assert re.findall(r'<(?:a class="ui-subnav-item" href="(/console\?view=records[^"]*)"|span class="ui-subnav-head")>(.*?)</', seat.group(1)) == [
+        ("", "사건"), ("/console?view=records", "검토할 사건"), ("/console?view=records&amp;show=open", "열린 사건"),
+        ("/console?view=records&amp;show=closed", "닫힌 사건"), ("", "AI 판단"),
+        ("/console?view=records&amp;show=facts", "AI 상황 사실"), ("/console?view=records&amp;show=log", "관제 기록")]
+    evidence = page[page.index('id="context-evidence"'):]
+    assert evidence.index('class="panel incident-panel"') < evidence.index('id="incident-side"') < evidence.index('id="incident-judgment"')
+    view = (WEB / "incident-view.js").read_text(encoding="utf-8")
+    assert "/api/fleet/incidents?limit=${records ? 100 : 10}" in view, "the records area reads the same incident API"
+    assert 'detail.name = "incident"' in view and 'el("incident-judgment")' in view
+
+
 def test_no_back_link_sentences_remain():
     for name in DOCS:
         page = _page(name).read_text(encoding="utf-8")

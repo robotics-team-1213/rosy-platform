@@ -14,6 +14,30 @@ let incidentReports = [], incidentTrafficReports = [];
 const linked = new URLSearchParams(location.search);
 const linkedRobot = linked.get('robot'), linkedIncident = linked.get('incident');
 let linkedFocused = false;
+// D-741 8 — 기록 영역(?view=records)에서는 하위 탐색이 고른 사건만 보이고, 연 사건의 원인과 조치가 오른쪽 칸에 선다.
+const records = linked.get("view") === "records", show = linked.get("show");
+const kept = !records || linkedIncident ? () => true : show === "open" ? report => !report.closed_at
+  : show === "closed" ? report => report.closed_at : report => !report.reviews.length;
+if (records) document.querySelector(".incident-panel").dataset.show = show === "facts" ? "facts" : "incidents";
+// One list row: the fold, its summary and the developer-diagnostics fold. Open folds survive a repaint.
+function incidentRow(key, openReports) {
+  const item = document.createElement("li"), detail = document.createElement("details"), summary = document.createElement("summary");
+  const raw = document.createElement("details"), rawTitle = document.createElement("summary");
+  item.className = "incident-row";
+  summary.className = rawTitle.className = "ui-disclosure-row";
+  rawTitle.textContent = "개발 진단";
+  detail.dataset.reportKey = key;
+  raw.dataset.reportKey = `${key}|diagnostics`;
+  detail.open = openReports.has(key);
+  raw.open = openReports.has(raw.dataset.reportKey);
+  detail.append(summary); raw.append(rawTitle); item.append(detail);
+  if (!records) return {item, detail, summary, raw, side: detail};
+  const side = document.createElement("div"), seat = el("incident-judgment");
+  const place = () => { if (!detail.open) side.remove(); else if (seat.firstChild !== side) seat.replaceChildren(side); };
+  side.className = "incident-row"; side.dataset.reportKey = key; detail.name = "incident";
+  detail.addEventListener("toggle", place); place();
+  return {item, detail, summary, raw, side};
+}
 function incidentSummary(summary, report, title) {
   const name = document.createElement("span");
   name.textContent = title;
@@ -79,9 +103,9 @@ async function refreshIncidents() {
   try {
     const filter = linkedRobot && linkedIncident
       ? `&robot_id=${encodeURIComponent(linkedRobot)}&stuck_id=${encodeURIComponent(linkedIncident)}` : '';
-    const payload = await call(`/api/fleet/incidents?limit=10${filter}`);
-    incidentReports = payload.reports || [];
-    onReports(incidentReports);
+    const payload = await call(`/api/fleet/incidents?limit=${records ? 100 : 10}${filter}`);
+    incidentReports = (payload.reports || []).filter(kept);
+    onReports(payload.reports || []);
     incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
     el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
@@ -92,24 +116,12 @@ async function refreshIncidents() {
     const focusedReport = document.activeElement?.closest('[data-report-key]')?.dataset.reportKey;
     const focusedLabel = document.activeElement?.getAttribute("aria-label");
     list.replaceChildren();
+    el("incident-judgment").replaceChildren();
     for (const report of incidentReports) {
-      const item = document.createElement("li");
-      item.className = "incident-row";
-      const detail = document.createElement("details");
-      detail.dataset.reportKey = `${report.robot_ids.join("|")}|${report.stuck_id}`;
-      detail.open = openReports.has(detail.dataset.reportKey);
-      const summary = document.createElement("summary");
-      summary.className = "ui-disclosure-row";
+      const {item, detail, summary, raw, side} = incidentRow(`${report.robot_ids.join("|")}|${report.stuck_id}`, openReports);
       const core = report.evidence.core, fleet = report.evidence.fleet;
       const causeName = CAUSE_LABEL[core.cause] || "원인 미확인";
       incidentSummary(summary, report, `${report.robot_ids.map(incidentRobotName).join(", ")} · ${causeName} · ${report.closed_at ? "과거 · 종료 기록 있음" : "사건 기록 · 종료 미확인"} · ${report.reviews.length ? "검토 기록 있음" : "검토 필요"}`);
-      detail.append(summary);
-      const raw = document.createElement("details"), rawTitle = document.createElement("summary");
-      rawTitle.className = "ui-disclosure-row";
-      rawTitle.textContent = "개발 진단";
-      raw.dataset.reportKey = `${detail.dataset.reportKey}|diagnostics`;
-      raw.open = openReports.has(raw.dataset.reportKey);
-      raw.append(rawTitle);
       incidentLine(detail, `상태: 라인 정지 · ${report.closed_at ? "종료 기록 있음" : "종료 기록 없음"} · 교착 여부는 별도 판정합니다.`);
       incidentLine(detail, `로봇 관측: 정지 ${core.held_s_max ?? "미확인"}초 · 재시도 ${core.attempts_max ?? "미확인"}`);
       incidentLine(detail, `관제 관측: 위치 ${{LOCALIZED: "확정", DEGRADED: "정확도 저하", UNKNOWN: "확인 불가"}[fleet.pose_state] || "미확인"} · 관측 나이 ${fleet.pose_age_s ?? "미확인"}초`);
@@ -138,13 +150,13 @@ async function refreshIncidents() {
         : "조치: 기록 없음");
       incidentLine(raw, `조치 필드: ${JSON.stringify(report.actions)}`);
       const latest = report.reviews.at(-1);
-      incidentLine(detail, report.handoff
+      incidentLine(side, report.handoff
         ? `담당 인수: ${report.handoff.principal_id} · 조치 수락·해소는 별도 확인`
         : '담당 인수: 아직 없음 · 자동 해결기 중지 요청과 구별');
       incidentLine(detail, report.notifications?.length
         ? `외부 알림: ${report.notifications.map(item => `${item.channel} ${item.kind === 'CLOSED' ? '종료 관측' : '검토 요청'} · ${DELIVERY_LABEL[item.state] || '전송 기록 미확인'}`).join(' / ')}`
         : '외부 알림: 전송 기록 없음');
-      incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
+      incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
       if (auth.role === "operator") {
@@ -167,12 +179,11 @@ async function refreshIncidents() {
               await refreshIncidents();
             }
           }));
-          detail.append(claim);
+          side.append(claim);
         }
-        detail.append(incidentReviewForm(report,
+        side.append(incidentReviewForm(report,
           `/api/fleet/incidents/${encodeURIComponent(report.robot_ids[0])}/${encodeURIComponent(report.stuck_id)}/review`));
       }
-      item.append(detail);
       detail.append(raw);
       list.append(item);
       if (!linkedFocused && report.robot_ids[0] === linkedRobot && report.stuck_id === linkedIncident) {
@@ -181,47 +192,34 @@ async function refreshIncidents() {
         linkedFocused = true;
       }
     }
+    if (records && !incidentReports.length) list.append(Object.assign(document.createElement("li"), {textContent: "이 화면에 해당하는 사건이 없습니다."}));
     const trafficList = el("incident-traffic-list");
     trafficList.replaceChildren();
     for (const report of incidentTrafficReports) {
       const ai = report.evidence.ai_fact;
-      const item = document.createElement("li");
-      item.className = "incident-row";
-      const detail = document.createElement("details");
-      detail.dataset.reportKey = report.id;
-      detail.open = openReports.has(detail.dataset.reportKey);
-      const summary = document.createElement("summary");
-      summary.className = "ui-disclosure-row";
+      const {item, detail, summary, raw, side} = incidentRow(report.id, openReports);
       const name = report.classification === "wait_cycle_confirmed"
         ? ai.value?.fleet_agrees === false ? "AI 단독 대기 순환 판단" : "AI·Fleet 대기 순환 일치"
         : {wait_cycle_stale_input: "낡은 입력의 대기 순환 후보", waiting_but_moving: "대기 중 이동",
            livelock: "반복 경로 정체", stalled: "운행 정체", unknown_occupancy_long: "위치 불명 점유 지속"}[report.classification]
           || "상황 분류 미확인";
       incidentSummary(summary, report, `${name} · ${report.robot_ids.map(incidentRobotName).join(", ")}`);
-      detail.append(summary);
       incidentLine(detail, `AI 분석 참고 · 신뢰도 ${Math.round(ai.confidence * 100)}% · 조치 명령과 별도입니다.`);
-      const raw = document.createElement("details"), rawTitle = document.createElement("summary");
-      rawTitle.className = "ui-disclosure-row";
-      rawTitle.textContent = "개발 진단";
-      raw.dataset.reportKey = `${detail.dataset.reportKey}|diagnostics`;
-      raw.open = openReports.has(raw.dataset.reportKey);
-      raw.append(rawTitle);
       incidentLine(raw, `AI ${ai.source} · ${ai.stage} · 분류 ${report.classification}`);
       incidentLine(raw, `측정값: ${JSON.stringify(ai.value)} · 근거: ${JSON.stringify(ai.evidence)}`);
       incidentLine(detail, "CORE·Rosy Cam: 이 AI 사실과 연결된 영속 표본 없음");
       const latest = report.reviews.at(-1);
-      incidentLine(detail, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
+      incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
-      if (auth.role === "operator") detail.append(incidentReviewForm(report,
+      if (auth.role === "operator") side.append(incidentReviewForm(report,
         `/api/fleet/incidents/facts/${ai.fact_row}/review`));
       detail.append(raw);
-      item.append(detail);
       trafficList.append(item);
     }
     if (focusedReport) {
       const fold = [...document.querySelectorAll('.incident-panel details[data-report-key]')].find(node => node.dataset.reportKey === focusedReport);
-      const target = fold && ([...fold.querySelectorAll('[aria-label]')].find(node => node.getAttribute("aria-label") === focusedLabel) || fold.querySelector("summary"));
+      const target = fold && ([...fold.querySelectorAll('[aria-label]'), ...el("incident-judgment").querySelectorAll('[aria-label]')].find(node => node.getAttribute("aria-label") === focusedLabel) || fold.querySelector("summary"));
       target?.focus({preventScroll: true});
     }
     if (!incidentTrafficReports.length) {
@@ -256,6 +254,7 @@ function reset() {
   incidentTrafficReports = [];
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
+  el("incident-judgment").replaceChildren();
   el("incident-export").disabled = true;
   el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
