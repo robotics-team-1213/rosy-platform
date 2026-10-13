@@ -15,7 +15,7 @@ if (typeof window !== 'undefined') window.addEventListener('storage', event => {
 });
 
 export async function restoreAccount() {
-  if (inPilotApp()) return null;
+  if (inPilotApp() && document.documentElement.dataset.pilotAccount !== 'managed') return null;
   const previous = account?.authenticated ? accountKey() : '';
   try {
     const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
