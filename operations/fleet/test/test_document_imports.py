@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 
-WEB = Path(__file__).resolve().parents[2] / "ui" / "console"
+WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
 
 _FROM = re.compile(r"""\bfrom\s+['"]([^'"]+)['"]""")
 _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")

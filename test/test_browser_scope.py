@@ -27,7 +27,7 @@ def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothin
 
 
 def test_windows_separators_are_accepted():
-    assert browser_scope.targets(["middleware\\ui\\pilot\\styles.css"]) == browser_scope.targets(
+    assert browser_scope.targets(["middleware\\robot_ui\\pilot\\styles.css"]) == browser_scope.targets(
         ["middleware/robot_ui/pilot/styles.css"])
 
 
