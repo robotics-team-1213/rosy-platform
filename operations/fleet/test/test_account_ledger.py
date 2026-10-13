@@ -109,6 +109,7 @@ def test_account_api_cookie_origin_capability_and_strict_bodies(tmp_path):
     path = "/api/fleet/auth/accounts"
     assert client.get(path, headers=ORIGIN).status_code == 200
     assert client.get(path).status_code == 403
+    assert client.get(path, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 200
     body = {"login": "bob", "principal_id": "bob", "role": "viewer",
             "password": "temporary secret", "grants": []}
     assert client.post(path, headers=ORIGIN, json={**body, "admin": True}).status_code == 422
