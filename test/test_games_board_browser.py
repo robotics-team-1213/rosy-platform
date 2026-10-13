@@ -78,6 +78,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     board.publish(_play_payload())
     server = AccountPreviewServer(board, port=0)
     origin = server.url.rstrip('/').replace('http:', 'https:')
+    issuer = origin.replace('127.0.0.1', 'localhost')
     callback = origin + '/api/account/callback'
     private = Ed25519PrivateKey.generate()
     raw = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
@@ -97,14 +98,14 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
         from hashlib import sha256
         assert base64.urlsafe_b64encode(sha256(fields['code_verifier'].encode()).digest()).rstrip(b'=').decode() == state['challenge']
         assert fields['redirect_uri'] == callback and fields['code'] == 'browser-code'
-        access = sign_access({'iss': 'https://account.example.test', 'aud': 'site:games',
+        access = sign_access({'iss': issuer, 'aud': 'site:games',
             'sub': 'alice', 'sid': 'family', 'jti': 'browser-fixture-123', 'rev': 1,
             'iat': clock[0], 'exp': clock[0] + 300,
             'grants': [{'resource': 'site:games', 'capabilities': ['games.operate' if state['operate'] else 'fleet.read']}]},
             raw, key_id='key')
         return {'access_token': access, 'refresh_token': 'fixture-reusable-token', 'token_type': 'Bearer'}
 
-    account = AccountClient(tmp_path/'account.db', issuer='https://account.example.test',
+    account = AccountClient(tmp_path/'account.db', issuer=issuer,
         client_id='games', resource='site:games', callback=callback, public_keys={'key': public},
         encryption_key=Fernet.generate_key(), clock=lambda: clock[0], post=authority)
     server.account = account
@@ -117,12 +118,14 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(ignore_https_errors=True)
+            navigation_errors = []
+            page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             def authorize(route):
                 query = parse_qs(urlsplit(route.request.url).query)
                 state['challenge'] = query['code_challenge'][0]
                 route.fulfill(status=302, headers={'Location': callback + '?' + urlencode({
                     'state': query['state'][0], 'code': 'browser-code'})})
-            page.route('https://account.example.test/**', authorize)
+            page.route(issuer + '/api/fleet/auth/authorize*', authorize)
             page.goto(origin)
             page.locator('#account-login').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
@@ -130,7 +133,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-login').click()
             page.wait_for_timeout(1000)
-            assert page.url.rstrip('/') == origin, (page.url, page.locator('body').inner_text())
+            assert page.url.rstrip('/') == origin, (page.url, navigation_errors, page.locator('body').inner_text())
             page.locator('#account-logout').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
             assert page.evaluate(stop) == 403 and not board.stop
