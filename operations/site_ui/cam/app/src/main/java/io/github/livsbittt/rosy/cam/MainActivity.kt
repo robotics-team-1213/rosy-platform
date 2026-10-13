@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
     private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
     private var accountVersion = 0L
     private val accountReady = mutableStateOf(false)
-    private val accountMessage = mutableStateOf("??? ?? ???? ??????")
+    private val accountMessage = mutableStateOf("Rosy Account로 로그인하세요")
     private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
     private fun handleAccountIntent(incoming: Intent?): Boolean {
         if (!accountConfigured || account?.isCallback(incoming) != true) return false
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                 account!!.session.permits(resource, "camera.manage")
             }.getOrDefault(false) }
             if (version != accountVersion) return@launch
-            accountReady.value = ok; accountMessage.value = if (ok) "????" else "??? ?? ??? ?? ??? ?????"
+            accountReady.value = ok; accountMessage.value = if (ok) "로그인됨" else "로그인 상태와 카메라 관리 권한을 확인하세요"
         }
         return true
     }
@@ -183,14 +183,14 @@ class MainActivity : ComponentActivity() {
                 TextButton(onClick = {
                     accountVersion++; accountReady.value = false; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
                     lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
-                        accountMessage.value = if (ok) "?????" else "??? ????? ? ?? ?? ??? ?? ?? ? ?????" }
-                }) { Text("Rosy Account ? ???? / ?? ??") }
+                        accountMessage.value = if (ok) "로그아웃됨" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다" }
+                }) { Text("Rosy Account 로그아웃 / 계정 변경") }
                 CameraContent()
             } else {
                 Text(accountMessage.value)
-                Text("?? ?? ??? ??? ?????. ?? ??? ??? ?????.")
-                TextButton(onClick = { account!!.launch(this@MainActivity, accountResource()) }) { Text("Rosy Account ???") }
-                TextButton(onClick = { StreamService.stop(this@MainActivity) }) { Text("?? ??") }
+                Text("카메라 관리에는 계정 권한이 필요합니다. 기존 기계 전송은 유지됩니다.")
+                TextButton(onClick = { account!!.launch(this@MainActivity, accountResource()) }) { Text("Rosy Account 로그인") }
+                TextButton(onClick = { StreamService.stop(this@MainActivity) }) { Text("전송 정지") }
             }
         }
     }
