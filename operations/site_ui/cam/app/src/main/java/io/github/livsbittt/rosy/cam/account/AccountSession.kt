@@ -122,14 +122,14 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         val c = claims(result.getString("access_token"), resource)
         require(result.getString("refresh_token").length in 20..2048)
         val previous = data.optString("subject")
-        if (previous.isNotEmpty() && previous != c.getString("sub")) {
+        if (previous.isNotEmpty() && (previous != c.getString("sub") || data.optString("family") != c.getString("sid"))) {
             require(switching) { "refresh changed identity" }
             val old = data.optJSONObject("tokens")
             old?.keys()?.forEach { r -> queueRevocation(old.getJSONObject(r).getString("refresh_token")) }
             data.remove("tokens"); stopSnapshot = emptyMap(); checked.clear(); save()
             retryRevocations()
         }
-        data.put("subject", c.getString("sub"))
+        data.put("subject", c.getString("sub")); data.put("family", c.getString("sid"))
         val tokens = data.optJSONObject("tokens") ?: JSONObject().also { data.put("tokens", it) }
         tokens.put(resource, result); stopSnapshot = stopSnapshot + (resource to result.getString("access_token")); checked.remove(resource); save()
     }
