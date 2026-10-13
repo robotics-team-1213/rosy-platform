@@ -174,6 +174,14 @@ _PUBLIC_PATH_TOKEN = re.compile(
     r"(?i)^[a-z][a-z0-9_.-]*(?:/[a-z][a-z0-9_.-]*)+/?$"
 )
 
+
+def _is_public_path_reference(line: str, token: re.Match) -> bool:
+    # The entropy matcher can start inside a path containing '_' or '-'.
+    for word in re.finditer(r"\S+", line):
+        if word.start() <= token.start() and token.end() <= word.end():
+            return bool(_PUBLIC_PATH_TOKEN.fullmatch(word[0].strip("'\"`,;()[]")))
+    return False
+
 # The absorption inventory intentionally records source and destination
 # SHA-256 values. They are public provenance fields, not device credentials.
 # Scrub only CSV columns 3 and 4 for that one known inventory format; other
@@ -637,7 +645,7 @@ def scan_text(path: str, text: str, *,
             # credential, PSK and QR checks remain active even on the same line.
             if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:
                 continue
-            if _PUBLIC_PATH_TOKEN.fullmatch(value):
+            if _PUBLIC_PATH_TOKEN.fullmatch(value) or _is_public_path_reference(entropy_line, match):
                 continue
             if _is_ed25519_public_key_body(value):
                 continue

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {loginReturn, loginHref} from '../../../ui/console/shared/login-return.js';
+import {loginReturn, loginHref} from '../../../site_ui/console/shared/login-return.js';
 
 const origin = 'https://fleet.test';
 test('return restores Fleet documents and existing work/inbox readers', () => {
