@@ -210,11 +210,24 @@ class CrosswalkGate:
         c, s = math.cos(zone.yaw), math.sin(zone.yaw)
         return c * (px - zone.x) + s * (py - zone.y), -s * (px - zone.x) + c * (py - zone.y)
 
+    @staticmethod
+    def _lane_edges(z: Zone, geo: Geometry):
+        """The zone's seen lane edges, no wider than a lane. Edges further apart than the lane model
+        are not the lane's (Gazebo lap 2026-10-14: the camera read the wall bases 0.120 and 0.122 m
+        either side as its edges, A's edge lay on the wall and its returns held 'person' for good):
+        the lane width is kept about their middle; a lone edge is capped at the lane half."""
+        half = geo.lane_half_m
+        left, right = half if z.left is None else z.left, -half if z.right is None else z.right
+        if z.left is not None and z.right is not None and left - right > 2 * half:
+            return (left + right) / 2 + half, (left + right) / 2 - half
+        return min(left, half), max(right, -half)
+
     def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0):
         """side: the body's lateral offset in the anchor frame now (the same odom as the scan)."""
         near, far, m = z.near - z.margin, z.far + z.margin, z.margin
-        left = max(geo.lane_half_m if z.left is None else z.left, geo.body_half_m) + z.lateral
-        right = min(-geo.lane_half_m if z.right is None else z.right, -geo.body_half_m) - z.lateral
+        seen_left, seen_right = self._lane_edges(z, geo)
+        left = max(seen_left, geo.body_half_m) + z.lateral
+        right = min(seen_right, -geo.body_half_m) - z.lateral
         if self._state != CROSSING or front < near:
             return ((near, far, right - geo.strip_m, left + geo.strip_m), (far, far + geo.exit_m + m, right, left))
         # The body front is in the zone: only the zone still ahead of it and the exit count; a
@@ -225,8 +238,7 @@ class CrosswalkGate:
         # The rest of the zone ahead: the seen lane width centred on the body, which follows that
         # lane, again in the scan's own odom frame (the drift since the zone's image only moves the
         # zone's lane edges relative to the anchor, not the lane relative to the body).
-        half = max(((geo.lane_half_m if z.left is None else z.left)
-                    - (-geo.lane_half_m if z.right is None else z.right)) / 2, geo.body_half_m)
+        half = max((seen_left - seen_right) / 2, geo.body_half_m)
         exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m, side + geo.body_half_m)
         return (((front, far, side - half, side + half), exit_box) if front < far else (exit_box,))
 
