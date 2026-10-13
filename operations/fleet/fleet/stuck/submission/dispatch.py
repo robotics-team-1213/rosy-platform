@@ -169,6 +169,8 @@ async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[
         extra = {}
         if answer.yield_m is not None and answer.yield_turn_rad is not None:
             extra = {"yield_m": answer.yield_m, "yield_turn_rad": answer.yield_turn_rad}
+        if answer.realign is not None:
+            extra["realign"] = answer.realign
         result = await client.line_stuck_decision(answer.stuck_id, answer.decision, **extra)
         if pending and result.get("outcome") != {
                 "BACK_AND_RETRY": "back", "RESUME": "resume", "YIELD": "yield", "ABORT": "idle",
@@ -178,7 +180,7 @@ async def legacy_answer(self, answer: Answer, now: float, *, selected: Optional[
         # Fleet is stopping mid-request: the robot may have applied the answer.
         self._board.record(**record, accepted=None, code="STUCK_DECISION_OUTCOME_UNKNOWN",
                            message="resolver stopped before the robot replied")
-        if answer.decision == "YIELD":
+        if answer.decision in ("YIELD", "REALIGN"):
             escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
             if escalation is not None:
                 self._escalated(escalation)
