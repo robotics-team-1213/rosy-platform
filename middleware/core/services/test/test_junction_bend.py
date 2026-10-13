@@ -4,6 +4,8 @@ import math
 
 import pytest
 
+from core_features.line_follow import authority
+from core_features.line_follow.recovery.junction import bend
 from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from test_junction_turn_site_basis import SITE, site_rig, site_step
 from test_line_junction import BODY, Rig
@@ -472,3 +474,178 @@ def test_a_pending_instruction_under_the_live_proof_asks_for_the_return_scan_vie
     assert send(rig) == (True, 1, 'armed')
     assert rig.m.wants_return_scan is True
     assert armed_rig().m.wants_return_scan is False
+
+
+# --- D-759: the lane's map heading for the anchor line -------------------------------------------
+
+WALL = 1_790_000_000.            # CORE wall clock at rig time 0 (snapshot odom_pose.stamp is on it)
+MAP_TURN = .4                    # the map frame: odom turned by this
+OFF_DEG = 21.6                   # Gazebo 2026-10-14, W3: the body's yaw off the lane at the take-over
+
+
+def _wall_rig():
+    rig = site_rig(**SITE)
+    rig.m._wall = lambda: WALL + rig.now
+    site_step(rig)
+    return rig
+
+
+def _entry(rig, lane_yaw=0., **over):
+    """Fleet's map_entry for a lane running `lane_yaw` in the rig's odom frame, with the yaw pair
+    of the rig's newest odom sample."""
+    return dict(dict(yaw_rad=lane_yaw+MAP_TURN, pose_yaw_rad=rig.yaw+MAP_TURN,
+                     odom_stamp_s=WALL+rig.now), **over)
+
+
+def _steered_take_over(rig, off_deg=OFF_DEG):
+    """The keeper steers the body `off_deg` to the right (away from the left bend) on the last
+    centimetres before the earliest arc start while the camera still reads the lane straight."""
+    while rig.x < .15:
+        site_step(rig, move=True)
+    for _ in range(5):                                    # under the odom trail's yaw-jump bound
+        rig.yaw -= math.radians(off_deg)/5
+        site_step(rig, move=True)
+    return until(rig, 'bending')
+
+
+def _pass_end(rig):
+    """Drive the arc and the bounded search to their end: (how far left of the lane's exit line
+    the body stands (the wall is on the right of a left bend), its yaw in deg). The lane is the one
+    Fleet sent: along +x from the odom origin, arc start at 0.3 m, 60 deg left, radius 0.1 m."""
+    until(rig, 'reacquiring')
+    until(rig, 'unresolved', seen=False)
+    exit_yaw, vertex = math.radians(60.), .3+.1*math.tan(math.radians(30.))
+    return -(rig.x-vertex)*math.sin(exit_yaw)+rig.y*math.cos(exit_yaw), math.degrees(rig.yaw)
+
+
+def test_the_measured_take_over_runs_the_anchor_line_on_the_lanes_map_heading():
+    """Gazebo 2026-10-14 (W3): the body was 21.6 deg off the lane, pointing at the wall, when the
+    pass took over. With Fleet's map_entry the lead-in, the arc and the exit follow the lane."""
+    rig = _wall_rig()
+    assert send(rig, map_entry=_entry(rig)) == (True, 1, 'armed')
+    assert rig.m.status().junction.map_entry_used is False    # placed, not used before the take-over
+    assert rig.m.status().junction.map_entry_reason is None
+    _, status = _steered_take_over(rig)
+    j = rig.m._junction
+    assert math.degrees(rig.yaw) == pytest.approx(-OFF_DEG, abs=3.)  # the pursuit has had one tick
+    assert j['anchor'][2] == pytest.approx(0., abs=1e-9)
+    assert j['target'] == pytest.approx(math.radians(60.), abs=1e-9)
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (True, None)
+    (x0, y0), (x1, y1) = j['path'][0], j['path'][6]
+    assert (x1-x0, y1-y0) == pytest.approx((.03, 0.), abs=1e-9)  # the lead-in runs along the lane
+    offset, yaw = _pass_end(rig)
+    assert abs(offset) < .02 and yaw == pytest.approx(60., abs=3.), (offset, yaw)
+
+
+def test_without_a_map_entry_the_anchor_line_follows_the_bodys_yaw_as_before():
+    rig = _wall_rig()
+    assert send(rig) == (True, 1, 'armed')
+    assert rig.m.status().junction.map_entry_reason == 'none_sent'
+    _, status = _steered_take_over(rig)
+    j = rig.m._junction
+    assert j['anchor'][2] == pytest.approx(-math.radians(OFF_DEG), abs=1e-9)
+    assert j['target'] == pytest.approx(math.radians(60.-OFF_DEG), abs=1e-9)
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (False, 'none_sent')
+    offset, yaw = _pass_end(rig)                           # out of the lane on the wall's side
+    assert offset < -.06 and yaw == pytest.approx(60.-OFF_DEG, abs=3.), (offset, yaw)
+
+
+def test_the_map_heading_is_placed_at_receipt_through_the_yaw_pair():
+    """Fleet's map pose yaw may be anything against odom: only its difference to the lane counts."""
+    rig = _wall_rig()
+    send(rig, map_entry=_entry(rig, lane_yaw=.1))          # the lane runs 0.1 rad left of the body
+    assert rig.m._junction['map_entry']['yaw'] == pytest.approx(.1, abs=1e-9)
+    until(rig, 'bending')
+    assert rig.m._junction['anchor'][2] == pytest.approx(.1, abs=1e-9)
+    assert rig.m._junction['target'] == pytest.approx(.1+math.radians(60.), abs=1e-9)
+
+
+@pytest.mark.parametrize('off_deg, used, reason', [(29., True, None), (31., False, 'heading')])
+def test_a_body_yaw_past_the_bound_keeps_its_own_anchor_line(off_deg, used, reason):
+    assert bend.MAP_ENTRY_MAX_HEADING_RAD == pytest.approx(math.radians(30.))
+    rig = _wall_rig()
+    send(rig, map_entry=_entry(rig))
+    _, status = _steered_take_over(rig, off_deg)
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (used, reason)
+    assert rig.m._junction['anchor'][2] == pytest.approx(0. if used else -math.radians(off_deg), abs=1e-9)
+
+
+def _todays(rig, reason):
+    """Armed with today's anchor rule and the reason on the record, through the take-over."""
+    assert rig.m._junction['map_entry'] == dict(reason=reason)
+    assert rig.m.status().junction.map_entry_reason == reason
+    _, status = _steered_take_over(rig)
+    assert rig.m._junction['anchor'][2] == pytest.approx(-math.radians(OFF_DEG), abs=1e-9)
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (False, reason)
+
+
+def test_a_map_entry_older_than_the_bound_keeps_todays_anchor():
+    rig = _wall_rig()
+    old = _entry(rig)
+    for _ in range(round(authority.ARC_ANCHOR_MAX_AGE_S/.05)+1):
+        site_step(rig)
+    send(rig, map_entry=old)
+    _todays(rig, 'stale')
+
+
+@pytest.mark.parametrize('offset, reason', [(.5, 'future'), (-.9, 'no_sample')])
+def test_a_stamp_outside_cores_odom_history_keeps_todays_anchor(offset, reason):
+    rig = _wall_rig()
+    site_step(rig)
+    send(rig, map_entry=_entry(rig, odom_stamp_s=WALL+rig.now+offset))
+    _todays(rig, reason)
+
+
+def test_an_odom_reset_before_receipt_keeps_todays_anchor():
+    rig = _wall_rig()
+    entry = _entry(rig)
+    rig.m.invalidate_return_pose()                         # a new odom epoch: the pair's sample is gone
+    site_step(rig)
+    send(rig, map_entry=entry)
+    _todays(rig, 'no_sample')
+
+
+def test_more_odom_travel_than_the_carry_bound_keeps_todays_anchor():
+    rig = _wall_rig()
+    assert rig.m.set_junction('bend', 'B1', 30., None, 60., None, expect={
+        **BEND, 'bend_in_m': authority.ARC_ANCHOR_MAX_CARRY_M+.3, 'map_entry': _entry(rig)})[2] == 'armed'
+    for _ in range(200):
+        _, status = site_step(rig, dx=.02)
+        if status.junction.state != 'armed':
+            break
+    assert status.junction.state == 'bending' and rig.x > authority.ARC_ANCHOR_MAX_CARRY_M
+    assert (status.junction.map_entry_used, status.junction.map_entry_reason) == (False, 'carry')
+
+
+@pytest.mark.parametrize('bad', [
+    {}, 'x', [0., 0., 1.], dict(yaw_rad=0., pose_yaw_rad=0.), dict(yaw_rad=math.nan),
+    dict(pose_yaw_rad=math.inf), dict(odom_stamp_s=math.nan), dict(odom_stamp_s=0.),
+    dict(odom_stamp_s=None), dict(yaw_rad='0'), dict(pose_yaw_rad=True)])
+def test_a_malformed_map_entry_is_refused(bad):
+    rig = _wall_rig()
+    entry = dict(_entry(rig), **bad) if isinstance(bad, dict) and len(bad) == 1 else bad
+    with pytest.raises(ValueError):
+        send(rig, map_entry=entry)
+    assert rig.m.status().junction.state == 'idle'
+
+
+def test_map_entry_belongs_to_bend():
+    rig = _wall_rig()
+    with pytest.raises(ValueError):
+        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=dict(map_entry=_entry(rig)))
+
+
+def test_the_own_line_rule_reads_the_map_entry_axis():
+    """D-507 note 9 on the lane's axis: a line 0.1 m past the vertex of the measured 90 deg corner
+    is the bend's own outer line although the body came in 21.6 deg off."""
+    rig = _wall_rig()
+    send(rig, turn=90., map_entry=_entry(rig))
+    _steered_take_over(rig)
+    _sight_past_the_vertex(rig, .1)
+    decision, status = until(rig, 'idle')
+    assert decision.linear > 0 and rig.m._junction_held is False
+
+
+def test_capability_follows_lane_bend():
+    assert site_rig().m.supports_lane_bend_map_entry is False
+    assert site_rig(**SITE).m.supports_lane_bend_map_entry is True

@@ -54,7 +54,8 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
     assert snapshot["junction"] == {"pending_action": "left", "place_id": "J2",
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
                                     "reason": None, "pivot_basis": None,
-                                    "signal_request_id": None, "signal_state": None}
+                                    "signal_request_id": None, "signal_state": None,
+                                    "map_entry_used": False, "map_entry_reason": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
@@ -259,6 +260,28 @@ def test_d507_bend_fields_validation(core_client):
     assert client.post(URL, json=BEND, headers=OPERATOR).json() == {
         "accepted": True, "junction_seq": 1, "state": "armed"}
     assert client.post(URL, json={**BEND, "turn_deg": -40}, headers=OPERATOR).json()["junction_seq"] == 2
+
+
+ENTRY = {"yaw_rad": 3.1416, "pose_yaw_rad": 2.9, "odom_stamp_s": 1.0}
+
+
+def test_d759_bend_map_entry_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    for bad in ({"yaw_rad": None}, {"yaw_rad": 7.0}, {"pose_yaw_rad": None}, {"pose_yaw_rad": "west"},
+                {"odom_stamp_s": None}, {"odom_stamp_s": 0}, {"odom_stamp_s": -1.0}):
+        entry = {k: v for k, v in {**ENTRY, **bad}.items() if v is not None}
+        assert client.post(URL, json={**BEND, "map_entry": entry}, headers=OPERATOR).status_code == 400, bad
+    for entry in ([1.0, 2.0], "entry", {}):
+        assert client.post(URL, json={**BEND, "map_entry": entry}, headers=OPERATOR).status_code == 400
+    assert client.post(URL, json={**BODY, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400
+    _pose(services, clock)
+    assert client.post(URL, json={**BEND, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
+    assert services.line_follow._junction["map_entry"] == {"reason": "stale"}  # a stamp of 1970
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")
+    client.post(URL, json={**BEND, "place_id": "B2"}, headers=OPERATOR)
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "none_sent")
 
 
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
