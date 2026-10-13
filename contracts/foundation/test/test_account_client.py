@@ -22,7 +22,7 @@ def receiver(tmp_path):
             active[0] = False
             return {}
         return {'access_token': sign_access({**claims(), 'iat': clock[0], 'exp': clock[0]+300},
-                private, key_id='key-1'), 'refresh_token': 'fresh-secret', 'token_type': 'Bearer'}
+                private, key_id='key-1'), 'refresh_token': 'fresh-secret-32-character-token-value', 'token_type': 'Bearer'}
     client = AccountClient(tmp_path/'sessions.sqlite', issuer='https://account.example.test',
         client_id='robot-app', resource='robot:r1', callback='https://r1.test/api/account/callback',
         public_keys={'key-1':public}, encryption_key=Fernet.generate_key(), clock=lambda: clock[0], post=post)
