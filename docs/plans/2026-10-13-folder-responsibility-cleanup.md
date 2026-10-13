@@ -22,6 +22,8 @@
 
 **S2 범위 확정·착지 HOLD:** [D-747](../adr/D-747-perception-judgment-holders.md)에 따라 판단과 전용 adapter 14개를 출력별 기능 holder에 배치하는 SOURCE 구현·독립 검토를 완료했다. 통합 후보의 시험 PC 3곳 SSH 불가로 원격 재검증은 600초 대기 뒤 NOT RUN이며 local main에는 착지하지 않았다. S3는 S2 착지 뒤에 연다. ROS-free 파일 IO나 보정 명령을 순수 판단으로 간주하지 않는다. 실행·검증·착지는 [S2 계획](2026-10-13-perception-judgment-s2.md)과 [기록](../validation/perception-judgment-s2-2026-10-13/result.md)에서 구분한다.
 
+**S2 후속 사용자 지시:** 위 HOLD 뒤에 사용자가 주소/VPN 변경을 확인하고 local merge까지만 요청했다. 원격 재검증 NOT RUN을 유지하고 lint·ff-only까지만 수행한다. push·다음 구조 단계는 이번 요청 범위 밖이다. 실제 착지는 Git와 검증 기록의 X landing readback으로 확인한다.
+
 ## 범위·책임·순서
 
 | 묶음 | 담당 책임 | 실행 순서 | 완료 결과 |
