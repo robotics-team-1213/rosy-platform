@@ -131,7 +131,8 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             expect(role).to_have_text("운영자", timeout=15000)  # D-540 2: Korean role, principal id in title
             expect(page.locator("#development-badge")).to_be_visible()
             if name == "console":
-                expect(page.locator('main [aria-labelledby="map-heading"] #online-pill')).to_have_text("2/3", timeout=15000)
+                count = page.locator('main [aria-labelledby="map-heading"] #online-pill')
+                expect(count).to_have_text("2/3", timeout=15000)
             else:
                 expect(page.locator("#online-pill")).to_have_count(0)
             expect(page.locator("#estop")).to_be_enabled()

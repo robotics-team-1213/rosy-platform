@@ -95,7 +95,8 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     stop = page.locator("#estop").bounding_box()
                     brand = page.locator("ui-brand").bounding_box()
                     actions = page.locator('[data-header-region="actions"]').bounding_box()
-                    assert actions["y"] <= badge["y"] and badge["y"] + badge["height"] <= actions["y"] + actions["height"]
+                    assert actions["y"] <= badge["y"]
+                    assert badge["y"] + badge["height"] <= actions["y"] + actions["height"]
                     if width >= 768:
                         assert max(badge["y"], brand["y"]) < min(
                             badge["y"] + badge["height"], brand["y"] + brand["height"])
