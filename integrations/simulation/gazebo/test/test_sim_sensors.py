@@ -3,6 +3,9 @@
 import importlib.util
 import math
 import re
+import struct
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import yaml
@@ -36,6 +39,65 @@ def test_no_frame_until_every_channel_has_a_reading():
     ir = _ir()
     assert ir.ir_raw([None, 0.013, 0.013]) is None
     assert ir.ir_raw([0.013, 0.013, None]) is None
+
+
+def test_ir_node_never_refreshes_floor_from_a_stale_channel(monkeypatch):
+    callbacks, published, timers = {}, [], []
+    now = [1_000_000_000]
+    node = SimpleNamespace(
+        create_publisher=lambda *_: SimpleNamespace(publish=lambda msg: published.append(msg.data)),
+        create_subscription=lambda _type, topic, callback, _qos: callbacks.setdefault(topic, callback),
+        create_timer=lambda _period, callback: timers.append(callback),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=now[0])),
+        destroy_node=lambda: None)
+
+    def send(name, stamp, distance=.013):
+        callbacks['ir_sim/' + name](SimpleNamespace(ranges=[distance],
+            header=SimpleNamespace(stamp=SimpleNamespace(sec=stamp, nanosec=0))))
+
+    def spin(_node):
+        send('left', 1); send('right', 1)
+        timers[0]()
+        assert published == []
+        send('mid', 1)
+        timers[0]()
+        assert published == [[2000] * 3]
+        now[0] = 2_000_000_000
+        send('mid', 2); send('right', 2); timers[0]()
+        assert published == [[2000] * 3]  # Left never reported this frame.
+        send('left', 2, math.inf)
+        timers[0]()
+        assert published == [[2000] * 3, [100, 2000, 2000]]
+        send('left', 2); send('mid', 2); send('right', 2)
+        timers[0]()
+        send('left', 1); send('mid', 1); send('right', 1)
+        timers[0]()
+        assert len(published) == 2  # Repeated or replayed timestamps cannot refresh evidence.
+        now[0] = 4_000_000_000
+        for name in ('left', 'mid', 'right'):
+            send(name, 3)
+        timers[0]()
+        assert len(published) == 2  # A complete but queued old frame is still stale.
+        for name in ('left', 'mid', 'right'):
+            send(name, 5)
+        timers[0]()
+        assert len(published) == 2  # /clock has not reached the physics frame yet.
+        now[0] = 5_000_000_000
+        timers[0]()
+        assert published[-1] == [2000] * 3 and len(published) == 3
+        now[0] = 6_000_000_000
+        send('mid', 6); send('right', 6)
+        callbacks['ir_sim/left'](SimpleNamespace(ranges=[.013],
+            header=SimpleNamespace(stamp=SimpleNamespace(sec=5, nanosec=1_000_000_000))))
+        timers[0]()
+        assert len(published) == 3  # Noncanonical time must not alias the next valid frame.
+
+    monkeypatch.setitem(sys.modules, 'rclpy', SimpleNamespace(init=lambda: None,
+        create_node=lambda _: node, spin=spin, ok=lambda: True, shutdown=lambda: None))
+    monkeypatch.setitem(sys.modules, 'rclpy.qos', SimpleNamespace(qos_profile_sensor_data=object()))
+    monkeypatch.setitem(sys.modules, 'sensor_msgs.msg', SimpleNamespace(LaserScan=object))
+    monkeypatch.setitem(sys.modules, 'std_msgs.msg', SimpleNamespace(UInt16MultiArray=SimpleNamespace))
+    _ir().main()
 
 
 def test_values_are_valid_ir_on_the_worker_thresholds():
@@ -107,4 +169,12 @@ def test_gazebo_lidar_covers_one_turn_without_a_repeated_beam():
     lo, hi = (eval(expr[k], {"pi": math.pi}) for k in ("min_angle", "max_angle"))  # noqa: S307
     inc = (hi - lo) / (samples - 1)
     assert samples == 640
-    assert abs((hi - lo + inc) - 2.0 * math.pi) < inc * 0.1
+    assert abs(inc - 2.0 * math.pi / samples) < 1e-12
+    assert abs((hi - lo + inc) - 2.0 * math.pi) < 1e-12
+    # Ogre2's float32 cubemap lookup wraps at the face edge.
+    angle = lo
+    for _ in range(samples):
+        axes = abs(math.sin(angle)), abs(math.cos(angle))
+        uv = 0.5 * (1.0 + min(axes) / max(axes))
+        assert struct.unpack('f', struct.pack('f', uv))[0] < 1.0
+        angle += inc

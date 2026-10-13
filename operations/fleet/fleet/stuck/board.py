@@ -175,11 +175,12 @@ class LineStuckBoard:
         return (FleetJudgmentReceipt(**asdict(assessment)).model_dump(mode="json")
                 if assessment is not None else None)
 
-    async def deliberate(self, robot_id, journal, supervisor, providers):
+    async def deliberate(self, robot_id, journal, supervisor, providers, *, baseline=None, current_baseline=None):
         """Explicit shadow caller; never forwards a stuck answer or activates a provider."""
         from ..server.incident_deliberation import run_line_judgment
         return await run_line_judgment(self.intervention_assessment(robot_id), journal,
-            supervisor, providers, current=lambda: self.intervention_assessment(robot_id))
+            supervisor, providers, current=lambda: self.intervention_assessment(robot_id),
+            baseline=baseline, current_baseline=current_baseline)
 
     def judgments(self, limit: int = 100) -> list[dict]:
         return self._log.judgments(limit) if self._log is not None else []
@@ -325,25 +326,32 @@ class LineStuckBoard:
                accepted: Optional[bool], outcome: Optional[str] = None,
                code: Optional[str] = None, message: Optional[str] = None,
                audit_id: Optional[str] = None, tier: Optional[str] = None,
-               rule: Optional[str] = None, escalated: Optional[str] = None) -> dict:
+               rule: Optional[str] = None, escalated: Optional[str] = None, durable: bool = False, connection=None) -> dict:
         """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
 
         D-438 §8: ``tier`` (human / rule) and ``rule`` say who decided; a resolver hand-off to
         a human is its own row with decision ``ESCALATE`` and the reason in ``escalated``.
         The row also goes to the durable log next to the API audit row (``audit_id``). The
         robot has already been asked, so a log failure is logged, never turned into an error."""
+        if durable and self._log is None:
+            raise OSError("durable stuck journal is not configured")
         row = {"robot_id": robot_id, "stuck_id": stuck_id, "decision": decision,
                "principal_id": principal_id, "accepted": accepted, "outcome": outcome,
                "code": code, "message": message, "audit_id": audit_id,
                "tier": tier, "rule": rule, "escalated": escalated,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
-        self._answers.append(row)
-        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
-                  robot_id, stuck_id, decision, principal_id, accepted, code)
+        if connection is None: self._publish_answer(row)
         if self._log is not None:
             try:
-                self._log.append(row)
+                self._log.append(row, connection=connection) if connection is not None else self._log.append(row)
             except (OSError, sqlite3.Error):
+                if durable:
+                    raise
                 _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
                                robot_id, stuck_id)
         return row
+
+    def _publish_answer(self, row):
+        self._answers.append(row)
+        _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
+                  row['robot_id'], row['stuck_id'], row['decision'], row['principal_id'], row['accepted'], row['code'])

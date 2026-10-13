@@ -110,7 +110,12 @@ def test_timeout_and_cancel_reap_child_group(tmp_path, cancel):
         pid = int(pid_file.read_text())
         for _ in range(100):
             status = f'/proc/{pid}/stat'
-            if not os.path.exists(status) or open(status).read().split()[2] == 'Z':
+            try:
+                with open(status) as stream:
+                    exited = stream.read().split()[2] == 'Z'
+            except (FileNotFoundError, ProcessLookupError):
+                exited = True
+            if exited:
                 break
             await asyncio.sleep(.01)
         else:

@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("source,package,modules,entrypoints,config", [
-    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power"],
+    ("middleware/core/gateway", "core", ["core", "core.drive", "core.system", "core.drive.traffic", "core.system.power",
+                                         "core_common.protocol.native", "core_common.protocol.native.operation",
+                                         "core_common.protocol.native.receipts", "core_features.navigation"],
      {"core": "core.main:main"}, None),
     ("middleware/core/api", "core_api_web", ["core_api_web"], {}, None),
     ("middleware/devices/pinky/bringup", "bringup", ["bringup"],
@@ -58,6 +60,13 @@ assert Path(dist.locate_file('')).resolve() == Path(target).resolve()
 for name in json.loads(modules):
     loaded = importlib.import_module(name)
     assert Path(loaded.__file__).resolve().is_relative_to(Path(target).resolve())
+if package == 'core':
+    from core_common.protocol.native.operation import NativeOperation
+    from core_common.protocol.native_operation import NativeOperation as LegacyNativeOperation
+    from core_common.protocol.native.receipts import NativeReceipts
+    from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
+    assert NativeOperation is LegacyNativeOperation
+    assert NativeReceipts is LegacyNativeReceipts
 print(json.dumps({e.name: e.value for e in dist.entry_points if e.group == 'console_scripts'}))
 """, str(installed), package, json.dumps(modules)], cwd=tmp_path,
         capture_output=True, text=True, timeout=30)

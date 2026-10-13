@@ -9,7 +9,7 @@ const DELIVERY_LABEL = {PENDING: '전송 대기', SENDING: '전송 중 · 결과
   RETRY: '제한 재시도 대기', UNKNOWN: '전송 여부 불명 · 재전송하지 않음', FAILED: '전송 실패',
   EXPIRED: '통지 기한 종료', SUPERSEDED: '현재 사건·담당·목적지 변경으로 취소'};
 
-export function createIncidentView({scope, el, view, call, log, auth}) {
+export function createIncidentView({scope, el, view, call, log, auth, onReports}) {
 let incidentReports = [], incidentTrafficReports = [];
 const linked = new URLSearchParams(location.search);
 const linkedRobot = linked.get('robot'), linkedIncident = linked.get('incident');
@@ -81,6 +81,7 @@ async function refreshIncidents() {
       ? `&robot_id=${encodeURIComponent(linkedRobot)}&stuck_id=${encodeURIComponent(linkedIncident)}` : '';
     const payload = await call(`/api/fleet/incidents?limit=10${filter}`);
     incidentReports = payload.reports || [];
+    onReports(incidentReports);
     incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
     el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
@@ -151,7 +152,7 @@ async function refreshIncidents() {
           const claim = document.createElement('ui-button');
           claim.setAttribute('kind', 'quiet');
           claim.textContent = '이 사건 맡기';
-          claim.addEventListener('click', scope.listener(async () => {
+          claim.addEventListener('click', scope.guard(async () => {
             claim.setAttribute('reason', '담당 인수를 기록하고 있습니다');
             claim.disabled = true;
             try {
@@ -230,6 +231,7 @@ async function refreshIncidents() {
     }
   } catch (error) {
     if (error.name === "AbortError") return;
+    onReports([]);
     status.textContent = `사건 기록을 불러오지 못했습니다: ${error.message}`;
   }
 }
@@ -249,6 +251,7 @@ scope.listen(el("incident-export"), "click", async () => {
 });
 
 function reset() {
+  onReports([]);
   incidentReports = [];
   incidentTrafficReports = [];
   el("incident-list").replaceChildren();

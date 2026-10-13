@@ -10,7 +10,7 @@ clock pause 에도 만료는 작동한다 — 판정은 monotonic 시계로 한�
 
 rclpy 가 없는 호스트에서는 이 모듈의 순수 판정(gate)만 시험이 돌린다.
 
-수동 실행은 --sim-only, ROS_DOMAIN_ID=120..199, ROS_LOCALHOST_ONLY=1,
+수동 실행은 --sim-only, ROS_DOMAIN_ID=80..99, ROS_LOCALHOST_ONLY=1,
 GZ_PARTITION=d426-<run_id>, ROS namespace /rosy_01../rosy_08이 모두 필요하다.
 ROSY_RUNTIME_MODE=hardware/motor에서는 실행하지 않는다. 런처·base 연결은 별도다.
 """
@@ -65,7 +65,7 @@ def main(argv=None) -> int:
         print(__doc__)
         return 0
     if (argv.count('--sim-only') != 1
-            or not re.fullmatch(r'1[2-9][0-9]', os.environ.get('ROS_DOMAIN_ID', ''))
+            or not re.fullmatch(r'[89][0-9]', os.environ.get('ROS_DOMAIN_ID', ''))
             or os.environ.get('ROS_LOCALHOST_ONLY') != '1'
             or not re.fullmatch(r'd426-[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', os.environ.get('GZ_PARTITION', ''))
             or os.environ.get('ROSY_RUNTIME_MODE', '') not in ('', 'core')):

@@ -164,6 +164,8 @@ def _check(resolver, first, proposal, row, stuck, rows, chain, problem, now, not
     rid, sid, decision = str(row["robot_id"]), str(stuck["stuck_id"]), proposal["decision"]
     if decision not in STUCK_WORDS:
         return "word_not_allowed", None
+    if rid in resolver.autonomous_robots and decision in chain.unresolved:
+        return "candidate_unresolved", None
     missing = first.evidence_invalid(proposal, rid)
     if missing is not None:
         return missing, None

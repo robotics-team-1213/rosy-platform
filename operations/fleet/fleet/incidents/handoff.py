@@ -25,7 +25,7 @@ class IncidentHandoff:
                 claimed_at REAL NOT NULL, PRIMARY KEY(robot_id, stuck_id))''')
 
     def claim(self, robot_id: str, stuck_id: str, receipt: dict,
-              principal_id: str, *, now: float) -> dict:
+              principal_id: str, *, now: float, admission=None) -> dict:
         if not principal_id or principal_id == 'site-console':
             raise ValueError('OPERATOR_IDENTITY_REQUIRED')
         revision = judgment_revision(receipt)
@@ -52,6 +52,9 @@ class IncidentHandoff:
             if previous is not None:
                 if previous['principal_id'] != principal_id:
                     raise ValueError('INCIDENT_ALREADY_CLAIMED')
+            if admission is not None:
+                admission(connection)
+            if previous is not None:
                 return dict(previous)
             connection.execute('INSERT INTO fleet_incident_claims VALUES (?, ?, ?, ?, ?)',
                                (robot_id, stuck_id, principal_id, revision, now))
