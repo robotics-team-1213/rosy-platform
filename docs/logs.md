@@ -8274,3 +8274,7 @@ osy-d395-s1d\`.
 - 증거: 기존 학습 계약/OMX exporter와 공식 HF 문서를 대조했다. 문서 검사 결과는 작업 세션에 기록한다.
 - gate 변화: 설계 Accepted. OAuth·협업 UI·데이터 migration·외부 전송·학습/장치 수용은 미구현/미검증이다.
 - 결정: 기존 wire·원본을 소급 변경하지 않고 단계별 구현한다.
+
+## 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
+- 사용자 범위: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
+- 계획 문서이며 제품 구현·착지·push·배포·실계정 전환 증거가 아니다.
