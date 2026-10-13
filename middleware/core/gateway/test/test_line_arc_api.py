@@ -1,5 +1,7 @@
 """D-520 1-2: exit_segment on POST /api/v1/line-follow/junction, capability lane_arc, the
 line_follow.arc status field and the arc config keys (start refusal)."""
+import json
+import math
 from dataclasses import replace
 
 import pytest
@@ -99,3 +101,60 @@ def test_bend_while_an_arc_runs_is_409(core_client):
             "bend_in_m": 0.2, "bend_tol_m": 0.1, "bend_radius_m": 0.3}
     refused = client.post(URL, json=bend, headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ARC_RUNNING"
+
+
+# --- D-744: exit_segment.map_anchor ----------------------------------------------------------------
+
+ANCHOR = {"centre_x_m": 1.25, "centre_y_m": -0.4, "pose_x_m": 1.0, "pose_y_m": -0.42,
+          "pose_yaw_rad": 0.3, "odom_stamp_s": 1790000000.5}
+
+
+def test_map_anchor_is_accepted_and_stored_with_the_segment(core_client):
+    client, services, clock = _active(core_client)
+    _enable(services)
+    _pose(services, clock)
+    body = {**ARC, "exit_segment": {**SEGMENT, "map_anchor": ANCHOR}}
+    assert client.post(URL, json=body, headers=OPERATOR).json()["state"] == "armed"
+    assert services.line_follow._junction["exit_segment"] == {**SEGMENT, "map_anchor": ANCHOR}
+
+
+def test_map_anchor_validation_is_400(core_client):
+    client, services, _ = _active(core_client)
+    _enable(services)
+    for bad in ({"centre_x_m": None}, {"centre_y_m": "east"}, {"pose_x_m": None}, {"pose_y_m": []},
+                {"pose_yaw_rad": None}, {"odom_stamp_s": None}, {"odom_stamp_s": 0},
+                {"odom_stamp_s": -1.0}, {"pose_yaw_rad": 7.0}):
+        anchor = {k: v for k, v in {**ANCHOR, **bad}.items() if v is not None}
+        body = {**ARC, "exit_segment": {**SEGMENT, "map_anchor": anchor}}
+        assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, bad
+    for anchor in ([1.0, 2.0], "anchor", {}):
+        body = {**ARC, "exit_segment": {**SEGMENT, "map_anchor": anchor}}
+        assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, anchor
+    for name in ("centre_x_m", "pose_y_m", "pose_yaw_rad", "odom_stamp_s"):
+        raw = json.dumps({**ARC, "exit_segment": {**SEGMENT, "map_anchor": {**ANCHOR, name: math.nan}}})
+        refused = client.post(URL, content=raw, headers={**OPERATOR, "content-type": "application/json"})
+        assert refused.status_code == 400, name
+
+
+def test_capability_lane_arc_map_anchor_follows_lane_arc(core_client):
+    client, services = core_client()
+    services.state.set_velocity(0.0, 0.0)
+
+    def base():
+        return client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]["items"][0]
+
+    assert base()["lane_arc_map_anchor"] is False
+    _enable(services)
+    assert base()["lane_arc_map_anchor"] is True
+
+
+def test_the_arc_record_reports_map_anchor_used(core_client):
+    client, services, clock = _active(core_client)
+    _enable(services)
+    _pose(services, clock)
+    lf = services.line_follow
+    with lf._lock:
+        lf._open_arc(dict(place_id="SW", action="left", map_id="lab-a", exit_segment=dict(SEGMENT)), clock["t"])
+    services.state.set_line_follow(lf.status())
+    arc = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["arc"]
+    assert arc["map_anchor_used"] is False and arc["ir_correction"]["used"] is False
