@@ -105,6 +105,15 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     assert ports.sent[1][1] == "SW" and ports.sent[1][0] != "bend"        # then the next place
 
 
+def test_a_bend_done_on_one_segment_goes_out_again_on_another():
+    """Gazebo lap run54/55/57: with the lap end 0.4 m after a bend, that bend was done right after
+    one lap change and stayed done until the next change, 2 cm before its arc: no_anchor."""
+    live = lambda runner: next(iter(runner._live.values()))
+    done = lambda index: (lambda runner: live(runner).bends_done.add((index, "B_SW")))
+    assert all(sent[0] != "bend" for sent in _trip(_bend_map(SW_BEND), before=done(0))[2].sent)  # done here
+    assert _trip(_bend_map(SW_BEND), before=done(4))[2].sent == [("bend", "B_SW", None)]
+
+
 def test_a_bend_core_ended_on_the_next_junction_counts_done_and_the_place_goes_out():
     """Lap SIM D (rec_4): CORE ended the pass on the SW sighting and waits there (same seq) 6 mm
     before the arc end on Fleet's map; Fleet must count the bend done and send the SW turn."""
