@@ -107,3 +107,16 @@ def test_the_published_wall_stamp_keys_the_odom_log():
     observe_lane_return(b, msg(), dict(x=0., y=0., yaw=0.), now=10., wall=1_790_000_000.125)
     entry = b._svc.line_follow._odom_log[-1]
     assert (entry[0], entry[6]) == (1_790_000_000.125, pytest.approx(9.9))
+
+
+def test_the_odom_callback_logs_the_sample_under_the_snapshots_stamp():
+    """D-758 0 review 2: what RosBridge._on_odom runs (odometry.observe_odom) publishes the odom pose and
+    hands its snapshot stamp to the line-follow log; dropping the hand-over must fail here."""
+    from core.bridge.odometry import observe_odom
+    from core_features.state.manager import StateManager
+    b = bridge()
+    b._bounded_trial_guard = None
+    b._svc.state = StateManager(robot_id="rosy_26", clock=lambda: 1_790_000_000.375)
+    observe_odom(b, msg(), dict(x=0., y=0., yaw=0.))
+    odom = b._svc.state.snapshot().odom_pose
+    assert odom.stamp == b._svc.line_follow._odom_log[-1][0] == 1_790_000_000.375
