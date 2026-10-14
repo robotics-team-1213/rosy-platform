@@ -201,6 +201,17 @@ def test_an_anchor_inside_the_age_bound_is_used():
     assert rig.m._arc['centre'] == pytest.approx(centre, abs=1e-9)
 
 
+@pytest.mark.parametrize('step_s', [-5., 5.])
+def test_a_wall_clock_step_after_the_pair_still_places_the_anchor(step_s):
+    """D-758 0: the pair's odom sample is found by the stamp CORE published; its age is on the line clock."""
+    rig, centre = _wall_rig(), _off_circle()
+    anchor = _anchor(rig, centre)
+    rig.m._wall = lambda: WALL + rig.now + step_s
+    rig.step()
+    assert _send_open(rig, anchor).arc.map_anchor_used is True
+    assert rig.m._arc['centre'] == pytest.approx(centre, abs=1e-9)
+
+
 @pytest.mark.parametrize('offset, reason', [(.5, 'future'), (-.9, 'no_sample')])
 def test_a_stamp_outside_cores_odom_history_keeps_todays_circle(offset, reason):
     """Newer than CORE's clock, or older than the first odom sample of this run."""

@@ -171,6 +171,18 @@ def test_ordering_epoch_and_pose_age():
     assert body_old == (False, "pose_stale")
 
 
+@pytest.mark.parametrize("step_s", [-5.0, 5.0])
+def test_a_wall_clock_step_still_finds_the_cues_odom_sample(step_s):
+    """D-758 0: the cue's pose_stamp is the stamp CORE published; its age is on the line clock."""
+    rig = Rig()
+    stamp = WALL + rig.fed
+    rig.m._wall = lambda: WALL + rig.t + step_s
+    rig.yaw = 0.05
+    rig.wait(0.3)
+    assert rig.cue("ON_LANE", 1, pose_stamp=stamp)[0]
+    assert rig.m._cue_yaw0[1] == pytest.approx(0.0)
+
+
 def test_mode_change_drops_cue_and_latch():
     rig = Rig()
     rig.cue("OFF_MAP", 1)
