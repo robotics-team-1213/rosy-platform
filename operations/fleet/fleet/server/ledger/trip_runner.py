@@ -467,7 +467,8 @@ class TripRunner(TripAdmission, TripProgress):
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
-                live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
+                live.junction = await self._call(self._junction.junction_state(  # D-760 8 review: fenced read
+                    robot_id, **self._after(self._junction, robot_id))) or {}
                 # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
                 arc = arc if isinstance(arc, dict) else {}
@@ -487,6 +488,7 @@ class TripRunner(TripAdmission, TripProgress):
                             "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
             else:  # a free segment: no stale lane ``waiting`` may end it
                 live.junction = {}
+            self._fence(robot_id)  # D-760 8 review: the next step reads after this step's pose and junction read
             if live.view["state"] == "link_wait" and not await self._link_back(live):
                 return
             if not live.open:
@@ -856,15 +858,13 @@ class TripRunner(TripAdmission, TripProgress):
         refresh = getattr(self._poses, "refresh", None)
         try:
             if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3), past the hub cache
-                fence = {"after": self._read_after.get(robot_id, 0)} if hasattr(self._poses, "read_number") else {}
-                await self._call(refresh(robot_id, force_rest=True, **fence))  # D-760 8 review: never an older read
+                await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
             self._unread.discard(robot_id)
         except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
                 self._refresh_warned_at = self._clock()
                 _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
-        self._fence(robot_id)
         try:
             return await self._call(self._poses.arbitrated_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
