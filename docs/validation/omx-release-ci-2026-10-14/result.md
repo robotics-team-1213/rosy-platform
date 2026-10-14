@@ -4,7 +4,7 @@
 
 ## 공개 결과와 실패 재현
 
-사용자가 승인한 공유 main의 `76a8361c5fa6e77a1395cda89f66536028225f60`을
+사용자가 승인한 공유 main의 commit `76a8361c5`를
 원격 main에 push했다. pre-push 원격 시험은 네 invocation에서 각각
 518, 8242, 6895, 6671 passed였고 알려진 실패 비교는 모두 NEW 0이었다.
 Android unit 및 unsigned site candidate build는 성공했다. 후보 생성은 배포가 아니다.
