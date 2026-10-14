@@ -64,8 +64,9 @@ def observe_bounded_trial(bridge, msg, sample, *, now=None):
         except Exception:pass
 
 
-def observe_lane_return(bridge, msg, sample, *, now=None):
-    """Preserve the real odom source clock; never derive travel from issued twists."""
+def observe_lane_return(bridge, msg, sample, *, now=None, wall=None):
+    """Preserve the real odom source clock; never derive travel from issued twists. ``wall``: the
+    stamp the state snapshot published for this sample (D-758 0: the odom log is found by it)."""
     line = bridge._svc.line_follow
     try:
         stamp = msg.header.stamp
@@ -88,6 +89,6 @@ def observe_lane_return(bridge, msg, sample, *, now=None):
         line.observe_return_pose(stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec,
             source_now_ns=bridge._node.get_clock().now().nanoseconds,
             frame=msg.header.frame_id, x=sample["x"], y=sample["y"], yaw=sample["yaw"],
-            received_at=bridge._line_clock() if now is None else now)
+            received_at=bridge._line_clock() if now is None else now, wall=wall)
     except (AttributeError, KeyError, TypeError, ValueError):
         line.invalidate_return_pose()

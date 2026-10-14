@@ -120,15 +120,16 @@ class LaneCueMixin:
             return True, None
 
     def _cue_pose_yaw(self, pose_stamp: float) -> tuple[Optional[tuple], Optional[str]]:
-        """((odom key, yaw) at ``pose_stamp`` (CORE wall clock, the authority's odom log), or a refusal."""
+        """((odom key, yaw) at ``pose_stamp`` (CORE wall clock, the authority's odom log), or a refusal.
+        D-758 0: a published stamp is aged on the line clock; any other on the wall clock, as before."""
         log, trail = self._odom_log, self._return_evidence.trail.samples
         if not log or not trail:
             return None, "odom_stale"
-        if pose_stamp > log[-1][0] + STAMP_TOL_S:
+        base, exact = self._odom_entry(pose_stamp)
+        if not exact and pose_stamp > log[-1][0] + STAMP_TOL_S:
             return None, "pose_future"
-        if pose_stamp < log[-1][0] - MAX_POSE_AGE_S:
+        if (log[-1][6] - base[6] if exact else log[-1][0] - pose_stamp) > MAX_POSE_AGE_S:
             return None, "pose_stale"
-        base = next((e for e in reversed(log) if e[0] <= pose_stamp), None)
         sample = None if base is None else next((p for p in reversed(trail) if p.stamp_ns == base[2]), None)
         if sample is None:
             return None, "pose_stale"
