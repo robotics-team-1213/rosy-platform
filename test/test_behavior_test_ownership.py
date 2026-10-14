@@ -71,6 +71,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_line_follow_stuck_no_motion.py",
     # D-607 integration exercises the gateway traffic seam and feature progress watcher together.
     "middleware/core/gateway/test/test_line_follow_stuck_no_progress.py",
+    # D-760 rev 3 item 9: CORE HTTP snapshot and line-follow responses expose the feature state.
+    "middleware/core/gateway/test/test_line_regulation_wait_api.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
     # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
     "middleware/core/gateway/test/test_native_owner_receipts.py",
