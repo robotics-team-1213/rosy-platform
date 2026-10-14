@@ -701,3 +701,10 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3. API Reference v1.225 절.
 - 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.
+
+## 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
+
+- 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `regulation_wait: authority | signal | crosswalk_held | crosswalk_wait | crosswalk_look | None`(기본 None, additive). API Ref v1.227.
+- 증거: `middleware/core/services/test/test_line_regulation_wait.py`(기본값, 모르는 값 거절), `middleware/core/gateway/test/test_line_regulation_wait_api.py`.
+- gate 변화: 없음.
+- 결정: D-760 개정 3 9항.
