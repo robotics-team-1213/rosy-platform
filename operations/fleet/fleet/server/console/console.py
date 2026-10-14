@@ -78,9 +78,7 @@ class FleetConsole(TripAware):
     ) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
-        self._clients: dict[str, RobotClient] = {
-            ep.robot_id: client for ep, client in zip(endpoints, clients)
-        }
+        self._clients: dict[str, RobotClient] = {ep.robot_id: client for ep, client in zip(endpoints, clients)}
         self._rest_tokens = {ep.robot_id: ep.token for ep in endpoints}
         self._agent_pairing_tokens = {ep.robot_id: ep.fleet_pairing_token for ep in endpoints
                                       if ep.fleet_pairing_token is not None}
@@ -133,6 +131,8 @@ class FleetConsole(TripAware):
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
+        #: D-760 8: (robot_id, max_age_s) -> its REST state; app.py sets MapPoseService.state (one read per robot).
+        self.read_state = lambda robot_id, max_age_s: self._client(robot_id).state()
         self._link_address_status = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
@@ -266,7 +266,7 @@ class FleetConsole(TripAware):
                 and self._clock() - row.last_heartbeat_monotonic
                 < self._hub_state_max_age_s):
             return row.snapshot.model_dump(mode="json"), "hub"
-        return await self._client(robot_id).state(), "rest"
+        return await self.read_state(robot_id, 1.0), "rest"   # D-760 8: shared, at most 1 s old
 
     async def snapshot(self) -> dict:
         """N대 상태를 한 번에 모은다. 한 대가 죽어도 나머지는 그대로 온다."""
@@ -723,7 +723,7 @@ class FleetConsole(TripAware):
         """로봇 좌표를 새로 읽는다. 미션을 내리는 순간에만 부른다 - 폴링은 스냅샷이 한다."""
         order = list(self._order)
         results = await asyncio.gather(
-            *(self._client(rid).state() for rid in order), return_exceptions=True)
+            *(self.read_state(rid, 0.2) for rid in order), return_exceptions=True)   # D-760 8: shared
         self._remember([
             {"robot_id": rid, "state": None if isinstance(r, BaseException) else r}
             for rid, r in zip(order, results) if rid in self._clients])

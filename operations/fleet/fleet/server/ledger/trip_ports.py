@@ -32,7 +32,7 @@ class MapPosePort(Protocol):
     def arbitrated_pose(self, robot_id: str) -> "Optional[MapPose] | Awaitable[Optional[MapPose]]": ...
 
     async def refresh(self, robot_id: str, *, force_rest: bool = False) -> None:
-        """Optional: read the robot's state/odom now. The loop calls it once per tick (2 Hz)."""
+        """Optional: read the robot's state/odom (D-760 8: the shared read). Once per tick (2 Hz)."""
 
 
 class LaneJunctionPort(Protocol):
@@ -68,12 +68,12 @@ class LaneJunctionPort(Protocol):
 class HttpLaneJunction:
     """D-494 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
 
-    def __init__(self, clients: Callable[[], Mapping[str, Any]]) -> None:
-        self._clients = clients
+    def __init__(self, clients: Callable[[], Mapping[str, Any]], read=None) -> None:
+        self._clients = clients  # D-760 8: ``read(robot_id)`` is the shared state read (app.py); alone, a direct read
+        self._read = read or (lambda robot_id: self._client(robot_id).state())
 
     def _client(self, robot_id: str):
-        client = self._clients().get(robot_id)
-        if client is None:
+        if (client := self._clients().get(robot_id)) is None:
             raise HubError("UNKNOWN_ROBOT", robot_id)
         return client
 
@@ -85,7 +85,7 @@ class HttpLaneJunction:
             advance_m=advance_m, expect=expect)
 
     async def junction_state(self, robot_id: str) -> Optional[dict]:
-        line = (await self._client(robot_id).state()).get("line_follow") or {}
+        line = (await self._read(robot_id)).get("line_follow") or {}
         junction = line.get("junction")
         # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction.
         # D-517 M3: a D-407 stuck or a RECOVERING state may reverse; no follower follows it then.

@@ -26,8 +26,11 @@ from rosy.world.state.projections.map_pose import (MapPose, MapPoseConfig, MapPo
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
-#: `refresh` skips the robot read while the newest odom sample is younger than this.
+#: `refresh` (hub snapshot when fresh, else REST) shares a read that started less than this ago.
 REFRESH_FRESH_S = 0.2
+#: D-760 8: the trip loop's age for the shared REST read, under its 0.5 s period, so a read before a
+#: link loss is never handed out after it and a robot is read at most 1/0.45 times a second.
+TRIP_READ_AGE_S = 0.45
 
 logger = logging.getLogger("fleet.map_pose")
 
@@ -39,7 +42,8 @@ class MapPoseService:
                  gather_rest: Optional[Callable[[str], Awaitable[Optional[Mapping]]]] = None,
                  map_id: Optional[Callable[[], Optional[str]]] = None,
                  source_map_ids: Iterable[str] = (),
-                 wall: Callable[[], float] = time.time) -> None:
+                 wall: Callable[[], float] = time.time,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self.config = config
         self._robot_ids = robot_ids
         self._gather = gather              # hub snapshot when fresh, else REST
@@ -50,8 +54,10 @@ class MapPoseService:
         self._source_map_ids = frozenset(source_map_ids)
         self._warned_map_ids: set[str] = set()
         self._wall = wall           # sighting captured_at and odom stamps are UTC epoch seconds
+        self._clock = clock         # D-760 8: a read's age, from its start
         self._trackers: dict[str, MapPoseTracker] = {}
         self._refreshing: dict[tuple[str, bool], asyncio.Future] = {}
+        self._kept: dict[tuple[str, bool], tuple[float, Mapping]] = {}   # (start, state) of the last read
 
     def active_map_id(self) -> Optional[str]:
         """The active site map frame id; warns once per id that no sighting source reports."""
@@ -106,26 +112,36 @@ class MapPoseService:
         else:
             tracker.add_odom(sample, self._wall())
 
-    async def refresh(self, robot_id: str, *, force_rest: bool = False) -> None:
-        """Read the robot's state now and feed its odom.
+    async def state(self, robot_id: str, max_age_s: float = TRIP_READ_AGE_S) -> Mapping:
+        """D-760 8: the robot's REST state, one read per robot shared by every Fleet loop (app.py
+        sets it as the console's `read_state`). A read that started within `max_age_s` (Fleet
+        monotonic time) is returned; else the caller joins the read in flight or starts one. A
+        failed read keeps nothing and raises its own exception to every waiter."""
+        return await self._read((robot_id, True), self._gather_rest, max_age_s)
 
-        Default: the hub snapshot when fresh, else REST. `force_rest` (the trip loop, at 2 Hz or
-        faster) bypasses the hub cache. Concurrent callers share one read per robot and mode; a
-        read is skipped while odom is fresher than 0.2 s."""
+    async def refresh(self, robot_id: str, *, force_rest: bool = False,
+                      max_age_s: float = TRIP_READ_AGE_S) -> None:
+        """Read the robot's state and feed its odom: the hub snapshot when fresh, else REST, shared
+        for 0.2 s. `force_rest` (the trip loop, lane compliance, the trail anchor) is `state`."""
         gather = self._gather_rest if force_rest else self._gather
-        tracker = self._tracker(robot_id)
-        if gather is None or tracker is None:
-            return
-        latest = tracker.latest_odom_stamp
-        if latest is not None and self._wall() - latest < REFRESH_FRESH_S:
-            return
-        key = (robot_id, force_rest)
+        if gather is not None and self._tracker(robot_id) is not None:
+            await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S)
+
+    async def _read(self, key: tuple[str, bool], gather, max_age_s: float) -> Mapping:
+        kept = self._kept.get(key)
+        if kept is not None and self._clock() - kept[0] <= max_age_s:
+            return kept[1]
         running = self._refreshing.get(key)
         if running is None:
-            running = self._refreshing[key] = asyncio.ensure_future(gather(robot_id))
+            running = self._refreshing[key] = asyncio.ensure_future(self._fetch(key, gather, self._clock()))
             running.add_done_callback(lambda done: self._refresh_done(key, done))
-        state = await asyncio.shield(running)
-        self.observe_state(robot_id, state)
+        return await asyncio.shield(running)
+
+    async def _fetch(self, key: tuple[str, bool], gather, started: float) -> Mapping:
+        state = await gather(key[0])
+        self._kept[key] = (started, state)
+        self.observe_state(key[0], state)    # once per read: odom_stamp stays the snapshot's own
+        return state
 
     def _refresh_done(self, key: tuple, done: asyncio.Future) -> None:
         self._refreshing.pop(key, None)
