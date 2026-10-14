@@ -426,6 +426,26 @@ def test_an_edge_misread_with_another_slope_cannot_hide_the_other_lane_edge():
     assert all(d.linear == 0 for _, d in s.run(7.0))
 
 
+def test_a_loose_lane_reading_on_the_stripes_does_not_turn_the_way_ahead():
+    """Gazebo m24: while crossing, the camera read the stripes as a lane 0.08 m wide, slope 0.18, bound
+    0.043 m; turned by it the way ahead ran over the wall and the crossing held for good. A reading looser
+    than D-491's MAX_LATERAL_M is no lane: the zone's own frame stays, and a person in the way still holds."""
+    walls = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    for person, moves in (([], True), ([(FAR - 0.02, 0.0, 0.02)], False)):
+        s = Sim(edges=(0.079, -0.079))
+        s.objects = walls
+        s.to_stop()
+        s.run(5.5)
+        assert s.crosswalk.state == "crossing"
+        end = s.t + 20.0
+        while s.x + B.front_x_m < NEAR + 0.02:
+            assert s.t < end, s.m.status()
+            s.frame()
+        s.edges, s.slope, s.lat_u, s.objects = (0.0, -0.08), (0.36, 0.0), 0.043, walls + person
+        out = [d.linear for _, d in s.run(1.0)]
+        assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
     """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
     body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no
