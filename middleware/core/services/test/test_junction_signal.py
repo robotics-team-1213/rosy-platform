@@ -109,7 +109,7 @@ def test_red_still_cancels_a_rotation_zeroed_by_authority():
 
 
 def test_red_still_cancels_a_rotation_zeroed_by_crosswalk():
-    from core_features.line_follow.crosswalk_gate import Zone
+    from core_features.line_follow.crosswalk.gate import Zone
     from test_line_junction import BODY
 
     rig = Rig(junction_signal_enabled=True, crosswalk_gate_enabled=True,

@@ -25,7 +25,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, MAX_TURN_RAD, _angle
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, MAX_TURN_RAD, _angle
 
 NONE, ARMED, APPROACHING, LOOKING, WAITING, CROSSING = (
     "none", "armed", "approaching", "looking", "waiting", "crossing")
