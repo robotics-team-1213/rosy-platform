@@ -36,7 +36,12 @@ def route(handler, method):
     try:
         if method == 'GET' and url.path == '/api/account/session':
             claims = account.resolve(cookie(handler, 'rosy_app_account')) if account else None
+            profile = account.profile(cookie(handler, 'rosy_app_account')) if claims else None
+            if profile and profile['account_id'] != claims.sub:
+                profile = None
             body = {'enabled': account is not None, 'authenticated': claims is not None,
+                    'profile': profile, 'profile_url': account.profile_url if claims else None,
+                    **({'account_id': claims.sub} if claims else {}),
                     'can_operate': bool(claims and claims.permits(account.resource, 'games.operate'))}
         elif method == 'GET' and url.path == '/api/account/login' and account:
             flow, target = account.start('/')

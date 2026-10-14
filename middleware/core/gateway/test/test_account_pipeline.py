@@ -81,6 +81,10 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     assert callback.status_code == 303
     identity = core.get('/api/account/session').json()
     assert identity['authenticated'] and identity['capabilities'] == ['robot.read']
+    assert identity['profile'] == {'account_id':identity['account_id'],'login':'alice','display_name':'alice'}
+    assert identity['profile_url'] == receiver.issuer + '/console/profile'
+    sessions.profile(fleet.cookies[COOKIE], 'Updated Alice')
+    assert core.get('/api/account/session').json()['profile']['display_name'] == 'Updated Alice'
     assert core.get('/api/v1/auth/whoami').status_code == 200
     assert core.post('/api/v1/teleop', json={'linear':0,'angular':0}, headers={'Origin':str(core.base_url).rstrip('/')}).status_code == 403
     clock[0] += 270
