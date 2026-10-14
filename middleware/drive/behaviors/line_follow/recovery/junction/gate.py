@@ -22,7 +22,7 @@ from core_features.line_follow.recovery.junction.approach import (
     MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
 from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
-from .signal import JunctionSignalMixin
+from core_features.line_follow.signal.gate import JunctionSignalMixin
 from .turn import (POSE_MAX_AGE_S, SETTLE_S, STILL_S, STILL_LIMIT_S, TURN_GAIN, TURN_MIN_W,
                    TURN_TIME_MARGIN_S, TURN_TOLERANCE_RAD, JunctionTurnMixin, _wrap)
 
