@@ -129,10 +129,13 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "site_ui/console/work",
               "fleet/fleet/server/ledger",
               "fleet/fleet/server/missions",
-              "fleet/fleet/server/work")
+              "fleet/fleet/server/work",
+              "fleet/fleet/server/trips",
+              "fleet/fleet/server/trip_checks")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
-FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/missions", "fleet/fleet/server/work")
+FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/missions", "fleet/fleet/server/work",
+                             "fleet/fleet/server/trips", "fleet/fleet/server/trip_checks")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -314,7 +317,7 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md; same DB, no resolver or device authority. "
         "Measured at 360 after unchanged relocation; +150 remains, re-judge before separate responsibility growth.",
     ),
-    "fleet/fleet/server/ledger/trip_runner.py": (
+    "fleet/fleet/server/trips/trip_runner.py": (
         751,
         "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
         "no behaviour change): the start checks are in server/trip_admission.py and the progress predicates in "
@@ -528,8 +531,31 @@ SIZE_VERDICTS = {
         "work_routes32 at the D-757 verdict commit61aa49b32, both then in the server unit (measured). Keep every "
         "file and HARD_TIER rule; later work-read growth is its own, not the server's or the ledger's.",
     ),
+    "fleet/fleet/server/trips": (
+        2_238,
+        "split: D-763 slice 4 registers the trip owners (trip_guard, trip_halts, trip_laps, trip_ports, "
+        "trip_routes, trip_runner) as their own fleet.server holder unit, the split the ledger verdict named; see "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md. Baseline2238 = those six files at the D-757 verdict "
+        "commit61aa49b32 (measured). Keep the trip_runner.py file verdict and every HARD_TIER rule. At the next +150 "
+        "the trip ports (trip_ports, the CORE/pose seams) leave for their own unit, not an accept.",
+    ),
+    "fleet/fleet/server/trip_checks": (
+        272,
+        "split: D-763 slice 4 registers the trip loop's two named mixins, the start admission (trip_admission) and "
+        "the progress predicates (trip_progress), carved out of trip_runner on 2026-10-10 "
+        "(docs/plans/2026-10-07-fleet-site-map-web-server-seam.md), as their own fleet.server holder unit; see "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md. Baseline272 = trip_admission192 + trip_progress80 at the "
+        "D-757 verdict commit61aa49b32 (measured). Keep every file and HARD_TIER rule. At the next +150 the start "
+        "admission and the progress predicates become two units, not an accept.",
+    ),
     "fleet/fleet/server/ledger": (
-        4_410,
+        1_900,
+        "split: D-763 slice 4 moved the trip owners into fleet/fleet/server/trips and fleet/fleet/server/trip_checks "
+        "(the split this verdict named; "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md). Baseline1900 = ledger4410 minus trips2510 at the D-757 "
+        "verdict commit61aa49b32 (measured; trips2238 + trip_checks272): the Task owners, action_receipts and core_event_store. Keep every "
+        "ledger file verdict and HARD_TIER rule. At the next +150 the Task dispatch routes leave for their own unit "
+        "(task_dispatch_routes keeps its D-430 safety tag), not an accept. Previous verdict: "
         "split: D-763 slice 4 moved the Mission owners into fleet/fleet/server/missions (the split this verdict "
         "named) and the work read into fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). "
         "Baseline4410 = ledger6985 minus missions2575 at the D-757 verdict commit61aa49b32 (measured). Growth since "
