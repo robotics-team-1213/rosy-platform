@@ -172,6 +172,7 @@ def test_refused_while_manual_control_is_active(core_client):
     assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
     assert client.post("/api/v1/teleop", json={"linear": 0.05, "angular": 0.0},
                        headers=OPERATOR).status_code == 200
+    assert services.command.manual_active
     refused = client.post(URL, json=BODY, headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "MODE_CONFLICT"
 
