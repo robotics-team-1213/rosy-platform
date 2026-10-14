@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.230
+**Version:** v1.231
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,11 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
+### v1.231 교차로 회전의 지도 출구 방향 (D-759 개정 1)
+
+`POST /api/v1/line-follow/junction`의 `map_entry`(v1.224)를 `turn_deg`가 있는 `left`·`right`에도 싣는다. 회전 목표를 진입 yaw + `turn_deg`가 아니라 지도의 출구 차로 방향에 두기 위한 값이다. 능력 `base_velocity.lane_turn_map_entry`가 참인 CORE에만 보낸다. 그 능력은 CORE 설정 `line_follow.turn_map_entry_enabled`(bool, 기본 `false`)가 켜져 있고 `junction_turn`이 참일 때만 참이다. 설정이 꺼진 CORE는 받은 `map_entry`를 쓰지 않는다(`disabled`). 없는 지시와 설정이 꺼진 CORE의 회전은 이 필드가 없을 때와 같다.
+
+필드와 범위는 v1.224와 같고 `yaw_rad`만 뜻이 다르다: 출구 차로가 교차로 장소에서 시작하는 방향(지도 좌표)이다. `straight`·`stop`이나 `turn_deg` 없는 `left`·`right`에 실으면 400 `VALIDATION_ERROR`다. CORE는 받은 때 굽이와 같이 그 방향을 odom으로 옮겨 둔다(`odom yaw + yaw_rad − pose_yaw_rad`). 교차로에 서서 회전을 시작할 때 그 방향이 오늘의 목표(진입 yaw + `turn_deg`)에서 15° 안이면(재획득 한도 30°의 절반) 목표를 그 방향으로 둔다. 목표가 180°를 넘어도 회전 방향은 `turn_deg`의 부호 그대로다. 회전 규칙(정지 확인, 5° 안 정착, 시간 상한), `advance_m`, 재획득은 그대로이고 재획득의 30° 비교도 그 목표를 쓴다. 쓰지 못하면 지시를 거절하지 않고 오늘의 목표를 쓰며 까닭을 `line_follow.junction.map_entry_reason`에 남긴다(`none_sent`·`disabled`·`stale`·`future`·`no_sample`·`epoch`·`carry`·`heading`, 뜻은 v1.224와 같고 `heading`은 오늘의 목표와 15° 초과, `epoch`는 받은 뒤 odom 실행이 바뀜). `map_entry_used`는 회전 목표가 지도 방향일 때만 참이다. 이제 `turn_deg`가 있는 `left`·`right`에서도 이 두 필드가 채워진다. Fleet은 능력이 참이고 이번 주기에 로봇을 찾은 지도 자세에 `odom_stamp`가 있을 때만 싣는다. SOURCE와 호스트 단위 시험까지이며 SIM·장치 수용은 하지 않았다.
 ### v1.230 승인 대기 작업의 거절 `POST /api/fleet/missions/{mission_id}/reject` (D-763 조각 5·5b)
 
 새 경로(additive). 본문은 admit과 같은 `FleetWorkDecisionRequest` `{expected_generation}`(bool을 뺀 0 이상 정수, 다른 키 거절)다. 이름 있는 운영자만(viewer·공유 콘솔 토큰·자격 없는 루프백은 403 `OPERATOR_IDENTITY_REQUIRED`/`FORBIDDEN`). 누가 볼 수 있고 결정할 수 있는지는 admit과 같은 단계 종류 등록부(`step_action_kinds`) 판정이다: 두 사람 종류(`CELL_TRANSFER`, Cell Job)는 이름 있는 운영자 누구나, 제안자만 종류(레거시 `PICK_PLACE`)는 제안자만이고 다른 사람에게는 404 `MISSION_NOT_FOUND`다. 제안자가 하면 `decision: WITHDRAWN_BY_PROPOSER`, 다른 운영자가 하면 `REJECTED_BY_OPERATOR`이고 행위자는 감사 행에 남는다. 결과: Cell Job은 status `HOLD`, reason `CANCELLED_BY_OPERATOR`(취소와 같은 끝 상태 — resume·cancel·admit 모두 거절, 사건 `CELL_JOB_REJECTED`에 `decision`), 레거시 Mission은 status `CANCELED`, reason이 `decision`(사건 `MISSION_REJECTED`). claim을 잡지 않는다. 응답 `{proposal, mission, decision}`. 거절: 아직 resolve 전 409 `PROPOSAL_NOT_RESOLVED`; `PROPOSED`가 아님(이미 승인·거절됨 — 두 번째 거절도 여기) 또는 `expected_generation`이 지금 정지 세대와 다름 409 `MISSION_REJECT_REFUSED`(`message`); Cell 원장 없음 503 `CELL_JOB_JOURNAL_UNAVAILABLE`; resolve된 원장 단계의 종류가 등록부에 없음 409 `APPROVAL_RULE_UNREGISTERED`(admit도 같다). 승인 값은 resolve된 원장 단계 종류들 가운데 가장 엄한 것이다. 대화 요청에 연결된 작업을 거절하면 기존 결과 회신 경로가 요청자에게 알린다(Mission `CANCELED`, Cell Job `HOLD`). 정지 중(dispatch 꺼짐)에도 거절은 된다. admit의 승인 판정은 같은 등록부에서 오고 코드와 순서는 그대로다(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404). admit 본문 모델 이름이 `FleetWorkDecisionRequest`로 바뀌었고 받는 값은 같다.
@@ -3015,6 +3020,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.231 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 15° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 오늘의 목표다. v1.231. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
 | v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
 | v1.227 | 2026-10-14 | Additive (D-760 개정 3 9항, feat/line-follow-regulation-wait): `GET /api/v1/line-follow` 와 상태 스냅숏 `line_follow` 의 선택 필드 `regulation_wait`(`authority`·`signal`·`crosswalk_held`·`crosswalk_wait`·`crosswalk_look`·null, 그 순서의 우선순위). CORE 2b 시계 도우미와 같은 판정. 동작·다른 필드·envelope 1.0 변경 없음. |
 | v1.226 | 2026-10-14 | Additive + Behavior (D-760 1–3항, feat/authority-ttl5-shrink-under-lease, Safety-Review 대상): `POST /api/v1/line-follow/authority` `ttl_s` 상한 2 → 5 s, 선택 필드 `shrink`(bool)·`seq`(정수 ≥ 0), 응답 `reason: stale_seq`·`seq_required`·`seq_legs_full`·`shrink_none_held`. CORE trip lease 가 열려 있는 동안 line-follow 는 통행권이 없으면 `authority_none` 으로 선다(임대가 없으면 v1.225 그대로). 능력 `base_velocity.line_follow_authority_shrink`·`line_follow_authority_under_lease`. 추가 필드와 임대가 없는 요청의 동작은 v1.225와 같다. Fleet 송신은 바뀌지 않는다(D-760 3단계) |

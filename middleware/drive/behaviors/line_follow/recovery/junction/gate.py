@@ -233,6 +233,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                       next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
+            elif turn_deg is not None:  # D-759 rev 1: a turn's exit heading, placed at receipt too
+                self._place_map_entry(self._junction, (expect or {}).get('map_entry'), current)
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
             # without an instruction (SIM: a left/right hint stopped it bridging the corner before
             # the bend), and a bridge tick in the lead window hands over (CAMERA_HOLDS).
