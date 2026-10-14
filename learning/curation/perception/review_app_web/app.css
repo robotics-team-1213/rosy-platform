@@ -319,3 +319,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
   .photo-sidebar > label { grid-column: 1 / -1; grid-row: auto; justify-self: stretch; }
   #reload { width: 100%; }
 }
+
+#review-versions img,#review-versions canvas{max-width:100%;height:auto;}
+#review-ai-jobs,#review-versions{overflow-wrap:anywhere;}
