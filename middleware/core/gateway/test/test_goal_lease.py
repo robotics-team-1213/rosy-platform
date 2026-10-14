@@ -163,6 +163,19 @@ def test_same_token_renews_after_another_token_was_refused(robot):
     assert svc.nav.expire_goal_lease() is False and executor.cancelled == 0
 
 
+def test_leased_home_is_renewed_by_the_token_that_sent_it(robot):
+    """D-760 9: /navigation/home records its sender too (route and manager.home forwarding)."""
+    from core_features.waypoints.manager import Waypoint
+    tc, svc, executor, clock = robot
+    svc.nav._waypoints.create(Waypoint(name="__home__", x=0.0, y=0.0))
+    reply = tc.post("/api/v1/navigation/home", json={"correlation_id": "h-1", "lease_ttl_s": 2.0},
+                    headers=OPERATOR)
+    assert reply.status_code == 200, reply.text
+    svc.nav.on_goal_accepted()
+    assert _renew(tc, "h-1").status_code == 200
+    assert _renew(tc, "h-1", headers=OTHER).status_code == 403
+
+
 def test_goal_without_lease_is_unchanged(robot):
     tc, svc, executor, clock = robot
     assert _goal(tc, correlation_id="a-1").status_code == 200
