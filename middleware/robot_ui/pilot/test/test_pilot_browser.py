@@ -712,6 +712,128 @@ def test_connect_app_bar_names_this_robot_at_phone_width(tablet_page, width, hei
     assert errors == [], errors
 
 
+ONE_ROW_BAR = """() => {
+  const seats = {bar: 'ui-topbar', brand: 'ui-brand', mark: 'ui-brand b', name: '[data-pilot-robot]',
+    tag: '[data-gate-state]', map: '[data-goto]', stop: '[data-estop]', notice: '#pilot-notice'};
+  const read = () => Object.fromEntries(Object.entries(seats).map(([key, selector]) => {
+    const r = document.querySelector(selector).getBoundingClientRect();
+    return [key, {x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height}]; }));
+  const notice = document.querySelector('#pilot-notice');
+  const before = notice.textContent;
+  notice.textContent = '';
+  const quiet = read();
+  const hit = document.elementFromPoint(quiet.stop.x + quiet.stop.width / 2, quiet.stop.y + quiet.stop.height / 2);
+  notice.textContent = '로봇에 연결됐습니다 · 비상 정지 중';
+  const told = read();
+  notice.textContent = before;
+  return {quiet, told, stopOnTop: Boolean(hit?.closest('[data-estop]')),
+    token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--appbar-height')),
+    overflow: document.documentElement.scrollWidth - innerWidth};
+}"""
+
+
+def _near(box, x, y, width, height):
+    return all(abs(box[key] - want) <= 1 for key, want in zip(("x", "y", "width", "height"), (x, y, width, height)))
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (768, 1024), (1024, 768), (1366, 768)])
+def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(tablet_page, width, height):
+    """D-741 3·5 and its 2026-10-14 addendum. From 64rem the connect screen's app bar is one row of --appbar-height:
+    brand, robot name, notice, gate state, 운용 지도, then the stop last, and the stop is no smaller than 82x48.
+    Below 64rem nothing moved: the numbers are the ones measured before this change (sha d434979c9), where the
+    stop spans both rows at 82x74 and a notice takes its own row under them."""
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": "rosy_26", "transport": "https"}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    playwright_sync.expect(page.locator("ui-topbar ui-brand [data-pilot-robot]")).to_have_text("rosy_26")
+    got = page.evaluate(ONE_ROW_BAR)
+    print(json.dumps({"width": width, **got}))
+    quiet, told, token = got["quiet"], got["told"], got["token"]
+    assert token == 64 and got["stopOnTop"] and got["overflow"] <= 0, got
+    assert all(abs(told[seat][key] - quiet[seat][key]) <= 0.5 for seat in ("stop", "map", "tag", "name", "mark")
+               for key in ("x", "y", "width", "height")), got  # a notice moves and squeezes nothing
+    assert told["notice"]["width"] > 0, got
+    if width < 1024:
+        mark, name_x = (20, 56) if width < 480 else (79, 115)
+        assert quiet["bar"]["height"] == 103 and abs(told["bar"]["height"] - 120) <= 1, got
+        assert _near(quiet["stop"], width - 106, 16, 82, 74), got
+        assert _near(quiet["map"], 76, 42, 82, 48) and _near(quiet["tag"], 24, 58, 44, 32), got
+        assert _near(quiet["name"], name_x, 20, 61, 14) and abs(quiet["mark"]["width"] - mark) <= 1, got
+        assert _near(told["notice"], 24, 94, width - 48, 17), got
+    else:
+        assert quiet["bar"]["height"] == token and told["bar"]["height"] == token, got
+        row = [told[key] for key in ("mark", "name", "notice", "tag", "map", "stop")]
+        assert all(0 <= box["y"] and box["bottom"] <= token for box in row), got
+        assert all(left["right"] <= right["x"] + 1 for left, right in zip(row, row[1:])), got
+        assert abs(quiet["stop"]["x"] - (width - 106)) <= 1 and quiet["stop"]["right"] <= width, got
+        assert quiet["stop"]["width"] >= 81.89 and quiet["stop"]["height"] >= 48, got  # 81.890625x48 before
+        assert quiet["map"]["width"] >= 81.89 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], width - 256, 16, 44, 32), got
+    assert errors == [], errors
+
+
+LONG_NOTICE = ("로그아웃 요청을 보내지 못했습니다. 계정 서버가 응답하지 않습니다. 이 기기의 로그인은 그대로 남아 있으니 "
+               "네트워크를 확인한 뒤 다시 로그아웃하세요. (ACCOUNT_UNAVAILABLE)")  # no real connect string reaches 90 chars; error.message can
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(1024, 768), (1366, 768)])
+def test_one_row_bar_holds_a_long_notice_name_and_tag(tablet_page, width, height):
+    """From 64rem a long notice, a long robot name and a long gate tag together neither grow the bar nor shrink,
+    move or cover the stop. The notice stays whole for assistive tech (role=status textContent)."""
+    assert len(LONG_NOTICE) >= 90
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
+    robot_id = "rosy-pinky-with-a-very-long-robot-name-0026"
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": robot_id, "transport": "https"}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    playwright_sync.expect(page.locator("ui-topbar ui-brand [data-pilot-robot]")).to_have_text(robot_id)
+    got = page.evaluate("""(text) => {
+      document.querySelector('#pilot-notice').textContent = text;
+      document.querySelector('[data-gate-state]').textContent = '비상 정지 중 · 안전 상태 확인 불가';
+      const box = (s) => { const r = document.querySelector(s).getBoundingClientRect();
+        return {x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height}; };
+      const stop = box('[data-estop]');
+      const hit = document.elementFromPoint(stop.x + stop.width / 2, stop.y + stop.height / 2);
+      return {bar: box('ui-topbar'), stop, notice: box('#pilot-notice'), tag: box('[data-gate-state]'),
+        map: box('[data-goto]'), name: box('[data-pilot-robot]'), stopOnTop: Boolean(hit?.closest('[data-estop]')),
+        said: document.querySelector('#pilot-notice').textContent,
+        token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--appbar-height')),
+        overflow: document.documentElement.scrollWidth - innerWidth};
+    }""", LONG_NOTICE)
+    print(json.dumps({"width": width, **got}))
+    stop = got["stop"]
+    assert got["bar"]["height"] == got["token"] == 64, got
+    assert stop["width"] >= 81.89 and stop["height"] >= 48 and got["stopOnTop"], got
+    assert abs(stop["x"] - (width - 106)) <= 1 and stop["bottom"] <= 64 and got["overflow"] <= 0, got
+    assert got["map"]["width"] >= 81.89 and got["map"]["height"] >= 48, got
+    assert got["notice"]["right"] <= got["tag"]["x"] + 1 and got["tag"]["right"] <= got["map"]["x"] + 1, got
+    assert got["said"] == LONG_NOTICE, got
+    assert got["notice"]["width"] > 0 and all(got[k]["y"] >= 0 and got[k]["bottom"] <= 64 for k in ("notice", "name", "tag")), got
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_bar_does_not_take_the_one_row_rule(tablet_page):
+    """The Pilot app's WebView keeps its bar: --topbar-height at 64rem and above, with the stop at 82x48."""
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": 1366, "height": 768})
+    _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert page.evaluate("document.body.dataset.pilotScreen") == "connect"
+    bar = page.locator("ui-topbar").bounding_box()
+    stop = page.locator("ui-topbar [data-estop]").bounding_box()
+    print(json.dumps({"bar": bar, "stop": stop}))
+    assert bar["height"] == 88 and _near(stop, 1260, 31, 82, 48), (bar, stop)
+    assert errors == [], errors
+
+
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_development_connection_enters_without_a_screen_code(tablet_page):
     """development mode offers a one-hour operator session. paired mode does not."""
