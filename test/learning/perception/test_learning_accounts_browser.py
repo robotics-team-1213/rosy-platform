@@ -67,6 +67,20 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
     folder = tmp_path/'central-review'; folder.mkdir()
     server = make_server(open_store(folder), port, accounts=managed)
+    class AuthorityHandler(server.RequestHandlerClass):
+        def do_GET(self):
+            request = urlsplit(self.path)
+            if request.path != '/api/fleet/auth/authorize':
+                return super().do_GET()
+            if not state['active']:
+                self.send_response(200); self.end_headers(); self.wfile.write(b'Signed out')
+                return
+            query = parse_qs(request.query)
+            state['challenge'] = query['code_challenge'][0]
+            self.send_response(302)
+            self.send_header('Location', callback + '?' + urlencode({'state': query['state'][0], 'code': 'browser-code'}))
+            self.end_headers()
+    server.RequestHandlerClass = AuthorityHandler
     cert, key = tmp_path/'cert.pem', tmp_path/'key.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', str(key),
                     '-out', str(cert), '-days', '1', '-subj', '/CN=localhost'], check=True, capture_output=True)
@@ -80,12 +94,6 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
             navigation_errors = []
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             try:
-                def authorize(route):
-                    query = parse_qs(urlsplit(route.request.url).query)
-                    state['challenge'] = query['code_challenge'][0]
-                    route.fulfill(status=302, headers={'Location': callback + '?' + urlencode({
-                        'state': query['state'][0], 'code': 'browser-code'})})
-                page.route(issuer + '/api/fleet/auth/authorize**', authorize)
                 page.goto(origin + '/accounts')
                 link = page.locator('[data-account-profile]')
                 expect = playwright.expect
@@ -106,8 +114,6 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 old_cookie = next(item['value'] for item in page.context.cookies()
                                   if item['name'] == 'rosy_learning_session')
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
-                page.unroute(issuer + '/api/fleet/auth/authorize**')
-                page.route(issuer + '/api/fleet/auth/authorize**', lambda route: route.fulfill(body='Signed out'))
                 page.locator('#logout').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
                 assert not state['active']
