@@ -59,7 +59,7 @@ class BaseVelocityControl(_Wire):
     sends it only then.
     ``lane_crosswalk_gate`` / ``lane_junction_signal`` (D-763 10 (c)) are true only when
     ``line_follow.crosswalk_gate_enabled`` / ``junction_signal_enabled`` is on; Fleet refuses a
-    route over a crosswalk / signal zone to a robot without it (absent = off).
+    route over a crosswalk / signal zone to a robot announcing it false (absent: a warning).
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """
