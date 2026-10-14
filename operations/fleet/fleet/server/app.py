@@ -848,8 +848,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     from fleet.server.work_routes import install_work_routes
     from fleet.server.channel_requests import install_channel_feature
-    install_work_routes(app, task_service=task_service, mission_service=mission_service,
-                        require_viewer=require_viewer, read_guard=read_guard)
+    install_work_routes(app, task_service=task_service, mission_service=mission_service, require_viewer=require_viewer,
+                        require_named=(require_operator, require_named_operator), read_guard=read_guard)
     from fleet.server.cell_app_routes import install_cell_app_routes
     cell_prepare = install_cell_app_routes(
         app, mission_service=mission_service, compiler=cell_job_compiler, service_id=cell_app_service_id,

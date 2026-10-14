@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.232
+**Version:** v1.235
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.235 작업 읽기의 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (D-763 조각 4, 8·9항)
+
+`GET /api/fleet/work`(v1.208)의 출처에 `trip`과 `cell_job`을 더한다(additive). 응답 모델은 그대로 `FleetWorkOverview`/`FleetWorkSummary`(`core_common.protocol.schemas`)이고 필드가 늘었다.
+
+- **행.** `source`가 `task`·`mission`·`trip`·`cell_job` 넷이다. trip 행: `source_id` = trip id, `action_kind` = `trip`, `status` = trip 상태 그대로(`started`·`running`·`link_wait`·`arrived`·`stopped`·`failed`·`canceled`), `device_id` = 로봇, `workcell_id` null, `reason` = trip 끝 사유, `updated_at` = trip view의 갱신 시각(UTC ISO). 열린 trip과 최근 끝난 trip이다(저장된 최근 `limit`개에 열린 trip을 더한다). Cell Job 행: `source_id` = mission id, `action_kind` = 원장 단계 종류(지금 `CELL_TRANSFER`), `status` = Cell Job 상태 그대로, `device_id` = OMX instance, `workcell_id`, `reason`, `updated_at`.
+- **새 필드(모든 행).** `visible_state`: `approval_pending`(`PROPOSED`) · `in_progress` · `waiting`(열린 trip의 `wait.waiting`이 참) · `intervention`(`HOLD`, trip `stopped`·`failed`, Task `FAILED`·`UNKNOWN`·`EXPIRED`) · `ended`(`GOAL_CONFIRMED`, `COMPLETED`, `CANCELED`, trip `arrived`·`canceled`, `CANCELLED_BY_OPERATOR`로 끝난 Cell Job) · 이 읽기가 모르는 상태는 null. 읽기 투영이고 원장 상태 값은 바뀌지 않는다(D-664 5항). `wait`: trip 행만, trip 읽기의 `wait`(v1.232)에서 `reason`·`waiting`·`bound_s`·`over_bound` 넷(`since` 없음, 판정하지 않은 tick은 null). 상한을 넘은 기다림은 `in_progress`이고 `over_bound` 참이다 — 경고이지 개입이 아니다(개정 2 질문 7). `approval`: `PROPOSED` 행만, 단계 종류 등록부의 값(`two_person`·`proposer_only`·`one_person`, v1.230과 같은 판정), 등록부에 없는 종류는 null(승인 경로가 409 `APPROVAL_RULE_UNREGISTERED`).
+- **범위(서버가 정한다).** Task·trip 행은 viewer 이상 모두(trip은 `GET /api/fleet/trips`와 같다). Mission 행은 지금처럼 제안한 사람 자신의 것만(`PICK_PLACE`는 제안자만 종류). Cell Job 행: 제안한 principal 자신, `PROPOSED`가 아닌 행은 운영자(`GET /api/fleet/cell-jobs/{id}`와 같은 범위), `PROPOSED` 행은 이름 있는 운영자(D-763 개정 2 질문 6: 두 사람 승인이 필요한 요약 행은 제안하지 않은 이름 있는 운영자에게도 보인다). viewer와 이름 없는 운영자(공유 콘솔 토큰)는 남의 `PROPOSED` Cell Job 행을 보지 못한다. 행에는 제안자 신원·계획·후보·요청 본문이 없다. 상세와 본문의 범위는 그대로다.
+- **응답 필드.** `cell_jobs_available`(Cell 원장 미설정이면 false, 빈 목록과 구별), `truncated_sources`에 `trip`·`cell_job`(최대 4), `rows` 최대 400행, `kinds`(아래).
+- **새 작업 종류 `kinds`.** 이 현장에서 지금 실행할 수 있는 새 작업 종류이고 값은 그 종류 행의 `action_kind`다. `trip`: 활성 현장 지도에 장소가 있고, 로봇 가운데 하나가 trip 능력(`base_velocity`의 `robot_kind`·`drive_modes`·`trip_max_linear`, D-494 1)을 알린다(능력 캐시 읽기, 처음 읽는 로봇은 최대 0.05 s). `CELL_TRANSFER`: 이 배포 프로필에서 단계 원장 하달이 열려 있고(`step_action_kinds.open_kinds`, 지금 `simulation`만) 하달기가 켜져 있고 설정된 OMX instance가 있다. 열리지 않은 종류는 목록에 없다(꺼진 단추나 "준비 중"으로 보이지 않는다, D-763 9항). 시작 권한 검사는 각 시작 경로가 그대로 한다.
+
+여러 원장 사이의 같은 시점은 보장하지 않는다. 행마다 원장 갱신 시각을 보인다. 이 경로는 읽기이며 dispatch·admission·claim을 하지 않는다. 승인·거절 자리(D-763 조각 5c)는 이 버전에 없다.
 
 ### v1.232 trip 읽기의 기다림 `wait.waiting`·`bound_s`·`over_bound` (D-763 조각 2, 8항)
 
@@ -188,7 +200,7 @@ CSRF 실패는403 `CSRF_REJECTED`, 초기 쿠키가 아닌 자격은403 `PASSWOR
 
 ### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
-`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다.
+`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다. v1.235(D-763 조각 4)부터 trip·Cell Job 출처와 그 범위는 v1.235 절을 따른다.
 
 `limit`은 정수 1–100, 기본 50이며 **원장별** 최근 행 수다. 응답은 `observed_at`(조회 UTC 시각), `tasks_available`, `missions_available`, `truncated_sources`(`task`/`mission`), `rows`(최대 200행)다. `observed_at`은 장치 센서의 관측 시각이 아니다. 원장 미설정은 available=false이며 빈 목록과 구별한다. 행은 `updated_at` 내림차순, source/source_id 내림차순으로 정렬한다. 전체 원장 스냅숏의 원자성 또는 두 원장 사이의 동일 시점은 보장하지 않는다.
 
@@ -3024,6 +3036,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.235 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
 | v1.232 | 2026-10-14 | Additive (D-763 조각 2, feat/fleet-work-wait-read): trip 읽기의 `wait`에 `waiting`·`bound_s`·`over_bound`를 싣는다. 한 주기에 한 번 쓰고, 판정에 닿지 못한 주기에는 null이다. 상한을 넘은 기다림은 경고이고 개입이 아니다(개정 2 질문 7). |
 | v1.231 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 15° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 오늘의 목표다. v1.231. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
 | v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
