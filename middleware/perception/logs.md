@@ -1569,3 +1569,10 @@
 - 증거: 원격 pytest(AI PC) 학습 페인트·관측 노드 시험 24개 파일 + `test_module_structure.py` 571 passed, 26 skipped, `known_failures` NEW 0. Gazebo 러너에서 본 6역할 모델(wall 없음)이 열 때 거절되는 시험을 더했다.
 - gate 변화: 없음. Gazebo 재실행과 실물 수용은 하지 않았다.
 - 결정: D-588 (예약)
+
+## 2026-10-14 · 09e54097a · 거절된 학습 모델 이유를 경고 한 번과 keep 묶음으로 낸다 (D-588)
+
+- 변경: 앞 기록의 거절 이유는 아무도 읽지 않았다. 페인트 워커가 "no model" 이유가 바뀔 때마다 경고를 한 번 내고(프레임마다는 아님), keep 디버그 묶음에 `paint_last_error`가 실린다. `LaneSegModel.open`의 `paint_target` 기본값을 노드와 `lane_marking_mask`처럼 `lane_marking`으로 바꿨다. 느슨한 기본값에 기대던 drivable 모델 시험 하나는 `paint_target="drivable"`을 적는다.
+- 증거: 원격 pytest(AI PC) 같은 묶음 + `paint_reuse_sim.py`, `test_module_structure.py` 572 passed, 26 skipped, `known_failures` NEW 0.
+- gate 변화: 없음. Gazebo 재실행과 실물 수용은 하지 않았다.
+- 결정: D-588 (예약)
