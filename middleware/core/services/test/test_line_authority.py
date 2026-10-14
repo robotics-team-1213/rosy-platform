@@ -553,9 +553,10 @@ def test_after_a_backward_wall_step_an_unpublished_stamp_is_refused():
     for _ in range(3):
         rig.step()
     stamp = WALL + rig.now + .03  # an old Fleet's stamp between two samples, not a published one
-    rig.m._wall = lambda: WALL + rig.now - 5.
+    rig.m._wall = lambda: WALL + rig.now - .1  # small enough that the stamp is not in the future
     for _ in range(3):
         rig.step(dx=.01)
+    assert rig.m._odom_log[-2][0] <= stamp <= rig.m._odom_log[-1][0]  # "at or before" lands after the step
     with pytest.raises(AuthorityRefused) as err:
         rig.send(.5, stamp=stamp)
     assert err.value.code == 'AUTHORITY_POSE_STALE'
