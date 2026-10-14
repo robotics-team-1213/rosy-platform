@@ -1109,3 +1109,11 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 - 결정: D-760 Decision 2.
 - 교훈: 없음.
+
+## 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
+
+- 변경: `core/bridge/ros_bridge.py::_on_odom`이 `state.set_odom_pose`를 먼저 부르고(odom `frame_id`·헤더 시각을 같이 넘겨 epoch 판정) 그 반환 stamp를 `odometry.observe_lane_return(..., wall=)`로 line-follow에 넘긴다.
+- 증거: `test_lane_return_odometry.py::test_the_published_wall_stamp_keys_the_odom_log`(수정 전 적색), `test_line_follow_lane_cue.py` 벽시계 ±5 s 시험, `middleware/core/gateway/test` 2865 통과(`X:/DevTemp/odom-monotonic/gw/run-1.txt`), `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. `ros_bridge.py` 910 → 912줄(판정 799 + 150 안).
+- 결정: D-758 0단계.
+- 교훈: 없음.

@@ -3618,3 +3618,11 @@
 - Change: redundant module and bend_fields docstrings are shortened, retaining provider identities, both bend contracts and refusal conditions. All validation, geometry, error handling and safety rationale remain.
 - Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
 - Gate: no runtime or device claim.
+
+## 2026-10-14 · uncommitted · fix(world): D-758 0단계 지도 자세 추적기가 CORE odom epoch 변경에 기준을 버린다
+
+- 변경: `operations/world/src/rosy/world/state/projections/map_pose.py` — `OdomSample.epoch`(선택), `odom_from_snapshot`이 `odom_pose.epoch`(0 이상 정수만)를 읽고, `add_odom`이 이전에 받은 epoch와 다른 표본에서 이동이 없어도 `_reset`한다. epoch가 없는 로봇은 이전 규칙 그대로다. Fleet이 돌려주는 `pose_stamp`·`odom_stamp_s`는 바뀌지 않는다. API 핀 시험 4개를 v1.228로.
+- 증거: `test_map_pose.py` 새 3건(수정 전 적색). Fleet·world 전체 스위트 결과는 보고서에 적는다.
+- gate 변화: SOURCE·호스트 근거만.
+- 결정: D-758 0단계.
+- 교훈: 없음.
