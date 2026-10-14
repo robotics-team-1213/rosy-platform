@@ -1117,3 +1117,11 @@
 - gate 변화: SOURCE·호스트 근거만. `ros_bridge.py` 910 → 912줄(판정 799 + 150 안).
 - 결정: D-758 0단계.
 - 교훈: 없음.
+
+## 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
+
+- 변경: `ros_bridge._on_odom`의 스냅숏 stamp → line-follow 기록 넘김을 ROS 없는 `core/bridge/odometry.py::observe_odom`으로 옮기고 `_on_odom`은 그것을 부른다(`test_bridge_timers.py`가 콜백 시험을 ROS 없는 형제 모듈에 두라고 한다). `ros_bridge.py` 912 → 908줄.
+- 증거: `test_lane_return_odometry.py::test_the_odom_callback_logs_the_sample_under_the_snapshots_stamp`. `wall=wall`을 뺀 변이 커밋 `1a0413b01`(가지에 없음)을 만들었으나 원격 실행은 전송 실패로 확인 못 함.
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인.
+- 결정: D-758 0단계 독립 Safety-Review 조건 2.
+- 교훈: 없음.

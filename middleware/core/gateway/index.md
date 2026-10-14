@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
 - 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
 - 2026-10-14 · 8a73125e6 · 임대가 첫 통행권 전에 끝나도 로봇은 서 있다 (D-760 2단계 안전 검토 M1, API v1.225)
 - 2026-10-14 · 1ee33639c · trip 임대가 열려 있으면 차선 추종이 통행권을 요구한다 (D-760 2단계, API v1.225)
 - 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 설정 읽기 (D-759 검토 반영, API v1.224)
-- 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
