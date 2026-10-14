@@ -442,12 +442,16 @@ def test_a_link_fault_after_every_return_keeps_the_first_since_so_the_stall_rule
     fleet.fail["junction"] = OSError("no route to host")
     _ticks(runner, fleet)
     since = runner.view("a")["wait"]["since"]
+    trace = []
     for _ in range(20):  # 10 s: lease ttl 8 + stall_s 2
         _ticks(runner, fleet)
-        if runner.view("a")["state"] != "link_wait":
+        view = runner.view("a")
+        trace.append((view["state"], view["reason"], sum(k == "junction" for _r, k, _b in fleet.calls),
+                      view["hold"], (runner._live["a"].traffic or {}).get("refused_at_m"), view.get("wait")))
+        if view["state"] != "link_wait":
             break
         assert runner.view("a")["wait"]["since"] == since
-    assert (runner.view("a")["state"], runner.view("a")["reason"]) == ("stopped", "stall")
+    assert (runner.view("a")["state"], runner.view("a")["reason"]) == ("stopped", "stall"), trace
     assert fleet.now - since <= runner.lease.ttl_s + 2.0 + 0.5
 
 
