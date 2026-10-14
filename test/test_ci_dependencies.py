@@ -214,3 +214,24 @@ def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
     assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
+
+
+def test_merge_group_runs_the_full_tier_against_the_group_base():
+    """D-762 stage 1: a merge queue group is a full-tier event and checks its own base..head."""
+    import yaml
+
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    triggers = doc.get("on", doc.get(True))  # PyYAML reads the bare key `on` as True
+    assert "merge_group" in triggers
+    assert "concurrency" not in doc, "a concurrency group could cancel a queue or main push run"
+    scope = {s["name"]: s for s in doc["jobs"]["scope"]["steps"]}
+    safety = scope["Safety-Review trailer (D-430)"]
+    assert "github.event_name == 'merge_group'" in safety["if"]
+    assert "github.event_name == 'merge_group' && github.event.merge_group.base_sha" in safety["env"]["SAFETY_BASE"]
+    tier = scope["Test scope (D-436)"]["run"]
+    # Only pull_request takes the affected tier; every other event (merge_group included) is full.
+    assert '"${{ github.event_name }}" = "pull_request"' in tier and "--full --ci-matrix" in tier
+    assert "merge_group" not in tier
+    test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
+    assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
+    assert "known_failures.rerun_ids" in test["run"] and '"-rA"' in test["run"]

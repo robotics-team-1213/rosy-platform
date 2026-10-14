@@ -662,3 +662,33 @@ def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
     assert "land-1-a1b2c3" not in _git(repo, "worktree", "list")
     refs = _git(repo, "for-each-ref", "--format=%(refname)", "refs/remote-pytest")
     assert "land-1-a1b2c3" not in refs and "refs/remote-pytest/other" in refs
+
+
+@pytest.mark.parametrize("listed,rerun_out,code", [
+    (True, "PASSED test/q.py::test_f\n", 0),            # listed, passes once more -> green
+    (True, "FAILED test/q.py::test_f - again\n", 1),    # listed, fails twice -> still red
+    (False, None, 1),                                    # unlisted -> never rerun
+])
+def test_run_on_reruns_only_quarantined_failures_once(tmp_path, monkeypatch, listed, rerun_out, code):
+    """D-762 stage 1: one rerun of listed ids, appended after the marker known_failures.py reads."""
+    monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp, "quarantine", lambda repo, sha: {"test/q.py::test_f": "r"} if listed else {})
+    calls = []
+
+    def job(host, name, k, log, job_args, inv, *a):
+        calls.append((k, inv))
+        log.write_bytes(b"FAILED test/q.py::test_f - boom\n1 failed\n" if k == 0 else rerun_out.encode())
+        return 1 if k == 0 or "FAILED" in rerun_out else 0
+
+    monkeypatch.setattr(rp.remote_job, "run", job)
+    log = tmp_path / "run-1.txt"
+    assert rp.run_on("h", [["test/q.py"]], [log], "ab" * 20, tmp_path, None) == [code]
+    if not listed:
+        assert len(calls) == 1
+        return
+    assert calls[1] == ("0r", ["test/q.py::test_f", "-q", "-rA", "-p", "no:cacheprovider"])
+    assert len(calls) == 2
+    text = log.read_text(encoding="utf-8")
+    assert rp.known_failures.RERUN_MARKER in text and text.endswith(rerun_out)
