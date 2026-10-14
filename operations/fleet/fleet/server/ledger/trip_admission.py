@@ -18,6 +18,7 @@ from rosy.world.state.projections.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
+from fleet.traffic import rule_m
 
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
@@ -51,21 +52,30 @@ class TripAdmission:
     async def hold_job(self, robot_id: str, job_id: str, operator: str, capabilities) -> dict:
         """D-763 6: at approval a multi-step job takes this robot's lease and holds it to its end (``lease.hold``).
 
-        Gate, rev 2 Q10 (a)(b): site trip lease and authority both on, the lease ttl above the 5 s authority
+        Gate: Rule M's verdict on each leg the robot drives (``reasons``), then rev 2 Q10 (a)(b) (``missing``):
+        site trip lease and authority both on, the lease ttl above the 5 s authority
         (D-760 1) and the robot's base announcing JOB_CAPS and an authority enforced under the lease, else 422
         LINK_UNBOUNDED_MOTION (D-760 7). Q10 (c) waits for the crosswalk/signal capability names. Open (D-763
         open question 1): what a lease expiry stops during an arm step; no arm step may be held until decided.
         """
         items = ((capabilities or {}).get("controls") or {}).get("items") or ()
         base = next((i for i in items if isinstance(i, dict) and i.get("kind") == "base_velocity"), {})
+        # D-760 6: the motion bound of each leg the robot drives is Rule M's own verdict, without the lease
+        # (the job's lease answers who holds the robot, never how far it may move: D-763 4).
+        trip = {"lease": None, "traffic_authority": self.authority.mode(
+            SimpleNamespace(line_follow_authority=base.get("line_follow_authority") is True))}
+        goal = {"goal_lease": "leased" if base.get("goal_lease") is True else None}
+        legs = [leg for leg in base.get("drive_modes") or () if leg in ("lane", "free")] or [None]
+        verdicts = [rule_m.verdict(trip=trip, leg=leg, goal=goal) for leg in legs]
+        reasons = list(dict.fromkeys(v["reason"] for v in verdicts if v["state"] != "bounded"))
         missing = [name for name in JOB_CAPS if base.get(name) is not True] + [name for name, off in (
             ("line_follow_authority_under_lease", base.get("line_follow_authority_required") is not True
              and base.get("line_follow_authority_under_lease") is not True),
             ("fleet.trip_lease_required", not self.lease.required),
             ("fleet.traffic.authority", not self.authority.enabled),
             ("fleet.trip_lease_ttl_s", self.lease.ttl_s <= AUTHORITY_MAX_TTL_S)) if off]
-        if missing:
-            raise TripError(422, "LINK_UNBOUNDED_MOTION", {"missing": missing})
+        if reasons or missing:  # reasons: Rule M's words (hold_back, no_goal_lease, leg_unknown); missing: Q10
+            raise TripError(422, "LINK_UNBOUNDED_MOTION", {"reasons": reasons, "missing": missing})
         if self.lease.on_job_lost is None:  # rev 2 Q3: no HOLD that reaches no person
             raise RuntimeError("D-763: wire lease.on_job_lost (incident + HOLD) before a job holds a robot")
         async with self._lock_for(robot_id):  # a trip start on this robot runs wholly before or after this
