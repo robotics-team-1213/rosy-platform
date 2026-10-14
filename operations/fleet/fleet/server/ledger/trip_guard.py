@@ -29,8 +29,11 @@ _LOG = logging.getLogger(__name__)
 GOAL_FRESH_S = 2.0
 
 
-def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
-    console.trip_busy = runner.robot_busy
+def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) -> None:
+    if claims is not None:  # D-763 4: a job's durable D-330 robot claim holds the robot too (HOLD, after a restart)
+        runner.lease.claimed = lambda robot_id: next((c["owner_id"] for c in claims(
+            resource_kind="robot", resource_id=robot_id) if c["owner_kind"] == "mission"), None)
+    console.trip_busy = lambda robot_id: runner.robot_busy(robot_id) or runner.lease.job_of(robot_id) is not None
     console.trip_goal_sent_at = {}
     goal, cancel, estop_all = console.goal, console.cancel, console.estop_all
     formation_start, line_follow_mode = console.formation_start, console.line_follow_mode
