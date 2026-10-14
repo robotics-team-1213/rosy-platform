@@ -275,3 +275,9 @@
 - 변경: 상한을 넘으면 카드 줄과 주의 행이 `대기 상한 넘음 · 막힘 해결 중 · <사유>`다(warn). crit `개입 필요` 행을 지웠다. 개입은 기존 막힘·해결기 인계 경로가 낸다.
 - 증거: 원격 시험(AI PC) 285 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, 7c26a028c) `test_console_card_trips_browser.py` 20 passed: 상한 넘으면 주의 목록과 카드 줄에 글, 최우선 개입 목록에는 없음. 로그 X: `browser-run/wait-read-b2.txt`.
 - gate 변화: 없음.
+
+## 2026-10-14 · f79947c25 · fix(console): 지도 화면 trip 줄은 열린 trip에만 기다림 글
+
+- 변경: `tripStatusText`가 `started`·`running`·`link_wait` trip에만 `tripWaitText`를 붙인다. API로 취소된 trip은 저장된 마지막 `waiting: true`를 가지고 있을 수 있다. `site-map-model.js` 799줄 그대로. 0d66d8b41에서 상한 넘김 글을 중립 문구 `대기 상한 넘음 · <사유>`로 바꿨다.
+- 증거: node 시험 포함 원격 218 passed, 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, f79947c25) `test_console_card_trips_browser.py` 20 passed, 로그 X: `browser-run/wait-read-b5.txt`.
+- gate 변화: 없음.
