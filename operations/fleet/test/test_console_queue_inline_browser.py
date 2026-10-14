@@ -295,7 +295,7 @@ LOW_CONTRAST = """selector => {
 
 
 @pytest.mark.parametrize("size,theme", [((320, 568), "dark"), ((320, 568), "light"), ((390, 844), "light"),
-                                        ((1366, 768), "light")])
+                                        ((1366, 768), "light"), ((1024, 768), "dark"), ((1100, 800), "light")])
 def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site, size, theme):
     """D-741 8 at 320x568 and in the light theme: nothing runs off sideways, the stop is in view with nothing over
     it, every records screen can be reached from the sub-nav, and the judgment seat's heading and review form can
