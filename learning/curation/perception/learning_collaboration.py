@@ -158,7 +158,9 @@ class Collaboration:
         principal = self.identity(handler)
         if path in ('/api/import', '/api/cad', '/api/learning/register'):
             raise PermissionError('project users cannot import arbitrary server filesystem paths')
-        if path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
+        if path.startswith(('/api/review-ai/', '/api/review-ai-cancel/')):
+            capability = 'edit'
+        elif path.startswith(('/api/frames/', '/api/masks/', '/api/mask-preview/')):
             capability = 'approve' if body.get('action') == 'approve' else 'edit'
         elif path == '/api/prepare':
             capability = 'approve'

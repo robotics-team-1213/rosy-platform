@@ -34,7 +34,7 @@ from core_common.protocol.docking import DockState, DockingStatus  # noqa: F401
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
+from core_common.protocol.work import FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
@@ -1036,6 +1036,10 @@ class LineFollowStatus(BaseModel):
     # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
     crosswalk: Optional[LineCrosswalkStatus] = None
     crosswalk_reported: bool = Field(default=False, exclude=True)
+    # D-760 rev 3 item 9 (v1.227): the regulation standing the robot, by precedence authority > signal >
+    # crosswalk_held > crosswalk_wait > crosswalk_look; None = line-follow off or none holds it.
+    regulation_wait: Optional[Literal['authority', 'signal', 'crosswalk_held', 'crosswalk_wait',
+                                      'crosswalk_look']] = None
 
     @model_validator(mode="before")
     @classmethod

@@ -151,7 +151,7 @@ def test_the_capability_is_read_from_the_controls_descriptor():
 
 def test_site_config_names_and_bounds(tmp_path):
     path = tmp_path / "site.yaml"
-    assert _trip_lease(SimpleNamespace(site_config=None)) == {"required": False, "ttl_s": 5.0}
+    assert _trip_lease(SimpleNamespace(site_config=None)) == {"required": False, "ttl_s": 8.0}  # D-760 1
     path.write_text("fleet:\n  trip_lease_required: true\n  trip_lease_ttl_s: 10\n", encoding="utf-8")
     assert _trip_lease(SimpleNamespace(site_config=path)) == {"required": True, "ttl_s": 10.0}
     for bad in ("trip_lease_required: 'yes'", "trip_lease_ttl_s: 11", "trip_lease_ttl_s: 0.5"):
@@ -196,7 +196,7 @@ def test_open_renew_release():
     lease_id = view["lease"]["lease_id"]
     assert view["lease"]["state"] == "held"
     assert ports.lease.puts == [{"lease_id": lease_id, "trip_id": "p1", "holder": "site-a",
-                                 "operator_name": "bob", "ttl_s": 5.0}]
+                                 "operator_name": "bob", "ttl_s": 8.0}]  # D-760 1
     _ticks(runner, ports, 4)
     assert len(ports.lease.puts) == 5 and {body["lease_id"] for body in ports.lease.puts} == {lease_id}
     _do(runner, runner.cancel("p1", "bob"))
@@ -322,7 +322,7 @@ def test_no_confirmed_renew_for_the_ttl_ends_the_trip():
     runner, store, ports = _setup()
     _start(runner, store, ports)
     ports.lease.down = True
-    _ticks(runner, ports, 9)  # 4.5 s: CORE still holds it
+    _ticks(runner, ports, 15)  # 7.5 s of the 8 s (D-760 1): CORE still holds it
     assert runner.view("p1")["state"] in ("started", "running")
     _ticks(runner, ports)
     ports.lease.down = False

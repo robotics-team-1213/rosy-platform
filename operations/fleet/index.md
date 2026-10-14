@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · uncommitted · fix(world): D-758 0단계 지도 자세 추적기가 CORE odom epoch 변경에 기준을 버린다
-- 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
-- 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
-- 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
-- 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
+- 2026-10-14 · c53057fef · Fleet 작업 원장을 자기 크기 단위로 등록 (D-763 5·5b)
+- 2026-10-14 · 65e315231 · D-763 조각 5·5b 보안 검토 반영
+- 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
+- 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+- 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다

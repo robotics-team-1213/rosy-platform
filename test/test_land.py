@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -305,27 +306,33 @@ def test_ff_refused_by_peer_dirty_file_leaves_it(repos, capsys):
     assert git(main, "rev-parse", "HEAD") == before
 
 
-FULL = ('{"mode": "full", "escalations": ["tools/x: harness"], "invocations": [],'
-        ' "local_invocations": [["pkg/test"]]}')
+FULL = ('{"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations": [],'
+        ' "local_invocations": [["pkg/test/test_a.py"]], "full_invocations": [["pkg/test"]]}')
 
 
-@pytest.mark.parametrize("affected, code", [
-    ("sys.exit(3)", 1),                    # harness present but selector broken: stop, no guessing
-    (f"print({FULL!r})", 0),               # FULL: land on the local subset, owe the rest to CI
+@pytest.mark.parametrize("affected, red, code", [
+    ("sys.exit(3)", False, 1),             # harness present but selector broken: stop, no guessing
+    (f"print({FULL!r})", False, 0),        # FULL: the whole tier on the lab PCs, then land
+    (f"print({FULL!r})", True, 1),         # FULL with a NEW failure in the full tier: not landed
 ])
-def test_harness_selector(repos, capsys, affected, code):
+def test_harness_selector(repos, monkeypatch, capsys, affected, red, code):
     main, wt = repos
     stub = f"import sys\nif sys.argv[1] == 'affected':\n    {affected}\n"
-    commit(wt, {"tools/harness/affected_tests.py": "", "tools/harness/rosy_harness.py": stub,
-                "pkg/a.py": "x = 2\n"}, "branch with harness")
+    files = {"tools/harness/rosy_harness.py": stub, "tools/harness/affected_tests.py": "", "pkg/a.py": "x = 2\n"}
+    if red:
+        files["pkg/test/test_bad.py"] = "def test_bad():\n    assert False\n"
+    commit(wt, files, "branch with harness")
     before = git(main, "rev-parse", "HEAD")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
     assert land.main(["--tests", "auto"]) == code
     captured = capsys.readouterr()
     if code:
-        assert "affected selector failed" in captured.err
+        assert ("affected selector failed" if affected.startswith("sys") else "NEW failure") in captured.err
         assert git(main, "rev-parse", "HEAD") == before
     else:
-        assert "FULL tier is still owed to CI" in captured.out.split("== landed")[1]
+        assert calls == [[["pkg/test"]]], "a FULL landing runs full_invocations, not the guards alone"
+        assert "FULL tier took" in captured.out.split("== landed")[1]
 
 
 GUARD = ("from pathlib import Path\n\n\n"
@@ -405,3 +412,109 @@ def test_logs_md_their_deletion_next_to_append_is_manual(repos):
     commit(main, {"docs/logs.md": "a\n"}, "peer deletes b")
     assert land.main(["--tests", "none"]) == 1
     assert no_merge_left(wt)
+
+
+SAFETY = "tools/harness/safety_review.py"
+
+
+def install_safety_rule(main: Path) -> None:
+    """The real safety_review.py (and its data files) with the fixture's init commit as BASELINE."""
+    rule = re.sub(r'BASELINE = "[0-9a-f]{40}"', f'BASELINE = "{git(main, "rev-parse", "HEAD")}"',
+                  (ROOT / SAFETY).read_text(encoding="utf-8"), count=1)
+    files = {SAFETY: rule, "tools/harness/platform_parts.yaml": "roots:\n  - path: safe\n    concern: safety\n",
+             "safe/stop.py": "LIMIT = 1\n"}
+    for data in sorted((ROOT / "tools/harness").glob("safety_review_*")):
+        files[f"tools/harness/{data.name}"] = data.read_bytes()
+    commit(main, files, "rule")
+
+
+@pytest.mark.parametrize("trailer, code", [("", 1), ("\n\nSafety-Review: test-reviewer unit evidence", 0)])
+def test_safety_tagged_change_needs_its_trailer_before_landing(repos, capsys, trailer, code):
+    """D-762 stage 0: CI's own D-430 5 rule (safety_review.py) runs on the commits the landing adds."""
+    main, wt = repos
+    install_safety_rule(main)
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"safe/stop.py": "LIMIT = 2\n"}, "loosen the stop" + trailer)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == code
+    err = capsys.readouterr().err
+    if code:
+        assert "touches safe/stop.py" in err and "not landing" in err
+        assert git(main, "rev-parse", "HEAD") == before
+    else:
+        assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def test_ordinary_landing_reports_distance_from_origin(repos, capsys):
+    main, wt = repos
+    git(main, "update-ref", "refs/remotes/origin/main", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert "local main is 1 commits / 0.0 hours ahead of origin/main" in capsys.readouterr().out
+
+
+def test_untrailered_safety_commit_already_on_main_does_not_block_a_landing(repos):
+    """Only the commits the landing adds are checked; main's own history is pre-push's and CI's."""
+    main, wt = repos
+    install_safety_rule(main)
+    commit(main, {"safe/stop.py": "LIMIT = 3\n"}, "untrailered safety edit already on main")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "ordinary branch change")
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+FULL_THEN_DELTA = """import json, sys
+if sys.argv[1] == 'affected':
+    if '--head' in sys.argv:
+        print(json.dumps({"mode": "affected", "escalations": [], "invocations": [["pkg/test/test_a.py"]]}))
+    else:
+        print(json.dumps({"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations": [],
+                          "local_invocations": [], "full_invocations": [["pkg/test"]]}))
+"""
+
+
+def test_main_moving_during_a_full_round_reruns_only_the_delta_tier(repos, monkeypatch, capsys):
+    """D-762 stage 0: round 2 selects main's delta since the FULL-tested main, not the whole tier."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": FULL_THEN_DELTA, "tools/harness/affected_tests.py": "",
+                "pkg/a.py": "x = 2\n"}, "branch with harness")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # a peer lands while the full tier runs
+            commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    first_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [[["pkg/test"]], [["pkg/test/test_a.py"]]]
+    assert f"FULL tier passed over main {first_main[:10]}" in capsys.readouterr().out
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, capsys):
+    """A delta path gone from the candidate (renamed here, edited there) is not narrowed to the delta tier."""
+    main, wt = repos
+    big = "".join(f"line_{i} = {i}\n" for i in range(30))
+    commit(main, {"pkg/big.py": big}, "big module")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"tools/harness/rosy_harness.py": FULL_THEN_DELTA, "tools/harness/affected_tests.py": ""}, "harness")
+    (wt / "moved").mkdir()
+    git(wt, "mv", "pkg/big.py", "moved/big.py")
+    git(wt, "commit", "-q", "-m", "move big")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # a peer edits the file at its old path while the full tier runs
+            commit(main, {"pkg/big.py": big.replace("line_0 = 0", "line_0 = -1")}, "peer edit")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [[["pkg/test"]], [["pkg/test"]]]
+    assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
+    assert "line_0 = -1" in (main / "moved/big.py").read_text()

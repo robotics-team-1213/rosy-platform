@@ -8,6 +8,7 @@ import pytest
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import PINKY_PRO
 from core_features.line_follow.crosswalk import gate as gate_module
+from core_features.line_follow.crosswalk import kernel as kernel_module
 from core_features.line_follow.crosswalk.gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
@@ -49,8 +50,8 @@ def rays_at(x, objects, *, no_return=None, wall_m=1.5, step_deg=2):
 
 
 class Sim:
-    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, **config):
-        self.edges = edges          # (left, right) inner paint edges the camera reports, or None
+    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, slope=0.0, **config):
+        self.edges, self.slope = edges, slope   # slope: the lane's direction in the body frame (dy/dx)          # (left, right) inner paint edges the camera reports, or None
         self.xw_u, self.lat_u = xw_u, lat_u   # crosswalk along-track bound (None = detector off), lane lateral
         self.t, self.x, self.linear = 1.0, 0.0, 0.0
         self.objects, self.no_return, self.scans = [], None, True
@@ -72,8 +73,9 @@ class Sim:
         raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=self.lat_u,
                    crosswalk_uncertainty_m=self.xw_u,
                    boundaries=[] if self.edges is None else [
-                       dict(side=side, slope=0.0, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
-                       for side, y in zip(("left", "right"), self.edges)])
+                       dict(side=side, slope=k, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
+                       for side, y, k in zip(("left", "right"), self.edges,
+                                             self.slope if isinstance(self.slope, tuple) else (self.slope,) * 2)])
         if crosswalk is not None and crosswalk[0] - self.x >= 0.0:
             raw["crosswalk"] = dict(near_m=crosswalk[0] - self.x, far_m=crosswalk[1] - self.x)
         m.observe(LineObservation(LineFollowMode.CAMERA_LINE, t, True, 0.0, 0.9,
@@ -115,7 +117,8 @@ def test_stop_gap_comes_from_the_body_and_range_min():
     geo = s.m._crosswalk_geometry()
     assert geo.s_wait == pytest.approx(RANGE_MIN - (B.front_x_m - B.lidar_x_m) + 0.02)
     assert geo.s_wait == pytest.approx(0.11, abs=0.002)       # D-573 2: Pinky nominal about 0.11 m
-    text = Path(gate_module.__file__).read_text(encoding="utf-8")
+    text = "\n".join(Path(module.__file__).read_text(encoding="utf-8")
+                     for module in (gate_module, kernel_module))
     assert "0.15" not in text and "0.22" not in text           # no D-384 hand constants
 
 
@@ -399,6 +402,71 @@ def test_a_poor_lane_reading_while_crossing_does_not_widen_the_way_ahead_into_th
         s.lat_u, s.objects = 0.046, walls + person
         out = [d.linear for _, d in s.run(1.0)]
         assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
+def test_the_look_area_follows_the_lane_direction_not_the_body_heading():
+    """D-573 개정 5 6항 (Gazebo m23): the robot stood 0.1 rad off the lane at the stop; turned to the body's
+    heading, the far end of the look area ran over the wall 0.117 m out and person_present held. The lane's
+    direction is the seen edges' slope; in that frame the walls stay outside and the lane stays inside."""
+    walls = [(x / 100, side + 0.1 * x / 100, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls
+    s.to_stop()
+    assert any(d.linear > 0 for _, d in s.run(7.0))
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls + [(0.60, -0.060 + 0.06, 0.012)]       # in the lane at its far right edge
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
+def test_an_edge_misread_with_another_slope_cannot_hide_the_other_lane_edge():
+    """Review 2026-10-14: a straight lane with the left edge misread at slope 0.1 tilts the mean frame
+    0.05 rad; the right edge's seen ends in that frame still bound A, so someone at its far end holds."""
+    s = Sim(edges=(0.079, -0.079), slope=(0.1, 0.0))
+    s.objects = [(0.60, -0.070, 0.012)]
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
+def test_a_loose_lane_reading_on_the_stripes_does_not_turn_the_way_ahead():
+    """Gazebo m24: while crossing, the camera read the stripes as a lane 0.08 m wide, slope 0.18, bound
+    0.043 m; turned by it the way ahead ran over the wall and the crossing held for good. A reading looser
+    than D-491's MAX_LATERAL_M is no lane: the zone's own frame stays, and a person in the way still holds."""
+    walls = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    for person, moves in (([], True), ([(FAR - 0.02, 0.0, 0.02)], False)):
+        s = Sim(edges=(0.079, -0.079))
+        s.objects = walls
+        s.to_stop()
+        s.run(5.5)
+        assert s.crosswalk.state == "crossing"
+        end = s.t + 20.0
+        while s.x + B.front_x_m < NEAR + 0.02:
+            assert s.t < end, s.m.status()
+            s.frame()
+        s.edges, s.slope, s.lat_u, s.objects = (0.0, -0.08), (0.36, 0.0), 0.043, walls + person
+        out = [d.linear for _, d in s.run(1.0)]
+        assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
+def test_a_frame_without_the_line_keeps_the_last_corridor_for_its_ttl_in_the_same_odom_run():
+    """Gazebo m25: a camera frame without the line cleared the lane evidence for a tick; without a corridor A
+    widened in the zone's skewed frame, read unknown and restarted the 5 s clear window at every such tick."""
+    s = Sim(edges=(0.079, -0.079))
+    s.frame()
+    held = s.m._fresh_corridor(s.t)
+    assert held is not None
+    s.m.observe(LineObservation(LineFollowMode.CAMERA_LINE, s.t, False, None, 0.0), received_at=s.t, source_now=s.t)
+    assert s.m._return_evidence._lane is None and s.m._fresh_corridor(s.t + 0.1) is held
+    s.linear = 0.08                                                   # moving: only for EVIDENCE_TTL_S
+    s.m._standing_still = lambda now: False
+    assert s.m._fresh_corridor(s.t + 0.31) is None
+    s.m._standing_still = lambda now: True                            # standing still where it was seen
+    here = SimpleNamespace(x=held[0].x, y=held[0].y, yaw=held[0].yaw)
+    assert s.m._fresh_corridor(s.t + 5.0, here) is held
+    for moved in (dict(x=here.x + 0.05), dict(yaw=here.yaw + 0.3)):    # drove or pivoted, then stopped (review)
+        assert s.m._fresh_corridor(s.t + 5.0, SimpleNamespace(**{**vars(here), **moved})) is None
+    s.m._return_evidence.reset()                                      # a new odom run: never the old corridor
+    assert s.m._fresh_corridor(s.t + 0.1) is None
 
 
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
