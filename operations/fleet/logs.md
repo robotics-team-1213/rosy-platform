@@ -3634,3 +3634,10 @@
 - gate 변화: 없음. 독립 Safety-Review 재확인 전.
 - 결정: D-760 Decision 3·4, 3단계 Safety-Review.
 - 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
+
+## 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
+
+- 변경: `TripAware.trip_refusal(robot_ids)`(`console/console_view.py`)가 "이 로봇에 주인이 있는가"의 하나뿐인 검사다. `trip_busy` 위에 서고, 주인이 있으면 `HubError("TRIP_ROBOT_BUSY", ...)`를, 없으면 None을 준다. 대화 요청 제출, 콘솔 목표 받기와 비켜설 자리 보내기, 막힘 결정, `/route`, `/goal`, `trip_guard`의 대형·차선 추종 거절이 이것을 부르고, 각자 응답 모양·문구·검사 순서는 그대로다. `trip_runner` 시작 때의 `engaged` 검사는 반대 질문(콘솔 움직임이 이미 있는가)이라 그대로 둔다. Fleet 크기 단위 56856 → 56854.
+- 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
+- gate 변화: 없음. 동작 같음.
+- 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
