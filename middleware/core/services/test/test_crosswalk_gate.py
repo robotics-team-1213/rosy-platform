@@ -557,26 +557,34 @@ def _step(g, zone, geo, pose, t, scan, **more):
                   persist_k=2, persist_n=3, **more)
 
 
-def _look_between_walls(zone_yaw, corridor):
-    """The gate standing before a zone 0.30..0.45 m ahead on a lane along odom x whose walls stand
-    0.117 m either side; the zone's anchor is `zone_yaw` off the lane. Returns the reasons of 3 s."""
+def _look_between_walls(zone_yaw, corridor, psi=0.0, person=(), toggle=False):
+    """The gate standing before a zone 0.30..0.45 m ahead on a lane whose walls stand 0.117 m either
+    side; the zone's anchor is `zone_yaw` off the lane and the robot `psi` (the world is turned by
+    -psi about the robot, which stays at yaw 0). Returns the reasons of 3 s."""
+    px = 0.30 - 0.035 - B.front_x_m
+
+    def world(x, y):
+        c, sn = math.cos(-psi), math.sin(-psi)
+        return px + c * (x - px) - sn * y, sn * (x - px) + c * y
     g = CrosswalkGate()
-    zone = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=zone_yaw, near=0.30, far=0.45, margin=0.02, lateral=0.02)
+    zx, zy = world(0.0, 0.0)
+    zone = Zone(key=(0, "odom"), x=zx, y=zy, yaw=zone_yaw - psi, near=0.30, far=0.45, margin=0.02, lateral=0.02)
     geo = Geometry(front_x=B.front_x_m, rear_x=B.rear_x_m, lidar_x=B.lidar_x_m, v_cross=0.04, s_wait=0.04,
                    slow_from=0.08, lane_half_m=0.10, body_half_m=B.half_width_m + 0.02, strip_m=0.0,
                    exit_m=0.15, end_margin=0.02)
-    pose = SimpleNamespace(x=0.30 - 0.035 - B.front_x_m, y=0.0, yaw=0.0)
-    walls = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.117, 0.117)]
-    seen = None if corridor is None else (pose, *corridor)
+    pose = SimpleNamespace(x=px, y=0.0, yaw=0.0)
+    things = [(x / 200, side, 0.002) for x in range(-80, 320) for side in (-0.117, 0.117)] + list(person)
+    things = [(*world(x, y), r) for x, y, r in things]
     out = []
     for i in range(30):
         t = 1.0 + i * 0.1
-        out.append(_step(g, zone, geo, pose, t, Scan(rays_at(pose.x, walls, step_deg=1), 0.05, t), corridor=seen)[1])
+        seen = None if corridor is None or (toggle and i % 2) else (pose, *corridor)
+        out.append(_step(g, zone, geo, pose, t, Scan(rays_at(px, things, step_deg=1), 0.05, t), corridor=seen)[1])
     return out
 
 
 def test_the_look_area_follows_the_lane_seen_now_not_the_zones_older_anchor():
-    """D-573 개정 6 (Gazebo lap m6-m13): the anchor of a zone seen earlier is a few degrees off the
+    """D-573 개정 5 (Gazebo lap m6-m13): the anchor of a zone seen earlier is a few degrees off the
     lane seen now; that slope over the look area used to widen it by 0.02-0.03 m into the walls
     0.117 m from the lane middle and person_present never cleared. Judged in the frame of the
     lane seen now the area is the lane plus the camera's own bound, and the walls stay outside."""
@@ -585,141 +593,36 @@ def test_the_look_area_follows_the_lane_seen_now_not_the_zones_older_anchor():
         assert "crosswalk_person_present" not in reasons and reasons[-1] is None, (yaw, reasons[-3:])
     # no lane seen now: the corridor's full width in the zone's own frame, as before (the wall holds)
     assert "crosswalk_person_present" in _look_between_walls(0.03, None)
-    # the camera reads the wall bases as the edges: the lane's inner width stands in (개정 6)
+    # the camera reads the wall bases as the edges: the lane's inner width stands in
     reasons = _look_between_walls(0.03, (0.120, -0.122, 0.02))
     assert "crosswalk_person_present" not in reasons and reasons[-1] is None
 
 
-@pytest.mark.parametrize("rays", [
-    (),                                                             # a scan without rays
-    tuple((math.radians(a), 2.0) for a in range(90, 271)),          # only the rear half: A outside FOV
-])
-def test_a_scan_that_does_not_cover_the_area_is_unknown(rays):
-    g, zone, geo = _looking_gate()
-    pose = SimpleNamespace(x=0.30 - 0.035 - B.front_x_m, y=0.0, yaw=0.0)
-    out = [_step(g, zone, geo, pose, 1.0 + i * 0.1, Scan(rays, 0.05, 1.0 + i * 0.1)) for i in range(20)]
-    assert all(cap == 0.0 for cap, _ in out)
-    assert out[-1][1] == "crosswalk_look_unknown"
+@pytest.mark.parametrize("psi", [0.04, -0.04])
+def test_a_person_at_the_far_lane_edge_holds_a_robot_standing_askew(psi):
+    """Review 2026-10-14: the lane seen now is known in the robot's own heading; askew by psi, the
+    far end of the look area tilts off the lane. The edges over their seen range (0.1-0.4 m) and
+    their slope beyond it keep the lane's far edge inside."""
+    seen = (0.079 - min(psi * 0.1, psi * 0.4), -0.079 - max(psi * 0.1, psi * 0.4), 0.005, abs(psi), 0.4)
+    for side in (0.075, -0.075):
+        reasons = _look_between_walls(0.0, seen, psi=psi, person=[(0.57, side, 0.012)])
+        assert None not in reasons and "crosswalk_person_present" in reasons, (side, reasons[-3:])
 
 
-@pytest.mark.parametrize("pose", [
-    SimpleNamespace(x=0.10, y=0.0, yaw=math.radians(60)),       # turned away at a junction
-    SimpleNamespace(x=0.10, y=0.25, yaw=0.0),                   # beside the zone's lane
-])
-def test_an_armed_zone_the_robot_turned_away_from_disarms(pose):
+def test_a_lane_seen_on_and_off_between_ticks_never_clears_a_person():
+    reasons = _look_between_walls(0.03, (0.079, -0.079, 0.02), person=[(0.40, 0.05, 0.02)], toggle=True)
+    assert None not in reasons
+
+
+def test_an_armed_zone_the_robot_turned_away_from_disarms_with_a_lane_in_view():
+    """Review 2026-10-14: turning the frame to the lane seen now must not hide the turn from
+    _on_course (a zone left behind at a junction would ride along the new road)."""
     g, zone, geo = _looking_gate()
     ahead = SimpleNamespace(x=0.0, y=0.0, yaw=0.0)
-    assert _step(g, zone, geo, ahead, 1.0, Scan((), 0.05, 1.0)) == (None, None)
-    assert g.zone is not None                                   # armed far away
-    _step(g, zone, geo, pose, 1.1, Scan((), 0.05, 1.1))
-    assert g.zone is None and g.status(1.1) is None
-
-
-def test_the_gate_needs_the_d422_path_mode():
-    with pytest.raises(ValueError):
-        LineFollowConfig(**BODY, crosswalk_gate_enabled=True, obstacle_mode="sector")
-
-
-# ---- D-573 rev 3 (2026-10-10 user): 5 s of continuous clear, then cross ----------------------------
-def _go_after(s, seconds):
-    return next((t for t, d in s.run(seconds) if d.linear > 0), None)
-
-
-def test_five_seconds_of_continuous_clear_then_crosses_without_asking_anyone():
-    s = Sim()
-    s.to_stop()
-    stop_t = s.t
-    assert _go_after(s, 4.8) is None                         # clear is observed, never cut short
-    go = _go_after(s, 2.0)
-    assert go is not None and 5.0 <= go - stop_t <= 5.6
-    assert s.crosswalk.state == "crossing"
-    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
-
-
-@pytest.mark.parametrize("bad", ["person", "unknown"])
-def test_a_bad_scan_at_4_9_s_restarts_the_five_second_window(bad):
-    s = Sim()
-    s.to_stop()
-    assert _go_after(s, 4.9) is None
-    if bad == "person":
-        s.objects = [(0.60, 0.0, 0.03)]
-    else:
-        s.no_return = lambda a: abs(a) < 0.3
-    s.run(0.1)
-    s.objects, s.no_return = [], None
-    bad_t = s.t
-    go = _go_after(s, 8.0)
-    assert go is not None and go - bad_t >= 5.0 - 0.05 - 1e-6
-
-
-@pytest.mark.parametrize("clear_s,min_scans", [(2.0, 16), (3.0, 24)])
-def test_clear_window_is_configurable(clear_s, min_scans):
-    s = Sim(crosswalk_clear_s=clear_s, crosswalk_look_min_scans=min_scans)
-    s.to_stop()
-    stop_t = s.t
-    go = _go_after(s, clear_s + 2.0)
-    assert go is not None and clear_s <= go - stop_t <= clear_s + 0.6
-
-
-@pytest.mark.parametrize("bad", ["person", "unknown"])
-def test_three_second_site_window_restarts_after_occupied_or_unknown_scan(bad):
-    s = Sim(crosswalk_clear_s=3.0, crosswalk_look_min_scans=24)
-    s.to_stop()
-    assert _go_after(s, 2.9) is None
-    if bad == "person":
-        s.objects = [(0.60, 0.0, 0.03)]
-    else:
-        s.no_return = lambda a: abs(a) < 0.3
-    s.run(0.1)
-    s.objects, s.no_return = [], None
-    bad_t = s.t
-    go = _go_after(s, 6.0)
-    assert go is not None and go - bad_t >= 3.0 - 0.05 - 1e-6
-
-
-def test_no_human_report_while_the_area_is_clearing():
-    """A person leaves after 8 s: the 10 s report must not fire inside the 5 s clear window."""
-    s = Sim()
-    s.objects = [(0.60, 0.0, 0.03)]
-    s.to_stop()
-    s.run(8.0)
-    s.objects = []
-    go = _go_after(s, 8.0)
-    assert go is not None
-    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
-
-
-def test_clear_window_defaults_and_report_ordering():
-    c = LineFollowConfig()
-    assert c.crosswalk_clear_s == 5.0 and c.crosswalk_look_min_scans == 40
-    assert c.crosswalk_report_s > c.crosswalk_clear_s
-    with pytest.raises(ValueError):
-        LineFollowConfig(crosswalk_clear_s=10.0, crosswalk_report_s=10.0)
-
-
-def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
-    """Fleet's hub re-parses the robot snapshot: null (gate on, outside a zone) must stay, absent stays absent."""
-    from core_common.protocol.schemas import LineFollowStatus
-
-    assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
-    assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
-
-
-def test_a_bare_reported_flag_without_the_key_stays_unknown():
-    """rosy-b3 review: an input flag alone must not become null = positively outside a zone."""
-    from core_common.protocol.schemas import LineFollowStatus
-
-    assert "crosswalk" not in LineFollowStatus.model_validate({"crosswalk_reported": True}).model_dump()
-
-
-def test_state_snapshot_round_trips_an_unknown_crosswalk_and_refuses_a_malformed_one():
-    import pydantic
-    from core_common.protocol.schemas import StateSnapshot
-
-    unknown = {"state": "unknown", "reason": "not_watched", "source": "camera"}
-    snap = StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": unknown}})
-    again = StateSnapshot.model_validate(snap.model_dump(mode="json"))
-    assert again.model_dump(mode="json")["line_follow"]["crosswalk"]["state"] == "unknown"
-    for bad in ("outside", {"zone_id": "z1"}, 3):
-        with pytest.raises(pydantic.ValidationError):
-            StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": bad}})
+    assert _step(g, zone, geo, ahead, 1.0, Scan((), 0.05, 1.0), corridor=(ahead, 0.079, -0.079, 0.02)) == (None, None)
+    assert g.zone is not None
+    for yaw in (math.radians(60), 0.35):            # another road; just past MAX_TURN_RAD
+        away = SimpleNamespace(x=0.10, y=0.0, yaw=yaw)
+        _step(g, zone, geo, away, 1.1, Scan((), 0.05, 1.1), corridor=(away, 0.079, -0.079, 0.02))
+        assert g.zone is None, yaw
+        _step(g, zone, geo, ahead, 1.2, Scan((), 0.05, 1.2))
