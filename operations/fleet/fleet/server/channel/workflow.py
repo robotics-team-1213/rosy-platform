@@ -177,7 +177,7 @@ def install_workflow_routes(app, workflow, *, require_operator, read_guard, task
         if task_service is None:
             raise HTTPException(503, detail='CHANNEL_TASK_SERVICE_REQUIRED')
         snapshot = workflow.read(request_id, principal.principal_id)
-        if console is not None and snapshot['candidate'] and console.trip_busy(snapshot['candidate']['robot_id']):
+        if console is not None and snapshot['candidate'] and console.trip_refusal([snapshot['candidate']['robot_id']]):
             raise HTTPException(409, detail='TRIP_ROBOT_BUSY')
         try:
             return await workflow.submit(request_id, principal.principal_id,

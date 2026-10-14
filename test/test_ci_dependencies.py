@@ -47,6 +47,19 @@ def test_core_wheel_dependencies_are_available_before_offline_install():
         assert providers[requirement.name] in requirement.specifier
 
 
+def test_ci_provides_the_site_account_oauth_runtime():
+    import re
+    import yaml
+
+    site_requirements = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    oauth_pin = re.search(r'^oauthlib==[^\s]+', site_requirements, re.MULTILINE).group()
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
+    tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
+                                  if not step.get('if')).replace('\\\n', ' '), comments=True)
+    assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
