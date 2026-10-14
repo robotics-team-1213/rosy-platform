@@ -577,12 +577,12 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     assert sizes["stop"] <= width, sizes
 
 
-# The wide layout stands from a 64rem body: a 1360px shell. 1349 is a 1366 laptop window with a classic scrollbar.
+# The wide layout stands from a 60rem body: a 1296px shell. 1349 is a 1366 laptop window with a classic scrollbar.
 @pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
-                                                       (1349, 768, 1, 1), (1366, 768, 2, 3)])
+                                                       (1349, 768, 2, 3), (1366, 768, 2, 3)])
 def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
     """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
-    and one-column forms until the body has 64rem, then two and three. There is no sideways overflow, no control
+    and one-column forms until the body has 60rem, then two and three. There is no sideways overflow, no control
     past the window or with cut text, no multi-column cell under 9rem (what these forms had at the sheet's own
     64rem break before the seats), and the sticky sub-nav shows every entry at the top and at the end of the page."""
     from playwright.sync_api import expect
