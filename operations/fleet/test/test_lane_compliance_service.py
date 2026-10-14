@@ -37,8 +37,8 @@ class Poses:
         assert (min_m, min_deg) == (LaneComplianceConfig().moving_min_m, LaneComplianceConfig().moving_min_deg)
         return robot_id in self.moving
 
-    async def refresh(self, robot_id, *, force_rest=False):
-        assert force_rest
+    async def refresh(self, robot_id, *, force_rest=False, max_age_s=None):
+        assert force_rest and max_age_s == 0.5   # D-760 8: lane compliance takes a 0.5 s old read
         self.refreshed.append(robot_id)
         if robot_id == "boom":
             raise OSError("unreachable")
