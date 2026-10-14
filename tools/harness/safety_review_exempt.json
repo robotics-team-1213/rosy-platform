@@ -354,5 +354,13 @@
   {
     "commit": "5cad91a98697838d49890bdd7847666659d7dad2",
     "reason": "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely bounded. Trailer commit 460a45c; no device acceptance."
+  },
+  {
+    "commit": "70092c52767c43f31119be7a411b6070519efc19",
+    "reason": "Independent read-only critic (opus), 2026-10-14/15, D-760 stage 4 shared state read: CONDITIONS (HIGH stale read across a send, MEDIUM link_back on a pre-loss read, Gazebo junction fence) then CONDITIONS MET on 1bd476f5b..4bcd8a643; console.py reads go through MapPoseService.state with max_age_s and read-number fences, failures re-raise the original exception, nothing cached on failure; remote operations/fleet + world + guards exit 0, known_failures 0 new; no device acceptance."
+  },
+  {
+    "commit": "217dc0fe1aceb96c26bfc3cf912190084a8453e1",
+    "reason": "Independent read-only critic (opus), 2026-10-14/15, D-760 stage 4 shared state read: CONDITIONS (HIGH stale read across a send, MEDIUM link_back on a pre-loss read, Gazebo junction fence) then CONDITIONS MET on 1bd476f5b..4bcd8a643; console.py reads go through MapPoseService.state with max_age_s and read-number fences, failures re-raise the original exception, nothing cached on failure; remote operations/fleet + world + guards exit 0, known_failures 0 new; no device acceptance."
   }
 ]
