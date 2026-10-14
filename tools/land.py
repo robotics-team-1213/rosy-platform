@@ -477,7 +477,7 @@ def land(args) -> int:
     summary: list[str] = []
     tested_main: str | None = None
     full_main: str | None = None  # main under this branch's last green FULL tier
-    start =out(wt, "rev-parse", "main")
+    start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
         reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
@@ -493,7 +493,15 @@ def land(args) -> int:
         if args.tests == "none":
             invocations: list[list[str]] = []
         elif args.tests == "auto":
-            if full_main:
+            # A peer's edit to a path the branch moved or removed: the selector skips paths that no longer
+            # exist, so the delta tier would test nothing of it; run this branch's FULL selection again.
+            gone = [p for p in lines(wt, "diff", "--name-only", "--diff-filter=d", full_main, main_sha)
+                    if not (wt / p).exists()] if full_main else []
+            if gone:
+                summary.append(f"round {round_no}: main delta edits {len(gone)} path(s) gone here"
+                               f" ({gone[0]}): FULL again")
+                invocations, note = select(wt, main_sha, python)
+            elif full_main:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
                 invocations, note = select(wt, full_main, python, head=main_sha)

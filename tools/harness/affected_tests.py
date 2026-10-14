@@ -422,8 +422,9 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
         if referencing or importing or trigger:
             continue
         if path.endswith((".md", ".test.mjs")):
-            # D-436 2: a Markdown note outside every module runs the guards only. No runner runs
-            # *.test.mjs outside a web/ dir today (test/learning/perception), so FULL would add nothing.
+            # D-436 2: a Markdown note outside every module runs the guards only. No runner runs the three
+            # test/learning/perception *.test.mjs today (web/account-session.test.mjs included: CI has no
+            # node step and land.py --node only globs test/web), so FULL would add nothing.
             continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
 

@@ -493,3 +493,28 @@ def test_main_moving_during_a_full_round_reruns_only_the_delta_tier(repos, monke
     assert calls == [[["pkg/test"]], [["pkg/test/test_a.py"]]]
     assert f"FULL tier passed over main {first_main[:10]}" in capsys.readouterr().out
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, capsys):
+    """A delta path gone from the candidate (renamed here, edited there) is not narrowed to the delta tier."""
+    main, wt = repos
+    big = "".join(f"line_{i} = {i}\n" for i in range(30))
+    commit(main, {"pkg/big.py": big}, "big module")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"tools/harness/rosy_harness.py": FULL_THEN_DELTA, "tools/harness/affected_tests.py": ""}, "harness")
+    (wt / "moved").mkdir()
+    git(wt, "mv", "pkg/big.py", "moved/big.py")
+    git(wt, "commit", "-q", "-m", "move big")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # a peer edits the file at its old path while the full tier runs
+            commit(main, {"pkg/big.py": big.replace("line_0 = 0", "line_0 = -1")}, "peer edit")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [[["pkg/test"]], [["pkg/test"]]]
+    assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
+    assert "line_0 = -1" in (main / "moved/big.py").read_text()

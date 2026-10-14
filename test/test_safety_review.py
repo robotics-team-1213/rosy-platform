@@ -91,9 +91,9 @@ def test_exempt_table_loads_and_names_real_commits():
     table = safety_review.load_exempt()
     assert table and safety_review.EXEMPT == table
     root = safety_review.EXEMPT_FILE.parent
-    missing = [sha for sha in table if subprocess.run(["git", "-C", str(root), "cat-file", "-e", sha + "^{commit}"],
+    missing = [sha for sha in table if subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", sha, "HEAD"],
                                                       capture_output=True).returncode]
-    assert not missing, f"EXEMPT names commits not in this history: {missing}"
+    assert not missing, f"EXEMPT names commits that are not ancestors of HEAD: {missing}"
 
 
 @pytest.mark.parametrize("text", [
