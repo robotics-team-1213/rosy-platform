@@ -38,3 +38,22 @@ D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되�
 - 로컬 main을 합친 뒤 부모 단위는 3,018줄이다(2,957 + main의 증가 + manager의 cue 연결). 부모 판정을 같은 변경에서 3,018로 다시 정한다.
 
 판정 상태: 2026-10-10 읽기 전용 critic이 독립 재판정했다. 결과는 AGREE-WITH-CONDITIONS이고 실측(cue 376, 부모 3,018, manager 792)이 정확하다고 확인했다. 조건(기록, 결합 설명, 120자 넘는 줄, `_cue_spot_turning` 상태 위치, REALIGN 경로)은 같은 브랜치에서 반영했다. 검증은 `test/architecture/test_module_structure.py`의 실측이다.
+
+## 2026-10-14 추가 — `line_follow/crosswalk` 단위 (D-491 구역, D-573 게이트와 보고)
+
+부모 단위 `line_follow`가 3,167줄로 한도(3,018 + 150 = 3,168)에 닿았다. 횡단보도 게이트에 넣을 안전 수정이 들어갈 자리가 없다. `cue` 때와 같은 방식으로 횡단보도 코드를 자기 단위로 옮긴다.
+
+- 새 Python 하위 패키지 `core_features/line_follow/crosswalk/`를 만들고 `SIZE_UNITS`에 더한다. 소스 자리는 `middleware/drive/behaviors/line_follow/crosswalk/`다.
+- 옮긴 파일은 셋이다. `git mv`로 옮겼고 내용은 import 줄만 바뀌었다.
+  - `crosswalk_gate.py` → `crosswalk/gate.py`(529, D-573 게이트와 `CrosswalkGateMixin`)
+  - `crosswalk_report.py` → `crosswalk/report.py`(122, D-573 6항 `line_follow.crosswalk` 보고, `CrosswalkReportMixin`)
+  - `crosswalk_zone.py` → `crosswalk/zone.py`(104, D-491 카메라 횡단보도 구역 `CrosswalkZones`)
+  - `crosswalk/__init__.py`(1)를 더해 새 단위는 756줄이다.
+- 옛 import 경로 `core_features.line_follow.crosswalk_gate`, `crosswalk_report`, `crosswalk_zone`은 부모에 호환 재수출 모듈(각 3줄, 합계 9줄)로 남는다. 옛 모듈이 갖던 이름을 밑줄 이름(`_angle`, `_slab`, `_edge_sides`)까지 그대로 내보낸다. 제품 코드(`manager.py`, `arc/lane_arc.py`, `recovery/junction/approach.py`, `recovery/lane_return_wiring.py`, 게이트웨이 `core/bridge/observation.py`)는 새 경로를 import한다.
+- 실측: 부모 3,167 → 2,421줄(−755 옮김, +9 재수출), 새 단위 0 → 756줄. 다른 단위(`cue` 379, `arc` 460, `recovery` 1,349, `recovery/junction` 1,242, `recovery/stuck` 1,095, `recovery/stuck/realign` 295)는 그대로다.
+- 부모에 남는 것: `manager.py`(819), `model.py`(600), `clearance.py`(445), `body_stop.py`(314), `authority.py`(165), `route_context.py`(50), `__init__.py`(19)와 재수출 셋(9).
+- 같은 도메인 규칙을 따른다. 게이트·보고 mixin과 구역은 `LineFollowManager`의 잠금과 세대 아래에서 돈다. 자기 잠금, 스레드, 저장소, 발행자가 없다. 프로세스나 런타임 소유의 이동이 없고 동작 변경이 없다. 설정 키, 상태 문자열, API, capabilities는 그대로다.
+- 설치: `core_features`의 `setup.py`는 `find_packages`로 `drive/behaviors/line_follow` 아래의 하위 패키지를 찾는다. `crosswalk/__init__.py`가 있으므로 따로 등록할 것이 없다.
+- 시험 한 곳을 새 경로로 돌렸다. `test_crosswalk_gate.py`가 게이트 소스 글자를 `gate_module.__file__`로 읽어 D-384 손 상수가 없는지 본다. 옛 경로는 이제 3줄 재수출이라 그 검사가 빈 검사가 되므로 `gate_module`을 `core_features.line_follow.crosswalk.gate`로 가져온다. 그 밖의 시험은 옛 경로를 그대로 쓴다.
+
+판정 상태: `SIZE_VERDICTS`의 부모 2,421과 새 단위 756은 제안값이다. 읽기 전용 critic의 독립 재판정이 아직 남아 있다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
