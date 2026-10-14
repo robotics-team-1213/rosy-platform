@@ -1053,3 +1053,10 @@
 - Change: junction gate grew to 602 lines after both optional bend fields were preserved. Its existing split obligation is applied: unchanged standing-still, start-turn and turn-step methods move to JunctionTurnMixin in turn.py. Constants and yaw wrapper retain gate import identities; one manager state/lock/generation and CORE final writer remain.
 - Evidence: first remote affected group at 7f5e596614 had 10014 passed, 538 skipped and one NEW architecture failure (gate602/trip_ports606). Independent integration_review confirmed all moved and remaining methods' AST identity and source/wheel/sdist closure. Final remote gate is pending.
 - Gate: SOURCE review only; no Gazebo, device, ARM64 or physical acceptance.
+## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
+- 증거: `git diff -M`에서 세 파일은 rename이고 import 줄만 다르다. `test_crosswalk_gate.py`의 소스 글자 검사만 새 경로로 돌렸다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
+- 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
