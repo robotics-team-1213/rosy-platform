@@ -76,9 +76,10 @@ def test_refuses_state_inside_release_source(tmp_path):
 def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
+    (state/'review-ai.json').write_text('{}')
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -87,9 +88,11 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     release.install(None,'old',root,None,None,'127.0.0.1',8774,unit)
     assert '--learning-control' not in unit.read_text()
     assert '--decisions-port' not in unit.read_text()
+    assert '--review-ai-config' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
+    assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
 
 
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
@@ -187,5 +190,7 @@ def test_functional_holder_cannot_be_omitted_from_review_source(tmp_path, missin
 def test_generated_unit_can_opt_in_to_private_owner_controls(tmp_path):
     state = tmp_path / 'state'; state.mkdir()
     (state / 'learning-control.json').write_text('{}')
+    (state / 'review-ai.json').write_text('{}')
     text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
     assert f'--learning-control {state / "learning-control.json"}' in text
+    assert f'--review-ai-config {state / "review-ai.json"}' in text
