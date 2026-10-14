@@ -3671,3 +3671,9 @@
 - 변경: `server/ledger/trip_runner.py::_step_lane`이 `lane_turn_map_entry` 로봇에게, 찾은 자세에 `odom_stamp`가 있을 때 `left`·`right`에 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 출구 차로의 `start_tangent`다. `console_view.TripCaps.lane_turn_map_entry`, trip 보기 `caps.lane_turn_map_entry`.
 - 증거: `test_trip_turn_map_entry.py`(능력 읽기, 값, 그 밖의 필드는 오늘과 같음, stamp가 없으면 싣지 않음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 0 증가다. `exit_segment` 조건문을 한 줄로, D-520 주석 두 줄을 한 줄로, `TripCaps`의 D-551 주석을 필드 옆으로 옮겼다.
+
+## 2026-10-14 · uncommitted · fix(test): 사실 기록 정지가 비상 정지를 늦추지 않는다는 시험을 시계 없이 (CI 38568954601)
+- 변경: `test/test_ai_facts.py::test_a_stalled_fact_write_does_not_delay_the_emergency_stop`. 사실 쓰기를 `time.sleep(1.0)` 뒤 실제 쓰기로 두고 `/api/fleet/estop` 왕복을 0.5 s로 재던 것을, 쓰기를 끝내 풀리지 않는 `threading.Event`에 세워 두고 정지가 먼저 200으로 끝나는지만 보는 것으로 바꿨다(쓰기 진입 확인, 정지 뒤에도 쓰기 요청이 미완, 그다음 풀어 200). 시계는 hang 가드 30 s뿐. 제품 코드는 그대로다.
+- 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
+- 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
