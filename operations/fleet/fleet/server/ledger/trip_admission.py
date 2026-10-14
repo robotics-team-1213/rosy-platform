@@ -104,8 +104,9 @@ class TripAdmission:
         unknown = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is None}
         if unknown:
             _LOG.warning("trip of %s crosses regulation its CORE does not announce: %s", robot_id, unknown)
-            if detail is not None:
-                detail["regulation_caps_unknown"] = unknown
+        if detail is not None:  # set, or cleared by a later clean check
+            detail.pop("regulation_caps_unknown", None)
+            detail.update({"regulation_caps_unknown": unknown} if unknown else {})
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):

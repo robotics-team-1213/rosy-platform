@@ -6,6 +6,7 @@ with it on. A route over neither starts regardless."""
 from __future__ import annotations
 
 import dataclasses
+import sys
 
 import pytest
 
@@ -27,7 +28,8 @@ def test_caps_read_both_rules_and_keep_absent_apart_from_false():
     assert trip_caps(_caps()).lane_crosswalk_gate is None and trip_caps(_caps()).lane_junction_signal is None
     both = trip_caps(_caps(lane_crosswalk_gate=False, lane_junction_signal=True))
     assert both.lane_crosswalk_gate is False and both.lane_junction_signal is True
-    assert trip_caps(_caps(lane_crosswalk_gate="true")).lane_crosswalk_gate is None
+    assert trip_caps(_caps(lane_crosswalk_gate="true")).lane_crosswalk_gate is False  # malformed: refused like false
+    assert trip_caps(_caps(lane_junction_signal=None)).lane_junction_signal is False
 
 
 def _east(caps, site_map=None):
@@ -78,3 +80,45 @@ def test_a_route_through_a_signalled_zone_by_announced_signal():
     # passes this rule either way; D-525 6 (CORE authority) is the next refusal
     assert _signal_trip(ON).code == "TRIP_SIGNAL_NEEDS_AUTHORITY"
     assert _signal_trip(dataclasses.replace(ON, lane_junction_signal=None)).code == "TRIP_SIGNAL_NEEDS_AUTHORITY"
+
+
+def _replan_hold(runner):
+    """The running trip's own plan held as an operator replan (the crosswalk route again)."""
+    live = runner._live["rosy_60"]
+    live.view["hold"] = {"reason": "replan", "map_version": live.view["map_version"], "plan": dict(live.view["plan"])}
+    return live
+
+
+def test_an_operator_replan_is_checked_like_a_start_and_a_clean_check_clears_the_warning():
+    runner, crossed = _east(ABSENT)
+    assert run(runner.start("p1", "bob"))["detail"]["regulation_caps_unknown"] == {"lane_crosswalk_gate": crossed}
+    live = _replan_hold(runner)
+    runner._caps = lambda _robot_id: OFF
+    with pytest.raises(TripError) as err:
+        run(runner.confirm_replan("p1", "bob"))
+    assert err.value.code == "TRIP_REGULATION_CAPS_MISSING" and live.view["hold"] is not None
+    runner._caps = lambda _robot_id: ON
+    view = run(runner.confirm_replan("p1", "bob"))
+    assert view["hold"] is None and "regulation_caps_unknown" not in view["detail"]
+
+
+def test_the_next_lap_is_checked_on_its_own_segments(monkeypatch):
+    runner, _ = _east(ON)
+    run(runner.start("p1", "bob"))
+    live = runner._live["rosy_60"]
+    body = {"segments": live.view["plan"]["segments"][:1]}
+    module = sys.modules[type(runner).__module__]
+    checked = []
+
+    async def caps_checks(_robot_id, _graph, segments, *_args, **_kwargs):
+        checked.append(segments)
+
+    async def pose_checks(*_args, **_kwargs):
+        return None, False
+
+    monkeypatch.setattr(runner, "_caps_checks", caps_checks)
+    monkeypatch.setattr(runner, "_pose_checks", pose_checks)
+    monkeypatch.setattr(module, "next_lap", lambda *_args: (body, None))
+    monkeypatch.setattr(module, "carry_on", lambda *_args: None)
+    run(runner._next_lap(live, 0))
+    assert checked == [body["segments"]]

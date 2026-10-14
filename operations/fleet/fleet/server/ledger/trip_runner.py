@@ -322,6 +322,8 @@ class TripRunner(TripAdmission, TripProgress):
                     return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
+            if (self._store.active() or (None,))[0] == hold["map_version"]:  # D-763 10 (c) as at a start; else TRIP_MAP_CHANGED below
+                await self._caps_checks(live.view["robot_id"], self._store.active()[2], hold["plan"]["segments"], bool(live.repeat), detail=live.view["detail"])
             self._apply_replan(live, hold, principal_id)
             self._describe(live)
             self._save(live)
@@ -773,10 +775,10 @@ class TripRunner(TripAdmission, TripProgress):
         end = live.arc(len(segments) - 1).point_at(segments[-1]["s_to"])
         try:
             graph = self._graph_for(live.view["map_version"])
-            await self._caps_checks(robot_id, graph, segments[index:], True, detail=live.view["detail"])
             await self._pose_checks(robot_id, graph, segments[index:])
             body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
                 self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
+            await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True, detail=live.view["detail"])
         except TripError as exc:
             body, hold = None, {"plan": None, "code": exc.code, "detail": exc.detail}
         if not live.open:
