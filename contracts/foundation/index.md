@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.229)
 - 2026-10-14 · 8a73125e6 · 통행권 응답 사유 seq_required·seq_legs_full·shrink_none_held (D-760 2단계 안전 검토, API v1.225)
 - 2026-10-14 · 5264ef279 · 통행권 상한 5 s는 CORE 통행권에만 (D-760 2단계)
 - 2026-10-14 · 1ee33639c · 통행권 ttl_s 상한 5 s, shrink·seq, 능력 플래그 둘 (D-760 2단계, API v1.225)
 - 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 기본값과 설명 (D-759 검토 반영, API v1.224)
-- 2026-10-14 · a9901c702 · 능력 lane_bend_map_entry와 junction.map_entry_used·map_entry_reason (D-759, API v1.224)

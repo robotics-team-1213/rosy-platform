@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 8163f878f · feat: D-759 개정 1 회전 지시에 출구 차로의 map_entry를 싣는다 (API v1.229)
 - 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
 - 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
 - 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
 - 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
-- 2026-10-14 · uncommitted · 목표 임대 갱신의 403도 임대를 놓는다 (D-760 5단계 안전 검토 MINOR 4)
