@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from test_password_session import _accounts, _app, _client, _login, ORIGIN
+from test_password_session import _accounts, _app, _client, _login, ORIGIN, TYPED
 
 PATH = '/api/fleet/auth/setup'
 
@@ -55,8 +55,8 @@ def test_managed_policy_role_without_account_grant_cannot_read_setup(tmp_path):
     from fleet.server.password_session import COOKIE
     manager = client.cookies.get(COOKIE)
     sessions.create_account(manager, login='bob', principal_id='bob', role='policy-admin',
-                            password='fixture-password-3874', grants=[])
-    assert _login(client, login='bob', password='fixture-password-3874').status_code == 204
+                            password=TYPED, grants=[])
+    assert _login(client, login='bob', password=TYPED).status_code == 204
     assert client.get(PATH, headers=ORIGIN).status_code == 403
     value, _ = sessions.change_password(client.cookies.get(COOKIE), 'fixture-password-final-3874')
     client.cookies.clear()
