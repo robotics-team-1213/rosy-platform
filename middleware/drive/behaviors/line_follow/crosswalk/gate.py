@@ -511,8 +511,10 @@ class CrosswalkGateMixin:
         turn = math.atan(slope)
         if abs(turn) > MAX_TURN_RAD:
             return None
-        return (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn),
-                edges["left"].intercept_m * math.cos(turn), edges["right"].intercept_m * math.cos(turn),
+        # each edge's seen ends in the lane frame; the outermost keeps an edge that disagrees with the mean (review)
+        side = {k: [math.cos(turn) * (b.slope * x + b.intercept_m) - math.sin(turn) * x
+                    for x in (b.observed_x_min_m, b.observed_x_max_m)] for k, b in edges.items()}
+        return (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn), max(side["left"]), min(side["right"]),
                 lane.uncertainty_m, max(abs(b.slope - slope) for b in edges.values()),
                 min(b.observed_x_max_m for b in edges.values()))
 

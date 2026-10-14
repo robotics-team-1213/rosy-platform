@@ -72,8 +72,9 @@ class Sim:
         raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=self.lat_u,
                    crosswalk_uncertainty_m=self.xw_u,
                    boundaries=[] if self.edges is None else [
-                       dict(side=side, slope=self.slope, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
-                       for side, y in zip(("left", "right"), self.edges)])
+                       dict(side=side, slope=k, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
+                       for side, y, k in zip(("left", "right"), self.edges,
+                                             self.slope if isinstance(self.slope, tuple) else (self.slope,) * 2)])
         if crosswalk is not None and crosswalk[0] - self.x >= 0.0:
             raw["crosswalk"] = dict(near_m=crosswalk[0] - self.x, far_m=crosswalk[1] - self.x)
         m.observe(LineObservation(LineFollowMode.CAMERA_LINE, t, True, 0.0, 0.9,
@@ -412,6 +413,15 @@ def test_the_look_area_follows_the_lane_direction_not_the_body_heading():
     assert any(d.linear > 0 for _, d in s.run(7.0))
     s = Sim(edges=(0.079, -0.079), slope=0.1)
     s.objects = walls + [(0.60, -0.060 + 0.06, 0.012)]       # in the lane at its far right edge
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+
+
+def test_an_edge_misread_with_another_slope_cannot_hide_the_other_lane_edge():
+    """Review 2026-10-14: a straight lane with the left edge misread at slope 0.1 tilts the mean frame
+    0.05 rad; the right edge's seen ends in that frame still bound A, so someone at its far end holds."""
+    s = Sim(edges=(0.079, -0.079), slope=(0.1, 0.0))
+    s.objects = [(0.60, -0.070, 0.012)]
     s.to_stop()
     assert all(d.linear == 0 for _, d in s.run(7.0))
 
