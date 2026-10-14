@@ -27,6 +27,22 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 class MainActivity : Activity() {
     private val accountConfigured by lazy { AndroidAccount.configured(this) }
     private val account by lazy { if (accountConfigured) AndroidAccount(this) else null }
+    @Volatile private var profileResource: String? = null
+    private var profileButton: Button? = null
+    private fun profileLabel(): String {
+        val resource = profileResource
+        val name = resource?.let { account?.session?.profile(it)?.optString("display_name") }
+        return "${name ?: "프로필 확인 불가"} · 프로필 관리"
+    }
+    private fun profileEntry(): Button = button(profileLabel()) {
+        endSession { account!!.manageProfile(this) }
+    }.also {
+        it.maxLines = 1
+        it.ellipsize = android.text.TextUtils.TruncateAt.END
+        it.maxWidth = (160 * resources.displayMetrics.density).toInt()
+        it.contentDescription = profileLabel()
+        profileButton = it
+    }
     private class NeedsAccount(val resource: String) : Exception()
     private fun accountConnection(candidate: Candidate, store: CandidateStore): LobbySession {
         val auth = requireNotNull(account)
@@ -35,6 +51,8 @@ class MainActivity : Activity() {
         val resource = "robot:${candidate.robotId}"
         if (auth.session.access(resource) == null) throw NeedsAccount(resource)
         require(auth.session.permits(resource, "robot.read")) { "robot read permission required" }
+        profileResource = resource
+        auth.session.refreshProfile(resource)
         return LobbySession(RobotTarget(candidate.robotId, candidate.host, candidate.port, ""), true,
             java.time.Instant.MAX, candidate, store, row.getString("ca_pem"), account = auth.session)
     }
@@ -46,7 +64,8 @@ class MainActivity : Activity() {
         val callback = incoming?.dataString ?: return
         incoming.data = null
         io.execute {
-            val ok = runCatching { account!!.session.complete(callback) }.isSuccess
+            val ok = runCatching { profileResource = account!!.session.complete(callback)
+                account!!.session.refreshProfile(profileResource!!) }.isSuccess
             main.post { returnToLobby(); status.text = if (ok) "로그인했습니다. 로봇을 선택하세요" else "로그인을 완료하지 못했습니다. 다시 시도하세요." }
         }
     }
@@ -66,6 +85,9 @@ class MainActivity : Activity() {
                     account!!.session.retryRevocations()
                     listOfNotNull(session?.target?.id, secondarySession?.target?.id).distinct().take(2)
                         .forEach { account!!.session.access("robot:$it") }
+                    if (profileResource == null) profileResource = account!!.session.restoredProfileResource()
+                    profileResource?.let { account!!.session.refreshProfile(it) }
+                    main.post { profileButton?.apply { text = profileLabel(); contentDescription = profileLabel() } }
                 } finally { accountChecking = false } }
             }
             main.postDelayed(this, 10000)
@@ -154,7 +176,9 @@ class MainActivity : Activity() {
         header.addView(label(if (compact) "Pilot · 로봇 선택" else "로봇 선택", RosyMetrics.TextTitle).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
+        if (accountConfigured) list.addView(profileEntry())
         if (accountConfigured) list.addView(button("Rosy Account 로그아웃 / 계정 변경") {
+            profileResource = null; profileButton?.text = profileLabel()
             endSession { io.execute { val ok = account!!.session.logout(); main.post {
                 status.text = if (ok) "로그아웃했습니다. 로봇을 선택하여 다시 로그인하세요" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다"
             } } }
@@ -295,6 +319,7 @@ class MainActivity : Activity() {
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
                     if (!groupRequested) bar.addView(button("두 번째 로봇") { chooseSecondaryRobot(candidate) })
                     bar.addView(button("기기·연결") { deviceDetails(candidate) })
+                    if (accountConfigured) bar.addView(profileEntry())
                     root.addView(bar)
                     healthText = label("태블릿 상태 확인 중", RosyMetrics.TextLabel); lastHealth?.let { renderHealth(it) }
                     val view = WebView(this); web = view

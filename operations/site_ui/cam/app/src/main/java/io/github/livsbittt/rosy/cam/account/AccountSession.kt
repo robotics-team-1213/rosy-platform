@@ -42,6 +42,9 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 }) {
     private var data = store.read()?.let { JSONObject(it) } ?: JSONObject()
     @Volatile private var stopSnapshot: Map<String, String> = emptyMap()
+    private data class Profile(val identity: String, val accountId: String, val login: String, val name: String)
+    @Volatile private var profileSnapshot: Profile? = null
+    val profileUrl: String get() = config.issuer + "/console/profile"
     private val checked = mutableMapOf<String, Long>()
     private fun save() { store.write(if (data.length() == 0) null else data.toString()) }
     private var nextRetry = 0L
@@ -61,6 +64,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     private fun random() = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) })
     @Synchronized fun begin(resource: String): String {
         require(resource in config.resources)
+        profileSnapshot = null
         val state = random(); val verifier = random()
         data.put("pending", JSONObject().put("state", state).put("verifier", verifier).put("resource", resource).put("expires", clock() + 300))
         save()
@@ -72,6 +76,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             .addQueryParameter("code_challenge_method", "S256").build().toString()
     }
     @Synchronized fun complete(callback: String): String {
+        profileSnapshot = null
         require(callback.length <= 8192)
         val url = callback.toHttpUrl(); val expected = config.redirect.toHttpUrl()
         require(url.newBuilder().query(null).fragment(null).build() == expected && url.fragment == null)
@@ -127,7 +132,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             require(switching) { "refresh changed identity" }
             val old = data.optJSONObject("tokens")
             old?.keys()?.forEach { r -> queueRevocation(old.getJSONObject(r).getString("refresh_token")) }
-            data.remove("tokens"); stopSnapshot = emptyMap(); checked.clear(); save()
+            data.remove("tokens"); stopSnapshot = emptyMap(); profileSnapshot = null; checked.clear(); save()
             retryRevocations()
         }
         data.put("subject", c.getString("sub")); data.put("family", c.getString("sid"))
@@ -155,6 +160,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             stopSnapshot = stopSnapshot + (resource to token)
             return token
         } catch (e: Exception) {
+            profileSnapshot = null
             // Fail closed and never replay a possibly consumed rotating refresh credential.
             queueRevocation(result.getString("refresh_token")); tokens.remove(resource); stopSnapshot = stopSnapshot - resource; checked.remove(resource); save(); return null
         }
@@ -166,6 +172,28 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         val token = stopSnapshot[resource] ?: return null
         val c = claims(token, resource); "${c.getString("sub")}:${c.getString("sid")}:${c.getLong("rev")}"
     }.getOrNull()
+    fun profile(resource: String): JSONObject? = profileSnapshot?.takeIf { it.identity == identity(resource) }?.let {
+        JSONObject().put("account_id", it.accountId).put("login", it.login).put("display_name", it.name)
+    }
+    @Synchronized fun restoredProfileResource(): String? = data.optJSONObject("tokens")?.keys()?.asSequence()
+        ?.firstOrNull { it in config.resources }
+    @Synchronized fun refreshProfile(resource: String): JSONObject? {
+        profileSnapshot = null
+        return runCatching {
+            val token = cachedAccess(resource) ?: access(resource) ?: return null
+            val c = claims(token, resource)
+            val result = request("userinfo", mapOf("token" to token))
+            require(result.keys().asSequence().toSet() == setOf("account_id", "login", "display_name"))
+            for (key in listOf("account_id", "login", "display_name")) require(result.get(key) is String)
+            val login = result.getString("login"); val rawName = result.getString("display_name"); val name = rawName.trim()
+            require(result.getString("account_id") == c.getString("sub"))
+            require(login.isNotBlank() && login.codePointCount(0, login.length) in 1..64 && name.codePointCount(0, name.length) in 1..80)
+            require((login + rawName).codePoints().noneMatch { Character.isISOControl(it) || it in 0xD800..0xDFFF })
+            val current = identity(resource) ?: return null
+            profileSnapshot = Profile(current, c.getString("sub"), login, name)
+            profile(resource)
+        }.getOrNull()
+    }
     @Synchronized fun context(resource: String): JSONObject? = access(resource)?.let {
         val c = claims(it, resource)
         JSONObject().put("enabled", true).put("authenticated", true).put("account_id", c.getString("sub"))
@@ -176,6 +204,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
                     if (g.getString("resource") == resource) { val a = g.getJSONArray("capabilities"); for (j in 0 until a.length()) caps.put(a.getString(j)) } }
                 caps
             }).put("grants", c.getJSONArray("grants"))
+            .put("profile", profile(resource) ?: JSONObject.NULL).put("profile_url", profileUrl)
     }
     @Synchronized fun permits(resource: String, capability: String): Boolean {
         val grants = context(resource)?.getJSONArray("grants") ?: return false
@@ -189,7 +218,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         old?.keys()?.forEach { r -> val token = old.getJSONObject(r).getString("refresh_token")
             if ((0 until out.length()).none { out.getString(it) == token }) out.put(token) }
         data = JSONObject(); if (out.length() > 0) data.put("revocations", out)
-        stopSnapshot = emptyMap(); checked.clear(); save()
+        stopSnapshot = emptyMap(); profileSnapshot = null; checked.clear(); save()
         nextRetry = 0; return retryRevocations()
     }
 }

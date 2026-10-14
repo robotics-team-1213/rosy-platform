@@ -906,3 +906,15 @@
 - 변경: 제품은 그대로다. `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 끝에서 idle을 기다린 뒤 차선 추종 모드 기록이 정확히 `CAMERA_LINE`, `OFF` 한 쌍인지 본다. 꼬리만 보던 확인은 늦게 닿은 이른 누름을 놓칠 수 있었다.
 - 증거: AI PC Chromium에서 이 시험과 `test_stick_takes_over_auto`, `test_go_releases_on_cancel_and_leave` 3 passed(`X:/DevTemp/browser-run/snw-review-pilot-1.txt`, sha 8b44b2399), `test_pilot_browser.py` 전체 153 passed(`snw-review-pilot-file-1.txt`).
 - gate 변화: 없음.
+
+## 2026-10-14 · 0679a548b · feat(pilot): 접속 화면 앱 바는 64rem 이상에서 한 줄 64px (D-741 3·5)
+
+- 변경: 64rem 이상 접속 화면의 머리가 88px에서 `--appbar-height` 64px 한 줄이 됐다. 자리는 세로 가운데에 서고 순서는 그대로다(R 심볼·Pilot, 로봇 이름, 알림 글, 상태 표, `운용 지도`, 비상 정지). 알림 글은 같은 줄에 남는다(1024px에서 240px 한 줄로 서고 표와 정지를 밀지 않았다). 64rem 아래는 D-466 두 줄 격자 그대로다. 한 줄 64px로는 두 줄을 차지하는 정지(82x74)가 작아지므로 사용자가 2026-10-14에 그렇게 정했다(D-741 부기). 규칙은 `html:not([data-pilot-shell="android"])`와 접속 화면으로 좁혀 주행·팔 화면과 Android 셸에는 닿지 않는다. `sw.js` 캐시 이름을 올렸다. `styles.css`는 951줄 그대로다.
+- 증거: 모델 PC Chromium. 바꾸기 전(`X:/DevTemp/browser-run/p1r-measure-1.txt`, sha d434979c9): 머리 320·390·768에서 103px(알림 글이 있으면 120px), 1024·1366에서 88px. 정지 320·390·768에서 82x74(y 16), 1024·1366에서 82x48(y 31). 바꾼 뒤(`p1r-green-4.txt`, sha 608e4cf88): 320·390·768의 머리·정지·상태 표·`운용 지도`·이름이 앞의 값과 같고, 1024·1366은 머리 64px, 정지 82x48(x 그대로, y 8), `운용 지도` 82x48, 상태 표 44x32. Android 셸은 앞뒤 모두 머리 88px, 정지 82x48(y 31). `test_pilot_browser.py` 전체와 `test_app_bar.py` 162 passed(`p1r-full-5.txt`, sha 0679a548b). 원격 `middleware/robot_ui/pilot/test`, `shared/web/test`, `test/architecture` 529 passed 209 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
+- gate 변화: 없음. 실기 전화·태블릿과 Android WebView에서는 확인하지 못했다. 64rem 이상에서 긴 오류 글이 알림 자리에 들어올 때의 줄바꿈은 재지 않았다(바꾸기 전과 같은 flex 줄이다).
+
+## 2026-10-14 · a3a4befa7 · fix(pilot): 한 줄 앱 바에서 긴 글이 정지를 줄이지 않는다 (검토 반영)
+
+- 변경: 64rem 이상 접속 화면에서 긴 알림 글(105자, 실제 접속 화면 문구는 90자에 못 미쳐 로그아웃 실패 글을 만들어 썼다), 긴 로봇 이름, 긴 상태 표가 함께 오면 머리가 1024px에서 124px로 커지고 1366px에서 정지가 56x48로 줄었다. 정지와 `운용 지도`는 `flex: none`, 알림 글과 로봇 이름은 한 줄 말줄임이 됐다. 알림 전문은 `role="status"` 글로 그대로 남는다. 알림을 머리 아래 줄로 옮기면 머리가 64px를 넘으므로 말줄임을 골랐다. 앞서 한 줄로 합친 알림 규칙을 두 줄로 되돌리고 주석을 제 줄에 뒀다. `styles.css` 956줄(상한 961). `test_app_bar.py`의 두 줄 격자 고정은 64rem 아래 블록 안을 본다.
+- 증거: 바꾸기 전 `X:/DevTemp/browser-run/p1r-long-7.txt`(모델 PC)와 `p1r-long-7ai.txt`(AI PC), sha 821e9d5f5: 1024에서 머리 124px·정지 48x48, 1366에서 정지 56x48. 바꾼 뒤 `p1r-long-9.txt`(AI PC, sha 468838479) 8 passed: 1024·1366 모두 머리 64px, 정지 82x48(x 918·1260, y 8)이 맨 위 요소, 지도 82x48, 알림 389·639px 한 줄, 가로 넘침 0. `test_pilot_browser.py` 전체와 `test_app_bar.py` 164 passed(`p1r-full-10.txt`, AI PC, sha a3a4befa7). 원격 pilot·shared/web·architecture 529 passed 211 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
+- gate 변화: 없음. 말줄임으로 잘린 알림 글의 뒷부분은 화면에서 보이지 않는다(낭독기는 전문을 읽는다). 실기 전화·태블릿·Android WebView는 확인하지 못했다.
