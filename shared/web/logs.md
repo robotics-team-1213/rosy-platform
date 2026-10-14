@@ -1,5 +1,10 @@
 # web_common logs
 
+## 2026-10-14 · feat/rosy-account-pipeline · 공통 계정 프로필
+- 변경: 수신 서비스가 검증한 계정 ID에 프로필 이름을 묶고 중앙 HTTPS 프로필로 연결하는 공통 표시 모듈 추가. 조회 실패·로그아웃은 이전 이름을 지운다.
+- 증거: Node 표시·URL·계정 불일치·로그아웃 시험 통과. 통합 원격 브라우저 시험은 계정 통합 계획에 기록한다.
+- gate 변화: 운영 배포·실기기 수용은 미확인.
+
 추가만 한다. 형식: [module harness 설계](../../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-22 이전 이력은 `git log -- src/core/web_common`를 본다.
 
