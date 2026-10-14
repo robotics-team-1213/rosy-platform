@@ -57,6 +57,13 @@ class LauncherIconParityTest {
         assertEquals(svg.map { it.copy(colour = "#ffffff") }, mono)
     }
 
+    /** D-654: the app bar mark is a copy of shared/web/brand/mark.svg. */
+    @Test
+    fun appBarMarkMatchesTheBrandMark() {
+        val mark = xml(File(iconsDir, "../brand/mark.svg")).paths().single().getAttribute("d")
+        assertEquals(listOf(mark), drawableShapes("ic_rosy_mark").map { it.path })
+    }
+
     @Test
     fun backgroundIsTheGroundToken() {
         val (background, _) = svgShapes()

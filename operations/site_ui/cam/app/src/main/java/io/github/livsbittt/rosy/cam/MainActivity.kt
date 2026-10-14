@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,9 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerViewModel
 import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerState
+import io.github.livsbittt.rosy.cam.ui.CamAppBar
+import io.github.livsbittt.rosy.cam.ui.CamBar
+import io.github.livsbittt.rosy.cam.ui.CamPath
 import io.github.livsbittt.rosy.cam.ui.CameraLanScreen
 import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
 
@@ -162,8 +166,18 @@ class MainActivity : ComponentActivity() {
         if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) screenPower.sleep()
     }
 
+    /** D-741 3: one app bar above every screen, also before login. Cam commands nothing, so it has no stop seat. */
     @Composable
     private fun OverheadApp() {
+        val state by StreamService.state.collectAsStateWithLifecycle()
+        val stored by settings.stored.collectAsStateWithLifecycle(initialValue = SiteLinkPrefs.Stored(null))
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
+            CamAppBar(CamBar.from(state, stored.link))
+            AccountContent()
+        }
+    }
+    @Composable
+    private fun AccountContent() {
         if (!accountConfigured) { CameraContent(); return }
         LaunchedEffect(Unit) {
             while (true) {
@@ -253,12 +267,14 @@ class MainActivity : ComponentActivity() {
         val rememberedPeers by cameraPeerModel.remembered.collectAsStateWithLifecycle()
         val current = attempt
         if (peerState != CameraPeerState.Idle && !state.running) {
+            CamPath("기기 연결")
             CameraPeerScreen(peerState, cameraPeerModel::confirmCertificate, cameraPeerModel::close, cameraPeerModel::open,
                 onDone = { cameraPeerModel.close(); showLan = false }, onForget = cameraPeerModel::forget)
         } else if (current != null) {
             val session = current.session
             val pairingState by session.state.collectAsStateWithLifecycle()
             val busy by session.busy.collectAsStateWithLifecycle()
+            CamPath(stringResource(R.string.pairing_title))
             PairingScreen(
                 site = current.site,
                 state = pairingState,
@@ -272,6 +288,7 @@ class MainActivity : ComponentActivity() {
                 },
             )
         } else if (showLan && !showSettings && !state.running) {
+            CamPath("영상 받을 기기")
             CameraLanScreen(onSelect = { record ->
                 val site = PairableSite(record.name, record.tlsHost, record.port, record.address)
                 if (record.peerApproval) cameraPeerModel.open(site)
@@ -279,6 +296,7 @@ class MainActivity : ComponentActivity() {
             }, onSettings = { showSettings = true }, onCurrent = if (siteLink == null) null else ({ showLan = false }),
                 remembered = rememberedPeers, onRemembered = cameraPeerModel::open)
         } else if (showSettings) {
+            CamPath(stringResource(R.string.settings_title))
             SettingsScreen(
                 currentLink = siteLink,
                 locked = state.running,
@@ -306,6 +324,7 @@ class MainActivity : ComponentActivity() {
                 },
             )
         } else {
+            CamPath("촬영")
             StreamScreen(
                 state = state,
                 siteLink = siteLink,
