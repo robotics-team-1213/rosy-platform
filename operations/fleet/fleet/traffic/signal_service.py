@@ -99,19 +99,21 @@ class SignalService:
         for signal_id, plan in self._signals.items():
             signal_phase.command(plan, self._phase[signal_id], "all_red", now)
 
+    def route_signals(self, segments) -> list:
+        """The signal id (None: no signal) of each unit span along this route; [] without signals or a table."""
+        layout = self._layout_for(self._store.active()) if self._signals and segments else None
+        if layout is None:
+            return []
+        zones = {plan.zone: signal_id for signal_id, plan in self._signals.items()}
+        return [zones.get(s.unit) for s in layout.route(self._store.active()[2], [arc_id(seg) for seg in segments])]
+
     def signal_refusal(self, segments, authority_mode: str) -> Optional[tuple[str, dict]]:
         """D-525 1/6 trip start check: no route starting inside a signalled zone, and only a robot that
         takes CORE authority may cross one (junction hold-back alone does not stop it at red)."""
-        if not self._signals or not segments:
-            return None
-        layout = self._layout_for(self._store.active())
-        if layout is None:
-            return None
-        zones = {plan.zone: signal_id for signal_id, plan in self._signals.items()}
-        spans = layout.route(self._store.active()[2], [arc_id(seg) for seg in segments])
-        if spans and spans[0].unit in zones:
-            return "TRIP_SIGNAL_START_IN_ZONE", {"signal_id": zones[spans[0].unit]}
-        crossed = sorted({zones[s.unit] for s in spans if s.unit in zones})
+        signals = self.route_signals(segments)
+        if signals and signals[0]:
+            return "TRIP_SIGNAL_START_IN_ZONE", {"signal_id": signals[0]}
+        crossed = sorted(set(signals) - {None})
         if crossed and authority_mode != "core":
             return "TRIP_SIGNAL_NEEDS_AUTHORITY", {"signals": crossed}
         return None
