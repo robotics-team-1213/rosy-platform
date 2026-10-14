@@ -496,6 +496,17 @@ class CrosswalkGateMixin:
         return out
 
     def _fresh_corridor(self, now: float):
+        """The corridor seen now, else the last one of this odom run while it is within EVIDENCE_TTL_S or the body
+        has stood still since (m25/m26: frames without the line, or a loose reading on the stripes, left a tick
+        without a corridor; A then read unknown in the zone's skewed frame and restarted the 5 s clear window)."""
+        seen = self._seen_corridor(now)
+        held_at, epoch, held = self._xwalk_corridor
+        if seen is None and held_at is not None and epoch == self._return_evidence.epoch and (
+                0.0 <= now - held_at <= EVIDENCE_TTL_S or self._standing_still(now)):
+            return held
+        return seen
+
+    def _seen_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
         as (lane pose, left, right, uncertainty_m, residual |slope|, seen-to x); None if older than the D-491
         evidence TTL, incomplete, looser than MAX_LATERAL_M or turned past MAX_TURN_RAD. D-573 개정 5 6항: the lane pose is the image pose
@@ -503,9 +514,6 @@ class CrosswalkGateMixin:
         edges are their distances from it in that frame."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
-        held_at, epoch, held = self._xwalk_corridor   # m25: a frame without the line clears the evidence for a
-        if lane is None and held_at is not None and epoch == ev.epoch and 0.0 <= now - held_at <= EVIDENCE_TTL_S:
-            return held   # tick; each such tick read A as unknown and restarted the 5 s clear window (same odom run)
         if lane is None or at is None or lane.uncertainty_m is None or not 0.0 <= now - at <= EVIDENCE_TTL_S:
             return None
         if lane.uncertainty_m > MAX_LATERAL_M:  # m24: on the stripes (0.043 m, edges 0.08 m apart) it is no lane
