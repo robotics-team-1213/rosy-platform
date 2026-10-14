@@ -540,6 +540,19 @@ class CrosswalkGateMixin:
             self._status = self._status.model_copy(update=update)
         return replace(decision, linear=linear, angular=angular)
 
+    def _regulated_wait_share(self, now: float, dt: float, speed: Optional[float]) -> float:
+        """D-507 13 / D-760 2b, for a maneuver's or an arc's clock: the seconds of the last dt a later
+        gate took. All of it while a non-FREE D-517 authority, a D-573 look/wait or a crossing held by a
+        return ahead (look_progress) stands the robot; a crossing's slower share against `speed`. dt
+        counts at most stale_after_s: a stalled tick thread that wakes held earns no more. Locked."""
+        c, auth = self._config, self._authority_on() and self._authority_state(now)
+        xw = self._xwalk.status(now) or {}
+        if (auth and auth[0] != "FREE") or xw.get("state") in (LOOKING, WAITING) or xw.get("look_progress") is not None:
+            lost = 1.0
+        else:
+            lost = max(0.0, 1 - c.crosswalk_cross_speed / speed) if xw.get("state") == CROSSING and speed else 0.0
+        return max(0.0, min(dt, c.stale_after_s)) * lost
+
     def _crosswalk_armed(self) -> bool:
         return self._config.crosswalk_gate_enabled and self._xwalk.zone is not None
 
