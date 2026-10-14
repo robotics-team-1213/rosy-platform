@@ -178,3 +178,47 @@ def test_profile_drops_response_when_local_session_is_logged_out(receiver):
         return original(endpoint, fields)
     client.post = post
     assert client.profile(cookie) is None
+
+
+@pytest.mark.parametrize('elapsed', [11, 270])
+def test_profile_never_introspects_or_renews_and_denial_keeps_session(receiver, elapsed):
+    client, clock, calls, _ = receiver
+    cookie = session(client)
+    subject = client.resolve(cookie).sub
+    clock[0] += elapsed
+    calls.clear()
+    denied = [False]
+    def post(endpoint, fields):
+        calls.append(endpoint)
+        assert endpoint == 'userinfo'
+        if denied[0]:
+            raise AccountDenied('Profile refused')
+        return {'account_id':subject, 'login':'alice', 'display_name':'Alice'}
+    client.post = post
+    with client.transaction() as db:
+        before = tuple(db.execute('SELECT * FROM app_account_sessions').fetchone())
+    assert client.profile(cookie)['account_id'] == subject
+    assert calls == ['userinfo']
+    denied[0] = True
+    assert client.profile(cookie) is None
+    with client.transaction() as db:
+        assert tuple(db.execute('SELECT * FROM app_account_sessions').fetchone()) == before
+    clock[0] += 301
+    calls.clear()
+    assert client.profile(cookie) is None
+    assert calls == []
+
+
+def test_profile_transport_timeout_is_shorter_than_auth(receiver, monkeypatch):
+    from core_common.protocol import account_client
+    client, _, _, _ = receiver
+    timeouts = []
+    class Opener:
+        def open(self, request, *, timeout):
+            timeouts.append(timeout)
+            raise TimeoutError()
+    monkeypatch.setattr(account_client, 'build_opener', lambda *args: Opener())
+    for endpoint in ('userinfo', 'introspect', 'token'):
+        with pytest.raises(AccountUnavailable):
+            client._post(endpoint, {'token':'test'})
+    assert timeouts == [1, 3, 3]
