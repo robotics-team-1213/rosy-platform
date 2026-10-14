@@ -956,3 +956,11 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 - 결정: D-760 Decision 2·3. API Reference v1.225 절과 `/line-follow/authority` 행.
 - 교훈: 없음.
+
+## 2026-10-14 · 8a73125e6 · 통행권 응답 사유를 API 설명에 더함 (D-760 2단계 안전 검토, API v1.225)
+
+- 변경: `api/v1/line_follow.py`의 `/authority` 설명에 `seq_required`·`seq_legs_full`·`shrink_none_held`. API Reference v1.225 절과 `/line-follow/authority` 행, 변경 기록 행을 같이 고쳤다(버전은 그대로 v1.225, 아직 착지 전).
+- 증거: `test_line_authority_api.py`, `test_protocol_version_alignment.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3.
+- 교훈: 없음.
