@@ -906,3 +906,9 @@
 - 변경: 제품은 그대로다. `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 끝에서 idle을 기다린 뒤 차선 추종 모드 기록이 정확히 `CAMERA_LINE`, `OFF` 한 쌍인지 본다. 꼬리만 보던 확인은 늦게 닿은 이른 누름을 놓칠 수 있었다.
 - 증거: AI PC Chromium에서 이 시험과 `test_stick_takes_over_auto`, `test_go_releases_on_cancel_and_leave` 3 passed(`X:/DevTemp/browser-run/snw-review-pilot-1.txt`, sha 8b44b2399), `test_pilot_browser.py` 전체 153 passed(`snw-review-pilot-file-1.txt`).
 - gate 변화: 없음.
+
+## 2026-10-14 · 0679a548b · feat(pilot): 접속 화면 앱 바는 64rem 이상에서 한 줄 64px (D-741 3·5)
+
+- 변경: 64rem 이상 접속 화면의 머리가 88px에서 `--appbar-height` 64px 한 줄이 됐다. 자리는 세로 가운데에 서고 순서는 그대로다(R 심볼·Pilot, 로봇 이름, 알림 글, 상태 표, `운용 지도`, 비상 정지). 알림 글은 같은 줄에 남는다(1024px에서 240px 한 줄로 서고 표와 정지를 밀지 않았다). 64rem 아래는 D-466 두 줄 격자 그대로다. 한 줄 64px로는 두 줄을 차지하는 정지(82x74)가 작아지므로 사용자가 2026-10-14에 그렇게 정했다(D-741 부기). 규칙은 `html:not([data-pilot-shell="android"])`와 접속 화면으로 좁혀 주행·팔 화면과 Android 셸에는 닿지 않는다. `sw.js` 캐시 이름을 올렸다. `styles.css`는 951줄 그대로다.
+- 증거: 모델 PC Chromium. 바꾸기 전(`X:/DevTemp/browser-run/p1r-measure-1.txt`, sha d434979c9): 머리 320·390·768에서 103px(알림 글이 있으면 120px), 1024·1366에서 88px. 정지 320·390·768에서 82x74(y 16), 1024·1366에서 82x48(y 31). 바꾼 뒤(`p1r-green-4.txt`, sha 608e4cf88): 320·390·768의 머리·정지·상태 표·`운용 지도`·이름이 앞의 값과 같고, 1024·1366은 머리 64px, 정지 82x48(x 그대로, y 8), `운용 지도` 82x48, 상태 표 44x32. Android 셸은 앞뒤 모두 머리 88px, 정지 82x48(y 31). `test_pilot_browser.py` 전체와 `test_app_bar.py` 162 passed(`p1r-full-5.txt`, sha 0679a548b). 원격 `middleware/robot_ui/pilot/test`, `shared/web/test`, `test/architecture` 529 passed 209 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
+- gate 변화: 없음. 실기 전화·태블릿과 Android WebView에서는 확인하지 못했다. 64rem 이상에서 긴 오류 글이 알림 자리에 들어올 때의 줄바꿈은 재지 않았다(바꾸기 전과 같은 flex 줄이다).
