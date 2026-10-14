@@ -8,6 +8,7 @@ import pytest
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import PINKY_PRO
 from core_features.line_follow.crosswalk import gate as gate_module
+from core_features.line_follow.crosswalk import kernel as kernel_module
 from core_features.line_follow.crosswalk.gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
@@ -116,7 +117,8 @@ def test_stop_gap_comes_from_the_body_and_range_min():
     geo = s.m._crosswalk_geometry()
     assert geo.s_wait == pytest.approx(RANGE_MIN - (B.front_x_m - B.lidar_x_m) + 0.02)
     assert geo.s_wait == pytest.approx(0.11, abs=0.002)       # D-573 2: Pinky nominal about 0.11 m
-    text = Path(gate_module.__file__).read_text(encoding="utf-8")
+    text = "\n".join(Path(module.__file__).read_text(encoding="utf-8")
+                     for module in (gate_module, kernel_module))
     assert "0.15" not in text and "0.22" not in text           # no D-384 hand constants
 
 

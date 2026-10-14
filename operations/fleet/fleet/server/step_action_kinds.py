@@ -3,7 +3,7 @@
 The step ledger (``CellJobStore``) and its dispatcher stay kind-neutral; everything that differs
 by ``action_kind`` is looked up here: which deployment profiles may dispatch it, the typed grant
 model and body, how a ledger step's inputs become that body, the ordered device phases a success
-must report, and how a device rejection code is recorded.
+must report, how a device rejection code is recorded, and who may approve it (D-763 item 7).
 """
 
 from __future__ import annotations
@@ -27,6 +27,14 @@ class StepActionKind:
     body: Callable[[Mapping[str, Any], int, Mapping[str, Any]], dict[str, Any]]
     phase_ids: tuple[str, ...]
     rejection_reasons: Mapping[str, str]
+    approval: str
+
+
+#: D-763 item 7, strictest first: two_person (a named operator other than the proposer; every arm
+#: step), proposer_only (legacy PICK_PLACE until the slice connecting its dispatch, D-763 rev 2 Q5),
+#: one_person (one named operator; motion-only kinds, none registered yet).
+APPROVALS = ("two_person", "proposer_only", "one_person")
+_LEGACY_APPROVALS = {"PICK_PLACE": "proposer_only"}  # no step-ledger dispatch rules, so not in _KINDS
 
 
 def _cell_transfer_body(job: Mapping[str, Any], step_index: int,
@@ -61,6 +69,7 @@ _KINDS = {
         # D-403 §9: a cell-hash or capability refusal is recorded as LOCAL_ACTION_REJECTED.
         rejection_reasons={"GRANT_REJECTED": "LOCAL_ACTION_REJECTED",
                            "UNSUPPORTED_VERSION": "LOCAL_ACTION_PROTOCOL_MISMATCH"},
+        approval="two_person",
     ),
 }
 
@@ -82,6 +91,12 @@ def open_kinds(deployment_profile: str) -> tuple[str, ...]:
     return tuple(name for name, kind in _KINDS.items() if deployment_profile in kind.open_profiles)
 
 
+def required_approval(action_kinds) -> str:
+    """Strictest approval over a job's step kinds; ValueError for none or an unregistered kind."""
+    return min((_LEGACY_APPROVALS.get(kind) or step_action_kind(kind).approval
+                for kind in action_kinds), key=APPROVALS.index)
+
+
 def rejection_reason(action_kind: str, code: str) -> str:
     return step_action_kind(action_kind).rejection_reasons.get(code, "LOCAL_ACTION_REJECTED")
 
@@ -100,6 +115,6 @@ def step_grant_digest(grant: Mapping[str, Any] | BaseModel) -> str:
 
 
 __all__ = [
-    "StepActionKind", "dispatch_open", "open_kinds", "rejection_reason", "step_action_kind",
-    "step_grant_digest",
+    "APPROVALS", "StepActionKind", "dispatch_open", "open_kinds", "rejection_reason",
+    "required_approval", "step_action_kind", "step_grant_digest",
 ]
