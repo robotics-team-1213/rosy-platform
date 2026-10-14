@@ -3698,3 +3698,11 @@
 - gate 변화: 없음. 크기: 서버 단위 순증 0(`console_view.py` 주석 압축), ledger +23, traffic +2.
 - 결정: D-763 개정 2 질문 10 (c).
 - 교훈: 횡단보도가 있는 기본 시험 지도 때문에 능력 하나를 요구하는 검사가 trip 시험 112개를 깨뜨렸다. 공유 caps fixture를 현재 로봇처럼 고치면 된다.
+
+## 2026-10-15 · 4ca431d25 · D-763 10항 (c) 사용자 결정: 필드 없는 옛 CORE는 경고, false만 거절
+
+- 변경: `TripCaps`의 두 능력이 `None`(알리지 않음)과 `false`를 가른다. `_caps_checks`가 `false`만 422 `TRIP_REGULATION_CAPS_MISSING`, `None`은 trip detail `regulation_caps_unknown {능력: [id]}`와 경고 로그 한 줄(ponytail: 새 릴리스가 다 깔리면 거절로 좁힌다). 시작·바퀴·재계획이 detail을 넘긴다. 공유 trip fixture의 `lane_crosswalk_gate=True`는 되돌렸다. 콘솔 문구·API 참조·D-763 부기 갱신.
+- 증거: `test/test_trip_regulation_caps.py`(없음 → 시작+경고, false → 거절, true → 시작, 둘 다 없는 경로 → 시작). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 사용자 결정 2026-10-15.
+- 교훈: 없음.
