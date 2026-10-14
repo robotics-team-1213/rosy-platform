@@ -624,21 +624,108 @@ def test_d517_authority_gate_also_stops_an_arc_tick():
     assert running(rig)
 
 
-def test_an_arc_held_by_the_authority_gate_times_out_and_holds():
-    """D-760 Open 2, today's behaviour: the arc's deadline runs on under an authority hold; it ends
-    lane_arc_timeout and the robot HOLDS (no fall back to lane following) even with authority back."""
-    from dataclasses import replace
+HOLD_CAP_S = 15.                           # crosswalk_report_s + crosswalk_clear_s (D-507 13)
 
+
+def _authority(rig, required):
+    from dataclasses import replace
+    rig.m._config = replace(rig.m.config, authority_required=required)
+
+
+def _crosswalk(rig, state):
+    """The D-573 gate's reported state (the robot is stood by the caller, as in test_junction_bend)."""
+    rig.m._xwalk.status = lambda now: {'state': state}
+
+
+def _held(rig, seconds, how):
+    """`seconds` of a later gate's hold on a standing robot; then the gate releases."""
+    if how == 'authority':
+        _authority(rig, True)
+    else:
+        _crosswalk(rig, how)
+    for _ in range(round(seconds/.05)):
+        rig.step(seen=False)                  # the gate zeroes the twist: odom stays put
+        if not running(rig):
+            break
+    if how == 'authority':
+        _authority(rig, False)
+    else:
+        del rig.m._xwalk.status
+
+
+@pytest.mark.parametrize('how', ['authority', 'looking', 'waiting'])
+@pytest.mark.parametrize('seconds', [3., 6.])
+def test_a_later_gate_hold_mid_arc_is_not_the_arcs_time(seconds, how):
+    """D-760 rev 2 item 6 (stage 2b): time a non-FREE authority or a crosswalk look/wait takes does
+    not count toward the arc's deadline, so the arc goes on and completes once the gate releases."""
+    rig = ArcRig()
+    rig.open()
+    rig.drive(10, seen=False)                 # 0.5 s of the 4.7 s arc
+    _held(rig, seconds, how)
+    assert running(rig)
+    decision, status = rig.until(lambda d, s: not running(rig), seen=False)
+    assert (status.arc.state, status.arc.reason) == ('ended', 'lane_arc_end_unarmed')
+    assert status.arc.travelled_m >= LENGTH
+
+
+def test_an_arc_held_by_the_authority_gate_past_the_cap_times_out_and_holds():
+    """D-760 rev 2 item 6: the deadline stands under an authority hold for 15 s at most; then
+    lane_arc_timeout and the robot HOLDS (no fall back to lane following) even with authority back."""
     rig = ArcRig(authority_required=True)
     rig.open()
     deadline = rig.m._arc['deadline']
     decision, status = rig.until(lambda d, s: not running(rig), limit=2000)
-    assert rig.now == pytest.approx(deadline, abs=.051) and status.arc.travelled_m == pytest.approx(0., abs=1e-6)
+    assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
+    assert status.arc.travelled_m == pytest.approx(0., abs=1e-6)
     assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
-    rig.m._config = replace(rig.m.config, authority_required=False)  # the gate releases
+    _authority(rig, False)                    # the gate releases
     decision, status = rig.drive(5)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason) == ('HOLD', 'lane_arc_timeout')
+
+
+def test_a_20_s_authority_hold_mid_arc_times_out_and_holds():
+    rig = ArcRig()
+    rig.open()
+    deadline = rig.m._arc['deadline']
+    rig.drive(10, seen=False)
+    _held(rig, 20., 'authority')
+    decision, status = rig.drive()
+    assert rig.now - .05 == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
+    assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
+    assert (decision.linear, decision.angular, status.state) == (0., 0., 'HOLD')
+
+
+@pytest.mark.parametrize('state', [None, 'armed', 'crossing'])
+def test_without_a_hold_the_deadline_is_todays(state):
+    """No hold (no zone, an armed zone, a crossing: the gate moves the robot): the deadline is
+    STEP_MARGIN_S + length/v from the open, as before stage 2b."""
+    rig = ArcRig()
+    rig.open()
+    deadline = rig.m._arc['deadline']
+    assert deadline - rig.now == pytest.approx(LENGTH/V + 2.)
+    if state:
+        _crosswalk(rig, state)
+    while running(rig):
+        decision, status = rig.step(seen=False)       # commanded, but odom stays put
+    assert rig.now == pytest.approx(deadline, abs=.051)
+    assert status.arc.reason == 'lane_arc_timeout'
+
+
+def test_the_hold_cap_is_per_arc_not_per_hold():
+    """A 10 s hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
+    within the second hold (a cap per hold would let it stand 25 s)."""
+    rig = ArcRig()
+    rig.open()
+    deadline = rig.m._arc['deadline']
+    rig.drive(10, seen=False)
+    _held(rig, 10., 'authority')
+    rig.drive(10, seen=False)
+    assert running(rig)
+    _held(rig, 20., 'waiting')
+    status = rig.m.status()
+    assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
+    assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
 
 
 BEND = dict(map_id='lab-a', bend_in_m=.2, bend_tol_m=.1, bend_radius_m=.3)
