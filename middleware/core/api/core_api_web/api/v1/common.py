@@ -151,14 +151,15 @@ def lease_actor(auth: AuthContext) -> str:
     return auth.label or auth.role
 
 
-def stop_ends_trip_lease(svc: CoreServicesLike, auth: AuthContext) -> None:
+def stop_ends_trip_lease(svc: CoreServicesLike, auth: AuthContext, halt: bool = True) -> None:
     """D-541 5: a non-owner's navigation cancel or line-follow OFF ends the lease and goes IDLE.
 
     Otherwise a free segment keeps NAVIGATION and the lease, and Fleet resends the goal.
+    D-763 6: a non-owner's IDLE (``halt=False``, the mode change stops) ends a job's lease too.
     """
     trip = getattr(svc, "trip_lease", None)
     if trip is not None and trip.blocking(auth.token_id) is not None:
-        trip.end("mode_left", by=lease_actor(auth), halt=True)
+        trip.end("mode_left", by=lease_actor(auth), halt=halt)
 
 
 def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None:
@@ -168,6 +169,8 @@ def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None
     if new_mode is not Mode.IDLE:
         # IDLE only stops the robot, so like e-stop it stays open to everyone.
         require_calibration_owner(svc, auth, "mode change")
+    else:  # a person's stop never leaves the trip's owner to drive on (a job's lease survives IDLE)
+        stop_ends_trip_lease(svc, auth, halt=False)
     if svc.line_follow.active:
         status = svc.line_follow.stop()
         svc.command.clear_navigation()

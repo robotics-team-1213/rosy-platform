@@ -776,3 +776,179 @@ def test_takeover_before_the_first_authority_never_frees_the_robot(robot):
     assert taken.status_code == 200, taken.text
     assert seen == [("taken_over", None, True, 0.0)]
     assert not services.line_follow.active and services.modes.mode.value == "IDLE"
+
+
+# --- D-763 6: a job's lease survives IDLE between its steps --------------------------------------
+
+
+def _between_steps(client, services):
+    """A job's lease, one lane step, then the owner's IDLE (the gap between two steps)."""
+    assert _open(client, job_id="job-3").status_code == 200
+    assert _lane(client).status_code == 200
+    assert client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=FLEET).status_code == 200
+    assert services.modes.mode.value == "IDLE" and not services.line_follow.active
+
+
+def test_job_lease_survives_the_owners_idle_and_shows_its_job(robot):
+    client, services, _ = robot
+    _between_steps(client, services)
+    assert services.trip_lease.current()["job_id"] == "job-3"
+    assert _state(client)["trip_lease"]["job_id"] == "job-3"
+    assert "trip_lease_ended" not in _state(client)
+    assert [e["type"] for e in _events(client)] == ["trip_lease.opened"]
+    assert _lane(client).status_code == 200            # the next step: the owner drives again
+
+
+def test_a_plain_trip_lease_still_ends_at_idle(robot):
+    client, services, _ = robot
+    _open(client)
+    assert services.trip_lease.current()["job_id"] is None
+    assert _lane(client).status_code == 200
+    assert client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=FLEET).status_code == 200
+    assert services.trip_lease.current() is None
+
+
+@pytest.mark.parametrize("path,body", [
+    ("/api/v1/mode", {"mode": "MANUAL"}),
+    ("/api/v1/mode", {"mode": "NAVIGATION"}),
+    ("/api/v1/teleop", {"linear": 0.05, "angular": 0.0}),
+])
+def test_between_steps_non_holder_mode_and_teleop_get_409(robot, path, body):
+    client, services, _ = robot
+    _between_steps(client, services)
+    refused = client.post(path, json=body, headers=OTHER)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "TRIP_LEASED", refused.text
+    assert services.trip_lease.current() is not None and services.modes.mode.value == "IDLE"
+
+
+def test_between_steps_handover_passes_and_halts(robot):
+    client, services, _ = robot
+    _between_steps(client, services)
+    taken = client.post(f"{URL}/takeover", json={"lease_id": "lease-1", "reason": "pilot"}, headers=OTHER)
+    assert taken.status_code == 200, taken.text
+    assert taken.json()["trip_lease_ended"]["reason"] == "taken_over" and taken.json()["mode"] == "IDLE"
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OTHER).status_code == 200
+    assert _open(client).status_code == 404            # Fleet's renew of the taken lease: refused
+
+
+@pytest.mark.parametrize("method,path,body", [
+    ("post", "/api/v1/safety/stop", None),
+    ("post", "/api/v1/mode", {"mode": "IDLE"}),
+])
+def test_between_steps_stops_pass_and_end_the_jobs_lease(robot, method, path, body):
+    client, services, _ = robot
+    _between_steps(client, services)
+    response = getattr(client, method)(path, json=body, headers=OTHER)
+    assert response.status_code == 200, response.text
+    assert services.trip_lease.current() is None       # a person's stop: Fleet never drives on (D-763 Q3)
+    assert _state(client)["trip_lease_ended"]["reason"] in ("estop", "mode_left")
+
+
+def test_a_non_owner_idle_during_a_jobs_step_ends_its_lease(robot):
+    client, services, _ = robot
+    assert _open(client, job_id="job-3").status_code == 200
+    assert _lane(client).status_code == 200
+    assert client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=OTHER).status_code == 200
+    assert services.trip_lease.current() is None and not services.line_follow.active
+    assert _state(client)["trip_lease_ended"]["reason"] == "mode_left"
+
+
+def test_owner_manual_still_ends_a_jobs_lease(robot):
+    client, services, _ = robot
+    _between_steps(client, services)
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=FLEET).status_code == 200
+    assert services.trip_lease.current() is None
+
+
+def test_between_steps_expiry_is_as_today(robot):
+    client, services, clock = robot
+    _between_steps(client, services)
+    clock.now += 5.1
+    services.trip_lease.expire_due()
+    assert services.trip_lease.current() is None and services.modes.mode.value == "IDLE"
+    assert _state(client)["trip_lease_ended"]["reason"] == "expired"
+    renew = _open(client, job_id="job-3")
+    assert renew.status_code == 404 and renew.json()["error"]["detail"]["ended"]["reason"] == "expired"
+
+
+def test_a_renew_never_changes_the_job(robot):
+    client, services, _ = robot
+    _open(client)
+    assert _open(client, job_id="job-9").json()["renewed"] is True
+    assert services.trip_lease.current()["job_id"] is None     # renewing never turns a trip's lease into a job's
+
+
+@pytest.mark.parametrize("job_id", ["", "   ", "j" * 129])
+def test_job_id_is_validated(robot, job_id):
+    client, _, _ = robot
+    assert _open(client, job_id=job_id).status_code == 400
+
+
+def test_capability_announces_trip_lease_job(robot):
+    client, _, _ = robot
+    controls = client.get("/api/v1/system/capabilities", headers=VIEWER).json()["controls"]
+    assert next(item for item in controls["items"] if item["kind"] == "base_velocity")["trip_lease_job"] is True
+
+
+def test_held_job_lease_never_extends_the_authority(robot):
+    """D-763 4 hard rule: renewing the job's lease keeps who holds the robot, not how far it may go."""
+    client, services, clock = robot
+    line, lf = {"t": 10.0}, services.line_follow
+    lf.bind_clock(lambda: line["t"])
+    lf._wall = lambda: 1_800_000_000.0 + line["t"]
+    assert _open(client, job_id="job-3").status_code == 200
+    assert _camera_lane(client).status_code == 200
+    stamp = round(line["t"] * 1e9)
+    lf.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                           received_at=line["t"])
+    body = {"authority_id": "s1:1", "leg_id": "s1:0", "pose_stamp": 1_800_000_000.0 + line["t"],
+            "until_m": 5.0, "ttl_s": 5.0}
+    assert client.post("/api/v1/line-follow/authority", json=body, headers=FLEET).json()["accepted"] is True
+    assert _gated(services, line["t"]) == 0.05
+    for _ in range(6):                                  # the trip loop stopped; only the lease is renewed
+        clock.now += 1.0
+        line["t"] += 1.0
+        assert _open(client, job_id="job-3").json()["renewed"] is True
+        services.trip_lease.expire_due()
+    assert services.trip_lease.current() is not None
+    assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_expired"
+
+
+def test_held_job_lease_never_extends_the_goal_lease(robot, monkeypatch):
+    client, services, clock = robot
+    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)  # as test_goal_lease
+    services.nav.lease_clock = clock
+    assert _open(client, job_id="job-3").status_code == 200
+    goal = client.post("/api/v1/navigation/goal", json={"x": 1.0, "y": 0.0, "correlation_id": "s2:g",
+                                                        "lease_ttl_s": 3.5}, headers=FLEET)
+    assert goal.status_code == 200, goal.text
+    services.nav.on_goal_accepted()
+    expired = False
+    for _ in range(4):
+        clock.now += 1.0
+        assert _open(client, job_id="job-3").json()["renewed"] is True
+        services.trip_lease.expire_due()
+        expired = services.nav.expire_goal_lease() or expired
+    assert expired and services.trip_lease.current() is not None
+
+
+def test_job_lease_order_lease_mode_first_authority_holds_at_every_step(robot):
+    """D-760 2 latch: released by the mode change between steps, armed again at the next line session."""
+    client, services, _ = robot
+    line, lf = {"t": 10.0}, services.line_follow
+    lf.bind_clock(lambda: line["t"])
+    lf._wall = lambda: 1_800_000_000.0 + line["t"]
+    _between_steps(client, services)                    # step 1 done; the latch went with that line session
+    assert _camera_lane(client).status_code == 200      # step 2: lease held, so it latches at once
+    assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
+    stamp = round(line["t"] * 1e9)
+    lf.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                           received_at=line["t"])
+    body = {"authority_id": "s2:1", "leg_id": "s2:0", "pose_stamp": 1_800_000_000.0 + line["t"],
+            "until_m": 1.0, "ttl_s": 5.0}
+    assert client.post("/api/v1/line-follow/authority", json=body, headers=FLEET).json()["accepted"] is True
+    assert _gated(services, line["t"]) == 0.05          # moves only after its first authority
+    assert client.delete(f"{URL}/lease-1", headers=FLEET).status_code == 200   # the job ended
+    assert client.put("/api/v1/line-follow/mode", json={"mode": "OFF"}, headers=FLEET).status_code == 200
+    assert _camera_lane(client).status_code == 200      # no lease, no config: no authority needed
+    assert _gated(services, line["t"]) == 0.05
