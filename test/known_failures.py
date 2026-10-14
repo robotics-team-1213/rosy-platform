@@ -5,9 +5,13 @@ Usage (from the repo root):
     python -m pytest <paths> -q -rfE -p no:cacheprovider > run.txt
     python test/known_failures.py run.txt        # or pipe the output on stdin
 
-Exit 0: every FAILED/ERROR line is a listed pre-existing failure.
+Exit 0: every FAILED/ERROR line is a listed pre-existing failure or FLAKY.
 Exit 1: at least one failure is not listed (the branch introduced it, or the list is stale).
 A listed id that did not fail is printed as "not failing here" (fixed, or not selected).
+
+D-762 stage 1: a failure listed in flaky_quarantine.txt that passed on one rerun is FLAKY,
+not NEW. The runner (tools/remote/remote_pytest.py, CI) reruns only those ids
+(``rerun_ids``) once, with ``-rA``, and appends that output after ``RERUN_MARKER``.
 """
 
 from __future__ import annotations
@@ -18,7 +22,10 @@ import re
 import sys
 
 LIST = Path(__file__).with_name("known_failures.txt")
+QUARANTINE = Path(__file__).with_name("flaky_quarantine.txt")
+RERUN_MARKER = "=== D-762 flaky quarantine rerun ==="
 SUMMARY = re.compile(r"^(?:FAILED|ERROR) (?P<nodeid>\S.*?)(?: - .*)?$")
+PASSED = re.compile(r"^PASSED (?P<nodeid>\S+)")
 
 
 def load_known(text: str) -> dict[str, str]:
@@ -47,10 +54,24 @@ def _matches(failed: str, known: str) -> bool:
     return failed == known or known.endswith("/" + failed)
 
 
+def rerun_ids(report: str, quarantine: dict[str, str]) -> list[str]:
+    """Failed ids of the first run that the quarantine lists: the only ones a runner may rerun."""
+    first = report.split(RERUN_MARKER, 1)[0]
+    return list(dict.fromkeys(f for f in failed_ids(first) if any(_matches(f, q) for q in quarantine)))
+
+
+def flaky(report: str, quarantine: dict[str, str]) -> list[str]:
+    """Quarantined first-run failures that the rerun after RERUN_MARKER shows PASSED."""
+    _, _, rerun = report.partition(RERUN_MARKER)
+    passed = {m.group("nodeid").replace("\\", "/") for line in rerun.splitlines()
+              if (m := PASSED.match(line.strip()))}
+    return [f for f in rerun_ids(report, quarantine) if f in passed]
+
+
 def compare(report: str, known: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
-    """Return (new failures, listed failures seen, listed ids not failing)."""
+    """Return (new failures, listed failures seen, listed ids not failing) of the first run."""
     new, seen = [], []
-    for failed in failed_ids(report):
+    for failed in failed_ids(report.split(RERUN_MARKER, 1)[0]):
         hit = next((k for k in known if _matches(failed, k)), None)
         if hit is None:
             new.append(failed)
@@ -73,13 +94,17 @@ def main(argv: list[str] | None = None) -> int:
     else:
         report = sys.stdin.read()
     new, seen, quiet = compare(report, load_known(LIST.read_text(encoding="utf-8")))
+    passed_once = flaky(report, load_known(QUARANTINE.read_text(encoding="utf-8")) if QUARANTINE.is_file() else {})
+    new = [nodeid for nodeid in new if nodeid not in passed_once]
     for nodeid in seen:
         print(f"known     {nodeid}")
     for nodeid in quiet:
         print(f"not failing here  {nodeid}")
+    for nodeid in passed_once:
+        print(f"FLAKY     {nodeid}")
     for nodeid in new:
         print(f"NEW       {nodeid}")
-    print(f"{len(new)} new, {len(seen)} known, {len(quiet)} listed but not failing")
+    print(f"{len(new)} new, {len(seen)} known, {len(passed_once)} flaky, {len(quiet)} listed but not failing")
     return 1 if new else 0
 
 
