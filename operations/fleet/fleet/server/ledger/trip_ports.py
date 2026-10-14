@@ -1,9 +1,4 @@
-"""D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and runtime state.
-
-``TripCaps`` (``console_view``, from the robot's capabilities) and ``MapPose``
-(``rosy.world.state.projections.map_pose``) are the providers' own types; app.py injects the capability
-closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's robot clients).
-"""
+"""D-494 trip ports/config/state; app.py injects TripCaps, MapPoseService and HttpLaneJunction."""
 
 from __future__ import annotations
 
@@ -410,8 +405,7 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
 
 
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig, located=None) -> Optional[dict]:
-    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``, ``bend_radius_m`` and
-    D-759 1 ``map_entry``; None on another map version, an arc start not 0-2 m ahead or a lane still turning before it."""
+    """D-507 bend fields (D-754 next line, D-759 map entry); None outside a straight same-map approach in (0, 2] m."""
     # Lead by trip speed x pose latency: unled, the arc began 2 cm late, 1.8 cm to the wall (Gazebo 2026-10-13). Errs inside.
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0
@@ -419,13 +413,19 @@ def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConf
         lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
     ahead = bend["s_start"] - s
     bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
+    index, segs = live.view["segment_index"], live.segments
     if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
-            or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
+            or not straight_approach(live.arc(index), s, bend["s_start"])):
         return None
     fields = dict(map_id=active[1].map_id, bend_in_m=bend_in, bend_tol_m=_pose_tol(live, config), bend_radius_m=bend["radius_m"])
     if caps.get("lane_bend_map_entry") and getattr(located, "odom_stamp", None) is not None:  # D-759 2: lane heading there
         fields["map_entry"] = {"yaw_rad": round(live.arc(live.view["segment_index"]).point_at(bend["s_start"])[2], 4),
                                "pose_yaw_rad": located.yaw, "odom_stamp_s": located.odom_stamp}
+    k = next((k for k in range(index, len(segs)) if ends_at_place(live.graph, segs[k])), None)
+    past = line_past(live.graph, *live.arc(k).point_at(segs[k]["s_to"])) if caps.get("lane_bend_next_line") and k is not None else None
+    if past is not None:  # D-754: vertex -> arc end -> that place -> its painted line; no known line, no field
+        line = bend["radius_m"] * math.tan(math.radians(abs(bend["turn_deg"])) / 2) - live.progress(index, bend["s_end"])
+        fields["next_line_in_m"] = round(max(0.0, min(line + live.progress(k, segs[k]["s_to"]) + past, MAX_EXPECT_IN_M)), 3)
     return fields
 
 

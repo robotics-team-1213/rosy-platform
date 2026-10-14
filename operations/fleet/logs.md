@@ -3577,6 +3577,48 @@
 - 결정: D-760 Decision 3. 능력 플래그에 따라 5 s를 보내는 것은 3단계다.
 - 교훈: 없음.
 
+## 2026-10-14 · 97ad6ca74 · 목표 임대 갱신은 그 목표를 보낸 클라이언트로 (D-760 5단계 확인)
+
+- 변경: 시험만. `test/test_goal_lease.py`에 `SenderRobot`(CORE의 D-760 9 규칙을 흉내 낸 가짜)와 갱신 경로 네 개(operator, dispatch, yield, trip) 매개 시험을 더했다. 보내기(`goal_lease.py:112`, 로스터 클라이언트)와 갱신(`goal_lease.py:173-177`, 같은 로스터 `_clients[rid]`)이 같은 객체임을 고정한다. stuck resolver 클라이언트(`cli.py:640`)는 목표를 보내지도 갱신하지도 않는다.
+- 증거: `operations/fleet/test/test_goal_lease.py` 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 주소 이동(`_replace_client`, 새 토큰)은 임대 행을 남긴다. 새 토큰의 갱신은 403이고 Fleet은 경고만 남긴다. 목표는 CORE에서 ttl(≤5 s) 안에 끝나고 다음 갱신이 409라 행이 지워진다. 화면 코드 교환은 5 s보다 길어 실제로는 이미 끝난 목표다.
+
+## 2026-10-14 · uncommitted · 목표 임대 갱신의 403도 임대를 놓는다 (D-760 5단계 안전 검토 MINOR 4)
+
+- 변경: `fleet/server/goal_lease.py` `renew`가 403을 409처럼 다룬다. 그 임대 행을 지우고 경고를 한 번 남긴다. 화면이 CORE가 거절하는 임대를 살아 있는 것으로 보이지 않게 한다. CORE는 그 목표를 제 만료에 끝낸다.
+- 증거: `test/test_goal_lease.py::test_every_renewal_path_renews_with_the_client_that_sent_the_goal`의 대조 단계(다른 클라이언트 403 → 행 삭제, 다음 갱신 시도 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
+## 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
+- 변경: `server/ledger/mission_store.py`의 `next_running_mission`·`next_reconciliation_mission`(16줄, 부르던 `mission_service` 두 줄은 6fd54b3a3에서 이미 지워졌다. 4fe614c8b 커밋 글의 6d764bd77은 추가한 커밋이라 틀린 표기다), `server/ledger/task_store.py`의 `recover_interrupted_requests`(29줄, 호출은 423921562에서 없어졌다), `server/signals.py`의 `SignalConsole.signal_ids`(4줄), Console `console.js`의 `authHeaders`·`lastStateOk`(5줄)를 지웠다. 동작, 경로, 스키마는 그대로다.
+- Evidence: no executable callers remain; historical recover_interrupted_requests() plan references are superseded by recover_interrupted_work. Fleet 크기 단위는 56742에서 56688이 됐다(판정 56755+150 그대로). 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. 시험만 부르는 코드(`load_policy_evidence_sources`, `load_cell_goal_registry`, `DeliberationJournal`, `decision_pipeline`, `selector_bridge`, `traffic_reservations`의 `verify_grant`·`waiting_seconds`, `task_store`의 claim 메서드)는 ADR이 이름으로 붙들고 있거나 연결을 기다리는 계약이라 남겼다.
+
+## 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
+- 변경: 순수 함수 `fleet/traffic/rule_m.py` `verdict`가 로봇마다 Fleet이 시작한 움직임(차로 trip, `navigation/goal`, 군집 추종)을 `bounded`·`unbounded`·`idle`로 판정한다. `GET /api/fleet/state` 로봇 행에 `rule_m {state, motion, reason}`을 더했다. 거절하는 것은 없다.
+- 판정: 차로 trip은 `traffic_authority: core`이거나 trip 임대를 쥐고 있으면 한도 있음, 아니면 `hold_back`. 목표는 임대(`goal_lease: leased`)면 한도 있음, 아니면 허브 수집(`gather_source: hub`)이고 SAF-003 정책이 STOP·HOLD·RETURN_HOME일 때만 한도 있음(`rest_only`·`policy_continue`·`policy_unknown`). 군집 추종은 한도 있음. 모르는 입력은 한도 없음이다.
+- 정책 읽기: 허브로 수집한 로봇만 `GET /api/v1/safety/state`의 `fleet_loss_policy`를 30초에 한 번 읽는다(`HttpRobotClient.safety_state`, 기존 `CapabilityDisplay`). 새 주기 루프는 없다. 답이 없으면 90초 뒤 "모름"이다.
+- 뺀 것: trip 밖 LINE_FOLLOW. Fleet은 `POST /api/fleet/robots/{id}/line-follow`로 IR_LINE을 켤 수 있지만 켰다는 기록을 남기지 않아, 대시보드가 켠 것과 가리지 못한다. 추측하지 않고 판정에서 뺐다.
+- 증거: `test_rule_m.py`(D-550 7항 행마다, 모르는 입력, 상태 행, 30초 읽기), `test_console_queues_contract.py`, `test/web/link-tag.test.mjs`·`attention-stale.test.mjs`. 원격 시험 로그는 X: `rule-m-warn` 세션이다.
+- gate 변화: 없음. 표시만이다. 장치·현장 확인과 화면 확인은 하지 않았다.
+
+## 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
+- 변경: 앞 항목의 SAF-003 정책 경로를 지웠다(`safety_state` 읽기, 정책 캐시, `rest_only`·`policy_*` 이유). CORE의 SAF-003은 `correlation_id`가 있는 목표에만 동작하고 Fleet은 dispatch 시도나 목표 임대가 있을 때만 그것을 보내므로, 허브 연결과 정책으로 "한도 있음"이라 할 수 없다. 이제 한도는 통행권 `core`, 쥐고 있는 trip 임대, 목표 임대 셋뿐이고 임대 없는 목표는 `no_goal_lease`다. 군집 추종 입력도 뺐다(추종만 하는 로봇은 `idle`). 오프라인 행에는 `rule_m`이 없다.
+- 범위: 1단계는 D-550 7항의 위반 셋 중 둘(임대 없는 목표, `hold_back` 차로 trip)만 본다. trip 밖에서 Fleet이 연 LINE_FOLLOW는 잡지 못한다.
+- 알려진 오경보: 끝난 Fleet 목표의 기록이 남아 있는 로봇을 대시보드·Pilot이 항법으로 움직이면 Fleet 목표로 보인다. 상태 스냅숏에 항법 `correlation_id`가 없어 가릴 수 없다.
+- 증거: `test_rule_m.py`(행 판정, 깨진 `navigation` 값, 오프라인 행). 원격 시험 로그는 X: `rule-m-warn/fix1`이다.
+- gate 변화: 없음. 표시만이다.
+
+## 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
+
+- Change: redundant module and bend_fields docstrings are shortened, retaining provider identities, both bend contracts and refusal conditions. All validation, geometry, error handling and safety rationale remain.
+- Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
+- Gate: no runtime or device claim.
+
 ## 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
 
 - 변경: 임대를 쥔 trip에서 상태 읽기 실패나 로봇 호출 무응답은 trip을 끝내지 않고 `link_wait`로 둔다(`trip_progress._link_wait`). 그동안 교차로 지시·목표·늘린 통행권이 나가지 않고 블록 표에서 UNKNOWN이라 블록이 그대로 잡힌다. 끝내는 것은 `lease_lost`(기본 8 s)와, 임대 `ttl_s`를 넘겨 기다린 뒤의 정체 규칙뿐이다. 돌아오면 지도 버전과 차선 모드를 다시 보고(`trip_admission._link_back`) 실패하면 그 시작 거절 코드로 끝낸다. 정체 예외는 대기 사유→상한 표 하나(`_wait_bound`, 지금은 `link_wait`만). 송신기는 `seq`를 싣고 구간 id에 Fleet 프로세스 epoch를 넣는다. `line_follow_authority_shrink` 로봇에는 `ttl_s` 5와 `shrink`+`until_m` 0(답이 `accepted: true`일 때까지 주기마다), 없는 로봇에는 2와 옛 동작. 단계 중·`link_wait`·차선 켜기 전·시작 뒤 5 s에는 늘리지 않는다. 확인 전에는 지도 버전이 바뀐 로봇의 고정 블록이 마지막 `until_m`까지 덮는다. 출발 검사는 임대가 켜져 있으면 `line_follow_authority_under_lease`도 받는다. trip 임대 `ttl_s` 기본 8. 콘솔 상태 이름 `연결 대기`.

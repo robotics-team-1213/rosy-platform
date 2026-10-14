@@ -340,3 +340,9 @@ def test_migrated_human_bearer_cannot_bypass_grants_or_disable(tmp_path):
     sessions.update_account(bob, alice["account_id"], revision=alice["revision"], enabled=False)
     assert client.get("/api/fleet/state", headers=human).status_code == 401
     assert client.get("/api/fleet/state", headers=machine).status_code == 200
+
+
+def test_managed_own_profile_exposes_exact_grants(tmp_path):
+    sessions = activated(tmp_path)
+    value = cookie(sessions)
+    assert sessions.profile(value)['grants'] == sessions.account_context(value)['grants']

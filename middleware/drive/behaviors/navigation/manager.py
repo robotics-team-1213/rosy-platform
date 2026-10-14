@@ -84,7 +84,7 @@ class NavigationManager:
         #: monotonic clock (not ``clock``, which the bridge may swap for sim time). It counts only
         #: while that correlation id is still the active goal.
         self.lease_clock = lease_clock
-        self._lease: Optional[tuple[str, float, UUID]] = None
+        self._lease: Optional[tuple[str, float, UUID, str | None]] = None
         # 목표는 uvicorn 워커(REST·WS)와 rclpy executor(브리지 타이머) 양쪽에서
         # 건드려진다(D-1). check-send-set 이 쪼개지면 취소가 목표를 놓친다.
         self._lock = threading.RLock()
@@ -167,7 +167,7 @@ class NavigationManager:
 
     def goal(self, spec: NavGoalSpec, source: str = "api",
              correlation_id: str | None = None, lease_ttl_s: float | None = None,
-             *, kind: str = "navigate", receipt_sink=None,
+             *, kind: str = "navigate", receipt_sink=None, lease_owner: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
              reservation: UUID | None = None) -> None:
@@ -215,7 +215,7 @@ class NavigationManager:
             self._active_spec = spec
             self._lease = (None if lease_ttl_s is None
                            else (correlation_id, self.lease_clock() + lease_ttl_s,
-                                 operation.run_id))
+                                 operation.run_id, lease_owner))
             try:
                 native_send = getattr(executor, "send_native_goal", None)
                 if native_send is not None:
@@ -255,17 +255,17 @@ class NavigationManager:
                 return None
             return self._active_correlation_id, self._active_spec
 
-    def renew_goal_lease(self, correlation_id: str, ttl_s: float) -> None:
+    def renew_goal_lease(self, correlation_id: str, ttl_s: float, owner: str | None = None) -> None:
         """D-550 10: extend the lease of the active leased goal. Never revives a goal: a goal
         that was cancelled, arrived, failed, replaced or never leased is GOAL_LEASE_NOT_ACTIVE."""
         _check_lease_ttl(ttl_s)
         with self._lock:
-            if (self._lease is None or self._lease[0] != correlation_id
-                    or self._active_correlation_id != correlation_id
-                    or self._nav_state in _IDLE_STATES):
-                raise NavigationError("GOAL_LEASE_NOT_ACTIVE",
-                                      f"no active leased goal with correlation_id {correlation_id!r}")
-            self._lease = (correlation_id, self.lease_clock() + ttl_s, self._lease[2])
+            if (self._lease is None or self._nav_state in _IDLE_STATES
+                    or correlation_id != self._lease[0] or correlation_id != self._active_correlation_id):
+                raise NavigationError("GOAL_LEASE_NOT_ACTIVE", f"no active leased goal {correlation_id!r}")
+            if owner != self._lease[3]:  # D-760 9: only the token that sent the goal (lease_owner)
+                raise NavigationError("FORBIDDEN", "only the token that sent this leased goal may renew it")
+            self._lease = (correlation_id, self.lease_clock() + ttl_s, self._lease[2], self._lease[3])
             self.native.generation += 1
 
     def expire_goal_lease(self) -> bool:
@@ -352,12 +352,12 @@ class NavigationManager:
         return True
 
     def home(self, source: str = "api", correlation_id: str | None = None,
-             lease_ttl_s: float | None = None, *, receipt_sink=None,
+             lease_ttl_s: float | None = None, *, receipt_sink=None, lease_owner: str | None = None,
              expected_boot_id: UUID | None = None,
              expected_owner_generation: int | None = None,
              reservation: UUID | None = None) -> None:
         spec = self.resolve_goal(waypoint="__home__")
-        self.goal(spec, source=source, correlation_id=correlation_id,
+        self.goal(spec, source=source, correlation_id=correlation_id, lease_owner=lease_owner,
                   lease_ttl_s=lease_ttl_s, kind="home", receipt_sink=receipt_sink,
                   expected_boot_id=expected_boot_id,
                   expected_owner_generation=expected_owner_generation,

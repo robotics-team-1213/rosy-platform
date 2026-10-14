@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from fleet.routing.graph import build_graph
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import bend_geometry, straight_approach
+from fleet.server.trip_ports import bend_geometry, line_past, straight_approach
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _arc, _plan, _setup, _ticks, run
@@ -29,13 +29,13 @@ def _bend_map(*bends) -> SiteMap:
                    edges=base.edges)
 
 
-def _trip(site_map, caps=BEND_CAPS, ahead=0.4, before=None):
+def _trip(site_map, caps=BEND_CAPS, ahead=0.4, before=None, to="SE"):
     """Start NW -> SE on west:rev with the SW bend's arc start ``ahead`` m in front; tick once
     (``before(runner)`` runs ahead of that tick)."""
     runner, store, ports = _setup(site_map, caps=caps)
     arc = _arc(store, "west:rev")
     s_start = bend_geometry(SitePlace(**SW_BEND), arc)[0]
-    _plan(store, ports, arc.id, s_start - ahead, "SE")
+    _plan(store, ports, arc.id, s_start - ahead, to)
     run(runner.start("p1", "bob"))
     ports.at(arc, s_start - ahead)
     if before is not None:
@@ -82,6 +82,9 @@ def test_caps_read_lane_bend():
     assert trip_caps(_caps()).lane_bend is False
     assert trip_caps(_caps(lane_bend=True)).lane_bend is True
     assert trip_caps(_caps(lane_bend="true")).lane_bend is False
+    assert trip_caps(_caps(lane_bend=True)).lane_bend_next_line is False  # D-754
+    assert trip_caps(_caps(lane_bend_next_line=True)).lane_bend_next_line is True
+    assert trip_caps(_caps(lane_bend_next_line="true")).lane_bend_next_line is False
 
 
 # ---- the trip loop -------------------------------------------------------------------------
@@ -156,6 +159,22 @@ def test_a_bend_done_on_one_segment_goes_out_again_on_another():
     done = lambda index: (lambda runner: live(runner).bends_done.add((index, "B_SW")))
     assert all(sent[0] != "bend" for sent in _trip(_bend_map(SW_BEND), before=done(0))[2].sent)  # done here
     assert _trip(_bend_map(SW_BEND), before=done(4))[2].sent == [("bend", "B_SW", None)]
+def test_a_next_line_robot_gets_the_distance_to_the_next_junction_line():
+    """D-754: from the bend's vertex along the route to SW's painted line; a robot without the
+    capability gets the four fields (pinned above), and a trip that ends on the lane before any
+    junction place gets none."""
+    caps = dataclasses.replace(BEND_CAPS, lane_bend_next_line=True)
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), caps=caps)
+    _, s_end, turn, radius = bend_geometry(SitePlace(**SW_BEND), arc)
+    to_place = radius * math.tan(math.radians(turn) / 2) + arc.length_m - s_end
+    past = line_past(store.active()[2], *arc.point_at(arc.length_m)) or 0.0
+    assert ports.sent == [("bend", "B_SW", None)] and 0.05 < to_place < 1.0
+    assert ports.expects[0]["next_line_in_m"] == pytest.approx(to_place + past, abs=0.002)
+    assert runner.view("p1")["caps"]["lane_bend_next_line"] is True
+    x, y, yaw = arc.point_at(s_end + 0.1)                                 # a start place on the lane, before SW
+    stop = dict(id="P", name="P", kind="start", x=x, y=y, yaw=yaw)
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND, stop), caps=caps, to="P")
+    assert ports.sent == [("bend", "B_SW", None)] and "next_line_in_m" not in ports.expects[0]
 
 
 def test_a_bend_core_ended_on_the_next_junction_counts_done_and_the_place_goes_out():
@@ -277,3 +296,9 @@ def test_a_trip_closed_mid_step_sends_no_bend(monkeypatch):
     monkeypatch.setattr(trip_runner, "bend_fields", closing)
     runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND))
     assert ports.sent == []
+
+
+def test_a_robot_with_both_bend_capabilities_receives_heading_and_next_line_distance():
+    caps = dataclasses.replace(BEND_CAPS, lane_bend_map_entry=True, lane_bend_next_line=True)
+    _, _, ports, _, _ = _trip(_bend_map(SW_BEND), caps, before=_stamped(1790000000.25))
+    assert "map_entry" in ports.expects[0] and "next_line_in_m" in ports.expects[0]

@@ -2783,3 +2783,9 @@
 - 변경: 독립 리뷰의 새 터미널 SHA 설정과 이미지 build 자원 경계를 보완했다. 공유 SIM 예약에서 이미지 build를 하지 않으며 준비된 이미지만 시작한다.
 - 증거: 새 Compose·기존 OMX·문서/harness 원격 129 passed, NEW 0; Compose 해석과 source SHA 누락 거절, vendor 패치 4개 적용, OMX-F/L 입력 URDF 검사 성공.
 - gate 변화: live SIM은 HOLD. 비현장 자원 여유 부족과 모델 PC Docker 소켓 접근 거부를 확인했으며 D-756에 재개 조건을 남겼다.
+
+## 2026-10-14 · b3d6f4cd5 · OMX 녹화 검증 개선
+
+- 변경: 기존 Pilot 조작 probe의 실제 이동·목표 오차·상태 충돌 재시도를 녹화 probe에 재사용했다. 조종권 갱신 실패와 종료 불명을 거절하고 진행 중 갱신이 끝난 뒤 의도적 만료를 시험한다.
+- 증거: 원격 RED 3건, 늦은 worker 오류 RED 1건 뒤 관련 33 passed, NEW 0. 독립 재검토에서 추가 소스 차단 없음. 상세는 docs/validation/omx-recording-probe-2026-10-14/result.md.
+- gate 변화: SOURCE/원격 회귀만. 비현장 메모리 기준 미달과 AI PC Docker 미설치로 live Gazebo는 미확인이다.

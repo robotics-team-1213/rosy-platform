@@ -22,6 +22,27 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_workspace):
+    page, store, expect = browser_workspace
+    opinion = {'available': True, 'current': True, 'model': 'fixture-ai',
+               'model_digest': 'fixture-version', 'unknown_pixels': 0,
+               'review_blocked': False,
+               'feedback': {'verdict': 'uncertain', 'issue': 'uncertain_visibility', 'note': 'fixture'}}
+    page.route('**/api/vlm-feedback/*', lambda route: route.fulfill(json=opinion))
+    open_pixels(page, store, expect)
+    expect(page.locator('#pixel-vlm-state')).to_have_text('AI 판단 보류')
+    expect(page.locator('#pixel-vlm-state')).to_have_attribute('state', 'warning')
+    page.locator('#pixel-filter').select_option('approved')
+    expect(page.locator('.pixel-vlm-feedback')).to_be_hidden()
+    expect(page.locator('#review-people-summary')).to_contain_text('확인할 수 없습니다')
+    page.locator('#pixel-all').click()
+    expect(page.locator('#pixel-vlm-state')).to_have_text('AI 판단 보류')
+    page.route('**/api/workspace', lambda route: route.fulfill(status=503, json={'error': 'unavailable'}))
+    page.locator('#pixel-reload').click()
+    expect(page.locator('.pixel-vlm-feedback')).to_be_hidden()
+    expect(page.locator('#review-people-summary')).to_contain_text('확인할 수 없습니다')
+
+
 def test_keyboard_pixel_cursor_samples_without_changing_photo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
