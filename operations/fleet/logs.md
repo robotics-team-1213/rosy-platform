@@ -3728,3 +3728,11 @@
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c).
 - 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 독립 검토 반영: 운영자 재계획·다음 바퀴·잘못된 값·지난 경고
+
+- 변경: `confirm_replan`이 `_apply_replan` 전에 보류된 계획의 구간으로 `_caps_checks`를 돈다(지도가 바뀌었으면 그대로 `TRIP_MAP_CHANGED`). `_next_lap`이 지금 바퀴의 남은 구간이 아니라 다음 바퀴 `body`의 구간을 검사한다. `TripCaps`는 있는데 bool이 아닌 값을 `false`로 읽어 거절한다. 깨끗한 검사가 trip detail의 `regulation_caps_unknown`을 지운다. `trip_runner.py` 896 → 898줄(한도 901).
+- 증거: `test/test_trip_regulation_caps.py`(운영자 재계획 거절·통과와 경고 지움, 다음 바퀴 구간, 잘못된 값). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 독립 검토 LAND-WITH-CONDITIONS.
+- 교훈: 거절 검사는 경로를 바꾸는 모든 입구(시작, AI 재계획, 운영자 재계획, 다음 바퀴)에 같이 둔다.
