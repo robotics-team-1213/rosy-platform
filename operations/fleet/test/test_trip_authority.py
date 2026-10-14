@@ -133,6 +133,7 @@ def test_a_failed_send_is_not_retried_before_the_next_period(caplog):
             raise OSError("unreachable")
 
     sender, live = AuthoritySender(Port(), True), _live(2.0, 0.5)
+    sender.quiet_until = -math.inf  # D-760 5: long after Fleet started
 
     async def go():
         for _ in range(3):
