@@ -166,7 +166,7 @@ class MainActivity : ComponentActivity() {
         if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) screenPower.sleep()
     }
 
-    /** D-741 3: one app bar above every screen, also before login. Cam commands nothing, so it has no stop seat. */
+    /** D-741 3: one app bar above every screen, also before login. The stream screen has no title under it, so the preview keeps its height. Cam commands nothing, so it has no stop seat. */
     @Composable
     private fun OverheadApp() {
         val state by StreamService.state.collectAsStateWithLifecycle()
@@ -267,7 +267,7 @@ class MainActivity : ComponentActivity() {
         val rememberedPeers by cameraPeerModel.remembered.collectAsStateWithLifecycle()
         val current = attempt
         if (peerState != CameraPeerState.Idle && !state.running) {
-            CamPath("기기 연결")
+            CamPath(stringResource(R.string.peer_title))
             CameraPeerScreen(peerState, cameraPeerModel::confirmCertificate, cameraPeerModel::close, cameraPeerModel::open,
                 onDone = { cameraPeerModel.close(); showLan = false }, onForget = cameraPeerModel::forget)
         } else if (current != null) {
@@ -288,7 +288,7 @@ class MainActivity : ComponentActivity() {
                 },
             )
         } else if (showLan && !showSettings && !state.running) {
-            CamPath("영상 받을 기기")
+            CamPath(stringResource(R.string.lan_title))
             CameraLanScreen(onSelect = { record ->
                 val site = PairableSite(record.name, record.tlsHost, record.port, record.address)
                 if (record.peerApproval) cameraPeerModel.open(site)
@@ -324,7 +324,6 @@ class MainActivity : ComponentActivity() {
                 },
             )
         } else {
-            CamPath("촬영")
             StreamScreen(
                 state = state,
                 siteLink = siteLink,
