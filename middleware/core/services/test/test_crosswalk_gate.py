@@ -458,8 +458,11 @@ def test_a_frame_without_the_line_keeps_the_last_corridor_for_its_ttl_in_the_sam
     s.linear = 0.08                                                   # moving: only for EVIDENCE_TTL_S
     s.m._standing_still = lambda now: False
     assert s.m._fresh_corridor(s.t + 0.31) is None
-    s.m._standing_still = lambda now: True                            # standing still: the lane cannot have moved
-    assert s.m._fresh_corridor(s.t + 5.0) is held
+    s.m._standing_still = lambda now: True                            # standing still where it was seen
+    here = SimpleNamespace(x=held[0].x, y=held[0].y, yaw=held[0].yaw)
+    assert s.m._fresh_corridor(s.t + 5.0, here) is held
+    for moved in (dict(x=here.x + 0.05), dict(yaw=here.yaw + 0.3)):    # drove or pivoted, then stopped (review)
+        assert s.m._fresh_corridor(s.t + 5.0, SimpleNamespace(**{**vars(here), **moved})) is None
     s.m._return_evidence.reset()                                      # a new odom run: never the old corridor
     assert s.m._fresh_corridor(s.t + 0.1) is None
 
