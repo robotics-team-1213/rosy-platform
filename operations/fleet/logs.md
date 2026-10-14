@@ -3634,3 +3634,16 @@
 - gate 변화: 없음. 독립 Safety-Review 재확인 전.
 - 결정: D-760 Decision 3·4, 3단계 Safety-Review.
 - 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
+
+## 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+
+- 변경: `step_action_kinds.StepActionKind`에 `approval`(값 `two_person`·`proposer_only`·`one_person`, 엄한 순서 `APPROVALS`)을 더했다. `CELL_TRANSFER`는 `two_person`. 레거시 `PICK_PLACE`는 단계 원장 규칙이 없어 `_LEGACY_APPROVALS`에 `proposer_only`로 따로 적었다(실물 하달 조각에서 두 사람으로, 개정 2 질문 5). `required_approval(kinds)`는 가장 엄한 값을 주고 모르는 종류·빈 목록은 `ValueError`. `mission_routes` admit은 `decidable()`로 등록부 판정을 읽고 `candidate.kind` 분기를 지웠다. 코드와 순서는 그대로(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404, `PROPOSAL_NOT_RESOLVED` 409).
+- 증거: `test_approval_registry.py`(등록된 모든 종류에 승인 값, 종류별 값, 모르는 종류 거절, 제안 단계의 모르는 종류 422, 두 사람 종류의 제안자 403과 다른 운영자 승인, 제안자만 종류의 다른 운영자 404·viewer 403, 공유 콘솔 토큰 403). 원격 119 passed: `X:/DevTemp/approval-registry/s5/run-1.txt`.
+- gate 변화: 없음. 동작은 같다.
+
+## 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
+
+- 변경: `POST /api/fleet/missions/{mission_id}/reject`, 본문 `FleetWorkDecisionRequest {expected_generation}`(`core_common.protocol.work`, admit·Cell resume도 같은 모델). 이름 있는 운영자만, 볼 수 있는 범위는 admit과 같은 등록부 판정. 제안자는 `WITHDRAWN_BY_PROPOSER`, 다른 운영자는 `REJECTED_BY_OPERATOR`. Cell Job은 취소와 같은 끝 상태 HOLD/`CANCELLED_BY_OPERATOR`(resume·cancel·admit 거절, 사건 `CELL_JOB_REJECTED`), 레거시 Mission은 `CANCELED`(사건 `MISSION_REJECTED`). claim 없음. `PROPOSED`가 아니거나(두 번째 거절 포함) 정지 세대가 다르면 409 `MISSION_REJECT_REFUSED`. 크기: admit의 두 원장 분기를 한 경로로, 제안 생성·resolve의 Cell 역할 검사를 도우미 하나로, `cell_job_store._json`을 `mission_store._json` 재사용으로 줄였다.
+- 증거: `test_approval_registry.py` 거절 시험(제안자 철회와 다른 운영자 404, 다른 운영자의 Cell 거절, viewer·서비스 403, 낡은 세대 409, 두 번째 거절 409, 거절 뒤 admit·resume 409, claim 없음, 감사 사건의 행위자, 공유 토큰 403, 잘못된 본문 422). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 화면(조각 5c)은 이 브랜치에 없다.
+- 결정: v1.228·v1.229는 착지 전 브랜치(`fix/odom-log-monotonic-epoch`, `feat/junction-turn-map-entry`)가 쓰고 있어 v1.230을 썼다. 대화 요청에 연결된 작업의 서버 쪽 직접 승인 차단은 이 조각에서 하지 않았다.
