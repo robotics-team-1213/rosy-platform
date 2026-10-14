@@ -84,7 +84,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
-        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work'):
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
                 target = 'fleet/server/' + source.name
                 assert names.count(target) == 1
