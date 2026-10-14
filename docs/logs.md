@@ -8413,3 +8413,10 @@ osy-d395-s1d\`.
 - 변경: validation/omx-recording-probe-2026-10-14/result.md에 관절 readback·상태 충돌·갱신 실패·late worker 오류의 RED/GREEN과 실행 한계를 기록했다. OMX README에 개선 동작과 컨테이너 내부 probe 사용을 설명했다.
 - 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
 - gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
+
+## 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
+
+- 변경: D-764 검수 AI 실행·취소·읽기 전용 버전 계약과 계획을 추가하고 API 부록을 연결했다.
+- 증거: 구현 및 회귀 시험 추가. 원격 실행·브라우저 검증 결과는 후속 기록한다.
+- gate 변화: 없음. 운영 배포·실 모델 품질 수용을 선언하지 않는다.
+- 결정: D-764

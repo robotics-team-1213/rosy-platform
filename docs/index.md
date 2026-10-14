@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
 - 2026-10-14 · b3d6f4cd5 · OMX 녹화 probe 오류 재현·수정
 - 2026-10-14 · 1432230ad · 사람-AI 검수 화면의 출처와 상태 표시
 - 2026-10-14 · uncommitted · 워크트리 청소의 자기 워크트리 빠른 길 (D-761 Proposed)
 - 2026-10-14 · 4bb927152 · docs: D-762 main 관문(PR·merge queue 단계), D-584 개정, 보류·보관 브랜치 목록
-- 2026-10-14 · 43c9e729f · 소유자 확인은 `--snapshot`에만 둔다 (D-761 Proposed)
