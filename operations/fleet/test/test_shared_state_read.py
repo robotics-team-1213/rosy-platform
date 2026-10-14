@@ -205,8 +205,8 @@ class SharedFleet(LinkFleet):
     def read_number(self, robot_id):
         return self.reads.read_number(robot_id)
 
-    async def junction_state(self, robot_id):
-        await self.reads.state(robot_id)
+    async def junction_state(self, robot_id, after=0):
+        await self.reads.state(robot_id, after=after)
         return await AuthFleet.junction_state(self, robot_id)
 
 
@@ -276,6 +276,7 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
     map_pose._clock = clock
     junction = app.state.trip_runner._junction
     assert console.read_state == map_pose.state             # app.py wiring: one read for every caller
+    assert junction.read_number == map_pose.read_number     # the trip fences the read its junction uses
 
     async def go():
         for step in range(60 * 20):                         # 50 ms steps
