@@ -56,7 +56,8 @@ def test_progress_ends_the_episode_and_a_later_wait_gets_a_fresh_bound():
     assert not _stalled_at(p, live, 5.0, s=1.0) and "wait" not in live.view  # it crossed
     live.junction["regulation_wait"] = "signal"
     _stalled_at(p, live, 30.0, s=1.0)
-    assert live.view["wait"] == {"since": 30.0, "reason": "signal"} and p._wait_bound("signal") == STALL_S
+    assert live.view["wait"] == {"since": 30.0, "reason": "signal", "bound_s": STALL_S, "over_bound": False,
+                                 "waiting": True}
 
 
 def test_a_link_wait_is_not_replaced_and_old_core_without_the_field_is_unchanged():
@@ -73,3 +74,36 @@ def test_junction_state_carries_the_regulation_wait():
     client = SimpleNamespace(state=lambda: asyncio.sleep(0, result=state))
     port = HttpLaneJunction(lambda: {"rosy_01": client})
     assert asyncio.run(port.junction_state("rosy_01"))["regulation_wait"] == "crosswalk_look"
+
+
+def test_the_trip_read_carries_each_reason_and_its_bound_then_over_bound_past_it():
+    """D-763 2 (API v1.231): ``view.wait`` keeps the one predicate's answer the stall clock uses."""
+    for reason in ("crosswalk_look", "crosswalk_wait", "crosswalk_held", "signal", "authority"):
+        p, live = _Progress(), _live(reason)
+        bound = p._wait_bound(reason)
+        assert not _stalled_at(p, live, 0.0) and not _stalled_at(p, live, bound - 0.1)
+        assert live.view["wait"] == {"since": 0.0, "reason": reason, "bound_s": bound, "over_bound": False,
+                                     "waiting": True}
+        _stalled_at(p, live, bound)
+        assert live.view["wait"]["over_bound"] and not live.view["wait"]["waiting"]
+
+
+def test_the_read_keeps_one_episode_across_reasons_and_progress_clears_it():
+    p, live = _Progress(), _live("crosswalk_look")
+    _stalled_at(p, live, 0.0)
+    live.junction["regulation_wait"] = "signal"
+    _stalled_at(p, live, 10.0)
+    assert live.view["wait"] == {"since": 0.0, "reason": "signal", "bound_s": STALL_S, "over_bound": False,
+                                 "waiting": True}
+    live.junction["regulation_wait"] = None
+    _stalled_at(p, live, 12.0)                                               # a null poll: no wait now, episode kept
+    assert live.view["wait"]["since"] == 0.0 and not live.view["wait"]["waiting"]
+    _stalled_at(p, live, STALL_S + 1.0)
+    assert live.view["wait"]["over_bound"]
+    assert not _stalled_at(p, live, STALL_S + 2.0, s=1.0) and "wait" not in live.view
+
+
+def test_a_link_wait_reads_its_lease_bound():
+    p, live = _Progress(), _live(None, wait={"reason": "link_wait", "since": 0.0})
+    assert p._waiting(live, 1.0) and live.view["wait"]["bound_s"] == 8.0
+    assert not p._waiting(live, 8.0) and live.view["wait"]["over_bound"]

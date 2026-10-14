@@ -98,13 +98,13 @@ class TripProgress:
 
     def _waiting(self, live: LiveTrip, now: float) -> bool:
         wait, regulation = live.view.get("wait") or {}, live.junction.get("regulation_wait")
-        if wait.get("reason") != "link_wait":
-            if not regulation:
-                return False  # the episode (and its ``since``) stays until the robot makes progress
-            # D-763 8: one episode from its first reason; a new reason takes its own bound from that start
+        link = wait.get("reason") == "link_wait"
+        if regulation and not link:  # D-763 8: one episode from its first reason; a new one takes its bound from there
             wait = live.view["wait"] = {"since": now, **wait, "reason": regulation}
-        bound = self._wait_bound(wait.get("reason"))
-        return bound is not None and now - wait["since"] < bound
+        bound = wait["bound_s"] = self._wait_bound(wait.get("reason"))  # v1.231: the trip read shows this answer
+        wait["over_bound"] = bound is not None and now - wait.get("since", now) >= bound
+        wait["waiting"] = bool(regulation or link) and bound is not None and not wait["over_bound"]
+        return wait["waiting"]
 
     async def _link_wait(self, live: LiveTrip, kind: str) -> bool:
         """D-760 4: a robot call or state read failed on a trip that holds its lease. The trip stays open in
