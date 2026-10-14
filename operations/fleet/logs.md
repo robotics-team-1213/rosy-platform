@@ -3672,3 +3672,9 @@
 - 증거: `test_shared_state_read.py`(나이·합류·실패 객체·정확한 stamp, 교차로 읽기 공유, 느린 로봇, trip 루프의 전송 오류 `link_wait`·`ValueError` 실패, 가짜 로봇 2·10대 60 s에 로봇당 120회 = 2.0회/s·어느 1 s에도 3회 이하, 주기 루프의 직접 `state()` 금지). 가짜 로봇을 요청 사이에 바꾸는 기존 시험 8개 파일은 `fakes.fresh_reads(app)`로 공유를 끈다(`fleet_gather.max_age_s = 0`과 같은 뜻). 원격 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 전송 계약은 그대로다.
 - 결정: D-760 Decision 8. 차로 준수는 계획의 0.5 s 대신 기본 0.45 s다(시뮬 자세 포트 `tools/sim/native_gazebo_map_pose.py`의 `refresh`가 `max_age_s`를 받지 않는다). 군집(`swarm/session.py`)과 명령 한 번짜리 경로는 그대로다.
+## 2026-10-15 · 95c9263a5 · D-760 4단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: `MapPoseService`가 REST 읽기마다 번호를 매기고(`read_number`), `state`·`refresh`가 `after`를 받는다. 번호가 `after` 이하인 읽기는 나이가 젊어도 주지 않고, 그런 읽기가 진행 중이면 끝나기를 기다린 뒤 새로 읽는다. trip 루프는 단계의 읽기 뒤, 교차로 지시 송신 뒤, 링크 끊김 때 울타리를 친다(`trip_progress._fence`). 그래서 지시 앞의 읽기로 같은 지시를 다시 보내지 않고, `link_wait`는 끊긴 뒤 시작한 읽기로만 끝난다. 한 단계의 자세와 교차로 상태는 여전히 한 읽기다. 상태 읽기의 HTTP 오류는 trip을 그 코드·status로 끝낸다(`TRIP_LOOP_ERROR` 대신). 로스터를 떠난 로봇의 읽기를 지우고, odom을 넣은 뒤 읽기를 남긴다.
+- 증거: `test_shared_state_read_fences.py`(0.43 s 간격으로 송신 뒤 단계가 와도 재송신 없음, 단계마다 새 읽기, 울타리 앞의 진행 중 읽기를 넘겨주지 않음, 끊기기 전 읽기가 끊긴 뒤 닿아도 `link_wait` 유지, 허브와 REST 읽기 분리, HTTP 503으로 `failed`/`HTTP_503`, 로스터 이탈). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review. 읽기 번호가 없는 자세 포트(시뮬 `native_gazebo_map_pose.py`, 시험 가짜)는 울타리 없이 지금처럼 읽는다.
