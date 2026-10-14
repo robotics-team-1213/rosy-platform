@@ -8325,6 +8325,27 @@ osy-d395-s1d\`.
 - 증거: 기준 main 39817a51e의 import 제한·영상 처리·OMX 변환·Hub 도구를 대조했다. 공식 저장 조건은 2026-10-14 확인 자료를 참조하고 운영 시 재확인한다. 문서·계약 검사는 이 계획 커밋에서 수행한다.
 - gate 변화: 없음. 구현 계획이며 업로드·유료 증설·삭제·배포 또는 실제 학습 수용을 수행하지 않는다.
 
+## 2026-10-14 · d6751f094 · feat: 학습 수집 계획의 가져오기 복구 단계
+
+- 변경: 수집·저장 계획에 단계 1 로컬 반영과 단계 2 구현·시험 근거를 구분하고, 재개 진행 필드·실패 코드·논리 예약의 API 계약을 기록했다.
+- 증거: 모델 PC 합성 9GiB 재개와 전체 SHA readback, 프로세스 crash checkpoint, HTTP 취소/즉시 재시도와 데스크톱·모바일 관련 원격 43 passed, known_failures 0 NEW. 운영 안내에 private import_limits와 파일별 진행·한계·복구를 연결했다.
+- gate 변화: 단계 3–5와 실제 외부 전송·운영 배포·학습 수용은 미완료로 유지한다. 합성 전송 시험을 실제 영상 용량·네트워크 처리량으로 확대하지 않는다.
+
+## 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
+- 변경: 모든 앱 하나의 계정, 권한 내 자동 인증 세션 연결. 계정 원장·관리·CORE/Pilot/Cam·학습/provider·회수·실사용 인수 8단계를 docs/plans/2026-10-14-rosy-account-completion.md에 정리했다.
+- 증거: 기준 62fbb5a13d의 인증 131개 원격 통과와 현재 계약·표면 목록을 읽고 계획했다.
+- gate 변화: 없음. 계획 문서이며 제품 구현·착지·push·배포·실계정 전환 증거가 아니다.
+
+## 2026-10-14 · uncommitted · docs: D-757 Rosy Account 통합 신원과 자동 세션
+- 변경: D-757과 ADR Log를 추가하고 D-549를 대체 상태로 표시했다. 전 앱 동일 신원·자동 인증 세션·자원별 권한·회수·이전·수용 계약을 정했다.
+- 증거: 사용자 요구와 D-519/549/686/689/755, 통합 실행 계획을 대조했다. protocol/API 상세 및 구현은 후속이다.
+- gate 변화: architecture Accepted. 제품 구현·착지·push·배포·실계정 전환·현장 수용은 미완료다.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
 ## 2026-10-14 · e1b6c97fe · 워크트리 관문 도구와 손실 없는 청소 (D-761 Proposed)
 
 - 변경: `tools/worktrees.py`(`status`, `prune`, `new`)를 추가했다. `tools/land.py`는 착지를 시작할 때 손실 없는 청소를 돌리고(`--no-prune`), harness lint는 상한 40이나 치울 워크트리가 있으면 경고한다. `AGENTS.md` 「같이 하는 깃」 1·6번, `docs/reference/shared-checkout.md`, `rosy-land-on-main` 스킬을 이 도구로 바꿨다.

@@ -881,3 +881,10 @@
 - 변경: 없음(증거 기록).
 - 증거: 원격 `middleware/robot_ui/pilot/test` 97 passed 149 skipped, CORE `/pilot` 경로와 표면 쪽 시험 8 passed 13 skipped, `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/pilot-app-bar/pilot.txt`, `core-api.txt`, `shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main 10581c1ce에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
 - gate 변화: 없음. 건너뛴 시험은 브라우저 시험이다. 화면·Android·실물 수용은 확인 못 함.
+
+## 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
+
+- 변경: 공통 Account 로그인과 보호된 native 세션을 연결했다. Proxy는 현재 Bearer를 HTTP/WS upstream에만 전달하고 WebView 저장소에는 넣지 않는다. 계정/family 변경은 이전 연결을 닫는다. 활성 로봇 최대 두 대만 갱신하며 조작과 정지 경로는 네트워크를 기다리지 않는 검증된 캐시를 읽는다. TLS CA 범위와 CORE의 최종 정지 권한은 유지한다.
+- 증거: 설정 포함 Gradle testDebugUnitTest 107 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/pilot-configured.txt. APK 공개 설정과 merged manifest의 정확한 callback/autoVerify를 확인했다. 원격 OMEN에서 test_shell_assets.py 4 passed, known_failures NEW 0 (같은 세션 logs/web-closure/run-1.txt).
+- 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB이며 Cam/Pilot은 순서대로 빌드했다.
+- gate 변화: SOURCE/JVM/APK. 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.

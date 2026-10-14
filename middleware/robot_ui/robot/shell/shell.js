@@ -1,3 +1,4 @@
+import { restoreAccount } from "../client.js";
 // 역할별 화면의 셸(D-204). 매니페스트를 받아 패널을 조립하고,
 // 세 화면이 공유하는 것 — 화면 전환기, 역할 표시, 비상 정지 하나 — 만 소유한다.
 // 로그인은 아직 /dashboard 가 소유한다(같은 탭의 sessionStorage 토큰을 그대로 쓴다, D-193 6).
@@ -208,7 +209,8 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
   }
 });
 
-if (!session.token) {
+await restoreAccount();
+if (!session.authenticated) {
   showLoginStatus("로그인이 필요합니다.");
 } else {
   if (["setup", "device"].includes(surface) && safetyStatus) {

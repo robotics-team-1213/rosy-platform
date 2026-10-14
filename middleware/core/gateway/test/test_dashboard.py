@@ -66,16 +66,14 @@ def assert_slam_click_routes(bundle: str) -> None:
 
 
 def assert_storage_rule(bundle: str) -> None:
-    """D-193 6: localStorage holds only a paired token, and only when asked to.
-
-    Every other use of localStorage in the dashboard would be a way for a
-    non-expiring token to outlive the tab.
-    """
+    """D-193 credentials stay bounded; D-757 broadcasts only an identity marker."""
     client = (WEB_ROOT / "client.js").read_text(encoding="utf-8")
     others = dashboard_js(without=("client.js",))
     assert "localStorage" not in others
-    assert client.count("localStorage.setItem(") == 1
-    guarded = client.split("localStorage.setItem(", 1)[0].rsplit("export function rememberToken", 1)[1]
+    assert client.count("localStorage.setItem(") == 2
+    assert "localStorage.setItem('rosy.account.identity', key)" in client
+    assert "localStorage.setItem(PAIRED_KEY, JSON.stringify({ token, expires_at: expiresAt }))" in client
+    guarded = client.split("export function rememberToken", 1)[1].split("localStorage.setItem(", 1)[0]
     assert "if (persist && left > 0 && left <= REMEMBER_MAX_MS)" in guarded
     assert "localStorage" in bundle
 

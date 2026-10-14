@@ -1,0 +1,21 @@
+// D-757: explicit public deployment trust; absent configuration keeps legacy installation behavior.
+def accountFile = providers.gradleProperty('rosy.accountConfig')
+def account = accountFile.isPresent() ? new groovy.json.JsonSlurper().parse(file(accountFile.get())) : null
+def callback = account == null ? null : new URI(account.redirect_uri)
+if (callback != null && (callback.scheme != 'https' || !callback.host || callback.rawQuery || callback.rawFragment || callback.userInfo)) {
+    throw new GradleException('Account callback must be an exact HTTPS app link')
+}
+android.defaultConfig.manifestPlaceholders += [accountCallbackHost: callback?.host ?: 'disabled.invalid', accountCallbackPath: callback?.path ?: '/account-disabled']
+def output = layout.buildDirectory.dir('generated/account-assets')
+def generateAccount = tasks.register('generateAccountConfig') {
+    if (accountFile.isPresent()) inputs.file(file(accountFile.get()))
+    inputs.property('accountEnabled', account != null)
+    outputs.dir(output)
+    doLast {
+        def target = output.get().file('account-config.json').asFile
+        if (account != null) { target.parentFile.mkdirs(); target.text = groovy.json.JsonOutput.toJson(account) }
+        else if (target.exists()) target.delete()
+    }
+}
+android.sourceSets.main.assets.srcDir(output)
+tasks.named('preBuild') { dependsOn(generateAccount) }

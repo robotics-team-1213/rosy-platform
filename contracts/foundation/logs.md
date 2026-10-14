@@ -657,6 +657,11 @@
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 없음.
 
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
 ## 2026-10-14 · a9901c702 · 능력 lane_bend_map_entry와 junction.map_entry_used·map_entry_reason (D-759, API v1.224)
 
 - 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_bend_map_entry`(없으면 wire에서 빠진다). `schemas.py`의 `LineJunctionStatus`에 `map_entry_used: bool = False`, `map_entry_reason: Optional[str] = None`.

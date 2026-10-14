@@ -85,6 +85,7 @@ def whoami(token):
 
 
 class Accounts:
+    central_account = False
     def __init__(self, db_path, key_path, config, *, clock=time.time):
         self.db_path, self.key_path = Path(db_path), Path(key_path)
         self.config_path = Path(config) if isinstance(config, (str, Path)) else None
@@ -119,6 +120,13 @@ class Accounts:
         if os.name != 'nt':
             self.db_path.chmod(0o600)
         self._dummy = hash_password(secrets.token_urlsafe(24))
+        self._legacy_authority()
+
+    def _legacy_authority(self):
+        if not self.central_account:
+            with self._db() as db:
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='rosy_account_owners'").fetchone():
+                    raise AccountError('Rosy Account configuration is required for this project')
 
     @contextmanager
     def _db(self):
@@ -178,6 +186,7 @@ class Accounts:
         return token, self.authenticate(token)
 
     def login(self, username, password, *, address='local'):
+        self._legacy_authority()
         if not isinstance(username, str) or not isinstance(password, str) or len(username) > 80 or len(password) > 1024:
             raise AccountError('invalid login')
         # Count attempted checks before scrypt so concurrent failures cannot bypass the bound.
@@ -205,6 +214,7 @@ class Accounts:
         return self._authenticate_id(_digest(token))
 
     def _authenticate_id(self, session_id):
+        self._legacy_authority()
         with self._db() as db:
             row = db.execute('SELECT * FROM learning_sessions WHERE id=?', (session_id,)).fetchone()
         if not row or row['expires'] <= self.clock() or row['project_id'] != self.project_id:
@@ -247,6 +257,7 @@ class Accounts:
         return invited
 
     def login_subject(self, subject):
+        self._legacy_authority()
         owner = self._subject_owner(subject)
         if not owner: raise AccountError('Hugging Face account has not been invited')
         return self._session(self._user(owner), subject)
@@ -344,14 +355,16 @@ class Accounts:
                               (self.project_id, principal['user_id'])).fetchall()
         return [self._connection_public(row) for row in rows]
 
+    def _owner_capabilities(self, row, principal):
+        return self._user(row['owner'])['memberships'][self.project_id]
+
     def credential(self, principal, connection_id, generation=None, *, resource=None):
         principal = self.require(principal, 'import')
         with self._db() as db:
             row = db.execute('SELECT * FROM learning_connections WHERE id=? AND project_id=?', (connection_id, self.project_id)).fetchone()
         if not row or not row['active'] or (row['sharing'] == 'personal' and row['owner'] != principal['user_id']):
             raise AccountError('connection access denied')
-        owner = self._user(row['owner'])
-        owner_capabilities = owner['memberships'][self.project_id]
+        owner_capabilities = self._owner_capabilities(row, principal)
         if 'import' not in owner_capabilities or (row['sharing'] == 'project' and 'manage' not in owner_capabilities):
             raise AccountError('connection owner permission revoked')
         if generation is not None and generation != row['generation']: raise AccountError('connection generation changed')
