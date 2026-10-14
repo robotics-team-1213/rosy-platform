@@ -89,4 +89,7 @@ def _trip_lease(args) -> dict:
         sys.exit("trip lease config: fleet.trip_lease_required must be true or false")
     if isinstance(ttl_s, bool) or not isinstance(ttl_s, (int, float)) or not MIN_TTL_S <= ttl_s <= MAX_TTL_S:
         sys.exit(f"trip lease config: fleet.trip_lease_ttl_s must be within {MIN_TTL_S:g}..{MAX_TTL_S:g}")
+    from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_TTL_S
+    if required and ttl_s <= AUTHORITY_TTL_S and _traffic_authority(args):  # D-760 1: the authority expires first
+        sys.exit(f"trip lease config: fleet.trip_lease_ttl_s must exceed the authority ttl {AUTHORITY_TTL_S:g} s")
     return {"required": required, "ttl_s": float(ttl_s)}
