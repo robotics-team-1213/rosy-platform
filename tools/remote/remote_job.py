@@ -30,6 +30,7 @@ JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L
 echo "$$ pytest 2 6" > "$L"; rm -f ~/rosy-jobs/"$1".resv
 trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
 echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"; rm -f "$L"' EXIT
+trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
 shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
@@ -44,7 +45,8 @@ R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; D=$R/runs/$1.jobs; J=$6
 mkdir -p ~/rosy-jobs "$D"; cd "$R/runs/$1"
 [ -e "$D/$4.log" ] && exit 0
 set -- "$1" "$2" "$3" "$4" "$5" "${@:7}"
-setsid nohup bash -c "$J" job "$@" > "$D/$4.log" 2>&1 < /dev/null &
+: > "$D/$4.log"  # exists before START returns, so the first poll finds it
+setsid nohup bash -c "$J" job "$@" >> "$D/$4.log" 2>&1 < /dev/null &
 """
 
 # The exit code is read before the log, so a poll that sees it also gets the whole log.
