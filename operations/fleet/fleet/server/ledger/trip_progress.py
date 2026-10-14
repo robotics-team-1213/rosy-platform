@@ -16,6 +16,7 @@ from fleet.server.trip_ports import LiveTrip
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
 #: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
 MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
+CROSSWALK_WAIT_S = 15.0  # CORE crosswalk_report_s 10 + crosswalk_clear_s 5 (D-573 3 defaults)
 
 
 class TripProgress:
@@ -83,11 +84,17 @@ class TripProgress:
         return now - live.progress_at >= self.config.stall_s
 
     def _wait_bound(self, reason: Optional[str]) -> Optional[float]:
-        """D-760 4 / D-517 4: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule applies again."""
-        return {"link_wait": self.lease.ttl_s}.get(reason)
+        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule
+        applies again. CORE's ``line_follow.regulation_wait`` (v1.227): a crosswalk look/wait is bounded by CORE's
+        crosswalk_report_s + crosswalk_clear_s defaults (D-573 3, then crosswalk_blocked goes to D-622)."""
+        crosswalk = dict.fromkeys(("crosswalk_look", "crosswalk_wait", "crosswalk_held"), CROSSWALK_WAIT_S)
+        return {"link_wait": self.lease.ttl_s, "authority": self.lease.ttl_s, "signal": self.config.stall_s,
+                **crosswalk}.get(reason)
 
     def _waiting(self, live: LiveTrip, now: float) -> bool:
-        wait = live.view.get("wait") or {}
+        wait, regulation = live.view.get("wait") or {}, live.junction.get("regulation_wait")
+        if wait.get("reason") != "link_wait" and wait.get("reason") != regulation:  # D-763 8: a new regulation wait
+            wait = live.view["wait"] = {"reason": regulation, "since": now} if regulation else {}
         bound = self._wait_bound(wait.get("reason"))
         return bound is not None and now - wait["since"] < bound
 
