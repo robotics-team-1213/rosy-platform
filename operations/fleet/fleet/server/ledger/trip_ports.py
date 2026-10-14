@@ -178,8 +178,8 @@ class TripConfig:
     stall_m: float = 0.05
     #: Every robot call of the loop gives up after this long (a stuck robot is an error).
     port_timeout_s: float = 1.5
-    #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30).
-    expect_tol_min_m: float = 0.12
+    expect_tol_min_m: float = 0.12  #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30)
+    bend_send_s: float = 0.0  #: D-507 bend lead: the instruction's HTTP send + CORE take time (site knob; ~0 in SIM)
     #: D-520 1: a lane within this of one circle is an ``exit_segment`` (260919 ring: 0.00007 m).
     arc_fit_tol_m: float = 0.005
     #: D-520 1: lane centre to the outer painted line's centre on a curve (260919 ring: line
@@ -406,11 +406,11 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
 
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig, located=None) -> Optional[dict]:
     """D-507 bend fields (D-754 next line, D-759 map entry); None outside a straight same-map approach in (0, 2] m."""
-    # Lead by top speed x measured pose latency (unled the arc began 2 cm late, 2026-10-13; SEND_ALLOWANCE_S on top began it 2 cm early, m16/m17).
+    # Lead: top speed x (pose age + read-to-send + site bend_send_s); unled 2 cm late (10-13), +0.2 s 2 cm early (m16/17).
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0
     if age is not None and live.pose_read_at is not None:
-        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at))
+        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + config.bend_send_s)
     ahead = bend["s_start"] - s
     bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
     index, segs = live.view["segment_index"], live.segments
