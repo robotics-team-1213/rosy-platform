@@ -131,7 +131,7 @@ class PoseTrail:
             dt = sample.received_at-old.received_at
             jump = math.hypot(sample.x-old.x, sample.y-old.y)
             if (sample.frame != old.frame or sample.stamp_ns <= old.stamp_ns
-                    or not 0 < dt <= 1. or jump > .02+.2*dt  # SIM m27: a 0.6 s gap with a fitting jump is one run
+                    or not 0 < dt <= .5 or jump > .02+.2*dt
                     or abs(_angle(sample.yaw-old.yaw)) > .1+dt):
                 self.samples.clear()
                 self.samples.append(sample)
