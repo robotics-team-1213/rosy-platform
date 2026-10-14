@@ -1,5 +1,9 @@
 [
   {
+    "commit": "775b1f3f6e7cd71bb3adc2415bbc5d4c0a14bd69",
+    "reason": "Independent code-reviewer safety review, 2026-10-14 (LAND after conditions b296ea453): D-759 rev 1 junction turn map_entry; flag-off identical; turn map target bounded 15 deg inside the 30 deg reacquire window; epoch/carry/stale/future fall back to today; turn sign kept past 180 deg; enable only after a SIM lap; no device acceptance."
+  },
+  {
     "commit": "e60a7891e21c353dfa8bcbae4422aabdc2535421",
     "reason": "Independent code-reviewer retrospective history-only SOURCE provenance review, 2026-10-14: e60a7891e adds default-off bend_map_entry_enabled (capability false, map_entry ignored as disabled, bend path identical); on-path rebase keeps OFF_PATH_M/body-sweep/motion_admitted/bound checks; gateway change is one config read; no device acceptance."
   },

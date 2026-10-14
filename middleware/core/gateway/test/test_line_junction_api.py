@@ -302,6 +302,26 @@ def test_d759_bend_map_entry_validation_and_record(core_client):
     assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "none_sent")
 
 
+def test_d759_rev1_turn_map_entry_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    turn = {**BODY, "action": "right", "turn_deg": -108.1}
+    for bad in ({**BODY, "action": "stop"}, {**BODY, "action": "left"}):  # no turn_deg: no exit heading
+        assert client.post(URL, json={**bad, "map_entry": ENTRY}, headers=OPERATOR).status_code == 400, bad
+    assert client.post(URL, json={**turn, "map_entry": {**ENTRY, "yaw_rad": 7.0}}, headers=OPERATOR).status_code == 400
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).turn_map_entry_enabled is False       # off by default
+    assert _line_follow_config({"turn_map_entry_enabled": True}).turn_map_entry_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"turn_map_entry_enabled": "true"})
+    assert client.post(URL, json={**turn, "map_entry": ENTRY}, headers=OPERATOR).json()["state"] == "armed"
+    assert lf._junction["map_entry"] == {"reason": "disabled"}
+    lf._config = replace(lf.config, turn_map_entry_enabled=True)
+    client.post(URL, json={**turn, "place_id": "J3", "map_entry": ENTRY}, headers=OPERATOR)
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["map_entry_used"], junction["map_entry_reason"]) == (False, "stale")  # a stamp of 1970
+
+
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
     _, services, clock = _active(core_client)
     raw = json.dumps({"reason": "junction_transverse", "stamp": clock["t"], "junction_ahead_m": 0.25})

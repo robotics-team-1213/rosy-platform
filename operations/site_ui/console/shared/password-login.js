@@ -2,7 +2,7 @@
 import {actionIcon} from '/common/ui.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
-import {canManageAccounts} from '/console/assets/account-permissions.js';
+import {canViewAccountSetup} from '/console/assets/account-permissions.js';
 
 const cookieRequest = createFleetClient();
 const sessionRequest = createFleetClient({credential: () => document.getElementById('console-token')?.value
@@ -121,7 +121,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
       cookiePrincipal = cookie ? session.principal_id : null;
       cookieRole = cookie ? session.role : null;
       if (profile) profile.hidden = !cookie || session.password_change_required === true;
-      if (accounts) accounts.hidden = !canManageAccounts(session);
+      if (accounts) accounts.hidden = !canViewAccountSetup(session);
       if (standalone) {
         if (cookie) return verified(session);
       } else {
