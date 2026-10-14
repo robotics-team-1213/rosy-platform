@@ -334,8 +334,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 4bb927152 · docs: D-762 main 관문(PR·merge queue 단계), D-584 개정, 보류·보관 브랜치 목록
 - 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-14 · uncommitted · docs: D-757 Rosy Account 통합 신원과 자동 세션
 - 2026-10-14 · uncommitted · docs: Rosy Account 통합 완성 계획
 - 2026-10-14 · d6751f094 · feat: 학습 수집 계획의 가져오기 복구 단계
-- 2026-10-14 · 39817a51e · docs: 학습 수집·영상·저장 개선 범위
