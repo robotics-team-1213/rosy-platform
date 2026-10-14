@@ -102,7 +102,7 @@ if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 
   case "$SAFETY_OUT" in
     *"without a \`Safety-Review:"*)
       echo "[pre-push] the commits listed are already in the pushed range and stay there if re-created;" \
-           "the way out is their full SHA in EXEMPT in tools/harness/safety_review.py with an independent" \
+           "the way out is their full SHA in tools/harness/safety_review_exempt.json with an independent" \
            "review (D-430 §5). Ask the author named above." >&2 ;;
   esac
   exit 1
