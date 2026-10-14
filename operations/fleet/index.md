@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
+- 2026-10-14 · 58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
+- 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
 - 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
 - 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
-- 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
-- 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
-- 2026-10-14 · 5264ef279 · 통행권 송신 ttl_s는 2 s 그대로 (D-760 2단계의 상수 분리)
