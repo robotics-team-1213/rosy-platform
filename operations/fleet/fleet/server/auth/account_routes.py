@@ -9,6 +9,24 @@ from fleet.server.site_auth import SitePrincipal
 
 
 def install_account_routes(app, *, sessions, authorize):
+    @app.get("/api/fleet/auth/setup", tags=["fleet-auth"])
+    def setup(request: Request, principal: SitePrincipal = Depends(authorize)):
+        if (getattr(request.state, "site_auth_via", None) != "cookie"
+                or principal.password_change_required
+                or not principal.permits_site("accounts.manage", {"policy-admin"})
+                or not (same_origin(request) or (
+                    request.headers.get("origin") is None
+                    and request.headers.get("sec-fetch-site") == "same-origin"))):
+            raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED"}, headers=NO_STORE)
+        authority = app.state.account_authority
+        return JSONResponse({
+            "configured": authority is not None,
+            "issuer": authority.issuer if authority else None,
+            "clients": [{"client_id": name, "redirect_uris": list(settings["redirect_uris"]),
+                         "resources": list(settings["resources"])}
+                        for name, settings in sorted(authority.clients.items())] if authority else [],
+        }, headers=NO_STORE)
+
     def manager(request: Request, principal: SitePrincipal = Depends(authorize)):
         local_read = (request.method in {"GET", "HEAD"} and request.headers.get("origin") is None
                       and request.headers.get("sec-fetch-site") == "same-origin")
