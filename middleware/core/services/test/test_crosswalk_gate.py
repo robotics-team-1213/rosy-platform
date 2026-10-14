@@ -561,8 +561,7 @@ def _look_between_walls(zone_yaw, corridor):
     """The gate standing before a zone 0.30..0.45 m ahead on a lane along odom x whose walls stand
     0.117 m either side; the zone's anchor is `zone_yaw` off the lane. Returns the reasons of 3 s."""
     g = CrosswalkGate()
-    zone = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=zone_yaw, near=0.30, far=0.45, margin=0.02, lateral=0.005,
-                left=0.079, right=-0.079)
+    zone = Zone(key=(0, "odom"), x=0.0, y=0.0, yaw=zone_yaw, near=0.30, far=0.45, margin=0.02, lateral=0.02)
     geo = Geometry(front_x=B.front_x_m, rear_x=B.rear_x_m, lidar_x=B.lidar_x_m, v_cross=0.04, s_wait=0.04,
                    slow_from=0.08, lane_half_m=0.10, body_half_m=B.half_width_m + 0.02, strip_m=0.0,
                    exit_m=0.15, end_margin=0.02)
@@ -581,13 +580,13 @@ def test_the_look_area_follows_the_lane_seen_now_not_the_zones_older_anchor():
     lane seen now; that slope over the look area used to widen it by 0.02-0.03 m into the walls
     0.117 m from the lane middle and person_present never cleared. Judged in the frame of the
     lane seen now the area is the lane plus the camera's own bound, and the walls stay outside."""
-    for yaw in (0.0, 0.04, -0.04):
-        reasons = _look_between_walls(yaw, (0.079, -0.079, 0.005))
+    for yaw in (0.0, 0.03, -0.03):                 # m8: 0.024 rad, the camera's own bound 0.02 m
+        reasons = _look_between_walls(yaw, (0.079, -0.079, 0.02))
         assert "person_present" not in reasons and reasons[-1] is None, (yaw, reasons[-3:])
-    # no lane seen now: the zone's own frame and pads, as before (the wall holds the skewed zone)
-    assert "person_present" in _look_between_walls(0.04, None)
+    # no lane seen now: the corridor's full width in the zone's own frame, as before (the wall holds)
+    assert "person_present" in _look_between_walls(0.03, None)
     # the camera reads the wall bases as the edges: the lane's inner width stands in (개정 6)
-    reasons = _look_between_walls(0.04, (0.120, -0.122, 0.005))
+    reasons = _look_between_walls(0.03, (0.120, -0.122, 0.02))
     assert "person_present" not in reasons and reasons[-1] is None
 
 
