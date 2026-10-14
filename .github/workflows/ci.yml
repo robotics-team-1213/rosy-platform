@@ -270,12 +270,15 @@ jobs:
                   sys.stdout.write(line)
                   out.append(line)
               code = proc.wait()
-              ids = known_failures.rerun_ids("".join(out), quarantine) if code == 1 else []
-              if ids and set(ids) == set(known_failures.failed_ids("".join(out))):
+              failed = known_failures.failed_ids("".join(out))
+              ids = known_failures.rerun_ids("".join(out), quarantine)
+              if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
                   rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider"],
-                                         env={**os.environ, **extra}).returncode
-                  if rerun == 0:
+                                         env={**os.environ, **extra}, stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT, text=True, errors="replace")
+                  print(rerun.stdout, flush=True)
+                  if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
               print("::endgroup::", flush=True)

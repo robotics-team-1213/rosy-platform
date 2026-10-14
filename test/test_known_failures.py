@@ -109,3 +109,52 @@ def test_every_listed_id_names_a_real_test_with_a_reason():
         function = name.split("[", 1)[0]
         assert f"def {function}(" in (ROOT / path).read_text(encoding="utf-8"), nodeid
         assert reason, nodeid
+
+
+def test_a_teardown_error_on_the_rerun_is_not_flaky(tmp_path, monkeypatch, capsys):
+    quarantine = tmp_path / "flaky.txt"
+    quarantine.write_text(f"{FLAKY_ID}  # synthetic; remove when fixed; 2026-10-14; test\n", encoding="utf-8")
+    monkeypatch.setattr(known_failures, "QUARANTINE", quarantine)
+    monkeypatch.setattr(known_failures, "LIST", tmp_path / "known.txt")
+    (tmp_path / "known.txt").write_text("", encoding="utf-8")
+    report = tmp_path / "run.txt"
+    report.write_text(f"FAILED {FLAKY_ID} - boom\n{known_failures.RERUN_MARKER}\n"
+                      f"PASSED {FLAKY_ID}\nERROR {FLAKY_ID} - teardown\n", encoding="utf-8")
+    assert known_failures.main([str(report)]) == 1
+    assert f"NEW       {FLAKY_ID}" in capsys.readouterr().out
+
+
+CLEAN = f"PASSED {FLAKY_ID}\n1 passed"
+
+
+@pytest.mark.parametrize("code,report,rerun_code,section,green", [
+    (1, f"FAILED {FLAKY_ID} - x", 0, CLEAN, True),
+    (1, f"FAILED {FLAKY_ID} - x\nFAILED test/test_q.py::test_real - x", 0, CLEAN, False),  # mixed
+    *((c, f"FAILED {FLAKY_ID} - x", 0, CLEAN, False) for c in (2, 3, 4, 5)),           # not a test failure
+    (1, f"FAILED {FLAKY_ID} - x\nERROR test/test_q.py - ImportError", 0, CLEAN, False),  # collection error
+    (1, "1 failed in 0.1s", 0, CLEAN, False),                                         # no summary lines
+    (1, f"FAILED {FLAKY_ID} - x", 0, f"PASSED {FLAKY_ID}\nERROR {FLAKY_ID} - teardown", False),
+    (1, f"FAILED {FLAKY_ID} - x", 1, CLEAN, False),                                   # rerun exit 1
+    (1, f"FAILED {FLAKY_ID} - x", 0, "", False),                                      # rerun ran nothing
+])
+def test_the_rerun_decision_shared_by_ci_and_the_lab_runner(code, report, rerun_code, section, green):
+    quarantine = {FLAKY_ID: "synthetic"}
+    failed = known_failures.failed_ids(report)
+    ids = known_failures.rerun_ids(report, quarantine)
+    due = known_failures.should_rerun(code, failed, ids)
+    assert due == (code == 1 and set(failed) == {FLAKY_ID})
+    assert known_failures.rerun_passed(code, failed, ids, rerun_code, section) is green
+
+def test_the_quarantine_is_safety_tagged_and_never_holds_a_safety_test():
+    """D-762 stage 1: adding an id needs a Safety-Review trailer; a safety-path test is never retried."""
+    import yaml
+
+    sys.path.insert(0, str(ROOT / "tools" / "harness"))
+    import safety_review
+
+    manifest = yaml.safe_load((ROOT / safety_review.MANIFEST).read_text(encoding="utf-8"))
+    roots, modules = manifest["roots"], set(manifest.get("safety_modules") or ())
+    assert safety_review.is_safety("test/flaky_quarantine.txt", roots, modules)
+    quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
+    under_safety = [n for n in quarantine if safety_review.is_safety(n.partition("::")[0], roots, modules)]
+    assert not under_safety, under_safety
