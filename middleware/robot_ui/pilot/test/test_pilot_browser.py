@@ -775,6 +775,48 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
     assert errors == [], errors
 
 
+LONG_NOTICE = ("로그아웃 요청을 보내지 못했습니다. 계정 서버가 응답하지 않습니다. 이 기기의 로그인은 그대로 남아 있으니 "
+               "네트워크를 확인한 뒤 다시 로그아웃하세요.")  # no real connect string reaches 90 chars; error.message can
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(1024, 768), (1366, 768)])
+def test_one_row_bar_holds_a_long_notice_name_and_tag(tablet_page, width, height):
+    """From 64rem a long notice, a long robot name and a long gate tag together neither grow the bar nor shrink,
+    move or cover the stop. The notice stays whole for assistive tech (role=status textContent)."""
+    assert len(LONG_NOTICE) >= 90
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
+    robot_id = "rosy-pinky-with-a-very-long-robot-name-0026"
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": robot_id, "transport": "https"}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    playwright_sync.expect(page.locator("ui-topbar ui-brand [data-pilot-robot]")).to_have_text(robot_id)
+    got = page.evaluate("""(text) => {
+      document.querySelector('#pilot-notice').textContent = text;
+      document.querySelector('[data-gate-state]').textContent = '비상 정지 중 · 안전 상태 확인 불가';
+      const box = (s) => { const r = document.querySelector(s).getBoundingClientRect();
+        return {x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height}; };
+      const stop = box('[data-estop]');
+      const hit = document.elementFromPoint(stop.x + stop.width / 2, stop.y + stop.height / 2);
+      return {bar: box('ui-topbar'), stop, notice: box('#pilot-notice'), tag: box('[data-gate-state]'),
+        map: box('[data-goto]'), name: box('[data-pilot-robot]'), stopOnTop: Boolean(hit?.closest('[data-estop]')),
+        said: document.querySelector('#pilot-notice').textContent,
+        token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--appbar-height')),
+        overflow: document.documentElement.scrollWidth - innerWidth};
+    }""", LONG_NOTICE)
+    print(json.dumps({"width": width, **got}))
+    stop = got["stop"]
+    assert got["bar"]["height"] == got["token"] == 64, got
+    assert stop["width"] >= 81.89 and stop["height"] >= 48 and got["stopOnTop"], got
+    assert abs(stop["x"] - (width - 106)) <= 1 and stop["bottom"] <= 64 and got["overflow"] <= 0, got
+    assert got["map"]["width"] >= 81.89 and got["map"]["height"] >= 48, got
+    assert got["notice"]["right"] <= got["tag"]["x"] + 1 and got["tag"]["right"] <= got["map"]["x"] + 1, got
+    assert got["said"] == LONG_NOTICE, got
+    assert errors == [], errors
+
+
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_android_shell_bar_does_not_take_the_one_row_rule(tablet_page):
     """The Pilot app's WebView keeps its bar: --topbar-height at 64rem and above, with the stop at 82x48."""
