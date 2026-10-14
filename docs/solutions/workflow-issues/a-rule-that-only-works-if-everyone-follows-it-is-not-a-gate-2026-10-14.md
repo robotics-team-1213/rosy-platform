@@ -25,7 +25,7 @@ not gave a clean split.
 
 **Held every time — checks a program runs and that stop the action:** `tools/land.py`'s lint,
 affected tests and `--ff-only`; the secret scan; the size verdicts. Each one caught real defects
-during the clean-up, including in branches that had been reviewed.
+during the clean-up.
 
 **Did not hold — rules written in prose:**
 
@@ -43,10 +43,10 @@ during the clean-up, including in branches that had been reviewed.
    (worktree gateway) are that conversion.
 2. **A check that prints a debt and continues is a rule, not a gate.** "Owed to CI" must become
    "waits for CI" or it will be owed forever.
-3. **A destructive batch parses its plan in Python, not with a shell `read`.** A plan file of
-   tab-separated rows was read with `while IFS=$'\t' read -r branch action reason`. Tab is IFS
-   whitespace, so consecutive tabs collapse and an empty column shifts every later field left. Rows
-   meant "keep" were read as "delete": six kept branches were deleted. Use `csv.reader(...,
+3. **A destructive batch parses its plan in Python, not with a shell `read`.** The plan was a
+   file of tab-separated rows, read in a shell loop with `read`. Tab is IFS whitespace, so
+   consecutive tabs collapse and an empty column shifts every later field left. Six branches the
+   plan kept were deleted. Use `csv.reader(...,
    delimiter="\t")` or `line.split("\t")`, assert the column count per row, print the parsed plan and
    read it before applying.
 4. **Tag before every delete, one by one.** The six branches came back only because each
@@ -63,8 +63,9 @@ during the clean-up, including in branches that had been reviewed.
 
 Prose rules fail silently and at scale: each session skips one step once, and the total is 279
 worktrees and a red `main`. Programmatic gates fail loudly and locally, at the moment and in the
-branch where the problem is. The same holds for the clean-up tools themselves — the one unguarded
-script in the session deleted work that every guarded step had preserved.
+branch where the problem is. The same holds for the clean-up tools themselves: the one step that
+trusted its input without a check deleted six branches, and the one habit that was mechanical (a
+tag before each delete) is what brought them back.
 
 ## When to Apply
 

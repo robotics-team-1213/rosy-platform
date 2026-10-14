@@ -2,7 +2,7 @@
 
 2026-10-13과 10-14에 미병합 브랜치를 한꺼번에 정리했다. 이 문서는 그 결과 가운데 다음 사람이 손댈 수 있는 것을 적는다. 보류는 브랜치가 남아 있고 `main`에 들어가지 않은 것이다. 보관은 브랜치를 지우고 `archive/<날짜>/<브랜치>` 태그만 남긴 것이다(D-172). 이름은 2026-10-14에 `git branch --list`와 `git tag -l`로 확인했다.
 
-정리의 방법과 교훈은 [check-supersession-before-resolving-stale-branch-conflicts](../solutions/workflow-issues/check-supersession-before-resolving-stale-branch-conflicts-2026-10-13.md)에 있다.
+정리의 방법과 교훈은 [check-supersession-before-resolving-stale-branch-conflicts](../solutions/workflow-issues/check-supersession-before-resolving-stale-branch-conflicts-2026-10-13.md)와 [a-rule-that-only-works-if-everyone-follows-it-is-not-a-gate](../solutions/workflow-issues/a-rule-that-only-works-if-everyone-follows-it-is-not-a-gate-2026-10-14.md)에 있다.
 
 ## 이 태그들은 실험실 clone에만 있다
 
