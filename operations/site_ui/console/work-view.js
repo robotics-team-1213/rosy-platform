@@ -8,15 +8,16 @@ export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
 
 export function createWorkView({scope, call, el, channelRequestView}) {
-  const query = new URLSearchParams(location.search), active = query.get("view") === "work";
+  const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]}[query.get("show")];
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
   el("work-overview").hidden = !active;
-  if (active) {
+  el("work-new").hidden = !fresh;
+  if (area) {
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
-    el("work-context").hidden = false;
+    el("work-context").hidden = fresh;
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
