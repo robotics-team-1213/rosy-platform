@@ -489,6 +489,11 @@ EXEMPT: dict[str, str] = {
         "live selected-run checks and final epoch binding require 7b0855fa2 for known-unsent "
         "context rejection and orphan-marker cleanup. See docs/validation/"
         "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
+    "5cad91a98697838d49890bdd7847666659d7dad2":  # git commit revision
+        "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. "
+        "A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within "
+        "its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely "
+        "bounded. Trailer commit 460a45c; no device acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

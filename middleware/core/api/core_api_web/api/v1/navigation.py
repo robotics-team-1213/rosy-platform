@@ -74,7 +74,7 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
         try:
             enter_navigation_mode(svc, auth)
             svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
-                         lease_ttl_s=body.lease_ttl_s, reservation=token,
+                         lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
                          receipt_sink=receipt.append)
         finally:
             svc.nav.release_goal_reservation(token)
@@ -89,8 +89,9 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
 @navigation_router.post("/navigation/goal/lease")
 def navigation_goal_lease(body: GoalLeaseRequest, auth: AuthContext = Depends(operator),
                           svc: CoreServicesLike = Depends(get_services)):
-    """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not the active goal."""
-    svc.nav.renew_goal_lease(body.correlation_id, body.ttl_s)
+    """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not the active goal.
+    D-760 9: 403 FORBIDDEN from a token other than the one that sent the goal."""
+    svc.nav.renew_goal_lease(body.correlation_id, body.ttl_s, owner=auth.token_id)
     return {"renewed": True, "correlation_id": body.correlation_id, "ttl_s": body.ttl_s}
 
 
@@ -124,7 +125,7 @@ def navigation_home(auth: AuthContext = Depends(operator),
         try:
             enter_navigation_mode(svc, auth)
             svc.nav.home(source=f"api:{auth.role}", correlation_id=body.correlation_id,
-                         lease_ttl_s=body.lease_ttl_s, reservation=token,
+                         lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
                          receipt_sink=receipt.append)
         finally:
             svc.nav.release_goal_reservation(token)
