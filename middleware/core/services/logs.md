@@ -1060,3 +1060,11 @@
 - gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
 - 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
 - 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
+
+## 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `recovery/junction/signal.py`를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로다. `recovery/junction/gate.py`의 import 줄 하나가 새 경로를 가리킨다. 옛 경로에 호환 재수출을 두지 않았다. `SIZE_UNITS`에 `drive/behaviors/line_follow/signal`을 더했다.
+- 증거: `git diff -M`에서 파일은 100% rename이고 다른 변경은 import 줄 하나와 한 줄짜리 `signal/__init__.py`다. 옛 모듈 경로를 import하는 시험은 없었다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. `recovery/junction` 단위 1,281줄 → 1,188줄, 새 단위 94줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가와 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`의 2026-10-14 보탬.
+- 교훈: 신호 mixin의 파일은 옮겼지만 `_junction_signal` 자리와 호출 순서는 교차로 게이트에 남는다. 다음 수정이 그 줄을 건드리면 `recovery/junction` 단위가 자란다.
