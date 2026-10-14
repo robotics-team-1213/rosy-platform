@@ -179,7 +179,7 @@ class TripConfig:
     #: Every robot call of the loop gives up after this long (a stuck robot is an error).
     port_timeout_s: float = 1.5
     expect_tol_min_m: float = 0.12  #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30)
-    bend_send_s: float = 0.0  #: D-507 bend lead: the instruction's HTTP send + CORE take time (site knob; ~0 in SIM)
+    bend_send_s: float = 0.01  #: D-507 bend lead: the instruction's HTTP send + CORE take time (site knob; local ~0.01)
     #: D-520 1: a lane within this of one circle is an ``exit_segment`` (260919 ring: 0.00007 m).
     arc_fit_tol_m: float = 0.005
     #: D-520 1: lane centre to the outer painted line's centre on a curve (260919 ring: line
