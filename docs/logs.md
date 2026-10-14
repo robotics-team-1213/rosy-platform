@@ -8414,6 +8414,20 @@ osy-d395-s1d\`.
 - 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
 - gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
 
+## 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
+
+- 변경: D-764 검수 AI 실행·취소·읽기 전용 버전 계약과 계획을 추가하고 API 부록을 연결했다.
+- 증거: 구현 및 회귀 시험 추가. 원격 실행·브라우저 검증 결과는 후속 기록한다.
+- gate 변화: 없음. 운영 배포·실 모델 품질 수용을 선언하지 않는다.
+- 결정: D-764
+
+## 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완
+
+- 변경: 검수 AI 실행과 버전 조회의 구현·독립 리뷰·브라우저 및 원격 검증 경과를 계획에 기록했다.
+- 증거: 첫 착지 검사 2725 passed, 270 skipped, canvas 등록 누락 1 failed를 수정. 합성 자료 Chromium 실행·취소·이력 24개·편집 보존 확인. 최종 재시험 결과는 착지 도구 로그에 기록한다.
+- gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
+- 결정: D-764
+
 ## 2026-10-14 · 18c24973d · D-762 단계 0: Safety-Review는 착지 전에, FULL 착지는 실험실 전체 티어 뒤에
 
 - 변경: `tools/land.py`는 착지가 `main`에 더하는 커밋에 `tools/harness/safety_review.py`(CI `scope` 잡과 같은 규칙)를 돌려 trailer가 없으면 착지하지 않는다. `tools/hooks/pre-push`는 같은 검사를 `origin/main..`push 커밋에 경고가 아니라 거절로 돌린다. 선택기가 FULL이면 가드와 대응 묶음만 돌리고 착지하던 길을 없애고, 실험실 PC에서 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)를 돌려 NEW 0일 때만 착지하며 걸린 시간을 찍는다. FULL 조건에 폴더를 넘는 rename, 지운 Python 모듈, `package.xml`, `_source_layout.py`, `test/architecture/**`, `test/known_failures.txt`를 더하고, 트리거 아래 Markdown 기록, `tools/harness/adr_gaps.txt`, node 시험 파일을 뺐다. 착지 뒤 로컬 `main`이 `origin/main`보다 몇 커밋·몇 시간 앞인지 한 줄로 찍는다(상한은 걸지 않음). D-762 단계 0 보충, `AGENTS.md` 시험 티어 문단, `tools/AGENTS.md` `land.py` 행, `tools/hooks/AGENTS.md`, `tools/harness/AGENTS.md`를 같이 고쳤다.

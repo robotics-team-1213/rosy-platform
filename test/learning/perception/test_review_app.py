@@ -319,8 +319,13 @@ def serve_as(monkeypatch, store, host):
     import threading
     import review_app
     real = review_app.ThreadingHTTPServer
-    monkeypatch.setattr(review_app, 'ThreadingHTTPServer', lambda addr, handler: real(('127.0.0.1', addr[1]), handler))
-    server = review_app.make_server(store, 0, host)
+    class LoopbackServer(real):
+        def __init__(self, addr, handler):
+            super().__init__(('127.0.0.1', addr[1]), handler)
+    monkeypatch.setattr(review_app, 'ThreadingHTTPServer', LoopbackServer)
+    jobs = review_app.Jobs(store)
+    server = review_app.make_server(store, 0, host, ai_jobs=jobs)
+    server.test_ai_jobs = jobs
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -342,6 +347,7 @@ def test_default_rejects_tailnet_host(tmp_path, monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+        assert server.test_ai_jobs.lease is None
 
 
 def test_explicit_host_accepts_host_and_origin_but_keeps_token_and_foreign_origin(tmp_path, monkeypatch):
@@ -361,6 +367,7 @@ def test_explicit_host_accepts_host_and_origin_but_keeps_token_and_foreign_origi
     finally:
         server.shutdown()
         server.server_close()
+        assert server.test_ai_jobs.lease is None
 
 
 @pytest.mark.parametrize('host', ['0.0.0.0', '::', '8.8.8.8', '100.128.0.1', 'localhost', 'example.com', '2001:db8::1'])
