@@ -26,6 +26,7 @@ from fleet.server.goal_evidence_service import GoalEvidenceSubmissionError
 from fleet.server.mission_store import MissionConflict
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.step_action_kinds import required_approval
 
 
 class MissionCandidateRequest(BaseModel):
@@ -414,20 +415,29 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                          if key != "cursor_state"}
         return MissionProgressEventPage.model_validate(contract_page).model_dump(mode="json")
 
+    def decidable(mission_id: str, principal: SitePrincipal) -> tuple[dict, str]:
+        """The resolved proposal this named operator may decide, and its registry approval."""
+        proposal = proposal_store.get(mission_id)
+        # D-763 item 7: Cell Jobs resolve to CELL_TRANSFER rows, ER 2 candidates to one PICK_PLACE.
+        cell = proposal is not None and proposal["candidate"].get("kind") == "cell_job"
+        rule = required_approval(["CELL_TRANSFER" if cell else "PICK_PLACE"])
+        if proposal is None or (rule == "proposer_only"
+                                and proposal["principal_id"] != principal.principal_id):
+            raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+        if proposal["state"] != "RESOLVED":
+            raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
+        return proposal, rule
+
     @app.post("/api/fleet/missions/{mission_id}/admit", dependencies=operator_guard,
               tags=["fleet-missions"])
     def fleet_mission_admit(mission_id: str, body: MissionAdmitRequest,
                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        proposal = proposal_store.get(mission_id)
-        if proposal is None:
-            raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+        proposal, rule = decidable(mission_id, principal)
+        if rule == "two_person" and proposal["principal_id"] == principal.principal_id:
+            raise HTTPException(status_code=403, detail={
+                "code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER",
+            })
         if proposal["candidate"].get("kind") == "cell_job":
-            if proposal["state"] != "RESOLVED":
-                raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
-            if proposal["principal_id"] == principal.principal_id:
-                raise HTTPException(status_code=403, detail={
-                    "code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER",
-                })
             if cell_job_store is None:
                 raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
             try:
@@ -454,10 +464,8 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
             return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
                     "mission": admitted, "physical_submission": "NOT_CONNECTED"}
 
-        if proposal["principal_id"] != principal.principal_id:
-            raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
         mission = mission_service.get(mission_id)
-        if mission is None or proposal["state"] != "RESOLVED":
+        if mission is None:
             raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
         try:
             current = _resolve_candidate(
