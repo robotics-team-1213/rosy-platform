@@ -3568,3 +3568,8 @@
 - 변경: `server/ledger/trip_ports.py::bend_fields`의 중첩 `**({} if ...)`를 `fields` dict와 `if` 한 가지로 바꿨다. 보내는 값은 같다. `console_view.TripCaps`의 두 주석을 줄였다.
 - 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
+
+## 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
+- 변경: `server/ledger/mission_store.py`의 `next_running_mission`·`next_reconciliation_mission`(16줄, 부르던 `mission_service` 두 줄은 6fd54b3a3에서 이미 지워졌다. 4fe614c8b 커밋 글의 6d764bd77은 추가한 커밋이라 틀린 표기다), `server/ledger/task_store.py`의 `recover_interrupted_requests`(29줄, 호출은 423921562에서 없어졌다), `server/signals.py`의 `SignalConsole.signal_ids`(4줄), Console `console.js`의 `authHeaders`·`lastStateOk`(5줄)를 지웠다. 동작, 경로, 스키마는 그대로다.
+- 증거: 저장소 전체(시험·도구·deploy·문서 포함)에서 이름을 단어 단위로 찾아 정의 말고는 없음을 확인했다. Fleet 크기 단위는 56742에서 56688이 됐다(판정 56755+150 그대로). 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. 시험만 부르는 코드(`load_policy_evidence_sources`, `load_cell_goal_registry`, `DeliberationJournal`, `decision_pipeline`, `selector_bridge`, `traffic_reservations`의 `verify_grant`·`waiting_seconds`, `task_store`의 claim 메서드)는 ADR이 이름으로 붙들고 있거나 연결을 기다리는 계약이라 남겼다.
