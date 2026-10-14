@@ -25,7 +25,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Optional
 
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, MAX_TURN_RAD, _angle
+from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_TURN_RAD, _angle
 
 NONE, ARMED, APPROACHING, LOOKING, WAITING, CROSSING = (
     "none", "armed", "approaching", "looking", "waiting", "crossing")
@@ -408,14 +408,15 @@ class CrosswalkGate:
 
 
 
-def lane_edges(left, right, half: float = CORRIDOR_HALF_M, body_half: float = 0.0):
+def lane_edges(left, right, half: float = CORRIDOR_HALF_M, body_half: float = 0.0, inner=IR_CATCH_HALF_M-.045):
     """Raw seen lane edges, no wider than a lane (D-573 개정 4: wall bases 0.120/0.122 m either side
-    were read as the edges and held 'person' for good). The width is kept about their middle, at most
-    half - body_half from the anchor: the body that took the image stands in that lane."""
+    were read as the edges and held 'person' for good). A wider pair gives way to the lane's own inner
+    half-width (the 0.079 m IR_CATCH_HALF_M is built on) about their middle, at most half - body_half
+    from the anchor (the body that took the image stands in that lane); the pads go on outside."""
     if left is not None and right is not None and left - right > 2 * half:
         reach = max(half - body_half, 0.0)
         middle = min(max((left + right) / 2, -reach), reach)
-        return middle + half, middle - half
+        return middle + inner, middle - inner
     return left, right
 
 
