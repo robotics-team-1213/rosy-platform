@@ -764,6 +764,10 @@
 | D-759 | 굽이 통과(D-507 보충)의 진입 직선을 지도의 차로 방향에 놓는다: `bend`의 `map_entry`, 능력 `lane_bend_map_entry` | Proposed |
 | D-762 | main으로 가는 길은 pull request와 merge queue 하나: 끝 상태는 브랜치마다 PR·auto-merge·공유 로컬 main 폐지, 에이전트는 관리자가 아닌 신원, 관문 경로는 작성자 아닌 code owner 승인(두 번째 owner 미정), D-584 범위 축소; 단계 0–5의 순서만 승인, GitHub 설정 적용은 단계마다 따로 승인 | Accepted |
 
+| D-758 | 로봇이 드는 현장 기준 — Fleet은 로봇마다 지도←odom 짝 하나를 보내고, 로봇은 자기 odom으로 현장 자세를 잇는다 | Proposed |
+
+| D-760 | Fleet이 시작한 움직임의 한도 — 끊김은 5초 버티고, 거리 끝에서 서고, 한도는 기본으로 켠다 | Accepted |
+
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
 - 상태: Accepted (2026-10-11).
