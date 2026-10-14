@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ sys.path.insert(0, str(DEPLOY))
 SPEC = importlib.util.spec_from_file_location("omx_recording_probe", DEPLOY / "probe_pilot_recording.py")
 recording = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(recording)
+REAL_EVENT, REAL_THREAD = threading.Event, threading.Thread
 
 
 class Event:
@@ -93,6 +95,9 @@ def harness(monkeypatch):
         def join(self, timeout):
             pass
 
+        def is_alive(self):
+            return False
+
     monkeypatch.setattr(recording.threading, "Event", Event)
     monkeypatch.setattr(recording.threading, "Thread", Thread)
     monkeypatch.setattr(recording.time, "sleep", lambda _delay: None)
@@ -131,3 +136,26 @@ def test_renewal_worker_failure_stops_before_recording_success(harness):
     with pytest.raises(RuntimeError, match="renewal"):
         recording.main("container")
     assert not any(path.endswith("/stop") for path, _, _ in harness.calls)
+
+
+def test_inflight_renewal_error_at_recording_close_cannot_report_success(harness, monkeypatch):
+    started, finish = REAL_EVENT(), REAL_EVENT()
+    request = harness.request
+
+    def delayed_request(path, **kwargs):
+        if path == "/seat/seat" and kwargs.get("method") == "PUT":
+            started.set()
+            assert finish.wait(3), "test did not release the renewal request"
+            raise RuntimeError("HTTP 409: late renewal failure")
+        if path.endswith("/stop"):
+            assert started.wait(3), "renewal did not start before recording closed"
+        result = request(path, **kwargs)
+        if path == "/recordings" and kwargs.get("method") == "POST" and harness.episode == 2:
+            finish.set()
+        return result
+
+    monkeypatch.setattr(recording.threading, "Event", REAL_EVENT)
+    monkeypatch.setattr(recording.threading, "Thread", REAL_THREAD)
+    monkeypatch.setattr(recording, "request", delayed_request)
+    with pytest.raises(RuntimeError, match="renewal"):
+        recording.main("container")
