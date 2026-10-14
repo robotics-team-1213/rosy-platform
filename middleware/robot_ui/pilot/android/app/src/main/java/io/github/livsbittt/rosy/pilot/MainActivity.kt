@@ -27,7 +27,7 @@ import io.github.livsbittt.rosy.cam.health.ScreenPower
 class MainActivity : Activity() {
     private val accountConfigured by lazy { AndroidAccount.configured(this) }
     private val account by lazy { if (accountConfigured) AndroidAccount(this) else null }
-    private var profileResource: String? = null
+    @Volatile private var profileResource: String? = null
     private var profileButton: Button? = null
     private fun profileLabel(): String {
         val resource = profileResource
@@ -36,7 +36,13 @@ class MainActivity : Activity() {
     }
     private fun profileEntry(): Button = button(profileLabel()) {
         endSession { account!!.manageProfile(this) }
-    }.also { profileButton = it }
+    }.also {
+        it.maxLines = 1
+        it.ellipsize = android.text.TextUtils.TruncateAt.END
+        it.maxWidth = (160 * resources.displayMetrics.density).toInt()
+        it.contentDescription = profileLabel()
+        profileButton = it
+    }
     private class NeedsAccount(val resource: String) : Exception()
     private fun accountConnection(candidate: Candidate, store: CandidateStore): LobbySession {
         val auth = requireNotNull(account)
@@ -80,7 +86,7 @@ class MainActivity : Activity() {
                     listOfNotNull(session?.target?.id, secondarySession?.target?.id).distinct().take(2)
                         .forEach { account!!.session.access("robot:$it") }
                     profileResource?.let { account!!.session.refreshProfile(it) }
-                    main.post { profileButton?.text = profileLabel() }
+                    main.post { profileButton?.apply { text = profileLabel(); contentDescription = profileLabel() } }
                 } finally { accountChecking = false } }
             }
             main.postDelayed(this, 10000)

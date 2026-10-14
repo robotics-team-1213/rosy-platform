@@ -76,6 +76,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             .addQueryParameter("code_challenge_method", "S256").build().toString()
     }
     @Synchronized fun complete(callback: String): String {
+        profileSnapshot = null
         require(callback.length <= 8192)
         val url = callback.toHttpUrl(); val expected = config.redirect.toHttpUrl()
         require(url.newBuilder().query(null).fragment(null).build() == expected && url.fragment == null)
