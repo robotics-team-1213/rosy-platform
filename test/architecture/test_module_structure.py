@@ -1464,16 +1464,16 @@ SIZE_VERDICTS = {
         "recovery/stuck/realign/ by its own dated addendum. Re-judge after +150.",
     ),
     "drive/behaviors/line_follow/recovery/junction": (
-        1188,
-        "split: proposed at 1188 on 2026-10-14, independent re-judge by a read-only critic still owed, after the "
-        "D-525/D-620 virtual signal (signal.py 93, JunctionSignalMixin) left for its own unit line_follow/signal "
-        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 signal addendum; "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-14 signal section): 1281 - 93. "
-        "What stays is gate.py 519, bend.py 306, approach.py 263, turn.py 98, __init__.py 2. gate.py still "
-        "composes JunctionSignalMixin into JunctionMixin, calls _signal_idle and _signal_gate, and holds the "
-        "_junction_signal slot (init, clear on a new instruction, the two status fields). Pure file move plus "
-        "one import line; no runtime move and no behaviour change. The 1137 verdict's obligations stand: no "
-        "file may pass 600, re-review at package +150 or a new owner. "
+        1137,
+        "split: base stays 1137 (adr_record 2026-10-10); independently re-judged 2026-10-14 by a read-only "
+        "critic, AGREE-WITH-CONDITIONS. Measured 1188 on 2026-10-14 after the D-525/D-620 virtual signal "
+        "(signal.py 93, JunctionSignalMixin) left for its own unit line_follow/signal "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 signal addendum): 1281 - 93. The 51 "
+        "lines above base are the D-754/D-759 bend/turn growth, not re-based. What stays is gate.py 519, "
+        "bend.py 306, approach.py 263, turn.py 98, __init__.py 2; gate.py composes JunctionSignalMixin, calls "
+        "_signal_idle and _signal_gate and holds the _junction_signal slot. Obligations stand: no file past "
+        "600, and the next +150 splits bend.py out rather than accepting. Signal-specific branching in "
+        "set_junction is a finding, not growth. "
         "Previous verdict: independently reviewed by adr_record at 1137 on 2026-10-10: D-620 keeps the Fleet episode/correlation policy in signal.py (90), separate from gate.py (569), approach.py (263) and bend.py (213). The existing manager lock/generation, CORE admission and final publisher are unchanged; the new mixin has no transport, thread or motion writer. The docs/plans/2026-10-07-line-follow-recovery-subpackage.md junction split remains applied. Package +150 remains; before gate.py reaches 600 move the bounded turn state out of that file. Re-review at package +150 or a new owner. Previous verdict: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
         "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
@@ -1552,7 +1552,8 @@ SIZE_VERDICTS = {
     ),
     "drive/behaviors/line_follow/signal": (
         94,
-        "accept: proposed at 94 on 2026-10-14, independent re-judge by a read-only critic still owed, when it left "
+        "accept: 94 on 2026-10-14, independently re-judged 2026-10-14 by a read-only critic, "
+        "AGREE-WITH-CONDITIONS, when it left "
         "line_follow/recovery/junction (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 signal "
         "addendum): gate.py 93 (D-525/D-620 virtual junction signal on the CORE side: the Fleet query episode, "
         "reply freshness and the 3 s unanswered right fallback, JunctionSignalMixin), __init__.py 1. A "
@@ -1561,6 +1562,9 @@ SIZE_VERDICTS = {
         "set_junction); no own lock, thread, transport, store or publisher. Imports: signal takes only "
         "core_common.protocol.schemas; recovery/junction/gate.py imports signal.gate; the manager calls "
         "_signal_committed. One direction junction -> signal. Pure file move plus one import line. "
+        "Signal-episode semantics (which instructions open or skip an episode, including an empty approach, "
+        "and how a Fleet answer or heartbeat may_enter is read) go in signal/gate.py; recovery/junction/gate.py "
+        "may only gain a call to a _signal_* hook. "
         "Re-judge after +150.",
     ),
     "drive/behaviors/line_follow/cue": (

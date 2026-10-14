@@ -82,4 +82,6 @@ D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되�
 - 설치: `core_features`의 `setup.py`는 `find_packages`로 `drive/behaviors/line_follow` 아래의 하위 패키지를 찾는다. `signal/__init__.py`가 있으므로 따로 등록할 것이 없다.
 - 이름: 패키지 이름 `signal`은 표준 라이브러리 `signal`과 같다. `core_features.line_follow.signal`로만 import되고 `line_follow/` 디렉터리는 `sys.path`에 오르지 않으므로 가리지 않는다. 옛 자리 `recovery/junction/signal.py`도 같은 조건이었다. `line_follow/` 안의 파일을 스크립트로 직접 실행하지 않는다.
 
-판정 상태: `SIZE_VERDICTS`의 `recovery/junction` 1,188과 새 단위 94는 제안값이다. 읽기 전용 critic의 독립 재판정이 아직 남아 있다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
+판정 상태: 읽기 전용 critic이 2026-10-14에 독립으로 재판정했다(AGREE-WITH-CONDITIONS). 새 단위는 94로 받아들인다. `recovery/junction`의 기준은 1,137 그대로다. 기준 위 51줄은 D-754/D-759의 bend·turn 증가분이고 기준을 다시 잡지 않았다. 다음 +150에서는 `bend.py`(306)를 떼어 낸다. 신호 episode의 의미(어느 지시가 episode를 열거나 건너뛰는지, 빈 approach, Fleet 답과 heartbeat `may_enter`를 읽는 법)는 `signal/gate.py`에 둔다. `recovery/junction/gate.py`에는 `_signal_*` 훅 호출만 더할 수 있고, `set_junction` 안의 신호 전용 분기는 지적 사항이다.
+
+배포: 런타임 파일 하나가 생기고 하나가 없어지므로 D-553 delta 경로가 받지 않는다(`junction-signal-2026-10-10` 결과 기록). 다음 신호 수정은 ARM64 전체 payload로 빌드한다. delta hotfix로 계획하지 않는다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
