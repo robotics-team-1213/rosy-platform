@@ -128,7 +128,7 @@ class OdomSample:
     y: float
     yaw: float
     stamp: float
-    #: D-758 0: CORE's odom epoch (snapshot `odom_pose.epoch`); None from a CORE before v1.232.
+    #: D-758 0: CORE's odom epoch (snapshot `odom_pose.epoch`); None from a CORE before v1.234.
     epoch: Optional[int] = None
 
 

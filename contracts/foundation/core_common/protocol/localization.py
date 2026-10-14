@@ -175,10 +175,10 @@ class OdomPose(BaseModel):
     form as a sighting's ``captured_at``, so Fleet can pair the two. Fleet echoes it
     unchanged as ``pose_stamp`` / ``odom_stamp_s``; CORE finds its odom sample by it.
 
-    D-758 0 (v1.232, additive): ``epoch`` counts odom discontinuities since CORE
+    D-758 0 (v1.234, additive): ``epoch`` counts odom discontinuities since CORE
     started (a jump, frame change or source clock going back); a sample of another
     epoch belongs to an odom frame that no longer exists. ``mono_s`` is the same
-    receipt on CORE's monotonic clock. Both are null from a CORE before v1.232.
+    receipt on CORE's monotonic clock. Both are null from a CORE before v1.234.
     """
 
     model_config = ConfigDict(frozen=True)

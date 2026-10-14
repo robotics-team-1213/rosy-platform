@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.232 → v1.234 (main 병합)
 - 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
 - 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228 → v1.232 (main 병합)
 - 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228
 - 2026-10-14 · ddd9723ef · D-760 2단계 통행권 계약을 v1.226으로 (v1.225 충돌 해소)
-- 2026-10-14 · 97ad6ca74 · `POST /navigation/goal/lease` 보낸 토큰만 (D-760 5단계, 버전 그대로 v1.225)

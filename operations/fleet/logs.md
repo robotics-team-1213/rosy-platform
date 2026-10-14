@@ -3679,3 +3679,22 @@
 - 변경: `server/ledger/trip_runner.py::_step_lane`이 `lane_turn_map_entry` 로봇에게, 찾은 자세에 `odom_stamp`가 있을 때 `left`·`right`에 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 출구 차로의 `start_tangent`다. `console_view.TripCaps.lane_turn_map_entry`, trip 보기 `caps.lane_turn_map_entry`.
 - 증거: `test_trip_turn_map_entry.py`(능력 읽기, 값, 그 밖의 필드는 오늘과 같음, stamp가 없으면 싣지 않음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 0 증가다. `exit_segment` 조건문을 한 줄로, D-520 주석 두 줄을 한 줄로, `TripCaps`의 D-551 주석을 필드 옆으로 옮겼다.
+## 2026-10-14 · 68a91feca · D-763 조각 2: trip 읽기에 기다림 판정의 답을 싣는다
+
+- 변경: `ledger/trip_progress.py` `_waiting`이 판정할 때마다 `view.wait`에 `bound_s`·`over_bound`·`waiting`을 적는다. 정체 시계가 쓰는 판정 그대로다(두 번째 판정 없음). 줄 수 같음(서버 순증 0). 정체 규칙의 동작은 같다. API v1.231(문서는 f38a5093a).
+- 증거: 원격 시험(모델 PC, f38a5093a) 284 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 사유마다 상한 안 기다림·넘으면 `over_bound`, 사유가 바뀌어도 한 번, 진행이 끝냄, `link_wait`의 lease 상한.
+- gate 변화: 없음. `GET /api/fleet/work`에는 trip 행이 없어(조각 4) trip 읽기에만 실었다.
+- 결정: D-763 8항, 구현 조각 2.
+
+## 2026-10-14 · 7c26a028c · D-763 조각 2 검토: 상한 넘김은 해결기 몫, 지난 tick의 답을 남기지 않는다
+
+- 변경: `ledger/trip_runner.py` `_step`이 맨 앞에서 `view.wait`의 `waiting`·`bound_s`·`over_bound`를 None(모름)으로 둔다. `_waiting`까지 가지 않고 끝난 tick은 지난 답을 보이지 않는다. 세 키는 정체 규칙이 읽지 않으므로 정체 시계는 같다. 서버 순증 0(`trip_progress.py` 주석 한 줄 줄임).
+- 증거: 원격 시험(AI PC, 7c26a028c) 285 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 자세를 잃어 `_stalled` 전에 끝난 tick에서 세 키가 None.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 7. 상한을 넘은 기다림은 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다.
+
+## 2026-10-14 · f79947c25 · D-763 조각 2 검토 2: tick마다 한 번 쓰고, 보고가 있을 때만 상한 넘김
+
+- 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
+- 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
+- gate 변화: 없음.
