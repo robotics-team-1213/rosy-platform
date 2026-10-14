@@ -591,6 +591,29 @@ def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):
         browser.close()
 
 
+def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # noqa: F811
+    """Review P2: the 이동 robot picker is a read control; a viewer switches robots and sees each card's reason,
+    while the start controls stay locked."""
+    from playwright.sync_api import expect, sync_playwright
+
+    api = {**API, "/api/fleet/session": {"principal_id": "eve", "role": "viewer"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        page.goto(site + "/console?view=work&show=new")
+        page.clock.run_for(2500)
+        page.locator("#work-new-move").click()
+        pick = page.locator("#work-move-robot")
+        for robot_id in ("rosy_02", "rosy_04"):
+            expect(pick).to_be_enabled()
+            pick.select_option(robot_id)
+            page.clock.run_for(1500)
+            go = page.locator(f'#work-move ui-button[data-trip-start="{robot_id}"]')
+            expect(go).to_have_count(1)
+            assert go.evaluate("node => node.disabled") and go.get_attribute("reason"), robot_id
+        assert not errors
+        browser.close()
+
+
 def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noqa: F811
     """D-763 9: 이동은 활성 현장 지도에 장소가 있을 때만 종류로 선다(꺼진 단추가 아니다). Cell 적재는 /console/cell로
     간다. 1366·390에서 이동 폼은 넘치지 않고 비상 정지는 첫 화면에 있다."""
