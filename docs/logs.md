@@ -8407,3 +8407,9 @@ osy-d395-s1d\`.
 - 증거: 관련 원격 시험 72 passed, NEW 0. JS 상태 분기 2 passed. 기존 357장 복사 자료로 Chromium 10화면 점검 통과. 의견 보류/오래됨 화면은 합성 응답으로 별도 검증하며 실 모델 실행 증거가 아니다.
 - gate 변화: 없음. 복사 자료의 UI와 호스트 계약 검증이며 운영 배포·실 모델 실행·학습 수용 증거가 아니다.
 - 범위: 실행 계획 `plans/2026-10-14-human-ai-review-ux.md`. AI 생성/재검사 작업 실행기·전체 이력/버전 비교는 후속 계약 단계다. 운영 DB·모델 활성화·로봇 실행 권한을 변경하지 않았다.
+
+## 2026-10-14 · b3d6f4cd5 · OMX 녹화 probe 오류 재현·수정
+
+- 변경: validation/omx-recording-probe-2026-10-14/result.md에 관절 readback·상태 충돌·갱신 실패·late worker 오류의 RED/GREEN과 실행 한계를 기록했다. OMX README에 개선 동작과 컨테이너 내부 probe 사용을 설명했다.
+- 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
+- gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
