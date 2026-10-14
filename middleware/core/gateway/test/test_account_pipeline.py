@@ -162,7 +162,7 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
             page.locator('[data-login=submit]').click()
             page.wait_for_url(robot+'/dashboard')
             assert page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
-            profile = page.locator('[data-account-profile]')
+            profile = page.locator('[data-account-profile]:visible')
             expect(profile).to_contain_text('alice')
             expect(profile).to_have_attribute('href', receiver.profile_url)
             expect(profile).to_have_attribute('target', '_blank')
