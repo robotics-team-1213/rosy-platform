@@ -1656,6 +1656,9 @@ def test_go_pressed_before_manual_mode_is_held_starts_nothing(tablet_page):
     page.wait_for_function(GO_ACTIVE)
     page.dispatch_event("[data-drive-go]", "pointerup")
     _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    playwright_sync.expect(page.locator("[data-drive-motion]")).to_have_text("대기")  # back at idle: nothing in flight
+    # Exactly the one held press. An early press that leaked to CORE late would add a second pair.
+    assert dev_server.LINE_FOLLOW_MODE_LOG == ["CAMERA_LINE", "OFF"], dev_server.LINE_FOLLOW_MODE_LOG
     assert errors == [], errors
 
 

@@ -106,7 +106,8 @@ def open_page(playwright, width: int, height: int, *, url: str | None = None):
 
 # D-741 — what a Fleet document's body still offers once the rail and the sub-nav took their seats: sideways overflow,
 # sub-nav entries that are off screen or under something, grids whose cells got narrow, buttons and selects whose own
-# text is cut (a text input scrolls its value, so it is not counted), and the stop. The caller decides what is too narrow.
+# text is cut (a text input scrolls its value, so it is not counted), controls that reach past the window, and the
+# stop. A grid with nothing visible in it is left out. The caller decides what is too narrow.
 BODY_FIT = """() => {
   const seen = (node) => node.checkVisibility({visibilityProperty: true}) && node.getClientRects().length > 0;
   const onTop = (node) => { const r = node.getBoundingClientRect();
@@ -125,12 +126,16 @@ BODY_FIT = """() => {
     }
     if (need > node.clientWidth + 1) cut.push(`${node.id || node.tagName} needs ${Math.round(need)} has ${node.clientWidth}`);
   }
+  const cells = (node) => [...node.children].filter(seen).map((child) => child.getBoundingClientRect().width);
   const grids = [...document.querySelectorAll('main :is(.form, .scope, .draft-actions, .documents, .map-workflow)')]
-    .filter(seen).map((node) => ({
+    .filter((node) => seen(node) && cells(node).length).map((node) => ({
       name: node.id || node.className, columns: getComputedStyle(node).gridTemplateColumns.split(' ').length,
-      width: Math.round(node.getBoundingClientRect().width),
-      narrowest: Math.round(Math.min(...[...node.children].filter(seen).map((child) => child.getBoundingClientRect().width))),
+      width: Math.round(node.getBoundingClientRect().width), narrowest: Math.round(Math.min(...cells(node))),
     }));
+  const outside = [...document.querySelectorAll('main :is(ui-button, select, input, textarea)')].filter((node) => {
+    const r = node.getBoundingClientRect();
+    return seen(node) && (r.left < -1 || r.right > innerWidth + 1);
+  }).map((node) => node.id || node.tagName);
   const nav = document.querySelector('.fleet-body > .ui-subnav > nav'), box = nav.getBoundingClientRect();
   const stop = document.getElementById('estop');
   return {
@@ -138,7 +143,7 @@ BODY_FIT = """() => {
     body: Math.round(document.querySelector('main').getBoundingClientRect().width),
     nav: {column: getComputedStyle(nav).flexDirection === 'column', top: Math.round(box.top), bottom: Math.round(box.bottom)},
     unreachable: [...nav.querySelectorAll('a')].filter((link) => !onTop(link)).map((link) => link.textContent),
-    grids, cut, stop: onTop(stop),
+    grids, cut, outside, stop: onTop(stop),
   };
 }"""
 

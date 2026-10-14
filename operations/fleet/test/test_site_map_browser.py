@@ -577,11 +577,14 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     assert sizes["stop"] <= width, sizes
 
 
-@pytest.mark.parametrize("width,height", [(1024, 768), (1100, 800), (1366, 768)])
-def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height):
-    """D-741 2: the rail and the sub-nav take 304px. The body beside them still has no sideways overflow, no control
-    whose text is cut and no form cell under 9rem (what these forms had at the sheet's own 64rem break before the
-    seats), and the sticky sub-nav shows every entry at the top and at the end of the page."""
+# The wide layout stands from a 64rem body: a 1360px shell. 1349 is a 1366 laptop window with a classic scrollbar.
+@pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
+                                                       (1349, 768, 1, 1), (1366, 768, 2, 3)])
+def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
+    """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
+    and one-column forms until the body has 64rem, then two and three. There is no sideways overflow, no control
+    past the window or with cut text, no multi-column cell under 9rem (what these forms had at the sheet's own
+    64rem break before the seats), and the sticky sub-nav shows every entry at the top and at the end of the page."""
     from playwright.sync_api import expect
 
     page, _, _ = page_site
@@ -596,11 +599,16 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
     end = page.evaluate(BODY_FIT)
     label = page.locator("#site-map-svg .label").first.evaluate("node => node.getBoundingClientRect().height")
     print(json.dumps({"size": [width, height], "top": top, "end": end, "label": label}, ensure_ascii=False))
-    assert top["nav"]["column"], top
+    assert top["nav"]["column"] == (width >= 1024), top
     assert top["overflow"] <= 0 and end["overflow"] <= 0, (top, end)
-    assert top["unreachable"] == [] and end["unreachable"] == [] and top["stop"] and end["stop"], (top, end)
-    assert top["cut"] == [], top
-    assert all(grid["columns"] == 1 or grid["narrowest"] >= 144 for grid in top["grids"]), top["grids"]
+    assert top["stop"] and end["stop"], (top, end)
+    if width >= 1024:  # below it the sub-nav is a row that scrolls sideways
+        assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
+    assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
+    columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
+    assert columns == {"map-workflow": panels, "place-form": fields, "form": fields,
+                       "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
+    assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
     assert label >= 12, label
 
 
