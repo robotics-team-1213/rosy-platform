@@ -193,7 +193,7 @@ def _play_payload() -> dict:
 
 def test_match_board_renders_published_play_state():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     # This case asserts the live label; a slow Chromium launch must not age the fixture.
     board = PreviewBoard(clock=lambda: 100.0)
@@ -223,7 +223,7 @@ def test_match_board_renders_published_play_state():
 
 def test_match_board_names_server_judged_delay():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -272,7 +272,7 @@ def test_match_board_names_server_judged_delay():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
 def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload())
@@ -307,7 +307,7 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
 
 def test_first_overlay_failure_has_no_last_match_claim():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
@@ -367,7 +367,7 @@ def _launch_board_page(playwright, url):
 
 def test_chromium_opens_preview_on_a_normally_blocked_port():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     try:
         server = PreviewServer(PreviewBoard(), port=6000)
@@ -390,7 +390,7 @@ def test_chromium_opens_preview_on_a_normally_blocked_port():
 def test_match_board_shows_lost_hold_state(width, height, reason, label):
     """D-103 유실 HOLD — 공이나 로봇을 잃으면 이유가 보드에 보인다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_lost_payload(reason), jpeg=None)
@@ -437,7 +437,7 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
 def test_match_board_initial_state_before_any_publish(width, height):
     """최초 기동 — publish 전 보드는 기본 안내만 보이고 아무 상태도 그리지 않는다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
@@ -471,7 +471,7 @@ def test_match_board_initial_state_before_any_publish(width, height):
 def test_missing_camera_frame_does_not_render_broken_image_placeholder():
     """An absent optional camera image stays absent even when CSS styles the img."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -516,7 +516,7 @@ GAMES_FIT_PROBE = """() => {
 def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
     """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -548,7 +548,7 @@ def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
 
 def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -624,7 +624,7 @@ def test_the_space_bar_promise_is_real():
     힌트가 거짓말을 했다. 몸에 포커스가 있을 때 Space 는 /stop 을 친다.
     """
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -655,7 +655,7 @@ def test_the_space_bar_promise_is_real():
 
 def test_match_state_is_announced_only_when_it_changes():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -692,7 +692,7 @@ def test_match_state_is_announced_only_when_it_changes():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
 def test_stop_failure_is_visible_and_can_be_retried(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -743,7 +743,7 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
 
 def test_overlay_failure_marks_last_received_match_as_stale():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
@@ -783,7 +783,7 @@ def test_overlay_failure_marks_last_received_match_as_stale():
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
@@ -842,7 +842,7 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
 
 def test_missing_overlay_after_play_marks_cached_score_as_last_received():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -866,7 +866,7 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
 def test_stalled_stop_request_recovers_for_retry(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
@@ -920,7 +920,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다. 칩 검사는
     감시용이다 — US-003의 자간 0 이후 옛 네 칸 격자도 320px에서 넘치지 않는다(2026-09-30 실측)."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
@@ -969,7 +969,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
 def test_visibility_observations_are_not_operational_approval():
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
     board = PreviewBoard(clock=lambda: 100.0)
     payload = _play_payload()
     payload.pop('visibility')
@@ -998,7 +998,7 @@ def test_visibility_observations_are_not_operational_approval():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
 def test_board_evidence_matrix_on_declared_widths(width, height):
     """D-153 LOCAL cells; accepted stop requests are not physical SAFE_STOP readback."""
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
