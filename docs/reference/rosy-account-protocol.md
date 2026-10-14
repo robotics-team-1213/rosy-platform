@@ -47,6 +47,25 @@ UI 표시 조건은 동일 site의 `accounts.manage`이며 서버가 매 요청 
 
 ## 신원과 자원 권한
 
+### 공통 프로필 표시 (2026-10-14 보완)
+
+프로필 편집 정본은 Fleet의 `/console/profile` 하나다. 앱별 프로필 저장소를 만들지 않는다.
+`POST /api/fleet/auth/userinfo`는 기존 form 경계로 `token` 하나를 받고, 현재 유효한
+access token의 계정만 조회한다. 성공 응답은 `account_id`, `login`, `display_name`이며
+정지·회수·만료·revision 불일치는 401, 원장 장애는 503이다. grant와 다른 계정 정보는
+이 응답으로 확장하지 않는다. 응답은 no-store이며 표시 이름은 권한 판단에 사용하지 않는다.
+
+수신 앱의 기존 session 응답은 `profile`(위 세 필드 또는 null)과 `profile_url`을 추가한다.
+URL은 신뢰 설정의 issuer에 `/console/profile`을 붙여 생성하며 서버 응답이나 사용자 입력으로
+외부 목적지를 바꾸지 않는다. 프로필 응답의 account_id는 검증한 세션 subject와 같아야 한다.
+프로필만 조회 실패하면 이전 사람의 이름을 유지하지 않고 확인 불가로 표시하며,
+기존 인증·회수 검사는 그대로 유지한다. 네이티브도 동일 계약을 쓰고 네트워크 조회를
+조작·정지 전송 경로에 추가하지 않는다. 표시 이름은 기존 세션 상태 갱신 주기로 다시 읽는다.
+
+Fleet 내 계정의 관리형 프로필 응답은 `grants`를 함께 제공한다. UI는 기존 role을
+역할로 표시하고 자원별 실제 capability를 별도 읽기 전용 목록으로 보여준다.
+권한 변경은 기존 `accounts.manage` 경로에서만 처리한다.
+
 Account identity는 불변 opaque `account_id`다. login/email은 identity가 아니다.
 권한은 `{resource, capabilities}` 목록이다. resource는 `site:<id>`, `robot:<id>`,
 `project:<id>` 중 하나이며 wildcard가 없다. id는 영숫자·점·밑줄·하이픈 1~96자다.
