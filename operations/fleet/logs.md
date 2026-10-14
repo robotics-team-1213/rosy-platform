@@ -3678,3 +3678,9 @@
 - 증거: `test_shared_state_read_fences.py`(0.43 s 간격으로 송신 뒤 단계가 와도 재송신 없음, 단계마다 새 읽기, 울타리 앞의 진행 중 읽기를 넘겨주지 않음, 끊기기 전 읽기가 끊긴 뒤 닿아도 `link_wait` 유지, 허브와 REST 읽기 분리, HTTP 503으로 `failed`/`HTTP_503`, 로스터 이탈). 원격 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음.
 - 결정: D-760 4단계 Safety-Review. 읽기 번호가 없는 자세 포트(시뮬 `native_gazebo_map_pose.py`, 시험 가짜)는 울타리 없이 지금처럼 읽는다.
+## 2026-10-15 · febf77ca9 · D-760 4단계 재검토: SIM 자세 포트 옆에서도 교차로 읽기에 울타리
+
+- 변경: trip 울타리가 자세 포트가 아니라 교차로 포트가 읽는 공유 읽기의 번호를 센다(`HttpLaneJunction(read, read_number)`, `app.py`가 `map_pose.state`·`map_pose.read_number`를 넘긴다). `junction_state`가 `after`를 받는다. `simulation_pose`면 자세 포트가 SIM 포트(`tools/sim/native_gazebo_map_pose.py`, 읽기 번호 없음)라 지금까지 교차로 읽기에 울타리가 없었다. 자세 갱신은 같은 번호의 읽기일 때만 `after`를 받는다(`trip_progress._after`). 울타리는 단계의 자세·교차로 읽기 뒤에 친다(한 단계 한 읽기 그대로).
+- 증거: `test_shared_state_read_fences.py`의 0.43 s 재송신 시험을 SIM 자세 포트로도 돌린다(직진 지시: 지시 앞의 idle 읽기면 다시 보낸다). 수정 전 SIM 경우 실패를 원격에서 확인했다(`X:/DevTemp/shared-state-read/red4/run-1.txt`). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 4단계 Safety-Review 재검토 MEDIUM.
