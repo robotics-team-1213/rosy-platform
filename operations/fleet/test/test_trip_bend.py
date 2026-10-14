@@ -95,8 +95,11 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     assert ports.turns == [pytest.approx(63.6, abs=0.1)]
     fields = ports.expects[0]
     assert fields["map_id"] == "site" and fields["bend_radius_m"] == 0.064
-    # 0.4 m along the lane, led by the trip speed over the pose latency (here the send allowance)
-    assert fields["bend_in_m"] == pytest.approx(0.34, abs=0.005)
+    # 0.4 m along the lane, led by the top speed over the measured pose latency (0.2 m/s x 0.1 s);
+    # no fixed send allowance: on top it began the arc 2 cm early (Gazebo m16/m17)
+    assert fields["bend_in_m"] == pytest.approx(0.38, abs=0.005)
+    from fleet.server.trip_ports import TripConfig, bend_fields
+    assert TripConfig.from_mapping({"bend_send_s": 0.1}).bend_send_s == 0.1      # a site's measured send time leads more
     assert fields["bend_tol_m"] == pytest.approx(0.12, abs=0.001)         # the junction tol rule
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
     ports.core.phase("bending")
