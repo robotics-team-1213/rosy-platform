@@ -205,6 +205,39 @@ def test_steep_far_line_is_sided_while_a_corner_is_latched():
     assert not [c for c in keeper.last["candidates"] if c["reason"] == "steep_far"]
 
 
+def _roundabout_exit(straight=True):
+    """Gazebo map_v2_fleet m20, NW roundabout exit, robot on the exit lane's centre: the
+    right edge straight at y -0.10 from x 0.196 to 0.32, then the corner's outer line
+    at 59.7 deg through (0.289, -0.129) up to (0.383, 0.031)."""
+    image = _render([])
+    floor = np.isfinite(X)
+    steep = floor & (np.abs(X - (0.289 + (Y + 0.129) / np.tan(np.radians(59.7)))) <= TAPE_HALF)
+    image[steep & (Y > -0.10) & (Y < 0.031)] = 195
+    if straight:
+        image[floor & (np.abs(Y + 0.10) <= TAPE_HALF) & (X >= 0.196) & (X <= 0.32)] = 195
+    return image
+
+
+@pytest.mark.parametrize("corner_turning", [False, True])
+def test_straight_near_run_before_a_steep_line_is_the_boundary(corner_turning):
+    # m20: the steep line was rejected as steep_crossing and the frame held (no_boundary)
+    # although ~20 paint points of the straight right edge lay nearer the robot.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=corner_turning)
+    obs = keeper.update(_roundabout_exit(), GROUND, lane_half_width_m=HALF)
+    last = keeper.last
+    assert obs is not None and last["strategy"] == "right_only"
+    edge = next(b for b in last["boundaries"] if b["selected"])
+    assert edge["side"] == "right" and edge["y_at_side_x_m"] == pytest.approx(-0.10, abs=0.015)
+    assert abs(edge["heading_deg"]) < 5.0 and abs(obs.error) < 0.15
+    assert [c for c in last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+
+
+def test_steep_line_alone_is_still_rejected():
+    obs, last = _keep(_roundabout_exit(straight=False))
+    assert obs is None and last["reason"] == "no_boundary" and last["boundaries"] == []
+    assert [c for c in last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+
+
 def test_white_wall_is_not_a_boundary():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], wall_y=-0.16))
     assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
