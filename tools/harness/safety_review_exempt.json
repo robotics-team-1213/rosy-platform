@@ -350,5 +350,9 @@
   {
     "commit": "ed761a9577dfc226898dd6e486d773c49b1821d3",
     "reason": "Independent ralph_quality retrospective review, 2026-10-12: history-only at bdea36dd89; live selected-run checks and final epoch binding require 7b0855fa2 for known-unsent context rejection and orphan-marker cleanup. See docs/validation/fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance."
+  },
+  {
+    "commit": "5cad91a98697838d49890bdd7847666659d7dad2",
+    "reason": "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely bounded. Trailer commit 460a45c; no device acceptance."
   }
 ]

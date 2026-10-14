@@ -3577,6 +3577,22 @@
 - 결정: D-760 Decision 3. 능력 플래그에 따라 5 s를 보내는 것은 3단계다.
 - 교훈: 없음.
 
+## 2026-10-14 · 97ad6ca74 · 목표 임대 갱신은 그 목표를 보낸 클라이언트로 (D-760 5단계 확인)
+
+- 변경: 시험만. `test/test_goal_lease.py`에 `SenderRobot`(CORE의 D-760 9 규칙을 흉내 낸 가짜)와 갱신 경로 네 개(operator, dispatch, yield, trip) 매개 시험을 더했다. 보내기(`goal_lease.py:112`, 로스터 클라이언트)와 갱신(`goal_lease.py:173-177`, 같은 로스터 `_clients[rid]`)이 같은 객체임을 고정한다. stuck resolver 클라이언트(`cli.py:640`)는 목표를 보내지도 갱신하지도 않는다.
+- 증거: `operations/fleet/test/test_goal_lease.py` 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 주소 이동(`_replace_client`, 새 토큰)은 임대 행을 남긴다. 새 토큰의 갱신은 403이고 Fleet은 경고만 남긴다. 목표는 CORE에서 ttl(≤5 s) 안에 끝나고 다음 갱신이 409라 행이 지워진다. 화면 코드 교환은 5 s보다 길어 실제로는 이미 끝난 목표다.
+
+## 2026-10-14 · uncommitted · 목표 임대 갱신의 403도 임대를 놓는다 (D-760 5단계 안전 검토 MINOR 4)
+
+- 변경: `fleet/server/goal_lease.py` `renew`가 403을 409처럼 다룬다. 그 임대 행을 지우고 경고를 한 번 남긴다. 화면이 CORE가 거절하는 임대를 살아 있는 것으로 보이지 않게 한다. CORE는 그 목표를 제 만료에 끝낸다.
+- 증거: `test/test_goal_lease.py::test_every_renewal_path_renews_with_the_client_that_sent_the_goal`의 대조 단계(다른 클라이언트 403 → 행 삭제, 다음 갱신 시도 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
 ## 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
 - 변경: `server/ledger/mission_store.py`의 `next_running_mission`·`next_reconciliation_mission`(16줄, 부르던 `mission_service` 두 줄은 6fd54b3a3에서 이미 지워졌다. 4fe614c8b 커밋 글의 6d764bd77은 추가한 커밋이라 틀린 표기다), `server/ledger/task_store.py`의 `recover_interrupted_requests`(29줄, 호출은 423921562에서 없어졌다), `server/signals.py`의 `SignalConsole.signal_ids`(4줄), Console `console.js`의 `authHeaders`·`lastStateOk`(5줄)를 지웠다. 동작, 경로, 스키마는 그대로다.
 - Evidence: no executable callers remain; historical recover_interrupted_requests() plan references are superseded by recover_interrupted_work. Fleet 크기 단위는 56742에서 56688이 됐다(판정 56755+150 그대로). 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.

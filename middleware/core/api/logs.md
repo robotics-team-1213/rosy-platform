@@ -964,3 +964,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3.
 - 교훈: 없음.
+
+## 2026-10-14 · 97ad6ca74 · `POST /navigation/goal/lease` 보낸 토큰만 (D-760 5단계, 버전 그대로 v1.225)
+
+- 변경: `api/v1/navigation.py`가 `/navigation/goal`·`/navigation/home`에서 `auth.token_id`를 `lease_owner`로, `/navigation/goal/lease`에서 `owner`로 넘긴다. 다른 토큰의 갱신은 403 `FORBIDDEN`(`_HTTP_BY_CODE`의 기존 코드, trip 임대 해제 거절과 같은 꼴). API Reference의 `/navigation/goal/lease` 행과 `FORBIDDEN` 오류 행에 적었다. 버전 정렬 가드는 올림을 요구하지 않아 v1.225 그대로다.
+- 증거: `test_goal_lease.py`(같은 토큰 200, 다른 토큰 403, 끝난 목표 409, 임대 없는 목표 그대로). 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
