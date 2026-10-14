@@ -483,6 +483,18 @@ def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
     assert rig.x == pytest.approx(.25, abs=.01)           # the arc start did not move
 
 
+def test_a_short_odom_gap_while_bending_holds_and_the_bend_goes_on():
+    """Gazebo m27: a 0.6 s odom gap mid-bend aborted the bend ('odom') and ended the trip. Within the
+    phase limit a missing pose holds the maneuver; a new odom run still aborts (below)."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    for _ in range(12):                                   # 0.6 s without a pose
+        decision, status = site_step(rig, pose=False)
+        assert status.junction.state == 'bending' and decision.linear == 0.
+    assert status.reason == 'junction_pose_gap'
+    until(rig, 'reacquiring')
+
+
 def test_odom_restart_while_armed_aborts():
     rig = armed_rig()
     site_step(rig, move=True)
