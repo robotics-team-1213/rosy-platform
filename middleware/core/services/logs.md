@@ -991,6 +991,14 @@
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
 
+## 2026-10-14 · db8e0977a · D-754 굽이가 넘겨줄 목격을 지도 거리로 가린다 (API v1.222)
+
+- 변경: `bend` 지시의 선택 필드 `next_line_in_m`(꼭짓점에서 다음 교차로 가로선까지의 차로 거리, 0–2 m)을 `check_bend`가 검증하고 `gate.py`가 지시에 둔다. `bend.py::_bend_own_line`은 필드가 있으면 목격 선 지점의 출구선 거리와 그 값의 차가 `bend_tol_m + crosswalk_range_error_fraction × junction_ahead_m + CORRIDOR_HALF_M`을 넘을 때 넘기지 않는다. 필드가 없으면 D-507 보충 9항의 모양 규칙 그대로다. 두 규칙은 선 지점 계산 `_bend_line`을 같이 쓴다. 능력 `lane_bend_next_line`은 `lane_bend`와 같은 값이다.
+- 증거: 원격(모델 PC) 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다. `test_junction_bend.py`: 90° 굽이의 호 가운데 0.17 m 목격이 필드 없이는 `waiting`, 지도 거리 1.0 m면 `idle`. 지도 거리가 맞으면 `waiting`, 허용치 밖이면 `idle`.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo run55 구간의 재실행과 장치 수용은 미검증이다. 상태 필드는 더하지 않았다.
+- 결정: D-754. 필드가 있으면 지도가 판단하고 9항의 60° 문턱은 쓰지 않는다.
+- 교훈: 굽이 자신의 선과 바로 뒤 교차로의 선은 호 가운데에서 모양이 같다. 가르는 것은 지도의 다음 장소 거리뿐이다.
+
 ## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
 
 - 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.

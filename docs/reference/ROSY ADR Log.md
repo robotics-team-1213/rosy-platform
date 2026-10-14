@@ -755,6 +755,7 @@
 
 | D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
 
+| D-754 | 굽이 통과가 넘겨주는 목격은 지도가 가린다: `bend`의 `next_line_in_m`, 능력 `lane_bend_next_line` | Proposed |
 | D-753 | Fleet holder 설치 namespace·구조 증가 검사 보완 | Accepted |
 | D-755 | 공통 학습 데이터와 다중 계정 협업 연동 | Accepted |
 | D-757 | Rosy Account 단일 신원과 모든 앱의 자동 인증 세션 | Accepted |

@@ -228,12 +228,12 @@ def test_next_junction_seen_after_the_arc_ends_the_pass():
     assert status.junction.state == 'idle' and status.junction.seq == 1
 
 
-def sight(rig, ahead):
+def sight(rig, ahead, reason='junction_transverse'):
     """The keeper's junction HOLD with its measured cross line, in the next rig tick's frame."""
-    rig.m.observe_junction('junction_transverse', round(rig.now+.05, 6), ahead_m=ahead, ahead_v=1)
+    rig.m.observe_junction(reason, round(rig.now+.05, 6), ahead_m=ahead, ahead_v=1)
 
 
-def bend_sighting_line_ahead(rig, ahead=.4):
+def bend_sighting_line_ahead(rig, ahead=.4, **kind):
     """Drive into the arc, sight the next junction's line once mid-arc (lap SIM A: 0.39-0.45 m
     ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
     until(rig, 'bending')
@@ -242,7 +242,7 @@ def bend_sighting_line_ahead(rig, ahead=.4):
         if abs(math.remainder(rig.yaw-entry, math.tau)) > math.radians(35.):
             break
         site_step(rig, move=True)
-    sight(rig, ahead)
+    sight(rig, ahead, **kind)
     site_step(rig, move=True)
     trail = rig.m._return_evidence.trail
     return trail.odometer + ahead  # the line, on the odometer
@@ -286,6 +286,70 @@ def test_a_line_far_along_the_exit_or_on_a_shallow_bend_is_still_handed_over():
         rig = armed_rig(**fields)
         _sight_past_the_vertex(rig, past)
         until(rig, 'waiting')
+
+
+def _line_out(rig, ahead, turn=60.):
+    """Where the line `ahead` of the rig lies along the exit line from the bend's vertex."""
+    exit_yaw = math.radians(turn)
+    vertex = BEND['bend_in_m']+BEND['bend_radius_m']*math.tan(exit_yaw/2)
+    px, py = rig.x+ahead*math.cos(rig.yaw)-vertex, rig.y+ahead*math.sin(rig.yaw)
+    return px*math.cos(exit_yaw)+py*math.sin(exit_yaw)
+
+
+def test_the_map_drops_a_mid_arc_line_where_it_has_no_junction():
+    """D-754, Gazebo lap run55: W3 (90 deg) read its own line mid-arc 0.17 m ahead, beyond the
+    note 9 reach, so it was handed over; the map's next junction is over 1 m on, so it is not."""
+    rig = armed_rig(turn=90.)
+    bend_sighting_line_ahead(rig, ahead=.17)
+    assert _line_out(rig, .17, 90.) > .10                 # beyond the own line's reach at 90 deg
+    until(rig, 'waiting')                                 # without the field: as before
+    for fields, ahead in ((dict(turn=90.), .17), ({}, .4)):
+        rig = armed_rig(next_line_in_m=1., **fields)
+        bend_sighting_line_ahead(rig, ahead=ahead)
+        decision, status = until(rig, 'idle')
+        assert decision.linear > 0 and rig.m._junction_held is False, fields
+        assert rig.m._junction_anchor is None, fields    # the sighting is cleared
+
+
+def test_the_map_keeps_a_mid_arc_line_where_its_next_junction_is():
+    """D-754: W1's next junction shortly after it; within the tolerance (0.05 placement +
+    0.05 x 0.4 range + 0.10 half lane = 0.17 m) either side, and not beyond it."""
+    probe = armed_rig()
+    bend_sighting_line_ahead(probe)
+    out = _line_out(probe, .4)
+    assert .25 < out < .5
+    for off, state in ((0., 'waiting'), (-.12, 'waiting'), (.12, 'waiting'), (.22, 'idle'), (-.22, 'idle')):
+        rig = armed_rig(next_line_in_m=out+off)
+        bend_sighting_line_ahead(rig)
+        until(rig, state)
+
+
+def test_a_fork_sighting_measures_the_place_short_of_the_maps_line():
+    """Review: junction_fork measures the place point, up to 0.30 m before the painted line; a
+    transverse sighting that far short is not that line. A refresh carries the map's new distance."""
+    probe = armed_rig()
+    bend_sighting_line_ahead(probe)
+    out = _line_out(probe, .4)
+    for kind, state in ((dict(reason='junction_fork'), 'waiting'), ({}, 'idle')):
+        rig = armed_rig(next_line_in_m=out+.25)
+        bend_sighting_line_ahead(rig, **kind)
+        until(rig, state)
+    rig = armed_rig(next_line_in_m=1.)
+    assert send(rig, next_line_in_m=.5) == (True, 1, 'armed') and rig.m._junction['next_line'] == .5
+
+
+def test_the_map_judges_a_line_read_on_the_entry_heading_too():
+    """D-754: a line read before the arc goes by the map's distance as well: dropped when the next
+    junction is far (a shallow bend too), handed over where the map has a line, inside note 9's reach."""
+    for fields, past, state in ((dict(next_line_in_m=1.), .1, 'idle'),
+                                # review: note 9's shape still drops it under a wide placement tolerance
+                                (dict(next_line_in_m=.35, bend_tol_m=.2), .1, 'idle'),
+                                (dict(next_line_in_m=1., turn=40.), .1, 'idle'),
+                                ({}, .2, 'idle'),         # 0.2 cos 60 = 0.10 along the exit: note 9
+                                (dict(next_line_in_m=.1), .2, 'waiting')):
+        rig = armed_rig(**fields)
+        _sight_past_the_vertex(rig, past)
+        until(rig, state)
 
 
 def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
@@ -378,7 +442,8 @@ def test_resend_while_armed_keeps_the_measured_travel():
 @pytest.mark.parametrize('turn, fields', [
     (None, {}), (95., {}), (60., {'bend_in_m': None}), (60., {'bend_tol_m': .31}),
     (60., {'bend_radius_m': .6}), (60., {'map_id': None}), (60., {'expect_in_m': .5, 'expect_tol_m': .1}),
-    (60., {'pivot_past_line_m': .1})])
+    (60., {'pivot_past_line_m': .1}), (60., {'next_line_in_m': -.01}), (60., {'next_line_in_m': 2.01}),
+    (60., {'next_line_in_m': math.nan})])
 def test_bend_needs_its_fields(turn, fields):
     rig = site_rig(**SITE)
     site_step(rig)
@@ -390,8 +455,9 @@ def test_bend_needs_its_fields(turn, fields):
 def test_bend_fields_belong_to_bend():
     rig = site_rig(**SITE)
     site_step(rig)
-    with pytest.raises(ValueError):
-        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=BEND)
+    for expect in (BEND, dict(map_id='lab-a', next_line_in_m=.5)):  # D-754: the next line too
+        with pytest.raises(ValueError):
+            rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=expect)
 
 
 def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
@@ -489,6 +555,8 @@ def test_lane_bend_capability_needs_a_basis():
     assert site_rig().m.supports_lane_bend is False        # no floor declaration, proof not live
     assert site_rig(**SITE).m.supports_lane_bend is True
     assert Rig().m.supports_lane_bend is True             # enforce proof configured
+    assert site_rig().m.supports_lane_bend_next_line is False  # D-754: with lane_bend
+    assert site_rig(**SITE).m.supports_lane_bend_next_line is True
 
 
 def test_a_pending_instruction_under_the_live_proof_asks_for_the_return_scan_view():
