@@ -1,18 +1,22 @@
 // Source identity and status stay separate; this view never admits or dispatches work.
+import { tripWaitText } from "/console/assets/site-map-model.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
-  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료"};
+  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료", started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};  // D-763 8: the server's read projection
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
-export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
+export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell 적재"})[row.source] || "팔 작업";
+export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 
 export function createWorkView({scope, call, el, channelRequestView}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
-  const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]}[query.get("show")];
+  const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED", "arrived", "canceled", "stopped", "failed"]}[query.get("show")];
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
+  const showKinds = (kinds = []) => [["work-new-move-item", "trip"], ["work-new-cell-item", "CELL_TRANSFER"]].forEach(([id, kind]) => { el(id).hidden = !kinds.includes(kind); });  // D-763 9: only the server's kinds; none without an answer
   el("work-overview").hidden = !active;
   el("work-new").hidden = !fresh;
   if (area) {
@@ -22,24 +26,22 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
     channelRequestView.reset();
-    rows = []; selected = null; detailVersion++;
-    list.replaceChildren(); detail.replaceChildren();
-    el("channel-requests").replaceChildren();
+    rows = []; selected = null; detailVersion++; showKinds();
+    list.replaceChildren(); detail.replaceChildren(); el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
     el("work-evidence").textContent = "작업을 선택하세요.";
   }
   function field(label, value) {
     const term = document.createElement("dt"), text = document.createElement("dd");
-    term.textContent = label; text.textContent = value || "미확인";
-    detail.append(term, text);
+    term.textContent = label; text.textContent = value || "미확인"; detail.append(term, text);
   }
   function showDetail(row) {
     detail.replaceChildren();
-    field("업무", row.action_kind === "navigate" ? "이동" : row.action_kind === "PICK_PLACE" ? "파지·배치" : "기타 작업");
+    field("업무", {navigate: "이동", trip: "이동", PICK_PLACE: "파지·배치", CELL_TRANSFER: "Cell 적재"}[row.action_kind] || "기타 작업");
     field("담당 장치", row.device_id);
     field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
-    field("실행 책임", row.source === "task" ? "CORE · 주행" : "OMX · 팔");
+    field("실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔");
     field("상태", workStatus(row.status));
     field("최근 원장 갱신", new Date(row.updated_at).toLocaleString());
     field("사유", row.reason || "기록된 사유 없음");
@@ -50,11 +52,11 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     const version = ++detailVersion, life = scope.capture();
     el("work-evidence").textContent = "결과 근거 조회 중";
     try {
-      const path = row.source === "task" ? "tasks" : "missions";
+      const path = {task: "tasks", trip: "trips", cell_job: "cell-jobs"}[row.source] || "missions";
       const result = await call(`/api/fleet/${path}/${encodeURIComponent(row.source_id)}`);
       life.check();
       if (version !== detailVersion) return;
-      const current = result.task || result.mission;
+      const current = result.task || result.mission || result.job || {...result, status: result.state};
       showDetail({...row, ...current, source: row.source, source_id: row.source_id, device_id: row.device_id});
       const count = result.history?.length || 0;
       el("work-evidence").textContent = `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`;
@@ -79,7 +81,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       button.setAttribute("data-work-read", "");
       button.setAttribute("aria-pressed", String(selected === workKey(row)));
       button.title = `${row.source} · ${row.source_id} · ${row.status}`;
-      button.textContent = `${workKind(row)} · ${row.device_id} · ${workStatus(row.status)}`;
+      button.textContent = workLine(row);
       button.addEventListener("click", () => select(row));
       item.append(button); list.append(item);
       if (focused === workKey(row)) button.focus({preventScroll: true});
@@ -87,10 +89,10 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     el("work-empty").hidden = list.childElementCount > 0;
   }
   async function refresh() {
-    if (!active || inFlight) return;
+    if (!area || inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
-      const result = await call("/api/fleet/work"); life.check();
+      const result = await call("/api/fleet/work"); life.check(); showKinds(result.kinds); if (fresh) return;
       const previous = rows.find(row => workKey(row) === selected);
       rows = shown ? result.rows.filter(row => shown.includes(row.status)) : result.rows;
       channelRequestView.setSources(result.rows);
@@ -101,7 +103,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       }
       el("work-state").textContent = `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
       el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
-        result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정"].join(" · ");
+        result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정", result.cell_jobs_available ? "Cell 작업 원장" : "Cell 작업 원장 미설정", "운행 기록"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);
       if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);
