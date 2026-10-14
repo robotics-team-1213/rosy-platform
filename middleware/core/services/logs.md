@@ -1128,3 +1128,11 @@
 - gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
+
+## 2026-10-15 · 9a9ea4554 · 규제 능력 속성 (D-763 10항 (c), API v1.233)
+
+- 변경: `line_follow/crosswalk/gate.py`에 `supports_lane_crosswalk_gate`(= `crosswalk_gate_enabled`), `line_follow/signal/gate.py`에 `supports_lane_junction_signal`(= `junction_signal_enabled`). 동작은 바뀌지 않는다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`.
+- gate 변화: 없음. 크기 단위 `crosswalk`·`signal` 각 +4줄.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.

@@ -985,3 +985,10 @@
 - 변경: `v1/line_follow.py`가 `map_entry`를 `bend`와 `turn_deg`가 있는 `left`·`right`에서 받는다. 그 밖은 400이다. `v1/system.py`가 `supports_lane_turn_map_entry`를 `lane_turn_map_entry`로 알린다. `app.py` 계약 버전 v1.231(fe8347cf4).
 - 증거: `middleware/core/gateway/test/test_line_junction_api.py::test_d759_rev1_turn_map_entry_validation_and_record`, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
+
+## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+- 변경: `v1/system.py`가 line-follow의 `supports_lane_crosswalk_gate`·`supports_lane_junction_signal`을 `controls`에 싣는다. `app.py` 계약 버전 v1.233.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.

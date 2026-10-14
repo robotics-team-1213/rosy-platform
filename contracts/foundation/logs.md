@@ -716,3 +716,11 @@
 - gate 변화: 없음.
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
+
+## 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_crosswalk_gate`·`lane_junction_signal`(없으면 wire에서 빠진다). 설정 기본값은 바꾸지 않았다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`(설정 켬·끔). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
