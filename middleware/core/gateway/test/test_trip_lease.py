@@ -726,7 +726,9 @@ def test_under_a_lease_lane_following_stands_until_an_authority_and_again_after_
     # The lease ended while line follow is on: latched, so nothing drives without an authority.
     assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
     assert _line_status(client)["authority"]["state"] == "NONE"
-    assert _lane(client).status_code == 200             # a mode change ends the session
+    # A mode change ends the session.
+    assert client.put("/api/v1/line-follow/mode", json={"mode": "OFF"}, headers=FLEET).status_code == 200
+    assert _camera_lane(client).status_code == 200
     assert _gated(services, line["t"]) == 0.05
     assert "authority" not in _line_status(client)
 
