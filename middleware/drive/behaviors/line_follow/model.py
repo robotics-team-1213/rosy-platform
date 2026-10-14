@@ -273,6 +273,7 @@ class LineFollowConfig:
     # lane_arc_blind (step 1 SIM default: the whole segment, 1.0 m).
     arc_enabled: bool = True
     bend_map_entry_enabled: bool = False  # D-759: take a bend's map_entry (off until a SIM lap of it)
+    turn_map_entry_enabled: bool = False  # D-759 rev 1: the same for a junction turn's exit heading
     route_context_enabled: bool = False
     arc_curvature_gain: float = 1.0
     arc_blind_max_m: float = 1.0
@@ -451,12 +452,9 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
-        if type(self.arc_enabled) is not bool:
-            raise ValueError("arc_enabled must be a boolean")
-        if type(self.bend_map_entry_enabled) is not bool:
-            raise ValueError("bend_map_entry_enabled must be a boolean")
-        if type(self.route_context_enabled) is not bool:
-            raise ValueError("route_context_enabled must be a boolean")
+        for flag in ("arc_enabled", "bend_map_entry_enabled", "turn_map_entry_enabled", "route_context_enabled"):
+            if type(getattr(self, flag)) is not bool:
+                raise ValueError(f"{flag} must be a boolean")
         if not (_finite(self.arc_curvature_gain) and 0.8 <= self.arc_curvature_gain <= 1.25
                 and _finite(self.arc_blind_max_m) and 0.0 < self.arc_blind_max_m <= 1.0):
             raise ValueError("arc_curvature_gain must be in [0.8, 1.25] and arc_blind_max_m in (0, 1]")

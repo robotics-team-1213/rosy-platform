@@ -240,7 +240,8 @@ class LineArcMapAnchor(BaseModel):
 class LineBendMapEntry(BaseModel):
     """D-759 1: the lane's heading at the bend's arc start in the map frame and one yaw pair: Fleet's
     map yaw of the robot and the stamp of the odom sample it was computed for (CORE wall clock, as
-    snapshot odom_pose.stamp). Sent only to a robot announcing lane_bend_map_entry."""
+    snapshot odom_pose.stamp). Sent only to a robot announcing lane_bend_map_entry. D-759 rev 1: with
+    left/right, yaw_rad is the exit lane's map heading, to a robot announcing lane_turn_map_entry."""
 
     yaw_rad: float = Field(ge=-6.2832, le=6.2832, allow_inf_nan=False)
     pose_yaw_rad: float = Field(ge=-6.2832, le=6.2832, allow_inf_nan=False)
@@ -282,7 +283,7 @@ class LineJunctionRequest(BaseModel):
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     bend_radius_m: Optional[float] = Field(default=None, gt=0, le=0.5)
-    map_entry: Optional[LineBendMapEntry] = None  # D-759 1: to a robot announcing lane_bend_map_entry
+    map_entry: Optional[LineBendMapEntry] = None  # D-759 1 (bend), rev 1 (left/right turn)
     # D-754: a bend's lane distance from its vertex to the next junction's cross line (2 = that far
     # or further), sent only to a robot announcing lane_bend_next_line.
     next_line_in_m: Optional[float] = Field(default=None, ge=0, le=2.0, allow_inf_nan=False)
@@ -320,8 +321,8 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     if body.action != "bend" and any(v is not None for v in (*bend, body.next_line_in_m)):
         raise ApiError("VALIDATION_ERROR", 400,
                        "bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend")
-    if body.action != "bend" and body.map_entry is not None:
-        raise ApiError("VALIDATION_ERROR", 400, "map_entry belongs to bend")
+    if body.map_entry is not None and body.action != "bend" and body.turn_deg is None:  # D-759 rev 1
+        raise ApiError("VALIDATION_ERROR", 400, "map_entry belongs to bend or a turn (left/right with turn_deg)")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     if (body.expect_in_m is None) != (body.expect_tol_m is None):
