@@ -212,6 +212,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 j['expires_at'] = current+float(expires_s)  # a refresh keeps the measured travel
                 if 'reason' in j['map_entry']:  # D-759 3: an unplaced heading is tried again
                     self._place_map_entry(j, expect.get('map_entry'), current)
+                j['next_line'] = expect.get('next_line_in_m')  # D-754: a replan may move the next place
                 return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
@@ -235,6 +236,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                 self._place_map_entry(self._junction, expect.get('map_entry'), current)  # D-759 3
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
+                                      next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as

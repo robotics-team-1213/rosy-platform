@@ -254,16 +254,22 @@ def test_d507_bend_fields_validation(core_client):
     client, services, clock = _active(core_client)
     for bad in ({"turn_deg": None}, {"turn_deg": 0}, {"turn_deg": 91}, {"map_id": None},
                 {"bend_in_m": None}, {"bend_in_m": 2.01}, {"bend_tol_m": 0.31}, {"bend_radius_m": 0.51},
-                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1}):
+                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1},
+                {"next_line_in_m": -0.01}, {"next_line_in_m": 2.01}):  # D-754
         body = {k: v for k, v in {**BEND, **bad}.items() if v is not None}
         assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
     assert client.post(URL, json={**BODY, "bend_in_m": 0.5}, headers=OPERATOR).status_code == 400
+    assert client.post(URL, json={**BODY, "next_line_in_m": 0.5}, headers=OPERATOR).status_code == 400
     refused = client.post(URL, json=BEND, headers=OPERATOR)  # no odom: the travel cannot start
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ODOM_STALE"
     _pose(services, clock)
     assert client.post(URL, json=BEND, headers=OPERATOR).json() == {
         "accepted": True, "junction_seq": 1, "state": "armed"}
     assert client.post(URL, json={**BEND, "turn_deg": -40}, headers=OPERATOR).json()["junction_seq"] == 2
+    for line in (0, 2.0):  # D-754: the optional next line reaches the manager
+        assert client.post(URL, json={**BEND, "place_id": f"B{line}", "next_line_in_m": line},
+                           headers=OPERATOR).json()["accepted"] is True
+        assert services.line_follow._junction["next_line"] == line
 
 
 ENTRY = {"yaw_rad": 3.1416, "pose_yaw_rad": 2.9, "odom_stamp_s": 1.0}
