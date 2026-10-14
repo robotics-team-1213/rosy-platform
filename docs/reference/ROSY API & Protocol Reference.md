@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.235
+**Version:** v1.238
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,7 +15,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
-### v1.235 작업 읽기의 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (D-763 조각 4, 8·9항)
+### v1.238 작업 읽기의 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (D-763 조각 4, 8·9항)
 
 `GET /api/fleet/work`(v1.208)의 출처에 `trip`과 `cell_job`을 더한다(additive). 응답 모델은 그대로 `FleetWorkOverview`/`FleetWorkSummary`(`core_common.protocol.schemas`)이고 필드가 늘었다.
 
@@ -27,6 +27,20 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - **새 작업 종류 `kinds`.** 이 현장에서 지금 실행할 수 있는 새 작업 종류이고 값은 그 종류 행의 `action_kind`다. `trip`: 활성 현장 지도에 장소가 있고, 로봇 가운데 하나가 trip 능력(`base_velocity`의 `robot_kind`·`drive_modes`·`trip_max_linear`, D-494 1)을 알린다(능력 캐시 읽기, 처음 읽는 로봇은 최대 0.05 s). `CELL_TRANSFER`: 이 배포 프로필에서 단계 원장 하달이 열려 있고(`step_action_kinds.open_kinds`, 지금 `simulation`만) 하달기가 켜져 있고 설정된 OMX instance가 있다. 열리지 않은 종류는 목록에 없다(꺼진 단추나 "준비 중"으로 보이지 않는다, D-763 9항). 시작 권한 검사는 각 시작 경로가 그대로 한다.
 
 여러 원장 사이의 같은 시점은 보장하지 않는다. 행마다 원장 갱신 시각을 보인다. 이 경로는 읽기이며 dispatch·admission·claim을 하지 않는다. 승인·거절 자리(D-763 조각 5c)는 이 버전에 없다.
+### v1.236 작업이 쥔 trip lease는 단계 사이 IDLE에서 끝나지 않는다 (D-763 조각 6, 4항)
+
+`PUT /api/v1/trip-lease` 본문에 선택 필드 `job_id`(1–128자)를 더한다(additive). `job_id`를 실어 연 lease는 다단계 작업의 lease다. 그 작업의 단계 사이에 로봇이 IDLE이 되어도 CORE 모드 감시가 lease를 끝내지 않는다(D-541 5항의 `mode_left`가 IDLE에서는 일어나지 않는다). MANUAL·도킹으로 감, 비상 정지, 넘겨받기(`POST /trip-lease/takeover`), 만료, 주인의 해제는 지금처럼 끝낸다. 주인 아닌 토큰의 `POST /mode {IDLE}`는 멈춤이라 누구에게나 열려 있고, 그 요청이 lease를 끝낸다(작업의 lease도, 로봇이 이미 IDLE이어도; `mode_left`, `by` = 그 토큰의 라벨). 사람이 세운 로봇을 Fleet이 주인 토큰으로 다시 움직이지 않게 하기 위해서다. 단계 사이에 주인 아닌 토큰의 다른 `/mode`와 `/teleop`은 409 `TRIP_LEASED`다. renew는 `job_id`를 바꾸지 않는다. lease는 "누가 로봇을 쥐는가"에만 답한다: 통행권(`line-follow/authority`, `ttl_s` ≤ 5)과 목표 임대(`navigation/goal/lease`)는 자기 `ttl`대로 만료하고 lease renew가 늘리지 않는다. 상태 `trip_lease`에 `job_id`(작업의 lease가 아니면 `null`)가 실린다. 능력 `base_velocity.trip_lease_job: true`는 이 동작을 하는 CORE다. 옛 CORE는 `job_id`를 무시하고 IDLE에서 lease를 끝내므로 Fleet은 이 능력이 없는 로봇에 다단계 작업을 승인하지 않는다(D-763 개정 2 질문 10). 팔 단계 중 만료의 동작은 정하지 않았다(D-763 남은 질문 1).
+### v1.234 odom 세대와 단조 수신 시각, odom 기록은 발행한 stamp로 찾는다 (D-758 0단계)
+
+스냅숏 `odom_pose`에 선택 필드 둘을 더한다. 필드가 없는 스냅숏(v1.233 이하 CORE)은 그대로 읽힌다. 요청·응답·envelope 1.0 변경 없음.
+
+| 필드 | 형식 | 뜻 |
+|---|---|---|
+| `odom_pose.epoch` | 정수 ≥ 0 | CORE 시작 뒤 odom 불연속 횟수. 한 표본에서 0.02 m + 0.2 m/s × 수신 간격을 넘는 이동, odom 메시지 `frame_id` 변경, ROS 헤더 시각이 뒤로 감 가운데 하나일 때만 는다. 원점을 지나 달리는 것과 line-follow 모드 변경은 세지 않는다 |
+| `odom_pose.mono_s` | 유한 실수 | 같은 수신의 CORE 단조 시각(s). 로봇 사이·재시작 사이에 비교하지 않는다 |
+
+- **CORE 조회.** `POST /line-follow/authority`의 `pose_stamp`, lane cue의 `pose_stamp`, `exit_segment.map_anchor`·`map_entry`의 `odom_stamp_s`는 그대로 스냅숏 `odom_pose.stamp`다. CORE는 그 stamp로 발행한 odom 표본을 찾고(|차| ≤ 1 µs, 같은 값이 둘이면 가장 새것), 그 표본의 나이와 순서는 line-follow 시계(장치 `time.monotonic`, `use_sim_time`에서 시뮬레이션 시각)로 잰다. 벽시계가 움직여도 같은 표본을 찾는다. 발행한 값과 맞지 않는 stamp(옛 Fleet의 계산한 값)는 v1.226과 같이 벽시계에서 그 이전 표본을 찾는다. 통행권의 `seq` 기억도 line-follow 시계로 잰다.
+- **Fleet.** 지도 자세 추적기는 `epoch`가 바뀐 표본을 받으면 이동이 없어도 odom 기록과 기준을 버린다(`epoch`가 없는 로봇은 그대로 이동 크기로 판정한다). Fleet이 돌려주는 stamp는 바뀌지 않는다.
 
 ### v1.232 trip 읽기의 기다림 `wait.waiting`·`bound_s`·`over_bound` (D-763 조각 2, 8항)
 
@@ -201,7 +215,7 @@ CSRF 실패는403 `CSRF_REJECTED`, 초기 쿠키가 아닌 자격은403 `PASSWOR
 
 ### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
-`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다. v1.235(D-763 조각 4)부터 trip·Cell Job 출처와 그 범위는 v1.235 절을 따른다.
+`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다. v1.238(D-763 조각 4)부터 trip·Cell Job 출처와 그 범위는 v1.238 절을 따른다.
 
 `limit`은 정수 1–100, 기본 50이며 **원장별** 최근 행 수다. 응답은 `observed_at`(조회 UTC 시각), `tasks_available`, `missions_available`, `truncated_sources`(`task`/`mission`), `rows`(최대 200행)다. `observed_at`은 장치 센서의 관측 시각이 아니다. 원장 미설정은 available=false이며 빈 목록과 구별한다. 행은 `updated_at` 내림차순, source/source_id 내림차순으로 정렬한다. 전체 원장 스냅숏의 원자성 또는 두 원장 사이의 동일 시점은 보장하지 않는다.
 
@@ -634,7 +648,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/calibration/session` | Operator | `{kind, label?, ttl_s?}` → 201 `{session}`. 모드가 IDLE·MANUAL 이 아니거나 navigation·도킹·line-follow·swarm 이 돌고 있으면 409 `MODE_CONFLICT`. `kind` 는 `^[a-z][a-z0-9_]{0,31}$`(알려진 값 `drive`·`camera`·`imu`·`ir`·`lidar`·`odometry`), `label` ≤ 80자(비면 `kind`), `ttl_s` 5–300(기본 30). 호출 토큰이 owner 가 된다. 세션은 로봇당 하나 — 이미 있으면(같은 토큰이어도) 409 `CALIBRATION_ACTIVE` + `detail.session` |
 | POST | `/api/v1/calibration/session/{id}/heartbeat` | Operator | owner 만. `ttl_s` 를 다시 채운 `{session}`. 다른 토큰 403 `FORBIDDEN`, 없거나 만료된 id 404 `NOT_FOUND`. `ttl_s` 안에 heartbeat 가 없으면 세션은 만료되고 `calibration.session_expired` 가 한 번 발행된다 |
 | DELETE | `/api/v1/calibration/session/{id}` | Operator | owner 또는 Admin(걸린 lease 강제 해제). 끝난 `{session}`. 그 밖의 토큰 403, 없는 id 404 |
-| PUT | `/api/v1/trip-lease` | Operator | D-541 1–2 (v1.157) — `{lease_id (^[A-Za-z0-9_.:-]{1,64}$), trip_id (1–128자), holder (Fleet 사이트, 1–64자), operator_name (trip 을 시작한 이름 있는 운영자, 1–64자), ttl_s (1–10, 기본 5)}` → 200 `{trip_lease, renewed}`. `trip_lease` = `{lease_id, trip_id, holder, operator_name, since, expires_in_s}`. lease 가 없으면 열고(호출 토큰이 주인), 같은 토큰·같은 `lease_id` 면 만료를 `ttl_s` 로 다시 채운다(renew, `renewed: true`). 다른 `lease_id`(같은 토큰이어도) 또는 다른 토큰 409 `TRIP_LEASED`. 열 때만 거절: 보정 세션이 있음 409 `CALIBRATION_ACTIVE`(보정과 trip lease 는 서로 배타. **같은 토큰의 보정 세션도 막는다** — D-541 2항의 "다른 토큰"보다 엄격한 fail-closed 선택), E-stop 409 `EMERGENCY_ACTIVE`, MANUAL 모드 409 `MANUAL_MODE`, DOCKING 모드 409 `MODE_CONFLICT`(도킹이 바퀴를 쥐고 있다). 이미 끝난 `lease_id` 로 부르면(넘겨받기·만료·주인 아닌 멈춤·release 뒤의 renew) 다시 열지 않고 404 `NOT_FOUND` + `detail.ended {lease_id, reason, by}` 다(D-541 7: 잃은 lease 는 되살리지 않는다; CORE 는 끝난 id 를 최근 1024개 기억한다). 새 `lease_id` 는 보통대로 연다. 값 밖 400 `VALIDATION_ERROR`. 상태는 메모리에만 있다(CORE 재시작이면 lease 없음). `ttl_s` 안에 renew 가 없으면 CORE 5 Hz 타이머가 lease 를 끝내고(`expired`) line-follow 를 끄고 내비게이션을 취소해 IDLE 로 둔다. 만료를 타이머가 처리하기 전까지(≤ 0.2 s) 지난 lease 도 주인 아닌 쓰기를 막는다 |
+| PUT | `/api/v1/trip-lease` | Operator | D-541 1–2 (v1.157) — `{lease_id (^[A-Za-z0-9_.:-]{1,64}$), trip_id (1–128자), holder (Fleet 사이트, 1–64자), operator_name (trip 을 시작한 이름 있는 운영자, 1–64자), ttl_s (1–10, 기본 5), job_id? (1–128자, v1.236: 작업의 lease, 단계 사이 IDLE에서 끝나지 않는다)}` → 200 `{trip_lease, renewed}`. `trip_lease` = `{lease_id, trip_id, holder, operator_name, since, expires_in_s, job_id}`. lease 가 없으면 열고(호출 토큰이 주인), 같은 토큰·같은 `lease_id` 면 만료를 `ttl_s` 로 다시 채운다(renew, `renewed: true`). 다른 `lease_id`(같은 토큰이어도) 또는 다른 토큰 409 `TRIP_LEASED`. 열 때만 거절: 보정 세션이 있음 409 `CALIBRATION_ACTIVE`(보정과 trip lease 는 서로 배타. **같은 토큰의 보정 세션도 막는다** — D-541 2항의 "다른 토큰"보다 엄격한 fail-closed 선택), E-stop 409 `EMERGENCY_ACTIVE`, MANUAL 모드 409 `MANUAL_MODE`, DOCKING 모드 409 `MODE_CONFLICT`(도킹이 바퀴를 쥐고 있다). 이미 끝난 `lease_id` 로 부르면(넘겨받기·만료·주인 아닌 멈춤·release 뒤의 renew) 다시 열지 않고 404 `NOT_FOUND` + `detail.ended {lease_id, reason, by}` 다(D-541 7: 잃은 lease 는 되살리지 않는다; CORE 는 끝난 id 를 최근 1024개 기억한다). 새 `lease_id` 는 보통대로 연다. 값 밖 400 `VALIDATION_ERROR`. 상태는 메모리에만 있다(CORE 재시작이면 lease 없음). `ttl_s` 안에 renew 가 없으면 CORE 5 Hz 타이머가 lease 를 끝내고(`expired`) line-follow 를 끄고 내비게이션을 취소해 IDLE 로 둔다. 만료를 타이머가 처리하기 전까지(≤ 0.2 s) 지난 lease 도 주인 아닌 쓰기를 막는다 |
 | DELETE | `/api/v1/trip-lease/{lease_id}` | Operator | D-541 1 (v1.157) — 주인 토큰의 정상 끝(`released`). 로봇을 멈추지 않는다(Fleet 이 먼저 `stop`/취소를 보낸다). 200 `{trip_lease_ended}`. 다른 토큰 403 `FORBIDDEN`. 없거나 끝난 lease 404 `NOT_FOUND`, 바로 앞에 끝난 그 lease 면 `detail.ended {lease_id, reason, by}` — Fleet renew 가 404 를 받았을 때 끝 이유를 읽는 자리다 |
 | POST | `/api/v1/trip-lease/takeover` | Operator | D-541 4 (v1.157) — `{lease_id, reason? (≤ 200자)}`. 주인 아닌 토큰의 명시적 넘겨받기: 같은 처리 안에서 lease 를 끝내고(`taken_over`, `by` = 넘겨받은 토큰의 라벨, 없으면 역할) line-follow 를 끄고 내비게이션을 취소해 IDLE 로 둔다. 200 `{trip_lease_ended, mode}`. MANUAL 은 그다음 `POST /mode` 로 따로 요청한다. 주인이 부르면 400(주인은 `DELETE`), 다른·끝난 `lease_id` 404(`detail.ended` 는 DELETE 와 같다), Viewer 403 |
 | GET | `/api/v1/fleet/link` | Viewer | D-555 (v1.163) — `{configured, provisioned, expected_hostname, hub_url, enabled, connected, fleet_goal_active, arm_state, arm_deadline_s}`. `arm_state`: `armed`(WELCOME 받음, 또는 relink 없음) \| `pending`(relink 뒤 첫 WELCOME 대기, `arm_deadline_s` 남은 초) \| `grace_expired`(35 s 안에 WELCOME 없음 — SAF-003 이 끊긴 링크로 센다). 허브 페어링 토큰은 어떤 응답에도 싣지 않는다 |
@@ -897,8 +911,10 @@ v1.70 추가 경로(모두 Bearer 인증):
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
 
 ```json
-"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123 }
+"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
 ```
+
+v1.234(D-758 0단계)부터 `epoch`(odom 불연속 횟수)와 `mono_s`(같은 수신의 CORE 단조 시각)를 같이 싣는다. 뜻과 규칙은 위 「v1.234」 절이다. 이전 CORE는 둘을 싣지 않는다.
 
 `safety_policy` 는 v1.71 additive 다(D-400). 공급자가 없거나 공급자가 실패하면 `null` 이다(CORE 가 실패를 로그에 남긴다). 같은 블록이 Fleet 하트비트의 상태 스냅샷에도 실린다. `safety` 는 e-stop 요약, `safety_policy` 는 D-400 정책 모드·그림자 기록이다.
 
@@ -932,7 +948,7 @@ v1.70 추가 경로(모두 Bearer 인증):
 
 `trip_lease` 와 `trip_lease_ended` 는 v1.157 선택 필드다(D-541 1). **없으면 키가 없다**
 (`null` 이 아니다). `trip_lease` `{lease_id, trip_id, holder, operator_name, since,
-expires_in_s}` 는 Fleet trip lease 가 살아 있는 동안만 있다. `trip_lease_ended
+expires_in_s, job_id}` 는 Fleet trip lease 가 살아 있는 동안만 있다(`job_id` v1.236, 작업의 lease 가 아니면 `null`). `trip_lease_ended
 {lease_id, reason, by}` 는 lease 가 끝난 뒤 10 s 동안(다음 lease 가 열리면 없어진다)
 있어 1 Hz heartbeat 와 `/ws/state` 가 모두 한 번은 본다. `reason` 은 `mode_left`(IDLE·
 MANUAL·도킹으로 감, D-407 ABORT, 주인 아닌 토큰의 `navigation/cancel`·line-follow OFF)·
@@ -2544,7 +2560,7 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
 | POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. Who may admit comes from the step-kind registry (D-763 item 7). |
 | POST | `/api/fleet/missions/{mission_id}/reject` | Named Operator | v1.230 (D-763 5b). Body `{expected_generation}`. End a `PROPOSED` Cell Job (HOLD/`CANCELLED_BY_OPERATOR`) or legacy Mission (`CANCELED`) without approval and without claims; the proposer withdraws (`WITHDRAWN_BY_PROPOSER`), another named operator rejects (`REJECTED_BY_OPERATOR`). Not `PROPOSED` or stale generation: 409 `MISSION_REJECT_REFUSED`. |
-| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.235 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
+| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.238 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/cancel` | Named Operator | End the Job: status HOLD with reason `CANCELLED_BY_OPERATOR` (terminal; no CANCELLED status until the D-420 v2 schema) and its claims released in the same transaction. Refused while a claim is DISPATCHING or UNKNOWN. |
@@ -3037,7 +3053,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.235 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
+| v1.238 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
+| v1.236 | 2026-10-15 | Additive (D-763 조각 6, feat/fleet-job-holds-lease): `PUT /api/v1/trip-lease` 선택 필드 `job_id` — 작업의 lease는 단계 사이 IDLE에서 끝나지 않는다. 주인 아닌 토큰의 `POST /mode {IDLE}`는 어떤 lease든 끝낸다(`mode_left`). 상태 `trip_lease.job_id`, 능력 `base_velocity.trip_lease_job`. 통행권·목표 임대의 만료는 그대로다. v1.233–v1.238는 다른 작업이 선점했다. envelope 1.0 변경 없음. |
+| v1.234 | 2026-10-14 | Additive (D-758 0단계, fix/odom-log-monotonic-epoch, Safety-Review 대상): 스냅숏 `odom_pose.epoch`(odom 불연속 횟수)·`mono_s`(CORE 단조 수신 시각). CORE는 통행권·lane cue·호 기준의 odom 표본을 발행한 `odom_pose.stamp`로 찾고 나이·순서를 line-follow 시계로 잰다(벽시계 이동에 무관). 맞지 않는 stamp는 v1.226과 같다. Fleet 지도 자세 추적기는 `epoch`가 바뀌면 기준을 버린다. 요청·응답·envelope 1.0 변경 없음. |
 | v1.232 | 2026-10-14 | Additive (D-763 조각 2, feat/fleet-work-wait-read): trip 읽기의 `wait`에 `waiting`·`bound_s`·`over_bound`를 싣는다. 한 주기에 한 번 쓰고, 판정에 닿지 못한 주기에는 null이다. 상한을 넘은 기다림은 경고이고 개입이 아니다(개정 2 질문 7). |
 | v1.231 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 15° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 오늘의 목표다. v1.231. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
 | v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
@@ -3556,6 +3574,19 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.
 
 `/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.
+
+### D-765 비공개 데이터셋·모델 저장소
+
+검수 앱 로컬 경로이며 CORE `/api/v1`이 아니다. `learning.publish`와 연결에 기록된 저장소 범위가 둘 다 있어야 한다. `learning.import`와 `learning.manage`는 이 경로를 대신하지 않는다. 개인 연결은 그 Hugging Face 사용자 이름의 저장소만 만들고, 프로젝트 연결은 허용 목록의 `dataset:`·`model:`만 다룬다. 생성은 `visibility: private`이며 만든 뒤 private가 아니면 실패한다. 공개 상태를 바꾸거나 자동으로 지우지 않는다. 삭제는 `confirm`이 `repo_id`와 같고 조회 결과가 private일 때만 한다. 응답에 토큰을 넣지 않는다. 파일 업로드, Spaces, 과금은 이 경로에 없다.
+
+| 경로 | 입력과 반환 |
+|---|---|
+| `GET /api/accounts/repos` | 정확한 쿼리 `connection_id`, `repo_type`(dataset 또는 model). `repos`에 `repo_id`, `private`, `sha`를 최대 50개 반환한다. 프로젝트 연결의 없는 저장소는 `missing: true`다. |
+| `POST /api/accounts/repos/create` | 정확한 본문 `connection_id`, `repo_type`, `repo_id`. 비공개로 확인된 저장소 항목을 반환한다. 409는 기존 저장소를 성공으로 보지 않는다. |
+| `POST /api/accounts/repos/delete` | 정확한 본문 `connection_id`, `repo_type`, `repo_id`, `confirm`. `confirm`은 `repo_id`와 같아야 한다. |
+| `POST /api/accounts/oauth` | `purpose`에 기존 `login`·`link` 외에 `manage`를 둔다. manage는 쓰기와 저장소 관리 범위가 모두 있을 때만 연결한다. |
+
+권한 거부는 기존 403이다. 범위 부족, 이름 불일치, 공개 저장소, Hub 실패는 400이며 비밀이나 Hub 본문을 포함하지 않는다.
 
 가져오기 작업은 파일별 `downloaded_bytes`, `partial_sha256`, 완료 `sha256`와 작업의 `reserved_bytes`를 반환한다. 부분 bytes는 검증 완료나 학습 승인이 아니다. 서버가 제공한 SHA-256과 로컬 부분 해시가 있는 파일만 같은 revision·연결 세대로 Range 재개한다. Range를 무시한 전체 응답은 덧붙이지 않고 처음부터 다시 받는다. `insufficient_space`, `storage_unavailable`, `verification_failed`, `access_revoked`, `worker_interrupted`, `import_failed`는 비밀을 포함하지 않는 실패 코드다. 저장소 실행 잠금과 남은 bytes의 논리 예약은 같은 imports root의 worker만 조정하며 파일시스템 전체의 물리 예약은 아니다. 운영자 전용 `import_limits` 설정은 웹 입력으로 변경할 수 없다.
 

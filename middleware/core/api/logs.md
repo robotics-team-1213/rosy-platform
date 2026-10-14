@@ -981,11 +981,46 @@
 - 결정: D-760 Decision 3.
 - 교훈: 없음.
 
+## 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228
+
+- 변경: `core_api_web/api/app.py` 모듈 docstring과 `description`의 계약 버전을 v1.228로(v1.227은 다른 브랜치가 쓴다). 문서 머리와 핀 시험을 같은 커밋에서 옮겼다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py`(gateway 스위트) 원격 통과.
+- gate 변화: 없음.
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228 → v1.232 (main 병합)
+
+- 변경: main이 v1.226·v1.227·v1.230을 썼고 v1.229·v1.231은 착지 전 다른 브랜치(`feat/junction-turn-map-entry`)가 쓴다. D-758 0단계 절·`odom_pose` 설명·변경 기록 행·`api/app.py` 독스트링과 `description`·헤더 핀 시험 5개 파일을 v1.232로 옮겼다. 위 항목들과 foundation·fleet 기록이 적은 v1.228은 그 때의 번호다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, fleet 핀 시험. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
 ## 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
 - 변경: `v1/line_follow.py`가 `map_entry`를 `bend`와 `turn_deg`가 있는 `left`·`right`에서 받는다. 그 밖은 400이다. `v1/system.py`가 `supports_lane_turn_map_entry`를 `lane_turn_map_entry`로 알린다. `app.py` 계약 버전 v1.231(fe8347cf4).
 - 증거: `middleware/core/gateway/test/test_line_junction_api.py::test_d759_rev1_turn_map_entry_validation_and_record`, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 
+## 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.232 → v1.234 (main 병합)
+
+- 변경: main이 v1.231(D-759 개정 1)과 v1.232(D-763 조각 2, `feat/fleet-work-wait-read`)를 썼고 v1.233은 다른 세션이 쓴다. D-758 0단계 절·「v1.233 이하 CORE」 문구·`odom_pose` 설명·변경 기록 행(v1.232 위)·`api/app.py` 독스트링과 `description`·헤더 핀 시험 5개 파일·`localization.py`·`map_pose.py` 주석을 v1.234로 옮겼다. v1.229는 쓰이지 않았다. 위 항목들이 적은 v1.228·v1.232는 그 때의 번호다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, fleet 핀 시험. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-758 0단계.
+- 교훈: 없음.
+## 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)
+
+- 변경: `v1/trip_lease.py` 선택 필드 `job_id`. `v1/common.py` `apply_mode`가 IDLE이면 `stop_ends_trip_lease(halt=False)`: 주인 아닌 토큰의 IDLE이 어떤 lease든 끝낸다(로봇이 이미 IDLE이어도). 사람이 세운 로봇을 Fleet이 주인 토큰으로 다시 움직이지 않게 한다. `v1/system.py` 능력 `trip_lease_job`.
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`, `test_capabilities_controls.py`. 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 4항·조각 6.
+- 교훈: 없음.
+
+## 2026-10-15 · 7334f9c40 · 계약 버전 v1.236
+
+- 변경: `api/app.py` 독스트링과 `description`이 v1.236. v1.233–v1.235는 다른 작업이 선점했다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 원격 통과.
 ## 2026-10-15 · 868461505 · 계약 버전 v1.235 (D-763 조각 4)
 - 변경: `app.py` 계약 버전 표기만 v1.235. 로봇 API는 바뀌지 않았다(v1.233·v1.234는 다른 세션이 잡아 두었다).
 - 증거: `middleware/core/gateway/test/test_protocol_version_alignment.py` 원격 통과(모델 PC, 6ae1df74e), 로그 X: `work-read/b/run-1.txt`.

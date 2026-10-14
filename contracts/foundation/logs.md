@@ -702,6 +702,14 @@
 - 결정: D-760 Decision 3. API Reference v1.225 절.
 - 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.
 
+## 2026-10-14 · uncommitted · feat(protocol): D-758 0단계 `OdomPose.epoch`·`mono_s` (v1.228 additive)
+
+- 변경: `core_common/protocol/localization.py::OdomPose`에 선택 필드 `epoch`(정수 ≥ 0)와 `mono_s`(유한 실수). 없는 스냅숏은 그대로 읽힌다.
+- 증거: `test_state_odom_pose.py::test_an_old_snapshot_odom_pose_without_epoch_still_parses`, `contracts/foundation/test` 통과(`X:/DevTemp/odom-monotonic/root/run-1.txt`).
+- gate 변화: 없음(추가 필드).
+- 결정: D-758 0단계. API Reference v1.228 절.
+- 교훈: 없음.
+
 ## 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
 
 - 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `regulation_wait: authority | signal | crosswalk_held | crosswalk_wait | crosswalk_look | None`(기본 None, additive). API Ref v1.227.
@@ -717,6 +725,12 @@
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
 
+## 2026-10-15 · 84f0c8456 · trip lease 상태 job_id와 능력 trip_lease_job (D-763 조각 6, API v1.236)
+
+- 변경: `protocol/trip_lease.py` `TripLeaseStatus.job_id`(선택, 기본 None). `protocol/controls.py` `BaseVelocityControl`·`pinky_controls`에 `trip_lease_job`(없으면 wire에서 빠진다).
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(상태·능력), `test_protocol_schemas.py` 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 조각 6, 개정 2 질문 10.
 ## 2026-10-15 · 868461505 · 작업 읽기 계약 확장 (D-763 조각 4, API v1.235)
 - 변경: `protocol/work.py` `FleetWorkSummary`에 출처 `trip`·`cell_job`, `visible_state`·`wait`(`FleetWorkWait`)·`approval`. `FleetWorkOverview`에 `cell_jobs_available`·`kinds`, 행 최대 400, `truncated_sources` 최대 4. `schemas.py`가 `FleetWorkWait`를 내보낸다.
 - 증거: 원격 225+66 passed(모델 PC, 6ae1df74e), 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`.

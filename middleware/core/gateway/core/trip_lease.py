@@ -10,7 +10,11 @@ requests stay open to everyone.
 
 The lease stores no drive mode: the owner's lane <-> free switches keep it.
 It ends on IDLE / MANUAL / DOCKING / EMERGENCY (mode listener), takeover,
-release and expiry. Takeover, expiry and a non-owner cancel also halt the
+release and expiry. D-763 6: a lease opened with a ``job_id`` is a job's and
+survives IDLE (the gap between its steps); another token's IDLE still ends it
+(``common.apply_mode``). It never extends a motion bound: authority and goal
+lease keep their own ttl, renewed only by the loop that drives the motion.
+Open (D-763 open question 1): what an expiry stops during an arm step. Takeover, expiry and a non-owner cancel also halt the
 robot to IDLE through ``halt`` (set by the CORE wiring); this object itself
 commands nothing (D-2). Memory only: a CORE restart has no lease.
 """
@@ -59,6 +63,7 @@ class _Lease:
     renewed_mono: float
     event_mono: float
     warned: set = field(default_factory=set)
+    job_id: Optional[str] = None
 
 
 def _iso(epoch: float) -> str:
@@ -83,13 +88,15 @@ class TripLeaseManager:
     # --- lease -------------------------------------------------------------
 
     def open(self, *, lease_id: str, trip_id: str, holder: str, operator_name: str,
-             ttl_s: float, owner_id: str, origin: str = "",
+             ttl_s: float, owner_id: str, origin: str = "", job_id: Optional[str] = None,
              refuse: Callable[[], Optional[TripLeaseError]] = lambda: None) -> tuple[dict, bool]:
         """Open, or renew when the same token sends the same ``lease_id``.
 
         ``refuse`` is the open-time check (calibration, MANUAL, E-stop); it is not
-        asked on a renew. Returns ``(lease, renewed)``.
+        asked on a renew, nor is ``job_id`` changed by one. Returns ``(lease, renewed)``.
         """
+        if job_id is not None and not 1 <= len(str(job_id).strip()) <= MAX_TRIP_ID_LENGTH:
+            raise TripLeaseError("VALIDATION_ERROR", f"job_id must be 1-{MAX_TRIP_ID_LENGTH} characters")
         lease_id = str(lease_id or "")
         trip_id = str(trip_id or "").strip()
         holder = str(holder or "").strip()
@@ -137,7 +144,8 @@ class TripLeaseManager:
                 current = self._lease = _Lease(
                     lease_id=lease_id, trip_id=trip_id, holder=holder,
                     operator_name=operator_name, owner_id=owner_id, ttl_s=ttl,
-                    origin=origin, since=_iso(self._clock()), renewed_mono=now, event_mono=now)
+                    origin=origin, since=_iso(self._clock()), renewed_mono=now, event_mono=now,
+                    job_id=None if job_id is None else str(job_id).strip())
                 self._ended = None
                 public = self._public(current, now)
                 renewed = False
@@ -282,6 +290,7 @@ class TripLeaseManager:
             "operator_name": lease.operator_name,
             "since": lease.since,
             "expires_in_s": round(max(0.0, lease.ttl_s - (now - lease.renewed_mono)), 1),
+            "job_id": lease.job_id,
         }
 
 
@@ -291,6 +300,9 @@ def build_trip_lease(events, state, modes, safety, line_follow, command, nav) ->
 
     def end_on_mode(old: Mode, new: Mode) -> None:
         # D-541 5: the owner's lane <-> free stays in NAVIGATION; every other mode ends the trip.
+        # D-763 6: but IDLE keeps a job's lease (between its steps); the D-760 2 latch is per line session.
+        if new is Mode.IDLE and (trip_lease.current() or {}).get("job_id"):
+            return
         if new is not Mode.NAVIGATION:
             trip_lease.end("estop" if new is Mode.EMERGENCY else "mode_left", by=f"mode:{new.value}")
     modes.change_listeners.append(end_on_mode)
