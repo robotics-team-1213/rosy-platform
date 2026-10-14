@@ -72,7 +72,7 @@
     <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
-    <a class="ui-subnav-item" href="/console/cell" aria-current="page">새 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=new" aria-current="page">새 작업</a>
     <span class="ui-subnav-head">Cell 적재 단계</span>
     <a class="ui-subnav-item" href="#recipe-heading">레시피</a>
     <a class="ui-subnav-item" href="#cell-heading">셀 설정</a>
@@ -86,7 +86,6 @@
     <ui-status id="estop-feedback" hidden></ui-status>
     <div class="cell-intro">
       <h1 class="ui-page-heading">Cell 작업 준비</h1>
-      <ui-text id="work-kind">새 작업의 종류 · Cell 적재. 이동은 <a href="/console">관제</a>의 로봇 카드에서 목적지를 배정합니다.</ui-text>
       <ui-text id="cell-purpose">레시피와 셀 문서를 준비해 계획을 미리 본 뒤 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
     </div>
     <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
