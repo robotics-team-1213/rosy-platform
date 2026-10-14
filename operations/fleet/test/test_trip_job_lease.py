@@ -96,8 +96,9 @@ def test_the_jobs_step_adopts_its_lease_and_closing_the_step_keeps_it():
     assert ports.lease.deletes == [] and lease["state"] == "held"
     _ticks(runner, ports, n=4)
     assert ports.lease.puts[-1]["lease_id"] == lease["lease_id"]
-    runner.release_job(R, JOB)                 # the job ended
-    _ticks(runner, ports)
+    async def end_job():                                # the job ended (called on the server's loop)
+        runner.release_job(R, JOB)
+    _do(runner, end_job())
     assert [d[0] for d in ports.lease.deletes] == [lease["lease_id"]] and runner.lease.job_of(R) is None
 
 

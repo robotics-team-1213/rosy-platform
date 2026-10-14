@@ -803,6 +803,7 @@ def test_a_plain_trip_lease_still_ends_at_idle(robot):
     client, services, _ = robot
     _open(client)
     assert services.trip_lease.current()["job_id"] is None
+    assert _lane(client).status_code == 200
     assert client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=FLEET).status_code == 200
     assert services.trip_lease.current() is None
 
