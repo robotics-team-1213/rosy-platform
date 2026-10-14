@@ -776,7 +776,7 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
 
 
 LONG_NOTICE = ("로그아웃 요청을 보내지 못했습니다. 계정 서버가 응답하지 않습니다. 이 기기의 로그인은 그대로 남아 있으니 "
-               "네트워크를 확인한 뒤 다시 로그아웃하세요.")  # no real connect string reaches 90 chars; error.message can
+               "네트워크를 확인한 뒤 다시 로그아웃하세요. (ACCOUNT_UNAVAILABLE)")  # no real connect string reaches 90 chars; error.message can
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
