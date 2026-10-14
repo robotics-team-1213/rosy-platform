@@ -1,6 +1,6 @@
 ## D-760 Fleet이 시작한 움직임의 한도 — 끊김은 5초 버티고, 거리 끝에서 서고, 한도는 기본으로 켠다
 
-**Status:** Proposed (2026-10-14, 사용자 결정 K1 "몇 초 끊김은 버텨야 한다, 5초", K2 "시험 통과 즉시 전체 켬", K3 "군집은 다음 단계로 미룸". 개정 1 같은 날: 독립 검토 REVISE(C1·C2, M1–M7)를 반영. 코드는 단계마다 따로 착지하고, 2–6단계는 Safety-Review, 6단계의 현장 반영은 릴리스 절차를 따른다)
+**Status:** Accepted (2026-10-14, 사용자 결정 K1 "몇 초 끊김은 버텨야 한다, 5초", K2 "시험 통과 즉시 전체 켬", K3 "군집은 다음 단계로 미룸", K4 "trip 임대 8초·목표 임대 3.5초·임대 중 통행권 강제를 확정하고 시작". 개정 1: 독립 검토 REVISE(C1·C2, M1–M7) 반영. Accepted는 구현·장치 수용이 아니다. 코드는 단계마다 따로 착지하고, 2–6단계는 Safety-Review, 6단계의 현장 반영은 릴리스 절차를 따른다)
 
 잇는 결정: [D-550](D-550-fleet-robot-communication-contract.md)(종류·만료·규칙 M — 7항 lane trip 행, 8항 J2, 10항, 13항 5단계를 이 기록이 고친다) · [D-517](D-517-multi-robot-lane-traffic.md) 4·6(통행권 — `ttl_s` 상한, "줄지 않는다", 재시작 뒤 동작을 고친다) · [D-541](D-541-core-fleet-trip-lease.md)(trip 임대 — 기본값과 `ttl_s`, 임대 중 통행권 강제를 더한다) · [D-494](D-494-fleet-trip-execution-m2-contracts.md)(trip 루프 — 로봇 호출 실패의 뜻을 고친다) · [D-419](D-419-saf003-fleet-link-loss-policy.md) · [D-555](D-555-enrolled-robot-hub-pairing.md) · [D-758](D-758-robot-held-site-anchor.md)(로봇이 드는 현장 기준, 같은 날의 짝 기록) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md) · [D-430](D-430-safety-as-a-separate-concern.md). 폴더 구조는 바뀌지 않으므로 D-427 3항은 해당하지 않는다.
 
