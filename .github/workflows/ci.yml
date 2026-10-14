@@ -136,9 +136,9 @@ jobs:
             --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
             --target /tmp/rosy-receiver-crypto \
             -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
-          # core_common's offline wheel install also requires the account SDK.
+          # Offline core wheels and Fleet account authority need these site-pinned providers.
           pip3 install --no-cache-dir --break-system-packages --no-deps \
-            --target /tmp/rosy-receiver-crypto joserfc==1.7.5
+            --target /tmp/rosy-receiver-crypto joserfc==1.7.5 oauthlib==4.0.0
           PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
           echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
