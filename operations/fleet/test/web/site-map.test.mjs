@@ -152,6 +152,10 @@ test('D-494 trip panel text and button reasons', async () => {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
+  // D-763 8: the wait shows on an open trip only; a canceled trip keeps its last stored wait
+  const waiting = {...trip, wait: {reason: 'signal', waiting: true, over_bound: false}};
+  assert.match(tripStatusText(waiting, MAP), / · 대기 · 신호$/);
+  assert.doesNotMatch(tripStatusText({...waiting, state: 'canceled'}, MAP), /대기/);
   // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
   assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
   assert.match(tripStatusText({...trip, stop_moved: {from: null, to: 'B'}}, MAP), /목적지 좌표 → /);

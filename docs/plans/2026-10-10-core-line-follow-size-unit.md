@@ -85,3 +85,9 @@ D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되�
 판정 상태: 읽기 전용 critic이 2026-10-14에 독립으로 재판정했다(AGREE-WITH-CONDITIONS). 새 단위는 94로 받아들인다. `recovery/junction`의 기준은 1,137 그대로다. 기준 위 51줄은 D-754/D-759의 bend·turn 증가분이고 기준을 다시 잡지 않았다. 다음 +150에서는 `bend.py`(306)를 떼어 낸다. 신호 episode의 의미(어느 지시가 episode를 열거나 건너뛰는지, 빈 approach, Fleet 답과 heartbeat `may_enter`를 읽는 법)는 `signal/gate.py`에 둔다. `recovery/junction/gate.py`에는 `_signal_*` 훅 호출만 더할 수 있고, `set_junction` 안의 신호 전용 분기는 지적 사항이다.
 
 배포: 런타임 파일 하나가 생기고 하나가 없어지므로 D-553 delta 경로가 받지 않는다(`junction-signal-2026-10-10` 결과 기록). 다음 신호 수정은 ARM64 전체 payload로 빌드한다. delta hotfix로 계획하지 않는다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
+
+## 2026-10-14 추가 — 횡단보도 순수 게이트와 manager 연결 분리
+
+D-573 lane-slope 보정과 D-760 대기 시계 보정을 합치면 `crosswalk/gate.py`가 608줄이다. 기존 판정의 600줄 조건에 따라 Zone/Scan/Geometry, 판정 함수, CrosswalkGate 및 순수 zone 변환을 `crosswalk/kernel.py`로 옮겼다. `kernel.py`는 453줄, `gate.py`는 189줄이며 전체 crosswalk 단위는 869줄로 기존 기준 756 + 150 이내다.
+
+`gate.py`는 CrosswalkGateMixin과 기존 이름의 재수출을 가진다. 모든 정의·상수·메서드의 AST는 이동 전과 같고 import 경로, manager 잠금·세대, 상태·프로토콜·발행자는 그대로다. 손 상수 금지 시험은 두 파일을 모두 검사한다. 설치는 기존 `core_features`의 패키지 수집 경로를 따른다. SIZE_UNITS와 판정 기준, +150 성장 허용, 600줄 한도는 바꾸지 않는다. 원격 시험과 장치 수용은 별도 증거다.

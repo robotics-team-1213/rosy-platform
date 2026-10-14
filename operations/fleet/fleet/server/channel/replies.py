@@ -55,7 +55,7 @@ class ChannelReplyOutbox:
                 return
             for kind, table, key, states in (
                 ('task', 'fleet_tasks', 'task_id', ('COMPLETED', 'FAILED', 'HOLD', 'CANCELED', 'EXPIRED', 'UNKNOWN')),
-                ('mission', 'fleet_missions', 'mission_id', ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD')),
+                ('mission', 'fleet_missions', 'mission_id', ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD', 'CANCELED')),
                 ('cell_job', 'fleet_cell_jobs', 'mission_id', ('ACTION_SUCCEEDED', 'GOAL_CONFIRMED', 'HOLD')),
             ):
                 if table not in tables:
