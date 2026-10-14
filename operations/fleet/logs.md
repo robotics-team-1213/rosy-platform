@@ -3697,3 +3697,10 @@
 - 증거: 원격 시험(모델 PC, 6ae1df74e) fleet 13개 파일 225 passed, 계약·구조 5개 파일 66 passed, `known_failures` 0 new, 로그 X: `work-read/run-1.txt`, `work-read/b/run-1.txt`. 새 시험 `test_work_sources.py`: 출처별 행, viewer·운영자·제안자·다른 운영자·이름 없는 운영자 범위, 원장 미설정, 종류 목록.
 - gate 변화: 없음. 호스트 시험뿐이고 장치·현장 확인은 하지 않았다.
 - 결정: D-763 조각 4. 끝난 작업 필터는 상태 목록 그대로(실패도 끝난 작업)이고 보이는 상태는 줄 글에만 쓴다.
+
+## 2026-10-15 · e7b196839 · D-763 조각 4 검토: Cell Job 상세 범위, 닫힌 trip의 기다림, 루프 밖 읽기, 작업 영역 단위
+
+- 변경: `GET /api/fleet/cell-jobs/{id}`가 작업 목록과 같은 범위다(제안자; `PROPOSED`가 아니면 운영자; 남의 `PROPOSED`는 이름 있는 운영자만, 나머지 404). 제안자 아닌 독자에게 `proposal_principal_id`가 없고 사건의 제안자는 `actor_id: "proposer"`다. trip 행의 `wait`는 열린 trip에만 싣는다. 작업 읽기의 SQLite 읽기는 `asyncio.to_thread` 한 번으로 이벤트 루프 밖에서 한다(33a0b5706). 관제 작업 영역은 자기 크기 단위 `site_ui/console/work`다(6377fe873, 계획 `docs/plans/2026-10-15-fleet-console-work-unit.md`). 원장 단위 7,135/7,135, 다음 원장 증가는 Mission 분리부터.
+- 증거: 원격(모델 PC, e7b196839) fleet 16개 파일 266 passed, 계약·구조 6개 파일 69 passed, `known_failures` 0 new, 로그 X: `work-read/r3a/run-1.txt`, `work-read/r3b/run-1.txt`. 새 시험: 제안자·이름 있는 운영자·공유 토큰·viewer 상세 범위, 닫힌 trip의 남은 `over_bound`, 루프 밖 읽기.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 6. 남의 `PROPOSED` Cell Job 상세는 이전에 운영자 누구나였고 이제 이름 있는 운영자만이다.
