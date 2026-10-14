@@ -1093,3 +1093,11 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 - 결정: D-759(Proposed).
 - 교훈: 없음.
+
+## 2026-10-14 · 1ee33639c · trip 임대가 열려 있으면 차선 추종이 통행권을 요구한다 (D-760 2단계, API v1.225)
+
+- 변경: `core/trip_lease.py::build_trip_lease`가 `line_follow.authority_leased = lambda: trip_lease.current() is not None`을 묶는다. 5 Hz 타이머가 아직 끝내지 않은 만료 임대도 열린 것으로 센다. 임대 객체는 그대로다(움직임을 주지 않는다, D-541 9).
+- 증거: `test_trip_lease.py` 3건(임대 없으면 통행권 문이 명령을 그대로 둠, 임대 → 차선 → `authority_none` → 통행권 → 통과 → lane·free·lane 뒤 다시 `authority_none` → 임대 해제 뒤 통과, 만료 임대는 타이머가 끝낼 때까지 강제), `test_line_authority_api.py` 2건, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다. `trip_lease.py` 315줄 → 318줄.
+- 결정: D-760 Decision 2. 잠금 순서는 차선 관리자 잠금 → 임대 잠금 한 방향이다(임대는 자기 잠금을 놓은 뒤에만 `halt`를 부른다).
+- 교훈: `fleet.trip_lease_required`만 켜고 `fleet.traffic.authority`를 끈 현장에 이 CORE를 올리면 lane trip 로봇이 `authority_none`으로 서 있다. Fleet 출발 검사(`TRIP_AUTHORITY_SITE_OFF`)는 아직 `line_follow_authority_required`만 본다(3단계).

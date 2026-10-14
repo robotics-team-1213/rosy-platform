@@ -677,3 +677,11 @@
 - gate 변화: 없음.
 - 결정: D-759(Proposed).
 - 교훈: 없음.
+
+## 2026-10-14 · 1ee33639c · 통행권 ttl_s 상한 5 s, shrink·seq, 능력 플래그 둘 (D-760 2단계, API v1.225)
+
+- 변경: `core_common/protocol/line_authority.py` — `MAX_TTL_S` 2.0 → 5.0, `LineAuthorityRequest`에 선택 필드 `shrink: bool = False`와 `seq: Optional[int]`(≥ 0). `core_common/protocol/controls.py` — `base_velocity`에 `line_follow_authority_shrink`·`line_follow_authority_under_lease`(없으면 wire에 싣지 않는다).
+- 증거: `middleware/core/gateway/test/test_line_authority_api.py`(`ttl_s` 5.0 수락, 5.01·음수 `seq`·정수가 아닌 `seq`·bool이 아닌 `shrink`는 400), `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-760 Decision 1·3.
+- 교훈: 계획은 범위 밖 `ttl_s`를 422로 적었지만 CORE API의 검증 실패는 400 `VALIDATION_ERROR`다.
