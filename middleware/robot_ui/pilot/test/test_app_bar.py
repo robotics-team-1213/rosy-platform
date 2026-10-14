@@ -48,5 +48,8 @@ def test_connect_bar_is_one_row_from_64rem_and_other_fold_rules_stay():
     assert "var(--topbar-height)" in sheet
     assert 'html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }' in sheet
     assert 'html[data-pilot-shell="android"] ui-topbar [data-goto] { display: none; }' in sheet
-    assert 'grid-template-areas: "brand brand stop" "state nav stop" "notice notice notice";' in sheet
-    assert 'body[data-pilot-screen="connect"] [data-estop] { grid-area: stop; align-self: stretch; }' in sheet
+    # Below 64rem the two-row grid stays (D-741 2026-10-14 addendum): the stop spans both rows.
+    narrow = sheet[sheet.index("@media (width < 64rem) {"):]
+    narrow = narrow[:narrow.index("\n}")]
+    assert 'grid-template-areas: "brand brand stop" "state nav stop" "notice notice notice";' in narrow
+    assert 'body[data-pilot-screen="connect"] [data-estop] { grid-area: stop; align-self: stretch; }' in narrow
