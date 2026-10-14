@@ -19,6 +19,47 @@ def test_ci_local_execution_wheel_pin_matches_package_metadata():
     assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
 
 
+def test_core_wheel_dependencies_are_available_before_offline_install():
+    import ast
+    import re
+    import yaml
+    from packaging.requirements import Requirement
+
+    tree = ast.parse((ROOT / 'contracts/foundation/setup.py').read_text(encoding='utf8'))
+    requirements = next(ast.literal_eval(keyword.value) for node in ast.walk(tree)
+                        if isinstance(node, ast.Call) for keyword in node.keywords
+                        if keyword.arg == 'install_requires')
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    wheel_index = next(i for i, step in enumerate(steps)
+                       if step['name'] == 'Build and install ROS-free platform API wheels')
+    commands = '\n'.join(step.get('run', '') for step in steps[:wheel_index] if not step.get('if'))
+    tokens = shlex.split(commands.replace('\\\n', ' '), comments=True)
+    providers = dict(re.findall(r'^([A-Za-z0-9._-]+)==([^\s\\]+)',
+                               (ROOT / 'deploy/robot/pinky_pro/image/device-python-requirements.txt')
+                               .read_text(), re.MULTILINE))
+    providers.update(token.split('==', 1) for token in tokens
+                     if re.fullmatch(r'[A-Za-z0-9._-]+==[0-9.]+', token))
+    for value in requirements:
+        requirement = Requirement(value)
+        if requirement.name == 'setuptools':  # ROS/colcon's apt build bootstrap.
+            continue
+        assert requirement.name in providers, f'CI offline wheel install lacks {value}'
+        assert providers[requirement.name] in requirement.specifier
+
+
+def test_ci_provides_the_site_account_oauth_runtime():
+    import re
+    import yaml
+
+    site_requirements = (ROOT / 'deploy/site/requirements-fleet.txt').read_text(encoding='utf8')
+    oauth_pin = re.search(r'^oauthlib==[^\s]+', site_requirements, re.MULTILINE).group()
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    test_index = next(i for i, step in enumerate(steps) if step['name'] == 'Test (matrix suite, D-436)')
+    tokens = shlex.split('\n'.join(step.get('run', '') for step in steps[:test_index]
+                                  if not step.get('if')).replace('\\\n', ' '), comments=True)
+    assert oauth_pin in tokens, f'CI account authority lacks site runtime {oauth_pin}'
+
+
 def test_ci_builds_and_pins_the_internal_wheel_dependency_closure():
     import yaml
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
