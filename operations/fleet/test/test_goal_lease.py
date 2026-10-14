@@ -493,6 +493,7 @@ class SenderRobot(LeaseRobot):
         return await super().navigation_goal(x, y, yaw, **options)
 
     async def navigation_goal_lease(self, correlation_id, ttl_s) -> dict:
+        self._record("navigation_goal_lease", correlation_id)
         if self.core.get("sender") is not self:
             raise RobotApiError(self.robot_id, 403, "FORBIDDEN", "not the token that sent the goal")
         return await super().navigation_goal_lease(correlation_id, ttl_s)
@@ -521,4 +522,6 @@ def test_every_renewal_path_renews_with_the_client_that_sent_the_goal(source):
     assert len(robot.renewals) == 1          # accepted: renewed by the sender
     console._clients["rosy_01"] = other = SenderRobot("rosy_01", core)   # another token (control)
     run(renew())
-    assert other.renewals == [] and console.goal_leases["rosy_01"]["state"] == "leased"
+    assert other.renewals == [] and "rosy_01" not in console.goal_leases   # 403 drops the lease
+    run(renew())
+    assert len(other.calls) == 1             # dropped once: no further renewal attempts

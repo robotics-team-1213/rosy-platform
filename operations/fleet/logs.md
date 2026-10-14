@@ -3584,3 +3584,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 9.
 - 교훈: 주소 이동(`_replace_client`, 새 토큰)은 임대 행을 남긴다. 새 토큰의 갱신은 403이고 Fleet은 경고만 남긴다. 목표는 CORE에서 ttl(≤5 s) 안에 끝나고 다음 갱신이 409라 행이 지워진다. 화면 코드 교환은 5 s보다 길어 실제로는 이미 끝난 목표다.
+
+## 2026-10-14 · uncommitted · 목표 임대 갱신의 403도 임대를 놓는다 (D-760 5단계 안전 검토 MINOR 4)
+
+- 변경: `fleet/server/goal_lease.py` `renew`가 403을 409처럼 다룬다. 그 임대 행을 지우고 경고를 한 번 남긴다. 화면이 CORE가 거절하는 임대를 살아 있는 것으로 보이지 않게 한다. CORE는 그 목표를 제 만료에 끝낸다.
+- 증거: `test/test_goal_lease.py::test_every_renewal_path_renews_with_the_client_that_sent_the_goal`의 대조 단계(다른 클라이언트 403 → 행 삭제, 다음 갱신 시도 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
