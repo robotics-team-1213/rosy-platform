@@ -972,3 +972,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 9.
 - 교훈: 없음.
+
+## 2026-10-14 · ddd9723ef · D-760 2단계 통행권 계약을 v1.226으로 (v1.225 충돌 해소)
+
+- 변경: main이 v1.225를 두 번 썼다(D-754 굽이 `next_line_in_m`, D-760 2단계 통행권). D-754는 v1.225로 두고, D-760 2단계 절·`/line-follow/authority` 행·능력 주석·변경 기록 행을 v1.226으로 옮겼다. `api/app.py` 독스트링과 `description`, 헤더를 고정하는 테스트도 같은 커밋에서 v1.226이다. 위의 2단계 항목들이 적은 v1.225는 그 때의 번호다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3.
+- 교훈: 없음.
