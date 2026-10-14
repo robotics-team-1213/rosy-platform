@@ -354,13 +354,15 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
 def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(operator),
                        svc: CoreServicesLike = Depends(get_services)):
     """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
-    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg).
+    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg without
+    ``shrink``; D-760 3 stale_seq / seq_required / seq_legs_full: the leg's ``seq`` order; shrink_none_held:
+    a ``shrink`` with nothing live to shrink, which also drops what is held).
     A 409 refusal also drops the held authority, so the robot stands."""
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow authority")
     try:
         result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
-                                               body.until_m, body.ttl_s)
+                                               body.until_m, body.ttl_s, shrink=body.shrink, seq=body.seq)
     except AuthorityRefused as exc:
         raise ApiError(exc.code, 409, exc.args[1]) from exc
     return result
