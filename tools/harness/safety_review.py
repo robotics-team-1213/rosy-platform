@@ -40,6 +40,7 @@ import yaml
 BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    '775b1f3f6e7cd71bb3adc2415bbc5d4c0a14bd69': 'Independent code-reviewer safety review, 2026-10-14 (LAND after conditions b296ea453): D-759 rev 1 junction turn map_entry; flag-off identical; turn map target bounded 15 deg inside the 30 deg reacquire window; epoch/carry/stale/future fall back to today; turn sign kept past 180 deg; enable only after a SIM lap; no device acceptance.',  # git commit revision
     'e60a7891e21c353dfa8bcbae4422aabdc2535421': 'Independent code-reviewer retrospective history-only SOURCE provenance review, 2026-10-14: e60a7891e adds default-off bend_map_entry_enabled (capability false, map_entry ignored as disabled, bend path identical); on-path rebase keeps OFF_PATH_M/body-sweep/motion_admitted/bound checks; gateway change is one config read; no device acceptance.',  # git commit revision
     'c9983d2fe4f1488459c3b214a93eafb591a891c6': 'Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: candidate da7a93ff8; Decision identity, finite values, lease and disposition validation extraction retains fail-closed checks. Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance. Additional independent peer provenance: Independent /root/review_release_safety: contract extraction; history only, requires 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md',  # git commit revision
     '1e8acc5dd81b90b28447f491cc894c5bd846cd41': 'Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: candidate da7a93ff8; Observation gaps and well-formed timing faults produce bounded ZERO/HOLD; malformed decisions, late STOP and actuation faults latch. Requires readonly, continuity and rollback followups. Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance. Additional independent peer provenance: Independent /root/review_release_safety: zero-only HOLD and command fences; history only, requires clock fix 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md',  # git commit revision
@@ -247,8 +248,7 @@ EXEMPT: dict[str, str] = {
         "pose[0:2] only (D-463 gate, idempotency, operator goal path untouched); new D-488/D-490 "
         "/trip caller is plan-only (execute/start 501, named operator) and refuses a None yaw. "
         "No stop, admission, dispatch or auth path touched; 136 host tests pass at the commit "
-        "(lane_route, site_map_api, stuck_resolver, server_console, overhead_tracking_service); "
-        "no device acceptance.",
+        "(lane_route, site_map_api, stuck_resolver, server_console, overhead_tracking_service); no device acceptance.",
     "a86afa7f7714ba583e0da1c0a3245c47e91430b4":  # git commit revision
         'Independent security-reviewer agent, 2026-10-07: console.py only adds the D-494 3 '
         'state sink (attribute, set_state_sink, one call in _remember after _seen) feeding '
