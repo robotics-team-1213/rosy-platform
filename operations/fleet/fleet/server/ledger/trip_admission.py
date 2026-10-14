@@ -120,6 +120,8 @@ class TripAdmission:
         plan's map version and, with a lane ahead, CORE's line mode must hold, else the trip ends as that refusal.
         A robot call that fails here raises, so the trip waits on. True: it runs again."""
         index = live.view["segment_index"]
+        if (live.view.get("lease") or {}).get("renewed_at", -math.inf) < live.view["wait"]["lease_at"]:
+            return False  # Safety-Review minor: no lease renew confirmed since the loss yet; it waits on
         try:
             self._graph_for(live.view["map_version"])
             if any(live.arc(i).drive_mode == "lane" for i in range(index, len(live.segments))):
