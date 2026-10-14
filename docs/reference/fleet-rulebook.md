@@ -191,7 +191,7 @@ CORE 결과 식별 계약과 건강 보고, 숙고형 모델 수용, 배포·실
 - [기타 문제](../../operations/fleet/fleet/stuck/problems.py), [결과 판단](../../operations/fleet/fleet/stuck/outcome.py), [원장 연결](../../operations/fleet/fleet/stuck/closed_loop.py)
 - [AI-first](../../operations/fleet/fleet/stuck/ai_first.py), [D-577 후보 검사](../../operations/fleet/fleet/stuck/lane_lost.py), [Decision](../../operations/decision/src/rosy/decision/)
 - [교통](../../operations/fleet/fleet/traffic/handover.py), [trip guard](../../operations/fleet/fleet/server/ledger/trip_guard.py), [자원 admission](../../operations/fleet/fleet/server/dispatch_admission.py)
-- [Task](../../operations/fleet/fleet/server/ledger/task_service.py), [Mission](../../operations/fleet/fleet/server/ledger/mission_dispatcher.py), [Situation](../../operations/situation/rosy_situation/assessment.py)
+- [Task](../../operations/fleet/fleet/server/ledger/task_service.py), [Mission](../../operations/fleet/fleet/server/missions/mission_dispatcher.py), [Situation](../../operations/situation/rosy_situation/assessment.py)
 
 
 ## 9. 관측·운영 기록과 AI 학습 원본
