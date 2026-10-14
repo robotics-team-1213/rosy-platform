@@ -62,11 +62,14 @@ class AuthorityMixin:
         return accepted
 
     def _odom_entry(self, stamp):
-        """D-758 0: (entry, exact). The newest entry published at ``stamp`` (a wall step cannot move it), else
-        (an older Fleet's or a computed stamp) the one logged at or before it on the wall clock, as before."""
+        """D-758 0: (entry, exact). The one entry published at ``stamp`` (a wall step cannot move it), else
+        (an older Fleet's or a computed stamp) the one logged at or before it on the wall clock, as before.
+        (None, True) refuses: two entries share the stamp (review 1: the newer counts less travel, more room)."""
         log = self._odom_log
-        hit = next((e for e in reversed(log) if abs(e[0]-stamp) <= STAMP_MATCH_S), None)
-        return (hit, True) if hit else (next((e for e in reversed(log) if e[0] <= stamp), None), False)
+        hits = [e for e in log if abs(e[0]-stamp) <= STAMP_MATCH_S]
+        if hits:
+            return (hits[0] if len(hits) == 1 else None), True
+        return next((e for e in reversed(log) if e[0] <= stamp), None), False
 
     def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None):
         """Store Fleet's authority. ``AuthorityRefused`` drops the held one too (the robot stands). D-760 3:
@@ -176,6 +179,8 @@ class AuthorityMixin:
         now), or why a map pose computed for that stamp cannot be paired with CORE's odom. D-758 0: a
         published stamp is aged on the line clock; any other on the wall clock, as before."""
         base, exact = self._odom_entry(stamp)  # the sample the map pose was computed for
+        if exact and base is None:
+            return 'no_sample'
         age = now-base[6] if exact else self._wall()-stamp
         if not -STAMP_TOL_S <= age <= ARC_ANCHOR_MAX_AGE_S:
             return 'stale' if age > 0 else 'future'
