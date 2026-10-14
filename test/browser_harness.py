@@ -105,8 +105,8 @@ def open_page(playwright, width: int, height: int, *, url: str | None = None):
 
 
 # D-741 — what a Fleet document's body still offers once the rail and the sub-nav took their seats: sideways overflow,
-# sub-nav entries that are off screen or under something, grids whose cells got narrow, controls whose own text is cut,
-# and the stop. The caller decides what is too narrow.
+# sub-nav entries that are off screen or under something, grids whose cells got narrow, buttons and selects whose own
+# text is cut (a text input scrolls its value, so it is not counted), and the stop. The caller decides what is too narrow.
 BODY_FIT = """() => {
   const seen = (node) => node.checkVisibility({visibilityProperty: true}) && node.getClientRects().length > 0;
   const onTop = (node) => { const r = node.getBoundingClientRect();
@@ -114,7 +114,7 @@ BODY_FIT = """() => {
       && node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); };
   const ctx = document.createElement('canvas').getContext('2d');
   const cut = [];
-  for (const node of document.querySelectorAll('main :is(ui-button, select, input:not([type=checkbox], [type=file]))')) {
+  for (const node of document.querySelectorAll('main :is(ui-button, select)')) {
     if (!seen(node)) continue;
     const style = getComputedStyle(node);
     let need = node.scrollWidth;

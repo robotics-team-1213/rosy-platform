@@ -1,4 +1,5 @@
-main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
+/* D-741 2 — 본문은 칸이다. 아래 64rem 접힘은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭에 답한다(D-359 §6.3). */
+main { container-type: inline-size; display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
 ui-section { display: grid; gap: var(--space-3); }
 .map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
 .map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
@@ -63,7 +64,7 @@ a { color: var(--text-primary); }
 #robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; }
-@media (width < 64rem) {
+@container (width < 64rem) {
   .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
   .form { grid-template-columns: 1fr; }
   .map-viewport { overflow-x: auto; }
