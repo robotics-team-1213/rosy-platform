@@ -500,7 +500,8 @@ def test_the_http_port_carries_the_line_follow_reason():
     port = HttpLaneJunction(lambda: {"r": Client()})
     assert run(port.junction_state("r")) == {"state": "waiting", "seq": 3, "line_reason": "junction_waiting",
                                               "line_recovering": False,
-                                              "arc": None}  # D-520 2: no line_follow.arc (older CORE)
+                                              "arc": None,  # D-520 2: no line_follow.arc (older CORE)
+                                              "regulation_wait": None}  # D-763 8: older CORE, no field
 
 
 def test_a_stale_lane_waiting_does_not_end_a_free_segment():
