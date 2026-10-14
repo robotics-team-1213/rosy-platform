@@ -8,6 +8,7 @@ alignment against the first lane (``start_check``) and the plan-time line camera
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 
 from core_common.robot_body import nominal_body_for
@@ -18,6 +19,7 @@ from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.site_map import _inside
 
+_LOG = logging.getLogger(__name__)
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
 LINE_MODES = ("CAMERA_LINE",)
@@ -67,8 +69,9 @@ class TripAdmission:
         if token != self._start_token(robot_id):
             raise TripError(409, "TRIP_START_CANCELED")
 
-    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None):
-        """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
+    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None, detail=None):
+        """D-494 start checks on the robot's capabilities; the caps, or ``TripError``. ``detail``: the trip's
+        detail dict that takes the D-763 10 (c) ``regulation_caps_unknown`` warning."""
         map_id = self._store.active()[1].map_id
         lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
         caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
@@ -91,12 +94,18 @@ class TripAdmission:
         if lane and self.authority.mode(caps) != "core" and bounded:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         # D-763 10 (c): a lane route over a crosswalk or a signalled zone needs CORE's matching rule on, else
-        # the rule would silently not run there. An older CORE without the field counts as off.
+        # the rule would silently not run there. A CORE announcing it off is refused.
         need = {"lane_crosswalk_gate": crosswalks_on(graph, segments, getattr(self._store.active()[1], "crosswalks", ())),
                 "lane_junction_signal": sorted(set(self.traffic.route_signals(segments)) - {None})} if lane else {}
-        missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, False) is not True}
+        missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is False}
         if missing:
             raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})
+        # ponytail: an older CORE (field absent) only warns; refuse it like False once every robot runs v1.233+.
+        unknown = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is None}
+        if unknown:
+            _LOG.warning("trip of %s crosses regulation its CORE does not announce: %s", robot_id, unknown)
+            if detail is not None:
+                detail["regulation_caps_unknown"] = unknown
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):

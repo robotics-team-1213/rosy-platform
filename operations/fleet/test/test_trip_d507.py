@@ -21,8 +21,8 @@ from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _activate_again, _arc, _free_map, _map, _plan, _setup, _ticks, run
 import fleet.server.trip_ports as trip_ports
 
-PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True, lane_crosswalk_gate=True)
-LEGACY = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, lane_crosswalk_gate=True)  # no junction_pivot
+PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
+LEGACY = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)  # no junction_pivot
 
 
 def test_west_edge_bend_candidate_needs_a_fresh_aligned_pose():

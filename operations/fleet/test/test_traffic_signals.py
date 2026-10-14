@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +15,6 @@ from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from test_lane_traffic import START_N, Fleet, _s_of, _trip
 from test_routing import demo_site
-from test_trip_runner import LANE
 
 RING = ("ring_n", "ring_s", "ring_e", "ring_w")
 
@@ -142,7 +140,6 @@ def test_a_plan_refused_on_the_map_stays_red_in_occupancy_mode_too(monkeypatch):
 
 def test_a_trip_across_a_signal_needs_core_authority():
     runner, store, fleet, _entries = _setup()
-    runner._caps = lambda _robot_id: replace(LANE, lane_crosswalk_gate=True, lane_junction_signal=True)  # D-763 10 (c)
     with pytest.raises(TripError) as err:
         _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
     assert err.value.code == "TRIP_SIGNAL_NEEDS_AUTHORITY" and err.value.detail == {"signals": ["sig"]}
