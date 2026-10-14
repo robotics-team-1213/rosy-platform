@@ -23,12 +23,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Optional
 
-from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_TURN_RAD, _angle
+from core_features.line_follow.crosswalk.zone import (CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_LATERAL_M,
+                                                      MAX_TURN_RAD, _angle)
 
 NONE, ARMED, APPROACHING, LOOKING, WAITING, CROSSING = (
     "none", "armed", "approaching", "looking", "waiting", "crossing")
+HOLD_POSE_M = .01  #: a held corridor stands only this close to its image pose (inside the 3 sigma edge band)
 #: D-573 4 detail reasons of the stuck cause ``crosswalk_blocked``.
 PERSON, UNKNOWN, STALE, LOST = "person_present", "look_unknown", "sensor_stale", "zone_lost"
 
@@ -454,6 +457,7 @@ class CrosswalkGateMixin:
     def _init_crosswalk_gate(self) -> None:
         self._xwalk = CrosswalkGate()
         self._xwalk_scan: Optional[Scan] = None
+        self._xwalk_corridor = (None, None, None, None)   # (received_at, odom epoch, image pose, corridor)
 
     @property
     def wants_crosswalk_scan(self) -> bool:
@@ -492,21 +496,42 @@ class CrosswalkGateMixin:
                 out.append(zone_of(z, c.crosswalk_range_error_fraction, body_half_m=c.body_half_width_m))
         return out
 
-    def _fresh_corridor(self, now: float):
-        """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
-        as (image pose, left, right, uncertainty_m, |slope|, seen-to x) over its observed x range; None if older than the
-        D-491 evidence TTL or incomplete."""
+    def _fresh_corridor(self, now: float, pose=None):
+        """Seen now, else this odom run's last within EVIDENCE_TTL_S or standing still where it was seen (m25/m26)."""
+        seen = self._seen_corridor(now)
+        held_at, epoch, image, held = self._xwalk_corridor
+        if seen is not None or held_at is None or epoch != self._return_evidence.epoch:
+            return seen
+        there = pose is not None and math.hypot(pose.x - image.x, pose.y - image.y) <= HOLD_POSE_M and abs(
+            _angle(pose.yaw - image.yaw)) <= HOLD_POSE_M / .75 and self._standing_still(now)
+        return held if 0.0 <= now - held_at <= EVIDENCE_TTL_S or there else None
+
+    def _seen_corridor(self, now: float):
+        """D-468 lane evidence as (lane pose, left, right, uncertainty_m, residual |slope|, seen-to x); None if stale,
+        incomplete, looser than MAX_LATERAL_M or turned past MAX_TURN_RAD. D-573 개정 5 7항: the image pose turned
+        along the edges' mean slope (the lane, not the body: m23 stood 0.1 rad off it), edges in that frame."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
         if lane is None or at is None or lane.uncertainty_m is None or not 0.0 <= now - at <= EVIDENCE_TTL_S:
             return None
-        edges = {b.side: [b.slope * x + b.intercept_m for x in (b.observed_x_min_m, b.observed_x_max_m)]
-                 for b in lane.boundaries}
+        if lane.uncertainty_m > MAX_LATERAL_M:  # m24: on the stripes (0.043 m, edges 0.08 m apart) it is no lane
+            return None                         # D-491's bound for a zone's lane; the zone's own frame then
+        edges = {b.side: b for b in lane.boundaries}
         image = ev._image_pose(round(lane.stamp * 1e9))
         if image is None or set(edges) != {"left", "right"}:
             return None
-        return (image, max(edges["left"]), min(edges["right"]), lane.uncertainty_m,
-                max(abs(b.slope) for b in lane.boundaries), min(b.observed_x_max_m for b in lane.boundaries))
+        slope = (edges["left"].slope + edges["right"].slope) / 2
+        turn = math.atan(slope)
+        if abs(turn) > MAX_TURN_RAD:
+            return None
+        # each edge's seen ends in the lane frame; the outermost keeps an edge that disagrees with the mean (review)
+        side = {k: [math.cos(turn) * (b.slope * x + b.intercept_m) - math.sin(turn) * x
+                    for x in (b.observed_x_min_m, b.observed_x_max_m)] for k, b in edges.items()}
+        self._xwalk_corridor = (at, ev.epoch, image, (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn), max(side["left"]),
+                                     min(side["right"]), lane.uncertainty_m,
+                                     max(abs(b.slope - slope) for b in edges.values()),
+                                     min(b.observed_x_max_m for b in edges.values())))
+        return self._xwalk_corridor[3]
 
     def _crosswalk_gate(self, now: float, decision):
         """Cap the tick's final decision; never lifts a zero (D-573 6)."""
@@ -522,7 +547,7 @@ class CrosswalkGateMixin:
             report_s=c.crosswalk_report_s, stale_s=c.clearance_stale_s,
             odom_error_fraction=c.crosswalk_odom_error_fraction, range_sigma_m=c.crosswalk_range_sigma_m,
             persist_k=c.crosswalk_persist_k, persist_n=c.crosswalk_persist_n,
-            corridor=self._fresh_corridor(now))
+            corridor=self._fresh_corridor(now, pose))
         if cap is None:
             return decision
         if cap <= 0.0:
@@ -545,13 +570,27 @@ class CrosswalkGateMixin:
         gate took. All of it while a non-FREE D-517 authority, a D-573 look/wait or a crossing held by a
         return ahead (look_progress) stands the robot; a crossing's slower share against `speed`. dt
         counts at most stale_after_s: a stalled tick thread that wakes held earns no more. Locked."""
-        c, auth = self._config, self._authority_on() and self._authority_state(now)
-        xw = self._xwalk.status(now) or {}
-        if (auth and auth[0] != "FREE") or xw.get("state") in (LOOKING, WAITING) or xw.get("look_progress") is not None:
+        c = self._config
+        if self._regulation_wait(now) is not None:
             lost = 1.0
         else:
+            xw = self._xwalk.status(now) or {}
             lost = max(0.0, 1 - c.crosswalk_cross_speed / speed) if xw.get("state") == CROSSING and speed else 0.0
         return max(0.0, min(dt, c.stale_after_s)) * lost
+
+    def _regulation_wait(self, now: float) -> Optional[str]:
+        """D-760 rev 3 9 ``line_follow.regulation_wait`` and the share above: the regulation standing
+        the robot. Precedence authority > signal > crosswalk_held > crosswalk_wait > crosswalk_look (the
+        crosswalk three exclude each other: held only while crossing). None = none. Locked."""
+        auth = self._authority_on() and self._authority_state(now)
+        if auth and auth[0] != "FREE":
+            return "authority"
+        if self._signal_holding():
+            return "signal"
+        xw = self._xwalk.status(now) or {}
+        if xw.get("state") in (LOOKING, WAITING):
+            return "crosswalk_wait" if xw["state"] == WAITING else "crosswalk_look"
+        return "crosswalk_held" if xw.get("look_progress") is not None else None
 
     def _crosswalk_armed(self) -> bool:
         return self._config.crosswalk_gate_enabled and self._xwalk.zone is not None

@@ -136,3 +136,5 @@
 - **GetAction 404는 기본이 UNKNOWN이다.** owner가 `ACTION_NOT_FOUND`라고 답하고, grant 만료 시각에 허용 지연(5 s)을 더한 시각이 지났고, 그 시도에 대해 장치 receipt를 한 번도 기록한 적이 없을 때만 "실행되지 않음"(HELD)으로 본다. 그 밖의 404와 다른 principal의 Action은 오류다. owner journal 식별은 아직 없다.
 - **한계(후속):** UNKNOWN은 장치 journal을 읽어야만 풀린다. owner를 영구히 잃으면 운영자가 증언하는 해결 경로가 생길 때까지 rearm이 막힌다(계획됨).
 - **(2026-10-03, C4b 1d)** Fleet은 `start_step` 뒤 전송 직전에 정지 세대를 다시 읽고, 바뀌었으면 보내지 않은 Step을 HOLD로 두고 claim을 `HELD`로 옮긴다. owner는 journal을 만들 때 임의 식별자(`journal_id`)를 한 번 만들어 receipt·GetAction·GetOwnerIdentity에 싣고, Fleet은 제출 때 그것을 기록한다. 404를 "실행되지 않음"으로 보려면 위 조건에 더해 owner의 현재 `journal_id`가 기록한 값과 같아야 하며, 다르거나 모르면 UNKNOWN이다.
+
+> 2026-10-14 부기(D-763): "승인자는 제안자와 달라야 한다"는 [D-763](D-763-fleet-work-kinds-composed-steps.md)(Accepted)에서 등록부의 "두 사람" 값을 가진 모든 작업 종류의 규칙이 된다. Cell Job의 동작은 바뀌지 않는다. 해당 조각(D-763 5)이 착지할 때 적용된다.
