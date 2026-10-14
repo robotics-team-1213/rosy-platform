@@ -8493,3 +8493,4 @@ osy-d395-s1d\`.
 - Change: docs/plans/2026-10-15-runtime-pipeline-closure.md maps 14 current flows to source, two fixes and remaining inputs/evidence. Historical Discord/incident plans are distinguished from current implementation.
 - Evidence: 0bc2a16c1 remote regression: 117 passed, terminal exit 0, NEW 0. Live intake, model quality, signed admission, ROS-SIM and device readback remain separate. This branch is separate from shared main.
 - Gate: unchanged. The inventory is a source audit, not runtime or physical acceptance.
+- Final evidence: 30b06737a remote regression: 273 passed, terminal exit 0, NEW 0. Earlier broad affected checkpoint: 6278 passed, 330 skipped and 3 format/size failures, all rechecked passing in the final regression. Local lint exit 0, errors 0, drift warnings 29. No whole-platform acceptance claim.

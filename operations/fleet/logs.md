@@ -3711,3 +3711,4 @@
 - Evidence: shutdown RED e4804ba77; corrected readback RED b73b04577 reached UNKNOWN instead of COMPLETED. Remote AI PC regression at 0bc2a16c1: 117 passed, exit 0, known_failures NEW 0. Raw logs: X: runtime-pipelines--0fd8e5 session logs/green-2/run-1.txt.
 - Scope: 14 flow entries and outstanding inputs/evidence in docs/plans/2026-10-15-runtime-pipeline-closure.md. No main landing, push, deployment, model activation or robot actuation. Source review found no critical/important issue.
 - Gate: unchanged. This regression does not establish ROS-SIM, ARTIFACT, DEVICE or FIELD acceptance.
+- Final evidence: fc7cd8aea affected checkpoint: 6278 passed, 330 skipped, 3 NEW (journal format and size verdict). Those failures were fixed without changing the size allowance or known-failure list. 30b06737a remote functional/contract/structure regression: 273 passed, terminal exit 0, NEW 0. Broad affected was not repeated at the final SHA; skipped tests remain unverified.
