@@ -7,7 +7,7 @@ import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import PINKY_PRO
-from core_features.line_follow import crosswalk_gate as gate_module
+from core_features.line_follow.crosswalk import gate as gate_module
 from core_features.line_follow.crosswalk_gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
