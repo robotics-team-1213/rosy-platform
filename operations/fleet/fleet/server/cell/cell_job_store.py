@@ -608,13 +608,22 @@ class CellJobStore:
             connection.commit()
         return result
 
-    def cancel(self, mission_id: str, *, actor_id: str) -> dict[str, Any]:
-        """Operator abort: terminal, and the claims are released in the same transaction."""
+    def cancel(self, mission_id: str, *, actor_id: str, decision: str | None = None,
+               expected_generation: int | None = None) -> dict[str, Any]:
+        """Operator abort: terminal, and the claims are released in the same transaction.
+
+        With ``decision`` (D-763 5b reject) only a PROPOSED Job at ``expected_generation`` ends.
+        """
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = self._require(connection, mission_id)
-            if job["status"] in {"PROPOSED", "GOAL_CONFIRMED", "RUNNING"} or job["reason"] == CANCELLED_REASON:
+            control = connection.execute("SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            if decision is not None and (job["status"] != "PROPOSED" or control is None
+                                         or control[0] != expected_generation):
+                raise MissionConflict("only a PROPOSED Cell Job at the current stop generation can be rejected")
+            if decision is None and (job["status"] in {"PROPOSED", "GOAL_CONFIRMED", "RUNNING"}
+                                     or job["reason"] == CANCELLED_REASON):
                 raise MissionConflict(f"a {job['status']} Cell Job cannot be cancelled")
             if self._claim_phases(connection, job) & {"DISPATCHING", "UNKNOWN"}:
                 raise MissionConflict("cancel is refused while a claim is DISPATCHING or UNKNOWN")
@@ -625,27 +634,10 @@ class CellJobStore:
             connection.execute("UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
                                (CANCELLED_REASON, now, mission_id))
             release_claims(connection, owner_kind="mission", owner_id=mission_id)
-            self._event(connection, mission_id, job["current_step_index"], "CELL_JOB_CANCELLED", actor_id,
-                        {"previous_status": job["status"], "previous_reason": job["reason"]})
-            result = self._get(connection, mission_id)
-            connection.commit()
-        return result
-
-    def reject(self, mission_id: str, *, actor_id: str, expected_generation: int,
-               decision: str) -> dict[str, Any]:
-        """D-763 5b: end a PROPOSED Job unapproved, terminal as cancel is (it never held a claim)."""
-        actor_id = _nonempty("actor_id", actor_id, limit=96)
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            job = self._require(connection, mission_id)
-            control = connection.execute(
-                "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()
-            if job["status"] != "PROPOSED" or control is None or control[0] != expected_generation:
-                raise MissionConflict("only a PROPOSED Cell Job at the current stop generation can be rejected")
-            connection.execute("UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
-                               (CANCELLED_REASON, _now(), mission_id))
-            self._event(connection, mission_id, None, "CELL_JOB_REJECTED", actor_id,
-                        {"decision": decision, "dispatch_generation": expected_generation})
+            self._event(connection, mission_id, job["current_step_index"],
+                        "CELL_JOB_REJECTED" if decision else "CELL_JOB_CANCELLED", actor_id,
+                        {"previous_status": job["status"], "previous_reason": job["reason"],
+                         **({"decision": decision} if decision else {})})
             result = self._get(connection, mission_id)
             connection.commit()
         return result

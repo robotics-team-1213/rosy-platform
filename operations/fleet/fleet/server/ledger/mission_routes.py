@@ -403,32 +403,36 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                          if key != "cursor_state"}
         return MissionProgressEventPage.model_validate(contract_page).model_dump(mode="json")
 
-    def decidable(mission_id: str, principal: SitePrincipal) -> tuple[dict, str]:
-        """The resolved proposal this named operator may decide, and its registry approval."""
+    def decidable(mission_id: str, principal: SitePrincipal) -> tuple[dict, str, dict]:
+        """The resolved proposal a named operator may decide, its ledger row and registry approval."""
         proposal = proposal_store.get(mission_id)
-        # D-763 item 7: Cell Jobs resolve to CELL_TRANSFER rows, ER 2 candidates to one PICK_PLACE.
-        cell = proposal is not None and proposal["candidate"].get("kind") == "cell_job"
-        rule = required_approval(["CELL_TRANSFER" if cell else "PICK_PLACE"])
-        if proposal is None or (rule == "proposer_only"
-                                and proposal["principal_id"] != principal.principal_id):
+        if proposal is None:
             raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
-        if proposal["state"] != "RESOLVED":
-            raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
-        return proposal, rule
+        cell, own = (proposal["candidate"].get("kind") == "cell_job",
+                     proposal["principal_id"] == principal.principal_id)
+        if cell and cell_job_store is None:
+            raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
+        record = (cell_job_store if cell else mission_service).get(mission_id)
+        if proposal["state"] != "RESOLVED" or record is None:  # no ledger steps yet: as before
+            raise HTTPException(status_code=409 if cell or own else 404, detail={
+                "code": "PROPOSAL_NOT_RESOLVED" if cell or own else "MISSION_NOT_FOUND"})
+        try:  # D-763 item 7: the strictest approval over the resolved ledger steps' kinds
+            rule = required_approval([step["action_kind"] for step in record["steps"]] if cell
+                                     else [record["action_kind"]])
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail={"code": "APPROVAL_RULE_UNREGISTERED"}) from exc
+        if rule == "proposer_only" and not own:
+            raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+        return proposal, rule, record
 
     @app.post("/api/fleet/missions/{mission_id}/admit", dependencies=operator_guard,
               tags=["fleet-missions"])
     def fleet_mission_admit(mission_id: str, body: MissionAdmitRequest,
                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        proposal, rule = decidable(mission_id, principal)
+        proposal, rule, mission = decidable(mission_id, principal)
         if rule == "two_person" and proposal["principal_id"] == principal.principal_id:
             raise HTTPException(status_code=403, detail={"code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"})
         cell = proposal["candidate"].get("kind") == "cell_job"
-        mission = None if cell else mission_service.get(mission_id)
-        if cell and cell_job_store is None:
-            raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
-        if not cell and mission is None:
-            raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
         try:
             if cell:
                 if cell_job_resolver is None:
@@ -461,16 +465,14 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     def fleet_mission_reject(mission_id: str, body: MissionAdmitRequest,
                              principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         """D-763 5b: the proposer withdraws, another operator rejects; nothing is claimed."""
-        proposal, _ = decidable(mission_id, principal)
-        store = (cell_job_store if proposal["candidate"].get("kind") == "cell_job"
-                 else mission_service.store)
-        if store is None:
-            raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
+        proposal, _, _ = decidable(mission_id, principal)
+        reject = (cell_job_store.cancel if proposal["candidate"].get("kind") == "cell_job"
+                  else mission_service.store.reject)
         decision = ("WITHDRAWN_BY_PROPOSER" if proposal["principal_id"] == principal.principal_id
                     else "REJECTED_BY_OPERATOR")
         try:
-            rejected = store.reject(mission_id, actor_id=principal.principal_id, decision=decision,
-                                    expected_generation=body.expected_generation)
+            rejected = reject(mission_id, actor_id=principal.principal_id, decision=decision,
+                              expected_generation=body.expected_generation)
         except (KeyError, MissionConflict, ValueError) as exc:
             raise HTTPException(status_code=409, detail={"code": "MISSION_REJECT_REFUSED",
                                                          "message": str(exc)}) from exc

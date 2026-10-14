@@ -19,7 +19,7 @@ class FleetWorkSummary(BaseModel):
 
 
 class FleetWorkDecisionRequest(BaseModel):
-    """D-763 7/5b: admit or reject a waiting job at the dispatch stop generation the operator saw."""
+    """D-763 7/5b (API v1.230): admit or reject a waiting job at the stop generation the operator saw."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
