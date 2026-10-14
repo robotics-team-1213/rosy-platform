@@ -28,6 +28,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
@@ -42,6 +43,7 @@ ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; abse
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
+SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
@@ -320,16 +322,29 @@ def select(wt: Path, base: str, python: str) -> tuple[list[list[str]], str | Non
         try:
             sel = json.loads(result.stdout)
             if sel["mode"] == "full":
-                # D-436 4: the full tier runs on GitHub runners, as `affected --run` does.
-                note = ("selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): ran the"
-                        " guards and mapped suites only; the FULL tier is still owed to CI")
+                # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
+                # guards alone; not via GitHub, which would publish unpushed main commits.
+                note = "selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): full tier on the lab PCs"
                 print(f"[tests] {note}")
-                return sel["local_invocations"], note
+                return sel["full_invocations"], note
             return sel["invocations"], None
         except (ValueError, KeyError, TypeError) as exc:
             raise Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
     changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
     return pack(wt, fallback_targets(wt, changed)), None
+
+
+def safety_review(wt: Path, base: str, head: str, python: str) -> None:
+    """D-762 stage 0: the commits this landing adds to main (base..head) pass CI's D-430 5 rule first."""
+    if not (wt / SAFETY).is_file():
+        return
+    code, text = step(wt, [python, SAFETY, base, head], None, "safety-review", allow_fail=True)
+    if code:
+        raise Stop(f"{text.strip()}\nnot landing: each commit listed needs a `Safety-Review: <reviewer/lane>"
+                   " <evidence>` trailer in its own message; a later trailer-only commit does not cover it, and"
+                   " --amend/rebase are not used here. Re-create the change on a new branch from main with the"
+                   f" trailer (git cherry-pick -n <sha>, then git commit), or add the full SHA to EXEMPT in {SAFETY}"
+                   " with an independent review (D-430 5)")
 
 
 def record_only(path: str) -> bool:
@@ -425,6 +440,18 @@ def tmp_dir(branch: str) -> Path:
     return path
 
 
+def ahead_of_origin(wt: Path, landed: str) -> str:
+    """D-762 open item 4 (cap not decided, reported only): unpushed commits and the oldest one's age.
+
+    Local refs only, no fetch."""
+    stamps = git(wt, "log", "--format=%ct", f"origin/main..{landed}", check=False)
+    if stamps.returncode:
+        return "local main vs origin/main: no origin/main ref here"
+    times = [int(t) for t in stamps.stdout.split()]
+    hours = (time.time() - min(times)) / 3600 if times else 0.0
+    return f"local main is {len(times)} commits / {hours:.1f} hours ahead of origin/main"
+
+
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -457,6 +484,8 @@ def land(args) -> int:
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
+        safety_review(wt, main_sha, candidate, python)
+        note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
         elif args.tests == "auto":
@@ -481,7 +510,10 @@ def land(args) -> int:
                            " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
+        began = time.monotonic()
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
+        if note:
+            summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
 
@@ -502,7 +534,7 @@ def land(args) -> int:
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
                              f"rounds: {round_no}", f"commits merged onto main: {count}",
-                             f"main is now {landed}"]))
+                             f"main is now {landed}", ahead_of_origin(wt, landed)]))
             print(f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
                   f"  {worktrees.SWEEP}")
             return 0
