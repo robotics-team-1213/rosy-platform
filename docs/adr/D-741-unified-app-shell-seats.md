@@ -138,3 +138,5 @@ D-277, D-220, D-371, D-421, D-629, D-632, D-439, D-473은 그대로 따른다.
 > 2026-10-14 부기(Cam 앱 바 조각의 검토 반영): Android 벡터 `operations/site_ui/cam/app/src/main/res/drawable/ic_rosy_mark.xml`은 SVG를 쓸 수 없는 네이티브 앱을 위한 `shared/web/brand/mark.svg`의 허용된 옮김이다(D-654 2항의 예외). `LauncherIconParityTest`가 경로와 뷰포트를 정본과 대조한다. 색은 D-654 3항대로 `--brand-rose`다. 이 밖의 복사본은 만들지 않는다.
 
 > 2026-10-14 부기(Pilot 앱 바 조각, 사용자 결정): Pilot 웹 접속 화면의 앱 바는 64rem 이상에서만 한 줄(`--appbar-height`)이다. 64rem 아래에서는 D-466의 두 줄 격자를 유지한다. 그 격자에서 비상 정지는 두 줄을 차지해 82x74px이고, 64px 한 줄로 만들면 정지가 작아진다. 사용자가 2026-10-14에 이렇게 정했다. 5항의 "앱 바는 한 줄을 유지한다"와 "이 결정이 바꾸는 기존 결정"의 D-466 행은 이 화면의 64rem 아래에 적용하지 않는다. 주행·팔 화면과 Android 셸의 머리는 이 조각이 바꾸지 않았다.
+
+> 2026-10-14 부기(D-763): 7항의 "API는 바꾸지 않는다"는 [D-763](D-763-fleet-work-kinds-composed-steps.md)(Accepted)이 바꾼다: 작업 조회의 출처에 trip과 Cell Job이 더해지고 보이는 상태·기다림 사유가 실리며, `새 작업`은 서버가 준 종류 목록이 된다(`/console/cell` 주소는 그대로). 해당 조각(D-763 4)이 착지할 때 적용된다.

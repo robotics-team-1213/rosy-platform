@@ -8,10 +8,10 @@ from fleet.server.site_auth import SitePrincipal
 from test_channel_workflow import fixture, GOAL, task
 
 
-def client_for(workflow, principal, task_service=None):
+def client_for(workflow, principal, task_service=None, console=None):
     app = FastAPI()
     install_workflow_routes(app, workflow, require_operator=lambda: SitePrincipal(principal, "operator"),
-                            read_guard=[], task_service=task_service)
+                            read_guard=[], task_service=task_service, console=console)
     return TestClient(app)
 
 
@@ -68,3 +68,21 @@ def test_submit_route_reuses_task_owner_and_rejects_stale_review(tmp_path):
     with closing(tasks._connect()) as conn:
         assert conn.execute("SELECT request_key FROM fleet_tasks WHERE task_id=?",
                             (first.json()["work_id"],)).fetchone()[0] == "discord-" + receipt["request_id"]
+
+
+def test_submit_route_refuses_a_robot_on_a_trip_before_a_task_is_queued(tmp_path):
+    """D-763 slice 1: the submit route asks the one holder check and keeps its plain-string 409."""
+    from fleet.server.console_view import TripAware
+    from fleet.server.task_service import FleetTaskService
+
+    class OnTrip(TripAware):
+        trip_busy = staticmethod(lambda robot_id: robot_id == "pinky")
+
+    workflow, _, tasks, _, receipt = fixture(tmp_path)
+    client = client_for(workflow, "op", FleetTaskService(tasks, robot_ids={"pinky"}), OnTrip())
+    path = f"/api/fleet/channel-requests/{receipt['request_id']}"
+    assert client.put(path + "/review", json={"expected_hash": receipt["content_hash"], "expected_revision": 0,
+                                             "state": "READY", "candidate": GOAL, "reason": "confirmed"}).status_code == 200
+    refused = client.post(path + "/submit", json={"expected_hash": receipt["content_hash"], "expected_revision": 1})
+    assert (refused.status_code, refused.json()) == (409, {"detail": "TRIP_ROBOT_BUSY"})
+    assert not tasks.queued_task_ids()
