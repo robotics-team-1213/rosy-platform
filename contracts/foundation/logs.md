@@ -685,3 +685,11 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 - 결정: D-760 Decision 1·3.
 - 교훈: 계획은 범위 밖 `ttl_s`를 422로 적었지만 CORE API의 검증 실패는 400 `VALIDATION_ERROR`다.
+
+## 2026-10-14 · 5264ef279 · 통행권 상한 5 s는 CORE 통행권에만 (D-760 2단계)
+
+- 변경: `line_advice.py`가 `line_authority.MAX_TTL_S`를 가져다 쓰던 것을 자기 상한 `MAX_TTL_S = 2.0`으로 바꿨다(D-525 참고 신호의 `ttl_s`는 그대로 2 s). `line_authority.py`에 `LEGACY_TTL_S = 2.0`(D-760 전 상한, Fleet이 능력 플래그 없는 CORE에 보내는 값).
+- 증거: 영향 범위 원격 실행에서 `test_line_advice_contract.py`·`test_line_advice_api.py`(2.5 s 거절)와 `operations/fleet/test/test_trip_authority.py`(`ttl_s` 2.0)가 실패해 드러났다. 원격 재실행 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3("플래그가 없는 로봇에는 `ttl_s` 2로 보낸다").
+- 교훈: 공유 상수의 값을 바꾸기 전에 그 이름을 가져다 쓰는 곳을 모두 찾는다. 상한 하나가 참고 신호의 상한과 Fleet 송신값을 같이 옮겼다.
