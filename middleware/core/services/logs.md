@@ -1099,3 +1099,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. SIM과 장치는 미검증이다. 크기 단위 `recovery/junction` 1188 → 1200줄(한도 1287), `turn.py` 98 → 106, `gate.py` 519 → 521, `bend.py` 306 → 308. `line_follow` 단위 `model.py` 600 → 598.
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
+
+## 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.229)
+
+- 변경: `bend.py` — 둔 방향이 odom 키를 기억하고 `_map_entry_yaw`가 키가 다르면 `epoch`(굽이도 같다), 한도를 인자로 받는다. `turn.py` — 회전 한도 `TURN_MAP_ENTRY_MAX_RAD = REACQUIRE_HEADING_RAD/2`(15°), 쓴 지도 목표가 180°를 넘어도 `turn_deg` 부호 쪽으로 돈다.
+- 증거: `test_junction_turn_map_entry.py`에 `epoch`·`carry`·`future`·20° `heading`·왼쪽 회전·재전송·180° 너머 방향·D-520 호 출발 방향. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. 크기 단위 `recovery/junction` 1200 → 1208줄(한도 1287).
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
