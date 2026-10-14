@@ -121,7 +121,9 @@ def test_a_read_in_flight_from_before_the_loss_does_not_bring_the_trip_back():
         fleet.gate = asyncio.Event()
         fleet.advance(0.5)
         early = asyncio.ensure_future(fleet.reads.state("a", 0.0))  # got through, answers late
-        await asyncio.sleep(0)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        assert fleet.calls[-1][:2] == ("a", "state")
         fleet.fail["state"] = OSError("no route to host")           # every later read fails
         await runner.tick()                                          # the step's read times out
         await _settle(runner)
