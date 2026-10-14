@@ -16,6 +16,7 @@ from rosy.world.state.projections.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
+from fleet.site_map import _inside
 
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
@@ -26,6 +27,21 @@ ALIGN_TURNS = 2
 ALIGN_WAIT_S = 12.0
 #: ... and this long after it for a camera sighting newer than the turn's end.
 ALIGN_SIGHTING_S = 3.0
+#: D-763 10 (c): sample step along the route's lanes for the crosswalk test (m).
+CROSSWALK_STEP_M = 0.02
+
+
+def crosswalks_on(graph, segments: list, crosswalks) -> list:
+    """D-763 10 (c): ids of the site-map crosswalks (D-573 1) a lane segment of this route enters."""
+    hit, polygons = set(), [(c.id, [tuple(p) for p in c.polygon]) for c in crosswalks]
+    for seg in segments if polygons else ():
+        arc = graph.arcs[arc_id(seg)]
+        if arc.drive_mode != "lane":
+            continue
+        s0, s1 = seg.get("s_from", 0.0), seg.get("s_to", arc.length_m)
+        points = [arc.point_at(min(s0 + k * CROSSWALK_STEP_M, s1)) for k in range(int((s1 - s0) / CROSSWALK_STEP_M) + 2)]
+        hit |= {cid for cid, polygon in polygons if any(_inside((x, y), polygon) for x, y, _ in points)}
+    return sorted(hit)
 
 
 def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) -> dict:
@@ -74,6 +90,13 @@ class TripAdmission:
             raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")
         if lane and self.authority.mode(caps) != "core" and bounded:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
+        # D-763 10 (c): a lane route over a crosswalk or a signalled zone needs CORE's matching rule on, else
+        # the rule would silently not run there. An older CORE without the field counts as off.
+        need = {"lane_crosswalk_gate": crosswalks_on(graph, segments, getattr(self._store.active()[1], "crosswalks", ())),
+                "lane_junction_signal": sorted(set(self.traffic.route_signals(segments)) - {None})} if lane else {}
+        missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, False) is not True}
+        if missing:
+            raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):
