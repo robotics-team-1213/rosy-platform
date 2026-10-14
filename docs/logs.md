@@ -8385,3 +8385,10 @@ osy-d395-s1d\`.
 - 증거: 43c9e729f 원격 `test/test_worktrees_tool.py test/test_land.py` 73 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\9`).
 - gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
 - 결정: 세션 id가 세션마다 달라 소유자를 따지면 아무것도 치워지지 않는다는 디스패처 지적을 반영했다.
+
+## 2026-10-14 · uncommitted · 워크트리 청소의 자기 워크트리 빠른 길 (D-761 Proposed)
+
+- 변경: `prune`은 호출한 쪽이 만들었고(소유자 기록과 세션 id까지 같다) 깨끗하고 `main`에 들어갔고 브랜치 reflog에 자기 커밋이 있는 워크트리를 72시간을 기다리지 않고 지운다. 커밋이 없는 빈 워크트리, reflog가 없는 것, 더러운 것, 남의 것은 72시간 규칙 그대로다. `.worktrees/` 아래 점으로 시작하는 디렉터리(`.omc`)와 일반 파일은 `status`, orphan 처리, 상한 계산에서 빼고 지우지 않는다. `land.py`는 착지 뒤 명령 하나 `python tools/worktrees.py prune --apply`를 알린다. D-761 3항·7항·Consequences, `AGENTS.md` 1·6번, `shared-checkout.md`, `rosy-land-on-main` 스킬, `tools/AGENTS.md`를 같이 고쳤다.
+- 증거: 아래 커밋 뒤 원격 시험 결과를 디스패처 보고에 적는다.
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune --apply`나 `--snapshot`을 실행한 적은 없다.
+- 결정: 첫 `status`가 59~61개로 상한 60에 닿았는데 끝난 워크트리가 모두 72시간보다 젊어 `prune`이 하나도 못 치웠다. 72시간은 자리를 비운 동료를 위한 것이라 자기 끝난 작업에는 필요 없다고 정했다.
