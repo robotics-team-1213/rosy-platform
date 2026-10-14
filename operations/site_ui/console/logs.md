@@ -275,3 +275,21 @@
 - 변경: `site_ui/console`을 `SIZE_UNITS`에 더했다(첫 등록 229d47e94, 이 커밋이 재판정 조건 반영). D-757 판정 커밋 61aa49b32에서 잰 값으로 나눈다: 서버 `fleet` 38822 + 관제 17933 = 56755. 브랜치 기점 06e97383b까지의 101줄(서버 +46, 관제 +55)은 다시 잡지 않는다. 지금 서버 38868, 관제 18023. 계획 `docs/plans/2026-10-14-fleet-console-size-unit.md`.
 - 증거: 읽기 전용 critic 독립 재판정 AGREE-WITH-CONDITIONS, 조건 반영. 원격 AI PC `test_module_structure.py`(P6 셋 포함)·`test_doc_tabs.py`·`test_site_map_api.py` 70 passed(`X:/DevTemp/work-move/run-1.txt`, HEAD 13b907495), `known_failures` 0 new.
 - gate 변화: 없음.
+
+## 2026-10-14 · f38a5093a · feat(console): 카드에 trip 기다림, 상한을 넘으면 개입 행 (D-763 조각 2, API v1.231)
+
+- 변경: `shared/site-map-model.js` `tripWaitText`가 `대기 · 횡단보도`·`대기 · 신호`·`대기 · 통행권`·`대기 · 연결`(상한을 넘으면 `대기 상한 넘음 · …`)을 만든다. `card-trip.js` 카드 줄은 기다림이면 이것을 먼저 보인다. `queues.js`는 `wait.over_bound`인 열린 trip을 crit 행 `개입 필요 — 대기 상한 넘음 · …`으로 낸다. 지도 화면 trip 줄(`tripStatusText`)에도 같은 글. API 문서 v1.231과 버전 고정 시험.
+- 증거: 원격 시험(모델 PC) 284 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(모델 PC, f38a5093a) `test_console_card_trips_browser.py` 20 passed: 카드 글, 1366×600·390×844 넘침 없음, 비상 정지 화면 안, 상한 넘으면 최우선 개입 행. 로그 X: `browser-run/wait-read-b1.txt`.
+- gate 변화: 없음.
+
+## 2026-10-14 · 7c26a028c · fix(console): 상한을 넘은 기다림은 주의 행 (D-763 개정 2 질문 7)
+
+- 변경: 상한을 넘으면 카드 줄과 주의 행이 `대기 상한 넘음 · 막힘 해결 중 · <사유>`다(warn). crit `개입 필요` 행을 지웠다. 개입은 기존 막힘·해결기 인계 경로가 낸다.
+- 증거: 원격 시험(AI PC) 285 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, 7c26a028c) `test_console_card_trips_browser.py` 20 passed: 상한 넘으면 주의 목록과 카드 줄에 글, 최우선 개입 목록에는 없음. 로그 X: `browser-run/wait-read-b2.txt`.
+- gate 변화: 없음.
+
+## 2026-10-14 · f79947c25 · fix(console): 지도 화면 trip 줄은 열린 trip에만 기다림 글
+
+- 변경: `tripStatusText`가 `started`·`running`·`link_wait` trip에만 `tripWaitText`를 붙인다. API로 취소된 trip은 저장된 마지막 `waiting: true`를 가지고 있을 수 있다. `site-map-model.js` 799줄 그대로. 0d66d8b41에서 상한 넘김 글을 중립 문구 `대기 상한 넘음 · <사유>`로 바꿨다.
+- 증거: node 시험 포함 원격 218 passed, 로그 X: `wait-read/run-1.txt`. 브라우저(AI PC, f79947c25) `test_console_card_trips_browser.py` 20 passed, 로그 X: `browser-run/wait-read-b5.txt`.
+- gate 변화: 없음.

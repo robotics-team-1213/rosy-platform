@@ -355,7 +355,7 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None):
     check_bind_host(host)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
         raise ValueError('AI jobs must belong to the review workspace')
@@ -371,7 +371,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:
             raise ValueError('collaboration requires loopback behind an HTTPS reverse proxy')
-        collaboration = Collaboration(accounts, store, oauth=oauth, imports=imports)
+        collaboration = Collaboration(accounts, store, oauth=oauth, imports=imports, repos=repos)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
     ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
