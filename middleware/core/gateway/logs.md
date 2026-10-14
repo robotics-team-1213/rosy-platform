@@ -1125,3 +1125,8 @@
 - gate 변화: SOURCE 근거만, 호스트 시험 미확인.
 - 결정: D-758 0단계 독립 Safety-Review 조건 2.
 - 교훈: 없음.
+
+## 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
+- 변경: `core/drive/line_follow.py`가 `turn_map_entry_enabled`를 bool로만 읽는다(기본 꺼짐).
+- 증거: `test/test_line_junction_api.py`(기본값, 켬, 문자열 거절), `test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
