@@ -3,6 +3,11 @@ from __future__ import annotations
 
 import math
 
+from core_features.line_follow.recovery.junction.approach import REACQUIRE_HEADING_RAD
+
+#: D-759 rev 1 (review): a turn takes the map's exit heading only this near entry yaw + turn_deg.
+#: Reacquisition then looks REACQUIRE_HEADING_RAD around it, so a wrong map yaw stays inside that.
+TURN_MAP_ENTRY_MAX_RAD = REACQUIRE_HEADING_RAD/2
 #: Same freshness bound as the D-476 bridge, including the wait before a turn starts.
 POSE_MAX_AGE_S = .3
 TURN_TOLERANCE_RAD = math.radians(5.)
@@ -83,11 +88,13 @@ class JunctionTurnMixin:
             base = pose.yaw if self._junction_entry is None else self._junction_entry[0]
             j['target'] = _wrap(base+math.radians(j['turn_deg']))
             if 'map_entry' in j:  # D-759 rev 1: the exit lane's map heading, if near this target
-                entry = self._map_entry_yaw(j, j['target'])
+                entry = self._map_entry_yaw(j, j['target'], TURN_MAP_ENTRY_MAX_RAD)
                 j['target'] = j['target'] if entry is None else entry
-            error = _wrap(j['target']-pose.yaw)
-            j.update(sub='rotating', phase_at=now, limit=abs(error)/floor+TURN_TIME_MARGIN_S)
         error = _wrap(j['target']-pose.yaw)
+        if j.get('entry_used') and error*j['turn_deg'] < 0 and abs(error) > math.pi/2:
+            error += math.copysign(math.tau, j['turn_deg'])  # review: past 180 deg, the commanded way
+        if j['sub'] == 'stopping':
+            j.update(sub='rotating', phase_at=now, limit=abs(error)/floor+TURN_TIME_MARGIN_S)
         if j['sub'] == 'rotating':
             # Review M6: stop early by what the commanded rate turns during the latency.
             if abs(error) > max(tolerance, abs(j['w'])*self._config.junction_turn_lead_s):

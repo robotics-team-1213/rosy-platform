@@ -120,10 +120,10 @@ class JunctionBendMixin:
                  'disabled' if not (c.bend_map_entry_enabled if j['action'] == 'bend' else c.turn_map_entry_enabled) else
                  self._odom_at_stamp(entry['odom_stamp_s'], now))
         placed = dict(reason=found) if isinstance(found, str) else dict(
-            yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2])
+            yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2], key=found[1])
         j.update(map_entry=placed, entry_why=placed.get('reason'))
 
-    def _map_entry_yaw(self, j, yaw):
+    def _map_entry_yaw(self, j, yaw, bound=MAP_ENTRY_MAX_HEADING_RAD):
         """D-759 4: the placed lane heading for the pass's entry line, or None for today's anchor
         (whose own `yaw` it is judged against) with the reason on the record. The odom run is the
         pass's own (a new one aborts it). Locked."""
@@ -131,8 +131,9 @@ class JunctionBendMixin:
         if 'reason' in entry:
             return None
         j['entry_why'] = why = (
+            'epoch' if entry['key'] != j['key'] else  # review: a new odom run restarts the path too
             'carry' if not log or log[-1][3]-entry['path'] > ARC_ANCHOR_MAX_CARRY_M else
-            'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > MAP_ENTRY_MAX_HEADING_RAD
+            'heading' if abs(math.remainder(yaw-entry['yaw'], math.tau)) > bound
             else None)
         j['entry_used'] = why is None
         return None if why else entry['yaw']
