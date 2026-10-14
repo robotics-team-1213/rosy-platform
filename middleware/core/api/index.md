@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
 - 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
 - 2026-10-14 · ddd9723ef · D-760 2단계 통행권 계약을 v1.226으로 (v1.225 충돌 해소)
 - 2026-10-14 · 97ad6ca74 · `POST /navigation/goal/lease` 보낸 토큰만 (D-760 5단계, 버전 그대로 v1.225)
 - 2026-10-14 · 8a73125e6 · 통행권 응답 사유를 API 설명에 더함 (D-760 2단계 안전 검토, API v1.225)
-- 2026-10-14 · 1ee33639c · 통행권 shrink·seq 전달과 능력 플래그 둘 (D-760 2단계, API v1.225)

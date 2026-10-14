@@ -3690,3 +3690,11 @@
 - 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
 - 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
 - gate 변화: 없음.
+
+## 2026-10-15 · 84bbabeca · D-763 10항 (c): 규제 능력 없는 로봇에 횡단보도·신호 구역 경로를 거절 (API v1.233)
+
+- 변경: `TripCaps`가 `lane_crosswalk_gate`·`lane_junction_signal`을 읽는다(없으면 꺼짐). `ledger/trip_admission.py` `_caps_checks`(시작·바퀴·재계획)가 lane 경로가 현장 지도 횡단보도 다각형에 들어가거나(`crosswalks_on`, 2 cm 표본) 신호 구역을 지나는데(`TrafficService.route_signals`, `signal_refusal`이 하던 구간 걷기) 능력이 없으면 422 `TRIP_REGULATION_CAPS_MISSING` `{missing: {능력: [id]}}`. 콘솔 문구 추가. 시험 fixture `LANE`·`BOTH`·`PIVOT`·`LEGACY`는 map_v2_fleet에 횡단보도가 있어 `lane_crosswalk_gate`를 알린다.
+- 증거: `test/test_trip_regulation_caps.py`, `test_traffic_signals.py`. 원격 시험(AI PC, cb1e6c61f) `operations/fleet/test` 전체 통과, `known_failures` 0 new.
+- gate 변화: 없음. 크기: 서버 단위 순증 0(`console_view.py` 주석 압축), ledger +23, traffic +2.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 횡단보도가 있는 기본 시험 지도 때문에 능력 하나를 요구하는 검사가 trip 시험 112개를 깨뜨렸다. 공유 caps fixture를 현재 로봇처럼 고치면 된다.
