@@ -82,7 +82,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
-#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum and its
+#: 2026-10-14 crosswalk addendum)
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
@@ -97,6 +98,7 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "drive/behaviors/line_follow/recovery/stuck/realign",
               "drive/behaviors/line_follow/arc",
               "drive/behaviors/line_follow/cue",
+              "drive/behaviors/line_follow/crosswalk",
               "drive/behaviors/localization",
               "drive/behaviors/swarm",
               "fleet/fleet/traffic",
@@ -1500,8 +1502,16 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "drive/behaviors/line_follow": (
-        3_018,
-        "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
+        2_412,
+        "accept: independently re-judged at 2412 on 2026-10-14 by read-only critic, AGREE-WITH-CONDITIONS (judged "
+        "at 2421 with three compatibility exports, deleted in the same change once the tests imported the new "
+        "path), after the D-491/D-573 crosswalk gate, report and zone left for line_follow/crosswalk "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 crosswalk addendum): 3167 - 755. "
+        "Conditions: new crosswalk logic goes to the crosswalk unit, not manager.py; at the next +150 the split "
+        "is clearance.py + body_stop.py (759, D-422 body stop) into their own unit, not another accept. "
+        "What stays is manager, model, "
+        "clearance, body_stop, authority and route_context. No runtime move and no "
+        "behaviour change. Earlier: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
         "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
         "had required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
         "Earlier: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
@@ -1509,6 +1519,18 @@ SIZE_VERDICTS = {
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
+    ),
+    "drive/behaviors/line_follow/crosswalk": (
+        756,
+        "accept: independently re-judged at 756 on 2026-10-14 by read-only critic, AGREE-WITH-CONDITIONS, when it "
+        "left line_follow (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 crosswalk addendum): "
+        "gate.py 529, report.py 122, zone.py 104, __init__.py 1. CrosswalkGateMixin and CrosswalkReportMixin are "
+        "LineFollowManager mixins under its lock and generation and read manager state through self; no own "
+        "lock, thread, store or publisher. Imports: zone.py takes _angle from recovery.lane_return; recovery "
+        "(lane_return_wiring, junction/approach) and arc import crosswalk.zone; manager and gateway "
+        "bridge/observation import gate/report. Pure file moves plus import lines. Condition: at the +150 "
+        "re-judge, or when gate.py passes 600, the pure gate (Zone/Scan/Geometry/judge/CrosswalkGate) and the "
+        "mixin glue split into separate files; no second accept on growth alone. Re-judge after +150.",
     ),
     "perception/front_camera/perception/drivable": (
         810,

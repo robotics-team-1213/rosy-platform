@@ -1,10 +1,10 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-10-07 -->
+<!-- Generated: 2026-09-25 | Updated: 2026-10-14 -->
 
 # line_follow
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-14
 
 ## Purpose
 
@@ -18,8 +18,10 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `clearance.py` | ROS-free LiDAR geometry: front sector minimum, swept-corridor path clearance, D-407 body clearances, D-422 swept-body gap, rotation gap, ultrasonic cone points |
 | `body_stop.py` | D-422 manager mixin: body gap along the intended path, derived/override stop gaps, LiDAR blind floor, ultrasonic echo freshness |
 | `authority.py` | D-517 4 (M2) manager mixin: Fleet movement authority (`POST /line-follow/authority`), wall-stamped odom path log for `pose_stamp`, stop at remaining ≤ D-424 stop gap, non-shrinking, `ttl_s` expiry; only ever zeroes the tick's final decision |
-| `crosswalk_gate.py` | D-573 crosswalk gate (default off, `concern: safety` path): stop before a D-491 camera zone at max(g(v), range_min - (front - lidar) + margin), look with LiDAR rays only (no return / shadow / blind = unknown), cross after `crosswalk_clear_s` (5 s, D-573 rev 3) of continuous empty scans, no timeout, `crosswalk_blocked` D-407 stuck after `crosswalk_report_s`; manager mixin applies its cap with `min` after the authority gate |
-| `crosswalk_report.py` | D-573 6 개정 `line_follow.crosswalk` view, gate on or off: own per-epoch camera zone list (dropped only when the back-off reach is past), watched-ground run with blind-gap restart; `null` / `inside` / `ahead` / `unknown` |
+| `crosswalk/gate.py` | D-573 crosswalk gate (default off, `concern: safety` path): stop before a D-491 camera zone at max(g(v), range_min - (front - lidar) + margin), look with LiDAR rays only (no return / shadow / blind = unknown), cross after `crosswalk_clear_s` (5 s, D-573 rev 3) of continuous empty scans, no timeout, `crosswalk_blocked` D-407 stuck after `crosswalk_report_s`; manager mixin applies its cap with `min` after the authority gate |
+| `crosswalk/report.py` | D-573 6 개정 `line_follow.crosswalk` view, gate on or off: own per-epoch camera zone list (dropped only when the back-off reach is past), watched-ground run with blind-gap restart; `null` / `inside` / `ahead` / `unknown` |
+| `crosswalk/zone.py` | D-491 camera crosswalk zones the IR lane guard may rest in, anchored in odom at the image pose |
+| `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py` | Compatibility exports of the old import paths (moved 2026-10-14); new code imports `core_features.line_follow.crosswalk.*` |
 | `model.py` | Modes, observations, config (incl. D-407 `recovery_*`, URDF `body_*`), decisions |
 | `recovery/stuck/stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
 | `recovery/stuck/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
@@ -34,6 +36,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | Directory | Purpose |
 |-----------|---------|
 | `arc/` | D-520 map-guided arc mixin (`lane_arc.py`): after a junction instruction's turn with `exit_segment`, drive omega = g*v*kappa on odom length to the next place, IR one-time correction, `segment_end` pivot; own size unit (`docs/plans/2026-10-08-line-follow-arc-subpackage.md`); same manager lock and generation |
+| `crosswalk/` | D-491 zone and D-573 gate/report mixins (`gate.py`, `report.py`, `zone.py`); own size unit (`docs/plans/2026-10-10-core-line-follow-size-unit.md`, 2026-10-14 addendum); same manager lock and generation |
 | `recovery/` | Lane recovery mixins of `LineFollowManager` (D-407 stuck, D-468 return, D-476 bridge, D-495 junction; `recovery/stuck/` and `recovery/junction/` are their own size units); same manager lock and generation, no own lock, thread, store or publisher |
 
 ## For AI Agents
