@@ -368,6 +368,52 @@ def test_the_track_wall_beside_the_lane_is_outside_the_look_area():
     assert go - stop_t <= 5.6
 
 
+def test_wall_bases_read_as_the_lane_edges_do_not_hold_an_empty_crosswalk():
+    """Gazebo lap 2026-10-14 (m3): the camera gave the wall bases 0.120 / 0.122 m either side as the
+    lane edges; A's edge lay on the wall, its returns hit one edge cell every scan and the persistence
+    rule answered person for good. The lane is no wider than its model, so the wall stays outside."""
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.121, 0.121)]
+    s.to_stop()
+    stop_t = s.t
+    go = next(t for t, d in s.run(7.0) if d.linear > 0)
+    assert go - stop_t <= 5.6
+
+
+def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
+    """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
+    body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no
+    longer judged (the documented loss; D-422 keeps the body's own path). A change that sees that
+    person again is welcome: update the second half then."""
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(0.42, 0.09, 0.008)]
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
+    s = Sim(edges=(0.120, -0.122))
+    s.objects = [(0.42, 0.118, 0.004)]
+    s.to_stop()
+    assert any(d.linear > 0 for _, d in s.run(7.0))
+
+
+def test_lane_edges_caps_raw_edges_only_and_pads_stay_outside():
+    """Review: the cap is on what the camera saw; an edge alone, a lane-wide pair and the zone's
+    uncertainty/drift pad are untouched (an off-centre robot keeps its real edges)."""
+    from core_features.line_follow.crosswalk_gate import lane_edges, zone_of
+    assert lane_edges(0.120, -0.122) == pytest.approx((0.099, -0.101))
+    assert lane_edges(0.109, -0.049) == (0.109, -0.049)        # 3 cm off-centre, a real lane
+    # review: one far misread edge (the next lane's line) must not slide the lane off the body
+    left, right = lane_edges(0.109, -0.29, body_half=0.0765)
+    assert left >= 0.0765 and right <= -0.0765 and left - right == pytest.approx(0.20)
+    assert lane_edges(None, -0.122) == (None, -0.122) and lane_edges(0.14, None) == (0.14, None)
+    anchor = SimpleNamespace(x=0.0, y=0.0, yaw=0.0, frame="odom")
+    z = zone_of(dict(anchor=anchor, epoch=0, near=0.3, far=0.45, uncertainty=0.09, left=0.120, right=-0.122), 0.05)
+    assert (z.left, z.right, z.lateral) == (pytest.approx(0.099), pytest.approx(-0.101), 0.09)
+    geo = Geometry(front_x=0.04, rear_x=-0.07, lidar_x=-0.017, v_cross=0.04, s_wait=0.04, slow_from=0.08,
+                   lane_half_m=0.10, body_half_m=0.077, strip_m=0.0, exit_m=0.15, end_margin=0.02)
+    look = CrosswalkGate()._boxes(z, geo, front=0.0)[0]
+    assert look[2:] == (pytest.approx(-0.191), pytest.approx(0.189))   # the pad is outside the cap
+
+
 def test_a_person_inside_the_seen_lane_corridor_still_stops():
     s = Sim(edges=(LANE_HALF, -LANE_HALF))
     s.objects = [(0.60, -0.07, 0.02)]           # beside the body path, on the lane

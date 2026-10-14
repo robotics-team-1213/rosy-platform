@@ -83,16 +83,16 @@ export function createStore(api, deps = {}) {
   // 4401 은 토큰이 없거나 틀렸거나 끊겼다는 뜻이다. REST 에게 묻는다: 401 이면
   // 세션 종료, 그 외에는 뒤로 물러났다가 다시 시도한다(state-socket.js 와 같은 규칙).
   async function verifyAfterRefusal() {
-    const token = session?.token;
+    const identity = session?.authKey ?? session?.token;
     try {
       await api("/api/v1/auth/whoami", { signal: AbortSignal.timeout(5_000) });
     } catch (error) {
-      if (error?.status === 401 && token === session?.token && subscribers.size) {
+      if (error?.status === 401 && identity === (session?.authKey ?? session?.token) && subscribers.size) {
         onUnauthorized(error);
         return;
       }
     }
-    if (subscribers.size && token === session?.token) scheduleReconnect();
+    if (subscribers.size && identity === (session?.authKey ?? session?.token)) scheduleReconnect();
   }
 
   function connect() {
@@ -105,7 +105,7 @@ export function createStore(api, deps = {}) {
     socket = live;
     live.addEventListener("open", () => {
       if (live !== socket || !session?.token) return;
-      live.send(JSON.stringify({ type: "auth", token: session.token }));
+      if (session.token) live.send(JSON.stringify({ type: "auth", token: session.token }));
     });
     live.addEventListener("message", (event) => {
       if (live !== socket) return;

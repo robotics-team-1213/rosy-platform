@@ -83,6 +83,8 @@ flowchart LR
     a["초대 수락"] --> b["클론 · 환경 설정"] --> c["이슈 고르기"] --> d["브랜치 · 작업"] --> e["PR · CI"] --> f["Squash 머지"]
 ```
 
+**main에 들어가는 길.** 오늘 팀원의 변경은 PR과 squash 머지로 들어가고, 실험실 PC의 에이전트 세션은 `tools/land.py`로 로컬 `main`에 착지한 뒤 push한다. 서버는 아직 CI 통과를 요구하지 않는다. 정해진 끝 상태는 모든 변경이 PR과 merge queue로 들어가는 것이고, 단계별로 적용한다([D-762](docs/adr/D-762-main-gateway-pull-request-merge-queue.md)). 실험실 PC 없이 기여하는 순서는 [기여 안내](.github/CONTRIBUTING.md)에 있다.
+
 ## 문서 지도
 
 | 분류 | 문서 |

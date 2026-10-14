@@ -14,6 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CAMERA_APP = ROOT / "operations/site_ui/cam/app/src/main/java"
+CAMERA_ACCOUNT = CAMERA_APP / "io/github/livsbittt/rosy/cam/account"
 VISION = ROOT / "operations/overhead/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
@@ -46,6 +47,16 @@ SHARED_OWNERSHIP = {"estop"}
 TRANSITIONAL = re.compile(r"\bD-\d+")
 
 
+def _camera_account_transport(path: Path, line: str) -> str:
+    """D-757: exempt only the shared authority transport, never operational APIs."""
+    if path == CAMERA_ACCOUNT / "AccountSession.kt":
+        return line.replace('"/api/fleet/auth/authorize"', '"ACCOUNT_AUTHORIZE"')
+    if path == CAMERA_ACCOUNT / "AndroidAccount.kt":
+        return re.sub(r'"/api/fleet/auth/"\s*\+\s*endpoint\b(?!\s*\+)',
+                      'ACCOUNT_ENDPOINT', line)
+    return line
+
+
 def _hits(root: Path, suffixes: tuple[str, ...], rules: dict[str, re.Pattern]) -> list[str]:
     found = []
     for path in sorted(root.rglob("*")):
@@ -53,7 +64,9 @@ def _hits(root: Path, suffixes: tuple[str, ...], rules: dict[str, re.Pattern]) -
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for label, pattern in rules.items():
-                if pattern.search(line):
+                checked = (_camera_account_transport(path, line)
+                           if root == CAMERA_APP and label == "Fleet user API" else line)
+                if pattern.search(checked):
                     found.append(f"{path.relative_to(ROOT).as_posix()}:{number}: {label}")
     return found
 
@@ -78,6 +91,25 @@ def owns_overlaps(rows: list[dict]) -> list[str]:
 def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert CAMERA_APP.is_dir()
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
+
+
+def test_camera_account_transport_only_uses_registered_authority_endpoints():
+    source = (CAMERA_ACCOUNT / "AccountSession.kt").read_text(encoding="utf-8")
+    calls = re.findall(r'\brequest\s*\(\s*([^,]+),', source)
+    assert set(calls) == {'"token"', '"introspect"', '"revoke"'}
+    forbidden = CAMERA_FORBIDDEN["Fleet user API"]
+    for name, allowed in (
+        ("AccountSession.kt", '"/api/fleet/auth/authorize"'),
+        ("AndroidAccount.kt", '"/api/fleet/auth/" + endpoint'),
+    ):
+        path = CAMERA_ACCOUNT / name
+        assert forbidden.search(_camera_account_transport(path, allowed)) is None
+        assert forbidden.search(_camera_account_transport(CAMERA_APP / name, allowed))
+        for denied in ('"/api/fleet/auth/accounts"', '"/api/fleet/tasks"',
+                       '"/api/fleet/robots/robot/route"', '"/api/fleet/auth/authorize/extra"',
+                       '"/api/fleet/auth/" + endpoint + "/extra"'):
+            assert forbidden.search(_camera_account_transport(path, denied)), denied
+        assert forbidden.search(_camera_account_transport(path, allowed + ' + "/api/fleet/tasks"'))
 
 
 def test_camera_estop_rule_matches_words_not_letters_inside_names():

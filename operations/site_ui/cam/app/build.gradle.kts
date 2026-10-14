@@ -77,6 +77,7 @@ android {
 apply(from = "../../../../shared/web/native-tokens.gradle")
 
 dependencies {
+    implementation("org.bouncycastle:bcprov-jdk18on:1.83")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -99,3 +100,5 @@ dependencies {
     // HeldCertificate: a throwaway site CA and leaf for the pinned-trust tests.
     testImplementation(libs.okhttp.tls)
 }
+
+apply(from = "../account-config.gradle")

@@ -210,6 +210,17 @@
 - 증거: 원격 소스 시험 통과. 화면 확인 없음.
 - gate 변화: 없음.
 
+## 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
+
+- 변경: 네 문서의 머리가 맥락 | 연결 | 알림·나 | 정지의 한 줄 앱 바가 됐다. 시계와 연결 글(`실시간`·`지연`·`연결 끊김`)이 머리로 오고 푸터와 그 안의 `관제 알림` 링크가 없어졌다. 알림 단추는 정적 마크업이다. 계정 단추(`#topbar-more`)가 역할 이름을 달고 그 아래에 계정·화면 표시·토큰 접속이 있다. 로봇 연결 수(`#online-pill`)는 관제 문서의 지도 머리로 갔고 다른 세 문서에는 없다. 레일 아이콘 아래에 `관제·설치·지도·작업·Cell`을 적었다. 접힘은 `.fleet-shell` 칸 질의(64rem, 48rem, 30rem)다.
+- 증거: 원격 소스 시험과 node 단위 시험 통과, `known_failures` NEW 0. `*_browser.py`는 원격에서 돌지 않았다. `operations/fleet/test`의 브라우저 시험은 푸시 뒤 CI가 증거이고, `test/test_fleet_console_browser.py`와 `shared/web/test/test_theme_browser.py`는 어디서도 저절로 돌지 않는다.
+- gate 변화: 없음. D-153 G2 캡처와 G3 사람 검토는 `docs/validation/fleet-app-bar-2026-10-13.md`에 적은 대로 아직 없다.
+
+## 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
+
+- 변경: 네 문서의 레일이 `관제·작업·기록·지도·설치` 다섯 영역이 됐다. 현장 지도와 Cell의 가로 앵커 줄(`.task-nav`)이 공용 하위 탐색 자리(`/common/app-shell.css`의 `.ui-subnav`)로 갔다. `/console?view=work`는 `전체 작업·승인 대기·끝난 작업·새 작업`을, `/console?view=records`는 `검토할 사건·열린 사건·닫힌 사건·AI 상황 사실·관제 기록`을 하위 탐색에 둔다. 화면은 `show`로 고르고 기존 `GET /api/fleet/work`, `GET /api/fleet/incidents` 답을 브라우저에서 거른다. `/console/cell`은 주소를 유지하고 `작업` 영역의 `새 작업`이다. 기록 영역에서는 사건 패널(또는 관제 기록)이 본문으로 올라가고 연 사건의 담당 인수·사람 검토·검토 폼이 오른쪽 칸 `원인과 조치`에 선다. 관제의 `기록·근거` 탭은 그대로다.
+- 증거: 원격 소스 시험 통과(`known_failures` NEW 0). 브라우저 시험은 시험 PC에서 조각마다 돌렸고 결과는 착지 보고에 있다. 화면을 사람이 본 적은 없다.
+- gate 변화: 없음. 검토 반영(2376c3886: 자리의 사건 이름, 한 번에 한 건을 스크립트로, 키·스크롤·상한 표기) 뒤 Fleet 크기 단위가 55464로 상한 55452를 12줄 넘었다. 판정은 올리지 않고, 저장소 어디서도 부르지 않는 Fleet 서버 코드 33줄(쓰지 않는 import 8, `mark_rejected`, `next_running`, `next_reconciliation`, `_ACTOR`, `formation_relay_kwargs`, `anchor_status`)을 지워 55439가 됐다(D-168). D-153 G2 캡처와 G3 사람 검토는 없다.
 ## 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 경고 행과 카드 표시 (D-550 8항, D-760 3항 1단계)
 
 - 변경: `queues.js` `attentionItems`가 `robot.rule_m.state === "unbounded"`일 때 주의 행 하나(`: 한도 없는 움직임 — 관제가 끊겨도 로봇이 계속 갑니다 (<이유>)`)를 낸다. `roster.js` 카드는 연결 태그 자리 옆에 `한도 없음` 태그를 붙인다. 이유 글은 `link-tag.js` `ruleMTag` 한 곳에 있다. 새 칸·새 클래스·인라인 스타일은 없다.

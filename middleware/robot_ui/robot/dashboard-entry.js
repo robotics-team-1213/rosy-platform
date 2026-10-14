@@ -1,3 +1,4 @@
+import { restoreAccount } from "./client.js";
 // Authentication entry: credentials stay in client.js; CORE owns permissions.
 import { api, session, rememberToken, forgetToken, normalizeLoginCode, pairWithCode,
   logout, connectionOffer, developmentSession, PAIRED_SOURCES, sourceLabel, expiryLabel } from "./client.js";
@@ -56,9 +57,9 @@ function renderIdentity() {
     el("entry-role").title = identity.role || "";
     el("entry-identity").textContent = [role, identity.label || identity.id,
       sourceLabel(identity.source), expiryLabel(identity.expires_at)].filter(Boolean).join(" · ");
-    el("entry-logout").textContent = PAIRED_SOURCES.has(identity.source) ? "로그아웃" : "이 브라우저에서 잊기";
+    el("entry-logout").textContent = identity.source === 'account' || PAIRED_SOURCES.has(identity.source) ? "로그아웃" : "이 브라우저에서 잊기";
     const remaining = Date.parse(identity.expires_at || "") - Date.now();
-    if (Number.isFinite(remaining) && remaining > 0) {
+    if (identity.source !== 'account' && Number.isFinite(remaining) && remaining > 0) {
       expiryTimer = setTimeout(() => {
         if (Date.parse(session.identity?.expires_at || "") > Date.now()) { renderIdentity(); return; }
         generation++;
@@ -74,7 +75,7 @@ function renderIdentity() {
 }
 
 async function loadDestinations() {
-  if (busy || !session.token) return;
+  if (busy || !session.authenticated) return;
   const attempt = ++generation;
   let identityConfirmed = false;
   busy = true;
@@ -193,10 +194,10 @@ el("entry-retry").addEventListener("click", loadDestinations);
 // D-432/D-471: 개발 연결 모드 로봇은 로그인 서랍에 코드 없는 입장을 보여준다.
 let devEntryProbed = false;
 async function revealDevEntry() {
-  if (devEntryProbed || session.token) return;
+  if (devEntryProbed || session.authenticated) return;
   devEntryProbed = true;
   const offer = await connectionOffer();
-  if (!offer || session.token) return;
+  if (!offer || session.authenticated) return;
   el("dev-connect-row").hidden = false;
 }
 el("dev-connect").addEventListener("click", async () => {
@@ -263,6 +264,8 @@ stop.addEventListener("click", async () => {
 });
 
 window.addEventListener("pagehide", () => { generation++; clearTimeout(retryTimer); clearTimeout(expiryTimer); });
+await restoreAccount();
+if (session.account?.enabled && !session.account.authenticated) window.location.assign('/api/account/login?return=/dashboard');
 renderIdentity();
-if (session.token) loadDestinations();
+if (session.authenticated) loadDestinations();
 else { setStatus(""); revealDevEntry(); }

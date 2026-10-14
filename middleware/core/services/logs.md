@@ -1012,8 +1012,30 @@
 - 결정: D-400 개정(2026-10-14).
 - 교훈: 20 ms 경계에 놓인 기존 시험 둘(`iter([1., 1.02])`)은 `1.02 - 1.0`의 부동소수 오차로만 상한을 넘었다. 30 ms로 옮겼다. `PolicyObservationUnavailable`은 `ValueError`의 하위라 `exc_info[0] is ValueError`를 보던 시험 한 줄을 `issubclass`로 바꿨다.
 
+## 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
+
+- Change: fail closed before lease reset when an active gap tick precedes the previous gap tick; no clock clamp, final writer or E-stop reset added.
+- Evidence: remote RED on c4e5d4ae3: three partial rollback cases failed, three original rollback cases passed. Six regressions cover late, unbound and unavailable observation paths. Independent authority_review SOURCE PASS; remote GREEN follows in the deployment evidence.
+- gate 변화: no DEVICE or FIELD acceptance; existing D-400 boundaries retained. Plan: docs/plans/2026-10-14-policy-gap-clock-fix.md.
+
 ## 2026-10-14 · 3f6c69245 · fix: HOLD 공백 시간에 평가 실행 시간 포함
 
 - 변경: 시계 역행·비유한 완료 시각을 거절하고 평가 완료까지 HOLD 나이를 센다. idle은 이전 평가 완료부터 다음 시작까지다. 처음부터 래치한 평가를 HOLD 계수에 넣지 않는다.
 - 증거: 원격 재현 NEW 7 후 수정본 322 passed, NEW 0. 독립 Codex review_release_safety 소스 리뷰; docs/validation/omx-release-safety-review-2026-10-14.md.
 - gate 변화: SOURCE/원격 회귀만. E-stop reset·SIM·실물 활성화 없음.
+
+## 2026-10-14 · 6579182c7 · D-759 굽이 통과의 진입 직선을 지도의 차로 방향에 놓는다 (API v1.224)
+
+- 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 검사하고(유한한 세 값, `odom_stamp_s` > 0, `bend`에만), `_place_map_entry`가 받은 때 차로 방향을 odom으로 옮기며(`odom yaw + yaw_rad − pose_yaw_rad`), `_start_bend`가 `_map_entry_yaw`로 닻의 yaw를 그 방향으로 바꾼다(닻 yaw와 30° 안, 받은 뒤 경로 1.5 m 안). 닻의 위치는 그대로다. `authority.py`는 D-744의 odom 표본 조회를 `_odom_at_stamp`로 꺼내 `_place_map_anchor`와 같이 쓴다(동작 변화 없음). `gate.py`는 지시에 둔 방향과 까닭을 싣고 상태에 `map_entry_used`·`map_entry_reason`을 낸다.
+- 증거: Gazebo run56·run62·run63·run64(W3에서 넘겨받을 때 yaw가 차로에서 21.6° 어긋나 `motion_unconfirmed`)가 계기다. `test_junction_bend.py`가 그 yaw 어긋남을 rig로 옮겼다: `map_entry`가 있으면 통과 끝이 나가는 직선에서 2 cm 안이고 yaw 60°±3°, 없으면 벽 쪽으로 6 cm 넘게 벗어나고 yaw 38.4°±3°다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이다. 시제품 run66(16바퀴)은 odom과 지도가 같은 시뮬레이터 overlay였고 이 구현이 아니다. `bend.py` 234줄 → 278줄, `gate.py` 586줄 → 590줄(파일 한도 600), `authority.py` 158줄 → 165줄.
+- 결정: D-759(Proposed). 한도 30°는 `REACQUIRE_HEADING_RAD`다. 횡 위치는 옮기지 않는다.
+- 교훈: odom 궤적은 한 틱에 0.15 rad 넘게 도는 yaw를 새 실행으로 본다(`lane_return.py`). rig에서 21.6°를 한 번에 주면 굽이가 `odom`으로 중단되므로 다섯 틱에 나눠 준다.
+
+## 2026-10-14 · e60a7891e · D-759 검토 반영: 기본 꺼짐, 닻을 로봇 자리로, 재전송 때 다시 옮김 (API v1.224)
+
+- 변경: `model.py`에 `bend_map_entry_enabled`(기본 `False`). `bend.py` — 능력 `supports_lane_bend_map_entry`가 그 설정을 요구하고, 꺼져 있으면 `_place_map_entry`가 받은 `map_entry`를 `disabled`로 둔다. `_start_bend`는 지도 방향을 쓸 때 닻을 넘겨받는 틱의 로봇 자세와 그때까지의 travel로 옮긴다(남은 직선은 `bend_in − travel` 그대로). `gate.py`의 재전송 가지는 둔 방향에 까닭이 남아 있을 때만 다시 옮긴다.
+- 증거: 독립 검토(LAND WITH FOLLOW-UP)의 1–3, 6항. `test_junction_bend.py`: 설정이 꺼지면 닻·경로·60틱의 명령이 `map_entry` 없는 지시와 같다; 0.22 m 뒤의 닻과 21.6°(옛 닻의 직선에서 6.5 cm 넘게 떨어짐)에서 `off_path` 없이 호를 돈다; `stale`이던 방향을 재전송이 다시 두고 둔 방향은 그대로다; Fleet yaw 15°·25° 오차를 그대로 따르는 동작과 남는 횡 오프셋을 고정했다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이고, 설정은 그 전까지 꺼 둔다. `model.py` 597줄 → 600줄(파일 한도 600에 닿았다. 다음 설정 키 전에 나눠야 한다), `gate.py` 591줄, `bend.py` 284줄.
+- 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
+- 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.

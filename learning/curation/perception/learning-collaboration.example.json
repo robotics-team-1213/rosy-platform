@@ -4,6 +4,7 @@
   "accounts_db": "/private/learning/accounts.sqlite3",
   "key_file": "/private/learning/learning-accounts.key",
   "imports_root": "/private/learning/imports",
+  "import_limits": {"max_file_bytes": 2147483648, "max_total_bytes": 8589934592, "reserve_bytes": 1073741824},
   "oauth": null,
   "users": [
     {

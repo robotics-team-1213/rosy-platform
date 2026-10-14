@@ -425,7 +425,11 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_871,
+        11_061,
+        "split: independently re-judged by account_ledger on 2026-10-14 for D-757 at11061. "
+        "Session restore and identity/revision fences stay in existing client/state/socket owners; "
+        "no duplicate transport or command writer. Preserve +150, all file/hard ceilings and "
+        "map-goal/app-binding extraction obligations. See docs/plans/2026-10-14-rosy-account-completion.md. Previous verdict: "
         "split: independently re-judged by design_consistency_review at 10871 on 2026-10-11: D-624 expands the existing shared-component gallery and semantic CSS roles with bounded map-evidence containment, no duplicate component library or new runtime/command owner. Keep package +150 and the sibling map goal-gate / D-362 P2 app-binding extraction obligations. Previous verdict: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
         "navigation-map UI in the existing map owner (map.js 534, panels/console/map.js 207: "
         "trusted-localization and safe-stop goal gating, path/route evidence, map identity, mobile stage); "
@@ -442,7 +446,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "core_common": (
-        10_031,
+        10_545,
+        "split: independently re-judged by account_ledger on 2026-10-14 for D-757 at10545. "
+        "The shared Account receiver deliberately adds HTTPS and encrypted SQLite sessions/outbox; "
+        "the older no-DB/transport statement is historical. Strict account_access104 and receiver279 "
+        "serve CORE/learning/Games without becoming authority or actuation. No new size units or "
+        "scan exclusions. Preserve +150, schema zero-growth and all file/protocol extraction limits. "
+        "See docs/plans/2026-10-14-rosy-account-completion.md. Previous verdict: "
         "split: independently re-judged by safety_structure_review at 10031 on 2026-10-12. "
         "Compared with main4dc522986 at9888, only Discord canonical DTO136 and schema re-export7 "
         "lines were added. Protocol5298 + domain1203 + other3504 + foundation root26. "
@@ -467,7 +477,13 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "fleet": (
-        55_302,
+        56_755,
+        "split: independently re-judged by account_ledger on 2026-10-14 for D-757 at56755. "
+        "Account ledger/authority/config/routes remain in existing Fleet authentication and Console "
+        "owners. Required HTTP split is completed: password_session501, password_routes182, both "
+        "below600; no file exemption, size-unit or scan exclusion added. Preserve +150, every "
+        "nested/zero/file/hard ceiling and observe/server/UI obligations. "
+        "See docs/plans/2026-10-14-rosy-account-completion.md. Previous verdict: "
         "split: independently measured by delivery_review on 2026-10-14 (D-753). "
         "Baseline55302 is the previous55286 plus exactly16 source-only lines: "
         "server/__init__7, _source_layout3, setup3, proof-copy explanation3. "

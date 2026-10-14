@@ -371,3 +371,26 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
+## 2026-10-13 · uncommitted · feat(games): 경기 보드 앱 바와 두 로봇 정지 (D-741 조각 13)
+
+- 변경: 정지 `#halt`를 아래 붙박이 줄에서 머리(`ui-topbar`)의 마지막 조작으로 옮기고 보이는 이름을 `두 로봇 정지`로 바꿨다(D-741 4항, D-201의 아래 줄을 바꾼다). `kind="irreversible"`, `data-always-live`, id, 클릭 처리, 스페이스 단축키(D-224)는 그대로다. 스페이스 안내와 `#halt-status`는 같은 붙박이 머리의 아랫줄(`.halt-note`)이다. 이름표는 제목(`1v1 피치`) 다음에 범위(`노트북 게임 호스트`) 순서다. 앱 이름은 주지 않았다(D-377). 머리는 격자다: 넓은 폭은 이름·단계·연결·정지 한 줄, 64rem 아래는 이름·단계·정지 / 연결 / 안내 세 줄이고, 30rem 아래는 위아래 여백을 `--space-1`로 줄였다.
+- 증거: 소스 시험 `test/test_rosy_games_surface.py::test_two_robot_stop_is_the_last_control_of_the_top_bar`를 더했다. `test/test_games_board_browser.py`의 아래 줄 단언(붙박이 위치, 전화 폭 전폭 정지, 유실 표지와 정지 줄의 순서)을 머리 안의 자리로 고쳤다. 원격 결과는 다음 항목에 적는다.
+- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기다. 화면 렌더, 320×568에서 정지 요청 뒤 머리 높이(20% 예산), G2 캡처, 실제 호스트의 두 로봇 정지 readback은 확인하지 않았다. 브랜치 `feat/games-app-bar`.
+
+## 2026-10-13 · 73e39c840 · feat(games): 조각 13 원격 결과
+
+- 변경: 없음(증거 기록).
+- 증거: 원격 `operations/apps/games/test` 104 passed, `test/test_rosy_games_surface.py test/test_games_board_browser.py` 10 passed 37 skipped(브라우저 시험은 건너뜀), `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/games-app-bar/games-pkg.txt`, `games-root.txt`, `shared-web.txt`).
+- gate 변화: 없음. 브라우저 시험과 화면 수용은 확인 못 함.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · be0ba5111 · fix: Games 계정 권한과 compact 정지 표시
+
+- 변경: 계정 권한이 없을 때 custom 정지 버튼의 hidden 속성이 CSS에 덮이지 않게 했다. 계정 조작은 정지 앞에 배치하고 compact 화면의 단계·연결 증거·정지 접근성을 유지했다. 기존 배치 시험에는 명시적 verified-claims fixture를 쓰고 실제 인증 흐름 시험을 분리했다.
+- 증거: 원격 실제 Chromium 38 passed와 Games 단위·정적 계약 115 passed, 각 exit 0 / known_failures NEW 0. HTTPS 인증 리다이렉트, PKCE proof, 실제 AccountClient SQLite와 쿠키를 사용해 미로그인·권한 부족 403, 허용된 board.stop, introspection 회수 후 403과 버튼 숨김을 확인했다. 인증 서버의 token/introspection 응답만 서명 fixture다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/games-browser 및 games-static에 있다.
+- gate 변화: SOURCE/원격 브라우저 증거다. board.stop 접수는 물리 로봇 정지 수용을 대신하지 않으며 운영 계정·현장 설정은 변경하지 않았다.

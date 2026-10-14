@@ -30,6 +30,8 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
 import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import worktrees  # noqa: E402  (D-761: tools/worktrees.py, the .worktrees/ cap warning)
 from adr_gaps import (  # noqa: E402,F401
     ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
 )
@@ -733,6 +735,7 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
     errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
     warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
+    warnings += [note for note in [worktrees.lint_note(repo)] if note]
     if config.get("sim2real_gaps"):
         registry, problem = sim2real.load(repo / config["sim2real_gaps"])
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))

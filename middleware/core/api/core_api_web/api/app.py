@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.223."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.224."""
 
 from __future__ import annotations
 
@@ -116,9 +116,16 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.223)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.224)",
     )
     app.state.core = services
+    from .account_sessions import install_account_sessions
+    from core_common.protocol.account_client import load_account_client
+    account_file = config.get('auth', {}).get('account_client_file')
+    app.state.account_client = load_account_client(account_file) if account_file else None
+    if app.state.account_client and app.state.account_client.resource != 'robot:' + services.identity.robot_id:
+        raise ValueError('Account resource does not match robot identity')
+    install_account_sessions(app)
     agent = getattr(services, "fleet_agent", None)
     if agent is not None and hasattr(agent, "start_on_loop"):
         # The FleetAgent needs a running loop; uvicorn's is the one CORE runs (thread in

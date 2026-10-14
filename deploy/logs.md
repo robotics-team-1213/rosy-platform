@@ -2766,3 +2766,20 @@
 - 변경: 장치를 열지 않는 설정 검사기와 LeRobot 0.4.4 녹화 예제를 추가했다. private/local-only 기본값과 normalized 단위를 검사한다.
 - 증거: 원격 기본 70개와 별도 공식 parser/reader/ACT 통합 1개 통과.
 - gate 변화: 없음. 실물 runtime과 보정·정지 수용은 별도다.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · uncommitted · OMX Pilot SIM 실행 준비
+
+- 변경: hardware 서비스와 분리한 compose.pilot-sim.yaml, 실행별 이미지 이름과 Pilot base image 입력, 기존 조작·녹화·export 경로의 원격 실행 안내를 추가했다.
+- 증거: 실제 Compose 설정 해석, 고정 vendor 패치 4개 적용·문법 검사, OMX-F/L URDF 생성 성공. 기존 원격 baseline 19 passed, NEW 0. 새 회귀 결과는 후속 기록한다.
+- gate 변화: 없음. 비현장 PC의 예약 반영 메모리 부족으로 새 이미지 build·Gazebo 실행은 보류다. D-756 부록에 재개 조건을 기록했다.
+
+## 2026-10-14 · 91995a99e · OMX SIM 준비 회귀 결과
+
+- 변경: 독립 리뷰의 새 터미널 SHA 설정과 이미지 build 자원 경계를 보완했다. 공유 SIM 예약에서 이미지 build를 하지 않으며 준비된 이미지만 시작한다.
+- 증거: 새 Compose·기존 OMX·문서/harness 원격 129 passed, NEW 0; Compose 해석과 source SHA 누락 거절, vendor 패치 4개 적용, OMX-F/L 입력 URDF 검사 성공.
+- gate 변화: live SIM은 HOLD. 비현장 자원 여유 부족과 모델 PC Docker 소켓 접근 거부를 확인했으며 D-756에 재개 조건을 남겼다.

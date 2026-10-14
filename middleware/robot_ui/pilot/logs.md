@@ -869,3 +869,22 @@
 - 변경: Fleet 외부 package_dir의 colcon editable cleanup 오류를 기존 full-install fallback으로 해결하고 legacy uninstall 옵션을 보존한다. Pilot PhoneHeat 공유 소스 누락을 추가한다. 구조 헤더 및 로그인·복귀·고급 토큰 복구 시험을 현재 동작과 맞춘다. 설치 요구 조건을 PEP 508로 정확히 확인하며 최신 main의 learning 계약을 보존한다.
 - 증거: 원격 실제 Chromium 2 passed, Pilot 단위 검사·debug APK BUILD SUCCESSFUL 및 실제 bundled proxy 1 passed, CI/최신 wheel·sdist 회귀 각 4 passed; 모두 종료 0/NEW 0. 실제 colcon 0.21.3/setuptools 68.1.2 새 설치와 legacy 정리, Discord 소스 4개 및 Console 자산 76개 바이트 보존을 확인했다. 이전 9d5b7d0a6446의 pre-push 18,942 passed에도 FULL/Android CI가 실패했으므로 새 서명·설치·계정 발급 증거로 삼지 않는다.
 - gate 변화: 선택 원격 회귀다. Fleet은 복사 설치이며 편집 뒤 재빌드가 필요하다. 최신 통합·전체 CI·서명·실제 설치·계정 발급은 이어 확인한다. 실물 로봇/폰/LCD 수용과 사용자 최종 비밀번호 변경은 대신 완료하지 않는다.
+
+## 2026-10-13 · uncommitted · feat(pilot): Pilot 웹 앱 바의 이름표 (D-741 조각 11)
+
+- 변경: 머리의 이름표를 R 심볼과 앱 이름 `Pilot`, 그 다음 이 화면이 붙어 있는 로봇 이름(`/api/v1/auth/connection`의 `robot_id`, 모르면 숨김)으로 바꿨다. 부제 `직접 조종`은 뺐다. 머리의 순서(이름표, 알림, 상태, `운용 지도`, 비상 정지)와 비상 정지 마크업·동작, 주행 중 얇은 머리, Android 셸 숨김, 64rem 아래 접속 화면 격자, `--topbar-height`, 주행 HUD는 고치지 않았다. `styles.css`는 바뀌지 않았다. 로봇 이름은 기존 규칙대로 주행·Gazebo 연습 화면과 64rem 아래 접속 화면에서 숨는다. `sw.js` 캐시 이름을 `rosy-pilot-shell-2026-10-13-app-bar`로 올렸다.
+- 증거: 소스 시험 `test/test_app_bar.py` 셋을 더했고 `test_pilot_browser.py::test_connection_offer_names_this_robot_before_the_neighbour`에 이름표와 마지막 조작 단언을 더했다. 원격 결과는 다음 항목에 적는다.
+- gate 변화: 없음. 브라우저 시험은 원격에서 돌지 않아 CI 대기다. 화면 렌더, 설치본, Android 셸, 실물 로봇에서의 비상 정지는 이 변경으로 확인하지 않았다. 브랜치 `feat/pilot-app-bar`.
+
+## 2026-10-13 · 44aca95f3 · feat(pilot): 조각 11 원격 결과
+
+- 변경: 없음(증거 기록).
+- 증거: 원격 `middleware/robot_ui/pilot/test` 97 passed 149 skipped, CORE `/pilot` 경로와 표면 쪽 시험 8 passed 13 skipped, `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/pilot-app-bar/pilot.txt`, `core-api.txt`, `shared-web.txt`). `test/architecture`의 3 실패(fleet 줄 수 판정, vision 폴더 이름 둘)는 깨끗한 main 10581c1ce에서도 같다(`X:/DevTemp/main-check/arch-main.txt`).
+- gate 변화: 없음. 건너뛴 시험은 브라우저 시험이다. 화면·Android·실물 수용은 확인 못 함.
+
+## 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
+
+- 변경: 공통 Account 로그인과 보호된 native 세션을 연결했다. Proxy는 현재 Bearer를 HTTP/WS upstream에만 전달하고 WebView 저장소에는 넣지 않는다. 계정/family 변경은 이전 연결을 닫는다. 활성 로봇 최대 두 대만 갱신하며 조작과 정지 경로는 네트워크를 기다리지 않는 검증된 캐시를 읽는다. TLS CA 범위와 CORE의 최종 정지 권한은 유지한다.
+- 증거: 설정 포함 Gradle testDebugUnitTest 107 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/pilot-configured.txt. APK 공개 설정과 merged manifest의 정확한 callback/autoVerify를 확인했다. 원격 OMEN에서 test_shell_assets.py 4 passed, known_failures NEW 0 (같은 세션 logs/web-closure/run-1.txt).
+- 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB이며 Cam/Pilot은 순서대로 빌드했다.
+- gate 변화: SOURCE/JVM/APK. 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.
