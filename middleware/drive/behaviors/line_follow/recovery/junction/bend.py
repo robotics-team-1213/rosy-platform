@@ -52,10 +52,11 @@ def check_bend(action, turn_deg, expect):
     """The bend fields belong to 'bend' and 'bend' needs all of them (the API answers 400 first)."""
     e = expect or {}
     entry = e.get('map_entry')
-    if entry is not None and not (action == 'bend' and isinstance(entry, dict) and all(
+    if entry is not None and not ((action == 'bend' or action in ('left', 'right') and turn_deg is not None)
+            and isinstance(entry, dict) and all(  # D-759 rev 1: a turn's exit heading too
             type(entry.get(k)) in (int, float) and math.isfinite(entry[k]) for k in MAP_ENTRY_FIELDS)
             and entry['odom_stamp_s'] > 0):
-        raise ValueError('map_entry belongs to bend: finite yaw_rad, pose_yaw_rad and odom_stamp_s > 0')
+        raise ValueError('map_entry belongs to bend or a turn: finite yaw_rad, pose_yaw_rad and odom_stamp_s > 0')
     if action != 'bend':
         if any(e.get(k) is not None for k in (*BEND_FIELDS, NEXT_LINE)):
             raise ValueError('bend_in_m, bend_tol_m, bend_radius_m and next_line_in_m belong to bend')
@@ -114,8 +115,9 @@ class JunctionBendMixin:
         """D-759 3: at receipt, the lane's map heading at the arc start turned into odom through
         Fleet's yaw pair (the map yaw and CORE's odom yaw at `odom_stamp_s`) into j['map_entry']:
         {yaw, path}, or {reason} for today's anchor. check_bend has validated the object."""
+        c = self._config  # D-759 rev 1: a turn has its own flag
         found = ('none_sent' if entry is None else
-                 'disabled' if not self._config.bend_map_entry_enabled else
+                 'disabled' if not (c.bend_map_entry_enabled if j['action'] == 'bend' else c.turn_map_entry_enabled) else
                  self._odom_at_stamp(entry['odom_stamp_s'], now))
         placed = dict(reason=found) if isinstance(found, str) else dict(
             yaw=math.remainder(found[0].yaw+entry['yaw_rad']-entry['pose_yaw_rad'], math.tau), path=found[2])
