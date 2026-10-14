@@ -16,7 +16,7 @@ from fleet.site_map import from_lane_graph
 from fleet.swarm.transport import RobotApiError
 from test_shared_state_read import Clock, _shared_setup
 from test_trip_link_wait import NEW, _running, _settle, _ticks
-from test_trip_runner import LANE, LANE_GRAPH, Ports, _arc, _plan
+from test_trip_runner import LANE, LANE_GRAPH, Ports, _plan
 
 
 class SnapshotPorts(Ports):
@@ -75,21 +75,18 @@ def _step(runner, ports, dt):
 
 @pytest.mark.parametrize("sim", [False, True])
 def test_a_step_0_43_s_after_a_send_reads_anew_and_sends_nothing_again(sim):
-    """Jittered periods: the step after the stop went out comes 0.43 s later, inside the 0.45 s age.
-    The read from before the send says idle; reusing it would send the stop again. With the SIM pose
-    port (no read numbers) the junction's own shared read is still fenced."""
+    """Jittered periods: the step after the straight went out comes 0.43 s later, inside the 0.45 s age.
+    The read from before the send says idle; reusing it would send the straight again (only an armed
+    instruction of ours is left alone). With the SIM pose port (no read numbers) the junction's own
+    shared read is still fenced."""
     runner, store, ports = _snapshot_setup(sim)
-    arc = _arc(store, "east:fwd")
-    _plan(store, ports, "east:fwd", 0.5, "SE")
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
     asyncio.run(runner.start("p1", "bob"))
-    _step(runner, ports, 0.5)
-    ports.at(arc, arc.length_m - 0.55)
-    _step(runner, ports, 0.5)
-    assert ports.sent == [("stop", "SE", 0.55)]
-    ports.at(arc, arc.length_m - 0.5)
+    _step(runner, ports, 0.5)  # ring_s is shorter than the arm distance: sent at once
+    assert ports.sent == [("straight", "SE", None)]
     for dt in (0.43, 0.43, 0.5, 0.43):
         _step(runner, ports, dt)
-    assert ports.sent == [("stop", "SE", 0.55)]
+    assert ports.sent == [("straight", "SE", None)]
 
 
 def test_every_trip_step_reads_after_the_last_one_even_inside_the_age():
