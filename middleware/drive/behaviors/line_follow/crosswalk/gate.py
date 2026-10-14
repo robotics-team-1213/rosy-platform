@@ -261,18 +261,23 @@ class CrosswalkGate:
         z = replace(self._zone, margin=self._zone.margin + drift, lateral=self._zone.lateral + drift)
         if corridor is not None:
             # The lane edges the camera sees now cap the zone's own edges plus drift since its
-            # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A). Pad:
-            # the evidence's lateral bound, drift since that image, and the edges' slope over A
-            # from the heading difference between that image and the zone anchor.
+            # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A).
+            # 개정 6: A is judged along the lane as that image saw it, not along the zone's older
+            # anchor. The heading difference between the two used to widen A by its slope over A's
+            # length (0.02-0.03 m on a lane whose walls stand 0.038 m outside its edges); turning the
+            # anchor frame to the seen lane removes that pad. The zone's own edges, measured in the
+            # old frame, keep it.
             cpose, cleft, cright, unc = corridor
             cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
-            offset = self._local(z, cpose, 0.0)[1]
             turn = abs(math.sin(cpose.yaw - z.yaw)) * (z.far + z.margin + geo.exit_m)
-            pad = unc + odom_error_fraction * math.hypot(pose.x - cpose.x, pose.y - cpose.y) + turn
+            z = replace(z, yaw=cpose.yaw)
+            offset = self._local(z, cpose, 0.0)[1]
+            pad = unc + odom_error_fraction * math.hypot(pose.x - cpose.x, pose.y - cpose.y)
             # Both are bounds of the same lane: keep the tighter side of each (the body floor in
             # _boxes still covers the swept path). A misread edge on the stripes cannot widen A.
-            left = offset + cleft + pad if z.left is None else min(z.left + z.lateral, offset + cleft + pad)
-            right = offset + cright - pad if z.right is None else max(z.right - z.lateral, offset + cright - pad)
+            own = z.lateral + turn
+            left = offset + cleft + pad if z.left is None else min(z.left + own, offset + cleft + pad)
+            right = offset + cright - pad if z.right is None else max(z.right - own, offset + cright - pad)
             z = replace(z, left=left, right=right, lateral=0.0)
         if self._state in (ARMED, APPROACHING):
             if not self._on_course(z, pose, geo):
