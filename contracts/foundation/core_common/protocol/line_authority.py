@@ -1,4 +1,4 @@
-"""D-517 4 (M2): the Fleet movement authority for a CORE lane trip.
+"""D-517 4 (M2), D-760 1-3: the Fleet movement authority for a CORE lane trip.
 
 ``POST /api/v1/line-follow/authority`` takes ``LineAuthorityRequest``; ``GET /api/v1/line-follow``
 shows ``LineAuthorityStatus`` as ``authority`` while CORE enforces one. Field semantics are in
@@ -10,8 +10,9 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-#: ``ttl_s`` is in (0, MAX_TTL_S], measured on CORE's line-follow clock (as ``hold_s``).
-MAX_TTL_S = 2.0
+#: ``ttl_s`` is in (0, MAX_TTL_S], measured on CORE's line-follow clock (as ``hold_s``): ``time.monotonic``
+#: on the Device, sim time under ``use_sim_time``; never the wall clock. 5 s since D-760 1 (was 2).
+MAX_TTL_S = 5.0
 #: ``until_m`` is in [0, MAX_UNTIL_M]: a few blocks ahead, never a whole lap.
 MAX_UNTIL_M = 10.0
 #: CORE takes a ``pose_stamp`` at most this far ahead of its newest odom sample (state stamps
@@ -36,6 +37,12 @@ class LineAuthorityRequest(BaseModel):
     #: Metres along the trip leg from that pose to the end of the authority.
     until_m: float = Field(ge=0, le=MAX_UNTIL_M, allow_inf_nan=False)
     ttl_s: float = Field(gt=0, le=MAX_TTL_S, allow_inf_nan=False)
+    #: D-760 3: true makes the end min(held end, this end) and refreshes ttl_s (``until_m`` 0: stand here);
+    #: false or absent keeps D-517 4 (a smaller end is ignored and does not refresh ttl_s).
+    shrink: bool = False
+    #: D-760 3: rises per (robot, leg_id). CORE ignores a request at or below the newest seq it saw on that
+    #: leg (``accepted`` false, ``reason`` stale_seq); absent: no order check (a Fleet before D-760).
+    seq: Optional[int] = Field(default=None, ge=0)
 
 
 class LineAuthorityStatus(BaseModel):

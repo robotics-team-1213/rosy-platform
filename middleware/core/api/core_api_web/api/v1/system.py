@@ -228,6 +228,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `lane_bend_map_entry` (D-759 2): line_follow.bend_map_entry_enabled (default off) with lane_bend.
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
+    # `line_follow_authority_shrink` (D-760 3): that authority takes `shrink` and `seq`, `ttl_s` up to 5 s.
+    # `line_follow_authority_under_lease` (D-760 2): enforced while this CORE's trip lease is open.
     # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
     # `trip_lease` (D-541 1): CORE holds the Fleet trip lease and fences non-owner motion.
     # `goal_lease` (D-550 10): navigation/goal takes lease_ttl_s; announced with goal navigation.
@@ -236,6 +238,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
         trip_max_linear = min(trip_max_linear, svc.line_follow.config.max_linear)
+    authority = callable(getattr(svc.line_follow, "set_authority", None))
     drive_modes = tuple(mode for mode, on in (
         ("lane", svc.line_follow is not None),
         ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
@@ -261,8 +264,10 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                                      svc.line_follow.config.route_context_enabled else None),
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
                                           svc.line_follow.config, "site_floor_map_id", None)),
-                                      line_follow_authority=callable(getattr(svc.line_follow,
-                                                                             "set_authority", None)),
+                                      line_follow_authority=authority,
+                                      line_follow_authority_shrink=authority,
+                                      line_follow_authority_under_lease=authority and getattr(
+                                          svc, "trip_lease", None) is not None,
                                       line_follow_authority_required=svc.line_follow is not None and getattr(
                                           svc.line_follow.config, "authority_required", False) is True,
                                       line_follow_advice=svc.line_follow is not None and getattr(

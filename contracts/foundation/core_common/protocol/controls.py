@@ -78,6 +78,8 @@ class BaseVelocityControl(_Wire):
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
     line_follow_authority_required: bool | None = None  # D-517 4: enforced before any authority too
+    line_follow_authority_shrink: bool | None = None  # D-760 3: the authority takes shrink and seq, ttl_s <= 5
+    line_follow_authority_under_lease: bool | None = None  # D-760 2: enforced while the trip lease is open
     line_follow_advice: bool | None = None  # D-525: POST /line-follow/advice is shown (display only)
     trip_lease: bool | None = None  # D-541 1: CORE takes PUT/DELETE /trip-lease and /trip-lease/takeover
     goal_lease: bool | None = None  # D-550 10: navigation/goal takes lease_ttl_s and /navigation/goal/lease
@@ -178,6 +180,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    route_context: bool | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
+                   line_follow_authority_shrink: bool | None = None,
+                   line_follow_authority_under_lease: bool | None = None,
                    line_follow_advice: bool | None = None,
                    trip_lease: bool | None = None, goal_lease: bool | None = None,
                    stuck_realign: tuple[Literal["PIVOT", "KTURN"], ...] | None = None) -> dict:
@@ -200,6 +204,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required,
+                                         line_follow_authority_shrink=line_follow_authority_shrink,
+                                         line_follow_authority_under_lease=line_follow_authority_under_lease,
                                          line_follow_advice=line_follow_advice,
                                          trip_lease=trip_lease, goal_lease=goal_lease,
                                          stuck_realign=stuck_realign))
