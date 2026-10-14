@@ -938,3 +938,6 @@ ui-empty {
   color: var(--nominal-quiet);
   font: var(--weight-medium) var(--text-label)/var(--leading-copy) var(--body);
 }
+/* Account context stays outside command bars and wraps long display names. */
+[data-account-profile] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+[data-account-profile][hidden] { display: none; }
