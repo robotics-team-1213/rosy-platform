@@ -1113,7 +1113,7 @@
 - gate 변화: SOURCE·호스트 근거만. Fleet은 아직 읽지 않는다(rosy-44 몫). Safety-Review 대상 경로(`crosswalk/gate.py`)를 건드렸다.
 - 결정: D-760 개정 3 9항. API Reference v1.227.
 
-## 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.229)
+## 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.231)
 
 - 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받고, `_place_map_entry`가 회전에서는 `turn_map_entry_enabled`를 본다. `gate.py`가 회전 지시를 받을 때 방향을 둔다. `turn.py` — 정지 확인 뒤 목표를 `_map_entry_yaw`로 지도 방향에 둔다(오늘 목표와 30° 안, 받은 뒤 경로 1.5 m 안). 능력 `supports_lane_turn_map_entry`. `model.py`에 `turn_map_entry_enabled`(기본 `false`); bool 검사 넷을 한 반복으로 묶었다(문구 그대로).
 - 증거: Gazebo m18·m19(NW 출구, 물려받은 yaw 오차 0.07–0.10 rad, `junction_unresolved`)가 계기다. `test_junction_turn_map_entry.py`(0.08 rad 진입 오차에서 목표가 지도 방향, 없으면 오차가 남음, 30° 경계, `stale`, 설정 꺼짐 = 오늘과 같은 목표·움직임, 능력, 400). `test_junction_bend.py`의 `left`+`map_entry` 거절 시험은 `straight`로 바꿨다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
@@ -1121,7 +1121,7 @@
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
 
-## 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.229)
+## 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.231)
 
 - 변경: `bend.py` — 둔 방향이 odom 키를 기억하고 `_map_entry_yaw`가 키가 다르면 `epoch`(굽이도 같다), 한도를 인자로 받는다. `turn.py` — 회전 한도 `TURN_MAP_ENTRY_MAX_RAD = REACQUIRE_HEADING_RAD/2`(15°), 쓴 지도 목표가 180°를 넘어도 `turn_deg` 부호 쪽으로 돈다.
 - 증거: `test_junction_turn_map_entry.py`에 `epoch`·`carry`·`future`·20° `heading`·왼쪽 회전·재전송·180° 너머 방향·D-520 호 출발 방향. 원격 결과는 이 브랜치의 최종 보고에 적는다.

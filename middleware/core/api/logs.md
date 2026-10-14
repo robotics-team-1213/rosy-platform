@@ -981,7 +981,7 @@
 - 결정: D-760 Decision 3.
 - 교훈: 없음.
 
-## 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.229)
-- 변경: `v1/line_follow.py`가 `map_entry`를 `bend`와 `turn_deg`가 있는 `left`·`right`에서 받는다. 그 밖은 400이다. `v1/system.py`가 `supports_lane_turn_map_entry`를 `lane_turn_map_entry`로 알린다. `app.py` 계약 버전 v1.229(fe8347cf4).
+## 2026-10-14 · 775b1f3f6 · 회전 지시의 map_entry와 능력 lane_turn_map_entry (D-759 개정 1, API v1.231)
+- 변경: `v1/line_follow.py`가 `map_entry`를 `bend`와 `turn_deg`가 있는 `left`·`right`에서 받는다. 그 밖은 400이다. `v1/system.py`가 `supports_lane_turn_map_entry`를 `lane_turn_map_entry`로 알린다. `app.py` 계약 버전 v1.231(fe8347cf4).
 - 증거: `middleware/core/gateway/test/test_line_junction_api.py::test_d759_rev1_turn_map_entry_validation_and_record`, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
