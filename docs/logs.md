@@ -8420,3 +8420,10 @@ osy-d395-s1d\`.
 - 증거: 기준선으로 `main` 27692ca02에 실험실 전체 티어 16개 호출을 돌렸다. 23,942 passed, 1,534 skipped, 실패 0, NEW 0, 27분 36초(현장 PC 한 대, `X:\DevTemp\land-recent\stage0`). 18c24973d 원격 `test/test_land.py test/test_affected_tests.py test/test_pre_push_hook.py test/test_remote_pytest.py test/test_land_record.py` 133 passed, NEW 0(`X:\DevTemp\land-recent\stage0`). 최근 착지 40개(reflog) 분류는 FULL 17개에서 15개로 줄었고(줄어든 3개는 node 시험 파일 둘과 `adr_gaps.txt` 하나, 늘어난 1개는 `test/architecture`), 2026-10-13 S3..S10은 모두 FULL이다(전에는 S3과 S10이 affected).
 - gate 변화: 착지와 push에 Safety-Review 거절, FULL 착지에 실험실 전체 티어. 로컬 `main`의 origin/main..main 범위에 trailer 없는 커밋이 하나 있다(e60a7891e, `line_follow.py`). 이 커밋은 EXEMPT나 대체 커밋이 생길 때까지 pre-push가 거절한다.
 - 결정: D-762 단계 0 (다)의 workflow dispatch 대신 실험실 전체 티어를 쓴다. 후보 브랜치를 올리면 push하지 않은 커밋이 공개된다. (나)는 이 브랜치의 범위가 아니다.
+
+## 2026-10-14 · 26555e786 · D-762 단계 0 검토 반영: 실험실 전체 티어 정정, 회차 2부터 변경분만, EXEMPT 데이터 파일
+
+- 변경: 18c24973d 항목의 "실험실 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)"는 틀렸다. 그 정의는 등록된 모듈 묶음 21개(`middleware/core/api/test`, `middleware/robot_ui/pilot/test` 등)를 빠뜨려, FULL 착지가 예전의 가드·대응 묶음보다 적게 돌 수 있었다. 이제 실험실 전체 티어(`full_invocations`)는 CI 전체 matrix, 루트 `test/`, `_full_paths`의 모든 모듈 묶음, 그 선택 자신의 `local_invocations`를 모두 덮는다. FULL 착지 중 `main`이 움직이면 다음 회차는 전체 티어를 통과한 `main`부터 새 `main`까지의 변경분 선택만 돈다(`tools/land.py` `full_main`). pre-push는 `origin/main`이 없으면 거절하고, 이미 push 범위에 있는 커밋에는 예외 목록을 안내하며 작성자를 찍는다. 예외 목록은 `tools/harness/safety_review_exempt.json`(88행, 값은 그대로)으로 옮겼고 파일이 없거나 깨지면 exit 1이다. `test/architecture/test_document_placement.py`를 가드 묶음에 넣었다.
+- 증거: 고친 정의로 `main` 3c3ff0bc2에 실험실 전체 티어 18개 호출을 다시 돌렸다. 25,596 passed, 1,835 skipped, 1 failed(`operations/fleet/test/test_model_recovery_submit.py::test_worker_real_model_writer_audit_readback_and_final_handoff[unknown]`, "worker did not become idle", 같은 파일 재실행 29 passed: 불안정), 19분 32초(모델 PC와 AI PC, `X:\DevTemp\land-recent\stage0\4`, `5`). 더해진 두 호출은 1,426 passed/290 skipped와 170 passed/13 skipped다.
+- gate 변화: FULL 착지의 시험 범위가 예전 경로의 상위 집합이 됐다. 남은 우회(`--tests none`, 손 `--ff-only`, 브랜치 자신의 `safety_review.py` 사본)와 한계는 D-762 단계 0 보충에 적었다.
+- 결정: 디스패처 검토(DO NOT LAND) 항목 1–7과 EXEMPT 데이터 파일 요청을 반영했다.
