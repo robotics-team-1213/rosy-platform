@@ -90,6 +90,33 @@ def bend_target(bends, half, radius, target, strategy):
     return _pursuit_point(origin, along, radius)[0], f"bend_{side}", math.inf
 
 
+def near_run(points, ends, half, limits):
+    """[line] for a rejected steep line: the straight paint run nearest base_link on its near end's
+    side (the lane edge before it curves into that line; m20 NW roundabout exit), or []. `limits`:
+    the keeper's (steep angle, ambiguous offset, inlier half-band, gap, shortest piece). Paint past
+    the ambiguous offset, inside the lane width and a half-width of the near end; nearest first, a
+    point joins within the half-band of the run's own y-on-x fit, a gap ends the run."""
+    steep, ambiguous, band, gap, shortest = limits
+    near_y = float(min(ends, key=lambda p: float(p[0]))[1])
+    lateral = points[:, 1] * math.copysign(1.0, near_y)
+    pool = points[(lateral > ambiguous) & (lateral <= 2.0 * half) & (np.abs(points[:, 1] - near_y) <= half)]
+    n = sx = sy = sxx = sxy = 0.0
+    first = last = None
+    fit = lambda: (n * sxy - sx * sy) / (n * sxx - sx * sx)  # noqa: E731 — slope of y on x
+    for x, y in pool[np.argsort(pool[:, 0], kind="stable")]:
+        if last is not None and x - last > gap:
+            break
+        if last is not None and last - first >= band and abs(y - (sy + fit() * (n * x - sx)) / n) > band:
+            continue
+        first, last = x if first is None else first, x
+        n, sx, sy, sxx, sxy = n + 1, sx + x, sy + y, sxx + x * x, sxy + x * y
+    if last is None or last - first < band or abs(math.atan(fit())) > steep or (last - first) * math.hypot(1.0, fit()) < shortest:
+        return []
+    direction = np.array([1.0, fit()]) / math.hypot(1.0, fit())
+    return [{"centre": np.array([first, (sy + fit() * (n * first - sx)) / n]), "direction": direction,
+             "along": (0.0, (last - first) / float(direction[0]))}]
+
+
 def stop_short(target, room):
     """`target` pulled back along its ray to no further than `room` ahead."""
     target = np.asarray(target, float)
