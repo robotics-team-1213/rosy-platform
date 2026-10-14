@@ -102,5 +102,5 @@
 - 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
 - 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
 - 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
+- 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
 - 2026-10-14 · 9ee82e94d · refactor: D-759 bend_fields의 map_entry 가지를 if 문으로 (검토 반영)
-- 2026-10-14 · 848a9b764 · feat: D-759 굽이 지시에 map_entry를 싣는다 (API v1.224)
