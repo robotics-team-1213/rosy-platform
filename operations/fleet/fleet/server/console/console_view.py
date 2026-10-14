@@ -150,10 +150,10 @@ class TripCaps:
     #: D-760 3: ``shrink``/``seq`` and ``ttl_s`` up to 5 s; D-760 2: enforced while its trip lease is open. Absent = no.
     line_follow_authority_shrink: bool = False
     line_follow_authority_under_lease: bool = False
-    #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
-    line_follow_advice: bool = False
+    line_follow_advice: bool = False  #: D-551: CORE shows a signal advice (POST /line-follow/advice, display only); absent = no
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
     lane_bend_map_entry: bool = False  #: D-759 2: CORE takes the bend's ``map_entry``; absent = no
+    lane_turn_map_entry: bool = False  #: D-759 rev 1: the same for a left/right turn's exit heading
     lane_bend_next_line: bool = False  #: D-754: CORE takes next_line_in_m; absent = no
     trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
@@ -189,7 +189,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_authority_under_lease=item.get("line_follow_authority_under_lease") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
-                            lane_bend_map_entry=item.get("lane_bend_map_entry") is True,
+                            lane_bend_map_entry=item.get("lane_bend_map_entry") is True, lane_turn_map_entry=item.get("lane_turn_map_entry") is True,
                             line_camera=camera if isinstance(camera, dict) else None)
     return None
 

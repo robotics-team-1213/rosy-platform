@@ -8468,3 +8468,22 @@ osy-d395-s1d\`.
 - 증거: 고친 정의로 `main` 3c3ff0bc2에 실험실 전체 티어 18개 호출을 다시 돌렸다. 25,596 passed, 1,835 skipped, 1 failed(`operations/fleet/test/test_model_recovery_submit.py::test_worker_real_model_writer_audit_readback_and_final_handoff[unknown]`, "worker did not become idle", 같은 파일 재실행 29 passed: 불안정), 19분 32초(모델 PC와 AI PC, `X:\DevTemp\land-recent\stage0\4`, `5`). 더해진 두 호출은 1,426 passed/290 skipped와 170 passed/13 skipped다.
 - gate 변화: FULL 착지의 시험 범위가 예전 경로의 상위 집합이 됐다. 남은 우회(`--tests none`, 손 `--ff-only`, 브랜치 자신의 `safety_review.py` 사본)와 한계는 D-762 단계 0 보충에 적었다.
 - 결정: 디스패처 검토(DO NOT LAND) 항목 1–7과 EXEMPT 데이터 파일 요청을 반영했다.
+
+## 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
+
+- 변경: D-765. 저장된 PAT·OAuth 연결의 기록된 범위와 learning.publish로 비공개 데이터셋·모델 저장소를 조회·생성·삭제한다. 읽기 연결과 가져오기는 유지한다. 파일 업로드와 Spaces는 포함하지 않는다.
+- 증거: 원격 pytest와 known_failures 비교는 이 커밋 뒤에 기록한다.
+- gate 변화: 없음. 실제 Hugging Face 계정 수용, 파일 업로드, 운영 배포는 이 변경으로 활성화하지 않는다.
+
+## 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
+
+- 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
+- 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
+- gate 변화: 없음.
+
+## 2026-10-14 · df1b93395 · D-762 단계 1: merge_group 트리거, CI 전체 티어가 모든 모듈 묶음을 덮는다, 불안정 시험 격리
+
+- 변경: `ci.yml`에 `merge_group` 트리거를 넣었다. 전체 티어로 돌고, Safety-Review와 `HARNESS_BASE_REF`의 base는 `merge_group.base_sha`다. `concurrency:`는 넣지 않았다. 선택기(`tools/harness/affected_tests.py`)의 CI 전체 matrix에 `modules` 러너를 더했다. 빠져 있던 등록 모듈 묶음 21개, 시험 파일 130개가 이 러너에서 돌고, 첫 녹색까지는 보고만 한다. `CI_FULL_EXCLUDED`가 사유가 있는 유일한 제외다. `test/flaky_quarantine.txt`를 새로 두었다. 목록에 있는 실패는 CI 시험 단계와 `tools/remote/remote_pytest.py`에서 한 번 다시 돈다. `test/known_failures.py`는 다시 돌아 통과한 실패를 FLAKY로, 두 번 실패한 것을 NEW로 찍는다. 목록에 없는 시험은 다시 돌지 않는다.
+- 증거: 원격 `test/test_known_failures.py test/test_affected_tests.py test/test_ci_dependencies.py test/test_remote_pytest.py test/test_land.py test/test_harness_contracts.py test/architecture`에서 409 passed, NEW 0이었다(`X:\DevTemp\land-recent\stage1\1`). CI 전체 티어가 덮는 등록 시험 파일은 1,388/1,518에서 1,518/1,518로 늘었다. `main`에 `ci.yml`을 여섯 번 dispatch했고 결과는 `docs/validation/ci-flake-rate-2026-10-14/result.md`에 있다. b1e84dd79의 다섯 번 가운데 셋이 적색이었고, 실패한 시험은 셋이며 서로 달랐다.
+- gate 변화: 아직 없다. merge queue와 필수 검사는 단계 3이고 승인되지 않았다. `modules` 러너는 보고만 한다. 격리 목록의 실패는 한 번 다시 돈 뒤 통과하면 CI 잡, pre-push, 착지를 막지 않는다.
+- 결정: 격리 목록에는 증거가 있는 둘(fleet 작업자 유휴 대기)만 넣었다. 비상정지 지연 시험과 수동 조작 중 모드 충돌 시험은 안전 경로라 격리하지 않고 소유자에게 넘겼다. 브라우저 시험 둘은 어떤 실행기도 다시 돌리지 않아 후속 항목으로 남겼다.
