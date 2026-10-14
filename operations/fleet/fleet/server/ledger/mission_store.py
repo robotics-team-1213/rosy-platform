@@ -721,22 +721,6 @@ class MissionStore:
             ).fetchone()
         return self._row(row)
 
-    def next_running_mission(self) -> dict[str, Any] | None:
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE status='RUNNING' "
-                "ORDER BY updated_at, mission_id LIMIT 1",
-            ).fetchone()
-        return self._row(row)
-
-    def next_reconciliation_mission(self) -> dict[str, Any] | None:
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE reconciliation_pending=1 "
-                "ORDER BY updated_at, mission_id LIMIT 1",
-            ).fetchone()
-        return self._row(row)
-
     def missions_awaiting_goal_evidence(self) -> list[dict[str, Any]]:
         """Return successful terminal Actions that have not confirmed their goal."""
         with closing(self._connect()) as connection:
