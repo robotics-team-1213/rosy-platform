@@ -923,7 +923,7 @@ function paintMove() {
   el("work-new-move-item").hidden = !view.activeSiteMap?.map?.places?.length || !view.robots.length;
   el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
   const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
-  const robot = view.robots.find(row => row.robot_id === id);
+  const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
   el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
   if (el("work-move").hidden || (focused?.tagName === "SELECT" && box.contains(focused))) return;  // as roster.place
   const controls = () => [...box.querySelectorAll("ui-button, select")], at = controls().indexOf(focused);
