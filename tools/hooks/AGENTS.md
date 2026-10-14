@@ -24,7 +24,7 @@ The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so e
 - The installed copy in `.git/hooks` does not follow edits here; re-run `install.sh` after changing `pre-push`.
 - Keep it fast. A new check belongs here only if it is cheap and has already failed CI; everything else stays in CI.
 - Never bypass the hook with `--no-verify`; fix the failure.
-- The `Safety-Review:` step (D-430 §5) runs `tools/harness/safety_review.py --warn-only` on the pushed tip for a quick local warning. The CI step in `.github/workflows/ci.yml` checks the complete range and enforces it.
+- The `Safety-Review:` step (D-430 §5) runs `tools/harness/safety_review.py origin/main <pushed sha>` and refuses the push on a missing trailer: the same rule and range CI's `scope` job checks after a push to `main` (D-762 stage 0). `tools/land.py` refuses the landing earlier on the same rule.
 
 ### Testing Requirements
 
