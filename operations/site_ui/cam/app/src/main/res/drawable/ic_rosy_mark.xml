@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copy of shared/web/brand/mark.svg (D-654). The app bar tints it;
+     LauncherIconParityTest keeps the path equal to the SVG. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M26 20H66A22 22 0 0 1 66 64H54L86 96H64L31 63A8 8 0 0 1 38 49H66A7 7 0 0 0 66 35H26A7.5 7.5 0 0 1 26 20Z" />
+</vector>
