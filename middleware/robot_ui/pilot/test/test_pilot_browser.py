@@ -1560,6 +1560,9 @@ def _arm_auto(page, base_url):
                          "angular": 0.0, "reason": "tracking"}).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
     urllib.request.urlopen(req).read()
+    # 진행은 이 화면이 수동 모드를 잡은 뒤에만 받는다(drive.js `!engaged`). 그 전의 누름은 버려지고 다시 오지 않는다.
+    # 조작 응답 표시는 잡은 뒤의 hold 루프만 쓰므로, 그 글이 뜬 것이 잡았다는 화면 증거다.
+    page.wait_for_function(ENGAGED)
     page.click("[data-drive-auto]")
     page.wait_for_selector("[data-drive-go]", state="visible")
     dev_server.LINE_FOLLOW_MODE_LOG.clear()
@@ -1574,6 +1577,38 @@ def _wait_for_modes(page, *expected):
 
 
 GO_ACTIVE = "document.querySelector('[data-drive-go]').classList.contains('active')"
+ENGAGED = "document.querySelector('[data-drive-fact=latency]').textContent.startsWith('조작 응답 ')"
+
+
+@pytest.mark.skipif(not browser_tests_enabled(),
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_go_pressed_before_manual_mode_is_held_starts_nothing(tablet_page):
+    """수동 모드를 잡기 전의 진행 누름은 CORE 에 닿지 않는다. 잡은 뒤의 누름만 차선 추종을 켠다."""
+    base_url, page, errors = tablet_page
+    held = []
+
+    def mode(route):
+        if route.request.method == "POST" and not held:
+            held.append(route)
+        else:
+            route.continue_()
+    page.route("**/api/v1/mode", mode)
+    _enter_drive(page, base_url)
+    page.click("[data-drive-auto]")
+    page.wait_for_selector("[data-drive-go]", state="visible")
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+    page.dispatch_event("[data-drive-go]", "pointerdown")
+    assert not page.evaluate(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointerup")
+    assert len(held) == 1 and not page.evaluate(ENGAGED)
+    held[0].continue_()
+    page.wait_for_function(ENGAGED)
+    assert dev_server.LINE_FOLLOW_MODE_LOG == []
+    page.dispatch_event("[data-drive-go]", "pointerdown")
+    page.wait_for_function(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointerup")
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    assert errors == [], errors
 
 
 @pytest.mark.skipif(not browser_tests_enabled(),
@@ -1621,7 +1656,8 @@ def test_stick_takes_over_auto(tablet_page):
     _wait_for_modes(page, "CAMERA_LINE", "OFF")
     page.wait_for_function(f"!({GO_ACTIVE})")
     page.mouse.up()
-    assert page.inner_text("[data-drive-motion]") == "대기"
+    # 진행 표시는 멈추는 중에 이미 꺼진다. 동작 표시는 CORE 가 수동을 돌려준 뒤(idle)에 대기로 돌아온다.
+    playwright_sync.expect(page.locator("[data-drive-motion]")).to_have_text("대기")
     assert errors == [], errors
 
 
@@ -2762,7 +2798,11 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, widt
     assert not page.locator('[data-pilot-token-form]').count()
     capture_target_error('unavailable')
     state.update(status=200, body={"kind": "invalid"})
+    # The first failure already shows this text, so it cannot mark the end of this attempt. The attempt ends when
+    # start() swaps in a fresh screen: measuring before that reads the old button while it is being detached.
+    shown = retry.element_handle()
     retry.click()
+    page.wait_for_function("shown => !shown.isConnected", arg=shown)
     expect(page.locator('[data-screen=connect]')).to_contain_text('연결과 대상 정보를 확인한 뒤 다시 시도하세요')
     expect(page.locator('[data-screen=connect]')).not_to_contain_text('invalid simulation target')
     capture_target_error('invalid')
