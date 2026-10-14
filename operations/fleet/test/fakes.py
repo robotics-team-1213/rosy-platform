@@ -39,7 +39,7 @@ def fresh_reads(app) -> None:
     """D-760 8: no shared robot state read is ever young enough to share (each clock call is 1e6 s on),
     like ``fleet_gather.max_age_s = 0``: a test that changes a fake robot between two requests
     milliseconds apart sees the change. Reads in flight are still joined."""
-    app.state.map_pose._clock = itertools.count(0.0, 1e6).__next__
+    app.state.map_pose._clock = itertools.count(1e12, 1e6).__next__   # past any read kept on time.monotonic
 
 
 async def settle(rounds: int = 20) -> None:
