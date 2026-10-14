@@ -626,3 +626,134 @@ def test_an_armed_zone_the_robot_turned_away_from_disarms_with_a_lane_in_view():
         _step(g, zone, geo, away, 1.1, Scan((), 0.05, 1.1), corridor=(away, 0.079, -0.079, 0.02))
         assert g.zone is None, yaw
         _step(g, zone, geo, ahead, 1.2, Scan((), 0.05, 1.2))
+
+
+def test_a_scan_that_does_not_cover_the_area_is_unknown(rays):
+    g, zone, geo = _looking_gate()
+    pose = SimpleNamespace(x=0.30 - 0.035 - B.front_x_m, y=0.0, yaw=0.0)
+    out = [_step(g, zone, geo, pose, 1.0 + i * 0.1, Scan(rays, 0.05, 1.0 + i * 0.1)) for i in range(20)]
+    assert all(cap == 0.0 for cap, _ in out)
+    assert out[-1][1] == "crosswalk_look_unknown"
+
+
+@pytest.mark.parametrize("pose", [
+    SimpleNamespace(x=0.10, y=0.0, yaw=math.radians(60)),       # turned away at a junction
+    SimpleNamespace(x=0.10, y=0.25, yaw=0.0),                   # beside the zone's lane
+])
+def test_an_armed_zone_the_robot_turned_away_from_disarms(pose):
+    g, zone, geo = _looking_gate()
+    ahead = SimpleNamespace(x=0.0, y=0.0, yaw=0.0)
+    assert _step(g, zone, geo, ahead, 1.0, Scan((), 0.05, 1.0)) == (None, None)
+    assert g.zone is not None                                   # armed far away
+    _step(g, zone, geo, pose, 1.1, Scan((), 0.05, 1.1))
+    assert g.zone is None and g.status(1.1) is None
+
+
+def test_the_gate_needs_the_d422_path_mode():
+    with pytest.raises(ValueError):
+        LineFollowConfig(**BODY, crosswalk_gate_enabled=True, obstacle_mode="sector")
+
+
+# ---- D-573 rev 3 (2026-10-10 user): 5 s of continuous clear, then cross ----------------------------
+def _go_after(s, seconds):
+    return next((t for t, d in s.run(seconds) if d.linear > 0), None)
+
+
+def test_five_seconds_of_continuous_clear_then_crosses_without_asking_anyone():
+    s = Sim()
+    s.to_stop()
+    stop_t = s.t
+    assert _go_after(s, 4.8) is None                         # clear is observed, never cut short
+    go = _go_after(s, 2.0)
+    assert go is not None and 5.0 <= go - stop_t <= 5.6
+    assert s.crosswalk.state == "crossing"
+    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
+
+
+@pytest.mark.parametrize("bad", ["person", "unknown"])
+def test_a_bad_scan_at_4_9_s_restarts_the_five_second_window(bad):
+    s = Sim()
+    s.to_stop()
+    assert _go_after(s, 4.9) is None
+    if bad == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    else:
+        s.no_return = lambda a: abs(a) < 0.3
+    s.run(0.1)
+    s.objects, s.no_return = [], None
+    bad_t = s.t
+    go = _go_after(s, 8.0)
+    assert go is not None and go - bad_t >= 5.0 - 0.05 - 1e-6
+
+
+@pytest.mark.parametrize("clear_s,min_scans", [(2.0, 16), (3.0, 24)])
+def test_clear_window_is_configurable(clear_s, min_scans):
+    s = Sim(crosswalk_clear_s=clear_s, crosswalk_look_min_scans=min_scans)
+    s.to_stop()
+    stop_t = s.t
+    go = _go_after(s, clear_s + 2.0)
+    assert go is not None and clear_s <= go - stop_t <= clear_s + 0.6
+
+
+@pytest.mark.parametrize("bad", ["person", "unknown"])
+def test_three_second_site_window_restarts_after_occupied_or_unknown_scan(bad):
+    s = Sim(crosswalk_clear_s=3.0, crosswalk_look_min_scans=24)
+    s.to_stop()
+    assert _go_after(s, 2.9) is None
+    if bad == "person":
+        s.objects = [(0.60, 0.0, 0.03)]
+    else:
+        s.no_return = lambda a: abs(a) < 0.3
+    s.run(0.1)
+    s.objects, s.no_return = [], None
+    bad_t = s.t
+    go = _go_after(s, 6.0)
+    assert go is not None and go - bad_t >= 3.0 - 0.05 - 1e-6
+
+
+def test_no_human_report_while_the_area_is_clearing():
+    """A person leaves after 8 s: the 10 s report must not fire inside the 5 s clear window."""
+    s = Sim()
+    s.objects = [(0.60, 0.0, 0.03)]
+    s.to_stop()
+    s.run(8.0)
+    s.objects = []
+    go = _go_after(s, 8.0)
+    assert go is not None
+    assert not [n for n, _ in s.bus.events if n == "nav.line_stuck_opened"]
+
+
+def test_clear_window_defaults_and_report_ordering():
+    c = LineFollowConfig()
+    assert c.crosswalk_clear_s == 5.0 and c.crosswalk_look_min_scans == 40
+    assert c.crosswalk_report_s > c.crosswalk_clear_s
+    with pytest.raises(ValueError):
+        LineFollowConfig(crosswalk_clear_s=10.0, crosswalk_report_s=10.0)
+
+
+def test_a_parsed_copy_keeps_the_crosswalk_key_d555_hub():
+    """Fleet's hub re-parses the robot snapshot: null (gate on, outside a zone) must stay, absent stays absent."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert LineFollowStatus.model_validate({"crosswalk": None}).model_dump()["crosswalk"] is None
+    assert "crosswalk" not in LineFollowStatus.model_validate({}).model_dump()
+
+
+def test_a_bare_reported_flag_without_the_key_stays_unknown():
+    """rosy-b3 review: an input flag alone must not become null = positively outside a zone."""
+    from core_common.protocol.schemas import LineFollowStatus
+
+    assert "crosswalk" not in LineFollowStatus.model_validate({"crosswalk_reported": True}).model_dump()
+
+
+def test_state_snapshot_round_trips_an_unknown_crosswalk_and_refuses_a_malformed_one():
+    import pydantic
+    from core_common.protocol.schemas import StateSnapshot
+
+    unknown = {"state": "unknown", "reason": "not_watched", "source": "camera"}
+    snap = StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": unknown}})
+    again = StateSnapshot.model_validate(snap.model_dump(mode="json"))
+    assert again.model_dump(mode="json")["line_follow"]["crosswalk"]["state"] == "unknown"
+    for bad in ("outside", {"zone_id": "z1"}, 3):
+        with pytest.raises(pydantic.ValidationError):
+            StateSnapshot.model_validate({"robot_id": "r", "line_follow": {"crosswalk": bad}})

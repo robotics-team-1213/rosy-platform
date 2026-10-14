@@ -271,8 +271,9 @@ class CrosswalkGate:
             cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
             skew, own = _angle(cpose.yaw - z.yaw), z.lateral
             turn = abs(math.sin(skew)) * (z.far + z.margin + geo.exit_m)
-            if z.far * (1 - math.cos(skew)) + geo.lane_half_m * abs(math.sin(skew)) <= z.margin:
-                z, own, turn = replace(z, yaw=cpose.yaw), own + turn, 0.0
+            shift = z.far * (1 - math.cos(skew)) + geo.lane_half_m * abs(math.sin(skew))
+            if shift <= z.margin:    # the turn's along-road shift of A's ends is added, not spent
+                z, own, turn = replace(z, yaw=cpose.yaw, margin=z.margin + shift), own + turn, 0.0
             ahead, offset = self._local(z, cpose, 0.0)
             if reach:   # past the range the edges were seen over, the lane may run on at their slope
                 turn += reach[0] * max(0.0, z.far + z.margin + geo.exit_m - ahead - reach[1])
