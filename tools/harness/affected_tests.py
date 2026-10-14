@@ -8,9 +8,10 @@ Usage (from the repository root)::
 Maps every changed file (``git diff base...HEAD`` plus the working tree) to the
 harness module that owns it, adds reverse dependents found through
 ``platform_parts.yaml`` ``import_prefix`` imports, tests that name the changed
-path, and an always-on guard set. Shared foundations, CI/test configuration and
+path, and an always-on guard set. Shared foundations, CI/test configuration,
+source layout and guard rules, committed folder moves and removed modules, and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. The full tier runs on GitHub Actions runners (ci.yml), never
+never nothing. ``tools/land.py`` runs a FULL selection's ``full_invocations`` on the lab PCs (D-762 stage 0). The full tier runs on GitHub Actions runners (ci.yml), never
 locally by default: ``--run`` on a FULL selection runs only the guards and the
 directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
@@ -41,6 +42,8 @@ GUARD_SET = (
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",
+    # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
+    "test/architecture/test_document_placement.py",
 )
 
 # D-436 §2: a change here can break any suite, so the full tier runs.
@@ -62,7 +65,14 @@ FULL_TRIGGERS = (
     *((f"deploy/robot/*/{area}/*.{suffix}", f"{area} manifest")
       for area in ("image", "native")
       for suffix in ("service", "timer", "path", "target", "conf", "env", "txt", "json", "yaml", "list")),
+    # D-762 stage 0: source layout and guard rules.
+    ("**/package.xml", "packaging"),
+    ("**/_source_layout.py", "source layout"),
+    ("test/architecture/**", "architecture guard rules"),
+    ("test/known_failures.txt", "known failures list"),
 )
+# D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
+NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt")
 
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.
@@ -149,11 +159,14 @@ class Selection:
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
+    #: FULL only: what tools/land.py runs on the lab PCs (D-762 stage 0).
+    full_invocations: list[list[str]] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
                 "reasons": self.reasons, "invocations": self.invocations,
-                "local_invocations": self.local_invocations}
+                "local_invocations": self.local_invocations,
+                "full_invocations": self.full_invocations}
 
 
 def _match(path: str, pattern: str) -> bool:
@@ -186,6 +199,22 @@ def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
         names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
         names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
     return sorted(n.strip() for n in names if n.strip())
+
+
+def moves(repo: Path, base: str, head: str | None = None) -> list[str]:
+    """D-762 stage 0: committed layout changes in ``base...head`` as escalations.
+
+    A rename across directories or a removed non-test Python module changes import
+    and path layout that the one-level selector cannot follow.
+    """
+    found = []
+    for line in _git(repo, "diff", "--name-status", "-M", f"{base}...{head or 'HEAD'}").splitlines():
+        status, *paths = line.split("\t")
+        if status.startswith("R") and PurePosixPath(paths[0]).parent != PurePosixPath(paths[1]).parent:
+            found.append(f"{paths[0]} -> {paths[1]}: folder move")
+        elif status == "D" and paths[0].endswith(".py") and not TEST_FILE.search(paths[0]):
+            found.append(f"{paths[0]}: Python module removed")
+    return found
 
 
 @dataclass
@@ -310,6 +339,19 @@ def _full_paths(repo: Repo) -> list[str]:
     return [p for p in dict.fromkeys(paths) if repo.exists(p)]
 
 
+def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[str]]:
+    """D-762 stage 0: the full tier on the lab PCs, never fewer suites than the local selection.
+
+    CI's full matrix (suites unsharded, root test/ whole), then every registered module
+    suite (`_full_paths`) and every `local` path none of those already covers.
+    """
+    ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
+    covered = [p for inv in ci for p in inv if not p.startswith("-")]
+    rest = [p for p in [*_full_paths(repo), *(p for inv in local for p in inv)]
+            if not any(_under(p, c) for c in covered)]
+    return ci + pack(repo, list(dict.fromkeys(rest)))
+
+
 def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
     """Group tests without duplicate basenames or oversized remote commands."""
     kept = [p for p in paths if not any(o != p and _under(p, o) for o in paths)]
@@ -328,8 +370,8 @@ def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(repo: Repo, changed: list[str]) -> Selection:
-    sel = Selection(mode="affected", changed=changed)
+def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
+    sel = Selection(mode="affected", changed=changed, escalations=list(moved))
 
     def add(path: str, why: str) -> None:
         if repo.exists(path):
@@ -343,7 +385,8 @@ def select(repo: Repo, changed: list[str]) -> Selection:
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
-        trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
+            (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
@@ -378,8 +421,11 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             add(test, f"imports {'/'.join(prefixes)} ({path})")
         if referencing or importing or trigger:
             continue
-        if path.endswith(".md"):
-            continue  # D-436 2: a Markdown note outside every module runs the guards only.
+        if path.endswith((".md", ".test.mjs")):
+            # D-436 2: a Markdown note outside every module runs the guards only. No runner runs the three
+            # test/learning/perception *.test.mjs today (web/account-session.test.mjs included: CI has no
+            # node step and land.py --node only globs test/web), so FULL would add nothing.
+            continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
@@ -416,6 +462,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
     sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.mode == "full":
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
 
@@ -507,12 +554,13 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
-        sel = select(repo, changed)
+        sel = select(repo, changed, moves(repo_root, base, head))
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
         sel.invocations = pack(repo, sorted(sel.reasons))
         sel.local_invocations = [list(GUARD_SET)]
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix and allow_full and sel.mode != "full":
         sel.mode = "full"
         sel.escalations.append("forced (--full): CI event other than pull_request")

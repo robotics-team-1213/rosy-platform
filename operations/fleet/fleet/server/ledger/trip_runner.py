@@ -108,6 +108,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
+        self.traffic.authority_reach, self._unread = self.authority.reach, set()  # D-760 3; D-760 4 state reads
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
         self._refresh_warned_at = -math.inf
@@ -191,7 +192,8 @@ class TripRunner(TripAdmission, TripProgress):
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
-                             "line_follow_authority": getattr(caps, "line_follow_authority", False),
+                             "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
+                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False), "lane_turn_map_entry": getattr(caps, "lane_turn_map_entry", False),
                              "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
@@ -225,6 +227,8 @@ class TripRunner(TripAdmission, TripProgress):
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
                     "lease": lease, "stop_moved": moved}
+            if enable:  # D-760 2: lease -> line ON -> first authority (CORE refuses one while OFF)
+                view["detail"]["line_follow_started"] = False
             if turns:  # D-603: the alignment turns CORE made before this start
                 view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
@@ -421,7 +425,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic.period(self._live.values())
         slow = self.authority.busy()  # an authority still out from an earlier period: no advice beside it
         settled = [live for r, live in self._live.items() if r not in self._inflight]  # mid-step: none
-        self.authority.period(settled)
+        self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
 
     async def _tick_robot(self, live: LiveTrip) -> None:
@@ -438,7 +442,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
-        if self._renew_lease is not None:
+        if self._renew_lease is not None and live.view["state"] != "link_wait":  # D-760 4: a free robot then stops
             # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
             # renewal that fails lets CORE cancel the goal when its lease runs out.
             try:
@@ -451,6 +455,8 @@ class TripRunner(TripAdmission, TripProgress):
             return
         live.see(pose)
         live.view["pose_observed_at"] = self._clock()
+        if robot_id in self._unread and await self._link_wait(live, "state_unread"):
+            return  # D-760 4: no state read, so nothing new goes out
         if pose is None or pose.state != LOCALIZED:
             await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
                                                        **pose_diagnostics(pose)}, halt_free=False)
@@ -477,6 +483,8 @@ class TripRunner(TripAdmission, TripProgress):
                             "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
             else:  # a free segment: no stale lane ``waiting`` may end it
                 live.junction = {}
+            if live.view["state"] == "link_wait" and not await self._link_back(live):
+                return
             if not live.open:
                 return
             index, s, off = self._locate(live, pose)
@@ -549,10 +557,14 @@ class TripRunner(TripAdmission, TripProgress):
             await self._stop(live, "failed", code, {"status": exc.status})
             return
         except (HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
-            await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
+            # D-760 4: a leased trip waits only on no answer (Safety-Review HIGH-1); any other error ends it
+            if not (isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc))):
+                await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
             return
         if not live.open:
             return  # canceled while the step was in flight
+        if (live.view.get("wait") or {}).get("reason") == "link_wait":
+            del live.view["wait"]  # a whole step without a link fault: the link_wait ``since`` may start over
         # after the step, so the last place's stop has gone out before "arrived"
         if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane):
             live.view["state"] = "arrived"
@@ -840,7 +852,9 @@ class TripRunner(TripAdmission, TripProgress):
         try:
             if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
+            self._unread.discard(robot_id)
         except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
+            self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
                 self._refresh_warned_at = self._clock()
                 _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
@@ -874,5 +888,6 @@ class TripRunner(TripAdmission, TripProgress):
         if not live.open:
             live.view["detail"].pop("bend_candidate", None)
             self.lease.close(live)  # D-541 7: DELETE after the halt
+            self.authority.forget(live.view["robot_id"], live.view["detail"].get("stop_sent") is True)  # MEDIUM-2
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)

@@ -275,6 +275,8 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'lane_cue': self._lane_cue_view(self._clock()),
+                                                   'regulation_wait': None if self._mode is LineFollowMode.OFF
+                                                   else self._regulation_wait(self._clock()),  # D-760 rev 3 9
                                                    # run 2 fix 4: a latched cue HOLD names itself even when
                                                    # a later gate (junction_waiting) rewrote the reason
                                                    **({'reason': self._cue_latch} if self._cue_latch

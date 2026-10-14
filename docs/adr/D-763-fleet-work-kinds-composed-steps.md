@@ -19,9 +19,9 @@ D-741 7항은 Fleet의 "로봇에게 시키는 일"을 `작업` 영역 하나에
 
    | D-760 단계 | 상태 | 저장소에서 확인한 것 |
    |---|---|---|
-   | 1 규칙 M 판정과 경고 | 검토 승인, origin 미착지 | `fleet/traffic/rule_m.py`가 로컬 `main`(`41a19818e`, `da6ed28eb`)에 있고 `origin/main`에는 없다 |
-   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.225 | 구현됨, 재검토 중, 미착지 | 이 워크트리의 `MAX_TTL_S`는 아직 2.0이다(`line_authority.py`). 브랜치 내용은 확인 못 함 |
-   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 시작 안 함 | 코드에 없다(이름 검색) |
+   | 1 규칙 M 판정과 경고 | 로컬 `main`에 착지, origin 미착지 | `fleet/traffic/rule_m.py` |
+   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.226 | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `MAX_TTL_S = 5.0`(`line_authority.py`), 능력 `line_follow_authority_under_lease`·`line_follow_authority_shrink`(`core_common/protocol/controls.py`) |
+   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `link_wait`가 `ledger/trip_admission.py`·`trip_ports.py`·`trip_progress.py`에 있다 |
    | 6 `LINK_UNBOUNDED_MOTION` 거절, 기본값 켜기 | Gazebo·장치 끊김 시험 뒤 | 코드에 없다 |
 
    trip 밖에서 Fleet이 차선 주행을 켜는 길(`console.line_follow_mode`)은 아직 있고 D-760 7항이 6단계에서 닫는다.
@@ -268,7 +268,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 1. **팔 단계 중 lease가 만료하면 CORE와 팔은 무엇을 하는가(팔이 서는가, 든 물체는 어떻게 되는가).** 조각 6의 Safety-Review가 정한다. 정하기 전에는 팔 단계가 든 종류를 열지 않는다.
 2. **가져오기를 여는 조각의 검토.** 개정 2 질문 1은 첫 대상을 고정 팔 인계로 정했지만 근거가 약하다. 가져오기를 여는 조각은 D-55·D-664의 팔 문구를 읽은 따로의 검토를 받는다.
 3. **기다림 사유의 번호 붙은 목록과 상한.** 차로 규제 작업이 D-573 개정 5 착지 뒤 D-573·D-525 개정에 싣는다. 8항의 초안 표는 그때까지 참고다.
-4. **능력 이름의 확정.** 개정 2 질문 10 (b)·(c)의 이름 가운데 `line_follow_authority_under_lease`(D-760 2단계 브랜치)와 횡단보도 게이트·교차로 신호 능력은 이 브랜치의 `core_common/protocol/controls.py`에 없다. 제안이고 해당 조각에서 확정한다.
+4. **능력 이름의 확정.** 개정 2 질문 10 (b)의 `line_follow_authority_under_lease`는 확정이다(D-760 2단계, API v1.226, `core_common/protocol/controls.py`). (c)의 횡단보도 게이트·교차로 신호 능력은 차선·규제 작업이 `lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`가 켜졌을 때만 참)와 `lane_junction_signal`(`junction_signal_enabled`가 켜졌을 때만 참)로 정했고, 아직 코드에 없다. API 버전을 올리는 그 작업의 브랜치에서 확정한다.
 
 ### 근거의 경계
 
@@ -308,7 +308,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 | 7 실패 횟수 | 작업 층은 실패 한 번이면 사람이다. "두 번"은 막힘 해결기 안(D-622)에만 둔다. 규제 대기(횡단보도 보는 중·기다림, 신호 빨강, 통행권 FREE 아님)는 실패가 아니라 기다림이다. 기다림이 상한을 넘으면 먼저 막힘 해결기로 가고, 해결기가 사람에게 넘긴 것만 작업의 실패 한 번으로 센다. 차로 규제 세션의 SIM 보고: 지금 `crosswalk_blocked`는 곧바로 콘솔로 가 trip을 정체로 끝냈다(같은 횡단보도에서 두 번). 밖의 조각 A가 고친다 | 3 / 0 / 0 | 3·8항 |
 | 8 Task navigate와 `/route` | 남기고 새 작업에 올리지 않는다. D-760 6단계 **전에** 다시 본다(정정 의견 채택): 6단계 뒤에는 임대 있는 목표(`dispatch` 출처, correlation id)를 보낼 때만 동작한다 | 2 + 정정 찬성 1 / 0 / 0 | 6항 |
 | 9 기다림 사유와 상한의 소유 | 차로 규제 작업. 초안 상한 표는 참고로 남고, 번호 붙은 목록은 D-573 개정 5 착지 뒤 온다 | 3 / 0 / 0 | 8항, 남은 질문 3 |
-| 10 다단계 종류의 조건 | (a) 현장 설정: trip lease와 통행권(`fleet.traffic.authority`) 둘 다 켜짐. (b) 로봇 능력: `trip_lease`, `goal_lease`, 그리고 `line_follow_authority_required` 또는 `line_follow_authority_under_lease`(D-760 2단계, API v1.225)를 알린다. 옛 릴리스에는 다단계 종류를 내놓지 않는다. (c) 단계의 경로가 횡단보도나 신호 장소를 지나면 그 로봇의 CORE 능력에 횡단보도 게이트와 교차로 신호가 켜져 있어야 하고, 아니면 Fleet이 그 단계를 거절한다(규제 규칙이 조용히 빠지지 않게). 앞의 셋(`trip_lease`, `goal_lease`, `line_follow_authority_required`)은 `controls.py`에 있다. 나머지 이름은 제안이고 해당 조각에서 확정한다 | 2 + 추가 2 / 0 / 0 | 5항, 남은 질문 4 |
+| 10 다단계 종류의 조건 | (a) 현장 설정: trip lease와 통행권(`fleet.traffic.authority`) 둘 다 켜짐. (b) 로봇 능력: `trip_lease`, `goal_lease`, 그리고 `line_follow_authority_required` 또는 `line_follow_authority_under_lease`(D-760 2단계, API v1.226)를 알린다. 옛 릴리스에는 다단계 종류를 내놓지 않는다. (c) 단계의 경로가 횡단보도나 신호 장소를 지나면 그 로봇의 CORE 능력에 횡단보도 게이트와 교차로 신호가 켜져 있어야 하고, 아니면 Fleet이 그 단계를 거절한다(규제 규칙이 조용히 빠지지 않게). 앞의 셋(`trip_lease`, `goal_lease`, `line_follow_authority_required`)은 `controls.py`에 있다. 나머지 이름은 제안이고 해당 조각에서 확정한다 | 2 + 추가 2 / 0 / 0 | 5항, 남은 질문 4 |
 
 **승인 자리 구현 시도에서 나온 것(같은 개정).** 주차된 브랜치 `feat/fleet-work-approval-seat`의 시도가 찾은 사실을 저장소에서 확인했다. (1) 기다리는 작업을 거절하는 서버 경로가 없다 → 조각 5b. (2) Cell Job은 `/api/fleet/work`에 나오지 않고 Cell 제안은 서비스 계정만 한다 → Context 2와 같은 빈틈, 조각 4가 메우고 승인 자리(5c)는 그것을 기다린다. (3) 팔 Mission의 승인은 제안자만 한다(다른 사람에게 404) → 7항과 질문 5 결정 그대로. (4) 승인 대기의 승인은 확인을 한 번 묻는다 → 9항. (5) 대화 요청에 연결된 작업은 승인 대기에서 요청 검토로 보낸다 → 9항, 위험 표.
 
