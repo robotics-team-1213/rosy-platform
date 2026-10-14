@@ -334,11 +334,7 @@ class RosBridge:
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
-        stamp = msg.header.stamp  # D-758 0: the snapshot's stamp keys the line-follow odom log
-        wall = self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"], frame=msg.header.frame_id,
-                                             source_stamp_ns=stamp.sec * 1_000_000_000 + stamp.nanosec)
-        odometry.observe_bounded_trial(self, msg, sample)
-        odometry.observe_lane_return(self, msg, sample, wall=wall)
+        odometry.observe_odom(self, msg, sample)  # D-758 0: snapshot stamp keys the line-follow odom log
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
