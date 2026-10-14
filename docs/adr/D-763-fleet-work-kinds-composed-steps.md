@@ -1,6 +1,6 @@
 ## D-763 Fleet 새 작업의 종류 — 단계의 조합으로 만들고, 작업마다 주인은 하나이며, 승인은 위험으로 정한다
 
-**Status:** Proposed (2026-10-14. 토론 참여 세션 세 곳의 답을 저장소와 대조해 정리했다. 문서만이다. 코드, API Reference, schema, SRS, 로봇 설정은 바꾸지 않는다. 아래에 "제안"이라고 적은 필드·경로·상태 값은 결정된 계약이 아니고, D-18에 따라 구현 조각에서 API Reference·공유 schema·SRS와 함께 확정한다. 실행한 시험은 없다. 근거는 코드와 ADR 읽기다)
+**Status:** Proposed (2026-10-14. 토론 참여 세션 세 곳의 답을 저장소와 대조해 정리했다. 개정 1 같은 날: 검토 세션 두 곳의 지적을 반영했다. 문서만이다. 코드, API Reference, schema, SRS, 로봇 설정은 바꾸지 않는다. 아래에 "제안"이라고 적은 필드·경로·상태 값은 결정된 계약이 아니고, D-18에 따라 구현 조각에서 API Reference·공유 schema·SRS와 함께 확정한다. 실행한 시험은 없다. 근거는 코드와 ADR 읽기다)
 
 잇는 결정: [D-741](D-741-unified-app-shell-seats.md) 7항(작업 영역의 자리. 종류의 API·필드·실행 owner를 이 기록에 맡겼다) · [D-664](D-664-mixed-device-work-and-workcell-boundaries.md)(공통 작업 개념과 읽기) · [D-12](D-12-mission-fleet.md) · [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md) · [D-330](D-330-fleet-action-admission-stop-and-recovery.md)(claim) · [D-401](D-401-rosy-cell-application.md) · [D-403](D-403-fleet-cell-job-route-cell-transfer.md)(Cell Job 경로와 승인) · [D-420](D-420-fleet-pinky-device-actions-multi-step-missions.md)(Proposed, 다단계 Mission) · [D-494](D-494-fleet-trip-execution-m2-contracts.md)(trip 루프) · [D-517](D-517-multi-robot-lane-traffic.md) · [D-541](D-541-core-fleet-trip-lease.md)(trip lease) · [D-573](D-573-crosswalk-stop-look-cross.md) · [D-438](D-438-fleet-stuck-resolver-rules-model-human.md) · [D-577](D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md) · [D-622](D-622-fleet-standalone-realign.md) · [D-758](D-758-robot-held-site-anchor.md) · [D-760](D-760-fleet-motion-bounds-ride-through.md) · [D-753](D-753-fleet-holder-namespace-guards.md). 폴더 구조는 바뀌지 않으므로 D-427 3항의 관계 표는 해당하지 않는다.
 
@@ -15,7 +15,16 @@ D-741 7항은 Fleet의 "로봇에게 시키는 일"을 `작업` 영역 하나에
 3. **로봇을 움직이는 Fleet 입구는 여러 개다.** trip(`POST /api/fleet/robots/{id}/trip` 계획, `POST /api/fleet/trips/{plan_id}/start`, 이름 있는 운영자), Task navigate, D-463 `/route`, 콘솔 목표, 대화 요청의 Task 제출, intent navigate, 양보 bay, 대형이다. "trip 로봇은 건드리지 않는다"는 검사(`TRIP_ROBOT_BUSY`)가 일곱 곳에 따로 있다(`channel/workflow.py`, `console/console.py` 두 곳, `console/console_routes.py`, `lane_route_routes.py`, `ledger/task_dispatch_routes.py`, `ledger/trip_guard.py`).
 4. **trip은 끝나면 다시 열리지 않는다.** 상태는 `started → running → (arrived | stopped | failed | canceled)`다. 코드에서 센 끝 사유는 열 가지가 넘는다: `junction`(aborted), `junction_unexpected`, `junction_no_window`, `stall`, `lease_lost`, `restart`, `TRIP_GOAL_REFUSED`, `TRIP_ROBOT_UNREACHABLE`, `TRIP_LINE_FOLLOW_START_FAILED`, `TRIP_LOOP_ERROR`, 운영자 취소·비상 정지(`ledger/trip_runner.py`, `trip_halts.py`). 재시작 전에 열려 있던 trip은 `stopped(restart)`가 되고 자동으로 다시 출발하지 않는다(D-494 5항). lease를 잃은 trip도 다시 열지 않는다(D-541 7항).
 5. **로봇을 쥐는 것은 trip이 열려 있는 동안뿐이다.** Fleet 쪽은 `robot_busy()`가 열린 trip만 본다. trip은 D-330 claim을 잡지 않는다(trip 코드에 `dispatch_admission` 호출이 없다). CORE 쪽 trip lease는 모드가 주행을 떠나면 끝난다(`middleware/core/gateway/core/trip_lease.py`의 `mode_left`). 그래서 trip 두 개 사이에 로봇이 IDLE이면 Fleet에도 CORE에도 주인이 없고, 대시보드·Pilot·다른 Fleet 입구가 로봇을 가져갈 수 있다. lease 자체도 현장 설정 `fleet.trip_lease_required`가 기본 false다.
-6. **한도는 결정됐고 일부만 만들어졌다.** D-760(Accepted)은 한도 없는 Fleet 움직임을 `422 LINK_UNBOUNDED_MOTION`으로 거절하기로 했다. 코드에는 1단계(판정 `fleet/traffic/rule_m.py`와 경고 표시)만 있다. 거절, `link_wait`, 통행권 줄이기, 기본값 켜기는 코드에 없다(이름 검색). trip 밖에서 Fleet이 차선 주행을 켜는 길(`console.line_follow_mode`)은 아직 있고 D-760 7항이 6단계에서 닫는다.
+6. **한도는 결정됐고 일부만 만들어졌다.** D-760(Accepted)은 한도 없는 Fleet 움직임을 `422 LINK_UNBOUNDED_MOTION`으로 거절하기로 했다. 단계별 상태는 다음이다(D-760 담당 세션의 설명을 저장소와 대조했다).
+
+   | D-760 단계 | 상태 | 저장소에서 확인한 것 |
+   |---|---|---|
+   | 1 규칙 M 판정과 경고 | 검토 승인, origin 미착지 | `fleet/traffic/rule_m.py`가 로컬 `main`(`41a19818e`, `da6ed28eb`)에 있고 `origin/main`에는 없다 |
+   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.225 | 구현됨, 재검토 중, 미착지 | 이 워크트리의 `MAX_TTL_S`는 아직 2.0이다(`line_authority.py`). 브랜치 내용은 확인 못 함 |
+   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 시작 안 함 | 코드에 없다(이름 검색) |
+   | 6 `LINK_UNBOUNDED_MOTION` 거절, 기본값 켜기 | Gazebo·장치 끊김 시험 뒤 | 코드에 없다 |
+
+   trip 밖에서 Fleet이 차선 주행을 켜는 길(`console.line_follow_mode`)은 아직 있고 D-760 7항이 6단계에서 닫는다.
 7. **순서 있는 Step 원장과 하달기는 하나 있고 종류 하나에 묶여 있다.** `fleet_cell_jobs`·`fleet_cell_steps`(`CHECK(action_kind='CELL_TRANSFER')`), 종류 등록부 `step_action_kinds.py`(항목은 `CELL_TRANSFER` 하나, `simulation` 프로필에서만 하달), 종류를 모르는 `StepJobDispatcher`다. Step k는 Step k−1이 `GOAL_CONFIRMED`일 때만 나가고, 장치 거절·실패·불명은 Job을 HOLD로 둔다. 레거시 `fleet_missions`의 승인 응답은 `physical_submission: NOT_CONNECTED`다.
 8. **승인 규칙은 서버에 둘 있다.** 운행 시작은 이름 있는 운영자 한 사람이다(D-540 9항, API v1.161). Cell Job 승인은 이름 있는 운영자이고 제안한 사람과 달라야 한다(`ledger/mission_routes.py`, 403 `CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER`). 이 검사는 `candidate.kind == "cell_job"`이라는 글자에 붙어 있다. 레거시 `PICK_PLACE` Mission은 반대로 제안한 사람만 승인할 수 있다(다른 사람에게는 404).
 9. **기다림은 일부만 정체에서 빠진다.** trip 정체 시계(`ledger/trip_progress.py` `_stalled`, 20 s 동안 0.05 m 미만)는 `hold`, 교차로 동작 중, 블록 대기(`waiting_for`), 통행권 끝 대기(`HOLDING`)에서 멈춘다. 횡단보도 게이트 대기와 신호 대기는 이 조건에 없다. D-573(Proposed) 4항은 게이트 대기를 정체로 세지 않는다고 적었지만 `_stalled`에는 없다. 토론 참여 세션은 횡단보도 대기 중 운행이 `stall`로 끝난 것을 보고했다. 이 기록에서 재현하지는 않았다.
@@ -38,7 +47,7 @@ D-420은 2026-10-02에 쓰였다. 그 뒤 trip 루프(D-494), 블록 통행권(D
 
 | 토론의 주장 | 저장소 |
 |---|---|
-| 한도 없는 Fleet 움직임은 거절된다(D-760) | 결정은 Accepted이고 코드는 경고만이다. 거절은 6단계다 |
+| 한도 없는 Fleet 움직임은 거절된다(D-760) | 결정은 Accepted이고 경고(1단계)도 origin에 아직 없다. 거절은 6단계다 |
 | trip lease가 trip 동안 로봇을 쥔다 | D-541의 Status는 Proposed이고 구현은 있다. 현장 기본값은 꺼짐이다 |
 | 이동 입구가 둘이면 `TRIP_ROBOT_BUSY`를 두 번 만든다 | 이미 일곱 곳에 있다. 하나로 모으는 쪽의 근거는 더 강하다 |
 | 가져오기 = 이동 + 장치 동작 + 이동을 Fleet이 잇는다 | 팔이 로봇에 장착된 경우에는 D-55와 D-664 3항이 접근·파지·운반·배치를 로봇 로컬 transaction으로 정했다. Fleet 조합은 운반 로봇과 고정 팔의 인계에만 맞는다(D-664 5항) |
@@ -74,14 +83,19 @@ D-420은 2026-10-02에 쓰였다. 그 뒤 trip 루프(D-494), 블록 통행권(D
 
 - **Fleet 쪽.** 작업은 승인부터 끝(완료, 운영자 취소)까지 그 로봇의 D-330 `robot` claim을 쥔다. 단계 사이와 HOLD에서도 쥔다(D-420 §4.5, Cell Job은 D-403 보강의 `HELD`). Fleet의 모든 움직임 입구는 "이 로봇에 주인이 있는가"를 **함수 하나**로 묻는다. 지금 일곱 곳의 `TRIP_ROBOT_BUSY` 검사가 그 함수로 모인다. 열린 trip과 작업 claim이 같은 답을 낸다.
 - **CORE 쪽.** 단계 사이에 로봇이 IDLE이어도 대시보드와 Pilot이 로봇을 가져가지 못해야 한다. 지금 trip lease는 IDLE로 가면 끝나므로 이것을 못 한다. **제안:** 작업이 쥔 lease는 그 작업의 단계 사이 IDLE에서 끝나지 않는다. 명시적 넘겨받기, 비상 정지, 만료, 주인의 해제는 지금처럼 끝낸다. 멈춤 요청은 지금처럼 누구에게나 열려 있다. 이것은 D-541 5항을 고치는 CORE 계약 변경이고 Safety-Review 대상이다(바뀌는 항).
+- **굳은 규칙: 작업의 주인은 움직임 한도를 늘리지 않는다.** 작업 동안 유지되는 lease는 "누가 로봇을 쥐는가"에만 답한다. 움직임의 한도는 단계마다 그대로다: 차로 구간은 통행권(D-760 이후 5 s), 자유 구간의 목표는 목표 임대(3.5 s). 작업 층이 일반 heartbeat로 lease나 통행권, 목표 임대를 늘리지 않는다. 각 한도는 그 움직임을 실제로 모는 루프(trip 루프, 목표 임대 갱신기)만 늘린다. trip 루프가 멈추면 작업의 주인이 살아 있어도 움직임 한도는 만료해야 한다. 시험으로 고정한다: trip 루프를 멈추고 작업 claim은 쥔 채 두면 로봇이 통행권·목표 임대 만료로 선다.
+- **D-760 2단계와의 관계.** D-760 2단계(브랜치, 미착지)는 CORE에 "lease를 본 차선 추종 세션은 모드가 바뀔 때까지 통행권을 요구한다"를 더한다(D-760 2항). lease를 모드 사이에 유지하는 것은 이와 맞는다: 통행권 요구는 세션마다 다시 걸린다. 다만 `mode_left`로 lease를 끝내는 규칙을 바꾸는 것은 `core/trip_lease.py` 변경이고, 팔이 움직이는 동안 lease가 만료하면 CORE가 무엇을 멈추는지(지금 만료 정지는 차선 추종과 내비게이션을 끈다)를 정해야 한다. 이 조각은 Safety-Review를 받고, 시작 전에 D-760 담당 세션에 알린다(그 세션도 이 파일을 고친다).
 - **우선순위는 없다.** 로봇에 작업이 있으면 다른 작업은 거절한다. 줄 세우기와 끼어들기는 정하지 않는다(하지 않는 것 1).
 - CORE 쪽 변경이 착지하고 장치에서 확인되기 전에는 운행 단계가 든 다단계 종류를 열지 않는다. 단계가 운행 하나인 이동은 지금의 trip lease로 충분하므로 기다리지 않는다.
 
-**5. 움직이는 단계는 모두 한도가 있다.** 작업의 운행 단계는 D-760이 `bounded`로 판정하는 것만이다: trip lease와 통행권을 쥔 차로 trip, 또는 임대 있는 목표. 다단계 종류는 현장 설정에서 trip lease가 켜져 있을 때만 승인된다(4항의 CORE 쪽 주인이 lease이기 때문이다). 이동은 D-760의 단계 일정을 그대로 따르고 이 기록이 더 조이지 않는다. 거절 코드는 D-760 7항의 `422 LINK_UNBOUNDED_MOTION`을 쓰고 새 코드를 만들지 않는다.
+**5. 움직이는 단계는 모두 한도가 있다.** 작업의 운행 단계는 D-760이 `bounded`로 판정하는 것만이다: trip lease와 통행권을 쥔 차로 trip, 또는 임대 있는 목표. 다단계 종류는 현장 설정에서 trip lease(`fleet.trip_lease_required`)와 통행권(`fleet.traffic.authority`)이 **둘 다** 켜져 있을 때만 승인된다. lease가 4항의 CORE 쪽 주인이고, lease만 켜고 통행권을 끄면 D-760 2단계 뒤 차로 로봇이 `authority_none`으로 서기 때문이다. 이동은 D-760의 단계 일정을 그대로 따르고 이 기록이 더 조이지 않는다. 거절 코드는 D-760 7항의 `422 LINK_UNBOUNDED_MOTION`을 쓰고 새 코드를 만들지 않는다.
+
+- **작업의 움직임은 규칙 M이 본다.** 규칙 M(`fleet/traffic/rule_m.py` `verdict`)은 열린 trip 보기와 콘솔 목표 기록만 입력으로 받는다. 작업의 운행 단계는 그 둘 가운데 하나로 나타나야 한다(운행 단계는 trip이므로 trip 보기, 자유 구간 목표는 목표 기록). 작업 전용 움직임 기록을 따로 두면 규칙 M이 로봇을 `idle`로 보고 6단계의 거절이 그 움직임을 놓친다. 이것을 요구로 두고 조각 7의 시험에 넣는다.
 
 **6. 이동의 길은 하나다.** 새 작업의 "이동"은 관제 로봇 카드, 현장 지도와 같은 trip을 만드는 세 번째 입구다. 같은 계획 경로, 같은 시작 검사, 같은 lease, 같은 구역 판정을 쓴다. 이동을 위한 새 Fleet 경로, 새 원장 행, 새 "busy" 검사는 만들지 않는다.
 
 - 다단계 종류의 운행 단계도 trip이다. D-420 §1의 `NAVIGATE_TO_POSE`·`FOLLOW_LANE_TO_STOPLINE`을 현장 이동의 단계로 쓰지 않는다. 한 로봇에 trip 하나(D-517 1항)와 통행권·구역 표가 trip을 전제로 하기 때문이다. D-420은 Proposed이므로 이것은 그 기록에 대한 조정 제안이다(바뀌는 항).
+- **작업의 이동은 운영자 출처로 나가지 않는다.** 목표 임대의 `operator` 출처는 그 이름 있는 운영자의 콘솔이 자리에 있을 때만 갱신된다(D-550 10, `server/goal_lease.py`의 presence). 승인한 사람이 자리를 뜨면 작업의 이동 단계가 임대 만료로 선다. 그래서 작업이 내는 목표(trip의 자유 구간 포함)는 `dispatch`처럼 "그 시도가 열려 있는 동안" 갱신되는 출처로, correlation id를 붙여(D-316) 나간다. trip 루프가 내는 목표는 지금 `trip` 출처이고 trip이 열려 있는 동안 갱신되므로 이 요구를 이미 만족한다. 작업 층이 trip 밖에서 목표를 직접 내는 경우가 생기면 `operator` 출처를 쓰지 않는다.
 - Task navigate, D-463 `/route`, 콘솔 목표는 지금처럼 남고 새 작업의 종류로 올리지 않는다. 없앨지는 정하지 않는다(열린 질문 8).
 
 **7. 승인은 위험으로 정하고 서버가 지킨다.**
@@ -103,10 +117,18 @@ D-420은 2026-10-02에 쓰였다. 그 뒤 trip 루프(D-494), 블록 통행권(D
 | 개입 필요 | 사람의 답이 있어야 다음으로 간다 | `HOLD`, trip `stopped`·`failed`, 재계획 확인 대기, 해결기의 사람 단계 |
 | 끝남 | 완료 또는 취소 | `GOAL_CONFIRMED`(마지막 단계), trip `arrived`·`canceled` |
 
-- **제안(읽기 계약, 추가):** 작업 요약 행에 보이는 상태와 기다림 사유를 싣는다. 사유는 두 갈래다. `regulation`: `signal`, `crosswalk`, `authority`, `traffic_zone`. `robot_help`: 막힘 해결기가 규칙·모델 단계에서 묻고 있다. 필드 이름과 값은 구현 조각의 API 버전·SRS `UI-WORK-001` 변경에서 확정한다. `regulation`의 정확한 목록은 차로 규제 작업이 정하고, 이 기록은 두 갈래와 아래 규칙만 정한다. D-760 4항의 `link_wait`가 만들어지면 같은 "기다림"에 든다.
+- **제안(읽기 계약, 추가):** 작업 요약 행에 보이는 상태와 기다림 사유를 싣는다. 사유는 두 갈래다. `regulation`: `signal`, `crosswalk`, `authority`, `traffic_zone`. `robot_help`: 막힘 해결기가 규칙·모델 단계에서 묻고 있다. 필드 이름과 값은 구현 조각의 API 버전·SRS `UI-WORK-001` 변경에서 확정한다.
+- **규제 정지는 trip의 끝이 아니다.** 횡단보도에서 보는 중·기다리는 중, 신호 대기, 통행권 대기는 기다림이고 trip을 끝내지 않는다. 지금은 그렇지 않다: 차로 규제 세션은 SIM에서 `crosswalk_blocked`가 trip을 끝내 정체로 간 것을 보았다. 저장소에서 확인한 것은 `crosswalk_blocked`가 CORE 횡단보도 게이트가 `crosswalk_report_s` 뒤 여는 D-407 막힘 원인이라는 것까지다(`middleware/drive/behaviors/line_follow/crosswalk/gate.py`, `recovery/stuck/stuck_recovery.py`). 그것이 trip을 끝내는 경로는 이 기록에서 재현하지 않았다.
+- **사유의 목록과 상한은 차로 규제 작업이 소유한다.** 최종 목록은 D-573·D-525 개정에 실리고 이 기록은 그것을 참조한다. 이 기록은 두 갈래와 아래 두 규칙만 고정한다. 그 세션의 초안 상한(참고, 결정 아님):
+
+  | 사유 | 초안 상한 | 근거 |
+  |---|---|---|
+  | 횡단보도 보는 중·기다림 | `report_s + clear_s`(CORE 설정) | D-573 개정 3 |
+  | 신호 빨강 | 신호 한 주기 | D-525, `signal_service` 주기 |
+  | 통행권이 FREE가 아님 | lease TTL | D-517 | D-760 4항의 `link_wait`가 만들어지면 같은 "기다림"에 든다.
 - 원장의 상태 값은 바꾸지 않는다. 보이는 상태는 읽기 투영이다(D-664 5항).
-- **기다림과 정체는 같은 함수가 가른다.** "지금 기다리는 중인가"를 판정하는 함수가 하나이고, 화면의 기다림 표시와 trip 정체 시계가 그 함수를 같이 쓴다. 화면이 기다림이라고 보이는 동안 정체 시계는 가지 않는다. 지금 `_stalled`의 조건 넷에 횡단보도 게이트 대기와 신호 대기를 더하는 것이 첫 일이다.
-- 기다림에는 끝이 있어야 한다. 사유마다 상한을 두고, 넘으면 개입 필요가 된다. 상한 값은 규제 작업이 사유와 함께 정한다. 상한 없는 사유는 넣지 않는다.
+- **기다림과 정체는 같은 함수가 가른다.** "지금 기다리는 중인가"를 판정하는 함수가 하나이고, 화면의 기다림 표시와 trip 정체 시계가 그 함수를 같이 쓴다. 화면이 기다림이라고 보이는 동안 정체 시계는 가지 않는다. `_stalled`의 조건 넷에 횡단보도 게이트 대기와 신호 대기를 더하는 일은 차로 규제 세션이 맡는다(이 기록의 조각 밖, 아래 "밖의 조각").
+- **기다림에는 끝이 있다.** 사유마다 상한을 두고, 넘으면 개입 필요가 된다. 상한 없는 사유는 넣지 않는다.
 
 **9. 화면은 실행할 수 있는 것만 보여 준다.**
 
@@ -134,7 +156,7 @@ D-420은 2026-10-02에 쓰였다. 그 뒤 trip 루프(D-494), 블록 통행권(D
 | 로봇이 짐을 실었다는 것과 그때의 몸체·속도 한도 | 로봇. 상태별 footprint·속도 프로필. 모르면 재시작·끊김 뒤 HOLD | D-55 |
 | 누가 이 로봇을 쥐는가 | Fleet claim과 CORE lease | 4항 |
 
-- **몇 초 끊김.** 물체를 실은 운행 단계도 trip이므로 D-760 1항이 그대로 적용된다. 0–5 s는 받은 통행권 끝까지 가고, 5–8 s는 서서 기다리고, 8 s를 넘으면 lease가 만료해 trip이 `lease_lost`로 끝난다. 그때 단계는 실패이고 작업은 HOLD다. 로봇은 물체를 실은 채 서 있다. 스스로 돌아가거나, 내려놓거나, 다시 출발하지 않는다. Fleet 쪽 claim은 풀리지 않는다. 팔 단계 중의 끊김은 팔 owner가 자기 규칙으로 끝내거나 서고(D-403), Fleet은 돌아온 뒤 대조만 하고 다시 보내지 않는다.
+- **몇 초 끊김.** 물체를 실은 운행 단계도 trip이므로 D-760 1항이 그대로 적용된다. 0–5 s는 받은 통행권 끝까지 가고, 5–8 s는 서서 기다리고, 8 s를 넘으면 lease가 만료해 로봇은 IDLE이 되고 trip이 `lease_lost`로 끝난다. 그때 단계는 실패이고 작업은 HOLD다. Fleet은 마지막으로 확인된 갱신에서 8 s 뒤에 `lease_lost`를 선언하므로 CORE의 만료보다 조금 이르다. 그 순간 로봇이 IDLE이라고 가정하지 않고, 다시 닿으면 로봇 상태를 읽어 확인한다. HOLD에서 다시 가는 것은 자동이 아니다: 재승인 뒤 새 lease를 열고 출발 검사를 다시 한다. 로봇은 물체를 실은 채 서 있다. 스스로 돌아가거나, 내려놓거나, 다시 출발하지 않는다. Fleet 쪽 claim은 풀리지 않는다. 팔 단계 중의 끊김은 팔 owner가 자기 규칙으로 끝내거나 서고(D-403), Fleet은 돌아온 뒤 대조만 하고 다시 보내지 않는다.
 - **저장소가 답하지 못하는 것(가져오기를 막는다).**
   1. 단계 사이 IDLE에서 CORE가 주인을 아는 방법이 없다(4항의 제안이 착지해야 한다).
   2. lease가 만료한 뒤 물체를 실은 로봇은 IDLE이고 누구나 몰 수 있다. 그래도 되는지 정해지지 않았다(열린 질문 3).
@@ -171,7 +193,7 @@ D-420은 2026-10-02에 쓰였다. 그 뒤 trip 루프(D-494), 블록 통행권(D
 | D-420 | §1의 `NAVIGATE_TO_POSE`·`FOLLOW_LANE_TO_STOPLINE`을 현장 이동의 단계로 쓰지 않고 trip을 운행 단계로 쓴다. `DOCK`·`UNDOCK`, §1.1–§1.2, §2–§5는 그대로 둔다. Nav2가 있는 프로필에서 `NAVIGATE_TO_POSE`가 필요한지는 D-420이 다시 본다 |
 | D-541 | 5항 "IDLE로 감 → `mode_left`로 lease 끝" → 작업이 쥔 lease는 그 작업의 단계 사이 IDLE에서 끝나지 않는다. 나머지 끝 사유와 "멈춤은 누구나"는 그대로다 |
 | D-494 | 5항 trip 상태기계에 "기다림"이 읽기 값으로 더해지고, 정체 판정이 8항의 함수를 쓴다. 상태 값 넷은 그대로다 |
-| D-573 | 4항의 "게이트 대기는 정체로 세지 않는다"를 8항의 함수 안에서 구현한다. 뜻은 같다 |
+| D-573 | 4항의 "게이트 대기는 정체로 세지 않는다"를 차로 규제 세션이 8항의 함수 안에서 구현한다(밖의 조각 A). 뜻은 같다 |
 
 D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 
@@ -201,16 +223,25 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 
 | 순서 | 조각 | 소유 모듈 | 시험과 관문 | 조건 |
 |---|---|---|---|---|
-| 1 | "주인이 있는가" 함수 하나로 일곱 검사를 모은다. 동작은 같다 | `operations/fleet/fleet/server/ledger/trip_guard.py`와 부르는 곳 | 호스트: 지금의 trip guard·console·dispatch 시험이 그대로 통과. 줄 수 감소. safety 태그 경로면 Safety-Review | 없음 |
-| 2 | 기다림 판정 함수 하나, 정체 시계가 그것을 쓴다(횡단보도 게이트·신호 대기 포함), trip 읽기에 기다림과 사유 | `ledger/trip_progress.py`, `ledger/trip_ports.py` | 호스트: 가짜 로봇이 사유마다 `stall_s`보다 오래 서 있어도 trip이 열려 있고, 상한을 넘으면 개입으로 간다. SIM: 원격 Gazebo에서 횡단보도 대기가 든 바퀴. 장치: 횡단보도 대기가 든 바퀴 한 번. API 버전(읽기 추가) | 차로 규제 작업의 사유 목록과 상한 |
+| 1 | "주인이 있는가" 함수 하나로 일곱 검사를 모은다. 동작은 같다 | `operations/fleet/fleet/server/ledger/trip_guard.py`와 부르는 곳 | 호스트: 지금의 trip guard·console·dispatch 시험이 그대로 통과. 줄 수 감소. safety 태그 경로면 Safety-Review. 착지 전에 차로 규제 세션에 알린다 | 없음 |
+| 2 | 밖의 조각 A의 기다림 판정을 읽기로 낸다: trip 읽기에 기다림과 사유, 상한을 넘으면 개입 | `ledger/trip_ports.py`, `work_read.py` | 호스트: 사유마다 상한 안에서는 기다림, 넘으면 개입. API 버전(읽기 추가) | 밖의 조각 A, D-573·D-525 개정의 사유 목록 |
 | 3 | 새 작업의 "이동" 입구. 로봇 카드와 같은 trip 경로를 부른다 | `operations/site_ui/console`(`shared/site-map-model.js`의 `planTrip`·`startTrip` 재사용) | node 시험, CI 브라우저 시험. 서버 변경 없음. 장치: 새 작업에서 시작한 운행 한 번이 로봇 카드에서 시작한 것과 같은 trip 기록을 남긴다 | 없음(D-741 조각과 같은 자리) |
 | 4 | `GET /api/fleet/work`에 trip·Cell Job 출처와 보이는 상태, 승인 대기의 소유 범위, 종류 목록 읽기 | `work_read.py`, `work_routes.py`, `core_common.protocol.schemas`, `work-view.js` | 호스트: 출처별 행, 권한(viewer·운영자·제안자·다른 운영자), 원장 미설정. SRS `UI-WORK-001`, API 버전, API Reference. 화면 시험 | 2(기다림 값) |
 | 5 | 등록부의 승인 값과 승인 경로의 등록부 판정, 계약 시험 | `step_action_kinds.py`, `ledger/mission_routes.py` | 호스트: 7항의 계약 시험. Cell Job 승인 시험이 그대로 통과 | 없음 |
-| 6 | 작업이 쥔 lease의 단계 사이 유지(CORE)와 작업의 `robot` claim(Fleet) | `middleware/core/gateway/core/trip_lease.py`, Fleet `traffic/trip_lease.py`, `dispatch_admission.py` | Safety-Review. API 버전. 호스트: 단계 사이 IDLE에서 주인 아닌 `/mode`·`/teleop` 409, 넘겨받기와 멈춤은 통과, 만료는 지금과 같다. SIM: 원격 Gazebo에서 단계 사이에 다른 입구가 거절된다. 장치: 실물 로봇에서 단계 사이에 Pilot이 거절되고 넘겨받기는 된다 | 열린 질문 2·3의 답 |
-| 7 | 운행 단계가 Step 원장에 들어간다(trip을 단계로 쓰는 어댑터) | D-420 §3의 원장 소유자, `step_dispatcher.py` | 호스트: `arrived`만 다음 단계로, 다른 끝은 HOLD(사유), 재승인이 새 trip을 연다, Fleet 재시작 뒤 자동 재출발 없음 | 6, D-420 §3의 원장 확정 |
+| 6 | 작업이 쥔 lease의 단계 사이 유지(CORE)와 작업의 `robot` claim(Fleet) | `middleware/core/gateway/core/trip_lease.py`, Fleet `traffic/trip_lease.py`, `dispatch_admission.py` | Safety-Review. 시작 전에 D-760 담당 세션에 알린다. API 버전. 호스트: 단계 사이 IDLE에서 주인 아닌 `/mode`·`/teleop` 409, 넘겨받기와 멈춤은 통과, 만료는 지금과 같다, trip 루프를 멈추면 작업 claim이 있어도 통행권·목표 임대가 만료한다(4항 굳은 규칙), 팔 동작 중 lease 만료의 정지. SIM: 원격 Gazebo에서 단계 사이에 다른 입구가 거절된다. 장치: 실물 로봇에서 단계 사이에 Pilot이 거절되고 넘겨받기는 된다 | 열린 질문 2·3의 답, D-760 2단계 착지 |
+| 7 | 운행 단계가 Step 원장에 들어간다(trip을 단계로 쓰는 어댑터) | D-420 §3의 원장 소유자, `step_dispatcher.py` | 호스트: `arrived`만 다음 단계로, 다른 끝은 HOLD(사유), 재승인이 새 lease와 출발 검사로 새 trip을 연다, Fleet 재시작 뒤 자동 재출발 없음, 작업의 움직임이 규칙 M에 trip 보기나 목표 기록으로 보인다, 작업이 내는 목표가 `operator` 출처가 아니다 | 6, D-420 §3의 원장 확정 |
 | 8 | 가져오기 종류(운반 로봇 ↔ 고정 팔 인계) | 인계 ADR이 정한다 | SIM: 원격 Gazebo에서 운행 → 인계 → 운행, 단계마다 끊김 3 s·6 s·9 s. 장치: 별도 결정 | 6, 7, 인계 ADR, 측정된 짐 프로필, 하지 않는 것 2의 기준 |
 
 1·3·5는 서로 기다리지 않는다. 이동은 3과 4가 착지하면 새 작업에서 시작하고 목록에서 보인다.
+
+**밖의 조각(이 기록이 소유하지 않는다).**
+
+| 조각 | 소유 | 내용 | 조건 |
+|---|---|---|---|
+| A | 차로 규제 세션 | `_stalled`에 횡단보도 게이트·신호 대기 예외를 더하고 규제 정지가 trip을 끝내지 않게 한다. 별도 브랜치, Fleet 크기 단위 순증 0 | 그 세션의 D-573 개정 5 브랜치 착지 뒤 |
+| B | D-760 담당 세션 | D-760 2·3·6단계(통행권 5 s, `link_wait`, 거절, 기본값 켜기) | D-760 일정 |
+
+**의존하는 Proposed 기록.** D-494, D-541, D-573은 Proposed다. 이 기록의 조각이 이들이 먼저 Accepted가 되기를 기다리지는 않는다. 그 코드가 이미 있거나 그 세션이 만든다. D-573은 개정 5의 SIM 바퀴와 장치 조건이 닫힌 뒤에야 Accepted 후보이고, Accepted는 사용자가 정한다. D-420과 D-758도 Proposed이고, 이 기록은 그 둘에 기대지 않는 이동부터 연다.
 
 ### Alternatives
 
@@ -229,19 +260,36 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 
 사용자에게 묻는 것이다. 각 항에 권고를 적는다.
 
-1. **가져오기의 팔은 어느 것인가: 고정 팔과의 인계인가, 로봇에 장착된 팔인가.** 권고: 고정 팔 인계를 먼저 한다. D-664 5항이 후속 실행을 그 한 가지로 한정했고, 장착 팔은 D-55의 로컬 transaction과 장치 측정이 먼저다.
-2. **단계 사이에 CORE가 로봇의 주인을 어떻게 아는가.** 권고: trip lease 하나를 작업 동안 유지한다(4항의 제안). 새 어휘를 만들지 않고 D-541의 넘겨받기·만료·멈춤 규칙을 그대로 쓴다. Safety-Review를 받는다.
+1. **가져오기의 팔은 어느 것인가: 고정 팔과의 인계인가, 로봇에 장착된 팔인가.** 권고: 고정 팔 인계를 먼저 한다. D-664 5항이 후속 실행을 그 한 가지로 한정했고, 장착 팔은 D-55의 로컬 transaction과 장치 측정이 먼저다. (D-760 담당 세션은 이 판단을 검토하지 않았고, 이동을 먼저 여는 데는 동의했다.)
+2. **단계 사이에 CORE가 로봇의 주인을 어떻게 아는가.** 권고: trip lease 하나를 작업 동안 유지한다(4항의 제안). 새 어휘를 만들지 않고 D-541의 넘겨받기·만료·멈춤 규칙을 그대로 쓴다. 단 lease는 주인만 말하고, 움직임 한도(통행권 5 s, 목표 임대 3.5 s)는 단계마다 그 움직임을 모는 루프만 늘린다(4항 굳은 규칙). 팔 동작 중 lease 만료 때의 정지를 같이 정한다. Safety-Review를 받고 D-760 담당 세션에 미리 알린다.
 3. **lease가 만료한 뒤 물체를 실은 로봇을 누가 움직일 수 있는가.** 권고: 지금과 같이 둔다. CORE는 IDLE이고 사람이 가져갈 수 있다. Fleet이 죽은 상황에서 사람이 로봇을 못 옮기는 쪽이 더 나쁘다. Fleet 쪽 작업은 HOLD로 남아 claim을 쥐고, 누가 가져갔는지는 `trip_lease_ended`로 기록에 남는다.
 4. **이동에 두 번째 승인을 넣지 않는 것이 맞는가.** 권고: 넣지 않는다. 지금처럼 이름 있는 운영자 한 사람이 시작한다.
 5. **레거시 `PICK_PLACE` Mission의 본인 승인을 언제 두 사람으로 바꾸는가.** 권고: 실물 하달을 연결하는 조각에서 같이 바꾼다. 그 전에는 하달이 없어 위험이 없고, 지금 바꾸면 쓰는 시험과 화면만 깨진다.
 6. **승인 대기에서 다른 사람의 제안을 어디까지 보이는가.** 권고: 요약 행(종류, 장치, 작업 공간, 제안한 사람, 시각)만 이름 있는 운영자에게 보인다. 계획과 후보 본문은 지금의 상세 권한을 따른다.
 7. **"두 번 실패하면 사람"으로 할 것인가.** 권고: 작업 층은 한 번 실패하면 사람이다. 두 번은 막힘 해결기 안의 한도(D-622)로만 둔다. 작업 층에 횟수를 두면 그것이 새 자동 재시도가 된다.
 8. **Task navigate와 D-463 `/route`를 없앨 것인가.** 권고: 지금은 남기고 새 작업에 올리지 않는다. D-760 6단계가 임대 없는 목표를 거절하면 쓰이는 곳이 드러나고, 그때 따로 정한다.
-9. **기다림 사유의 목록과 상한은 누가 정하는가.** 권고: 차로 규제 작업이 정한다. 이 기록은 두 갈래(`regulation`, `robot_help`)와 "기다림과 정체는 같은 함수", "상한 없는 사유는 없다"만 고정한다.
-10. **다단계 종류의 승인 조건에 "현장 trip lease 켜짐"을 넣는 것이 맞는가.** 권고: 넣는다. lease가 꺼진 현장에서는 단계 사이의 주인이 없다. D-760 6단계가 기본값을 켜면 이 조건은 늘 참이다.
+9. **기다림 사유의 목록과 상한은 누가 정하는가.** 답이 정해졌다: 차로 규제 세션이 소유하고 D-573·D-525 개정에 싣는다. 이 기록은 두 갈래(`regulation`, `robot_help`)와 "기다림과 정체는 같은 함수", "상한 없는 사유는 없다"만 고정한다. 사용자에게 남는 질문은 없다.
+10. **다단계 종류의 승인 조건에 "현장 trip lease와 통행권 둘 다 켜짐"을 넣는 것이 맞는가.** 권고: 넣는다. lease가 꺼진 현장에서는 단계 사이의 주인이 없고, lease만 켜면 차로 로봇이 `authority_none`으로 선다. D-760 6단계가 두 기본값을 같이 켜면 이 조건은 늘 참이다.
 
 ### 근거의 경계
 
 - 이 기록의 사실은 2026-10-14 워크트리 `e8bcc99a5`의 코드와 ADR을 읽은 것이다. 실행한 시험, SIM, 장치 확인은 없다.
-- 확인 못 함: D-420의 일부가 다른 이름으로 구현됐는지, API 버전 고정이 아홉 곳인지, 횡단보도 대기 중 `stall` 종료의 재현, 콘솔 쪽 크기 단위의 남은 여유, Pinky–OMX 인계 ADR이 다른 제목으로 있는지.
+- 확인 못 함: SIM에서 `crosswalk_blocked`가 trip을 끝낸 경로(차로 규제 세션의 관측), D-760 2단계 브랜치의 내용, D-420의 일부가 다른 이름으로 구현됐는지, API 버전 고정이 아홉 곳인지, 횡단보도 대기 중 `stall` 종료의 재현, 콘솔 쪽 크기 단위의 남은 여유, Pinky–OMX 인계 ADR이 다른 제목으로 있는지.
 - Accepted가 되어도 구현, 원격 시험, 설치, 현장 수용은 조각마다 따로다.
+
+### 개정 1 (2026-10-14) — 검토 반영
+
+| 지적 | 고친 곳 |
+|---|---|
+| 규제 정지는 trip의 끝이 아니라 기다림이다. SIM에서 `crosswalk_blocked`가 trip을 끝냈다 | 8항 |
+| 사유 목록과 상한은 차로 규제 세션이 소유한다(초안 상한) | 8항, 열린 질문 9 |
+| `_stalled` 예외는 차로 규제 세션의 별도 브랜치다 | 조각 2, 밖의 조각 A |
+| 주인 함수 조각 착지 전에 알린다 | 조각 1 |
+| D-494·D-541·D-573은 Proposed 의존이다 | 의존하는 Proposed 기록 |
+| 작업의 주인은 움직임 한도를 늘리지 않는다 | 4항 굳은 규칙, 조각 6, 열린 질문 2 |
+| D-760 2단계와 `core/trip_lease.py`, 팔 동작 중 만료 | 4항, 조각 6 |
+| D-760 단계별 상태, lease와 통행권 둘 다 켜기 | Context 6, 5항, 열린 질문 10 |
+| `lease_lost` 선언 시점과 다시 닿을 때의 확인, 재개는 새 lease와 출발 검사 | 10항, 조각 7 |
+| 작업의 이동은 `operator` 출처가 아니다 | 6항, 조각 7 |
+| 규칙 M이 작업의 움직임을 본다 | 5항, 조각 7 |
+| 고정 팔 판단은 D-760 담당 세션이 검토하지 않았다 | 열린 질문 1 |
