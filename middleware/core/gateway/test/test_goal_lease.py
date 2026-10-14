@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
+OTHER = {"Authorization": "Bearer rosy-dev-admin"}   # another token that passes `operator`
 
 
 class Clock:
@@ -47,9 +48,9 @@ def _goal(tc, **extra):
                    headers=OPERATOR)
 
 
-def _renew(tc, correlation_id, ttl_s=2.0):
+def _renew(tc, correlation_id, ttl_s=2.0, headers=OPERATOR):
     return tc.post("/api/v1/navigation/goal/lease",
-                   json={"correlation_id": correlation_id, "ttl_s": ttl_s}, headers=OPERATOR)
+                   json={"correlation_id": correlation_id, "ttl_s": ttl_s}, headers=headers)
 
 
 def _canceled(svc):
@@ -135,6 +136,30 @@ def test_newer_unleased_goal_is_not_cancelled_by_an_old_lease(robot):
     _goal(tc, correlation_id="a-2")
     svc.nav.on_goal_accepted()
     clock.now += 10.0
+    assert svc.nav.expire_goal_lease() is False and executor.cancelled == 0
+
+
+def test_only_the_sending_token_renews_and_another_token_leaves_the_lease_alone(robot):
+    """D-760 9: another operator token is 403 FORBIDDEN; the goal keeps its own expiry."""
+    tc, svc, executor, clock = robot
+    _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
+    svc.nav.on_goal_accepted()
+    clock.now += 1.5
+    reply = _renew(tc, "a-1", headers=OTHER)
+    assert reply.status_code == 403 and reply.json()["error"]["code"] == "FORBIDDEN"
+    assert svc.nav.fleet_goal()[0] == "a-1" and executor.cancelled == 0
+    clock.now += 0.6                                       # past the sender's 2.0 s, not extended
+    assert svc.nav.expire_goal_lease() is True and executor.cancelled == 1
+    assert _renew(tc, "a-1", headers=OTHER).json()["error"]["code"] == "GOAL_LEASE_NOT_ACTIVE"
+
+
+def test_same_token_renews_after_another_token_was_refused(robot):
+    tc, svc, executor, clock = robot
+    _goal(tc, correlation_id="a-1", lease_ttl_s=2.0)
+    svc.nav.on_goal_accepted()
+    assert _renew(tc, "a-1", headers=OTHER).status_code == 403
+    assert _renew(tc, "a-1").status_code == 200
+    clock.now += 1.9
     assert svc.nav.expire_goal_lease() is False and executor.cancelled == 0
 
 
