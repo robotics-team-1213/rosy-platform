@@ -30,6 +30,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
+    # D-760 rev 3: gateway HTTP serialization of the real manager wait judgement.
+    "middleware/core/gateway/test/test_line_regulation_wait_api.py",
     # 2026-10-12: the steering-law commit added this file and missed this list.
     # It drives LineFollowManager through the loaded drivable steer.
     "middleware/core/gateway/test/test_line_follow_drivable_law.py",
