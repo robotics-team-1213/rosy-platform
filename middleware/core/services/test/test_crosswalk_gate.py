@@ -453,7 +453,7 @@ def test_a_frame_without_the_line_keeps_the_last_corridor_for_its_ttl_in_the_sam
     s.frame()
     held = s.m._fresh_corridor(s.t)
     assert held is not None
-    s.m.observe(LineObservation(LineFollowMode.CAMERA_LINE, s.t, False, 0.0, 0.0), received_at=s.t, source_now=s.t)
+    s.m.observe(LineObservation(LineFollowMode.CAMERA_LINE, s.t, False, None, 0.0), received_at=s.t, source_now=s.t)
     assert s.m._return_evidence._lane is None and s.m._fresh_corridor(s.t + 0.1) is held
     assert s.m._fresh_corridor(s.t + 0.31) is None                     # EVIDENCE_TTL_S
     s.m._return_evidence.reset()                                      # a new odom run: never the old corridor
