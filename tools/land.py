@@ -306,15 +306,16 @@ def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(wt: Path, base: str, python: str) -> tuple[list[list[str]], str | None]:
-    """pytest invocations for the branch delta (base...HEAD), and a note owed to the summary.
+def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[list[list[str]], str | None]:
+    """pytest invocations for base...HEAD (or base...head), and a FULL note owed to the summary.
 
     The D-436 selector (`rosy_harness.py affected`) when the harness is present —
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
     """
     if (wt / "tools/harness/affected_tests.py").is_file():
         # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
-        result = subprocess.run([python, HARNESS, "affected", "--base", base, "--json"], cwd=wt,
+        result = subprocess.run([python, HARNESS, "affected", "--base", base, *(["--head", head] if head else []),
+                                 "--json"], cwd=wt,
                                 capture_output=True, text=True, encoding="utf-8", env=ENV)
         if result.returncode != 0:
             raise Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
@@ -339,6 +340,8 @@ def safety_review(wt: Path, base: str, head: str, python: str) -> None:
     if not (wt / SAFETY).is_file():
         return
     code, text = step(wt, [python, SAFETY, base, head], None, "safety-review", allow_fail=True)
+    if code and "without a `Safety-Review:" not in text:  # a crash or missing history: no trailer advice
+        raise Stop(f"{text.strip()}\nsafety_review.py failed (exit {code}); not landing")
     if code:
         raise Stop(f"{text.strip()}\nnot landing: each commit listed needs a `Safety-Review: <reviewer/lane>"
                    " <evidence>` trailer in its own message; a later trailer-only commit does not cover it, and"
@@ -473,7 +476,8 @@ def land(args) -> int:
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
-    start = out(wt, "rev-parse", "main")
+    full_main: str | None = None  # main under this branch's last green FULL tier
+    start =out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
         reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
@@ -489,7 +493,15 @@ def land(args) -> int:
         if args.tests == "none":
             invocations: list[list[str]] = []
         elif args.tests == "auto":
-            invocations, note = select(wt, main_sha, python)
+            if full_main:
+                # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
+                # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
+                invocations, note = select(wt, full_main, python, head=main_sha)
+                reusable = False  # the FULL tier ran on an earlier candidate
+                summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
+                               f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
+            else:
+                invocations, note = select(wt, main_sha, python)
             if note and note not in summary:
                 summary.append(note)
         else:
@@ -513,6 +525,7 @@ def land(args) -> int:
         began = time.monotonic()
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
         if note:
+            full_main = main_sha
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha

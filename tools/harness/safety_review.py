@@ -586,7 +586,7 @@ def main(argv: list[str]) -> int:
     for commit in checked:
         reasons = needs_review(commit, range_manifests)
         if reasons and not TRAILER.search(_git("log", "-1", "--format=%B", commit)):
-            subject = _git("log", "-1", "--format=%h %s", commit).strip()
+            subject = _git("log", "-1", "--format=%h %s (author %an)", commit).strip()
             missing.append(f"{subject}\n    " + "\n    ".join(reasons))
     print(f"[safety-review] {len(checked)} commit(s) checked after baseline {BASELINE[:9]}")
     if not missing:
