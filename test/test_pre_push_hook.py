@@ -149,7 +149,8 @@ def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: s
 
 def _run_safety_step(repo):
     """The hook's Safety-Review step, exactly as written, in `repo`."""
-    step = SCRIPT.read_text(encoding="utf-8").split("# No origin/main would narrow", 1)[1].split("FAST_SUITES=(", 1)[0]
+    step = (SCRIPT.read_text(encoding="utf-8").split("# No origin/main would narrow", 1)[1]
+            .split("\n", 1)[1].split("FAST_SUITES=(", 1)[0])
     head = 'set -euo pipefail\nPUSH_SHA="$(git rev-parse HEAD)"\n'
     return subprocess.run([BASH, "-c", head + step], cwd=repo, capture_output=True, text=True,
                           env={**os.environ, "PY": sys.executable})
