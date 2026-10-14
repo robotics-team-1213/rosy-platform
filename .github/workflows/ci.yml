@@ -241,7 +241,7 @@ jobs:
           import sys
 
           # Enable only Fleet and the explicit account SSO journey; leave other CORE browsers opt-in.
-          account_browser = "middleware/core/gateway/test/test_account_pipeline.py::test_browser_sso_return_uses_real_cookies_and_authority_ui"
+          account_browser = "middleware/core/gateway/test/test_account_pipeline.py"
           runs = []
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
               browser = [p for p in paths if p.startswith("operations/fleet/test") or p == account_browser]
