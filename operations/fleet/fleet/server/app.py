@@ -771,7 +771,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
-    install_trip_guard(console, trip_runner)
+    install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:

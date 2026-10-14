@@ -1,6 +1,6 @@
 # ROSY Platform 현재 폴더 책임
 
-2026-10-13 S1~S10 source 정리 및 local main 착지 완료. 원격 재검증·CI·배포·장치는 별도 NOT RUN. [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이 현재 배치 기준이다.
+2026-10-13 폴더 정리의 착지 범위는 [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이다. 그 기록과 아래 단계 표가 다르면, 현재 경로는 편집 집 표와 manifest다. 원격 재검증·CI·배포·장치는 그 기록이 NOT RUN으로 남긴 항목이다.
 
 2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
 
@@ -31,7 +31,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
-집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sightings/odom의 현재 상태를 투영하며 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
 
 같은 영어 단어는 집을 나눈다.
 
@@ -52,7 +52,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 
 ## 폴더 이름과 묶음
 
-[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표는 현재 경로다. S1의 현재 경로는 D-743을 따르며 S2~S10은 이동 전이다.
+[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표가 현재 경로다. S1은 D-743, S10의 MapPose 직접 import는 D-752로 끝났다. S2~S9 칸이 「이동 전」이면 그 문장이 기록한 시점이다. 편집 집 표나 manifest와 다르면 편집 집 표와 manifest가 현재 경로다.
 
 규칙은 여섯 가지다. 디렉터리의 마지막 이름은 권한 하나다. import와 ROS 패키지 이름은 유지한다. 같은 입력과 같은 출력은 한 기능 폴더에 둔다. 사실, 명령, 원장, 임대, 후보 검사는 나눈다. 경로는 실행 PC가 아니다. 한 커밋에 한 단계만 착지한다.
 
@@ -66,7 +66,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 7 | `lane_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 남긴다 | 이동 전 |
 | 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | 이동 전. SQLite는 하나 |
 | 9 | `perception/tools`의 호스트 도구를 `tools/sim`, `tools/calibration`로 | 이동 전 |
-| 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | 이동 전 |
+| 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import. Fleet alias 없음 |
 
 권한이 다른 폴더는 이름이 같아도 합치지 않는다. 보정 세션 임대, 공통 Safety, 장치 로컬 허용 동작, 상황 사실, 로봇 로컬 실행, 천장 관측, CORE 조립은 각 단계를 지나도 자기 폴더에 남는다. 다섯 설치 이름 폴더 `control`, `planning`, `safety`, `sensing`, `wander`도 남는다.
 
@@ -182,7 +182,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
 | `operations/site_ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
 | `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
-| `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — ObservationSnapshot/API와 `state/projections/map_pose.py`. Fleet MapPoseService·trip·swarm·lane compliance·history가 실제 소비 |
+| `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — `ObservationSnapshot`과 `state/projections/map_pose.py`. Fleet은 그 모듈을 직접 import한다(D-752). MapPoseService·trip·swarm·lane·history의 서비스와 원장은 Fleet |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |
@@ -229,7 +229,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 
 `control` ROS 배포는 유지된다. `control.sensing`의 실제 구현은 `middleware/perception/sensors/sensing`, `control.sensing.perception`은 `middleware/perception/front_camera/perception`에 있다. `control.control`의 평탄한 module identity는 Drive의 `safety/recovery/tracking/calibration` holder에서 설치하고 `control.planning`, `control.wander`, `control.safety`도 기존 이름으로 설치한다. `control` 아래 compatibility 진입점은 source 조회의 좁은 path 연결과 기존 export를 맡는다. 설치된 배포가 checkout의 sibling 경로를 필요로 하는 구조로 해석하지 않는다. build는 정적 source mapping을 사용하고 sdist는 실제 source snapshot을 포함한다.
 
-Fleet의 `rosy.world.state.projections.map_pose`는 World 구현 module의 명시적인 identity alias다. MapPose 알고리즘은 World에 있고 HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
+MapPose 구현은 `operations/world`의 `rosy.world.state.projections.map_pose` 하나다. Fleet 소비자는 그 모듈을 직접 import하고, D-630의 Fleet identity alias는 D-752에서 제거했다. HTTP route·roster·admission·claim·dispatch는 Fleet에 남는다. Situation의 기존 `deadlock`, `incident_context`, `vlm`은 이동한 module identity를 유지하는 명시적 alias이며 analyzers package는 기존 기호를 명시적으로 export한다. 호환 코드에 알고리즘을 복제하지 않는다.
 
 Gazebo의 launch와 script는 manifest에서 각각 별도 concern을 갖지만 실제 ROS 배포명은 `gz_sim`이다. launch가 장치 pipeline을 시작한다는 이유만으로 resource/install owner를 다른 패키지로 분리하지 않았다. robot description·map/STL lineage·기존 share resource를 그 패키지 소비자와 함께 유지한다.
 
@@ -243,7 +243,7 @@ D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제
 
 후속 main `7afb0e2c4`의 소스에서는 D-661 인수·알림이 `fleet/incidents/{handoff,notifications}.py`에 있다. 다음 구조 작업도 이 직접 import 경로와 책임을 유지한다. Situation의 `rosy_situation/incidents`는 상황 근거를 구성하는 모듈이며 Fleet의 담당 인수·전송 원장과 구분한다. [하위 패키지 이동 계획](../plans/2026-10-11-fleet-team-incidents-subpackage.md)과 [책임 분리 계획](../plans/2026-10-11-responsibility-authority-orchestration.md)을 따른다. D-660~D-662 소스 반영과 최종 검증 receipt·실제 운영 수용은 별개이며, 실제 채널 수신·현장 정답 검수 및 단계 6 모델 토론은 HOLD다.
 
-현재 World 구현은 `ObservationSnapshot`과 관측/odom을 합성하는 `MapPoseTracker`다. `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 이를 소비한다. World 내부의 `predicted` 표기는 마지막 관측에서 odom으로 갱신하는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
+현재 World 구현은 `ObservationSnapshot`과 관측·운영자 pin·odom을 합성하는 `MapPoseTracker`다. Fleet의 `MapPoseService`, trip admission/progress/ports, swarm anchor, lane compliance, path history가 `rosy.world.state.projections.map_pose`를 직접 소비한다. `source=bridged`는 마지막 관측에서 odom으로 잇는 dead reckoning이며, 행동 후보를 넣고 미래 상태·불확실성을 내는 action-conditioned rollout이 아니다. `road_region`은 카메라 구역 입력의 시각·프레임·보정·근거 검사이고 주행이 아니다(D-665). 관측 타입의 정본은 `core_common.observation`이다(D-667). Situation은 현재 stuck/traffic/incident 사실과 일부 analyzer의 제한된 WAIT/BACK_AND_RETRY 제안을 별도로 출력한다. 기존 제안 출력을 모두 사실 또는 새 공통 assessment로 집계하지 않는다.
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 

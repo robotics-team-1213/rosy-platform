@@ -64,8 +64,19 @@ def observe_bounded_trial(bridge, msg, sample, *, now=None):
         except Exception:pass
 
 
-def observe_lane_return(bridge, msg, sample, *, now=None):
-    """Preserve the real odom source clock; never derive travel from issued twists."""
+def observe_odom(bridge, msg, sample):
+    """RosBridge._on_odom's odom hand-over (D-758 0): the state snapshot stamps the pose (epoch from the
+    message frame and header time) and the line-follow log keys the same sample on that stamp."""
+    stamp = msg.header.stamp
+    wall = bridge._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"], frame=msg.header.frame_id,
+                                           source_stamp_ns=stamp.sec * 1_000_000_000 + stamp.nanosec)
+    observe_bounded_trial(bridge, msg, sample)
+    observe_lane_return(bridge, msg, sample, wall=wall)
+
+
+def observe_lane_return(bridge, msg, sample, *, now=None, wall=None):
+    """Preserve the real odom source clock; never derive travel from issued twists. ``wall``: the
+    stamp the state snapshot published for this sample (D-758 0: the odom log is found by it)."""
     line = bridge._svc.line_follow
     try:
         stamp = msg.header.stamp
@@ -88,6 +99,6 @@ def observe_lane_return(bridge, msg, sample, *, now=None):
         line.observe_return_pose(stamp_ns=stamp.sec*1_000_000_000+stamp.nanosec,
             source_now_ns=bridge._node.get_clock().now().nanoseconds,
             frame=msg.header.frame_id, x=sample["x"], y=sample["y"], yaw=sample["yaw"],
-            received_at=bridge._line_clock() if now is None else now)
+            received_at=bridge._line_clock() if now is None else now, wall=wall)
     except (AttributeError, KeyError, TypeError, ValueError):
         line.invalidate_return_pose()

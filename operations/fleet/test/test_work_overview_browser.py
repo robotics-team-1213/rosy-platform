@@ -305,7 +305,7 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
 
 @pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
 def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size):
-    """D-763 4 (v1.235): trip and Cell Job rows stand beside Task/Mission with the server's visible state; a wait
+    """D-763 4 (v1.238): trip and Cell Job rows stand beside Task/Mission with the server's visible state; a wait
     reads as 대기 and past its bound as a warning, not 개입. 승인 대기·끝난 작업 filter the same answer. Placeholder
     identities only (rev 2 Q6)."""
     from playwright.sync_api import sync_playwright
