@@ -1,4 +1,6 @@
 """D-517 4 (M2): the Fleet movement authority gate in the real line-follow manager (no ROS)."""
+import json
+
 import pytest
 
 from core_features.line_follow.authority import AuthorityRefused
@@ -487,3 +489,55 @@ def test_earlier_stops_keep_their_reason_under_a_lease_without_authority():
     rig.m.stop('estop')
     decision = rig.step()
     assert decision.linear == 0. and (rig.m.status().state, rig.m.status().reason) == ('OFF', 'mode_off')
+
+
+# --- D-758 0: the odom log is found by the stamp CORE published, its order and age on the line clock ---
+
+@pytest.mark.parametrize('step_s', [-5., 5.])
+def test_a_wall_clock_step_after_fleets_pose_finds_the_same_sample(step_s):
+    rig = Rig()
+    for _ in range(3):
+        rig.step()
+    stamp = json.loads(json.dumps(WALL + rig.now))  # snapshot odom_pose.stamp, through Fleet and back
+    rig.m._wall = lambda: WALL + rig.now + step_s  # chrony steps the wall clock
+    for _ in range(3):
+        rig.step(dx=.01)
+    assert rig.send(.5, stamp=stamp)['accepted'] is True
+    assert rig.authority()['remaining_m'] == pytest.approx(.47, abs=1e-6)
+
+
+def test_two_samples_on_one_wall_stamp_resolve_to_the_newest():
+    rig = Rig()
+    rig.step()
+    rig.m._wall = lambda: WALL + 9.  # a later sample lands on this stamp after a backward step
+    rig.step(dx=.01)
+    rig.m._wall = lambda: WALL + rig.now - 9.
+    rig.step(dx=.01)
+    rig.m._wall = lambda: WALL + 9.
+    rig.step(dx=.01)  # the newest sample on WALL + 9
+    rig.m._wall = lambda: WALL + rig.now
+    rig.step(dx=.01)
+    assert rig.send(.5, stamp=WALL + 9.)['accepted'] is True
+    assert rig.authority()['remaining_m'] == pytest.approx(.49, abs=1e-6)
+
+
+def test_an_old_fleet_stamp_between_samples_resolves_as_before():
+    rig = Rig()
+    rig.step()
+    stamp = WALL + rig.now + .03  # not a published stamp: the sample at or before it
+    rig.step(dx=.01)
+    rig.step(dx=.01)
+    assert rig.send(.5, stamp=stamp)['accepted'] is True
+    assert rig.authority()['remaining_m'] == pytest.approx(.48, abs=1e-6)
+
+
+def test_a_backward_wall_step_does_not_forget_a_legs_seq():
+    rig = Rig()
+    for _ in range(3):
+        rig.step()
+    rig.m._wall = lambda: WALL + rig.now - 10.
+    rig.step()
+    rig.send(1., leg='L1', seq=5)
+    rig.send(1., leg='L2', seq=1)
+    assert set(rig.m._authority_seq) == {'L1', 'L2'}
+    assert rig.send(2., leg='L1', seq=4)['reason'] == 'stale_seq'
