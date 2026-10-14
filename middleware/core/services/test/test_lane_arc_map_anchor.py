@@ -212,6 +212,15 @@ def test_a_wall_clock_step_after_the_pair_still_places_the_anchor(step_s):
     assert rig.m._arc['centre'] == pytest.approx(centre, abs=1e-9)
 
 
+def test_two_samples_on_the_anchors_stamp_keep_todays_circle():
+    """D-758 0 review 1: an ambiguous stamp pairs with no sample."""
+    rig = _wall_rig()
+    rig.m._wall = lambda: WALL + 9.
+    rig.step()
+    rig.step()
+    _todays(rig, _send_open(rig, _anchor(rig, _off_circle(), odom_stamp_s=WALL + 9.)), 'no_sample')
+
+
 @pytest.mark.parametrize('offset, reason', [(.5, 'future'), (-.9, 'no_sample')])
 def test_a_stamp_outside_cores_odom_history_keeps_todays_circle(offset, reason):
     """Newer than CORE's clock, or older than the first odom sample of this run."""

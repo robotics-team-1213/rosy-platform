@@ -506,7 +506,8 @@ def test_a_wall_clock_step_after_fleets_pose_finds_the_same_sample(step_s):
     assert rig.authority()['remaining_m'] == pytest.approx(.47, abs=1e-6)
 
 
-def test_two_samples_on_one_wall_stamp_resolve_to_the_newest():
+def test_two_samples_on_one_wall_stamp_are_refused():
+    """Review 1: the newest would count less travel (more room); an ambiguous stamp is not found."""
     rig = Rig()
     rig.step()
     rig.m._wall = lambda: WALL + 9.  # a later sample lands on this stamp after a backward step
@@ -517,8 +518,10 @@ def test_two_samples_on_one_wall_stamp_resolve_to_the_newest():
     rig.step(dx=.01)  # the newest sample on WALL + 9
     rig.m._wall = lambda: WALL + rig.now
     rig.step(dx=.01)
-    assert rig.send(.5, stamp=WALL + 9.)['accepted'] is True
-    assert rig.authority()['remaining_m'] == pytest.approx(.49, abs=1e-6)
+    with pytest.raises(AuthorityRefused) as err:
+        rig.send(.5, stamp=WALL + 9.)
+    assert err.value.code == 'AUTHORITY_POSE_STALE'
+    assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
 
 
 def test_an_old_fleet_stamp_between_samples_resolves_as_before():
