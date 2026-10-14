@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 2c409d117 · refactor: console.js의 읽지 않는 선언 두 개 삭제
 - 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
 - 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
 - 2026-10-13 · 1438d53d1 · feat(web): control line (D-741), Cell 묶음 선 유지
 - 2026-10-13 · 7f40561e6 · main 브라우저 회귀 수정 재확인 (D-683/D-493/D-519)
-- 2026-10-13 · cfeced643 · main 브라우저 회귀 수정 (D-683/D-493/D-519)
