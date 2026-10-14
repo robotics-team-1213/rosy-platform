@@ -8440,6 +8440,12 @@ osy-d395-s1d\`.
 - 증거: 수정 전 main commit `82d3de6ce`의 깨끗한 원격 checkout에서 동일 실패 재현; 독립 위치 검토 완료. 보정 후 소유권·API·기능 시험 19 passed, NEW 0. 이전 공개 시도는 소유권 실패 및 별도 Fleet 시험의 SSH 단절로 중단돼 push되지 않았다.
 - gate 변화: 없음. 기기·현장 수용과 구분한다.
 
+## 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+
+- 변경: `fix/runtime-jose-lock`에서 사이트에 고정된 `oauthlib==4.0.0`을 CI 검증 target에 제공한다. `--no-deps`와 cryptography 50·device runtime lock을 유지하며, 사이트 pin 누락을 잡는 회귀검사를 추가했다.
+- 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.
+
 ## 2026-10-14 · 18c24973d · D-762 단계 0: Safety-Review는 착지 전에, FULL 착지는 실험실 전체 티어 뒤에
 
 - 변경: `tools/land.py`는 착지가 `main`에 더하는 커밋에 `tools/harness/safety_review.py`(CI `scope` 잡과 같은 규칙)를 돌려 trailer가 없으면 착지하지 않는다. `tools/hooks/pre-push`는 같은 검사를 `origin/main..`push 커밋에 경고가 아니라 거절로 돌린다. 선택기가 FULL이면 가드와 대응 묶음만 돌리고 착지하던 길을 없애고, 실험실 PC에서 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)를 돌려 NEW 0일 때만 착지하며 걸린 시간을 찍는다. FULL 조건에 폴더를 넘는 rename, 지운 Python 모듈, `package.xml`, `_source_layout.py`, `test/architecture/**`, `test/known_failures.txt`를 더하고, 트리거 아래 Markdown 기록, `tools/harness/adr_gaps.txt`, node 시험 파일을 뺐다. 착지 뒤 로컬 `main`이 `origin/main`보다 몇 커밋·몇 시간 앞인지 한 줄로 찍는다(상한은 걸지 않음). D-762 단계 0 보충, `AGENTS.md` 시험 티어 문단, `tools/AGENTS.md` `land.py` 행, `tools/hooks/AGENTS.md`, `tools/harness/AGENTS.md`를 같이 고쳤다.
