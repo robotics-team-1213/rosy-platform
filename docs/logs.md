@@ -8366,3 +8366,10 @@ osy-d395-s1d\`.
 - 증거: ffb2a9f80 원격 `test/test_worktrees_tool.py test/test_land.py` 72 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\6`).
 - gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
 - 결정: 2026-10-14 세션 간 ADR 논의의 세 항목을 반영했다. 착지와 push는 디스패처가 한다.
+
+## 2026-10-14 · 43c9e729f · 소유자 확인은 `--snapshot`에만 둔다 (D-761 Proposed)
+
+- 변경: 손실 없는 `prune --apply`는 소유자를 가리지 않고 조건을 만족하는 워크트리를 지운다. 소유자 확인과 `--all`은 스냅샷이 필요한 행에만 적용한다. `status`의 `you` 열, 상한 거절 문구, D-761 3항·5항·Consequences, 절차 문서 세 곳을 같이 고쳤다.
+- 증거: 43c9e729f 원격 `test/test_worktrees_tool.py test/test_land.py` 73 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\9`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 세션 id가 세션마다 달라 소유자를 따지면 아무것도 치워지지 않는다는 디스패처 지적을 반영했다.

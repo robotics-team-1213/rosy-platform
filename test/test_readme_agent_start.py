@@ -54,7 +54,8 @@ def test_agents_md_records_the_shared_checkout_commands():
 
     assert WORKTREE in section
     assert "python tools/worktrees.py prune --apply" in section
-    assert "60개 이상이면 만들지 않고" in section and "`--all`은 사람이나 디스패처가 정한다" in section
+    assert "60개 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
+    assert "소유자 기록이 없는 것은 `--all`을 줘야 다룬다" in section
     assert "`prune --snapshot`" in section and "사람이나 디스패처만 돌린다" in section
     assert "--snapshot --" not in section  # no ready-to-paste snapshot command for every session
     assert "git worktree lock" in section

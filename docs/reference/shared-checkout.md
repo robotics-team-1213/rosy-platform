@@ -25,8 +25,8 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 이 도구는
    아무것도 지우지 않고, 치울 수 있는 끝난 워크트리 개수와
    `python tools/worktrees.py prune --apply`를 알린다(D-761, Proposed). 그 명령은
-   자신이 만든 워크트리 가운데 깨끗하고, `main`에 들어갔고, 잠기지 않았고, 72시간
-   넘게 쉰 것만 지운다(`--all`은 남의 것과 소유자 없는 것까지).
+   누가 만들었든 깨끗하고, `main`에 들어갔고, 잠기지 않았고, 72시간 넘게 쉰 것만
+   지운다. 더럽거나 `main`에 안 들어간 것은 `--snapshot`의 몫이고 소유자를 가린다.
    `.worktrees/` 아래가 60개 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
    디스패처만 돌린다. 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. 공유
    `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지
