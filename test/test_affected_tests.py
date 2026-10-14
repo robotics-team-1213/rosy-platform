@@ -158,6 +158,13 @@ CASES = [
     ("selector config -> full", ["tools/harness/harness.yaml"], "full", None),
     ("requirements pin -> full", ["deploy/robot/device-python-requirements.txt"], "full", None),
     ("nothing changed -> guards only", [], "affected", set()),
+    # D-762 stage 0: source layout and guard rules escalate; records under a trigger do not.
+    ("package manifest -> full", ["middleware/perception/package.xml"], "full", None),
+    ("source layout -> full", ["middleware/perception/control/_source_layout.py"], "full", None),
+    ("architecture guard -> full", ["test/architecture/test_layout.py"], "full", None),
+    ("known failures list -> full", ["test/known_failures.txt"], "full", None),
+    ("foundation record -> its module suite and direct dependents, not full", ["contracts/foundation/logs.md"],
+     "affected", {"contracts/foundation/test", "middleware/perception/test"}),
 ]
 
 
@@ -227,6 +234,44 @@ def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
     finally:
         _git(sample, "checkout", "-q", "--", ".")
         _git(sample, "checkout", "-q", "main")
+
+
+@pytest.mark.parametrize("change, mode", [
+    (("git", "mv", "middleware/perception/control/battery.py", "middleware/perception/nodes/battery.py"), "full"),
+    (("git", "rm", "-q", "middleware/core/gateway/core/node.py"), "full"),           # import path gone
+    (("git", "mv", "tools/ssh/rosy_ssh_enroll.py", "tools/ssh/enroll.py"), "affected"),  # same folder
+])
+def test_committed_folder_moves_escalate(sample, capsys, change, mode):
+    """D-762 stage 0: the 2026-10-13 S3..S10 restructure shape (renames across folders) is FULL."""
+    _git(sample, "checkout", "-q", "-b", "move")
+    try:
+        (sample / "middleware/perception/nodes").mkdir(exist_ok=True)
+        _git(sample, *change[1:])
+        _git(sample, "commit", "-q", "-m", "move")
+        assert harness.main(["affected", "--repo", str(sample), "--base", "main", "--json"]) == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["mode"] == mode, out["escalations"]
+        assert out["full_invocations"] == (affected.lab_full_invocations() if mode == "full" else [])
+    finally:
+        _git(sample, "checkout", "-q", "main")
+        _git(sample, "branch", "-q", "-D", "move")
+
+
+def test_real_repo_wide_ordinary_edits_stay_affected():
+    """D-762 stage 0: an API version bump (its pin files) and ADR-gap records are not FULL."""
+    repo = affected.Repo.load(ROOT)
+    pins = ["middleware/core/api/core_api_web/api/app.py", "docs/reference/ROSY API & Protocol Reference.md",
+            "operations/fleet/test/test_lane_route.py", "operations/fleet/test/test_mission_progress.py",
+            "test/test_line_follow_contract_docs.py"]
+    for changed in (pins, ["tools/harness/adr_gaps.txt"]):
+        sel = affected.select(repo, changed)
+        assert sel.mode == "affected", sel.escalations
+
+
+def test_lab_full_tier_is_the_ci_full_matrix_plus_the_root_suite():
+    full = affected.lab_full_invocations()
+    assert full[-1] == ["test"]
+    assert full[:-1] == [inv for entry in affected.CI_FULL_MATRIX for inv in entry["invocations"]]
 
 
 def test_missing_base_escalates_to_full(sample, capsys):

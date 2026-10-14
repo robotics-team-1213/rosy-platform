@@ -89,9 +89,15 @@ if out:
     sys.exit(1)
 EOF
 
-# D-430 §5: local early warning for this tip; CI checks the complete pushed range.
-echo "[pre-push] Safety-Review trailer on pushed tip (warning only)"
-"$PY" tools/harness/safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only
+# D-430 §5, D-762 stage 0: the rule CI's scope job enforces, on the range a push to main
+# makes it check (origin/main..tip), refused here rather than red on main after the push.
+echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
+"$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" || {
+  echo "[pre-push] each commit listed needs a Safety-Review: trailer in its own message (no --amend/rebase here):" \
+       "re-create it on a branch from main with the trailer, or EXEMPT its SHA in tools/harness/safety_review.py" \
+       "with an independent review (D-430 §5)" >&2
+  exit 1
+}
 
 FAST_SUITES=(
   test/test_harness_contracts.py

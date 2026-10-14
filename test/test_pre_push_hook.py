@@ -117,10 +117,11 @@ def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
     assert pushed.stdout.strip() == "1" * 40, pushed.stderr
 
 
-def test_safety_warning_checks_tip_while_ci_checks_full_range():
+def test_safety_review_refuses_the_range_ci_checks():
+    """D-762 stage 0: enforced on origin/main..tip, the range a push to main makes CI check."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert 'safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only' in text
-    assert "git merge-base HEAD origin/main" not in text.split("Safety-Review trailer on pushed tip")[1].split("FAST_SUITES", 1)[0]
+    assert 'safety_review.py origin/main "$PUSH_SHA" || {' in text
+    assert "--warn-only" not in text
 
 
 INSTALLER = ROOT / "tools" / "hooks" / "install.sh"
