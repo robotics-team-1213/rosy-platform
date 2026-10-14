@@ -92,6 +92,4 @@ The integration grew junction/gate.py to 602 lines. Apply the existing verdict's
 
 ## 2026-10-14 보탬 — 가상 신호가 `recovery/junction`에서 `line_follow/signal`로
 
-- `recovery/junction/signal.py`(93, D-620 `JunctionSignalMixin`)를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로이고 `recovery/junction/gate.py`의 import 줄 하나만 바뀌었다. 계획과 실측은 `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가에 있다.
-- `recovery/junction` 단위는 1,281 → 1,188줄이다. 남는 파일은 `gate.py`(519), `bend.py`(306), `approach.py`(263), `turn.py`(98), `__init__.py`(2)다. 판정 1,188은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
-- 지키는 것은 그대로다. `LineFollowManager` 믹스인 하나, 매니저 잠금 하나, generation 하나. 의존 방향은 junction → signal 한쪽이다. 런타임 이동과 동작 변경이 없다.
+계획, 실측, 판정은 `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 신호 추가 절 하나에 둔다.
