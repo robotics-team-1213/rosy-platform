@@ -153,7 +153,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
@@ -172,6 +172,8 @@ class TripRunner(TripAdmission, TripProgress):
             body = nominal_body_for(caps.kind)
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
+            if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": self.lease.job_of(robot_id)})
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
@@ -182,7 +184,7 @@ class TripRunner(TripAdmission, TripProgress):
                 start_token=start_token)
             self._check_start_token(robot_id, start_token)
             pose_observed_at = self._clock()
-            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id}, caps)
+            lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id}, caps)
             try:
                 self._check_start_token(robot_id, start_token)
                 engaged = self._engaged(robot_id)

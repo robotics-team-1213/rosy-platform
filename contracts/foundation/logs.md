@@ -724,3 +724,11 @@
 - gate 변화: 없음.
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 없음.
+
+## 2026-10-15 · 84f0c8456 · trip lease 상태 job_id와 능력 trip_lease_job (D-763 조각 6, API v1.236)
+
+- 변경: `protocol/trip_lease.py` `TripLeaseStatus.job_id`(선택, 기본 None). `protocol/controls.py` `BaseVelocityControl`·`pinky_controls`에 `trip_lease_job`(없으면 wire에서 빠진다).
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(상태·능력), `test_protocol_schemas.py` 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 조각 6, 개정 2 질문 10.
+- 교훈: 없음.
