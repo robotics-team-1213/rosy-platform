@@ -336,6 +336,6 @@
 
 - 2026-10-14 · uncommitted · fix(remote): 원격 pytest가 ssh 끊김을 견딘다
 - 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+- 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
 - 2026-10-14 · 3971caad2 · 공개 전 CORE API 시험 소유권 보정
 - 2026-10-14 · ff848d70c · OMX 공개 후 CI 의존성 누락 수정
-- 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완

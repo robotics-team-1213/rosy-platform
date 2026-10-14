@@ -8446,6 +8446,12 @@ osy-d395-s1d\`.
 - 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
 - gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.
 
+## 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+
+- 변경: `fix/runtime-jose-lock`에서 사이트에 고정된 `oauthlib==4.0.0`을 CI 검증 target에 제공한다. `--no-deps`와 cryptography 50·device runtime lock을 유지하며, 사이트 pin 누락을 잡는 회귀검사를 추가했다.
+- 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.
+
 ## 2026-10-14 · uncommitted · fix(remote): 원격 pytest가 ssh 끊김을 견딘다
 
 - 변경: `tools/remote/remote_job.py` 신규. 각 pytest 호출을 시험 PC에서 `setsid nohup` 작업으로 띄우고(메모리 상한·nice/ionice·umask 그대로, 호스트 쪽 `timeout` 5400 s), 작업이 자기 pid로 `~/rosy-jobs/<run>.lock`을 잡고 끝날 때 trap이 종료 코드를 임시 파일→이름 바꾸기로 쓰고 잠금을 지운다. 노트북은 10 s마다 짧은 ssh로 오프셋 뒤 로그 바이트와 종료 코드를 가져오고, 실패하면 5·10·20·30 s 간격으로 `ROSY_TEST_RECONNECT`(기본 600 s)까지 재시도한 뒤 255와 "lost contact with <host> for N s; the run continues there: <path>"로 끝내며 작업·잠금·실행 폴더는 남긴다. ship은 ssh 255에 최대 3번 처음부터 다시 보낸다. 로컬 로그는 원격 로그와 바이트 단위로 같다
