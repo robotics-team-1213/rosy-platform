@@ -1502,13 +1502,15 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "drive/behaviors/line_follow": (
-        2_421,
-        "accept: proposed at 2421 on 2026-10-14 after the D-491/D-573 crosswalk gate, report and zone left for "
-        "their own unit line_follow/crosswalk (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 "
-        "crosswalk addendum; independent re-judge by a read-only critic still owed): 3167 measured on main "
-        "(full against 3018+150) - 755 moved + 9 lines of compatibility exports at the old import paths "
-        "(crosswalk_gate.py, crosswalk_report.py, crosswalk_zone.py, 3 each). What stays is manager, model, "
-        "clearance, body_stop, authority, route_context and those three exports. No runtime move and no "
+        2_412,
+        "accept: independently re-judged at 2412 on 2026-10-14 by read-only critic, AGREE-WITH-CONDITIONS (judged "
+        "at 2421 with three compatibility exports, deleted in the same change once the tests imported the new "
+        "path), after the D-491/D-573 crosswalk gate, report and zone left for line_follow/crosswalk "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 crosswalk addendum): 3167 - 755. "
+        "Conditions: new crosswalk logic goes to the crosswalk unit, not manager.py; at the next +150 the split "
+        "is clearance.py + body_stop.py (759, D-422 body stop) into their own unit, not another accept. "
+        "What stays is manager, model, "
+        "clearance, body_stop, authority and route_context. No runtime move and no "
         "behaviour change. Earlier: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
         "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
         "had required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
@@ -1520,13 +1522,15 @@ SIZE_VERDICTS = {
     ),
     "drive/behaviors/line_follow/crosswalk": (
         756,
-        "accept: proposed at 756 on 2026-10-14 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
-        "size-unit.md, 2026-10-14 crosswalk addendum; independent re-judge by a read-only critic still owed): "
-        "gate.py 529 (D-573 crosswalk gate and CrosswalkGateMixin), report.py 122 (D-573 6 line_follow.crosswalk "
-        "view, CrosswalkReportMixin), zone.py 104 (D-491 camera crosswalk zones) and __init__.py 1. All run "
-        "under the LineFollowManager lock and generation; no own lock, thread, store or publisher. Moved out "
-        "because the parent unit was full (3167 of 3018+150) and a crosswalk safety fix needs room. Pure file moves plus "
-        "import lines; the old import paths stay as compatibility exports in the parent. Re-judge after +150.",
+        "accept: independently re-judged at 756 on 2026-10-14 by read-only critic, AGREE-WITH-CONDITIONS, when it "
+        "left line_follow (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 crosswalk addendum): "
+        "gate.py 529, report.py 122, zone.py 104, __init__.py 1. CrosswalkGateMixin and CrosswalkReportMixin are "
+        "LineFollowManager mixins under its lock and generation and read manager state through self; no own "
+        "lock, thread, store or publisher. Imports: zone.py takes _angle from recovery.lane_return; recovery "
+        "(lane_return_wiring, junction/approach) and arc import crosswalk.zone; manager and gateway "
+        "bridge/observation import gate/report. Pure file moves plus import lines. Condition: at the +150 "
+        "re-judge, or when gate.py passes 600, the pure gate (Zone/Scan/Geometry/judge/CrosswalkGate) and the "
+        "mixin glue split into separate files; no second accept on growth alone. Re-judge after +150.",
     ),
     "perception/front_camera/perception/drivable": (
         810,

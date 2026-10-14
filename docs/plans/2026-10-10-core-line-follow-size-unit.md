@@ -57,3 +57,10 @@ D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되�
 - 시험 한 곳을 새 경로로 돌렸다. `test_crosswalk_gate.py`가 게이트 소스 글자를 `gate_module.__file__`로 읽어 D-384 손 상수가 없는지 본다. 옛 경로는 이제 3줄 재수출이라 그 검사가 빈 검사가 되므로 `gate_module`을 `core_features.line_follow.crosswalk.gate`로 가져온다. 그 밖의 시험은 옛 경로를 그대로 쓴다.
 
 판정 상태: `SIZE_VERDICTS`의 부모 2,421과 새 단위 756은 제안값이다. 읽기 전용 critic의 독립 재판정이 아직 남아 있다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
+
+### 2026-10-14 재판정 결과 (읽기 전용 critic)
+
+- 판정: 두 단위 모두 AGREE-WITH-CONDITIONS. 부모는 2421(호환 재수출 세 개 포함)로 판정받았고, 같은 변경에서 시험 일곱 줄을 새 경로(`core_features.line_follow.crosswalk.gate`·`.zone`)로 옮기고 재수출을 지워 2412가 되었다. 재수출이 남아 있으면 옛 경로에 건 `monkeypatch`가 실제 코드에 닿지 않는다는 지적 때문이다.
+- import 방향: `crosswalk/zone.py`가 `recovery.lane_return`의 `_angle`을 쓰고, `recovery`(`lane_return_wiring`, `junction/approach`)와 `arc`가 `crosswalk.zone`을 쓴다. 모듈 순환은 아니다.
+- 조건: 새 횡단보도 로직은 `manager.py`가 아니라 crosswalk 단위에 둔다. crosswalk가 +150에 닿거나 `gate.py`가 600줄을 넘으면 순수 게이트(Zone/Scan/Geometry/judge/CrosswalkGate)와 mixin을 다른 파일로 나눈다. 부모가 다시 +150에 닿으면 `clearance.py`와 `body_stop.py`(759줄, D-422 몸 정지)를 자기 단위로 내보낸다. 수용만으로 넘기지 않는다.
+- 커밋 `75d15d3f4` 하나에는 옛 import 경로가 없어 시험 파일 셋이 그 커밋에서 import에 실패한다(bisect 주의). 다음 커밋이 고친다.
