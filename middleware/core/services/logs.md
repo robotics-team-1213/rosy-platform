@@ -1062,3 +1062,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. `authority.py` 175줄 → 192줄. 크기 단위 `drive/behaviors/line_follow`는 이 브랜치에서 모두 +27줄이다.
 - 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
 - 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
+
+## 2026-10-14 · be48f4d34 · D-760 2b단계: 뒤 문이 가져간 시간은 호의 기한이 아니다
+
+- 변경: `line_follow/arc/lane_arc.py::_arc_step`. D-507 13항(`recovery/junction/gate.py::_maneuver`)과 같은 규칙: 틱마다 통행권(`_authority_on`·`_authority_state`)이 `FREE`가 아니거나 횡단보도 게이트(`_xwalk.status`)가 `looking`·`waiting`이면 지난 틱부터의 시간을 호 기한과 열린 IR 보정 기한에 더한다. 한 호에 `crosswalk_report_s + crosswalk_clear_s`(15 s)까지. 그 뒤는 지금처럼 `lane_arc_timeout`과 HOLD. 문이 가져가지 않은 시간은 지금 기한 그대로다. `crossing`의 느린 몫(교차로 기동의 규칙)은 호에 넣지 않았다(호는 알려진 횡단보도 위에서 열리지 않는다). D-400 `policy_hold`는 이 층에서 보이지 않아 넣지 않았다. D-744 원, 호 기하, D-759, 타임아웃 뒤 동작은 그대로다.
+- 증거: `test_lane_arc.py` — 통행권·`looking`·`waiting`이 호 도중 3 s·6 s 잡았다가 풀리면 호를 마침(6건), 통행권 없이 연 호는 기한 + 15 s에 `lane_arc_timeout`·HOLD(옛 "오늘 동작" 고정 시험을 바꿈), 호 도중 20 s는 기한 + 15 s에 `lane_arc_timeout`, 문이 없거나 `armed`·`crossing`이면 기한이 `length_m`/v + 2 s 그대로, IR 보정 중 잡힘은 보정 기한도 세움, 10 s 두 번은 합해서 15 s(호마다 상한). 고치기 전 커밋에서 새 시험 10건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요. 크기 단위 `drive/behaviors/line_follow/arc` 460 → 469(한도 460, +9 초과, 재판정 필요). 부모 단위 `line_follow`는 바뀌지 않음.
+- 결정: D-760 개정 2 6항. API Reference의 호 시간 한도 문장을 고쳤다(버전 행은 올리지 않음).
+- 교훈: 호 0.5 s 지점의 20 s 정지는 남은 여유 때문에 정지 안이 아니라 풀린 뒤 주행 중에 시간이 다한다. 시험의 시점은 기한 + 15 s로 잰다.
