@@ -814,6 +814,7 @@ def test_one_row_bar_holds_a_long_notice_name_and_tag(tablet_page, width, height
     assert got["map"]["width"] >= 81.89 and got["map"]["height"] >= 48, got
     assert got["notice"]["right"] <= got["tag"]["x"] + 1 and got["tag"]["right"] <= got["map"]["x"] + 1, got
     assert got["said"] == LONG_NOTICE, got
+    assert got["notice"]["width"] > 0 and all(got[k]["y"] >= 0 and got[k]["bottom"] <= 64 for k in ("notice", "name", "tag")), got
     assert errors == [], errors
 
 
