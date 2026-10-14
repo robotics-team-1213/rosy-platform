@@ -294,7 +294,7 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
         assert len(times) <= 3 * 60, (rid, len(times))
         worst = max(sum(1 for t in times if start <= t < start + 1.0) for start in times)
         assert worst <= 3, (rid, worst)
-        assert len(times) >= 2 * 60 - 1                     # the trip loop still reads every period
+        assert len(times) == 2 * 60                         # one read per trip period: 2.0/s measured
 
 
 # --- guard -------------------------------------------------------------------------------------
