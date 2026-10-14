@@ -263,3 +263,9 @@
 - 변경: 카드 태그 글을 `정지 한도 없음`으로 바꿨다. 이유는 `hold_back`·`no_goal_lease`·`leg_unknown` 셋이다. `ruleMTag`의 쓰지 않는 `reason` 값과 카드의 `data-rule-m`을 지웠다. 오프라인 로봇은 서버가 판정을 주지 않아 주의 행도 카드 태그도 없다.
 - 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과. 브라우저 시험과 화면 확인 없음.
 - gate 변화: 없음.
+
+## 2026-10-14 · f38a5093a · feat(console): 카드에 trip 기다림, 상한을 넘으면 개입 행 (D-763 조각 2, API v1.231)
+
+- 변경: `shared/site-map-model.js` `tripWaitText`가 `대기 · 횡단보도`·`대기 · 신호`·`대기 · 통행권`·`대기 · 연결`(상한을 넘으면 `대기 상한 넘음 · …`)을 만든다. `card-trip.js` 카드 줄은 기다림이면 이것을 먼저 보인다. `queues.js`는 `wait.over_bound`인 열린 trip을 crit 행 `개입 필요 — 대기 상한 넘음 · …`으로 낸다. 지도 화면 trip 줄(`tripStatusText`)에도 같은 글. API 문서 v1.231과 버전 고정 시험.
+- 증거: 원격 시험(모델 PC) 284 passed(node 시험 포함), 로그 X: `wait-read/run-1.txt`. 브라우저(모델 PC, f38a5093a) `test_console_card_trips_browser.py` 20 passed: 카드 글, 1366×600·390×844 넘침 없음, 비상 정지 화면 안, 상한 넘으면 최우선 개입 행. 로그 X: `browser-run/wait-read-b1.txt`.
+- gate 변화: 없음.
