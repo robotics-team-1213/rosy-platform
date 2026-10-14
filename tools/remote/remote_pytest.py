@@ -431,23 +431,24 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
                 continue
             text = log.read_bytes().decode("utf-8", errors="replace")
             print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
-            ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if codes[-1] == 1 else []
-            if ids:  # D-762 stage 1: quarantined failures only, once; known_failures.py reads the verdict
+            failed = known_failures.failed_ids(text)
+            ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if codes[-1] == 1 and failed else []
+            if known_failures.should_rerun(codes[-1], failed, ids):  # D-762 stage 1: once, listed ids only
                 print(f"[remote-pytest] rerunning {len(ids)} quarantined failure(s) once", flush=True)
                 rerun = log.with_name(log.stem + "-rerun.txt")
                 try:
-                    remote_job.run(host, name, f"{k}r", rerun, [name, deps_sha, cpu],
-                                   [*ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
+                    rerun_code = remote_job.run(host, name, f"{k}r", rerun, [name, deps_sha, cpu],
+                                                [*ids, "-q", "-rA", "-p", "no:cacheprovider"], PYTEST_TIMEOUT, SSH)
                 except remote_job.Lost as error:
-                    lost = str(error)
+                    lost, rerun_code = str(error), remote_job.LOST_EXIT
                     print(lost, file=sys.stderr, flush=True)
+                section = rerun.read_bytes() if rerun.is_file() else b"[remote-pytest] rerun lost\n"
                 with log.open("ab") as out:
-                    out.write(f"\n{known_failures.RERUN_MARKER}\n".encode() + rerun.read_bytes())
-                report = log.read_bytes().decode("utf-8", errors="replace")
-                passed = known_failures.flaky(report, quarantine(repo, sha))
-                print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(passed) or 'none'}", flush=True)
-                if set(passed) == set(known_failures.failed_ids(text)):
-                    codes[-1] = 0  # every failure was quarantined and passed once more (pre-push reads this)
+                    out.write(f"\n{known_failures.RERUN_MARKER}\n".encode() + section)
+                if known_failures.rerun_passed(codes[-1], failed, ids, rerun_code,
+                                               section.decode("utf-8", errors="replace")):
+                    print(f"[remote-pytest] FLAKY (passed on rerun): {' '.join(ids)}", flush=True)
+                    codes[-1] = 0  # pre-push reads this exit code
         return codes
     finally:
         if lost:  # never kill or clean up a job we cannot see; its own trap drops the lock when it ends

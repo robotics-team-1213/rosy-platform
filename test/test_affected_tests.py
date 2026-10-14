@@ -459,3 +459,16 @@ def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     assert {p for inv in entries[0]['invocations'] for p in inv} == suites
     assert entries[0]['ros'] == 'none'
     assert suites <= set(affected.FULL_SUITES)
+
+
+def test_modules_runner_gates_by_2026_11_15():
+    """D-762 stage 1: `modules` reports only until its first green run; it may not stay non-gating."""
+    import datetime
+
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    reporting = sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing"))
+    if datetime.date.today() > datetime.date(2026, 11, 15):
+        assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
+    else:
+        assert reporting in ([], ["modules"]), reporting

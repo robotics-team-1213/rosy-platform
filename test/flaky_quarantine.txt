@@ -4,6 +4,8 @@
 # reports FLAKY, not NEW. Fails twice -> NEW. An unlisted test is never rerun.
 # Add a line only with evidence of a flake on a sha where the test also passed; never to hide a failure
 # your branch introduced. Remove the line in the commit that meets its removal condition.
+# This file is a concern: safety root (platform_parts.yaml): a commit that changes it needs a Safety-Review:
+# trailer. A test under a safety root is never listed (test/test_known_failures.py).
 # Browser follow-ups (not listed: no runner reruns them; root test/ browser suites run only by hand on a
 # test PC with ROSY_RUN_BROWSER_TESTS=1, CI opts in only operations/fleet/test):
 #   test/test_games_board_browser.py::test_compact_board_recovery_keeps_equal_panels_and_stop_visible (320x568)

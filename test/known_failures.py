@@ -60,12 +60,28 @@ def rerun_ids(report: str, quarantine: dict[str, str]) -> list[str]:
     return list(dict.fromkeys(f for f in failed_ids(first) if any(_matches(f, q) for q in quarantine)))
 
 
-def flaky(report: str, quarantine: dict[str, str]) -> list[str]:
-    """Quarantined first-run failures that the rerun after RERUN_MARKER shows PASSED."""
-    _, _, rerun = report.partition(RERUN_MARKER)
-    passed = {m.group("nodeid").replace("\\", "/") for line in rerun.splitlines()
+def _rerun_clean(ids: list[str], section: str) -> list[str]:
+    """Ids the rerun section shows PASSED and never FAILED/ERROR (a teardown error prints both)."""
+    passed = {m.group("nodeid").replace("\\", "/") for line in section.splitlines()
               if (m := PASSED.match(line.strip()))}
-    return [f for f in rerun_ids(report, quarantine) if f in passed]
+    bad = set(failed_ids(section))
+    return [i for i in ids if i in passed and i not in bad]
+
+
+def flaky(report: str, quarantine: dict[str, str]) -> list[str]:
+    """Quarantined first-run failures that the rerun after RERUN_MARKER passed cleanly."""
+    return _rerun_clean(rerun_ids(report, quarantine), report.partition(RERUN_MARKER)[2])
+
+
+def should_rerun(code: int, failed: list[str], quarantined: list[str]) -> bool:
+    """D-762 stage 1: rerun only a pytest exit 1 whose every failure (ERROR lines included) is quarantined."""
+    return code == 1 and bool(failed) and set(failed) == set(quarantined)
+
+
+def rerun_passed(code: int, failed: list[str], quarantined: list[str], rerun_code: int, section: str) -> bool:
+    """The one rerun turns the invocation green: it was due, exited 0 and passed every id cleanly."""
+    return (should_rerun(code, failed, quarantined) and rerun_code == 0
+            and _rerun_clean(quarantined, section) == list(dict.fromkeys(quarantined)))
 
 
 def compare(report: str, known: dict[str, str]) -> tuple[list[str], list[str], list[str]]:

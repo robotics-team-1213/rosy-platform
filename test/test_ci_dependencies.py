@@ -234,4 +234,4 @@ def test_merge_group_runs_the_full_tier_against_the_group_base():
     assert "merge_group" not in tier
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
-    assert "known_failures.rerun_ids" in test["run"] and '"-rA"' in test["run"]
+    assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
