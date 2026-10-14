@@ -299,3 +299,9 @@
 - 변경: `work-view.js` 줄 글이 서버의 보이는 상태를 쓰고 기다림을 먼저 보인다(`tripWaitText`, 상한을 넘으면 `대기 상한 넘음 · <사유>`, 개입 아님). 필터에 운행·Cell 적재, 끝난 작업에 trip 끝 상태. trip·Cell Job 행은 기존 상세 읽기를 연다. 새 작업은 `/api/fleet/work`의 `kinds`에 있는 종류만 보이고 답이 없으면 아무 종류도 없다. `console.js` `paintMove`의 브라우저 추측(장소·로봇) 줄을 지웠다. 콘솔 단위 18082→18083(상한 18083).
 - 증거: 브라우저(AI PC, 6ae1df74e) `test_work_overview_browser.py`·`test_console_card_trips_browser.py` 35 passed, 로그 X: `browser-run/wrs4-b1.txt`. node 시험은 `test_site_map_api.py`로 원격 225 passed 안에 있다.
 - gate 변화: 없음.
+
+## 2026-10-15 · e7b196839 · D-763 조각 4 검토: 끝난 작업·승인 대기는 보이는 상태로 거른다
+
+- 변경: `work/work-view.js`(6377fe873에서 `work/`로 옮김, 자기 크기 단위)의 `show=pending|done`이 서버의 `visible_state`(`approval_pending`·`ended`)로 거른다. 취소된 Cell Job은 끝난 작업에 있고 실패한 Task는 없다. 6ae1df74e에서 크기를 맞추려고 한 줄에 모은 문장을 파일의 모양으로 되돌렸다. 단위: 콘솔 17,717/17,719, 작업 영역 379/514.
+- 증거: 브라우저(AI PC, e7b196839) `test_work_overview_browser.py`·`test_console_card_trips_browser.py`·`test_cell_app_browser.py` 93 passed, 로그 X: `browser-run/wrs4-b3.txt`.
+- gate 변화: 없음.
