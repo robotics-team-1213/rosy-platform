@@ -15,17 +15,21 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig, TripError
 from fleet.server.trip_runner import TripRunner
 from fleet.traffic import trip_authority
+from fleet.swarm.transport import RobotApiError
+from fleet.traffic.config import _trip_lease
 from fleet.traffic.trip_authority import AuthoritySender
 from test_lane_traffic import _arc, _trip
 from test_routing import demo_site
 from test_trip_authority import AUTH, AuthFleet
 from test_trip_lease import LeaseCore
-from test_trip_runner import _activate_again
+from test_trip_runner import _activate_again, run
 
 #: a stage-2 CORE: shrink/seq, 5 s ttl, enforced under the lease
 NEW = dataclasses.replace(AUTH, trip_lease=True, line_follow_authority_shrink=True,
                           line_follow_authority_under_lease=True)
 STOOD = {"accepted": True, "authority": {"state": "HOLDING"}}
+#: CORE refused the request (409): it dropped its held end, but Fleet does not count that as a confirmed shrink
+REFUSED = RobotApiError("a", 409, "AUTHORITY_ODOM_STALE", "no fresh odom to measure travel")
 
 
 class LinkFleet(AuthFleet):
@@ -36,6 +40,8 @@ class LinkFleet(AuthFleet):
         self.lease = {robot_id: LeaseCore() for robot_id in ids}
         self.down: set[str] = set()
         self.lease_up: set[str] = set()  # robots whose lease renews while their other calls fail
+        self.lease_down: set[str] = set()  # robots whose lease renew fails while their other calls answer
+        self.fail: dict[str, Exception] = {}  # call kind -> what it raises for every robot
         self.calls: list[tuple] = []  # (robot id, kind, authority body or None) tried
         self.line_gate: asyncio.Event | None = None
         self.line_waiting = False
@@ -44,6 +50,8 @@ class LinkFleet(AuthFleet):
         self.calls.append((robot_id, kind, body))
         if robot_id in self.down:
             raise OSError("no route to host")
+        if kind in self.fail:
+            raise self.fail[kind]
 
     async def refresh(self, robot_id, force_rest=False):
         self._call(robot_id, "state")
@@ -55,6 +63,10 @@ class LinkFleet(AuthFleet):
     async def send_junction(self, robot_id, *args, **kwargs):
         self._call(robot_id, "junction")
         return await super().send_junction(robot_id, *args, **kwargs)
+
+    async def hold(self, robot_id):
+        self._call(robot_id, "hold")
+        return await super().hold(robot_id)
 
     async def goal(self, robot_id, *args):
         self._call(robot_id, "goal")
@@ -72,24 +84,26 @@ class LinkFleet(AuthFleet):
 
     async def send_authority(self, robot_id, body):
         self._call(robot_id, "authority", body)
+        if isinstance(self.answer, Exception):  # a CORE 409 refusal
+            raise self.answer
         return await super().send_authority(robot_id, body)
 
     async def trip_lease(self, robot_id, body):
-        self.lease[robot_id].down = robot_id in self.down - self.lease_up
+        self.lease[robot_id].down = robot_id in (self.down - self.lease_up) | self.lease_down
         return self.lease[robot_id].put(body)
 
     async def trip_lease_release(self, robot_id, lease_id):
         return self.lease[robot_id].delete(lease_id)
 
 
-def _setup(caps, lease=True, config=TripConfig()):
+def _setup(caps, lease=True, config=TripConfig(), renew_lease=None):
     fleet = LinkFleet(tuple(caps), caps)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=config,
-                        authority=True, lease={"required": lease})
+                        authority=True, lease={"required": lease}, renew_lease=renew_lease)
     runner.lease._clock = lambda: fleet.now
     runner.authority._clock, runner.authority.quiet_until = (lambda: fleet.now), -math.inf
     return runner, store, fleet
@@ -216,7 +230,7 @@ def test_a_link_wait_robot_keeps_its_blocks_and_the_robot_behind_stops_before_th
 def _shrinks_until_confirmed(runner, fleet, robot_id="a"):
     """The next period sends ``shrink`` + 0 and repeats it while CORE does not accept it; once accepted (or
     the case cleared) no shrink follows. Returns what was sent in the two periods after."""
-    fleet.answer = {"accepted": False, "reason": "shrink_none_held", "authority": None}
+    fleet.answer = REFUSED
     since = len(fleet.calls)
     _ticks(runner, fleet, 2)
     bodies = _bodies(fleet, robot_id, since)
@@ -250,7 +264,7 @@ def test_another_map_version_shrinks_and_keeps_the_end_pinned_until_confirmed():
     assert runner.authority.reach("a") > 0
     runner.authority._held["a"]["until_m"] = reach = 2.0  # as if a 2 m authority were out
     _activate_again(store)
-    fleet.answer = {"accepted": False, "reason": "shrink_none_held", "authority": None}
+    fleet.answer = REFUSED
     _ticks(runner, fleet)
     assert _bodies(fleet, "a")[-1]["shrink"] is True
     layout, graph = runner.traffic._layout, store.active()[2]
@@ -277,7 +291,8 @@ def test_a_convoy_follower_whose_grant_goes_back_shrinks():
     assert _bodies(fleet, "b")[-1]["shrink"] is True
 
 
-def test_a_robot_mid_step_gets_a_shrink_not_an_extend():
+def test_a_robot_mid_step_gets_neither_an_extend_nor_a_shrink():
+    """Safety-Review MEDIUM-3: Fleet's own slowness does not stop a robot; it rolls on its held ttl."""
     runner, store, fleet = _running(*_setup({"a": NEW}, config=TripConfig(period_s=0.05)))
     gate, inner = asyncio.Event(), fleet.junction_state
 
@@ -288,15 +303,15 @@ def test_a_robot_mid_step_gets_a_shrink_not_an_extend():
     async def go():
         fleet.junction_state = slow
         since = len(fleet.calls)
-        fleet.advance(0.5)
-        await runner.tick()
-        await _settle(runner)
-        body = _bodies(fleet, "a", since)[-1]
+        for _ in range(3):
+            fleet.advance(0.5)
+            await runner.tick()
+            await _settle(runner)
+        bodies = _bodies(fleet, "a", since)
         gate.set()
         await asyncio.gather(*runner._inflight.values())
-        return body
-    body = asyncio.run(go())
-    assert body["shrink"] is True and body["until_m"] == 0.0
+        return bodies
+    assert asyncio.run(go()) == []
 
 
 def test_a_robot_without_the_shrink_flag_gets_ttl_2_and_never_a_shrink():
@@ -396,3 +411,130 @@ def test_under_lease_robots_start_only_with_the_lease_required():
     with pytest.raises(TripError) as err:
         _trip(runner, store, fleet, "a", "east:fwd", 0.3)
     assert err.value.code == "TRIP_AUTHORITY_NOT_REQUIRED"
+
+
+# ---- Safety-Review CONDITIONS (2026-10-14) ----------------------------------------------------
+
+def _near_place(caps=NEW, **setup):
+    """A trip whose robot is within arm distance of its next place: each step sends a junction instruction."""
+    runner, store, fleet = _setup({"a": caps}, **setup)
+    east = _arc(store, "east:fwd")
+    _trip(runner, store, fleet, "a", "east:fwd", east.length_m - 0.3)
+    return runner, store, fleet
+
+
+def test_a_non_transport_error_after_the_link_returned_ends_the_trip():
+    """HIGH-1 (a): only no answer is link loss; a ValueError ends the trip failed as before."""
+    runner, store, fleet = _near_place(config=TripConfig(stall_s=2.0))
+    fleet.down.add("a")
+    _ticks(runner, fleet, 2)
+    assert runner.view("a")["state"] == "link_wait"
+    fleet.down.discard("a")
+    fleet.fail["junction"] = ValueError("bad body")
+    _ticks(runner, fleet, 2)
+    view = runner.view("a")
+    assert (view["state"], view["reason"], view["detail"]["kind"]) == ("failed", "TRIP_ROBOT_UNREACHABLE", "ValueError")
+
+
+def test_a_link_fault_after_every_return_keeps_the_first_since_so_the_stall_rule_ends_it():
+    """HIGH-1 (b): _link_back passes, a later call of the same step gets no answer, every period."""
+    runner, store, fleet = _near_place(config=TripConfig(stall_s=2.0))
+    fleet.fail["junction"] = OSError("no route to host")
+    _ticks(runner, fleet)
+    since = runner.view("a")["wait"]["since"]
+    for _ in range(20):  # 10 s: lease ttl 8 + stall_s 2
+        _ticks(runner, fleet)
+        if runner.view("a")["state"] != "link_wait":
+            break
+        assert runner.view("a")["wait"]["since"] == since
+    assert (runner.view("a")["state"], runner.view("a")["reason"]) == ("stopped", "stall")
+    assert fleet.now - since <= runner.lease.ttl_s + 2.0 + 0.5
+
+
+def test_a_cancel_during_link_wait_keeps_the_pin_until_the_last_extend_expired():
+    """MEDIUM-2: the halt got no answer, so the robot may still drive its last extend for up to its ttl."""
+    runner, store, fleet = _running(*_setup({"a": NEW}))
+    fleet.down.add("a")
+    _ticks(runner, fleet, 2)
+    reach = runner.authority.reach("a")
+    assert reach > 0
+    run(runner.cancel("a", "bob"))
+    assert runner.view("a")["detail"]["stop_sent"] is False and runner.authority.reach("a") == reach
+    sent_at = runner.authority._held["a"]["sent_at"]
+    fleet.advance(sent_at + 5.0 + 1.5 - fleet.now - 0.1)
+    assert runner.authority.reach("a") == reach
+    fleet.advance(0.2)
+    assert runner.authority.reach("a") == 0.0
+
+
+def test_a_confirmed_halt_drops_the_pin_at_once():
+    """MEDIUM-2 / mutation: the trip end's forget runs; the line is OFF, so no authority is left."""
+    runner, store, fleet = _running(*_setup({"a": NEW}))
+    assert runner.authority.reach("a") > 0
+    run(runner.cancel("a", "bob"))
+    assert runner.view("a")["detail"]["stop_sent"] is True and runner.authority.reach("a") == 0.0
+
+
+def test_shrink_none_held_counts_as_confirmed():
+    runner, store, fleet = _running(*_setup({"a": NEW}))
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("table")
+    runner.traffic.step = broken
+    fleet.answer = {"accepted": False, "reason": "shrink_none_held", "authority": {"state": "NONE"}}
+    since = len(fleet.calls)
+    _ticks(runner, fleet, 3)
+    bodies = _bodies(fleet, "a", since)
+    assert len(bodies) == 1 and bodies[0]["shrink"] is True and runner.authority.reach("a") == 0.0
+
+
+def test_a_confirmation_for_another_leg_does_not_confirm_the_held_one():
+    """Mutation: ``held["leg"] == body["leg_id"]`` in ``_send``."""
+    class Port:
+        async def send_authority(self, robot_id, body):
+            return {"accepted": True}
+    sender = AuthoritySender(Port(), True, clock=lambda: 100.0)
+    sender._held["a"] = {"leg": "t:1:e", "stamp": 5.0, "until_m": 1.0, "shrunk": False, "sent_at": 100.0}
+    live = SimpleNamespace(view={"robot_id": "a"}, authority=None)
+    asyncio.run(sender._send(live, {"leg_id": "t:0:e", "shrink": True, "until_m": 0.0}))
+    assert sender.reach("a") == 1.0
+
+
+def test_the_lease_ttl_must_outlast_the_authority(tmp_path):
+    path = tmp_path / "site.yaml"
+    path.write_text("fleet:\n  trip_lease_required: true\n  trip_lease_ttl_s: 5\n  traffic:\n    authority: true\n",
+                    encoding="utf-8")
+    with pytest.raises(SystemExit):
+        _trip_lease(SimpleNamespace(site_config=path))
+    path.write_text("fleet:\n  trip_lease_required: true\n  trip_lease_ttl_s: 5\n", encoding="utf-8")
+    assert _trip_lease(SimpleNamespace(site_config=path))["ttl_s"] == 5.0  # no authority: no order to keep
+    path.write_text("fleet:\n  trip_lease_required: true\n  trip_lease_ttl_s: 6\n  traffic:\n    authority: true\n",
+                    encoding="utf-8")
+    assert _trip_lease(SimpleNamespace(site_config=path))["ttl_s"] == 6.0
+
+
+def test_the_link_returns_only_after_a_lease_renew_since_the_loss():
+    runner, store, fleet = _running(*_setup({"a": NEW}))
+    fleet.down.add("a")
+    _ticks(runner, fleet, 3)
+    fleet.down.discard("a")
+    fleet.lease_down.add("a")  # the robot answers, its lease renew not yet
+    _ticks(runner, fleet, 2)
+    assert runner.view("a")["state"] == "link_wait"
+    fleet.lease_down.discard("a")
+    _ticks(runner, fleet, 2)
+    assert runner.view("a")["state"] == "running"
+
+
+def test_no_goal_lease_renewal_during_link_wait():
+    renewed = []
+
+    async def renew(robot_id):
+        renewed.append(robot_id)
+    runner, store, fleet = _running(*_setup({"a": NEW}, renew_lease=renew))
+    assert renewed
+    fleet.down.add("a")
+    _ticks(runner, fleet)
+    count = len(renewed)
+    _ticks(runner, fleet, 4)
+    assert runner.view("a")["state"] == "link_wait" and len(renewed) == count
