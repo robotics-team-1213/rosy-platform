@@ -49,10 +49,15 @@ def main(tmp_path, monkeypatch):
     return main
 
 
-def add(main: Path, name: str, commit: bool = False, merge: bool = False) -> Path:
-    """A worktree on feat/<name>; optionally with one commit, optionally landed on main."""
+ME = "t <t@t>"  # the fixture's git identity; no agent session in the environment
+
+
+def add(main: Path, name: str, commit: bool = False, merge: bool = False, owner: str | None = ME) -> Path:
+    """A worktree on feat/<name>, owned by the caller unless told otherwise; optionally committed and landed."""
     wt = main / ".worktrees" / name
     git(main, "worktree", "add", "-q", str(wt), "-b", f"feat/{name}", "main")
+    if owner:
+        git(main, "config", f"branch.feat/{name}.description", f"owner: {owner}")
     if commit:
         (wt / f"{name}.txt").write_text(name, encoding="utf-8")
         git(wt, "add", f"{name}.txt")
@@ -75,7 +80,6 @@ def wrap_git(monkeypatch, hook):
 
 def test_clean_merged_worktree_is_pruned_with_its_branch(main):
     wt = add(main, "done", commit=True, merge=True)
-    git(main, "config", "branch.feat/done.description", "owner: t")
     assert worktrees.prune(main, now=LATER) == 1  # dry run: counted, nothing touched
     assert wt.is_dir() and refs(main, "refs/heads/feat") == ["refs/heads/feat/done"]
     assert worktrees.prune(main, apply=True, now=LATER) == 1
@@ -152,8 +156,9 @@ def test_detached_unmerged_head_is_kept_under_refs_wip(main):
     tip = git(wt, "rev-parse", "HEAD")
     git(wt, "checkout", "-q", "--detach")
     git(main, "branch", "-q", "-D", "feat/loose")  # now only the detached HEAD reaches the commit
-    assert worktrees.prune(main, apply=True, now=LATER) == 0
-    assert worktrees.prune(main, apply=True, snapshot=True, now=LATER) == 1
+    assert worktrees.prune(main, apply=True, everyone=True, now=LATER) == 0
+    assert worktrees.prune(main, apply=True, snapshot=True, now=LATER) == 0  # no branch, so no owner
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 1
     assert not wt.exists()
     assert git(main, "rev-parse", f"refs/wip/{DAY}/loose") == tip
 
@@ -305,11 +310,12 @@ def test_failed_remove_keeps_the_branch_and_reports_an_orphan(main, monkeypatch,
     assert [line for line in capsys.readouterr().out.splitlines() if line.startswith("stuck ")][0].endswith("orphan")
     monkeypatch.setattr(worktrees, "CAP", 1)  # the orphan counts toward the cap
     assert worktrees.main(["new", "more", "feat/more"]) == 1
-    assert worktrees.prune(main, apply=True, snapshot=True, now=LATER) == 0  # not empty: left alone
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 0  # not empty
     assert (wt / "a.txt").is_file()
     shutil.rmtree(wt)
     wt.mkdir()
-    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    assert worktrees.prune(main, apply=True, now=LATER) == 0  # an orphan has no owner
+    assert worktrees.prune(main, apply=True, everyone=True, now=LATER) == 1
     assert not wt.exists()
 
 
@@ -341,11 +347,11 @@ def test_status_names_a_verdict_per_worktree(main, capsys):
     git(main, "worktree", "lock", str(add(main, "held")))
     assert worktrees.main(["status"], now=LATER) == 0
     verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
-    assert verdict["done"].endswith("removable")
-    assert verdict["open"].endswith("needs snapshot")
-    assert verdict["held"].endswith("locked")
+    assert "yes   removable" in verdict["done"]
+    assert "yes   needs snapshot" in verdict["open"]
+    assert "-     locked" in verdict["held"]
     assert worktrees.main(["status"]) == 0
-    assert all(line.endswith("active") for line in capsys.readouterr().out.splitlines()
+    assert all("-     active" in line for line in capsys.readouterr().out.splitlines()
                if line.split()[0] in ("done", "open"))
 
 
@@ -373,7 +379,7 @@ def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
     assert git(main, "config", "branch.fix/one.description") == "owner: t <t@t>; session sess-7"
     assert "incident 42" in git(main, "config", "branch.feat/three.description")
     assert worktrees.main(["status"]) == 0
-    assert "[owner: t <t@t>; session sess-7]" in capsys.readouterr().out
+    assert "[t <t@t>; session sess-7]" in capsys.readouterr().out
 
 
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
@@ -388,6 +394,47 @@ def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, m
     assert worktrees.main(["new", "next", "refactor/next", "--prune"], now=LATER) == 0
     assert not done.exists()
     assert kept.is_dir()  # unmerged: `new` never snapshots
+
+
+def test_prune_takes_only_the_callers_worktrees_unless_all(main, capsys):
+    mine = add(main, "mine", commit=True, merge=True)
+    peer = add(main, "peer", commit=True, merge=True, owner="t <t@t>; session other")
+    bare = add(main, "bare", commit=True, merge=True, owner=None)  # a bare `git worktree add`
+    assert worktrees.main(["status"], now=LATER) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert "yes   removable" in line["mine"]
+    assert "--all removable" in line["peer"] and "[t <t@t>; session other]" in line["peer"]
+    assert "--all removable" in line["bare"]
+    assert worktrees.main(["prune", "--snapshot", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "owner unowned: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
+    assert not mine.exists() and peer.is_dir() and bare.is_dir()
+    assert worktrees.main(["prune", "--apply", "--all"], now=LATER) == 0
+    assert not peer.exists() and not bare.exists()
+
+
+def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, capsys):
+    monkeypatch.setattr(worktrees, "CAP", 3)
+    add(main, "mine", commit=True, merge=True)
+    add(main, "bare", commit=True, merge=True, owner=None)
+    add(main, "open", commit=True, owner=None)  # unmerged: not removable, not counted
+    assert worktrees.main(["new", "x", "feat/x", "--no-prune"], now=LATER) == 1
+    err = capsys.readouterr().err
+    assert "removable, owner t <t@t>: 1" in err and "removable, owner unowned: 1" in err
+
+
+def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
+    half = add(main, "half", commit=True)
+    add(main, "open", commit=True)
+    (main / "m.txt").write_text("m", encoding="utf-8")
+    git(main, "add", "m.txt")
+    git(main, "commit", "-q", "-m", "main moved")
+    git(half, "merge", "-q", "--no-edit", "main")  # what tools/land.py leaves when the landing stops
+    assert worktrees.main(["status"], now=LATER) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert " unmerged " in line["half"] and "tip is a merge of main" in line["half"]
+    assert "tip is a merge of main" not in line["open"]
+    assert worktrees.prune(main, apply=True, now=LATER) == 0  # unmerged stays unmerged: kept
 
 
 @pytest.mark.parametrize("name, branch", [
