@@ -34,7 +34,7 @@ from core_common.protocol.docking import DockState, DockingStatus  # noqa: F401
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import FleetWorkOverview, FleetWorkSummary  # noqa: F401
+from core_common.protocol.work import FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext

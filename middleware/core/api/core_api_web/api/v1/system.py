@@ -227,6 +227,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `lane_arc_map_anchor` (D-744 2): the manager takes exit_segment.map_anchor (with lane_arc).
     # `lane_bend_map_entry` (D-759 2): line_follow.bend_map_entry_enabled (default off) with lane_bend.
+    # `lane_turn_map_entry` (D-759 rev 1): line_follow.turn_map_entry_enabled (default off) with junction_turn.
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     # `line_follow_authority_shrink` (D-760 3): that authority takes `shrink` and `seq`, `ttl_s` up to 5 s.
@@ -261,6 +262,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
                                       lane_bend_map_entry=getattr(
                                           svc.line_follow, "supports_lane_bend_map_entry", False) is True,
+                                      lane_turn_map_entry=getattr(
+                                          svc.line_follow, "supports_lane_turn_map_entry", False) is True,
                                       lane_bend_next_line=getattr(
                                           svc.line_follow, "supports_lane_bend_next_line", False) is True,
                                       route_context=(True if svc.line_follow is not None and
