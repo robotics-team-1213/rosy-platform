@@ -64,6 +64,16 @@ def observe_bounded_trial(bridge, msg, sample, *, now=None):
         except Exception:pass
 
 
+def observe_odom(bridge, msg, sample):
+    """RosBridge._on_odom's odom hand-over (D-758 0): the state snapshot stamps the pose (epoch from the
+    message frame and header time) and the line-follow log keys the same sample on that stamp."""
+    stamp = msg.header.stamp
+    wall = bridge._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"], frame=msg.header.frame_id,
+                                           source_stamp_ns=stamp.sec * 1_000_000_000 + stamp.nanosec)
+    observe_bounded_trial(bridge, msg, sample)
+    observe_lane_return(bridge, msg, sample, wall=wall)
+
+
 def observe_lane_return(bridge, msg, sample, *, now=None, wall=None):
     """Preserve the real odom source clock; never derive travel from issued twists. ``wall``: the
     stamp the state snapshot published for this sample (D-758 0: the odom log is found by it)."""
