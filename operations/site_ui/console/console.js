@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { cardTripLine, placeOptions } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
@@ -61,11 +62,11 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
-const raised = area.get("view") !== "records" ? el("work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
+const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
-if (raised.id !== "work-overview") {
+if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
   if (inbox.choice !== "inbox") inbox.select("evidence");
@@ -339,6 +340,7 @@ function render() {
   roster.fillQueues();
   inbox.refresh();
   roster.trip.syncConvoy();  // D-540 (d) 대형·대열
+  if (!el("work-new").hidden) paintMove();
   lineStuck.render();
   deviceWatch.render();
   tripReplan.render();
@@ -914,6 +916,26 @@ view.openFormationWorkspace = () => {
   heading.focus({preventScroll: false});
 };
 view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
+// D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
+// 활성 현장 지도에 장소가 없으면 이동은 종류 목록에 없다(꺼진 단추로 보이지 않는다).
+function paintMove() {
+  const pick = el("work-move-robot"), box = el("work-move-form"), focused = document.activeElement;
+  el("work-new-move-item").hidden = !view.activeSiteMap?.map?.places?.length || !view.robots.length;
+  el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
+  const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
+  const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
+  el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
+  if (el("work-move").hidden || (focused?.tagName === "SELECT" && box.contains(focused))) return;  // as roster.place
+  const controls = () => [...box.querySelectorAll("ui-button, select")], at = controls().indexOf(focused);
+  if (robot && !roster.trip.section(robot)) roster.trip.focus(id);  // another robot, or reopened after a start
+  box.replaceChildren(...(robot ? [roster.trip.section(robot)] : []));
+  controls()[at]?.focus({preventScroll: true});
+}
+pageScope.listen(el("work-new-move"), "click", ({currentTarget: button}) => {
+  for (const name of ["aria-pressed", "aria-expanded"]) button.setAttribute(name, String(button.getAttribute(name) !== "true"));
+  render();
+});
+pageScope.listen(el("work-move-robot"), "change", () => render());
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
