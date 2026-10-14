@@ -689,9 +689,9 @@ def test_a_20_s_authority_hold_mid_arc_times_out_and_holds():
     rig.open()
     deadline = rig.m._arc['deadline']
     rig.drive(10, seen=False)
-    _held(rig, 20., 'authority')
-    decision, status = rig.drive()
-    assert rig.now - .05 == pytest.approx(deadline+HOLD_CAP_S, abs=.051)
+    _held(rig, 20., 'authority')             # 15 s stood; the rest of the margin is gone
+    decision, status = rig.until(lambda d, s: not running(rig), seen=False)
+    assert rig.now == pytest.approx(deadline+HOLD_CAP_S, abs=.051) and status.arc.travelled_m < LENGTH
     assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
     assert (decision.linear, decision.angular, status.state) == (0., 0., 'HOLD')
 
