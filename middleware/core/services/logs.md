@@ -1070,3 +1070,9 @@
 - gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요. 크기 단위 `drive/behaviors/line_follow/arc` 460 → 469(한도 460, +9 초과, 재판정 필요). 부모 단위 `line_follow`는 바뀌지 않음.
 - 결정: D-760 개정 2 6항. API Reference의 호 시간 한도 문장을 고쳤다(버전 행은 올리지 않음).
 - 교훈: 호 0.5 s 지점의 20 s 정지는 남은 여유 때문에 정지 안이 아니라 풀린 뒤 주행 중에 시간이 다한다. 시험의 시점은 기한 + 15 s로 잰다.
+
+## 2026-10-14 · uncommitted · D-760 2b 독립 검토 반영: 공유 계산, 틱 간격 상한, 건너는 중의 몫
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulated_wait_share(now, dt, speed)`를 두고 `recovery/junction/gate.py::_maneuver`(D-507 13)와 `arc/lane_arc.py::_arc_step`이 같이 쓴다. 통행권 비`FREE`, `looking`·`waiting`, 건너는 중 앞 물체로 선 상태(`look_progress`, 두 호출부 모두 놓쳤다)는 전부, 건너는 중은 `1 - crosswalk_cross_speed/speed`만 센다. `dt`는 `stale_after_s`까지만 센다(틱 스레드가 멈췄다 HOLDING으로 깨어나도 그 간격을 주지 않는다). 상한 15 s는 호출부가 지킨다. 호는 이제 건너는 중의 몫도 받는다(속도는 `_arc_speed()`). `lane_arc.py`의 공백만 바뀐 줄을 되돌렸다. 크기 판정 `line_follow/arc`를 467로 재판정 문구와 함께 바꿨다(검토자 문구 + 단위 계획 인용, 가드가 계획 인용을 요구한다).
+- 증거: `test_lane_arc.py` — 2 s 주행 뒤 3 s 정지가 기한을 3.0 s 옮김, 멈춘 틱 간격은 `stale_after_s`까지(그 틱은 낡은 odom으로 호도 끝난다), 건너는 중 선 시간 2 s 전부·움직이는 건너기 2 s의 절반. 교차로·횡단보도·통행권·호 시험과 `test_module_structure.py` 원격 통과.
+- gate 변화: SOURCE·호스트 근거만. 크기: arc 467, crosswalk 769(판정 756), junction 1239, `recovery/junction/gate.py` 597줄.
