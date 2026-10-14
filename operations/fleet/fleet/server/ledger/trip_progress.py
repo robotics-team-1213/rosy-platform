@@ -1,10 +1,11 @@
 """D-494 5 progress predicates of the trip loop (``trip_runner``): where the robot is on its plan,
-whether CORE carried out an instruction, arrival and stall. Moved out of ``trip_runner`` unchanged
+whether CORE carried out an instruction, arrival, stall and D-760 4 ``link_wait``. Moved out of ``trip_runner`` unchanged
 (2026-10-10 seam, docs/plans/2026-10-07-fleet-site-map-web-server-seam.md); ``TripRunner`` mixes it in.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from rosy.world.state.projections.map_pose import MapPose
@@ -67,14 +68,41 @@ class TripProgress:
         remaining -= hold_back_m(self.traffic, live.segments[index]) or 0.0  # D-517 3: it stops short of a zone
         return remaining <= self.config.arrive_lane_m or (holding and remaining <= self.config.pass_window_m)
 
-    def _stalled(self, live: LiveTrip, index: int, s: float) -> bool:
+    def _stalled(self, live: LiveTrip, index: Optional[int] = None, s: float = 0.0) -> bool:
+        """No ``stall_m`` of progress for ``stall_s``; ``index`` None: the robot could not be located."""
         now = self._clock()
-        progress = live.progress(index, s)
+        progress = -math.inf if index is None else live.progress(index, s)
         if (live.progress_at is None or progress >= live.best_progress + self.config.stall_m
                 or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
+                or self._waiting(live, now)
                 or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
                 or (live.authority or {}).get("state") == "HOLDING"):  # nor at the authority's end
             live.best_progress = max(live.best_progress, progress)
             live.progress_at = now
             return False
         return now - live.progress_at >= self.config.stall_s
+
+    def _wait_bound(self, reason: Optional[str]) -> Optional[float]:
+        """D-760 4 / D-517 4: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule applies again."""
+        return {"link_wait": self.lease.ttl_s}.get(reason)
+
+    def _waiting(self, live: LiveTrip, now: float) -> bool:
+        wait = live.view.get("wait") or {}
+        bound = self._wait_bound(wait.get("reason"))
+        return bound is not None and now - wait["since"] < bound
+
+    async def _link_wait(self, live: LiveTrip, kind: str) -> bool:
+        """D-760 4: a robot call or state read failed on a trip that holds its lease. The trip stays open in
+        ``link_wait`` (no instruction, goal or extended authority; UNKNOWN in the block table, so its blocks stay
+        held) until the link returns (``_link_back``) or the lease is lost. False: no lease, the trip ends as before."""
+        if not live.open or (live.view.get("lease") or {}).get("state") != "held":
+            return False
+        live.at, live.at_stamp = None, None
+        if (live.view.get("wait") or {}).get("reason") != "link_wait":  # kept until a whole step passes
+            live.view["wait"] = {"reason": "link_wait", "since": self._clock(), "lease_at": self.lease.now()}
+        live.view["state"], live.view["wait"]["kind"] = "link_wait", kind
+        if self._stalled(live):
+            await self._stop(live, "stopped", "stall", {"stall_s": self.config.stall_s, "link_wait": kind})
+        else:
+            self._save(live)
+        return True
