@@ -19,3 +19,5 @@
 **Validation:** [검토·단계별 계획](../plans/2026-10-11-mixed-device-work-design.md)의 협업 인계, 중복/지연 메시지, 취소·재시작·정지 범위, 완료 증거 시나리오를 요구한다. 문서 검증은 장치/현장 협업 수용이 아니다.
 
 **References:** [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md), [D-296](D-296-device-middleware-and-site-orchestration-terminology.md), [D-298](D-298-mission-action-and-stop-evidence-terminology.md), [D-369](D-369-control-authority-and-stop-evidence.md), [D-657](D-657-judgment-adapter-and-pure-execution-extraction.md), [CONCEPTS](../../CONCEPTS.md).
+
+> 2026-10-14 부기(D-763): 5항의 소유 범위는 [D-763](D-763-fleet-work-kinds-composed-steps.md)(Accepted)이 바꾼다: 두 사람 승인이 필요한 작업의 요약 행은 다른 이름 있는 운영자에게도 보인다. 상세와 본문의 소유 범위는 그대로다. 해당 조각(D-763 4)이 착지할 때 적용된다.
