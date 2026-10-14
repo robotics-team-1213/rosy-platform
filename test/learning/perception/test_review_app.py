@@ -126,6 +126,36 @@ def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
         ReviewStore(store.state, empty_training=True)
 
 
+def test_existing_mask_is_not_a_selectable_ai_candidate(tmp_path):
+    import threading
+    import urllib.request
+    import review_masks
+    from review_app import make_server
+    from test_review_cycle import CLASSES
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        value = json.load(urllib.request.urlopen(f'http://127.0.0.1:{server.server_port}/api/learning'))
+        assert value['pixel_counts']['drafted'] == 1
+        assert value['pixel_counts']['candidates'] == 0
+        assert value['pixel_draft_first'] is None
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+def test_unattributed_object_event_does_not_inherit_previous_actor(tmp_path):
+    store = open_store(tmp_path)
+    row = store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'}, actor='reviewer-a')
+    store.update(0, {'version': row['version'], 'action': 'approve', 'complete_frame_review': True})
+    events = ReviewStore(store.state).history(0)['events']['object']
+    assert 'actor' not in events[0]
+    assert events[1]['actor'] == 'reviewer-a'
+
+
 def test_history_distinguishes_imported_state_from_app_decisions(tmp_path):
     store = open_store(tmp_path)
     assert store.history(0)['object_status'] == 'approved'

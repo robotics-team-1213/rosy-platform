@@ -17,6 +17,114 @@ from test_review_app import open_store
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
+def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
+    """Real HTTPS receiver, signed grants and SQLite; only authority transport is replaced."""
+    import base64
+    import ssl
+    import subprocess
+    import time
+    from urllib.parse import parse_qs, urlencode, urlsplit
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from core_common.protocol.account_access import sign_access
+    from core_common.protocol.account_client import AccountClient, AccountUnavailable
+    from learning_rosy_accounts import RosyAccounts
+    playwright = pytest.importorskip('playwright.sync_api')
+    port = free_port()
+    origin = f'https://127.0.0.1:{port}'
+    issuer = origin.replace('127.0.0.1', 'localhost')
+    callback = origin + '/api/account/callback'
+    private = Ed25519PrivateKey.generate()
+    pem = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    public = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    state = {'name': 'Alice', 'offline': False, 'active': True, 'challenge': ''}
+
+    def authority(endpoint, fields):
+        if endpoint == 'introspect':
+            return {'active': state['active']}
+        if endpoint == 'revoke':
+            state['active'] = False
+            return {}
+        if endpoint == 'userinfo':
+            if state['offline']:
+                raise AccountUnavailable()
+            return {'account_id': 'central-alice', 'login': 'alice', 'display_name': state['name']}
+        assert endpoint == 'token' and fields['code'] == 'browser-code'
+        assert base64.urlsafe_b64encode(hashlib.sha256(fields['code_verifier'].encode()).digest()).rstrip(b'=').decode() == state['challenge']
+        now = int(time.time())
+        return {'token_type': 'Bearer', 'refresh_token': 'fixture-refresh-credential',
+                'access_token': sign_access({'iss': issuer, 'aud': 'project:one', 'sub': 'central-alice',
+                    'sid': 'family', 'jti': 'learning-browser-123', 'rev': 1, 'iat': now, 'exp': now + 300,
+                    'grants': [{'resource': 'project:one', 'capabilities': ['learning.view']}]}, pem, key_id='key')}
+
+    receiver = AccountClient(tmp_path/'central.sqlite', issuer=issuer, client_id='learning', resource='project:one',
+        callback=callback, public_keys={'key': public}, encryption_key=Fernet.generate_key(),
+        post=authority, destinations=('/accounts', '/'))
+    config = accounts.config()
+    config['account_subjects'] = {'central-alice': 'alice'}
+    config['public_origin'] = origin
+    managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
+    folder = tmp_path/'central-review'; folder.mkdir()
+    server = make_server(open_store(folder), port, accounts=managed)
+    class AuthorityHandler(server.RequestHandlerClass):
+        def do_GET(self):
+            request = urlsplit(self.path)
+            if request.path != '/api/fleet/auth/authorize':
+                return super().do_GET()
+            if not state['active']:
+                self.send_response(200); self.end_headers(); self.wfile.write(b'Signed out')
+                return
+            query = parse_qs(request.query)
+            state['challenge'] = query['code_challenge'][0]
+            self.send_response(302)
+            self.send_header('Location', callback + '?' + urlencode({'state': query['state'][0], 'code': 'browser-code'}))
+            self.end_headers()
+    server.RequestHandlerClass = AuthorityHandler
+    cert, key = tmp_path/'cert.pem', tmp_path/'key.pem'
+    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', str(key),
+                    '-out', str(cert), '-days', '1', '-subj', '/CN=localhost'], check=True, capture_output=True)
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); tls.load_cert_chain(cert, key)
+    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    try:
+        with playwright.sync_playwright() as runtime:
+            browser = runtime.chromium.launch(headless=True)
+            page = browser.new_page(ignore_https_errors=True)
+            navigation_errors = []
+            page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
+            try:
+                page.goto(origin + '/accounts')
+                link = page.locator('[data-account-profile]')
+                expect = playwright.expect
+                try:
+                    expect(link).to_contain_text('Alice', timeout=15000)
+                except AssertionError:
+                    pytest.fail(f'Profile login failed at {page.url}: {navigation_errors}; {page.locator("body").inner_text()[:1000]}')
+                expect(link).to_have_attribute('href', issuer + '/console/profile')
+                assert page.request.get(origin + '/api/accounts/session').json()['account_id'] == 'central-alice'
+                expect(page.locator('#import-panel')).to_be_hidden()
+                state['name'] = 'Updated Alice'
+                expect(link).to_contain_text('Updated Alice', timeout=15000)
+                state['offline'] = True
+                expect(link).not_to_contain_text('Alice', timeout=15000)
+                expect(link).to_be_visible()
+                state['offline'] = False
+                expect(link).to_contain_text('Updated Alice', timeout=15000)
+                old_cookie = next(item['value'] for item in page.context.cookies()
+                                  if item['name'] == 'rosy_learning_session')
+                # Keep the next login at the issuer so logout cannot immediately reauthenticate.
+                page.locator('#logout').click()
+                page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
+                assert not state['active']
+                assert receiver.resolve(old_cookie) is None
+                assert page.request.get(origin + '/api/accounts/session').status == 401
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)
+
+
 class SelectedAccountTransport(Transport):
     def __init__(self):
         super().__init__()

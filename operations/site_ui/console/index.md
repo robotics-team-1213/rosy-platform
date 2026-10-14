@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
-- 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
-- 2026-10-13 · 1438d53d1 · feat(web): control line (D-741), Cell 묶음 선 유지
-- 2026-10-13 · 7f40561e6 · main 브라우저 회귀 수정 재확인 (D-683/D-493/D-519)
-- 2026-10-13 · cfeced643 · main 브라우저 회귀 수정 (D-683/D-493/D-519)
+- 2026-10-14 · ba11d856d · fix(fleet): 규칙 M 카드 글과 이유 정리 (검토 반영)
+- 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 경고 행과 카드 표시 (D-550 8항, D-760 3항 1단계)
+- 2026-10-14 · 08fd296c0 · fix(fleet): 현장 지도·Cell 본문 접힘을 60rem으로 (D-741 2)
+- 2026-10-14 · 8b44b2399 · test(fleet): 폭마다 열 수를 고정하고 360·1349를 더함 (검토 반영)
+- 2026-10-14 · ac505f819 · test(fleet): 기록 영역을 320×568·밝게·1024에서 잼 (D-741 8)

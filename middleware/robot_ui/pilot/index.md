@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native Pilot
-- 2026-10-13 · 44aca95f3 · feat(pilot): 조각 11 원격 결과
-- 2026-10-13 · uncommitted · feat(pilot): Pilot 웹 앱 바의 이름표 (D-741 조각 11)
-- 2026-10-12 · fc055ee116 · CI 설치·Android·브라우저 보완
-- 2026-10-12 · 7cfb52c53 · test(pilot): 원격 Android proxy 시험 실행 경로
+- 2026-10-14 · a3a4befa7 · fix(pilot): 한 줄 앱 바에서 긴 글이 정지를 줄이지 않는다 (검토 반영)
+- 2026-10-14 · 0679a548b · feat(pilot): 접속 화면 앱 바는 64rem 이상에서 한 줄 64px (D-741 3·5)
+- 2026-10-14 · 8b44b2399 · test(pilot): 이른 누름 시험이 모드 기록 전체를 본다 (검토 반영)
+- 2026-10-14 · 71e43aeed · feat(pilot): 전화 폭 접속 화면 앱 바의 로봇 이름 (D-741 3)
+- 2026-10-14 · f5e01bdea · test(pilot): 같은 sha에서 결과가 바뀌던 브라우저 시험 둘

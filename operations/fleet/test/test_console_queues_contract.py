@@ -115,3 +115,20 @@ def test_d577_lane_lost_hold_rows_name_the_reason_and_rise_after_the_deadline():
     assert "HUMAN_DEADLINE_S = 30" in queues
     assert "30초 넘게 답 없음" in queues
     assert "overdue" in queues
+
+
+def test_d550_rule_m_unbounded_motion_is_one_warn_row_and_a_card_mark():
+    """D-550 8 / D-760 3 stage 1: an unbounded Fleet motion is a warn row in the one attention rule
+    (D-493) and a mark beside the card's link tag. Display only; no new panel, no inline style."""
+    queues, roster = QUEUES.read_text(encoding="utf-8"), ROSTER.read_text(encoding="utf-8")
+    link_tag = (WEB / "link-tag.js").read_text(encoding="utf-8")
+    rule = queues[queues.index("function attentionItems(robot)"):queues.index("function attentionKey(robot)")]
+    assert "const unbounded = ruleMTag(robot.rule_m);" in rule
+    assert 'if (unbounded) items.push({ severity: "warn", text: `: 한도 없는 움직임 — ${unbounded.text}` });' in rule
+    assert 'if (rule?.state !== "unbounded") return null;' in link_tag
+    assert "관제가 끊겨도 로봇이 계속 갑니다" in link_tag
+    for reason in ("hold_back", "no_goal_lease", "leg_unknown"):
+        assert f"  {reason}: " in link_tag
+    assert "const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);" in roster
+    assert "tag(unbounded.word, unbounded.kind)" in roster and "boundNode.style" not in roster
+    assert 'word: "정지 한도 없음"' in link_tag

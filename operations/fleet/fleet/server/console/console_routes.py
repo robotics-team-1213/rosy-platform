@@ -31,6 +31,7 @@ from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.swarm.transport import RobotApiError
+from fleet.traffic import rule_m
 
 
 class FormationRequest(BaseModel):
@@ -168,7 +169,6 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
         refresh_s=1.0, max_age_s=5.0)
     lane = getattr(app.state, "lane_compliance", None)
-
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
@@ -190,6 +190,15 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             row["power_health"] = next(power_values) if row["online"] else None
             row["power_health_age_s"] = (power_display.age(row["robot_id"])
                                          if row["power_health"] is not None else None)
+        # D-550 8 / D-760 3 stage 1: warn only. The verdict is shown, nothing is refused.
+        runner = getattr(app.state, "trip_runner", None)
+        trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}
+        for row in rows:
+            robot_id = row["robot_id"]
+            if row["online"]:  # an offline row already says the link is down
+                row["rule_m"] = rule_m.verdict(
+                    trip=trips.get(robot_id), leg=runner.leg_mode(robot_id) if robot_id in trips else None,
+                    goal=row.get("goal"), navigation=(row.get("state") or {}).get("navigation"))
         return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])

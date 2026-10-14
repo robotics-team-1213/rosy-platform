@@ -96,7 +96,7 @@ def test_camera_app_has_no_robot_or_fleet_user_calls():
 def test_camera_account_transport_only_uses_registered_authority_endpoints():
     source = (CAMERA_ACCOUNT / "AccountSession.kt").read_text(encoding="utf-8")
     calls = re.findall(r'\brequest\s*\(\s*([^,]+),', source)
-    assert set(calls) == {'"token"', '"introspect"', '"revoke"'}
+    assert set(calls) == {'"token"', '"introspect"', '"revoke"', '"userinfo"'}
     forbidden = CAMERA_FORBIDDEN["Fleet user API"]
     for name, allowed in (
         ("AccountSession.kt", '"/api/fleet/auth/authorize"'),

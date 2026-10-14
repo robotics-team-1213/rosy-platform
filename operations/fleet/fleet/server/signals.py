@@ -307,10 +307,6 @@ class SignalConsole:
         self._poll_lock = asyncio.Lock()
         self._last_poll = float("-inf")
 
-    @property
-    def signal_ids(self) -> list[str]:
-        return list(self._order)
-
     def _client(self, signal_id: str) -> SignalClient:
         client = self._clients.get(signal_id)
         if client is None:

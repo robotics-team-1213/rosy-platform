@@ -997,6 +997,14 @@
 - 증거: 단독 실행 ModuleNotFoundError 원인은 services conftest 에 gateway 경로가 없던 것. 단독·CI 모양 원격 실행 결과는 커밋 메시지 참조.
 - gate 변화: 없음. 테스트 경로 설정만 바뀐다. 제품 코드 무변경.
 
+## 2026-10-14 · db8e0977a · D-754 굽이가 넘겨줄 목격을 지도 거리로 가린다 (API v1.222)
+
+- 변경: `bend` 지시의 선택 필드 `next_line_in_m`(꼭짓점에서 다음 교차로 가로선까지의 차로 거리, 0–2 m)을 `check_bend`가 검증하고 `gate.py`가 지시에 둔다. `bend.py::_bend_own_line`은 필드가 있으면 목격 선 지점의 출구선 거리와 그 값의 차가 `bend_tol_m + crosswalk_range_error_fraction × junction_ahead_m + CORRIDOR_HALF_M`을 넘을 때 넘기지 않는다. 필드가 없으면 D-507 보충 9항의 모양 규칙 그대로다. 두 규칙은 선 지점 계산 `_bend_line`을 같이 쓴다. 능력 `lane_bend_next_line`은 `lane_bend`와 같은 값이다.
+- 증거: 원격(모델 PC) 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다. `test_junction_bend.py`: 90° 굽이의 호 가운데 0.17 m 목격이 필드 없이는 `waiting`, 지도 거리 1.0 m면 `idle`. 지도 거리가 맞으면 `waiting`, 허용치 밖이면 `idle`.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo run55 구간의 재실행과 장치 수용은 미검증이다. 상태 필드는 더하지 않았다.
+- 결정: D-754. 필드가 있으면 지도가 판단하고 9항의 60° 문턱은 쓰지 않는다.
+- 교훈: 굽이 자신의 선과 바로 뒤 교차로의 선은 호 가운데에서 모양이 같다. 가르는 것은 지도의 다음 장소 거리뿐이다.
+
 ## 2026-10-14 · 7c94fc4af · D-740 개정 3 거절된 한 틱은 교차로 기동을 버리지 않는다 (API v1.222)
 
 - 변경: `recovery/junction/gate.py::_unconfirmed`. 기동 중 `_return_probe`가 거절하면 그 틱은 HOLD `junction_motion_unconfirmed`(명령 0)이고 기동은 유지된다. 처음 거절부터 `min(clearance_stale_s, 0.5 s)`를 넘기면 `motion_unconfirmed`로 중단한다. 굽이는 두 번째 물음(`motion_admitted`)까지 통과해야 승인으로 친다.
@@ -1040,6 +1048,11 @@
 - 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
 - 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
 
+## 2026-10-14 · 7f5e596614 · D-754/D-759 integration applies the bounded-turn seam
+
+- Change: junction gate grew to 602 lines after both optional bend fields were preserved. Its existing split obligation is applied: unchanged standing-still, start-turn and turn-step methods move to JunctionTurnMixin in turn.py. Constants and yaw wrapper retain gate import identities; one manager state/lock/generation and CORE final writer remain.
+- Evidence: first remote affected group at 7f5e596614 had 10014 passed, 538 skipped and one NEW architecture failure (gate602/trip_ports606). Independent integration_review confirmed all moved and remaining methods' AST identity and source/wheel/sdist closure. Final remote gate is pending.
+- Gate: SOURCE review only; no Gazebo, device, ARM64 or physical acceptance.
 ## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
 
 - 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
@@ -1062,3 +1075,19 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. `authority.py` 175줄 → 192줄. 크기 단위 `drive/behaviors/line_follow`는 이 브랜치에서 모두 +27줄이다.
 - 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
 - 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
+
+## 2026-10-14 · 97ad6ca74 · 목표 임대는 그 목표를 보낸 토큰만 갱신한다 (D-760 5단계)
+
+- 변경: `navigation/manager.py`. `goal()`·`home()`이 `lease_owner`(보낸 토큰 id)를 받아 임대 튜플의 네 번째 칸에 둔다. `renew_goal_lease(..., owner)`는 활성 여부(`GOAL_LEASE_NOT_ACTIVE`)를 먼저 보고, 그 다음 `owner`가 다르면 `FORBIDDEN`을 낸다. 거절된 갱신은 임대·만료 시각·목표를 건드리지 않는다. 파일은 600줄 그대로다.
+- 증거: `middleware/core/gateway/test/test_goal_lease.py` 2건 추가(다른 토큰 403·목표는 제 만료에 끝남, 거절 뒤 보낸 토큰 갱신 200), 기존 409·임대 없는 목표 시험 통과. 원격(AI PC) 97ad6ca74 exit 0.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 근거 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
+## 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `recovery/junction/signal.py`를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로다. `recovery/junction/gate.py`의 import 줄 하나가 새 경로를 가리킨다. 옛 경로에 호환 재수출을 두지 않았다. `SIZE_UNITS`에 `drive/behaviors/line_follow/signal`을 더했다.
+- 증거: `git diff -M`에서 파일은 100% rename이고 다른 변경은 import 줄 하나와 한 줄짜리 `signal/__init__.py`다. 옛 모듈 경로를 import하는 시험은 없었다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. `recovery/junction` 단위 1,281줄 → 1,188줄, 새 단위 94줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가와 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`의 2026-10-14 보탬.
+- 교훈: 신호 mixin의 파일은 옮겼지만 `_junction_signal` 자리와 호출 순서는 교차로 게이트에 남는다. 다음 수정이 그 줄을 건드리면 `recovery/junction` 단위가 자란다.
