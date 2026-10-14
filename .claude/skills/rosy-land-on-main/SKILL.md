@@ -24,9 +24,10 @@ python tools/worktrees.py status                              # every worktree w
 ```
 
 - `new` (D-761, Proposed) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`) and removes nothing:
-  it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (clean,
-  merged into `main`, not locked, no ignored data, idle 72 h); `new --prune` applies that first. It
-  refuses at 40 worktrees. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
+  it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (your own,
+  clean, merged into `main`, not locked, no ignored data, idle 72 h; `--all` adds peers' and unowned ones);
+  `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and counts removable
+  worktrees per owner; `status` shows each row's owner and whether you may remove it. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
   removes dirty or unmerged worktrees too: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 

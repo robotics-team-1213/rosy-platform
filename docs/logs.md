@@ -8338,3 +8338,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_worktrees_tool.py test/test_land.py` 69 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\3`).
 - gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
 - 결정: 독립 리뷰의 17개 항목을 반영했다. 착지와 push는 디스패처가 한다.
+
+## 2026-10-14 · ffb2a9f80 · 워크트리 청소의 소유자 범위와 상한 60 (D-761 Proposed)
+
+- 변경: `prune`은 `new`가 적은 소유자 기록이 호출한 쪽과 같은 워크트리만 다루고 `--all`일 때만 남의 것과 소유자 없는 것을 다룬다. `status`는 소유자와 지울 수 있는지를 보여 주고, main을 머지한 끝 커밋을 표시한다. 상한 거절은 치울 수 있는 개수를 소유자별로 찍는다. 상한을 60으로 올렸다. D-761과 절차 문서 세 곳을 같이 고쳤다.
+- 증거: ffb2a9f80 원격 `test/test_worktrees_tool.py test/test_land.py` 72 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\6`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 2026-10-14 세션 간 ADR 논의의 세 항목을 반영했다. 착지와 push는 디스패처가 한다.
