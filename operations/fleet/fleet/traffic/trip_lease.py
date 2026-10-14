@@ -52,9 +52,8 @@ class TripLease:
         self._releasing: dict[str, asyncio.Future] = {}
         self.jobs: dict[str, SimpleNamespace] = {}  # robot id -> its job's hold (open=True, job=True, view)
 
-    def job_of(self, robot_id: str):
-        job = self.jobs.get(robot_id)
-        return job.view["job_id"] if job is not None else self.claimed(robot_id)
+    def job_of(self, robot_id: str):  # the job holding this robot: its hold here, else its durable claim
+        return self.jobs[robot_id].view["job_id"] if robot_id in self.jobs else self.claimed(robot_id)
 
     def _job_lease(self, robot_id: str):
         return (self.jobs.get(robot_id) or SimpleNamespace(view={})).view.get("lease")
@@ -105,7 +104,7 @@ class TripLease:
                 continue
             task = self._inflight.get(robot_id)
             if self._clock() - lease["renewed_at"] >= self.ttl_s:
-                self._inflight[robot_id] = asyncio.ensure_future(self._lose(live, "renew_timeout"))
+                self._inflight[robot_id] = asyncio.ensure_future(self.lose(live, "renew_timeout"))
             elif task is None or task.done():
                 self._inflight[robot_id] = asyncio.ensure_future(self._renew(live))
 
@@ -117,7 +116,7 @@ class TripLease:
             if exc.status >= 500:
                 return  # CORE did not judge it; the ttl rule decides
             ended = (exc.detail or {}).get("ended") or {}
-            await self._lose(live, ended.get("reason") or ("leased" if exc.code == "TRIP_LEASED" else exc.code),
+            await self.lose(live, ended.get("reason") or ("leased" if exc.code == "TRIP_LEASED" else exc.code),
                              ended.get("by"))
             return
         except Exception as exc:  # noqa: BLE001 — unreachable: the ttl rule decides
@@ -125,11 +124,11 @@ class TripLease:
             return
         if answer.get("renewed") is False:  # CORE restarted: this PUT opened a lease nobody holds
             self._release_later(robot_id, lease["lease_id"])
-            await self._lose(live, "core_restarted")
+            await self.lose(live, "core_restarted")
         elif lease["state"] == HELD:
             lease["renewed_at"] = sent
 
-    async def _lose(self, live, reason: str, by: str | None = None) -> None:
+    async def lose(self, live, reason: str, by: str | None = None) -> None:
         lease = live.view["lease"]
         if lease["state"] != HELD:
             return
@@ -139,9 +138,10 @@ class TripLease:
             await self._on_lost(live, detail)
         job = self.jobs.get(live.view["robot_id"])
         if job is not None and job.view["lease"] is lease and self.on_job_lost is not None:
-            # Fleet says lost at ttl after the last confirmed renew, a little before CORE: the caller reads
-            # the robot's state when it answers again and never assumes IDLE now (D-763 10).
-            await self.on_job_lost(job.view, detail)
+            try:  # lost at ttl after the last confirmed renew, before CORE: never assume IDLE now (D-763 10)
+                await self.on_job_lost(job.view, detail)
+            except Exception:  # noqa: BLE001 — the lease is already lost; the incident path must say so loudly
+                _LOG.exception("job %s lost its lease but the incident hook failed", job.view["job_id"])
 
     def close(self, live) -> None:
         """The trip closed (its halt already sent): release a lease it still holds, except its job's."""
@@ -151,13 +151,13 @@ class TripLease:
             self._release_later(live.view["robot_id"], lease["lease_id"])
 
     def _release_later(self, robot_id: str, lease_id: str) -> None:
-        self._releasing[robot_id] = asyncio.ensure_future(self._delete(robot_id, lease_id))
+        self._releasing[robot_id] = asyncio.ensure_future(self.delete(robot_id, lease_id))
 
     async def release(self, robot_id: str, lease_id: str) -> None:
         if (self._job_lease(robot_id) or {}).get("lease_id") != lease_id:  # a step that did not start: job keeps it
-            await self._delete(robot_id, lease_id)
+            await self.delete(robot_id, lease_id)
 
-    async def _delete(self, robot_id: str, lease_id: str) -> None:
+    async def delete(self, robot_id: str, lease_id: str) -> None:
         try:
             await asyncio.wait_for(self._port.trip_lease_release(robot_id, lease_id), self._timeout_s)
         except Exception as exc:  # noqa: BLE001 — already ended (404) or unreachable: CORE's expiry ends it
