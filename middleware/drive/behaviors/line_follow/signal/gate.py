@@ -18,6 +18,13 @@ class JunctionSignalMixin:
                 and not (self._junction_signal or {}).get('entered')
                 and j.get('state') in ('armed', 'approaching', 'turning', 'advancing')))
 
+    def _signal_holding(self):
+        """D-760 rev 3 9: the junction stands for this episode's Fleet signal (no reply yet, red,
+        unknown, expired, green without may_enter) until the gate selects and the robot enters. Locked."""
+        s = self._junction_signal
+        return bool(self._config.junction_signal_enabled and s is not None and not s.get('entered')
+                    and (self._junction or {}).get('state') == 'waiting')
+
     def junction_signal_request(self):
         with self._lock:
             s = self._junction_signal

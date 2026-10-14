@@ -19,7 +19,7 @@ from fleet.site_map import ENDPOINT_TOL_M
 _LOG = logging.getLogger(__name__)
 
 #: Trip states that are still going.
-OPEN = ("started", "running")
+OPEN = ("started", "running", "link_wait")  # D-760 4: a robot without a link keeps its trip open
 
 
 #: D-494 1: ``caps(robot_id) -> TripCaps | None`` (sync or async), app.py's capability closure.
@@ -92,7 +92,7 @@ class HttpLaneJunction:
         # D-520 2: ``arc`` is CORE's ``line_follow.arc`` record (arc_seq, from_place_id, state, ...)
         recovering = line.get("state") == "RECOVERING" or line.get("stuck") is not None
         return ({**junction, "line_reason": line.get("reason"), "line_recovering": recovering,
-                 "arc": line.get("arc")}
+                 "arc": line.get("arc"), "regulation_wait": line.get("regulation_wait")}  # D-763 8 (API v1.227)
                 if isinstance(junction, dict) else None)
 
     async def hold(self, robot_id: str) -> dict:

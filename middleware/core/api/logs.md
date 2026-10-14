@@ -964,3 +964,19 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3.
 - 교훈: 없음.
+
+## 2026-10-14 · 97ad6ca74 · `POST /navigation/goal/lease` 보낸 토큰만 (D-760 5단계, 버전 그대로 v1.225)
+
+- 변경: `api/v1/navigation.py`가 `/navigation/goal`·`/navigation/home`에서 `auth.token_id`를 `lease_owner`로, `/navigation/goal/lease`에서 `owner`로 넘긴다. 다른 토큰의 갱신은 403 `FORBIDDEN`(`_HTTP_BY_CODE`의 기존 코드, trip 임대 해제 거절과 같은 꼴). API Reference의 `/navigation/goal/lease` 행과 `FORBIDDEN` 오류 행에 적었다. 버전 정렬 가드는 올림을 요구하지 않아 v1.225 그대로다.
+- 증거: `test_goal_lease.py`(같은 토큰 200, 다른 토큰 403, 끝난 목표 409, 임대 없는 목표 그대로). 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
+## 2026-10-14 · ddd9723ef · D-760 2단계 통행권 계약을 v1.226으로 (v1.225 충돌 해소)
+
+- 변경: main이 v1.225를 두 번 썼다(D-754 굽이 `next_line_in_m`, D-760 2단계 통행권). D-754는 v1.225로 두고, D-760 2단계 절·`/line-follow/authority` 행·능력 주석·변경 기록 행을 v1.226으로 옮겼다. `api/app.py` 독스트링과 `description`, 헤더를 고정하는 테스트도 같은 커밋에서 v1.226이다. 위의 2단계 항목들이 적은 v1.225는 그 때의 번호다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3.
+- 교훈: 없음.
