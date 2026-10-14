@@ -900,3 +900,9 @@
 - 변경: 64rem 아래 접속 화면에서 숨기던 로봇 이름(`[data-pilot-robot]`)을 이름 줄에 남겼다. 길면 말줄임이 된다. 30rem 아래에서는 워드마크 `Pilot`이 R 심볼로 접힌다(Fleet·Robot과 같다). 링크의 접근 이름은 그대로다. 주행·팔 화면, 접속 화면의 두 줄 격자, 비상 정지의 마크업·핸들러·순서는 바꾸지 않았다. 캐시된 시트가 바뀌어 `sw.js`의 캐시 이름을 올렸다.
 - 증거: 바꾸기 전 측정(AI PC Chromium, `snw-measure-pilot-1.txt`): 이름 줄 폭 390에서 252px·320에서 182px, 워드마크 79px, 비상 정지 82×74px. 바꾼 뒤(`snw-measure-pilot-2.txt`, sha 71e43aeed) `test_connect_app_bar_names_this_robot_at_phone_width` 4 passed: R 심볼 20px, `rosy_26` 61px, 긴 이름은 이름 줄 끝에서 잘리고, 이름을 숨겼을 때와 비상 정지 상자·머리 높이가 같다. `test_pilot_browser.py` 전체 153 passed(`snw-pilot-file-1.txt`). 원격 소스 시험 `middleware/robot_ui/pilot/test`와 `shared/web/test`는 known_failures NEW 0(`X:/DevTemp/shell-narrow/`).
 - gate 변화: 없음. 접속 화면 머리는 전화 폭에서 103px 두 줄이다(D-466 그대로). 64px 한 줄로 만들지 않았고, 상태 표와 `운용 지도`까지 한 줄에 서는지는 재지 않았다. Android 셸은 이름표를 숨기므로 달라지지 않는다. 실기 전화·태블릿에서는 보지 않았다.
+
+## 2026-10-14 · 8b44b2399 · test(pilot): 이른 누름 시험이 모드 기록 전체를 본다 (검토 반영)
+
+- 변경: 제품은 그대로다. `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 끝에서 idle을 기다린 뒤 차선 추종 모드 기록이 정확히 `CAMERA_LINE`, `OFF` 한 쌍인지 본다. 꼬리만 보던 확인은 늦게 닿은 이른 누름을 놓칠 수 있었다.
+- 증거: AI PC Chromium에서 이 시험과 `test_stick_takes_over_auto`, `test_go_releases_on_cancel_and_leave` 3 passed(`X:/DevTemp/browser-run/snw-review-pilot-1.txt`, sha 8b44b2399), `test_pilot_browser.py` 전체 153 passed(`snw-review-pilot-file-1.txt`).
+- gate 변화: 없음.
