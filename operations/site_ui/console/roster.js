@@ -7,7 +7,7 @@ import { NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_
   enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
-import { linkTag } from "./link-tag.js";
+import { linkTag, ruleMTag } from "./link-tag.js";
 import { positionTag, robotPoseText, sitePoseText, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
@@ -292,6 +292,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         linkNode.title = `${reason.message} ${reason.action}`;
       }
       head.appendChild(linkNode);
+    }
+    const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);
+    if (unbounded) {
+      const boundNode = tag(unbounded.word, unbounded.kind);
+      boundNode.title = unbounded.text;
+      head.appendChild(boundNode);
     }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
