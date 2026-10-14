@@ -1,6 +1,6 @@
 ## D-761 워크트리는 관문 도구로 만들고, 끝난 워크트리는 손실 없는 청소로 치운다
 
-**Status:** Proposed (2026-10-14). 사용자가 워크트리 증가를 글로 된 규칙이 아니라 프로그램 관문으로 관리하라고 요청했다. 이 결정 자체는 아직 승인되지 않았다. 2026-10-14 독립 리뷰(높음 5, 중간 6)를 반영해 고쳤다. 착지는 디스패처가 한다.
+**Status:** Proposed (2026-10-14). 사용자가 워크트리 증가를 글로 된 규칙이 아니라 프로그램 관문으로 관리하라고 요청했다. 이 결정 자체는 아직 승인되지 않았다. 2026-10-14 독립 리뷰(높음 5, 중간 6)와 같은 날 다른 세션들과의 논의(소유자 범위, 소유자별 집계, 상한 60)를 반영해 고쳤다. 착지는 디스패처가 한다.
 
 ### Context
 
@@ -14,9 +14,9 @@
 
 ### Decision
 
-1. **만드는 관문은 하나다.** 워크트리는 `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 만든다. 도구는 `<type>`이 `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나인지(D-372), 브랜치 이름이 `git check-ref-format --branch`를 통과하는지, 짧은이름이 경로 한 마디이고 `.`으로 끝나지 않는지, 경로와 브랜치가 아직 없는지 본 다음 `git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main`을 실행한다. `--relative-paths`를 모르는 git(2.48 미만)에서는 그 옵션 없이 다시 실행한다. 만든 사람(`user.name`, `user.email`, 있으면 `CLAUDE_CODE_SESSION_ID`)을 `branch.<브랜치>.description`에 적고 `status`가 보여 준다. 청소는 이 값을 읽지 않는다. 누구 것인지 사람이 판단할 때 쓴다.
+1. **만드는 관문은 하나다.** 워크트리는 `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 만든다. 도구는 `<type>`이 `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나인지(D-372), 브랜치 이름이 `git check-ref-format --branch`를 통과하는지, 짧은이름이 경로 한 마디이고 `.`으로 끝나지 않는지, 경로와 브랜치가 아직 없는지 본 다음 `git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main`을 실행한다. `--relative-paths`를 모르는 git(2.48 미만)에서는 그 옵션 없이 다시 실행한다. 만든 사람(`user.name`, `user.email`, 있으면 `CLAUDE_CODE_SESSION_ID`)을 `branch.<브랜치>.description`에 `owner: <신원>`으로 적는다. 이것이 그 워크트리의 소유자 기록이다(3항).
 2. **다른 명령의 부수 효과로는 아무것도 지우지 않는다.** `new`와 `tools/land.py`는 손실 없는 청소가 지울 수 있는 개수를 한 줄로 알리기만 한다(`N finished worktree(s) can be removed: python tools/worktrees.py prune --apply`). `--prune`을 주면 그 청소를 실제로 하고, `--no-prune`을 주면 알림도 하지 않는다. `land.py`에서 이 단계가 실패하면 경고만 찍고 착지를 계속한다.
-3. **손실 없는 청소(`prune --apply`)의 조건.** 다음을 모두 만족하는 워크트리만 지운다. 수정·스테이징·미추적 파일이 없다. HEAD가 `main`의 조상이다. 잠겨 있지 않다. 브랜치가 `main`이 아니다. rebase, merge, cherry-pick, revert, bisect가 진행 중이 아니다. 캐시가 아닌 gitignore 파일이 없다(6항). 72시간 넘게 쉬었다(4항). main 체크아웃과 도구를 실행한 워크트리는 어떤 옵션으로도 지우지 않는다. 지우기 직전에 그 워크트리의 HEAD sha, 브랜치, 잠금, 쉰 시간을 다시 읽고, 처음 본 것과 다르면 지우지 않는다. 깨끗한 워크트리는 `--force` 없이 지워서 git이 한 번 더 확인하게 한다. 브랜치는 그 sha가 `refs/heads/main`의 조상일 때 `git update-ref -d refs/heads/<브랜치> <sha>`로 지운다. 그 사이 브랜치가 움직였으면 이 명령이 실패하고 브랜치가 남는다. 적용하는 청소 두 개가 섞이지 않도록 공통 git 디렉터리에 `worktrees-prune.lock`을 만들고 끝나면 지운다. 30분이 지난 잠금 파일은 넘겨받는다.
+3. **손실 없는 청소(`prune --apply`)의 조건.** `prune --apply`와 `prune --snapshot`은 소유자 기록이 호출한 쪽의 신원(git 신원과, 있으면 세션 id)과 같은 워크트리만 다룬다. `--all`을 주면 다른 세션 것과 소유자 기록이 없는 것도 다룬다. 소유자 기록이 없는 워크트리는 "unowned"다. 이 결정 이전에 만든 워크트리, 맨손 `git worktree add`로 만든 것, 분리된 HEAD, orphan 디렉터리가 모두 여기에 든다. 상한에 막힌 세션이 동료의 워크트리를 지우지 않고 누구 것이 치울 수 있는지 보게 하려는 것이다. `status`는 행마다 소유자와, 호출한 쪽이 지울 수 있는지(`yes`, `--all`, `-`)를 보여 준다. 그 범위 안에서 다음을 모두 만족하는 워크트리만 지운다. 수정·스테이징·미추적 파일이 없다. HEAD가 `main`의 조상이다(브랜치 끝 sha로 본다. `tools/land.py`가 만든 "Merge branch 'main' into X" 커밋이 끝인데 그 뒤 착지하지 못한 브랜치는 조상이 아니므로 남는다. `status`는 그런 행에 "tip is a merge of main"을 붙인다). 잠겨 있지 않다. 브랜치가 `main`이 아니다. rebase, merge, cherry-pick, revert, bisect가 진행 중이 아니다. 캐시가 아닌 gitignore 파일이 없다(6항). 72시간 넘게 쉬었다(4항). main 체크아웃과 도구를 실행한 워크트리는 어떤 옵션으로도 지우지 않는다. 지우기 직전에 그 워크트리의 HEAD sha, 브랜치, 잠금, 쉰 시간을 다시 읽고, 처음 본 것과 다르면 지우지 않는다. 깨끗한 워크트리는 `--force` 없이 지워서 git이 한 번 더 확인하게 한다. 브랜치는 그 sha가 `refs/heads/main`의 조상일 때 `git update-ref -d refs/heads/<브랜치> <sha>`로 지운다. 그 사이 브랜치가 움직였으면 이 명령이 실패하고 브랜치가 남는다. 적용하는 청소 두 개가 섞이지 않도록 공통 git 디렉터리에 `worktrees-prune.lock`을 만들고 끝나면 지운다. 30분이 지난 잠금 파일은 넘겨받는다.
 4. **쉰 시간.** 다음 가운데 가장 최근 시각부터 잰다. 브랜치 끝 커밋 시각, 워크트리의 `.git` 파일 수정 시각(만든 시각의 하한), `logs/HEAD` 수정 시각, `git status`가 보여 주는 파일의 수정 시각. `logs/HEAD`가 없거나 읽히지 않으면 활동 중으로 본다. 인덱스 파일의 수정 시각은 쓰지 않는다. `git status`만 돌려도 바뀌기 때문이다. 기본값은 72시간이다.
 5. **커밋 안 된 작업은 `refs/wip` 아래에 남긴 뒤에만 지운다.** `prune --snapshot`은 사람이나 디스패처만 돌린다. 쉬고 있는 워크트리 가운데 더럽거나 main에 들어가지 않은 것도 다룬다.
    - 더러운 워크트리는 임시 인덱스(`GIT_INDEX_FILE`)에 `read-tree HEAD`, `add -A`, `write-tree`, `commit-tree`를 해서 워크트리의 HEAD를 부모로 하는 커밋을 만든다. 워크트리의 인덱스와 브랜치는 건드리지 않는다.
@@ -33,7 +33,7 @@
    - `.omc/`는 캐시가 아니다. 에이전트 상태다.
    - git이 내용 전체가 무시된 디렉터리를 한 줄로 보고하면 도구가 그 안을 걸어서 캐시 밖 파일이 하나라도 있는지 본다.
 7. **지우다 실패한 디렉터리.** `git worktree remove`가 실패했는데 git 목록에서는 빠지고 디렉터리가 남으면(Windows의 열린 핸들, 긴 경로) `ORPHAN <경로>`를 찍고 브랜치를 남긴다. exit 상태는 바꾸지 않는다. `status`는 `.worktrees/` 아래의 등록되지 않은 디렉터리를 `orphan`으로 보여 주고, 상한 계산에 넣는다. 손실 없는 청소는 비어 있는 orphan 디렉터리만 지운다.
-8. **상한은 40개이고 비상구가 있다.** `new`는 `.worktrees/` 아래가 40개 이상이면 exit 1로 거절한다. 가장 오래 쉰 열 개와 판정을 찍고, `python tools/worktrees.py status`와 손실 없는 `prune --apply`를 알려 준다. `--snapshot`은 사람이나 디스패처가 돌린다고 적는다. `--force-over-cap "<이유>"`를 주면 상한을 넘겨 만들고 이유를 찍고 `branch.<브랜치>.description`에 남긴다. 빈 이유는 거절한다. 사고 대응 중에 막히는 것이 워크트리 하나가 더 생기는 것보다 나쁘기 때문이다.
+8. **상한은 60개이고 비상구가 있다.** 세는 것은 `.worktrees/` 아래의 모든 디렉터리다. orphan도 센다. 2026-10-14에 네 세션이 활동 중인 워크트리를 30~45개 썼다. `new`는 60개 이상이면 exit 1로 거절한다. 가장 오래 쉰 열 개와 판정, 그리고 손실 없이 치울 수 있는 워크트리가 소유자별로 몇 개인지를 찍고, `python tools/worktrees.py status`와 손실 없는 `prune --apply`를 알려 준다. `--snapshot`은 사람이나 디스패처가 돌린다고 적는다. `--force-over-cap "<이유>"`를 주면 상한을 넘겨 만들고 이유를 찍고 `branch.<브랜치>.description`에 남긴다. 빈 이유는 거절한다. 사고 대응 중에 막히는 것이 워크트리 하나가 더 생기는 것보다 나쁘기 때문이다.
 9. **lint는 경고만 한다.** `python tools/harness/rosy_harness.py lint`는 워크트리가 상한 이상이거나, main에 들어갔고 72시간 넘게 쉰 워크트리가 있으면 `WARN`을 찍는다. 문구는 8항과 같은 안내다. 이 검사는 워크트리마다 `git status`를 돌리지 않는다. CI와 `.worktrees/`가 없는 체크아웃에서는 아무것도 찍지 않고, 어떤 예외가 나도 lint를 실패시키지 않는다.
 10. **절차 문서.** `AGENTS.md` 「같이 하는 깃」 1번과 6번, `docs/reference/shared-checkout.md`의 같은 절, `rosy-land-on-main` 스킬을 이 도구로 바꾼다. 실험실 PC 우산 문서는 저장소 밖이라 사람이 같이 고친다.
 
@@ -43,7 +43,7 @@
 - 원격 브랜치를 정리하지 않는다.
 - main에 들어가지 않은 브랜치를 지우지 않는다. 로컬 브랜치 수는 이 결정만으로는 main에 들어간 만큼만 준다.
 - 이 결정이 Proposed인 동안 자동으로 지우는 경로가 없다. 지우는 것은 누군가 `prune --apply`나 `--prune`을 친 때뿐이다.
-- 소유자 표시로 청소를 막거나 허락하지 않는다.
+- 소유자 기록은 인증이 아니다. `git config` 한 줄이고 `--all`로 넘어갈 수 있다. 실수로 동료 것을 지우는 것을 막는 장치다.
 - 설정 파일이 없다. 상한과 기본 쉰 시간은 `tools/worktrees.py`의 상수다.
 
 ### D-172와의 관계
@@ -57,10 +57,12 @@ D-172는 구조 개편 이전의 미병합 브랜치를 `archive/<YYYY-MM-DD>/<b
 - 캐시 목록에 없는 gitignore 파일(`.vscode/`, `local.properties`)도 같은 방식으로 남는다.
 - `refs/wip`는 clone과 기본 push에 실려 가지 않는다. 이 PC에만 있는 보존이다.
 - 알림은 `new`와 `land`에 `git worktree list`와 `for-each-ref` 두 번, 그리고 쉬고 있고 main에 들어간 워크트리마다 `git status` 한 번을 더한다.
-- 상한 40은 측정으로 정한 값이 아니다. 동시에 일하는 세션 수보다 넉넉하게 잡은 시작값이고 상수 하나를 바꿔 조정한다.
+- 지금 있는 워크트리는 전부 소유자 기록이 없다. 누군가 `--all`로 돌리기 전에는 손실 없는 청소가 하나도 지우지 않는다.
+- 세션 id가 신원에 들어가므로, 세션이 끝난 뒤 그 세션이 만든 워크트리는 다른 세션에게 남의 것이다. `--all`로만 치워진다.
+- 상한 60은 하루 관측(네 세션, 30~45개)에 여유를 둔 값이다. 상수 하나를 바꿔 조정한다.
 
 ### Validation
 
-- `test/test_worktrees_tool.py`: 임시 저장소에서 실제 git으로 시험한다. 손실 없는 청소와 브랜치 삭제, `--snapshot`의 `refs/wip` 보존과 내용, 캐시 규칙(`.omc`, `data/log`, 루트와 colcon 옆의 `log`), 잠금, 쉰 시간과 `logs/HEAD` 없는 경우, 실행 중인 워크트리 보호, 훑은 뒤 생긴 커밋, 움직인 브랜치, 실패한 삭제와 orphan, 중첩 저장소, 분리된 HEAD, 진행 중인 rebase, 청소 잠금, `new`의 상한·비상구·거절·소유자 기록, `land.py`와 `new`가 `--prune` 없이는 지우지 않는 것을 본다.
+- `test/test_worktrees_tool.py`: 임시 저장소에서 실제 git으로 시험한다. 손실 없는 청소와 브랜치 삭제, `--snapshot`의 `refs/wip` 보존과 내용, 캐시 규칙(`.omc`, `data/log`, 루트와 colcon 옆의 `log`), 잠금, 쉰 시간과 `logs/HEAD` 없는 경우, 실행 중인 워크트리 보호, 훑은 뒤 생긴 커밋, 움직인 브랜치, 실패한 삭제와 orphan, 중첩 저장소, 분리된 HEAD, 진행 중인 rebase, 청소 잠금, `new`의 상한·비상구·거절·소유자 기록, 소유자 범위와 `--all`, 상한 거절의 소유자별 집계, main을 머지한 끝 커밋 표시, `land.py`와 `new`가 `--prune` 없이는 지우지 않는 것을 본다.
 - 이 도구의 `prune`과 `new`는 실제 저장소에 대해 아직 한 번도 실행하지 않았다. 다른 세션이 일하는 중이라 임시 저장소에서만 시험했다. Windows에서의 삭제 실패는 git 호출을 바꿔 흉내 냈다.
 - `python tools/harness/rosy_harness.py lint`가 오류 0이다.
