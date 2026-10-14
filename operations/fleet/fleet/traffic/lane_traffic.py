@@ -97,6 +97,8 @@ class TrafficService(SignalService):
         self._front: dict[str, tuple[str, float, float, float]] = {}
         #: robot id -> (front, clock, periods in a row) of a refused front that may settle (JUMP_SETTLE_PERIODS)
         self._jumped: dict[str, tuple[float, float, int]] = {}
+        #: D-760 3: robot id -> metres it may still drive on an unconfirmed authority; a pin covers them too
+        self.authority_reach = lambda _robot_id: 0.0
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -109,7 +111,7 @@ class TrafficService(SignalService):
             old, state = self._state, blocks.TableState()
             for robot_id in {*old.route, *old.held, *old.last_occupied, *old.pinned}:
                 pose = self._last_pose.get(robot_id)
-                units = self._under(layout, active[2], pose) if pose is not None else {}
+                units = self._under(layout, active[2], pose, self.authority_reach(robot_id)) if pose is not None else {}
                 if units:
                     state.pinned[robot_id] = units
             self._layout, self._version, self._state, self._seen = layout, active[0], state, {}
@@ -117,10 +119,10 @@ class TrafficService(SignalService):
             self._busy, self._occupancy = None, {}
         return self._layout
 
-    def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float]) -> dict[str, bool]:
-        """``{unit: forward}`` a robot body at ``pose`` (± its length and u along the lane) may touch."""
+    def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float], extra: float = 0.0) -> dict[str, bool]:
+        """``{unit: forward}`` a robot body at ``pose`` (± its length, u and ``extra`` along the lane) may touch."""
         x, y, yaw = pose
-        reach = self._length + self._u_max
+        reach = self._length + self._u_max + extra
         units: dict[str, bool] = {}
         for arc in graph.arcs.values():
             if not arc.forward:
@@ -257,7 +259,7 @@ class TrafficService(SignalService):
             self._pin(robot_id)
         moving = {live.view["robot_id"] for live in lives if live.open}  # open trips on an old map
         for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
-            units = self._under(layout, active[2], fresh[robot_id])
+            units = self._under(layout, active[2], fresh[robot_id], self.authority_reach(robot_id))
             if robot_id in moving:  # still driving: its pose may lag a period, so pins only grow
                 state.pinned[robot_id] = {**state.pinned[robot_id], **units}
             elif units:  # where it stands now replaces the pins

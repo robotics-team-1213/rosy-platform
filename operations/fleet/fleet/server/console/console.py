@@ -469,8 +469,8 @@ class FleetConsole(TripAware):
                     "reason": "LOCALIZATION_UNTRUSTED"}
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation during goal admission")
-        if lease_source != "trip" and self.trip_busy(robot_id):
-            raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
+        if lease_source != "trip" and (busy := self.trip_refusal([robot_id])):
+            raise busy
         result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
         if result["accepted"] is False:
             return result
@@ -693,8 +693,8 @@ class FleetConsole(TripAware):
             raise HubError("COMMAND_REJECTED", f"{robot_id} stopped during yield admission")
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation while planning a yield")
-        if self.trip_busy(robot_id):
-            raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
+        if busy := self.trip_refusal([robot_id]):
+            raise busy
         self.goal_leases.check_stop(mover, mover_stop)
         try:
             result = await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")

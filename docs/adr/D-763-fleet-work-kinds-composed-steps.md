@@ -19,9 +19,9 @@ D-741 7항은 Fleet의 "로봇에게 시키는 일"을 `작업` 영역 하나에
 
    | D-760 단계 | 상태 | 저장소에서 확인한 것 |
    |---|---|---|
-   | 1 규칙 M 판정과 경고 | 검토 승인, origin 미착지 | `fleet/traffic/rule_m.py`가 로컬 `main`(`41a19818e`, `da6ed28eb`)에 있고 `origin/main`에는 없다 |
-   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.226 | 구현됨, 재검토 중, 미착지 | 이 워크트리의 `MAX_TTL_S`는 아직 2.0이다(`line_authority.py`). 브랜치 내용은 확인 못 함 |
-   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 시작 안 함 | 코드에 없다(이름 검색) |
+   | 1 규칙 M 판정과 경고 | 로컬 `main`에 착지, origin 미착지 | `fleet/traffic/rule_m.py` |
+   | 2 CORE `ttl_s` 상한 5, `shrink`·`seq`, 임대 중 통행권 강제, API v1.226 | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `MAX_TTL_S = 5.0`(`line_authority.py`), 능력 `line_follow_authority_under_lease`·`line_follow_authority_shrink`(`core_common/protocol/controls.py`) |
+   | 3 `link_wait`, Fleet 줄이기 송신, 재시작 뒤 5 s | 로컬 `main`에 착지(2026-10-14), origin 미착지 | `link_wait`가 `ledger/trip_admission.py`·`trip_ports.py`·`trip_progress.py`에 있다 |
    | 6 `LINK_UNBOUNDED_MOTION` 거절, 기본값 켜기 | Gazebo·장치 끊김 시험 뒤 | 코드에 없다 |
 
    trip 밖에서 Fleet이 차선 주행을 켜는 길(`console.line_follow_mode`)은 아직 있고 D-760 7항이 6단계에서 닫는다.
@@ -268,7 +268,7 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 1. **팔 단계 중 lease가 만료하면 CORE와 팔은 무엇을 하는가(팔이 서는가, 든 물체는 어떻게 되는가).** 조각 6의 Safety-Review가 정한다. 정하기 전에는 팔 단계가 든 종류를 열지 않는다.
 2. **가져오기를 여는 조각의 검토.** 개정 2 질문 1은 첫 대상을 고정 팔 인계로 정했지만 근거가 약하다. 가져오기를 여는 조각은 D-55·D-664의 팔 문구를 읽은 따로의 검토를 받는다.
 3. **기다림 사유의 번호 붙은 목록과 상한.** 차로 규제 작업이 D-573 개정 5 착지 뒤 D-573·D-525 개정에 싣는다. 8항의 초안 표는 그때까지 참고다.
-4. **능력 이름의 확정.** 개정 2 질문 10 (b)·(c)의 이름 가운데 `line_follow_authority_under_lease`(D-760 2단계 브랜치)와 횡단보도 게이트·교차로 신호 능력은 이 브랜치의 `core_common/protocol/controls.py`에 없다. 제안이고 해당 조각에서 확정한다.
+4. **능력 이름의 확정.** 개정 2 질문 10 (b)의 `line_follow_authority_under_lease`는 확정이다(D-760 2단계, API v1.226, `core_common/protocol/controls.py`). (c)의 횡단보도 게이트·교차로 신호 능력은 차선·규제 작업이 `lane_crosswalk_gate`(CORE `line_follow.crosswalk_gate_enabled`가 켜졌을 때만 참)와 `lane_junction_signal`(`junction_signal_enabled`가 켜졌을 때만 참)로 정했고, 아직 코드에 없다. API 버전을 올리는 그 작업의 브랜치에서 확정한다.
 
 ### 근거의 경계
 
