@@ -123,10 +123,16 @@ def analyze(state, ask, model_digest, limit=None):
 def read_current_feedback(state, index):
     state = Path(state).resolve()
     path = state / "vlm-feedback.json"
-    if not path.is_file():
-        return {"available": False}
     try:
-        report = json.loads(path.read_text(encoding="utf-8"))
+        with sqlite3.connect(f"file:{state / 'reviews.sqlite3'}?mode=ro", uri=True) as db:
+            exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_ai_feedback'").fetchone()
+            row = db.execute('SELECT report FROM review_ai_feedback WHERE frame=?', (index,)).fetchone() if exists else None
+        if row:
+            report = json.loads(row[0])
+        elif path.is_file():
+            report = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            return {"available": False}
         metadata, rows = _snapshot(state)
         row = next(row for row in rows if row[0] == index)
         item = next(item for item in report["frames"] if item["frame"] == index)
@@ -144,9 +150,11 @@ def read_current_feedback(state, index):
         return {"available": True, "current": current, "advisory_only": True,
                 "workspace_changed": report["generation"] != metadata["generation"],
                 "model": report["model"], "model_digest": report["model_digest"],
+                "job_id": report.get("job_id"), "requested_by": report.get("requested_by"),
+                "created_at": report.get("created_at"),
                 "feedback": feedback, "unknown_pixels": item["unknown_pixels"],
                 "review_blocked": item["review_blocked"]}
-    except (KeyError, ValueError, TypeError, StopIteration, OSError):
+    except (KeyError, ValueError, TypeError, StopIteration, OSError, sqlite3.Error):
         return {"available": False}
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import math
 from types import SimpleNamespace
 
 import pytest
@@ -48,6 +49,7 @@ def _setup(caps, enabled=True, answer=None, config=TripConfig()):
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=config,
                         authority=enabled)
+    runner.authority.quiet_until = -math.inf  # D-760 5: these trips run long after Fleet started
     return runner, store, fleet
 
 
@@ -96,8 +98,8 @@ def test_the_payload_is_relative_to_the_pose_the_table_used():
     base = live.segments[0]["s_from"] + live.progress(*live.at)
     # blocks.py: a robot's d is its FRONT; CORE measures base odom travel, so the front stays inside
     assert live.traffic["front_d_m"] == pytest.approx(base + PINKY_PRO.front_x_m)
-    assert set(body) == {"authority_id", "leg_id", "pose_stamp", "until_m", "ttl_s"}
-    assert body["leg_id"] == "a:0" and body["ttl_s"] == 2.0
+    assert set(body) == {"authority_id", "leg_id", "pose_stamp", "until_m", "ttl_s", "seq"}
+    assert body["leg_id"].startswith("a:0:") and body["ttl_s"] == 2.0 and body["seq"] == 0  # D-760 3: no shrink flag
     assert body["pose_stamp"] == pytest.approx(fleet.p["a"].pose.odom_stamp) == live.traffic["pose_stamp"]
     assert body["until_m"] == pytest.approx(live.traffic["authority_end_m"] - base - PINKY_PRO.front_x_m, abs=1e-3)
     assert body["until_m"] > 0
@@ -131,6 +133,7 @@ def test_a_failed_send_is_not_retried_before_the_next_period(caplog):
             raise OSError("unreachable")
 
     sender, live = AuthoritySender(Port(), True), _live(2.0, 0.5)
+    sender.quiet_until = -math.inf  # D-760 5: long after Fleet started
 
     async def go():
         for _ in range(3):
