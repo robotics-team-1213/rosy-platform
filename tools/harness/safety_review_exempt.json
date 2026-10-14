@@ -358,5 +358,13 @@
   {
     "commit": "5cad91a98697838d49890bdd7847666659d7dad2",
     "reason": "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely bounded. Trailer commit 460a45c; no device acceptance."
+  },
+  {
+    "commit": "df1b93395b4749fa13537dbf315ac7cc0c6566a2",
+    "reason": "D-762 stage 1, 2026-10-14: created test/flaky_quarantine.txt before a later commit on the same branch (fix(ci) review commit, Safety-Review trailer) tagged that file concern: safety. Dispatcher independent review of e7db14989 read this commit; the one listed id is a fleet worker-idle flake outside every safety root."
+  },
+  {
+    "commit": "e7db149893df19e1182440e95337b3d20548313c",
+    "reason": "D-762 stage 1, 2026-10-14: added the second fleet worker-idle flake (test_incident_cost_receipt [True], CI run 38571112242) to test/flaky_quarantine.txt before the file was tagged concern: safety on the same branch. Covered by the dispatcher independent review of e7db14989."
   }
 ]
