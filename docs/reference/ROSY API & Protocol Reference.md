@@ -1,4 +1,7 @@
 ﻿# ROSY API & Protocol Reference
+
+D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md). 사람 신원·앱 세션 교환·자원별 접근 자격·계정 관리의 구현 대상이며 운영 활성화 증거는 별도다.
+
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
@@ -3473,6 +3476,8 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 검수 앱의 선택적 `--collaboration`은 모델 PC의 HTTPS 프록시 뒤 loopback HTTP에 적용한다. CORE `/api/v1`, Fleet 역할, ROS와 장치 실행 프로토콜을 추가하거나 변경하지 않는다. 사용자·프로젝트 membership, 개인별 HF 연결, 자료 가져오기 경로와 요청 필드는 [검수 앱 공동 계정 설명](../../learning/curation/perception/docs/review-app.md#공동-계정과-hugging-face-가져오기-d-755)을 따른다.
 
 `/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.
+
+가져오기 작업은 파일별 `downloaded_bytes`, `partial_sha256`, 완료 `sha256`와 작업의 `reserved_bytes`를 반환한다. 부분 bytes는 검증 완료나 학습 승인이 아니다. 서버가 제공한 SHA-256과 로컬 부분 해시가 있는 파일만 같은 revision·연결 세대로 Range 재개한다. Range를 무시한 전체 응답은 덧붙이지 않고 처음부터 다시 받는다. `insufficient_space`, `storage_unavailable`, `verification_failed`, `access_revoked`, `worker_interrupted`, `import_failed`는 비밀을 포함하지 않는 실패 코드다. 저장소 실행 잠금과 남은 bytes의 논리 예약은 같은 imports root의 worker만 조정하며 파일시스템 전체의 물리 예약은 아니다. 운영자 전용 `import_limits` 설정은 웹 입력으로 변경할 수 없다.
 
 ### 학습 저장 현황과 공간 사전 점검 (D-755 후속)
 

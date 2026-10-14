@@ -232,7 +232,7 @@ h1 {
    스크롤해도 정지가 남는다. 스페이스 안내와 요청 결과는 같은 머리의 아랫줄이다. */
 ui-shell[grammar="focal"] ui-topbar {
   display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content;
   row-gap: var(--space-1);
 }
 
@@ -253,6 +253,9 @@ ui-shell[grammar="focal"] ui-topbar {
 #halt-status[data-state="error"] { color: var(--status-crit); }
 
 #halt { min-width: 96px; }
+#halt[hidden], #account-login[hidden], #account-logout[hidden] { display: none; }
+#account-login, #account-logout { grid-column: 4; grid-row: 1; }
+#halt { grid-column: 5; grid-row: 1; }
 
 @media (width < 64rem) {
   ui-shell[grammar="focal"] ui-topbar {
@@ -263,6 +266,7 @@ ui-shell[grammar="focal"] ui-topbar {
 
   #phase { margin: 0; }
   #connection { grid-column: 1 / -1; margin: 0; }
+  #account-login, #account-logout { grid-column: 2; grid-row: 1; justify-self: end; }
   #halt { grid-column: 3; grid-row: 1; }
   .halt-note { justify-content: flex-start; }
 
@@ -282,8 +286,14 @@ ui-shell[grammar="focal"] ui-topbar {
 /* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)는
    접고 경기 단계·정지, 연결 증거, 정지 안내의 세 줄만 남긴다. */
 @media (width < 30rem) {
-  ui-shell[grammar="focal"] ui-topbar { padding-block: var(--space-1); }
-  ui-topbar ui-brand small { display: none; }
+  ui-shell[grammar="focal"] ui-topbar {
+    padding-block: var(--space-1);
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    column-gap: var(--space-1);
+  }
+  ui-topbar ui-brand { display: none; }
+  #phase { grid-column: 1; grid-row: 1; }
+  #account-logout { padding-inline: var(--space-1); }
 }
 /* 전화 화면의 HOLD에서는 유실 이유를 피치보다 먼저 놓는다. */
 @media (width < 30rem) {

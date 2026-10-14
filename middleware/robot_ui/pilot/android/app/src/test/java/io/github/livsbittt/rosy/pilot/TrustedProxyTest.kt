@@ -18,6 +18,40 @@ class TrustedProxyTest {
         "ca_pem":${JSONObject.quote(ca.certificatePem())},"robots":[
         {"robot_id":"rosy_01","tls_host":"robot-a.local","port":$port,"credential":"private-token-value"}]}
     """.trimIndent())
+    @Test fun managedProxyNeverExposesOrAcceptsBrowserBearer() {
+        val ca = HeldCertificate.Builder().certificateAuthority(1).build()
+        val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()
+        MockWebServer().use { remote ->
+            remote.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf, ca.certificate).build().sslSocketFactory(), false)
+            remote.start(); remote.enqueue(MockResponse().setBody("{}")); remote.enqueue(MockResponse().setBody("{}"))
+            val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
+            store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
+            var current = "native-first-secret"
+            val connection = object : PilotConnection {
+                override val target = config.robots.single()
+                override val secure = true
+                override val managed = true
+                override fun bearer() = current
+                override fun authorized() = true
+                override fun client() = config.client(target, store)
+                override fun accountContext() = JSONObject().put("enabled", true).put("authenticated", true)
+            }
+            val proxy = PilotProxy(connection, null, {})
+            try {
+                proxy.start(5000, false)
+                fun read(path: String): String = OkHttpClient().newCall(Request.Builder().url(proxy.origin + path)
+                    .header("Cookie", "${proxy.cookieName}=${proxy.capability}").header("Authorization", "Bearer attacker-browser-token").build())
+                    .execute().use { assertEquals(200, it.code); it.body!!.string() }
+                val bootstrap = read("/pilot/bootstrap.js")
+                assertTrue(bootstrap.contains("pilotAccount='managed'")); assertFalse(bootstrap.contains(current))
+                assertFalse(bootstrap.contains("setItem"))
+                read("/api/v1/auth/whoami"); assertEquals("Bearer native-first-secret", remote.takeRequest().getHeader("Authorization"))
+                current = "native-refreshed-secret"
+                read("/api/v1/auth/whoami"); assertEquals("Bearer native-refreshed-secret", remote.takeRequest().getHeader("Authorization"))
+                assertFalse(read("/api/account/session").contains(current))
+            } finally { proxy.stop() }
+        }
+    }
     @Test fun tlsDnsOverrideRetainsHostnameAndBearer() {
         val ca = HeldCertificate.Builder().certificateAuthority(1).build()
         val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()
