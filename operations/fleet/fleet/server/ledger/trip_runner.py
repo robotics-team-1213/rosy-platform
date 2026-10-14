@@ -108,8 +108,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
-        # D-760 3; D-760 4 state reads; D-760 8 review: robot -> the read number the next step's read is above
-        self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}
+        self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
         self._refresh_warned_at = -math.inf
@@ -470,8 +469,7 @@ class TripRunner(TripAdmission, TripProgress):
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
-                live.junction = await self._call(self._junction.junction_state(  # D-760 8 review: fenced read
-                    robot_id, **self._after(self._junction, robot_id))) or {}
+                live.junction = await self._call(self._junction.junction_state(robot_id, **self._after(self._junction, robot_id))) or {}  # D-760 8: fenced
                 # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
                 arc = arc if isinstance(arc, dict) else {}
