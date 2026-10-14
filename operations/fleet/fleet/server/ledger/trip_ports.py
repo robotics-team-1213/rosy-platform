@@ -406,11 +406,11 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
 
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig, located=None) -> Optional[dict]:
     """D-507 bend fields (D-754 next line, D-759 map entry); None outside a straight same-map approach in (0, 2] m."""
-    # Lead by trip speed x pose latency: unled, the arc began 2 cm late, 1.8 cm to the wall (Gazebo 2026-10-13). Errs inside.
+    # Lead by top speed x measured pose latency (unled the arc began 2 cm late, 2026-10-13; SEND_ALLOWANCE_S on top began it 2 cm early, m16/m17).
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0
     if age is not None and live.pose_read_at is not None:
-        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S)
+        lead = (caps.get("max_speed") or 0.0) * (age + (_monotonic() - live.pose_read_at))
     ahead = bend["s_start"] - s
     bend_in = round(max(min(ahead, 0.001), ahead - lead), 3)  # an arc start still ahead stays ahead
     index, segs = live.view["segment_index"], live.segments
