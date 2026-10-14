@@ -1,9 +1,4 @@
-"""D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and runtime state.
-
-``TripCaps`` (``console_view``, from the robot's capabilities) and ``MapPose``
-(``rosy.world.state.projections.map_pose``) are the providers' own types; app.py injects the capability
-closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's robot clients).
-"""
+"""D-494 trip ports/config/state; app.py injects TripCaps, MapPoseService and HttpLaneJunction."""
 
 from __future__ import annotations
 
@@ -410,8 +405,7 @@ def straight_approach(arc, s: float, s_start: float) -> bool:
 
 
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig, located=None) -> Optional[dict]:
-    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``, ``bend_radius_m`` and
-    D-759 1 ``map_entry``; None on another map version, an arc start not 0-2 m ahead or a lane still turning before it."""
+    """D-507 bend fields (D-754 next line, D-759 map entry); None outside a straight same-map approach in (0, 2] m."""
     # Lead by trip speed x pose latency: unled, the arc began 2 cm late, 1.8 cm to the wall (Gazebo 2026-10-13). Errs inside.
     caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     age, lead = pose.get("age_s"), 0.0

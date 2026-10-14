@@ -1047,3 +1047,9 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이고, 설정은 그 전까지 꺼 둔다. `model.py` 597줄 → 600줄(파일 한도 600에 닿았다. 다음 설정 키 전에 나눠야 한다), `gate.py` 591줄, `bend.py` 284줄.
 - 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
 - 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
+
+## 2026-10-14 · 7f5e596614 · D-754/D-759 integration applies the bounded-turn seam
+
+- Change: junction gate grew to 602 lines after both optional bend fields were preserved. Its existing split obligation is applied: unchanged standing-still, start-turn and turn-step methods move to JunctionTurnMixin in turn.py. Constants and yaw wrapper retain gate import identities; one manager state/lock/generation and CORE final writer remain.
+- Evidence: first remote affected group at 7f5e596614 had 10014 passed, 538 skipped and one NEW architecture failure (gate602/trip_ports606). Independent integration_review confirmed all moved and remaining methods' AST identity and source/wheel/sdist closure. Final remote gate is pending.
+- Gate: SOURCE review only; no Gazebo, device, ARM64 or physical acceptance.

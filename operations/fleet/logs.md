@@ -3582,3 +3582,9 @@
 - 알려진 오경보: 끝난 Fleet 목표의 기록이 남아 있는 로봇을 대시보드·Pilot이 항법으로 움직이면 Fleet 목표로 보인다. 상태 스냅숏에 항법 `correlation_id`가 없어 가릴 수 없다.
 - 증거: `test_rule_m.py`(행 판정, 깨진 `navigation` 값, 오프라인 행). 원격 시험 로그는 X: `rule-m-warn/fix1`이다.
 - gate 변화: 없음. 표시만이다.
+
+## 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
+
+- Change: redundant module and bend_fields docstrings are shortened, retaining provider identities, both bend contracts and refusal conditions. All validation, geometry, error handling and safety rationale remain.
+- Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
+- Gate: no runtime or device claim.
