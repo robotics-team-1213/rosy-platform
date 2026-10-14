@@ -84,3 +84,32 @@ def test_new_branch_or_force_push_checks_only_the_tip_and_exempt_skips(repo, mon
     assert safety_review.main([repo.base, "HEAD"]) == 1
     monkeypatch.setattr(safety_review, "EXEMPT", {old: "reviewed: test"})
     assert safety_review.main([repo.base, "HEAD"]) == 0
+
+
+def test_exempt_table_loads_and_names_real_commits():
+    """The EXEMPT data file: full 40-hex SHAs that exist in this history, each with a reason."""
+    table = safety_review.load_exempt()
+    assert table and safety_review.EXEMPT == table
+    root = safety_review.EXEMPT_FILE.parent
+    missing = [sha for sha in table if subprocess.run(["git", "-C", str(root), "cat-file", "-e", sha + "^{commit}"],
+                                                      capture_output=True).returncode]
+    assert not missing, f"EXEMPT names commits not in this history: {missing}"
+
+
+@pytest.mark.parametrize("text", [
+    "", "{not json", "{}", '[{"commit": "abc", "reason": "short sha"}]',
+    '[{"commit": "' + "a" * 40 + '", "reason": " "}]',
+    '[{"commit": "' + "a" * 40 + '", "reason": "x"}, {"commit": "' + "a" * 40 + '", "reason": "dup"}]',
+])
+def test_malformed_exempt_table_exits_1(tmp_path, text):
+    path = tmp_path / "safety_review_exempt.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(SystemExit) as stop:
+        safety_review.load_exempt(path)
+    assert stop.value.code != 0 and "safety_review_exempt.json" in str(stop.value.code)
+
+
+def test_missing_exempt_table_exits_1(tmp_path):
+    with pytest.raises(SystemExit) as stop:
+        safety_review.load_exempt(tmp_path / "safety_review_exempt.json")
+    assert "cannot load" in str(stop.value.code)
