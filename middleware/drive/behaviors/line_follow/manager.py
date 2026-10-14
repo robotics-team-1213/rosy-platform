@@ -135,6 +135,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             self._reset_arc(reason or default)
             self._init_authority()
             self._xwalk.reset()
+            self._regulated_wait_sample = None
             self._init_lane_cue()  # D-430 review 10: a mode change (and E-stop) drops the cue and its latch
             self._generation += 1
             self._mode = selected

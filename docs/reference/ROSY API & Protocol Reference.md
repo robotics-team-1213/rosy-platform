@@ -19,6 +19,10 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 `GET /api/fleet/trips`·`/api/fleet/trips/{trip_id}`의 trip view에 이미 있는 `wait {reason, since, …}`에 필드 셋을 더한다(additive). Fleet trip 정체 시계(`ledger/trip_progress.py` `_waiting`)가 판정할 때마다 그 답을 그대로 적는다. 화면의 기다림 표시와 정체 시계가 같은 판정을 쓴다(D-763 8항). `waiting`: 참이면 기다림이고 정체 시계가 가지 않는다. `bound_s`: 지금 사유의 상한 초(`link_wait`·`authority`는 trip lease `ttl_s`, `signal`은 `stall_s`, `crosswalk_look`·`crosswalk_wait`·`crosswalk_held`는 15 s; 모르는 사유는 null). `over_bound`: 규제나 `link_wait`가 지금 보고되는 동안, 이 기다림(첫 사유부터 한 번, 사유가 바뀌어도 이어짐)이 상한을 넘었다. 보고가 그치면 `waiting`·`over_bound` 모두 거짓이다. 이때부터 정체 규칙이 다시 돌고, 관제는 주의 행 `대기 상한 넘음 · <사유>`로 보인다. D-763 개정 2 질문 7: 상한을 넘은 기다림은 먼저 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다. `reason`은 CORE `line_follow.regulation_wait`(v1.227) 값 또는 `link_wait`(D-760 4항)이다. `stall_m`만큼 나아가면 규제 기다림은 사라진다(`wait` 키 없음). `since`는 Fleet 단조 시계라 화면이 쓰지 않는다. 세 키는 tick마다 판정할 때 한 번에 쓴다. 판정이 돌지 않은 tick(교차로 동작 중, hold, 그 앞의 종료)이 끝나면 null(모름)이다. tick 도중의 읽기는 앞 tick의 답을 본다. `GET /api/fleet/work`에는 trip 행이 아직 없다(D-763 조각 4). 옛 view는 세 키가 없다.
 
+### v1.230 승인 대기 작업의 거절 `POST /api/fleet/missions/{mission_id}/reject` (D-763 조각 5·5b)
+
+새 경로(additive). 본문은 admit과 같은 `FleetWorkDecisionRequest` `{expected_generation}`(bool을 뺀 0 이상 정수, 다른 키 거절)다. 이름 있는 운영자만(viewer·공유 콘솔 토큰·자격 없는 루프백은 403 `OPERATOR_IDENTITY_REQUIRED`/`FORBIDDEN`). 누가 볼 수 있고 결정할 수 있는지는 admit과 같은 단계 종류 등록부(`step_action_kinds`) 판정이다: 두 사람 종류(`CELL_TRANSFER`, Cell Job)는 이름 있는 운영자 누구나, 제안자만 종류(레거시 `PICK_PLACE`)는 제안자만이고 다른 사람에게는 404 `MISSION_NOT_FOUND`다. 제안자가 하면 `decision: WITHDRAWN_BY_PROPOSER`, 다른 운영자가 하면 `REJECTED_BY_OPERATOR`이고 행위자는 감사 행에 남는다. 결과: Cell Job은 status `HOLD`, reason `CANCELLED_BY_OPERATOR`(취소와 같은 끝 상태 — resume·cancel·admit 모두 거절, 사건 `CELL_JOB_REJECTED`에 `decision`), 레거시 Mission은 status `CANCELED`, reason이 `decision`(사건 `MISSION_REJECTED`). claim을 잡지 않는다. 응답 `{proposal, mission, decision}`. 거절: 아직 resolve 전 409 `PROPOSAL_NOT_RESOLVED`; `PROPOSED`가 아님(이미 승인·거절됨 — 두 번째 거절도 여기) 또는 `expected_generation`이 지금 정지 세대와 다름 409 `MISSION_REJECT_REFUSED`(`message`); Cell 원장 없음 503 `CELL_JOB_JOURNAL_UNAVAILABLE`; resolve된 원장 단계의 종류가 등록부에 없음 409 `APPROVAL_RULE_UNREGISTERED`(admit도 같다). 승인 값은 resolve된 원장 단계 종류들 가운데 가장 엄한 것이다. 대화 요청에 연결된 작업을 거절하면 기존 결과 회신 경로가 요청자에게 알린다(Mission `CANCELED`, Cell Job `HOLD`). 정지 중(dispatch 꺼짐)에도 거절은 된다. admit의 승인 판정은 같은 등록부에서 오고 코드와 순서는 그대로다(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404). admit 본문 모델 이름이 `FleetWorkDecisionRequest`로 바뀌었고 받는 값은 같다.
+
 ### v1.227 로봇을 세운 규제 `line_follow.regulation_wait` (D-760 개정 3 9항)
 
 `GET /api/v1/line-follow`와 상태 스냅숏 `line_follow`에 선택 필드 `regulation_wait`를 더한다(additive). 값은 `authority` | `signal` | `crosswalk_held` | `crosswalk_wait` | `crosswalk_look` | null이다. CORE 2b 도우미(`crosswalk/gate.py` `_regulation_wait`)가 기동·호 시계를 세울 때 쓰는 판정 그대로다. `authority`: 강제 중인 D-517 통행권이 `FREE`가 아니다. `signal`: D-525/D-620 교차로 신호를 기다린다(응답 없음, 적색, unknown, 만료, `may_enter` 없는 녹색). `crosswalk_held`: D-573 건너는 중 앞의 반사로 섰다. `crosswalk_wait`: 보기 창이 사람·unknown·stale로 막혔다(`state: waiting`). `crosswalk_look`: 보는 중(`state: looking`). 여럿이면 우선순위 `authority` > `signal` > `crosswalk_held` > `crosswalk_wait` > `crosswalk_look`이다. line-follow가 꺼졌거나 규제가 세우지 않으면 null이다. Fleet은 정체 판정에서 `reason` 문자열을 다시 풀지 않고 이 필드를 읽는다. 옛 CORE는 키가 없다. 다른 필드와 동작은 그대로다.
@@ -2520,7 +2524,8 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status; a named operator may inspect a Cell Job proposal. |
 | POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator; `service` for `cell_job` only | Recheck current evidence/capability through the injected resolver or recompile a Cell Job through the process compiler port; create a proposal-only Mission draft and ordered steps. |
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
-| POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. |
+| POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. Who may admit comes from the step-kind registry (D-763 item 7). |
+| POST | `/api/fleet/missions/{mission_id}/reject` | Named Operator | v1.230 (D-763 5b). Body `{expected_generation}`. End a `PROPOSED` Cell Job (HOLD/`CANCELLED_BY_OPERATOR`) or legacy Mission (`CANCELED`) without approval and without claims; the proposer withdraws (`WITHDRAWN_BY_PROPOSER`), another named operator rejects (`REJECTED_BY_OPERATOR`). Not `PROPOSED` or stale generation: 409 `MISSION_REJECT_REFUSED`. |
 | GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. |
@@ -2579,7 +2584,10 @@ returns `409` with no new claim. General mutation audit failure returns `503`
 before proposal or admission mutation. The synchronous admission response reports
 `physical_submission: NOT_CONNECTED`: admission itself is only a claim transaction.
 For Cell Jobs, the approving operator must have a different principal ID from
-the service proposer. Changed compilation, changed generation, or resource
+the service proposer. This rule is read from the step-kind registry
+(`step_action_kinds`, D-763 item 7): `CELL_TRANSFER` is two-person; legacy
+`PICK_PLACE` stays proposer-only (other principals get 404) until the slice that
+connects its physical dispatch. Changed compilation, changed generation, or resource
 conflict leaves the Job unadmitted and creates no claim. If the separately configured, explicitly enabled background dispatcher is running,
 it may later submit one fenced local Action. Neither response proves ROS goal
 completion, software stop, driver standstill, object placement, or physical E-stop
@@ -3011,6 +3019,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
 | v1.227 | 2026-10-14 | Additive (D-760 개정 3 9항, feat/line-follow-regulation-wait): `GET /api/v1/line-follow` 와 상태 스냅숏 `line_follow` 의 선택 필드 `regulation_wait`(`authority`·`signal`·`crosswalk_held`·`crosswalk_wait`·`crosswalk_look`·null, 그 순서의 우선순위). CORE 2b 시계 도우미와 같은 판정. 동작·다른 필드·envelope 1.0 변경 없음. |
 | v1.226 | 2026-10-14 | Additive + Behavior (D-760 1–3항, feat/authority-ttl5-shrink-under-lease, Safety-Review 대상): `POST /api/v1/line-follow/authority` `ttl_s` 상한 2 → 5 s, 선택 필드 `shrink`(bool)·`seq`(정수 ≥ 0), 응답 `reason: stale_seq`·`seq_required`·`seq_legs_full`·`shrink_none_held`. CORE trip lease 가 열려 있는 동안 line-follow 는 통행권이 없으면 `authority_none` 으로 선다(임대가 없으면 v1.225 그대로). 능력 `base_velocity.line_follow_authority_shrink`·`line_follow_authority_under_lease`. 추가 필드와 임대가 없는 요청의 동작은 v1.225와 같다. Fleet 송신은 바뀌지 않는다(D-760 3단계) |
 
