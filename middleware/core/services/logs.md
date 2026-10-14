@@ -1091,3 +1091,24 @@
 - gate 변화: 없음. SOURCE 구조 근거만 더한다. `recovery/junction` 단위 1,281줄 → 1,188줄, 새 단위 94줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
 - 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가와 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`의 2026-10-14 보탬.
 - 교훈: 신호 mixin의 파일은 옮겼지만 `_junction_signal` 자리와 호출 순서는 교차로 게이트에 남는다. 다음 수정이 그 줄을 건드리면 `recovery/junction` 단위가 자란다.
+
+## 2026-10-14 · be48f4d34 · D-760 2b단계: 뒤 문이 가져간 시간은 호의 기한이 아니다
+
+- 변경: `line_follow/arc/lane_arc.py::_arc_step`. D-507 13항(`recovery/junction/gate.py::_maneuver`)과 같은 규칙: 틱마다 통행권(`_authority_on`·`_authority_state`)이 `FREE`가 아니거나 횡단보도 게이트(`_xwalk.status`)가 `looking`·`waiting`이면 지난 틱부터의 시간을 호 기한과 열린 IR 보정 기한에 더한다. 한 호에 `crosswalk_report_s + crosswalk_clear_s`(15 s)까지. 그 뒤는 지금처럼 `lane_arc_timeout`과 HOLD. 문이 가져가지 않은 시간은 지금 기한 그대로다. `crossing`의 느린 몫(교차로 기동의 규칙)은 호에 넣지 않았다(호는 알려진 횡단보도 위에서 열리지 않는다). D-400 `policy_hold`는 이 층에서 보이지 않아 넣지 않았다. D-744 원, 호 기하, D-759, 타임아웃 뒤 동작은 그대로다.
+- 증거: `test_lane_arc.py` — 통행권·`looking`·`waiting`이 호 도중 3 s·6 s 잡았다가 풀리면 호를 마침(6건), 통행권 없이 연 호는 기한 + 15 s에 `lane_arc_timeout`·HOLD(옛 "오늘 동작" 고정 시험을 바꿈), 호 도중 20 s는 기한 + 15 s에 `lane_arc_timeout`, 문이 없거나 `armed`·`crossing`이면 기한이 `length_m`/v + 2 s 그대로, IR 보정 중 잡힘은 보정 기한도 세움, 10 s 두 번은 합해서 15 s(호마다 상한). 고치기 전 커밋에서 새 시험 10건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요. 크기 단위 `drive/behaviors/line_follow/arc` 460 → 469(한도 460, +9 초과, 재판정 필요). 부모 단위 `line_follow`는 바뀌지 않음.
+- 결정: D-760 개정 2 6항. API Reference의 호 시간 한도 문장을 고쳤다(버전 행은 올리지 않음).
+- 교훈: 호 0.5 s 지점의 20 s 정지는 남은 여유 때문에 정지 안이 아니라 풀린 뒤 주행 중에 시간이 다한다. 시험의 시점은 기한 + 15 s로 잰다.
+
+## 2026-10-14 · uncommitted · D-760 2b 독립 검토 반영: 공유 계산, 틱 간격 상한, 건너는 중의 몫
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulated_wait_share(now, dt, speed)`를 두고 `recovery/junction/gate.py::_maneuver`(D-507 13)와 `arc/lane_arc.py::_arc_step`이 같이 쓴다. 통행권 비`FREE`, `looking`·`waiting`, 건너는 중 앞 물체로 선 상태(`look_progress`, 두 호출부 모두 놓쳤다)는 전부, 건너는 중은 `1 - crosswalk_cross_speed/speed`만 센다. `dt`는 `stale_after_s`까지만 센다(틱 스레드가 멈췄다 HOLDING으로 깨어나도 그 간격을 주지 않는다). 상한 15 s는 호출부가 지킨다. 호는 이제 건너는 중의 몫도 받는다(속도는 `_arc_speed()`). `lane_arc.py`의 공백만 바뀐 줄을 되돌렸다. 크기 판정 `line_follow/arc`를 467로 재판정 문구와 함께 바꿨다(검토자 문구 + 단위 계획 인용, 가드가 계획 인용을 요구한다).
+- 증거: `test_lane_arc.py` — 2 s 주행 뒤 3 s 정지가 기한을 3.0 s 옮김, 멈춘 틱 간격은 `stale_after_s`까지(그 틱은 낡은 odom으로 호도 끝난다), 건너는 중 선 시간 2 s 전부·움직이는 건너기 2 s의 절반. 교차로·횡단보도·통행권·호 시험과 `test_module_structure.py` 원격 통과.
+- gate 변화: SOURCE·호스트 근거만. 크기: arc 467, crosswalk 769(판정 756), junction 1239, `recovery/junction/gate.py` 597줄.
+
+## 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulation_wait(now)`를 두었다. 통행권 비`FREE` → `authority`, D-620 신호 대기(`signal/gate.py::_signal_holding`: 신호 켜짐, 들어가지 않은 회차, 교차로 `waiting`) → `signal`, 횡단보도 `waiting` → `crosswalk_wait`, `looking` → `crosswalk_look`, 건너는 중 앞 물체로 섬(`look_progress`) → `crosswalk_held`, 아니면 None. 우선순위는 그 순서다(횡단보도 셋은 서로 겹치지 않는다). `_regulated_wait_share`는 이 분류가 None이 아니면 dt 전부를 센다(사본 없음). 신호 대기가 새로 들어갔지만 그때 교차로는 `waiting`이라 기동 시계가 돌지 않고, 호는 틱을 가져가 교차로 문이 돌지 않는다. `manager.status()`가 꺼짐이 아니면 이 값을 `regulation_wait`에 넣어 `GET /line-follow`와 상태 스냅숏에 같이 실린다.
+- 증거: `middleware/core/services/test/test_line_regulation_wait.py`, `middleware/core/gateway/test/test_line_regulation_wait_api.py`. 고치기 전 커밋에서 새 시험 17건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. Fleet은 아직 읽지 않는다(rosy-44 몫). Safety-Review 대상 경로(`crosswalk/gate.py`)를 건드렸다.
+- 결정: D-760 개정 3 9항. API Reference v1.227.
