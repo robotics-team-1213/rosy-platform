@@ -38,6 +38,7 @@ CANVAS_FILES = [
     GAMES / "board.js",
     SRC.parent / "learning/curation/perception/review_app_web/app.js",
     SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
+    SRC.parent / "learning/curation/perception/review_app_web/versions.js",
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")
