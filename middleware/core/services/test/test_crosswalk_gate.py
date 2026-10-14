@@ -380,6 +380,27 @@ def test_wall_bases_read_as_the_lane_edges_do_not_hold_an_empty_crosswalk():
     assert go - stop_t <= 5.6
 
 
+def test_a_poor_lane_reading_while_crossing_does_not_widen_the_way_ahead_into_the_walls():
+    """D-573 개정 5 (Gazebo lap m15): on the stripes the camera's lane bound grew to 0.046 m; merged
+    into the zone's edges it made the way ahead of the crossing body 0.14 m wide each side and the
+    walls 0.117 m out held the crossing for good. The way ahead is the lane's own width about the
+    body; a person in it still stops the crossing."""
+    for person, moves in (([], True), ([(FAR - 0.02, 0.05, 0.02)], False)):
+        s = Sim(edges=(0.079, -0.079))
+        walls = [(x / 100, side, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+        s.objects = walls
+        s.to_stop()
+        s.run(5.5)
+        assert s.crosswalk.state == "crossing"
+        end = s.t + 20.0
+        while s.x + B.front_x_m < NEAR + 0.02:
+            assert s.t < end, s.m.status()
+            s.frame()
+        s.lat_u, s.objects = 0.046, walls + person
+        out = [d.linear for _, d in s.run(1.0)]
+        assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
     """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
     body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no

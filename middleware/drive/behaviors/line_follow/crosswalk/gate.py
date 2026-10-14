@@ -225,8 +225,11 @@ class CrosswalkGate:
         # The rest of the zone ahead: the seen lane width centred on the body, which follows that
         # lane, again in the scan's own odom frame (the drift since the zone's image only moves the
         # zone's lane edges relative to the anchor, not the lane relative to the body).
-        half = max(((geo.lane_half_m if z.left is None else z.left)
-                    - (-geo.lane_half_m if z.right is None else z.right)) / 2, geo.body_half_m)
+        # 개정 5: the zone's own lane width; the pads a seen corridor merges into z's edges are
+        # position bounds the body centring already covers (m15: 0.046 m of them reached the wall).
+        raw = self._zone or z
+        half = max(((geo.lane_half_m if raw.left is None else raw.left)
+                    - (-geo.lane_half_m if raw.right is None else raw.right)) / 2, geo.body_half_m)
         exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m, side + geo.body_half_m)
         return (((front, far, side - half, side + half), exit_box) if front < far else (exit_box,))
 
