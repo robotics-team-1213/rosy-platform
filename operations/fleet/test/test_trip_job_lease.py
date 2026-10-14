@@ -156,6 +156,43 @@ def test_between_steps_every_fleet_entry_answers_busy_but_stops_pass():
     assert console.calls == [("line", R, "OFF"), ("cancel", R)]
 
 
+def test_a_persons_stop_through_fleet_holds_the_job_and_no_step_runs_on():
+    """Fleet's own token is the lease owner, so CORE keeps the lease: Fleet gives it up and the job HOLDs."""
+    runner, store, ports, lost, lease = _held()
+    console = _Console()
+    install_trip_guard(console, runner)
+    _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
+    _do(runner, runner.start("p1", "kim", job_id=JOB))
+    _do(runner, console.cancel(R))
+    assert runner.view("p1")["state"] == "canceled"
+    assert lost == [(JOB, {"lease_reason": "operator_cancel"})] and lease["state"] == "lost"
+    assert [d[0] for d in ports.lease.deletes] == [lease["lease_id"]] and ports.lease.lease is None
+    _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p2")
+    assert _refused(runner, runner.start("p2", "kim", job_id=JOB)).code == "TRIP_ROBOT_BUSY"  # re-approval first
+    assert console.trip_busy(R)                          # the job keeps the robot in HOLD
+
+
+def test_a_job_does_not_take_a_robot_that_already_moves():
+    runner, store, ports, _ = _job_runner()
+    _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
+    _do(runner, runner.start("p1", "kim"))
+    err = _refused(runner, runner.hold_job(R, JOB, "kim", CAPS))
+    assert (err.status, err.code, err.detail) == (409, "TRIP_ROBOT_BUSY", {"reason": "trip"})
+    runner2, _, ports2, _ = _job_runner()
+    runner2._engaged = lambda robot_id: "goal"           # a console goal still running
+    assert _refused(runner2, runner2.hold_job(R, JOB, "kim", CAPS)).detail == {"reason": "goal"}
+    assert ports2.lease.puts == []
+
+
+def test_a_job_ends_only_after_its_step_trip():
+    runner, store, ports, _, lease = _held()
+    _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
+    _do(runner, runner.start("p1", "kim", job_id=JOB))
+    with pytest.raises(Exception) as busy:
+        runner.release_job(R, JOB)
+    assert getattr(busy.value, "code", None) == "TRIP_BUSY" and lease["state"] == "held"
+
+
 def test_a_jobs_durable_robot_claim_holds_the_robot_without_its_lease():
     runner, store, ports, _ = _job_runner()
     claims = {R: [{"owner_kind": "task", "owner_id": "t-1"}, {"owner_kind": "mission", "owner_id": JOB}]}

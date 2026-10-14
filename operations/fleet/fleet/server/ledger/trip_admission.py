@@ -68,23 +68,38 @@ class TripAdmission:
             raise TripError(422, "LINK_UNBOUNDED_MOTION", {"missing": missing})
         if self.lease.on_job_lost is None:  # rev 2 Q3: no HOLD that reaches no person
             raise RuntimeError("D-763: wire lease.on_job_lost (incident + HOLD) before a job holds a robot")
-        old = self.lease.jobs.get(robot_id)
-        if old is not None and old.view["job_id"] != job_id:  # one job per robot, no queue (D-763 4)
-            raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": old.view["job_id"]})
-        if old is not None and old.view["lease"]["state"] == "held":
-            return old.view["lease"]
-        self.lease.jobs.pop(robot_id, None)  # a lost one: re-approval opens a new lease (rev 2 Q3)
-        view = {"robot_id": robot_id, "trip_id": job_id, "job_id": job_id, "started_by": operator}
-        view["lease"] = await self.lease.open(robot_id, view, SimpleNamespace(trip_lease=True))
-        self.lease.jobs[robot_id] = SimpleNamespace(open=True, job=True, view=view)
-        return view["lease"]
+        async with self._lock_for(robot_id):  # a trip start on this robot runs wholly before or after this
+            old = self.lease.jobs.get(robot_id)
+            if old is not None and old.view["job_id"] != job_id:  # one job per robot, no queue (D-763 4)
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": old.view["job_id"]})
+            if old is not None and old.view["lease"]["state"] == "held":
+                return old.view["lease"]
+            busy = ("trip" if self.robot_busy(robot_id) else None) or self._engaged(robot_id)
+            if busy is not None:  # it already moves for someone else (a trip, a console goal, formation ...)
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": busy})
+            self.lease.jobs.pop(robot_id, None)  # a lost one: re-approval opens a new lease (rev 2 Q3)
+            view = {"robot_id": robot_id, "trip_id": job_id, "job_id": job_id, "started_by": operator}
+            view["lease"] = await self.lease.open(robot_id, view, SimpleNamespace(trip_lease=True))
+            self.lease.jobs[robot_id] = SimpleNamespace(open=True, job=True, view=view)
+            return view["lease"]
 
     def release_job(self, robot_id: str, job_id: str) -> None:
-        """The job ended (done, operator cancel): its lease goes (DELETE)."""
+        """The job ended (done, operator cancel): its lease goes (DELETE). Its step trip ends first."""
         job = self.lease.jobs.get(robot_id)
         if job is not None and job.view["job_id"] == job_id:
+            if self.robot_busy(robot_id):  # the step trip shares the lease: never leave it driving lease-less
+                raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
             del self.lease.jobs[robot_id]
             self.lease.close(job)
+
+    async def stop_job(self, robot_id: str, reason: str) -> None:
+        """A person's stop sent through Fleet carries the lease owner's token, so CORE keeps the lease: Fleet
+        gives it up itself, and the job HOLDs through the incident path (rev 2 Q3); no step runs on after it."""
+        job = self.lease.jobs.get(robot_id)
+        if job is not None and job.view["lease"]["state"] == "held":
+            lease_id = job.view["lease"]["lease_id"]
+            await self.lease.lose(job, reason)
+            await self.lease.delete(robot_id, lease_id)
 
     def _start_token(self, robot_id):
         return self._stop_epoch, self._start_cancels.get(robot_id, 0)

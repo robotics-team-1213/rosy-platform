@@ -49,6 +49,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) ->
         """After a stop: a trip store failure is logged, never in place of the stop's result."""
         try:
             await runner.cancel_robot(robot_id, reason)
+            if hasattr(runner, "stop_job"):  # D-763 6: a job holding the robot HOLDs; its next step never runs
+                await runner.stop_job(robot_id, reason)
         except Exception:
             _LOG.exception("could not end the trip of %s after %s", robot_id, reason)
 
