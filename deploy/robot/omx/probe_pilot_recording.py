@@ -28,6 +28,14 @@ def main(container: str) -> None:
 
     thread = threading.Thread(target=renew, daemon=True)
     thread.start()
+
+    def stop_renewal():
+        stopped.set()
+        # The shared HTTP client has a 10 s socket timeout.
+        thread.join(timeout=11)
+        if thread.is_alive():
+            raise RuntimeError("seat renewal worker did not stop")
+
     try:
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
@@ -66,8 +74,8 @@ def main(container: str) -> None:
                           "joint1_after": after["positions"]["joint1"]}, indent=2))
         request("/recordings", method="POST", token=token,
                 body={"seat_id": seat, "task": "Lease expiry must leave incomplete source"})
-        stopped.set()
-        thread.join(timeout=2)
+        stop_renewal()
+        check_renewal()
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
             fault = request("/recordings", token=token)
@@ -80,13 +88,14 @@ def main(container: str) -> None:
             raise RuntimeError(f"wrong lease interruption: {fault}")
         print(json.dumps({"lease_expiry_recording": fault}, indent=2))
     finally:
-        stopped.set()
-        thread.join(timeout=2)
         try:
-            request(f"/seat/{seat}", method="DELETE", token=token)
-        except RuntimeError as exc:
-            if "HTTP 409" not in str(exc):
-                raise
+            stop_renewal()
+        finally:
+            try:
+                request(f"/seat/{seat}", method="DELETE", token=token)
+            except RuntimeError as exc:
+                if "HTTP 409" not in str(exc):
+                    raise
 
 
 if __name__ == "__main__":
