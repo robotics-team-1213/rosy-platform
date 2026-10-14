@@ -56,7 +56,8 @@ def test_progress_ends_the_episode_and_a_later_wait_gets_a_fresh_bound():
     assert not _stalled_at(p, live, 5.0, s=1.0) and "wait" not in live.view  # it crossed
     live.junction["regulation_wait"] = "signal"
     _stalled_at(p, live, 30.0, s=1.0)
-    assert live.view["wait"] == {"since": 30.0, "reason": "signal"} and p._wait_bound("signal") == STALL_S
+    assert live.view["wait"] == {"since": 30.0, "reason": "signal", "bound_s": STALL_S, "over_bound": False,
+                                 "waiting": True}
 
 
 def test_a_link_wait_is_not_replaced_and_old_core_without_the_field_is_unchanged():
@@ -73,3 +74,80 @@ def test_junction_state_carries_the_regulation_wait():
     client = SimpleNamespace(state=lambda: asyncio.sleep(0, result=state))
     port = HttpLaneJunction(lambda: {"rosy_01": client})
     assert asyncio.run(port.junction_state("rosy_01"))["regulation_wait"] == "crosswalk_look"
+
+
+def test_the_trip_read_carries_each_reason_and_its_bound_then_over_bound_past_it():
+    """D-763 2 (API v1.232): ``view.wait`` keeps the one predicate's answer the stall clock uses."""
+    for reason in ("crosswalk_look", "crosswalk_wait", "crosswalk_held", "signal", "authority"):
+        p, live = _Progress(), _live(reason)
+        bound = p._wait_bound(reason)
+        assert not _stalled_at(p, live, 0.0) and not _stalled_at(p, live, bound - 0.1)
+        assert live.view["wait"] == {"since": 0.0, "reason": reason, "bound_s": bound, "over_bound": False,
+                                     "waiting": True}
+        _stalled_at(p, live, bound)
+        assert live.view["wait"]["over_bound"] and not live.view["wait"]["waiting"]
+
+
+def test_the_read_keeps_one_episode_across_reasons_and_progress_clears_it():
+    p, live = _Progress(), _live("crosswalk_look")
+    _stalled_at(p, live, 0.0)
+    live.junction["regulation_wait"] = "signal"
+    _stalled_at(p, live, 10.0)
+    assert live.view["wait"] == {"since": 0.0, "reason": "signal", "bound_s": STALL_S, "over_bound": False,
+                                 "waiting": True}
+    live.junction["regulation_wait"] = None
+    _stalled_at(p, live, 12.0)                                               # a null poll: no wait now, episode kept
+    assert live.view["wait"]["since"] == 0.0 and not live.view["wait"]["waiting"]
+    _stalled_at(p, live, STALL_S + 1.0)                                      # no wait reported: not over its bound
+    assert not live.view["wait"]["over_bound"] and not live.view["wait"]["waiting"]
+    live.junction["regulation_wait"] = "crosswalk_look"
+    _stalled_at(p, live, STALL_S + 1.5)                                      # reported again: the same episode, over
+    assert live.view["wait"]["since"] == 0.0 and live.view["wait"]["over_bound"]
+    assert not _stalled_at(p, live, STALL_S + 2.0, s=1.0) and "wait" not in live.view
+
+
+def test_a_link_wait_reads_its_lease_bound():
+    p, live = _Progress(), _live(None, wait={"reason": "link_wait", "since": 0.0})
+    assert p._waiting(live, 1.0) and live.view["wait"]["bound_s"] == 8.0
+    assert not p._waiting(live, 8.0) and live.view["wait"]["over_bound"]
+
+
+def test_a_tick_that_returns_before_the_wait_check_shows_no_stale_answer():
+    """D-763 8: ``waiting``/``bound_s``/``over_bound`` are unknown (None) on a tick that never reaches ``_waiting``."""
+    from test_trip_runner import _plan, _setup, _ticks, run
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    runner._live["rosy_60"].view["wait"] = {"reason": "signal", "since": 0.0, "bound_s": STALL_S,
+                                            "over_bound": False, "waiting": True}
+    ports.pose = None                                                         # the step stops on the pose first
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert view["reason"] == "pose" and view["wait"]["reason"] == "signal"
+    assert (view["wait"]["waiting"], view["wait"]["bound_s"], view["wait"]["over_bound"]) == (None, None, None)
+
+
+def test_a_read_during_a_slow_pose_read_still_sees_the_wait():
+    """D-763 8: the answer is written once per tick; a read while the step awaits the robot sees the last one."""
+    import asyncio as _asyncio
+    from test_trip_runner import _plan, _setup, _ticks, run
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+
+    async def regulated(robot_id, status=ports.junction_state):
+        return {**(await status(robot_id)), "regulation_wait": "crosswalk_look"}
+
+    ports.junction_state = regulated
+    _ticks(runner, ports, 2)
+    assert runner.view("p1")["wait"]["waiting"] is True
+    seen, refresh = [], ports.refresh
+
+    async def slow(robot_id, force_rest=False):
+        await _asyncio.sleep(0)
+        seen.append(runner.view("p1")["wait"]["waiting"])
+        await refresh(robot_id, force_rest)
+
+    ports.refresh = slow
+    _ticks(runner, ports)
+    assert seen and all(value is True for value in seen) and runner.view("p1")["wait"]["waiting"] is True
