@@ -85,6 +85,17 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     assert identity['profile_url'] == receiver.issuer + '/console/profile'
     sessions.profile(fleet.cookies[COOKIE], 'Updated Alice')
     assert core.get('/api/account/session').json()['profile']['display_name'] == 'Updated Alice'
+    from core_common.protocol.account_client import AccountUnavailable
+    original_post = receiver.post
+    def unavailable_profile(endpoint, fields):
+        if endpoint == 'userinfo':
+            raise AccountUnavailable()
+        return original_post(endpoint, fields)
+    receiver.post = unavailable_profile
+    unavailable = core.get('/api/account/session').json()
+    assert unavailable['authenticated'] and unavailable['profile'] is None
+    assert unavailable['capabilities'] == ['robot.read']
+    receiver.post = original_post
     assert core.get('/api/v1/auth/whoami').status_code == 200
     assert core.post('/api/v1/teleop', json={'linear':0,'angular':0}, headers={'Origin':str(core.base_url).rstrip('/')}).status_code == 403
     clock[0] += 270
