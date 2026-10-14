@@ -319,3 +319,9 @@
 - 증거: 설정 포함 Gradle testDebugUnitTest 431 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/cam-configured.txt. 실제 Python 서명 fixture, refresh identity, 지연 페어링, 재시작 회수, HTTP 시간 제한을 확인했다. APK의 공개 설정과 merged manifest의 정확한 callback/autoVerify도 읽어 확인했다.
 - 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB다.
 - gate 변화: SOURCE/JVM/APK. 운영 설정을 활성화하거나 APK를 장치에 설치하지 않았다. 실제 Keystore, 검증된 app link, 운영 로그인과 DEVICE/FIELD 수용은 별도 확인한다.
+
+## 2026-10-14 · 0f446e518 · feat(cam): D-741 앱 바 (통합 셸 조각 14)
+
+- 변경: 다섯 화면과 로그인 전 화면 위에 앱 바 하나를 둔다. R 심볼(`shared/web/brand/mark.svg` 복사본), `Cam`, 저장된 받는 곳 이름, 그 아래 줄에 연결 상태가 선다. 네 화면의 제목과 새 제목 `촬영`은 앱 바 아래 경로 자리(`CamPath`)로 옮겼다. 촬영 화면 상태 칸의 상태 머리글은 앱 바로 갔다. Cam은 명령하지 않으므로 정지 자리와 푸터는 없다. 와이어 이름과 문자열 자원은 바꾸지 않았다.
+- 증거: 0f446e518을 원격 시험 PC(Ubuntu, JDK 21, 사용자 홈의 Android SDK platform 35)에서 `android.yml`과 같은 `testDebugUnitTest --no-daemon`으로 돌려 438 passed, failures/errors 0(이전 main 22811dc39는 431). `CamBarTest` 6, `LauncherIconParityTest`의 심볼 대조 1이 새 시험이다. Cam 소스를 읽는 Python 시험 58 passed, known_failures NEW 0. 로그 X: `DevTemp/cam-app-bar/bar-1.txt`, `run-1.txt`.
+- gate 변화: 없음(SOURCE/JVM). 화면을 렌더하거나 폰에 설치하지 않았다. 좁은 폭에서 앱 바 높이와 미리보기 크기, TalkBack 읽기는 확인하지 않았다. DEVICE/FIELD는 PARKED.
