@@ -8434,6 +8434,18 @@ osy-d395-s1d\`.
 - 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
 - gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
 
+## 2026-10-14 · 3971caad2 · 공개 전 CORE API 시험 소유권 보정
+
+- 변경: `fix/runtime-jose-lock`의 pre-push에서 발견한 D-760 regulation_wait API 통합시험 경로 하나를 소유권 목록에 명시했다. 순수 기능 시험은 services에 두고, gateway의 실제 HTTP seam 시험과 검사 규칙을 유지한다.
+- 증거: 수정 전 main commit `82d3de6ce`의 깨끗한 원격 checkout에서 동일 실패 재현; 독립 위치 검토 완료. 보정 후 소유권·API·기능 시험 19 passed, NEW 0. 이전 공개 시도는 소유권 실패 및 별도 Fleet 시험의 SSH 단절로 중단돼 push되지 않았다.
+- gate 변화: 없음. 기기·현장 수용과 구분한다.
+
+## 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+
+- 변경: `fix/runtime-jose-lock`에서 사이트에 고정된 `oauthlib==4.0.0`을 CI 검증 target에 제공한다. `--no-deps`와 cryptography 50·device runtime lock을 유지하며, 사이트 pin 누락을 잡는 회귀검사를 추가했다.
+- 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.
+
 ## 2026-10-14 · uncommitted · fix(remote): 원격 pytest가 ssh 끊김을 견딘다
 
 - 변경: `tools/remote/remote_job.py` 신규. 각 pytest 호출을 시험 PC에서 `setsid nohup` 작업으로 띄우고(메모리 상한·nice/ionice·umask 그대로, 호스트 쪽 `timeout` 5400 s), 작업이 자기 pid로 `~/rosy-jobs/<run>.lock`을 잡고 끝날 때 trap이 종료 코드를 임시 파일→이름 바꾸기로 쓰고 잠금을 지운다. 노트북은 10 s마다 짧은 ssh로 오프셋 뒤 로그 바이트와 종료 코드를 가져오고, 실패하면 5·10·20·30 s 간격으로 `ROSY_TEST_RECONNECT`(기본 600 s)까지 재시도한 뒤 255와 "lost contact with <host> for N s; the run continues there: <path>"로 끝내며 작업·잠금·실행 폴더는 남긴다. ship은 ssh 255에 최대 3번 처음부터 다시 보낸다. 로컬 로그는 원격 로그와 바이트 단위로 같다

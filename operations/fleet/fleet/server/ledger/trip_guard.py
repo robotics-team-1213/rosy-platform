@@ -23,16 +23,10 @@ import logging
 import time
 from typing import Optional
 
-from fleet.hub.hub import HubError
-
 _LOG = logging.getLogger(__name__)
 
 #: A console goal this recent counts as running even before the robot reports NAVIGATING.
 GOAL_FRESH_S = 2.0
-
-
-def _busy(robot_ids) -> HubError:
-    return HubError("TRIP_ROBOT_BUSY", f"{', '.join(robot_ids)} is on a running trip; cancel the trip first")
 
 
 def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
@@ -43,9 +37,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
     formation_reform, formation_resume = console.formation_reform, console.formation_resume
 
     def refuse(robot_ids) -> None:
-        busy = [robot_id for robot_id in dict.fromkeys(robot_ids) if runner.robot_busy(robot_id)]
-        if busy:
-            raise _busy(busy)
+        if busy := console.trip_refusal(robot_ids):
+            raise busy
 
     async def end_trip(robot_id, reason) -> None:
         """After a stop: a trip store failure is logged, never in place of the stop's result."""
@@ -79,10 +72,10 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
         return await formation_resume(*args, **kwargs)
 
     async def guarded_line_follow_mode(robot_id, mode):
-        if not runner.robot_busy(robot_id):
+        if not (busy := console.trip_refusal([robot_id])):
             return await line_follow_mode(robot_id, mode)
         if mode != "OFF":
-            raise _busy([robot_id])
+            raise busy
         try:
             return await line_follow_mode(robot_id, mode)  # the operator's stop goes first
         finally:
