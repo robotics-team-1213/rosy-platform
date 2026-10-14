@@ -33,7 +33,7 @@ class UiuxPreviewActivity : ComponentActivity() {
             RosyTheme {
                 Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
                     CamAppBar(CamBar(site.serviceName, R.string.state_stopped))
-                    CamPath(if (state.startsWith("pair-")) stringResource(R.string.pairing_title) else "기기 연결")
+                    CamPath(stringResource(if (state.startsWith("pair-")) R.string.pairing_title else R.string.peer_title))
                     when (state) {
                         "pair-requested" -> PairingScreen(site, PairingState.Requested(site, "demo", "123456", ""), false, {}, {}, {}, {})
                         "pair-fingerprint" -> PairingScreen(site, PairingState.ConfirmFingerprint(site, "Demo receiver", "ceiling_demo", "ABCD-EF12-3456-7890", "demo-credential", ""), false, {}, {}, {}, {})

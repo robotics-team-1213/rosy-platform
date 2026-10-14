@@ -26,12 +26,17 @@ class CamBarTest {
         assertEquals("Demo site", CamBar.from(StreamState(), link("Demo site", "demo.local")).target)
         assertEquals("demo.local", CamBar.from(StreamState(), link(null, "demo.local")).target)
         assertEquals("manual-host", CamBar.from(StreamState(), link(null, null, "manual-host")).target)
+        // A blank name is no name: it falls through instead of leaving an empty target.
+        assertEquals("demo.local", CamBar.from(StreamState(), link(" ", "demo.local")).target)
+        assertEquals("manual-host", CamBar.from(StreamState(), link("", " ", "manual-host")).target)
+        assertNull(CamBar.from(StreamState(), link("", null)).target)
     }
 
     @Test
     fun linkFollowsTheStream() {
         assertEquals(R.string.state_stopped, CamBar.from(StreamState(), null).link)
         assertEquals(R.string.state_connecting, CamBar.from(running(LinkState.CONNECTING), null).link)
+        assertEquals(R.string.state_disconnected, CamBar.from(running(LinkState.DISCONNECTED), null).link)
         assertEquals(R.string.state_streaming, CamBar.from(running(LinkState.STREAMING), null).link)
         assertEquals(R.string.state_standby, CamBar.from(running(LinkState.STREAMING, transmitting = false), null).link)
         assertEquals(R.string.state_preview_only, CamBar.from(running(LinkState.STREAMING).copy(previewOnly = true), null).link)
@@ -52,24 +57,34 @@ class CamBarTest {
     private val ui = File("src/main/java/io/github/livsbittt/rosy/cam/ui")
     private val activity = File("src/main/java/io/github/livsbittt/rosy/cam/MainActivity.kt").readText()
 
+    /** Layout has no JVM test here, so these three read the source for the one mistake each names. */
     @Test
-    fun noScreenDrawsItsOwnTitle() {
-        val drawing = ui.listFiles { file -> file.extension == "kt" && "typography.headlineSmall" in file.readText() }!!
-        assertEquals(listOf("CamBar.kt"), drawing.map { it.name })
-    }
-
-    @Test
-    fun theActivityPutsOneBarAboveEveryScreenAndATitleUnderIt() {
+    fun eachTitledScreenHasOneTitleUnderTheBarAndTheStreamScreenHasNone() {
         assertEquals(1, Regex("""\bCamAppBar\(""").findAll(activity).count())
-        val titles = Regex("""\bCamPath\(""").findAll(activity).count()
-        val screens = Regex("""\b(CameraLanScreen|CameraPeerScreen|PairingScreen|SettingsScreen|StreamScreen)\(""").findAll(activity).count()
-        assertEquals(5, screens)
-        assertEquals(screens, titles)
+        val titled = mapOf(
+            "CameraPeerScreen" to "peer_title", "PairingScreen" to "pairing_title",
+            "CameraLanScreen" to "lan_title", "SettingsScreen" to "settings_title",
+        )
+        for ((screen, title) in titled) {
+            val call = Regex("""CamPath\(stringResource\(R\.string\.$title\)\)\s+$screen\(""")
+            assertEquals("$screen directly under its title", 1, call.findAll(activity).count())
+        }
+        assertEquals(titled.size, Regex("""\bCamPath\(""").findAll(activity).count())
+        // A title above the preview would take its height on a landscape phone.
+        assertEquals(1, Regex("""\} else \{\s+StreamScreen\(""").findAll(activity).count())
     }
 
     @Test
-    fun theBarHasNoCommandSeat() {
+    fun noScreenRepeatsATitleTheActivityDraws() {
+        val titles = Regex("""R\.string\.(peer|pairing|lan|settings)_title\b""")
+        val repeating = ui.listFiles { file -> file.extension == "kt" && titles.containsMatchIn(file.readText()) }!!
+        assertEquals(emptyList<String>(), repeating.map { it.name })
+    }
+
+    @Test
+    fun theBarTakesNoCallbackAndDrawsNoControl() {
         val bar = File(ui, "CamBar.kt").readText()
+        assertTrue("fun CamAppBar(bar: CamBar) {" in bar)
         assertFalse(Regex("""Button\(|clickable|onClick""").containsMatchIn(bar))
     }
 }

@@ -15,9 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,7 +44,7 @@ data class CamBar(
 
     companion object {
         fun from(state: StreamState, siteLink: SiteLink?) = CamBar(
-            target = siteLink?.run { siteName ?: tlsHost ?: manualHost },
+            target = siteLink?.run { listOf(siteName, tlsHost, manualHost).firstOrNull { !it.isNullOrBlank() } },
             link = when {
                 !state.running -> R.string.state_stopped
                 state.thermalPause -> R.string.state_thermal_pause
@@ -64,8 +67,15 @@ fun CamAppBar(bar: CamBar) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
         ) {
-            Icon(painterResource(R.drawable.ic_rosy_mark), contentDescription = "Rosy", tint = RosyColors.BrandRose, modifier = Modifier.size(28.dp))
-            Text("Cam", style = MaterialTheme.typography.titleLarge)
+            // The mark and the name read as one heading, "Rosy Cam".
+            Row(
+                modifier = Modifier.semantics(mergeDescendants = true) { heading() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
+            ) {
+                Icon(painterResource(R.drawable.ic_rosy_mark), contentDescription = "Rosy", tint = RosyColors.BrandRose, modifier = Modifier.size(28.dp))
+                Text("Cam", style = MaterialTheme.typography.titleLarge)
+            }
             bar.target?.let {
                 Text(it, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -73,9 +83,9 @@ fun CamAppBar(bar: CamBar) {
         }
         Text(
             stringResource(bar.link),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (bar.caution) RosyColors.StatusWarn else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = RosyMetrics.Space4.dp, end = RosyMetrics.Space4.dp, bottom = RosyMetrics.Space2.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (bar.caution) RosyColors.StatusWarn else Color.Unspecified,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.padding(start = RosyMetrics.Space4.dp, end = RosyMetrics.Space4.dp, bottom = RosyMetrics.Space2.dp),
         )
         HorizontalDivider()
     }
