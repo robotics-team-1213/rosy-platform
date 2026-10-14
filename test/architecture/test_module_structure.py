@@ -1483,7 +1483,8 @@ SIZE_VERDICTS = {
         "so no second copy and no growth at the 600-line junction file. Still one LineFollowManager mixin "
         "under the manager lock and generation; no own lock, thread, store or publisher; the D-422 sweep, IR "
         "guard and final publisher are unchanged and gates only lower its twist. No split plan is in flight; "
-        "re-judge on the next +150. Previous verdict: accept at 310 (2026-10-08, read-only critic).",
+        "re-judge on the next +150. Previous verdict: accept at 310 (2026-10-08, read-only critic). "
+        "Unit registration: docs/plans/2026-10-08-line-follow-arc-subpackage.md.",
     ),
     "drive/behaviors/localization": (
         1080,

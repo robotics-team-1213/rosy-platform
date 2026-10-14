@@ -751,9 +751,11 @@ def test_a_stalled_tick_that_wakes_held_does_not_credit_the_gap():
     rig.drive(10, seen=False)
     _authority(rig, True)
     before = rig.m._arc['deadline']
+    with rig.m._lock:                         # the shared helper both clocks call
+        assert rig.m._regulated_wait_share(rig.now, 5., V) == rig.m.config.stale_after_s
     rig.now += 5.
-    rig.step(seen=False)
-    assert 0. < rig.m._arc['deadline'] - before <= rig.m.config.stale_after_s + 1e-9
+    rig.step(seen=False)                      # here the stale odom also ends the arc
+    assert rig.m._arc['deadline'] - before <= rig.m.config.stale_after_s + 1e-9
 
 
 def test_a_crossing_held_by_a_return_ahead_is_credited_and_a_crossing_takes_its_share():
