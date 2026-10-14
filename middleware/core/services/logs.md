@@ -1039,3 +1039,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이고, 설정은 그 전까지 꺼 둔다. `model.py` 597줄 → 600줄(파일 한도 600에 닿았다. 다음 설정 키 전에 나눠야 한다), `gate.py` 591줄, `bend.py` 284줄.
 - 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
 - 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
+
+## 2026-10-14 · 1ee33639c · D-760 2단계: 통행권 줄이기·순서, trip 임대 중 강제 (API v1.225)
+
+- 변경: `line_follow/authority.py` — `set_authority(..., shrink=False, seq=None)`. `seq`가 같은 `leg_id`에서 마지막으로 본 값 이하면 `accepted: false`, `reason: stale_seq`로 무시하고 쥔 끝과 만료를 건드리지 않는다. `seq`는 거절 판정 전에 기억한다(거절된 줄이기보다 먼저 보낸 늘리기가 늦게 닿아도 받지 않게). 기억 `_authority_seq`는 `leg_id` 하나에 대한 것이고 모드 변경에도 남는다(모드를 껐다 켠 사이에 늦게 닿은 옛 요청이 새 통행권이 되지 않게). `shrink: true`면 끝 = `min(쥔 끝, 요청 끝)`이고 만료를 갱신한다. 강제 조건은 `_authority_on()` 한 곳이다: 설정 `authority_required`, 이 세션의 요청, 또는 `authority_leased()`(CORE가 trip 임대를 묶는다, 기본 거짓). `recovery/junction/gate.py`의 기동 시계 멈춤도 같은 조건을 쓴다(줄 수 변화 없음, 600줄).
+- 증거: `middleware/core/services/test/test_line_authority.py`에 14건을 더했다: 4.9 s FREE·5.1 s EXPIRED, 벽시계를 ±1시간 옮겨도 만료가 같음, 늘리기(seq 3) → 줄이기(seq 4) → 늦은 늘리기(seq 2), 낡은 `seq`가 만료를 늦추지 않음, 구간별 `seq`와 모드 변경, `seq`·`shrink` 없는 요청의 옛 동작, `shrink` + `until_m: 0`의 다음 틱 HOLD `authority_end`, 줄이기가 끝을 늘리지 않음, 거절된 줄이기가 통행권을 버림, 임대 중 첫 통행권 전 `authority_none`, 임대 중 모드 변경, 임대 없는 주행, IR 가드·몸체 정지·E-stop 사유가 임대 중에도 앞섬. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo·장치 수용은 미검증이다. `authority.py` 165줄 → 175줄. 크기 단위 `drive/behaviors/line_follow`는 3167줄 → 3177줄로 한도 3168을 넘는다(`test_size_verdicts_are_well_formed_and_current` 실패). 디스패처가 아는 실패이고 `refactor/line-follow-crosswalk-unit`이 자리를 낸다. 이 브랜치에서 판정을 고치지 않았다.
+- 결정: D-760 Decision 2·3, Open 1(장치의 `ttl_s` 시계는 `time.monotonic`이다. `core/bridge/traffic_gate.py::line_clock`, `test_line_follow_sim_clock.py`가 고정한다. D-517 4항 구현 노트의 "장치에서는 ROS 시계"는 틀렸고 `use_sim_time`일 때만 ROS 시계다). Open 2는 바꾸지 않았다: 통행권 문은 교차로 회전·접근·굽이·호의 명령도 0으로 만든다. 교차로 기동은 그동안 기동 시계가 서고(합계 `crosswalk_report_s + crosswalk_clear_s`까지) 그 뒤 `timeout`으로 중단된다. 호는 시계가 서지 않아 `length_m`/v + 2 s 뒤 `lane_arc_timeout`으로 멈추고 다시 열리지 않는다.
+- 교훈: 순서 번호는 "받았다"가 아니라 "봤다"로 기억해야 한다. 받은 것만 기억하면 거절된 줄이기 뒤의 늦은 늘리기가 통행권을 되살린다.

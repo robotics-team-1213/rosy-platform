@@ -948,3 +948,11 @@
 - 변경: `v1/line_follow.py`에 `LineBendMapEntry {yaw_rad, pose_yaw_rad, odom_stamp_s}`와 `LineJunctionRequest.map_entry`. `bend`가 아닌 action에 실으면 400이다. `_expect`가 매니저로 넘긴다. `v1/system.py`가 `supports_lane_bend_map_entry`를 `lane_bend_map_entry`로 알린다.
 - 증거: `middleware/core/gateway/test/test_line_junction_api.py`(400 일곱 가지와 객체가 아닌 값 셋, 저장, 스냅숏의 `map_entry_reason`), `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
+
+## 2026-10-14 · 1ee33639c · 통행권 shrink·seq 전달과 능력 플래그 둘 (D-760 2단계, API v1.225)
+
+- 변경: `api/v1/line_follow.py` — `POST /line-follow/authority`가 `shrink`·`seq`를 관리자에 넘긴다. `api/v1/system.py` — `line_follow_authority_shrink`(관리자가 통행권을 받을 때), `line_follow_authority_under_lease`(그 관리자와 trip 임대가 같이 있을 때). `api/app.py` 계약 버전 v1.225.
+- 증거: `test_line_authority_api.py`, `test_capabilities_controls.py`, `test_protocol_version_alignment.py`, `test/test_line_follow_contract_docs.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-760 Decision 2·3. API Reference v1.225 절과 `/line-follow/authority` 행.
+- 교훈: 없음.
