@@ -38,8 +38,7 @@ import yaml
 
 #: main when this check landed (D-430 wave 0). Its ancestors are never checked.
 BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
-#: Reviewed historical commits after BASELINE that touch safety paths without a
-#: trailer, as full SHA -> reason. Add only with an independent review.
+#: Reviewed historical commits after BASELINE that touch safety paths without a trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
     'e60a7891e21c353dfa8bcbae4422aabdc2535421': 'Independent code-reviewer retrospective history-only SOURCE provenance review, 2026-10-14: e60a7891e adds default-off bend_map_entry_enabled (capability false, map_entry ignored as disabled, bend path identical); on-path rebase keeps OFF_PATH_M/body-sweep/motion_admitted/bound checks; gateway change is one config read; no device acceptance.',  # git commit revision
     'c9983d2fe4f1488459c3b214a93eafb591a891c6': 'Independent Codex /root/authority_review retrospective history-only SOURCE provenance review, 2026-10-14: candidate da7a93ff8; Decision identity, finite values, lease and disposition validation extraction retains fail-closed checks. Requires active-gap rollback fix 0e59264da and its remote 245 PASS / NEW 0; See docs/validation/folder-deploy-safety-review-2026-10-14/result.md; no standalone, device or motion acceptance. Additional independent peer provenance: Independent /root/review_release_safety: contract extraction; history only, requires 3f6c69245; no device acceptance. docs/validation/omx-release-safety-review-2026-10-14.md',  # git commit revision
@@ -489,11 +488,7 @@ EXEMPT: dict[str, str] = {
         "live selected-run checks and final epoch binding require 7b0855fa2 for known-unsent "
         "context rejection and orphan-marker cleanup. See docs/validation/"
         "fleet-ai-discord-safety-review-2026-10-12/result.md; no standalone or device acceptance.",
-    "5cad91a98697838d49890bdd7847666659d7dad2":  # git commit revision
-        "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. "
-        "A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within "
-        "its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely "
-        "bounded. Trailer commit 460a45c; no device acceptance.",
+    "5cad91a98697838d49890bdd7847666659d7dad2": "Independent read-only code-reviewer (opus) re-review, 2026-10-14, D-760 stage 5: APPROVE. A 403 renewal drops Fleet's goal_lease entry like a 409; CORE still expires the goal within its ttl and no path re-sends a goal without a lease; Rule M reports unbounded, never falsely bounded. Trailer commit 460a45c; no device acceptance.",  # git commit revision
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
