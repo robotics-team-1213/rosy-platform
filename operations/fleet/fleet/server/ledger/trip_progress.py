@@ -98,9 +98,9 @@ class TripProgress:
         if not live.open or (live.view.get("lease") or {}).get("state") != "held":
             return False
         live.at, live.at_stamp = None, None
-        if live.view["state"] != "link_wait":
-            live.view.update(state="link_wait", wait={"reason": "link_wait", "since": self._clock()})
-        live.view["wait"]["kind"] = kind
+        if (live.view.get("wait") or {}).get("reason") != "link_wait":  # kept until a whole step passes
+            live.view["wait"] = {"reason": "link_wait", "since": self._clock()}
+        live.view["state"], live.view["wait"]["kind"] = "link_wait", kind
         if self._stalled(live):
             await self._stop(live, "stopped", "stall", {"stall_s": self.config.stall_s, "link_wait": kind})
         else:

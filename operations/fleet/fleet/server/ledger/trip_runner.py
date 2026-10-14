@@ -549,11 +549,14 @@ class TripRunner(TripAdmission, TripProgress):
             await self._stop(live, "failed", code, {"status": exc.status})
             return
         except (HubError, OSError, RuntimeError, ValueError, httpx.HTTPError) as exc:
-            if not await self._link_wait(live, _code(exc)):  # D-760 4: a leased trip waits for the link
+            # D-760 4: a leased trip waits only on no answer (Safety-Review HIGH-1); any other error ends it
+            if not (isinstance(exc, (HubError, OSError, httpx.TransportError)) and await self._link_wait(live, _code(exc))):
                 await self._stop(live, "failed", "TRIP_ROBOT_UNREACHABLE", {"kind": _code(exc)})
             return
         if not live.open:
             return  # canceled while the step was in flight
+        if (live.view.get("wait") or {}).get("reason") == "link_wait":
+            del live.view["wait"]  # a whole step without a link fault: the link_wait ``since`` may start over
         # after the step, so the last place's stop has gone out before "arrived"
         if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane):
             live.view["state"] = "arrived"
