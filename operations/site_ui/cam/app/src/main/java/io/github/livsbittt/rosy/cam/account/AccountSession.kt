@@ -185,8 +185,8 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
             for (key in listOf("account_id", "login", "display_name")) require(result.get(key) is String)
             val login = result.getString("login"); val rawName = result.getString("display_name"); val name = rawName.trim()
             require(result.getString("account_id") == c.getString("sub"))
-            require(login.codePointCount(0, login.length) in 1..64 && name.codePointCount(0, name.length) in 1..80)
-            require((login + rawName).codePoints().noneMatch { it < 32 || it == 127 || it in 0xD800..0xDFFF })
+            require(login.isNotBlank() && login.codePointCount(0, login.length) in 1..64 && name.codePointCount(0, name.length) in 1..80)
+            require((login + rawName).codePoints().noneMatch { Character.isISOControl(it) || it in 0xD800..0xDFFF })
             val current = identity(resource) ?: return null
             profileSnapshot = Profile(current, c.getString("sub"), login, name)
             profile(resource)
