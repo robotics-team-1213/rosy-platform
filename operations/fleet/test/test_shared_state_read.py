@@ -14,7 +14,6 @@ import pytest
 
 from fakes import FakeRobot
 from fleet.hub.hub import HubError
-from fleet.server import lane_compliance_service
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.localization_service import build_localization_service
@@ -281,7 +280,7 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
                     await junction.junction_state(rid)
             if step % 10 == 4:                              # lane compliance, its own phase
                 for rid in ids:
-                    await map_pose.refresh(rid, force_rest=True, max_age_s=lane_compliance_service.PERIOD_S)
+                    await map_pose.refresh(rid, force_rest=True)    # the monitor's call (0.45 s)
             if step % 10 == 7:
                 await localization.tick()
             if step % 5 == 2:                               # the task dispatch loop's snapshot

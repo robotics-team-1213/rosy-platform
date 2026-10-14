@@ -853,7 +853,7 @@ class TripRunner(TripAdmission, TripProgress):
             if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
             self._unread.discard(robot_id)
-        except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
+        except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
                 self._refresh_warned_at = self._clock()

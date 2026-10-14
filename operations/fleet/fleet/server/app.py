@@ -619,6 +619,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         execution_pose.bind_active_map(_execution_active_map)
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    console.read_state = map_pose.state   # D-760 8: one shared REST state read per robot for every loop
     identity.map_pose = map_pose.arbitrated_pose   # D-596 amendment: where to look, never an input
     from fleet.swarm.anchor import anchored_relay_factory
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
@@ -763,7 +764,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
-                             junction=lane_junction or HttpLaneJunction(console.clients),
+                             junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state),
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
