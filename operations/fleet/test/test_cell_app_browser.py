@@ -11,7 +11,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
 import yaml
 
 from test_cell_job_api import _setup
@@ -260,6 +260,26 @@ def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, 
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"fleet-cell-widths-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("width,height", [(1024, 768), (1100, 800), (1366, 768)])
+def test_cell_body_keeps_usable_columns_beside_the_sub_nav(browser_site, width, height):
+    """D-741 2: the rail and the sub-nav take 304px. With both documents loaded the body beside them has no sideways
+    overflow, no control whose text is cut and no field under 9rem, and the sticky sub-nav shows every entry at the
+    top and at the end of the page."""
+    page, _, _ = browser_site
+    _prepare(page)
+    page.set_viewport_size({"width": width, "height": height})
+    page.evaluate("scrollTo(0, 0)")
+    top = page.evaluate(BODY_FIT)
+    page.evaluate("scrollTo(0, document.documentElement.scrollHeight)")
+    end = page.evaluate(BODY_FIT)
+    print(json.dumps({"size": [width, height], "top": top, "end": end}, ensure_ascii=False))
+    assert top["nav"]["column"], top
+    assert top["overflow"] <= 0 and end["overflow"] <= 0, (top, end)
+    assert top["unreachable"] == [] and end["unreachable"] == [] and top["stop"] and end["stop"], (top, end)
+    assert top["cut"] == [], top
+    assert all(grid["columns"] == 1 or grid["narrowest"] >= 144 for grid in top["grids"]), top["grids"]
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
