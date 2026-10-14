@@ -61,3 +61,19 @@
 - **SOURCE·호스트 단위 시험만 했다.** `middleware/core/services/test/test_junction_bend.py`(측정 사례: `map_entry`가 있으면 진입 직선이 차로 방향이고 통과 끝이 나가는 직선에서 2 cm 안, 없으면 오늘처럼 로봇 yaw를 따라 벽 쪽으로 6 cm 넘게 벗어남; yaw 쌍으로 옮기기; 29°는 쓰고 31°는 `heading`; `stale`·`future`·`no_sample`·odom 재시작·`carry`; 잘못된 객체 거절; 9항 축; 설정이 꺼지면 능력이 거짓이고 받은 `map_entry`는 `disabled`이며 닻·경로·명령이 `map_entry` 없는 지시와 같음; 0.22 m 뒤의 닻과 21.6°에서 `off_path` 없이 호를 돎; 재전송이 `stale`이던 방향을 다시 둠; 한계 1(횡 오프셋이 남음)과 한계 8(Fleet yaw 15°·25° 오차를 그대로 따름)의 동작 고정), `middleware/core/gateway/test/test_line_junction_api.py`·`test_capabilities_controls.py`(400, 기록, 능력), `operations/fleet/test/test_trip_bend.py`(능력과 `odom_stamp`가 있을 때만 실음, 값은 호 시작점의 차로 방향과 찾은 자세의 yaw 쌍, 넘겨받은 자세가 없으면 싣지 않음).
 - **SIM: 열려 있다.** 이 구현으로 Gazebo map_v2_fleet 한 바퀴를 돌리지 않았다. run66은 다른 코드(3항)다.
 - **DEVICE: 열려 있다.**
+
+## 개정 1 (2026-10-14) · 교차로 회전도 지도의 출구 방향을 겨눈다
+
+Gazebo m18·m19에서 회전형 로터리 출구(NW, 오른쪽, Fleet 고정 `turn_deg` −108.1)가 `junction_unresolved`로 끝났다. 회전 목표는 `진입 yaw + turn_deg`다(`turn.py`, 진입 yaw는 교차로를 본 순간의 로봇 yaw). 앞선 기동에서 남은 0.07–0.10 rad의 yaw 오차가 그대로 출구 방향의 오차가 됐고, 0.10 m 전진 뒤 재획득(30° 안 3프레임)이 `camera_line_not_visible`로 실패해 `lost_after_s` 3초 뒤 끝났다. 굽이의 진입 직선(이 ADR 본문)과 같은 원인이고 같은 재료로 고친다.
+
+결정:
+1. `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 싣는다. `yaw_rad`는 출구 차로가 교차로 장소에서 시작하는 방향(지도 좌표, Fleet `start_tangent`)이다. 필드, 범위, 400 규칙은 1항과 같고 `straight`·`stop`·`turn_deg` 없는 회전에 실으면 400이다.
+2. 설정 `line_follow.turn_map_entry_enabled`(bool, 기본 `false`)와 능력 `lane_turn_map_entry`(설정이 켜져 있고 `junction_turn`이 참일 때만 참)를 더한다. Fleet은 2항과 같은 조건(능력, 찾은 지도 자세의 `odom_stamp`)에서만 싣는다. 설정이 꺼지면 받은 값은 `disabled`다. 굽이 설정과 따로 둔 까닭은 켜는 조건(SIM 한 바퀴)이 기동마다 따로이기 때문이다.
+3. CORE는 받을 때 3항과 같이 odom으로 옮긴다: `target = wrap(odom_yaw(odom_stamp_s) + yaw_rad − pose_yaw_rad)`. 교차로에 서서 회전을 시작할 때(정지 확인 직후) 그 방향이 오늘의 목표(진입 yaw + `turn_deg`)에서 `MAP_ENTRY_MAX_HEADING_RAD`(30°, 4항과 같은 한도) 안이면 목표를 그 방향으로 둔다. 넘으면 `heading`으로 오늘의 목표를 쓴다. 나머지 실패(`stale`·`future`·`no_sample`·`epoch`·`carry`)도 5항 그대로다.
+4. 기록은 6항의 `map_entry_used`·`map_entry_reason`을 그대로 쓴다. 이제 `turn_deg`가 있는 회전에서도 채워진다(6항의 "`bend`가 아닌 지시에서는 늘 false와 null"은 "`bend`도 회전도 아닌 지시"로 읽는다). `used`는 회전 목표가 지도 방향일 때만 참이다.
+
+바뀌지 않는 것: 회전 규칙(정지 확인, 5° 정착, 앞당김 정지, 시간 상한), `advance_m`, 재획득 규칙과 그 30° 비교(목표만 바뀐다), D-422·`motion_admitted`, D-520 호(`exit_segment`)의 기하. `map_entry`가 없거나 설정이 꺼진 회전의 목표와 명령은 오늘과 같다.
+
+한계: 본문 한계 2·3·5·6이 그대로 적용된다. Fleet 지도 yaw의 오차는 출구 방향의 오차가 된다. 오늘 목표와 30°까지 다를 수 있으므로, 진입 yaw가 맞고 Fleet yaw가 틀린 로봇은 오늘보다 나빠질 수 있다(본문 한계 8과 같은 이유로 기본은 꺼짐). 횡 위치는 옮기지 않는다. 0.10 m 전진의 끝이 출구 차로 중심에서 벗어난 만큼은 그대로 남는다.
+
+검증 상태: SOURCE·호스트 단위 시험만 했다. `middleware/core/services/test/test_junction_turn_map_entry.py`(0.08 rad 진입 오차에서 목표가 지도 방향, 없으면 오늘처럼 오차가 남음, 30° 경계 안팎, `stale`, 설정이 꺼지면 `disabled`이고 목표·움직임이 같음, 능력, 400), `middleware/core/gateway/test/test_line_junction_api.py`·`test_capabilities_controls.py`, `operations/fleet/test/test_trip_turn_map_entry.py`. SIM(NW 출구 한 바퀴)과 DEVICE는 열려 있다. API Reference는 additive로 v1.229다.
