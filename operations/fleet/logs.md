@@ -3655,3 +3655,9 @@
 - 증거: 원격 시험(AI PC, 7c26a028c) 285 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 자세를 잃어 `_stalled` 전에 끝난 tick에서 세 키가 None.
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 7. 상한을 넘은 기다림은 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다.
+
+## 2026-10-14 · f79947c25 · D-763 조각 2 검토 2: tick마다 한 번 쓰고, 보고가 있을 때만 상한 넘김
+
+- 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
+- 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
+- gate 변화: 없음.
