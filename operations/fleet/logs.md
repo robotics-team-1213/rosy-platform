@@ -3752,3 +3752,10 @@
 - 증거: 원격(모델 PC, e7b196839) fleet 16개 파일 266 passed, 계약·구조 6개 파일 69 passed, `known_failures` 0 new, 로그 X: `work-read/r3a/run-1.txt`, `work-read/r3b/run-1.txt`. 새 시험: 제안자·이름 있는 운영자·공유 토큰·viewer 상세 범위, 닫힌 trip의 남은 `over_bound`, 루프 밖 읽기.
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 6. 남의 `PROPOSED` Cell Job 상세는 이전에 운영자 누구나였고 이제 이름 있는 운영자만이다.
+
+## 2026-10-15 · db7b5cf3a · Mission 원장과 작업 읽기를 자기 크기 단위로 (main 머지 ab8ac53f6 뒤, API v1.238)
+
+- 변경: main(조각 6, v1.236) 머지 뒤 원장 단위가 7,215로 한도 7,135를 넘었다. 원장 계획이 이름 붙인 분리로 `mission_*` 여덟 파일을 새 holder `server/missions`(2,575/2,725)로, 그것으로 모자라 작업 읽기(`work_read.py`·`work_routes.py`)를 `server/work`(128/207)로 옮겼다. 모듈 이름은 그대로다(`SERVER_HOLDERS`). 원장 4,545/4,560, 서버 31,846/31,930(같은 경계로 조각 전 31,847). 조각 4는 v1.237(feat/regulation-capabilities 선점) 위의 v1.238이다. 머지의 logs 해소가 main의 마지막 gate 줄을 잘랐던 것을 main 파일 + 이 브랜치의 추가 행으로 고쳤다.
+- 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
