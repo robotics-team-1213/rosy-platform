@@ -32,7 +32,8 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     from learning_rosy_accounts import RosyAccounts
     playwright = pytest.importorskip('playwright.sync_api')
     port = free_port()
-    origin, issuer = f'https://127.0.0.1:{port}', 'https://account.example.test'
+    origin = f'https://127.0.0.1:{port}'
+    issuer = origin.replace('127.0.0.1', 'localhost')
     callback = origin + '/api/account/callback'
     private = Ed25519PrivateKey.generate()
     pem = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
@@ -76,6 +77,8 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
         with playwright.sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
             page = browser.new_page(ignore_https_errors=True)
+            navigation_errors = []
+            page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             try:
                 def authorize(route):
                     query = parse_qs(urlsplit(route.request.url).query)
@@ -89,7 +92,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 try:
                     expect(link).to_contain_text('Alice', timeout=15000)
                 except AssertionError:
-                    pytest.fail(f'Profile login failed at {page.url}: {page.locator("body").inner_text()[:1000]}')
+                    pytest.fail(f'Profile login failed at {page.url}: {navigation_errors}; {page.locator("body").inner_text()[:1000]}')
                 expect(link).to_have_attribute('href', issuer + '/console/profile')
                 assert page.request.get(origin + '/api/accounts/session').json()['account_id'] == 'central-alice'
                 expect(page.locator('#import-panel')).to_be_hidden()
