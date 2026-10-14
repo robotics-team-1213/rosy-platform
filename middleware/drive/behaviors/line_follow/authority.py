@@ -64,11 +64,14 @@ class AuthorityMixin:
     def _odom_entry(self, stamp):
         """D-758 0: (entry, exact). The one entry published at ``stamp`` (a wall step cannot move it), else
         (an older Fleet's or a computed stamp) the one logged at or before it on the wall clock, as before.
-        (None, True) refuses: two entries share the stamp (review 1: the newer counts less travel, more room)."""
+        (None, True) refuses: two entries share the stamp (review 1: the newer counts less travel, more room),
+        or no entry does while the log's wall stamps step back (review 3: "at or before" lands after the step)."""
         log = self._odom_log
         hits = [e for e in log if abs(e[0]-stamp) <= STAMP_MATCH_S]
         if hits:
             return (hits[0] if len(hits) == 1 else None), True
+        if any(a[0] > b[0] for a, b in zip(log, list(log)[1:])):
+            return None, True
         return next((e for e in reversed(log) if e[0] <= stamp), None), False
 
     def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None):
