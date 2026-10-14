@@ -541,7 +541,7 @@ def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
 
 
 def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(site):  # noqa: F811
-    """D-763 8 (v1.231): the card line shows Fleet's wait; past its bound a warn row, never 개입 (rev 2 Q7)."""
+    """D-763 8 (v1.232): the card line shows Fleet's wait; past its bound a warn row, never 개입 (rev 2 Q7)."""
     from playwright.sync_api import expect, sync_playwright
 
     waiting = {**LEAD, "wait": {"reason": "crosswalk_look", "since": 0.0, "bound_s": 15.0, "over_bound": False,

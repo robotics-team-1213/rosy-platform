@@ -3667,6 +3667,10 @@
 - 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 독립 재판정 전.
 
+## 2026-10-14 · 8163f878f · feat: D-759 개정 1 회전 지시에 출구 차로의 map_entry를 싣는다 (API v1.231)
+- 변경: `server/ledger/trip_runner.py::_step_lane`이 `lane_turn_map_entry` 로봇에게, 찾은 자세에 `odom_stamp`가 있을 때 `left`·`right`에 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 출구 차로의 `start_tangent`다. `console_view.TripCaps.lane_turn_map_entry`, trip 보기 `caps.lane_turn_map_entry`.
+- 증거: `test_trip_turn_map_entry.py`(능력 읽기, 값, 그 밖의 필드는 오늘과 같음, stamp가 없으면 싣지 않음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 0 증가다. `exit_segment` 조건문을 한 줄로, D-520 주석 두 줄을 한 줄로, `TripCaps`의 D-551 주석을 필드 옆으로 옮겼다.
 ## 2026-10-14 · 68a91feca · D-763 조각 2: trip 읽기에 기다림 판정의 답을 싣는다
 
 - 변경: `ledger/trip_progress.py` `_waiting`이 판정할 때마다 `view.wait`에 `bound_s`·`over_bound`·`waiting`을 적는다. 정체 시계가 쓰는 판정 그대로다(두 번째 판정 없음). 줄 수 같음(서버 순증 0). 정체 규칙의 동작은 같다. API v1.231(문서는 f38a5093a).
