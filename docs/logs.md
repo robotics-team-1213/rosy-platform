@@ -2651,6 +2651,12 @@
 - 증거: Compare D-33, D-38, D-117, D-152, D-246, D-269, D-273, and proposed D-281; verify the ADR log and implementation sequence reference each independent runtime gate.
 - gate 변화: no runtime or device gate moved; D-282 is Proposed and does not enable actuator or camera capability.
 
+## 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
+
+- 변경: 잠긴 vendor Gazebo action에 연결된 정책 소유자가 동시 leader 요청을 거부하는 후속 시험과 호스트 이전 runbook을 기록했다.
+- 근거: 재현 probe의 경쟁 요청 `busy`, 취소 최종 상태, 이전 launch의 leader topic 구독자 0, 장치 mount 거부를 확인했다.
+- gate 변화: Task 3 전체는 HOLD. DDS 직접 접근 통제, native 단일 writer 프로세스, 실제 Ubuntu/OMX의 정지·복구 증거는 남았다.
+
 ## 2026-09-27 · docs(validation): record merged-main site candidate smoke
 
 - Change: record the current merged-main `1e3de3e8` site candidate hashes and packaged Docker LOCAL rerun, including auth/API, synthetic ceiling-camera sighting, task persistence after Fleet restart, and test results.
