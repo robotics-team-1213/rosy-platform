@@ -3635,6 +3635,13 @@
 - 결정: D-760 Decision 3·4, 3단계 Safety-Review.
 - 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
 
+## 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
+
+- 변경: `TripAware.trip_refusal(robot_ids)`(`console/console_view.py`)가 "이 로봇에 주인이 있는가"의 하나뿐인 검사다. `trip_busy` 위에 서고, 주인이 있으면 `HubError("TRIP_ROBOT_BUSY", ...)`를, 없으면 None을 준다. 대화 요청 제출, 콘솔 목표 받기와 비켜설 자리 보내기, 막힘 결정, `/route`, `/goal`, `trip_guard`의 대형·차선 추종 거절이 이것을 부르고, 각자 응답 모양·문구·검사 순서는 그대로다. `trip_runner` 시작 때의 `engaged` 검사는 반대 질문(콘솔 움직임이 이미 있는가)이라 그대로 둔다. Fleet 크기 단위 56856 → 56854.
+- 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
+- gate 변화: 없음. 동작 같음.
+- 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
+
 ## 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
 
 - 변경: `step_action_kinds.StepActionKind`에 `approval`(값 `two_person`·`proposer_only`·`one_person`, 엄한 순서 `APPROVALS`)을 더했다. `CELL_TRANSFER`는 `two_person`. 레거시 `PICK_PLACE`는 단계 원장 규칙이 없어 `_LEGACY_APPROVALS`에 `proposer_only`로 따로 적었다(실물 하달 조각에서 두 사람으로, 개정 2 질문 5). `required_approval(kinds)`는 가장 엄한 값을 주고 모르는 종류·빈 목록은 `ValueError`. `mission_routes` admit은 `decidable()`로 등록부 판정을 읽고 `candidate.kind` 분기를 지웠다. 코드와 순서는 그대로(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404, `PROPOSAL_NOT_RESOLVED` 409).

@@ -1,4 +1,6 @@
 import {accountFetch} from '/account-session.js';
+import {showVersions,resetVersions} from '/versions.js';
+import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
 import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory, resetHistory } from '/history.js';
@@ -73,6 +75,7 @@ function setView(detail) {
   next.src=`/api/view-images/${index}`;
 }
 function enable() {
+  updateAI();
   const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
   const invalidCoordinates = !!$('boxes').querySelector('[aria-invalid="true"]');
@@ -207,6 +210,15 @@ function paint() {
     ctx.restore();
   }
 }
+function connectAI(){
+  const index=frame.index;
+  showAI('object',index,request,()=>frame?.index===index?{version:frame.version,blocked:!ready||busy||loading||conflicted||forbidden||!!gesture||!!coordinatePreview}:null,async()=>{
+    const value=await request(`/api/object-drafts/${index}`);if(frame?.index!==index)return;
+    modelDrafts=value.drafts;
+    $('model-draft-select').replaceChildren(...modelDrafts.map((row,i)=>new Option(`${candidateOrigin(row.origin)} · 박스 ${row.boxes.length}개`,String(i))));
+    $('model-draft-panel').hidden=!modelDrafts.length;draftPreview=null;draftStatus();paint();enable();
+  });
+}
 async function select(index) {
   const serial = ++loadSerial;
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
@@ -218,7 +230,7 @@ async function select(index) {
   $('save-status').textContent='사진을 불러오는 중…';
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
-  resetHistory();
+  resetHistory();resetVersions();resetAI();
   request(`/api/history/${index}`).then(value=>{if(serial===loadSerial)showHistory(value);})
     .catch(()=>{if(serial===loadSerial)resetHistory('검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.');});
   $('source-info').textContent = frame.source.source_kind === 'mcap'
@@ -231,7 +243,7 @@ async function select(index) {
     if(serial!==loadSerial)return;
     modelDrafts=value.drafts;
     $('model-draft-select').replaceChildren(...modelDrafts.map((draft,i)=>new Option(
-      `${draft.origin || '모델'} · 박스 ${draft.boxes.length}개`,String(i))));
+      `${candidateOrigin(draft.origin)} · 박스 ${draft.boxes.length}개`,String(i))));
     $('model-draft-panel').hidden=!modelDrafts.length;
     if(modelDrafts.length && (frame.review.review_origin!=='model_draft_pending_human' || frame.review.draft_sha256!==modelDrafts[0].sha256))draftPreview='model';
     draftStatus();paint();enable();
@@ -246,6 +258,7 @@ async function select(index) {
       error('사진 크기가 원본과 다릅니다'); return;
     }
     sourceImage=image=next; ready = true; $('image-message').hidden = true;
+    showVersions('object',index);connectAI();
     $('save-status').textContent = `서버 저장됨 · v${frame.version}`; paint(); enable();
     if(detailView)setView(true);else $('view-status').textContent='원본 사진 · '+inputPurpose();
   };
@@ -341,7 +354,7 @@ async function mutate(action, extras={}, restoring=false) {
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
     if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
     if(advance) {select(advance.index); return;}
-    frameHeading();
+    frameHeading();showVersions('object',id);connectAI();
     request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
       .catch(()=>{if(frame?.index===id)resetHistory('검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.');});
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
@@ -362,7 +375,7 @@ $('source-preview').onclick=()=>{draftPreview=draftPreview==='source'?null:'sour
 $('model-preview').onclick=()=>{draftPreview=draftPreview==='model'?null:'model';draftStatus();paint();};
 $('model-draft-select').onchange=()=>{draftPreview='model';draftStatus();paint();};
 $('model-candidates').onclick=()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
-  if(draft&&window.confirm(`현재 박스를 ${draft.origin || '모델'} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
+  if(draft&&window.confirm(`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
     mutate('apply_object_draft',{draft_sha256:draft.sha256});};
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
@@ -470,7 +483,7 @@ function saveView() {
 function applyFilter() {
   const visible=visibleFrames();
   if(visible.length) select(visible.some(item=>item.index===frame?.index)?frame.index:visible[0].index);
-  else {++loadSerial;cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!workspace.frames.length;$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
+  else {++loadSerial;resetAI();resetVersions();cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!workspace.frames.length;$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
 }
 $('filter').onchange=applyFilter;
 $('show-all').onclick=()=> {if(loadFailed){load();return;}if(!workspace.frames.length){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
@@ -493,6 +506,7 @@ $('prepare').onclick=async()=> {
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent=`자료 준비 실패 · ${e.message}`;$('export-result').scrollIntoView({block:'center'});} finally {busy=false; enable();}
 };
 async function load(index) {
+  resetAI();resetVersions();
   loading=true;ready=false;++loadSerial;cancelGesture();$('counts').textContent='불러오는 중';$('frames').replaceChildren();listKey='';$('filter').parentElement.hidden=true;$('empty-frames').hidden=true;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent='검수 내용을 확인하는 중';$('empty-review').querySelector('p').textContent='현재 사진과 결정 내용을 불러오고 있습니다.';$('show-all').hidden=true;enable();
   const started=performance.now();
   const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('empty-review').querySelector('p').textContent=`서버 응답 대기 ${seconds}초 · 현재 사진과 결정 내용을 확인하고 있습니다.`;},1000);

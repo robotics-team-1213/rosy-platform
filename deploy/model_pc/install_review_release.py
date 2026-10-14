@@ -131,6 +131,8 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
         if any(char.isspace() for char in str(value)):
             raise ValueError("systemd paths must not contain whitespace")
     control = f" --learning-control {state / 'learning-control.json'}" if (state / 'learning-control.json').is_file() else ''
+    if (state / 'review-ai.json').is_file():
+        control += f" --review-ai-config {state / 'review-ai.json'}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
@@ -259,6 +261,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
         for line in (unit_text if unit_text is not None else text).splitlines(keepends=True):
             if line.startswith('ExecStart='):
                 line = re.sub(r' --learning-control [^\s]+', '', line)
+                line = re.sub(r' --review-ai-config [^\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
                 cli = app.read_text(encoding='utf-8')
                 port_arg = re.search(r' --port ([0-9]+)', line)
@@ -268,6 +271,9 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 if state_arg and '--learning-control' in cli:
                     binding = Path(state_arg[1]) / 'learning-control.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --learning-control {binding}\n'
+                if state_arg and '--review-ai-config' in cli:
+                    binding = Path(state_arg[1]) / 'review-ai.json'
+                    if binding.is_file(): line = line.rstrip('\n') + f' --review-ai-config {binding}\n'
             lines.append(line)
         adjusted = ''.join(lines)
         if adjusted != text: unit_text = adjusted

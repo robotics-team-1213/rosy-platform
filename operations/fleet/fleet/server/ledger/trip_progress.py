@@ -16,6 +16,7 @@ from fleet.server.trip_ports import LiveTrip
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
 #: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
 MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
+CROSSWALK_WAIT_S = 15.0  # CORE crosswalk_report_s 10 + crosswalk_clear_s 5 (D-573 3 defaults)
 
 
 class TripProgress:
@@ -72,7 +73,10 @@ class TripProgress:
         """No ``stall_m`` of progress for ``stall_s``; ``index`` None: the robot could not be located."""
         now = self._clock()
         progress = -math.inf if index is None else live.progress(index, s)
-        if (live.progress_at is None or progress >= live.best_progress + self.config.stall_m
+        moved = progress >= live.best_progress + self.config.stall_m
+        if moved and (live.view.get("wait") or {}).get("reason") not in (None, "link_wait"):
+            live.view.pop("wait")  # D-763 8: only progress ends a regulation episode, not a reason change
+        if (live.progress_at is None or moved
                 or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
                 or self._waiting(live, now)
                 or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
@@ -83,11 +87,22 @@ class TripProgress:
         return now - live.progress_at >= self.config.stall_s
 
     def _wait_bound(self, reason: Optional[str]) -> Optional[float]:
-        """D-760 4 / D-517 4: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule applies again."""
-        return {"link_wait": self.lease.ttl_s}.get(reason)
+        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule
+        applies again. CORE's ``line_follow.regulation_wait`` (v1.227): a crosswalk look/wait is bounded by CORE's
+        crosswalk_report_s + crosswalk_clear_s defaults (D-573 3, then crosswalk_blocked goes to D-622).
+        ponytail: fixed defaults; a robot configured longer reaches the stall rule early. Read them from CORE status
+        if a site changes them."""
+        crosswalk = dict.fromkeys(("crosswalk_look", "crosswalk_wait", "crosswalk_held"), CROSSWALK_WAIT_S)
+        return {"link_wait": self.lease.ttl_s, "authority": self.lease.ttl_s, "signal": self.config.stall_s,
+                **crosswalk}.get(reason)
 
     def _waiting(self, live: LiveTrip, now: float) -> bool:
-        wait = live.view.get("wait") or {}
+        wait, regulation = live.view.get("wait") or {}, live.junction.get("regulation_wait")
+        if wait.get("reason") != "link_wait":
+            if not regulation:
+                return False  # the episode (and its ``since``) stays until the robot makes progress
+            # D-763 8: one episode from its first reason; a new reason takes its own bound from that start
+            wait = live.view["wait"] = {"since": now, **wait, "reason": regulation}
         bound = self._wait_bound(wait.get("reason"))
         return bound is not None and now - wait["since"] < bound
 

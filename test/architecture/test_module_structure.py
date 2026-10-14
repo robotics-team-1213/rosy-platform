@@ -124,7 +124,8 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "decision/src/rosy/decision/deliberation/evaluation",
               "perception/front_camera/perception",
               "perception/front_camera/perception/learned",
-              "perception/front_camera/perception/drivable")
+              "perception/front_camera/perception/drivable",
+              "site_ui/console")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -479,8 +480,24 @@ SIZE_VERDICTS = {
         "and first real Discord readback remain separate gates. "
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
+    "site_ui/console": (
+        17_933,
+        "split: D-763 slice 3 registers the browser console as its own size unit; see "
+        "docs/plans/2026-10-14-fleet-console-size-unit.md. Baseline17933 is the console measured at the D-757 "
+        "verdict commit61aa49b32 (fleet server38822, combined56755); at branch base06e97383b it was17988 (+55), "
+        "now18023 (+90 of +150, not rebaselined). Independently re-judged 2026-10-14 by read-only critic, "
+        "AGREE-WITH-CONDITIONS. Keep console.js1175 (HARD_TIER, zero file growth), map-view.js984 and "
+        "styles.css802 file verdicts. At the next +150 work-view.js and console.js's work-area wiring "
+        "(paintMove, the work-new/work-move seats) leave for their own subpackage, not an accept.",
+    ),
     "fleet": (
-        56_755,
+        38_822,
+        "split: D-763 slice 3 moved the browser console holder operations/site_ui/console into its own unit "
+        "site_ui/console (docs/plans/2026-10-14-fleet-console-size-unit.md). Baseline38822 = the D-757 "
+        "verdict56755 split at its commit61aa49b32 into server38822 + console17933 (measured). At branch base "
+        "06e97383b the server was38868: its +46 stays consumed allowance and is not rebaselined; no "
+        "functional-growth allowance was added. Independently re-judged 2026-10-14 by read-only critic, "
+        "AGREE-WITH-CONDITIONS. Previous verdict: "
         "split: independently re-judged by account_ledger on 2026-10-14 for D-757 at56755. "
         "Account ledger/authority/config/routes remain in existing Fleet authentication and Console "
         "owners. Required HTTP split is completed: password_session501, password_routes182, both "

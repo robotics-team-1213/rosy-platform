@@ -8413,3 +8413,35 @@ osy-d395-s1d\`.
 - 변경: validation/omx-recording-probe-2026-10-14/result.md에 관절 readback·상태 충돌·갱신 실패·late worker 오류의 RED/GREEN과 실행 한계를 기록했다. OMX README에 개선 동작과 컨테이너 내부 probe 사용을 설명했다.
 - 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
 - gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
+
+## 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
+
+- 변경: D-764 검수 AI 실행·취소·읽기 전용 버전 계약과 계획을 추가하고 API 부록을 연결했다.
+- 증거: 구현 및 회귀 시험 추가. 원격 실행·브라우저 검증 결과는 후속 기록한다.
+- gate 변화: 없음. 운영 배포·실 모델 품질 수용을 선언하지 않는다.
+- 결정: D-764
+
+## 2026-10-14 · e7c724721 · fix(review): 조회 실패 잔류와 canvas 계약 보완
+
+- 변경: 검수 AI 실행과 버전 조회의 구현·독립 리뷰·브라우저 및 원격 검증 경과를 계획에 기록했다.
+- 증거: 첫 착지 검사 2725 passed, 270 skipped, canvas 등록 누락 1 failed를 수정. 합성 자료 Chromium 실행·취소·이력 24개·편집 보존 확인. 최종 재시험 결과는 착지 도구 로그에 기록한다.
+- gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
+- 결정: D-764
+
+## 2026-10-14 · ff848d70c · OMX 공개 후 CI 의존성 누락 수정
+
+- 변경: `fix/runtime-jose-lock`에서 offline core wheel 설치 전 CI 검증 target에 `joserfc==1.7.5`를 제공한다. 기기 runtime lock 및 cryptography 50은 유지한다.
+- 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
+
+## 2026-10-14 · 3971caad2 · 공개 전 CORE API 시험 소유권 보정
+
+- 변경: `fix/runtime-jose-lock`의 pre-push에서 발견한 D-760 regulation_wait API 통합시험 경로 하나를 소유권 목록에 명시했다. 순수 기능 시험은 services에 두고, gateway의 실제 HTTP seam 시험과 검사 규칙을 유지한다.
+- 증거: 수정 전 main commit `82d3de6ce`의 깨끗한 원격 checkout에서 동일 실패 재현; 독립 위치 검토 완료. 보정 후 소유권·API·기능 시험 19 passed, NEW 0. 이전 공개 시도는 소유권 실패 및 별도 Fleet 시험의 SSH 단절로 중단돼 push되지 않았다.
+- gate 변화: 없음. 기기·현장 수용과 구분한다.
+
+## 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+
+- 변경: `fix/runtime-jose-lock`에서 사이트에 고정된 `oauthlib==4.0.0`을 CI 검증 target에 제공한다. `--no-deps`와 cryptography 50·device runtime lock을 유지하며, 사이트 pin 누락을 잡는 회귀검사를 추가했다.
+- 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.

@@ -101,6 +101,6 @@
 
 - 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
 - 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+- 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
 - 2026-10-14 · 58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
 - 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
-- 2026-10-14 · 7f5e596614 · Trip ports retain the 600-line ceiling after bend integration
