@@ -37,10 +37,14 @@ from games.host.preview import (  # noqa: E402
 class _LayoutAccount:
     """Verified-claims fixture for layout only; security flow is tested below."""
     resource = 'site:layout'
+    profile_url = 'https://account.test/console/profile'
+
+    def profile(self, _cookie):
+        return None
 
     def resolve(self, _cookie):
         from types import SimpleNamespace
-        return SimpleNamespace(permits=lambda resource, capability:
+        return SimpleNamespace(sub='layout-account', permits=lambda resource, capability:
                                (resource, capability) == (self.resource, 'games.operate'))
 
     def retry_revocations(self):

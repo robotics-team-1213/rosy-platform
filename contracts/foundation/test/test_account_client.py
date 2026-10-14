@@ -138,3 +138,43 @@ def test_bearer_requires_initial_online_check_and_rechecks_at_ten_seconds(receiv
     active[0] = False
     clock[0] += 10
     with pytest.raises(AccountDenied): client.verify_bearer(token)
+
+
+def test_profile_is_live_bound_and_profile_failure_keeps_auth(receiver):
+    client, clock, calls, active = receiver
+    cookie = session(client)
+    subject = client.resolve(cookie).sub
+    original = client.post
+    profile = {'account_id': subject, 'login': 'alice', 'display_name': 'Alice'}
+    def post(endpoint, fields):
+        if endpoint == 'userinfo':
+            if profile.get('offline'):
+                raise AccountUnavailable()
+            return dict(profile)
+        return original(endpoint, fields)
+    client.post = post
+    assert client.profile_url == 'https://account.example.test/console/profile'
+    assert client.profile(cookie) == profile
+    profile['display_name'] = 'Updated'
+    assert client.profile(cookie)['display_name'] == 'Updated'
+    profile['account_id'] = 'another-account'
+    assert client.profile(cookie) is None
+    assert client.resolve(cookie).sub == subject
+    profile['offline'] = True
+    assert client.profile(cookie) is None
+    assert client.resolve(cookie).sub == subject
+    assert client.profile('unknown') is None
+
+
+def test_profile_drops_response_when_local_session_is_logged_out(receiver):
+    client, _, _, _ = receiver
+    cookie = session(client)
+    subject = client.resolve(cookie).sub
+    original = client.post
+    def post(endpoint, fields):
+        if endpoint == 'userinfo':
+            client.logout(cookie)
+            return {'account_id':subject, 'login':'alice', 'display_name':'Old'}
+        return original(endpoint, fields)
+    client.post = post
+    assert client.profile(cookie) is None

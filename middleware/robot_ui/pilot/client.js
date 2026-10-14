@@ -14,13 +14,22 @@ if (typeof window !== 'undefined') window.addEventListener('storage', event => {
   }
 });
 
+let accountRead = 0;
+function publishProfile(value) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rosy:account-profile', {detail:value}));
+}
+
 export async function restoreAccount() {
   if (inPilotApp() && document.documentElement.dataset.pilotAccount !== 'managed') return null;
+  const read = ++accountRead;
   const previous = account?.authenticated ? accountKey() : '';
   try {
     const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    if (!response.ok) return account;
-    account = await response.json();
+    if (!response.ok) { if (read === accountRead) publishProfile(null); return account; }
+    const result = await response.json();
+    if (read !== accountRead) return account;
+    account = result;
+    publishProfile(account);
     if (account?.authenticated) {
       sessionStorage.removeItem(KEY);
       try { localStorage.setItem('rosy.account.identity', accountKey()); } catch {}
@@ -30,7 +39,7 @@ export async function restoreAccount() {
       document.body.hidden = true;
       window.location.reload();
     }
-  } catch { /* A failed probe never opens the development login path. */ }
+  } catch { if (read === accountRead) publishProfile(null); /* A failed probe never opens the development login path. */ }
   return account;
 }
 if (typeof window !== 'undefined') window.setInterval(() => {
@@ -55,13 +64,17 @@ export function inPilotApp() {
 }
 
 export function setToken(value) {
+  accountRead++;
   account = null;
+  publishProfile(null);
   sessionStorage.setItem(KEY, String(value ?? "").trim());
 }
 
 export function clearToken() {
   sessionStorage.removeItem(KEY);
+  accountRead++;
   account = null;
+  publishProfile(null);
 }
 
 export function prepareConsoleSession() {

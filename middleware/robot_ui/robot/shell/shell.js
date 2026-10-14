@@ -1,3 +1,4 @@
+import '/common/account-profile.js';
 import { restoreAccount } from "../client.js";
 // 역할별 화면의 셸(D-204). 매니페스트를 받아 패널을 조립하고,
 // 세 화면이 공유하는 것 — 화면 전환기, 역할 표시, 비상 정지 하나 — 만 소유한다.
