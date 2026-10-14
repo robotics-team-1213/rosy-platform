@@ -1,0 +1,57 @@
+# ROSY 전체 실행 흐름 연결 점검
+
+사용자 요청: 미완성 파이프라인을 목록으로 정리하고 끊긴 연결을 처리한다.
+브랜치: `fix/runtime-pipelines`. 조사 기준: `c6d52b238`.
+계약: README 핵심 계약, D-2/D-38, D-678, D-732, D-752.
+
+`STATUS.md`의 HOLD는 코드 누락과 검증 대기를 함께 포함한다. 이 목록은 현재
+소스의 진입점과 결과 소비자를 따라 정리한 것이며, 모든 경로의 실행 통과표가 아니다.
+예전 계획의 미구현 표시는 현재 소스와 대조해야 한다. 공유 main의 동시 변경은
+이 브랜치의 수정이나 검증으로 계산하지 않는다.
+
+## 경로 목록과 처리
+
+| 번호 | 실행 흐름 | 현재 연결의 소스 근거 | 확인한 미완성/처리 상태 |
+|---|---|---|---|
+| 1 | 센서·카메라 → 차로 관측 → CORE | `middleware/perception/sensors/line_observation/line_observer_node.py`, `middleware/drive`, CORE bridge | 관측과 최종 writer는 연결돼 있다. 센서 보정·실제 그래프·정지 거리 증거는 별도다. legacy safety publisher를 함께 켜지 않는다. |
+| 2 | 천장 관측·pin·odom → World → Fleet 자세 | `operations/world/src/rosy/world/state/projections/map_pose.py`, Fleet `map_pose_service.py` | 현재 자세 projection 연결은 존재한다. `bridged`는 dead reckoning이다. 행동 조건부 미래 World model은 별도 계획이며 임의 구현하지 않는다. |
+| 3 | 인증 → Console·채널 접수 → 기명 요청 | Fleet `auth/`, `channel/gateway.py`, `channel/requests.py`, `app.py` | Gateway·요청 원장·설치 연결이 현재 존재한다. 과거 Discord 계획의 Gateway 미구현 문구를 현재 상태로 사용하지 않는다. 실제 수신·계정 회수·배포 수용은 이번에 검증하지 않았다. |
+| 4 | 대화 → 후보 → 기존 intent → CORE | `channel/conversation/runtime.py`, `channel/execution/{runtime,worker}.py`, `app.py` | 명시적 설정과 admission으로 연결돼 있다. admission 만료·UNKNOWN은 새 전송 권한이 아니다. 실제 모델 의미 품질과 운영 승인 자료를 만들지 않는다. |
+| 5 | navigation Task → native ACK → 이벤트/readback → 자원 해제 | `ledger/task_results.py`, `channel/execution/outcomes/{task_receipt,evidence,reconcile}.py`, `_task_dispatch_loop` | **수정:** 한 owner의 느린 조회가 다른 owner의 종결을 막는 순차 조회를, 기존 20건 한도 안에서 독립 조회로 바꾼다. 동일 boot/run/attempt·2초·quiescence·claim CAS를 유지한다. |
+| 6 | Mission·Cell Job → Arm owner → Action 결과 → 목표 증거 | `ledger/mission_dispatcher.py`, `step_dispatcher.py`, `goal_evidence_service.py`, `app.py` | dispatcher와 목표 증거 callback은 연결돼 있다. Action 성공만으로 물리 목표를 완료하지 않는다. 실제 producer/신뢰 자료·물체 파지·장치 수용은 별도다. |
+| 7 | 지도 경로 → trip·traffic·lease → CORE → 도착·다음 구간 | `ledger/trip_runner.py`, `traffic/lane_traffic.py`, `traffic/trip_lease.py` | 기존 경로 존재. 현장 지도·교통 설정과 다중 로봇/신호 수용 증거는 이번에 얻지 않았다. |
+| 8 | formation → arm → relay → watch → hold/stop | `swarm/session.py`, `swarm/relay.py`, `app.py` | 기존 경로 존재. 참조 소실 HOLD와 최종 CORE writer를 유지한다. 실물 동시 주행은 미검증이다. |
+| 9 | stuck·incident → law·rule/AI → admission → owner → 결과/인계 | `stuck/loop.py`, `incidents/automation/{runtime,execution/worker}.py` | 현재 lane recovery candidate와 명시적 `recovery_submit` 연결이 있다. 예전 '읽기만 처리' 기록으로 전체를 미구현이라 판단하지 않는다. door/arm 범용 backend와 자동 실패 분류·재훈련은 이 연결의 계약 밖 후속이다. |
+| 10 | 실행 사건 → 피드백 export → 검수 → 후보 비교·registry | `test_incident_feedback_export.py`, `learning/registry/policy`, 기존 reasoning lifecycle 계획 | export·검수·registry 소스가 존재한다. 전체 관측/명령/청구 coverage, 독립 정답·한계, signed 운영 수용이 부족하면 비교/승격 HOLD다. 이를 합성 승인으로 메우지 않는다. |
+| 11 | 영상 수집 → 검수 → dataset → train/eval → READY → intake·shadow | `learning/curation/perception`, `learning/training/perception/{review_pipeline,train_job}.py`, `learning/registry/perception/{watch,deliver}.py` | 명시적 owner context 연결이 있다. 실제 검수 mask·원본 픽셀/collection lineage·평가 자료는 별도 입력이다. shadow delivery는 주행 활성화가 아니다. |
+| 12 | OMX 시연 → episode → LeRobot → ACT → replay/SIM | `learning/curation/omx`, `learning/training/omx`, 기존 OMX adapter | Gazebo Pilot 경로와 offline 학습은 존재한다. Isaac OMX controller/camera/task 연결은 기존 준비 계획에서도 미구현이다. 실물 driver나 임의 unit 변환으로 대체하지 않는다. |
+| 13 | 빌드 → 서명 artifact → 설치 → 장치 readback | `deploy/robot/pinky_pro/{image,release,install-pi.sh}`, `deploy/site` | 소스 연결과 서명/배포/SD 부팅·장치 수용 증거를 구분한다. 이번 작업은 push·배포·runtime 활성화를 하지 않는다. |
+| 14 | Fleet 시작 → 모든 background owner → 종료 | `app.py` lifespan 및 각 worker runtime | **수정:** 종료 시 이미 실패한 한 worker가 뒤의 worker 취소·회수를 중단하지 않도록 전체 취소 후 `gather(return_exceptions=True)`로 회수하고 실제 오류를 기록한다. |
+
+## 구현 범위
+
+5번·14번은 기존 계약을 집행하는 결함 수정이다. 새 command writer, 외부 API,
+모델 권한, 서비스, 재시도 정책을 추가하지 않는다. 결과 조회의 병렬성만 바꾸며
+SQLite 적용은 await 없는 기존 `BEGIN IMMEDIATE`/원장 재검증 안에서 수행한다.
+조회 오류는 해당 Task의 UNKNOWN/점유를 유지한다. 종료 오류를 성공으로 숨기지
+않고 로그에 남긴다. background 종료는 물리 정지 receipt가 아니다.
+
+## 검증 기록
+
+- 종료 회귀: `e4804ba77`에서 원격 RED. 실패한 trip worker를 await하다 종료가 중단됐다.
+- 최초 readback 시험은 준비 코드가 두 번째 service 생성으로 startup fence를 닫아
+  원하는 경계에 도달하지 못했다. 결함 재현 증거로 사용하지 않는다.
+- 준비 수정 후 `b73b04577`에서 원격 RED: 선행 owner가 후행 owner를 기다리는 동안
+  순차 조회가 timeout을 만들고 선행 Task가 `UNKNOWN`에 남았다.
+- 원시 로그: X: 세션 `2026-10-15--042319--runtime-pipelines--0fd8e5/logs/`.
+  각 pytest 결과는 `test/known_failures.py`로 판정한다. GREEN 및 영향 검사는
+  종료 결과를 얻은 뒤 아래에 추가한다.
+
+## 전체 완성을 막는 남은 입력과 증거
+
+코드 존재와 운영 연결 완료는 다르다. 실제 검수/평가 자료, 운영 수용 receipt,
+현장 overlay·설치 revision, 적격 시뮬레이션과 장치 readback이 있어야 1~13의
+운영 완료를 판정할 수 있다. door/arm 범용 자동 개입과 Isaac OMX 학습 환경은
+해당 실행 owner·입출력·성공 기준을 먼저 확정해야 한다. 이 작업은 미완성 항목을
+숨기거나 PARKED/HOLD gate를 자동 해제하지 않는다. 사용자 지시 전 main 착지와
+push를 하지 않는다.

@@ -49,7 +49,7 @@ def test_slow_native_owner_does_not_block_another_tasks_completion(tmp_path):
     run(exercise())
 
 
-def _accepted_native_task(tmp_path, *, robot_ids={"rosy_01"}):
+def _accepted_native_task(tmp_path, *, robot_ids=frozenset({"rosy_01"})):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     service = FleetTaskService(store, robot_ids=robot_ids)
     control = store.dispatch_control()
