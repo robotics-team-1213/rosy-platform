@@ -38,6 +38,5 @@ D-754 Reserved by a concurrent local session; not included in OMX D-756 branch; 
 
 
 D-754 Reserved by a concurrent local session; ADR absent from this branch; reconcile when its ADR lands
+D-760 Reserved by a concurrent local session; ADR absent from the D-761 worktree-gateway branch; remove when its ADR lands
 D-758 Reserved by a concurrent local session; ADR absent from the D-759 branch; remove when its ADR lands
-D-760 Reserved by a concurrent local session (Fleet-robot bounds); ADR absent from the D-762 branch; remove when its ADR lands
-D-761 Reserved on feat/worktree-gateway (worktree gateway and prune, Proposed); ADR absent from the D-762 branch; remove when its ADR lands

@@ -81,3 +81,24 @@ Hub/Spaces 배포 수용이 아니다. 새 API, 런타임 승격, main 착지·p
 - [구현 계획](../plans/2026-10-14-omx-imitation-preparation.md)
 - [D-496](D-496-omx-hardware-arm-control-acceptance.md)
 - [공식 viewer README](https://huggingface.co/spaces/lerobot/visualize_dataset/blob/461b74e/README.md) — 2026-10-14 확인; 우리 계정의 접근 시험은 아님.
+
+## 2026-10-14 부록: 시뮬레이션 준비 재개 조건
+
+후속 요청에 따라 [SIM 코드 조사·준비](../plans/2026-10-14-omx-simulation-preparation.md)와
+독립 Pilot Compose 입력을 추가한다. D-390의 기존 Gazebo·단일 owner·녹화 경로를
+재사용하며 hardware profile, 단위, API와 기존 실물 재개 조건은 바꾸지 않는다.
+
+첫 원격 SSH 실패는 재시도에서 복구되었고 기존 OMX 시험 19개가 통과했다.
+그러나 비현장 SIM PC는 예약 반영 가용 메모리가 D-568의 8 GiB 최소보다 작아
+새 Gazebo 실행을 보류했다. 자원 여유가 생기면 전용 job을 예약하고 이미지 build,
+Pilot 조작·ROS terminal/readback, complete 녹화·lease 중단, LeRobot reader
+재독출 순서로 확인한다. 현재 Compose 해석·vendor 패치 적용·OMX-F/L URDF 생성은
+실행 준비 증거이며 live SIM 성공이 아니다. 현장 PC나 노트북으로 우회하지 않는다.
+Isaac은 USD import부터 별도 확인하며 OMX controller/camera/task와 정책의
+closed-loop 과제 성공을 준비 완료로 주장하지 않는다.
+
+후속 준비 commit `91995a99e`의 원격 계약 시험은 129 passed, NEW 0이다.
+모델 PC의 Docker 읽기 진단은 소켓 접근 거부로 실패했다. 권한이나 설치를 자동
+변경하지 않았으며 비현장 build 환경·사용 가능한 Docker context도 재개 입력에
+포함한다. 서비스의 `cpus`/`mem_limit`은 build 제한이 아니므로 이미지 build는
+전체 자원을 독점 예약한 비현장 build host에서 별도로 준비한다.
