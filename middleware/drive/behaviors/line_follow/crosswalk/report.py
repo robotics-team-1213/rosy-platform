@@ -11,8 +11,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from core_features.line_follow.crosswalk_gate import CrosswalkGate, zone_of
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, MAX_LATERAL_M, MAX_TURN_RAD, _angle
+from core_features.line_follow.crosswalk.gate import CrosswalkGate, zone_of
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, MAX_LATERAL_M, MAX_TURN_RAD, _angle
 
 #: Distinct crosswalks one epoch may hold; more is ``unknown`` (fail closed, never a silent drop).
 MAX_SEEN = 64

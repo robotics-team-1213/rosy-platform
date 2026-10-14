@@ -7,8 +7,8 @@ import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_common.robot_body import PINKY_PRO
-from core_features.line_follow import crosswalk_gate as gate_module
-from core_features.line_follow.crosswalk_gate import CrosswalkGate, Scan, judge, scan_rays
+from core_features.line_follow.crosswalk import gate as gate_module
+from core_features.line_follow.crosswalk.gate import CrosswalkGate, Scan, judge, scan_rays
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
 from core_features.line_follow.recovery.stuck.stuck_recovery import AnswerRefused
@@ -398,7 +398,7 @@ def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
 def test_lane_edges_caps_raw_edges_only_and_pads_stay_outside():
     """Review: the cap is on what the camera saw; an edge alone, a lane-wide pair and the zone's
     uncertainty/drift pad are untouched (an off-centre robot keeps its real edges)."""
-    from core_features.line_follow.crosswalk_gate import lane_edges, zone_of
+    from core_features.line_follow.crosswalk.gate import lane_edges, zone_of
     assert lane_edges(0.120, -0.122) == pytest.approx((0.099, -0.101))
     assert lane_edges(0.109, -0.049) == (0.109, -0.049)        # 3 cm off-centre, a real lane
     # review: one far misread edge (the next lane's line) must not slide the lane off the body
@@ -433,7 +433,7 @@ def test_the_corridor_never_narrower_than_the_body():
 import random
 from types import SimpleNamespace
 
-from core_features.line_follow.crosswalk_gate import Geometry, Zone
+from core_features.line_follow.crosswalk.gate import Geometry, Zone
 
 SIGMA = 0.0035      # measured C1 range noise, 0-0.5 m (8kcn 2026-10-10, p90 0.0031, max 0.0034)
 EDGE = 0.08

@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 
 from core_common.protocol.line_arc import LineArcStatus
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M
 from core_features.line_follow.model import LineFollowDecision
 from core_features.line_follow.recovery.junction.gate import DEFAULT_ADVANCE_M, JunctionRefused
 from core_features.line_follow.recovery.junction.approach import STEP_MARGIN_S
