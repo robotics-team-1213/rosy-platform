@@ -395,8 +395,12 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
 
     def _maneuver(self, j, now, decision):
         pose = self._fresh_pose(now)
-        if pose is None and now - j['phase_at'] <= j['limit']:  # an odom gap (SIM m27: 0.6 s) holds within the phase
+        if pose is None and now - j.setdefault('gap_at', now) <= self._config.lost_after_s:
+            # an odom gap (SIM m27: 0.6 s) holds and the phase clock stands, up to the camera-loss bound
+            j['limit'] += now - j.get('gap_tick', now)
+            j['gap_tick'] = now
             return self._junction_hold('junction_pose_gap', decision)
+        j.pop('gap_at', None), j.pop('gap_tick', None)
         if pose is None or (self._return_evidence.epoch, pose.frame) != j['key']:
             return self._abort(j, 'odom', decision)
         refusal = self._maneuver_refusal(now)
