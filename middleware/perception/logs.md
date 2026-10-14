@@ -1562,3 +1562,10 @@
 - 변경: 14 unchanged source files move to localization, graph_health, object_observation, line_observation and snapshots, with dedicated ROS adapters. Existing control.* identities and CORE command authority remain.
 - 증거: byte hashes and Git contents agree; independent source/Safety/deployment-closure review PASS. Remote verification and local landing are recorded separately in docs/validation/perception-judgment-s2-2026-10-13/result.md.
 - gate 변화: 없음. No device/ROS transport acceptance claimed.
+
+## 2026-10-14 · 9406dc248 · 바닥 게이트가 못 쓰는 학습 모델을 열 때 거절한다 (D-588)
+
+- 변경: `lane_mask.floor_gate_role_error`가 바닥 게이트의 역할 규칙 하나다(lane_marking 마스크는 wall 역할, target drivable은 wall 또는 drivable). `LaneSegModel.open(paint_target=...)`과 프레임마다의 `lane_marking_mask` 검사가 같은 함수를 쓴다. 관측 노드는 `learned_paint_target`을 넘긴다. wall이 없는 모델을 target lane_marking으로 열면 `ManifestError`로 거절되고 슬롯 `last_error`에 이유가 남으며 denoise로 돈다. 받아들이던 모델의 동작은 같다.
+- 증거: 원격 pytest(AI PC) 학습 페인트·관측 노드 시험 24개 파일 + `test_module_structure.py` 571 passed, 26 skipped, `known_failures` NEW 0. Gazebo 러너에서 본 6역할 모델(wall 없음)이 열 때 거절되는 시험을 더했다.
+- gate 변화: 없음. Gazebo 재실행과 실물 수용은 하지 않았다.
+- 결정: D-588 (예약)
