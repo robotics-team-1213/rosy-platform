@@ -416,10 +416,13 @@ def test_under_lease_robots_start_only_with_the_lease_required():
 # ---- Safety-Review CONDITIONS (2026-10-14) ----------------------------------------------------
 
 def _near_place(caps=NEW, **setup):
-    """A trip whose robot is within arm distance of its next place: each step sends a junction instruction."""
+    """A trip whose robot is within arm distance of its next place: each step sends a junction instruction.
+    It is placed in the block table first (a robot the table never placed holds every instruction)."""
     runner, store, fleet = _setup({"a": caps}, **setup)
     east = _arc(store, "east:fwd")
-    _trip(runner, store, fleet, "a", "east:fwd", east.length_m - 0.3)
+    _trip(runner, store, fleet, "a", "east:fwd", east.length_m - 0.9)
+    _ticks(runner, fleet)
+    fleet.at("a", east, east.length_m - 0.3)
     return runner, store, fleet
 
 
