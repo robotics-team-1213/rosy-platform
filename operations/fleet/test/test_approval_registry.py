@@ -126,3 +126,79 @@ def test_shared_console_token_cannot_admit(tmp_path):
                      {"expected_generation": _generation(tasks)})
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
+
+
+# D-763 5b: reject a waiting job.
+
+def _reject(client, mission_id, token, generation):
+    return _post(client, f"/api/fleet/missions/{mission_id}/reject", token,
+                 {"expected_generation": generation})
+
+
+def test_proposer_withdraws_a_waiting_mission_and_it_cannot_be_admitted(tmp_path):
+    client, tasks = _app(tmp_path)
+    mission = _resolved(client, "op1-secret", _er2_candidate())
+    generation = _generation(tasks)
+
+    hidden = _reject(client, mission, "op2-secret", generation)
+    withdrawn = _reject(client, mission, "op1-secret", generation)
+    again = _reject(client, mission, "op1-secret", generation)
+    admit = _post(client, f"/api/fleet/missions/{mission}/admit", "op1-secret",
+                  {"expected_generation": generation})
+
+    assert hidden.status_code == 404  # proposer_only: other operators never see it
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["decision"] == "WITHDRAWN_BY_PROPOSER"
+    assert withdrawn.json()["mission"]["status"] == "CANCELED"
+    assert withdrawn.json()["mission"]["reason"] == "WITHDRAWN_BY_PROPOSER"
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "MISSION_REJECT_REFUSED"
+    assert admit.status_code == 409 and admit.json()["detail"]["code"] == "MISSION_ADMISSION_REFUSED"
+    assert tasks.store.resource_claims(resource_kind="object", resource_id="block-1") == []
+    history = client.app.state.mission_service.history(mission)
+    rejected = [event for event in history if event["event_type"] == "MISSION_REJECTED"]
+    assert len(rejected) == 1 and rejected[0]["actor_id"] == "operator-1"
+
+
+def test_other_operator_rejects_a_cell_job_and_no_approval_follows(tmp_path):
+    client, tasks = _app(tmp_path)
+    job = _resolved(client, "cell-secret", _cell_candidate())
+    generation = _generation(tasks)
+
+    viewer = _reject(client, job, "viewer-secret", generation)
+    service = _reject(client, job, "cell-secret", generation)
+    stale = _reject(client, job, "op1-secret", generation + 1)
+    rejected = _reject(client, job, "op1-secret", generation)
+    again = _reject(client, job, "op2-secret", generation)
+    admit = _post(client, f"/api/fleet/missions/{job}/admit", "op2-secret",
+                  {"expected_generation": generation})
+    resume = _post(client, f"/api/fleet/cell-jobs/{job}/resume", "op2-secret",
+                   {"expected_generation": generation})
+
+    assert viewer.status_code == 403 and service.status_code == 403
+    assert stale.status_code == 409 and stale.json()["detail"]["code"] == "MISSION_REJECT_REFUSED"
+    assert rejected.status_code == 200, rejected.text
+    body = rejected.json()
+    assert body["decision"] == "REJECTED_BY_OPERATOR"
+    assert (body["mission"]["status"], body["mission"]["reason"]) == ("HOLD", "CANCELLED_BY_OPERATOR")
+    assert again.status_code == 409
+    assert admit.status_code == 409 and admit.json()["detail"]["code"] == "CELL_JOB_ADMISSION_REFUSED"
+    assert resume.status_code == 409
+    assert tasks.store.resource_claims(resource_kind="workcell", resource_id="omx_01") == []
+    events = client.app.state.cell_job_store.get(job)["events"]
+    assert [(e["event_type"], e["actor_id"]) for e in events if e["event_type"] == "CELL_JOB_REJECTED"] == [
+        ("CELL_JOB_REJECTED", "operator-1")]
+
+
+def test_reject_refuses_unnamed_principals_and_bad_bodies(tmp_path):
+    client, tasks = _app(tmp_path, named=False, console_token="shared-secret")
+    mission = _resolved(client, "shared-secret", _er2_candidate())
+    shared = _reject(client, mission, "shared-secret", _generation(tasks))
+    assert shared.status_code == 403
+    assert shared.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
+
+    named, tasks = _app(tmp_path / "named")
+    mission = _resolved(named, "op1-secret", _er2_candidate())
+    for body in ({"expected_generation": True}, {"expected_generation": -1},
+                 {"expected_generation": 1.0}, {"expected_generation": 0, "reason": "x"}):
+        assert _post(named, f"/api/fleet/missions/{mission}/reject", "op1-secret", body).status_code == 422
+    assert _reject(named, "missing", "op1-secret", 0).status_code == 404

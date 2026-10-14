@@ -18,6 +18,14 @@ class FleetWorkSummary(BaseModel):
     updated_at: str
 
 
+class FleetWorkDecisionRequest(BaseModel):
+    """D-763 7/5b: admit or reject a waiting job at the dispatch stop generation the operator saw."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    expected_generation: int = Field(ge=0)
+
+
 class FleetWorkOverview(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
