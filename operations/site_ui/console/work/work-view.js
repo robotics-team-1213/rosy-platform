@@ -15,7 +15,7 @@ export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) 
 export function createWorkView({scope, call, el, channelRequestView}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
-  const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED", "arrived", "canceled", "stopped", "failed"]}[query.get("show")];
+  const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
@@ -105,7 +105,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       showKinds(result.kinds);
       if (fresh) return;
       const previous = rows.find(row => workKey(row) === selected);
-      rows = shown ? result.rows.filter(row => shown.includes(row.status)) : result.rows;
+      rows = shown ? result.rows.filter(row => shown.includes(row.visible_state)) : result.rows;
       channelRequestView.setSources(result.rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {

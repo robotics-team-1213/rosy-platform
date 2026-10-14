@@ -12,7 +12,7 @@
 - 파일 두 개를 옮긴다: `work-view.js`(D-664 작업 읽기, `/console?view=work`)와 `channel-request-view.js`(D-680 대화 요청 검토, 작업 화면 안의 칸). 둘 다 `console.js`만 import하고 둘 다 작업 영역의 화면이다. 새 폴더에 `__init__.py`를 둔다(`cell/`과 같다). 그래서 Fleet 배포는 `fleet.server.web.work`를 찾고 `setup.py` package_data에 `work/*.js`를 더한다.
 - 브라우저 주소는 그대로 `/console/assets/<파일이름>`이다. `console/static_routes.py` allowlist의 원본 경로만 `work/...`로 바뀐다. `console.js`의 `./work-view.js` import는 같은 주소로 풀린다. node 해석 훅(`test/web/resolve-console-assets.mjs`)과 문서 import 시험(`test_document_imports.py`)이 `work/`를 찾는다.
 - 가장 안쪽 단위가 줄을 가져가므로(`_over_budget`) 두 파일과 `__init__.py`는 `site_ui/console` 대신 이 단위로 세어진다. 스캔에서 빠지는 파일은 없다.
-- `console.js`의 작업 영역 연결(`paintMove`, `work-new`·`work-move` 자리, 15줄 안팎)은 옮기지 않는다. 로봇 카드의 운행 폼(`roster.trip`), `view`, `render`를 닫아 쓰는 셸 코드라서, 옮기면 그 셋을 넘기는 새 경계가 생긴다. `console.js`는 HARD_TIER 위라 파일 증가 0이 그대로 지킨다. 조각 4는 거기서 한 줄을 지웠다.
+- **콘솔 계획에서 벗어난 점(기록).** 콘솔 계획은 `work-view.js`와 함께 `console.js`의 작업 영역 연결을 내라고 적었다. 그 연결(`paintMove`, `work-new`·`work-move` 자리, 15줄 안팎)은 옮기지 않는다. 로봇 카드의 운행 폼(`roster.trip`), `view`, `render`를 닫아 쓰는 셸 코드라서, 옮기면 그 셋을 넘기는 새 경계가 생긴다. `console.js`는 HARD_TIER 위라 파일 증가 0이 그대로 지킨다. 조각 4는 거기서 한 줄을 지웠다.
 
 ## 기준선
 
@@ -31,7 +31,7 @@ D-757 판정 커밋 `61aa49b32`에서 앞의 두 계획과 같은 방법(그 커
 ## 다른 두 단위
 
 - `fleet`(서버)은 조각 4에서 순증이 음수다: 31,904 → 31,881(`work_routes.py`를 원장 holder로 옮김 −32, `work_read.py` Cell Job 조회 +8, `setup.py` +1). D-763의 서버 순증 0 규칙을 지킨다.
-- `fleet/fleet/server/ledger`는 6,985 + 150 = 7,135 한도에 7,130이다. 5줄이 남는다. 원장 계획은 다음 +150에서 Mission 승인·거절 경로(`mission_routes`)와 Mission 원장(`mission_store`)을 자기 하위 단위로 낸다고 정했다. 다음 원장 증가는 그 분리부터다.
+- `fleet/fleet/server/ledger`는 6,985 + 150 = 7,135 한도에 7,135다(검토 반영: Cell Job 상세 범위 +3, 닫힌 trip의 `wait` +1, 이벤트 루프 밖 읽기 +7을 포함). 남은 줄이 없다. 원장 계획은 다음 +150에서 Mission 승인·거절 경로(`mission_routes`)와 Mission 원장(`mission_store`)을 자기 하위 단위로 낸다고 정했다. 다음 원장 증가는 그 분리부터다.
 
 ## 그대로 두는 것
 
@@ -43,4 +43,4 @@ D-757 판정 커밋 `61aa49b32`에서 앞의 두 계획과 같은 방법(그 커
 
 `test/architecture/test_module_structure.py`의 실측(`test_over_budget_code_has_a_recorded_verdict`, `test_size_units_are_real_subpackages_with_a_split_plan`, `test_size_verdicts_are_well_formed_and_current`)과 배포 자원 시험(`test/test_remaining_platform_installed.py`)을 원격 시험 PC에서 돌린다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
 
-판정 상태: 독립 재판정 전이다. 착지 전에 읽기 전용 검토가 기준선(`61aa49b32`에서 143 + 221)과 위 한도 문장을 다시 잰다.
+판정 상태: 2026-10-15 브랜치 검토의 크기 재판정 ACCEPT WITH CONDITIONS. 조건: (1) `paintMove`와 작업 자리가 `console.js`에 남는 것은 위 "벗어난 점"과 그 이유로 기록한다. (2) 다음 콘솔 증가(남은 2줄)는 그 연결을 이 단위로 내는 분리부터 시작하고, 다음 원장 증가(검토 반영 뒤 7,135로 남은 0줄)는 원장 계획이 이름 붙인 Mission 분리(`mission_routes`·`mission_store`, `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`, 조각 6 착지 뒤 머지에서)부터 시작한다. 수용으로 넘기지 않는다.

@@ -77,7 +77,7 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
     assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "Cell 적재")]
     assert "disabled" not in kinds.group(1) and 'id="work-kind"' not in _page("cell.html").read_text(encoding="utf-8")
     work_view = (WEB / "work" / "work-view.js").read_text(encoding="utf-8")
-    assert 'pending: ["PROPOSED"]' in work_view and "doc-tabs" not in work_view
+    assert 'pending: ["approval_pending"]' in work_view and "doc-tabs" not in work_view
 
 
 def test_records_area_screens_and_the_judgment_seat():

@@ -32,7 +32,8 @@ def _shown(row: dict) -> dict:
 
 
 def _trip_row(view: dict) -> dict:
-    wait = view.get("wait")
+    # A closed trip keeps its last wait answer in storage; only an open trip has a wait to show (as f79947c25)
+    wait = view.get("wait") if view["state"] in ("started", "running", "link_wait") else None
     return {"source": "trip", "source_id": view["trip_id"], "action_kind": "trip", "status": view["state"],
             "device_id": view["robot_id"], "workcell_id": None, "reason": view.get("reason"),
             "updated_at": datetime.fromtimestamp(view["updated_at"], timezone.utc).isoformat(timespec="milliseconds"),

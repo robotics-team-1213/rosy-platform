@@ -242,8 +242,9 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         browser, page, errors = _open(playwright, site, api, posts, size=size)
         try:
             # D-741 7: 끝난 작업·승인 대기는 같은 조회 결과를 상태로 거른다. 걸러진 줄은 있고 나머지는 없어야 한다.
-            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09"},
-                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait"}]
+            extra = [{**rows[0], "source_id": "done-1", "status": "COMPLETED", "device_id": "rosy_09", "visible_state": "ended"},
+                     {**rows[1], "source_id": "wait-1", "status": "PROPOSED", "device_id": "omx_wait",
+                      "visible_state": "approval_pending"}]
             api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
             for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
                 page.goto(site + "/console?view=work&show=" + show)
@@ -332,7 +333,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
         browser, page, errors = _open(playwright, site, api, [], size=size)
         try:
             for show, expected in (("pending", ["Cell 적재 · omx_control · 승인 대기"]),
-                                   ("done", ["운행 · rosy_03 · 끝남", "주행 · rosy_04 · 개입 필요"])):
+                                   ("done", ["운행 · rosy_03 · 끝남"])):  # 개입 필요 is not 끝남 (D-763 8)
                 page.goto(site + "/console?view=work&show=" + show)
                 page.clock.run_for(2000)
                 page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count",
