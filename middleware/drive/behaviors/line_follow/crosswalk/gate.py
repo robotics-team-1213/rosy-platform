@@ -544,14 +544,22 @@ class CrosswalkGateMixin:
         """D-507 13 / D-760 2b, for a maneuver's or an arc's clock: the seconds of the last dt a later
         gate took. All of it while a non-FREE D-517 authority, a D-573 look/wait or a crossing held by a
         return ahead (look_progress) stands the robot; a crossing's slower share against `speed`. dt
-        counts at most stale_after_s: a stalled tick thread that wakes held earns no more. Locked."""
+        counts at most stale_after_s, only with a matching previous tick that also lost time. Locked."""
         c = self._config
         if self._regulation_wait(now) is not None:
             lost = 1.0
         else:
             xw = self._xwalk.status(now) or {}
             lost = max(0.0, 1 - c.crosswalk_cross_speed / speed) if xw.get("state") == CROSSING and speed else 0.0
-        return max(0.0, min(dt, c.stale_after_s)) * lost
+        previous = getattr(self, '_regulated_wait_sample', None)
+        if previous is not None and now == previous[0]:
+            self._regulated_wait_sample = (now, min(lost, previous[1]))
+            return 0.0
+        self._regulated_wait_sample = (now, lost)
+        if (previous is None or now <= previous[0]
+                or abs(now - dt - previous[0]) > 1e-6):
+            return 0.0
+        return max(0.0, min(dt, c.stale_after_s)) * min(lost, previous[1])
 
     def _regulation_wait(self, now: float) -> Optional[str]:
         """D-760 rev 3 9 ``line_follow.regulation_wait`` and the share above: the regulation standing
