@@ -335,6 +335,7 @@ def test_pending_seat_approves_through_the_existing_admit_route(site, size, case
             page.route("**/api/fleet/missions/wait-1/admit", admit)
             page.goto(site + "/console?view=work&show=pending")
             page.clock.run_for(2000)
+            expect(page.locator("#work-admit")).to_be_hidden()  # nothing chosen, nothing to approve
             page.locator("#work-list ui-button").filter(has_text="omx_wait").click()
             button = page.locator("#work-admit")
             expect(button).to_be_visible()
