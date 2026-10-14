@@ -70,7 +70,9 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
     config['account_subjects'] = {'central-alice':'alice','central-bob':'bob'}
     records = {sha256(name.encode()).hexdigest():SimpleNamespace(sub='central-'+name,
         aud='project:one',permits=lambda *args:True) for name in ['alice','bob']}
-    receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None)
+    receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None,
+        profile_url='https://account.test/console/profile',
+        profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
     (tmp_path/'workspace').mkdir()
     store = open_store(tmp_path/'workspace')
@@ -82,6 +84,10 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         assert status == 200
         status, bob = request(base,'/api/accounts/session','bob')
         assert status == 200 and bob['token'] != alice['token']
+        assert alice['profile']['account_id'] == alice['account_id'] == 'central-alice'
+        assert bob['profile']['account_id'] == bob['account_id'] == 'central-bob'
+        receiver.profile_session_id = lambda sid: alice['profile']
+        assert request(base,'/api/accounts/session','bob')[1]['profile'] is None
         assert bob['account_session'] != alice['account_session']
         before = store.get(0)
         assert request(base,'/api/frames/0','bob',{'version':1,'action':'exclude'},alice['token'])[0] == 403

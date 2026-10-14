@@ -59,3 +59,30 @@ def test_protocol_input_is_bounded_and_storage_failure_is_safe(authority, monkey
     response = client.post('/api/fleet/auth/token', data={'grant_type': 'refresh_token'})
     assert response.status_code == 503
     assert 'private' not in response.text and 'secret' not in response.text
+
+
+def test_userinfo_is_access_bound_live_and_no_store(authority):
+    from test_account_authority import get_code, exchange
+    engine, context, families = authority
+    context.update(login='alice', display_name='Alice')
+    families[context['session_family']].update(login='alice', display_name='Alice')
+    token = json.loads(exchange(engine, get_code(engine, context))[1])['access_token']
+    client = client_for(authority)
+    response = client.post('/api/fleet/auth/userinfo', data={'token':token})
+    assert response.status_code == 200
+    assert response.json() == {'account_id':context['account_id'], 'login':'alice', 'display_name':'Alice'}
+    assert response.headers['cache-control'] == 'no-store'
+    families[context['session_family']]['display_name'] = 'Updated'
+    assert client.post('/api/fleet/auth/userinfo', data={'token':token}).json()['display_name'] == 'Updated'
+    assert client.post('/api/fleet/auth/userinfo', data={'token':'bad'}).status_code == 401
+    families.clear()
+    assert client.post('/api/fleet/auth/userinfo', data={'token':token}).status_code == 401
+
+
+def test_userinfo_storage_failure_is_503(authority, monkeypatch):
+    client = client_for(authority)
+    def fail(token):
+        raise sqlite3.OperationalError('secret database')
+    monkeypatch.setattr(authority[0], 'userinfo', fail)
+    response = client.post('/api/fleet/auth/userinfo', data={'token':'test'})
+    assert response.status_code == 503 and 'secret' not in response.text

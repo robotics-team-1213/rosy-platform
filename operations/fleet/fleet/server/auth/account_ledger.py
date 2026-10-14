@@ -371,5 +371,5 @@ class AccountLedger:
                 row["display_name"] = display_name
             principal = row["principal_id"]
             return {"login": row["login"], "principal_id": principal, "role": row["role"],
-                    "display_name": row["display_name"],
+                    "display_name": row["display_name"], "grants": json.loads(row["grants"]),
                     "email": principal if principal.count("@") == 1 and all(principal.split("@")) else None}
