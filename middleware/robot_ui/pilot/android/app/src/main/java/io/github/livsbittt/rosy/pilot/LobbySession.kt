@@ -13,6 +13,11 @@ interface PilotConnection {
     val secure: Boolean
     fun authorized(): Boolean
     fun client(): OkHttpClient
+    val managed: Boolean get() = false
+    fun bearer(): String = target.credential
+    fun stopBearer(): String = target.credential
+    fun accountContext(): JSONObject? = null
+    fun logoutAccount(): Boolean = false
     fun invalidateCredential() = Unit
 }
 
@@ -26,11 +31,20 @@ class ScopedProfileConnection(private val profile: PilotProfile, override val ta
 /** HTTP approval remains bound to the selected IP. A changed address requires a fresh session. */
 class LobbySession(override val target: RobotTarget, override val secure: Boolean,
     val expiresAt: Instant, private val candidate: Candidate, private val store: CandidateStore, private val caPem: String? = null,
-    val peerApproval: PeerRelationship? = null) : PilotConnection {
+    val peerApproval: PeerRelationship? = null,
+    private val account: io.github.livsbittt.rosy.cam.account.AccountSession? = null) : PilotConnection {
+    private val resource = "robot:${target.id}"
+    private val accountIdentity = account?.identity(resource)
+    override val managed get() = account != null
+    // Renewal/introspection runs on the bounded lifecycle worker, never in a motion or stop request.
+    override fun bearer(): String = if (managed) account!!.cachedAccess(resource) ?: error("account unavailable") else target.credential
+    override fun stopBearer(): String = if (managed) account!!.cachedAccess(resource).orEmpty() else target.credential
+    override fun accountContext() = account?.context(resource)
+    override fun logoutAccount() = account?.logout() ?: false
     private val peerCa = caPem?.let { PeerTls.ca(it) }
     var onInvalidated: () -> Unit = {}
     override fun invalidateCredential() { onInvalidated() }
-    override fun authorized(): Boolean = Instant.now() < expiresAt && runCatching {
+    override fun authorized(): Boolean = (!managed || (accountIdentity != null && account!!.identity(resource) == accountIdentity)) && Instant.now() < expiresAt && runCatching {
         peerCa?.checkValidity()
         store.matches(candidate, target.id)
     }.getOrDefault(false)

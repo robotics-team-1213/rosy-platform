@@ -383,3 +383,14 @@
 - 변경: 없음(증거 기록).
 - 증거: 원격 `operations/apps/games/test` 104 passed, `test/test_rosy_games_surface.py test/test_games_board_browser.py` 10 passed 37 skipped(브라우저 시험은 건너뜀), `shared/web/test` 285 passed 49 skipped. 셋 다 known_failures NEW 0 (`X:/DevTemp/games-app-bar/games-pkg.txt`, `games-root.txt`, `shared-web.txt`).
 - gate 변화: 없음. 브라우저 시험과 화면 수용은 확인 못 함.
+
+## 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
+- 변경: 중앙 계정 저장소, PKCE, 세션 갱신과 회수, 앱별 권한 검증을 연결했다. 상세 계약과 범위는 Account completion plan과 protocol에 기록했다.
+- 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
+- gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
+
+## 2026-10-14 · be0ba5111 · fix: Games 계정 권한과 compact 정지 표시
+
+- 변경: 계정 권한이 없을 때 custom 정지 버튼의 hidden 속성이 CSS에 덮이지 않게 했다. 계정 조작은 정지 앞에 배치하고 compact 화면의 단계·연결 증거·정지 접근성을 유지했다. 기존 배치 시험에는 명시적 verified-claims fixture를 쓰고 실제 인증 흐름 시험을 분리했다.
+- 증거: 원격 실제 Chromium 38 passed와 Games 단위·정적 계약 115 passed, 각 exit 0 / known_failures NEW 0. HTTPS 인증 리다이렉트, PKCE proof, 실제 AccountClient SQLite와 쿠키를 사용해 미로그인·권한 부족 403, 허용된 board.stop, introspection 회수 후 403과 버튼 숨김을 확인했다. 인증 서버의 token/introspection 응답만 서명 fixture다. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/games-browser 및 games-static에 있다.
+- gate 변화: SOURCE/원격 브라우저 증거다. board.stop 접수는 물리 로봇 정지 수용을 대신하지 않으며 운영 계정·현장 설정은 변경하지 않았다.

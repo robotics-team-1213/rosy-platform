@@ -1,6 +1,8 @@
 """Optional project authorization and account/import HTTP routes for the review app."""
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import SimpleCookie
+import hashlib
+import hmac
 import threading
 from urllib.parse import parse_qs, urlparse
 
@@ -20,6 +22,11 @@ def cookie(handler, name):
 class Collaboration:
     def __init__(self, accounts, store, *, oauth=None, imports=None):
         self.accounts, self.oauth, self.imports = accounts, oauth, imports
+        self.receiver = getattr(accounts, 'receiver', None)
+        self.unavailable = ()
+        if self.receiver:
+            from core_common.protocol.account_client import AccountUnavailable
+            self.unavailable = (AccountUnavailable,)
         self.origin = (accounts.config().get('public_origin') if hasattr(accounts, 'config')
                        else getattr(accounts, 'public_origin', None))
         self.authority = urlparse(self.origin).netloc if self.origin else None
@@ -38,9 +45,27 @@ class Collaboration:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='learning-import') if imports else None
         self.slots = threading.BoundedSemaphore(4)
         self.tasks = {}
+        self.retries = {}
+        self.closing = False
         self.lock = threading.Lock()
+        self.stopping = threading.Event()
+        if self.receiver:
+            def retry():
+                while not self.stopping.is_set():
+                    try:
+                        self.receiver.retry_revocations()
+                    except (ValueError, *self.unavailable):
+                        pass
+                    self.stopping.wait(20)
+            self.revocations = threading.Thread(target=retry, daemon=True, name='account-revocations')
+            self.revocations.start()
 
     def shutdown(self):
+        with self.lock:
+            self.closing = True
+        self.stopping.set()
+        if self.receiver:
+            self.revocations.join(timeout=4)
         if self.pool:
             self.pool.shutdown(wait=True, cancel_futures=True)
 
@@ -55,11 +80,40 @@ class Collaboration:
         handler.learning_principal = principal
         return principal
 
+    def csrf(self, handler, token):
+        return hmac.new(token.encode(), cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
+
     def get(self, handler, path, token):
-        if path in ('/accounts', '/accounts.js', '/commands.js', '/app.css') or path.startswith('/common/'):
+        try:
+            return self._get(handler, path, token)
+        except self.unavailable:
+            handler.send({'error':'Rosy Account 연결을 확인하세요.'}, 503)
+            return True
+
+    def _get(self, handler, path, token):
+        if self.receiver and path == '/api/account/login':
+            query = parse_qs(urlparse(handler.path).query)
+            target = query.get('return', ['/accounts'])[0]
+            binding, url = self.receiver.start(target)
+            self.set_cookie(handler, 'rosy_account_flow', binding)
+            handler.extra_headers.append(('Location', url))
+            handler.send(b'', 303)
+            return True
+        if self.receiver and path == '/api/account/callback':
+            query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
+            if set(query) != {'code','state'} or any(len(v) != 1 for v in query.values()):
+                raise ValueError('invalid Account callback')
+            session, target = self.receiver.finish(cookie(handler, 'rosy_account_flow'), query['state'][0], query['code'][0])
+            self.set_cookie(handler, 'rosy_account_flow', '', clear=True)
+            self.set_cookie(handler, COOKIE, session)
+            handler.extra_headers.append(('Location', target))
+            handler.send(b'',303)
+            return True
+        if path in ('/accounts', '/accounts.js', '/account-session.js', '/commands.js', '/app.css') or path.startswith('/common/'):
             return False
         if path == '/api/accounts/options':
             handler.send({'enabled': True, 'oauth': self.oauth is not None,
+                          'rosy_account': self.receiver is not None,
                           'project_id': self.accounts.project_id})
             return True
         if path == '/oauth/huggingface/callback':
@@ -87,6 +141,8 @@ class Collaboration:
             return True
         if path == '/api/accounts/session':
             public = {key: principal[key] for key in ('user_id', 'project_id', 'capabilities')}
+            if self.receiver:
+                public['account_session'] = principal['_session_id']
             handler.send(dict(public, token=token, connections=self.accounts.connections(principal)))
             return True
         if path == '/api/learning/imports':
@@ -121,7 +177,10 @@ class Collaboration:
         if job['status'] != 'queued':
             return
         with self.lock:
+            if self.closing:
+                raise ValueError('import service is stopping')
             if job['id'] in self.tasks:
+                self.retries[job['id']] = (job, principal)
                 return
             if not self.slots.acquire(blocking=False):
                 raise ValueError('가져오기 대기열이 가득 찼습니다. 잠시 후 재시도하세요.')
@@ -129,12 +188,36 @@ class Collaboration:
             self.tasks[job['id']] = future
 
         def done(_):
+            following = None
             with self.lock:
-                self.tasks.pop(job['id'], None)
-                self.slots.release()
+                retry = self.retries.pop(job['id'], None)
+                if retry and not self.closing:
+                    # Keep the same queue slot until the requested retry finishes.
+                    following = self.pool.submit(self.imports.run, job['id'], retry[1])
+                    self.tasks[job['id']] = following
+                else:
+                    self.tasks.pop(job['id'], None)
+                    self.slots.release()
+            if following:
+                following.add_done_callback(done)
         future.add_done_callback(done)
 
     def post(self, handler, path, body, token):
+        try:
+            return self._post(handler, path, body, token)
+        except self.unavailable:
+            handler.send({'error':'이 앱의 로그아웃 요청은 보존되었습니다. 계정 연결 복구 후 회수를 완료합니다.'
+                          if path == '/api/accounts/logout' else 'Rosy Account 연결을 확인하세요.'},503)
+            return True
+
+    def _post(self, handler, path, body, token):
+        if self.receiver and path == '/api/accounts/oauth' and handler.headers.get('X-Pinky-Token') != self.csrf(handler, token):
+            raise PermissionError('Account session changed')
+        if self.receiver and path == '/api/accounts/logout':
+            self.set_cookie(handler, COOKIE, '', clear=True)
+            self.accounts.logout(cookie(handler, COOKIE))
+            handler.send({'ok':True})
+            return True
         if path == '/api/accounts/login':
             session, _ = self.accounts.login(body.get('username'), body.get('password'),
                                               address=handler.client_address[0])
@@ -142,6 +225,8 @@ class Collaboration:
             handler.send({'ok': True})
             return True
         if path == '/api/accounts/oauth' and body.get('purpose') == 'login':
+            if self.receiver:
+                raise PermissionError('Use Rosy Account to sign in')
             if not self.oauth:
                 raise ValueError('Hugging Face OAuth is not configured')
             url, binding = self.oauth.begin('login')
@@ -201,12 +286,21 @@ def load(config_path, store):
             raise ValueError(f'{name} must be an absolute private path')
         return value
 
-    accounts = Accounts(private_path('accounts_db'), private_path('key_file'), path)
+    if config.get('account_client_file'):
+        from core_common.protocol.account_client import load_account_client
+        from learning_rosy_accounts import RosyAccounts
+        receiver = load_account_client(private_path('account_client_file'), destinations=('/accounts','/'))
+        if receiver.callback != config.get('public_origin', '') + '/api/account/callback':
+            raise ValueError('Account callback must match public_origin')
+        accounts = RosyAccounts(private_path('accounts_db'), private_path('key_file'), path, receiver=receiver)
+    else:
+        accounts = Accounts(private_path('accounts_db'), private_path('key_file'), path)
     oauth = OAuth(accounts) if config.get('oauth') else None
 
     def credential(actor, project, connection, generation=None, resource=None):
         accounts.authorize(actor, project, 'import')
         return accounts.credential(actor, connection, generation=generation, resource=resource)
 
-    imports = LearningImports(private_path('imports_root'), accounts.authorize, credential)
+    imports = LearningImports(private_path('imports_root'), accounts.authorize, credential,
+                              limits=config.get('import_limits'))
     return accounts, oauth, imports

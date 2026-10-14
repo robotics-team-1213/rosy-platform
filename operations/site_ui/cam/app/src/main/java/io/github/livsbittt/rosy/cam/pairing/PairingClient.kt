@@ -115,6 +115,7 @@ class PairingClient(
     private val now: () -> Instant = Instant::now,
     /** Blocking wait before the single confirm resend; runs on the step's IO thread. Tests pass a no-op. */
     private val pause: (Long) -> Unit = { Thread.sleep(it) },
+    private val authorized: () -> Boolean = { true },
 ) {
     /** Written by the step that runs (one at a time, [PairingSession]); read from the UI thread. */
     @Volatile
@@ -208,6 +209,7 @@ class PairingClient(
         if (!matches) return finish(PairingState.Rejected("fingerprint_mismatch"))
         if (!now().isBefore(confirmBy)) return finish(PairingState.Expired("confirm_deadline"))
         val link = siteLink(shown.site, result!!) ?: return finish(PairingState.Rejected("site_link"))
+        if (!authorized()) return finish(PairingState.Rejected("management_revoked"))
         store.save(link)
         val credential = shown.credentialId
         val confirm = PairingConfirm(credential)
@@ -216,7 +218,7 @@ class PairingClient(
         } catch (e: IOException) {
             // No answer: the server may or may not have activated it. S2 confirm is idempotent (rosy-00 d5d4a2e4),
             // so ask exactly once more on the same pinned session; a matching 200 keeps the link.
-            if (confirmAgain(shown.site, id, confirm)) return finish(PairingState.Paired(link))
+            if (confirmAgain(shown.site, id, confirm) && authorized()) return finish(PairingState.Paired(link))
             // Still unsettled: keep nothing; the screen names the credential so the operator can revoke it if the
             // console lists it as active.
             store.discard(link)
@@ -235,6 +237,10 @@ class PairingClient(
                 else -> PairingState.Rejected("confirm_failed", credential)
             }
             is Outcome.Done -> confirm.replyReason(outcome.value)?.let { PairingState.Rejected("confirm_$it", credential) }
+        }
+        if (!authorized()) {
+            store.discard(link)
+            return finish(PairingState.Rejected("confirm_management_revoked", credential))
         }
         if (failed != null) {
             store.discard(link)

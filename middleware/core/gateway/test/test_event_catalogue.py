@@ -349,8 +349,10 @@ def _declared_capability_names() -> set[str]:
     """
     from core_common.domain.capabilities import _CAP001_TO_CONCEPT
     from core_common.domain.tasks import TaskKind
+    from core_common.protocol.account_access import CAPABILITIES
 
     names = {name for pair in _CAP001_TO_CONCEPT for name in pair}
+    names.update(name for group in CAPABILITIES.values() for name in group)
     for kind in TaskKind:
         names.update((kind.capability, kind.concept_id))
     return names

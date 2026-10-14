@@ -22,6 +22,7 @@ SHARED = {
     "poll-gate.js",
     "development-auth.js",
     "password-login.js",
+    "account-permissions.js",  # D-757: shared read-only session capability predicates
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
@@ -33,6 +34,7 @@ SHARED = {
 }
 
 OWN = {
+    "account-page.js": set(),
     "console.js": {
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission

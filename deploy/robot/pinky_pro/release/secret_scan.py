@@ -139,6 +139,17 @@ _CAMERA_PEER_PUBLIC_VECTOR_VALUES = {
 }
 
 
+def _is_public_account_vector(path: str, line: str, value: str) -> bool:
+    # D-757 Python-to-Kotlin signature vector: example.test/site:test, exp=1300.
+    # Public, expired in 1970, and no private key; bind exact bytes and field/path.
+    if path.replace('\\', '/') != 'operations/site_ui/cam/app/src/test/resources/account-access-v1.json':
+        return False
+    field = re.fullmatch(r'\s*"token":\s*"([A-Za-z0-9_.-]+)"\s*,?\s*', line)
+    return bool(field and value in field.group(1)
+                and hashlib.sha256(field.group(1).encode()).hexdigest()
+                == '053e414728003393c86f702bd095f6ed00367cede6eb5b7718b18a707f446f48')
+
+
 def _is_public_peer_vector(path: str, line: str, value: str) -> bool:
     allowed = {_PEER_VECTOR_PATH: _PEER_PUBLIC_VECTOR_VALUES,
                _CAMERA_PEER_VECTOR_PATH: _CAMERA_PEER_PUBLIC_VECTOR_VALUES,
@@ -633,7 +644,7 @@ def scan_text(path: str, text: str, *,
 
         for match in _BARE_TOKEN.finditer(entropy_line):
             value = match.group("value")
-            if _is_public_peer_vector(path, line, value):
+            if _is_public_peer_vector(path, line, value) or _is_public_account_vector(path, line, value):
                 continue
             # Only this exact reviewed token is excused. Earlier private-key,
             # credential, PSK and QR checks remain active even on the same line.

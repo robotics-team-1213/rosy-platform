@@ -29,7 +29,7 @@ val nativePalette = tasks.register("generateNativePalette") {
 }
 val shared = tasks.register<Sync>("sharedContracts") {
     from("../../../../../operations/site_ui/cam/app/src/main/java")
-    include("**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
+    include("**/account/*.kt", "**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
         "**/health/DeviceHealth.kt", "**/health/PhoneHeat.kt", "**/health/ScreenCoolingPolicy.kt", "**/health/ScreenPower.kt")
@@ -83,6 +83,7 @@ android {
 apply(from = "../../../../../shared/web/native-tokens.gradle")
 tasks.named("preBuild") { dependsOn(shared, screens, sharedScreenResources, nativePalette) }
 dependencies {
+    implementation("org.bouncycastle:bcprov-jdk18on:1.83")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
@@ -91,3 +92,5 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
 }
+
+apply(from = "../../../../../operations/site_ui/cam/account-config.gradle")

@@ -266,6 +266,14 @@ python learning/curation/perception/learning_accounts.py generate-key /private/l
 python learning/curation/perception/learning_accounts.py hash-password
 ```
 
+Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./contracts/foundation`도
+설치한다. collaboration 설정의 `account_client_file`은 보호된 수신 설정의 절대 경로,
+`account_subjects`는 중앙 account_id와 기존 user_id의 명시적 일대일 매핑이다.
+수신 resource는 `project:<project_id>`, callback은 `public_origin + /api/account/callback`이다.
+원장에 최초 연결을 기록한 뒤 소유자를 바꾸거나 중앙 설정을 빼고 이전 비밀번호로 돌아갈 수 없다.
+기존 HF 연결·암호화 키·학습 자료를 교체하지 않는다. 자세한 필드는
+[Account protocol](../../../../docs/reference/rosy-account-protocol.md)을 따른다.
+
 키 생성은 기존 파일을 덮어쓰지 않는다. Linux 키 파일, 설정, DB, 부모 폴더와 백업은 소유자만 접근하도록 관리한다. 암호화 키는 DB와 함께 복구할 수 있도록 별도로 보관한다. 키 파일 교체만으로 기존 연결 비밀이 이전되지는 않는다.
 
 `users[].user_id`는 내부의 안정적인 신원이며 이메일로 계정을 합치지 않는다. `memberships`는 프로젝트 ID별 `view`, `edit`, `approve`, `import`, `manage` 목록이다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리를 각각 허용한다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
@@ -295,6 +303,14 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
+
+계정 화면에서 작업·파일별 받은 bytes와 해시 검증 상태, 공간 부족·검증 실패·접근 철회 이유를 확인한다. 취소 직후 재시도는 이전 실행이 끝난 뒤 같은 입력으로 이어진다. 새로고침은 펼친 파일 목록과 키보드 초점을 유지한다. 실행 프로세스가 종료되면 OS 잠금이 풀리며 다음 목록 조회·재시도가 중단 작업을 복구한다. 계정 세대가 바뀌면 과거 작업을 새 연결로 재사용하지 않는다.
+
+부분 재개는 최초 HF metadata의 SHA-256이 있는 파일에만 허용한다. 로컬 체크포인트는 최대 8MiB 또는 1초마다 flush/fsync 후 저장하며, 강제 종료가 남긴 미확정 tail은 마지막 정상 해시 구간 뒤에서 버린다. provider가 Range를 무시한 200 응답은 덧붙이지 않는다. 206의 시작 offset·끝·전체 길이와 인코딩을 검사하고 마지막에 전체 SHA-256을 검증한다. 해시가 없는 미완료 파일은 처음부터 다시 받는다. 완료 파일은 기록된 전체 해시를 다시 검증해 재사용한다. [HF 파일 식별](https://huggingface.co/docs/huggingface_hub/en/package_reference/file_download), [HTTP Range 의미](https://www.rfc-editor.org/rfc/rfc9110.html#name-range)를 따른다.
+
+private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`, `reserve_bytes` 정수 bytes다. 기본은 파일당 2GiB·작업당 8GiB·여유 1GiB, 파일 수는 최대 256개다. 파일 한도는 양수이며 작업 한도 이하여야 하고 각 값의 상한은 1TiB다. 이 상한은 검증된 운영 용량을 뜻하지 않는다. 운영자는 실제 디스크·동시 작업·전송 시험 후에만 한도를 올리고 재시작한다. HTTP 사용자는 한도를 변경할 수 없다.
+
+하나의 private imports root에서는 OS 잠금으로 worker 하나만 실행한다. DB 트랜잭션은 중복 생성과 취소/완료 경합을 조정한다. 검증한 기존 부분 파일을 제외한 남은 bytes와 여유분·metadata 1MiB를 시작 전에 검사하고 쓰기마다 여유를 다시 검사한다. `reserved_bytes`는 이 실행기의 남은 전송량에 대한 논리 예약이며 다른 앱의 디스크 쓰기를 막지 않는다. 파일시스템과 OS 잠금을 공유하지 않는 여러 호스트의 NAS worker는 지원하지 않는다. `.partial`은 완료 자료로 등록하지 않고 취소 후에도 재개용으로 남긴다. 자동 원본 삭제·유료 증설은 하지 않는다.
 
 완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 외부 게시와 Spaces 실행은 현재 범위에 포함되지 않는다.
 
