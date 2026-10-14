@@ -167,7 +167,7 @@ def test_safety_step_refuses_the_range_ci_checks(tmp_path, case):
         git("update-ref", "-d", "refs/remotes/origin/main")
     result = _run_safety_step(tmp_path)
     assert result.returncode == (0 if case == "trailer" else 1), result.stderr
-    assert ("EXEMPT" in result.stderr) == (case == "missing")
+    assert ("safety_review_exempt.json" in result.stderr) == (case == "missing")
     if case == "missing":
         assert "Peer Author" in result.stderr and "loosen" in result.stderr
     if case == "no-origin":
