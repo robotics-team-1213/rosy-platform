@@ -312,4 +312,7 @@ def build_trip_lease(events, state, modes, safety, line_follow, command, nav) ->
             events.publish("mode.changed", source="trip_lease",
                            data={"from": Mode.NAVIGATION.value, "to": Mode.IDLE.value, "by": "trip_lease"})
     trip_lease.halt = halt
+    # D-760 2: while a lease is open, line follow needs a held Fleet authority (a lapsed lease the 5 Hz
+    # timer has not ended yet still counts: safe side).
+    line_follow.authority_leased = lambda: trip_lease.current() is not None
     return trip_lease

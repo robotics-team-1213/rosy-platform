@@ -1,6 +1,6 @@
 # D-760 실행 계획 — Fleet이 시작한 움직임의 한도와 5초 끊김 버티기
 
-**날짜:** 2026-10-14 · **결정:** [D-760](../adr/D-760-fleet-motion-bounds-ride-through.md) 개정 1, 짝 기록 [D-758](../adr/D-758-robot-held-site-anchor.md) · **상태:** 1단계 진행 중
+**날짜:** 2026-10-14 · **결정:** [D-760](../adr/D-760-fleet-motion-bounds-ride-through.md) 개정 1, 짝 기록 [D-758](../adr/D-758-robot-held-site-anchor.md) · **상태:** 1단계 리뷰 승인(착지 대기), 2단계 안전 재검토 중, 삭제 브랜치 리뷰 승인(착지 대기)
 
 이 문서는 단계별 작업, 닿는 파일, 시험 항목, 통과 기준을 적는다. 계약과 이유는 ADR에 있다. 단계마다 실행기가 시험을 먼저 쓰고(TDD) 단계마다 자기 브랜치에 커밋한다.
 
@@ -53,7 +53,7 @@
   4. 임대 중 강제: trip 임대가 열려 있으면 통행권이 없을 때 `authority_none`으로 선다. 모드 변경과 CORE 재시작 뒤에도 같다. 임대가 끝나면 지금 규칙(`authority_required` 또는 `_authority_seen`)으로 돌아간다.
   5. 능력 플래그 둘을 알린다.
 - **시험(기존 D-517 M2 시험에 더한다)**
-  - `ttl_s` 5.0 수락, 5.01 거절(422). 4.9 s에 FREE, 5.1 s에 EXPIRED.
+  - `ttl_s` 5.0 수락, 5.01 거절(400 `VALIDATION_ERROR`). 4.9 s에 FREE, 5.1 s에 EXPIRED.
   - 늘리기(seq 3) → 줄이기(seq 4) → 늦게 닿은 늘리기(seq 2): 끝이 줄인 채다.
   - `shrink` + `until_m: 0`: 다음 틱에 HOLD `authority_end`.
   - `shrink` 요청이 `AUTHORITY_POSE_STALE`로 거절: 통행권이 없어지고 로봇이 선다.
@@ -63,6 +63,17 @@
   - 임대 없음 + `authority_required` false: 통행권 없이 달린다(대시보드 차선 주행이 그대로다).
   - 몸체 정지(D-422)·IR 가드·E-stop이 통행권 문보다 먼저다(기존 시험이 그대로 통과).
 - **끝난 기준:** 위 시험과 기존 차선 추종·trip 임대 시험 통과, 가드 시험(프로토콜 버전 맞춤, 이벤트 목록) 통과, Safety-Review trailer.
+
+## 2b단계 — 호의 기한에서 문이 가져간 시간 빼기 (D-760 개정 2의 6)
+
+- **브랜치:** `fix/lane-arc-hold-clock` · **검토:** Safety-Review · **선행:** 2단계 착지, `line_follow/arc` 크기 단위 재판정
+- **닿는 곳:** `middleware/drive/behaviors/line_follow/arc/lane_arc.py`
+- **작업:** 통행권이 FREE가 아니거나 횡단보도 게이트가 살피는 동안 호의 기한을 세지 않는다. 한 호에 더하는 시간은 상한을 둔다(D-507 13항과 같은 규칙, 15 s). 시작 전에 rosy-44에 알린다(D-744·D-759와 닿는다).
+- **시험:** 호 도중 통행권이 3 s·6 s 없다가 돌아옴: 호를 이어서 마친다. 20 s 없음: `lane_arc_timeout`으로 서 있다(지금과 같다). 문이 가져가지 않은 시간은 지금 기한 그대로다.
+
+## 2c단계 — 안전 모듈 목록에 두 파일 추가 (D-760 개정 2의 7)
+
+- 2단계가 origin에 올라간 뒤 `tools/harness/platform_parts.yaml` `safety_modules`에 `line_follow/authority.py`와 `core/trip_lease.py`를 넣는다. 그 커밋은 trailer를 단다.
 
 ## 0단계 — odom 기록을 단조 시각으로 (D-758 0단계)
 

@@ -8408,6 +8408,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 복사 자료의 UI와 호스트 계약 검증이며 운영 배포·실 모델 실행·학습 수용 증거가 아니다.
 - 범위: 실행 계획 `plans/2026-10-14-human-ai-review-ux.md`. AI 생성/재검사 작업 실행기·전체 이력/버전 비교는 후속 계약 단계다. 운영 DB·모델 활성화·로봇 실행 권한을 변경하지 않았다.
 
+## 2026-10-14 · b3d6f4cd5 · OMX 녹화 probe 오류 재현·수정
+
+- 변경: validation/omx-recording-probe-2026-10-14/result.md에 관절 readback·상태 충돌·갱신 실패·late worker 오류의 RED/GREEN과 실행 한계를 기록했다. OMX README에 개선 동작과 컨테이너 내부 probe 사용을 설명했다.
+- 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
+- gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
+
 ## 2026-10-14 · 18c24973d · D-762 단계 0: Safety-Review는 착지 전에, FULL 착지는 실험실 전체 티어 뒤에
 
 - 변경: `tools/land.py`는 착지가 `main`에 더하는 커밋에 `tools/harness/safety_review.py`(CI `scope` 잡과 같은 규칙)를 돌려 trailer가 없으면 착지하지 않는다. `tools/hooks/pre-push`는 같은 검사를 `origin/main..`push 커밋에 경고가 아니라 거절로 돌린다. 선택기가 FULL이면 가드와 대응 묶음만 돌리고 착지하던 길을 없애고, 실험실 PC에서 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)를 돌려 NEW 0일 때만 착지하며 걸린 시간을 찍는다. FULL 조건에 폴더를 넘는 rename, 지운 Python 모듈, `package.xml`, `_source_layout.py`, `test/architecture/**`, `test/known_failures.txt`를 더하고, 트리거 아래 Markdown 기록, `tools/harness/adr_gaps.txt`, node 시험 파일을 뺐다. 착지 뒤 로컬 `main`이 `origin/main`보다 몇 커밋·몇 시간 앞인지 한 줄로 찍는다(상한은 걸지 않음). D-762 단계 0 보충, `AGENTS.md` 시험 티어 문단, `tools/AGENTS.md` `land.py` 행, `tools/hooks/AGENTS.md`, `tools/harness/AGENTS.md`를 같이 고쳤다.

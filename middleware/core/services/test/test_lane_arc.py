@@ -624,6 +624,23 @@ def test_d517_authority_gate_also_stops_an_arc_tick():
     assert running(rig)
 
 
+def test_an_arc_held_by_the_authority_gate_times_out_and_holds():
+    """D-760 Open 2, today's behaviour: the arc's deadline runs on under an authority hold; it ends
+    lane_arc_timeout and the robot HOLDS (no fall back to lane following) even with authority back."""
+    from dataclasses import replace
+
+    rig = ArcRig(authority_required=True)
+    rig.open()
+    deadline = rig.m._arc['deadline']
+    decision, status = rig.until(lambda d, s: not running(rig), limit=2000)
+    assert rig.now == pytest.approx(deadline, abs=.051) and status.arc.travelled_m == pytest.approx(0., abs=1e-6)
+    assert (status.arc.state, status.arc.reason) == ('stopped', 'lane_arc_timeout')
+    rig.m._config = replace(rig.m.config, authority_required=False)  # the gate releases
+    decision, status = rig.drive(5)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason) == ('HOLD', 'lane_arc_timeout')
+
+
 BEND = dict(map_id='lab-a', bend_in_m=.2, bend_tol_m=.1, bend_radius_m=.3)
 
 

@@ -14,7 +14,7 @@ import asyncio
 import logging
 from typing import Iterable
 
-from core_common.protocol.line_authority import MAX_TTL_S, MAX_UNTIL_M
+from core_common.protocol.line_authority import LEGACY_TTL_S, MAX_UNTIL_M
 
 _LOG = logging.getLogger(__name__)
 CORE, HOLD_BACK = "core", "hold_back"
@@ -49,7 +49,7 @@ class AuthoritySender:
         self._count += 1
         return {"authority_id": f"{live.view['trip_id']}:{self._count}", "leg_id": leg, "pose_stamp": stamp,
                 "until_m": round(min(MAX_UNTIL_M, max(0.0, absolute - live.trim_m - front)), 3),
-                "ttl_s": MAX_TTL_S}
+                "ttl_s": LEGACY_TTL_S}
 
     def period(self, lives: Iterable) -> None:
         for live in lives:
