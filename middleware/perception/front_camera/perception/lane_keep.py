@@ -117,7 +117,7 @@ from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants
     _continues,
     _junction,
 )
-from .lane_keep_bend import as_transverse, bend_side, bend_target, nearest_first, parallel_spans, runs_past, stop_short
+from .lane_keep_bend import as_transverse, bend_side, bend_target, near_run, nearest_first, parallel_spans, runs_past, stop_short
 from .lane_keep_paint import extract_paint_points
 
 #: Lookahead from base_link where the lane centre is read.
@@ -315,10 +315,9 @@ class LaneKeeper:
         lines, blobs = extract_lines(points, rng, usable=fit_cells(view.seen, self.last["crosswalk"]),  # G-16
                                      paint_half_m=self._fit_half) if len(points) else ([], [])
         self.last["blobs"] = len(blobs)
-        previous = self._previous_target
-        left, right, transverse, bends = [], [], [], []
+        previous, left, right, transverse, bends = self._previous_target, [], [], [], []
         bend_expected, parallel = bool(bend_expected) and self._corner_turning, parallel_spans(lines, SIDE_X_M, STEEP_MIN_ANGLE_RAD)
-        for line in nearest_first(lines) if bend_expected else lines:  # a piece continuing another is sided after it
+        for line in (lines := nearest_first(lines) if bend_expected else lines):  # a piece continuing another is sided after it
             centre, direction = line["centre"], line["direction"]
             heading = math.atan2(direction[1], direction[0])
             ends = [centre + direction * line["along"][0], centre + direction * line["along"][1]]
@@ -363,6 +362,7 @@ class LaneKeeper:
                     and (paint_spans_lane or ((paint_crosses or paint_outside) and far_lateral))):
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
+                lines += near_run(points, ends, half, (STEEP_MIN_ANGLE_RAD, AMBIGUOUS_LATERAL_M, CORE_HALF_M, MAX_GAP_M, MIN_LINE_LENGTH_M))
                 continue
             near_y = float(min(ends, key=lambda p: p[0])[1])  # D-507 B9: a steep line is sided by its seen paint
             at = near_y if bend_expected and abs(heading) > STEEP_MIN_ANGLE_RAD and abs(near_y) >= half / 2.0 else lateral
