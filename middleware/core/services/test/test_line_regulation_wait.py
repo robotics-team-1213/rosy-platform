@@ -57,6 +57,22 @@ def test_signal_wait_until_the_robot_enters():
     assert rig.step(junction=True)[1].regulation_wait is None
 
 
+def test_green_selected_but_not_entered_is_not_a_signal_wait():
+    """Safety-Review: once green+may_enter selects the turn, the junction leaves `waiting`; before
+    _signal_committed marks it entered (a later stop zeroed the twist) nothing regulatory holds."""
+    rig = Rig()
+    _signal_waiting(rig)
+    request = rig.m.junction_signal_request()
+    rig.m.junction_signal_answer(dict(request_id=request, lamp='green', may_enter=True, reason='test'))
+    rig.step(junction=True)
+    s = rig.m._junction_signal
+    s.pop('entered', None)                    # as if a later stop zeroed the twist this tick
+    s['state'] = 'green'
+    assert rig.m._junction['state'] in ('armed', 'approaching', 'turning', 'advancing')
+    assert rig.m._regulation_wait(rig.now) is None
+    assert rig.m._regulated_wait_share(rig.now, .05, .1) == 0.
+
+
 def test_junction_wait_without_the_signal_is_not_a_regulation():
     rig = Rig()
     decision, status = rig.step(junction=True)
