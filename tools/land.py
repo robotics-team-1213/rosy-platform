@@ -346,8 +346,8 @@ def safety_review(wt: Path, base: str, head: str, python: str) -> None:
         raise Stop(f"{text.strip()}\nnot landing: each commit listed needs a `Safety-Review: <reviewer/lane>"
                    " <evidence>` trailer in its own message; a later trailer-only commit does not cover it, and"
                    " --amend/rebase are not used here. Re-create the change on a new branch from main with the"
-                   f" trailer (git cherry-pick -n <sha>, then git commit), or add the full SHA to tools/harness/safety_review_exempt.json"
-                   " with an independent review (D-430 5)")
+                   " trailer (git cherry-pick -n <sha>, then git commit), or add the full SHA to"
+                   " tools/harness/safety_review_exempt.json with an independent review (D-430 5)")
 
 
 def record_only(path: str) -> bool:
