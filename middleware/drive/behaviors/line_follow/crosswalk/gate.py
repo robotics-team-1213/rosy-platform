@@ -210,8 +210,9 @@ class CrosswalkGate:
         c, s = math.cos(zone.yaw), math.sin(zone.yaw)
         return c * (px - zone.x) + s * (py - zone.y), -s * (px - zone.x) + c * (py - zone.y)
 
-    def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0):
-        """side: the body's lateral offset in the anchor frame now (the same odom as the scan)."""
+    def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0, heading: float = 0.0):
+        """side: the body's lateral offset in the anchor frame now (the same odom as the scan);
+        heading: the body's yaw off the anchor axis."""
         near, far, m = z.near - z.margin, z.far + z.margin, z.margin
         left = max(geo.lane_half_m if z.left is None else z.left, geo.body_half_m) + z.lateral
         right = min(-geo.lane_half_m if z.right is None else z.right, -geo.body_half_m) - z.lateral
@@ -227,10 +228,13 @@ class CrosswalkGate:
         # zone's lane edges relative to the anchor, not the lane relative to the body).
         # 개정 5: the zone's own lane width; the pads a seen corridor merges into z's edges are
         # position bounds the body centring already covers (m15: 0.046 m of them reached the wall).
-        raw = self._zone or z
-        half = max(((geo.lane_half_m if raw.left is None else raw.left)
-                    - (-geo.lane_half_m if raw.right is None else raw.right)) / 2, geo.body_half_m)
-        exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m, side + geo.body_half_m)
+        # The boxes are axis-aligned: a body heading off the axis sweeps sideways by its slope over
+        # what is left of A (review 2026-10-14).
+        sweep = abs(math.sin(heading)) * max(0.0, far + geo.exit_m + m - front)
+        half = max(((geo.lane_half_m if self._zone.left is None else self._zone.left)
+                    - (-geo.lane_half_m if self._zone.right is None else self._zone.right)) / 2,
+                   geo.body_half_m) + sweep
+        exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m - sweep, side + geo.body_half_m + sweep)
         return (((front, far, side - half, side + half), exit_box) if front < far else (exit_box,))
 
     # ---- tick ------------------------------------------------------------------------------
@@ -359,7 +363,7 @@ class CrosswalkGate:
         heading = math.atan2(math.sin(pose.yaw - z.yaw), math.cos(pose.yaw - z.yaw))
         front = self._local(z, pose, geo.front_x)[0]
         band, k, n = self._persist
-        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1]),
+        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading),
                                      self._local(z, pose, geo.lidar_x),
                                      heading, blind_proven=self._state == CROSSING, band=band)
         # D-573 rev 2: a return within 3 sigma of A's edge is a person once the same cell is hit in
