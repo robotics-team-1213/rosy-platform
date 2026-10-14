@@ -2,7 +2,7 @@
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.crosswalk_zone import CrosswalkZones
+from core_features.line_follow.crosswalk.zone import CrosswalkZones
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 
@@ -227,7 +227,7 @@ def test_unbounded_frames_admit_no_zone(lateral, along, crosswalk):
 
 
 def test_lateral_cap_keeps_the_ir_catch_reach():
-    from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M, IR_CATCH_HALF_M, MAX_LATERAL_M
+    from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, IR_CATCH_HALF_M, MAX_LATERAL_M
     assert CORRIDOR_HALF_M + MAX_LATERAL_M <= IR_CATCH_HALF_M + 1e-12
     assert MAX_LATERAL_M == pytest.approx(0.024)
 
