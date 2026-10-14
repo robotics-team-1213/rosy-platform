@@ -180,7 +180,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     @Synchronized fun refreshProfile(resource: String): JSONObject? {
         profileSnapshot = null
         return runCatching {
-            val token = access(resource) ?: return null
+            val token = cachedAccess(resource) ?: access(resource) ?: return null
             val c = claims(token, resource)
             val result = request("userinfo", mapOf("token" to token))
             require(result.keys().asSequence().toSet() == setOf("account_id", "login", "display_name"))
