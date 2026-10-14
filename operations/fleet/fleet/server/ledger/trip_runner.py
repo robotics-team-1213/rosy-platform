@@ -434,7 +434,7 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
-        if self._renew_lease is not None:
+        if self._renew_lease is not None and live.view["state"] != "link_wait":  # D-760 4: a free robot then stops
             # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
             # renewal that fails lets CORE cancel the goal when its lease runs out.
             try:
