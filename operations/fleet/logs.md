@@ -3719,3 +3719,9 @@
 - 증거: `test_the_motion_bound_part_is_rule_ms_verdict`, `test_a_lane_only_robot_needs_no_free_leg_bound`. 원격(0b7df2e16) exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
 - gate 변화: 없음.
 - 결정: D-760 Decision 6, D-763 4항.
+
+## 2026-10-15 · e0febb524 · 잘못된 drive_modes는 leg_unknown, 다리 시험을 반증 가능하게
+
+- 변경: `hold_job`이 list·tuple이 아닌 `drive_modes`(true, 5)를 모드 없음으로 본다(422 `leg_unknown`, TypeError 500이 아니다). lane만 가진 로봇 시험은 `goal_lease`를 빼고 Rule M 사유가 없음을 확인한다. free만 가진 경우를 더했다.
+- 증거: 원격(e0febb524) `test_trip_job_lease.py`·`test_rule_m.py` exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
