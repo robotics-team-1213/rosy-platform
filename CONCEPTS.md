@@ -64,7 +64,7 @@ The production of an observation from sensors or a camera, carrying source, time
 
 ### World state
 
-The gathered, aged facts for one robot. Today that shape is Fleet `MapPose` (`state`, `source`, `age_s`). A general World State contract waits until a second consumer exists (D-503, Proposed). `world` contrasts an observation with a confirmed event. It is not a generative world model, and a model's description does not overwrite an execution fact (architecture design v0.2 §3.1, D-290).
+The current pose of one robot. The live shape is `MapPose` (`state`, `source`, `age_s`) in `rosy.world.state.projections.map_pose`. Fleet imports that module directly (D-752). Service, ledger, and admission stay in Fleet. `source=bridged` ages the last sighting or operator pin by odom. It is dead reckoning, not an action-conditioned future. A wider World State contract is still only a proposal (D-503). `world` contrasts an observation with a confirmed event. It is not a generative world model, and a model's description does not overwrite an execution fact (architecture design v0.2 §3.1, D-290). The layer picture is the repository README section 「인지와 판단」.
 
 ### Decision candidate
 
