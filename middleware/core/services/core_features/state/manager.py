@@ -32,6 +32,10 @@ from core_common.protocol.schemas import (
 
 log = logging.getLogger(__name__)
 
+#: D-758 0: one odom step beyond this many metres plus ODOM_JUMP_MPS * dt is a discontinuity (the
+#: line-follow PoseTrail's 0.02 + 0.2 dt, recovery/lane_return.py), so the odom epoch moves.
+ODOM_JUMP_M, ODOM_JUMP_MPS = 0.02, 0.2
+
 
 def _as_map_id(value) -> Optional[str]:
     """MAP-001 map id, normalised to a string or nothing.
@@ -80,6 +84,8 @@ class StateManager:
         self._odom_pose: Optional[OdomPose] = None
         self._odom_mono: Optional[float] = None  # D-581: receipt on the monotonic clock (age)
         self._odom_rejected_logged = False
+        self._odom_epoch = 0  # D-758 0: odom discontinuities since start
+        self._odom_source: tuple = (None, None)  # (frame, source stamp ns) last given
         self._velocity = Velocity()
         self._battery = Battery()
         self._battery_status = BatteryStatus()
@@ -164,21 +170,35 @@ class StateManager:
             # Age on the monotonic clock: a backward wall-clock step must not make it look fresh.
             return odom.x, odom.y, odom.yaw, self._monotonic() - self._odom_mono
 
-    def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
-        """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
+    def set_odom_pose(self, x: float, y: float, yaw: float, frame: Optional[str] = None,
+                      source_stamp_ns: Optional[int] = None) -> Optional[float]:
+        """D-494 2: odom-frame pose, stamped with the wall clock at receipt; returns that
+        stamp (the one the snapshot publishes) or None when the sample is dropped.
 
         A non-finite sample is dropped and the previous pose kept (logged once),
-        so one bad odom message never fails the state snapshot.
+        so one bad odom message never fails the state snapshot. D-758 0: the odom
+        epoch moves on a discontinuity only: a step beyond ODOM_JUMP_M + ODOM_JUMP_MPS
+        * dt, another ``frame`` or a ``source_stamp_ns`` going back (each compared only
+        when given both times). Driving through the origin is no reset.
         """
         with self._lock:
-            stamp = self._clock()
+            stamp, mono = self._clock(), self._monotonic()
             if not all(math.isfinite(v) for v in (x, y, yaw, stamp)):
                 if not self._odom_rejected_logged:
                     self._odom_rejected_logged = True
                     log.warning("non-finite odom pose dropped (x=%r y=%r yaw=%r)", x, y, yaw)
-                return
-            self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp)
-            self._odom_mono = self._monotonic()
+                return None
+            prev, (prev_frame, prev_ns) = self._odom_pose, self._odom_source
+            if prev is not None and (
+                    math.hypot(x - prev.x, y - prev.y) > ODOM_JUMP_M + ODOM_JUMP_MPS * (mono - self._odom_mono)
+                    or None not in (frame, prev_frame) and frame != prev_frame
+                    or None not in (source_stamp_ns, prev_ns) and source_stamp_ns < prev_ns):
+                self._odom_epoch += 1
+            self._odom_source = (prev_frame if frame is None else frame,
+                                 prev_ns if source_stamp_ns is None else source_stamp_ns)
+            self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp, epoch=self._odom_epoch, mono_s=mono)
+            self._odom_mono = mono
+            return stamp
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:
