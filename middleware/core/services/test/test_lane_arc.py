@@ -712,6 +712,20 @@ def test_without_a_hold_the_deadline_is_todays(state):
     assert status.arc.reason == 'lane_arc_timeout'
 
 
+def test_a_hold_during_the_ir_correction_stands_its_limit_too():
+    """The correction's own time limit (lane_arc_edge) stands with the arc's under a hold."""
+    rig = ArcRig()
+    rig.open(dict(SEGMENT, length_m=1.))
+    _past_grace(rig)
+    rig.drive(ir='left')
+    a = rig.m._arc
+    c = a['corr']
+    before = (a['deadline'], c['deadline'])
+    _held(rig, 3., 'authority')
+    assert running(rig) and c['phase'] == 'away'
+    assert (a['deadline']-before[0], c['deadline']-before[1]) == (pytest.approx(3., abs=.051),)*2
+
+
 def test_the_hold_cap_is_per_arc_not_per_hold():
     """A 10 s hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
     within the second hold (a cap per hold would let it stand 25 s)."""
