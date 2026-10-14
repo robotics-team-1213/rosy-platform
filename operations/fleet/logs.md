@@ -3654,3 +3654,15 @@
 - 증거: `test_approval_registry.py` 거절 시험(제안자 철회와 다른 운영자 404, 다른 운영자의 Cell 거절, viewer·서비스 403, 낡은 세대 409, 두 번째 거절 409, 거절 뒤 admit·resume 409, claim 없음, 감사 사건의 행위자, 공유 토큰 403, 잘못된 본문 422). 원격 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 화면(조각 5c)은 이 브랜치에 없다.
 - 결정: v1.228·v1.229는 착지 전 브랜치(`fix/odom-log-monotonic-epoch`, `feat/junction-turn-map-entry`)가 쓰고 있어 v1.230을 썼다. 대화 요청에 연결된 작업의 서버 쪽 직접 승인 차단은 이 조각에서 하지 않았다.
+
+## 2026-10-14 · 65e315231 · D-763 조각 5·5b 보안 검토 반영
+
+- 변경: `decidable()`가 resolve된 원장 행의 단계 종류(Cell Job 단계의 `action_kind`, Mission `action_kind`)에서 가장 엄한 승인을 읽는다. 등록부에 없는 종류는 500이 아니라 409 `APPROVAL_RULE_UNREGISTERED`. resolve 전 제안의 보이는 범위는 전과 같다(Cell·제안자 409, 그 밖 404). Cell 거절은 새 메서드 대신 `CellJobStore.cancel(decision=, expected_generation=)`(사건 `CELL_JOB_REJECTED` 그대로). 대화 요청에 연결된 작업의 거절은 기존 결과 회신 경로로 요청자에게 간다: Cell `HOLD`는 이미 회신했고 Mission `CANCELED`를 관측 상태에 더했다. 작업 흐름 행은 `LINKED`(그 관계의 끝 상태)로 남는다. `work.py` docstring에 v1.230.
+- 증거: `test_approval_registry.py`(경로 수준의 가장 엄한 값, 미등록 종류 409, 대화 요청 연결 작업 거절의 회신). 원격 `X:/DevTemp/approval-registry/r2/run-1.txt`, secret-scan 가드 `test/test_release_boundary_guards.py` 포함, `known_failures` 0 new.
+- gate 변화: 없음.
+
+## 2026-10-14 · c53057fef · Fleet 작업 원장을 자기 크기 단위로 등록 (D-763 5·5b)
+
+- 변경: `docs/plans/2026-10-14-fleet-ledger-size-unit.md`. `fleet/fleet/server/ledger` 단위, 판정값 6,985(`61aa49b32`에서 잼), `fleet` 판정값 31,837. 지금 서버 31,886, 원장 7,036, 관제 18,023. 원장은 `__init__.py` 없는 `fleet.server` 보관 자리라 하위 패키지 시험이 `FLEET_SERVER_HOLDER_UNITS`도 받는다.
+- 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 독립 재판정 전.
