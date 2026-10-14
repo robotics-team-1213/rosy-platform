@@ -39,7 +39,10 @@ class LobbySession(override val target: RobotTarget, override val secure: Boolea
     // Renewal/introspection runs on the bounded lifecycle worker, never in a motion or stop request.
     override fun bearer(): String = if (managed) account!!.cachedAccess(resource) ?: error("account unavailable") else target.credential
     override fun stopBearer(): String = if (managed) account!!.cachedAccess(resource).orEmpty() else target.credential
-    override fun accountContext() = account?.context(resource)
+    override fun accountContext() = account?.let {
+        it.context(resource) ?: JSONObject().put("enabled", true).put("authenticated", false)
+            .put("profile", JSONObject.NULL).put("profile_url", it.profileUrl)
+    }
     override fun logoutAccount() = account?.logout() ?: false
     private val peerCa = caPem?.let { PeerTls.ca(it) }
     var onInvalidated: () -> Unit = {}
