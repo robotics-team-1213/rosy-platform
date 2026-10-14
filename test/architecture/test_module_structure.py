@@ -124,7 +124,8 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "decision/src/rosy/decision/deliberation/evaluation",
               "perception/front_camera/perception",
               "perception/front_camera/perception/learned",
-              "perception/front_camera/perception/drivable")
+              "perception/front_camera/perception/drivable",
+              "site_ui/console")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -479,8 +480,20 @@ SIZE_VERDICTS = {
         "and first real Discord readback remain separate gates. "
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
+    "site_ui/console": (
+        17_988,
+        "split: D-763 slice 3 registers the browser console as its own size unit at branch base06e97383b "
+        "(console17988, fleet server38868, combined56856); see docs/plans/2026-10-14-fleet-console-size-unit.md. "
+        "+150 from17988. Keep console.js1175 (HARD_TIER, zero file growth), map-view.js984 and styles.css802 "
+        "file verdicts. At the next +150 the work-area screen code leaves for its own subpackage, not an accept.",
+    ),
     "fleet": (
-        56_755,
+        38_767,
+        "split: D-763 slice 3 moved the browser console holder operations/site_ui/console into its own unit "
+        "site_ui/console (docs/plans/2026-10-14-fleet-console-size-unit.md). Baseline38767 = the D-757 "
+        "verdict56755 minus console17988 measured at branch base06e97383b; base measured38868, so the101 "
+        "lines above56755 stay consumed allowance and are not rebaselined; no functional-growth allowance "
+        "was added. Previous verdict: "
         "split: independently re-judged by account_ledger on 2026-10-14 for D-757 at56755. "
         "Account ledger/authority/config/routes remain in existing Fleet authentication and Console "
         "owners. Required HTTP split is completed: password_session501, password_routes182, both "
