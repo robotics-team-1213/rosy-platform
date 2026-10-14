@@ -15,8 +15,7 @@ def test_slow_native_owner_does_not_block_another_tasks_completion(tmp_path):
     from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
     from test_channel_native_outcomes import _readback
 
-    previous, first, _, _ = _accepted_native_task(tmp_path)
-    service = FleetTaskService(previous.store, robot_ids={"rosy_01", "rosy_02"})
+    service, first, _, _ = _accepted_native_task(tmp_path, robot_ids={"rosy_01", "rosy_02"})
     run(service.submit_navigation(robot_id="rosy_02", x=1., y=2., source="operator",
                                   actor_id="op", request_key="second-native-goal"))
 
@@ -50,9 +49,9 @@ def test_slow_native_owner_does_not_block_another_tasks_completion(tmp_path):
     run(exercise())
 
 
-def _accepted_native_task(tmp_path):
+def _accepted_native_task(tmp_path, *, robot_ids={"rosy_01"}):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    service = FleetTaskService(store, robot_ids=robot_ids)
     control = store.dispatch_control()
     store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator")
     queued = run(service.submit_navigation(
