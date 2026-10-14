@@ -118,10 +118,6 @@ function cancelAllNotice(message = "", details = false) {
   link.hidden = !details;
 }
 
-function authHeaders() {
-  return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
-}
-
 // D-359 §6.4 — compact·medium에서 접속·역할·테마는 토글 뒤에 접힌다(세로 예산).
 // 넓은 창에서는 CSS가 토글을 숨기고 항목을 줄에 세운다. 잠기면 토큰 칸을 연다.
 const connectionView = createConnectionView({scope: pageScope, el});
@@ -927,7 +923,6 @@ const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   openCard: (robotId) => { roster.openCard(robotId); render(); } });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
-let lastStateOk = null;
 function refreshDiagnostics() {
   const diag = (id, text) => {
     const node = el(id);
