@@ -8413,3 +8413,9 @@ osy-d395-s1d\`.
 - 변경: validation/omx-recording-probe-2026-10-14/result.md에 관절 readback·상태 충돌·갱신 실패·late worker 오류의 RED/GREEN과 실행 한계를 기록했다. OMX README에 개선 동작과 컨테이너 내부 probe 사용을 설명했다.
 - 증거: 최종 관련 원격 33 passed, NEW 0; 독립 소스 재검토 완료.
 - gate 변화: 없음. 실제 Gazebo·새 이미지·학습 정책 수용과 구분한다.
+
+## 2026-10-14 · ff848d70c · OMX 공개 후 CI 의존성 누락 수정
+
+- 변경: `fix/runtime-jose-lock`에서 offline core wheel 설치 전 CI 검증 target에 `joserfc==1.7.5`를 제공한다. 기기 runtime lock 및 cryptography 50은 유지한다.
+- 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
