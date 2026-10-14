@@ -59,15 +59,10 @@ def install_work_routes(app, *, task_service, mission_service, require_viewer, r
             found.append("CELL_TRANSFER")
         return found
 
-    @app.get("/api/fleet/work", dependencies=read_guard,
-             response_model=FleetWorkOverview, tags=["fleet-work"])
-    async def fleet_work(limit: int = Query(default=50, ge=1, le=100),
-                         principal=Depends(require_viewer)) -> dict:
+    def stored(cells, scoped: dict, limit: int) -> tuple[list, list, list]:
+        """Every SQLite read of this route (ledgers, stored trips). It runs in a worker thread
+        (``asyncio.to_thread``), never on the event loop the trip runner's timing and lease renewal share."""
         rows, truncated = [], []
-        cells = mission_service if getattr(app.state, "cell_job_store", None) is not None else None
-        owner = {"principal_id": principal.principal_id}
-        scoped = {"mission": owner, "cell_job": {**owner, "named": named(principal),
-                                                 "operator": principal.permits_site("fleet.operate", {"operator"})}}
         for source, service in (("task", task_service), ("mission", mission_service), ("cell_job", cells)):
             if service is None:
                 continue
@@ -75,11 +70,23 @@ def install_work_routes(app, *, task_service, mission_service, require_viewer, r
             if len(summaries) > limit:
                 truncated.append(source)
             rows.extend({"source": source, **row} for row in summaries[:limit])
-        runner = app.state.trip_runner  # D-517 1: a trip stays open beyond the newest stored ones
-        trips = {view["trip_id"]: view for view in runner.recent(limit + 1) + runner.open_trips()}
+        return rows, truncated, app.state.site_maps.trips(limit=limit + 1)
+
+    @app.get("/api/fleet/work", dependencies=read_guard,
+             response_model=FleetWorkOverview, tags=["fleet-work"])
+    async def fleet_work(limit: int = Query(default=50, ge=1, le=100),
+                         principal=Depends(require_viewer)) -> dict:
+        cells = mission_service if getattr(app.state, "cell_job_store", None) is not None else None
+        owner = {"principal_id": principal.principal_id}
+        scoped = {"mission": owner, "cell_job": {**owner, "named": named(principal),
+                                                 "operator": principal.permits_site("fleet.operate", {"operator"})}}
+        # Open trips are copied on the loop (the runner mutates them there); D-517 1: one may be older than the stored ones
+        live = {view["trip_id"]: _trip_row(view) for view in app.state.trip_runner.open_trips()}
+        rows, truncated, saved = await asyncio.to_thread(stored, cells, scoped, limit)
+        trips = {view["trip_id"]: _trip_row(view) for view in saved} | live
         if len(trips) > limit:
             truncated.append("trip")
-        rows.extend(_trip_row(view) for view in sorted(trips.values(), key=lambda v: -v["updated_at"])[:limit])
+        rows.extend(sorted(trips.values(), key=lambda row: row["updated_at"], reverse=True)[:limit])
         rows = sorted(map(_shown, rows), key=lambda row: (row["updated_at"], row["source"], row["source_id"]),
                       reverse=True)
         return {"observed_at": datetime.now(timezone.utc).isoformat(), "rows": rows, "kinds": await kinds(),

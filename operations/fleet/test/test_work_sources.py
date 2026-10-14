@@ -127,3 +127,30 @@ def test_kinds_list_only_what_runs_here(tmp_path, monkeypatch):
     assert _work(client, "viewer-secret")["kinds"] == ["CELL_TRANSFER"]
     monkeypatch.setattr(state, "omx_instances", {})
     assert _work(client, "viewer-secret")["kinds"] == []  # no capable device
+
+
+def test_ledger_and_stored_trip_reads_run_off_the_event_loop(tmp_path, monkeypatch):
+    """The trip runner's timing, lease renewal and stall clock share the event loop: no SQLite read on it."""
+    import asyncio
+    from fleet.server import work_routes
+
+    client, _ = _app(tmp_path)
+    _resolved(client, "cell-secret", _cell_candidate())
+    _trip(client, "t1", "arrived", 10.0)
+    on_loop = []
+
+    def watched(read):
+        def call(*args, **kwargs):
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(read)
+            except RuntimeError:  # a worker thread has no running loop
+                pass
+            return read(*args, **kwargs)
+        return call
+
+    monkeypatch.setattr(work_routes, "work_summaries", watched(work_routes.work_summaries))
+    monkeypatch.setattr(client.app.state.site_maps, "trips", watched(client.app.state.site_maps.trips))
+    body = _work(client, "op1-secret")
+    assert _rows(body, "trip") and _rows(body, "cell_job") and _rows(body, "task") == {}
+    assert on_loop == []
