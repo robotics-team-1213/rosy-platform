@@ -210,8 +210,9 @@ class CrosswalkGate:
         c, s = math.cos(zone.yaw), math.sin(zone.yaw)
         return c * (px - zone.x) + s * (py - zone.y), -s * (px - zone.x) + c * (py - zone.y)
 
-    def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0):
-        """side: the body's lateral offset in the anchor frame now (the same odom as the scan)."""
+    def _boxes(self, z: Zone, geo: Geometry, front: float, side: float = 0.0, heading: float = 0.0):
+        """side: the body's lateral offset in the anchor frame now (the same odom as the scan);
+        heading: the body's yaw off the anchor axis."""
         near, far, m = z.near - z.margin, z.far + z.margin, z.margin
         left = max(geo.lane_half_m if z.left is None else z.left, geo.body_half_m) + z.lateral
         right = min(-geo.lane_half_m if z.right is None else z.right, -geo.body_half_m) - z.lateral
@@ -225,9 +226,15 @@ class CrosswalkGate:
         # The rest of the zone ahead: the seen lane width centred on the body, which follows that
         # lane, again in the scan's own odom frame (the drift since the zone's image only moves the
         # zone's lane edges relative to the anchor, not the lane relative to the body).
-        half = max(((geo.lane_half_m if z.left is None else z.left)
-                    - (-geo.lane_half_m if z.right is None else z.right)) / 2, geo.body_half_m)
-        exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m, side + geo.body_half_m)
+        # 개정 5: the zone's own lane width; the pads a seen corridor merges into z's edges are
+        # position bounds the body centring already covers (m15: 0.046 m of them reached the wall).
+        # The boxes are axis-aligned: a body heading off the axis sweeps sideways by its slope over
+        # what is left of A (review 2026-10-14).
+        sweep = abs(math.sin(heading)) * max(0.0, far + geo.exit_m + m - front)
+        half = max(((geo.lane_half_m if self._zone.left is None else self._zone.left)
+                    - (-geo.lane_half_m if self._zone.right is None else self._zone.right)) / 2,
+                   geo.body_half_m) + sweep
+        exit_box = (far, far + geo.exit_m + m, side - geo.body_half_m - sweep, side + geo.body_half_m + sweep)
         return (((front, far, side - half, side + half), exit_box) if front < far else (exit_box,))
 
     # ---- tick ------------------------------------------------------------------------------
@@ -261,21 +268,30 @@ class CrosswalkGate:
         z = replace(self._zone, margin=self._zone.margin + drift, lateral=self._zone.lateral + drift)
         if corridor is not None:
             # The lane edges the camera sees now cap the zone's own edges plus drift since its
-            # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A). Pad:
-            # the evidence's lateral bound, drift since that image, and the edges' slope over A
-            # from the heading difference between that image and the zone anchor.
-            cpose, cleft, cright, unc = corridor
+            # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A).
+            # 개정 5: A is judged along the lane as that image saw it, not along the zone's older
+            # anchor: the heading difference between the two used to widen A by its slope over A's
+            # length (0.02-0.03 m on a lane whose walls stand 0.038 m outside its edges). Only while
+            # that turn moves A's ends along the road by less than the zone's own margin; a larger
+            # one keeps the zone's frame and the slope pad. The zone's own edges keep the slope.
+            cpose, cleft, cright, unc, *reach = corridor
             cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
-            offset = self._local(z, cpose, 0.0)[1]
-            turn = abs(math.sin(cpose.yaw - z.yaw)) * (z.far + z.margin + geo.exit_m)
+            skew, own = _angle(cpose.yaw - z.yaw), z.lateral
+            turn = abs(math.sin(skew)) * (z.far + z.margin + geo.exit_m)
+            shift = z.far * (1 - math.cos(skew)) + geo.lane_half_m * abs(math.sin(skew))
+            if shift <= z.margin:    # the turn's along-road shift of A's ends is added, not spent
+                z, own, turn = replace(z, yaw=cpose.yaw, margin=z.margin + shift), own + turn, 0.0
+            ahead, offset = self._local(z, cpose, 0.0)
+            if reach:   # past the range the edges were seen over, the lane may run on at their slope
+                turn += reach[0] * max(0.0, z.far + z.margin + geo.exit_m - ahead - reach[1])
             pad = unc + odom_error_fraction * math.hypot(pose.x - cpose.x, pose.y - cpose.y) + turn
             # Both are bounds of the same lane: keep the tighter side of each (the body floor in
             # _boxes still covers the swept path). A misread edge on the stripes cannot widen A.
-            left = offset + cleft + pad if z.left is None else min(z.left + z.lateral, offset + cleft + pad)
-            right = offset + cright - pad if z.right is None else max(z.right - z.lateral, offset + cright - pad)
+            left = offset + cleft + pad if z.left is None else min(z.left + own, offset + cleft + pad)
+            right = offset + cright - pad if z.right is None else max(z.right - own, offset + cright - pad)
             z = replace(z, left=left, right=right, lateral=0.0)
         if self._state in (ARMED, APPROACHING):
-            if not self._on_course(z, pose, geo):
+            if not self._on_course(z, pose, geo, self._zone.yaw):
                 self.reset()      # turned away (review M2): the next tick arms the zone ahead, if any
                 return None, None
             gap = z.near - z.margin - self._local(z, pose, geo.front_x)[0]
@@ -327,14 +343,15 @@ class CrosswalkGate:
         self._id, self._state = f"camera-{self._count}", ARMED
         return True
 
-    def _on_course(self, z: Zone, pose, geo: Geometry) -> bool:
+    def _on_course(self, z: Zone, pose, geo: Geometry, yaw=None) -> bool:
         """The body is in the zone's lane corridor and heads along it. MAX_TURN_RAD is D-491's
         "a crosswalk is crossed straight; more is another road" bound (review M2: a zone left
         behind at a junction kept the gate armed for the next crosswalk)."""
         side = self._local(z, pose, 0.0)[1]
         left = (geo.lane_half_m if z.left is None else z.left) + z.lateral
         right = (-geo.lane_half_m if z.right is None else z.right) - z.lateral
-        return abs(_angle(pose.yaw - z.yaw)) <= MAX_TURN_RAD and right <= side <= left
+        # yaw: the anchor as imaged; z may be turned to the lane seen now (개정 5)
+        return abs(_angle(pose.yaw - (z.yaw if yaw is None else yaw))) <= MAX_TURN_RAD and right <= side <= left
 
     def _judge_new(self, now, scan, stale_s, geo, pose, z):
         """None = a new empty scan, "same" = no new scan since the last (still fresh), else why not."""
@@ -346,7 +363,7 @@ class CrosswalkGate:
         heading = math.atan2(math.sin(pose.yaw - z.yaw), math.cos(pose.yaw - z.yaw))
         front = self._local(z, pose, geo.front_x)[0]
         band, k, n = self._persist
-        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1]),
+        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading),
                                      self._local(z, pose, geo.lidar_x),
                                      heading, blind_proven=self._state == CROSSING, band=band)
         # D-573 rev 2: a return within 3 sigma of A's edge is a person once the same cell is hit in
@@ -477,7 +494,7 @@ class CrosswalkGateMixin:
 
     def _fresh_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
-        as (image pose, left, right, uncertainty_m) over its observed x range; None if older than the
+        as (image pose, left, right, uncertainty_m, |slope|, seen-to x) over its observed x range; None if older than the
         D-491 evidence TTL or incomplete."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
@@ -488,7 +505,8 @@ class CrosswalkGateMixin:
         image = ev._image_pose(round(lane.stamp * 1e9))
         if image is None or set(edges) != {"left", "right"}:
             return None
-        return image, max(edges["left"]), min(edges["right"]), lane.uncertainty_m
+        return (image, max(edges["left"]), min(edges["right"]), lane.uncertainty_m,
+                max(abs(b.slope) for b in lane.boundaries), min(b.observed_x_max_m for b in lane.boundaries))
 
     def _crosswalk_gate(self, now: float, decision):
         """Cap the tick's final decision; never lifts a zero (D-573 6)."""
