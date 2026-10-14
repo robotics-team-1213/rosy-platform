@@ -72,7 +72,7 @@ KTURN 후진 arc는 기존 rear strip·blind band·trail·freshness 거절 검�
 
 ## World와 검증 상태
 
-현재 World의 pure MapPose 구현은 `operations/world/src/rosy/world/state/projections/map_pose.py`에 있다. Fleet의 기존 import는 identity alias이고 service·trip·claim·dispatch transaction은 Fleet가 소유한다. 관측/odom 기반 dead reckoning을 행동 조건부 미래 rollout으로 집계하지 않는다. action-conditioned World model, 대응 학습·독립 평가와 실제 decision 소비자는 D-625의 후속 계획이며 빈 prediction 폴더를 만들지 않았다.
+현재 World의 MapPose 구현은 `operations/world/src/rosy/world/state/projections/map_pose.py` 하나다. Fleet·sim·시험은 `rosy.world.state.projections.map_pose`를 직접 import한다. D-630의 Fleet identity alias는 D-752에서 제거했다. service·trip·claim·dispatch transaction은 Fleet이 소유한다. `source=bridged`는 마지막 관측 이후의 odom dead reckoning이고, 행동 조건부 미래 rollout이 아니다. action-conditioned World model과 그 학습·독립 평가·decision 소비자는 D-625의 후속 계획이며 빈 prediction 폴더를 만들지 않았다.
 
 [독립 Safety 리뷰](../validation/d628-core-drive-2026-10-11/safety-review.md)는 소스 범위 판정이다. remote 회귀·known_failures·harness/Safety·checkout 밖 설치 결과와 local main 착지는 [검증 기록](../validation/d630-platform-holders-2026-10-11/result.md)에 있다. 옛 경로 때문에 실패한 시험과 수정 후 재검사를 각각 기록했다. CI·ROS 실행·ARM64 이미지·배포 readback·실물·현장 수용은 확인하지 않았다. 후속 작업은 [CORE 계획](../plans/2026-10-11-core-responsibility-and-driving.md), [D-628 실행 계획](../plans/2026-10-11-core-drive-remaining.md), [전체 이전 계획](../plans/2026-10-11-platform-structure-migration.md)을 따른다.
 

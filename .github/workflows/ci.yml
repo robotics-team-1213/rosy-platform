@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # D-762 stage 1: a merge queue group runs the full tier against its base (no effect until the
+  # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
+  # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
+  merge_group:
   # D-436: PR 은 affected 티어, main push·야간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
   schedule:
@@ -19,7 +23,7 @@ on:
 jobs:
   # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
   # 선택기가 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 풀 matrix 다.
-  # main push·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
+  # main push·merge_group·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
   # D-430 Safety-Review 도 여기서 한 번만 돈다(전체 이력이 필요한 유일한 선행 검사).
   scope:
     # D-135 전환 (2026-09-20): ubuntu-26.04 리허설 연속 녹색 후 게이팅 러너를
@@ -49,13 +53,13 @@ jobs:
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
       # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
-      # commits, or a push's before..after (the tip alone for a new branch or a
-      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
-      # red. Relies on the full-history checkout above (fetch-depth: 0).
+      # commits, a merge group's base_sha..head (D-762), or a push's before..after (the
+      # tip alone for a new branch or a force push). Scheduled/called runs skip it, so one
+      # old commit cannot keep CI red. Relies on the full-history checkout above (fetch-depth: 0).
       - name: Safety-Review trailer (D-430)
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
 
       - name: Test scope (D-436)
@@ -224,7 +228,7 @@ jobs:
         shell: bash
         env:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
-          HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           ROSY_ROS: ${{ matrix.ros }}
           ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
@@ -247,14 +251,36 @@ jobs:
               fleet = [p for p in paths if p.startswith("operations/fleet/test")]
               rest = [p for p in paths if p not in fleet]
               runs += [(rest, {}), (fleet, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+          # D-762 stage 1: when every failure is listed in test/flaky_quarantine.txt, those ids
+          # rerun once here; all passing makes the invocation green (FLAKY). Unlisted: no rerun.
+          sys.path.append("test")
+          import known_failures
+          quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
           status = 0
           for paths, extra in runs:
               if not paths:
                   continue
               print("::group::pytest " + " ".join(paths), flush=True)
-              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v",
-                                     "--continue-on-collection-errors"],
-                                    env={**os.environ, **extra}).returncode
+              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, "-v",
+                                       "--continue-on-collection-errors"],
+                                      env={**os.environ, **extra}, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, errors="replace")
+              out = []
+              for line in proc.stdout:
+                  sys.stdout.write(line)
+                  out.append(line)
+              code = proc.wait()
+              failed = known_failures.failed_ids("".join(out))
+              ids = known_failures.rerun_ids("".join(out), quarantine)
+              if known_failures.should_rerun(code, failed, ids):
+                  print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
+                  rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider"],
+                                         env={**os.environ, **extra}, stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT, text=True, errors="replace")
+                  print(rerun.stdout, flush=True)
+                  if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
+                      print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
+                      code = 0
               print("::endgroup::", flush=True)
               if code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
