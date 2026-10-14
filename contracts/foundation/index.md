@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
 - 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
 - 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.231)
 - 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
-- 2026-10-14 · 8a73125e6 · 통행권 응답 사유 seq_required·seq_legs_full·shrink_none_held (D-760 2단계 안전 검토, API v1.225)
-- 2026-10-14 · 5264ef279 · 통행권 상한 5 s는 CORE 통행권에만 (D-760 2단계)
+- 2026-10-14 · uncommitted · feat(protocol): D-758 0단계 `OdomPose.epoch`·`mono_s` (v1.228 additive)

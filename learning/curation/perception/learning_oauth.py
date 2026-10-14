@@ -68,9 +68,18 @@ class OAuth:
 
     def begin(self, purpose, *, session=None):
         cfg = self._config()
-        if purpose not in ('login', 'link'): raise AccountError('invalid authorization purpose')
+        requested = {'login': 'openid profile',
+                     'link': 'openid profile read-repos gated-repos',
+                     'manage': 'openid profile read-repos write-repos manage-repos'}
+        if purpose not in requested:
+            raise AccountError('invalid authorization purpose')
         principal = None
-        if purpose == 'link': principal = self.accounts.require(self.accounts.authenticate(session), 'import')
+        if purpose == 'link':
+            principal = self.accounts.require(self.accounts.authenticate(session), 'import')
+        elif purpose == 'manage':
+            # Storing the credential still requires import. Publish alone cannot keep a token.
+            principal = self.accounts.require(self.accounts.authenticate(session), 'publish')
+            self.accounts.require(principal, 'import')
         state, binding, nonce, verifier = [secrets.token_urlsafe(32) for _ in range(4)]
         pending = {'purpose': purpose, 'nonce': nonce, 'verifier': verifier, 'config': _digest(_json(cfg)),
                    'project_id': self.accounts.project_id}
@@ -79,12 +88,12 @@ class OAuth:
             db.execute('INSERT INTO learning_oauth_flows VALUES(?,?,?,?,?)',
                        (_digest(state), _digest(binding), principal['_session_id'] if principal else None,
                         self.accounts.clock() + 600, self.accounts.cipher.encrypt(_json(pending).encode()).decode()))
-        scope = 'openid profile' if purpose == 'login' else 'openid profile read-repos gated-repos'
         query = {'response_type': 'code', 'client_id': cfg['client_id'], 'redirect_uri': cfg['redirect_uri'],
-                 'scope': scope, 'state': state, 'nonce': nonce, 'code_challenge_method': 'S256',
+                 'scope': requested[purpose], 'state': state, 'nonce': nonce, 'code_challenge_method': 'S256',
                  'code_challenge': _b64(hashlib.sha256(verifier.encode()).digest())}
         # Explicit account selection avoids silently linking whichever HF account was last used.
-        if purpose == 'link': query['prompt'] = 'select_account'
+        if purpose != 'login':
+            query['prompt'] = 'select_account'
         return AUTHORIZE + '?' + urlencode(query), binding
 
     def _consume(self, query, binding, session):
@@ -140,7 +149,9 @@ class OAuth:
     def complete(self, query, binding, *, session=None):
         cfg = self._config(); pending = self._consume(query, binding, session)
         if not hmac.compare_digest(pending['config'], _digest(_json(cfg))): raise AccountError('OAuth configuration changed')
-        principal = self.accounts.authenticate(session) if pending['purpose'] == 'link' else None
+        if pending['purpose'] not in ('login', 'link', 'manage'):
+            raise AccountError('invalid authorization purpose')
+        principal = self.accounts.authenticate(session) if pending['purpose'] in ('link', 'manage') else None
         data = {'grant_type': 'authorization_code', 'code': query['code'], 'client_id': cfg['client_id'],
                 'redirect_uri': cfg['redirect_uri'], 'code_verifier': pending['verifier']}
         headers = {}
@@ -163,12 +174,20 @@ class OAuth:
         except Exception: raise AccountError('Hugging Face profile verification failed') from None
         if profile.get('sub') != claims['sub']: raise AccountError('Hugging Face profile identity mismatch')
         if pending['purpose'] == 'login': return self.accounts.login_subject(claims['sub'])
-        granted = response.get('scope', '').split()
-        if 'read-repos' not in granted: raise AccountError('repository read permission was not granted')
+        granted = set(str(response.get('scope', '')).split())
+        allowed = {'link': ('read-repos', 'gated-repos'),
+                   'manage': ('read-repos', 'write-repos', 'manage-repos')}[pending['purpose']]
+        # Keep only scopes this purpose requested. A read link cannot store write.
+        scopes = [scope for scope in allowed if scope in granted]
+        if pending['purpose'] == 'link' and 'read-repos' not in scopes:
+            raise AccountError('repository read permission was not granted')
+        if pending['purpose'] == 'manage' and not {'write-repos', 'manage-repos'} <= set(scopes):
+            raise AccountError('repository management permission was not granted')
         expires = response.get('expires_in')
         if type(expires) not in (int, float) or not math.isfinite(expires) or not 0 < expires <= 366 * 86400:
             raise AccountError('provider credential expiry unavailable')
         username = profile.get('preferred_username') or profile.get('name')
         if not isinstance(username, str) or not username: raise AccountError('provider username unavailable')
         # No offline scope is requested: expired credentials require an explicit reconnect.
-        return None, self.accounts.connect_oauth(principal, claims['sub'], username, token, self.accounts.clock() + expires)
+        return None, self.accounts.connect_oauth(principal, claims['sub'], username, token,
+                                                  self.accounts.clock() + expires, scopes=scopes)
