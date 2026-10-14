@@ -8474,3 +8474,9 @@ osy-d395-s1d\`.
 - 변경: D-765. 저장된 PAT·OAuth 연결의 기록된 범위와 learning.publish로 비공개 데이터셋·모델 저장소를 조회·생성·삭제한다. 읽기 연결과 가져오기는 유지한다. 파일 업로드와 Spaces는 포함하지 않는다.
 - 증거: 원격 pytest와 known_failures 비교는 이 커밋 뒤에 기록한다.
 - gate 변화: 없음. 실제 Hugging Face 계정 수용, 파일 업로드, 운영 배포는 이 변경으로 활성화하지 않는다.
+
+## 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
+
+- 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
+- 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
+- gate 변화: 없음.
