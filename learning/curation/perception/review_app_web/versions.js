@@ -1,4 +1,5 @@
 import {accountFetch} from '/account-session.js';
+import {cssColor} from '/common/ui.js';
 import {actorName} from '/ai-jobs.js';
 // Read-only history. Frame changes invalidate every outstanding response.
 let generation=0;
@@ -26,7 +27,7 @@ export function showVersions(lane,index){
         const photo=element('img');photo.alt=`이전 픽셀 버전 ${number}, 원본 사진 위에 표시`;photo.src=`/api/review-version-images/${index}/${number}`;
         photo.onerror=()=>{if(ticket===generation&&request===selection)preview.append(element('p','이전 마스크 이미지를 불러오지 못했습니다.'));};preview.append(photo);
       }else{
-        const canvas=element('canvas');canvas.setAttribute('role','img');canvas.setAttribute('aria-label',`이전 객체 버전 ${number}, 원본 사진 위에 표시한 객체 박스`);const photo=new Image();photo.onload=()=>{if(ticket!==generation||request!==selection)return;canvas.width=photo.naturalWidth;canvas.height=photo.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(photo,0,0);ctx.strokeStyle=getComputedStyle(node).getPropertyValue('--ink').trim()||'black';ctx.lineWidth=Math.max(2,canvas.width/300);for(const box of value.boxes){const [x,y,x1,y1]=box.bbox_xyxy;ctx.strokeRect(x,y,x1-x,y1-y);}};photo.onerror=()=>{if(ticket===generation&&request===selection)preview.append(element('p','원본 사진을 불러오지 못했습니다.'));};photo.src=`/api/images/${index}`;preview.append(canvas);
+        const canvas=element('canvas');canvas.setAttribute('role','img');canvas.setAttribute('aria-label',`이전 객체 버전 ${number}, 원본 사진 위에 표시한 객체 박스`);const photo=new Image();photo.onload=()=>{if(ticket!==generation||request!==selection)return;canvas.width=photo.naturalWidth;canvas.height=photo.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(photo,0,0);ctx.strokeStyle=cssColor('--status-warn');ctx.lineWidth=Math.max(2,canvas.width/300);for(const box of value.boxes){const [x,y,x1,y1]=box.bbox_xyxy;ctx.strokeRect(x,y,x1-x,y1-y);}};photo.onerror=()=>{if(ticket===generation&&request===selection)preview.append(element('p','원본 사진을 불러오지 못했습니다.'));};photo.src=`/api/images/${index}`;preview.append(canvas);
         const rows=element('ul');for(const box of value.boxes)rows.append(element('li',`${box.label||'미분류'} · [${box.bbox_xyxy.join(', ')}]`));
         preview.append(element('p','현재 화면의 원본 사진·객체와 좌표를 비교하세요.'));preview.append(rows);if(!value.boxes.length)preview.append(element('p','객체 없음'));
       }
