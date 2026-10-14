@@ -19,12 +19,14 @@ import asyncio
 import logging
 import uuid
 
-from core_common.protocol.trip_lease import DEFAULT_TTL_S, MAX_TTL_S, MIN_TTL_S
+from core_common.protocol.trip_lease import MAX_TTL_S, MIN_TTL_S
 from fleet.server.trip_ports import TripError
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
 HELD, LOST, RELEASED = "held", "lost", "released"
+#: D-760 1: Fleet's lease ``ttl_s`` (T_keep): the 5 s authority always expires first; ``link_wait`` lasts this long.
+FLEET_TTL_S = 8.0
 #: D-541 2 open refusals as trip start codes; any other refusal is TRIP_LEASE_REFUSED.
 START_CODES = {"TRIP_LEASED": "TRIP_ROBOT_LEASED", "MANUAL_MODE": "TRIP_ROBOT_MANUAL",
                "CALIBRATION_ACTIVE": "CALIBRATION_ACTIVE"}
@@ -32,7 +34,7 @@ START_CODES = {"TRIP_LEASED": "TRIP_ROBOT_LEASED", "MANUAL_MODE": "TRIP_ROBOT_MA
 
 class TripLease:
     def __init__(self, port, clock, timeout_s: float, on_lost=None, *, required: bool = False,
-                 holder: str = "fleet", ttl_s: float = DEFAULT_TTL_S) -> None:
+                 holder: str = "fleet", ttl_s: float = FLEET_TTL_S) -> None:
         if not MIN_TTL_S <= ttl_s <= MAX_TTL_S:
             raise ValueError(f"fleet.trip_lease_ttl_s must be within {MIN_TTL_S:g}..{MAX_TTL_S:g}")
         self._port, self._clock, self._timeout_s, self._on_lost = port, clock, timeout_s, on_lost

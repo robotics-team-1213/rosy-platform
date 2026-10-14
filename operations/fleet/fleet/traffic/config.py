@@ -71,17 +71,18 @@ def _traffic_signal_advice(args) -> bool:
 
 
 def _trip_lease(args) -> dict:
-    """D-541 7: ``fleet.trip_lease_required`` (default false) and ``fleet.trip_lease_ttl_s`` (default 5, 1..10)."""
+    """D-541 7: ``fleet.trip_lease_required`` (default false) and ``fleet.trip_lease_ttl_s`` (default 8 since D-760 1, 1..10)."""
     import yaml
 
-    from core_common.protocol.trip_lease import DEFAULT_TTL_S, MAX_TTL_S, MIN_TTL_S
+    from core_common.protocol.trip_lease import MAX_TTL_S, MIN_TTL_S
+    from fleet.traffic.trip_lease import FLEET_TTL_S
 
     try:
         site_config = {}
         if getattr(args, "site_config", None) is not None:
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
         fleet = site_config.get("fleet") or {}
-        required, ttl_s = fleet.get("trip_lease_required", False), fleet.get("trip_lease_ttl_s", DEFAULT_TTL_S)
+        required, ttl_s = fleet.get("trip_lease_required", False), fleet.get("trip_lease_ttl_s", FLEET_TTL_S)
     except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"trip lease config: {exc}")
     if not isinstance(required, bool):

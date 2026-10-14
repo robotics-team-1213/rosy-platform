@@ -67,9 +67,12 @@ class TripAdmission:
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
         if lane and floor is not None and floor != map_id:
             raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
-        if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
-            raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
-        if lane and self.authority.mode(caps) != "core" and caps.line_follow_authority_required is True:
+        # D-517 4: no first-authority gap after a restart; D-760 2: or enforced while the lease Fleet opens is held
+        bounded = caps.line_follow_authority_required is True or (
+            self.lease.required and getattr(caps, "line_follow_authority_under_lease", False) is True)
+        if lane and self.authority.mode(caps) == "core" and not bounded:
+            raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")
+        if lane and self.authority.mode(caps) != "core" and bounded:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         return caps
 
@@ -111,6 +114,26 @@ class TripAdmission:
             if check["code"] is not None:
                 raise TripError(422, check["code"], check)
         return pose, enable
+
+    async def _link_back(self, live) -> bool:
+        """D-760 4: the robot answered again after ``link_wait`` and its pose was read LOCALIZED. As at a start, the
+        plan's map version and, with a lane ahead, CORE's line mode must hold, else the trip ends as that refusal.
+        A robot call that fails here raises, so the trip waits on. True: it runs again."""
+        index = live.view["segment_index"]
+        try:
+            self._graph_for(live.view["map_version"])
+            if any(live.arc(i).drive_mode == "lane" for i in range(index, len(live.segments))):
+                mode = await self._call(self._junction.line_follow_mode(live.view["robot_id"]))
+                if mode not in LINE_MODES:
+                    raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
+        except TripError as exc:
+            await self._stop(live, "failed", exc.code, {**exc.detail, "link_wait": live.view["wait"]["kind"]})
+            return False
+        if not live.open:  # canceled or the lease lost meanwhile
+            return False
+        live.view["state"] = "running"
+        live.view.pop("wait", None)
+        return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
                           start_at=None, caps=None, start_token=None):
