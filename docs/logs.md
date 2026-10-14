@@ -8385,3 +8385,11 @@ osy-d395-s1d\`.
 - 증거: 43c9e729f 원격 `test/test_worktrees_tool.py test/test_land.py` 73 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\9`).
 - gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
 - 결정: 세션 id가 세션마다 달라 소유자를 따지면 아무것도 치워지지 않는다는 디스패처 지적을 반영했다.
+
+## 2026-10-14 · 4bb927152 · docs: D-762 main 관문(PR·merge queue 단계), D-584 개정, 보류·보관 브랜치 목록
+
+- 변경: `docs/main-gateway-adr`에서 D-762(Accepted: 끝 상태는 브랜치마다 PR과 merge queue, 공유 로컬 main 폐지, 에이전트의 비관리자 신원, 관문 경로의 작성자 아닌 code owner 승인, 단계 0–5)를 쓰고 ADR Log 행을 넣었다. D-584에 2026-10-14 개정 절을 붙였다(실험실 노트북의 규칙, 들이는 증거는 PR CI). `.github/CONTRIBUTING.md`와 README 「시작하기」에 오늘의 경로(서버는 CI를 요구하지 않음, `tools/land.py` 로컬 착지는 이행 경로)와 끝 상태를 적었다. `reference/held-branches.md`(보류 5개, 2026-10-14 보관 25개, 태그와 wip 스냅샷은 실험실 clone에만 있음)와 교훈 `solutions/workflow-issues/a-rule-that-only-works-if-everyone-follows-it-is-not-a-gate-2026-10-14.md`를 추가했다. `adr_gaps.txt`에 다른 세션이 선점한 D-760, D-761을 넣었다.
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 `lint` 오류 0. 목록의 브랜치 5개와 태그 25개는 `git branch --list`, `git tag -l`로 확인했고 2026-10-13/14 archive 태그는 origin에 0개다. 원격 시험 결과는 착지 보고에 있다.
+- gate 변화: 없음. 문서만 바꿨다. 도구, 워크플로, GitHub 설정은 그대로다.
+- 결정: D-762 Accepted(결정 1–4와 단계 순서). 단계 적용과 GitHub 설정 변경은 단계마다 따로 승인받는다. 두 번째 owner 미정이 단계 3을 막는다.
+- 교훈: 모두가 따라야만 성립하는 규칙은 관문이 아니다(위 solutions 문서).
