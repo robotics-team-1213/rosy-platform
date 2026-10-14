@@ -151,7 +151,7 @@ jobs:
           echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Fleet browser verification tools
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
         run: |
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt playwright
           python3 -m playwright install --with-deps chromium
@@ -240,13 +240,13 @@ jobs:
           import subprocess
           import sys
 
-          # 브라우저 옵트인은 Fleet 시험에만 준다(Chromium 은 Fleet 조건에서만 설치된다).
-          # 같이 묶인 다른 묶음의 브라우저 시험까지 켜지지 않게 Fleet 경로는 따로 돈다.
+          # Enable only Fleet and the explicit account SSO journey; leave other CORE browsers opt-in.
+          account_browser = "middleware/core/gateway/test/test_account_pipeline.py::test_browser_sso_return_uses_real_cookies_and_authority_ui"
           runs = []
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
-              fleet = [p for p in paths if p.startswith("operations/fleet/test")]
-              rest = [p for p in paths if p not in fleet]
-              runs += [(rest, {}), (fleet, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+              browser = [p for p in paths if p.startswith("operations/fleet/test") or p == account_browser]
+              rest = [p for p in paths if p not in browser]
+              runs += [(rest, {}), (browser, {"ROSY_RUN_BROWSER_TESTS": "1"})]
           status = 0
           for paths, extra in runs:
               if not paths:
