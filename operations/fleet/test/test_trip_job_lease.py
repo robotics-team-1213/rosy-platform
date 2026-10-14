@@ -11,7 +11,8 @@ from test_trip_lease import _do, _plan, _refused, _setup, _ticks
 JOB = "job-3"
 R = "rosy_60"  # test_trip_runner.Ports' robot
 CAPS = {"controls": {"items": [{"kind": "base_velocity", "trip_lease": True, "trip_lease_job": True,
-                                "goal_lease": True, "line_follow_authority_under_lease": True}]}}
+                                "goal_lease": True, "line_follow_authority_under_lease": True,
+                                "line_follow_authority": True, "drive_modes": ["lane", "free"]}]}}
 
 
 def _job_runner(**lease):
@@ -53,6 +54,27 @@ def test_a_job_takes_a_robot_only_with_every_bound_on(change, missing):
     err = _refused(runner, runner.hold_job(R, JOB, "kim", change.get("caps", CAPS)))
     assert (err.status, err.code) == (422, "LINK_UNBOUNDED_MOTION") and missing in err.detail["missing"]
     assert ports.lease.puts == [] and runner.lease.job_of(R) is None
+
+
+@pytest.mark.parametrize("change,reasons", [
+    ({"authority": False}, ["hold_back"]),                                  # no authority goes out
+    ({"caps": _caps(line_follow_authority=None)}, ["hold_back"]),
+    ({"caps": _caps(goal_lease=None)}, ["no_goal_lease"]),                  # a free leg without a leased goal
+    ({"caps": _caps(drive_modes=None)}, ["leg_unknown"]),
+    ({"caps": _caps(goal_lease=None, line_follow_authority=None)}, ["hold_back", "no_goal_lease"]),
+])
+def test_the_motion_bound_part_is_rule_ms_verdict(change, reasons):
+    """D-760 6 in one place: hold_job asks rule_m.verdict per leg (without the lease) and names its reasons."""
+    runner, _, ports, _ = _job_runner()
+    runner.authority.enabled = change.get("authority", True)
+    err = _refused(runner, runner.hold_job(R, JOB, "kim", change.get("caps", CAPS)))
+    assert (err.status, err.code) == (422, "LINK_UNBOUNDED_MOTION") and err.detail["reasons"] == reasons
+    assert ports.lease.puts == []
+
+
+def test_a_lane_only_robot_needs_no_free_leg_bound():
+    runner, _, _, _ = _job_runner()
+    assert _do(runner, runner.hold_job(R, JOB, "kim", _caps(drive_modes=["lane"])))["state"] == "held"
 
 
 def test_an_authority_required_robot_passes_without_the_under_lease_flag():
