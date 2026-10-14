@@ -122,7 +122,6 @@ fun PairingScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space4.dp),
         ) {
-            Text(stringResource(R.string.pairing_title), style = MaterialTheme.typography.headlineSmall)
             Text(stringResource(R.string.pairing_site, site.serviceName, site.tlsHost), style = MaterialTheme.typography.bodyMedium)
 
             when (state) {
