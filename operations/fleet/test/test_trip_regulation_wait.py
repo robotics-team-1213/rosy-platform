@@ -107,3 +107,18 @@ def test_a_link_wait_reads_its_lease_bound():
     p, live = _Progress(), _live(None, wait={"reason": "link_wait", "since": 0.0})
     assert p._waiting(live, 1.0) and live.view["wait"]["bound_s"] == 8.0
     assert not p._waiting(live, 8.0) and live.view["wait"]["over_bound"]
+
+
+def test_a_tick_that_returns_before_the_wait_check_shows_no_stale_answer():
+    """D-763 8: ``waiting``/``bound_s``/``over_bound`` are unknown (None) on a tick that never reaches ``_waiting``."""
+    from test_trip_runner import _plan, _setup, _ticks, run
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    runner._live["rosy_60"].view["wait"] = {"reason": "signal", "since": 0.0, "bound_s": STALL_S,
+                                            "over_bound": False, "waiting": True}
+    ports.pose = None                                                         # the step stops on the pose first
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert view["reason"] == "pose" and view["wait"]["reason"] == "signal"
+    assert (view["wait"]["waiting"], view["wait"]["bound_s"], view["wait"]["over_bound"]) == (None, None, None)

@@ -541,7 +541,7 @@ def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
 
 
 def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(site):  # noqa: F811
-    """D-763 8 (v1.231): the card line shows Fleet's wait; past its bound it is a crit queue row."""
+    """D-763 8 (v1.231): the card line shows Fleet's wait; past its bound a warn row, never 개입 (rev 2 Q7)."""
     from playwright.sync_api import expect, sync_playwright
 
     waiting = {**LEAD, "wait": {"reason": "crosswalk_look", "since": 0.0, "bound_s": 15.0, "over_bound": False,
@@ -556,10 +556,12 @@ def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(sit
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
-        assert "대기 상한" not in page.locator("#critical-list").inner_text()
+        assert "대기 상한" not in page.locator(".queues-panel").inner_text()
         over = {**waiting, "wait": {**waiting["wait"], "reason": "signal", "over_bound": True, "waiting": False}}
         api["/api/fleet/trips"] = {"running": over, "trips": [over, LOST], "open": [over]}
         page.clock.run_for(1500)
-        expect(page.locator("#critical-list")).to_contain_text("개입 필요 — 대기 상한 넘음 · 신호")
+        expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 막힘 해결 중 · 신호")
+        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 막힘 해결 중 · 신호")
+        assert "대기 상한" not in page.locator("#critical-list").inner_text()
         assert not errors
         browser.close()
