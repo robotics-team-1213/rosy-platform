@@ -191,26 +191,32 @@ class SharedFleet(LinkFleet):
     def __init__(self, ids, caps):
         super().__init__(ids, caps)
         self.reads = MapPoseService(lambda: list(ids), gather_rest=self._rest, clock=lambda: self.now)
+        self.gate: asyncio.Event | None = None  # set: a read that got through waits here
 
     async def _rest(self, robot_id):
         self._call(robot_id, "state")
+        if self.gate is not None:
+            await self.gate.wait()
         return {"robot_id": robot_id}
 
-    async def refresh(self, robot_id, force_rest=False):
-        await self.reads.refresh(robot_id, force_rest=force_rest)
+    async def refresh(self, robot_id, force_rest=False, after=0):
+        await self.reads.refresh(robot_id, force_rest=force_rest, after=after)
+
+    def read_number(self, robot_id):
+        return self.reads.read_number(robot_id)
 
     async def junction_state(self, robot_id):
         await self.reads.state(robot_id)
         return await AuthFleet.junction_state(self, robot_id)
 
 
-def _shared_setup(caps):
+def _shared_setup(caps, **config):
     fleet = SharedFleet(tuple(caps), caps)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
-                        blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
+                        blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(**config),
                         authority=True, lease={"required": True})
     runner.lease._clock = lambda: fleet.now
     runner.authority._clock, runner.authority.quiet_until = (lambda: fleet.now), -math.inf
