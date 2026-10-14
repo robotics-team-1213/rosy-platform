@@ -8487,3 +8487,8 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_known_failures.py test/test_affected_tests.py test/test_ci_dependencies.py test/test_remote_pytest.py test/test_land.py test/test_harness_contracts.py test/architecture`에서 409 passed, NEW 0이었다(`X:\DevTemp\land-recent\stage1\1`). CI 전체 티어가 덮는 등록 시험 파일은 1,388/1,518에서 1,518/1,518로 늘었다. `main`에 `ci.yml`을 여섯 번 dispatch했고 결과는 `docs/validation/ci-flake-rate-2026-10-14/result.md`에 있다. b1e84dd79의 다섯 번 가운데 셋이 적색이었고, 실패한 시험은 셋이며 서로 달랐다.
 - gate 변화: 아직 없다. merge queue와 필수 검사는 단계 3이고 승인되지 않았다. `modules` 러너는 보고만 한다. 격리 목록의 실패는 한 번 다시 돈 뒤 통과하면 CI 잡, pre-push, 착지를 막지 않는다.
 - 결정: 격리 목록에는 증거가 있는 둘(fleet 작업자 유휴 대기)만 넣었다. 비상정지 지연 시험과 수동 조작 중 모드 충돌 시험은 안전 경로라 격리하지 않고 소유자에게 넘겼다. 브라우저 시험 둘은 어떤 실행기도 다시 돌리지 않아 후속 항목으로 남겼다.
+
+## 2026-10-15 - fix/runtime-pipelines - runtime connection inventory
+
+- Change: docs/plans/2026-10-15-runtime-pipeline-closure.md maps 14 current flows to source, two fixes and remaining inputs/evidence. Historical Discord/incident plans are distinguished from current implementation.
+- Evidence: 0bc2a16c1 remote regression: 117 passed, terminal exit 0, NEW 0. Live intake, model quality, signed admission, ROS-SIM and device readback remain separate. This branch is separate from shared main.

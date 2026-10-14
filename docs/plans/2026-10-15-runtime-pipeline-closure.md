@@ -44,8 +44,14 @@ SQLite 적용은 await 없는 기존 `BEGIN IMMEDIATE`/원장 재검증 안에�
 - 준비 수정 후 `b73b04577`에서 원격 RED: 선행 owner가 후행 owner를 기다리는 동안
   순차 조회가 timeout을 만들고 선행 Task가 `UNKNOWN`에 남았다.
 - 원시 로그: X: 세션 `2026-10-15--042319--runtime-pipelines--0fd8e5/logs/`.
-  각 pytest 결과는 `test/known_failures.py`로 판정한다. GREEN 및 영향 검사는
-  종료 결과를 얻은 뒤 아래에 추가한다.
+  각 pytest 결과는 `test/known_failures.py`로 판정한다.
+- `0bc2a16c1`의 적격 AI PC 원격 GREEN: Task native outcome·channel native
+  outcome·server app 3개 파일 117 passed, terminal exit 0, NEW 0.
+- 독립 source 검토: critical/important 지적 없음. 조회 한도와 취소 전파,
+  기존 CAS·identity·quiescence 보존 및 종료 오류 기록을 확인했다.
+  취소를 무시하는 worker나 개별 `aclose()` 자체의 실패는 이 변경의 보장 밖이다.
+- 영향 선택: 기준 `c6d52b238`, affected 57개 경로, FULL escalation 없음.
+  영향 시험 종료 결과는 별도로 기록한다.
 
 ## 전체 완성을 막는 남은 입력과 증거
 
