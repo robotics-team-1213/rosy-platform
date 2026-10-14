@@ -82,7 +82,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
-#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum)
+#: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum and its
+#: 2026-10-14 crosswalk addendum)
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
@@ -97,6 +98,7 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "drive/behaviors/line_follow/recovery/stuck/realign",
               "drive/behaviors/line_follow/arc",
               "drive/behaviors/line_follow/cue",
+              "drive/behaviors/line_follow/crosswalk",
               "drive/behaviors/localization",
               "drive/behaviors/swarm",
               "fleet/fleet/traffic",
@@ -1500,8 +1502,14 @@ SIZE_VERDICTS = {
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
     ),
     "drive/behaviors/line_follow": (
-        3_018,
-        "accept: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
+        2_421,
+        "accept: proposed at 2421 on 2026-10-14 after the D-491/D-573 crosswalk gate, report and zone left for "
+        "their own unit line_follow/crosswalk (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 "
+        "crosswalk addendum; independent re-judge by a read-only critic still owed): 3167 measured on main "
+        "(full against 3018+150) - 755 moved + 9 lines of compatibility exports at the old import paths "
+        "(crosswalk_gate.py, crosswalk_report.py, crosswalk_zone.py, 3 each). What stays is manager, model, "
+        "clearance, body_stop, authority, route_context and those three exports. No runtime move and no "
+        "behaviour change. Earlier: re-judged at 3018 on 2026-10-10 after the D-511 lane cue left for its own unit line_follow/cue "
         "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-10 cue addendum; independently re-judged by read-only critic 2026-10-10, AGREE-WITH-CONDITIONS; it "
         "had required the split instead of a 3357 accept); 2957 + local main + the manager's cue hooks. "
         "Earlier: independently re-judged at 2957 on 2026-10-10 for D-573 6 rev (feat/crosswalk-null-outside-zone) "
@@ -1509,6 +1517,16 @@ SIZE_VERDICTS = {
         "line_follow (manager, model, clearance, body_stop, authority, crosswalk gate/report/zone, route_context) "
         "as one LineFollowManager domain under one lock and generation; recovery, junction and arc stay their "
         "own units. No runtime move; CommandManager stays the final cmd_vel publisher. Re-judge after +150.",
+    ),
+    "drive/behaviors/line_follow/crosswalk": (
+        756,
+        "accept: proposed at 756 on 2026-10-14 when it left line_follow (docs/plans/2026-10-10-core-line-follow-"
+        "size-unit.md, 2026-10-14 crosswalk addendum; independent re-judge by a read-only critic still owed): "
+        "gate.py 529 (D-573 crosswalk gate and CrosswalkGateMixin), report.py 122 (D-573 6 line_follow.crosswalk "
+        "view, CrosswalkReportMixin), zone.py 104 (D-491 camera crosswalk zones) and __init__.py 1. All run "
+        "under the LineFollowManager lock and generation; no own lock, thread, store or publisher. Moved out "
+        "because the parent unit was full (3167 of 3018+150) and a crosswalk safety fix needs room. Pure file moves plus "
+        "import lines; the old import paths stay as compatibility exports in the parent. Re-judge after +150.",
     ),
     "perception/front_camera/perception/drivable": (
         810,
