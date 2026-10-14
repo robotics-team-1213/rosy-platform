@@ -509,7 +509,9 @@ SIZE_VERDICTS = {
         "unit (docs/plans/2026-10-14-fleet-ledger-size-unit.md). Baseline31837 = the console-split 38822 split "
         "at the D-757 verdict commit61aa49b32 into server31837 + ledger6985 (measured). At branch base06e97383b "
         "the server was31862; that +25 and this branch's server share stay consumed allowance and are not "
-        "rebaselined; no functional-growth allowance was added. Previous verdict: "
+        "rebaselined; no functional-growth allowance was added. Later D-763 slices are net-zero on this "
+        "server unit: registry (step_action_kinds) or Cell growth may not use its remaining 101 lines "
+        "(re-judged 2026-10-14, ACCEPT WITH CONDITIONS). Previous verdict: "
         "split: D-763 slice 3 moved the browser console holder operations/site_ui/console into its own unit "
         "site_ui/console (docs/plans/2026-10-14-fleet-console-size-unit.md). Baseline38822 = the D-757 "
         "verdict56755 split at its commit61aa49b32 into server38822 + console17933 (measured). At branch base "
@@ -2338,6 +2340,15 @@ def test_size_units_are_real_subpackages_with_a_split_plan():
         if not any((ROOT / plan).is_file() for plan in plans):
             bad.append(f"{unit}: verdict cites no existing docs/plans split plan")
     assert bad == [], bad
+
+
+def test_fleet_server_holder_units_are_declared_holders():
+    """D-763: a holder unit counted without __init__.py must be one of fleet.server's SERVER_HOLDERS."""
+    layout = ast.parse((ROOT / "operations/fleet/fleet/_source_layout.py").read_text(encoding="utf-8"))
+    holders = next(ast.literal_eval(node.value) for node in layout.body if isinstance(node, ast.Assign)
+                   and any(getattr(target, "id", None) == "SERVER_HOLDERS" for target in node.targets))
+    assert {unit.removeprefix("fleet/fleet/server/") for unit in FLEET_SERVER_HOLDER_UNITS} <= set(holders)
+    assert all(unit.startswith("fleet/fleet/server/") and unit in SIZE_UNITS for unit in FLEET_SERVER_HOLDER_UNITS)
 
 
 def _allowance(key: str, at_verdict: int, now: int) -> int:
