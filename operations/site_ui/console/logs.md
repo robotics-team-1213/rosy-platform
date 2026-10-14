@@ -257,3 +257,10 @@
 - 변경: 카드 태그 글을 `정지 한도 없음`으로 바꿨다. 이유는 `hold_back`·`no_goal_lease`·`leg_unknown` 셋이다. `ruleMTag`의 쓰지 않는 `reason` 값과 카드의 `data-rule-m`을 지웠다. 오프라인 로봇은 서버가 판정을 주지 않아 주의 행도 카드 태그도 없다.
 - 증거: `node --test`(link-tag, attention-stale, queue-inline) 통과. 브라우저 시험과 화면 확인 없음.
 - gate 변화: 없음.
+
+## 2026-10-14 · ce31980a5 · feat(console): 작업 칸에서 승인 대기 팔 작업 승인 (D-741 7)
+
+- 변경: `/console?view=work`에서 `PROPOSED` 팔 작업(Mission)을 고르면 오른쪽 작업 칸에 `실행 승인`(`#work-admit`)이 선다. Cell과 같은 기존 `POST /api/fleet/missions/{id}/admit`에 `/api/fleet/dispatch-control`의 `generation`을 `expected_generation`으로 보낸다. 보기 전용이면 `운영자 권한이 필요합니다`, 공유 토큰이면 `이름 있는 운영자 로그인이 필요합니다`를 단추 아래 사유로 적고 막는다(세션의 역할·주체에서 나온다). 그 밖의 거절은 서버가 답한 말을 그 자리에 적고, 5xx·연결 실패는 결과 미확인으로 적고 다시 보내지 않는다. 성공하면 목록과 칸을 다시 읽는다. 새 API·필드는 없다.
+- 하지 않은 것: `반려`는 없다. `PROPOSED` 작업을 반려하는 서버 경로가 없다(Cell `cancel`은 `PROPOSED`를 거절하고, Mission에는 취소 경로가 없다). Cell 작업은 `/api/fleet/work`에 나오지 않아(`fleet_cell_jobs`는 이 조회에 없다) 제안자 규칙과 `적재 배치 미리보기 열기`는 이 목록에 설 자리가 없다. 서버가 그 규칙으로 거절하면 그 코드가 사유로 보인다.
+- 증거: 브라우저 시험 `test_pending_seat_approves_through_the_existing_admit_route`(1366·390 × 승인·보기 전용·공유 토큰·거절·미확인)를 포함한 `test_work_overview_browser.py` 20 passed, AI PC Chromium(`X:/DevTemp/browser-run/work-approval-b4.txt`, sha 226268b05). 첫 실행에서 `ui-button`이 `hidden`을 무시해 단추가 늘 보이고, 서버 코드가 든 사유가 1366에서 단추를 넘치게 한 것을 잡아 226268b05에서 기존 규칙(`#dispatch-rearm[hidden]`, `.work-list ui-button`)에 이름을 더해 고쳤다. 화면을 사람이 본 적은 없다.
+- gate 변화: Fleet 크기 단위 +25줄. D-753 증가 허용 0을 넘는다. 지울 수 있는 죽은 코드(`next_running_mission` 등)는 main에서 이미 지워졌다.
