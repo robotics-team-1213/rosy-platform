@@ -108,10 +108,18 @@ class TripProgress:
 
     def _fence(self, robot_id: str) -> None:
         """D-760 8 review: the trip's next state read starts after every read begun so far (its last step, a
-        junction send, a link loss). A pose port without read numbers (a test fake, SIM) is not fenced."""
-        number = getattr(getattr(self, "_poses", None), "read_number", None)
+        junction send, a link loss). The numbers are those of the shared read the junction port reads
+        (``read_number``, app.py: MapPoseService); a junction port without them (a test fake) is not fenced."""
+        number = getattr(getattr(self, "_junction", None), "read_number", None)
         if number is not None:
             self._read_after[robot_id] = number(robot_id)
+
+    def _after(self, port, robot_id: str) -> dict:
+        """``{"after": n}`` for a read on ``port`` that is the junction's numbered read, else nothing: the SIM
+        pose port has its own reads, and a read number means nothing to it."""
+        number = getattr(getattr(self, "_junction", None), "read_number", None)
+        same = number is not None and getattr(port, "read_number", None) == number
+        return {"after": self._read_after.get(robot_id, 0)} if same else {}
 
     async def _link_wait(self, live: LiveTrip, kind: str) -> bool:
         """D-760 4: a robot call or state read failed on a trip that holds its lease. The trip stays open in

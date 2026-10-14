@@ -764,7 +764,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
-                             junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state),
+                             junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state, map_pose.read_number),
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
