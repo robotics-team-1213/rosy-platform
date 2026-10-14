@@ -160,5 +160,4 @@ async def reconcile_tasks(service, console):
             await task_result(service.store, console._client(task['robot_id']), task, events=service.core_events)
         except Exception:
             return
-
     await asyncio.gather(*(reconcile(row) for row in rows))
