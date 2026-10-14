@@ -98,7 +98,7 @@ The numbered chapters stay the target shape. The scan picture is the repository 
 | Read | Status | Boundary |
 |---|---|---|
 | [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md) §6 | Accepted | Perception observes. AI keeps a versioned candidate. Fleet keeps the ledger. CORE commands |
-| [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md) | Proposed, docs only | Perception → World State → Supervisor → Skill → Planner/Control. Live fact shape is Fleet `MapPose` |
+| [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md) | Proposed, docs only | Perception → World State → Supervisor → Skill → Planner/Control. Live pose is World `MapPose` (`rosy.world.state.projections.map_pose`, D-752). The proposal's `fleet/localization/map_pose.py` path is not live |
 | [v0.2 §3.1](../reference/ROSY_Platform_Architecture_Design_v0.2.md) | target design | `world` contrasts observations with confirmed events. A generative world model is outside this boundary |
 | [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), [D-527](../adr/D-527-decision-test-host-boundaries.md) | Accepted | model PC evaluates, AI PC infers an approved version, Fleet decides, CORE rechecks. Dotted lines are the target connection |
 | [Pipeline](../plans/2026-10-08-decision-model-pipeline-design.md), [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md) | D-492 Proposed | VLM identity and text choice stay separate tasks |

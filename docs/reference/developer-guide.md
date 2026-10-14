@@ -3,7 +3,7 @@
 현재 전체 배치와 각 holder의 유지 이유는 [폴더 책임표](platform-folder-responsibilities.md), 실제 이동·설치·원격 검증은 [D-637 결과](../validation/d637-remaining-folders-2026-10-11/result.md)를 본다. 모든 pytest는 D-584에 따라 원격 시험 PC 또는 CI에서 실행한다.
 
 - **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
-- **갱신:** 2026-10-11 (D-637 실제 source holder 반영)
+- **갱신:** 2026-10-14 (폴더 이름은 [편집 집](platform-folder-responsibilities.md#편집-집). World 자세는 D-752)
 - 처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
 
 ## 구조
@@ -13,8 +13,8 @@
 | 폴더 | 무엇 |
 |---|---|
 | `contracts/` | 공유 계약: `foundation`(core_common 타입·프로토콜·설정), `ros_idl`(ROS 인터페이스), `motion`, `skill`, `learning`. 계약은 동작을 실행하지 않는다 |
-| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `control/drive`(길찾기·추종·복구·보정), `perception`(센서·vision, 기존 배포 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `execution`, `ui`(대시보드·Pilot·face) |
-| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `decision`(기존 제안 코드), `ui/console`(Fleet가 설치·제공하는 자산), `vision`(천장 카메라), `processes`, `execution`, `world`, `apps`, `ui/cam`(Rosy Cam 앱), `site_devices`(도크·신호등 펌웨어) |
+| `middleware/` | 로봇 위에서 도는 것: `core`(CORE 게이트웨이·서비스·이벤트·API), `drive`(길찾기·추종·복구·보정), `perception`(센서·앞 카메라, ROS 패키지 `control`), `devices`(Pinky·OMX 프로필·bringup·adapter), `drivers`, `skills`, `robot_execution`(로컬 policy·receipt), `robot_ui`(대시보드·Pilot·face) |
+| `operations/` | 현장 서버 쪽: `fleet`(미션·원장·admission·serving), `world`(현재 자세. Fleet이 `rosy.world.state.projections.map_pose`를 직접 import, D-752), `decision`(기존 제안 코드, Fleet 배포), `site_ui/console`(Fleet가 설치·제공하는 자산), `overhead`(천장 카메라), `site_execution`, `site_ui/cam`(Rosy Cam 앱), `processes`, `apps`, `site_devices`(도크·신호등 펌웨어), `situation` |
 | `learning/` | 데이터 정리·학습·모델 등록(`curation`, `training`, `registry`, `evaluation`), `envs/isaac`(Isaac Sim) |
 | `integrations/` | 로봇·시뮬레이션 adapter (`robots`, `simulation` — Gazebo 월드·다로봇 시뮬) |
 | `shared/web/` | 공용 웹 자산 (패키지 `web_common`) |
