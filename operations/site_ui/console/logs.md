@@ -221,3 +221,15 @@
 - 변경: 네 문서의 레일이 `관제·작업·기록·지도·설치` 다섯 영역이 됐다. 현장 지도와 Cell의 가로 앵커 줄(`.task-nav`)이 공용 하위 탐색 자리(`/common/app-shell.css`의 `.ui-subnav`)로 갔다. `/console?view=work`는 `전체 작업·승인 대기·끝난 작업·새 작업`을, `/console?view=records`는 `검토할 사건·열린 사건·닫힌 사건·AI 상황 사실·관제 기록`을 하위 탐색에 둔다. 화면은 `show`로 고르고 기존 `GET /api/fleet/work`, `GET /api/fleet/incidents` 답을 브라우저에서 거른다. `/console/cell`은 주소를 유지하고 `작업` 영역의 `새 작업`이다. 기록 영역에서는 사건 패널(또는 관제 기록)이 본문으로 올라가고 연 사건의 담당 인수·사람 검토·검토 폼이 오른쪽 칸 `원인과 조치`에 선다. 관제의 `기록·근거` 탭은 그대로다.
 - 증거: 원격 소스 시험 통과(`known_failures` NEW 0). 브라우저 시험은 시험 PC에서 조각마다 돌렸고 결과는 착지 보고에 있다. 화면을 사람이 본 적은 없다.
 - gate 변화: 없음. 검토 반영(2376c3886: 자리의 사건 이름, 한 번에 한 건을 스크립트로, 키·스크롤·상한 표기) 뒤 Fleet 크기 단위가 55464로 상한 55452를 12줄 넘었다. 판정은 올리지 않고, 저장소 어디서도 부르지 않는 Fleet 서버 코드 33줄(쓰지 않는 import 8, `mark_rejected`, `next_running`, `next_reconciliation`, `_ACTOR`, `formation_relay_kwargs`, `anchor_status`)을 지워 55439가 됐다(D-168). D-153 G2 캡처와 G3 사람 검토는 없다.
+
+## 2026-10-14 · 33f6d8415 · fix(fleet): 현장 지도·Cell의 열이 본문 폭에 답한다 (D-741 2)
+
+- 변경: `site-map.css`와 `cell/cell.css`의 `main`이 칸(`container-type: inline-size`)이 됐고 64rem 접힘이 `@media`에서 `@container`로 갔다. 레일 72px과 하위 탐색 232px 옆에서 넓은 배치는 본문 자체가 64rem일 때부터 선다. 30rem 전화 단 규칙은 뷰포트 그대로다. 머리와 비상 정지는 건드리지 않았다.
+- 증거: 고치기 전 측정(모델 PC Chromium, `X:/DevTemp/browser-run/snw-measure-fleet-1.txt`): 1024×768에서 본문 720px, 두 열이 336px씩, 세 열 폼의 칸 104px(1100에서 117px). 하위 탐색이 들어오기 전 같은 시트의 64rem 경계 값은 계산으로 154px다(잰 값이 아니다). 가로 넘침·가려진 하위 탐색 항목·잘린 단추 글은 없었고 Cell 하위 탐색의 아래 끝은 651px다. 고친 뒤(`snw-measure-fleet-2.txt`, sha 71e43aeed): 1024와 1100에서 한 열, 폼 칸 221px 이상, 1366에서는 전과 같은 두 열(칸 161px). 관련 브라우저 파일 넷 162 passed(`snw-fleet-files-1.txt`). 원격 소스 시험 known_failures NEW 0.
+- gate 변화: 없음. Fleet 크기 단위 56742 → 56744(기준 56755). 창 높이가 651px보다 낮은 넓은 창에서 Cell 하위 탐색의 아래 항목이 화면 밖에 남는지는 재지 않았다. Cell `요청 키` 입력은 1024에서 값(311px)이 칸(219px)보다 길어 입력 안에서 밀어 읽는다.
+
+## 2026-10-14 · ac505f819 · test(fleet): 기록 영역을 320×568·밝게·1024에서 잼 (D-741 8)
+
+- 변경: 제품은 그대로다. `test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme`이 가로 넘침, 비상 정지(화면 안, 위에 덮인 것 없음), 하위 탐색 다섯 항목, 판단 자리의 제목과 검토 폼(창 안, 잘리지 않음, 서로 겹치지 않음), 기록 자리 글의 대비를 잰다.
+- 증거: AI PC Chromium 6 passed(`X:/DevTemp/browser-run/snw-measure-records-3.txt`, sha ac505f819): 320×568 어둡게·밝게, 390×844 밝게, 1366×768 밝게, 1024×768 어둡게, 1100×800 밝게. 넘침 0, 글 45~47개 가운데 4.5:1 아래 없음, 320에서 폼 칸 296px, 1024에서 판단 자리 219px. 결함은 찾지 못했다.
+- gate 변화: 없음. 1024에서 `console.js`는 아직 뷰포트 폭으로 본문을 2:1로 나눠 판단 자리가 219px다(1366에서 333px). 쓸 수는 있어 고치지 않았다. 화면을 사람이 본 적은 없다.

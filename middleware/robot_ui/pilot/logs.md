@@ -888,3 +888,15 @@
 - 증거: 설정 포함 Gradle testDebugUnitTest 107 passed, failures/errors 0, assembleDebug 성공. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-14--022455--account-native--1143d2/logs/pilot-configured.txt. APK 공개 설정과 merged manifest의 정확한 callback/autoVerify를 확인했다. 원격 OMEN에서 test_shell_assets.py 4 passed, known_failures NEW 0 (같은 세션 logs/web-closure/run-1.txt).
 - 실행: 기존 wrapper에 testDebugUnitTest assembleDebug --max-workers=1 --no-daemon, -Prosy.accountConfig=<X 공개 fixture>, -Prosy.buildRoot=<X 출력>, --project-cache-dir <X cache>, -Pkotlin.compiler.execution.strategy=in-process를 전달했다. JVM heap은 1GB이며 Cam/Pilot은 순서대로 빌드했다.
 - gate 변화: SOURCE/JVM/APK. 운영 issuer/callback/signer 등록, 실제 Android app link와 Keystore, 장치 로그인 및 물리 주행은 확인하지 않았다. 현장 설정과 계정은 변경하지 않았다.
+
+## 2026-10-14 · f5e01bdea · test(pilot): 같은 sha에서 결과가 바뀌던 브라우저 시험 둘
+
+- 변경: 제품은 그대로다. `test_stick_takes_over_auto`는 주행 화면이 수동 모드를 잡았는지 모르는 채 `진행`을 한 번 눌렀다. `drive.js`는 engage 요청이 돌아오기 전의 누름을 버리고(`blocked: !engaged`) 다시 누르는 것이 없어 `GO_ACTIVE`가 10초 동안 오지 않았다. `_arm_auto`가 `조작 응답` 표시를 기다린다. 이 글은 수동 모드를 잡은 뒤의 hold 루프만 쓴다. 새 시험 `test_go_pressed_before_manual_mode_is_held_starts_nothing`이 engage 요청을 붙잡아 두고 그 사이의 누름이 CORE에 닿지 않음을 고정한다. 마지막 `대기` 확인은 멈추는 중이 아니라 idle을 기다린다. `test_startup_target_failure_retries_without_pinky_fallback`은 두 번째 시도의 끝을 안내 글로 판단했는데 그 글은 첫 실패 때 이미 떠 있다. `start()`가 화면을 갈아 끼우는 사이에 옛 단추를 재서 `bounding_box()`가 None이었다. 보이던 단추가 문서에서 떨어질 때까지 기다린다.
+- 증거: 모델 PC Chromium에서 두 시험과 새 시험, `test_go_releases_on_cancel_and_leave`를 다섯 번 연속 돌려 매번 4 passed(`X:/DevTemp/browser-run/snw-flaky-1.txt`~`5.txt`, sha f5e01bdea). 경합을 다시 만들어 실패를 본 것은 아니다. 근거는 코드 경로와 새 시험이다.
+- gate 변화: 없음. 시한을 늘리거나 잠을 넣지 않았다.
+
+## 2026-10-14 · 71e43aeed · feat(pilot): 전화 폭 접속 화면 앱 바의 로봇 이름 (D-741 3)
+
+- 변경: 64rem 아래 접속 화면에서 숨기던 로봇 이름(`[data-pilot-robot]`)을 이름 줄에 남겼다. 길면 말줄임이 된다. 30rem 아래에서는 워드마크 `Pilot`이 R 심볼로 접힌다(Fleet·Robot과 같다). 링크의 접근 이름은 그대로다. 주행·팔 화면, 접속 화면의 두 줄 격자, 비상 정지의 마크업·핸들러·순서는 바꾸지 않았다. 캐시된 시트가 바뀌어 `sw.js`의 캐시 이름을 올렸다.
+- 증거: 바꾸기 전 측정(AI PC Chromium, `snw-measure-pilot-1.txt`): 이름 줄 폭 390에서 252px·320에서 182px, 워드마크 79px, 비상 정지 82×74px. 바꾼 뒤(`snw-measure-pilot-2.txt`, sha 71e43aeed) `test_connect_app_bar_names_this_robot_at_phone_width` 4 passed: R 심볼 20px, `rosy_26` 61px, 긴 이름은 이름 줄 끝에서 잘리고, 이름을 숨겼을 때와 비상 정지 상자·머리 높이가 같다. `test_pilot_browser.py` 전체 153 passed(`snw-pilot-file-1.txt`). 원격 소스 시험 `middleware/robot_ui/pilot/test`와 `shared/web/test`는 known_failures NEW 0(`X:/DevTemp/shell-narrow/`).
+- gate 변화: 없음. 접속 화면 머리는 전화 폭에서 103px 두 줄이다(D-466 그대로). 64px 한 줄로 만들지 않았고, 상태 표와 `운용 지도`까지 한 줄에 서는지는 재지 않았다. Android 셸은 이름표를 숨기므로 달라지지 않는다. 실기 전화·태블릿에서는 보지 않았다.
