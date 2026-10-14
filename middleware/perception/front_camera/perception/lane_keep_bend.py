@@ -90,32 +90,25 @@ def bend_target(bends, half, radius, target, strategy):
     return _pursuit_point(origin, along, radius)[0], f"bend_{side}", math.inf
 
 
-def near_run(points, ends, half, parallel, limits):
-    """[line] for a rejected steep line: the straight paint run nearest base_link on its near end's side
-    (the lane edge before it curves into it; m20 roundabout exit), or [] if that side has a `parallel` line
-    a half-width long. `limits`: the keeper's (steep angle, ambiguous offset, inlier half-band, gap, shortest
-    piece). Paint past the ambiguous offset, inside the lane width and a half-width of the near end; nearest
-    first, a point joins within the half-band of the run's own y-on-x fit, a gap ends the run."""
-    steep, ambiguous, band, gap, shortest = limits
-    near_y = float(min(ends, key=lambda p: float(p[0]))[1])
-    if any((y > 0.0) == (near_y > 0.0) and far - near >= half for y, near, far in parallel): return []  # noqa: E701
-    lateral = points[:, 1] * math.copysign(1.0, near_y)
-    pool = points[(lateral > ambiguous) & (lateral <= 2.0 * half) & (np.abs(points[:, 1] - near_y) <= half)]
-    n = sx = sy = sxx = sxy = 0.0
-    first = last = None
-    fit = lambda: (n * sxy - sx * sy) / (n * sxx - sx * sx)  # noqa: E731 — slope of y on x
-    for x, y in pool[np.argsort(pool[:, 0], kind="stable")].tolist():
-        if last is not None and x - last > gap:
-            break
-        if last is not None and last - first >= band and abs(y - (sy + fit() * (n * x - sx)) / n) > band:
-            continue
-        first, last = x if first is None else first, x
-        n, sx, sy, sxx, sxy = n + 1, sx + x, sy + y, sxx + x * x, sxy + x * y
-    if last is None or last - first < band or abs(math.atan(fit())) > steep or (last - first) * math.hypot(1.0, fit()) < shortest:
+def near_run(recovered, ends, half, parallel, taken, limits):
+    """[line] for a rejected steep line: the lane edge before it curves into it (m20 roundabout exit), or [].
+    `recovered`: the frame's paint refitted favouring the heading (extract_lines' blob retry: every usable,
+    flank, cell and length check kept), so the steep line's drop band cannot eat the run. Taken: the nearest
+    one under the steep angle starting nearer than the steep line's near end and within `band` of that end's
+    offset there; that end past the ambiguous offset and inside the lane width. None when that side has a
+    `parallel` line a half-width long, or its run is already `taken` (one per side)."""
+    steep, ambiguous, band = limits
+    near = min(ends, key=lambda p: float(p[0]))
+    x, y = float(near[0]), float(near[1])
+    if not ambiguous < abs(y) <= 2.0 * half or any((v > 0.0) == (y > 0.0) and far - start >= half for v, start, far in parallel):
         return []
-    direction = np.array([1.0, fit()]) / math.hypot(1.0, fit())
-    return [{"centre": np.array([first, (sy + fit() * (n * first - sx)) / n]), "direction": direction,
-             "along": (0.0, (last - first) / float(direction[0]))}]
+    fits = [line for line in nearest_first(recovered) if abs(line["direction"][1]) <= math.sin(steep)
+            and min(float(line["centre"][0] + line["direction"][0] * t) for t in line["along"]) < x
+            and abs(_lateral_at(line["centre"], line["direction"], x) - y) <= band]
+    if not fits or any(fits[0] is line for line in taken):
+        return []
+    fits[0]["near_run"] = True  # kept out of the corner and junction rules
+    return fits[:1]
 
 
 def stop_short(target, room):
