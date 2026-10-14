@@ -32,7 +32,7 @@ object RosyColors {
     val Paper = Color(RosyTokenColors.Ink) // --ink
     val Muted = Color(RosyTokenColors.InkQuiet) // --ink-quiet
 
-    /** ROSY wordmark only (D-277). Not for status, focus, commands or data. */
+    /** ROSY wordmark and its R mark only (D-277, D-654 3). Not for status, focus, commands or data. */
     val BrandRose = Color(RosyTokenColors.BrandRose) // --brand-rose
 
     /** Status colours are for thresholds only; nominal state has no colour (D-82). Crit is a fill with Paper ink. */

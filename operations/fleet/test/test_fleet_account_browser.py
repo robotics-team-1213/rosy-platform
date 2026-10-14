@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
-def account_page(tmp_path, request):
+def account_page(tmp_path, request, account_backend):
     from playwright.sync_api import sync_playwright
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://127.0.0.1:8080', 'robot-only')],
                            [FakeRobot('rosy_01')])
@@ -33,6 +33,8 @@ def account_page(tmp_path, request):
         logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': hash_password('pw-1234')}
     app = create_app(console, task_service=tasks, site_users={}, site_logins=logins,
         web_common=ROOT / 'shared' / 'web', start_task_dispatcher=False)
+    if account_backend == 'managed':
+        app.state.password_sessions.bootstrap_accounts('alice', 'test-site')
     listener = safe_listener()
     origin = f'http://localhost:{listener.getsockname()[1]}'
     server = uvicorn.Server(uvicorn.Config(app, log_level='error', timeout_graceful_shutdown=3))
@@ -55,6 +57,11 @@ def account_page(tmp_path, request):
         worker.join(timeout=20)
         listener.close()
         assert not worker.is_alive()
+
+
+@pytest.fixture(params=['legacy', 'managed'])
+def account_backend(request):
+    return request.param
 
 
 def _credentials(page):
