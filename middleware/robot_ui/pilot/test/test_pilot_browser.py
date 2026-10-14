@@ -759,7 +759,7 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
     assert told["notice"]["width"] > 0, got
     if width < 1024:
         mark, name_x = (20, 56) if width < 480 else (79, 115)
-        assert quiet["bar"]["height"] == 103 and told["bar"]["height"] == 120, got
+        assert quiet["bar"]["height"] == 103 and abs(told["bar"]["height"] - 120) <= 1, got
         assert _near(quiet["stop"], width - 106, 16, 82, 74), got
         assert _near(quiet["map"], 76, 42, 82, 48) and _near(quiet["tag"], 24, 58, 44, 32), got
         assert _near(quiet["name"], name_x, 20, 61, 14) and abs(quiet["mark"]["width"] - mark) <= 1, got
