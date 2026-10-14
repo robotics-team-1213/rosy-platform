@@ -1,4 +1,4 @@
-﻿"""Browser proof of AI candidate publication and read-only review history."""
+"""Browser proof of AI candidate publication and read-only review history."""
 from contextlib import contextmanager
 import threading
 
@@ -131,7 +131,7 @@ def test_frame_switch_removes_ai_and_versions_before_delayed_mask_failure(tmp_pa
         expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
         assert len(held) == 1
         held[0].fulfill(status=503, json={'error': 'fixture mask read failed'})
-        expect(page.locator('#pixel-error')).to_contain_text('fixture mask read failed')
+        expect(page.locator('#pixel-error')).to_contain_text('\uac80\uc218 \uc11c\ube44\uc2a4\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4')
         expect(page.locator('#review-ai-jobs')).to_have_count(0)
         expect(page.locator('#review-versions')).to_have_count(0)
         assert not jobs.status(0)['jobs'] and not jobs.status(1)['jobs']
