@@ -632,9 +632,9 @@ def _authority(rig, required):
     rig.m._config = replace(rig.m.config, authority_required=required)
 
 
-def _crosswalk(rig, state):
+def _crosswalk(rig, state, **status):
     """The D-573 gate's reported state (the robot is stood by the caller, as in test_junction_bend)."""
-    rig.m._xwalk.status = lambda now: {'state': state}
+    rig.m._xwalk.status = lambda now: {'state': state, **status}
 
 
 def _held(rig, seconds, how):
@@ -696,10 +696,10 @@ def test_a_20_s_authority_hold_mid_arc_times_out_and_holds():
     assert (decision.linear, decision.angular, status.state) == (0., 0., 'HOLD')
 
 
-@pytest.mark.parametrize('state', [None, 'armed', 'crossing'])
+@pytest.mark.parametrize('state', [None, 'armed'])
 def test_without_a_hold_the_deadline_is_todays(state):
-    """No hold (no zone, an armed zone, a crossing: the gate moves the robot): the deadline is
-    STEP_MARGIN_S + length/v from the open, as before stage 2b."""
+    """No hold (no zone, an armed zone): the deadline is STEP_MARGIN_S + length/v from the open,
+    as before stage 2b."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
@@ -724,6 +724,49 @@ def test_a_hold_during_the_ir_correction_stands_its_limit_too():
     _held(rig, 3., 'authority')
     assert running(rig) and c['phase'] == 'away'
     assert (a['deadline']-before[0], c['deadline']-before[1]) == (pytest.approx(3., abs=.051),)*2
+
+
+def _moved(rig, ticks, **step):
+    """The arc deadline's move over `ticks` standing steps."""
+    before = rig.m._arc['deadline']
+    for _ in range(ticks):
+        rig.step(seen=False, **step)
+    return rig.m._arc['deadline'] - before
+
+
+def test_two_s_unheld_then_a_3_s_hold_moves_the_deadline_3_s():
+    """Review 4(a): unheld time never counts, however long it ran before the hold."""
+    rig = ArcRig()
+    rig.open(dict(SEGMENT, length_m=1.))
+    rig.drive(40, seen=False)                 # 2 s unheld
+    _authority(rig, True)
+    assert _moved(rig, 60) == pytest.approx(3., abs=.05)
+    assert running(rig)
+
+
+def test_a_stalled_tick_that_wakes_held_does_not_credit_the_gap():
+    """Review 4(b): a 5 s tick-thread stall ending in HOLDING credits stale_after_s at most."""
+    rig = ArcRig()
+    rig.open()
+    rig.drive(10, seen=False)
+    _authority(rig, True)
+    before = rig.m._arc['deadline']
+    rig.now += 5.
+    rig.step(seen=False)
+    assert 0. < rig.m._arc['deadline'] - before <= rig.m.config.stale_after_s + 1e-9
+
+
+def test_a_crossing_held_by_a_return_ahead_is_credited_and_a_crossing_takes_its_share():
+    """Review 4(c): a crossing stopped by a return ahead (look_progress set) stands the clock; a
+    moving crossing at crosswalk_cross_speed 0.04 against the arc's 0.08 takes half its time."""
+    rig = ArcRig()
+    rig.open()
+    rig.drive(10, seen=False)
+    _crosswalk(rig, 'crossing', look_progress=0.)
+    assert _moved(rig, 40) == pytest.approx(2.)
+    _crosswalk(rig, 'crossing', look_progress=None)
+    assert _moved(rig, 40) == pytest.approx(1.)
+    assert running(rig)
 
 
 def test_the_hold_cap_is_per_arc_not_per_hold():
