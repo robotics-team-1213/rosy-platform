@@ -42,6 +42,8 @@ GUARD_SET = (
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",
+    # D-762 stage 0: Markdown under a FULL trigger is not FULL; placement still runs.
+    "test/architecture/test_document_placement.py",
 )
 
 # D-436 §2: a change here can break any suite, so the full tier runs.
@@ -157,17 +159,14 @@ class Selection:
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
+    #: FULL only: what tools/land.py runs on the lab PCs (D-762 stage 0).
+    full_invocations: list[list[str]] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
                 "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
-                "full_invocations": lab_full_invocations() if self.mode == "full" else []}
-
-
-def lab_full_invocations() -> list[list[str]]:
-    """D-762 stage 0: CI's full matrix as one lab-PC run (suites unsharded, root test/ whole)."""
-    return [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
+                "full_invocations": self.full_invocations}
 
 
 def _match(path: str, pattern: str) -> bool:
@@ -340,6 +339,19 @@ def _full_paths(repo: Repo) -> list[str]:
     return [p for p in dict.fromkeys(paths) if repo.exists(p)]
 
 
+def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[str]]:
+    """D-762 stage 0: the full tier on the lab PCs, never fewer suites than the local selection.
+
+    CI's full matrix (suites unsharded, root test/ whole), then every registered module
+    suite (`_full_paths`) and every `local` path none of those already covers.
+    """
+    ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
+    covered = [p for inv in ci for p in inv if not p.startswith("-")]
+    rest = [p for p in [*_full_paths(repo), *(p for inv in local for p in inv)]
+            if not any(_under(p, c) for c in covered)]
+    return ci + pack(repo, list(dict.fromkeys(rest)))
+
+
 def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
     """Group tests without duplicate basenames or oversized remote commands."""
     kept = [p for p in paths if not any(o != p and _under(p, o) for o in paths)]
@@ -410,7 +422,9 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
         if referencing or importing or trigger:
             continue
         if path.endswith((".md", ".test.mjs")):
-            continue  # D-436 2: a Markdown note outside every module runs the guards only; a node test only itself.
+            # D-436 2: a Markdown note outside every module runs the guards only. No runner runs
+            # *.test.mjs outside a web/ dir today (test/learning/perception), so FULL would add nothing.
+            continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
@@ -447,6 +461,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
     sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.mode == "full":
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
 
@@ -544,6 +559,7 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
         sel.invocations = pack(repo, sorted(sel.reasons))
         sel.local_invocations = [list(GUARD_SET)]
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix and allow_full and sel.mode != "full":
         sel.mode = "full"
         sel.escalations.append("forced (--full): CI event other than pull_request")

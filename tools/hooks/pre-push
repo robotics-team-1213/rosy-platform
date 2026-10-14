@@ -91,13 +91,23 @@ EOF
 
 # D-430 §5, D-762 stage 0: the rule CI's scope job enforces, on the range a push to main
 # makes it check (origin/main..tip), refused here rather than red on main after the push.
-echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
-"$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" || {
-  echo "[pre-push] each commit listed needs a Safety-Review: trailer in its own message (no --amend/rebase here):" \
-       "re-create it on a branch from main with the trailer, or EXEMPT its SHA in tools/harness/safety_review.py" \
-       "with an independent review (D-430 §5)" >&2
+# No origin/main would narrow the check to the tip alone (the new-branch rule): refuse instead.
+git rev-parse --verify -q origin/main >/dev/null || {
+  echo "[pre-push] no origin/main ref: the Safety-Review range cannot be checked; git fetch origin first" >&2
   exit 1
 }
+echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
+if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 2>&1)"; then
+  printf '%s\n' "$SAFETY_OUT" >&2
+  case "$SAFETY_OUT" in
+    *"without a \`Safety-Review:"*)
+      echo "[pre-push] the commits listed are already in the pushed range and stay there if re-created;" \
+           "the way out is their full SHA in EXEMPT in tools/harness/safety_review.py with an independent" \
+           "review (D-430 §5). Ask the author named above." >&2 ;;
+  esac
+  exit 1
+fi
+printf '%s\n' "$SAFETY_OUT"
 
 FAST_SUITES=(
   test/test_harness_contracts.py
