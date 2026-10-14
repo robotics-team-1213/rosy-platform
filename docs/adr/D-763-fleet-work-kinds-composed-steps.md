@@ -318,3 +318,6 @@ D-12, D-55, D-330, D-438, D-517, D-577, D-622, D-760은 그대로 따른다.
 
 **다른 기록에 남길 가리킴.** 이 개정은 다른 기록의 파일을 고치지 않는다. D-741, D-664, D-403의 해당 항과 D-420, D-541, D-494, D-573에는 착지 뒤 "D-763이 이 항을 바꾼다"는 한 줄을 따로 더한다.
 
+> 2026-10-14 부기(조각 1·3 착지): 조각 1의 "주인이 있는가" 함수는 `trip_guard.py`가 아니라 `operations/fleet/fleet/server/console/console_view.py`의 `trip_refusal()`이다. trip 감시가 설치되지 않은 콘솔에서도 답하고, 안전 경로 파일에 새 import가 필요 없어서다. `trip_runner.py`의 시작 거절(콘솔이 이미 움직이는 로봇)은 반대 질문이라 합치지 않았다. 조각 3은 브라우저 콘솔을 별도 크기 단위 `site_ui/console`로 등록한 뒤 들어갔다([계획](../plans/2026-10-14-fleet-console-size-unit.md)).
+
+> 2026-10-14 부기(조각 2): 기다림 사유와 상한은 `operations/fleet/fleet/server/ledger/trip_progress.py` `_wait_bound`에 있다(`link_wait`·`authority` = lease ttl, `signal` = `stall_s`, 횡단보도 `crosswalk_look`·`crosswalk_wait`·`crosswalk_held` = 15 s `CROSSWALK_WAIT_S`). CORE는 사유를 `line_follow.regulation_wait`(v1.227)로 알린다. 조각 2는 trip 읽기에 `waiting`·`bound_s`·`over_bound`를 낸다(v1.232). 상한을 넘으면 관제는 개입이 아니라 주의 "대기 상한 넘음 · <사유>"를 보인다(개정 2 질문 7).

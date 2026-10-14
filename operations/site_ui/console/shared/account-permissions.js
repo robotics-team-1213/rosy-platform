@@ -4,6 +4,11 @@ export function canManageAccounts(session) {
       && grant.capabilities.includes('accounts.manage'));
 }
 
+export function canViewAccountSetup(session) {
+  return canManageAccounts(session) || (session?.via === 'cookie' && !session.account_id
+    && !session.password_change_required && session.role === 'policy-admin');
+}
+
 export const CAPABILITIES = {
   site: {'accounts.manage': '계정 관리', 'fleet.read': '관제 조회', 'fleet.operate': '관제 조작',
     'fleet.policy': '관제 정책', 'camera.manage': '카메라 관리', 'games.operate': '게임 조작'},

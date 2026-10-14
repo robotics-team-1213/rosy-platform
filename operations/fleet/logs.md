@@ -3641,3 +3641,52 @@
 - 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
 - gate 변화: 없음. 동작 같음.
 - 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
+
+## 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+
+- 변경: `step_action_kinds.StepActionKind`에 `approval`(값 `two_person`·`proposer_only`·`one_person`, 엄한 순서 `APPROVALS`)을 더했다. `CELL_TRANSFER`는 `two_person`. 레거시 `PICK_PLACE`는 단계 원장 규칙이 없어 `_LEGACY_APPROVALS`에 `proposer_only`로 따로 적었다(실물 하달 조각에서 두 사람으로, 개정 2 질문 5). `required_approval(kinds)`는 가장 엄한 값을 주고 모르는 종류·빈 목록은 `ValueError`. `mission_routes` admit은 `decidable()`로 등록부 판정을 읽고 `candidate.kind` 분기를 지웠다. 코드와 순서는 그대로(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404, `PROPOSAL_NOT_RESOLVED` 409).
+- 증거: `test_approval_registry.py`(등록된 모든 종류에 승인 값, 종류별 값, 모르는 종류 거절, 제안 단계의 모르는 종류 422, 두 사람 종류의 제안자 403과 다른 운영자 승인, 제안자만 종류의 다른 운영자 404·viewer 403, 공유 콘솔 토큰 403). 원격 119 passed: `X:/DevTemp/approval-registry/s5/run-1.txt`.
+- gate 변화: 없음. 동작은 같다.
+
+## 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
+
+- 변경: `POST /api/fleet/missions/{mission_id}/reject`, 본문 `FleetWorkDecisionRequest {expected_generation}`(`core_common.protocol.work`, admit·Cell resume도 같은 모델). 이름 있는 운영자만, 볼 수 있는 범위는 admit과 같은 등록부 판정. 제안자는 `WITHDRAWN_BY_PROPOSER`, 다른 운영자는 `REJECTED_BY_OPERATOR`. Cell Job은 취소와 같은 끝 상태 HOLD/`CANCELLED_BY_OPERATOR`(resume·cancel·admit 거절, 사건 `CELL_JOB_REJECTED`), 레거시 Mission은 `CANCELED`(사건 `MISSION_REJECTED`). claim 없음. `PROPOSED`가 아니거나(두 번째 거절 포함) 정지 세대가 다르면 409 `MISSION_REJECT_REFUSED`. 크기: admit의 두 원장 분기를 한 경로로, 제안 생성·resolve의 Cell 역할 검사를 도우미 하나로, `cell_job_store._json`을 `mission_store._json` 재사용으로 줄였다.
+- 증거: `test_approval_registry.py` 거절 시험(제안자 철회와 다른 운영자 404, 다른 운영자의 Cell 거절, viewer·서비스 403, 낡은 세대 409, 두 번째 거절 409, 거절 뒤 admit·resume 409, claim 없음, 감사 사건의 행위자, 공유 토큰 403, 잘못된 본문 422). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 화면(조각 5c)은 이 브랜치에 없다.
+- 결정: v1.228·v1.229는 착지 전 브랜치(`fix/odom-log-monotonic-epoch`, `feat/junction-turn-map-entry`)가 쓰고 있어 v1.230을 썼다. 대화 요청에 연결된 작업의 서버 쪽 직접 승인 차단은 이 조각에서 하지 않았다.
+
+## 2026-10-14 · 65e315231 · D-763 조각 5·5b 보안 검토 반영
+
+- 변경: `decidable()`가 resolve된 원장 행의 단계 종류(Cell Job 단계의 `action_kind`, Mission `action_kind`)에서 가장 엄한 승인을 읽는다. 등록부에 없는 종류는 500이 아니라 409 `APPROVAL_RULE_UNREGISTERED`. resolve 전 제안의 보이는 범위는 전과 같다(Cell·제안자 409, 그 밖 404). Cell 거절은 새 메서드 대신 `CellJobStore.cancel(decision=, expected_generation=)`(사건 `CELL_JOB_REJECTED` 그대로). 대화 요청에 연결된 작업의 거절은 기존 결과 회신 경로로 요청자에게 간다: Cell `HOLD`는 이미 회신했고 Mission `CANCELED`를 관측 상태에 더했다. 작업 흐름 행은 `LINKED`(그 관계의 끝 상태)로 남는다. `work.py` docstring에 v1.230.
+- 증거: `test_approval_registry.py`(경로 수준의 가장 엄한 값, 미등록 종류 409, 대화 요청 연결 작업 거절의 회신). 원격 `X:/DevTemp/approval-registry/r2/run-1.txt`, secret-scan 가드 `test/test_release_boundary_guards.py` 포함, `known_failures` 0 new.
+- gate 변화: 없음.
+
+## 2026-10-14 · c53057fef · Fleet 작업 원장을 자기 크기 단위로 등록 (D-763 5·5b)
+
+- 변경: `docs/plans/2026-10-14-fleet-ledger-size-unit.md`. `fleet/fleet/server/ledger` 단위, 판정값 6,985(`61aa49b32`에서 잼), `fleet` 판정값 31,837. 지금 서버 31,886, 원장 7,036, 관제 18,023. 원장은 `__init__.py` 없는 `fleet.server` 보관 자리라 하위 패키지 시험이 `FLEET_SERVER_HOLDER_UNITS`도 받는다.
+- 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 독립 재판정 전.
+
+## 2026-10-14 · 8163f878f · feat: D-759 개정 1 회전 지시에 출구 차로의 map_entry를 싣는다 (API v1.231)
+- 변경: `server/ledger/trip_runner.py::_step_lane`이 `lane_turn_map_entry` 로봇에게, 찾은 자세에 `odom_stamp`가 있을 때 `left`·`right`에 `map_entry {yaw_rad, pose_yaw_rad, odom_stamp_s}`를 더한다. `yaw_rad`는 출구 차로의 `start_tangent`다. `console_view.TripCaps.lane_turn_map_entry`, trip 보기 `caps.lane_turn_map_entry`.
+- 증거: `test_trip_turn_map_entry.py`(능력 읽기, 값, 그 밖의 필드는 오늘과 같음, stamp가 없으면 싣지 않음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. fleet 제품 줄 수는 0 증가다. `exit_segment` 조건문을 한 줄로, D-520 주석 두 줄을 한 줄로, `TripCaps`의 D-551 주석을 필드 옆으로 옮겼다.
+## 2026-10-14 · 68a91feca · D-763 조각 2: trip 읽기에 기다림 판정의 답을 싣는다
+
+- 변경: `ledger/trip_progress.py` `_waiting`이 판정할 때마다 `view.wait`에 `bound_s`·`over_bound`·`waiting`을 적는다. 정체 시계가 쓰는 판정 그대로다(두 번째 판정 없음). 줄 수 같음(서버 순증 0). 정체 규칙의 동작은 같다. API v1.231(문서는 f38a5093a).
+- 증거: 원격 시험(모델 PC, f38a5093a) 284 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 사유마다 상한 안 기다림·넘으면 `over_bound`, 사유가 바뀌어도 한 번, 진행이 끝냄, `link_wait`의 lease 상한.
+- gate 변화: 없음. `GET /api/fleet/work`에는 trip 행이 없어(조각 4) trip 읽기에만 실었다.
+- 결정: D-763 8항, 구현 조각 2.
+
+## 2026-10-14 · 7c26a028c · D-763 조각 2 검토: 상한 넘김은 해결기 몫, 지난 tick의 답을 남기지 않는다
+
+- 변경: `ledger/trip_runner.py` `_step`이 맨 앞에서 `view.wait`의 `waiting`·`bound_s`·`over_bound`를 None(모름)으로 둔다. `_waiting`까지 가지 않고 끝난 tick은 지난 답을 보이지 않는다. 세 키는 정체 규칙이 읽지 않으므로 정체 시계는 같다. 서버 순증 0(`trip_progress.py` 주석 한 줄 줄임).
+- 증거: 원격 시험(AI PC, 7c26a028c) 285 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 자세를 잃어 `_stalled` 전에 끝난 tick에서 세 키가 None.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 7. 상한을 넘은 기다림은 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다.
+
+## 2026-10-14 · f79947c25 · D-763 조각 2 검토 2: tick마다 한 번 쓰고, 보고가 있을 때만 상한 넘김
+
+- 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
+- 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
+- gate 변화: 없음.

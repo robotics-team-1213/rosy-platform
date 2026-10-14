@@ -483,6 +483,18 @@ def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
     assert rig.x == pytest.approx(.25, abs=.01)           # the arc start did not move
 
 
+def test_a_short_odom_gap_while_bending_holds_and_the_bend_goes_on():
+    """Gazebo m27: a 0.6 s odom gap mid-bend aborted the bend ('odom') and ended the trip. Within the
+    phase limit a missing pose holds the maneuver; a new odom run still aborts (below)."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    for _ in range(12):                                   # 0.6 s without a pose
+        decision, status = site_step(rig, pose=False)
+        assert status.junction.state == 'bending'
+    assert status.reason == 'junction_pose_gap' and decision.linear == 0.
+    until(rig, 'reacquiring')
+
+
 def test_odom_restart_while_armed_aborts():
     rig = armed_rig()
     site_step(rig, move=True)
@@ -738,7 +750,8 @@ def test_a_malformed_map_entry_is_refused(bad):
 def test_map_entry_belongs_to_bend():
     rig = _wall_rig()
     with pytest.raises(ValueError):
-        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=dict(map_entry=_entry(rig)))
+        # D-759 rev 1: a left/right turn takes one too (test_junction_turn_map_entry.py)
+        rig.m.set_junction('straight', 'J1', 10., None, None, None, expect=dict(map_entry=_entry(rig)))
 
 
 def test_the_own_line_rule_reads_the_map_entry_axis():
