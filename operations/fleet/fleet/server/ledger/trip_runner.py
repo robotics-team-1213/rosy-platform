@@ -108,7 +108,8 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
                                                                           signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
-        self.traffic.authority_reach, self._unread = self.authority.reach, set()  # D-760 3; D-760 4 state reads
+        # D-760 3; D-760 4 state reads; D-760 8 review: robot -> the read number the next step's read is above
+        self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
         self._refresh_warned_at = -math.inf
@@ -450,7 +451,10 @@ class TripRunner(TripAdmission, TripProgress):
             except Exception:
                 _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
-        pose = await self.map_pose(robot_id)
+        try:
+            pose = await self.map_pose(robot_id)
+        except RobotApiError as exc:  # D-760 8 review: the robot answered the state read, with an error
+            return await self._stop(live, "failed", exc.code, {"status": exc.status})
         if not live.open:
             return
         live.see(pose)
@@ -720,6 +724,7 @@ class TripRunner(TripAdmission, TripProgress):
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
             reply = {"already_done": True}  # CORE R1: this place's action already ran
+        self._fence(live.view["robot_id"])  # D-760 8 review: the next step sees CORE after this send
         live.view["detail"].pop("junction_retry", None)
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
@@ -850,14 +855,16 @@ class TripRunner(TripAdmission, TripProgress):
         """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
         refresh = getattr(self._poses, "refresh", None)
         try:
-            if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)
-                await self._call(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
+            if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3), past the hub cache
+                fence = {"after": self._read_after.get(robot_id, 0)} if hasattr(self._poses, "read_number") else {}
+                await self._call(refresh(robot_id, force_rest=True, **fence))  # D-760 8 review: never an older read
             self._unread.discard(robot_id)
         except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:
                 self._refresh_warned_at = self._clock()
                 _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
+        self._fence(robot_id)
         try:
             return await self._call(self._poses.arbitrated_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
