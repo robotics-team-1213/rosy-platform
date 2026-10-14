@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
     private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
     private var accountVersion = 0L
     private val accountReady = mutableStateOf(false)
+    private val accountName = mutableStateOf<String?>(null)
     private val accountMessage = mutableStateOf("Rosy Account로 로그인하세요")
     private fun accountResource() = account!!.config.resources.single { it.startsWith("site:") }
     private fun handleAccountIntent(incoming: Intent?): Boolean {
@@ -75,12 +76,15 @@ class MainActivity : ComponentActivity() {
         val callback = incoming?.dataString ?: return true
         incoming.data = null
         val version = ++accountVersion
+        accountName.value = null
         lifecycleScope.launch {
             val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
                 val resource = account!!.session.complete(callback)
+                account!!.session.refreshProfile(resource)
                 account!!.session.permits(resource, "camera.manage")
             }.getOrDefault(false) }
             if (version != accountVersion) return@launch
+            accountName.value = if (ok) account!!.session.profile(accountResource())?.optString("display_name") else null
             accountReady.value = ok; accountMessage.value = if (ok) "로그인됨" else "로그인 상태와 카메라 관리 권한을 확인하세요"
         }
         return true
@@ -183,19 +187,24 @@ class MainActivity : ComponentActivity() {
             while (true) {
                 val version = accountVersion
                 val ready = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    account!!.session.refreshProfile(accountResource())
                     runCatching { account!!.session.permits(accountResource(), "camera.manage") }.getOrDefault(false)
                 }
                 if (version == accountVersion) {
                     if (!ready) { pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null }
                     accountReady.value = ready
+                    accountName.value = if (ready) account!!.session.profile(accountResource())?.optString("display_name") else null
                 }
                 kotlinx.coroutines.delay(10000)
             }
         }
         Column {
             if (accountReady.value) {
+                TextButton(onClick = { account!!.manageProfile(this@MainActivity) }) {
+                    Text("${accountName.value ?: "프로필 확인 불가"} · 프로필 관리")
+                }
                 TextButton(onClick = {
-                    accountVersion++; accountReady.value = false; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
+                    accountVersion++; accountReady.value = false; accountName.value = null; pairingModel.revokeManagement(); cameraPeerModel.close(); pendingPairing.value = null
                     lifecycleScope.launch { val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { account!!.session.logout() }
                         accountMessage.value = if (ok) "로그아웃됨" else "앱에서 로그아웃했습니다. 서버 세션 회수를 다시 시도합니다" }
                 }) { Text("Rosy Account 로그아웃 / 계정 변경") }

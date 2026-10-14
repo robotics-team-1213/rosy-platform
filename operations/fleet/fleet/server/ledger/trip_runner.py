@@ -129,6 +129,14 @@ class TripRunner(TripAdmission, TripProgress):
         live = self._live.get(robot_id)
         return live is not None and live.open
 
+    def leg_mode(self, robot_id: str) -> Optional[str]:
+        """Drive mode (``lane``/``free``) of the open trip's current segment; None when it cannot be told."""
+        live = self._live.get(robot_id)
+        try:
+            return live.arc(live.view["segment_index"]).drive_mode if live is not None and live.open else None
+        except (KeyError, IndexError, TypeError):
+            return None
+
     def convoy_refusal(self, robot_id: str, leader: str, **cycle) -> Optional[tuple]:
         return convoy_refusal(self._live, robot_id, leader, **cycle)
 
@@ -185,7 +193,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
-                             "lane_bend": caps.lane_bend, "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
+                             "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)

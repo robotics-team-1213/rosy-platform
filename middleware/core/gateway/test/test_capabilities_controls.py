@@ -99,6 +99,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     lf._config = dataclasses.replace(lf._config, authority_required=False)
     assert base["lane_bend"] is False                  # D-507 addendum: no basis a bend could use
     assert base["lane_bend_map_entry"] is False        # D-759 2: with lane_bend
+    assert base["lane_bend_next_line"] is False        # D-754: with lane_bend
     lf = svc.line_follow  # D-495: a fresh keep_debug frame with corner_turning on
     lf.observe_junction("no_boundary", lf._clock(), corner_turning=True)
     assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
@@ -108,6 +109,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["lane_bend_map_entry"] is False  # line_follow.bend_map_entry_enabled off
     lf._config = dataclasses.replace(lf._config, bend_map_entry_enabled=True)
     assert _controls(client)["items"][0]["lane_bend_map_entry"] is True
+    assert _controls(client)["items"][0]["lane_bend_next_line"] is True
     lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
     lf.observe_junction("no_boundary", lf._clock(), ahead_v=1)       # fresh marker
@@ -127,7 +129,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["line_follow_authority_under_lease"] is False
     assert base["line_follow_advice"] is False
     assert base["line_follow_authority_required"] is False
-    assert base["lane_bend"] is False and base["lane_bend_map_entry"] is False
+    assert base["lane_bend"] is False and base["lane_bend_map_entry"] is False and base["lane_bend_next_line"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
 
 

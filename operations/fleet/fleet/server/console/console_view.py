@@ -145,6 +145,7 @@ class TripCaps:
     line_follow_advice: bool = False
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
     lane_bend_map_entry: bool = False  #: D-759 2: CORE takes the bend's ``map_entry``; absent = no
+    lane_bend_next_line: bool = False  #: D-754: CORE takes next_line_in_m; absent = no
     trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
@@ -171,7 +172,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             camera = line.get("camera") if isinstance(line, dict) else None
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
-                            junction_pivot=item.get("junction_pivot") is True,
+                            junction_pivot=item.get("junction_pivot") is True, lane_bend_next_line=item.get("lane_bend_next_line") is True,
                             lane_arc=item.get("lane_arc") is True, lane_arc_map_anchor=item.get("lane_arc_map_anchor") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,

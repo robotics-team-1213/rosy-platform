@@ -83,7 +83,7 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: docs/plans/2026-10-09-core-localization-size-unit.md,
 #: docs/plans/2026-10-09-core-swarm-size-unit.md,
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md (incl. its 2026-10-10 cue addendum and its
-#: 2026-10-14 crosswalk addendum)
+#: 2026-10-14 crosswalk and signal addenda)
 #: docs/plans/2026-10-10-core-line-follow-size-unit.md,
 #: docs/plans/2026-10-10-fleet-localization-size-unit.md
 #: docs/plans/2026-10-12-hourly-channel-health-subpackage.md
@@ -99,6 +99,7 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "drive/behaviors/line_follow/arc",
               "drive/behaviors/line_follow/cue",
               "drive/behaviors/line_follow/crosswalk",
+              "drive/behaviors/line_follow/signal",
               "drive/behaviors/localization",
               "drive/behaviors/swarm",
               "fleet/fleet/traffic",
@@ -1396,7 +1397,7 @@ SIZE_VERDICTS = {
         763,
         "accept: reviewed by adr_record on 2026-10-10 at 792, within the existing 763+150 allowance. "
         "D-620 adds one final-decision commit call after authority and crosswalk; episode state remains "
-        "in junction/signal.py. Lane-cue and crosswalk-report state already live in LaneCueMixin and "
+        "in junction/signal.py (moved unchanged to line_follow/signal/gate.py on 2026-10-14). Lane-cue and crosswalk-report state already live in LaneCueMixin and "
         "CrosswalkReportMixin; this call adds no manager-owned state, writer or thread. Original baseline "
         "763 and all budgets remain; further stateful growth must stay in those dedicated mixins. "
         "The final-decision fix is implemented by this reviewer and needs the parent's separate diff review. "
@@ -1464,7 +1465,16 @@ SIZE_VERDICTS = {
     ),
     "drive/behaviors/line_follow/recovery/junction": (
         1137,
-        "split: independently reviewed by adr_record at 1137 on 2026-10-10: D-620 keeps the Fleet episode/correlation policy in signal.py (90), separate from gate.py (569), approach.py (263) and bend.py (213). The existing manager lock/generation, CORE admission and final publisher are unchanged; the new mixin has no transport, thread or motion writer. The docs/plans/2026-10-07-line-follow-recovery-subpackage.md junction split remains applied. Package +150 remains; before gate.py reaches 600 move the bounded turn state out of that file. Re-review at package +150 or a new owner. Previous verdict: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
+        "split: base stays 1137 (adr_record 2026-10-10); independently re-judged 2026-10-14 by a read-only "
+        "critic, AGREE-WITH-CONDITIONS. Measured 1188 on 2026-10-14 after the D-525/D-620 virtual signal "
+        "(signal.py 93, JunctionSignalMixin) left for its own unit line_follow/signal "
+        "(docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 signal addendum): 1281 - 93. The 51 "
+        "lines above base are the D-754/D-759 bend/turn growth, not re-based. What stays is gate.py 519, "
+        "bend.py 306, approach.py 263, turn.py 98, __init__.py 2; gate.py composes JunctionSignalMixin, calls "
+        "_signal_idle and _signal_gate and holds the _junction_signal slot. Obligations stand: no file past "
+        "600, and the next +150 splits bend.py out rather than accepting. Signal-specific branching in "
+        "set_junction is a finding, not growth. "
+        "Previous verdict: independently reviewed by adr_record at 1137 on 2026-10-10: D-620 keeps the Fleet episode/correlation policy in signal.py (90), separate from gate.py (569), approach.py (263) and bend.py (213). The existing manager lock/generation, CORE admission and final publisher are unchanged; the new mixin has no transport, thread or motion writer. The docs/plans/2026-10-07-line-follow-recovery-subpackage.md junction split remains applied. Package +150 remains; before gate.py reaches 600 move the bounded turn state out of that file. Re-review at package +150 or a new owner. Previous verdict: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
         "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
         "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2; merging main brought D-520's "
@@ -1540,6 +1550,23 @@ SIZE_VERDICTS = {
         "2026-10-10 drivable addendum of docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. "
         "Judged at 810 on 2026-10-10. New steering features (driving context, map corner arc) go here; "
         "drivable_steer.py splits before 600. Re-judge on growth past +150.",
+    ),
+    "drive/behaviors/line_follow/signal": (
+        94,
+        "accept: 94 on 2026-10-14, independently re-judged 2026-10-14 by a read-only critic, "
+        "AGREE-WITH-CONDITIONS, when it left "
+        "line_follow/recovery/junction (docs/plans/2026-10-10-core-line-follow-size-unit.md, 2026-10-14 signal "
+        "addendum): gate.py 93 (D-525/D-620 virtual junction signal on the CORE side: the Fleet query episode, "
+        "reply freshness and the 3 s unanswered right fallback, JunctionSignalMixin), __init__.py 1. A "
+        "LineFollowManager mixin under its lock and generation, composed through JunctionMixin; it reads and "
+        "writes manager and junction state through self (_junction, _junction_signal, _bridge_hint, "
+        "set_junction); no own lock, thread, transport, store or publisher. Imports: signal takes only "
+        "core_common.protocol.schemas; recovery/junction/gate.py imports signal.gate; the manager calls "
+        "_signal_committed. One direction junction -> signal. Pure file move plus one import line. "
+        "Signal-episode semantics (which instructions open or skip an episode, including an empty approach, "
+        "and how a Fleet answer or heartbeat may_enter is read) go in signal/gate.py; recovery/junction/gate.py "
+        "may only gain a call to a _signal_* hook. "
+        "Re-judge after +150.",
     ),
     "drive/behaviors/line_follow/cue": (
         376,

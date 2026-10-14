@@ -37,10 +37,14 @@ from games.host.preview import (  # noqa: E402
 class _LayoutAccount:
     """Verified-claims fixture for layout only; security flow is tested below."""
     resource = 'site:layout'
+    profile_url = 'https://account.test/console/profile'
+
+    def profile(self, _cookie):
+        return None
 
     def resolve(self, _cookie):
         from types import SimpleNamespace
-        return SimpleNamespace(permits=lambda resource, capability:
+        return SimpleNamespace(sub='layout-account', permits=lambda resource, capability:
                                (resource, capability) == (self.resource, 'games.operate'))
 
     def retry_revocations(self):
@@ -62,7 +66,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     import time
     from functools import partial
     from urllib.parse import parse_qs, urlsplit, urlencode
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, expect
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives import serialization
@@ -85,9 +89,11 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
                                 serialization.NoEncryption())
     public = private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
     clock = [int(time.time())]
-    state = {'active': True, 'operate': False, 'challenge': ''}
+    state = {'active': True, 'operate': False, 'challenge': '', 'display_name':'Game Alice'}
 
     def authority(endpoint, fields):
+        if endpoint == 'userinfo':
+            return {'account_id':'alice', 'login':'alice', 'display_name':state['display_name']}
         if endpoint == 'introspect':
             return {'active': state['active']}
         if endpoint == 'revoke':
@@ -138,13 +144,18 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page.locator('#account-login').click()
             page.wait_for_url(origin + '/')
             page.locator('#account-logout').wait_for(state='visible')
+            expect(page.locator('[data-account-profile]')).to_contain_text('Game Alice')
+            assert page.locator('[data-account-profile]').get_attribute('href') == issuer + '/console/profile'
             assert page.locator('#halt').is_hidden()
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-logout').click()
             page.locator('#account-login').wait_for(state='visible')
+            assert page.locator('[data-account-profile]').is_hidden()
             state.update(active=True, operate=True)
             page.locator('#account-login').click()
             page.locator('#halt').wait_for(state='visible')
+            state['display_name'] = 'Updated Player'
+            expect(page.locator('[data-account-profile]')).to_contain_text('Updated Player', timeout=15000)
             page.locator('#halt').click()
             page.locator('#halt-status[data-state="sent"]').wait_for()
             assert board.stop
@@ -154,6 +165,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#halt').wait_for(state='hidden', timeout=15000)
             assert page.locator('#account-login').is_visible()
+            assert page.locator('[data-account-profile]').is_hidden()
             browser.close()
     finally:
         server.close()
