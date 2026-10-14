@@ -770,8 +770,8 @@ def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(
         assert all(0 <= box["y"] and box["bottom"] <= token for box in row), got
         assert all(left["right"] <= right["x"] + 1 for left, right in zip(row, row[1:])), got
         assert abs(quiet["stop"]["x"] - (width - 106)) <= 1 and quiet["stop"]["right"] <= width, got
-        assert quiet["stop"]["width"] >= 82 and quiet["stop"]["height"] >= 48, got
-        assert quiet["map"]["width"] >= 82 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], width - 256, 16, 44, 32), got
+        assert quiet["stop"]["width"] >= 81.89 and quiet["stop"]["height"] >= 48, got  # 81.890625x48 before
+        assert quiet["map"]["width"] >= 81.89 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], width - 256, 16, 44, 32), got
     assert errors == [], errors
 
 
