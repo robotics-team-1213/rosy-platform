@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 #: ``ttl_s`` is in (0, MAX_TTL_S], measured on CORE's line-follow clock (as ``hold_s``): ``time.monotonic``
 #: on the Device, sim time under ``use_sim_time``; never the wall clock. 5 s since D-760 1 (was 2).
 MAX_TTL_S = 5.0
+#: The cap before D-760: what Fleet sends a CORE without ``line_follow_authority_shrink`` (D-760 3).
+LEGACY_TTL_S = 2.0
 #: ``until_m`` is in [0, MAX_UNTIL_M]: a few blocks ahead, never a whole lap.
 MAX_UNTIL_M = 10.0
 #: CORE takes a ``pose_stamp`` at most this far ahead of its newest odom sample (state stamps
