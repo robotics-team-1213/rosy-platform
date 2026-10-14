@@ -53,9 +53,8 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
         principal: SitePrincipal = Depends(require_named_operator),  # D-540 9
     ) -> dict:
         """D-463. Expand stored lane edges and send only the next short point."""
-        if console.trip_busy(robot_id):  # D-494 5: the trip loop owns this robot's motion
-            raise HTTPException(status_code=409, detail={
-                "code": "TRIP_ROBOT_BUSY", "message": f"{robot_id} is on a running trip"})
+        if busy := console.trip_refusal([robot_id]):  # D-494 5: the trip loop owns this robot's motion
+            raise HTTPException(409, {"code": busy.code, "message": f"{robot_id} is on a running trip"})
         active = site_maps.active()
         if active is None:
             raise HTTPException(status_code=409, detail={
