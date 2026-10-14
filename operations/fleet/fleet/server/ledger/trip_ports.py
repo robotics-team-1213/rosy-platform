@@ -24,7 +24,7 @@ from fleet.site_map import ENDPOINT_TOL_M
 _LOG = logging.getLogger(__name__)
 
 #: Trip states that are still going.
-OPEN = ("started", "running")
+OPEN = ("started", "running", "link_wait")  # D-760 4: a robot without a link keeps its trip open
 
 
 #: D-494 1: ``caps(robot_id) -> TripCaps | None`` (sync or async), app.py's capability closure.

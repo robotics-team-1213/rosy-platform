@@ -141,6 +141,9 @@ class TripCaps:
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False
+    #: D-760 3: ``shrink``/``seq`` and ``ttl_s`` up to 5 s; D-760 2: enforced while its trip lease is open. Absent = no.
+    line_follow_authority_shrink: bool = False
+    line_follow_authority_under_lease: bool = False
     #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
     line_follow_advice: bool = False
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
@@ -175,6 +178,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             lane_arc=item.get("lane_arc") is True, lane_arc_map_anchor=item.get("lane_arc_map_anchor") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
+                            line_follow_authority_shrink=item.get("line_follow_authority_shrink") is True,
+                            line_follow_authority_under_lease=item.get("line_follow_authority_under_lease") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
                             lane_bend_map_entry=item.get("lane_bend_map_entry") is True,
