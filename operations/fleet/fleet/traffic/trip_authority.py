@@ -118,7 +118,8 @@ class AuthoritySender:
             answer = await asyncio.wait_for(self._port.send_authority(robot_id, body), self._timeout_s) or {}
             live.authority = answer.get("authority")
             held = self._held.get(robot_id)
-            if body.get("shrink") and answer.get("accepted") is True and held is not None and held["leg"] == body["leg_id"]:
+            confirmed = answer.get("accepted") is True or answer.get("reason") == "shrink_none_held"  # nothing held
+            if body.get("shrink") and confirmed and held is not None and held["leg"] == body["leg_id"]:
                 held["shrunk"] = True  # CORE's end is now at most where the robot stood at the stamp
             self._failing.discard(robot_id)
         except Exception as exc:  # noqa: BLE001 — the robot's expiry is the safety; next period sends again
