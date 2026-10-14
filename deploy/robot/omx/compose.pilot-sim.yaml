@@ -1,0 +1,55 @@
+# Standalone SIM input: never combine with compose.yaml's hardware service.
+# Run only on a reserved non-site Linux simulation host (D-568/D-571/D-584).
+services:
+  vendor:
+    profiles: [build]
+    image: "${COMPOSE_PROJECT_NAME:-rosy-omx-sim}-vendor:local"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["true"]
+    network_mode: none
+
+  pilot:
+    image: "${COMPOSE_PROJECT_NAME:-rosy-omx-sim}-pilot:local"
+    build:
+      context: ../../..
+      dockerfile: deploy/robot/omx/Dockerfile.pilot
+      args:
+        OMX_BASE_IMAGE: "${COMPOSE_PROJECT_NAME:-rosy-omx-sim}-vendor:local"
+    init: true
+    restart: "no"
+    cpus: 8
+    mem_limit: 8g
+    shm_size: 256m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - "127.0.0.1:${OMX_PILOT_PORT:-8088}:8088"
+    environment:
+      ROSY_SIM_SOURCE_REVISION: "${ROSY_SIM_SOURCE_REVISION:?set the full committed source SHA}"
+      ROSY_SIM_RECORD_ROOT: /recordings
+      OMX_PILOT_DOMAIN_ID: "75"
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      GZ_PARTITION: "${COMPOSE_PROJECT_NAME:-rosy-omx-sim}"
+      GZ_IP: 127.0.0.1
+    volumes:
+      - type: bind
+        source: ../../..
+        target: /repo
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: recordings
+        target: /recordings
+    networks: [sim]
+    command: [bash, /repo/deploy/robot/omx/run_pilot_sim.sh]
+
+networks:
+  sim:
+    internal: true
+
+volumes:
+  recordings:
