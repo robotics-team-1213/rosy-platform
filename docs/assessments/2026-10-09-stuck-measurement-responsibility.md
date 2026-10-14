@@ -3,6 +3,7 @@
 - 날짜: 2026-10-09 (Asia/Seoul)
 - 기준: 로컬 main `c91b4c9cd`에서 읽은 ADR과 소스
 - 상태: 검토 정리. Accepted·Proposed ADR을 대체하지 않는다. 자격 발급, `--stuck-resolver` 가동, 로컬 복귀 승격, VLM 구현, 일반 World State 계약을 승인하지 않는다.
+- 이후(2026-10-14): 자세 구현은 `rosy.world.state.projections.map_pose`이고 Fleet은 그 모듈을 직접 import한다(D-752). 아래의 「Fleet MapPose」는 이 검토일의 말이다.
 - 범위: [D-407](../adr/D-407-lane-stuck-recovery-console-then-local.md), [D-422](../adr/D-422-line-follow-body-referenced-obstacle-stop.md), [D-430](../adr/D-430-safety-as-a-separate-concern.md), [D-435](../adr/D-435-work-orchestration-fleet-and-device-authority.md), [D-438](../adr/D-438-fleet-stuck-resolver-rules-model-human.md), [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md), [D-495](../adr/D-495-lane-junction-bounded-turn-and-junction-defaults.md), [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md), [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), [D-523](../adr/D-523-ai-pc-ask-returns-facts-or-candidates.md), [D-541](../adr/D-541-core-fleet-trip-lease.md), [D-356](../adr/D-356-perception-learning-loop-and-model-delivery.md)
 - 제외: 코드 변경, 현장 DB 건수 조회, 배포·장치 수용
 

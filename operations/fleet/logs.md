@@ -3619,6 +3619,14 @@
 - Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
 - Gate: no runtime or device claim.
 
+## 2026-10-14 · uncommitted · fix(world): D-758 0단계 지도 자세 추적기가 CORE odom epoch 변경에 기준을 버린다
+
+- 변경: `operations/world/src/rosy/world/state/projections/map_pose.py` — `OdomSample.epoch`(선택), `odom_from_snapshot`이 `odom_pose.epoch`(0 이상 정수만)를 읽고, `add_odom`이 이전에 받은 epoch와 다른 표본에서 이동이 없어도 `_reset`한다. epoch가 없는 로봇은 이전 규칙 그대로다. Fleet이 돌려주는 `pose_stamp`·`odom_stamp_s`는 바뀌지 않는다. API 핀 시험 4개를 v1.228로.
+- 증거: `test_map_pose.py` 새 3건(수정 전 적색). Fleet·world 전체 스위트 결과는 보고서에 적는다.
+- gate 변화: SOURCE·호스트 근거만.
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
 ## 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
 
 - 변경: 임대를 쥔 trip에서 상태 읽기 실패나 로봇 호출 무응답은 trip을 끝내지 않고 `link_wait`로 둔다(`trip_progress._link_wait`). 그동안 교차로 지시·목표·늘린 통행권이 나가지 않고 블록 표에서 UNKNOWN이라 블록이 그대로 잡힌다. 끝내는 것은 `lease_lost`(기본 8 s)와, 임대 `ttl_s`를 넘겨 기다린 뒤의 정체 규칙뿐이다. 돌아오면 지도 버전과 차선 모드를 다시 보고(`trip_admission._link_back`) 실패하면 그 시작 거절 코드로 끝낸다. 정체 예외는 대기 사유→상한 표 하나(`_wait_bound`, 지금은 `link_wait`만). 송신기는 `seq`를 싣고 구간 id에 Fleet 프로세스 epoch를 넣는다. `line_follow_authority_shrink` 로봇에는 `ttl_s` 5와 `shrink`+`until_m` 0(답이 `accepted: true`일 때까지 주기마다), 없는 로봇에는 2와 옛 동작. 단계 중·`link_wait`·차선 켜기 전·시작 뒤 5 s에는 늘리지 않는다. 확인 전에는 지도 버전이 바뀐 로봇의 고정 블록이 마지막 `until_m`까지 덮는다. 출발 검사는 임대가 켜져 있으면 `line_follow_authority_under_lease`도 받는다. trip 임대 `ttl_s` 기본 8. 콘솔 상태 이름 `연결 대기`.
@@ -3691,6 +3699,11 @@
 - 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
 - gate 변화: 없음.
 
+## 2026-10-14 · uncommitted · fix(test): 사실 기록 정지가 비상 정지를 늦추지 않는다는 시험을 시계 없이 (CI 38568954601)
+- 변경: `test/test_ai_facts.py::test_a_stalled_fact_write_does_not_delay_the_emergency_stop`. 사실 쓰기를 `time.sleep(1.0)` 뒤 실제 쓰기로 두고 `/api/fleet/estop` 왕복을 0.5 s로 재던 것을, 쓰기를 끝내 풀리지 않는 `threading.Event`에 세워 두고 정지가 먼저 200으로 끝나는지만 보는 것으로 바꿨다(쓰기 진입 확인, 정지 뒤에도 쓰기 요청이 미완, 그다음 풀어 200). 시계는 hang 가드 30 s뿐. 제품 코드는 그대로다.
+- 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
+- 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
 ## 2026-10-15 · aa9913d2f · 다단계 작업이 로봇의 lease와 claim을 쥔다 (D-763 조각 6)
 
 - 변경: `ledger/trip_admission.py` `hold_job`(개정 2 질문 10 (a)(b) 관문, 아니면 422 `LINK_UNBOUNDED_MOTION`; `on_job_lost` 없이는 거절)와 `release_job`. `traffic/trip_lease.py`: `jobs`, 단계 사이 갱신(`period`가 열린 trip 없는 작업도 갱신, `/trip-lease`만 보낸다), 작업의 단계가 lease를 이어받고 닫아도 유지, 시작 실패는 작업 lease를 두고, 작업 lease 상실은 `on_job_lost`. `ledger/trip_runner.py` `start(job_id=)`: 작업이 쥔 로봇의 다른 시작은 정렬 회전 전에 `TRIP_ROBOT_BUSY`. `ledger/trip_guard.py`: `trip_busy`가 작업의 hold와 내구 D-330 `mission` robot claim도 본다. `server/app.py` 한 줄(claims 연결). 서버 크기 단위 순증 0(31904), traffic 2200(≤2201), ledger 7083.

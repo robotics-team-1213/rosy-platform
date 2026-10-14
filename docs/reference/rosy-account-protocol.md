@@ -232,5 +232,7 @@ generation을 승인한 중앙 subject와 session에 결속하며 매 사용/wor
 한 번 다시 연결해야 한다. 승인 세션의 로그아웃·회수·만료 후에는 공유도 중단된다.
 개인 세션과 무관한 무인 프로젝트 위임을 자동 생성하지 않는다.
 
+비공개 데이터셋·모델 저장소의 목록·생성·삭제는 `learning.publish`와 연결에 기록된 저장소 범위가 있을 때만 한다. `learning.import`와 `learning.manage`는 그 경로를 대신하지 않는다. 개인 연결의 생성 네임스페이스는 그 Hugging Face 사용자 이름이고, 프로젝트 연결은 허용 목록의 데이터셋·모델만 다룬다.
+
 참고: [OAuthlib 서버](https://oauthlib.readthedocs.io/en/latest/oauth2/server.html),
 [joserfc JWT](https://jose.authlib.org/en/guide/jwt/).

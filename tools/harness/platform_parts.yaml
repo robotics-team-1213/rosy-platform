@@ -794,6 +794,12 @@ roots:
     d427_target: test
     wave: none
     concern: other
+  - path: test/flaky_quarantine.txt
+    part: test
+    d427_target: test/flaky_quarantine.txt
+    wave: none
+    concern: safety
+    note: D-762 stage 1. A listed failure passes after one rerun, so adding an id needs a Safety-Review trailer.
   - path: docs
     part: docs
     d427_target: docs

@@ -133,6 +133,13 @@ CI_FULL_MATRIX = (
         "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
         "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"]], "ros": "base"},
 )
+# D-762 stage 1: the only registered test files CI's full tier skips, each with its reason.
+# Every other registered module suite CI_FULL_MATRIX does not name runs on the `modules` runner.
+CI_FULL_EXCLUDED = {
+    f"middleware/devices/pinky/bringup/test/test_{name}.py":
+        "ament lint template, not a product contract; CI never ran it and the lab full tier --ignores it too"
+    for name in ("flake8", "pep257", "copyright")
+}
 
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
@@ -346,10 +353,14 @@ def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[s
     suite (`_full_paths`) and every `local` path none of those already covers.
     """
     ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
-    covered = [p for inv in ci for p in inv if not p.startswith("-")]
-    rest = [p for p in [*_full_paths(repo), *(p for inv in local for p in inv)]
-            if not any(_under(p, c) for c in covered)]
-    return ci + pack(repo, list(dict.fromkeys(rest)))
+    return ci + pack(repo, _outside_ci_matrix([*_full_paths(repo), *(p for inv in local for p in inv)]))
+
+
+def _outside_ci_matrix(paths: list[str]) -> list[str]:
+    """Paths no CI_FULL_MATRIX suite or the root test/ shards already run."""
+    covered = [p for entry in CI_FULL_MATRIX for inv in entry["invocations"] for p in inv
+               if not p.startswith("-")] + ["test"]
+    return [p for p in dict.fromkeys(paths) if not any(_under(p, c) for c in covered)]
 
 
 def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
@@ -491,6 +502,11 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
+        # D-762 stage 1: every other registered module suite, so CI's full tier is the lab full tier.
+        # Never ran in the CI container before; reports (like sensing) until its first green run.
+        modules = pack(repo, _outside_ci_matrix(_full_paths(repo)))
+        if modules:
+            entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
     else:
         entries = [{"name": f"affected-{i + 1}", "invocations": [inv]}
                    for i, inv in enumerate(sel.invocations)]
