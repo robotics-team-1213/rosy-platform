@@ -3,7 +3,7 @@
 import pytest
 
 from browser_harness import browser_tests_enabled
-from test_console_queue_inline_browser import API, _open, _shot, site  # noqa: F401
+from test_console_queue_inline_browser import API, ON_TOP, _open, _shot, site  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
@@ -298,5 +298,88 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             page.wait_for_function("() => document.getElementById('work-list').childElementCount === 0")
             assert "조회 실패" in page.locator("#work-state").inner_text()
             assert not posts and not errors
+        finally:
+            browser.close()
+
+
+NAMED = "이름 있는 운영자 로그인이 필요합니다"
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+@pytest.mark.parametrize("case", ["approve", "viewer", "shared-token", "refused", "unknown"])
+def test_pending_seat_approves_through_the_existing_admit_route(site, size, case):
+    """D-741 7: 승인 대기에서 고른 팔 작업은 오른쪽 칸에서 기존 admit 경로로 승인한다. 막힌 단추는 이유를 적는다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    width, height = size
+    row = {"source": "mission", "source_id": "wait-1", "action_kind": "PICK_PLACE", "status": "PROPOSED",
+           "device_id": "omx_wait", "workcell_id": "packing", "reason": None, "updated_at": "2026-10-14T01:00:00+00:00"}
+    work = {"rows": [row], "observed_at": "2026-10-14T01:00:01+00:00", "tasks_available": True,
+            "missions_available": True, "truncated_sources": []}
+    session = {"viewer": ("eve", "viewer"), "shared-token": ("site-console", "operator")}.get(case, ("bob", "operator"))
+    api = {**API, "/api/fleet/session": {"principal_id": session[0], "role": session[1]}, "/api/fleet/work": work,
+           "/api/fleet/missions/wait-1": {"mission": row, "history": []},
+           "/api/fleet/dispatch-control": {"dispatch_enabled": True, "generation": 7}}
+    answer = {"approve": (200, {"mission": {**row, "status": "READY"}}),
+              "refused": (403, {"detail": {"code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"}}),
+              "unknown": (503, {"detail": "down"})}.get(case)
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=size)
+        try:
+            def admit(route):
+                posts.append(("admit", route.request.post_data_json))
+                if case == "approve":
+                    work["rows"] = []
+                route.fulfill(status=answer[0], json=answer[1])
+            page.route("**/api/fleet/missions/wait-1/admit", admit)
+            page.goto(site + "/console?view=work&show=pending")
+            page.clock.run_for(2000)
+            page.locator("#work-list ui-button").filter(has_text="omx_wait").click()
+            button = page.locator("#work-admit")
+            expect(button).to_be_visible()
+            expect(button).to_contain_text("실행 승인")
+            if case in ("viewer", "shared-token"):
+                expect(button).to_be_disabled()
+                reason = "운영자 권한이 필요합니다" if case == "viewer" else NAMED
+                expect(button).to_have_attribute("reason", reason)
+                described = button.get_attribute("aria-describedby")
+                assert page.locator(f"#{described}").inner_text() == reason
+                button.click(force=True)
+                assert not posts
+            else:
+                expect(button).to_be_enabled()
+                button.click()
+                for _ in range(50):
+                    page.clock.run_for(100)
+                    if posts:
+                        break
+                assert posts == [("admit", {"expected_generation": 7})], posts
+                if case == "approve":
+                    page.clock.run_for(2000)  # a poll in flight skips the refresh; the next one shows it
+                    page.wait_for_function("() => document.querySelectorAll('#work-list ui-button').length === 0")
+                    expect(button).to_be_hidden()
+                    assert "omx_wait" not in page.locator("#work-detail").inner_text()
+                else:
+                    text = ("승인이 거절됐습니다 · CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER" if case == "refused"
+                            else "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.")
+                    expect(button).to_have_attribute("reason", text)
+                    expect(button).to_be_disabled()
+                    described = button.get_attribute("aria-describedby")
+                    assert page.locator(f"#{described}").inner_text() == text
+                    assert page.locator("#work-list ui-button").count() == 1
+            if case != "approve":
+                button.scroll_into_view_if_needed()
+                box = button.bounding_box()
+                assert box["x"] >= 0 and box["x"] + box["width"] <= width, box
+                assert button.evaluate("node => node.scrollWidth <= node.clientWidth + 1"), box
+            stop = page.locator("#estop")
+            page.evaluate("window.scrollTo(0, 0)")
+            box = stop.bounding_box()
+            assert box["y"] >= 0 and box["y"] + box["height"] <= height, box
+            assert box["x"] >= 0 and box["x"] + box["width"] <= width and stop.evaluate(ON_TOP), box
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            _shot(page, f"work-approve-{case}-{width}.png", full_page=True)
+            assert not errors
         finally:
             browser.close()
