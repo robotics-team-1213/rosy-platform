@@ -1,4 +1,4 @@
-/* D-741 2 — 본문은 칸이다. 두 문서 칸은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭이 64rem일 때부터 나란히 선다(D-359 §6.3). */
+/* D-741 2 — 본문은 칸이다. 두 문서 칸은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭이 60rem일 때부터 나란히 선다(D-359 §6.3, 값의 이유는 surfaces.yaml). */
 main { container-type: inline-size; display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; }
 .cell-intro { display: grid; gap: var(--space-1); }
 .cell-intro h1 { margin: 0; }
@@ -34,4 +34,4 @@ a { color: var(--text-primary); }
   ui-head:has(#compile) { flex-direction: column; align-items: stretch; }
   #compile { box-sizing: border-box; width: 100%; }
 }
-@container (width < 64rem) { .documents { grid-template-columns: 1fr; } }
+@container (width < 60rem) { .documents { grid-template-columns: 1fr; } }

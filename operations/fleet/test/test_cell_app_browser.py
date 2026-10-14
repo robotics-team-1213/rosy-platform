@@ -262,12 +262,12 @@ def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, 
         page.screenshot(path=str(Path(output) / f"fleet-cell-widths-{width}x{height}.png"), full_page=True)
 
 
-# The two documents stand side by side from a 64rem body: a 1360px shell. 1349 is a 1366 window with a classic scrollbar.
-@pytest.mark.parametrize("width,height,panels", [(360, 740, 1), (1024, 768, 1), (1100, 800, 1), (1349, 768, 1),
+# The two documents stand side by side from a 60rem body: a 1296px shell. 1349 is a 1366 window with a classic scrollbar.
+@pytest.mark.parametrize("width,height,panels", [(360, 740, 1), (1024, 768, 1), (1100, 800, 1), (1349, 768, 2),
                                                 (1366, 768, 2)])
 def test_cell_body_keeps_usable_columns_beside_the_sub_nav(browser_site, width, height, panels):
     """D-741 2: the rail and the sub-nav take 304px. With both documents loaded the body puts them in one column
-    until it has 64rem itself, then two. There is no sideways overflow, no control past the window or with cut text,
+    until it has 60rem itself, then two. There is no sideways overflow, no control past the window or with cut text,
     no multi-column field under 9rem, and the sticky sub-nav shows every entry at the top and at the end of the page."""
     page, _, _ = browser_site
     _prepare(page)
