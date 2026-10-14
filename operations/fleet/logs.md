@@ -3690,3 +3690,25 @@
 - 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
 - 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
 - gate 변화: 없음.
+
+## 2026-10-15 · aa9913d2f · 다단계 작업이 로봇의 lease와 claim을 쥔다 (D-763 조각 6)
+
+- 변경: `ledger/trip_admission.py` `hold_job`(개정 2 질문 10 (a)(b) 관문, 아니면 422 `LINK_UNBOUNDED_MOTION`; `on_job_lost` 없이는 거절)와 `release_job`. `traffic/trip_lease.py`: `jobs`, 단계 사이 갱신(`period`가 열린 trip 없는 작업도 갱신, `/trip-lease`만 보낸다), 작업의 단계가 lease를 이어받고 닫아도 유지, 시작 실패는 작업 lease를 두고, 작업 lease 상실은 `on_job_lost`. `ledger/trip_runner.py` `start(job_id=)`: 작업이 쥔 로봇의 다른 시작은 정렬 회전 전에 `TRIP_ROBOT_BUSY`. `ledger/trip_guard.py`: `trip_busy`가 작업의 hold와 내구 D-330 `mission` robot claim도 본다. `server/app.py` 한 줄(claims 연결). 서버 크기 단위 순증 0(31904), traffic 2200(≤2201), ledger 7083.
+- 증거: `test/test_trip_job_lease.py`. 원격(7334f9c40) 통과, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음. 아직 `hold_job`을 부르는 운영 경로가 없다(조각 7).
+- 결정: D-763 4항·조각 6.
+- 교훈: 없음.
+
+## 2026-10-15 · d05bccdec · 조각 6 안전 검토 반영
+
+- 변경: Fleet이 보낸 사람의 멈춤(취소, line-follow OFF)은 lease 주인 토큰이라 CORE가 lease를 두므로 `stop_job`이 lease를 놓고 사건 경로를 부르며 작업을 HOLD로 둔다. `hold_job`은 로봇 잠금 안에서, 이미 움직이는 로봇(열린 trip, 콘솔 목표, 대형)을 거절한다. `release_job`은 단계 trip이 열려 있으면 409 `TRIP_BUSY`. 사건 hook 예외는 기록한다. SRS CORE `SAF-007`, Fleet `MSN-007`.
+- 증거: `test/test_trip_job_lease.py` 새 시험 셋. 원격(d05bccdec) 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 3.
+- 교훈: 같은 토큰을 쓰는 Fleet 콘솔의 멈춤은 CORE의 "주인 아닌 멈춤" 규칙에 걸리지 않는다. Fleet 쪽에서 따로 닫아야 한다.
+
+## 2026-10-15 · 9f1f7876f · trip 취소가 실패해도 작업은 HOLD
+
+- 변경: `ledger/trip_guard.py` `end_trip`이 `stop_job`을 따로 `try`에서 부른다. trip 저장소가 실패해도 사람의 멈춤 뒤 작업 lease가 갱신되며 남지 않는다(재검토 LOW).
+- 증거: `test_a_failed_trip_cancel_still_holds_the_job`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.

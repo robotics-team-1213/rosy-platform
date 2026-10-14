@@ -985,3 +985,17 @@
 - 변경: `v1/line_follow.py`가 `map_entry`를 `bend`와 `turn_deg`가 있는 `left`·`right`에서 받는다. 그 밖은 400이다. `v1/system.py`가 `supports_lane_turn_map_entry`를 `lane_turn_map_entry`로 알린다. `app.py` 계약 버전 v1.231(fe8347cf4).
 - 증거: `middleware/core/gateway/test/test_line_junction_api.py::test_d759_rev1_turn_map_entry_validation_and_record`, `test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
+
+## 2026-10-15 · 84f0c8456 · PUT /trip-lease job_id, 주인 아닌 IDLE은 lease를 끝낸다 (D-763 조각 6, API v1.236)
+
+- 변경: `v1/trip_lease.py` 선택 필드 `job_id`. `v1/common.py` `apply_mode`가 IDLE이면 `stop_ends_trip_lease(halt=False)`: 주인 아닌 토큰의 IDLE이 어떤 lease든 끝낸다(로봇이 이미 IDLE이어도). 사람이 세운 로봇을 Fleet이 주인 토큰으로 다시 움직이지 않게 한다. `v1/system.py` 능력 `trip_lease_job`.
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`, `test_capabilities_controls.py`. 원격 통과(7334f9c40).
+- gate 변화: 없음.
+- 결정: D-763 4항·조각 6.
+- 교훈: 없음.
+
+## 2026-10-15 · 7334f9c40 · 계약 버전 v1.236
+
+- 변경: `api/app.py` 독스트링과 `description`이 v1.236. v1.233–v1.235는 다른 작업이 선점했다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 원격 통과.
+- gate 변화: 없음.
