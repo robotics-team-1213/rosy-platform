@@ -433,7 +433,10 @@ class TripRunner(TripAdmission, TripProgress):
         try:
             async with self._lock_for(live.view["robot_id"]):
                 if live.open:
+                    live.waited = False  # set by _waiting, which writes view.wait's answer in one go (D-763 8)
                     await self._step(live)
+                    if not live.waited:  # a step that returned before _waiting shows no answer, not the last one
+                        (live.view.get("wait") or {}).update(waiting=None, bound_s=None, over_bound=None)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -450,7 +453,6 @@ class TripRunner(TripAdmission, TripProgress):
             except Exception:
                 _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
-        (live.view.get("wait") or {}).update(waiting=None, bound_s=None, over_bound=None)  # D-763 8: unknown until _waiting runs
         pose = await self.map_pose(robot_id)
         if not live.open:
             return
