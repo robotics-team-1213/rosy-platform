@@ -42,3 +42,14 @@ def test_credit_needs_the_immediately_preceding_tick():
     rig.step(seen=False)
     with rig.m._lock:
         assert rig.m._regulated_wait_share(rig.now + 1., .05, V) == 0.
+
+
+def test_mode_change_starts_without_a_previous_wait_sample():
+    rig = ArcRig()
+    rig.open()
+    _authority(rig, True)
+    rig.step(seen=False)
+    rig.step(seen=False)
+    rig.m.set_mode('CAMERA_LINE')
+    with rig.m._lock:
+        assert rig.m._regulated_wait_share(rig.now + .05, .05, V) == 0.
