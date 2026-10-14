@@ -176,6 +176,17 @@ def test_leased_home_is_renewed_by_the_token_that_sent_it(robot):
     assert _renew(tc, "h-1", headers=OTHER).status_code == 403
 
 
+def test_a_lease_without_an_owner_refuses_a_named_renewal(robot):
+    """D-760 9: owner None (an internal caller) is an owner too; a token id is not it."""
+    from core_features.navigation.manager import NavigationError, NavGoalSpec
+    _tc, svc, _executor, _clock = robot
+    svc.nav.goal(NavGoalSpec(1.0, 0.5, 0.0), correlation_id="i-1", lease_ttl_s=1.0, lease_owner=None)
+    svc.nav.on_goal_accepted()
+    with pytest.raises(NavigationError) as err:
+        svc.nav.renew_goal_lease("i-1", 1.0, owner="x")
+    assert err.value.code == "FORBIDDEN"
+
+
 def test_goal_without_lease_is_unchanged(robot):
     tc, svc, executor, clock = robot
     assert _goal(tc, correlation_id="a-1").status_code == 200
