@@ -265,6 +265,107 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             browser.close()
 
 
+# Is the element itself what a pointer meets at its centre (not a sticky bar or a neighbour laid over it)?
+ON_TOP = """node => { const r = node.getBoundingClientRect();
+  return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }"""
+# Text below 4.5:1 (3:1 from 24px) against the surfaces painted under it. A 1px canvas resolves any CSS colour
+# (rgb, color(srgb ...), alpha) the way the page composites it.
+LOW_CONTRAST = """selector => {
+  const ctx = document.createElement('canvas').getContext('2d', {willReadFrequently: true});
+  const paint = colours => { ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1, 1);
+    for (const colour of colours) { ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1); }
+    return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).map(v => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); };
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const low = [];
+  for (const node of document.querySelectorAll(selector)) {
+    if (!node.checkVisibility({visibilityProperty: true}) || node.closest('[disabled]')) continue;
+    if (![...node.childNodes].some(child => child.nodeType === 3 && child.textContent.trim())) continue;
+    const under = [];
+    for (let at = node; at; at = at.parentElement) under.unshift(getComputedStyle(at).backgroundColor);
+    const style = getComputedStyle(node), ground = lum(paint(under)), ink = lum(paint([...under, style.color]));
+    const ratio = (Math.max(ground, ink) + 0.05) / (Math.min(ground, ink) + 0.05);
+    if (ratio < (parseFloat(style.fontSize) >= 24 ? 3 : 4.5))
+      low.push(`${node.tagName.toLowerCase()}#${node.id}.${node.className} ${ratio.toFixed(2)} "${node.textContent.trim().slice(0, 16)}"`);
+  }
+  return low;
+}"""
+
+
+@pytest.mark.parametrize("size,theme", [((320, 568), "dark"), ((320, 568), "light"), ((390, 844), "light"),
+                                        ((1366, 768), "light")])
+def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site, size, theme):
+    """D-741 8 at 320x568 and in the light theme: nothing runs off sideways, the stop is in view with nothing over
+    it, every records screen can be reached from the sub-nav, and the judgment seat's heading and review form can
+    be read and used."""
+    from playwright.sync_api import expect, sync_playwright
+
+    width, height = size
+    reports = [{"id": f"line_stuck:rosy_01:s-{index}", "classification": "line_stuck", "robot_ids": ["rosy_01"],
+                "stuck_id": f"s-{index}", "opened_at": "2026-10-10T05:00:00+00:00", "closed_at": None, "actions": [],
+                "reviews": [], "evidence": {"core": {}, "fleet": {}, "rosy_cam": None, "ai_facts": [],
+                                             "front_image": {"status": "not_retained"}}} for index in range(8)]
+    api = {**API, "/api/fleet/incidents": {"reports": reports, "traffic_reports": []}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts,
+                                      {"/api/fleet/incidents/rosy_01/s-0/review": (200, {"reviewed": True})}, size=size)
+        try:
+            page.goto(site + "/console?view=records")
+            page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+            page.clock.run_for(2000)
+            links = page.get_by_role("navigation", name="기록 화면", exact=True).locator("a")
+            expect(links).to_have_count(5)
+            reach = []
+            for index in range(5):
+                link = links.nth(index)
+                link.scroll_into_view_if_needed()
+                box = link.bounding_box()
+                reach.append((round(box["x"]), round(box["width"]), round(box["height"])))
+                assert box["x"] >= 0 and box["x"] + box["width"] <= width and box["height"] >= 44, (index, box)
+                assert link.evaluate(ON_TOP), (index, box)
+            page.locator("#incident-list > li").first.locator(":scope > details > summary").click()
+            seat = page.locator("#incident-judgment")
+            heading = seat.locator("h3")
+            expect(heading).to_contain_text("rosy_01")
+            if width < 1024:
+                expect(seat).to_be_in_viewport()
+            controls = {name: seat.locator(selector) for name, selector in
+                        (("heading", "h3"), ("cause", "select"), ("note", "input"), ("save", "ui-button[type=submit]"))}
+            boxes = {}
+            for name, control in controls.items():
+                control.scroll_into_view_if_needed()
+                box = boxes[name] = control.bounding_box()
+                assert box["x"] >= 0 and box["x"] + box["width"] <= width and box["width"] >= 144, (name, box)
+                assert control.evaluate("node => node.scrollWidth <= node.clientWidth + 1"), (name, box)
+                assert control.evaluate(ON_TOP), (name, box)
+            order = sorted(boxes.values(), key=lambda box: (box["y"], box["x"]))
+            for above, below in zip(order, order[1:]):  # no control lies over the next
+                assert above["y"] + above["height"] <= below["y"] + 1 or above["x"] + above["width"] <= below["x"] + 1, boxes
+            stop = page.locator("#estop")
+            box = stop.bounding_box()
+            assert box["height"] >= 48 and box["y"] >= 0 and box["y"] + box["height"] <= height, box
+            assert box["x"] >= 0 and box["x"] + box["width"] <= width and stop.evaluate(ON_TOP), box
+            overflow = page.evaluate("document.documentElement.scrollWidth - innerWidth")
+            low = page.evaluate(LOW_CONTRAST, ".ui-subnav *, .doc-tabs *, .incident-panel *, #incident-side *")
+            print(json.dumps({"size": size, "theme": theme, "subnav": reach, "seat": boxes, "stop": box,
+                              "overflow": overflow, "low_contrast": low}, ensure_ascii=False))
+            assert overflow <= 0, overflow
+            assert low == [], low
+            controls["cause"].select_option("obstacle")
+            controls["note"].fill("현장 상자 확인")
+            controls["save"].click()
+            for _ in range(50):  # the request leaves on the real network clock
+                page.clock.run_for(100)
+                if posts:
+                    break
+            assert posts and posts[-1][0] == "/api/fleet/incidents/rosy_01/s-0/review", posts
+            _shot(page, f"records-{theme}-{width}.png", full_page=True)
+            assert not errors
+        finally:
+            browser.close()
+
+
 # Elements that scroll on their own right now (the document is reported separately).
 SCROLLERS = """() => [...document.querySelectorAll('body *')].filter((node) => {
   const y = getComputedStyle(node).overflowY;
