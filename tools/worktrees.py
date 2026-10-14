@@ -11,7 +11,8 @@ Usage (from the main checkout or any worktree of the repository)::
 what is lossless: a worktree that is clean (nothing modified, staged or
 untracked), whose HEAD is an ancestor of ``main``, that is not locked, has no
 rebase/merge/bisect/cherry-pick in progress, holds no ignored file outside the
-cache directories, and has been idle ``--idle-hours`` (default 72). Its branch is
+cache directories, and has been idle ``--idle-hours`` (default 72), unless the caller made it (see
+below). Its branch is
 deleted by exact sha (``git update-ref -d <ref> <sha>``) once that sha is an
 ancestor of main. ``--snapshot``, which only a person or the dispatcher runs,
 also takes idle worktrees that are dirty or unmerged: the working files (modified,
@@ -19,7 +20,10 @@ staged, untracked) go into a commit on top of the worktree's HEAD, built in a
 temporary index and kept as ``refs/wip/<date>/<name>`` (not a tag: ``git push
 --tags`` must not publish it); only a snapshot that matches the worktree lets it
 be removed. An unmerged branch is always kept. The lossless prune takes any
-owner's worktree: it has nothing left to lose and has been idle three days.
+owner's worktree: it has nothing left to lose and has been idle three days. The caller's own
+finished worktree (owner note equal to the caller's identity, session included) is removable at once
+when clean and merged and its branch has a commit of its own in the reflog (landed work; a
+just-created empty worktree is "merged" too and waits like anyone's).
 ``--snapshot`` takes a dirty or unmerged one only if the caller made it (the
 owner note ``new`` writes: git identity plus agent session); ``--all`` also
 takes peers' and unowned ones. Never removed: the main checkout,
@@ -141,7 +145,9 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
     branch, tip, lock, merged into main, owner, and ``last`` = newest of the tip commit
     time, the ``.git`` file (creation) and ``logs/HEAD``; without ``logs/HEAD``
     it is infinite, which reads as active. A directory git does not list (a
-    half-removed worktree) is an ``orphan`` row. ``judge`` adds the rest.
+    half-removed worktree) is an ``orphan`` row. A dot-named directory (``.omc``) and a plain
+    file under ``.worktrees/`` are not worktrees and not orphans: not listed, not counted.
+    ``judge`` adds the rest.
     """
     listing = _must(git(cwd, "worktree", "list", "--porcelain"), "git worktree list")
     blocks = [dict(line.partition(" ")[::2] for line in block.splitlines())
@@ -176,7 +182,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
                          last=max(tip, reflog, _mtime(path / ".git")) if reflog else float("inf")))
     listed = {row["path"].resolve() for row in rows}
     rows += [_row(path, orphan=True) for path in sorted(holder.iterdir())
-             if path.is_dir() and path.resolve() not in listed]
+             if path.is_dir() and not path.name.startswith(".") and path.resolve() not in listed]
     return root, rows
 
 
@@ -214,16 +220,27 @@ def _status(path: Path) -> tuple[list[str], list[str]] | None:
     return changed, ignored
 
 
-def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool = False, full: bool = False) -> None:
+def _landed(row: dict) -> bool:
+    """Work landed from this branch: its reflog records a commit made on it. No reflog reads as no."""
+    log = git(row["path"], "reflog", "show", "--format=%gs", f"refs/heads/{row['branch']}")
+    return log.returncode == 0 and any(line.startswith("commit") for line in log.stdout.splitlines())
+
+
+def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool = False, full: bool = False,
+          me: str = "") -> None:
     """Set ``idle_h`` and ``verdict``; ``git status`` runs only when the cheap facts do not decide.
 
     ``lossless`` stops at an unmerged branch (the lossless prune keeps it anyway);
-    ``full`` always reads the status, for the uncommitted count in ``status``.
+    ``full`` always reads the status, for the uncommitted count in ``status``. ``me`` is the
+    caller's identity: a merged branch it owns that carries a commit of its own (``_landed``)
+    skips the idle wait while the worktree is clean (``row["fast"]``).
     """
+    row["fast"] = bool(me and row["owner"] == me and row["branch"] and row["merged"] and not row["orphan"]
+                       and row["branch"] != "main" and _landed(row))
     cheap = ("orphan" if row["orphan"] else "locked" if row["locked"]
              else "current" if row["path"].resolve() == here
              else "on main" if row["branch"] == "main"
-             else "active" if now - row["last"] < idle_hours * 3600
+             else "active" if not row["fast"] and now - row["last"] < idle_hours * 3600
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
              else "needs snapshot" if lossless and not row["merged"] else None)
     if (cheap is None or full) and not row["orphan"]:
@@ -232,9 +249,10 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
             cheap = cheap or "unreadable"
         else:
             row["changed"], row["ignored"] = status
+            row["fast"] = row["fast"] and not status[0]  # uncommitted files: back to the idle wait
             row["last"] = max([row["last"], *(_newest(row["path"] / rel) for rel in row["changed"])])
     row["idle_h"] = max(0.0, (now - row["last"]) / 3600)
-    row["verdict"] = cheap or ("active" if row["idle_h"] < idle_hours
+    row["verdict"] = cheap or ("active" if not row["fast"] and row["idle_h"] < idle_hours
                                else "holds ignored data" if row["ignored"]
                                else "needs snapshot" if row["changed"] or not row["merged"]
                                else "removable")
@@ -293,7 +311,7 @@ def _remove(root: Path, row: dict, day: str, now: float, idle_hours: float, say=
     # The scan may be minutes old: the row must still be the same commit, branch and lock, and still idle.
     fresh = next((r for r in scan(root)[1] if r["path"].resolve() == path.resolve()), None)
     if (not fresh or fresh["orphan"] or any(fresh[k] != row[k] for k in ("sha", "branch", "locked"))
-            or now - fresh["last"] < idle_hours * 3600):
+            or (now - fresh["last"] < idle_hours * 3600 and not row["fast"])):
         raise RuntimeError("changed since the scan; kept")
     note, force = "", []
     if row["changed"]:
@@ -348,7 +366,7 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
     done = 0
     try:
         for row in sorted(rows, key=lambda r: r["name"]):
-            judge(row, now, idle_hours, here, lossless=not snapshot)
+            judge(row, now, idle_hours, here, lossless=not snapshot, me=me)
             label = f"{row['name']} [{row['branch'] or ('orphan' if row['orphan'] else 'detached')}]"
             if not _takes(row, now, idle_hours, snapshot):
                 if not quiet:
@@ -402,9 +420,9 @@ def _table(rows: list[dict], me: str, now: float, file=None) -> None:
 
 def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
     root, rows = scan(cwd)
-    here = _here(cwd)
+    here, me = _here(cwd), _identity(root)
     for row in rows:
-        judge(row, now, idle_hours, here, full=True)
+        judge(row, now, idle_hours, here, full=True, me=me)
         # A tip that merged main in (tools/land.py does) and was not landed since is not an ancestor of main.
         # Still unmerged, and correctly kept; the note only explains why a "landed-looking" branch is.
         if row["merged"] or row["orphan"]:
@@ -413,7 +431,7 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if any(git(root, "merge-base", "--is-ancestor", p, "main").returncode == 0 for p in parents):
             row["note"] = "tip is a merge of main"
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
-    _table(sorted(rows, key=lambda r: -r["idle_h"]), _identity(root), now)
+    _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)
     print(f"[worktrees] {len(rows)} under {root / '.worktrees'} (cap {CAP})")
     return 0
 
@@ -442,7 +460,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
     if len(rows) >= CAP and reason is None:
         here = _here(cwd)
         for row in rows:
-            judge(row, now, IDLE_HOURS, here, lossless=True)
+            judge(row, now, IDLE_HOURS, here, lossless=True, me=_identity(root))
         print(f"refused: {len(rows)} worktrees under {root / '.worktrees'}, the cap is {CAP}. Longest idle:",
               file=sys.stderr)
         _table(sorted(rows, key=lambda r: r["last"])[:10], _identity(root), now, file=sys.stderr)
