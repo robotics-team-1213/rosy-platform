@@ -24,6 +24,7 @@ install(FILES
   request.js
   scope.js
   fleet-client.js
+  account-profile.js
   DESTINATION share/${PROJECT_NAME}
 )
 

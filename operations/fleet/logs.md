@@ -3569,6 +3569,14 @@
 - 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
 
+## 2026-10-14 · 5264ef279 · 통행권 송신 ttl_s는 2 s 그대로 (D-760 2단계의 상수 분리)
+
+- 변경: `fleet/traffic/trip_authority.py`가 `MAX_TTL_S` 대신 `LEGACY_TTL_S`(2.0)를 보낸다. 값과 동작은 바뀌지 않는다. CORE 계약의 상한이 5 s가 되면서 같은 상수를 보내던 Fleet이 모든 로봇에 5 s를 보내게 되는 것을 막는다.
+- 증거: `test_trip_authority.py::test_the_payload_is_relative_to_the_pose_the_table_used`(`ttl_s` 2.0). 원격 재실행 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3. 능력 플래그에 따라 5 s를 보내는 것은 3단계다.
+- 교훈: 없음.
+
 ## 2026-10-14 · 2c409d117 · refactor: 부르는 곳 없는 Fleet 코드 54줄 삭제
 - 변경: `server/ledger/mission_store.py`의 `next_running_mission`·`next_reconciliation_mission`(16줄, 부르던 `mission_service` 두 줄은 6fd54b3a3에서 이미 지워졌다. 4fe614c8b 커밋 글의 6d764bd77은 추가한 커밋이라 틀린 표기다), `server/ledger/task_store.py`의 `recover_interrupted_requests`(29줄, 호출은 423921562에서 없어졌다), `server/signals.py`의 `SignalConsole.signal_ids`(4줄), Console `console.js`의 `authHeaders`·`lastStateOk`(5줄)를 지웠다. 동작, 경로, 스키마는 그대로다.
 - Evidence: no executable callers remain; historical recover_interrupted_requests() plan references are superseded by recover_interrupted_work. Fleet 크기 단위는 56742에서 56688이 됐다(판정 56755+150 그대로). 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.

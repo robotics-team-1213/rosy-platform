@@ -65,6 +65,9 @@ class AndroidAccount(context: Context) {
     fun launch(activity: Activity, resource: String) {
         activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(session.begin(resource))).addCategory(Intent.CATEGORY_BROWSABLE))
     }
+    fun manageProfile(activity: Activity) {
+        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(session.profileUrl)).addCategory(Intent.CATEGORY_BROWSABLE))
+    }
     fun isCallback(intent: Intent?): Boolean = intent?.action == Intent.ACTION_VIEW && intent.data?.let {
         it.scheme == "https" && it.host == Uri.parse(config.redirect).host && it.path == Uri.parse(config.redirect).path
     } == true

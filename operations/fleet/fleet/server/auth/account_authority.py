@@ -146,24 +146,41 @@ class AccountAuthority:
         except (ValueError, OAuth2Error):
             return self.error()
 
-    def introspect(self, token):
+    def _access_context(self, db, token):
         if not isinstance(token, str) or len(token) > 16384:
-            return {'active': False}
+            return None
+        row = db.execute('SELECT * FROM account_oauth_access WHERE digest=?', (digest(token),)).fetchone()
+        if (row is None or row['expires'] <= self.clock()
+                or row['resource'] not in self.clients.get(row['client'], {}).get('resources', [])):
+            return None
+        context = self.resolve_family(db, row['family'])
+        if context is None or context['revision'] != row['revision']:
+            return None
+        try:
+            record = verify_access(token, self.public_keys, issuer=self.issuer,
+                                   audience=row['resource'], now=self.clock())
+        except ValueError:
+            return None
+        if (record.sub, record.sid, record.rev) != (context['account_id'], row['family'], row['revision']):
+            return None
+        return record, context
+
+    def introspect(self, token):
         with self.transaction() as db:
-            row = db.execute('SELECT * FROM account_oauth_access WHERE digest=?', (digest(token),)).fetchone()
-            if (row is None or row['expires'] <= self.clock()
-                    or row['resource'] not in self.clients.get(row['client'], {}).get('resources', [])):
+            found = self._access_context(db, token)
+            if found is None:
                 return {'active': False}
-            context = self.resolve_family(db, row['family'])
-            if context is None or context['revision'] != row['revision']:
-                return {'active': False}
-            try:
-                record = verify_access(token, self.public_keys, issuer=self.issuer,
-                                       audience=row['resource'], now=self.clock())
-            except ValueError:
-                return {'active': False}
+            record, _ = found
             return {'active': True, 'sub': record.sub, 'sid': record.sid, 'rev': record.rev,
                     'aud': record.aud, 'exp': record.exp}
+
+    def userinfo(self, token):
+        with self.transaction() as db:
+            found = self._access_context(db, token)
+            if found is None:
+                return None
+            _, context = found
+            return {key: context[key] for key in ('account_id', 'login', 'display_name')}
 
     def revoke(self, token):
         if not isinstance(token, str) or len(token) > 16384:

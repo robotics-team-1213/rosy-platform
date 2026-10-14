@@ -1,6 +1,6 @@
 ## D-760 Fleet이 시작한 움직임의 한도 — 끊김은 5초 버티고, 거리 끝에서 서고, 한도는 기본으로 켠다
 
-**Status:** Accepted (2026-10-14, 사용자 결정 K1 "몇 초 끊김은 버텨야 한다, 5초", K2 "시험 통과 즉시 전체 켬", K3 "군집은 다음 단계로 미룸", K4 "trip 임대 8초·목표 임대 3.5초·임대 중 통행권 강제를 확정하고 시작". 개정 1: 독립 검토 REVISE(C1·C2, M1–M7) 반영. Accepted는 구현·장치 수용이 아니다. 코드는 단계마다 따로 착지하고, 2–6단계는 Safety-Review, 6단계의 현장 반영은 릴리스 절차를 따른다)
+**Status:** Accepted (2026-10-14, 사용자 결정 K1 "몇 초 끊김은 버텨야 한다, 5초", K2 "시험 통과 즉시 전체 켬", K3 "군집은 다음 단계로 미룸", K4 "trip 임대 8초·목표 임대 3.5초·임대 중 통행권 강제를 확정하고 시작". 개정 1: 독립 검토 REVISE(C1·C2, M1–M7) 반영. 개정 2: 1·2단계 구현과 독립 안전 검토 반영. Accepted는 구현·장치 수용이 아니다. 코드는 단계마다 따로 착지하고, 2–6단계는 Safety-Review, 6단계의 현장 반영은 릴리스 절차를 따른다)
 
 잇는 결정: [D-550](D-550-fleet-robot-communication-contract.md)(종류·만료·규칙 M — 7항 lane trip 행, 8항 J2, 10항, 13항 5단계를 이 기록이 고친다) · [D-517](D-517-multi-robot-lane-traffic.md) 4·6(통행권 — `ttl_s` 상한, "줄지 않는다", 재시작 뒤 동작을 고친다) · [D-541](D-541-core-fleet-trip-lease.md)(trip 임대 — 기본값과 `ttl_s`, 임대 중 통행권 강제를 더한다) · [D-494](D-494-fleet-trip-execution-m2-contracts.md)(trip 루프 — 로봇 호출 실패의 뜻을 고친다) · [D-419](D-419-saf003-fleet-link-loss-policy.md) · [D-555](D-555-enrolled-robot-hub-pairing.md) · [D-758](D-758-robot-held-site-anchor.md)(로봇이 드는 현장 기준, 같은 날의 짝 기록) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md) · [D-430](D-430-safety-as-a-separate-concern.md). 폴더 구조는 바뀌지 않으므로 D-427 3항은 해당하지 않는다.
 
@@ -185,3 +185,23 @@
 | M5 5 s가 모두 같아 경합이다 | Decision 1: 통행권 5, 임대 8, 목표 임대 3.5 |
 | M6 3·4·5단계에 Safety-Review가 없다 | 11: 2–6단계 모두 |
 | M7 시험에 빠진 경우 | 11: 6단계 시험 |
+
+### 개정 2 (2026-10-14) — 1·2단계 구현과 독립 안전 검토에서 나온 것
+
+위 본문과 다르면 이 개정이 이긴다.
+
+1. **임대를 본 세션은 끝까지 통행권을 요구한다(Decision 2 보강).** 임대 중 강제를 임대 상태만 보고 판정하면, 첫 통행권 전에 임대가 해제·만료·넘겨받기로 끝나는 순간 서 있던 로봇이 한도 없이 달린다(안전 검토 M1). CORE는 차선 추종 세션에서 임대를 한 번 보면 모드를 바꿀 때까지 통행권을 요구한다. 모드를 바꾸면 풀리므로 그 뒤의 대시보드 주행은 지금과 같다.
+2. **`seq`는 구간마다 기억한다(Decision 3 보강).** 구간 8개까지 기억한다. 잊는 것은 그 구간을 마지막으로 본 때가 odom 기록의 가장 오래된 표본보다 앞일 때뿐이고, 그러면 그 구간의 늦은 요청은 `AUTHORITY_POSE_STALE`로 거절된다. 아홉 번째 살아 있는 구간은 `seq_legs_full`로 무시한다. `seq`를 쓴 구간에서 `seq` 없는 요청은 `seq_required`로 무시한다(줄인 끝을 번호 없는 옛 요청이 되돌리지 못한다). Fleet은 재시작 뒤 같은 `leg_id`에 작은 `seq`를 다시 쓰면 안 된다: 구간 id를 바꾸거나 `seq`를 이어 쓴다(3단계).
+3. **줄이기는 허가를 만들지 않는다(Decision 3 정정).** 같은 구간·같은 odom 세대에 살아 있는 통행권이 없으면 `shrink`는 `shrink_none_held`로 거절되고 들고 있던 것도 버린다(로봇은 선다). 본문의 "줄인 끝은 언제나 옛 끝 안이다"는 이 규칙이 있어야 참이다.
+4. **상한 5 s는 CORE가 받는 한도이고, Fleet은 3단계까지 2 s를 보낸다.** 계약에 `LEGACY_TTL_S = 2.0`을 두었다. 상한만 올리면 Fleet이 5 s를 거절하는 옛 로봇에도 5 s를 보낸다. 범위 밖 `ttl_s`는 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다). 옛 CORE는 모르는 필드를 무시하므로 Fleet은 `line_follow_authority_shrink` 플래그를 본 로봇에만 `shrink`를 보낸다.
+5. **Open 1 닫음.** 장치에서 `ttl_s`는 이미 단조 시계로 잰다(`core/bridge/traffic_gate.py`, `use_sim_time`일 때만 ROS 시계). D-517 구현 노트의 "장치에서는 ROS 시계"가 틀린 기록이다. 5 s의 최악 거리는 0.5 m다(차선 추종 `max_linear` 상한 0.10 m/s).
+6. **Open 2의 답: 회전은 버티고 호는 버티지 못한다.**
+   - 교차로 기동: 통행권이 FREE가 아닌 동안 단계 시계가 서고(D-507 13항), 한 지시에 15 s까지만 더한 뒤 `junction_aborted`로 선다.
+   - 호(D-520·D-744): 통행권 문이 명령을 0으로 만들어도 호의 기한은 흐른다(`arc/lane_arc.py`, 여유 2 s). 2 s 넘게 서면 `lane_arc_timeout`으로 끝나고, 통행권이 돌아와도 로봇은 서 있다(차선 추종으로 돌아가지 않는다). 안전하지만 Decision 1의 "5–8 s는 서 있다가 이어 간다"가 호 도중에는 성립하지 않는다.
+   - **단계 2b를 더한다:** 호의 기한에서 뒤 문이 가져간 시간을 빼되 상한을 둔다(D-507 13항과 같은 규칙). `line_follow/arc` 단위가 줄 수 한도(460)에 닿아 있어 재판정이 필요하다. Safety-Review. 6단계 전에 한다.
+7. **안전 태그가 빠져 있다(11항 정정).** `line_follow/authority.py`와 `core/trip_lease.py`는 `tools/harness/platform_parts.yaml`의 `safety_modules`에 없다. 본문 11항의 "safety 태그 경로"는 틀렸다. 2단계는 독립 안전 검토를 받았고 trailer를 단다. 두 파일을 목록에 넣는 것은 2단계가 origin에 올라간 뒤의 후속 변경으로 한다(먼저 넣으면 이미 만든 커밋이 검사 범위에 들어가 amend 없이는 통과하지 못한다).
+8. **규칙 M 1단계가 세는 것(Decision 6 보강).** trip 임대만 쥐어도 `bounded`다(임대가 만료하면 CORE가 차선 추종을 멈추고 목표를 취소한다, `core/trip_lease.py`). 구간 종류를 모르는 trip은 임대가 없으면 `unbounded(leg_unknown)`이다.
+9. **6단계 준비에 더한다.**
+   - 이 릴리스의 로봇에서 `trip_lease_required`만 켜고 `traffic.authority`를 끄면 로봇이 `authority_none`으로 서 있다. 둘은 같이 켠다.
+   - Gazebo에서 Fleet 막힘 해결기는 `robots.yaml`에 `resolver_token`이 없으면 답하지 않는다(로그 `no_resolver_token`). 끊김 시험 러너에 넣는다.
+   - 시험 표에 더한다: 호 도중 끊김(2b 뒤 "이어 간다"), 임대가 첫 통행권 전에 끝남(움직이지 않는다), 재계획 뒤 옛 구간의 늦은 요청(무시된다).
