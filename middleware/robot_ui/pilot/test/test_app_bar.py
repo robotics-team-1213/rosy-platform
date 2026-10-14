@@ -1,7 +1,8 @@
 """D-741 3·4 — Pilot 웹 앱 바: 맥락(R 심볼, Pilot, 붙어 있는 로봇 이름), 상태, 운용 지도, 비상 정지 순서.
 
 비상 정지는 CORE `safety/stop`이고 앱 바의 마지막 조작이다. 주행 중 머리가 얇아지는 규칙,
-Android 셸의 숨김, 64rem 아래 접속 화면의 격자는 이 조각이 바꾸지 않는다.
+Android 셸의 숨김, 64rem 아래 접속 화면의 격자는 그대로다. 64rem 이상의 접속 화면만 한 줄 64px다
+(D-741 2026-10-14 부기). 화면에서 잰 값은 `test_pilot_browser.py`가 고정한다.
 """
 
 from __future__ import annotations
@@ -37,11 +38,18 @@ def test_brand_names_the_robot_this_page_is_attached_to():
     assert "name.textContent = offer.robotId; name.hidden = false;" in connect
 
 
-def test_bar_keeps_its_height_token_and_existing_fold_rules():
+def test_connect_bar_is_one_row_from_64rem_and_other_fold_rules_stay():
     sheet = (PILOT / "styles.css").read_text(encoding="utf-8")
-    assert "--appbar-height" not in sheet, "Pilot 머리 높이는 이 조각에서 --topbar-height 그대로다"
+    one_row = ('html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar '
+               "{ align-items: center; min-height: var(--appbar-height); padding-block: var(--space-1); }")
+    assert sheet.count("--appbar-height") == 1, "한 줄 높이는 접속 화면 한 규칙만 쓴다(주행·팔·Android 셸은 그대로)"
+    wide = sheet[sheet.index("@media (width >= 64rem) {"):sheet.index("@media (width < 64rem) {")]
+    assert one_row in wide, "한 줄 규칙은 64rem 이상 블록 안에만 있다"
     assert "var(--topbar-height)" in sheet
     assert 'html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }' in sheet
     assert 'html[data-pilot-shell="android"] ui-topbar [data-goto] { display: none; }' in sheet
-    assert 'grid-template-areas: "brand brand stop" "state nav stop" "notice notice notice";' in sheet
-    assert 'body[data-pilot-screen="connect"] [data-estop] { grid-area: stop; align-self: stretch; }' in sheet
+    # Below 64rem the two-row grid stays (D-741 2026-10-14 addendum): the stop spans both rows.
+    narrow = sheet[sheet.index("@media (width < 64rem) {"):]
+    narrow = narrow[:narrow.index("\n}")]
+    assert 'grid-template-areas: "brand brand stop" "state nav stop" "notice notice notice";' in narrow
+    assert 'body[data-pilot-screen="connect"] [data-estop] { grid-area: stop; align-self: stretch; }' in narrow
