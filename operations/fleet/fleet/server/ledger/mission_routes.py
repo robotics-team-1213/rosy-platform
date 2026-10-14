@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import json
 import time
+from functools import partial
 from datetime import datetime, timezone
 from typing import Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from core_common.protocol.schemas import (
+    FleetWorkDecisionRequest as MissionAdmitRequest,
     MissionCursorExpiredError,
     MissionCursorResetError,
     MissionProgressEventPage,
@@ -36,19 +38,6 @@ class MissionCandidateRequest(BaseModel):
     workcell_id: str
     instance_id: str
     candidate: dict[str, object]
-
-
-class MissionAdmitRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    expected_generation: int
-
-    @field_validator("expected_generation", mode="before")
-    @classmethod
-    def _non_negative_generation(cls, value):
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError("expected_generation must be a non-negative integer")
-        return value
 
 
 def _mission_candidate_result(proposal: dict, mission: dict | None) -> dict:
@@ -211,6 +200,15 @@ def _stable_resolution(value: Mapping) -> str:
                       allow_nan=False)
 
 
+def _require_cell_role(candidate: Mapping, principal: SitePrincipal) -> bool:
+    """Only the service principal proposes a Cell Job, and it proposes nothing else."""
+    cell = candidate.get("kind") == "cell_job"
+    if cell != (principal.role == "service"):
+        raise HTTPException(status_code=403, detail={"code": "CELL_JOB_SERVICE_PRINCIPAL_REQUIRED" if cell
+                                                     else "SERVICE_PRINCIPAL_CELL_JOB_ONLY"})
+    return cell
+
+
 def install_mission_routes(app, *, mission_service, proposal_store, goal_evidence_service,
                            mission_progress, candidate_resolver, cell_job_store,
                            cell_job_resolver, require_viewer, require_operator,
@@ -246,12 +244,7 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     @app.post("/api/fleet/proposals", dependencies=[Depends(require_proposer)], tags=["fleet-missions"])
     def fleet_proposal_create(body: MissionCandidateRequest,
                               principal: SitePrincipal = Depends(require_proposer)) -> dict:
-        cell_candidate = body.candidate.get("kind") == "cell_job"
-        if cell_candidate != (principal.role == "service"):
-            raise HTTPException(status_code=403, detail={
-                "code": "CELL_JOB_SERVICE_PRINCIPAL_REQUIRED" if cell_candidate
-                else "SERVICE_PRINCIPAL_CELL_JOB_ONLY",
-            })
+        _require_cell_role(body.candidate, principal)
         try:
             saved = proposal_store.create(
                 principal_id=principal.principal_id, request_key=body.request_key,
@@ -296,12 +289,7 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
         proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
         if proposal is None:
             raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
-        cell_candidate = proposal["candidate"].get("kind") == "cell_job"
-        if cell_candidate != (principal.role == "service"):
-            raise HTTPException(status_code=403, detail={
-                "code": "CELL_JOB_SERVICE_PRINCIPAL_REQUIRED" if cell_candidate
-                else "SERVICE_PRINCIPAL_CELL_JOB_ONLY",
-            })
+        cell_candidate = _require_cell_role(proposal["candidate"], principal)
         if proposal["state"] == "RESOLVED":
             if cell_candidate:
                 return {"created": False, **_mission_candidate_result(
@@ -434,58 +422,59 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         proposal, rule = decidable(mission_id, principal)
         if rule == "two_person" and proposal["principal_id"] == principal.principal_id:
-            raise HTTPException(status_code=403, detail={
-                "code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER",
-            })
-        if proposal["candidate"].get("kind") == "cell_job":
-            if cell_job_store is None:
-                raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
-            try:
-                if cell_job_resolver is None:
-                    raise HTTPException(status_code=503, detail={
-                        "code": "CELL_JOB_COMPILER_UNAVAILABLE",
-                    })
-                current = cell_job_resolver(
-                    proposal["candidate"], workcell_id=proposal["workcell_id"],
-                    instance_id=proposal["instance_id"],
-                )
-                if _stable_resolution(current) != _stable_resolution(proposal.get("resolution", {})):
-                    raise ProposalRejected("CELL_JOB_CHANGED_SINCE_RESOLUTION")
-                admitted = cell_job_store.admit(
-                    mission_id, actor_id=principal.principal_id,
-                    expected_generation=body.expected_generation,
-                )
-            except ProposalRejected as exc:
-                raise HTTPException(status_code=409, detail={"code": exc.code}) from exc
-            except (MissionConflict, ValueError) as exc:
-                raise HTTPException(status_code=409, detail={
-                    "code": "CELL_JOB_ADMISSION_REFUSED", "message": str(exc),
-                }) from exc
-            return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
-                    "mission": admitted, "physical_submission": "NOT_CONNECTED"}
-
-        mission = mission_service.get(mission_id)
-        if mission is None:
+            raise HTTPException(status_code=403, detail={"code": "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"})
+        cell = proposal["candidate"].get("kind") == "cell_job"
+        mission = None if cell else mission_service.get(mission_id)
+        if cell and cell_job_store is None:
+            raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
+        if not cell and mission is None:
             raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
         try:
-            current = _resolve_candidate(
-                candidate_resolver,
-                proposal["candidate"], workcell_id=mission["workcell_id"],
-                instance_id=mission["instance_id"], now=time.time(),
-            )
-            if _stable_resolution(current) != _stable_resolution(proposal["resolution"]):
-                raise ProposalRejected("EVIDENCE_OR_CAPABILITY_CHANGED")
-            admitted = mission_service.admit(
-                mission_id, actor_id=principal.principal_id,
-                expected_generation=body.expected_generation,
-                resources=[tuple(item) for item in proposal["resolution"]["resources"]],
-            )
+            if cell:
+                if cell_job_resolver is None:
+                    raise HTTPException(status_code=503, detail={"code": "CELL_JOB_COMPILER_UNAVAILABLE"})
+                current = cell_job_resolver(proposal["candidate"], workcell_id=proposal["workcell_id"],
+                                            instance_id=proposal["instance_id"])
+                admit = cell_job_store.admit
+            else:
+                current = _resolve_candidate(candidate_resolver, proposal["candidate"], now=time.time(),
+                                             workcell_id=mission["workcell_id"],
+                                             instance_id=mission["instance_id"])
+                admit = partial(mission_service.admit, resources=[
+                    tuple(item) for item in proposal["resolution"]["resources"]])
+            if _stable_resolution(current) != _stable_resolution(proposal.get("resolution", {})):
+                raise ProposalRejected("CELL_JOB_CHANGED_SINCE_RESOLUTION" if cell
+                                       else "EVIDENCE_OR_CAPABILITY_CHANGED")
+            admitted = admit(mission_id, actor_id=principal.principal_id,
+                             expected_generation=body.expected_generation)
         except ProposalRejected as exc:
             raise HTTPException(status_code=409, detail={"code": exc.code}) from exc
         except (MissionConflict, ValueError) as exc:
-            raise HTTPException(status_code=409, detail={"code": "MISSION_ADMISSION_REFUSED",
-                                                         "message": str(exc)}) from exc
+            raise HTTPException(status_code=409, detail={
+                "code": "CELL_JOB_ADMISSION_REFUSED" if cell else "MISSION_ADMISSION_REFUSED",
+                "message": str(exc)}) from exc
         return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
                 "mission": admitted, "physical_submission": "NOT_CONNECTED"}
+
+    @app.post("/api/fleet/missions/{mission_id}/reject", dependencies=operator_guard,
+              tags=["fleet-missions"])
+    def fleet_mission_reject(mission_id: str, body: MissionAdmitRequest,
+                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-763 5b: the proposer withdraws, another operator rejects; nothing is claimed."""
+        proposal, _ = decidable(mission_id, principal)
+        store = (cell_job_store if proposal["candidate"].get("kind") == "cell_job"
+                 else mission_service.store)
+        if store is None:
+            raise HTTPException(status_code=503, detail={"code": "CELL_JOB_JOURNAL_UNAVAILABLE"})
+        decision = ("WITHDRAWN_BY_PROPOSER" if proposal["principal_id"] == principal.principal_id
+                    else "REJECTED_BY_OPERATOR")
+        try:
+            rejected = store.reject(mission_id, actor_id=principal.principal_id, decision=decision,
+                                    expected_generation=body.expected_generation)
+        except (KeyError, MissionConflict, ValueError) as exc:
+            raise HTTPException(status_code=409, detail={"code": "MISSION_REJECT_REFUSED",
+                                                         "message": str(exc)}) from exc
+        return {"proposal": _mission_candidate_result(proposal, rejected)["proposal"],
+                "mission": rejected, "decision": decision}
 
     return fleet_proposal_create, fleet_proposal_resolve, fleet_mission_admit

@@ -574,6 +574,29 @@ class MissionStore:
             connection.commit()
         return self._row(updated)
 
+    def reject(self, mission_id: str, *, actor_id: str, expected_generation: int,
+               decision: str) -> dict[str, Any]:
+        """D-763 5b: a PROPOSED Mission ends CANCELED with ``decision`` as reason; it held no claim."""
+        actor_id = _nonempty("actor_id", actor_id, limit=96)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
+                                     (mission_id,)).fetchone()
+            control = connection.execute(
+                "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            if (row is None or row["status"] != "PROPOSED" or control is None
+                    or control[0] != expected_generation):
+                raise MissionConflict("only a PROPOSED Mission at the current stop generation can be rejected")
+            connection.execute("UPDATE fleet_missions SET status='CANCELED', reason=?, updated_at=? "
+                               "WHERE mission_id=?", (decision, _now(), mission_id))
+            self._event(connection, event_source="fleet_mission", source_event_id=f"reject:{mission_id}",
+                        mission=row, event_type="MISSION_REJECTED", state="CANCELED", actor_id=actor_id,
+                        detail={"decision": decision, "dispatch_generation": expected_generation})
+            updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
+                                         (mission_id,)).fetchone()
+            connection.commit()
+        return self._row(updated)
+
     def hold_ready(self, mission_id: str, *, actor_id: str, reason: str) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         reason = _nonempty("reason", reason, limit=96)
