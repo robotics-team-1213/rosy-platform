@@ -126,6 +126,8 @@ class LaneCueMixin:
         if not log or not trail:
             return None, "odom_stale"
         base, exact = self._odom_entry(pose_stamp)
+        if exact and base is None:
+            return None, "pose_stale"
         if not exact and pose_stamp > log[-1][0] + STAMP_TOL_S:
             return None, "pose_future"
         if (log[-1][6] - base[6] if exact else log[-1][0] - pose_stamp) > MAX_POSE_AGE_S:
