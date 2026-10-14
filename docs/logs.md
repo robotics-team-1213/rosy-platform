@@ -8480,3 +8480,9 @@ osy-d395-s1d\`.
 - 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
 - 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
 - gate 변화: 없음.
+
+## 2026-10-15 · 0349f6177 · OMX 후속 확인과 계정 브라우저 CI 준비
+
+- 변경: `fix/omx-readiness-followup`에서 Fleet OAuthlib pin과 사이트 runtime을 정렬하고 full CI에 계정 pipeline 파일의 브라우저 opt-in을 연결했다. 미공개 World 안내를 canonical 소비자와 대조했다.
+- 증거: 두 guard RED 2 failed 뒤 관련 원격 102 passed, 1 skipped, NEW 0; 독립 소스 검토 완료. validation/omx-followup-2026-10-15/result.md에 경로 계약 실패의 보정과 확인 범위를 기록했다.
+- gate 변화: 없음. 실제 브라우저는 새 CI에서 확인한다. live SIM의 자원·Docker 차단과 미정인 실물/HF 입력은 D-756에 덧붙였다.

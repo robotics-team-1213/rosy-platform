@@ -3696,3 +3696,9 @@
 - 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
 - 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
+
+## 2026-10-15 · 0349f6177 · 계정 runtime pin과 SSO CI 연결
+
+- 변경: `fix/omx-readiness-followup`에서 패키지 OAuthlib 요구를 사이트·CI와 같은 4.0.0으로 정렬했다. full CI의 account pipeline 파일만 브라우저 opt-in을 추가해 일반 CORE 범위는 유지한다.
+- 증거: pin/CI guard RED 뒤 원격 계정·selector·runtime 계약 102 passed, 1 skipped, NEW 0; 독립 소스 검토 완료. 실제 Chromium 실행은 새 CI에서 별도 확인한다.
+- gate 변화: 없음. 장치 활성화나 계정 외부 수용 증거가 아니다.
