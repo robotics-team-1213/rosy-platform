@@ -274,6 +274,7 @@
 
 - 변경: `site_ui/console`을 `SIZE_UNITS`에 더했다(첫 등록 229d47e94, 이 커밋이 재판정 조건 반영). D-757 판정 커밋 61aa49b32에서 잰 값으로 나눈다: 서버 `fleet` 38822 + 관제 17933 = 56755. 브랜치 기점 06e97383b까지의 101줄(서버 +46, 관제 +55)은 다시 잡지 않는다. 지금 서버 38868, 관제 18023. 계획 `docs/plans/2026-10-14-fleet-console-size-unit.md`.
 - 증거: 읽기 전용 critic 독립 재판정 AGREE-WITH-CONDITIONS, 조건 반영. 원격 AI PC `test_module_structure.py`(P6 셋 포함)·`test_doc_tabs.py`·`test_site_map_api.py` 70 passed(`X:/DevTemp/work-move/run-1.txt`, HEAD 13b907495), `known_failures` 0 new.
+- gate 변화: 없음.
 
 ## 2026-10-14 · f38a5093a · feat(console): 카드에 trip 기다림, 상한을 넘으면 개입 행 (D-763 조각 2, API v1.231)
 
