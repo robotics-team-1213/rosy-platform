@@ -3019,6 +3019,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.231 | 2026-10-14 | Additive (D-763 조각 2, feat/fleet-work-wait-read): trip 읽기의 `wait`에 `waiting`·`bound_s`·`over_bound`를 싣는다. 한 주기에 한 번 쓰고, 판정에 닿지 못한 주기에는 null이다. 상한을 넘은 기다림은 경고이고 개입이 아니다(개정 2 질문 7). |
 | v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
 | v1.227 | 2026-10-14 | Additive (D-760 개정 3 9항, feat/line-follow-regulation-wait): `GET /api/v1/line-follow` 와 상태 스냅숏 `line_follow` 의 선택 필드 `regulation_wait`(`authority`·`signal`·`crosswalk_held`·`crosswalk_wait`·`crosswalk_look`·null, 그 순서의 우선순위). CORE 2b 시계 도우미와 같은 판정. 동작·다른 필드·envelope 1.0 변경 없음. |
 | v1.226 | 2026-10-14 | Additive + Behavior (D-760 1–3항, feat/authority-ttl5-shrink-under-lease, Safety-Review 대상): `POST /api/v1/line-follow/authority` `ttl_s` 상한 2 → 5 s, 선택 필드 `shrink`(bool)·`seq`(정수 ≥ 0), 응답 `reason: stale_seq`·`seq_required`·`seq_legs_full`·`shrink_none_held`. CORE trip lease 가 열려 있는 동안 line-follow 는 통행권이 없으면 `authority_none` 으로 선다(임대가 없으면 v1.225 그대로). 능력 `base_velocity.line_follow_authority_shrink`·`line_follow_authority_under_lease`. 추가 필드와 임대가 없는 요청의 동작은 v1.225와 같다. Fleet 송신은 바뀌지 않는다(D-760 3단계) |
