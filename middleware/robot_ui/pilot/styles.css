@@ -827,6 +827,11 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 }
 /* 태블릿 가로: 왼쪽 작업 공간(영상·readback), 오른쪽 조작부 — 컨트롤러처럼 한 화면에 */
 @media (width >= 64rem) {
+  /* D-741 3: 한 줄. 64rem 아래 두 줄 격자는 2026-10-14 부기. 긴 글은 알림·이름이 말줄임으로 받고 정지·지도는 줄지 않는다. */
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar { align-items: center; min-height: var(--appbar-height); padding-block: var(--space-1); }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] ui-topbar :is([data-estop], [data-goto]) { flex: none; }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand, ui-brand a, ui-brand small, #pilot-notice) { min-width: 0; }
+  html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand small, #pilot-notice) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
   [data-screen="arm"] { max-width: 120rem; }
   .arm-console {
