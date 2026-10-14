@@ -1541,6 +1541,23 @@ def test_robot_routes_refuse_a_trip_robot(tmp_path):
     assert (view["state"], view["reason"]) == ("canceled", "operator_line_follow_off")
 
 
+def test_every_route_holder_refusal_keeps_its_exact_body(tmp_path):
+    """D-763 slice 1: one holder check behind every route; each route's 409 body stays as it was."""
+    ports = Ports()
+    client, _tasks, _store, _robot, _console = _app(tmp_path, ports)
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
+    assert client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR).status_code == 200
+    long = {"code": "TRIP_ROBOT_BUSY", "message": "rosy_60 is on a running trip; cancel the trip first"}
+    busy = {**OPERATOR, "Idempotency-Key": "k1"}
+    for path, body, detail in (
+            ("goal", {"x": 0.1, "y": 0.0, "yaw": 0.0}, long),
+            ("route", {"edges": ["ring_s"]}, {"code": "TRIP_ROBOT_BUSY", "message": "rosy_60 is on a running trip"}),
+            ("line-stuck/decision", {"stuck_id": "s1", "decision": "BACK_AND_RETRY"}, long)):
+        response = client.post(f"/api/fleet/robots/rosy_60/{path}", json=body, headers=busy)
+        assert (response.status_code, response.json()) == (409, {"detail": detail}), path
+
+
 def test_start_through_the_api_refuses_a_robot_with_a_queued_console_mission(tmp_path):
     ports = Ports()
     client, _tasks, _store, _robot, console = _app(tmp_path, ports)
