@@ -97,9 +97,9 @@ def _generated_beside(parent: Path) -> bool:
     """``parent`` proves its build/install/log/dist are generated: a gradle module or a colcon workspace."""
     if any(parent.glob("build.gradle*")):
         return True
-    colcon = ("build", "install", "log")
-    return (all((parent / d).is_dir() for d in colcon)
-            and (any((parent / d / "COLCON_IGNORE").is_file() for d in colcon)
+    colcon_dirs = ("build", "install", "log")
+    return (all((parent / d).is_dir() for d in colcon_dirs)
+            and (any((parent / d / "COLCON_IGNORE").is_file() for d in colcon_dirs)
                  or any((parent / "install").glob("setup.*"))))
 
 
