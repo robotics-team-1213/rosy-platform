@@ -3648,3 +3648,10 @@
 - 증거: 원격 시험(모델 PC, f38a5093a) 284 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 사유마다 상한 안 기다림·넘으면 `over_bound`, 사유가 바뀌어도 한 번, 진행이 끝냄, `link_wait`의 lease 상한.
 - gate 변화: 없음. `GET /api/fleet/work`에는 trip 행이 없어(조각 4) trip 읽기에만 실었다.
 - 결정: D-763 8항, 구현 조각 2.
+
+## 2026-10-14 · 7c26a028c · D-763 조각 2 검토: 상한 넘김은 해결기 몫, 지난 tick의 답을 남기지 않는다
+
+- 변경: `ledger/trip_runner.py` `_step`이 맨 앞에서 `view.wait`의 `waiting`·`bound_s`·`over_bound`를 None(모름)으로 둔다. `_waiting`까지 가지 않고 끝난 tick은 지난 답을 보이지 않는다. 세 키는 정체 규칙이 읽지 않으므로 정체 시계는 같다. 서버 순증 0(`trip_progress.py` 주석 한 줄 줄임).
+- 증거: 원격 시험(AI PC, 7c26a028c) 285 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 자세를 잃어 `_stalled` 전에 끝난 tick에서 세 키가 None.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 7. 상한을 넘은 기다림은 막힘 해결기(D-622)로 가고, 개입은 해결기가 사람에게 넘길 때만이다.
