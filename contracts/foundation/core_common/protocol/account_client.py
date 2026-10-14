@@ -232,6 +232,45 @@ class AccountClient:
                 db.execute('DELETE FROM app_account_sessions WHERE id=?', (row['id'],))
                 return None
 
+    @property
+    def profile_url(self):
+        return self.issuer + '/console/profile'
+
+    def profile(self, cookie):
+        if not isinstance(cookie, str) or not 1 <= len(cookie) <= 128:
+            return None
+        return self.profile_session_id(_digest(cookie))
+
+    def profile_session_id(self, session_id):
+        """Read fresh display metadata without caching or changing authorization on failure."""
+        try:
+            claims = self.resolve_session_id(session_id)
+            if claims is None:
+                return None
+            with self.transaction() as db:
+                row = db.execute('SELECT tokens FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+            if row is None:
+                return None
+            encrypted = row['tokens']
+            tokens = json.loads(self.cipher.decrypt(encrypted))
+            current = self._claims(tokens['access_token'])
+            if (current.sub, current.sid, current.rev) != (claims.sub, claims.sid, claims.rev):
+                return None
+            profile = self.post('userinfo', {'token': tokens['access_token']})
+            fields = {'account_id', 'login', 'display_name'}
+            if (not isinstance(profile, dict) or set(profile) != fields
+                    or profile['account_id'] != claims.sub
+                    or any(not isinstance(profile[key], str) or not 1 <= len(profile[key]) <= 128 for key in fields)):
+                return None
+            # Logout or renewal while userinfo was in flight must not resurrect an old name.
+            with self.transaction() as db:
+                row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+            if row is None or row['tokens'] != encrypted or row['expires'] <= self.clock() or current.exp <= self.clock():
+                return None
+            return {key: profile[key] for key in fields}
+        except (AccountUnavailable, ValueError, InvalidToken, KeyError, TypeError):
+            return None
+
     def logout(self, cookie):
         if not isinstance(cookie, str) or len(cookie) > 128:
             return
