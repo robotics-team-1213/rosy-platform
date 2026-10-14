@@ -106,12 +106,20 @@ class TripProgress:
         bound = self._wait_bound(wait.get("reason"))
         return bound is not None and now - wait["since"] < bound
 
+    def _fence(self, robot_id: str) -> None:
+        """D-760 8 review: the trip's next state read starts after every read begun so far (its last step, a
+        junction send, a link loss). A pose port without read numbers (a test fake, SIM) is not fenced."""
+        number = getattr(getattr(self, "_poses", None), "read_number", None)
+        if number is not None:
+            self._read_after[robot_id] = number(robot_id)
+
     async def _link_wait(self, live: LiveTrip, kind: str) -> bool:
         """D-760 4: a robot call or state read failed on a trip that holds its lease. The trip stays open in
         ``link_wait`` (no instruction, goal or extended authority; UNKNOWN in the block table, so its blocks stay
         held) until the link returns (``_link_back``) or the lease is lost. False: no lease, the trip ends as before."""
         if not live.open or (live.view.get("lease") or {}).get("state") != "held":
             return False
+        self._fence(live.view["robot_id"])  # D-760 8 review: only a read that starts after the loss brings it back
         live.at, live.at_stamp = None, None
         if (live.view.get("wait") or {}).get("reason") != "link_wait":  # kept until a whole step passes
             live.view["wait"] = {"reason": "link_wait", "since": self._clock(), "lease_at": self.lease.now()}

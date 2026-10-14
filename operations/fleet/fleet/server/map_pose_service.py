@@ -56,8 +56,11 @@ class MapPoseService:
         self._wall = wall           # sighting captured_at and odom stamps are UTC epoch seconds
         self._clock = clock         # D-760 8: a read's age, from its start
         self._trackers: dict[str, MapPoseTracker] = {}
-        self._refreshing: dict[tuple[str, bool], asyncio.Future] = {}
-        self._kept: dict[tuple[str, bool], tuple[float, Mapping]] = {}   # (start, state) of the last read
+        #: (robot_id, force_rest) -> the read in flight (task, number), the last read (start, number, state)
+        #: and the number of reads started; hub and REST reads never share.
+        self._refreshing: dict[tuple[str, bool], tuple[asyncio.Future, int]] = {}
+        self._kept: dict[tuple[str, bool], tuple[float, int, Mapping]] = {}
+        self._numbers: dict[tuple[str, bool], int] = {}
 
     def active_map_id(self) -> Optional[str]:
         """The active site map frame id; warns once per id that no sighting source reports."""
@@ -77,6 +80,8 @@ class MapPoseService:
         roster = set(self._robot_ids())
         for gone in set(self._trackers) - roster:     # a robot that left starts over if it returns
             del self._trackers[gone]
+        for key in [key for key in self._kept if key[0] not in roster]:   # and its kept reads
+            del self._kept[key]
         if robot_id not in roster:
             return None
         tracker = self._trackers.get(robot_id)
@@ -112,39 +117,53 @@ class MapPoseService:
         else:
             tracker.add_odom(sample, self._wall())
 
-    async def state(self, robot_id: str, max_age_s: float = TRIP_READ_AGE_S) -> Mapping:
+    async def state(self, robot_id: str, max_age_s: float = TRIP_READ_AGE_S, after: int = 0) -> Mapping:
         """D-760 8: the robot's REST state, one read per robot shared by every Fleet loop (app.py
         sets it as the console's `read_state`). A read that started within `max_age_s` (Fleet
-        monotonic time) is returned; else the caller joins the read in flight or starts one. A
-        failed read keeps nothing and raises its own exception to every waiter."""
-        return await self._read((robot_id, True), self._gather_rest, max_age_s)
+        monotonic time) and is numbered above `after` (`read_number`) is returned; else the caller
+        joins the read in flight or starts one. A read in flight numbered `after` or below is
+        waited out first (review: the trip loop's read starts after its last step, send or loss).
+        A failed read keeps nothing and raises its own exception to every waiter."""
+        return await self._read((robot_id, True), self._gather_rest, max_age_s, after)
+
+    def read_number(self, robot_id: str) -> int:
+        """The number of the robot's newest REST read started so far (0: none)."""
+        return self._numbers.get((robot_id, True), 0)
 
     async def refresh(self, robot_id: str, *, force_rest: bool = False,
-                      max_age_s: float = TRIP_READ_AGE_S) -> None:
+                      max_age_s: float = TRIP_READ_AGE_S, after: int = 0) -> None:
         """Read the robot's state and feed its odom: the hub snapshot when fresh, else REST, shared
         for 0.2 s. `force_rest` (the trip loop, lane compliance, the trail anchor) is `state`."""
         gather = self._gather_rest if force_rest else self._gather
         if gather is not None and self._tracker(robot_id) is not None:
-            await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S)
+            await self._read((robot_id, force_rest), gather, max_age_s if force_rest else REFRESH_FRESH_S,
+                             after if force_rest else 0)
 
-    async def _read(self, key: tuple[str, bool], gather, max_age_s: float) -> Mapping:
-        kept = self._kept.get(key)
-        if kept is not None and self._clock() - kept[0] <= max_age_s:
-            return kept[1]
-        running = self._refreshing.get(key)
-        if running is None:
-            running = self._refreshing[key] = asyncio.ensure_future(self._fetch(key, gather, self._clock()))
-            running.add_done_callback(lambda done: self._refresh_done(key, done))
-        return await asyncio.shield(running)
+    async def _read(self, key: tuple[str, bool], gather, max_age_s: float, after: int) -> Mapping:
+        while True:
+            kept = self._kept.get(key)
+            if kept is not None and kept[1] > after and self._clock() - kept[0] <= max_age_s:
+                return kept[2]
+            running = self._refreshing.get(key)
+            if running is not None and running[1] <= after:
+                await asyncio.wait([running[0]])     # its outcome is its own waiters'; then a new read
+                continue
+            if running is None:
+                number = self._numbers[key] = self._numbers.get(key, 0) + 1
+                task = asyncio.ensure_future(self._fetch(key, gather, self._clock(), number))
+                running = self._refreshing[key] = (task, number)
+                task.add_done_callback(lambda done: self._refresh_done(key, done))
+            return await asyncio.shield(running[0])
 
-    async def _fetch(self, key: tuple[str, bool], gather, started: float) -> Mapping:
+    async def _fetch(self, key: tuple[str, bool], gather, started: float, number: int) -> Mapping:
         state = await gather(key[0])
-        self._kept[key] = (started, state)
         self.observe_state(key[0], state)    # once per read: odom_stamp stays the snapshot's own
+        self._kept[key] = (started, number, state)
         return state
 
     def _refresh_done(self, key: tuple, done: asyncio.Future) -> None:
-        self._refreshing.pop(key, None)
+        if self._refreshing.get(key, (None,))[0] is done:
+            self._refreshing.pop(key)
         # Retrieved here so a read whose waiters were all cancelled never logs "never retrieved".
         if not done.cancelled() and done.exception() is not None:
             logger.debug("map pose: state read for %s failed: %r", key[0], done.exception())
