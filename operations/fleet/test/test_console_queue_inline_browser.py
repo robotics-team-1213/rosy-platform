@@ -322,7 +322,8 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
                 link.scroll_into_view_if_needed()
                 box = link.bounding_box()
                 reach.append((round(box["x"]), round(box["width"]), round(box["height"])))
-                assert box["x"] >= 0 and box["x"] + box["width"] <= width and box["height"] >= 44, (index, box)
+                # The row scrolls on whole pixels, so an entry brought to its edge may sit a fraction past it.
+                assert box["x"] >= -1 and box["x"] + box["width"] <= width + 1 and box["height"] >= 44, (index, box)
                 assert link.evaluate(ON_TOP), (index, box)
             page.locator("#incident-list > li").first.locator(":scope > details > summary").click()
             seat = page.locator("#incident-judgment")
