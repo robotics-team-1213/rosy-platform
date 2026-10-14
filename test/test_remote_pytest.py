@@ -96,7 +96,7 @@ def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path)
     monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
     monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
-    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or 0)
+    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or log.write_bytes(b""))
     rp.run_on(other, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
     assert sent[0][2] == "400%"  # CPU cap
 
@@ -210,7 +210,7 @@ def test_site_pc_pytest_gets_a_cpu_quota(monkeypatch, tmp_path):
     monkeypatch.setattr(rp, "ship", lambda *a: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
     monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
-    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or 0)
+    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or log.write_bytes(b""))
     for h in (rp.SITE_HOST, "model@1"):
         rp.run_on(h, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
     assert sent[0][2] == "400%" and sent[1][2] == ""
@@ -556,4 +556,4 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     lock = home / "rosy-jobs" / "r.lock"
     _wait_for_lock(lock)
     _sh(rj.KILL, env, "r")
-    assert _poll_until_done(env) != 0 and not lock.exists()
+    assert _poll_until_done(env) == 143 and not lock.exists()
