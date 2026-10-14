@@ -3712,3 +3712,10 @@
 - 변경: `ledger/trip_guard.py` `end_trip`이 `stop_job`을 따로 `try`에서 부른다. trip 저장소가 실패해도 사람의 멈춤 뒤 작업 lease가 갱신되며 남지 않는다(재검토 LOW).
 - 증거: `test_a_failed_trip_cancel_still_holds_the_job`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음.
+
+## 2026-10-15 · 0b7df2e16 · hold_job의 움직임 한도는 Rule M이 판정한다 (D-760 6, D-763 조각 6)
+
+- 변경: D-760 담당 세션 요청. `ledger/trip_admission.py` `hold_job`이 로봇이 모는 다리(lane·free)마다 `traffic/rule_m.py` `verdict`를 lease 없이 부른다(lane은 통행권 `core`, free는 임대 있는 목표). 422 `LINK_UNBOUNDED_MOTION` 본문은 `reasons`(Rule M의 말: `hold_back`, `no_goal_lease`, `leg_unknown`)와 `missing`(질문 10의 능력·설정)이다. traffic 단위 그대로(2200), ledger 7115, 서버 순증 0.
+- 증거: `test_the_motion_bound_part_is_rule_ms_verdict`, `test_a_lane_only_robot_needs_no_free_leg_bound`. 원격(0b7df2e16) exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-760 Decision 6, D-763 4항.
