@@ -100,7 +100,7 @@ class TripAdmission:
         missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is False}
         if missing:
             raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})
-        # ponytail: an older CORE (field absent) only warns; refuse it like False once every robot runs v1.233+.
+        # ponytail: an older CORE (field absent) only warns; refuse it like False once every robot runs v1.237+.
         unknown = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is None}
         if unknown:
             _LOG.warning("trip of %s crosses regulation its CORE does not announce: %s", robot_id, unknown)
