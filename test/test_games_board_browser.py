@@ -969,7 +969,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
 def test_visibility_observations_are_not_operational_approval():
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, expect
     board = PreviewBoard(clock=lambda: 100.0)
     payload = _play_payload()
     payload.pop('visibility')
