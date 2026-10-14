@@ -184,7 +184,8 @@ class TripRunner(TripAdmission, TripProgress):
                 caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
-                             "line_follow_authority": getattr(caps, "line_follow_authority", False),
+                             "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
+                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
                              "lane_bend": caps.lane_bend, "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone

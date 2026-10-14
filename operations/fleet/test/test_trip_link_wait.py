@@ -199,12 +199,13 @@ def test_a_link_wait_robot_keeps_its_blocks_and_the_robot_behind_stops_before_th
     _trip(runner, store, fleet, "b", "east:fwd", middle - 0.05)
     _ticks(runner, fleet)
     state = runner.traffic._state
-    held = {unit for unit, _f in state.held["a"].values()} | set(state.last_occupied["a"])
+    def grants(robot_id):
+        return {unit for unit, _forward in state.held[robot_id].values()}
+    held_a, held_b = grants("a"), grants("b")
     fleet.down.add("a")
     _ticks(runner, fleet, 6)
     assert runner.view("a")["state"] == "link_wait"
-    assert held <= {unit for unit, _f in state.held["a"].values()} | set(state.last_occupied["a"])
-    assert not held & {unit for unit, _f in state.held["b"].values()}
+    assert held_a <= grants("a") and grants("b") <= held_b  # a keeps its blocks; b is granted none of them
     assert runner._live["b"].traffic["waiting_for"] == ["a"]
 
 
