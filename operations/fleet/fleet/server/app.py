@@ -410,17 +410,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             power_display = getattr(app.state, "power_health_display", None)
             if power_display is not None:
                 await power_display.aclose()
-            for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
+            backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
                                signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                               lease_task, path_task, calibration_drift_task, notification_task):
-                if background is not None:
-                    background.cancel()
-                    try:
-                        await background
-                    except asyncio.CancelledError:
-                        pass
+                               lease_task, path_task, calibration_drift_task, notification_task)
+                           if background is not None]
+            for background in backgrounds:
+                background.cancel()
+            for result in await asyncio.gather(*backgrounds, return_exceptions=True):
+                if isinstance(result, Exception):
+                    _LOG.error("Fleet background worker failed before shutdown",
+                               exc_info=(type(result), result, result.__traceback__))
             if notification_http is not None:
                 await notification_http.aclose()
             if calibration_drift_watch is not None:
