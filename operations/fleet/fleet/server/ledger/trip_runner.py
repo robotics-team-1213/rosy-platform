@@ -880,6 +880,6 @@ class TripRunner(TripAdmission, TripProgress):
         if not live.open:
             live.view["detail"].pop("bend_candidate", None)
             self.lease.close(live)  # D-541 7: DELETE after the halt
-            self.authority.forget(live.view["robot_id"])
+            self.authority.forget(live.view["robot_id"], live.view["detail"].get("stop_sent") is True)  # MEDIUM-2
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)

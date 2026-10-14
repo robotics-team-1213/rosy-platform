@@ -37,7 +37,7 @@ class AuthoritySender:
         #: robot id -> (leg id, end in plan metres before any lap trim) last sent
         self._sent: dict[str, tuple[str, float]] = {}
         self._seq: dict[str, tuple[str, int]] = {}  # robot id -> (leg id, last seq)
-        #: robot id -> its last extend {leg, stamp, until_m, shrunk: CORE confirmed a shrink since}
+        #: robot id -> its last extend {leg, stamp, until_m, sent_at, shrunk: CORE confirmed a shrink since, closed}
         self._held: dict[str, dict] = {}
         self._count, self._failing = 0, set()
 
@@ -49,13 +49,21 @@ class AuthoritySender:
         return {robot_id for robot_id, task in self._inflight.items() if not task.done()}
 
     def reach(self, robot_id: str) -> float:
-        """Metres past its pose the robot may still drive on an extend CORE has not confirmed shrunk."""
+        """Metres past its pose the robot may still drive on an extend CORE has not confirmed shrunk; after an
+        unconfirmed trip end, until that extend has expired at CORE (send + MAX_TTL_S + this client's timeout)."""
         held = self._held.get(robot_id)
+        if held is not None and held.get("closed") and self._clock() >= held["sent_at"] + MAX_TTL_S + self._timeout_s:
+            self._held.pop(robot_id)
+            held = None
         return 0.0 if held is None or held["shrunk"] else held["until_m"]
 
-    def forget(self, robot_id: str) -> None:
-        """Its trip ended and the robot was stopped (mode OFF, or CORE's lease expiry ended its line)."""
-        self._held.pop(robot_id, None)
+    def forget(self, robot_id: str, stopped: bool) -> None:
+        """Its trip ended: a confirmed stop (line OFF) leaves no authority; else ``reach`` holds until expiry."""
+        held = self._held.get(robot_id)
+        if held is not None and (stopped or held["shrunk"]):
+            self._held.pop(robot_id)
+        elif held is not None:
+            held["closed"] = True
 
     def _request(self, live, leg: str, **fields) -> dict:
         robot_id, last = live.view["robot_id"], self._seq.get(live.view["robot_id"])
@@ -75,7 +83,7 @@ class AuthoritySender:
             absolute = max(absolute, last[1])
         self._sent[robot_id] = (leg, absolute)
         until = round(min(MAX_UNTIL_M, max(0.0, absolute - live.trim_m - front)), 3)
-        self._held[robot_id] = {"leg": leg, "stamp": stamp, "until_m": until, "shrunk": False}
+        self._held[robot_id] = {"leg": leg, "stamp": stamp, "until_m": until, "shrunk": False, "sent_at": self._clock()}
         shrinks = (live.view.get("caps") or {}).get("line_follow_authority_shrink") is True
         return self._request(live, leg, pose_stamp=stamp, until_m=until, ttl_s=MAX_TTL_S if shrinks else LEGACY_TTL_S)
 
