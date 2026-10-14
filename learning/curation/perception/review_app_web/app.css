@@ -309,6 +309,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 }
 
 /* Peer editing actions share a column; content length cannot change the target. */
+.review-people-summary { margin-block: var(--space-1); overflow-wrap: anywhere; }
+.review-history-link { display: inline-block; margin-block-end: var(--space-2); }
+.review-ai-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+#pixel-main > .pixel-vlm-feedback { margin-block: var(--space-2); padding: var(--space-3); border: 1px solid var(--surface-line); }
+#pixel-vlm-note { overflow-wrap: anywhere; }
 .review-editor-tools .toolbar ui-button { flex: 1 1 0; min-width: 0; }
 @media (width < 30rem) {
   .photo-sidebar > label { grid-column: 1 / -1; grid-row: auto; justify-self: stretch; }
