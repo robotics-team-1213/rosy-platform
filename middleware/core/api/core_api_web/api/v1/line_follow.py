@@ -351,7 +351,8 @@ def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(o
                        svc: CoreServicesLike = Depends(get_services)):
     """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
     Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg without
-    ``shrink``; stale_seq: D-760 3, ``seq`` at or below the newest seen on the leg).
+    ``shrink``; D-760 3 stale_seq / seq_required / seq_legs_full: the leg's ``seq`` order; shrink_none_held:
+    a ``shrink`` with nothing live to shrink, which also drops what is held).
     A 409 refusal also drops the held authority, so the robot stands."""
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow authority")

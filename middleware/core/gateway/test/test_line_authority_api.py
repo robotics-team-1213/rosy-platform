@@ -94,5 +94,15 @@ def test_shrink_and_seq_reach_the_gate(core_client):
     assert late.status_code == 200
     assert (late.json()["accepted"], late.json()["reason"]) == (False, "stale_seq")
     assert late.json()["authority"]["remaining_m"] == 0.0
-    plain = client.post(URL, json=_body(clock, until_m=0.5), headers=OPERATOR).json()  # a Fleet before D-760
-    assert plain["accepted"] is True and plain["authority"]["remaining_m"] == 0.5
+    plain = client.post(URL, json=_body(clock, until_m=0.5), headers=OPERATOR)  # no seq on a leg that has one
+    assert plain.status_code == 200
+    assert (plain.json()["accepted"], plain.json()["reason"]) == (False, "seq_required")
+    assert plain.json()["authority"]["remaining_m"] == 0.0
+
+
+def test_a_shrink_with_nothing_held_grants_nothing(core_client):
+    client, _, clock = _active(core_client)
+    answer = client.post(URL, json=_body(clock, shrink=True), headers=OPERATOR)
+    assert answer.status_code == 200
+    assert (answer.json()["accepted"], answer.json()["reason"]) == (False, "shrink_none_held")
+    assert answer.json()["authority"]["state"] == "NONE"
