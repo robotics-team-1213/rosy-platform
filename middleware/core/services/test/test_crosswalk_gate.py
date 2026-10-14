@@ -582,12 +582,12 @@ def test_the_look_area_follows_the_lane_seen_now_not_the_zones_older_anchor():
     lane seen now the area is the lane plus the camera's own bound, and the walls stay outside."""
     for yaw in (0.0, 0.03, -0.03):                 # m8: 0.024 rad, the camera's own bound 0.02 m
         reasons = _look_between_walls(yaw, (0.079, -0.079, 0.02))
-        assert "person_present" not in reasons and reasons[-1] is None, (yaw, reasons[-3:])
+        assert "crosswalk_person_present" not in reasons and reasons[-1] is None, (yaw, reasons[-3:])
     # no lane seen now: the corridor's full width in the zone's own frame, as before (the wall holds)
-    assert "person_present" in _look_between_walls(0.03, None)
+    assert "crosswalk_person_present" in _look_between_walls(0.03, None)
     # the camera reads the wall bases as the edges: the lane's inner width stands in (개정 6)
     reasons = _look_between_walls(0.03, (0.120, -0.122, 0.02))
-    assert "person_present" not in reasons and reasons[-1] is None
+    assert "crosswalk_person_present" not in reasons and reasons[-1] is None
 
 
 @pytest.mark.parametrize("rays", [
