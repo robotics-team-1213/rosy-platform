@@ -628,6 +628,10 @@ def test_an_armed_zone_the_robot_turned_away_from_disarms_with_a_lane_in_view():
         _step(g, zone, geo, ahead, 1.2, Scan((), 0.05, 1.2))
 
 
+@pytest.mark.parametrize("rays", [
+    (),                                                             # a scan without rays
+    tuple((math.radians(a), 2.0) for a in range(90, 271)),          # only the rear half: A outside FOV
+])
 def test_a_scan_that_does_not_cover_the_area_is_unknown(rays):
     g, zone, geo = _looking_gate()
     pose = SimpleNamespace(x=0.30 - 0.035 - B.front_x_m, y=0.0, yaw=0.0)
