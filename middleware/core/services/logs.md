@@ -1113,3 +1113,11 @@
 - gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요(통행권 주행 거리 계산). 크기: `line_follow` 2452(판정 2412 + 150 안), cue 380, `state/manager.py` 360줄, `authority.py` 205줄.
 - 결정: D-758 0단계(조정자가 계획 범위 변경을 기록한다: 기록은 line_follow에 남고 Fleet은 stamp를 그대로 돌려준다).
 - 교훈: 스냅숏 stamp와 기록 stamp가 따로 찍히면 "이전 표본" 탐색만 가능하다. 같은 값을 한 번 찍어 두 곳에 쓰면 벽시계 이동과 무관하게 정확히 찾는다.
+
+## 2026-10-14 · uncommitted · fix(line_follow): D-758 0단계 독립 안전 검토 1·3항 — 모호한 stamp와 뒤로 간 벽시계에서 거절
+
+- 변경: `line_follow/authority.py::_odom_entry` — 발행 stamp와 맞는 항목이 둘 이상이면 찾지 못한 것으로 한다(새것을 고르면 지난 거리가 줄어 여유가 커진다). 맞는 항목이 없고 기록 안의 벽시계 stamp가 한 곳이라도 뒤로 가면 "그 이전" 탐색을 하지 않고 거절한다. 통행권 `AUTHORITY_POSE_STALE`, 호 기준 `no_sample`, 차로 신호 `pose_stale`.
+- 증거: `test_line_authority.py`(같은 stamp 둘 → 거절, 0.1 s 뒤로 간 뒤 발행하지 않은 stamp → 거절), `test_lane_arc_map_anchor.py`·`test_line_follow_lane_cue.py`(같은 stamp 둘). 원격 시험은 확인 못 함: 이 노트북에서 시험 PC로의 묶음 전송이 모두 `Connection reset by peer`(짧은 ssh는 된다).
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인. `authority.py` 213줄.
+- 결정: D-758 0단계 독립 Safety-Review 조건 1·3.
+- 교훈: 같은 stamp에서 "가장 새것"은 안전 쪽이 아니다. 통행권은 모를 때 서야 한다.
