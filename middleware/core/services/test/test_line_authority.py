@@ -537,7 +537,8 @@ def test_a_backward_wall_step_does_not_forget_a_legs_seq():
         rig.step()
     rig.m._wall = lambda: WALL + rig.now - 10.
     rig.step()
-    rig.send(1., leg='L1', seq=5)
-    rig.send(1., leg='L2', seq=1)
+    stamp = rig.m._odom_log[-1][0]  # the stamp published on the stepped clock
+    rig.send(1., leg='L1', seq=5, stamp=stamp)
+    rig.send(1., leg='L2', seq=1, stamp=stamp)
     assert set(rig.m._authority_seq) == {'L1', 'L2'}
-    assert rig.send(2., leg='L1', seq=4)['reason'] == 'stale_seq'
+    assert rig.send(2., leg='L1', seq=4, stamp=stamp)['reason'] == 'stale_seq'
