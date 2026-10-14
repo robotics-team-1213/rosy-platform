@@ -1040,6 +1040,13 @@
 - 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
 - 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
 
+## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
+- 증거: `git diff -M`에서 세 파일은 rename이고 import 줄만 다르다. `test_crosswalk_gate.py`의 소스 글자 검사만 새 경로로 돌렸다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
+- 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
 ## 2026-10-14 · 1ee33639c · D-760 2단계: 통행권 줄이기·순서, trip 임대 중 강제 (API v1.225)
 
 - 변경: `line_follow/authority.py` — `set_authority(..., shrink=False, seq=None)`. `seq`가 같은 `leg_id`에서 마지막으로 본 값 이하면 `accepted: false`, `reason: stale_seq`로 무시하고 쥔 끝과 만료를 건드리지 않는다. `seq`는 거절 판정 전에 기억한다(거절된 줄이기보다 먼저 보낸 늘리기가 늦게 닿아도 받지 않게). 기억 `_authority_seq`는 `leg_id` 하나에 대한 것이고 모드 변경에도 남는다(모드를 껐다 켠 사이에 늦게 닿은 옛 요청이 새 통행권이 되지 않게). `shrink: true`면 끝 = `min(쥔 끝, 요청 끝)`이고 만료를 갱신한다. 강제 조건은 `_authority_on()` 한 곳이다: 설정 `authority_required`, 이 세션의 요청, 또는 `authority_leased()`(CORE가 trip 임대를 묶는다, 기본 거짓). `recovery/junction/gate.py`의 기동 시계 멈춤도 같은 조건을 쓴다(줄 수 변화 없음, 600줄).
