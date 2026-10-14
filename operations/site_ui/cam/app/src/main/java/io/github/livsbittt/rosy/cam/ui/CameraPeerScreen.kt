@@ -28,7 +28,6 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
         discovery.start(); onDispose { discovery.stop() }
     }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(RosyMetrics.Space5.dp), verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp)) {
-        Text("영상 받을 기기", style = MaterialTheme.typography.headlineSmall)
         Text("같은 Wi-Fi의 기기를 선택하세요. 처음 연결할 때만 상대 화면에서 승인합니다.")
         if (!wifi) Text("Wi-Fi에 연결한 뒤 다시 찾으세요.")
         else if (records.isEmpty()) Text(if (scanning) "기기를 찾고 있습니다…" else "발견한 기기가 없습니다. 상대 기기의 연결 화면을 확인하세요.")
@@ -54,7 +53,6 @@ fun CameraPeerScreen(state: CameraPeerState, onCertificate: (Boolean) -> Unit, o
     onRetry: (PairableSite) -> Unit, onDone: () -> Unit, onForget: (PairableSite) -> Unit) {
     var forgetting by remember { mutableStateOf<PairableSite?>(null) }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(RosyMetrics.Space5.dp), verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space4.dp)) {
-        Text("기기 연결", style = MaterialTheme.typography.headlineSmall)
         when (state) {
             is CameraPeerState.Connecting -> { Text(state.site.serviceName); Text("연결을 확인하고 있습니다…") }
             is CameraPeerState.Pending -> {
