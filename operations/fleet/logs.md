@@ -3738,6 +3738,7 @@
 - 변경: `hold_job`이 list·tuple이 아닌 `drive_modes`(true, 5)를 모드 없음으로 본다(422 `leg_unknown`, TypeError 500이 아니다). lane만 가진 로봇 시험은 `goal_lease`를 빼고 Rule M 사유가 없음을 확인한다. free만 가진 경우를 더했다.
 - 증거: 원격(e0febb524) `test_trip_job_lease.py`·`test_rule_m.py` exit 0, `known_failures` 0 new, 로그 X: `job-lease/run-1.txt`.
 - gate 변화: 없음.
+
 ## 2026-10-15 · 868461505 · D-763 조각 4: 작업 읽기에 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (API v1.235)
 
 - 변경: `GET /api/fleet/work`가 Task·Mission에 더해 trip(저장된 최근 것 + 열린 것 전부)과 Cell Job을 읽는다. 행마다 `visible_state`(D-763 8), trip 행은 `wait`(v1.232의 네 키, `since` 없음), `PROPOSED` 행은 등록부 `approval`. 응답에 `cell_jobs_available`·`kinds`(`trip`: 활성 지도 장소 + trip 능력을 알리는 로봇, `CELL_TRANSFER`: 단계 하달 열림 + 하달기 + OMX 설정). Cell Job 범위는 서버가 정한다: 제안자, `PROPOSED`가 아닌 행은 운영자(cell-jobs 상세와 같다), `PROPOSED` 행은 이름 있는 운영자(개정 2 질문 6). 제안자 신원은 쿼리 밖으로 나가지 않는다. `work_routes.py`를 같은 종류의 경로가 있는 원장 holder(`ledger/`)로 옮겼다. 크기: 서버 31904→31880(순증 −24), 원장 7036→7123(상한 7135), 기준값은 올리지 않았다.

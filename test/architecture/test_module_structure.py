@@ -127,10 +127,12 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "perception/front_camera/perception/drivable",
               "site_ui/console",
               "site_ui/console/work",
-              "fleet/fleet/server/ledger")
+              "fleet/fleet/server/ledger",
+              "fleet/fleet/server/missions",
+              "fleet/fleet/server/work")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
-FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger",)
+FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/missions", "fleet/fleet/server/work")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -510,8 +512,29 @@ SIZE_VERDICTS = {
         "plans measured theirs. Keep every nested/file/HARD_TIER rule. At the next +150 the 5c approval seat "
         "goes to its own module in this unit, not an accept.",
     ),
+    "fleet/fleet/server/missions": (
+        2_575,
+        "split: D-763 slice 4 (after the slice-6 merge) registers the Mission owners (mission_store, "
+        "mission_service, mission_routes incl. admit/reject, mission_progress, mission_dispatcher and the three "
+        "mission_model_turn_* files) as their own fleet.server holder unit; see "
+        "docs/plans/2026-10-15-fleet-ledger-missions-unit.md. Baseline2575 = those eight files at the D-757 verdict "
+        "commit61aa49b32 (measured). Keep every file verdict and HARD_TIER rule. At the next +150 the model turns "
+        "(mission_model_turn_*) leave for their own unit, not an accept.",
+    ),
+    "fleet/fleet/server/work": (
+        57,
+        "split: D-763 slice 4 registers the D-664 work read (work_read.py, work_routes.py) as its own fleet.server "
+        "holder unit; see docs/plans/2026-10-15-fleet-ledger-missions-unit.md. Baseline57 = work_read25 + "
+        "work_routes32 at the D-757 verdict commit61aa49b32, both then in the server unit (measured). Keep every "
+        "file and HARD_TIER rule; later work-read growth is its own, not the server's or the ledger's.",
+    ),
     "fleet/fleet/server/ledger": (
-        6_985,
+        4_410,
+        "split: D-763 slice 4 moved the Mission owners into fleet/fleet/server/missions (the split this verdict "
+        "named) and the work read into fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). "
+        "Baseline4410 = ledger6985 minus missions2575 at the D-757 verdict commit61aa49b32 (measured). Growth since "
+        "the verdict stays used and is not rebaselined. Keep every ledger file verdict and HARD_TIER rule. "
+        "Previous verdict: "
         "split: D-763 slices 5/5b register the Fleet work-ledger holder (Task, trip and Mission owners incl. "
         "the approval/reject routes) as its own unit; see docs/plans/2026-10-14-fleet-ledger-size-unit.md. "
         "Baseline6985 is the ledger measured at the D-757 verdict commit61aa49b32; at branch base06e97383b it "
@@ -520,7 +543,11 @@ SIZE_VERDICTS = {
         "approval/reject routes and mission_store leave for their own subpackage, not an accept.",
     ),
     "fleet": (
-        31_837,
+        31_780,
+        "split: D-763 slice 4 moved the work read (work_read25 + work_routes32 at 61aa49b32) into its own unit "
+        "fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). Baseline31780 = 31837 minus "
+        "those 57 lines (measured). No functional-growth allowance was added; later D-763 slices stay net-zero on "
+        "this server unit (slice 4: before 31847, after 31846, both without the work read). Previous verdict: "
         "split: D-763 slices 5/5b moved the work-ledger holder operations/fleet/fleet/server/ledger into its own "
         "unit (docs/plans/2026-10-14-fleet-ledger-size-unit.md). Baseline31837 = the console-split 38822 split "
         "at the D-757 verdict commit61aa49b32 into server31837 + ledger6985 (measured). At branch base06e97383b "
@@ -1245,7 +1272,7 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "fleet/fleet/server/ledger/mission_store.py": (
+    "fleet/fleet/server/missions/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
