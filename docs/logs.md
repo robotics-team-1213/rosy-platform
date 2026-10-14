@@ -8428,6 +8428,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
 - 결정: D-764
 
+## 2026-10-14 · ff848d70c · OMX 공개 후 CI 의존성 누락 수정
+
+- 변경: `fix/runtime-jose-lock`에서 offline core wheel 설치 전 CI 검증 target에 `joserfc==1.7.5`를 제공한다. 기기 runtime lock 및 cryptography 50은 유지한다.
+- 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
+
+## 2026-10-14 · 3971caad2 · 공개 전 CORE API 시험 소유권 보정
+
+- 변경: `fix/runtime-jose-lock`의 pre-push에서 발견한 D-760 regulation_wait API 통합시험 경로 하나를 소유권 목록에 명시했다. 순수 기능 시험은 services에 두고, gateway의 실제 HTTP seam 시험과 검사 규칙을 유지한다.
+- 증거: 수정 전 main commit `82d3de6ce`의 깨끗한 원격 checkout에서 동일 실패 재현; 독립 위치 검토 완료. 보정 후 소유권·API·기능 시험 19 passed, NEW 0. 이전 공개 시도는 소유권 실패 및 별도 Fleet 시험의 SSH 단절로 중단돼 push되지 않았다.
+- gate 변화: 없음. 기기·현장 수용과 구분한다.
+
 ## 2026-10-14 · 18c24973d · D-762 단계 0: Safety-Review는 착지 전에, FULL 착지는 실험실 전체 티어 뒤에
 
 - 변경: `tools/land.py`는 착지가 `main`에 더하는 커밋에 `tools/harness/safety_review.py`(CI `scope` 잡과 같은 규칙)를 돌려 trailer가 없으면 착지하지 않는다. `tools/hooks/pre-push`는 같은 검사를 `origin/main..`push 커밋에 경고가 아니라 거절로 돌린다. 선택기가 FULL이면 가드와 대응 묶음만 돌리고 착지하던 길을 없애고, 실험실 PC에서 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)를 돌려 NEW 0일 때만 착지하며 걸린 시간을 찍는다. FULL 조건에 폴더를 넘는 rename, 지운 Python 모듈, `package.xml`, `_source_layout.py`, `test/architecture/**`, `test/known_failures.txt`를 더하고, 트리거 아래 Markdown 기록, `tools/harness/adr_gaps.txt`, node 시험 파일을 뺐다. 착지 뒤 로컬 `main`이 `origin/main`보다 몇 커밋·몇 시간 앞인지 한 줄로 찍는다(상한은 걸지 않음). D-762 단계 0 보충, `AGENTS.md` 시험 티어 문단, `tools/AGENTS.md` `land.py` 행, `tools/hooks/AGENTS.md`, `tools/harness/AGENTS.md`를 같이 고쳤다.
