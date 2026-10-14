@@ -172,7 +172,13 @@ class OdomPose(BaseModel):
     """D-494 2: pose in the robot's odom frame and when CORE received it.
 
     ``stamp`` is UTC epoch seconds (wall time, not robot monotonic), the same
-    form as a sighting's ``captured_at``, so Fleet can pair the two.
+    form as a sighting's ``captured_at``, so Fleet can pair the two. Fleet echoes it
+    unchanged as ``pose_stamp`` / ``odom_stamp_s``; CORE finds its odom sample by it.
+
+    D-758 0 (v1.234, additive): ``epoch`` counts odom discontinuities since CORE
+    started (a jump, frame change or source clock going back); a sample of another
+    epoch belongs to an odom frame that no longer exists. ``mono_s`` is the same
+    receipt on CORE's monotonic clock. Both are null from a CORE before v1.234.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -181,3 +187,5 @@ class OdomPose(BaseModel):
     y: Finite
     yaw: Finite
     stamp: Finite
+    epoch: Optional[int] = Field(default=None, ge=0)
+    mono_s: Optional[Finite] = None
