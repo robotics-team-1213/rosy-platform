@@ -496,15 +496,11 @@ class CrosswalkGateMixin:
         return out
 
     def _fresh_corridor(self, now: float):
-        """The corridor seen now, else the last one of this odom run while it is within EVIDENCE_TTL_S or the body
-        has stood still since (m25/m26: frames without the line, or a loose reading on the stripes, left a tick
-        without a corridor; A then read unknown in the zone's skewed frame and restarted the 5 s clear window)."""
+        """The corridor seen now, else this odom run's last one within EVIDENCE_TTL_S or while standing still (m25/m26)."""
         seen = self._seen_corridor(now)
         held_at, epoch, held = self._xwalk_corridor
-        if seen is None and held_at is not None and epoch == self._return_evidence.epoch and (
-                0.0 <= now - held_at <= EVIDENCE_TTL_S or self._standing_still(now)):
-            return held
-        return seen
+        keep = held_at is not None and epoch == self._return_evidence.epoch
+        return held if seen is None and keep and (0.0 <= now - held_at <= EVIDENCE_TTL_S or self._standing_still(now)) else seen
 
     def _seen_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
