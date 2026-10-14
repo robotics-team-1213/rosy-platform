@@ -65,7 +65,8 @@ class TripAdmission:
         trip = {"lease": None, "traffic_authority": self.authority.mode(
             SimpleNamespace(line_follow_authority=base.get("line_follow_authority") is True))}
         goal = {"goal_lease": "leased" if base.get("goal_lease") is True else None}
-        legs = [leg for leg in base.get("drive_modes") or () if leg in ("lane", "free")] or [None]
+        modes = base.get("drive_modes")  # anything but a list is no modes: leg_unknown, never a 500
+        legs = [leg for leg in (modes if isinstance(modes, (list, tuple)) else ()) if leg in ("lane", "free")] or [None]
         verdicts = [rule_m.verdict(trip=trip, leg=leg, goal=goal) for leg in legs]
         reasons = list(dict.fromkeys(v["reason"] for v in verdicts if v["state"] != "bounded"))
         missing = [name for name in JOB_CAPS if base.get(name) is not True] + [name for name, off in (

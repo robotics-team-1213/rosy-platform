@@ -61,6 +61,8 @@ def test_a_job_takes_a_robot_only_with_every_bound_on(change, missing):
     ({"caps": _caps(line_follow_authority=None)}, ["hold_back"]),
     ({"caps": _caps(goal_lease=None)}, ["no_goal_lease"]),                  # a free leg without a leased goal
     ({"caps": _caps(drive_modes=None)}, ["leg_unknown"]),
+    ({"caps": _caps(drive_modes=True)}, ["leg_unknown"]),                   # malformed: 422, not a 500
+    ({"caps": _caps(drive_modes=5)}, ["leg_unknown"]),
     ({"caps": _caps(goal_lease=None, line_follow_authority=None)}, ["hold_back", "no_goal_lease"]),
 ])
 def test_the_motion_bound_part_is_rule_ms_verdict(change, reasons):
@@ -74,7 +76,18 @@ def test_the_motion_bound_part_is_rule_ms_verdict(change, reasons):
 
 def test_a_lane_only_robot_needs_no_free_leg_bound():
     runner, _, _, _ = _job_runner()
-    assert _do(runner, runner.hold_job(R, JOB, "kim", _caps(drive_modes=["lane"])))["state"] == "held"
+    err = _refused(runner, runner.hold_job(R, JOB, "kim", _caps(drive_modes=["lane"], goal_lease=None)))
+    assert err.detail == {"reasons": [], "missing": ["goal_lease"]}   # Rule M passes; only Q10 (b) refuses
+
+
+def test_a_free_only_robot_needs_no_lane_authority():
+    runner, _, ports, _ = _job_runner()
+    runner.authority.enabled = False                     # no lane authority at all
+    err = _refused(runner, runner.hold_job(R, JOB, "kim", _caps(drive_modes=["free"], line_follow_authority=None)))
+    assert err.detail == {"reasons": [], "missing": ["fleet.traffic.authority"]}   # Rule M passes; Q10 (a) refuses
+    runner.authority.enabled = True
+    assert _do(runner, runner.hold_job(R, JOB, "kim", _caps(drive_modes=["free"], line_follow_authority=None)))[
+        "state"] == "held"
 
 
 def test_an_authority_required_robot_passes_without_the_under_lease_flag():
