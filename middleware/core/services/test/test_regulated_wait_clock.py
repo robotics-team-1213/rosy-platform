@@ -53,3 +53,18 @@ def test_mode_change_starts_without_a_previous_wait_sample():
     rig.m.set_mode('CAMERA_LINE')
     with rig.m._lock:
         assert rig.m._regulated_wait_share(rig.now + .05, .05, V) == 0.
+
+
+def test_same_tick_unheld_sample_removes_wait_credit():
+    rig = ArcRig()
+    rig.open()
+    rig.drive(10, seen=False)
+    now = rig.now + .05
+    _authority(rig, True)
+    with rig.m._lock:
+        rig.m._regulated_wait_share(now, .05, V)
+        _authority(rig, False)
+        rig.m._regulated_wait_share(now, .05, V)
+        _authority(rig, True)
+        assert rig.m._regulated_wait_share(now + .05, .05, V) == 0.
+        assert rig.m._regulated_wait_share(now + .10, .05, V) == pytest.approx(.05)
