@@ -317,9 +317,10 @@ def test_field_view_review_fixes_are_served():
     # The inbox remains outside the fold and the shared 48px stop keeps its own column.
     assert '.topbar-extra[data-open="true"]' in styles and '"identity status actions safety"' in styles
     assert ".fleet-header-actions { grid-area: actions;" in styles
-    # D-501/D-641: the single Cell icon keeps its accessible label.
+    # D-741 6: the rail shows the name under the icon.
     import re
-    assert re.findall(r'<a href="/console/cell" data-action-icon="cell" data-icon-only="">(.*?)</a>', page) == ["Cell"]
+    rail = re.search(r'<nav class="doc-tabs".*?</nav>', page, re.S).group(0)
+    assert re.findall(r'<a href="/console\?view=work" data-action-icon="list">(.*?)</a>', rail) == ["작업"]
     assert ".fleet-header-safety { grid-area: safety; justify-self: end; }" in styles
     assert 'href="/console/cell"' in page
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page

@@ -27,7 +27,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
-import { bindEstop, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
+import { bindEstop, noteLink, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -36,6 +36,18 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
+// D-741 6·7 — 주소의 view가 영역을 고른다: 레일의 현재 위치와 그 영역의 하위 탐색, 그 안의 현재 화면(show)이 따라온다.
+const area = new URLSearchParams(location.search);
+const areaNav = [...document.querySelectorAll(".ui-subnav")].find(node => node.dataset.area === area.get("view"));
+if (areaNav) {
+  areaNav.hidden = false;
+  const show = [...areaNav.querySelectorAll("a")].some(link => link.href.endsWith(`show=${area.get("show")}`)) ? area.get("show") : null;
+  for (const link of document.querySelectorAll(".doc-tabs a, .ui-subnav a")) {
+    const to = new URL(link.href).searchParams;
+    if (to.get("view") === area.get("view") && (link.closest(".doc-tabs") || to.get("show") === show)) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
 const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
   document.querySelector('.console-context')];
@@ -48,15 +60,23 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
-layoutPanels.push(el("work-overview"));
+// D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
+const raised = area.get("view") !== "records" ? el("work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
+layoutPanels.push(raised);
+if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
+if (raised.id !== "work-overview") {
+  layoutPanels[MAP_PANEL].hidden = true;
+  el("incident-side").hidden = false;
+  if (inbox.choice !== "inbox") inbox.select("evidence");
+}
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
-  const ordered = workView.active ? [el("work-overview"), document.querySelector('.console-context'),
-    ...layoutPanels.filter(node => node.id !== "work-overview" && !node.matches('.console-context'))] : layoutPanels;
+  const ordered = areaNav ? [raised, document.querySelector('.console-context'),
+    ...layoutPanels.filter(node => node !== raised && !node.matches('.console-context'))] : layoutPanels;
   ordered.forEach((node) => {
-    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node.id === "work-overview" ? primary : secondary) : main;
+    const parent = layoutMedia.matches ? (node === layoutPanels[MAP_PANEL] || node === raised ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
@@ -183,7 +203,13 @@ let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
 
 const log = inbox.log;
 
-const fleetClient = createFleetClient({ credential: () => auth.token });
+const fleetApi = createFleetClient({ credential: () => auth.token });
+// D-741 3 — any answer keeps the link word live. Only the state poll may call it down: Fleet answers
+// 502/503 for a refusing robot or a feature that is off.
+const fleetClient = (path, options) => fleetApi(path, options).then(body => { noteLink(); return body; }, error => {
+  if (path === "/api/fleet/state" || error.status < 500) noteLink(error);
+  throw error;
+});
 
 async function call(path, options = {}) {
   const task = pageScope.capture();
@@ -388,7 +414,9 @@ pageScope.onDispose(() => {
 async function refreshState() {
   const life = pageScope.capture();
   life.check();
-  if (auth.locked || statePollInFlight) return;
+  // A signed-out console still asks Fleet's open endpoint, so the link word does not drift to 지연.
+  if (auth.locked) return void fleetApi("/api/fleet/auth/connection", {signals: [life.signal]}).then(() => noteLink(), noteLink);
+  if (statePollInFlight) return;
   statePollInFlight = true;
   let fleetAnswered = false;
   try {
@@ -598,7 +626,7 @@ async function refreshAuthorization() {
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
 pageScope.listen(document, "keydown", (event) => {
-  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
+  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas, summary")) return;
   const cards = [...document.querySelectorAll("#roster article")];
   if (!cards.length) return;
   const active = document.activeElement;

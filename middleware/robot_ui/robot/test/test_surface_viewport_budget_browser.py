@@ -37,6 +37,8 @@ MEASURE = """() => {
       .filter(node => node.getBoundingClientRect().right > innerWidth + 1)
       .slice(0, 6).map(node => `${node.tagName}#${node.id}.${node.className}`),
     topbar: box('ui-topbar'),
+    rail: box('.ui-rail'),
+    railItems: [...document.querySelectorAll('#surface-switch .ui-rail-item')].map(node => node.getBoundingClientRect().toJSON()),
     roleClipped: document.querySelector('#shell-role').scrollWidth > document.querySelector('#shell-role').clientWidth + 1,
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
@@ -88,7 +90,10 @@ def test_manifest_failure_has_a_keyboard_retry_and_preserves_the_stop(tmp_path):
         page.keyboard.press("Enter")
         page.wait_for_function("document.querySelector('#surface-status').hidden")
         assert page.locator("#surface-retry").count() == 0
-        assert page.locator("#surface-switch [aria-current=page]").inner_text() == "작업 준비"
+        # D-741 6: 레일은 아이콘 아래에 짧은 이름을 적고 전체 이름은 접근성 이름이다.
+        current = page.locator("#surface-switch [aria-current=page]")
+        assert current.get_attribute("aria-label") == "작업 준비"
+        assert current.inner_text().strip() == "준비"
         assert errors == [], errors
         browser.close()
 
@@ -146,6 +151,12 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
         assert first["roleClipped"] is False, (surface, first)
         assert first["topbar"]["height"] <= 0.2 * height, (
             f"{surface} {width}×{height}: 머리 {first['topbar']['height']}px > 창 높이의 20%")
+        # D-741 6: 화면 전환은 머리 아래 레일 한 줄이다. 머리와 더해도 예산 안이고 세 화면이 한 줄에 선다.
+        chrome = first["topbar"]["height"] + first["rail"]["height"]
+        assert chrome <= 0.2 * height, f"{surface} {width}×{height}: 머리+레일 {chrome}px > 창 높이의 20%"
+        assert first["topbar"]["bottom"] <= first["rail"]["top"], (surface, first["topbar"], first["rail"])
+        rail_items = first["railItems"]
+        assert len(rail_items) == 3 and len({round(item["top"]) for item in rail_items}) == 1, (surface, rail_items)
         assert _inside(first["estop"], width, height), (surface, first["estop"])
         assert first["sticky"] == "sticky", (surface, first["sticky"])
         if surface == "console":

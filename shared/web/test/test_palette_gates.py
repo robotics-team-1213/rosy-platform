@@ -286,10 +286,13 @@ def test_rosy_brand_wash_is_a_subtle_tinted_surface(palette):
 def test_rosy_brand_tokens_are_used_by_wordmark_and_surface_navigation():
     components = WEB_COMPONENTS.read_text(encoding="utf-8")
     legacy_shell = (DASHBOARD / "styles.css").read_text(encoding="utf-8")
-    role_shell = (DASHBOARD / "shell" / "shell.css").read_text(encoding="utf-8")
+    # D-741 6: the role surfaces switch screens in the shared rail; its sheet owns the position mark.
+    rail = (WEB_COMPONENTS.parent / "app-shell.css").read_text(encoding="utf-8")
+    assert 'createNode("a", "ui-rail-item", short)' in (DASHBOARD / "shell" / "shell.js").read_text(encoding="utf-8")
+    assert '<link rel="stylesheet" href="/common/app-shell.css">' in (DASHBOARD / "surface.html").read_text(encoding="utf-8")
     assert "ui-brand b" in components and "color: var(--brand-rose)" in components
     assert ".brand b" in legacy_shell and "color: var(--brand-rose)" in legacy_shell
-    active = role_shell.split('.surface-switch a[aria-current="page"]', 1)[1].split("}", 1)[0]
+    active = rail.split('.ui-rail-item[aria-current="page"]', 1)[1].split("}", 1)[0]
     assert "color: var(--brand-rose)" in active
     assert "background: var(--brand-rose-wash)" in active
 

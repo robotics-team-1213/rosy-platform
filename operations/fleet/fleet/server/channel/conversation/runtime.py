@@ -1,7 +1,6 @@
 """Optional admitted conversation protocol, separate from D-720 status admission."""
 import asyncio
 from contextlib import asynccontextmanager
-import json
 import logging
 from pathlib import Path
 import time

@@ -266,6 +266,14 @@ python learning/curation/perception/learning_accounts.py generate-key /private/l
 python learning/curation/perception/learning_accounts.py hash-password
 ```
 
+Rosy Account 통합(D-757)은 저장소 루트에서 `python -m pip install ./contracts/foundation`도
+설치한다. collaboration 설정의 `account_client_file`은 보호된 수신 설정의 절대 경로,
+`account_subjects`는 중앙 account_id와 기존 user_id의 명시적 일대일 매핑이다.
+수신 resource는 `project:<project_id>`, callback은 `public_origin + /api/account/callback`이다.
+원장에 최초 연결을 기록한 뒤 소유자를 바꾸거나 중앙 설정을 빼고 이전 비밀번호로 돌아갈 수 없다.
+기존 HF 연결·암호화 키·학습 자료를 교체하지 않는다. 자세한 필드는
+[Account protocol](../../../../docs/reference/rosy-account-protocol.md)을 따른다.
+
 키 생성은 기존 파일을 덮어쓰지 않는다. Linux 키 파일, 설정, DB, 부모 폴더와 백업은 소유자만 접근하도록 관리한다. 암호화 키는 DB와 함께 복구할 수 있도록 별도로 보관한다. 키 파일 교체만으로 기존 연결 비밀이 이전되지는 않는다.
 
 `users[].user_id`는 내부의 안정적인 신원이며 이메일로 계정을 합치지 않는다. `memberships`는 프로젝트 ID별 `view`, `edit`, `approve`, `import`, `manage` 목록이다. 열람, 라벨 수정, 승인, 자료 가져오기, 프로젝트 연결·학습 제어 관리를 각각 허용한다. 계정 DB는 여러 프로젝트에서 공유할 수 있지만 앱 설정과 작업공간은 `project_id` 하나에 고정한다. 첫 연결 시 DB의 프로젝트 바인딩이 남고 다른 프로젝트로 바꿀 수 없다. 사용자 제거나 membership 변경은 다음 요청과 worker 체크포인트에서 재검사한다.
@@ -296,6 +304,14 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
 
+계정 화면에서 작업·파일별 받은 bytes와 해시 검증 상태, 공간 부족·검증 실패·접근 철회 이유를 확인한다. 취소 직후 재시도는 이전 실행이 끝난 뒤 같은 입력으로 이어진다. 새로고침은 펼친 파일 목록과 키보드 초점을 유지한다. 실행 프로세스가 종료되면 OS 잠금이 풀리며 다음 목록 조회·재시도가 중단 작업을 복구한다. 계정 세대가 바뀌면 과거 작업을 새 연결로 재사용하지 않는다.
+
+부분 재개는 최초 HF metadata의 SHA-256이 있는 파일에만 허용한다. 로컬 체크포인트는 최대 8MiB 또는 1초마다 flush/fsync 후 저장하며, 강제 종료가 남긴 미확정 tail은 마지막 정상 해시 구간 뒤에서 버린다. provider가 Range를 무시한 200 응답은 덧붙이지 않는다. 206의 시작 offset·끝·전체 길이와 인코딩을 검사하고 마지막에 전체 SHA-256을 검증한다. 해시가 없는 미완료 파일은 처음부터 다시 받는다. 완료 파일은 기록된 전체 해시를 다시 검증해 재사용한다. [HF 파일 식별](https://huggingface.co/docs/huggingface_hub/en/package_reference/file_download), [HTTP Range 의미](https://www.rfc-editor.org/rfc/rfc9110.html#name-range)를 따른다.
+
+private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`, `reserve_bytes` 정수 bytes다. 기본은 파일당 2GiB·작업당 8GiB·여유 1GiB, 파일 수는 최대 256개다. 파일 한도는 양수이며 작업 한도 이하여야 하고 각 값의 상한은 1TiB다. 이 상한은 검증된 운영 용량을 뜻하지 않는다. 운영자는 실제 디스크·동시 작업·전송 시험 후에만 한도를 올리고 재시작한다. HTTP 사용자는 한도를 변경할 수 없다.
+
+하나의 private imports root에서는 OS 잠금으로 worker 하나만 실행한다. DB 트랜잭션은 중복 생성과 취소/완료 경합을 조정한다. 검증한 기존 부분 파일을 제외한 남은 bytes와 여유분·metadata 1MiB를 시작 전에 검사하고 쓰기마다 여유를 다시 검사한다. `reserved_bytes`는 이 실행기의 남은 전송량에 대한 논리 예약이며 다른 앱의 디스크 쓰기를 막지 않는다. 파일시스템과 OS 잠금을 공유하지 않는 여러 호스트의 NAS worker는 지원하지 않는다. `.partial`은 완료 자료로 등록하지 않고 취소 후에도 재개용으로 남긴다. 자동 원본 삭제·유료 증설은 하지 않는다.
+
 완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 외부 게시와 Spaces 실행은 현재 범위에 포함되지 않는다.
 
 전환 전 앱과 관련 쓰기를 멈추고 state, DB, 설정의 일관된 백업을 보관한다. 협업 바인딩 후 `--collaboration`만 제거하거나 DB의 바인딩 행을 지워 인증을 해제하지 않는다. 되돌릴 때도 협업을 유지하는 지원 버전을 쓰거나, 서비스를 멈추고 전환 전 백업을 별도 위치에 복원하여 기존 접근 범위를 다시 검토한다. 전환 후 이력은 별도로 보존하며 원본 백업을 덮어쓰지 않는다. 실제 외부 인증 수용은 등록된 앱과 사용자 동의로 로그인·연결·private/gated 접근·철회까지 확인해야 하며 가짜 provider 시험은 이를 대신하지 않는다.
@@ -325,3 +341,17 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 계정 화면은 현재 권한에 맞춰 연결·가져오기·해제 버튼을 표시한다. 프로젝트 연결 해제는 관리자, 작업 취소·재시도는 가져오기 권한을 가진 요청자에게만 표시하며 서버에서도 같은 조건을 검사한다. 세션 만료·철회가 다음 요청이나 상태 조회에서 확인되면 사용자·작업 목록과 입력 중인 토큰·자료 요청을 지우고 로그인 화면으로 돌아간다. 서버의 일시적 오류는 로그아웃으로 처리하지 않으며 `최신 상태 확인`으로 재시도한다.
 
 OAuth 사용 시 `public_origin`과 `redirect_uri`의 `/oauth/huggingface/callback` 주소가 정확히 일치해야 한다. 누락·다른 호스트·다른 경로·HTTP callback은 작업공간에 협업 바인딩을 기록하기 전에 시작을 거부한다. 설정을 고친 뒤 다시 시작한다.
+
+### 수집·저장 현황과 공간 점검
+
+학습 화면의 `수집·저장 공간`은 등록한 프로젝트 폴더를 읽고 공간을 추정한다. 설정이 없으면 미설정으로 표시한다. `learning-storage.example.json`을 Git 밖의 private `learning-storage.json`으로 복사해 `--storage-config <private-json>`을 기존 시작 명령에 추가한다. 협업 모드는 project_id, 단독 모드는 해당 workspace metadata의 workspace_id를 쓴다. 관리자는 이 프로젝트가 소유한 데이터 디렉터리만 등록한다. 경로·project 변경은 재시작 후 적용한다.
+
+root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. history DB가 있는 폴더·중첩 root·심볼릭 링크 root는 거부한다. Linux/POSIX 모델 PC에서 디렉터리 descriptor와 no-follow로 부모부터 탐색한다. 지원하지 않는 호스트나 읽을 수 없는 폴더는 미확인으로 표시한다. 한 스캔은 항목 사이에 경과 5초·100000항목·깊이64를 검사하고 60초 캐시한다. 이미 대기 중인 네트워크 파일시스템 호출 자체를 중단하는 시간 제한은 아니다. 상한 초과, 내부 링크·특수 파일, 읽기 오류가 있으면 전체 합계를 null로 남긴다. 사용자에게 실제 경로·파일명을 반환하지 않는다.
+
+논리 bytes는 파일 이름별 크기 합, file_bytes는 root 안의 inode 중복을 제외한 크기, allocated_bytes는 해당 파일들의 할당 블록 합이다. 재인코딩·동일 내용 복사·reflink를 내용 해시 중복 제거한 수치가 아니다. root 간 하드링크와 공유 볼륨의 여유 공간을 합산하지 않는다. `.part`, `.partial`, `.tmp` 이름의 파일과 `.partial` 디렉터리 안의 파일을 미완료로 별도 집계한다. 이것은 recorder 종료나 영상 품질의 증명이 아니다. pending 용도는 관리자가 완료된 전송 대기 자료만 놓는 폴더이며, 미완료 이름의 파일을 제외한다. pending root가 없으면 전송 대기량은 미확인이다.
+
+하루 증가량은 같은 프로젝트·설정·root의 최근 30일 측정 중 24시간 이상 떨어진 두 값을 비교한다. 축적 근거가 없거나 감소/동일하면 증가량과 잔여 일수를 미확인으로 표시한다. 설정이 바뀌면 과거 추세를 섞지 않는다. 예상 잔여 일수는 그 폴더의 증가율과 현재 파일시스템 여유분 기준이며 다른 작업이 쓰는 공간까지 예측하지 않는다. 일별 집계는 기존 workspace DB에 저장하고 오래된 집계만 정리한다. 수집 원본에는 쓰지 않는다.
+
+공간 사전 점검은 목적지 ID와 다운로드·임시 복사·변환 추가 공간·업로드 예상 크기를 받는다. 로컬 세 항목은 같은 목적지 볼륨에 존재하는 사본으로 합산하고 reserve_bytes를 더한다. 공간을 예약하거나 전송하지 않는다. 실제 작업 시작 시 자원 재검사가 필요하다. 웹 경로 입력, 삭제, 외부 게시와 유료 증설을 제공하지 않는다.
+
+원격 quota는 미확인이 기본이다. 공식 quota API를 호출하지 않는다. 관리자가 수동 확인한 경우에만 remote_quota에 remaining_bytes, source(공개해도 되는 근거 설명), measured_at, expires_at(UTC epoch 초 정수)을 기록한다. 측정 전/만료 후에는 보류한다. 한 설정의 한 대상 quota이며 여러 계정 용량을 더하지 않는다. 업로드 요구량이 0이면 원격 quota는 점검하지 않는다. 최신 상태는 HTTP 401/403·오류가 발생하면 화면에서 지우고 재시도를 제공한다.

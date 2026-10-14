@@ -143,10 +143,9 @@ class TripCaps:
     line_follow_authority_required: bool = False
     #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
     line_follow_advice: bool = False
-    #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
-    lane_bend: bool = False
-    #: D-541 1: CORE takes PUT/DELETE /trip-lease (Fleet holds the robot for a trip); absent means no.
-    trip_lease: bool = False
+    lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
+    lane_bend_map_entry: bool = False  #: D-759 2: CORE takes the bend's ``map_entry``; absent = no
+    trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
     line_camera: Optional[dict] = None
 
@@ -178,6 +177,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
+                            lane_bend_map_entry=item.get("lane_bend_map_entry") is True,
                             line_camera=camera if isinstance(camera, dict) else None)
     return None
 

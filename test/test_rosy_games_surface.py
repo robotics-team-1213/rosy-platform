@@ -115,3 +115,28 @@ def test_games_board_is_not_the_core_dashboard():
     styles = (games_web / "styles.css").read_text(encoding="utf-8")
     assert "tokens.css" not in styles
     assert "/dashboard/assets" not in styles
+
+
+def test_two_robot_stop_is_the_last_control_of_the_top_bar():
+    """D-741 3·4 (replaces the D-201 bottom row): the host stop ends the app bar and says what it does."""
+    import re
+
+    web = ROOT / "operations" / "apps" / "games" / "games" / "web"
+    html = (web / "index.html").read_text(encoding="utf-8")
+    bar = re.search(r"<ui-topbar>(.*?)</ui-topbar>", html, re.S).group(1)
+    # D-757 exposes the host stop only after a verified games.operate grant.
+    stop = '<ui-button id="halt" kind="irreversible" data-always-live type="button" hidden disabled>두 로봇 정지</ui-button>'
+    assert html.count('id="halt"') == 1 and stop in bar
+    controls = re.findall(r"<(?:ui-button|button|a|input|select)\b[^>]*>", bar)
+    assert controls and controls[-1].startswith('<ui-button id="halt"')
+    assert bar.index("<ui-brand") < bar.index('id="phase"') < bar.index('id="connection"') < bar.index('id="halt"')
+    assert bar.index("<b>1v1 피치</b>") < bar.index("<small>노트북 게임 호스트</small>"), "title, then scope"
+    note = bar.split(stop, 1)[1]
+    assert "스페이스 키로도 두 로봇을 세웁니다" in note
+    assert '<span id="halt-status" role="status" aria-live="polite"></span>' in note
+    css = (web / "styles.css").read_text(encoding="utf-8")
+    assert "halt-row" not in html and "halt-row" not in css
+    assert "sticky" not in css, "the stop rides the shared sticky top bar, not a row of its own"
+    js = (web / "board.js").read_text(encoding="utf-8")
+    assert 'fetch("/stop", { method: "POST", signal: controller.signal })' in js
+    assert 'if (event.code !== "Space" || event.repeat) return;' in js and "halt.click();" in js
