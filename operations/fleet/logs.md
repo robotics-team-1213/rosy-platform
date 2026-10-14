@@ -3698,3 +3698,9 @@
 - 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
 - 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
 - gate 변화: 없음.
+
+## 2026-10-14 · uncommitted · fix(test): 사실 기록 정지가 비상 정지를 늦추지 않는다는 시험을 시계 없이 (CI 38568954601)
+- 변경: `test/test_ai_facts.py::test_a_stalled_fact_write_does_not_delay_the_emergency_stop`. 사실 쓰기를 `time.sleep(1.0)` 뒤 실제 쓰기로 두고 `/api/fleet/estop` 왕복을 0.5 s로 재던 것을, 쓰기를 끝내 풀리지 않는 `threading.Event`에 세워 두고 정지가 먼저 200으로 끝나는지만 보는 것으로 바꿨다(쓰기 진입 확인, 정지 뒤에도 쓰기 요청이 미완, 그다음 풀어 200). 시계는 hang 가드 30 s뿐. 제품 코드는 그대로다.
+- 원인: 제품은 이미 쓰기를 `asyncio.to_thread`로 이벤트 루프 밖에 두고(`stuck/ai_facts.py` `ai_facts`) 정지와 공유하는 락이 없다. 시험이 잰 0.83 s는 sleep(1.0)보다 짧아 정지가 쓰기를 기다린 것이 아니다. 잰 창이 정지 경로 자체(감사 기록, 래치, fan-out의 SQLite 동기 쓰기)의 실제 작업을 담아 CI 러너 부하가 그대로 들어갔다. 그래서 0.5 s 벽시계 한도가 정지 지연이 아니라 러너 속도를 쟀다.
+- 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
