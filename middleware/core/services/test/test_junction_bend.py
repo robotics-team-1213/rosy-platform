@@ -738,7 +738,8 @@ def test_a_malformed_map_entry_is_refused(bad):
 def test_map_entry_belongs_to_bend():
     rig = _wall_rig()
     with pytest.raises(ValueError):
-        rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=dict(map_entry=_entry(rig)))
+        # D-759 rev 1: a left/right turn takes one too (test_junction_turn_map_entry.py)
+        rig.m.set_junction('straight', 'J1', 10., None, None, None, expect=dict(map_entry=_entry(rig)))
 
 
 def test_the_own_line_rule_reads_the_map_entry_axis():
