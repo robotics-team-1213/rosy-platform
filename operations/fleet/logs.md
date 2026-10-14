@@ -3666,3 +3666,9 @@
 - 변경: `docs/plans/2026-10-14-fleet-ledger-size-unit.md`. `fleet/fleet/server/ledger` 단위, 판정값 6,985(`61aa49b32`에서 잼), `fleet` 판정값 31,837. 지금 서버 31,886, 원장 7,036, 관제 18,023. 원장은 `__init__.py` 없는 `fleet.server` 보관 자리라 하위 패키지 시험이 `FLEET_SERVER_HOLDER_UNITS`도 받는다.
 - 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 독립 재판정 전.
+## 2026-10-14 · 70092c527 · D-760 4단계: 로봇마다 공유 상태 읽기 하나
+
+- 변경: `MapPoseService.state(robot_id, max_age_s)`가 로봇마다 하나인 REST 상태 읽기다. 읽기 시작 시각(Fleet 단조 시계)부터 `max_age_s` 안이면 그 값을, 아니면 진행 중인 읽기에 붙거나 새로 읽는다. 실패한 읽기는 아무것도 남기지 않고 같은 예외 객체를 기다리던 모두에게 던진다. 읽기마다 odom을 한 번 넣는다(스냅숏 stamp 그대로). trip 루프의 자세 갱신과 교차로 상태(`HttpLaneJunction(read=)`)가 0.45 s로 한 읽기를 같이 쓰고, 차로 준수(0.45 s), 위치 결정(`read_state`, 0.5 s), 관제 REST 대체(1 s)와 하달 직전 읽기(0.2 s)도 같은 읽기를 쓴다(`app.py`가 `console.read_state = map_pose.state`). `refresh`의 로봇 odom 시계 대 Fleet 벽시계 0.2 s 건너뛰기는 Fleet 단조 나이 규칙으로 바꿨다. trip 루프는 응답 없음(`HubError`, `OSError`, `httpx.TransportError`)만 읽지 못한 상태로 보고 그 밖의 읽기 오류는 trip을 끝낸다(D-760 개정 3의 2).
+- 증거: `test_shared_state_read.py`(나이·합류·실패 객체·정확한 stamp, 교차로 읽기 공유, 느린 로봇, trip 루프의 전송 오류 `link_wait`·`ValueError` 실패, 가짜 로봇 2·10대 60 s에 로봇당 120회 = 2.0회/s·어느 1 s에도 3회 이하, 주기 루프의 직접 `state()` 금지). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 전송 계약은 그대로다.
+- 결정: D-760 Decision 8. 차로 준수는 계획의 0.5 s 대신 기본 0.45 s다(시뮬 자세 포트 `tools/sim/native_gazebo_map_pose.py`의 `refresh`가 `max_age_s`를 받지 않는다). 군집(`swarm/session.py`)과 명령 한 번짜리 경로는 그대로다.
