@@ -702,9 +702,25 @@
 - 결정: D-760 Decision 3. API Reference v1.225 절.
 - 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.
 
+## 2026-10-14 · uncommitted · feat(protocol): D-758 0단계 `OdomPose.epoch`·`mono_s` (v1.228 additive)
+
+- 변경: `core_common/protocol/localization.py::OdomPose`에 선택 필드 `epoch`(정수 ≥ 0)와 `mono_s`(유한 실수). 없는 스냅숏은 그대로 읽힌다.
+- 증거: `test_state_odom_pose.py::test_an_old_snapshot_odom_pose_without_epoch_still_parses`, `contracts/foundation/test` 통과(`X:/DevTemp/odom-monotonic/root/run-1.txt`).
+- gate 변화: 없음(추가 필드).
+- 결정: D-758 0단계. API Reference v1.228 절.
+- 교훈: 없음.
+
 ## 2026-10-14 · uncommitted · core_common(protocol): LineFollowStatus.regulation_wait (D-760 개정 3 9항)
 
 - 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `regulation_wait: authority | signal | crosswalk_held | crosswalk_wait | crosswalk_look | None`(기본 None, additive). API Ref v1.227.
 - 증거: `middleware/core/services/test/test_line_regulation_wait.py`(기본값, 모르는 값 거절), `middleware/core/gateway/test/test_line_regulation_wait_api.py`.
 - gate 변화: 없음.
 - 결정: D-760 개정 3 9항.
+
+## 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.231)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_turn_map_entry`(없으면 wire에서 빠진다). `config/rosy_default.yaml`에 `line_follow.turn_map_entry_enabled: false`. `schemas.py`는 바꾸지 않았다(`map_entry_used`·`map_entry_reason`을 회전도 쓴다).
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 없음.

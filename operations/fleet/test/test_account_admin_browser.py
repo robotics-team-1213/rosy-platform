@@ -13,13 +13,16 @@ from fleet.cli import default_web_common
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium account scenario")
 
 
-def test_account_administration_uses_real_ledger(tmp_path):
+@pytest.mark.parametrize('managed', [True, False])
+def test_account_administration_uses_real_ledger(tmp_path, managed):
     from playwright.sync_api import expect, sync_playwright
     base, tasks = _app(tmp_path)
-    app = create_app(base.state.console, task_service=tasks, site_users={}, site_logins=_accounts(),
+    app = create_app(base.state.console, task_service=tasks, site_users={},
+                     site_logins=_accounts(role='policy-admin'),
                      web_common=default_web_common(), start_task_dispatcher=False)
     sessions = app.state.password_sessions
-    sessions.bootstrap_accounts("alice", "test-site")
+    if managed:
+        sessions.bootstrap_accounts("alice", "test-site")
     listener = safe_listener()
     origin = f"http://localhost:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
@@ -39,6 +42,17 @@ def test_account_administration_uses_real_ledger(tmp_path):
                 page.locator("[data-login=password]").fill("correct horse")
                 page.locator("[data-login=submit]").click()
                 expect(page).to_have_url(origin + "/console/accounts")
+                expect(page.locator('#account-setup')).to_be_visible()
+                expect(page.locator('#account-setup-state')).to_contain_text('아직 설정되지 않았습니다')
+                page.get_by_text('최초 설정과 앱 추가 방법', exact=True).click()
+                expect(page.get_by_role('link', name='서버 설치 안내')).to_be_visible()
+                if not managed:
+                    expect(page.locator('#account-content')).to_be_hidden()
+                    page.locator('#account-setup-reload').click()
+                    expect(page.locator('#account-setup')).to_be_visible()
+                    page.evaluate("window.dispatchEvent(new StorageEvent('storage', {key:'rosy.fleet.account.identity', newValue:'changed'}))")
+                    expect(page.locator('#account-setup')).to_be_hidden()
+                    return
                 expect(page.locator("#account-content")).to_be_visible()
                 page.locator("#account-name").fill("bob")
                 page.locator("#account-principal").fill("bob")

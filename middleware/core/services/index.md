@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · b296ea453 · D-759 개정 1 독립 검토 반영 (API v1.231)
+- 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.231)
 - 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
-- 2026-10-14 · uncommitted · D-760 2b 독립 검토 반영: 공유 계산, 틱 간격 상한, 건너는 중의 몫
-- 2026-10-14 · be48f4d34 · D-760 2b단계: 뒤 문이 가져간 시간은 호의 기한이 아니다
-- 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
-- 2026-10-14 · 97ad6ca74 · 목표 임대는 그 목표를 보낸 토큰만 갱신한다 (D-760 5단계)
+- 2026-10-14 · uncommitted · fix(line_follow): D-758 0단계 독립 안전 검토 1·3항 — 모호한 stamp와 뒤로 간 벽시계에서 거절
+- 2026-10-14 · uncommitted · fix(line_follow,state): D-758 0단계 odom 기록을 발행 stamp로 찾고 line-follow 시계로 잰다, odom epoch

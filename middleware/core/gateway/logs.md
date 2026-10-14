@@ -1109,3 +1109,32 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다.
 - 결정: D-760 Decision 2.
 - 교훈: 없음.
+
+## 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
+
+- 변경: `core/bridge/ros_bridge.py::_on_odom`이 `state.set_odom_pose`를 먼저 부르고(odom `frame_id`·헤더 시각을 같이 넘겨 epoch 판정) 그 반환 stamp를 `odometry.observe_lane_return(..., wall=)`로 line-follow에 넘긴다.
+- 증거: `test_lane_return_odometry.py::test_the_published_wall_stamp_keys_the_odom_log`(수정 전 적색), `test_line_follow_lane_cue.py` 벽시계 ±5 s 시험, `middleware/core/gateway/test` 2865 통과(`X:/DevTemp/odom-monotonic/gw/run-1.txt`), `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. `ros_bridge.py` 910 → 912줄(판정 799 + 150 안).
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
+
+- 변경: `ros_bridge._on_odom`의 스냅숏 stamp → line-follow 기록 넘김을 ROS 없는 `core/bridge/odometry.py::observe_odom`으로 옮기고 `_on_odom`은 그것을 부른다(`test_bridge_timers.py`가 콜백 시험을 ROS 없는 형제 모듈에 두라고 한다). `ros_bridge.py` 912 → 908줄.
+- 증거: `test_lane_return_odometry.py::test_the_odom_callback_logs_the_sample_under_the_snapshots_stamp`. `wall=wall`을 뺀 변이 커밋 `1a0413b01`(가지에 없음)을 만들었으나 원격 실행은 전송 실패로 확인 못 함.
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인.
+- 결정: D-758 0단계 독립 Safety-Review 조건 2.
+- 교훈: 없음.
+
+## 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
+- 변경: `core/drive/line_follow.py`가 `turn_map_entry_enabled`를 bool로만 읽는다(기본 꺼짐).
+- 증거: `test/test_line_junction_api.py`(기본값, 켬, 문자열 거절), `test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-14 · uncommitted · test: 수동 거절 시험을 벽시계 워치독에서 떼어 낸다
+- 변경: `test/test_line_junction_api.py::test_refused_while_manual_control_is_active`가 `watchdog.timeout_ms`를 60 s로 고정한다(`test_manual_navigation_ownership.py`와 같은 방식). 제품 코드는 그대로다.
+- 원인: CI 38573105206(b1e84dd79)에서 teleop과 `/line-follow/junction` 사이가 500 ms를 넘어 teleop 세션이 만료됐고(`command/manager.py` `manual_active`), `require_manual_released`가 통과해 `set_junction`의 `LINE_FOLLOW_NOT_ACTIVE`가 나왔다. 확인 순서는 맞다: 거절 검사가 먼저이고, 만료된 세션을 수동 제어로 치지 않는 것은 설계다(SAF-002). 시험 설정 경합이지 제품 순서 결함이 아니다.
+- 증거: 원격 pytest 20회 호출. 수정 전 20/20 통과(느린 러너에서만 재현돼 재현 못 함), 수정 후 19/20 통과 + 1회 하네스 기동 실패(같은 HEAD 파일 전체 재실행 21 passed). 원인 판단 근거는 코드 경로와 CI 로그다.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 벽시계 워치독(500 ms)을 쓰는 시험은 세션 유지가 시험 대상이 아니면 타임아웃을 고정한다.

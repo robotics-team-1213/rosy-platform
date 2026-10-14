@@ -87,24 +87,21 @@ class TripProgress:
         return now - live.progress_at >= self.config.stall_s
 
     def _wait_bound(self, reason: Optional[str]) -> Optional[float]:
-        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule
-        applies again. CORE's ``line_follow.regulation_wait`` (v1.227): a crosswalk look/wait is bounded by CORE's
-        crosswalk_report_s + crosswalk_clear_s defaults (D-573 3, then crosswalk_blocked goes to D-622).
-        ponytail: fixed defaults; a robot configured longer reaches the stall rule early. Read them from CORE status
-        if a site changes them."""
+        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` before the stall rule applies again;
+        crosswalk = CORE report_s + clear_s defaults (D-573 3). ponytail: fixed; read CORE status if a site changes them."""
         crosswalk = dict.fromkeys(("crosswalk_look", "crosswalk_wait", "crosswalk_held"), CROSSWALK_WAIT_S)
         return {"link_wait": self.lease.ttl_s, "authority": self.lease.ttl_s, "signal": self.config.stall_s,
                 **crosswalk}.get(reason)
 
     def _waiting(self, live: LiveTrip, now: float) -> bool:
         wait, regulation = live.view.get("wait") or {}, live.junction.get("regulation_wait")
-        if wait.get("reason") != "link_wait":
-            if not regulation:
-                return False  # the episode (and its ``since``) stays until the robot makes progress
-            # D-763 8: one episode from its first reason; a new reason takes its own bound from that start
+        link = wait.get("reason") == "link_wait"
+        if regulation and not link:  # D-763 8: one episode from its first reason; a new one takes its bound from there
             wait = live.view["wait"] = {"since": now, **wait, "reason": regulation}
-        bound = self._wait_bound(wait.get("reason"))
-        return bound is not None and now - wait["since"] < bound
+        bound, active, live.waited = self._wait_bound(wait.get("reason")), bool(regulation or link), True
+        over = active and bound is not None and now - wait.get("since", now) >= bound  # only while a wait is reported
+        wait.update(bound_s=bound, over_bound=over, waiting=active and bound is not None and not over)  # v1.231: one write
+        return wait["waiting"]
 
     def _fence(self, robot_id: str) -> None:
         """D-760 8 review: the trip's next state read starts after every read begun so far (its last step, a

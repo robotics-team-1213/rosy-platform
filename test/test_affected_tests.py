@@ -371,6 +371,22 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     assert affected.ci_matrix(repo, selection)["include"] == matrix
 
 
+def test_ci_full_matrix_reaches_every_registered_module_suite():
+    """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    args = [p for e in matrix for inv in e["invocations"] for p in inv]
+    ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
+    assert ignored == set(affected.CI_FULL_EXCLUDED), "every --ignore needs a CI_FULL_EXCLUDED reason"
+    assert all(affected.CI_FULL_EXCLUDED.values())
+    ran = {t for p in args if not p.startswith("-") for t in repo.test_files_under(p)} - ignored
+    registered = {t for p in affected._full_paths(repo) for t in repo.test_files_under(p)}
+    missing = sorted(registered - ran - set(affected.CI_FULL_EXCLUDED))
+    assert not missing, f"registered suites CI's full tier never runs: {missing}"
+    for suite in ("middleware/core/api/test", "middleware/robot_ui/pilot/test", "operations/apps/games/test"):
+        assert any(affected._under(t, suite) for t in ran), suite
+
+
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
@@ -443,3 +459,16 @@ def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     assert {p for inv in entries[0]['invocations'] for p in inv} == suites
     assert entries[0]['ros'] == 'none'
     assert suites <= set(affected.FULL_SUITES)
+
+
+def test_modules_runner_gates_by_2026_11_15():
+    """D-762 stage 1: `modules` reports only until its first green run; it may not stay non-gating."""
+    import datetime
+
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    reporting = sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing"))
+    if datetime.date.today() > datetime.date(2026, 11, 15):
+        assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
+    else:
+        assert reporting in ([], ["modules"]), reporting

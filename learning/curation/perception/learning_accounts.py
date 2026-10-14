@@ -22,7 +22,8 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from cryptography.fernet import Fernet, InvalidToken
 
-CAPABILITIES = {'view', 'edit', 'approve', 'manage', 'import'}
+CAPABILITIES = {'view', 'edit', 'approve', 'manage', 'import', 'publish'}
+REPO_SCOPES = ('read-repos', 'gated-repos', 'write-repos', 'manage-repos')
 _PASSWORD_SLOTS = threading.BoundedSemaphore(2)
 
 
@@ -72,6 +73,26 @@ class _NoRedirect(HTTPRedirectHandler):
         raise AccountError('provider redirect refused')
 
 
+def token_scopes(identity):
+    """Map a verified whoami document to repository scopes. Missing proof grants none."""
+    auth = identity.get('auth') if isinstance(identity, dict) else None
+    access = auth.get('accessToken') if isinstance(auth, dict) else None
+    if not isinstance(access, dict):
+        return []
+    role = access.get('role')
+    if role == 'read':
+        scopes = ['read-repos']
+        if access.get('canReadGatedRepos') is True:
+            scopes.append('gated-repos')
+        return scopes
+    if role == 'write':
+        # A classic write token can create and delete repos the user can write.
+        return ['read-repos', 'gated-repos', 'write-repos', 'manage-repos']
+    if role == 'fineGrained' and isinstance(access.get('scopes'), list):
+        return [scope for scope in REPO_SCOPES if scope in access['scopes']]
+    return []
+
+
 def whoami(token):
     request = Request('https://huggingface.co/api/whoami-v2', headers={'Authorization': 'Bearer ' + token})
     try:
@@ -110,13 +131,17 @@ class Accounts:
                     subject TEXT PRIMARY KEY,user_id TEXT,active INTEGER);
                 CREATE TABLE IF NOT EXISTS learning_connections (
                     id TEXT PRIMARY KEY,project_id TEXT,owner TEXT,subject TEXT,username TEXT,
-                    sharing TEXT,resources TEXT,secret TEXT,generation INTEGER,active INTEGER,expires REAL);
+                    sharing TEXT,resources TEXT,secret TEXT,generation INTEGER,active INTEGER,expires REAL,
+                    scopes TEXT);
                 CREATE TABLE IF NOT EXISTS learning_audit (
                     id INTEGER PRIMARY KEY,created REAL,project_id TEXT,user_id TEXT,action TEXT,object_id TEXT);
                 CREATE TABLE IF NOT EXISTS learning_login_attempts (key TEXT,created REAL);
                 CREATE TABLE IF NOT EXISTS learning_oauth_flows (
                     state TEXT PRIMARY KEY,binding TEXT,session_id TEXT,expires REAL,secret TEXT);
             ''')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(learning_connections)')}
+            if 'scopes' not in columns:
+                db.execute('ALTER TABLE learning_connections ADD COLUMN scopes TEXT')
         if os.name != 'nt':
             self.db_path.chmod(0o600)
         self._dummy = hash_password(secrets.token_urlsafe(24))
@@ -292,8 +317,11 @@ class Accounts:
             db.execute('DELETE FROM learning_sessions WHERE user_id=? AND subject=?', (user['user_id'], subject))
             self._audit(db, user['user_id'], 'identity_unlink', subject)
 
-    def _save_connection(self, db, principal, subject, username, token, *, subject_kind, sharing, resources, expires=None):
+    def _save_connection(self, db, principal, subject, username, token, *, subject_kind, sharing, resources, expires=None, scopes):
         # whoami IDs and OIDC subjects are different identity namespaces, even when their text matches.
+        scopes = sorted(set(scopes))
+        if any(scope not in REPO_SCOPES for scope in scopes):
+            raise AccountError('invalid connection scope')
         subject = subject_kind + ':' + subject
         row = db.execute('SELECT * FROM learning_connections WHERE project_id=? AND owner=? AND subject=? AND sharing=?',
                          (self.project_id, principal['user_id'], subject, sharing)).fetchone()
@@ -301,9 +329,11 @@ class Accounts:
         generation = row['generation'] + 1 if row else 1
         ciphertext = self.cipher.encrypt(_json({'token': token, 'id': connection_id, 'project': self.project_id,
                                            'owner': principal['user_id'], 'generation': generation}).encode()).decode()
-        db.execute('INSERT OR REPLACE INTO learning_connections VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+        db.execute('''INSERT OR REPLACE INTO learning_connections
+                       (id,project_id,owner,subject,username,sharing,resources,secret,generation,active,expires,scopes)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
                    (connection_id, self.project_id, principal['user_id'], subject, username, sharing,
-                    _json(resources), ciphertext, generation, 1, expires))
+                    _json(resources), ciphertext, generation, 1, expires, _json(scopes)))
         self._audit(db, principal['user_id'], 'connection_link', connection_id)
         return connection_id
 
@@ -327,26 +357,40 @@ class Accounts:
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
             self.require(principal, 'manage' if sharing == 'project' else 'import')
-            cid = self._save_connection(db, principal, subject, username, token, subject_kind='pat', sharing=sharing, resources=resources)
+            cid = self._save_connection(db, principal, subject, username, token, subject_kind='pat', sharing=sharing,
+                                        resources=resources, scopes=token_scopes(identity))
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
-    def connect_oauth(self, principal, subject, username, token, expires):
+    def connect_oauth(self, principal, subject, username, token, expires, scopes=()):
         principal = self.require(principal, 'import')
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
             self.require(principal, 'import'); self._link(db, principal, subject)
-            cid = self._save_connection(db, principal, subject, username, token, subject_kind='oidc', sharing='personal', resources=[], expires=expires)
+            cid = self._save_connection(db, principal, subject, username, token, subject_kind='oidc', sharing='personal',
+                                        resources=[], expires=expires, scopes=scopes)
         return next(c for c in self.connections(principal) if c['connection_id'] == cid)
 
     @staticmethod
-    def _connection_public(row):
+    def _stored_scopes(row):
+        raw = row['scopes'] if 'scopes' in row.keys() else None
+        if not raw:
+            return []
+        try:
+            scopes = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(scopes, list) or any(scope not in REPO_SCOPES for scope in scopes):
+            return []
+        return scopes
+
+    def _connection_public(self, row):
         kind, separator, subject = row['subject'].partition(':')
         if not separator or kind not in ('pat', 'oidc') or not subject:
             raise AccountError('connection identity namespace unavailable; reconnect')
         return {'connection_id': row['id'], 'provider': 'huggingface', 'owner_id': row['owner'],
                 'subject': subject, 'subject_kind': kind, 'username': row['username'], 'sharing': row['sharing'],
-                'resources': json.loads(row['resources']), 'generation': row['generation'],
-                'expires_at': row['expires'], 'active': bool(row['active'])}
+                'resources': json.loads(row['resources']), 'scopes': self._stored_scopes(row),
+                'generation': row['generation'], 'expires_at': row['expires'], 'active': bool(row['active'])}
 
     def connections(self, principal):
         principal = self.require(principal, 'view')
@@ -378,6 +422,39 @@ class Accounts:
         except (InvalidToken, ValueError, KeyError):
             raise AccountError('connection secret unavailable') from None
         return dict(self._connection_public(row), token=secret['token'])
+
+    def management_credential(self, principal, connection_id, *, scope, resource=None):
+        """Publish permission plus a recorded repository scope. Import does not imply this."""
+        if scope not in ('read-repos', 'write-repos', 'manage-repos'):
+            raise AccountError('invalid management scope')
+        principal = self.require(principal, 'publish')
+        with self._db() as db:
+            row = db.execute('SELECT * FROM learning_connections WHERE id=? AND project_id=?', (connection_id, self.project_id)).fetchone()
+        if not row or not row['active'] or (row['sharing'] == 'personal' and row['owner'] != principal['user_id']):
+            raise AccountError('connection access denied')
+        owner_capabilities = self._owner_capabilities(row, principal)
+        if 'publish' not in owner_capabilities or (row['sharing'] == 'project' and 'manage' not in owner_capabilities):
+            raise AccountError('connection owner permission revoked')
+        if row['expires'] is not None and row['expires'] <= self.clock():
+            raise AccountError('connection expired; reconnect')
+        if scope not in self._stored_scopes(row):
+            raise AccountError('connection scope denied')
+        if resource is not None and row['sharing'] == 'project' and resource not in json.loads(row['resources']):
+            raise AccountError('repository not allowed for project connection')
+        try:
+            secret = json.loads(self.cipher.decrypt(row['secret'].encode()))
+            if any(secret[key] != value for key, value in [('id', row['id']), ('project', self.project_id), ('owner', row['owner']), ('generation', row['generation'])]):
+                raise ValueError
+        except (InvalidToken, ValueError, KeyError):
+            raise AccountError('connection secret unavailable') from None
+        return dict(self._connection_public(row), token=secret['token'])
+
+    def audit_publish(self, principal, action, object_id):
+        if action not in ('repo_create', 'repo_delete'):
+            raise AccountError('invalid audit action')
+        principal = self.require(principal, 'publish')
+        with self._db() as db:
+            self._audit(db, principal['user_id'], action, object_id)
 
     def assert_connection(self, principal, connection_id, generation):
         self.credential(principal, connection_id, generation)

@@ -195,7 +195,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
                              "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False),
-                             "line_follow_advice": getattr(caps, "line_follow_advice", False),
+                             "line_follow_advice": getattr(caps, "line_follow_advice", False), "lane_turn_map_entry": getattr(caps, "lane_turn_map_entry", False),
                              "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
@@ -434,7 +434,10 @@ class TripRunner(TripAdmission, TripProgress):
         try:
             async with self._lock_for(live.view["robot_id"]):
                 if live.open:
+                    live.waited = False  # set by _waiting, which writes view.wait's answer in one go (D-763 8)
                     await self._step(live)
+                    if not live.waited:  # a step that returned before _waiting shows no answer, not the last one
+                        (live.view.get("wait") or {}).update(waiting=None, bound_s=None, over_bound=None)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -627,12 +630,12 @@ class TripRunner(TripAdmission, TripProgress):
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
                                outer_line_offset_m=self.config.arc_outer_line_offset_m,
                                map_pose=None if stamp is None else (pose.x, pose.y, pose.yaw, stamp))
-        if arc is not None:
-            expect = {**expect, "exit_segment": arc}
-        # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg
-        # off at SW); with an exit_segment no advance_m (CORE starts the arc there)
+        expect = {**expect, "exit_segment": arc} if arc is not None else expect
+        # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg off at SW); with an exit_segment no advance_m (CORE starts the arc there)
         turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
         advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
+        if turn is not None and expect and live.view["caps"].get("lane_turn_map_entry") and getattr(pose, "odom_stamp", None) is not None:
+            expect = {**expect, "map_entry": {"yaw_rad": round(live.arc(index + 1).start_tangent, 4), "pose_yaw_rad": pose.yaw, "odom_stamp_s": pose.odom_stamp}}  # D-759 rev 1: the exit lane's map heading
         if not live.open:
             return
         if action in (LEFT, RIGHT) and (expect or {}).get("expect_in_m") is None:
