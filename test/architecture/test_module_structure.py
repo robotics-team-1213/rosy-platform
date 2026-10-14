@@ -126,6 +126,7 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "perception/front_camera/perception/learned",
               "perception/front_camera/perception/drivable",
               "site_ui/console",
+              "site_ui/console/work",
               "fleet/fleet/server/ledger")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
@@ -485,7 +486,13 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "site_ui/console": (
-        17_933,
+        17_569,
+        "split: D-763 slice 4 moved the work area (work-view.js, channel-request-view.js) into its own unit "
+        "site_ui/console/work (docs/plans/2026-10-15-fleet-console-work-unit.md). Baseline17569 = the console "
+        "17933 split at the D-757 verdict commit61aa49b32 into console17569 + work364 (measured). The +150 already "
+        "used stays used and is not rebaselined; console.js1175 HARD_TIER, map-view.js984 and styles.css802 file "
+        "verdicts are unchanged. paintMove and the work-new/work-move seats stay in console.js (shell closures). "
+        "Previous verdict: "
         "split: D-763 slice 3 registers the browser console as its own size unit; see "
         "docs/plans/2026-10-14-fleet-console-size-unit.md. Baseline17933 is the console measured at the D-757 "
         "verdict commit61aa49b32 (fleet server38822, combined56755); at branch base06e97383b it was17988 (+55), "
@@ -493,6 +500,15 @@ SIZE_VERDICTS = {
         "AGREE-WITH-CONDITIONS. Keep console.js1175 (HARD_TIER, zero file growth), map-view.js984 and "
         "styles.css802 file verdicts. At the next +150 work-view.js and console.js's work-area wiring "
         "(paintMove, the work-new/work-move seats) leave for their own subpackage, not an accept.",
+    ),
+    "site_ui/console/work": (
+        364,
+        "split: D-763 slice 4 registers the console work area (work-view.js, channel-request-view.js, the "
+        "/console?view=work read and 대화 요청 review) as its own unit; see "
+        "docs/plans/2026-10-15-fleet-console-work-unit.md. Baseline364 = those two files at the D-757 verdict "
+        "commit61aa49b32 (work-view.js143 + channel-request-view.js221), measured the way the console and ledger "
+        "plans measured theirs. Keep every nested/file/HARD_TIER rule. At the next +150 the 5c approval seat "
+        "goes to its own module in this unit, not an accept.",
     ),
     "fleet/fleet/server/ledger": (
         6_985,

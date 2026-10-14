@@ -3,8 +3,10 @@ import { tripWaitText } from "/console/assets/site-map-model.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
-  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료", started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
-const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};  // D-763 8: the server's read projection
+  CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료",
+  started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+// D-763 8 — 서버가 준 보이는 상태(읽기 투영). 원장 상태는 상세의 「상태」 그대로다.
+const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell 적재"})[row.source] || "팔 작업";
@@ -16,7 +18,11 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED", "arrived", "canceled", "stopped", "failed"]}[query.get("show")];
   let rows = [], selected = null, inFlight = false, detailVersion = 0;
   const list = el("work-list"), detail = el("work-detail");
-  const showKinds = (kinds = []) => [["work-new-move-item", "trip"], ["work-new-cell-item", "CELL_TRANSFER"]].forEach(([id, kind]) => { el(id).hidden = !kinds.includes(kind); });  // D-763 9: only the server's kinds; none without an answer
+  // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
+  function showKinds(kinds = []) {
+    el("work-new-move-item").hidden = !kinds.includes("trip");
+    el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
+  }
   el("work-overview").hidden = !active;
   el("work-new").hidden = !fresh;
   if (area) {
@@ -26,15 +32,18 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
     channelRequestView.reset();
-    rows = []; selected = null; detailVersion++; showKinds();
-    list.replaceChildren(); detail.replaceChildren(); el("channel-requests").replaceChildren();
+    rows = []; selected = null; detailVersion++;
+    showKinds();
+    list.replaceChildren(); detail.replaceChildren();
+    el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
     el("work-evidence").textContent = "작업을 선택하세요.";
   }
   function field(label, value) {
     const term = document.createElement("dt"), text = document.createElement("dd");
-    term.textContent = label; text.textContent = value || "미확인"; detail.append(term, text);
+    term.textContent = label; text.textContent = value || "미확인";
+    detail.append(term, text);
   }
   function showDetail(row) {
     detail.replaceChildren();
@@ -92,7 +101,9 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     if (!area || inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
-      const result = await call("/api/fleet/work"); life.check(); showKinds(result.kinds); if (fresh) return;
+      const result = await call("/api/fleet/work"); life.check();
+      showKinds(result.kinds);
+      if (fresh) return;
       const previous = rows.find(row => workKey(row) === selected);
       rows = shown ? result.rows.filter(row => shown.includes(row.status)) : result.rows;
       channelRequestView.setSources(result.rows);
@@ -103,7 +114,8 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       }
       el("work-state").textContent = `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
       el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
-        result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정", result.cell_jobs_available ? "Cell 작업 원장" : "Cell 작업 원장 미설정", "운행 기록"].join(" · ");
+        result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정",
+        result.cell_jobs_available ? "Cell 작업 원장" : "Cell 작업 원장 미설정", "운행 기록"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);
       if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);

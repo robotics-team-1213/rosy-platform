@@ -24,7 +24,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
-| `work-view.js` | D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
+| `work/work-view.js`, `work/channel-request-view.js` | Work area, its own size unit `site_ui/console/work` (docs/plans/2026-10-15-fleet-console-work-unit.md); `channel-request-view.js` is the D-680 대화 요청 review. D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no dispatch/admission |
 | `incident-view.js` | D-362/D-641 incident evidence, human review and JSON export; at `/console?view=records` (D-741 8) the sub-nav's `show` filters the same answer and the opened incident's handoff and review stand in `#incident-judgment`; session, polling cadence and command authority remain in `console.js` |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |

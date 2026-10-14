@@ -25,6 +25,7 @@ setup(
         '*.html', '*.css', '*.js',
         'shared/*.css', 'shared/*.js',
         'cell/*.html', 'cell/*.css', 'cell/*.js',
+        'work/*.js',
     ]},
     include_package_data=True,
     exclude_package_data={'fleet.server': [
