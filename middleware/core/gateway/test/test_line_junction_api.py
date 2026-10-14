@@ -166,6 +166,9 @@ def test_refused_while_manual_control_is_active(core_client):
     """Review L6: the same manual-released rule as the other motion endpoints."""
     client, services = core_client()
     services.state.set_velocity(0.0, 0.0)
+    # The 500 ms teleop watchdog runs on the wall clock; a slow CI runner between the two
+    # requests expires the session (= no manual control), so pin it. Expiry has its own test.
+    services.command.watchdog.timeout_ms = 60_000
     assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
     assert client.post("/api/v1/teleop", json={"linear": 0.05, "angular": 0.0},
                        headers=OPERATOR).status_code == 200
