@@ -1485,15 +1485,16 @@ SIZE_VERDICTS = {
         "gate) before that.",
     ),
     "drive/behaviors/line_follow/arc": (
-        310,
-        "accept: independently re-judged 2026-10-08 at 299 (lane_arc.py 298, read-only critic agent). "
-        "D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
-        "(2713 +150) and core_features (12772 +150) have no room for it. One cohesive LineFollowManager "
-        "mixin under the single manager lock and generation, with no own lock, thread, store or publisher. "
-        "CORE CommandManager stays the final cmd_vel publisher, and the D-422 sweep is called, never "
-        "changed. Dependency runs arc to recovery only. Split plan of record: "
-        "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
-        "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
+        467,
+        "accept: independently re-judged 2026-10-14 at 467 (read-only critic agent), D-760 2b. The arc "
+        "deadline and IR-correction limit stand while a later gate holds (non-FREE D-517 authority, D-573 "
+        "look/wait, crossing share), capped crosswalk_report_s + clear_s per arc; the rule is one shared "
+        "helper in line_follow/crosswalk/gate.py also used by recovery/junction/gate.py _maneuver (D-507 13), "
+        "so no second copy and no growth at the 600-line junction file. Still one LineFollowManager mixin "
+        "under the manager lock and generation; no own lock, thread, store or publisher; the D-422 sweep, IR "
+        "guard and final publisher are unchanged and gates only lower its twist. No split plan is in flight; "
+        "re-judge on the next +150. Previous verdict: accept at 310 (2026-10-08, read-only critic). "
+        "Unit registration: docs/plans/2026-10-08-line-follow-arc-subpackage.md.",
     ),
     "drive/behaviors/localization": (
         1080,
