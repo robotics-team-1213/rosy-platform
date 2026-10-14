@@ -7,10 +7,11 @@ other trips keep M1 (junction hold-back only, view ``traffic_authority: hold_bac
 robot in flight, no retry before the next period: when sends stop, the robot's own expiry stops it.
 D-760: every request carries ``seq``, rising per (robot, leg). The leg id is ``{trip_id}:{route_rev}:{FLEET_EPOCH}``:
 a new Fleet process never reuses a leg whose highest seq CORE remembers (``stale_seq``). ``ttl_s`` is MAX_TTL_S to a
-robot with ``line_follow_authority_shrink``, else LEGACY_TTL_S and never a shrink. No extended authority goes to a
-robot mid-step, in ``link_wait``, before its line is on (D-760 2), or for QUARANTINE_S after this process started
-(D-760 5). Without one (D-760 Context 5), a robot holding an extend gets ``shrink: true, until_m: 0`` every period
-until CORE answers ``accepted: true``; until then the block table keeps that end's metres (``reach``).
+robot with ``line_follow_authority_shrink``, else LEGACY_TTL_S and never a shrink. A robot mid-step gets nothing and
+rolls on its held ttl (Safety-Review MEDIUM-3: Fleet's slowness does not stop it). No extended authority goes to a robot
+in ``link_wait``, before its line is on (D-760 2), or for QUARANTINE_S after this process started (D-760 5). Without
+one (D-760 Context 5), a robot holding an extend gets ``shrink: true, until_m: 0`` every period until CORE confirms
+it (``accepted: true``, or ``shrink_none_held``: nothing held); until then the table keeps that end's metres (``reach``).
 """
 
 from __future__ import annotations
@@ -102,9 +103,10 @@ class AuthoritySender:
         for live in lives:
             robot_id = live.view["robot_id"]
             task = self._inflight.get(robot_id)
-            if not live.open or live.view.get("traffic_authority") != CORE or (task is not None and not task.done()):
+            if (not live.open or live.view.get("traffic_authority") != CORE or (task is not None and not task.done())
+                    or robot_id in mid_step):
                 continue
-            hold = (quiet or robot_id in mid_step or live.view.get("state") == "link_wait"
+            hold = (quiet or live.view.get("state") == "link_wait"
                     or (live.view.get("detail") or {}).get("line_follow_started") is False)
             body = (None if hold else self.body(live)) or self.shrink(live)
             if body is not None:
