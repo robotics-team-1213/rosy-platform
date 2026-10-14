@@ -57,6 +57,17 @@ class LauncherIconParityTest {
         assertEquals(svg.map { it.copy(colour = "#ffffff") }, mono)
     }
 
+    /** D-654: the app bar mark is a copy of shared/web/brand/mark.svg. */
+    @Test
+    fun appBarMarkMatchesTheBrandMark() {
+        val svg = xml(File(iconsDir, "../brand/mark.svg"))
+        val drawable = xml(File(res, "drawable/ic_rosy_mark.xml"))
+        assertEquals(listOf(svg.paths().single().getAttribute("d")), drawableShapes("ic_rosy_mark").map { it.path })
+        // The same path in another viewport would draw a different mark.
+        assertEquals(svg.getAttribute("viewBox"),
+            "0 0 ${drawable.getAttributeNS(ANDROID, "viewportWidth")} ${drawable.getAttributeNS(ANDROID, "viewportHeight")}")
+    }
+
     @Test
     fun backgroundIsTheGroundToken() {
         val (background, _) = svgShapes()

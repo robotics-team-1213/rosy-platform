@@ -125,7 +125,6 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space3.dp),
     ) {
-        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
         if (development != null) {
             Text(stringResource(R.string.settings_development_active, development.siteName, development.expiresAt.toString()))
             OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = onDevelopmentRevoke, enabled = !locked, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
