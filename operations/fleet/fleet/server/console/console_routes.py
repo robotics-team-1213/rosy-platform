@@ -367,9 +367,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
-        on_trip = console.trip_busy(robot_id)
+        on_trip = console.trip_refusal([robot_id])
         if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
-            raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
+            raise http_error(on_trip)
         try:
             if body.decision not in ('WAIT', 'ABORT') and board._log is not None:
                 # Claim and motion admission have one order; stops never wait on this lock.
