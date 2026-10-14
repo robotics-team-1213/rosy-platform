@@ -387,6 +387,10 @@ SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopba
 고정값을 사용한다. digest가 다르면 결과를 등록하지 않는다. 임의 명령·모델 URL·Python 경로를
 웹에서 입력할 수 없다. 작업공간마다 실행 하나만 허용하며 서버 재시작 시 미완료 작업은 실패로
 기록한다. 구버전 release로 돌아갈 때 설치 도구는 지원하지 않는 AI 옵션을 제거한다.
+객체 초안은 기존 adapter의 7클래스(robot/obstacle_box/cone/traffic_light/sign/person/obstacle)
+작업공간만 지원한다. 기존 6클래스 자료를 재해석하지 않는다. 새 자료는 별도 작업공간을 처음
+만들 때 `--object-classes learning/curation/perception/classes/object_review_obstacle_v1.yaml`로
+등록한다. 픽셀 보완·검사는 차선 내부 의미 체계만 지원하며 road_surface/1은 차단한다.
 협업 모드는 edit 권한으로 요청·취소하고 타인 작업 취소는 manage도 필요하다. 등록 직전에
 세션·권한을 다시 확인한다. 로컬 비협업 작업은 미인증 로컬 작업자로 표시한다.
 
