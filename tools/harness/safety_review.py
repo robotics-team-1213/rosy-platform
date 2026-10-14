@@ -300,8 +300,7 @@ EXEMPT: dict[str, str] = {
         " D-421/D-430 latches and auth are unchanged, and no stop path is wrapped. 273 host tests pass at"
         " branch head 2dbb81946 (trip_runner, server_console, site_map_trip, cancel_all, lane_route, "
         "line_stuck_api, stuck_resolver_loop, dispatch_admission, dispatch_stop_latch, server_formation, "
-        "server_traffic); probes confirm estop/cancel/cancel-all reach a trip robot; no device "
-        "acceptance.",
+        "server_traffic); probes confirm estop/cancel/cancel-all reach a trip robot; no device acceptance.",
     "7b2146db26853544a3d59204488517e85a6fc4b6":  # git commit revision
         "Independent security-reviewer agent, 2026-10-07: console.py and task_dispatch_routes.py inline "
         "the same TRIP_ROBOT_BUSY refusals (set_trip_busy/refuse_trip_robot replaced by a trip_busy "
