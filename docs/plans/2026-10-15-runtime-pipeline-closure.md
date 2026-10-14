@@ -51,7 +51,15 @@ SQLite 적용은 await 없는 기존 `BEGIN IMMEDIATE`/원장 재검증 안에�
   기존 CAS·identity·quiescence 보존 및 종료 오류 기록을 확인했다.
   취소를 무시하는 worker나 개별 `aclose()` 자체의 실패는 이 변경의 보장 밖이다.
 - 영향 선택: 기준 `c6d52b238`, affected 57개 경로, FULL escalation 없음.
-  영향 시험 종료 결과는 별도로 기록한다.
+  중간 커밋 `fc7cd8aea` 원격 영향 시험은 6,278 passed, 330 skipped,
+  3 failed, terminal exit 1이었다. 실패는 기록 heading 형식 2개 검사와
+  outcomes 모듈 크기 판정 1개이며 기존 실패로 분류하지 않았다.
+- 기록 형식과 한 줄 초과를 수정한 `30b06737a`에서 위 실패를 포함한
+  기능·계약·구조 7개 파일을 다시 원격 검사했다. 273 passed, terminal
+  exit 0, NEW 0. 허용 크기와 검사 기준은 바꾸지 않았다. 영향 전체를 최신
+  SHA에서 다시 실행한 결과로 합산하지 않는다. skipped 330건은 미검증이다.
+- local lint: exit 0, 오류 0개. last_verified drift 경고 29개는 gate
+  승격의 근거가 아니며 기존 모듈 전체 검증으로 처리하지 않았다.
 
 ## 전체 완성을 막는 남은 입력과 증거
 
