@@ -89,3 +89,9 @@ D-495 교차로 동작 브랜치가 main에 들어간 뒤에 한다. 같은 시�
 ## 2026-10-14 addendum - bounded turn seam during D-754/D-759 integration
 
 The integration grew junction/gate.py to 602 lines. Apply the existing verdict's required bounded-turn extraction: _standing_still, _start_turn and _turn_step move unchanged into junction/turn.py, along with their constants and yaw wrapper. JunctionMixin inherits JunctionTurnMixin on the same LineFollowManager object; the manager lock/generation and final writer are unchanged. Gate re-exports the constants/helper names used by existing imports. AST identity verifies all three method bodies. No new thread, process, lock, publisher, configuration or command path is added. Existing junction, crosswalk, arc and installed-package tests cover the seam; remote verification is required before landing.
+
+## 2026-10-14 보탬 — 가상 신호가 `recovery/junction`에서 `line_follow/signal`로
+
+- `recovery/junction/signal.py`(93, D-620 `JunctionSignalMixin`)를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로이고 `recovery/junction/gate.py`의 import 줄 하나만 바뀌었다. 계획과 실측은 `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가에 있다.
+- `recovery/junction` 단위는 1,281 → 1,188줄이다. 남는 파일은 `gate.py`(519), `bend.py`(306), `approach.py`(263), `turn.py`(98), `__init__.py`(2)다. 판정 1,188은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 지키는 것은 그대로다. `LineFollowManager` 믹스인 하나, 매니저 잠금 하나, generation 하나. 의존 방향은 junction → signal 한쪽이다. 런타임 이동과 동작 변경이 없다.
