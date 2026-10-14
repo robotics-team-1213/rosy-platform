@@ -300,7 +300,7 @@ HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비�
 }
 ```
 
-실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
+실제 origin과 provider에 등록한 URI가 정확히 일치해야 한다. 공개 클라이언트로 등록한 경우에만 `client_secret_file`을 생략한다. 첫 HF 로그인은 관리자가 `hf_subjects`에 초대한 검증된 subject 또는 로그인한 사용자가 명시적으로 연결한 신원만 허용한다. 로그인은 `openid profile`, 자료 연결은 추가로 `read-repos gated-repos`를 요청한다. 저장소 관리 연결은 `read-repos write-repos manage-repos`를 요청하고, 쓰기와 저장소 관리가 모두 있을 때만 저장한다. 요청하지 않은 범위는 저장하지 않는다. PKCE·state·nonce·issuer·audience·서명·만료를 검증한다. 서버는 토큰을 암호화하며 전역 `HF_TOKEN`이나 CLI 로그인 계정을 바꾸지 않는다. offline refresh를 요청하지 않으므로 만료되면 명시적으로 다시 연결한다.
 
 가져오기는 branch/tag를 최초 요청에서 immutable commit으로 고정한다. 재시도도 같은 commit과 계정 세대를 유지하며 다른 계정으로 자동 대체하지 않는다. gated 개인 접근 승인은 팀 이용 허가가 아니므로 팀 이용 근거가 없으면 `rights_hold`다. 크기·경로·해시 검증 후 원자적으로 등록하며 중간 파일을 완료 자료로 노출하지 않는다. 다운로드한 Python 코드·pickle·모델 코드를 실행하지 않는다.
 
@@ -312,7 +312,7 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 하나의 private imports root에서는 OS 잠금으로 worker 하나만 실행한다. DB 트랜잭션은 중복 생성과 취소/완료 경합을 조정한다. 검증한 기존 부분 파일을 제외한 남은 bytes와 여유분·metadata 1MiB를 시작 전에 검사하고 쓰기마다 여유를 다시 검사한다. `reserved_bytes`는 이 실행기의 남은 전송량에 대한 논리 예약이며 다른 앱의 디스크 쓰기를 막지 않는다. 파일시스템과 OS 잠금을 공유하지 않는 여러 호스트의 NAS worker는 지원하지 않는다. `.partial`은 완료 자료로 등록하지 않고 취소 후에도 재개용으로 남긴다. 자동 원본 삭제·유료 증설은 하지 않는다.
 
-완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 외부 게시와 Spaces 실행은 현재 범위에 포함되지 않는다.
+완료 상태는 `pending_curation`이다. 확장자가 있어도 디코딩·시간 정렬을 증명한 것으로 보지 않는다. `rosy.media-manifest/1`은 원본 파일, 권리 증거, 외부 commit을 묶고 미확인 라벨·권리·capture group은 보류한다. 동기화된 state/action이 없는 자료는 모방 학습에 사용할 수 없다. 모델 다운로드는 적재·승격·로봇 실행을 허용하지 않는다. 다른 provider, 파일 업로드, Spaces 실행은 현재 범위에 포함되지 않는다. 외부 게시 권한이 있는 사용자는 저장된 연결로 비공개 데이터셋·모델 저장소를 조회·생성·삭제할 수 있다. 공개로 바꾸거나 기존 공개 저장소를 지우지 않는다.
 
 전환 전 앱과 관련 쓰기를 멈추고 state, DB, 설정의 일관된 백업을 보관한다. 협업 바인딩 후 `--collaboration`만 제거하거나 DB의 바인딩 행을 지워 인증을 해제하지 않는다. 되돌릴 때도 협업을 유지하는 지원 버전을 쓰거나, 서비스를 멈추고 전환 전 백업을 별도 위치에 복원하여 기존 접근 범위를 다시 검토한다. 전환 후 이력은 별도로 보존하며 원본 백업을 덮어쓰지 않는다. 실제 외부 인증 수용은 등록된 앱과 사용자 동의로 로그인·연결·private/gated 접근·철회까지 확인해야 하며 가짜 provider 시험은 이를 대신하지 않는다.
 
@@ -325,10 +325,13 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 | GET | `/api/accounts/session` | 현재 세션·프로젝트·연결 |
 | POST | `/api/accounts/login` | `username`, `password` |
 | POST | `/api/accounts/logout` | `{}`; 현재 세션 철회 |
-| POST | `/api/accounts/oauth` | `purpose: login` 또는 `link` |
+| POST | `/api/accounts/oauth` | `purpose: login`, `link`, 또는 `manage` |
 | GET | `/oauth/huggingface/callback` | provider의 `code`, `state` |
 | POST | `/api/accounts/connect` | `token`, `sharing: personal|project`, `resources` |
 | POST | `/api/accounts/disconnect` | `connection_id` |
+| GET | `/api/accounts/repos` | `connection_id`, `repo_type`은 dataset 또는 model; `learning.publish`와 기록된 `read-repos` |
+| POST | `/api/accounts/repos/create` | `connection_id`, `repo_type`, `repo_id`; `learning.publish`와 기록된 `write-repos`. 비공개만 만든다 |
+| POST | `/api/accounts/repos/delete` | `connection_id`, `repo_type`, `repo_id`, `confirm`; `confirm`은 `repo_id`와 같다. `learning.publish`와 기록된 `manage-repos`. 조회 결과가 비공개일 때만 지운다 |
 | GET | `/api/learning/imports` | 현재 프로젝트 작업 목록 |
 | POST | `/api/learning/imports/create` | `connection_id`, `repo_type: dataset|model`, `repo_id`, `revision`, `files`, `rights` |
 | POST | `/api/learning/imports/retry` | `id`; 동일 고정 입력 재시도 |
