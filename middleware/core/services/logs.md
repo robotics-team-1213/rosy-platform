@@ -1105,3 +1105,11 @@
 - 변경: `line_follow/crosswalk/gate.py`에 `_regulated_wait_share(now, dt, speed)`를 두고 `recovery/junction/gate.py::_maneuver`(D-507 13)와 `arc/lane_arc.py::_arc_step`이 같이 쓴다. 통행권 비`FREE`, `looking`·`waiting`, 건너는 중 앞 물체로 선 상태(`look_progress`, 두 호출부 모두 놓쳤다)는 전부, 건너는 중은 `1 - crosswalk_cross_speed/speed`만 센다. `dt`는 `stale_after_s`까지만 센다(틱 스레드가 멈췄다 HOLDING으로 깨어나도 그 간격을 주지 않는다). 상한 15 s는 호출부가 지킨다. 호는 이제 건너는 중의 몫도 받는다(속도는 `_arc_speed()`). `lane_arc.py`의 공백만 바뀐 줄을 되돌렸다. 크기 판정 `line_follow/arc`를 467로 재판정 문구와 함께 바꿨다(검토자 문구 + 단위 계획 인용, 가드가 계획 인용을 요구한다).
 - 증거: `test_lane_arc.py` — 2 s 주행 뒤 3 s 정지가 기한을 3.0 s 옮김, 멈춘 틱 간격은 `stale_after_s`까지(그 틱은 낡은 odom으로 호도 끝난다), 건너는 중 선 시간 2 s 전부·움직이는 건너기 2 s의 절반. 교차로·횡단보도·통행권·호 시험과 `test_module_structure.py` 원격 통과.
 - gate 변화: SOURCE·호스트 근거만. 크기: arc 467, crosswalk 769(판정 756), junction 1239, `recovery/junction/gate.py` 597줄.
+
+## 2026-10-14 · uncommitted · fix(line_follow,state): D-758 0단계 odom 기록을 발행 stamp로 찾고 line-follow 시계로 잰다, odom epoch
+
+- 변경: `line_follow/authority.py` — odom 기록 항목에 스냅숏이 발행한 벽시계 stamp(`observe_return_pose(wall=...)`, 없으면 지금 벽시계)와 line-follow 시계(`trail` 표본의 `received_at`)를 둔다. `_odom_entry(stamp)`가 |차| ≤ `STAMP_MATCH_S`(1 µs)인 가장 새 항목을 찾고, 없으면 이전처럼 벽시계에서 그 이전 항목을 찾는다. 통행권(`set_authority`)·호 기준(`_odom_at_stamp`, D-744·D-759)·차로 신호(`cue/lane_cue.py::_cue_pose_yaw`, D-511)가 이 조회를 쓰고, 찾은 표본의 나이·미래 판정은 line-follow 시계로 한다. `_authority_seq`도 line-follow 시계다. `state/manager.py::set_odom_pose(x, y, yaw, frame=None, source_stamp_ns=None)`가 발행한 stamp를 돌려주고 `odom_pose.epoch`(한 표본 이동 > 0.02 + 0.2·dt m, frame 변경, 원본 시각 역행에서만 증가)와 `mono_s`를 싣는다.
+- 증거: `test_line_authority.py`(벽시계 ±5 s 뒤 같은 표본, JSON 왕복, 같은 stamp 둘이면 새것, 옛 Fleet 계산 stamp는 이전대로, 역행 뒤 seq 기억), `test_lane_arc_map_anchor.py`(±5 s 뒤 기준 사용), `test_state_odom_pose.py`(원점 통과는 epoch 그대로, 이동·frame·시각 역행에서 증가) — 수정 전 적색 확인(`X:/DevTemp/odom-monotonic`), 수정 뒤 `middleware/core/services/test` 1867 통과, `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 미검증. Safety-Review 필요(통행권 주행 거리 계산). 크기: `line_follow` 2452(판정 2412 + 150 안), cue 380, `state/manager.py` 360줄, `authority.py` 205줄.
+- 결정: D-758 0단계(조정자가 계획 범위 변경을 기록한다: 기록은 line_follow에 남고 Fleet은 stamp를 그대로 돌려준다).
+- 교훈: 스냅숏 stamp와 기록 stamp가 따로 찍히면 "이전 표본" 탐색만 가능하다. 같은 값을 한 번 찍어 두 곳에 쓰면 벽시계 이동과 무관하게 정확히 찾는다.

@@ -980,3 +980,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3.
 - 교훈: 없음.
+
+## 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228
+
+- 변경: `core_api_web/api/app.py` 모듈 docstring과 `description`의 계약 버전을 v1.228로(v1.227은 다른 브랜치가 쓴다). 문서 머리와 핀 시험을 같은 커밋에서 옮겼다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py`(gateway 스위트) 원격 통과.
+- gate 변화: 없음.
+- 결정: D-758 0단계.
+- 교훈: 없음.
