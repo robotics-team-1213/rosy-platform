@@ -456,6 +456,7 @@ class CrosswalkGateMixin:
     def _init_crosswalk_gate(self) -> None:
         self._xwalk = CrosswalkGate()
         self._xwalk_scan: Optional[Scan] = None
+        self._xwalk_corridor = (None, None, None)   # (received_at, odom epoch, corridor), kept for EVIDENCE_TTL_S
 
     @property
     def wants_crosswalk_scan(self) -> bool:
@@ -502,6 +503,9 @@ class CrosswalkGateMixin:
         edges are their distances from it in that frame."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
+        held_at, epoch, held = self._xwalk_corridor   # m25: a frame without the line clears the evidence for a
+        if lane is None and held_at is not None and epoch == ev.epoch and 0.0 <= now - held_at <= EVIDENCE_TTL_S:
+            return held   # tick; each such tick read A as unknown and restarted the 5 s clear window (same odom run)
         if lane is None or at is None or lane.uncertainty_m is None or not 0.0 <= now - at <= EVIDENCE_TTL_S:
             return None
         if lane.uncertainty_m > MAX_LATERAL_M:  # m24: on the stripes (0.043 m, edges 0.08 m apart) it is no lane
@@ -517,9 +521,11 @@ class CrosswalkGateMixin:
         # each edge's seen ends in the lane frame; the outermost keeps an edge that disagrees with the mean (review)
         side = {k: [math.cos(turn) * (b.slope * x + b.intercept_m) - math.sin(turn) * x
                     for x in (b.observed_x_min_m, b.observed_x_max_m)] for k, b in edges.items()}
-        return (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn), max(side["left"]), min(side["right"]),
-                lane.uncertainty_m, max(abs(b.slope - slope) for b in edges.values()),
-                min(b.observed_x_max_m for b in edges.values()))
+        self._xwalk_corridor = (at, ev.epoch, (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn), max(side["left"]),
+                                     min(side["right"]), lane.uncertainty_m,
+                                     max(abs(b.slope - slope) for b in edges.values()),
+                                     min(b.observed_x_max_m for b in edges.values())))
+        return self._xwalk_corridor[2]
 
     def _crosswalk_gate(self, now: float, decision):
         """Cap the tick's final decision; never lifts a zero (D-573 6)."""

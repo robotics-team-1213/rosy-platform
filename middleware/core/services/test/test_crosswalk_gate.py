@@ -446,6 +446,20 @@ def test_a_loose_lane_reading_on_the_stripes_does_not_turn_the_way_ahead():
         assert (out[-1] > 0) is moves, (person, s.m.status().reason)
 
 
+def test_a_frame_without_the_line_keeps_the_last_corridor_for_its_ttl_in_the_same_odom_run():
+    """Gazebo m25: a camera frame without the line cleared the lane evidence for a tick; without a corridor A
+    widened in the zone's skewed frame, read unknown and restarted the 5 s clear window at every such tick."""
+    s = Sim(edges=(0.079, -0.079))
+    s.frame()
+    held = s.m._fresh_corridor(s.t)
+    assert held is not None
+    s.m.observe(LineObservation(LineFollowMode.CAMERA_LINE, s.t, False, 0.0, 0.0), received_at=s.t, source_now=s.t)
+    assert s.m._return_evidence._lane is None and s.m._fresh_corridor(s.t + 0.1) is held
+    assert s.m._fresh_corridor(s.t + 0.31) is None                     # EVIDENCE_TTL_S
+    s.m._return_evidence.reset()                                      # a new odom run: never the old corridor
+    assert s.m._fresh_corridor(s.t + 0.1) is None
+
+
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
     """D-573 개정 4: with wall bases read as the edges, someone 0.09 m from the middle (beyond the
     body's own 0.077 m) still stops the crossing; someone 0.118 m out, against the wall, is no
