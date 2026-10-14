@@ -251,7 +251,7 @@ def test_committed_folder_moves_escalate(sample, capsys, change, mode):
         assert harness.main(["affected", "--repo", str(sample), "--base", "main", "--json"]) == 0
         out = json.loads(capsys.readouterr().out)
         assert out["mode"] == mode, out["escalations"]
-        assert out["full_invocations"] == (affected.lab_full_invocations() if mode == "full" else [])
+        assert bool(out["full_invocations"]) == (mode == "full")
     finally:
         _git(sample, "checkout", "-q", "main")
         _git(sample, "branch", "-q", "-D", "move")
@@ -268,10 +268,22 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
         assert sel.mode == "affected", sel.escalations
 
 
-def test_lab_full_tier_is_the_ci_full_matrix_plus_the_root_suite():
-    full = affected.lab_full_invocations()
-    assert full[-1] == ["test"]
-    assert full[:-1] == [inv for entry in affected.CI_FULL_MATRIX for inv in entry["invocations"]]
+@pytest.mark.parametrize("changed", [
+    ["middleware/robot_ui/pilot/package.xml"],        # was: pilot/test ran; must still run
+    ["contracts/foundation/core_common/__init__.py"],
+    [".github/workflows/ci.yml"],
+])
+def test_real_repo_full_tier_covers_every_module_suite_and_the_local_selection(changed):
+    """D-762 stage 0: a FULL landing never runs fewer suites than the old guards + mapped path."""
+    repo = affected.Repo.load(ROOT)
+    sel = affected.select(repo, changed)
+    assert sel.mode == "full"
+    full = [p for inv in sel.full_invocations for p in inv if not p.startswith("-")]
+    covered = lambda path: any(affected._under(path, f) for f in full)  # noqa: E731
+    local = [p for inv in sel.local_invocations for p in inv]
+    assert local and all(map(covered, local)), [p for p in local if not covered(p)]
+    assert all(map(covered, affected._full_paths(repo))), [p for p in affected._full_paths(repo) if not covered(p)]
+    assert covered("middleware/robot_ui/pilot/test") and covered("middleware/core/api/test")
 
 
 def test_missing_base_escalates_to_full(sample, capsys):

@@ -417,15 +417,22 @@ def test_logs_md_their_deletion_next_to_append_is_manual(repos):
 SAFETY = "tools/harness/safety_review.py"
 
 
+def install_safety_rule(main: Path) -> None:
+    """The real safety_review.py (and its data files) with the fixture's init commit as BASELINE."""
+    rule = re.sub(r'BASELINE = "[0-9a-f]{40}"', f'BASELINE = "{git(main, "rev-parse", "HEAD")}"',
+                  (ROOT / SAFETY).read_text(encoding="utf-8"), count=1)
+    files = {SAFETY: rule, "tools/harness/platform_parts.yaml": "roots:\n  - path: safe\n    concern: safety\n",
+             "safe/stop.py": "LIMIT = 1\n"}
+    for data in sorted((ROOT / "tools/harness").glob("safety_review_*")):
+        files[f"tools/harness/{data.name}"] = data.read_bytes()
+    commit(main, files, "rule")
+
+
 @pytest.mark.parametrize("trailer, code", [("", 1), ("\n\nSafety-Review: test-reviewer unit evidence", 0)])
 def test_safety_tagged_change_needs_its_trailer_before_landing(repos, capsys, trailer, code):
     """D-762 stage 0: CI's own D-430 5 rule (safety_review.py) runs on the commits the landing adds."""
     main, wt = repos
-    # The fixture's history starts at its own init commit, so that is the rule's BASELINE.
-    rule = re.sub(r'BASELINE = "[0-9a-f]{40}"', f'BASELINE = "{git(main, "rev-parse", "HEAD")}"',
-                  (ROOT / SAFETY).read_text(encoding="utf-8"), count=1)
-    commit(main, {SAFETY: rule, "tools/harness/platform_parts.yaml":
-                  "roots:\n  - path: safe\n    concern: safety\n", "safe/stop.py": "LIMIT = 1\n"}, "rule")
+    install_safety_rule(main)
     git(wt, "merge", "-q", "main")
     commit(wt, {"safe/stop.py": "LIMIT = 2\n"}, "loosen the stop" + trailer)
     before = git(main, "rev-parse", "HEAD")
@@ -445,3 +452,44 @@ def test_ordinary_landing_reports_distance_from_origin(repos, capsys):
     assert land.main(["--tests", "none"]) == 0
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
     assert "local main is 1 commits / 0.0 hours ahead of origin/main" in capsys.readouterr().out
+
+
+def test_untrailered_safety_commit_already_on_main_does_not_block_a_landing(repos):
+    """Only the commits the landing adds are checked; main's own history is pre-push's and CI's."""
+    main, wt = repos
+    install_safety_rule(main)
+    commit(main, {"safe/stop.py": "LIMIT = 3\n"}, "untrailered safety edit already on main")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "ordinary branch change")
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+FULL_THEN_DELTA = """import json, sys
+if sys.argv[1] == 'affected':
+    if '--head' in sys.argv:
+        print(json.dumps({"mode": "affected", "escalations": [], "invocations": [["pkg/test/test_a.py"]]}))
+    else:
+        print(json.dumps({"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations": [],
+                          "local_invocations": [], "full_invocations": [["pkg/test"]]}))
+"""
+
+
+def test_main_moving_during_a_full_round_reruns_only_the_delta_tier(repos, monkeypatch, capsys):
+    """D-762 stage 0: round 2 selects main's delta since the FULL-tested main, not the whole tier."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": FULL_THEN_DELTA, "tools/harness/affected_tests.py": "",
+                "pkg/a.py": "x = 2\n"}, "branch with harness")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # a peer lands while the full tier runs
+            commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    first_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [[["pkg/test"]], [["pkg/test/test_a.py"]]]
+    assert f"FULL tier passed over main {first_main[:10]}" in capsys.readouterr().out
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
