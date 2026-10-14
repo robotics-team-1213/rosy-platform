@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Optional
 
 from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_TURN_RAD, _angle
@@ -494,19 +495,26 @@ class CrosswalkGateMixin:
 
     def _fresh_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
-        as (image pose, left, right, uncertainty_m, |slope|, seen-to x) over its observed x range; None if older than the
-        D-491 evidence TTL or incomplete."""
+        as (lane pose, left, right, uncertainty_m, residual |slope|, seen-to x); None if older than the D-491
+        evidence TTL, incomplete or turned past MAX_TURN_RAD. D-573 개정 5 6항: the lane pose is the image pose
+        turned along the two edges' mean slope (the lane, not the body: SIM m23 stood 0.1 rad off it), and the
+        edges are their distances from it in that frame."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
         if lane is None or at is None or lane.uncertainty_m is None or not 0.0 <= now - at <= EVIDENCE_TTL_S:
             return None
-        edges = {b.side: [b.slope * x + b.intercept_m for x in (b.observed_x_min_m, b.observed_x_max_m)]
-                 for b in lane.boundaries}
+        edges = {b.side: b for b in lane.boundaries}
         image = ev._image_pose(round(lane.stamp * 1e9))
         if image is None or set(edges) != {"left", "right"}:
             return None
-        return (image, max(edges["left"]), min(edges["right"]), lane.uncertainty_m,
-                max(abs(b.slope) for b in lane.boundaries), min(b.observed_x_max_m for b in lane.boundaries))
+        slope = (edges["left"].slope + edges["right"].slope) / 2
+        turn = math.atan(slope)
+        if abs(turn) > MAX_TURN_RAD:
+            return None
+        return (SimpleNamespace(x=image.x, y=image.y, yaw=image.yaw + turn),
+                edges["left"].intercept_m * math.cos(turn), edges["right"].intercept_m * math.cos(turn),
+                lane.uncertainty_m, max(abs(b.slope - slope) for b in edges.values()),
+                min(b.observed_x_max_m for b in edges.values()))
 
     def _crosswalk_gate(self, now: float, decision):
         """Cap the tick's final decision; never lifts a zero (D-573 6)."""

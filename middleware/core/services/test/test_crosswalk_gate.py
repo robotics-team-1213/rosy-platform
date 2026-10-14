@@ -49,8 +49,8 @@ def rays_at(x, objects, *, no_return=None, wall_m=1.5, step_deg=2):
 
 
 class Sim:
-    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, **config):
-        self.edges = edges          # (left, right) inner paint edges the camera reports, or None
+    def __init__(self, enabled=True, edges=None, xw_u=0.02, lat_u=0.005, slope=0.0, **config):
+        self.edges, self.slope = edges, slope   # slope: the lane's direction in the body frame (dy/dx)          # (left, right) inner paint edges the camera reports, or None
         self.xw_u, self.lat_u = xw_u, lat_u   # crosswalk along-track bound (None = detector off), lane lateral
         self.t, self.x, self.linear = 1.0, 0.0, 0.0
         self.objects, self.no_return, self.scans = [], None, True
@@ -72,7 +72,7 @@ class Sim:
         raw = dict(stamp=t, geometry_id="rig", ground_source="CALIBRATED", uncertainty_m=self.lat_u,
                    crosswalk_uncertainty_m=self.xw_u,
                    boundaries=[] if self.edges is None else [
-                       dict(side=side, slope=0.0, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
+                       dict(side=side, slope=self.slope, intercept_m=y, observed_x_min_m=0.1, observed_x_max_m=0.6)
                        for side, y in zip(("left", "right"), self.edges)])
         if crosswalk is not None and crosswalk[0] - self.x >= 0.0:
             raw["crosswalk"] = dict(near_m=crosswalk[0] - self.x, far_m=crosswalk[1] - self.x)
@@ -399,6 +399,21 @@ def test_a_poor_lane_reading_while_crossing_does_not_widen_the_way_ahead_into_th
         s.lat_u, s.objects = 0.046, walls + person
         out = [d.linear for _, d in s.run(1.0)]
         assert (out[-1] > 0) is moves, (person, s.m.status().reason)
+
+
+def test_the_look_area_follows_the_lane_direction_not_the_body_heading():
+    """D-573 개정 5 6항 (Gazebo m23): the robot stood 0.1 rad off the lane at the stop; turned to the body's
+    heading, the far end of the look area ran over the wall 0.117 m out and person_present held. The lane's
+    direction is the seen edges' slope; in that frame the walls stay outside and the lane stays inside."""
+    walls = [(x / 100, side + 0.1 * x / 100, 0.004) for x in range(0, 120) for side in (-0.117, 0.117)]
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls
+    s.to_stop()
+    assert any(d.linear > 0 for _, d in s.run(7.0))
+    s = Sim(edges=(0.079, -0.079), slope=0.1)
+    s.objects = walls + [(0.60, -0.060 + 0.06, 0.012)]       # in the lane at its far right edge
+    s.to_stop()
+    assert all(d.linear == 0 for _, d in s.run(7.0))
 
 
 def test_the_lane_width_cap_keeps_the_lane_and_gives_up_the_wall_side():
