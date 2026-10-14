@@ -131,8 +131,7 @@ class TripAdmission:
             return False
         if not live.open:  # canceled or the lease lost meanwhile
             return False
-        live.view["state"] = "running"
-        live.view.pop("wait", None)
+        live.view["state"] = "running"  # ``wait`` stays until this step ends without a link fault
         return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
