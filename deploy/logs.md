@@ -2789,3 +2789,10 @@
 - 변경: 기존 Pilot 조작 probe의 실제 이동·목표 오차·상태 충돌 재시도를 녹화 probe에 재사용했다. 조종권 갱신 실패와 종료 불명을 거절하고 진행 중 갱신이 끝난 뒤 의도적 만료를 시험한다.
 - 증거: 원격 RED 3건, 늦은 worker 오류 RED 1건 뒤 관련 33 passed, NEW 0. 독립 재검토에서 추가 소스 차단 없음. 상세는 docs/validation/omx-recording-probe-2026-10-14/result.md.
 - gate 변화: SOURCE/원격 회귀만. 비현장 메모리 기준 미달과 AI PC Docker 미설치로 live Gazebo는 미확인이다.
+
+## 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
+
+- 변경: 검수 release의 선택적 review-ai.json 설정을 unit에 연결하고 구버전 왕복 시 CLI 호환을 유지한다.
+- 증거: 구현 및 회귀 시험 추가. 원격 실행·브라우저 검증 결과는 후속 기록한다.
+- gate 변화: 없음. 운영 배포·실 모델 품질 수용을 선언하지 않는다.
+- 결정: D-764
