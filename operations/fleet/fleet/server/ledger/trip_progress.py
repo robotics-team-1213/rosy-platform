@@ -87,10 +87,8 @@ class TripProgress:
         return now - live.progress_at >= self.config.stall_s
 
     def _wait_bound(self, reason: Optional[str]) -> Optional[float]:
-        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule
-        applies again. CORE's ``line_follow.regulation_wait`` (v1.227): a crosswalk look/wait is bounded by CORE's
-        crosswalk_report_s + crosswalk_clear_s defaults (D-573 3, then crosswalk_blocked goes to D-622).
-        ponytail: fixed defaults; a robot configured longer stalls early. Read CORE status if a site changes them."""
+        """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` before the stall rule applies again;
+        crosswalk = CORE report_s + clear_s defaults (D-573 3). ponytail: fixed; read CORE status if a site changes them."""
         crosswalk = dict.fromkeys(("crosswalk_look", "crosswalk_wait", "crosswalk_held"), CROSSWALK_WAIT_S)
         return {"link_wait": self.lease.ttl_s, "authority": self.lease.ttl_s, "signal": self.config.stall_s,
                 **crosswalk}.get(reason)
@@ -100,9 +98,9 @@ class TripProgress:
         link = wait.get("reason") == "link_wait"
         if regulation and not link:  # D-763 8: one episode from its first reason; a new one takes its bound from there
             wait = live.view["wait"] = {"since": now, **wait, "reason": regulation}
-        bound = wait["bound_s"] = self._wait_bound(wait.get("reason"))  # v1.231: the trip read shows this answer
-        wait["over_bound"] = bound is not None and now - wait.get("since", now) >= bound
-        wait["waiting"] = bool(regulation or link) and bound is not None and not wait["over_bound"]
+        bound, active, live.waited = self._wait_bound(wait.get("reason")), bool(regulation or link), True
+        over = active and bound is not None and now - wait.get("since", now) >= bound  # only while a wait is reported
+        wait.update(bound_s=bound, over_bound=over, waiting=active and bound is not None and not over)  # v1.231: one write
         return wait["waiting"]
 
     async def _link_wait(self, live: LiveTrip, kind: str) -> bool:

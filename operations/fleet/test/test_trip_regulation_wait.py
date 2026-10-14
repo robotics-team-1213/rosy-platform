@@ -98,8 +98,11 @@ def test_the_read_keeps_one_episode_across_reasons_and_progress_clears_it():
     live.junction["regulation_wait"] = None
     _stalled_at(p, live, 12.0)                                               # a null poll: no wait now, episode kept
     assert live.view["wait"]["since"] == 0.0 and not live.view["wait"]["waiting"]
-    _stalled_at(p, live, STALL_S + 1.0)
-    assert live.view["wait"]["over_bound"]
+    _stalled_at(p, live, STALL_S + 1.0)                                      # no wait reported: not over its bound
+    assert not live.view["wait"]["over_bound"] and not live.view["wait"]["waiting"]
+    live.junction["regulation_wait"] = "crosswalk_look"
+    _stalled_at(p, live, STALL_S + 1.5)                                      # reported again: the same episode, over
+    assert live.view["wait"]["since"] == 0.0 and live.view["wait"]["over_bound"]
     assert not _stalled_at(p, live, STALL_S + 2.0, s=1.0) and "wait" not in live.view
 
 
@@ -122,3 +125,29 @@ def test_a_tick_that_returns_before_the_wait_check_shows_no_stale_answer():
     view = runner.view("p1")
     assert view["reason"] == "pose" and view["wait"]["reason"] == "signal"
     assert (view["wait"]["waiting"], view["wait"]["bound_s"], view["wait"]["over_bound"]) == (None, None, None)
+
+
+def test_a_read_during_a_slow_pose_read_still_sees_the_wait():
+    """D-763 8: the answer is written once per tick; a read while the step awaits the robot sees the last one."""
+    import asyncio as _asyncio
+    from test_trip_runner import _plan, _setup, _ticks, run
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+
+    async def regulated(robot_id, status=ports.junction_state):
+        return {**(await status(robot_id)), "regulation_wait": "crosswalk_look"}
+
+    ports.junction_state = regulated
+    _ticks(runner, ports, 2)
+    assert runner.view("p1")["wait"]["waiting"] is True
+    seen, refresh = [], ports.refresh
+
+    async def slow(robot_id, force_rest=False):
+        await _asyncio.sleep(0)
+        seen.append(runner.view("p1")["wait"]["waiting"])
+        await refresh(robot_id, force_rest)
+
+    ports.refresh = slow
+    _ticks(runner, ports)
+    assert seen and all(value is True for value in seen) and runner.view("p1")["wait"]["waiting"] is True

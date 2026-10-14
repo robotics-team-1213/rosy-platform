@@ -78,7 +78,7 @@ test("a stopped trip is a warn row (the card opens); a new open trip clears it",
 });
 
 test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no 개입 (rev 2 Q7)", () => {
-  const wait = (reason, waiting, over_bound = !waiting) => ({ robot_id: "a", trip_id: "t3", wait: { reason, waiting, over_bound } });
+  const wait = (reason, waiting, over_bound = !waiting) => ({ robot_id: "a", trip_id: "t3", state: "running", wait: { reason, waiting, over_bound } });
   const traffic = { units: [], robots: [{ robot_id: "a", lap: 3 }] };
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("crosswalk_look", true)] }, "a"), "대기 · 횡단보도");
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", true)] }, "a"), "대기 · 신호");
