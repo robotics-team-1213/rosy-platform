@@ -42,6 +42,10 @@ class TripLease:
         self._inflight: dict[str, asyncio.Future] = {}
         self._releasing: dict[str, asyncio.Future] = {}
 
+    def now(self) -> float:
+        """This lease's clock (``renewed_at`` is on it)."""
+        return self._clock()
+
     def _body(self, lease_id: str, view: dict) -> dict:
         return {"lease_id": lease_id, "trip_id": view["trip_id"][:128], "holder": self.holder[:64],
                 "operator_name": (view["started_by"] or "operator")[:64], "ttl_s": self.ttl_s}
