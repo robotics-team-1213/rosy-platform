@@ -131,7 +131,9 @@ def test_existing_mask_is_not_a_selectable_ai_candidate(tmp_path):
     import urllib.request
     import review_masks
     from review_app import make_server
+    from test_review_cycle import CLASSES
     store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
     review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
     server = make_server(store, 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

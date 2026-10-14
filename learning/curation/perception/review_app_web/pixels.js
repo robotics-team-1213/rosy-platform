@@ -1,6 +1,6 @@
 import {accountFetch} from '/account-session.js';
 import {cssColor, clearPalette} from '/common/ui.js';
-import {showHistory} from '/history.js';
+import {showHistory,resetHistory,feedbackPresentation} from '/history.js';
 import {reviewViewport} from '/viewport.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
@@ -24,6 +24,16 @@ const pixelResult=document.createElement('p');pixelResult.id='pixel-result';pixe
 const pixelResultNote=document.createElement('p');pixelResultNote.id='pixel-result-note';pixelResultNote.className='review-result-note';pixelResultNote.setAttribute('role','status');
 $('pixel-coverage').after(pixelResult,pixelResultNote,$('pixel-legend'),$('pixel-candidate-tools'),$('pixel-candidate-preview'),document.querySelector('.pixel-vlm-feedback'));
 pixelResultNote.after(document.querySelector('.pixel-layout .review-view-bar'));
+const aiPanel=document.querySelector('.pixel-vlm-feedback');
+$('pixel-status').after(aiPanel);
+const aiActions=document.createElement('div');aiActions.className='review-ai-actions';
+const refreshAi=document.createElement('button');refreshAi.id='pixel-vlm-refresh';refreshAi.type='button';refreshAi.className='ui-field';refreshAi.textContent='AI 의견 다시 조회';
+refreshAi.onclick=()=>{if(ready&&!loading)void loadVlm(frame.index,serial);};
+const aiHelp=document.createElement('a');aiHelp.href='/learning';aiHelp.textContent='학습 작업 확인';
+aiActions.append(refreshAi,aiHelp);aiPanel.append(aiActions);
+const candidateEmpty=document.createElement('p');candidateEmpty.id='pixel-candidate-empty';candidateEmpty.className='quiet';
+$('pixel-candidate-tools').before(candidateEmpty);
+
 // Retry must remain reachable when unavailable/empty state hides the editing content.
 pixelContent.after($('pixel-reload'));
 document.querySelector('.pixel-quick-tools').prepend(document.querySelector('.pixel-ribbon-nav'));
@@ -83,7 +93,7 @@ function v13Review(){return !!review?.classes?.classes.some(row=>row.name==='lan
 function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(row=>row.sha256===$('pixel-candidates').value)?.origin==='v12_pixel_mask_candidate';}
 function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>`${row.sha256}:${row.origin}`).join(',')}`,select=$('pixel-candidates');
  if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_road_visible_lane_clip':'SAM3 차선 밖 미검수 보정','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||row.origin||'출처 미기록'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
-  $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
+  candidateEmpty.hidden=rows.length>0;candidateEmpty.textContent=ready?'선택 가능한 새 AI 초안 없음 · 현재 라벨의 출처는 검수 이력에서 확인하세요.':'초안 목록을 불러오는 중…';$('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
   $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';
   mergeCandidate.disabled=select.disabled||!rows.length||!unknownPixels||frame?.status==='excluded'||review?.status==='excluded';
  $('pixel-apply-candidate').textContent=legacyCandidate()?'v12 참고 마스크로 전체 교체':'선택 초안으로 전체 교체';
@@ -207,11 +217,18 @@ function paint(){if(!ready)return;const canvas=$('pixel-canvas'),ctx=canvas.getC
   const radius=Math.max(3,5*canvas.width/Math.max(1,canvas.getBoundingClientRect().width));ctx.lineWidth=Math.max(2,radius/2);for(const [x,y] of seeds){ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.fillStyle=cssColor('--ink');ctx.fill();ctx.strokeStyle=cssColor('--ground');ctx.stroke();}
   if(keyCursor){const [x,y]=keyCursor,scale=canvas.width/Math.max(1,canvas.getBoundingClientRect().width);ctx.save();ctx.strokeStyle=cssColor('--series-primary');ctx.lineWidth=2*scale;ctx.beginPath();ctx.moveTo(x-5*scale,y);ctx.lineTo(x+5*scale,y);ctx.moveTo(x,y-5*scale);ctx.lineTo(x,y+5*scale);ctx.stroke();ctx.restore();}
 }
-async function loadVlm(index,ticket){const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');state.setAttribute('state','pending');state.textContent='현재 저장된 마스크의 AI 의견을 확인하는 중입니다.';note.textContent='';try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial)return;if(!value.available){state.textContent='아직 이 사진의 AI 확인 결과가 없습니다.';return;}if(!value.current){state.setAttribute('state','warning');state.textContent='마스크가 바뀌어 AI 의견이 오래됐습니다. 새 검사가 필요합니다.';return;}const labels={concern:'검토할 부분 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};state.setAttribute('state',value.review_blocked||value.feedback.verdict==='concern'?'warning':'ready');state.textContent=`${labels[value.feedback.verdict]} · 255 미검수 ${value.unknown_pixels.toLocaleString()}픽셀`;note.textContent=value.feedback.note;}catch{if(ticket!==serial)return;state.setAttribute('state','warning');state.textContent='AI 의견을 불러오지 못했습니다. 원본과 마스크를 직접 확인하세요.';}}
+async function loadVlm(index,ticket){
+ const state=$('pixel-vlm-state'),note=$('pixel-vlm-note');
+ state.setAttribute('state','pending');state.textContent='AI 의견을 불러오는 중…';note.textContent='';
+ try{const value=await request(`/api/vlm-feedback/${index}`);if(ticket!==serial)return;
+  const result=feedbackPresentation(value);state.setAttribute('state',result.state);state.textContent=result.title;note.textContent=result.note;
+ }catch{if(ticket!==serial)return;state.setAttribute('state','warning');state.textContent='AI 의견 조회 실패';note.textContent='다시 조회를 누르세요. 조회는 AI 검사를 새로 실행하지 않습니다.';}
+}
+
 async function select(index){const ticket=++serial,selectedClass=$('pixel-class').value;ready=false;keyCursor=null;keyboardPosition.hidden=true;savedPixelSummary='';pixelResult.textContent='사진을 불러오는 중';candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='';stroke=null;draft=[];polygon=[];clearSamples();brush.hidden=true;frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-coverage').textContent='';$('pixel-decision').hidden=true;$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
- $('review-history-summary').textContent='검수 기록을 불러오는 중…';
+ resetHistory();$('pixel-vlm-state').textContent='AI 의견을 불러오는 중…';$('pixel-vlm-state').setAttribute('state','pending');$('pixel-vlm-note').textContent='';
  request(`/api/history/${frame.index}`).then(value=>{if(ticket===serial)showHistory(value);})
-   .catch(()=>{if(ticket===serial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.';});
+   .catch(()=>{if(ticket===serial)resetHistory('검수 기록을 불러오지 못했습니다. 최신 내용을 다시 불러오세요.');});
  $('pixel-title').textContent=`사진 ${frame.index+1} 픽셀 검수`;$('pixel-object').href=`/?frame=${frame.index}`;if($('pixel-unknown'))$('pixel-unknown').checked=false;
  try{const next=await request(`/api/masks/${frame.index}`);const [photo,pixels]=await Promise.all([image(`/api/images/${frame.index}`),image(`/api/mask-images/${frame.index}?v=${next.version}`)]);if(ticket!==serial)return;if(photo.naturalWidth!==frame.source.width||photo.naturalHeight!==frame.source.height||pixels.naturalWidth!==photo.naturalWidth||pixels.naturalHeight!==photo.naturalHeight)throw new Error('원본과 마스크 크기가 다릅니다.');review=next;original=displayPhoto=photo;maskImage=pixels;const canvas=$('pixel-canvas');canvas.width=photo.naturalWidth;canvas.height=photo.naturalHeight;
  $('pixel-class').replaceChildren();const choose=document.createElement('option');choose.value='';choose.textContent='클래스를 선택하세요';$('pixel-class').append(choose);for(const cls of next.classes?.classes||[]){const option=document.createElement('option');option.value=cls.index;option.textContent=className(cls);$('pixel-class').append(option);}const unknown=document.createElement('option');unknown.value=255;unknown.textContent='미검수로 지우기';$('pixel-class').append(unknown);$('pixel-class').value=selectedClass||String(next.classes?.classes.find(cls=>cls.name==='lane_line')?.index??'');$('pixel-status').setAttribute('state',next.status==='approved'?'ready':'warning');$('pixel-status').textContent=`${states[next.status]} · v${next.version} · ${photo.naturalWidth} × ${photo.naturalHeight} · 객체 ${frame.status==='excluded'?'제외':frame.status==='approved'?'승인':'대기'}`;$('pixel-source').textContent=JSON.stringify({source:frame.source,mask:next,map_reference:workspace.map_reference},null,2);legend();quickClasses();ready=true;paint();void loadVlm(frame.index,ticket);if(detailView)void setView(true);else $('pixel-view-status').textContent='원본 사진 · '+inputPurpose();}
