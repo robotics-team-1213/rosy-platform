@@ -222,6 +222,12 @@
 - 증거: 원격 소스 시험 통과(`known_failures` NEW 0). 브라우저 시험은 시험 PC에서 조각마다 돌렸고 결과는 착지 보고에 있다. 화면을 사람이 본 적은 없다.
 - gate 변화: 없음. 검토 반영(2376c3886: 자리의 사건 이름, 한 번에 한 건을 스크립트로, 키·스크롤·상한 표기) 뒤 Fleet 크기 단위가 55464로 상한 55452를 12줄 넘었다. 판정은 올리지 않고, 저장소 어디서도 부르지 않는 Fleet 서버 코드 33줄(쓰지 않는 import 8, `mark_rejected`, `next_running`, `next_reconciliation`, `_ACTOR`, `formation_relay_kwargs`, `anchor_status`)을 지워 55439가 됐다(D-168). D-153 G2 캡처와 G3 사람 검토는 없다.
 
+## 2026-10-14 · 2c409d117 · refactor: console.js의 읽지 않는 선언 두 개 삭제
+
+- 변경: `console.js`의 `authHeaders()`와 `lastStateOk`를 지웠다(5줄). 둘 다 선언만 있고 읽는 곳이 없다. `install.js`의 `authHeaders`는 그대로다.
+- 증거: `node --check console.js`, `operations/fleet/test/web` node 시험. 원격 시험 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+
 ## 2026-10-14 · 33f6d8415 · fix(fleet): 현장 지도·Cell의 열이 본문 폭에 답한다 (D-741 2)
 
 - 변경: `site-map.css`와 `cell/cell.css`의 `main`이 칸(`container-type: inline-size`)이 됐고 64rem 접힘이 `@media`에서 `@container`로 갔다. 레일 72px과 하위 탐색 232px 옆에서 넓은 배치는 본문 자체가 64rem일 때부터 선다. 30rem 전화 단 규칙은 뷰포트 그대로다. 머리와 비상 정지는 건드리지 않았다.
