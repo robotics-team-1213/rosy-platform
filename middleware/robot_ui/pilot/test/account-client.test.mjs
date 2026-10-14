@@ -19,4 +19,15 @@ test('Account session restores without putting credentials into browser storage'
   client.clearToken();
   release({private:'previous-account'});
   await assert.rejects(pending, /계정이 변경/);
+
+  // A delayed session/profile read must not restore an account after local logout.
+  let finishSession;
+  globalThis.fetch = async () => ({ok:true,json:()=>new Promise(resolve=>{finishSession=resolve;})});
+  const restoring = client.restoreAccount();
+  await new Promise(resolve=>setImmediate(resolve));
+  client.clearToken();
+  finishSession({enabled:true,authenticated:true,account_id:'one',profile:{display_name:'old'}});
+  await restoring;
+  assert.equal(client.account, null);
+  assert.equal(client.authenticated(), false);
 });

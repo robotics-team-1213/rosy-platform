@@ -70,7 +70,7 @@ def _credentials(page):
 
 
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
-def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path):
+def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path, account_backend):
     from playwright.sync_api import expect
     page, origin = account_page
     page.goto(origin + '/console/login?return=' + path)
@@ -93,6 +93,12 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
         profile = page
     expect(profile.locator('#profile-id')).to_have_text('alice')
     expect(profile.locator('#profile-role')).to_have_text('운영자')
+    if account_backend == 'managed':
+        expect(profile.locator('#profile-grants')).to_be_visible()
+        expect(profile.locator('#profile-grant-list')).to_contain_text('site:test-site')
+        expect(profile.locator('#profile-grant-list')).to_contain_text('계정 관리')
+    else:
+        expect(profile.locator('#profile-grants')).to_be_hidden()
     assert profile.locator('#profile-id input, #profile-email input, #profile-role input').count() == 0
     assert profile.evaluate('document.documentElement.scrollWidth <= innerWidth')
     name = '<b>현장 운영자</b>'
@@ -161,6 +167,7 @@ def test_profile_save_failure_preserves_name_and_does_not_claim_success(account_
                if route.request.method == 'PATCH' else route.continue_())
     page.locator('#profile-name-save').click()
     expect(page.locator('#profile-status')).to_contain_text('처리 결과를 확인할 수 없습니다')
+    expect(page.locator('#profile-grants')).to_be_hidden()
     expect(page.locator('#profile-name')).to_have_value('저장 확인 필요')
     page.unroute('**/api/fleet/auth/profile')
     page.locator('#profile-reload').click()

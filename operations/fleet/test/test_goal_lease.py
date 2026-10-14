@@ -479,3 +479,49 @@ def test_capability_is_read_from_the_base_velocity_control_only():
     for caps in (None, {}, {"controls": {"items": [{"kind": "joint_jog", "goal_lease": True}]}},
                  {"controls": {"items": [{"kind": "base_velocity", "goal_lease": "true"}]}}):
         assert not goal_lease_supported(caps)
+
+
+class SenderRobot(LeaseRobot):
+    """CORE's D-760 9 rule in the fake: only the client (token) that sent the goal renews it."""
+
+    def __init__(self, robot_id: str, core: dict) -> None:
+        super().__init__(robot_id)
+        self.core = core                     # one robot's CORE state, shared by its clients
+
+    async def navigation_goal(self, x, y, yaw, **options) -> dict:
+        self.core["sender"] = self
+        return await super().navigation_goal(x, y, yaw, **options)
+
+    async def navigation_goal_lease(self, correlation_id, ttl_s) -> dict:
+        self._record("navigation_goal_lease", correlation_id)
+        if self.core.get("sender") is not self:
+            raise RobotApiError(self.robot_id, 403, "FORBIDDEN", "not the token that sent the goal")
+        return await super().navigation_goal_lease(correlation_id, ttl_s)
+
+
+@pytest.mark.parametrize("source", ["operator", "dispatch", "yield", "trip"])
+def test_every_renewal_path_renews_with_the_client_that_sent_the_goal(source):
+    """D-760 9: CORE refuses a renewal from another token, so each renewer must use the sender."""
+    core = {}
+    robot = SenderRobot("rosy_01", core)
+    console = _console(robot, ttl=4.0)
+    console.goal_leases.operator_present()
+    tasks = {"t-1": {"attempt_id": "attempt-9", "status": "RUNNING"}}
+    console.goal_leases.attempt_open = partial(attempt_open, SimpleNamespace(get_task=tasks.get))
+    if source == "trip":
+        install_trip_guard(console, SimpleNamespace(robot_busy=lambda _robot_id: True))
+    send = {"operator": lambda: console.goal("rosy_01", 1.0, 0.0),
+            "dispatch": lambda: console.goal("rosy_01", 1.0, 0.0, task_id="t-1",
+                                             attempt_id="attempt-9", attempt_seq=1),
+            "yield": lambda: console._bay_goal("rosy_01", (2.0, 0.0), "rosy_02"),
+            "trip": lambda: console.goal("rosy_01", 1.0, 0.0, trip=True)}[source]
+    run(send())
+    assert console.goal_leases["rosy_01"]["source"] == source and core["sender"] is robot
+    renew = partial(console.goal_leases.renew, *(("trip", "rosy_01") if source == "trip" else ("console",)))
+    run(renew())
+    assert len(robot.renewals) == 1          # accepted: renewed by the sender
+    console._clients["rosy_01"] = other = SenderRobot("rosy_01", core)   # another token (control)
+    run(renew())
+    assert other.renewals == [] and "rosy_01" not in console.goal_leases   # 403 drops the lease
+    run(renew())
+    assert len(other.calls) == 1             # dropped once: no further renewal attempts

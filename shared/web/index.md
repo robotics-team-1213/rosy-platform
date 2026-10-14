@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 7135ce58a · feat(auth): 공통 계정 프로필
 - 2026-10-13 · 2a7afbd1f · test(web): Rosy Robot이 공용 레일과 하위 탐색 자리를 쓴다 (D-741 6)
 - 2026-10-13 · 9e2d4ef0c · feat(fleet): console app bar registers a 48rem container breakpoint (D-741)
 - 2026-10-13 · 1438d53d1 · feat(web): control line at ink 50% on buttons and fields (D-741)
 - 2026-10-13 · 039a9efe8 · feat(web): shared app shell seats (D-741)
-- 2026-10-12 · 80a12948c · fix(ui): 원래 예외 보존과 복구 안내

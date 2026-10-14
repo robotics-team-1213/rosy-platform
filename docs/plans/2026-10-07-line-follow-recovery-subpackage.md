@@ -85,3 +85,11 @@ D-495 교차로 동작 브랜치가 main에 들어간 뒤에 한다. 같은 시�
 - 파일: `request.py`(답 모양·한도), `manoeuvre.py`(odom yaw 목표 하나, `cue/odom_pivot.OdomPivot` 재사용, K-턴 뒤 호·앞 호), `recovery.py`(`StuckRecovery`를 잇는 `RealignRecovery`: `REALIGN` 답, `REALIGNING`·`REALIGN_SETTLING` 단계, 막힘마다 2회), `mixin.py`(`RealignMixin`: 시작·매 틱 확인 — `pose_stamp`, 회전 원·8구역, `_back_refusal`, D-422 몸 정지, IR 감시, D-573 게이트), `__init__.py`(설명). 측정 2026-10-10: 합 289(`__init__` 12, `request` 34, `manoeuvre` 40, `recovery` 107, `mixin` 96).
 - 지키는 것: `LineFollowManager` 믹스인 하나(매니저 잠금 하나, generation 하나). 자기 잠금·스레드·저장소·발행자 없음. 회전·호 명령은 기존 막힘 동작 경로(`stuck_wiring._apply_recovery`, 종류 `realign`)로만 나가고 최종 `cmd_vel` 발행자는 CORE CommandManager다. 의존 방향은 `realign` → `stuck`·`cue/odom_pivot`이고 `stuck`은 `realign`을 import하지 않는다(매니저가 믹스인을 조립한다).
 - 검증: `test_line_stuck_realign.py`, gateway `test_line_follow_stuck_api.py`, `test/architecture`.
+
+## 2026-10-14 addendum - bounded turn seam during D-754/D-759 integration
+
+The integration grew junction/gate.py to 602 lines. Apply the existing verdict's required bounded-turn extraction: _standing_still, _start_turn and _turn_step move unchanged into junction/turn.py, along with their constants and yaw wrapper. JunctionMixin inherits JunctionTurnMixin on the same LineFollowManager object; the manager lock/generation and final writer are unchanged. Gate re-exports the constants/helper names used by existing imports. AST identity verifies all three method bodies. No new thread, process, lock, publisher, configuration or command path is added. Existing junction, crosswalk, arc and installed-package tests cover the seam; remote verification is required before landing.
+
+## 2026-10-14 보탬 — 가상 신호가 `recovery/junction`에서 `line_follow/signal`로
+
+계획, 실측, 판정은 `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 신호 추가 절 하나에 둔다.

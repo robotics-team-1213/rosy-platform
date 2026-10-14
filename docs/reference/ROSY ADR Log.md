@@ -755,6 +755,7 @@
 
 | D-752 | Fleet MapPose 소비자를 World로 직접 연결 | Accepted |
 
+| D-754 | 굽이 통과가 넘겨주는 목격은 지도가 가린다: `bend`의 `next_line_in_m`, 능력 `lane_bend_next_line` | Proposed |
 | D-753 | Fleet holder 설치 namespace·구조 증가 검사 보완 | Accepted |
 | D-755 | 공통 학습 데이터와 다중 계정 협업 연동 | Accepted |
 | D-757 | Rosy Account 단일 신원과 모든 앱의 자동 인증 세션 | Accepted |
@@ -763,6 +764,11 @@
 | D-761 | 워크트리는 관문 도구로 만들고, 끝난 워크트리는 손실 없는 청소로 치운다 | Proposed |
 | D-759 | 굽이 통과(D-507 보충)의 진입 직선을 지도의 차로 방향에 놓는다: `bend`의 `map_entry`, 능력 `lane_bend_map_entry` | Proposed |
 | D-762 | main으로 가는 길은 pull request와 merge queue 하나: 끝 상태는 브랜치마다 PR·auto-merge·공유 로컬 main 폐지, 에이전트는 관리자가 아닌 신원, 관문 경로는 작성자 아닌 code owner 승인(두 번째 owner 미정), D-584 범위 축소; 단계 0–5의 순서만 승인, GitHub 설정 적용은 단계마다 따로 승인 | Accepted |
+
+| D-758 | 로봇이 드는 현장 기준 — Fleet은 로봇마다 지도←odom 짝 하나를 보내고, 로봇은 자기 odom으로 현장 자세를 잇는다 | Proposed |
+
+| D-760 | Fleet이 시작한 움직임의 한도 — 끊김은 5초 버티고, 거리 끝에서 서고, 한도는 기본으로 켠다 | Accepted |
+| D-763 | Fleet 새 작업의 종류 — 단계의 조합으로 만들고, 작업마다 주인은 하나이며, 승인은 위험으로 정한다 | Accepted |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
