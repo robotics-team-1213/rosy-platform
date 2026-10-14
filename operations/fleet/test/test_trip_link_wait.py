@@ -38,6 +38,7 @@ class LinkFleet(AuthFleet):
         self.lease_up: set[str] = set()  # robots whose lease renews while their other calls fail
         self.calls: list[tuple] = []  # (robot id, kind, authority body or None) tried
         self.line_gate: asyncio.Event | None = None
+        self.line_waiting = False
 
     def _call(self, robot_id, kind, body=None):
         self.calls.append((robot_id, kind, body))
@@ -65,6 +66,7 @@ class LinkFleet(AuthFleet):
 
     async def start_camera_line(self, robot_id):
         if self.line_gate is not None:
+            self.line_waiting = True
             await self.line_gate.wait()
         return await self.p[robot_id].start_camera_line(robot_id)
 
@@ -356,6 +358,10 @@ def test_no_authority_before_the_line_is_on():
     async def go():
         fleet.line_gate = asyncio.Event()
         start = asyncio.ensure_future(runner.start("a", "bob"))
+        for _ in range(1000):  # the start's own checks run up to CORE's line PUT
+            if fleet.line_waiting:
+                break
+            await asyncio.sleep(0)
         for _ in range(4):  # the lease is open, the line not yet on
             fleet.advance(0.5)
             await runner.tick()
