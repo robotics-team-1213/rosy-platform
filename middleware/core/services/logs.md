@@ -1076,6 +1076,14 @@
 - 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
 - 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
 
+## 2026-10-14 · 97ad6ca74 · 목표 임대는 그 목표를 보낸 토큰만 갱신한다 (D-760 5단계)
+
+- 변경: `navigation/manager.py`. `goal()`·`home()`이 `lease_owner`(보낸 토큰 id)를 받아 임대 튜플의 네 번째 칸에 둔다. `renew_goal_lease(..., owner)`는 활성 여부(`GOAL_LEASE_NOT_ACTIVE`)를 먼저 보고, 그 다음 `owner`가 다르면 `FORBIDDEN`을 낸다. 거절된 갱신은 임대·만료 시각·목표를 건드리지 않는다. 파일은 600줄 그대로다.
+- 증거: `middleware/core/gateway/test/test_goal_lease.py` 2건 추가(다른 토큰 403·목표는 제 만료에 끝남, 거절 뒤 보낸 토큰 갱신 200), 기존 409·임대 없는 목표 시험 통과. 원격(AI PC) 97ad6ca74 exit 0.
+- gate 변화: SOURCE·호스트 근거만. 장치·Gazebo 근거 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 없음.
+
 ## 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
 
 - 변경: `recovery/junction/signal.py`를 `git mv`로 `line_follow/signal/gate.py`로 옮겼다. 내용은 그대로다. `recovery/junction/gate.py`의 import 줄 하나가 새 경로를 가리킨다. 옛 경로에 호환 재수출을 두지 않았다. `SIZE_UNITS`에 `drive/behaviors/line_follow/signal`을 더했다.
