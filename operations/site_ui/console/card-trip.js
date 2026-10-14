@@ -7,7 +7,7 @@
 import {
   convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody,
   repeatTripReason, startTrip,
-  trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason,
+  trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason, tripWaitText,
 } from "/console/assets/site-map-model.js";
 import { chooseConvoyLeader, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
@@ -17,7 +17,7 @@ export { endedTripText, openTrip };
 
 /** D-517 10 card line: lap, waits, resolver for an open trip; else why the last trip ended (D-541 7). */
 export function cardTripLine(view, robotId) {
-  return trafficCardLine(view.traffic, robotId) || endedTripText(view, robotId);
+  return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId) || endedTripText(view, robotId);
 }
 
 /** '' when this robot may be sent on a trip from here; otherwise the first reason that holds (D-359 §5.3). */
@@ -42,7 +42,7 @@ export function cancelScope(trip, lineFollowMode) {
 }
 
 // Options change only when the list does, so a poll keeps the operator's choice.
-function placeOptions(select, places, chosen, label = (place) => `${place.name} (${place.id})`) {
+export function placeOptions(select, places, chosen, label = (place) => `${place.name} (${place.id})`) {
   const ids = places.map((place) => place.id).join(",");
   if (select.dataset.ids !== ids) {
     select.dataset.ids = ids;

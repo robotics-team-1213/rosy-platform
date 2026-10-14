@@ -53,6 +53,10 @@ _HOLD_REASON = {'waiting': 'junction_waiting', 'unresolved': 'junction_unresolve
 
 
 
+#: After an odom gap the trail starts a new epoch (D-468: > 0.5 s); a maneuver held at zero through it
+#: keeps its place when the body is still within the trail's own jump floor and a small turn.
+REKEY_M, REKEY_RAD = .02, .05
+
 class JunctionRefused(Exception):
     """A junction instruction CORE does not take in the current line-follow mode (409)."""
 
@@ -229,6 +233,8 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
                                       next_line=expect.get('next_line_in_m'),  # D-754
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
+            elif turn_deg is not None:  # D-759 rev 1: a turn's exit heading, placed at receipt too
+                self._place_map_entry(self._junction, (expect or {}).get('map_entry'), current)
             # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
             # without an instruction (SIM: a left/right hint stopped it bridging the corner before
             # the bend), and a bridge tick in the lead window hands over (CAMERA_HOLDS).
@@ -395,8 +401,19 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
 
     def _maneuver(self, j, now, decision):
         pose = self._fresh_pose(now)
-        if pose is None or (self._return_evidence.epoch, pose.frame) != j['key']:
+        if pose is None and now - j.setdefault('gap_at', now) <= self._config.lost_after_s:
+            # an odom gap (SIM m27: 0.6 s) holds and the phase clock stands, up to the camera-loss bound
+            j['limit'] += now - j.get('gap_tick', now)
+            j['gap_tick'] = j['tick_at'] = now  # review: the gap is not also a regulated wait
+            return self._junction_hold('junction_pose_gap', decision)
+        key, seen, gapped = pose and (self._return_evidence.epoch, pose.frame), j.get('seen'), j.pop('gap_at', None)
+        j.pop('gap_tick', None)
+        if gapped is not None and key and seen and key != j['key'] and key[1] == j['key'][1] and math.hypot(
+                pose.x-seen[0], pose.y-seen[1]) <= REKEY_M and abs(math.remainder(pose.yaw-seen[2], math.tau)) <= REKEY_RAD:
+            j.update(key=key, last=None)  # a gap > 0.5 s splits the trail (D-468); held at zero it is the same place
+        if pose is None or key != j['key']:
             return self._abort(j, 'odom', decision)
+        j['seen'] = (pose.x, pose.y, pose.yaw)
         refusal = self._maneuver_refusal(now)
         if refusal == 'stuck' and j['state'] == 'reacquiring':
             # The lane stayed out of view past lost_after_s: D-407 asks the console. That is a
