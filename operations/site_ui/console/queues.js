@@ -141,7 +141,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-540 (d): a trip Fleet stopped (lease lost, stall, junction …) until the robot's next trip; not arrive/cancel.
     const ended = endedTripText(view, robot.robot_id);
     if (ended) items.push({ severity: "warn", text: `: ${ended}` });
-    const trip = openTrip(view, robot.robot_id);  // D-763 rev 2 Q7: past its bound the resolver acts; 개입 is its hand-off
+    const trip = openTrip(view, robot.robot_id);  // D-763 rev 2 Q7: past its bound a warn row; 개입 is the resolver's hand-off
     if (trip?.wait?.over_bound) items.push({ severity: "warn", text: `: ${tripWaitText(trip)}` });
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     if (localizationUrgent(robot.localization)) {

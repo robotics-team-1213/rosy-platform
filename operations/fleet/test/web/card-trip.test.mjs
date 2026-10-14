@@ -88,6 +88,6 @@ test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no �
   assert.deepEqual(attentionItems(robot()), []);  // a wait within its bound is no exception
   view.trafficTrips = [wait("crosswalk_wait", false)];
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),
-    ["warn: 대기 상한 넘음 · 막힘 해결 중 · 횡단보도"]);
-  assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false)] }, "a"), "대기 상한 넘음 · 막힘 해결 중 · 신호");
+    ["warn: 대기 상한 넘음 · 횡단보도"]);
+  assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false)] }, "a"), "대기 상한 넘음 · 신호");
 });
