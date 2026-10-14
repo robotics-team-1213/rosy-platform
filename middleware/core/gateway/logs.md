@@ -1101,3 +1101,11 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다. `trip_lease.py` 315줄 → 318줄.
 - 결정: D-760 Decision 2. 잠금 순서는 차선 관리자 잠금 → 임대 잠금 한 방향이다(임대는 자기 잠금을 놓은 뒤에만 `halt`를 부른다).
 - 교훈: `fleet.trip_lease_required`만 켜고 `fleet.traffic.authority`를 끈 현장에 이 CORE를 올리면 lane trip 로봇이 `authority_none`으로 서 있다. Fleet 출발 검사(`TRIP_AUTHORITY_SITE_OFF`)는 아직 `line_follow_authority_required`만 본다(3단계).
+
+## 2026-10-14 · 8a73125e6 · 임대가 첫 통행권 전에 끝나도 로봇은 서 있다 (D-760 2단계 안전 검토 M1, API v1.225)
+
+- 변경: 코드 변경 없음(`core/trip_lease.py`의 묶음은 그대로). 차선 관리자가 강제를 세션에 래치하므로, `TripLeaseManager.end()`가 임대를 지운 뒤 `halt`가 차선 추종을 끄기 전의 틈에서도 통행권 문이 명령을 0으로 둔다.
+- 증거: `test_trip_lease.py` — 만료와 인수 각각에서 `halt`가 불리는 순간(임대 없음, 차선 추종 켜짐) 문이 0을 낸다. 해제(DELETE) 뒤에도 `authority_none`이고 모드를 바꾼 뒤에만 풀린다. `test_line_authority_api.py` — `seq`를 본 구간의 `seq` 없는 요청은 `seq_required`, 쥔 것 없는 `shrink`는 `shrink_none_held`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE·호스트 근거만이다.
+- 결정: D-760 Decision 2.
+- 교훈: 없음.

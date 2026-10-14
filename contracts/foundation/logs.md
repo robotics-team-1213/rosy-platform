@@ -693,3 +693,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3("플래그가 없는 로봇에는 `ttl_s` 2로 보낸다").
 - 교훈: 공유 상수의 값을 바꾸기 전에 그 이름을 가져다 쓰는 곳을 모두 찾는다. 상한 하나가 참고 신호의 상한과 Fleet 송신값을 같이 옮겼다.
+
+## 2026-10-14 · 8a73125e6 · 통행권 응답 사유 seq_required·seq_legs_full·shrink_none_held (D-760 2단계 안전 검토, API v1.225)
+
+- 변경: `core_common/protocol/line_authority.py`의 `shrink`·`seq` 설명만 고쳤다(필드와 범위는 그대로). 응답 `reason`은 자유 문자열이라 schema 변경이 없다.
+- 증거: `middleware/core/gateway/test/test_line_authority_api.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-760 Decision 3. API Reference v1.225 절.
+- 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.

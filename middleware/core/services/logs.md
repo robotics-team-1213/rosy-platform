@@ -1054,3 +1054,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. Gazebo·장치 수용은 미검증이다. `authority.py` 165줄 → 175줄. 크기 단위 `drive/behaviors/line_follow`는 3167줄 → 3177줄로 한도 3168을 넘는다(`test_size_verdicts_are_well_formed_and_current` 실패). 디스패처가 아는 실패이고 `refactor/line-follow-crosswalk-unit`이 자리를 낸다. 이 브랜치에서 판정을 고치지 않았다.
 - 결정: D-760 Decision 2·3, Open 1(장치의 `ttl_s` 시계는 `time.monotonic`이다. `core/bridge/traffic_gate.py::line_clock`, `test_line_follow_sim_clock.py`가 고정한다. D-517 4항 구현 노트의 "장치에서는 ROS 시계"는 틀렸고 `use_sim_time`일 때만 ROS 시계다). Open 2는 바꾸지 않았다: 통행권 문은 교차로 회전·접근·굽이·호의 명령도 0으로 만든다. 교차로 기동은 그동안 기동 시계가 서고(합계 `crosswalk_report_s + crosswalk_clear_s`까지) 그 뒤 `timeout`으로 중단된다. 호는 시계가 서지 않아 `length_m`/v + 2 s 뒤 `lane_arc_timeout`으로 멈추고 다시 열리지 않는다.
 - 교훈: 순서 번호는 "받았다"가 아니라 "봤다"로 기억해야 한다. 받은 것만 기억하면 거절된 줄이기 뒤의 늦은 늘리기가 통행권을 되살린다.
+
+## 2026-10-14 · 8a73125e6 · D-760 2단계 안전 검토 반영: 임대 래치, 구간별 seq 기억, 줄이기는 주지 않는다 (API v1.225)
+
+- 변경: `line_follow/authority.py`. (M1) 임대 중 강제를 차선 세션에 래치한다: 모드를 고를 때 임대가 열려 있거나(`_init_authority`) 문이 임대가 열린 것을 한 번 보면(`_authority_on`) `_authority_seen`이 참이 되고 모드 변경까지 남는다. 임대가 첫 통행권 전에 풀림·만료·인수로 끝나도 로봇은 `authority_none`으로 서 있다. (M2) `seq` 기억을 구간별 사전으로 바꿨다(`SEQ_LEGS` 8개). 어떤 구간을 마지막으로 본 CORE 벽시계 시각이 odom 기록의 가장 오래된 표본보다 앞일 때만 지운다. 그 구간의 늦은 요청은 그 시각보다 앞선 `pose_stamp`를 실으므로 `AUTHORITY_POSE_STALE`로 거절된다. 지울 수 없는 구간이 8개면 새 구간은 `seq_legs_full`로 무시한다. `seq`를 본 구간의 `seq` 없는 요청은 `seq_required`로 무시한다. (M3) 같은 구간·같은 odom 궤적의 만료 전 통행권이 없을 때의 `shrink`는 통행권을 만들지 않고 쥔 것도 버린다(`shrink_none_held`).
+- 증거: `test_line_authority.py` 11건 추가·1건 고침(임대가 끝난 뒤에도 정지, 모드 변경 때의 래치, 옛 구간의 늦은 요청, 기록 밖으로 나간 구간만 잊음, 9번째 구간 거절, `seq` 없는 요청 무시, `shrink` 세 경우, 문은 0인 결정을 올리지 않음). `test_junction_bend.py`(통행권 정지 중 기동 시계가 15 s까지 서고 `timeout`, HOLD `junction_aborted`), `test_lane_arc.py`(호는 시계가 서지 않아 `lane_arc_timeout`, 통행권이 돌아와도 HOLD). 변이 시험 표와 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. `authority.py` 175줄 → 192줄. 크기 단위 `drive/behaviors/line_follow`는 이 브랜치에서 모두 +27줄이다.
+- 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
+- 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
