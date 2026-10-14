@@ -1,4 +1,4 @@
-﻿"""Immutable, permission-bound HF downloads; no external accounts or scripts."""
+"""Immutable, permission-bound HF downloads; no external accounts or scripts."""
 import hashlib
 import json
 import sqlite3

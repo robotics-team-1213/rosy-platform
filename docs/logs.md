@@ -8346,6 +8346,46 @@ osy-d395-s1d\`.
 - 증거: 실제 API, SQLite, HTTPS Chromium 통합 10개 통과. 권한 회수 후 열린 WS가 15초 이내 종료됨을 검증했다. 원격 로그는 X: account-pipeline--063948 세션에 보관한다.
 - gate 변화: SOURCE와 원격 시험 증거만 추가. CI, 배포, 실제 Android app-link와 현장 사용자 수용은 별도다.
 
+## 2026-10-14 · uncommitted · OMX 시뮬레이션 경로 조사와 준비
+
+- 변경: 기존 Gazebo/Pilot·녹화·LeRobot·ACT·Isaac 코드를 대조하고 재현 경로를 plans/2026-10-14-omx-simulation-preparation.md에 정리했다. 최신 ROBOTIS Zenoh 안내와 고정 Jazzy/CycloneDDS의 차이, native/SIM 단위 경계를 명시했다.
+- 증거: Compose 해석·vendor 패치·모델 입력 검사 성공, 원격 baseline 19 passed. 새 live SIM은 메모리 여유 부족으로 미확인이다.
+- gate 변화: 없음. D-756 부록은 실행 재개 조건이며 장치나 정책 수용이 아니다.
+
+## 2026-10-14 · 91995a99e · OMX SIM 준비 검증·보류 기록
+
+- 변경: 계획과 D-756 부록에 129개 원격 통과, 독립 소스 리뷰, 모델 PC Docker 소켓 거부 및 별도 build 환경 필요를 기록했다.
+- 증거: NEW 0. 상세 경로는 plans/2026-10-14-omx-simulation-preparation.md에 있다.
+- gate 변화: 실제 Gazebo·Isaac USD import·정책 closed-loop·실물/HF 수용은 미확인이다.
+
+## 2026-10-14 · e1b6c97fe · 워크트리 관문 도구와 손실 없는 청소 (D-761 Proposed)
+
+- 변경: `tools/worktrees.py`(`status`, `prune`, `new`)를 추가했다. `tools/land.py`는 착지를 시작할 때 손실 없는 청소를 돌리고(`--no-prune`), harness lint는 상한 40이나 치울 워크트리가 있으면 경고한다. `AGENTS.md` 「같이 하는 깃」 1·6번, `docs/reference/shared-checkout.md`, `rosy-land-on-main` 스킬을 이 도구로 바꿨다.
+- 증거: e1b6c97fe 원격 `test/test_worktrees_tool.py test/test_land.py` 55 passed, NEW 0. 변이 커밋 c3b446996(gitignore 판정, 임시 인덱스 `add -A`, 실행 중 워크트리 보호 제거)에서 해당 시험 4개 실패를 확인했다.
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소의 워크트리에 `prune`을 실행한 적은 없다.
+- 결정: D-761은 Proposed다. 착지와 push는 디스패처의 독립 리뷰 뒤에 한다.
+
+## 2026-10-14 · 103375895 · 워크트리 관문 도구 리뷰 반영 (D-761 Proposed)
+
+- 변경: `land.py`와 `new`는 치울 수 있는 워크트리를 알리기만 하고 `--prune`일 때만 지운다. 기본 쉰 시간 72시간, `logs/HEAD` 없으면 활동 중, 지우기 직전 재확인, sha로 브랜치 삭제, `.omc`와 깊은 `build`·`install`·`log`·`dist`는 캐시가 아님, orphan 디렉터리, 스냅샷은 `refs/wip`, 중첩 저장소·진행 중 작업 거절, 청소 잠금, 소유자 기록. D-761과 절차 문서 세 곳을 같이 고쳤다.
+- 증거: 원격 `test/test_worktrees_tool.py test/test_land.py` 69 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\3`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 독립 리뷰의 17개 항목을 반영했다. 착지와 push는 디스패처가 한다.
+
+## 2026-10-14 · ffb2a9f80 · 워크트리 청소의 소유자 범위와 상한 60 (D-761 Proposed)
+
+- 변경: `prune`은 `new`가 적은 소유자 기록이 호출한 쪽과 같은 워크트리만 다루고 `--all`일 때만 남의 것과 소유자 없는 것을 다룬다. `status`는 소유자와 지울 수 있는지를 보여 주고, main을 머지한 끝 커밋을 표시한다. 상한 거절은 치울 수 있는 개수를 소유자별로 찍는다. 상한을 60으로 올렸다. D-761과 절차 문서 세 곳을 같이 고쳤다.
+- 증거: ffb2a9f80 원격 `test/test_worktrees_tool.py test/test_land.py` 72 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\6`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 2026-10-14 세션 간 ADR 논의의 세 항목을 반영했다. 착지와 push는 디스패처가 한다.
+
+## 2026-10-14 · 43c9e729f · 소유자 확인은 `--snapshot`에만 둔다 (D-761 Proposed)
+
+- 변경: 손실 없는 `prune --apply`는 소유자를 가리지 않고 조건을 만족하는 워크트리를 지운다. 소유자 확인과 `--all`은 스냅샷이 필요한 행에만 적용한다. `status`의 `you` 열, 상한 거절 문구, D-761 3항·5항·Consequences, 절차 문서 세 곳을 같이 고쳤다.
+- 증거: 43c9e729f 원격 `test/test_worktrees_tool.py test/test_land.py` 73 passed, NEW 0 (`X:\DevTemp\land-recent\wtgate\9`).
+- gate 변화: 없음. 임시 저장소 시험이다. 실제 저장소에 `prune`이나 `new`를 실행한 적은 없다.
+- 결정: 세션 id가 세션마다 달라 소유자를 따지면 아무것도 치워지지 않는다는 디스패처 지적을 반영했다.
+
 ## 2026-10-14 · 4bb927152 · docs: D-762 main 관문(PR·merge queue 단계), D-584 개정, 보류·보관 브랜치 목록
 
 - 변경: `docs/main-gateway-adr`에서 D-762(Accepted: 끝 상태는 브랜치마다 PR과 merge queue, 공유 로컬 main 폐지, 에이전트의 비관리자 신원, 관문 경로의 작성자 아닌 code owner 승인, 단계 0–5)를 쓰고 ADR Log 행을 넣었다. D-584에 2026-10-14 개정 절을 붙였다(실험실 노트북의 규칙, 들이는 증거는 PR CI). `.github/CONTRIBUTING.md`와 README 「시작하기」에 오늘의 경로(서버는 CI를 요구하지 않음, `tools/land.py` 로컬 착지는 이행 경로)와 끝 상태를 적었다. `reference/held-branches.md`(보류 5개, 2026-10-14 보관 25개, 태그와 wip 스냅샷은 실험실 clone에만 있음)와 교훈 `solutions/workflow-issues/a-rule-that-only-works-if-everyone-follows-it-is-not-a-gate-2026-10-14.md`를 추가했다. `adr_gaps.txt`에 다른 세션이 선점한 D-760, D-761을 넣었다.
