@@ -32,7 +32,8 @@ def test_trip_rows_carry_state_robot_reason_and_the_wait_answer(tmp_path):
                                                   "bound_s": 20.0, "over_bound": False})
     _trip(client, "t-over", "running", 1_001.0, {"reason": "authority", "waiting": False, "bound_s": 8.0,
                                                   "over_bound": True})
-    _trip(client, "t-stop", "stopped", 1_002.0, reason="stall")
+    _trip(client, "t-stop", "stopped", 1_002.0, {"reason": "signal", "waiting": False, "bound_s": 20.0,
+                                                  "over_bound": True}, reason="stall")  # kept from its last tick
     _trip(client, "t-done", "arrived", 1_003.0)
     body = _work(client, "viewer-secret")
     trips = _rows(body, "trip")
@@ -41,6 +42,7 @@ def test_trip_rows_carry_state_robot_reason_and_the_wait_answer(tmp_path):
     assert [trips[key]["visible_state"] for key in ("t-wait", "t-over", "t-stop", "t-done")] == [
         "waiting", "in_progress", "intervention", "ended"]  # past the bound: a warning, not 개입 (rev 2 Q7)
     assert trips["t-stop"]["reason"] == "stall" and trips["t-stop"]["device_id"] == "rosy_01"
+    assert trips["t-stop"]["wait"] is None and trips["t-over"]["wait"]["over_bound"] is True  # only an open trip waits
     assert trips["t-done"]["action_kind"] == "trip" and trips["t-done"]["updated_at"].startswith("1970-01-01T00:16:43")
     assert "since" not in str(trips["t-wait"]["wait"]) and "operator-1" not in str(trips)
     assert [row["source_id"] for row in body["rows"]][:2] == ["t-done", "t-stop"]
@@ -154,3 +156,27 @@ def test_ledger_and_stored_trip_reads_run_off_the_event_loop(tmp_path, monkeypat
     body = _work(client, "op1-secret")
     assert _rows(body, "trip") and _rows(body, "cell_job") and _rows(body, "task") == {}
     assert on_loop == []
+
+
+def _detail(client, job, token):
+    return client.get(f"/api/fleet/cell-jobs/{job}", headers={"Authorization": f"Bearer {token}"})
+
+
+def test_cell_job_detail_follows_the_list_scope_and_never_shows_the_proposer(tmp_path):
+    """Review blocker: the row's detail read may not widen the list's scope or leak the proposer (rev 2 Q6)."""
+    named, _ = _app(tmp_path)
+    job = _resolved(named, "cell-secret", _cell_candidate())
+    shared, tasks = _app(tmp_path, named=False, console_token="shared-secret")
+    own = _detail(named, job, "cell-secret")
+    assert own.status_code == 200 and own.json()["job"]["proposal_principal_id"] == "cell-service"
+    other = _detail(named, job, "op1-secret")
+    assert other.status_code == 200, other.text
+    assert "proposal_principal_id" not in other.json()["job"] and "cell-service" not in other.text
+    assert other.json()["job"]["steps"]  # the plan stays: the detail scope is otherwise unchanged
+    assert _detail(named, job, "viewer-secret").status_code == 404
+    assert _detail(shared, job, "shared-secret").status_code == 404  # an unnamed operator: not another's PROPOSED job
+    assert _post(named, f"/api/fleet/missions/{job}/reject", "op1-secret",
+                 {"expected_generation": _generation(tasks)}).status_code == 200
+    later = _detail(shared, job, "shared-secret")
+    assert later.status_code == 200 and "cell-service" not in later.text
+    assert _detail(named, job, "viewer-secret").status_code == 404

@@ -3690,7 +3690,7 @@
 - 변경: `_waiting`이 세 키를 지역값으로 계산해 한 번에 쓴다. `_step` 맨 앞의 None 초기화를 지우고, `_tick_robot`이 그 step이 `_waiting`에 닿지 않았을 때만(`live.waited`) 세 키를 None으로 둔다. tick 도중의 읽기는 앞 tick의 답을 본다(깜빡임 없음). `over_bound`는 규제나 `link_wait`가 지금 보고될 때만 참이다. 기다림의 시작은 사유가 바뀌어도 그대로다. 정체 규칙이 읽는 `_waiting`의 반환 식은 같다. 서버 순증 0(`trip_runner.py` +2, `trip_progress.py` 주석 −2).
 - 증거: 원격 시험(모델 PC, f79947c25) 218 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 느린 자세 읽기 도중의 읽기가 `waiting: true`. 보고가 그친 사이에는 `over_bound`가 거짓이라고 시험을 바꿨다(이전 시험은 참이라고 고정했다).
 - gate 변화: 없음.
-
+
 ## 2026-10-15 · 868461505 · D-763 조각 4: 작업 읽기에 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (API v1.235)
 
 - 변경: `GET /api/fleet/work`가 Task·Mission에 더해 trip(저장된 최근 것 + 열린 것 전부)과 Cell Job을 읽는다. 행마다 `visible_state`(D-763 8), trip 행은 `wait`(v1.232의 네 키, `since` 없음), `PROPOSED` 행은 등록부 `approval`. 응답에 `cell_jobs_available`·`kinds`(`trip`: 활성 지도 장소 + trip 능력을 알리는 로봇, `CELL_TRANSFER`: 단계 하달 열림 + 하달기 + OMX 설정). Cell Job 범위는 서버가 정한다: 제안자, `PROPOSED`가 아닌 행은 운영자(cell-jobs 상세와 같다), `PROPOSED` 행은 이름 있는 운영자(개정 2 질문 6). 제안자 신원은 쿼리 밖으로 나가지 않는다. `work_routes.py`를 같은 종류의 경로가 있는 원장 holder(`ledger/`)로 옮겼다. 크기: 서버 31904→31880(순증 −24), 원장 7036→7123(상한 7135), 기준값은 올리지 않았다.
