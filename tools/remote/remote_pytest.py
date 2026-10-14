@@ -95,7 +95,8 @@ git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fe
 cat > "$R/runs/$NAME.bundle"
 git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
-git worktree remove --force "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship
+""" + remote_job.SWEEP + r"""git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked
+git worktree prune
 git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 """
 
