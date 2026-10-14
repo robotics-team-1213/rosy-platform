@@ -202,3 +202,68 @@ def test_reject_refuses_unnamed_principals_and_bad_bodies(tmp_path):
                  {"expected_generation": 1.0}, {"expected_generation": 0, "reason": "x"}):
         assert _post(named, f"/api/fleet/missions/{mission}/reject", "op1-secret", body).status_code == 422
     assert _reject(named, "missing", "op1-secret", 0).status_code == 404
+
+
+def test_admit_takes_the_strictest_approval_of_the_resolved_steps(tmp_path, monkeypatch):
+    client, tasks = _app(tmp_path)
+    mission = _resolved(client, "op1-secret", _er2_candidate())
+    service = client.app.state.mission_service
+    real_get = service.get
+    # A resolved PICK_PLACE row that also carried an arm step would need two people.
+    monkeypatch.setattr(service, "get", lambda mission_id: {**real_get(mission_id), "action_kind": "CELL_TRANSFER"})
+    body = {"expected_generation": _generation(tasks)}
+    own = _post(client, f"/api/fleet/missions/{mission}/admit", "op1-secret", body)
+    assert own.status_code == 403
+    assert own.json()["detail"]["code"] == "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"
+
+    job = _resolved(client, "cell-secret", _cell_candidate(), key="req-2")
+    store = client.app.state.cell_job_store
+    real_job = store.get
+    monkeypatch.setattr(store, "get", lambda mission_id: {
+        **real_job(mission_id), "steps": [*real_job(mission_id)["steps"], {"action_kind": "PICK_PLACE"}]})
+    mixed = _post(client, f"/api/fleet/missions/{job}/reject", "op2-secret", body)
+    assert mixed.status_code == 200 and mixed.json()["decision"] == "REJECTED_BY_OPERATOR"  # two_person wins
+
+
+def test_unregistered_step_kind_is_a_stable_409(tmp_path, monkeypatch):
+    client, tasks = _app(tmp_path)
+    mission = _resolved(client, "op1-secret", _er2_candidate())
+    monkeypatch.delitem(step_action_kinds._LEGACY_APPROVALS, "PICK_PLACE")
+    body = {"expected_generation": _generation(tasks)}
+    for route in ("admit", "reject"):
+        response = _post(client, f"/api/fleet/missions/{mission}/{route}", "op1-secret", body)
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "APPROVAL_RULE_UNREGISTERED"
+
+
+@pytest.mark.parametrize("kind", ["mission", "cell_job"])
+def test_rejecting_channel_linked_work_replies_to_the_requester(tmp_path, kind):
+    from contextlib import closing
+    from fleet.server.channel_replies import ChannelReplyOutbox
+    from test_cell_app_api import _refs
+    from test_cell_job_api import _setup
+    from test_channel_missions import config, prepare_mission
+    from test_mission_api import _client
+    if kind == "mission":
+        client, tasks, _ = _client(tmp_path, channel_config=config())
+        candidate = {"candidate": _er2_candidate()}
+    else:
+        client, tasks, _ = _setup(tmp_path, channel_config=config(), cell_app_service_id="cell-service")
+        candidate = _refs(client)
+    journal = client.app.state.channel_requests
+    journal.reply_outbox = outbox = ChannelReplyOutbox(journal)
+    _, path, body = prepare_mission(client)
+    body.pop("candidate")
+    work_id = _post(client, path + "/prepare", "operator-secret", {**body, "kind": kind, **candidate}).json()["work_id"]
+
+    rejected = _reject(client, work_id, "operator-secret", _generation(tasks))
+    outbox.observe_results()
+
+    assert rejected.status_code == 200, rejected.text
+    status = "CANCELED" if kind == "mission" else "HOLD"
+    with closing(tasks.store._connect()) as conn:
+        rows = conn.execute("SELECT kind, state FROM fleet_channel_reply_outbox WHERE kind=?",
+                            (f"{kind.upper()}:{status}",)).fetchall()
+        workflow = conn.execute("SELECT state FROM fleet_channel_workflow WHERE work_id=?", (work_id,)).fetchone()
+    assert [tuple(row) for row in rows] == [(f"{kind.upper()}:{status}", "PENDING")]
+    assert workflow[0] == "LINKED"  # the relation is final; the outcome travels as the reply
