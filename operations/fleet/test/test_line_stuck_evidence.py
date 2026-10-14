@@ -10,7 +10,7 @@ from hashlib import sha256
 
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_reads
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
@@ -92,6 +92,7 @@ def _client(robot, tmp_path):
                          sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"}})
     client = TestClient(app)
     client.app.state.fleet_gather.max_age_s = 0.0
+    fresh_reads(client.app)
     return client
 
 

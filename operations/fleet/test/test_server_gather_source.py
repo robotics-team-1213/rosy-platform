@@ -6,7 +6,7 @@
 
 import asyncio
 
-from fakes import FakeClock, FakeRobot, run
+from fakes import FakeClock, FakeRobot, fresh_reads, run
 from test_hub import _ep, _hello
 from fastapi.testclient import TestClient
 
@@ -57,6 +57,7 @@ def test_power_health_is_bounded_and_one_failure_does_not_hide_another_robot():
     assert good.calls.count(("power_health",)) == 2
     good.state_error = ConnectionError("offline")
     client.app.state.fleet_gather.max_age_s = 0.0
+    fresh_reads(client.app)
     assert _state_rows(client)[0]["power_health"] is None
 
 
