@@ -62,6 +62,7 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
         post=authority, destinations=('/accounts', '/'))
     config = accounts.config()
     config['account_subjects'] = {'central-alice': 'alice'}
+    config['public_origin'] = origin
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
     folder = tmp_path/'central-review'; folder.mkdir()
     server = make_server(open_store(folder), port, accounts=managed)
@@ -85,7 +86,10 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 page.goto(origin + '/accounts')
                 link = page.locator('[data-account-profile]')
                 expect = playwright.expect
-                expect(link).to_contain_text('Alice', timeout=15000)
+                try:
+                    expect(link).to_contain_text('Alice', timeout=15000)
+                except AssertionError:
+                    pytest.fail(f'Profile login failed at {page.url}: {page.locator("body").inner_text()[:1000]}')
                 expect(link).to_have_attribute('href', issuer + '/console/profile')
                 assert page.request.get(origin + '/api/accounts/session').json()['account_id'] == 'central-alice'
                 expect(page.locator('#import-panel')).to_be_hidden()
