@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.238
+**Version:** v1.237
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,7 +15,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
 
-### v1.238 작업 읽기의 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (D-763 조각 4, 8·9항)
+### v1.237 작업 읽기의 trip·Cell Job 출처, 보이는 상태, 승인 대기 범위, 새 작업 종류 (D-763 조각 4, 8·9항)
 
 `GET /api/fleet/work`(v1.208)의 출처에 `trip`과 `cell_job`을 더한다(additive). 응답 모델은 그대로 `FleetWorkOverview`/`FleetWorkSummary`(`core_common.protocol.schemas`)이고 필드가 늘었다.
 
@@ -215,7 +215,7 @@ CSRF 실패는403 `CSRF_REJECTED`, 초기 쿠키가 아닌 자격은403 `PASSWOR
 
 ### v1.208 D-664 · 공통 작업 읽기 (`GET /api/fleet/work`)
 
-`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다. v1.238(D-763 조각 4)부터 trip·Cell Job 출처와 그 범위는 v1.238 절을 따른다.
+`FleetWorkOverview` / `FleetWorkSummary`는 `core_common.protocol.schemas`의 additive 읽기 계약이다. 기존 Task/Mission 상태와 실행 API를 변경하지 않는다. viewer 이상이 조회하며 주행 Task는 기존 Task read 권한, Mission은 기존 Mission read와 동일한 principal 소유 범위 및 RESOLVED proposal을 요구한다. 다른 사용자의 Mission은 운영자에게도 이 목록으로 노출하지 않는다. v1.237(D-763 조각 4)부터 trip·Cell Job 출처와 그 범위는 v1.237 절을 따른다.
 
 `limit`은 정수 1–100, 기본 50이며 **원장별** 최근 행 수다. 응답은 `observed_at`(조회 UTC 시각), `tasks_available`, `missions_available`, `truncated_sources`(`task`/`mission`), `rows`(최대 200행)다. `observed_at`은 장치 센서의 관측 시각이 아니다. 원장 미설정은 available=false이며 빈 목록과 구별한다. 행은 `updated_at` 내림차순, source/source_id 내림차순으로 정렬한다. 전체 원장 스냅숏의 원자성 또는 두 원장 사이의 동일 시점은 보장하지 않는다.
 
@@ -2560,7 +2560,7 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
 | POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. Who may admit comes from the step-kind registry (D-763 item 7). |
 | POST | `/api/fleet/missions/{mission_id}/reject` | Named Operator | v1.230 (D-763 5b). Body `{expected_generation}`. End a `PROPOSED` Cell Job (HOLD/`CANCELLED_BY_OPERATOR`) or legacy Mission (`CANCELED`) without approval and without claims; the proposer withdraws (`WITHDRAWN_BY_PROPOSER`), another named operator rejects (`REJECTED_BY_OPERATOR`). Not `PROPOSED` or stale generation: 409 `MISSION_REJECT_REFUSED`. |
-| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.238 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
+| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. v1.237 (D-763 4): the same scope as the work list — the proposer; any operator for a Job that is not `PROPOSED`; only a named operator for another principal's `PROPOSED` Job (others 404 `CELL_JOB_NOT_FOUND`). A reader who is not the proposer gets no `proposal_principal_id` and sees the proposer as `actor_id: "proposer"` in events. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. |
 | POST | `/api/fleet/cell-jobs/{mission_id}/cancel` | Named Operator | End the Job: status HOLD with reason `CANCELLED_BY_OPERATOR` (terminal; no CANCELLED status until the D-420 v2 schema) and its claims released in the same transaction. Refused while a claim is DISPATCHING or UNKNOWN. |
@@ -3053,8 +3053,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.238 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
-| v1.236 | 2026-10-15 | Additive (D-763 조각 6, feat/fleet-job-holds-lease): `PUT /api/v1/trip-lease` 선택 필드 `job_id` — 작업의 lease는 단계 사이 IDLE에서 끝나지 않는다. 주인 아닌 토큰의 `POST /mode {IDLE}`는 어떤 lease든 끝낸다(`mode_left`). 상태 `trip_lease.job_id`, 능력 `base_velocity.trip_lease_job`. 통행권·목표 임대의 만료는 그대로다. v1.233–v1.238는 다른 작업이 선점했다. envelope 1.0 변경 없음. |
+| v1.237 | 2026-10-15 | Additive (D-763 조각 4, feat/fleet-work-read-sources): `GET /api/fleet/work`에 `trip`·`cell_job` 출처, 행의 `visible_state`·`wait`·`approval`, 응답의 `cell_jobs_available`·`kinds`. 두 사람 승인 `PROPOSED` Cell Job 요약 행은 제안하지 않은 이름 있는 운영자에게 보인다(개정 2 질문 6). 상세·본문 범위, 원장 상태, envelope 1.0 변경 없음. |
+| v1.236 | 2026-10-15 | Additive (D-763 조각 6, feat/fleet-job-holds-lease): `PUT /api/v1/trip-lease` 선택 필드 `job_id` — 작업의 lease는 단계 사이 IDLE에서 끝나지 않는다. 주인 아닌 토큰의 `POST /mode {IDLE}`는 어떤 lease든 끝낸다(`mode_left`). 상태 `trip_lease.job_id`, 능력 `base_velocity.trip_lease_job`. 통행권·목표 임대의 만료는 그대로다. v1.233–v1.237는 다른 작업이 선점했다. envelope 1.0 변경 없음. |
 | v1.234 | 2026-10-14 | Additive (D-758 0단계, fix/odom-log-monotonic-epoch, Safety-Review 대상): 스냅숏 `odom_pose.epoch`(odom 불연속 횟수)·`mono_s`(CORE 단조 수신 시각). CORE는 통행권·lane cue·호 기준의 odom 표본을 발행한 `odom_pose.stamp`로 찾고 나이·순서를 line-follow 시계로 잰다(벽시계 이동에 무관). 맞지 않는 stamp는 v1.226과 같다. Fleet 지도 자세 추적기는 `epoch`가 바뀌면 기준을 버린다. 요청·응답·envelope 1.0 변경 없음. |
 | v1.232 | 2026-10-14 | Additive (D-763 조각 2, feat/fleet-work-wait-read): trip 읽기의 `wait`에 `waiting`·`bound_s`·`over_bound`를 싣는다. 한 주기에 한 번 쓰고, 판정에 닿지 못한 주기에는 null이다. 상한을 넘은 기다림은 경고이고 개입이 아니다(개정 2 질문 7). |
 | v1.231 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 15° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 오늘의 목표다. v1.231. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
