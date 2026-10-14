@@ -314,8 +314,7 @@ def test_failed_remove_keeps_the_branch_and_reports_an_orphan(main, monkeypatch,
     assert (wt / "a.txt").is_file()
     shutil.rmtree(wt)
     wt.mkdir()
-    assert worktrees.prune(main, apply=True, now=LATER) == 0  # an orphan has no owner
-    assert worktrees.prune(main, apply=True, everyone=True, now=LATER) == 1
+    assert worktrees.prune(main, apply=True, now=LATER) == 1  # an empty orphan: anyone may remove it
     assert not wt.exists()
 
 
@@ -396,21 +395,35 @@ def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, m
     assert kept.is_dir()  # unmerged: `new` never snapshots
 
 
-def test_prune_takes_only_the_callers_worktrees_unless_all(main, capsys):
-    mine = add(main, "mine", commit=True, merge=True)
+def test_lossless_prune_takes_any_owners_finished_worktree(main, capsys):
     peer = add(main, "peer", commit=True, merge=True, owner="t <t@t>; session other")
     bare = add(main, "bare", commit=True, merge=True, owner=None)  # a bare `git worktree add`
     assert worktrees.main(["status"], now=LATER) == 0
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
-    assert "yes   removable" in line["mine"]
-    assert "--all removable" in line["peer"] and "[t <t@t>; session other]" in line["peer"]
-    assert "--all removable" in line["bare"]
+    assert "yes   removable" in line["peer"] and "[t <t@t>; session other]" in line["peer"]
+    assert "yes   removable" in line["bare"]
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0  # nothing left to lose, idle three days
+    assert not peer.exists() and not bare.exists()
+    assert refs(main, "refs/heads/feat") == []
+
+
+def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
+    mine = add(main, "mine", commit=True)
+    peer = add(main, "peer", commit=True, owner="t <t@t>; session other")
+    bare = add(main, "bare", owner=None)  # a bare `git worktree add`, with uncommitted work
+    (bare / "wip.txt").write_text("wip", encoding="utf-8")
+    assert worktrees.main(["status"], now=LATER) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert "yes   needs snapshot" in line["mine"]
+    assert "--all needs snapshot" in line["peer"] and "--all needs snapshot" in line["bare"]
     assert worktrees.main(["prune", "--snapshot", "--apply"], now=LATER) == 0
     out = capsys.readouterr().out
     assert "owner unowned: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
-    assert not mine.exists() and peer.is_dir() and bare.is_dir()
-    assert worktrees.main(["prune", "--apply", "--all"], now=LATER) == 0
+    assert not mine.exists() and peer.is_dir() and (bare / "wip.txt").is_file()
+    assert refs(main, "refs/wip") == []
+    assert worktrees.main(["prune", "--snapshot", "--apply", "--all"], now=LATER) == 0
     assert not peer.exists() and not bare.exists()
+    assert git(main, "show", f"refs/wip/{DAY}/bare:wip.txt") == "wip"
 
 
 def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, capsys):
@@ -421,6 +434,7 @@ def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, cap
     assert worktrees.main(["new", "x", "feat/x", "--no-prune"], now=LATER) == 1
     err = capsys.readouterr().err
     assert "removable, owner t <t@t>: 1" in err and "removable, owner unowned: 1" in err
+    assert f"you may remove all 2: {worktrees.SWEEP}" in err
 
 
 def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):

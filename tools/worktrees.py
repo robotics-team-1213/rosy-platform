@@ -18,9 +18,11 @@ also takes idle worktrees that are dirty or unmerged: the working files (modifie
 staged, untracked) go into a commit on top of the worktree's HEAD, built in a
 temporary index and kept as ``refs/wip/<date>/<name>`` (not a tag: ``git push
 --tags`` must not publish it); only a snapshot that matches the worktree lets it
-be removed. An unmerged branch is always kept. Both act only on worktrees the
-caller made (the owner note ``new`` writes: git identity plus agent session);
-``--all`` also takes peers' and unowned ones. Never removed: the main checkout,
+be removed. An unmerged branch is always kept. The lossless prune takes any
+owner's worktree: it has nothing left to lose and has been idle three days.
+``--snapshot`` takes a dirty or unmerged one only if the caller made it (the
+owner note ``new`` writes: git identity plus agent session); ``--all`` also
+takes peers' and unowned ones. Never removed: the main checkout,
 the worktree the tool runs in, a locked one, one on ``main``, one holding ignored
 non-cache files. Snapshots: ``git for-each-ref refs/wip``; restore with
 ``git worktree add <path> <ref>`` or ``git checkout <ref> -- .``.
@@ -58,8 +60,8 @@ GENERATED = {"build", "install", "log", "dist"}
 BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
 ZERO = "0" * 40
 SWEEP = "python tools/worktrees.py prune --apply"
-HINT = (f"see `python tools/worktrees.py status`; `{SWEEP}` removes only your own clean, merged, idle ones"
-        " (`--all`: peers' and unowned too); `--snapshot` is for a person or the dispatcher, not for every session")
+HINT = (f"see `python tools/worktrees.py status`; `{SWEEP}` removes only clean, merged, idle ones, whoever"
+        " made them; `--snapshot` is for a person or the dispatcher, not for every session")
 
 
 def git(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -326,8 +328,9 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
           everyone: bool = False, quiet: bool = False, now: float | None = None, say=print) -> int:
     """Remove (or, without ``apply``, list) what may go; return how many. ``quiet`` drops the KEEP lines.
 
-    Only the caller's own worktrees unless ``everyone`` (``--all``): a session at the cap must see
-    whose worktrees are removable, not delete a peer's. No owner note reads as unowned.
+    A lossless removal needs no owner: nothing is lost and the worktree sat idle for days. A row
+    that needs a snapshot (dirty or unmerged work) is taken only from its owner unless ``everyone``
+    (``--all``); no owner note reads as unowned.
     """
     now = time.time() if now is None else now
     day = time.strftime("%Y-%m-%d", time.localtime(now))
@@ -351,7 +354,7 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
                 if not quiet:
                     say(f"KEEP    {label} {row['verdict']}")
                 continue
-            if not everyone and row["owner"] != me:
+            if row["verdict"] == "needs snapshot" and not everyone and row["owner"] != me:
                 if not quiet:
                     say(f"KEEP    {label} {row['verdict']}, owner {row['owner'] or 'unowned'}: only with --all")
                 continue
@@ -386,11 +389,12 @@ def sweep(cwd: Path, apply: bool = False, now: float | None = None) -> None:
 # --- commands -------------------------------------------------------------------
 
 def _table(rows: list[dict], me: str, now: float, file=None) -> None:
-    """One line per row; ``you`` says whether the caller's plain prune may take it (yes) or only --all."""
+    """One line per row; ``you``: may the caller remove it (yes), only with --all, or not at all (-)."""
     for row in rows:
         owner = "; ".join(text for text in (row["owner"], row.get("note")) if text)
         branch = row["branch"] or ("(orphan)" if row["orphan"] else "(detached)")
-        you = "-" if not _takes(row, now, IDLE_HOURS, True) else "yes" if row["owner"] == me else "--all"
+        you = ("-" if not _takes(row, now, IDLE_HOURS, True)
+               else "yes" if row["verdict"] != "needs snapshot" or row["owner"] == me else "--all")
         print(f"{row['name']:<32} {branch:<44} {'merged' if row['merged'] else 'unmerged':<8} "
               f"{len(row['changed']):>5} {row['idle_h']:>6.0f}h {'locked' if row['locked'] else '-':<6} {you:<5} "
               f"{row['verdict']}" + (f"  [{owner}]" if owner else ""), file=file)
@@ -443,8 +447,10 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
               file=sys.stderr)
         _table(sorted(rows, key=lambda r: r["last"])[:10], _identity(root), now, file=sys.stderr)
         finished = [r["owner"] or "unowned" for r in rows if _takes(r, now, IDLE_HOURS, False)]
-        for owner in sorted(set(finished)):  # whose they are: a peer's are not this session's to remove
+        for owner in sorted(set(finished)):  # whose they were; clean, merged and idle, so anyone may sweep them
             print(f"removable, owner {owner}: {finished.count(owner)}", file=sys.stderr)
+        if finished:
+            print(f"you may remove all {len(finished)}: {SWEEP}", file=sys.stderr)
         print(f'{HINT}\nor, during an incident: add --force-over-cap "<reason>"', file=sys.stderr)
         return 1
     add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", "-b", branch, "main"]
@@ -491,7 +497,7 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
     pruner = sub.add_parser("prune", help="remove idle worktrees without losing work (dry run by default)")
     pruner.add_argument("--apply", action="store_true", help="act; without it the plan is printed")
     pruner.add_argument("--all", dest="everyone", action="store_true",
-                        help="also worktrees other sessions made, and ones with no owner note")
+                        help="with --snapshot: also worktrees other sessions made, and unowned ones")
     pruner.add_argument("--snapshot", action="store_true",
                         help="also take dirty or unmerged worktrees, after keeping uncommitted work under refs/wip")
     for command in (status, pruner):
