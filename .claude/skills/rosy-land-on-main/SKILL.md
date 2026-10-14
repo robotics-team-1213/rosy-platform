@@ -25,7 +25,7 @@ python tools/worktrees.py status                              # every worktree w
 
 - `new` (D-761, Proposed) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`) and removes nothing:
   it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (any owner's:
-  clean, merged into `main`, not locked, no ignored data, idle 72 h, so nothing is left to lose);
+  clean, merged into `main`, not locked, no ignored data, idle 72 h, so nothing is left to lose; your own landed worktree, with a commit of its own on its branch, needs no wait);
   `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and counts removable
   worktrees per owner; `status` shows each row's owner and whether you may remove it. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
   removes dirty or unmerged worktrees too, the caller's own unless `--all`: only a person or the dispatcher runs it.
@@ -113,8 +113,8 @@ digraph land {
 3. If git refuses because a peer's uncommitted file would be overwritten: leave that file.
    Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
 4. `tools/land.py` only reports finished worktrees when it starts (`--prune` removes them, `--no-prune`
-   is silent). Remove a landed worktree after leaving it, in the main checkout:
-   `git worktree remove .worktrees/<short-name>`, then `git branch -d <branch>`. A branch
+   is silent). Remove your landed worktree after leaving it, in the main checkout, with one command:
+   `python tools/worktrees.py prune --apply` (your own landed worktree goes at once, others' after 72 h). A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
 5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
    Local main ahead of `origin/main` has no CI evidence.

@@ -50,6 +50,7 @@ def main(tmp_path, monkeypatch):
 
 
 ME = "t <t@t>"  # the fixture's git identity; no agent session in the environment
+PEER = "p <p@p>"  # another session's worktree: only the 72 h rule applies to it
 
 
 def add(main: Path, name: str, commit: bool = False, merge: bool = False, owner: str | None = ME) -> Path:
@@ -221,7 +222,7 @@ def test_locked_worktree_is_never_removed(main):
 
 
 def test_idle_threshold_is_respected(main):
-    wt = add(main, "fresh", commit=True, merge=True)
+    wt = add(main, "fresh", commit=True, merge=True, owner=PEER)
     now = time.time()
     assert worktrees.prune(main, apply=True, snapshot=True, now=now) == 0
     assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 0
@@ -229,7 +230,7 @@ def test_idle_threshold_is_respected(main):
 
 
 def test_idle_counts_uncommitted_files_and_the_given_threshold(main):
-    wt = add(main, "fresh", commit=True, merge=True)
+    wt = add(main, "fresh", commit=True, merge=True, owner=PEER)
     now = time.time()
     assert worktrees.prune(main, apply=True, now=now + 100 * HOUR, idle_hours=200) == 0
     # An uncommitted file written an hour before the clock keeps the worktree active.
@@ -341,7 +342,7 @@ def test_the_worktree_the_tool_runs_in_is_never_removed(main, monkeypatch):
 
 
 def test_status_names_a_verdict_per_worktree(main, capsys):
-    add(main, "done", commit=True, merge=True)
+    add(main, "done", commit=True, merge=True, owner=PEER)
     add(main, "open", commit=True)
     git(main, "worktree", "lock", str(add(main, "held")))
     assert worktrees.main(["status"], now=LATER) == 0
@@ -501,7 +502,7 @@ def test_land_reports_finished_worktrees_and_removes_nothing(main, landing, caps
     out = capsys.readouterr().out
     assert f"1 finished worktree(s) can be removed: {worktrees.SWEEP}" in out
     assert "this worktree is now removable" in out and "&&" not in out  # PowerShell 5.1 has no &&
-    assert "\n  git worktree remove " in out and "\n  git branch -d feat/topic" in out
+    assert f"\n  {worktrees.SWEEP}" in out and "git worktree remove" not in out  # one command, not two
 
 
 def test_land_prune_sweeps_finished_worktrees_but_not_the_one_landing(main, landing):
@@ -527,3 +528,55 @@ def test_land_continues_when_the_prune_fails(main, landing, monkeypatch, capsys)
     assert land.main(["--tests", "none"]) == 0
     assert "worktree prune failed" in capsys.readouterr().out
     assert done.is_dir() and git(main, "rev-parse", "main") == git(topic, "rev-parse", "HEAD")
+
+
+# --- owner fast path and non-worktree entries under .worktrees/ ---------------------
+
+def test_owner_fast_path_takes_only_the_callers_landed_clean_worktree(main, capsys):
+    now = time.time()  # everything was made seconds ago
+    mine = add(main, "mine", commit=True, merge=True)
+    peer = add(main, "peer", commit=True, merge=True, owner=PEER)
+    empty = add(main, "empty")  # never committed: its tip is main's, so "merged" without any work landed
+    other = add(main, "sess", commit=True, merge=True, owner=f"{ME}; session other")
+    blind = add(main, "blind", commit=True, merge=True)
+    (main / ".git" / "logs" / "refs" / "heads" / "feat" / "blind").unlink()  # no reflog: no evidence
+    assert worktrees.main(["status"], now=now) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert "yes   removable" in line["mine"]
+    assert all("-     active" in line[name] for name in ("peer", "empty", "sess", "blind"))
+    assert worktrees.prune(main, now=now) == 1  # dry run
+    assert mine.is_dir()
+    assert worktrees.prune(main, apply=True, now=now) == 1
+    assert not mine.exists() and "refs/heads/feat/mine" not in refs(main, "refs/heads/feat")
+    assert all(wt.is_dir() for wt in (peer, empty, other, blind))
+    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 4  # the 72 h rule still takes the rest
+    assert not any(wt.exists() for wt in (peer, empty, other, blind))
+
+
+def test_owner_fast_path_waits_for_a_dirty_worktree_and_the_current_one(main, monkeypatch):
+    now = time.time()
+    dirty = add(main, "dirty", commit=True, merge=True)
+    (dirty / "note.txt").write_text("wip", encoding="utf-8")
+    here = add(main, "here", commit=True, merge=True)
+    monkeypatch.chdir(here)
+    assert worktrees.main(["prune", "--snapshot", "--apply"], now=now) == 0
+    assert dirty.is_dir() and here.is_dir()
+
+
+def test_dot_directories_and_plain_files_under_worktrees_are_not_worktrees(main, monkeypatch, capsys):
+    monkeypatch.setattr(worktrees, "CAP", 2)
+    holder = main / ".worktrees"
+    wt = add(main, "a", commit=True)
+    (holder / ".omc").mkdir()
+    (holder / ".omc" / "state.json").write_text("{}", encoding="utf-8")
+    (holder / ".empty").mkdir()
+    (holder / "README.md").write_text("stray", encoding="utf-8")
+    assert len(worktrees.scan(main)[1]) == 1  # the cap counts worktrees only
+    assert worktrees.main(["status"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert ".omc" not in out and ".empty" not in out and "README" not in out and "1 under" in out
+    assert worktrees.main(["new", "b", "fix/b"]) == 0  # 1 < cap 2: the junk is not counted
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER + 100 * HOUR) >= 1
+    assert (holder / ".omc" / "state.json").is_file() and (holder / ".empty").is_dir()
+    assert (holder / "README.md").is_file() and not wt.exists()

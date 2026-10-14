@@ -504,7 +504,7 @@ def land(args) -> int:
                              f"rounds: {round_no}", f"commits merged onto main: {count}",
                              f"main is now {landed}"]))
             print(f"[land] this worktree is now removable. After leaving it, from the main checkout {main_co}:\n"
-                  f"  git worktree remove {wt}\n  git branch -d {branch}")
+                  f"  {worktrees.SWEEP}")
             return 0
         if out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved before the fast-forward; merging again")
