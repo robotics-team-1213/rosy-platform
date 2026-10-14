@@ -64,3 +64,22 @@ D-511 개정 1–5의 lane cue가 들어오며 부모 단위가 3,357줄이 되�
 - import 방향: `crosswalk/zone.py`가 `recovery.lane_return`의 `_angle`을 쓰고, `recovery`(`lane_return_wiring`, `junction/approach`)와 `arc`가 `crosswalk.zone`을 쓴다. 모듈 순환은 아니다.
 - 조건: 새 횡단보도 로직은 `manager.py`가 아니라 crosswalk 단위에 둔다. crosswalk가 +150에 닿거나 `gate.py`가 600줄을 넘으면 순수 게이트(Zone/Scan/Geometry/judge/CrosswalkGate)와 mixin을 다른 파일로 나눈다. 부모가 다시 +150에 닿으면 `clearance.py`와 `body_stop.py`(759줄, D-422 몸 정지)를 자기 단위로 내보낸다. 수용만으로 넘기지 않는다.
 - 커밋 `75d15d3f4` 하나에는 옛 import 경로가 없어 시험 파일 셋이 그 커밋에서 import에 실패한다(bisect 주의). 다음 커밋이 고친다.
+
+## 2026-10-14 추가 — `line_follow/signal` 단위 (D-525/D-620 가상 신호의 CORE 쪽)
+
+`recovery/junction` 단위가 1,281줄로 한도(1,137 + 150 = 1,287)까지 6줄 남았다. 가상 신호에서 로봇이 `may_enter`를 받지 못하는 결함을 다음에 고쳐야 하는데 들어갈 자리가 없다. 횡단보도 때와 같은 방식으로 신호 코드를 자기 단위로 옮긴다.
+
+- 새 Python 하위 패키지 `core_features/line_follow/signal/`을 만들고 `SIZE_UNITS`에 더한다. 소스 자리는 `middleware/drive/behaviors/line_follow/signal/`이다. `crosswalk`, `cue`, `arc`와 같은 층이다.
+- 옮긴 파일은 하나다. `git mv`로 옮겼고 내용은 한 글자도 바뀌지 않았다.
+  - `recovery/junction/signal.py` → `signal/gate.py`(93, `JunctionSignalMixin`: Fleet 질의 episode, 답의 신선도, 3초 무응답 우회전 대체, 진입 확정)
+  - `signal/__init__.py`(1)를 더해 새 단위는 94줄이다.
+- import 줄 하나가 바뀌었다. `recovery/junction/gate.py`의 `from .signal import JunctionSignalMixin`이 `from core_features.line_follow.signal.gate import JunctionSignalMixin`이 되었다. 옛 경로를 import하는 제품 코드와 시험은 그 밖에 없다. 옛 경로에 호환 재수출 모듈을 두지 않는다.
+- 실측: `recovery/junction` 1,281 → 1,188줄(−93), 새 단위 0 → 94줄. 다른 단위(부모 `line_follow` 2,412, `crosswalk` 757, `cue` 379, `arc` 460, `recovery` 1,349, `recovery/stuck` 1,095, `recovery/stuck/realign` 295)는 그대로다.
+- `recovery/junction`에 남는 것: `gate.py`(519), `bend.py`(306), `approach.py`(263), `turn.py`(98), `__init__.py`(2). 신호와 닿는 줄은 `gate.py`에 남는다. `JunctionMixin`이 `JunctionSignalMixin`을 상속하고, `_junction_signal` 자리를 초기화하고 새 지시 때 비우며, 상태의 `signal_request_id`·`signal_state`를 채우고, 매 틱 `_signal_idle`과 `_signal_gate`를 부른다. 이 줄들은 교차로 상태 기계의 일부라 옮기지 않았다. 옮기려면 순서와 로직을 손대야 한다.
+- import 방향: `signal/gate.py`는 `core_common.protocol.schemas`만 import한다. `recovery/junction/gate.py`가 `signal.gate`를 import한다(junction → signal 한쪽). `manager.py`는 `signal`을 import하지 않고 mixin 메서드 `_signal_committed`를 부른다. 게이트웨이도 mixin 메서드(`junction_signal_request`, `junction_signal_answer`, `junction_signal_link_refused`)로만 닿는다. 모듈 순환은 없다.
+- 실행 중 결합은 그대로다. mixin은 `self`로 교차로와 매니저 상태(`_junction`, `_junction_signal`, `_bridge_hint`, `_mode`, `_config`, `_clock`, `_lock`)를 읽고 쓰며 `set_junction`을 부른다. 파일 자리만 바뀌었고 이 결합은 줄지 않았다.
+- 같은 도메인 규칙을 따른다. mixin은 `LineFollowManager`의 잠금과 세대 아래에서 돈다. 자기 잠금, 스레드, 전송, 저장소, 발행자가 없다. 프로세스나 런타임 소유의 이동이 없고 동작 변경이 없다. 설정 키(`junction_signal_enabled`), 상태 문자열, API, capabilities는 그대로다.
+- 설치: `core_features`의 `setup.py`는 `find_packages`로 `drive/behaviors/line_follow` 아래의 하위 패키지를 찾는다. `signal/__init__.py`가 있으므로 따로 등록할 것이 없다.
+- 이름: 패키지 이름 `signal`은 표준 라이브러리 `signal`과 같다. `core_features.line_follow.signal`로만 import되고 `line_follow/` 디렉터리는 `sys.path`에 오르지 않으므로 가리지 않는다. 옛 자리 `recovery/junction/signal.py`도 같은 조건이었다. `line_follow/` 안의 파일을 스크립트로 직접 실행하지 않는다.
+
+판정 상태: `SIZE_VERDICTS`의 `recovery/junction` 1,188과 새 단위 94는 제안값이다. 읽기 전용 critic의 독립 재판정이 아직 남아 있다. 검증은 `test/architecture/test_module_structure.py`의 실측이다. SOURCE 구조 증거이며 ROS-SIM·DEVICE·FIELD 수용을 뜻하지 않는다.
