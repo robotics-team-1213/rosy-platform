@@ -355,3 +355,46 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 공간 사전 점검은 목적지 ID와 다운로드·임시 복사·변환 추가 공간·업로드 예상 크기를 받는다. 로컬 세 항목은 같은 목적지 볼륨에 존재하는 사본으로 합산하고 reserve_bytes를 더한다. 공간을 예약하거나 전송하지 않는다. 실제 작업 시작 시 자원 재검사가 필요하다. 웹 경로 입력, 삭제, 외부 게시와 유료 증설을 제공하지 않는다.
 
 원격 quota는 미확인이 기본이다. 공식 quota API를 호출하지 않는다. 관리자가 수동 확인한 경우에만 remote_quota에 remaining_bytes, source(공개해도 되는 근거 설명), measured_at, expires_at(UTC epoch 초 정수)을 기록한다. 측정 전/만료 후에는 보류한다. 한 설정의 한 대상 quota이며 여러 계정 용량을 더하지 않는다. 업로드 요구량이 0이면 원격 quota는 점검하지 않는다. 최신 상태는 HTTP 401/403·오류가 발생하면 화면에서 지우고 재시도를 제공한다.
+# AI 실행과 저장 버전 조회 (D-764)
+
+객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
+실행 상태와 요청자·모델이 표시되며 완료 후 **AI 결과 목록 조회**로 후보 또는 참고 의견을
+불러온다. 조회·실행은 라벨 적용이나 승인이 아니다. 미저장 획·선택 영역은 먼저 저장하거나
+버린 뒤 요청한다. 실패 후 같은 실행 버튼으로 현재 revision의 새 작업을 만들 수 있다.
+**이 AI 작업 취소**는 결과 등록을 막고 worker를 중지한다. 이미 모델 서버가 받은 연산은
+종료될 때까지 남을 수 있다. 새 기능은 Tab 또는 Ctrl+K 기능 검색으로 접근한다.
+
+**전체 이력 · 이전 버전 비교**는 20건씩 과거 이력을 조회한다. 버전을 선택하면 작업자·상태와
+저장된 박스/마스크를 현재 화면과 비교할 수 있다. 과거 스냅샷이 없는 기록은 비교 불가로
+표시한다. 과거 기록 조회로 현재 검수 revision은 바뀌지 않는다.
+
+관리자는 모델 PC의 검증된 Python 환경과 기존 Qwen/SAM 설치를 사용해 private JSON을 만든다.
+`--review-ai-config <private-config>`로 지정하거나 설치 도구가 읽는 state의 `review-ai.json`에
+둔다. 설정이 없으면 실행 버튼에 이유가 표시되고 기존 검수는 계속 사용할 수 있다.
+등록값 예시는 다음과 같다(실제 주소·경로·계정은 공개 저장소에 넣지 않는다).
+
+```json
+{
+  "workspace_id": "<current-workspace-id>",
+  "python": "/absolute/model-venv/bin/python",
+  "model_digest": "<64-lowercase-hex-sha256>",
+  "sam_checkpoint": "/absolute/models/sam3.pt",
+  "sam_checkpoint_sha256": "<64-lowercase-hex-sha256>"
+}
+```
+
+SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopback endpoint는 기존 adapter의
+고정값을 사용한다. digest가 다르면 결과를 등록하지 않는다. 임의 명령·모델 URL·Python 경로를
+웹에서 입력할 수 없다. 작업공간마다 실행 하나만 허용하며 서버 재시작 시 미완료 작업은 실패로
+기록한다. 구버전 release로 돌아갈 때 설치 도구는 지원하지 않는 AI 옵션을 제거한다.
+객체 초안은 기존 adapter의 7클래스(robot/obstacle_box/cone/traffic_light/sign/person/obstacle)
+작업공간만 지원한다. 기존 6클래스 자료를 재해석하지 않는다. 새 자료는 별도 작업공간을 처음
+만들 때 `--object-classes learning/curation/perception/classes/object_review_obstacle_v1.yaml`로
+등록한다. 픽셀 보완·검사는 차선 내부 의미 체계만 지원하며 road_surface/1은 차단한다.
+협업 모드는 edit 권한으로 요청·취소하고 타인 작업 취소는 manage도 필요하다. 등록 직전에
+세션·권한을 다시 확인한다. 로컬 비협업 작업은 미인증 로컬 작업자로 표시한다.
+
+관련 HTTP 계약은 API reference D-764 부록, 시험은 `test_review_ai_jobs.py`,
+`test_review_ai_http.py`, `test_review_versions.py`, `test_review_ai_browser.py`다.
+pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
+필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.
