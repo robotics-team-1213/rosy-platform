@@ -560,8 +560,8 @@ def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(sit
         over = {**waiting, "wait": {**waiting["wait"], "reason": "signal", "over_bound": True, "waiting": False}}
         api["/api/fleet/trips"] = {"running": over, "trips": [over, LOST], "open": [over]}
         page.clock.run_for(1500)
-        expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 막힘 해결 중 · 신호")
-        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 막힘 해결 중 · 신호")
+        expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 신호")
+        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 신호")
         assert "대기 상한" not in page.locator("#critical-list").inner_text()
         assert not errors
         browser.close()
