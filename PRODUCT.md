@@ -32,7 +32,7 @@ ROSY의 모든 활성 사용자 표면은 **현대적이고, 쉽게 쓰이며, �
 
 ## Positioning
 
-현재 World는 관측·odom 기반 상태 projection을 제공하고 Fleet가 작업 원장을 소유하며 CORE와 OMX owner가 각 장치의 실행 경계를 지킨다. 행동 조건부 미래 예측은 후속 계획이다. 실제 소스 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md)을 따른다.
+현재 World(`operations/world`)는 받은 관측·운영자 pin·odom으로 지금 자세를 만든다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽고 작업 원장을 소유한다. CORE와 OMX owner가 각 장치의 실행 경계를 지킨다. 행동 조건부 미래 예측은 후속 계획이다. 층의 그림은 [README 「인지와 판단」](README.md#인지와-판단), 폴더 배치는 [현재 폴더 책임](docs/reference/platform-folder-responsibilities.md)이다.
 
 - 증거 기반 상태 표시: `fresh`/`delayed`/`disconnected`/`unavailable` 4상태를 값마다 구분하고 미확인을 정상으로 그리지 않는다.
 - CORE 단일 게이트웨이: 외부 클라이언트는 ROS를 말하지 않는다(CORE SRS §1.3).

@@ -64,10 +64,34 @@ def make_incident_worker(tmp_path, *, admitted=True, change=None, budget_calls=4
 
 
 async def settled(worker):
-    for _ in range(200):
+    # Hosted-runner I/O can exceed 400 ms; keep completion bounded by wall time.
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 5
+    while loop.time() < deadline:
         await asyncio.sleep(.002)
         if worker.idle: return
     raise AssertionError('worker did not become idle')
+
+
+def test_settled_allows_delayed_worker_completion():
+    class Worker:
+        idle = False
+
+    async def run():
+        worker = Worker()
+
+        async def finish():
+            await asyncio.sleep(.5)
+            worker.idle = True
+
+        task = asyncio.create_task(finish())
+        try:
+            await settled(worker)
+            assert worker.idle
+        finally:
+            await task
+
+    asyncio.run(run())
 
 
 def test_normal_and_unadmitted_have_no_model_calls_or_nominal_case_flood(tmp_path):

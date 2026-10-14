@@ -95,6 +95,7 @@ Rosy 우산 폴더는 제품 저장소, 동결 보관본, 릴리스 증거를 �
 - **문제와 근거:** `fleet.localization.map_pose` 문자열이 operations/tools/test의 추적 파일 35개에 남는다. 실제 소비자에는 `map_pose_service`, trip admission/progress/ports, swarm anchor와 시뮬 도구가 있다. 별칭은 중복 알고리즘이 아니지만 편집 위치를 Fleet으로 오인하게 한다.
 - **최소 조치:** D-738 10에서 생산 호출자와 시험/monkeypatch 대상을 World import로 이전한 뒤 별칭을 제거한다. 별칭부터 지우지 않는다.
 - **그대로 두면:** 이동이 끝난 구현을 Fleet에 다시 만들거나 단순 alias 제거로 소비자 import를 깨뜨릴 수 있다.
+- **이후:** D-752가 이 조치를 실행했다. 현행 소비자는 `rosy.world.state.projections.map_pose`를 직접 import하고, Fleet alias 파일은 없다. 위의 역할·근거는 기준 SHA의 발견으로 남긴다.
 
 ## 물리 잔여물·소유자 검토 필요
 
