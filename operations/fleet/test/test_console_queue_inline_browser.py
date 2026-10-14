@@ -278,17 +278,19 @@ LOW_CONTRAST = """selector => {
       return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); };
   const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const low = [];
+  let read = 0;
   for (const node of document.querySelectorAll(selector)) {
     if (!node.checkVisibility({visibilityProperty: true}) || node.closest('[disabled]')) continue;
     if (![...node.childNodes].some(child => child.nodeType === 3 && child.textContent.trim())) continue;
     const under = [];
+    read += 1;
     for (let at = node; at; at = at.parentElement) under.unshift(getComputedStyle(at).backgroundColor);
     const style = getComputedStyle(node), ground = lum(paint(under)), ink = lum(paint([...under, style.color]));
     const ratio = (Math.max(ground, ink) + 0.05) / (Math.min(ground, ink) + 0.05);
     if (ratio < (parseFloat(style.fontSize) >= 24 ? 3 : 4.5))
       low.push(`${node.tagName.toLowerCase()}#${node.id}.${node.className} ${ratio.toFixed(2)} "${node.textContent.trim().slice(0, 16)}"`);
   }
-  return low;
+  return {read, low};
 }"""
 
 
@@ -348,11 +350,16 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
             assert box["height"] >= 48 and box["y"] >= 0 and box["y"] + box["height"] <= height, box
             assert box["x"] >= 0 and box["x"] + box["width"] <= width and stop.evaluate(ON_TOP), box
             overflow = page.evaluate("document.documentElement.scrollWidth - innerWidth")
-            low = page.evaluate(LOW_CONTRAST, ".ui-subnav *, .doc-tabs *, .incident-panel *, #incident-side *")
+            seats = ".ui-subnav *, .doc-tabs *, .incident-panel *, #incident-side *"
+            contrast = page.evaluate(LOW_CONTRAST, seats)
             print(json.dumps({"size": size, "theme": theme, "subnav": reach, "seat": boxes, "stop": box,
-                              "overflow": overflow, "low_contrast": low}, ensure_ascii=False))
+                              "overflow": overflow, "contrast": contrast}, ensure_ascii=False))
             assert overflow <= 0, overflow
-            assert low == [], low
+            assert contrast["read"] >= 20 and contrast["low"] == [], contrast
+            # The measure itself: grey on grey in the seat heading must be reported, in a colour syntax tokens resolve to.
+            heading.evaluate("node => { node.style.color = 'color(srgb 0.5 0.5 0.5)'; node.style.backgroundColor = 'rgb(140 140 140)'; }")
+            assert any(line.startswith("h3") for line in page.evaluate(LOW_CONTRAST, seats)["low"])
+            heading.evaluate("node => { node.style.color = ''; node.style.backgroundColor = ''; }")
             controls["cause"].select_option("obstacle")
             controls["note"].fill("현장 상자 확인")
             controls["save"].click()
