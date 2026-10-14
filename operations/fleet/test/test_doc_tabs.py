@@ -60,19 +60,22 @@ def test_in_page_anchors_sit_in_the_shared_subnav_seat():
 
 
 def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
-    """D-741 7 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 /console/cell이고 그 문서가 현재 화면으로 표시한다."""
+    """D-741 7 / D-763 9 — 전체 작업·승인 대기·끝난 작업·새 작업. 새 작업은 종류 목록이고 Cell 문서는 그 아래에 놓인다."""
     screens = [("/console?view=work", "전체 작업"), ("/console?view=work&amp;show=pending", "승인 대기"),
-               ("/console?view=work&amp;show=done", "끝난 작업"), ("/console/cell", "새 작업")]
+               ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                   ("cell.html", '<div class="ui-subnav">', ["/console/cell"])):
+                                   ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
         assert seat, name
         links = re.findall(r'<a class="ui-subnav-item" href="(/console[^"#]*)"( aria-current="page")?>(.*?)</a>', seat.group(1))
         assert [(href, text) for href, _, text in links] == screens, name
         assert [href for href, mark, _ in links if mark] == current, name
-    cell = _page("cell.html").read_text(encoding="utf-8")
-    assert '<ui-text id="work-kind">새 작업의 종류 · Cell 적재.' in cell
+    # D-763 9: 종류는 실행할 수 있을 때만 선다. 이동은 꺼진 단추가 아니라 숨은 항목이고, Cell 적재는 /console/cell이다.
+    kinds = re.search(r'<ul class="work-list" aria-label="새 작업 종류">(.*?)</ul>', _page("index.html").read_text(encoding="utf-8"), re.S)
+    assert kinds and '<li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move"' in kinds.group(1)
+    assert re.findall(r'<a [^>]*href="([^"]+)">(.*?)</a>', kinds.group(1)) == [("/console/cell", "Cell 적재")]
+    assert "disabled" not in kinds.group(1) and 'id="work-kind"' not in _page("cell.html").read_text(encoding="utf-8")
     work_view = (WEB / "work-view.js").read_text(encoding="utf-8")
     assert 'pending: ["PROPOSED"]' in work_view and "doc-tabs" not in work_view
 

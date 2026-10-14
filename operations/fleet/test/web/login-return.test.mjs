@@ -17,6 +17,7 @@ test('return restores Fleet documents and existing work/inbox readers', () => {
   assert.equal(loginReturn('/console?view=work&inbox=1', origin), '/console?view=work&inbox=1');
   assert.equal(loginReturn('/console?view=work&show=pending', origin), '/console?view=work&show=pending');
   assert.equal(loginReturn('/console?view=records&show=facts', origin), '/console?view=records&show=facts');
+  assert.equal(loginReturn('/console?view=work&show=new', origin), '/console?view=work&show=new');  // D-763 새 작업
   assert.equal(loginReturn('/console?show=done', origin), '/console');
   assert.equal(loginReturn('/console?view=work&show=__proto__', origin), '/console?view=work');
 });
