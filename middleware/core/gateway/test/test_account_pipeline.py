@@ -190,7 +190,7 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
                 return original_post(endpoint, fields)
             receiver.post = unavailable_profile
             page.evaluate("import('/pilot/assets/client.js').then(module => module.restoreAccount())")
-            expect(page.locator('[data-account-profile]')).to_contain_text('?? ?? ??')
+            expect(page.locator('[data-account-profile]')).to_contain_text('\uc774\ub984 \ud655\uc778 \ubd88\uac00')
             assert page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             receiver.post = original_post
             cookies = context.cookies()
