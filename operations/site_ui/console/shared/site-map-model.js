@@ -105,7 +105,7 @@ const LEASE_END_LABEL = {
   core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
 export const TRIP_STATE_LABEL = {
-  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
+  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기',
 };
 const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
 export const TRIP_REASON_LABEL = {

@@ -3618,3 +3618,19 @@
 - Change: redundant module and bend_fields docstrings are shortened, retaining provider identities, both bend contracts and refusal conditions. All validation, geometry, error handling and safety rationale remain.
 - Evidence: non-docstring module AST equals the preceding candidate; independent integration_review approved the editorial-only cleanup. Final remote gate is pending.
 - Gate: no runtime or device claim.
+
+## 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
+
+- 변경: 임대를 쥔 trip에서 상태 읽기 실패나 로봇 호출 무응답은 trip을 끝내지 않고 `link_wait`로 둔다(`trip_progress._link_wait`). 그동안 교차로 지시·목표·늘린 통행권이 나가지 않고 블록 표에서 UNKNOWN이라 블록이 그대로 잡힌다. 끝내는 것은 `lease_lost`(기본 8 s)와, 임대 `ttl_s`를 넘겨 기다린 뒤의 정체 규칙뿐이다. 돌아오면 지도 버전과 차선 모드를 다시 보고(`trip_admission._link_back`) 실패하면 그 시작 거절 코드로 끝낸다. 정체 예외는 대기 사유→상한 표 하나(`_wait_bound`, 지금은 `link_wait`만). 송신기는 `seq`를 싣고 구간 id에 Fleet 프로세스 epoch를 넣는다. `line_follow_authority_shrink` 로봇에는 `ttl_s` 5와 `shrink`+`until_m` 0(답이 `accepted: true`일 때까지 주기마다), 없는 로봇에는 2와 옛 동작. 단계 중·`link_wait`·차선 켜기 전·시작 뒤 5 s에는 늘리지 않는다. 확인 전에는 지도 버전이 바뀐 로봇의 고정 블록이 마지막 `until_m`까지 덮는다. 출발 검사는 임대가 켜져 있으면 `line_follow_authority_under_lease`도 받는다. trip 임대 `ttl_s` 기본 8. 콘솔 상태 이름 `연결 대기`.
+- 증거: `operations/fleet/test/test_trip_link_wait.py` 새 시험(3·4.5·5.5 s 끊김 뒤 이어 감, 9 s `lease_lost`, 돌아온 뒤 모드·지도 버전 검사, 임대 없는 trip은 첫 실패에 끝, 임대가 살아 있는 동안 정체 아님, 블록 유지와 뒤 로봇 대기, 다섯 경우의 줄이기와 확인 뒤 멈춤, 플래그 없는 로봇 2 s·줄이기 없음, `seq`·재시작 뒤 새 구간, 재시작 뒤 5 s, 차선 켜기 전 통행권 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만. Gazebo·장치 수용 전, 독립 Safety-Review 전.
+- 결정: D-760 Decision 1·2·3·4·5와 개정 2. 기본값 `fleet.traffic.authority`·`fleet.trip_lease_required`는 그대로 false(6단계).
+- 교훈: 송신 주기가 단계 결과를 기다리는 동안의 로봇도 "보내지 않음"이 아니라 "줄임"의 대상이다.
+
+## 2026-10-14 · 58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: HIGH-1 연결 끊김은 무응답(`HubError`, `OSError`·시간 초과, `httpx.TransportError`)만이고 `ValueError`·`RuntimeError`는 지금처럼 `failed`다. `link_wait`의 `since`는 한 단계가 끊김 없이 끝날 때까지 남는다. MEDIUM-2 trip이 끝나도 정지가 확인되지 않았으면(`stop_sent`가 참이 아님) 마지막 늘리기의 송신 시각 + 5 s + 클라이언트 한도까지 고정 블록이 그 끝을 덮는다. MEDIUM-3 단계 중인 로봇에는 늘리기도 줄이기도 보내지 않는다(검토자 결정, ADR에는 검토자가 적는다). 작은 것: `shrink_none_held`는 확인으로 센다, 통행권이 켜져 있으면 trip 임대 `ttl_s`는 5 s보다 커야 한다, 돌아올 때 끊긴 뒤 보낸 임대 갱신이 확인되어야 한다, `link_wait` 동안 목표 임대를 갱신하지 않고 돌아오면 목표를 다시 보낸다.
+- 증거: `test_trip_link_wait.py`에 시험을 더해 먼저 원격에서 8건 실패를 보고(3aa6ff21b), 고친 뒤 trip·교통 묶음이 원격에서 통과했다(`known_failures` 0 new). 다리 확인과 `forget` 호출을 지우는 변이를 잡는 시험 두 건을 더했다.
+- gate 변화: 없음. 독립 Safety-Review 재확인 전.
+- 결정: D-760 Decision 3·4, 3단계 Safety-Review.
+- 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
