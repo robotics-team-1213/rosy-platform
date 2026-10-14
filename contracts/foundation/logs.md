@@ -701,3 +701,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3. API Reference v1.225 절.
 - 교훈: 앞 항목의 사실을 다시 적는다. 범위 밖 `ttl_s`(예: 5.01)는 400 `VALIDATION_ERROR`다. 422가 아니다.
+
+## 2026-10-14 · 775b1f3f6 · 능력 lane_turn_map_entry와 설정 turn_map_entry_enabled (D-759 개정 1, API v1.229)
+
+- 변경: `controls.py`의 `BaseVelocityControl`과 `pinky_controls`에 `lane_turn_map_entry`(없으면 wire에서 빠진다). `config/rosy_default.yaml`에 `line_follow.turn_map_entry_enabled: false`. `schemas.py`는 바꾸지 않았다(`map_entry_used`·`map_entry_reason`을 회전도 쓴다).
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 없음.

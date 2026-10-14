@@ -1091,3 +1091,11 @@
 - gate 변화: 없음. SOURCE 구조 근거만 더한다. `recovery/junction` 단위 1,281줄 → 1,188줄, 새 단위 94줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
 - 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 signal 추가와 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`의 2026-10-14 보탬.
 - 교훈: 신호 mixin의 파일은 옮겼지만 `_junction_signal` 자리와 호출 순서는 교차로 게이트에 남는다. 다음 수정이 그 줄을 건드리면 `recovery/junction` 단위가 자란다.
+
+## 2026-10-14 · 775b1f3f6 · D-759 개정 1 교차로 회전의 목표를 지도의 출구 방향에 둔다 (API v1.229)
+
+- 변경: `recovery/junction/bend.py` — `check_bend`가 `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받고, `_place_map_entry`가 회전에서는 `turn_map_entry_enabled`를 본다. `gate.py`가 회전 지시를 받을 때 방향을 둔다. `turn.py` — 정지 확인 뒤 목표를 `_map_entry_yaw`로 지도 방향에 둔다(오늘 목표와 30° 안, 받은 뒤 경로 1.5 m 안). 능력 `supports_lane_turn_map_entry`. `model.py`에 `turn_map_entry_enabled`(기본 `false`); bool 검사 넷을 한 반복으로 묶었다(문구 그대로).
+- 증거: Gazebo m18·m19(NW 출구, 물려받은 yaw 오차 0.07–0.10 rad, `junction_unresolved`)가 계기다. `test_junction_turn_map_entry.py`(0.08 rad 진입 오차에서 목표가 지도 방향, 없으면 오차가 남음, 30° 경계, `stale`, 설정 꺼짐 = 오늘과 같은 목표·움직임, 능력, 400). `test_junction_bend.py`의 `left`+`map_entry` 거절 시험은 `straight`로 바꿨다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. SIM과 장치는 미검증이다. 크기 단위 `recovery/junction` 1188 → 1200줄(한도 1287), `turn.py` 98 → 106, `gate.py` 519 → 521, `bend.py` 306 → 308. `line_follow` 단위 `model.py` 600 → 598.
+- 결정: D-759 개정 1(Proposed).
+- 교훈: 없음.
