@@ -77,7 +77,7 @@ def test_junction_state_carries_the_regulation_wait():
 
 
 def test_the_trip_read_carries_each_reason_and_its_bound_then_over_bound_past_it():
-    """D-763 2 (API v1.231): ``view.wait`` keeps the one predicate's answer the stall clock uses."""
+    """D-763 2 (API v1.232): ``view.wait`` keeps the one predicate's answer the stall clock uses."""
     for reason in ("crosswalk_look", "crosswalk_wait", "crosswalk_held", "signal", "authority"):
         p, live = _Progress(), _live(reason)
         bound = p._wait_bound(reason)

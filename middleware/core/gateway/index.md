@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
 - 2026-10-14 · 8a73125e6 · 임대가 첫 통행권 전에 끝나도 로봇은 서 있다 (D-760 2단계 안전 검토 M1, API v1.225)
 - 2026-10-14 · 1ee33639c · trip 임대가 열려 있으면 차선 추종이 통행권을 요구한다 (D-760 2단계, API v1.225)
 - 2026-10-14 · e60a7891e · line_follow.bend_map_entry_enabled 설정 읽기 (D-759 검토 반영, API v1.224)
 - 2026-10-14 · 0e59264da · D-400 active policy-gap clock rollback
-- 2026-10-14 · 06ce5334b · enforce 어댑터가 stale_hold_s를 안전 관리자에 넘긴다 (D-400 4항, API v1.223)
