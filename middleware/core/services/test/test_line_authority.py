@@ -545,3 +545,18 @@ def test_a_backward_wall_step_does_not_forget_a_legs_seq():
     rig.send(1., leg='L2', seq=1, stamp=stamp)
     assert set(rig.m._authority_seq) == {'L1', 'L2'}
     assert rig.send(2., leg='L1', seq=4, stamp=stamp)['reason'] == 'stale_seq'
+
+
+def test_after_a_backward_wall_step_an_unpublished_stamp_is_refused():
+    """D-758 0 review 3: "at or before" on a log whose wall stamps go back finds a sample after the step."""
+    rig = Rig()
+    for _ in range(3):
+        rig.step()
+    stamp = WALL + rig.now + .03  # an old Fleet's stamp between two samples, not a published one
+    rig.m._wall = lambda: WALL + rig.now - 5.
+    for _ in range(3):
+        rig.step(dx=.01)
+    with pytest.raises(AuthorityRefused) as err:
+        rig.send(.5, stamp=stamp)
+    assert err.value.code == 'AUTHORITY_POSE_STALE'
+    assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
