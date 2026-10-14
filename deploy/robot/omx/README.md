@@ -269,3 +269,118 @@ host HTTP tests are not Gazebo or physical acceptance.
 ## 실물 모방학습 준비
 
 녹화 설정 검사, native 검토·분할, ACT, private Hub 동기화는 [실행 안내](../../../learning/curation/omx/README.md)를 따른다. 실행 PC와 HF 조직은 미정이며 Pilot 실물 활성화는 별도다.
+
+## 재현 가능한 Pilot SIM 준비
+
+코드 위치·Gazebo/Isaac 선택·upstream 차이는 [조사와 계획](../../../docs/plans/2026-10-14-omx-simulation-preparation.md)에 있다.
+새 `compose.pilot-sim.yaml`은 hardware 서비스와 독립된 SIM 전용 입력이다.
+serial 변수 없이 해석할 수 있고 Pilot의 기존 서버·world·단일 owner를 사용한다.
+이 절차의 새 이미지 build와 live 실행은 아직 미확인이다.
+
+**실행 위치:** 노트북에서는 설정 검사만 한다. Gazebo는 D-568/D-571에 따라
+`python tools/remote/remote_sim.py --check`로 비현장 PC의 여유를 확인하고,
+`python tools/remote/remote_pytest.py --pick sim`으로 예약한 호스트에서만 실행한다.
+출력된 host가 현장 PC이거나 `~/rosy-jobs/site`가 있으면 중단한다.
+아래 Pilot 구성은 8 CPU/8 GiB 상한이다. placement의 6 CPU 최소 통과만으로
+충분하다고 간주하지 말고 다른 작업의 예약을 뺀 8 CPU/8 GiB 여유를 확인한다.
+공유 호스트에는 임의로 ROS/Docker를 설치하지 않는다.
+
+이미지 build는 먼저 별도 준비한다. Compose 서비스의 CPU·메모리 상한은 **build에는
+적용되지 않는다**. 아래 build 명령은 전체 자원을 독점 예약한 비현장 빌드 호스트에서만
+실행한다. 공유 모델/AI PC의 SIM 8 CPU/8 GiB 예약으로 build하지 않는다. 전용 builder가
+없으면 이미지 build를 보류한다. 이미지가 다른 PC에 있으면 `docker save`/`docker load`로
+전달하고 source lock·패치와 이미지 ID를 대조한다. 이 절차는 registry에 push하지 않는다.
+
+```bash
+# On the dedicated build host, from the clean committed checkout:
+export ROSY_SIM_SOURCE_REVISION="$(git rev-parse HEAD)"
+export COMPOSE_PROJECT_NAME="rosy-omx-sim-$(date +%s)-$$"
+omx_compose=deploy/robot/omx/compose.pilot-sim.yaml
+docker compose -f "$omx_compose" build vendor &&
+docker compose -f "$omx_compose" build pilot
+docker image inspect "$COMPOSE_PROJECT_NAME-pilot:local" --format '{{.Id}}'
+```
+
+선택한 SIM Linux 호스트의 `~/rosy-test` 아래에 같은 clean committed checkout과
+이미지를 준비하고 **위와 같은 COMPOSE_PROJECT_NAME**을 export한다.
+그 checkout의 루트에서 전용 터미널로 실행한다. 이 터미널을 닫으면 자기 project만
+내리고, 녹화 volume은 남긴다. 기존 작업의 컨테이너를 재시작하거나 종료하지 않는다.
+
+```bash
+test ! -e "$HOME/rosy-jobs/site" || exit 1
+test -z "$(git status --porcelain)" || exit 1
+export ROSY_SIM_SOURCE_REVISION="$(git rev-parse HEAD)"
+: "${COMPOSE_PROJECT_NAME:?set the project name used to build the images}"
+mkdir -p "$HOME/rosy-jobs" "$HOME/rosy-test/omx-evidence/$COMPOSE_PROJECT_NAME"
+omx_out="$HOME/rosy-test/omx-evidence/$COMPOSE_PROJECT_NAME"
+omx_lock="$HOME/rosy-jobs/$COMPOSE_PROJECT_NAME.lock"
+printf '%s sim 8 8\n' "$$" > "$omx_lock"
+omx_compose=deploy/robot/omx/compose.pilot-sim.yaml
+cleanup_omx() {
+  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$omx_compose" down
+  rm -f -- "$omx_lock"
+}
+trap cleanup_omx EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+set -e -o pipefail
+docker compose -f "$omx_compose" config --format json > "$omx_out/compose.json"
+docker image inspect "$COMPOSE_PROJECT_NAME-pilot:local" > "$omx_out/pilot-image.json"
+docker compose -f "$omx_compose" up -d --no-build --pull never pilot
+docker compose -f "$omx_compose" images --format json > "$omx_out/images.json"
+docker compose -f "$omx_compose" ps --format json > "$omx_out/containers.json"
+docker compose -f "$omx_compose" logs -f pilot | tee "$omx_out/pilot.txt"
+```
+
+`down`에 `-v`를 붙이지 않는다. project별 recording volume을 보존한다.
+장시간 unattended 실행기는 아니며 터미널·자원 lock의 소유자가 실행 종료를 확인한다.
+`remote_sim.py cmd`의 systemd scope는 Docker daemon 자원/수명을 소유하지 않으므로
+이 Compose를 그 안에 넣었다는 이유만으로 종료·자원 회수가 보장된다고 판단하지 않는다.
+
+두 번째 터미널도 같은 checkout 루트에서 **위와 같은 project 이름·source SHA·포트**를 설정한다. 기본 HTTP 포트 8088은
+기존 probe와 일치한다. 다른 SIM이 이미 사용하면 이를 중단하지 말고 이번 작업을
+미루거나 `OMX_PILOT_PORT`를 바꾸되 아래 기존 host probe는 8088 전용임을 유의한다.
+
+```bash
+export COMPOSE_PROJECT_NAME=<the-project-name-from-the-first-terminal>
+export ROSY_SIM_SOURCE_REVISION="$(git rev-parse HEAD)"
+export OMX_PILOT_PORT=8088
+omx_compose=deploy/robot/omx/compose.pilot-sim.yaml
+omx_container="$(docker compose -f "$omx_compose" ps -q pilot)"
+test -n "$omx_container"
+python3 deploy/robot/omx/probe_pilot_sim_http.py "$omx_container"
+# Each probe consumes the one-time pairing code; start a fresh server for recording.
+docker compose -f "$omx_compose" restart pilot
+# Wait for the server startup message in the first terminal, then:
+python3 deploy/robot/omx/probe_pilot_recording.py "$omx_container"
+```
+
+각 probe의 stdout/stderr와 exit code를 위 evidence 경로에 보존한다. 실패하면
+그대로 기록하고 영상 fps·state skew·owner 검사를 느슨하게 바꾸지 않는다.
+녹화 probe의 complete episode와 lease expiry로 생긴 incomplete episode를 구분한다.
+`SUCCEEDED`와 실제 joint readback을 함께 보고, 녹화는 frame 수·issues·원본 영상까지
+확인한다. incomplete를 학습에 넣지 않는다.
+
+수동 연습은 다시 서버를 restart한 뒤 컨테이너의
+`/run/rosy-omx-pilot/pairing-code`를 로컬 CLI로 읽어 `/pilot`에서 페어링한다.
+원격 PC일 때는 개발 PC에서 `ssh -N -L 8088:127.0.0.1:8088 <selected-sim-host>`로
+터널을 만들고 `http://127.0.0.1:8088/pilot`에 접속한다. 코드는 로그에 저장하지 않는다.
+각 관절 조작·그리퍼·영상 확인 후 Pilot 녹화 시작/종료로 시연을 남긴다.
+
+export 전에 자기 컨테이너를 stop해 녹화를 닫고, `docker cp`로 `/recordings/.`를
+새 evidence 디렉터리에 복사한다. 다음은 선택한 **complete** 원본 하나의 예다.
+`LEROBOT_PYTHON`은 별도 Python 3.12/LeRobot 0.4.4 CPU 환경이며 ROS 환경이 아니다.
+
+```bash
+export PYTHONPATH="$PWD/middleware/devices/omx/adapter:$PWD/contracts/foundation"
+"$LEROBOT_PYTHON" learning/curation/omx/lerobot_export.py \
+  <complete-episode-directory> <new-export-directory> --repo-id rosy-local/omx-sim
+```
+
+`rosy_export.json`의 `status=verified`와 reader frame 수를 확인한다.
+여러 task/초기 상태에서 수집하고 episode 단위 train/eval을 나눈 뒤
+[ACT 학습 안내](../../../learning/training/omx/README.md)를 따른다. 이 SIM export는
+`omx_sim_ros`/rad이며 native `omx_follower` 데이터와 혼합하지 않는다.
+Hub 업로드는 [기존 registry 도구](../../../learning/registry/policy/README.md)의
+검토된 파일·private repo·고정 SHA readback 절차를 따른다. Compose는 upload나
+HF 인증을 하지 않는다. 실제 정책의 Gazebo 집기·실물 운용은 별도 검증이다.
