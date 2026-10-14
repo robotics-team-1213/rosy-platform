@@ -8433,3 +8433,11 @@ osy-d395-s1d\`.
 - 변경: `fix/runtime-jose-lock`에서 offline core wheel 설치 전 CI 검증 target에 `joserfc==1.7.5`를 제공한다. 기기 runtime lock 및 cryptography 50은 유지한다.
 - 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
 - gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
+
+## 2026-10-14 · uncommitted · fix(remote): 원격 pytest가 ssh 끊김을 견딘다
+
+- 변경: `tools/remote/remote_job.py` 신규. 각 pytest 호출을 시험 PC에서 `setsid nohup` 작업으로 띄우고(메모리 상한·nice/ionice·umask 그대로, 호스트 쪽 `timeout` 5400 s), 작업이 자기 pid로 `~/rosy-jobs/<run>.lock`을 잡고 끝날 때 trap이 종료 코드를 임시 파일→이름 바꾸기로 쓰고 잠금을 지운다. 노트북은 10 s마다 짧은 ssh로 오프셋 뒤 로그 바이트와 종료 코드를 가져오고, 실패하면 5·10·20·30 s 간격으로 `ROSY_TEST_RECONNECT`(기본 600 s)까지 재시도한 뒤 255와 "lost contact with <host> for N s; the run continues there: <path>"로 끝내며 작업·잠금·실행 폴더는 남긴다. ship은 ssh 255에 최대 3번 처음부터 다시 보낸다. 로컬 로그는 원격 로그와 바이트 단위로 같다
+- 증거: 2026-10-14 원격(AI PC) `test/test_remote_pytest.py test/test_land.py test/architecture/test_module_structure.py test/test_harness_contracts.py` 209 passed, `known_failures` NEW 0. 실제 장시간 실행 `operations/fleet/test`(모델 PC, 8분 48초) 5169 passed 286 skipped, NEW 0; 그 동안 끊김은 없어 재연결은 가짜 전송 시험으로만 확인
+- gate 변화: 없음. 호스트 배치·상한·land.py 동작은 바뀌지 않음
+- 결정: 없음(D-568·D-584 범위 안, D-762 후속 중 시험 PC 가용성의 일부)
+- 교훈: 4번 연속 FULL 착지가 긴 ssh 스트림의 연결 재설정으로 실패했다. 긴 원격 작업은 ssh 세션에 묶지 않는다
