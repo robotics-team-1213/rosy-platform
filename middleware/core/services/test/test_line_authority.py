@@ -394,10 +394,10 @@ def test_a_refused_shrink_drops_the_authority_and_the_robot_stands():
         rig.step()
     rig.send(1., seq=1)
     with pytest.raises(AuthorityRefused) as err:
-        rig.send(0., stamp=WALL + rig.now - 6., shrink=True, seq=2)
+        rig.send(0., stamp=WALL + rig.now - 6., shrink=True, seq=3)
     assert err.value.code == 'AUTHORITY_POSE_STALE'
     assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
-    assert rig.send(1., seq=1)['reason'] == 'stale_seq'  # the refused shrink's seq was still seen
+    assert rig.send(1., seq=2)['reason'] == 'stale_seq'  # sent before the refused shrink, whose seq was still seen
     assert rig.step().linear == 0.
 
 
