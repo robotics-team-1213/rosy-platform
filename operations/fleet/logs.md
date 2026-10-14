@@ -3641,3 +3641,10 @@
 - 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
 - gate 변화: 없음. 동작 같음.
 - 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
+
+## 2026-10-14 · 68a91feca · D-763 조각 2: trip 읽기에 기다림 판정의 답을 싣는다
+
+- 변경: `ledger/trip_progress.py` `_waiting`이 판정할 때마다 `view.wait`에 `bound_s`·`over_bound`·`waiting`을 적는다. 정체 시계가 쓰는 판정 그대로다(두 번째 판정 없음). 줄 수 같음(서버 순증 0). 정체 규칙의 동작은 같다. API v1.231(문서는 f38a5093a).
+- 증거: 원격 시험(모델 PC, f38a5093a) 284 passed, `known_failures` 0 new, 로그 X: `wait-read/run-1.txt`. 새 시험: 사유마다 상한 안 기다림·넘으면 `over_bound`, 사유가 바뀌어도 한 번, 진행이 끝냄, `link_wait`의 lease 상한.
+- gate 변화: 없음. `GET /api/fleet/work`에는 trip 행이 없어(조각 4) trip 읽기에만 실었다.
+- 결정: D-763 8항, 구현 조각 2.
