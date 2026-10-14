@@ -26,7 +26,7 @@ All Rosy Cam app code: capture, encode, and push latest-only JPEG frames to the 
 | `pairing/` | D-341 `rosy-pair/1`: `Pairing`, `PairingClient` state machine, `PairingHttp` transport, `PairingMessages`, `PairingSession`, `PairingViewModel` |
 | `service/` | `StreamService` foreground service, `CameraSessionPlan` |
 | `settings/` | `PairingUri` (`rosyov://`), DataStore `SettingsStore`, `SiteLink*` records/prefs, mDNS discovery (`NsdSiteBrowser`, `OverheadServerDiscovery`, `OverheadServiceRecord`) |
-| `ui/` | Compose screens (`StreamScreen`, `PairingScreen`, `SettingsScreen`), `RosyTheme`, `ProblemGuide`, `LensAdvice`, `CornerGuide`, `WifiState`, `LanNetworks` |
+| `ui/` | Compose screens (`StreamScreen`, `PairingScreen`, `SettingsScreen`), `CamBar` (D-741 app bar and the title under it; no stop seat), `RosyTheme`, `ProblemGuide`, `LensAdvice`, `CornerGuide`, `WifiState`, `LanNetworks` |
 
 ## For AI Agents
 

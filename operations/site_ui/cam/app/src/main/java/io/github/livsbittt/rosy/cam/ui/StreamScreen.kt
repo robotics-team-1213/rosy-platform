@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -226,21 +225,7 @@ private fun StatusPanel(
     val link = state.link
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space1.dp)) {
-        val stateText = when {
-            !state.running -> R.string.state_stopped
-            state.thermalPause -> R.string.state_thermal_pause
-            state.previewOnly -> R.string.state_preview_only
-            link.state == LinkState.STREAMING && !state.transmitting -> R.string.state_standby
-            link.state == LinkState.STREAMING -> R.string.state_streaming
-            link.state == LinkState.CONNECTING -> R.string.state_connecting
-            else -> R.string.state_disconnected
-        }
-        // Nominal states carry no colour (D-82); only the reconnecting state is a caution.
-        Text(
-            stringResource(stateText),
-            style = MaterialTheme.typography.headlineSmall,
-            color = if (stateText == R.string.state_disconnected) RosyColors.StatusWarn else Color.Unspecified,
-        )
+        // The link state stands in the app bar (CamBar, D-741 3).
         // While stopped, show the saved pairing: state.target still holds the last run's target,
         // which is stale once the operator saves a new address.
         val saved = pairing?.let { "${it.host}:${it.port} · ${it.source}" }

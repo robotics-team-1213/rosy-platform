@@ -13,7 +13,7 @@ README = ROOT / "README.md"
 SHARED = ROOT / "docs" / "reference" / "shared-checkout.md"
 AGENTS = ROOT / "AGENTS.md"
 
-WORKTREE = "git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main"
+WORKTREE = "python tools/worktrees.py new <짧은이름> <type>/<topic>"  # D-761: the gateway, not a bare add
 
 
 def _readme_section(text: str) -> str:
@@ -53,6 +53,14 @@ def test_agents_md_records_the_shared_checkout_commands():
     section = _agents_section(AGENTS.read_text(encoding="utf-8"))
 
     assert WORKTREE in section
+    assert "python tools/worktrees.py prune --apply" in section
+    assert "60개 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
+    assert "소유자 기록이 없는 것은 `--all`을 줘야 다룬다" in section
+    assert "72시간을 기다리지 않고 바로 지운다" in section and "명령 하나 `python tools/worktrees.py prune --apply`" in section
+    assert "git worktree remove .worktrees" not in section  # one command, not two
+    assert "`prune --snapshot`" in section and "사람이나 디스패처만 돌린다" in section
+    assert "--snapshot --" not in section  # no ready-to-paste snapshot command for every session
+    assert "git worktree lock" in section
     assert "git add -A" in section
     assert "git diff --cached --name-only" in section
     assert "git commit --only" in section
