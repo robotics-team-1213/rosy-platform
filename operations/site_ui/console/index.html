@@ -75,7 +75,7 @@
     <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
-    <a class="ui-subnav-item" href="/console/cell">새 작업</a>
+    <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
   </nav></div>
   <div class="ui-subnav" data-area="records" hidden><nav class="ui-subnav-nav" aria-label="기록 화면">
     <span class="ui-subnav-head">사건</span>
@@ -154,6 +154,14 @@
       </section>
     </section>
 
+    <!-- D-763 6·9 — 새 작업은 여기서 실행할 수 있는 종류만 보인다. 이동의 폼은 오른쪽 칸에 서는 로봇 카드의 운행 폼이다. -->
+    <section class="panel" id="work-new" aria-labelledby="work-new-heading" hidden>
+      <h2 id="work-new-heading">새 작업</h2>
+      <ul class="work-list" aria-label="새 작업 종류">
+        <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
+        <li><a class="ui-disclosure-row" href="/console/cell">Cell 적재</a></li>
+      </ul>
+    </section>
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>
@@ -290,7 +298,12 @@
         <h2 id="work-detail-heading">작업 상세</h2>
         <dl id="work-detail" class="work-detail"></dl>
         <p id="work-evidence" class="hint" role="status">작업을 선택하세요.</p>
-        <a href="/console/cell" data-action-icon="cell">팔 공정 설정</a>
+      </section>
+      <section class="panel" id="work-move" aria-labelledby="work-move-heading" hidden>
+        <h2 id="work-move-heading">이동</h2>
+        <label for="work-move-robot">로봇</label><select id="work-move-robot" class="ui-field"></select>
+        <p id="work-move-state" class="hint" role="status"></p>
+        <div id="work-move-form"></div>
       </section>
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
