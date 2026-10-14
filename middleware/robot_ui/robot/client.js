@@ -70,12 +70,21 @@ export const authHeaders = () => ({
   ...(session.token ? {Authorization: `Bearer ${session.token}`} : {}),
 });
 
+let accountRead = 0;
+function publishProfile(value) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rosy:account-profile', {detail:value}));
+}
+
 export async function restoreAccount() {
+  const read = ++accountRead;
   const previous = session.account?.authenticated ? session.authKey : '';
   try {
     const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    if (!response.ok) return session.account;
-    session.account = await response.json();
+    if (!response.ok) { if (read === accountRead) publishProfile(null); return session.account; }
+    const result = await response.json();
+    if (read !== accountRead) return session.account;
+    session.account = result;
+    publishProfile(session.account);
     if (session.account?.authenticated) {
       session.token = '';
       storageRemove(sessionStorage, SESSION_KEY);
@@ -87,7 +96,7 @@ export async function restoreAccount() {
       document.body.hidden = true;
       window.location.reload();
     }
-  } catch { /* A failed probe never opens the development login path. */ }
+  } catch { if (read === accountRead) publishProfile(null); /* A failed probe never opens the development login path. */ }
   return session.account;
 }
 
@@ -119,7 +128,9 @@ export function setConnection(kind, label) {
 
 /** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */
 export function rememberToken(token, { expiresAt = null, persist = false } = {}) {
+  accountRead++;
   session.account = null;
+  publishProfile(null);
   session.token = token;
   const left = expiresAt ? Date.parse(expiresAt) - Date.now() : NaN;
   if (persist && left > 0 && left <= REMEMBER_MAX_MS) {
@@ -137,7 +148,9 @@ export function rememberToken(token, { expiresAt = null, persist = false } = {})
 
 export function forgetToken() {
   session.token = "";
+  accountRead++;
   session.account = null;
+  publishProfile(null);
   session.identity = null;
   session.role = "";
   storageRemove(sessionStorage, SESSION_KEY);

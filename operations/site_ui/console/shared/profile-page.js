@@ -1,6 +1,7 @@
 import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 import {roleLabel} from '/console/assets/fleet-header.js';
+import {CAPABILITIES} from '/console/assets/account-permissions.js';
 
 const request = createFleetClient();
 const $ = id => document.getElementById(id);
@@ -31,6 +32,23 @@ async function readProfile(expected = null) {
   }
   return profile;
 }
+function renderGrants(profile) {
+  $('profile-role').textContent = roleLabel(profile.role);
+  const grants = profile.grants;
+  $('profile-grants').hidden = !Array.isArray(grants);
+  $('profile-grant-list').replaceChildren();
+  if (!Array.isArray(grants)) return;
+  for (const grant of grants) {
+    const item = document.createElement('li');
+    const labels = CAPABILITIES[grant.resource.split(':')[0]] || {};
+    item.textContent = `${grant.resource} · ${grant.capabilities.map(code => labels[code] || code).join(', ')}`;
+    $('profile-grant-list').append(item);
+  }
+  if (!grants.length) {
+    const item = document.createElement('li'); item.textContent = '부여된 서비스 권한 없음';
+    $('profile-grant-list').append(item);
+  }
+}
 async function load(expected = null) {
   const profile = await readProfile(expected);
   owner = profile.principal_id;
@@ -38,6 +56,7 @@ async function load(expected = null) {
   $('profile-email').textContent = profile.email || '등록된 이메일 없음';
   $('profile-role').textContent = roleLabel(profile.role);
   $('profile-name').value = profile.display_name;
+  renderGrants(profile);
   $('profile-content').hidden = false;
   $('profile-login').hidden = true;
   return profile;
@@ -119,7 +138,7 @@ $('profile-reload').addEventListener('click', reload);
 window.addEventListener('focus', async () => {
   if (busy || !owner || $('profile-content').hidden) return;
   lock(true);
-  try { await readProfile(owner); }
+  try { renderGrants(await readProfile(owner)); }
   catch (error) { failure(error); }
   finally { lock(false); }
 });

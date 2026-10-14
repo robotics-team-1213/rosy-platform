@@ -70,7 +70,7 @@ def _credentials(page):
 
 
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
-def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path):
+def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path, account_backend):
     from playwright.sync_api import expect
     page, origin = account_page
     page.goto(origin + '/console/login?return=' + path)
@@ -93,6 +93,12 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
         profile = page
     expect(profile.locator('#profile-id')).to_have_text('alice')
     expect(profile.locator('#profile-role')).to_have_text('운영자')
+    if account_backend == 'managed':
+        expect(profile.locator('#profile-grants')).to_be_visible()
+        expect(profile.locator('#profile-grant-list')).to_contain_text('site:test-site')
+        expect(profile.locator('#profile-grant-list')).to_contain_text('계정 관리')
+    else:
+        expect(profile.locator('#profile-grants')).to_be_hidden()
     assert profile.locator('#profile-id input, #profile-email input, #profile-role input').count() == 0
     assert profile.evaluate('document.documentElement.scrollWidth <= innerWidth')
     name = '<b>현장 운영자</b>'
