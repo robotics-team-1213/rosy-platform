@@ -96,3 +96,5 @@ D-460은 사람 운전자 사이의 운전석 임대를 거절했다: (a) D-411 
 ### 개정 이력
 
 - rev 1 (2026-10-09, 독립 검토 반영): lease에 운전 방식 저장을 없앰(주인의 lane ↔ free 전환은 유지), 검사를 `require_calibration_owner` 안 한 곳으로(`/swarm/follow`, initialpose, SLAM, 움직이는 막힘 답, `/ws/swarm/reference` 포함), `stuck_resolver` 토큰 규칙, 다른 `lease_id` 409, Fleet 전용 CORE 토큰 전제, `fleet.trip_lease_ttl_s`(≤ 10 s)와 Wi-Fi 끊김 메모. D-460·D-494·D-430에 개정 줄.
+
+> 2026-10-14 부기(D-763): [D-763](D-763-fleet-work-kinds-composed-steps.md)(Accepted)의 조정 제안: 5항 "IDLE로 감 → `mode_left`로 lease 끝"에서, 작업이 쥔 lease는 그 작업의 단계 사이 IDLE에서 끝나지 않는다. 나머지 끝 사유와 "멈춤은 누구나"는 그대로다. D-763 조각 6(Safety-Review)이 착지할 때 적용된다.
