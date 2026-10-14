@@ -30,6 +30,29 @@ let polling = false;
 let hasMatch = false;
 let lastEvidence = null;
 let evidenceAnnouncement = "";
+let canOperate = false;
+async function accountSession() {
+  try {
+    const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+    if (!response.ok) throw new Error('Account unavailable');
+    const session = await response.json();
+    canOperate = session.can_operate === true;
+    document.getElementById('account-login').hidden = !session.enabled || session.authenticated;
+    document.getElementById('account-logout').hidden = !session.authenticated;
+  } catch (_) { canOperate = false; }
+  halt.hidden = !canOperate;
+  halt.disabled = !canOperate;
+}
+document.getElementById('account-logout').addEventListener('click', async () => {
+  canOperate = false; halt.hidden = true; halt.disabled = true;
+  try {
+    const response = await fetch('/api/account/logout', {method:'POST', signal:AbortSignal.timeout(5000)});
+    if (!response.ok) throw new Error('중앙 로그아웃 처리가 지연 중입니다.');
+  } catch (error) { haltStatus.textContent = error.message; }
+  await accountSession();
+});
+setInterval(accountSession, 10000);
+accountSession();
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;
@@ -242,7 +265,7 @@ async function tick() {
 }
 
 halt.addEventListener("click", async () => {
-  if (halt.disabled) return;
+  if (halt.disabled || !canOperate) return;
   const restoreFocus = document.activeElement === halt;
   halt.disabled = true;
   haltStatus.dataset.state = "pending";
@@ -261,7 +284,7 @@ halt.addEventListener("click", async () => {
       : "정지 요청 실패 · 다시 눌러 재시도하세요");
   } finally {
     clearTimeout(timeout);
-    halt.disabled = false;
+    halt.disabled = !canOperate;
     if (restoreFocus) halt.focus();
   }
 });

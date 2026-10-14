@@ -275,7 +275,7 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     def fleet_proposal_read(proposal_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
         proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
-        if proposal is None and principal.role == "operator":
+        if proposal is None and principal.permits_site("fleet.operate", {"operator"}):
             candidate_proposal = proposal_store.get(proposal_id)
             if (candidate_proposal is not None
                     and candidate_proposal["candidate"].get("kind") == "cell_job"):
@@ -357,7 +357,7 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     def fleet_cell_job_read(mission_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
         proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
-        if proposal is None and principal.role == "operator":
+        if proposal is None and principal.permits_site("fleet.operate", {"operator"}):
             proposal = proposal_store.get(mission_id)
         if (proposal is None or proposal["candidate"].get("kind") != "cell_job"
                 or proposal["state"] != "RESOLVED"):

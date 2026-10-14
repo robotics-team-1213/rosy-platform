@@ -20,7 +20,9 @@
     </ui-brand>
     <p id="phase">대기</p>
     <p id="connection">경기 데이터 대기 중</p>
-    <ui-button id="halt" kind="irreversible" data-always-live type="button">두 로봇 정지</ui-button>
+    <a id="account-login" href="/api/account/login" hidden>Rosy Account 로그인</a>
+    <ui-button id="account-logout" kind="quiet" type="button" hidden>로그아웃</ui-button>
+    <ui-button id="halt" kind="irreversible" data-always-live type="button" hidden disabled>두 로봇 정지</ui-button>
     <p class="halt-note">
       <span>스페이스 키로도 두 로봇을 세웁니다</span>
       <span id="halt-status" role="status" aria-live="polite"></span>

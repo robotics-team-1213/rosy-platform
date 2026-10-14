@@ -13,7 +13,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", ["config/match.yaml"]),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "core_common"],
     zip_safe=True,
     description="Laptop game host. Not a CORE RobotMode.",
     license="Apache-2.0",

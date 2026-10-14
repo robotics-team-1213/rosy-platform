@@ -204,7 +204,7 @@ export function mount(root, ctx) {
   window.addEventListener("rosy:operator-action", action);
   const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
     previewMode: () => capture.state().previewMode,
-    api: ctx.api, authHeaders, hasToken: () => Boolean(session.token), isHidden: () => document.hidden,
+    api: ctx.api, authHeaders, hasToken: () => Boolean(session.authenticated), isHidden: () => document.hidden,
     onQuality: (quality) => {
       qualityIndicator.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
       qualityIndicator.textContent = quality?.reason === "overexposed"
