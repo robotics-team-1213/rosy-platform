@@ -10,7 +10,10 @@ shipped. The commit travels as a git bundle (so guard tests that run git see a r
 as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
 under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
 (``.github/workflows/ci.yml``); different dependency versions can run together.
-Each pytest runs under a 6 GB memory cap, nice 15 and idle I/O.
+Each pytest runs under a 6 GB memory cap, nice 15 and idle I/O, detached from ssh
+(``remote_job.py``): the laptop follows its log with short polls and rides out a dropped
+link for ``ROSY_TEST_RECONNECT`` s (default 600); past that the invocation exits 255 and the
+job is left running on the host.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
 host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
@@ -42,6 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab_hosts  # noqa: E402
+import remote_job  # noqa: E402
 
 # Live Fleet host: last resort, Fleet reserve, CPU cap (D-568 3).
 # The address is ROSY_SITE_HOST, else gitignored private/lab-hosts.json (D-226).
@@ -91,6 +95,8 @@ git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fe
 cat > "$R/runs/$NAME.bundle"
 git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
+""" + remote_job.SWEEP + r"""git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked
+git worktree prune
 git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 """
 
@@ -143,17 +149,6 @@ mv "$N" "$V"
 echo "[remote] ready $V"
 """
 
-# $3 = CPUQuota ('' = none). The job lock holds this shell's pid, which exec keeps.
-PYTEST = r"""set -euo pipefail
-R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; CPU=$3; cd "$R/runs/$1"
-[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
-mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; rm -f ~/rosy-jobs/"$1".resv; shift 3
-export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
-umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
-exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
-  nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
-"""
-
 # One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid
 # locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget.
 PROBE = r"""J=~/rosy-jobs; c=0; m=0; now=$(date +%s)
@@ -184,7 +179,7 @@ rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
-rm -f "$R/runs/$1.bundle"
+rm -rf "$R/runs/$1.bundle" "$R/runs/$1.jobs"
 """
 
 
@@ -321,8 +316,13 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data, capture_output=True,
-                            timeout=STEP_TIMEOUT["ship"])
+            for attempt in range(3):  # a dropped link (ssh 255) ships again from scratch
+                result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data,
+                                capture_output=True, timeout=STEP_TIMEOUT["ship"])
+                if result.returncode != 255 or attempt == 2:
+                    break
+                print(f"[remote-pytest] shipping to {host} lost the link; retrying", file=sys.stderr, flush=True)
+                time.sleep(remote_job.BACKOFF[attempt])
             if result.returncode == 0:
                 return
             if result.returncode != 3 or not base:
@@ -399,20 +399,36 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
            label: str | None) -> list[int]:
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
+    lost = None
     try:
         ship(repo, host, sha, name)
         deps_sha, dirs = deps(repo, sha)
         if remote(host, VENV, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         codes = []
-        for inv, log in zip(invocations, logs):
+        for k, (inv, log) in enumerate(zip(invocations, logs)):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
+            if lost:
+                codes.append(remote_job.LOST_EXIT)
+                continue
             cpu = SITE_CPU_QUOTA if host in SITES else ""
-            codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
-                                  + " ".join(map(shlex.quote, [name, deps_sha, cpu, *inv, *PYTEST_TAIL]))], log))
+            try:
+                codes.append(remote_job.run(host, name, k, log, [name, deps_sha, cpu], [*inv, *PYTEST_TAIL],
+                                            PYTEST_TIMEOUT, SSH))
+            except remote_job.Lost as error:
+                lost = str(error)
+                print(lost, file=sys.stderr, flush=True)
+                codes.append(remote_job.LOST_EXIT)
+                continue
+            text = log.read_bytes().decode("utf-8", errors="replace")
+            print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
         return codes
     finally:
-        remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
+        if lost:  # never kill or clean up a job we cannot see; its own trap drops the lock when it ends
+            print(f"[remote-pytest] left ~/rosy-test/runs/{name} on {host}; remove it when the job is done",
+                  file=sys.stderr, flush=True)
+        else:
+            remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
 
 
 def affected_invocations(selection: dict, skip: set[str]) -> list[list[str]]:
