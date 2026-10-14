@@ -734,13 +734,13 @@ def _moved(rig, ticks, **step):
     return rig.m._arc['deadline'] - before
 
 
-def test_two_s_unheld_then_a_3_s_hold_moves_the_deadline_3_s():
+def test_two_s_unheld_then_a_3_s_hold_credits_waiting_intervals():
     """Review 4(a): unheld time never counts, however long it ran before the hold."""
     rig = ArcRig()
     rig.open(dict(SEGMENT, length_m=1.))
     rig.drive(40, seen=False)                 # 2 s unheld
     _authority(rig, True)
-    assert _moved(rig, 60) == pytest.approx(3., abs=.05)
+    assert _moved(rig, 60) == pytest.approx(2.95)
     assert running(rig)
 
 
@@ -752,7 +752,7 @@ def test_a_stalled_tick_that_wakes_held_does_not_credit_the_gap():
     _authority(rig, True)
     before = rig.m._arc['deadline']
     with rig.m._lock:                         # the shared helper both clocks call
-        assert rig.m._regulated_wait_share(rig.now, 5., V) == rig.m.config.stale_after_s
+        assert rig.m._regulated_wait_share(rig.now, 5., V) == 0.
     rig.now += 5.
     rig.step(seen=False)                      # here the stale odom also ends the arc
     assert rig.m._arc['deadline'] - before <= rig.m.config.stale_after_s + 1e-9
@@ -765,7 +765,7 @@ def test_a_crossing_held_by_a_return_ahead_is_credited_and_a_crossing_takes_its_
     rig.open()
     rig.drive(10, seen=False)
     _crosswalk(rig, 'crossing', look_progress=0.)
-    assert _moved(rig, 40) == pytest.approx(2.)
+    assert _moved(rig, 40) == pytest.approx(1.95)
     _crosswalk(rig, 'crossing', look_progress=None)
     assert _moved(rig, 40) == pytest.approx(1.)
     assert running(rig)

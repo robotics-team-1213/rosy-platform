@@ -110,12 +110,14 @@ def test_precedence_authority_signal_crosswalk():
 @pytest.mark.parametrize('xw', [dict(state='looking'), dict(state='waiting'),
                                 dict(state='crossing', look_progress=.1)])
 def test_the_clock_helper_reads_the_same_judgement(xw):
-    """The 2b helper credits the whole dt exactly while the field names a regulation."""
+    """The 2b helper credits only a sustained regulation across adjacent ticks."""
     rig = Rig()
     assert rig.m._regulated_wait_share(rig.now, .05, .1) == 0.
     _crosswalk(rig, **xw)
     assert rig.m._regulation_wait(rig.now) is not None
-    assert rig.m._regulated_wait_share(rig.now, .05, .1) == pytest.approx(.05)
+    assert rig.m._regulated_wait_share(rig.now, .05, .1) == 0.
+    assert rig.m._regulated_wait_share(rig.now + .05, .05, .1) == 0.
+    assert rig.m._regulated_wait_share(rig.now + .10, .05, .1) == pytest.approx(.05)
 
 
 def test_old_fields_unchanged_and_field_is_optional():
