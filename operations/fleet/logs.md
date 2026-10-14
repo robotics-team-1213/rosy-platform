@@ -3568,3 +3568,17 @@
 - 변경: `server/ledger/trip_ports.py::bend_fields`의 중첩 `**({} if ...)`를 `fields` dict와 `if` 한 가지로 바꿨다. 보내는 값은 같다. `console_view.TripCaps`의 두 주석을 줄였다.
 - 증거: `test_trip_bend.py`(넘겨받은 자세가 없으면 능력이 있어도 `map_entry`를 싣지 않음, 기존 두 시험). 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음. fleet 제품 줄 수는 main 대비 0 증가 그대로다(`trip_ports.py` 600줄).
+## 2026-10-14 · 41a19818e · feat(fleet): 규칙 M 평가기, 경고만 (D-550 8항, D-760 3항 1단계)
+- 변경: 순수 함수 `fleet/traffic/rule_m.py` `verdict`가 로봇마다 Fleet이 시작한 움직임(차로 trip, `navigation/goal`, 군집 추종)을 `bounded`·`unbounded`·`idle`로 판정한다. `GET /api/fleet/state` 로봇 행에 `rule_m {state, motion, reason}`을 더했다. 거절하는 것은 없다.
+- 판정: 차로 trip은 `traffic_authority: core`이거나 trip 임대를 쥐고 있으면 한도 있음, 아니면 `hold_back`. 목표는 임대(`goal_lease: leased`)면 한도 있음, 아니면 허브 수집(`gather_source: hub`)이고 SAF-003 정책이 STOP·HOLD·RETURN_HOME일 때만 한도 있음(`rest_only`·`policy_continue`·`policy_unknown`). 군집 추종은 한도 있음. 모르는 입력은 한도 없음이다.
+- 정책 읽기: 허브로 수집한 로봇만 `GET /api/v1/safety/state`의 `fleet_loss_policy`를 30초에 한 번 읽는다(`HttpRobotClient.safety_state`, 기존 `CapabilityDisplay`). 새 주기 루프는 없다. 답이 없으면 90초 뒤 "모름"이다.
+- 뺀 것: trip 밖 LINE_FOLLOW. Fleet은 `POST /api/fleet/robots/{id}/line-follow`로 IR_LINE을 켤 수 있지만 켰다는 기록을 남기지 않아, 대시보드가 켠 것과 가리지 못한다. 추측하지 않고 판정에서 뺐다.
+- 증거: `test_rule_m.py`(D-550 7항 행마다, 모르는 입력, 상태 행, 30초 읽기), `test_console_queues_contract.py`, `test/web/link-tag.test.mjs`·`attention-stale.test.mjs`. 원격 시험 로그는 X: `rule-m-warn` 세션이다.
+- gate 변화: 없음. 표시만이다. 장치·현장 확인과 화면 확인은 하지 않았다.
+
+## 2026-10-14 · ba11d856d · fix(fleet): 규칙 M은 Fleet이 쥔 TTL만 센다 (검토 반영)
+- 변경: 앞 항목의 SAF-003 정책 경로를 지웠다(`safety_state` 읽기, 정책 캐시, `rest_only`·`policy_*` 이유). CORE의 SAF-003은 `correlation_id`가 있는 목표에만 동작하고 Fleet은 dispatch 시도나 목표 임대가 있을 때만 그것을 보내므로, 허브 연결과 정책으로 "한도 있음"이라 할 수 없다. 이제 한도는 통행권 `core`, 쥐고 있는 trip 임대, 목표 임대 셋뿐이고 임대 없는 목표는 `no_goal_lease`다. 군집 추종 입력도 뺐다(추종만 하는 로봇은 `idle`). 오프라인 행에는 `rule_m`이 없다.
+- 범위: 1단계는 D-550 7항의 위반 셋 중 둘(임대 없는 목표, `hold_back` 차로 trip)만 본다. trip 밖에서 Fleet이 연 LINE_FOLLOW는 잡지 못한다.
+- 알려진 오경보: 끝난 Fleet 목표의 기록이 남아 있는 로봇을 대시보드·Pilot이 항법으로 움직이면 Fleet 목표로 보인다. 상태 스냅숏에 항법 `correlation_id`가 없어 가릴 수 없다.
+- 증거: `test_rule_m.py`(행 판정, 깨진 `navigation` 값, 오프라인 행). 원격 시험 로그는 X: `rule-m-warn/fix1`이다.
+- gate 변화: 없음. 표시만이다.
