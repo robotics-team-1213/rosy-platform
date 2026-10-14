@@ -7,12 +7,13 @@ export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => row.source === "task" ? "주행" : "팔 작업";
 
-export function createWorkView({scope, call, el, channelRequestView}) {
+export function createWorkView({scope, call, el, channelRequestView, approveReason}) {
   const query = new URLSearchParams(location.search), active = query.get("view") === "work";
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["PROPOSED"], done: ["GOAL_CONFIRMED", "COMPLETED", "FAILED", "CANCELED", "EXPIRED", "CLOSED"]}[query.get("show")];
-  let rows = [], selected = null, inFlight = false, detailVersion = 0;
-  const list = el("work-list"), detail = el("work-detail");
+  let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
+  const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
+  const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   el("work-overview").hidden = !active;
   if (active) {
     document.querySelector('[aria-labelledby="map-heading"]').hidden = true;
@@ -22,7 +23,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   function reset(message = "접속 후 작업을 확인할 수 있습니다.") {
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
-    list.replaceChildren(); detail.replaceChildren();
+    list.replaceChildren(); clear();
     el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
     el("work-state").textContent = message;
@@ -34,7 +35,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     detail.append(term, text);
   }
   function showDetail(row) {
-    detail.replaceChildren();
+    clear();
     field("업무", row.action_kind === "navigate" ? "이동" : row.action_kind === "PICK_PLACE" ? "파지·배치" : "기타 작업");
     field("담당 장치", row.device_id);
     field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
@@ -43,9 +44,13 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     field("최근 원장 갱신", new Date(row.updated_at).toLocaleString());
     field("사유", row.reason || "기록된 사유 없음");
     field("작업 식별자", row.source_id);
+    // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
+    admit.hidden = row.source !== "mission" || row.status !== "PROPOSED";
+    admit.reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
+    admit.disabled = Boolean(admit.reason);
   }
   async function select(row) {
-    selected = workKey(row); paint(); showDetail(row);
+    selected = workKey(row); refusal = ""; paint(); showDetail(row);
     const version = ++detailVersion, life = scope.capture();
     el("work-evidence").textContent = "결과 근거 조회 중";
     try {
@@ -66,7 +71,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     const filter = el("work-filter").value;
     const selection = rows.find(row => workKey(row) === selected);
     if (selection && filter !== "all" && selection.source !== filter) {
-      selected = null; detailVersion++; detail.replaceChildren();
+      selected = null; detailVersion++; clear();
       el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
     }
     const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
@@ -85,6 +90,23 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     }
     el("work-empty").hidden = list.childElementCount > 0;
   }
+  // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
+  async function approve() {
+    const row = rows.find(row => workKey(row) === selected), life = scope.capture();
+    if (!row || busy) return;
+    busy = true; refusal = ""; showDetail(row);
+    try {
+      const control = await call("/api/fleet/dispatch-control"); life.check();
+      await call(`/api/fleet/missions/${encodeURIComponent(row.source_id)}/admit`, {method: "POST",
+        headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_generation: control.generation})});
+    } catch (error) {
+      refusal = error.status >= 400 && error.status < 500 ? `승인이 거절됐습니다 · ${error.message}`
+        : "승인 결과 미확인 · 다시 보내지 않았습니다. 원장을 확인하세요.";
+    } finally { busy = false; }
+    if (!life.current()) return;
+    if (workKey(row) === selected) showDetail(row);
+    await refresh();
+  }
   async function refresh() {
     if (!active || inFlight) return;
     const life = scope.capture(); inFlight = true;
@@ -102,7 +124,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
       el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정"].join(" · ");
       const current = rows.find(row => workKey(row) === selected);
-      if (selected && !current) { selected = null; detailVersion++; detail.replaceChildren(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
+      if (selected && !current) { selected = null; detailVersion++; clear(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
       if (current) showDetail(current);
       paint();
       await refreshRequests(life);
@@ -138,5 +160,6 @@ export function createWorkView({scope, call, el, channelRequestView}) {
   }
   scope.listen(el("work-filter"), "change", paint);
   scope.listen(el("work-refresh"), "click", refresh);
+  scope.listen(admit, "click", approve);
   return {active, refresh, reset};
 }

@@ -16,7 +16,7 @@ import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { pinPrefill } from "./localization-badge.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
@@ -59,7 +59,8 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
-const workView = createWorkView({scope: pageScope, call, el, channelRequestView});
+const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
+  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const raised = area.get("view") !== "records" ? el("work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);
