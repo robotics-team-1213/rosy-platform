@@ -172,6 +172,18 @@ def test_a_persons_stop_through_fleet_holds_the_job_and_no_step_runs_on():
     assert console.trip_busy(R)                          # the job keeps the robot in HOLD
 
 
+def test_a_failed_trip_cancel_still_holds_the_job():
+    runner, _, ports, lost, lease = _held()
+    console = _Console()
+    install_trip_guard(console, runner)
+
+    async def broken(robot_id, reason):
+        raise OSError("trip store down")
+    runner.cancel_robot = broken
+    _do(runner, console.cancel(R))
+    assert lost == [(JOB, {"lease_reason": "operator_cancel"})] and lease["state"] == "lost"
+
+
 def test_a_job_does_not_take_a_robot_that_already_moves():
     runner, store, ports, _ = _job_runner()
     _plan(store, ports, "east:fwd", 0.5, "SE", plan_id="p1")
