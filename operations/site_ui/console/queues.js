@@ -5,7 +5,7 @@ import { ruleMTag } from "./link-tag.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
-import { routeAttention, trafficAttention, tripEndText } from "/console/assets/site-map-model.js";
+import { routeAttention, trafficAttention, tripEndText, tripWaitText } from "/console/assets/site-map-model.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 
 function nodeWithText(tagName, className = "", text) {
@@ -141,6 +141,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-540 (d): a trip Fleet stopped (lease lost, stall, junction …) until the robot's next trip; not arrive/cancel.
     const ended = endedTripText(view, robot.robot_id);
     if (ended) items.push({ severity: "warn", text: `: ${ended}` });
+    const trip = openTrip(view, robot.robot_id);  // D-763 8: a wait past its bound is the operator's
+    if (trip?.wait?.over_bound) items.push({ severity: "crit", text: `: 개입 필요 — ${tripWaitText(trip)}` });
     items.push(...routeAttention(openTrip(view, robot.robot_id), view.trafficAi, Date.now()));
     if (localizationUrgent(robot.localization)) {
       // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
