@@ -180,7 +180,8 @@ def test_drivable_model_without_wall_loads_but_cannot_use_ungated_lane_fallback(
     if has_way:
         labels[100:, 90:230] = 2
     folder = _model_dir(tmp_path, classes)
-    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels, 3), floor_gate=True)
+    model = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels, 3), floor_gate=True,
+                              paint_target="drivable")
     frame = np.zeros((H, W, 3), np.uint8)
     assert model.floor_gate is True
     if has_way:
