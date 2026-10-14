@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 
-from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
+from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M
 
 MAX_EXPECT_IN_M, MAX_EXPECT_TOL_M, MAX_PIVOT_PAST_LINE_M = 2., .30, .30
 MAX_AHEAD_M = 2.
