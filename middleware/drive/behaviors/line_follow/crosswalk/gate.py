@@ -26,7 +26,8 @@ from dataclasses import dataclass, replace
 from types import SimpleNamespace
 from typing import Optional
 
-from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_TURN_RAD, _angle
+from core_features.line_follow.crosswalk.zone import (CORRIDOR_HALF_M, EVIDENCE_TTL_S, IR_CATCH_HALF_M, MAX_LATERAL_M,
+                                                      MAX_TURN_RAD, _angle)
 
 NONE, ARMED, APPROACHING, LOOKING, WAITING, CROSSING = (
     "none", "armed", "approaching", "looking", "waiting", "crossing")
@@ -496,13 +497,15 @@ class CrosswalkGateMixin:
     def _fresh_corridor(self, now: float):
         """The latest accepted D-468 lane evidence with both inner edges and a bounded lateral error,
         as (lane pose, left, right, uncertainty_m, residual |slope|, seen-to x); None if older than the D-491
-        evidence TTL, incomplete or turned past MAX_TURN_RAD. D-573 개정 5 6항: the lane pose is the image pose
+        evidence TTL, incomplete, looser than MAX_LATERAL_M or turned past MAX_TURN_RAD. D-573 개정 5 6항: the lane pose is the image pose
         turned along the two edges' mean slope (the lane, not the body: SIM m23 stood 0.1 rad off it), and the
         edges are their distances from it in that frame."""
         ev = self._return_evidence
         lane, at = ev._lane, ev._received_at
         if lane is None or at is None or lane.uncertainty_m is None or not 0.0 <= now - at <= EVIDENCE_TTL_S:
             return None
+        if lane.uncertainty_m > MAX_LATERAL_M:  # m24: on the stripes (0.043 m, edges 0.08 m apart) it is no lane
+            return None                         # D-491's bound for a zone's lane; the zone's own frame then
         edges = {b.side: b for b in lane.boundaries}
         image = ev._image_pose(round(lane.stamp * 1e9))
         if image is None or set(edges) != {"left", "right"}:
