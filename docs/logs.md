@@ -8427,3 +8427,9 @@ osy-d395-s1d\`.
 - 증거: 첫 착지 검사 2725 passed, 270 skipped, canvas 등록 누락 1 failed를 수정. 합성 자료 Chromium 실행·취소·이력 24개·편집 보존 확인. 최종 재시험 결과는 착지 도구 로그에 기록한다.
 - gate 변화: 없음. 실제 GPU 모델과 운영 배포 수용은 미검증.
 - 결정: D-764
+
+## 2026-10-14 · ff848d70c · OMX 공개 후 CI 의존성 누락 수정
+
+- 변경: `fix/runtime-jose-lock`에서 offline core wheel 설치 전 CI 검증 target에 `joserfc==1.7.5`를 제공한다. 기기 runtime lock 및 cryptography 50은 유지한다.
+- 증거: 공유 main `76a8361c5` push 완료, pre-push 22326 passed, NEW 0. 실제 CI의 wheel 설치 실패를 재현한 RED 1 failed 뒤 관련 원격 GREEN 96 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. validation/omx-release-ci-2026-10-14/result.md에 CI 실패와 수정 범위를 기록했다. 수정 후 terminal CI, live Gazebo·물리 OMX·HF readback은 별도 증거가 필요하다.
