@@ -540,6 +540,33 @@ def test_cancel_all_goes_at_once_for_any_operator(site):  # noqa: F811
         browser.close()
 
 
+def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(site):  # noqa: F811
+    """D-763 8 (v1.232): the card line shows Fleet's wait; past its bound a warn row, never 개입 (rev 2 Q7)."""
+    from playwright.sync_api import expect, sync_playwright
+
+    waiting = {**LEAD, "wait": {"reason": "crosswalk_look", "since": 0.0, "bound_s": 15.0, "over_bound": False,
+                                "waiting": True}}
+    api = {**API, "/api/fleet/trips": {"running": waiting, "trips": [waiting, LOST], "open": [waiting]}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, [])
+        for width, height in [(1366, 600), (390, 844)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.clock.run_for(1500)
+            expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 · 횡단보도")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["y"] >= 0 and stop["y"] + stop["height"] <= height, width
+        assert "대기 상한" not in page.locator(".queues-panel").inner_text()
+        over = {**waiting, "wait": {**waiting["wait"], "reason": "signal", "over_bound": True, "waiting": False}}
+        api["/api/fleet/trips"] = {"running": over, "trips": [over, LOST], "open": [over]}
+        page.clock.run_for(1500)
+        expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 신호")
+        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 신호")
+        assert "대기 상한" not in page.locator("#critical-list").inner_text()
+        assert not errors
+        browser.close()
+
+
 def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):  # noqa: F811
     """D-763 6: 작업 › 새 작업의 이동은 로봇 카드의 운행 폼 그대로다. 같은 계획·시작 요청을 보내고, 바쁜 로봇에는
     카드와 같은 거절(TRIP_ROBOT_BUSY)을 보인다."""
