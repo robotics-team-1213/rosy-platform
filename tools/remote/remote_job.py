@@ -27,7 +27,7 @@ CALL_TIMEOUT = 60
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
 JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.lock
-echo "$$ pytest 2 6" > "$L"; rm -f ~/rosy-jobs/"$1".resv
+echo "$$ pytest 2 6" > "$L"; echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
 trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
 echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"; rm -f "$L"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
@@ -38,20 +38,43 @@ timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=6G ${
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@"
 """
 
-# Same args as JOB with the JOB text inserted as $6. A retried start (dropped link) finds the log.
+# Job k is alive while the pid in <k>.pid (the lock's pid, but k-specific) answers kill -0.
+ALIVE = r"""alive=0; if read -r pid < "$D/$K.pid" 2>/dev/null && kill -0 "$pid" 2>/dev/null; then alive=1; fi"""
+
+# Same args as JOB with the JOB text inserted as $6. A retried start (dropped link) that finds the
+# job's exit code or its live pid starts nothing.
 START = r"""set -euo pipefail
-R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; D=$R/runs/$1.jobs; J=$6
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; D=$R/runs/$1.jobs; J=$6; K=$4
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
 mkdir -p ~/rosy-jobs "$D"; cd "$R/runs/$1"
-[ -e "$D/$4.log" ] && exit 0
+""" + ALIVE + r"""
+if [ -e "$D/$K.rc" ] || [ $alive = 1 ]; then exit 0; fi
 set -- "$1" "$2" "$3" "$4" "$5" "${@:7}"
 : > "$D/$4.log"  # exists before START returns, so the first poll finds it
 setsid nohup bash -c "$J" job "$@" >> "$D/$4.log" 2>&1 < /dev/null &
 """
 
 # The exit code is read before the log, so a poll that sees it also gets the whole log.
-POLL = r"""D=~/rosy-test/runs/$1.jobs; rc=; [ -f "$D/$2.rc" ] && rc=$(cat "$D/$2.rc")
-echo "ROSYJOB ${rc:--}"; tail -c +$(($3 + 1)) "$D/$2.log"
+POLL = r"""D=~/rosy-test/runs/$1.jobs; K=$2; rc=; [ -f "$D/$2.rc" ] && rc=$(cat "$D/$2.rc")
+""" + ALIVE + r"""
+echo "ROSYJOB ${rc:--} $alive"; tail -c +$(($3 + 1)) "$D/$2.log"
+"""
+
+# SHIP: runs left behind after lost contact (an exit code, no live job, untouched for 12 h).
+# Only <label>-<6 hex> runs that have a <run>.jobs dir, i.e. this runner's; never sim-* or anything else.
+SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].jobs; do
+  [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +720)" ] || continue
+  n=$(basename "$J" .jobs); live=0
+  case $n in sim-*) continue;; esac  # remote_sim.py runs clean up themselves
+  for p in "$J"/*.pid ~/rosy-jobs/"$n".lock; do
+    if [ -f "$p" ] && read -r q _ < "$p" && kill -0 "$q" 2>/dev/null; then live=1; fi
+  done
+  [ $live = 0 ] || continue
+  echo "[remote] removing $n, left after lost contact" >&2
+  git worktree remove -f -f "$R/runs/$n" 2>/dev/null || rm -rf "$R/runs/$n"
+  git update-ref -d "refs/remote-pytest/$n" 2>/dev/null || true
+  rm -rf "$J"
+done  # SHIP runs git worktree prune next
 """
 
 # Ctrl-C / laptop deadline: TERM the job's process group (setsid made its pid the group id).
@@ -59,6 +82,7 @@ KILL = r"""read -r pid _ < ~/rosy-jobs/"$1".lock 2>/dev/null && kill -TERM -- "-
 
 
 LOST_EXIT = 255  # what land.py sees for an invocation whose host went silent
+VANISHED_EXIT = 254  # the job ended without an exit code (host reboot, SIGKILL, START cut off)
 
 
 class Lost(Exception):
@@ -91,14 +115,15 @@ def retrying(call, what: str, host: str, budget: float, sleep, clock):
     return result, None
 
 
-def parse_poll(out: bytes) -> tuple[int | None, bytes] | None:
-    """(exit code or None while running, new log bytes) from POLL output; None if malformed."""
+def parse_poll(out: bytes) -> tuple[int | None, bool, bytes] | None:
+    """(exit code or None, job pid alive, new log bytes) from POLL output; None if malformed."""
     at = out.find(b"ROSYJOB ")  # login chatter before it is dropped
     end = out.find(b"\n", at)
-    if at < 0 or end < 0:
+    fields = out[at + 8:end].split()
+    if at < 0 or end < 0 or len(fields) != 2:
         return None
-    rc = out[at + 8:end].strip()
-    return (int(rc) if rc.lstrip(b"-").isdigit() else None), out[end + 1:]
+    rc = fields[0]
+    return (int(rc) if rc.lstrip(b"-").isdigit() else None), fields[1] == b"1", out[end + 1:]
 
 
 def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_args: list[str], timeout_s: int,
@@ -112,32 +137,38 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_bytes(b"")
     args = [*job_args, str(k), str(timeout_s), JOB, *pytest_args]
-    started, lost = retrying(lambda: call(ssh, host, START, *args), "start", host, budget, sleep, clock)
-    if started is None:
-        raise Lost(f"[remote-pytest] lost contact with {host} for {lost:.0f} s while starting; "
-                   f"the run may continue there: {where}")
-    if started.returncode != 0:
-        log.write_bytes(started.stdout + started.stderr)
-        return started.returncode
 
     def poll():
         result = call(ssh, host, POLL, name, str(k), str(offset))
         return parse_poll(result.stdout) if result is not None and result.returncode == 0 else None
 
-    offset, deadline = 0, clock() + timeout_s + 120  # the job's own timeout fires first
-    try:
+    offset, gone = 0, 0
+    try:  # START too: Ctrl-C in its backoff must not leave a job running under the caller's cleanup
+        started, lost = retrying(lambda: call(ssh, host, START, *args), "start", host, budget, sleep, clock)
+        if started is None:
+            raise Lost(f"[remote-pytest] lost contact with {host} for {lost:.0f} s while starting; "
+                       f"the run may continue there: {where}")
+        if started.returncode != 0:
+            log.write_bytes(started.stdout + started.stderr)
+            return started.returncode
+        deadline = clock() + timeout_s + 120  # the job's own timeout fires first
         with log.open("ab") as out:
             while True:
                 got, lost = retrying(poll, "poll", host, budget, sleep, clock)
                 if got is None:
                     raise Lost(f"[remote-pytest] lost contact with {host} for {lost:.0f} s; "
                                f"the run continues there: {where}")
-                rc, data = got
+                rc, alive, data = got
                 out.write(data)
                 out.flush()
                 offset += len(data)
                 if rc is not None:
                     return rc
+                gone = 0 if alive else gone + 1  # twice: the launch or the exit trap may be mid-way
+                if gone == 2:
+                    out.write(f"\n[remote-pytest] the job on {host} ended without an exit code (host reboot or"
+                              f" killed); exit {VANISHED_EXIT}: {where}\n".encode())
+                    return VANISHED_EXIT
                 if clock() > deadline:
                     call(ssh, host, KILL, name)
                     return 124

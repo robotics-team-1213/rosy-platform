@@ -427,7 +427,7 @@ class FakeJobHost:
         if self.polls in self.junk:  # ssh exit 0 but cut before the marker line ended
             return subprocess.CompletedProcess([], 0, b"motd\nROSYJ", b"")
         rc = b"-" if self.chunks else str(self.rc).encode()
-        return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b"\n" + self.log[int(args[2]):], b"")
+        return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b" 1\n" + self.log[int(args[2]):], b"")
 
 
 def _clock():
@@ -465,10 +465,11 @@ def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_
 
 
 def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
-    assert rj.parse_poll(b"motd\nROSYJOB -\nlog") == (None, b"log")
-    assert rj.parse_poll(b"ROSYJOB 3\n") == (3, b"")
-    assert rj.parse_poll(b"ROSYJOB 1") is None and rj.parse_poll(b"partial") is None
-    assert rj.parse_poll(b"ROSYJOB x\nlog") == (None, b"log")
+    assert rj.parse_poll(b"motd\nROSYJOB - 1\nlog") == (None, True, b"log")
+    assert rj.parse_poll(b"ROSYJOB 3 0\n") == (3, False, b"")
+    assert rj.parse_poll(b"ROSYJOB 1 0") is None and rj.parse_poll(b"partial") is None
+    assert rj.parse_poll(b"ROSYJOB 1\n") is None  # no liveness field: cut off or an old script
+    assert rj.parse_poll(b"ROSYJOB x 1\nlog") == (None, True, b"log")
     # The job writes the code beside the file and renames it; POLL reads only the final name.
     assert 'echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
@@ -490,7 +491,8 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
     answers[:] = [255, 255, 255]
     with pytest.raises(SystemExit, match="exit 255"):
         rp.ship(repo, "h", head, "run2")
-    assert 'git worktree remove --force "$R/runs/$NAME"' in rp.SHIP  # a second attempt can add it again
+    # A second attempt can add it again, even over a half-made (locked "initializing") worktree.
+    assert 'git worktree remove -f -f "$R/runs/$NAME"' in rp.SHIP and rp.remote_job.SWEEP in rp.SHIP
 
 
 def _job_env(tmp_path, python_body):
@@ -523,7 +525,7 @@ def _wait_for_lock(lock):
 
 def _poll_until_done(env):
     for _ in range(100):
-        code, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
+        code, _, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
         if code is not None:
             return code
         time.sleep(0.1)
@@ -545,7 +547,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
     assert out.startswith(b"out\nerr\n") and out.endswith(b"args -m pytest test/x.py -q\n")
-    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, out[4:])  # offset 4: after "out\n"
+    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
 
 
 def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
@@ -557,3 +559,106 @@ def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
     _wait_for_lock(lock)
     _sh(rj.KILL, env, "r")
     assert _poll_until_done(env) == 143 and not lock.exists()
+
+
+def test_ctrl_c_during_the_start_backoff_still_kills_the_job(tmp_path):
+    scripts = []
+
+    def call(ssh, host, script, *args):
+        scripts.append(script)
+        return None  # START's link drops; it may or may not have launched the job
+
+    def interrupt(seconds):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        rj.run("h", "r", 0, tmp_path / "1.txt", ["r", "d", ""], [], 60, [], call=call, sleep=interrupt)
+    assert scripts == [rj.START, rj.KILL]
+
+
+class VanishingHost(FakeJobHost):
+    """Polls answer, but the job's pid is gone and it never wrote an exit code."""
+
+    def __init__(self, alive):
+        super().__init__([b"half a log\n"] + [b""] * 9, 0)
+        self.alive = list(alive)
+
+    def __call__(self, ssh, host, script, *args):
+        result = super().__call__(ssh, host, script, *args)
+        if script == rj.POLL:
+            flag = b"1" if self.alive.pop(0) else b"0"
+            result.stdout = result.stdout.replace(b"ROSYJOB - 1", b"ROSYJOB - " + flag)
+        return result
+
+
+def test_a_job_that_dies_without_an_exit_code_is_reported_after_two_polls(tmp_path):
+    fake = VanishingHost([True, False, True, False, False, True])  # a single miss is the launch/trap window
+    now, sleep, clock = _clock()
+    log = tmp_path / "1.txt"
+    code = rj.run("h", "r", 0, log, ["r", "d", ""], [], 5400, [], call=fake, sleep=sleep, clock=clock)
+    assert code == rj.VANISHED_EXIT and code not in (0, 1, rj.LOST_EXIT)  # land.py stops on it
+    assert fake.polls == 5 and now[0] < 60  # not the 92-minute timeout
+    text = log.read_bytes()
+    assert text.startswith(b"half a log\n") and b"ended without an exit code" in text
+
+
+def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_finished_job(tmp_path):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, "sleep 30\n")
+    assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
+    pid = _wait_for_lock(home / "rosy-jobs" / "r.lock")
+    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)[:2] == (None, True)
+    os.killpg(pid, 9)  # host reboot / OOM kill: no trap, no exit code
+    for _ in range(50):
+        if rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)[:2] == (None, False):
+            break
+        time.sleep(0.1)
+    else:
+        pytest.fail("POLL still reports the SIGKILLed job alive")
+    jobs = home / "rosy-test" / "runs" / "r.jobs"
+    (jobs / "0.rc").write_text("0\n")
+    (jobs / "0.log").write_bytes(b"done\n")
+    assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
+    time.sleep(0.5)
+    assert (jobs / "0.log").read_bytes() == b"done\n"  # an existing exit code: nothing started
+
+
+def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
+    if not shutil.which("bash") or sys.platform == "win32":
+        pytest.skip("POSIX bash is required")
+    home = tmp_path / "home"
+    root, jobs = home / "rosy-test", home / "rosy-jobs"
+    repo, runs = root / "repo", root / "runs"
+    jobs.mkdir(parents=True)
+    runs.mkdir(parents=True)
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
+    live = subprocess.Popen(["sleep", "30"])
+    old = time.time() - 13 * 3600
+    names = {"land-1-a1b2c3": "old", "land-2-d4e5f6": "live", "abcdef0123-0a0b0c": "fresh",
+             "land-3-0f0f0f": "running", "sim-0123456789-abcdef": "sim", "other": "other"}
+    try:
+        for name, kind in names.items():
+            _git(repo, "worktree", "add", "-q", "--detach", str(runs / name), "HEAD")
+            _git(repo, "update-ref", f"refs/remote-pytest/{name}", "HEAD")
+            j = runs / f"{name}.jobs"
+            j.mkdir()
+            if kind != "running":
+                (j / "0.rc").write_text("1\n")
+            (j / "0.pid").write_text(f"{live.pid if kind in ('live', 'running') else 999999999}\n")
+            if kind != "fresh":
+                os.utime(j, (old, old))
+        (runs / "land-2-d4e5f6.jobs" / "0.pid").write_text("999999999\n")
+        (jobs / "land-2-d4e5f6.lock").write_text(f"{live.pid} pytest 2 6\n")  # a later invocation runs
+        script = (f"set -euo pipefail; R={shlex.quote(str(root))}; cd \"$R/repo\"\n" + rp.remote_job.SWEEP
+                  + "git worktree prune\n")
+        subprocess.run(["bash", "-c", script], env={"HOME": str(home), "PATH": "/usr/bin:/bin"}, check=True,
+                       capture_output=True, timeout=30)
+    finally:
+        live.kill()
+    gone = {n for n in names if not (runs / n).exists()}
+    assert gone == {"land-1-a1b2c3"} and not (runs / "land-1-a1b2c3.jobs").exists()
+    assert "land-1-a1b2c3" not in _git(repo, "worktree", "list")
+    refs = _git(repo, "for-each-ref", "--format=%(refname)", "refs/remote-pytest")
+    assert "land-1-a1b2c3" not in refs and "refs/remote-pytest/other" in refs
