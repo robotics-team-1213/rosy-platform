@@ -732,11 +732,17 @@ ONE_ROW_BAR = """() => {
 }"""
 
 
+def _near(box, x, y, width, height):
+    return all(abs(box[key] - want) <= 1 for key, want in zip(("x", "y", "width", "height"), (x, y, width, height)))
+
+
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (768, 1024), (1024, 768), (1366, 768)])
-def test_connect_app_bar_is_one_row_of_the_app_bar_height(tablet_page, width, height):
-    """D-741 3·5: the connect screen's app bar is one row of --appbar-height at every width: brand, robot name,
-    gate state, 운용 지도, then the stop last. A notice neither moves nor covers the stop."""
+def test_connect_app_bar_is_one_row_from_64rem_and_keeps_the_two_row_stop_below(tablet_page, width, height):
+    """D-741 3·5 and its 2026-10-14 addendum. From 64rem the connect screen's app bar is one row of --appbar-height:
+    brand, robot name, notice, gate state, 운용 지도, then the stop last, and the stop is no smaller than 82x48.
+    Below 64rem nothing moved: the numbers are the ones measured before this change (sha d434979c9), where the
+    stop spans both rows at 82x74 and a notice takes its own row under them."""
     base_url, page, errors = tablet_page
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
@@ -747,16 +753,41 @@ def test_connect_app_bar_is_one_row_of_the_app_bar_height(tablet_page, width, he
     got = page.evaluate(ONE_ROW_BAR)
     print(json.dumps({"width": width, **got}))
     quiet, told, token = got["quiet"], got["told"], got["token"]
-    assert token == 64 and quiet["bar"]["height"] == token, got
-    row = [quiet[key] for key in ("mark", "name", "tag", "map", "stop")]
-    assert all(quiet["bar"]["y"] <= box["y"] and box["bottom"] <= quiet["bar"]["y"] + token for box in row), got
-    assert all(left["right"] <= right["x"] + 1 for left, right in zip(row, row[1:])), got
-    assert row[-1]["right"] <= width and got["stopOnTop"] and got["overflow"] <= 0, got
-    assert all(quiet[key]["width"] >= 44 and quiet[key]["height"] >= 44 for key in ("map", "stop")), got
+    assert token == 64 and got["stopOnTop"] and got["overflow"] <= 0, got
+    assert all(abs(told[seat][key] - quiet[seat][key]) <= 0.5 for seat in ("stop", "map", "tag", "name", "mark")
+               for key in ("x", "y", "width", "height")), got  # a notice moves and squeezes nothing
     assert told["notice"]["width"] > 0, got
-    assert all(abs(told["stop"][key] - quiet["stop"][key]) <= 0.5 for key in ("x", "y", "width", "height")), got
-    assert told["notice"]["bottom"] <= told["stop"]["y"] or told["notice"]["y"] >= told["stop"]["bottom"] \
-        or told["notice"]["right"] <= told["stop"]["x"], got
+    if width < 1024:
+        mark, name_x = (20, 56) if width < 480 else (79, 115)
+        assert quiet["bar"]["height"] == 103 and told["bar"]["height"] == 120, got
+        assert _near(quiet["stop"], width - 106, 16, 82, 74), got
+        assert _near(quiet["map"], 76, 42, 82, 48) and _near(quiet["tag"], 24, 58, 44, 32), got
+        assert _near(quiet["name"], name_x, 20, 61, 14) and abs(quiet["mark"]["width"] - mark) <= 1, got
+        assert _near(told["notice"], 24, 94, width - 48, 17), got
+    else:
+        assert quiet["bar"]["height"] == token and told["bar"]["height"] == token, got
+        row = [told[key] for key in ("mark", "name", "notice", "tag", "map", "stop")]
+        assert all(0 <= box["y"] and box["bottom"] <= token for box in row), got
+        assert all(left["right"] <= right["x"] + 1 for left, right in zip(row, row[1:])), got
+        assert abs(quiet["stop"]["x"] - (width - 106)) <= 1 and quiet["stop"]["right"] <= width, got
+        assert quiet["stop"]["width"] >= 82 and quiet["stop"]["height"] >= 48, got
+        assert quiet["map"]["width"] >= 82 and quiet["map"]["height"] >= 48 and _near(quiet["tag"], width - 256, 16, 44, 32), got
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_bar_does_not_take_the_one_row_rule(tablet_page):
+    """The Pilot app's WebView keeps its bar: --topbar-height at 64rem and above, with the stop at 82x48."""
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": 1366, "height": 768})
+    _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert page.evaluate("document.body.dataset.pilotScreen") == "connect"
+    bar = page.locator("ui-topbar").bounding_box()
+    stop = page.locator("ui-topbar [data-estop]").bounding_box()
+    print(json.dumps({"bar": bar, "stop": stop}))
+    assert bar["height"] == 88 and _near(stop, 1260, 31, 82, 48), (bar, stop)
     assert errors == [], errors
 
 
