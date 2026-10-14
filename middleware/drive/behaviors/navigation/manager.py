@@ -84,7 +84,7 @@ class NavigationManager:
         #: monotonic clock (not ``clock``, which the bridge may swap for sim time). It counts only
         #: while that correlation id is still the active goal.
         self.lease_clock = lease_clock
-        self._lease: Optional[tuple[str, float, UUID]] = None
+        self._lease: Optional[tuple[str, float, UUID, str | None]] = None
         # 목표는 uvicorn 워커(REST·WS)와 rclpy executor(브리지 타이머) 양쪽에서
         # 건드려진다(D-1). check-send-set 이 쪼개지면 취소가 목표를 놓친다.
         self._lock = threading.RLock()
