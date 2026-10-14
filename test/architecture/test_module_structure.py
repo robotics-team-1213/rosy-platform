@@ -518,8 +518,8 @@ SIZE_VERDICTS = {
         "mission_service, mission_routes incl. admit/reject, mission_progress, mission_dispatcher and the three "
         "mission_model_turn_* files) as their own fleet.server holder unit; see "
         "docs/plans/2026-10-15-fleet-ledger-missions-unit.md. Baseline2575 = those eight files at the D-757 verdict "
-        "commit61aa49b32 (measured). Keep every file verdict and HARD_TIER rule. At the next +150 the model turns "
-        "(mission_model_turn_*) leave for their own unit, not an accept.",
+        "commit61aa49b32 (measured). Keep every file verdict and HARD_TIER rule. The next split is "
+        "mission_model_turn_*: at the next +150 the model turns leave for their own unit, not an accept.",
     ),
     "fleet/fleet/server/work": (
         57,
@@ -534,6 +534,7 @@ SIZE_VERDICTS = {
         "named) and the work read into fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). "
         "Baseline4410 = ledger6985 minus missions2575 at the D-757 verdict commit61aa49b32 (measured). Growth since "
         "the verdict stays used and is not rebaselined. Keep every ledger file verdict and HARD_TIER rule. "
+        "At the next +150 the trip owners (trip_*) leave for their own unit, not an accept. "
         "Previous verdict: "
         "split: D-763 slices 5/5b register the Fleet work-ledger holder (Task, trip and Mission owners incl. "
         "the approval/reject routes) as its own unit; see docs/plans/2026-10-14-fleet-ledger-size-unit.md. "
