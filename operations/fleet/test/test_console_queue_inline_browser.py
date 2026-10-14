@@ -314,7 +314,9 @@ def test_records_area_fits_the_narrowest_phone_and_reads_in_the_light_theme(site
                                       {"/api/fleet/incidents/rosy_01/s-0/review": (200, {"reviewed": True})}, size=size)
         try:
             page.goto(site + "/console?view=records")
-            page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+            ground = {name: page.evaluate("""theme => { document.documentElement.dataset.theme = theme;
+                return getComputedStyle(document.body).backgroundColor; }""", name) for name in ("dark", theme)}
+            assert (ground[theme] != ground["dark"]) == (theme == "light"), ground  # the theme is really the one named
             page.clock.run_for(2000)
             links = page.get_by_role("navigation", name="기록 화면", exact=True).locator("a")
             expect(links).to_have_count(5)

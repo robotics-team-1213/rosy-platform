@@ -262,11 +262,13 @@ def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, 
         page.screenshot(path=str(Path(output) / f"fleet-cell-widths-{width}x{height}.png"), full_page=True)
 
 
-@pytest.mark.parametrize("width,height", [(1024, 768), (1100, 800), (1366, 768)])
-def test_cell_body_keeps_usable_columns_beside_the_sub_nav(browser_site, width, height):
-    """D-741 2: the rail and the sub-nav take 304px. With both documents loaded the body beside them has no sideways
-    overflow, no control whose text is cut and no field under 9rem, and the sticky sub-nav shows every entry at the
-    top and at the end of the page."""
+# The two documents stand side by side from a 64rem body: a 1360px shell. 1349 is a 1366 window with a classic scrollbar.
+@pytest.mark.parametrize("width,height,panels", [(360, 740, 1), (1024, 768, 1), (1100, 800, 1), (1349, 768, 1),
+                                                (1366, 768, 2)])
+def test_cell_body_keeps_usable_columns_beside_the_sub_nav(browser_site, width, height, panels):
+    """D-741 2: the rail and the sub-nav take 304px. With both documents loaded the body puts them in one column
+    until it has 64rem itself, then two. There is no sideways overflow, no control past the window or with cut text,
+    no multi-column field under 9rem, and the sticky sub-nav shows every entry at the top and at the end of the page."""
     page, _, _ = browser_site
     _prepare(page)
     page.set_viewport_size({"width": width, "height": height})
@@ -275,11 +277,16 @@ def test_cell_body_keeps_usable_columns_beside_the_sub_nav(browser_site, width, 
     page.evaluate("scrollTo(0, document.documentElement.scrollHeight)")
     end = page.evaluate(BODY_FIT)
     print(json.dumps({"size": [width, height], "top": top, "end": end}, ensure_ascii=False))
-    assert top["nav"]["column"], top
+    assert top["nav"]["column"] == (width >= 1024), top
     assert top["overflow"] <= 0 and end["overflow"] <= 0, (top, end)
-    assert top["unreachable"] == [] and end["unreachable"] == [] and top["stop"] and end["stop"], (top, end)
-    assert top["cut"] == [], top
-    assert all(grid["columns"] == 1 or grid["narrowest"] >= 144 for grid in top["grids"]), top["grids"]
+    assert top["stop"] and end["stop"], (top, end)
+    if width >= 1024:  # below it the sub-nav is a row that scrolls sideways
+        assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
+    assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
+    fields = 1 if width < 480 else 3
+    assert {grid["name"]: grid["columns"] for grid in top["grids"]} == {
+        "documents": panels, "recipe-fields": fields, "cell-fields": fields, "scope": fields}, top["grids"]
+    assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
