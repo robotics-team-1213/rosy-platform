@@ -14,6 +14,7 @@ from typing import Optional
 import httpx
 
 from core_common.protocol import connect_reason
+from fleet.hub.hub import HubError
 from fleet.swarm.transport import RobotApiError
 
 # D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
@@ -32,6 +33,11 @@ class TripAware:
     @staticmethod
     def trip_busy(robot_id: str) -> bool:
         return False
+
+    def trip_refusal(self, robot_ids) -> Optional[HubError]:
+        """D-763 4: the one "has this robot a holder" check of every Fleet motion entry."""
+        busy = [robot_id for robot_id in dict.fromkeys(robot_ids) if self.trip_busy(robot_id)]
+        return HubError("TRIP_ROBOT_BUSY", f"{', '.join(busy)} is on a running trip; cancel the trip first") if busy else None
 
 
 class CapabilityDisplay:
