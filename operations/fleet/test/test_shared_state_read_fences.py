@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from fleet.server.map_pose_service import MapPoseService
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
@@ -36,15 +38,29 @@ class SnapshotPorts(Ports):
     def read_number(self, robot_id):
         return self.reads.read_number(robot_id)
 
-    async def junction_state(self, robot_id):
-        return (await self.reads.state(robot_id))["line_follow"]["junction"]
+    async def junction_state(self, robot_id, after=0):
+        return (await self.reads.state(robot_id, after=after))["line_follow"]["junction"]
 
 
-def _snapshot_setup():
+class SimPose:
+    """The SIM pose port (``tools/sim/native_gazebo_map_pose.py``): its own refresh, no read numbers."""
+
+    def __init__(self, ports):
+        self.ports = ports
+
+    async def refresh(self, robot_id, *, force_rest=False):
+        pass
+
+    def arbitrated_pose(self, robot_id):
+        return self.ports.pose
+
+
+def _snapshot_setup(sim=False):
     ports = SnapshotPorts()
     store = SiteMapStore(None, clock=lambda: ports.now)
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, poses=ports,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for,
+                        poses=SimPose(ports) if sim else ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig())
     return runner, store, ports
@@ -57,10 +73,12 @@ def _step(runner, ports, dt):
 
 # --- 1 HIGH: never a read from before the last step or the last send ---------------------------
 
-def test_a_step_0_43_s_after_a_send_reads_anew_and_sends_nothing_again():
+@pytest.mark.parametrize("sim", [False, True])
+def test_a_step_0_43_s_after_a_send_reads_anew_and_sends_nothing_again(sim):
     """Jittered periods: the step after the stop went out comes 0.43 s later, inside the 0.45 s age.
-    The read from before the send says idle; reusing it would send the stop again."""
-    runner, store, ports = _snapshot_setup()
+    The read from before the send says idle; reusing it would send the stop again. With the SIM pose
+    port (no read numbers) the junction's own shared read is still fenced."""
+    runner, store, ports = _snapshot_setup(sim)
     arc = _arc(store, "east:fwd")
     _plan(store, ports, "east:fwd", 0.5, "SE")
     asyncio.run(runner.start("p1", "bob"))
