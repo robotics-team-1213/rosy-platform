@@ -39,8 +39,9 @@ LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane
 OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
 # D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
-LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
-BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
+# D-763 10 (c): map_v2_fleet carries crosswalks, so a current robot announces its crosswalk gate.
+LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True, lane_crosswalk_gate=True)
+BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True, lane_crosswalk_gate=True)
 MANOEUVRE = CORE_MANEUVER  # the fake CORE is busy exactly when CORE is
 
 
