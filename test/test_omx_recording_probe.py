@@ -96,8 +96,7 @@ def harness(monkeypatch):
     monkeypatch.setattr(recording.threading, "Event", Event)
     monkeypatch.setattr(recording.threading, "Thread", Thread)
     monkeypatch.setattr(recording.time, "sleep", lambda _delay: None)
-    monkeypatch.setattr(recording.subprocess, "run",
-                        lambda *args, **kwargs: type("Result", (), {"stdout": "test-code"})())
+    monkeypatch.setattr(recording, "pairing_code", lambda *_args: "test-code")
     monkeypatch.setattr(recording, "request", http.request)
     import probe_pilot_sim_http
     monkeypatch.setattr(probe_pilot_sim_http, "request", http.request)

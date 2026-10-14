@@ -1,31 +1,37 @@
 """Record real Gazebo data through Pilot HTTP; prints no pairing code/token."""
 
 import json
-import subprocess
 import sys
 import threading
 import time
-from uuid import uuid4
-
-from probe_pilot_sim_http import request
+from probe_pilot_sim_http import Probe, pairing_code, request
 
 
 def main(container: str) -> None:
-    code = subprocess.run(["docker", "exec", container, "cat", "/run/rosy-omx-pilot/pairing-code"],
-                          check=True, capture_output=True, text=True).stdout.strip()
+    code = pairing_code(container, time.monotonic() + 120)
     token = request("/pair", method="POST", body={"code": code})["token"]
     seat = request("/seat", method="POST", token=token)["seat_id"]
     stopped = threading.Event()
+    renew_errors = []
+
+    def check_renewal():
+        if renew_errors:
+            raise RuntimeError("seat renewal failed; recording is not verified") from renew_errors[0]
 
     def renew():
         while not stopped.wait(0.8):
-            request(f"/seat/{seat}", method="PUT", token=token)
+            try:
+                request(f"/seat/{seat}", method="PUT", token=token)
+            except Exception as exc:
+                renew_errors.append(exc)
+                stopped.set()
 
     thread = threading.Thread(target=renew, daemon=True)
     thread.start()
     try:
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
+            check_renewal()
             state = request("/state", token=token)
             camera = request("/camera", token=token)
             if state["ready"] and camera["fresh"]:
@@ -35,19 +41,13 @@ def main(container: str) -> None:
             raise RuntimeError(f"capture never ready: state={state}, camera={camera}")
         recording = request("/recordings", method="POST", token=token,
                             body={"seat_id": seat, "task": "Gazebo joint1 positive jog demonstration"})
-        command_id = str(uuid4())
         state = request("/state", token=token)
-        goal = request("/goals", method="POST", token=token, body={
-            "instance_id": state["instance_id"], "seat_id": seat, "request_id": command_id,
-            "joint": "joint1", "delta_rad": 0.02, "duration_s": 0.4,
-            "state_sequence": state["state_sequence"], "expires_at_ms": int(time.time() * 1000) + 5000,
-        })
-        if goal["state"] not in {"LOCAL_ACCEPTED", "ROS_ACCEPTED", "RUNNING"}:
-            raise RuntimeError(f"goal rejected: {goal}")
+        result = Probe(token, seat, stop=stopped).run_jog("joint1", 0.02)
+        goal = result["goal"]
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
+            check_renewal()
             current = request("/recordings", token=token)
-            goal = request(f"/goals/{command_id}", token=token)
             if current["status"] != "recording":
                 raise RuntimeError(f"recording interrupted: {current}")
             if current["frame_count"] >= 10 and goal["state"] == "SUCCEEDED":
@@ -55,11 +55,12 @@ def main(container: str) -> None:
             time.sleep(0.2)
         else:
             raise RuntimeError(f"capture/goal incomplete: {current}, {goal}")
+        check_renewal()
         closed = request(f"/recordings/{recording['episode_id']}/stop", method="POST", token=token,
                          body={"seat_id": seat, "outcome": "success"})
         if closed["status"] != "complete":
             raise RuntimeError(f"source incomplete: {closed}")
-        after = request("/state", token=token)
+        after = result["state"]
         print(json.dumps({"recording": closed, "goal": goal, "camera": camera,
                           "joint1_before": state["positions"]["joint1"],
                           "joint1_after": after["positions"]["joint1"]}, indent=2))
