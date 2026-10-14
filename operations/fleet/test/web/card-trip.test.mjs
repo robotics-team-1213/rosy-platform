@@ -77,7 +77,7 @@ test("a stopped trip is a warn row (the card opens); a new open trip clears it",
   assert.deepEqual(attentionItems(robot()), []);
 });
 
-test("D-763 8: the card line shows Fleet's wait; past its bound the queue asks a person", () => {
+test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no 개입 (rev 2 Q7)", () => {
   const wait = (reason, waiting, over_bound = !waiting) => ({ robot_id: "a", trip_id: "t3", wait: { reason, waiting, over_bound } });
   const traffic = { units: [], robots: [{ robot_id: "a", lap: 3 }] };
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("crosswalk_look", true)] }, "a"), "대기 · 횡단보도");
@@ -88,5 +88,6 @@ test("D-763 8: the card line shows Fleet's wait; past its bound the queue asks a
   assert.deepEqual(attentionItems(robot()), []);  // a wait within its bound is no exception
   view.trafficTrips = [wait("crosswalk_wait", false)];
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),
-    ["crit: 개입 필요 — 대기 상한 넘음 · 횡단보도"]);
+    ["warn: 대기 상한 넘음 · 막힘 해결 중 · 횡단보도"]);
+  assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false)] }, "a"), "대기 상한 넘음 · 막힘 해결 중 · 신호");
 });

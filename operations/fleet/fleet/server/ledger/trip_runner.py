@@ -450,6 +450,7 @@ class TripRunner(TripAdmission, TripProgress):
             except Exception:
                 _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
+        (live.view.get("wait") or {}).update(waiting=None, bound_s=None, over_bound=None)  # D-763 8: unknown until _waiting runs
         pose = await self.map_pose(robot_id)
         if not live.open:
             return

@@ -90,8 +90,7 @@ class TripProgress:
         """D-760 4 / D-517 4 / D-763 8: seconds a trip may wait for ``reason`` (``view.wait``) before the stall rule
         applies again. CORE's ``line_follow.regulation_wait`` (v1.227): a crosswalk look/wait is bounded by CORE's
         crosswalk_report_s + crosswalk_clear_s defaults (D-573 3, then crosswalk_blocked goes to D-622).
-        ponytail: fixed defaults; a robot configured longer reaches the stall rule early. Read them from CORE status
-        if a site changes them."""
+        ponytail: fixed defaults; a robot configured longer stalls early. Read CORE status if a site changes them."""
         crosswalk = dict.fromkeys(("crosswalk_look", "crosswalk_wait", "crosswalk_held"), CROSSWALK_WAIT_S)
         return {"link_wait": self.lease.ttl_s, "authority": self.lease.ttl_s, "signal": self.config.stall_s,
                 **crosswalk}.get(reason)
