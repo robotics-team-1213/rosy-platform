@@ -8439,3 +8439,9 @@ osy-d395-s1d\`.
 - 변경: `fix/runtime-jose-lock`의 pre-push에서 발견한 D-760 regulation_wait API 통합시험 경로 하나를 소유권 목록에 명시했다. 순수 기능 시험은 services에 두고, gateway의 실제 HTTP seam 시험과 검사 규칙을 유지한다.
 - 증거: 수정 전 main commit `82d3de6ce`의 깨끗한 원격 checkout에서 동일 실패 재현; 독립 위치 검토 완료. 보정 후 소유권·API·기능 시험 19 passed, NEW 0. 이전 공개 시도는 소유권 실패 및 별도 Fleet 시험의 SSH 단절로 중단돼 push되지 않았다.
 - gate 변화: 없음. 기기·현장 수용과 구분한다.
+
+## 2026-10-14 · 14b34dffc · Fleet 계정 CI provider 보완
+
+- 변경: `fix/runtime-jose-lock`에서 사이트에 고정된 `oauthlib==4.0.0`을 CI 검증 target에 제공한다. `--no-deps`와 cryptography 50·device runtime lock을 유지하며, 사이트 pin 누락을 잡는 회귀검사를 추가했다.
+- 증거: CI 38551288909의 15개 wheel 설치는 성공했으나 Fleet 계정 시험 collection과 CORE 계정 pipeline에서 OAuthlib 누락이 확인됐다. 원격 RED 1 failed, GREEN 계정 인증·배포 및 CI/runtime 계약 57 passed, NEW 0; 독립 소스 검토 완료.
+- gate 변화: 없음. 수정 후 전체 CI는 다시 확인한다. Fleet setup.py의 이전 OAuthlib pin과 사이트 runtime pin 차이는 이번 CI 환경 보정의 범위 밖이다.
