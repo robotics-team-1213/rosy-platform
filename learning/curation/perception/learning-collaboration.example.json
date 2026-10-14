@@ -14,7 +14,7 @@
       "password_hash": "REPLACE_WITH_HASH_PASSWORD_OUTPUT",
       "hf_subjects": [],
       "memberships": {
-        "example-project": ["view", "edit", "approve", "import", "manage"]
+        "example-project": ["view", "edit", "approve", "import", "manage", "publish"]
       }
     },
     {
