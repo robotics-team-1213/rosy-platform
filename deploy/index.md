@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · b3d6f4cd5 · OMX 녹화 검증 개선
 - 2026-10-14 · 91995a99e · OMX SIM 준비 회귀 결과
 - 2026-10-14 · uncommitted · OMX Pilot SIM 실행 준비
 - 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-14 · uncommitted · OMX recorder configuration preparation
-- 2026-10-12 · d7008e6b4 · 선택 status 미설치와 conversation 설치 분리

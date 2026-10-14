@@ -355,6 +355,13 @@ docker compose -f "$omx_compose" restart pilot
 python3 deploy/robot/omx/probe_pilot_recording.py "$omx_container"
 ```
 
+녹화 probe는 기존 조작 probe와 같은 관절 이동·목표 오차 검사를 사용한다.
+ROS 성공 응답만으로 시연을 성공 처리하지 않는다. 상태 충돌은 새 상태와 요청 ID로
+한 번만 재시도하며, 조종권 갱신 실패나 갱신 worker 종료 불명은 실패로 끝난다.
+의도적 lease 만료 시험은 진행 중 갱신 요청의 종료와 오류 확인 뒤에 시작한다.
+컨테이너 안에서는 `python3 /repo/deploy/robot/omx/probe_pilot_recording.py --inside`로
+같은 probe를 실행할 수 있다. 이 경우 Docker CLI 대신 로컬 pairing code 파일을 읽는다.
+
 각 probe의 stdout/stderr와 exit code를 위 evidence 경로에 보존한다. 실패하면
 그대로 기록하고 영상 fps·state skew·owner 검사를 느슨하게 바꾸지 않는다.
 녹화 probe의 complete episode와 lease expiry로 생긴 incomplete episode를 구분한다.
