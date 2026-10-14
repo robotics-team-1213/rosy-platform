@@ -1039,3 +1039,11 @@
 - gate 변화: SOURCE·호스트 근거만 더한다. Gazebo와 장치 수용은 미검증이고, 설정은 그 전까지 꺼 둔다. `model.py` 597줄 → 600줄(파일 한도 600에 닿았다. 다음 설정 키 전에 나눠야 한다), `gate.py` 591줄, `bend.py` 284줄.
 - 결정: D-759(Proposed) Decision 2·3·4와 한계 8.
 - 교훈: 닻의 방향만 바꾸면 닻이 오래됐을 때 로봇이 새 직선 밖에 선다. 방향을 바꾸는 값은 위치의 기준도 같이 본다.
+
+## 2026-10-14 · 75d15d3f4 · 횡단보도 게이트·보고·구역을 `line_follow/crosswalk` 크기 단위로 옮김 (동작 변경 없음)
+
+- 변경: `crosswalk_gate.py`, `crosswalk_report.py`, `crosswalk_zone.py`를 `git mv`로 `line_follow/crosswalk/`의 `gate.py`, `report.py`, `zone.py`로 옮겼다. 바뀐 내용은 import 줄뿐이다. 옛 import 경로는 3줄짜리 호환 재수출 모듈로 남는다. 제품 코드는 새 경로를 import한다. `SIZE_UNITS`에 `drive/behaviors/line_follow/crosswalk`를 더했다.
+- 증거: `git diff -M`에서 세 파일은 rename이고 import 줄만 다르다. `test_crosswalk_gate.py`의 소스 글자 검사만 새 경로로 돌렸다. 원격 결과와 `known_failures` NEW 수는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
+- 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
+- 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
