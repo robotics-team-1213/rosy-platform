@@ -5,6 +5,51 @@ import org.junit.Test
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class AccountSessionTest {
+    @Test fun profileIsValidatedRefreshedAndNeverFetchedByCommandAccess() {
+        var subject = "alice"; var name = "Alice"; var malformed = false; var calls = 0
+        val session = AccountSession(trusted(), MemoryStore(), { endpoint, _ ->
+            when (endpoint) {
+                "token" -> org.json.JSONObject().put("token_type", "Bearer").put("access_token", signed(1000, subject = subject)).put("refresh_token", "f".repeat(40))
+                "introspect" -> org.json.JSONObject().put("active", true).put("sub", subject).put("aud", "site:test")
+                "userinfo" -> { calls++; org.json.JSONObject().put("account_id", if (malformed) "other" else subject).put("login", subject).put("display_name", name) }
+                else -> org.json.JSONObject()
+            }
+        }, {1000})
+        session.complete(callback(session.begin("site:test")))
+        assertNotNull(session.access("site:test")); assertTrue(session.permits("site:test", "camera.manage")); assertEquals(0, calls)
+        assertEquals("Alice", session.refreshProfile("site:test")!!.getString("display_name"))
+        name = "Updated"; assertEquals("Updated", session.refreshProfile("site:test")!!.getString("display_name"))
+        assertEquals("https://account.example.test/console/profile", session.context("site:test")!!.getString("profile_url"))
+        malformed = true; assertNull(session.refreshProfile("site:test")); assertTrue(session.context("site:test")!!.isNull("profile"))
+        malformed = false; name = "x".repeat(129); assertNull(session.refreshProfile("site:test"))
+        name = "Alice"; session.refreshProfile("site:test")
+        subject = "bob"; session.complete(callback(session.begin("site:test")))
+        assertNull(session.profile("site:test")); assertEquals("bob", session.refreshProfile("site:test")!!.getString("account_id"))
+        session.logout(); assertNull(session.profile("site:test"))
+    }
+
+    @Test fun stalledProfileNeverBlocksCachedStopAndFailureClearsName() {
+        val entered = java.util.concurrent.CountDownLatch(1); val release = java.util.concurrent.CountDownLatch(1)
+        var stall = false
+        val session = AccountSession(trusted(), MemoryStore(), { endpoint, _ ->
+            when (endpoint) {
+                "token" -> org.json.JSONObject().put("token_type", "Bearer").put("access_token", signed(1000)).put("refresh_token", "f".repeat(40))
+                "introspect" -> org.json.JSONObject().put("active", true).put("sub", "alice").put("aud", "site:test")
+                "userinfo" -> { if (stall) { entered.countDown(); release.await(); throw java.io.IOException("offline") }
+                    org.json.JSONObject().put("account_id", "alice").put("login", "alice").put("display_name", "Alice") }
+                else -> org.json.JSONObject()
+            }
+        }, {1000})
+        session.complete(callback(session.begin("site:test"))); session.refreshProfile("site:test"); stall = true
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val pending = worker.submit<org.json.JSONObject?> { session.refreshProfile("site:test") }
+            assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
+            val began = System.nanoTime(); assertNotNull(session.cachedAccess("site:test"))
+            assertTrue(System.nanoTime() - began < 100_000_000)
+            release.countDown(); assertNull(pending.get(2, java.util.concurrent.TimeUnit.SECONDS)); assertNull(session.profile("site:test"))
+        } finally { release.countDown(); worker.shutdownNow() }
+    }
     private val privateKey = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(java.security.SecureRandom())
     private fun encoded(bytes: ByteArray) = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     private fun signed(now: Long, resource: String = "site:test", subject: String = "alice"): String {
