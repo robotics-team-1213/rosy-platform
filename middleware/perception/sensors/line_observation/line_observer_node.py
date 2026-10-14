@@ -581,6 +581,8 @@ class LineObserverNode(Node):
                                               if self._paint_worker is not None else None),
                               paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
                                                 if self._paint_worker is not None else None),
+                              paint_last_error=(self._paint_worker.last_error
+                                                if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),

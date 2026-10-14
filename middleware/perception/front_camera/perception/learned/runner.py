@@ -88,9 +88,9 @@ class LaneSegModel:
     @classmethod
     def open(cls, folder, *, session_factory: Callable | None = None,
              threads: int = 2, allow_spinning: bool = True, floor_gate: bool = False,
-             paint_target: str = "drivable") -> "LaneSegModel":
-        """paint_target (learned_paint_target) picks the floor gate's role rule; the default is the
-        laxer drivable one, the observer passes its own so a model the gate cannot use is refused."""
+             paint_target: str = "lane_marking") -> "LaneSegModel":
+        """paint_target (learned_paint_target) picks the floor gate's role rule, so a model the gate
+        cannot use is refused here instead of failing every frame (D-588)."""
         manifest = load_manifest(folder)
         verify_files(manifest)
         error = floor_gate_role_error(manifest.classes, paint_target) if floor_gate else None
