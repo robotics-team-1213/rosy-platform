@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from core_common.protocol.schemas import EventMessage
-from fakes import FakeClock, FakeRobot
+from fakes import FakeClock, FakeRobot, fresh_reads
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import LineStuckDecisionRequest
@@ -60,6 +60,7 @@ def _named_app(console: FleetConsole, tmp_path, **kwargs):
             sha256(OPERATOR.encode()).hexdigest(): {"principal_id": "op-7", "role": "operator"},
             sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"},
         })
+    fresh_reads(app)   # the tests change the fake robot between requests
     return TestClient(app), store
 
 

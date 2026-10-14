@@ -266,7 +266,7 @@ class FleetConsole(TripAware):
                 and self._clock() - row.last_heartbeat_monotonic
                 < self._hub_state_max_age_s):
             return row.snapshot.model_dump(mode="json"), "hub"
-        return await self.read_state(robot_id, 1.0), "rest"   # D-760 8: shared, at most 1 s old
+        return await self.read_state(robot_id, 0.45), "rest"   # D-760 8: shared; the 2 Hz tether watch reads anew
 
     async def snapshot(self) -> dict:
         """N대 상태를 한 번에 모은다. 한 대가 죽어도 나머지는 그대로 온다."""
