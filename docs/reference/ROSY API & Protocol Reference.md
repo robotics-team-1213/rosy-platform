@@ -3527,3 +3527,23 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 - `GET /api/learning/storage`: 설정 상태, 측정 시각, root별 파일 수·논리 bytes·하드링크 중복 제외 file_bytes·할당 bytes·미완료 파일 bytes·파일시스템 잔여 bytes, 일 증가량·추정 잔여 일수, 등록된 pending root의 bytes를 반환한다. 60초 캐시를 사용한다. 부분 스캔·오류·근거 부족은 null/partial/unavailable로 표시한다.
 - `POST /api/learning/storage/preflight`: 기존 Origin·X-Pinky-Token 검사와 view 권한을 요구한다. 정확한 입력은 destination_id, download_bytes, staging_bytes, transform_bytes, upload_bytes이며 bytes는 0..9000000000000000 정수다. 알려진 root ID만 허용한다. 로컬 요구량은 세 로컬 항목과 관리자 reserve_bytes의 합이며 현재 같은 목적지 파일시스템 여유와 비교한다. 원격 업로드 요구량은 관리자 제공 quota의 잔여량·출처·측정 시각·유효기간과 비교한다. ready/hold/blocked는 순간 공간 추정이며 예약·전송·자료 품질 승인이 아니다.
 - 미설정 GET은 not_configured, 미설정 사전 점검은 400이다. 잘못된 root/입력은 400, 세션·프로젝트 접근 거부는 기존 401/403 규칙을 따른다. 공개 wire는 파일 경로·삭제·업로드·유료 증설 입력을 받지 않는다.
+
+### D-764 검수 AI 실행과 저장 버전
+
+다음은 모델 PC 검수 앱 전용이며 CORE protocol schema를 변경하지 않는다. 협업 모드의
+GET은 view, AI POST는 edit와 기존 Origin·X-Pinky-Token을 요구한다. 타인의 작업 취소에는
+manage도 필요하다. actor는 서버 세션에서 정하며 비협업 모드는 local-unidentified다.
+
+| 경로 | 입력과 반환 |
+|---|---|
+| `GET /api/review-ai/{index}` | 동작별 available/reason과 최신 30개 작업. 작업에는 id/frame/action/version/state/actor/model/model_digest/created_at/updated_at/error/result와 입력 해시가 포함된다. 비밀·서버 경로는 반환하지 않는다. |
+| `POST /api/review-ai/{index}` | 정확히 action과 version. action은 object_draft/pixel_draft/mask_check, version은 해당 객체/픽셀 저장 revision 정수. 새 작업 반환. |
+| `POST /api/review-ai-cancel/{id}` | 빈 JSON 객체. 작업 ID는 32자리 hex. 종료된 작업의 취소는 상태 유지. |
+| `GET /api/review-history/{lane}/{index}` | lane은 object/pixel. 선택적 before 양의 정수, limit 1..100(기본 20). events와 next_before, version 내림차순. |
+| `GET /api/review-versions/{lane}/{index}/{version}` | 저장 snapshot metadata, available, actor/ts/status(기록된 경우). 객체 boxes 또는 픽셀 해시·크기·클래스. 미보존은 available=false. |
+| `GET /api/review-version-images/{index}/{version}` | 검증된 과거 픽셀 overlay PNG. 미보존·해시/형식 오류는 400. |
+
+AI 작업 상태는 queued/running/succeeded/failed/cancelled/stale다. 성공은 후보·참고 의견 저장이며
+승인·학습 투입이 아니다. 생성 시 stale version은 409, 잘못된 입력·미설정은 400,
+권한 거부는 403이다. 결과 등록 전 요청자의 세션/권한과 입력을 재검사한다.
+재시도는 현재 revision으로 새 POST다. 기존 작업 이력은 유지한다.
