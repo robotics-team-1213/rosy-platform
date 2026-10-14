@@ -8469,6 +8469,18 @@ osy-d395-s1d\`.
 - gate 변화: FULL 착지의 시험 범위가 예전 경로의 상위 집합이 됐다. 남은 우회(`--tests none`, 손 `--ff-only`, 브랜치 자신의 `safety_review.py` 사본)와 한계는 D-762 단계 0 보충에 적었다.
 - 결정: 디스패처 검토(DO NOT LAND) 항목 1–7과 EXEMPT 데이터 파일 요청을 반영했다.
 
+## 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
+
+- 변경: D-765. 저장된 PAT·OAuth 연결의 기록된 범위와 learning.publish로 비공개 데이터셋·모델 저장소를 조회·생성·삭제한다. 읽기 연결과 가져오기는 유지한다. 파일 업로드와 Spaces는 포함하지 않는다.
+- 증거: 원격 pytest와 known_failures 비교는 이 커밋 뒤에 기록한다.
+- gate 변화: 없음. 실제 Hugging Face 계정 수용, 파일 업로드, 운영 배포는 이 변경으로 활성화하지 않는다.
+
+## 2026-10-14 · d685e1351 · test: Hugging Face 비공개 저장소 관리 원격 시험
+
+- 변경: 없음. D-765 구현 커밋 d685e1351의 시험 기록만 추가한다.
+- 증거: 모델 PC rosy@100.98.162.71에서 d685e1351 원격 pytest 53 passed, known_failures 0 NEW (`X:\DevTemp\hf-repo-manage\run-1.txt`). 시험 PC 셋 모두 여유 메모리 6 GB 아래여서 기준 미달이지만 닿는 호스트로 실행했다.
+- gate 변화: 없음.
+
 ## 2026-10-14 · df1b93395 · D-762 단계 1: merge_group 트리거, CI 전체 티어가 모든 모듈 묶음을 덮는다, 불안정 시험 격리
 
 - 변경: `ci.yml`에 `merge_group` 트리거를 넣었다. 전체 티어로 돌고, Safety-Review와 `HARNESS_BASE_REF`의 base는 `merge_group.base_sha`다. `concurrency:`는 넣지 않았다. 선택기(`tools/harness/affected_tests.py`)의 CI 전체 matrix에 `modules` 러너를 더했다. 빠져 있던 등록 모듈 묶음 21개, 시험 파일 130개가 이 러너에서 돌고, 첫 녹색까지는 보고만 한다. `CI_FULL_EXCLUDED`가 사유가 있는 유일한 제외다. `test/flaky_quarantine.txt`를 새로 두었다. 목록에 있는 실패는 CI 시험 단계와 `tools/remote/remote_pytest.py`에서 한 번 다시 돈다. `test/known_failures.py`는 다시 돌아 통과한 실패를 FLAKY로, 두 번 실패한 것을 NEW로 찍는다. 목록에 없는 시험은 다시 돌지 않는다.
