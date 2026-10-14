@@ -85,6 +85,7 @@ class MainActivity : Activity() {
                     account!!.session.retryRevocations()
                     listOfNotNull(session?.target?.id, secondarySession?.target?.id).distinct().take(2)
                         .forEach { account!!.session.access("robot:$it") }
+                    if (profileResource == null) profileResource = account!!.session.restoredProfileResource()
                     profileResource?.let { account!!.session.refreshProfile(it) }
                     main.post { profileButton?.apply { text = profileLabel(); contentDescription = profileLabel() } }
                 } finally { accountChecking = false } }

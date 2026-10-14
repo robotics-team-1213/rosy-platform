@@ -175,6 +175,8 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
     fun profile(resource: String): JSONObject? = profileSnapshot?.takeIf { it.identity == identity(resource) }?.let {
         JSONObject().put("account_id", it.accountId).put("login", it.login).put("display_name", it.name)
     }
+    @Synchronized fun restoredProfileResource(): String? = data.optJSONObject("tokens")?.keys()?.asSequence()
+        ?.firstOrNull { it in config.resources }
     @Synchronized fun refreshProfile(resource: String): JSONObject? {
         profileSnapshot = null
         return runCatching {

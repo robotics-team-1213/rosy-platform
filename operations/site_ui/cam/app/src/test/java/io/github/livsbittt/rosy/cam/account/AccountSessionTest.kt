@@ -16,6 +16,7 @@ class AccountSessionTest {
             }
         }, {1000})
         session.complete(callback(session.begin("site:test")))
+        assertEquals("site:test", session.restoredProfileResource())
         assertNotNull(session.access("site:test")); assertTrue(session.permits("site:test", "camera.manage")); assertEquals(0, calls)
         assertEquals("Alice", session.refreshProfile("site:test")!!.getString("display_name"))
         name = "Updated"; assertEquals("Updated", session.refreshProfile("site:test")!!.getString("display_name"))
@@ -28,7 +29,7 @@ class AccountSessionTest {
         name = "Alice"; session.refreshProfile("site:test")
         subject = "bob"; session.complete(callback(session.begin("site:test")))
         assertNull(session.profile("site:test")); assertEquals("bob", session.refreshProfile("site:test")!!.getString("account_id"))
-        session.logout(); assertNull(session.profile("site:test"))
+        session.logout(); assertNull(session.profile("site:test")); assertNull(session.restoredProfileResource())
     }
 
     @Test fun stalledProfileNeverBlocksCachedStopAndFailureClearsName() {
