@@ -368,7 +368,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `VALIDATION_ERROR` | 400 | 요청 스키마 위반 | 로봇/Fleet |
 | `ROBOT_MUST_BE_STOPPED` | 409 | staged 주행 정책 적용 전에 IDLE/EMERGENCY, 0 속도, line-follow OFF 조건이 충족되지 않음 | 로봇 |
 | `UNAUTHORIZED` | 401 | 토큰 없음/무효 | 로봇/Fleet |
-| `FORBIDDEN` | 403 | 권한 부족 | 로봇/Fleet |
+| `FORBIDDEN` | 403 | 권한 부족. D-760 9항: 목표를 보낸 토큰이 아닌 토큰의 `POST /navigation/goal/lease` | 로봇/Fleet |
 | `NOT_FOUND` | 404 | 리소스 없음 | 로봇/Fleet |
 | `MODE_CONFLICT` | 409 | 현재 모드에서 수행 불가 (예: MANUAL 중 NAV goal) | 로봇 |
 | `EMERGENCY_ACTIVE` | 409 | E-Stop 활성 상태 | 로봇 |
@@ -528,7 +528,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
 | POST | `/api/v1/navigation/goal` | Operator | NAV-001 (`{x,y,yaw}` 또는 `{waypoint}`; 선택적 `correlation_id`는 Fleet dispatch 시도 ID와 실행 이벤트를 잇는 추적 메타데이터). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
-| POST | `/api/v1/navigation/goal/lease` | Operator | D-550 10 (v1.160, Safety-Review). Fleet 목표 임대 갱신 `{correlation_id (1–128자), ttl_s (0 < s ≤ 5, 유한)}` → `{renewed: true, correlation_id, ttl_s}`. `POST /navigation/goal` 선택 필드 `lease_ttl_s`(0 < s ≤ 5, 유한, `correlation_id` 필요; 어기면 모드 전이 전에 400 `VALIDATION_ERROR`)로 연 임대를 늘린다. 활성이 아니거나(취소·도착·실패·만료·교체된) 임대 없이 연 `correlation_id`는 409 `GOAL_LEASE_NOT_ACTIVE`이고 목표를 되살리지 않는다. 만료하면 5 Hz 전원 타이머가 SAF-003 STOP과 같은 취소 경로로 목표를 취소한다(`nav.canceled` source `goal_lease`). 만료는 `fleet_loss_policy`와 관계없이 STOP이다: 임대가 먼저 끝나면 SAF-003은 지킬 목표가 없어 `safety.fleet_lost`를 내지 않는다(D-550 10). `ttl_s`는 CORE 단조 시계. 능력 `controls` `base_velocity.goal_lease: true`(목표 주행이 있을 때)일 때만 Fleet이 쓴다. `lease_ttl_s`가 없는 목표는 지금과 같다 |
+| POST | `/api/v1/navigation/goal/lease` | Operator | D-550 10 (v1.160, Safety-Review). Fleet 목표 임대 갱신 `{correlation_id (1–128자), ttl_s (0 < s ≤ 5, 유한)}` → `{renewed: true, correlation_id, ttl_s}`. `POST /navigation/goal` 선택 필드 `lease_ttl_s`(0 < s ≤ 5, 유한, `correlation_id` 필요; 어기면 모드 전이 전에 400 `VALIDATION_ERROR`)로 연 임대를 늘린다. 활성이 아니거나(취소·도착·실패·만료·교체된) 임대 없이 연 `correlation_id`는 409 `GOAL_LEASE_NOT_ACTIVE`이고 목표를 되살리지 않는다. 그 목표(`POST /navigation/goal`·`/navigation/home`)를 보낸 토큰이 아닌 토큰의 갱신은 403 `FORBIDDEN`이다(D-760 9항): 임대와 목표는 그대로이고 목표는 제 만료 시각에 끝난다. 활성 여부를 먼저 보므로 끝난 목표는 어느 토큰이든 409다. 만료하면 5 Hz 전원 타이머가 SAF-003 STOP과 같은 취소 경로로 목표를 취소한다(`nav.canceled` source `goal_lease`). 만료는 `fleet_loss_policy`와 관계없이 STOP이다: 임대가 먼저 끝나면 SAF-003은 지킬 목표가 없어 `safety.fleet_lost`를 내지 않는다(D-550 10). `ttl_s`는 CORE 단조 시계. 능력 `controls` `base_velocity.goal_lease: true`(목표 주행이 있을 때)일 때만 Fleet이 쓴다. `lease_ttl_s`가 없는 목표는 지금과 같다 |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
