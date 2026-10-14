@@ -1121,3 +1121,10 @@
 - gate 변화: SOURCE 근거만, 호스트 시험 미확인. `authority.py` 213줄.
 - 결정: D-758 0단계 독립 Safety-Review 조건 1·3.
 - 교훈: 같은 stamp에서 "가장 새것"은 안전 쪽이 아니다. 통행권은 모를 때 서야 한다.
+
+## 2026-10-14 · uncommitted · D-760 개정 3 9항: `line_follow.regulation_wait`
+
+- 변경: `line_follow/crosswalk/gate.py`에 `_regulation_wait(now)`를 두었다. 통행권 비`FREE` → `authority`, D-620 신호 대기(`signal/gate.py::_signal_holding`: 신호 켜짐, 들어가지 않은 회차, 교차로 `waiting`) → `signal`, 횡단보도 `waiting` → `crosswalk_wait`, `looking` → `crosswalk_look`, 건너는 중 앞 물체로 섬(`look_progress`) → `crosswalk_held`, 아니면 None. 우선순위는 그 순서다(횡단보도 셋은 서로 겹치지 않는다). `_regulated_wait_share`는 이 분류가 None이 아니면 dt 전부를 센다(사본 없음). 신호 대기가 새로 들어갔지만 그때 교차로는 `waiting`이라 기동 시계가 돌지 않고, 호는 틱을 가져가 교차로 문이 돌지 않는다. `manager.status()`가 꺼짐이 아니면 이 값을 `regulation_wait`에 넣어 `GET /line-follow`와 상태 스냅숏에 같이 실린다.
+- 증거: `middleware/core/services/test/test_line_regulation_wait.py`, `middleware/core/gateway/test/test_line_regulation_wait_api.py`. 고치기 전 커밋에서 새 시험 17건이 원격으로 실패했다.
+- gate 변화: SOURCE·호스트 근거만. Fleet은 아직 읽지 않는다(rosy-44 몫). Safety-Review 대상 경로(`crosswalk/gate.py`)를 건드렸다.
+- 결정: D-760 개정 3 9항. API Reference v1.227.

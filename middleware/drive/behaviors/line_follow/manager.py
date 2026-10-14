@@ -135,6 +135,7 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             self._reset_arc(reason or default)
             self._init_authority()
             self._xwalk.reset()
+            self._regulated_wait_sample = None
             self._init_lane_cue()  # D-430 review 10: a mode change (and E-stop) drops the cue and its latch
             self._generation += 1
             self._mode = selected
@@ -275,6 +276,8 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
                                                    'crosswalk_reported': True, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'lane_cue': self._lane_cue_view(self._clock()),
+                                                   'regulation_wait': None if self._mode is LineFollowMode.OFF
+                                                   else self._regulation_wait(self._clock()),  # D-760 rev 3 9
                                                    # run 2 fix 4: a latched cue HOLD names itself even when
                                                    # a later gate (junction_waiting) rewrote the reason
                                                    **({'reason': self._cue_latch} if self._cue_latch

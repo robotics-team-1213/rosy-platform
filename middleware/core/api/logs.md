@@ -988,3 +988,11 @@
 - gate 변화: 없음.
 - 결정: D-758 0단계.
 - 교훈: 없음.
+
+## 2026-10-14 · uncommitted · docs(api): D-758 0단계 계약 버전 v1.228 → v1.232 (main 병합)
+
+- 변경: main이 v1.226·v1.227·v1.230을 썼고 v1.229·v1.231은 착지 전 다른 브랜치(`feat/junction-turn-map-entry`)가 쓴다. D-758 0단계 절·`odom_pose` 설명·변경 기록 행·`api/app.py` 독스트링과 `description`·헤더 핀 시험 5개 파일을 v1.232로 옮겼다. 위 항목들과 foundation·fleet 기록이 적은 v1.228은 그 때의 번호다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, fleet 핀 시험. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-758 0단계.
+- 교훈: 없음.

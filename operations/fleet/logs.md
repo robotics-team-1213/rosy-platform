@@ -3626,3 +3626,51 @@
 - gate 변화: SOURCE·호스트 근거만.
 - 결정: D-758 0단계.
 - 교훈: 없음.
+
+## 2026-10-14 · fec267000 · D-760 3단계: trip 끊김 기다리기(link_wait), 통행권 줄이기·순서, 재시작 뒤 5 s
+
+- 변경: 임대를 쥔 trip에서 상태 읽기 실패나 로봇 호출 무응답은 trip을 끝내지 않고 `link_wait`로 둔다(`trip_progress._link_wait`). 그동안 교차로 지시·목표·늘린 통행권이 나가지 않고 블록 표에서 UNKNOWN이라 블록이 그대로 잡힌다. 끝내는 것은 `lease_lost`(기본 8 s)와, 임대 `ttl_s`를 넘겨 기다린 뒤의 정체 규칙뿐이다. 돌아오면 지도 버전과 차선 모드를 다시 보고(`trip_admission._link_back`) 실패하면 그 시작 거절 코드로 끝낸다. 정체 예외는 대기 사유→상한 표 하나(`_wait_bound`, 지금은 `link_wait`만). 송신기는 `seq`를 싣고 구간 id에 Fleet 프로세스 epoch를 넣는다. `line_follow_authority_shrink` 로봇에는 `ttl_s` 5와 `shrink`+`until_m` 0(답이 `accepted: true`일 때까지 주기마다), 없는 로봇에는 2와 옛 동작. 단계 중·`link_wait`·차선 켜기 전·시작 뒤 5 s에는 늘리지 않는다. 확인 전에는 지도 버전이 바뀐 로봇의 고정 블록이 마지막 `until_m`까지 덮는다. 출발 검사는 임대가 켜져 있으면 `line_follow_authority_under_lease`도 받는다. trip 임대 `ttl_s` 기본 8. 콘솔 상태 이름 `연결 대기`.
+- 증거: `operations/fleet/test/test_trip_link_wait.py` 새 시험(3·4.5·5.5 s 끊김 뒤 이어 감, 9 s `lease_lost`, 돌아온 뒤 모드·지도 버전 검사, 임대 없는 trip은 첫 실패에 끝, 임대가 살아 있는 동안 정체 아님, 블록 유지와 뒤 로봇 대기, 다섯 경우의 줄이기와 확인 뒤 멈춤, 플래그 없는 로봇 2 s·줄이기 없음, `seq`·재시작 뒤 새 구간, 재시작 뒤 5 s, 차선 켜기 전 통행권 없음). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만. Gazebo·장치 수용 전, 독립 Safety-Review 전.
+- 결정: D-760 Decision 1·2·3·4·5와 개정 2. 기본값 `fleet.traffic.authority`·`fleet.trip_lease_required`는 그대로 false(6단계).
+- 교훈: 송신 주기가 단계 결과를 기다리는 동안의 로봇도 "보내지 않음"이 아니라 "줄임"의 대상이다.
+
+## 2026-10-14 · 58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: HIGH-1 연결 끊김은 무응답(`HubError`, `OSError`·시간 초과, `httpx.TransportError`)만이고 `ValueError`·`RuntimeError`는 지금처럼 `failed`다. `link_wait`의 `since`는 한 단계가 끊김 없이 끝날 때까지 남는다. MEDIUM-2 trip이 끝나도 정지가 확인되지 않았으면(`stop_sent`가 참이 아님) 마지막 늘리기의 송신 시각 + 5 s + 클라이언트 한도까지 고정 블록이 그 끝을 덮는다. MEDIUM-3 단계 중인 로봇에는 늘리기도 줄이기도 보내지 않는다(검토자 결정, ADR에는 검토자가 적는다). 작은 것: `shrink_none_held`는 확인으로 센다, 통행권이 켜져 있으면 trip 임대 `ttl_s`는 5 s보다 커야 한다, 돌아올 때 끊긴 뒤 보낸 임대 갱신이 확인되어야 한다, `link_wait` 동안 목표 임대를 갱신하지 않고 돌아오면 목표를 다시 보낸다.
+- 증거: `test_trip_link_wait.py`에 시험을 더해 먼저 원격에서 8건 실패를 보고(3aa6ff21b), 고친 뒤 trip·교통 묶음이 원격에서 통과했다(`known_failures` 0 new). 다리 확인과 `forget` 호출을 지우는 변이를 잡는 시험 두 건을 더했다.
+- gate 변화: 없음. 독립 Safety-Review 재확인 전.
+- 결정: D-760 Decision 3·4, 3단계 Safety-Review.
+- 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
+
+## 2026-10-14 · 264b378bf · D-763 조각 1: 주인 검사 하나로 TRIP_ROBOT_BUSY 일곱 곳을 모은다
+
+- 변경: `TripAware.trip_refusal(robot_ids)`(`console/console_view.py`)가 "이 로봇에 주인이 있는가"의 하나뿐인 검사다. `trip_busy` 위에 서고, 주인이 있으면 `HubError("TRIP_ROBOT_BUSY", ...)`를, 없으면 None을 준다. 대화 요청 제출, 콘솔 목표 받기와 비켜설 자리 보내기, 막힘 결정, `/route`, `/goal`, `trip_guard`의 대형·차선 추종 거절이 이것을 부르고, 각자 응답 모양·문구·검사 순서는 그대로다. `trip_runner` 시작 때의 `engaged` 검사는 반대 질문(콘솔 움직임이 이미 있는가)이라 그대로 둔다. Fleet 크기 단위 56856 → 56854.
+- 증거: 원격 시험(ai PC) 631 passed, `known_failures` 0 new, 로그 X: `holder-check/run-1.txt`. 새 시험: 대화 요청 제출 409 문자열, `/goal`·`/route`·막힘 BACK_AND_RETRY의 409 본문 전체.
+- gate 변화: 없음. 동작 같음.
+- 결정: D-763 4항, 구현 조각 1. Safety-Review는 커밋 trailer.
+
+## 2026-10-14 · 6bb334d16 · D-763 조각 5: 승인은 단계 종류 등록부가 정한다
+
+- 변경: `step_action_kinds.StepActionKind`에 `approval`(값 `two_person`·`proposer_only`·`one_person`, 엄한 순서 `APPROVALS`)을 더했다. `CELL_TRANSFER`는 `two_person`. 레거시 `PICK_PLACE`는 단계 원장 규칙이 없어 `_LEGACY_APPROVALS`에 `proposer_only`로 따로 적었다(실물 하달 조각에서 두 사람으로, 개정 2 질문 5). `required_approval(kinds)`는 가장 엄한 값을 주고 모르는 종류·빈 목록은 `ValueError`. `mission_routes` admit은 `decidable()`로 등록부 판정을 읽고 `candidate.kind` 분기를 지웠다. 코드와 순서는 그대로(`CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER` 403, `PICK_PLACE` 비제안자 404, `PROPOSAL_NOT_RESOLVED` 409).
+- 증거: `test_approval_registry.py`(등록된 모든 종류에 승인 값, 종류별 값, 모르는 종류 거절, 제안 단계의 모르는 종류 422, 두 사람 종류의 제안자 403과 다른 운영자 승인, 제안자만 종류의 다른 운영자 404·viewer 403, 공유 콘솔 토큰 403). 원격 119 passed: `X:/DevTemp/approval-registry/s5/run-1.txt`.
+- gate 변화: 없음. 동작은 같다.
+
+## 2026-10-14 · 65bea79df · D-763 조각 5b: 승인 대기 작업의 거절 경로 (API v1.230)
+
+- 변경: `POST /api/fleet/missions/{mission_id}/reject`, 본문 `FleetWorkDecisionRequest {expected_generation}`(`core_common.protocol.work`, admit·Cell resume도 같은 모델). 이름 있는 운영자만, 볼 수 있는 범위는 admit과 같은 등록부 판정. 제안자는 `WITHDRAWN_BY_PROPOSER`, 다른 운영자는 `REJECTED_BY_OPERATOR`. Cell Job은 취소와 같은 끝 상태 HOLD/`CANCELLED_BY_OPERATOR`(resume·cancel·admit 거절, 사건 `CELL_JOB_REJECTED`), 레거시 Mission은 `CANCELED`(사건 `MISSION_REJECTED`). claim 없음. `PROPOSED`가 아니거나(두 번째 거절 포함) 정지 세대가 다르면 409 `MISSION_REJECT_REFUSED`. 크기: admit의 두 원장 분기를 한 경로로, 제안 생성·resolve의 Cell 역할 검사를 도우미 하나로, `cell_job_store._json`을 `mission_store._json` 재사용으로 줄였다.
+- 증거: `test_approval_registry.py` 거절 시험(제안자 철회와 다른 운영자 404, 다른 운영자의 Cell 거절, viewer·서비스 403, 낡은 세대 409, 두 번째 거절 409, 거절 뒤 admit·resume 409, claim 없음, 감사 사건의 행위자, 공유 토큰 403, 잘못된 본문 422). 원격 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 화면(조각 5c)은 이 브랜치에 없다.
+- 결정: v1.228·v1.229는 착지 전 브랜치(`fix/odom-log-monotonic-epoch`, `feat/junction-turn-map-entry`)가 쓰고 있어 v1.230을 썼다. 대화 요청에 연결된 작업의 서버 쪽 직접 승인 차단은 이 조각에서 하지 않았다.
+
+## 2026-10-14 · 65e315231 · D-763 조각 5·5b 보안 검토 반영
+
+- 변경: `decidable()`가 resolve된 원장 행의 단계 종류(Cell Job 단계의 `action_kind`, Mission `action_kind`)에서 가장 엄한 승인을 읽는다. 등록부에 없는 종류는 500이 아니라 409 `APPROVAL_RULE_UNREGISTERED`. resolve 전 제안의 보이는 범위는 전과 같다(Cell·제안자 409, 그 밖 404). Cell 거절은 새 메서드 대신 `CellJobStore.cancel(decision=, expected_generation=)`(사건 `CELL_JOB_REJECTED` 그대로). 대화 요청에 연결된 작업의 거절은 기존 결과 회신 경로로 요청자에게 간다: Cell `HOLD`는 이미 회신했고 Mission `CANCELED`를 관측 상태에 더했다. 작업 흐름 행은 `LINKED`(그 관계의 끝 상태)로 남는다. `work.py` docstring에 v1.230.
+- 증거: `test_approval_registry.py`(경로 수준의 가장 엄한 값, 미등록 종류 409, 대화 요청 연결 작업 거절의 회신). 원격 `X:/DevTemp/approval-registry/r2/run-1.txt`, secret-scan 가드 `test/test_release_boundary_guards.py` 포함, `known_failures` 0 new.
+- gate 변화: 없음.
+
+## 2026-10-14 · c53057fef · Fleet 작업 원장을 자기 크기 단위로 등록 (D-763 5·5b)
+
+- 변경: `docs/plans/2026-10-14-fleet-ledger-size-unit.md`. `fleet/fleet/server/ledger` 단위, 판정값 6,985(`61aa49b32`에서 잼), `fleet` 판정값 31,837. 지금 서버 31,886, 원장 7,036, 관제 18,023. 원장은 `__init__.py` 없는 `fleet.server` 보관 자리라 하위 패키지 시험이 `FLEET_SERVER_HOLDER_UNITS`도 받는다.
+- 증거: 원격 `test/architecture` 결과는 이 브랜치 보고에 적는다.
+- gate 변화: 없음. 독립 재판정 전.
