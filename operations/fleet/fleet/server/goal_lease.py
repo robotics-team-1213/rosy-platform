@@ -13,7 +13,7 @@ One renewer per goal source (D-550 10), each only while its reason to move holds
 - ``trip``: the trip loop, each step.
 
 Renewal of a goal stops on a console cancel (also the internal route/trust/hold cancels), an
-E-stop, or CORE's 409. Fleet stopping stops it all: CORE cancels each goal within ttl.
+E-stop, or CORE's 409 or 403. Fleet stopping stops it all: CORE cancels each goal within ttl.
 """
 
 from __future__ import annotations
@@ -165,7 +165,8 @@ class GoalLeases(dict):
     async def renew(self, renewer: str = "console", robot_id: Optional[str] = None) -> None:
         """Renew each leased goal of ``renewer`` (``console``: operator, dispatch and yield goals;
         ``trip``: trip goals; only ``robot_id`` when given) whose source still holds. A 409 means
-        the goal ended on the robot (arrived, failed, cancelled, replaced, expired): renewal stops.
+        the goal ended on the robot (arrived, failed, cancelled, replaced, expired), a 403 that this
+        client did not send it (D-760 9; CORE expires it): renewal stops either way.
         Any other failure is left to CORE, which cancels the goal when its lease runs out."""
         for rid, lease in list(self.items()):
             if lease["state"] != "leased" or robot_id not in (None, rid):
@@ -176,7 +177,11 @@ class GoalLeases(dict):
                     continue
                 await client.navigation_goal_lease(lease["correlation_id"], lease["ttl_s"])
             except Exception as exc:  # RobotApiError carries .status; no import (D-430 §3 rule 1)
-                if getattr(exc, "status", None) == 409 and self.get(rid) is lease:
+                status = getattr(exc, "status", None)
+                if status in (403, 409) and self.get(rid) is lease:
+                    # D-760 9: 403 = this client is not the goal's sender; CORE will expire it
                     self.pop(rid, None)
+                    if status == 403:
+                        logger.warning("goal lease renewal for %s refused (not the sender): %s", rid, exc)
                 else:
                     logger.warning("goal lease renewal for %s failed: %s", rid, exc)
