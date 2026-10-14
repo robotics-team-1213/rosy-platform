@@ -81,6 +81,12 @@
 - **닿는 곳:** `middleware/core/services/core_features/state/manager.py`(odom 기록, `odom_pose.epoch`·단조 시각), `middleware/drive/behaviors/line_follow/authority.py`·`cue/lane_cue.py`(조회), `contracts/foundation/core_common/protocol/schemas.py`·`localization.py`(`OdomPose` 추가 필드), Fleet `rosy.world...map_pose`(epoch가 바뀌면 기준을 버림), API Reference
 - **작업:** 기록을 StateManager로 옮기고 단조 시각으로 찾는다. `pose_stamp`는 Fleet이 돌려주는 값 그대로 비교하므로 스냅숏이 단조 시각을 같이 내고 Fleet이 그것을 돌려준다(옛 Fleet의 벽시계 stamp도 받는다).
 - **시험:** 벽시계를 ±5 s 옮긴 뒤 통행권·호·차로 신호의 조회가 같은 표본을 찾는다. odom이 0으로 돌아가면 epoch가 늘고 Fleet 추적기가 기준을 버린다. 기존 D-517·D-744·D-511 시험 통과.
+- **범위 변경(2026-10-14, 코드 조사 뒤):** odom 기록은 이미 하나다(`line_follow/authority.py` `_odom_log`, 세 조회가 같이 쓴다). 그래서 기록을 옮기지 않는다. 대신 다음처럼 한다.
+  - 스냅숏이 내는 벽시계 stamp와 단조 시각을 기록 항목에 같이 적는다.
+  - 조회는 Fleet이 돌려준 stamp와 정확히 같은 항목을 찾는다. 나이·미래·순서 판정은 단조 시각으로 한다. 정확히 같은 항목이 없으면 지금 방식으로 찾는다(옛 Fleet).
+  - StateManager가 odom 불연속에만 느는 `odom_pose.epoch`와 `odom_pose.mono_s`를 낸다(선택 필드, v1.228). 차선 추종 모드 변경으로는 늘지 않는다.
+  - Fleet은 `map_pose.py`만 고쳐 epoch가 바뀌면 기준을 버린다.
+  - Fleet이 단조 stamp를 돌려주는 것은 사이트 앵커(D-758 2단계 이후)로 미룬다. 3단계 파일 9개와 겹치지 않는다.
 
 ## 3단계 — Fleet trip 루프: 끊김 기다리기, 줄이기 송신, 재시작 뒤 T
 
