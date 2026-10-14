@@ -417,7 +417,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic.period(self._live.values())
         slow = self.authority.busy()  # an authority still out from an earlier period: no advice beside it
         settled = [live for r, live in self._live.items() if r not in self._inflight]  # mid-step: none
-        self.authority.period(self._live.values(), set(self._inflight))  # mid-step: no extend (D-760 Context 5)
+        self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
 
     async def _tick_robot(self, live: LiveTrip) -> None:
