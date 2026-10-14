@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.225
+**Version:** v1.229
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,12 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.229 교차로 회전의 지도 출구 방향 (D-759 개정 1)
+
+`POST /api/v1/line-follow/junction`의 `map_entry`(v1.224)를 `turn_deg`가 있는 `left`·`right`에도 싣는다. 회전 목표를 진입 yaw + `turn_deg`가 아니라 지도의 출구 차로 방향에 두기 위한 값이다. 능력 `base_velocity.lane_turn_map_entry`가 참인 CORE에만 보낸다. 그 능력은 CORE 설정 `line_follow.turn_map_entry_enabled`(bool, 기본 `false`)가 켜져 있고 `junction_turn`이 참일 때만 참이다. 설정이 꺼진 CORE는 받은 `map_entry`를 쓰지 않는다(`disabled`). 없는 지시와 설정이 꺼진 CORE의 회전은 v1.228과 같다.
+
+필드와 범위는 v1.224와 같고 `yaw_rad`만 뜻이 다르다: 출구 차로가 교차로 장소에서 시작하는 방향(지도 좌표)이다. `straight`·`stop`이나 `turn_deg` 없는 `left`·`right`에 실으면 400 `VALIDATION_ERROR`다. CORE는 받은 때 굽이와 같이 그 방향을 odom으로 옮겨 둔다(`odom yaw + yaw_rad − pose_yaw_rad`). 교차로에 서서 회전을 시작할 때 그 방향이 오늘의 목표(진입 yaw + `turn_deg`)에서 30° 안이면 목표를 그 방향으로 둔다. 회전 규칙(정지 확인, 5° 안 정착, 시간 상한), `advance_m`, 재획득은 그대로이고 재획득의 30° 비교도 그 목표를 쓴다. 쓰지 못하면 지시를 거절하지 않고 오늘의 목표를 쓰며 까닭을 `line_follow.junction.map_entry_reason`에 남긴다(`none_sent`·`disabled`·`stale`·`future`·`no_sample`·`epoch`·`carry`·`heading`, 뜻은 v1.224와 같고 `heading`은 오늘의 목표와 30° 초과). `map_entry_used`는 회전 목표가 지도 방향일 때만 참이다. 이제 `turn_deg`가 있는 `left`·`right`에서도 이 두 필드가 채워진다. Fleet은 능력이 참이고 이번 주기에 로봇을 찾은 지도 자세에 `odom_stamp`가 있을 때만 싣는다. SOURCE와 호스트 단위 시험까지이며 SIM·장치 수용은 하지 않았다.
 
 ### v1.225 통행권: 5초, 명시적 줄이기, 순서, trip 임대 중 강제 (D-760 1–3항)
 
@@ -3003,6 +3009,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.229 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 30° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 v1.228의 목표다. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
 | v1.225 | 2026-10-14 | Additive + Behavior (D-760 1–3항, feat/authority-ttl5-shrink-under-lease, Safety-Review 대상): `POST /api/v1/line-follow/authority` `ttl_s` 상한 2 → 5 s, 선택 필드 `shrink`(bool)·`seq`(정수 ≥ 0), 응답 `reason: stale_seq`·`seq_required`·`seq_legs_full`·`shrink_none_held`. CORE trip lease 가 열려 있는 동안 line-follow 는 통행권이 없으면 `authority_none` 으로 선다(임대가 없으면 v1.224 그대로). 능력 `base_velocity.line_follow_authority_shrink`·`line_follow_authority_under_lease`. 추가 필드와 임대가 없는 요청의 동작은 v1.224와 같다. Fleet 송신은 바뀌지 않는다(D-760 3단계) |
 
 | v1.225 | 2026-10-14 | Additive (D-754): `POST /api/v1/line-follow/junction` `action: bend` 선택 필드 `next_line_in_m`(0–2 m, 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_bend_next_line`, Fleet trip 보기 `caps.lane_bend_next_line`. 필드가 없는 지시와 능력이 없는 로봇은 그대로다. 상태·응답·envelope 1.0 변경 없음. |
