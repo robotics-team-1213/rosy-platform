@@ -3584,3 +3584,11 @@
 - gate 변화: SOURCE·호스트 근거만. Gazebo·장치 수용 전, 독립 Safety-Review 전.
 - 결정: D-760 Decision 1·2·3·4·5와 개정 2. 기본값 `fleet.traffic.authority`·`fleet.trip_lease_required`는 그대로 false(6단계).
 - 교훈: 송신 주기가 단계 결과를 기다리는 동안의 로봇도 "보내지 않음"이 아니라 "줄임"의 대상이다.
+
+## 2026-10-14 · c695a936e..58a3fdc99 · D-760 3단계 독립 Safety-Review CONDITIONS 반영
+
+- 변경: HIGH-1 연결 끊김은 무응답(`HubError`, `OSError`·시간 초과, `httpx.TransportError`)만이고 `ValueError`·`RuntimeError`는 지금처럼 `failed`다. `link_wait`의 `since`는 한 단계가 끊김 없이 끝날 때까지 남는다. MEDIUM-2 trip이 끝나도 정지가 확인되지 않았으면(`stop_sent`가 참이 아님) 마지막 늘리기의 송신 시각 + 5 s + 클라이언트 한도까지 고정 블록이 그 끝을 덮는다. MEDIUM-3 단계 중인 로봇에는 늘리기도 줄이기도 보내지 않는다(검토자 결정, ADR에는 검토자가 적는다). 작은 것: `shrink_none_held`는 확인으로 센다, 통행권이 켜져 있으면 trip 임대 `ttl_s`는 5 s보다 커야 한다, 돌아올 때 끊긴 뒤 보낸 임대 갱신이 확인되어야 한다, `link_wait` 동안 목표 임대를 갱신하지 않고 돌아오면 목표를 다시 보낸다.
+- 증거: `test_trip_link_wait.py`에 시험을 더해 먼저 원격에서 8건 실패를 보고(3aa6ff21b), 고친 뒤 trip·교통 묶음이 원격에서 통과했다(`known_failures` 0 new). 다리 확인과 `forget` 호출을 지우는 변이를 잡는 시험 두 건을 더했다.
+- gate 변화: 없음. 독립 Safety-Review 재확인 전.
+- 결정: D-760 Decision 3·4, 3단계 Safety-Review.
+- 교훈: 블록 표가 한 번도 놓지 않은 로봇은 모든 지시를 막으므로, 끊김 시험은 로봇을 먼저 표에 놓아야 그 경로를 지난다.
