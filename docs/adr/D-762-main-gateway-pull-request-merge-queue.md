@@ -52,6 +52,7 @@
 단계별 보충:
 
 - **단계 0 (다)의 방식은 구현에서 고른다.** 후보 브랜치에 대한 workflow dispatch를 쓴다. PR은 쓰지 않는다. 로컬 `main`이 origin보다 앞서 있는 동안 PR을 열면 그 브랜치와 상관없는, 아직 push하지 않은 커밋이 같이 공개된다.
+- **단계 0 구현 기록 (2026-10-14, `feat/main-gateway-stage0`).** (가) `tools/land.py`는 착지가 `main`에 더하는 커밋에, `tools/hooks/pre-push`는 `origin/main..`push 커밋에 CI `scope` 잡과 같은 `tools/harness/safety_review.py`를 돌리고, trailer가 없으면 착지와 push를 거절한다. (다) 선택기(`tools/harness/affected_tests.py`)는 폴더를 넘는 rename, 지운 Python 모듈, `package.xml`, `_source_layout.py`, `test/architecture/**`, `test/known_failures.txt`를 FULL에 더하고, 트리거 아래의 Markdown 기록과 `adr_gaps.txt`, node 시험 파일은 FULL에서 뺀다. FULL 착지는 위 보충과 달리 workflow dispatch가 아니라 실험실 시험 PC에서 전체 티어(`CI_FULL_MATRIX`와 루트 `test/`)를 돌리고 NEW 0일 때만 착지한다. 후보 브랜치를 GitHub에 올리는 것도 아직 push하지 않은 커밋을 공개하기 때문이다. 시험 PC가 없으면 착지하지 않는다(D-584). 「열린 항목」 4의 상한은 걸지 않고, 착지 뒤 로컬 `main`이 `origin/main`보다 몇 커밋, 몇 시간 앞인지만 찍는다. (나)는 이 구현에 들어 있지 않다.
 - **단계 2의 안전한 쪽.** `main`이 적색이거나 큐가 막히면 새 릴리스가 나가지 않고, 로봇은 마지막으로 좋았던 릴리스에 머문다. 이것이 의도한 실패 방향이다. 급한 현장 수정이 막힐 수 있다는 비용은 벤치 예외가 아니라 `main`을 고치는 것(따로 정할 것 5)으로 푼다.
 - **단계 3을 묶는 이유.** 큐 없이 검사만 필수로 걸면 녹색 PR 둘이 합쳐져 `main`을 깨뜨릴 수 있다. `merge_group` 트리거 없이 걸면 큐의 검사가 영원히 오지 않는다. CODEOWNERS 없이 걸면 PR이 자기를 막는 검사를 고칠 수 있다. 에이전트가 관리자 신원으로 push하는 동안에는 우회가 그대로 남는다.
 - **큐의 병합 방식.** 설계 세션의 권고는 merge commit이다. squash는 커밋 sha를 바꿔서 조상 검사(D-761 제안)와 착지 기록의 sha 연결이 끊긴다. 확정은 단계 3을 적용할 때 한다. 그때까지 저장소 설정은 squash 하나다.

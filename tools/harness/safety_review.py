@@ -24,8 +24,8 @@ on the paths it changes against every parent (``diff-tree --cc``: conflict
 resolutions and evil-merge edits); what it brings in is checked on the merged
 commits themselves.
 
-``--warn-only`` prints the same report and exits 0; ``tools/hooks/pre-push`` uses it
-as an opt-in early warning. The CI step is the enforcement.
+``--warn-only`` prints the same report and exits 0. CI's ``scope`` job, ``tools/land.py`` (the commits a
+landing adds) and ``tools/hooks/pre-push`` (``origin/main..`` the pushed sha) enforce it (D-762 stage 0).
 """
 
 from __future__ import annotations
