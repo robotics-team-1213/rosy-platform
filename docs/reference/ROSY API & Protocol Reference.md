@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.226
+**Version:** v1.228
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.228 odom 세대와 단조 수신 시각, odom 기록은 발행한 stamp로 찾는다 (D-758 0단계)
+
+스냅숏 `odom_pose`에 선택 필드 둘을 더한다. 필드가 없는 스냅숏(v1.227 이하 CORE)은 그대로 읽힌다. 요청·응답·envelope 1.0 변경 없음.
+
+| 필드 | 형식 | 뜻 |
+|---|---|---|
+| `odom_pose.epoch` | 정수 ≥ 0 | CORE 시작 뒤 odom 불연속 횟수. 한 표본에서 0.02 m + 0.2 m/s × 수신 간격을 넘는 이동, odom 메시지 `frame_id` 변경, ROS 헤더 시각이 뒤로 감 가운데 하나일 때만 는다. 원점을 지나 달리는 것과 line-follow 모드 변경은 세지 않는다 |
+| `odom_pose.mono_s` | 유한 실수 | 같은 수신의 CORE 단조 시각(s). 로봇 사이·재시작 사이에 비교하지 않는다 |
+
+- **CORE 조회.** `POST /line-follow/authority`의 `pose_stamp`, lane cue의 `pose_stamp`, `exit_segment.map_anchor`·`map_entry`의 `odom_stamp_s`는 그대로 스냅숏 `odom_pose.stamp`다. CORE는 그 stamp로 발행한 odom 표본을 찾고(|차| ≤ 1 µs, 같은 값이 둘이면 가장 새것), 그 표본의 나이와 순서는 line-follow 시계(장치 `time.monotonic`, `use_sim_time`에서 시뮬레이션 시각)로 잰다. 벽시계가 움직여도 같은 표본을 찾는다. 발행한 값과 맞지 않는 stamp(옛 Fleet의 계산한 값)는 v1.226과 같이 벽시계에서 그 이전 표본을 찾는다. 통행권의 `seq` 기억도 line-follow 시계로 잰다.
+- **Fleet.** 지도 자세 추적기는 `epoch`가 바뀐 표본을 받으면 이동이 없어도 odom 기록과 기준을 버린다(`epoch`가 없는 로봇은 그대로 이동 크기로 판정한다). Fleet이 돌려주는 stamp는 바뀌지 않는다.
 
 ### v1.226 통행권: 5초, 명시적 줄이기, 순서, trip 임대 중 강제 (D-760 1–3항)
 
@@ -867,8 +879,10 @@ v1.70 추가 경로(모두 Bearer 인증):
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
 
 ```json
-"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123 }
+"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
 ```
+
+v1.228(D-758 0단계)부터 `epoch`(odom 불연속 횟수)와 `mono_s`(같은 수신의 CORE 단조 시각)를 같이 싣는다. 뜻과 규칙은 위 「v1.228」 절이다. 이전 CORE는 둘을 싣지 않는다.
 
 `safety_policy` 는 v1.71 additive 다(D-400). 공급자가 없거나 공급자가 실패하면 `null` 이다(CORE 가 실패를 로그에 남긴다). 같은 블록이 Fleet 하트비트의 상태 스냅샷에도 실린다. `safety` 는 e-stop 요약, `safety_policy` 는 D-400 정책 모드·그림자 기록이다.
 
@@ -3003,6 +3017,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.228 | 2026-10-14 | Additive (D-758 0단계, fix/odom-log-monotonic-epoch, Safety-Review 대상): 스냅숏 `odom_pose.epoch`(odom 불연속 횟수)·`mono_s`(CORE 단조 수신 시각). CORE는 통행권·lane cue·호 기준의 odom 표본을 발행한 `odom_pose.stamp`로 찾고 나이·순서를 line-follow 시계로 잰다(벽시계 이동에 무관). 맞지 않는 stamp는 v1.226과 같다. Fleet 지도 자세 추적기는 `epoch`가 바뀌면 기준을 버린다. 요청·응답·envelope 1.0 변경 없음. |
 | v1.226 | 2026-10-14 | Additive + Behavior (D-760 1–3항, feat/authority-ttl5-shrink-under-lease, Safety-Review 대상): `POST /api/v1/line-follow/authority` `ttl_s` 상한 2 → 5 s, 선택 필드 `shrink`(bool)·`seq`(정수 ≥ 0), 응답 `reason: stale_seq`·`seq_required`·`seq_legs_full`·`shrink_none_held`. CORE trip lease 가 열려 있는 동안 line-follow 는 통행권이 없으면 `authority_none` 으로 선다(임대가 없으면 v1.225 그대로). 능력 `base_velocity.line_follow_authority_shrink`·`line_follow_authority_under_lease`. 추가 필드와 임대가 없는 요청의 동작은 v1.225와 같다. Fleet 송신은 바뀌지 않는다(D-760 3단계) |
 
 | v1.225 | 2026-10-14 | Additive (D-754): `POST /api/v1/line-follow/junction` `action: bend` 선택 필드 `next_line_in_m`(0–2 m, 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_bend_next_line`, Fleet trip 보기 `caps.lane_bend_next_line`. 필드가 없는 지시와 능력이 없는 로봇은 그대로다. 상태·응답·envelope 1.0 변경 없음. |
