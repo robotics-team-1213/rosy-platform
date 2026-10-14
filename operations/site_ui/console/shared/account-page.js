@@ -1,5 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
-import {canManageAccounts, CAPABILITIES} from '/console/assets/account-permissions.js';
+import {canManageAccounts, canViewAccountSetup, CAPABILITIES} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
 let owner = null, rows = [], selected = null, busy = false;
@@ -7,7 +7,7 @@ const lifetime = new AbortController();
 let invalidated = false;
 function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
 window.addEventListener('storage', event => {
-  if (event.key === 'rosy.fleet.account.identity' && owner && event.newValue !== owner) {
+  if (event.key === 'rosy.fleet.account.identity' && (!owner || event.newValue !== owner)) {
     invalidated = true; lifetime.abort(); fail(changed());
   }
 });
@@ -26,6 +26,8 @@ function status(text, state = 'ready') {
 function clearSecrets() { $('account-password').value = ''; $('account-reset-password').value = ''; }
 function fail(error) {
   clearSecrets();
+  $('account-setup').hidden = true; $('account-clients').replaceChildren();
+  $('account-setup-state').textContent = '';
   if ([401, 403].includes(error.status) || error.code === 'ACCOUNT_CHANGED') {
     $('account-content').hidden = true; $('account-login').hidden = false;
     $('account-grants').replaceChildren(); $('account-list').replaceChildren(); selected = null;
@@ -146,4 +148,30 @@ for (const [id, action] of [['account-reset', 'reset-password'], ['account-revok
   });
 }
 $('account-form').addEventListener('submit', event => { event.preventDefault(); $('account-save').click(); });
-perform(async () => { await load(); status('관리할 계정을 선택하거나 새 계정을 만드세요.'); });
+async function setup() {
+  $('account-setup').hidden = true; $('account-clients').replaceChildren();
+  try {
+    const before = await rawRequest('/api/fleet/auth/session', {signal:lifetime.signal});
+    if (!canViewAccountSetup(before)) throw Object.assign(new Error(), {status:403});
+    const result = await rawRequest('/api/fleet/auth/setup', {signal:lifetime.signal});
+    const after = await rawRequest('/api/fleet/auth/session', {signal:lifetime.signal});
+    if (invalidated || JSON.stringify(before) !== JSON.stringify(after)) throw changed();
+    $('account-setup-state').textContent = result.configured
+      ? `통합 로그인 설정 적용됨 · ${result.issuer}`
+      : '통합 로그인이 아직 설정되지 않았습니다. 서버 설치 안내에 따라 활성화하세요.';
+    for (const client of result.clients) {
+      const item = document.createElement('li');
+      item.textContent = `${client.client_id} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`;
+      $('account-clients').append(item);
+    }
+    $('account-setup').hidden = false; $('account-login').hidden = true;
+    if (canManageAccounts(after)) {
+      await perform(async () => { await load(); status('관리할 계정을 선택하거나 새 계정을 만드세요.'); });
+    } else {
+      $('account-content').hidden = true;
+      status('최초 서버 설정을 마친 뒤 지정된 계정 관리자로 다시 로그인하세요.', 'warning');
+    }
+  } catch (error) { fail(error); }
+}
+$('account-setup-reload').addEventListener('click', setup);
+setup();
