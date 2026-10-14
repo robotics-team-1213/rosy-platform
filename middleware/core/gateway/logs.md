@@ -1110,6 +1110,22 @@
 - 결정: D-760 Decision 2.
 - 교훈: 없음.
 
+## 2026-10-14 · uncommitted · fix(bridge): D-758 0단계 odom 스냅숏 stamp를 line-follow odom 기록에 넘긴다
+
+- 변경: `core/bridge/ros_bridge.py::_on_odom`이 `state.set_odom_pose`를 먼저 부르고(odom `frame_id`·헤더 시각을 같이 넘겨 epoch 판정) 그 반환 stamp를 `odometry.observe_lane_return(..., wall=)`로 line-follow에 넘긴다.
+- 증거: `test_lane_return_odometry.py::test_the_published_wall_stamp_keys_the_odom_log`(수정 전 적색), `test_line_follow_lane_cue.py` 벽시계 ±5 s 시험, `middleware/core/gateway/test` 2865 통과(`X:/DevTemp/odom-monotonic/gw/run-1.txt`), `known_failures` NEW 0.
+- gate 변화: SOURCE·호스트 근거만. `ros_bridge.py` 910 → 912줄(판정 799 + 150 안).
+- 결정: D-758 0단계.
+- 교훈: 없음.
+
+## 2026-10-14 · uncommitted · refactor(bridge): D-758 0단계 검토 2항 — odom 넘김을 `odometry.observe_odom`으로
+
+- 변경: `ros_bridge._on_odom`의 스냅숏 stamp → line-follow 기록 넘김을 ROS 없는 `core/bridge/odometry.py::observe_odom`으로 옮기고 `_on_odom`은 그것을 부른다(`test_bridge_timers.py`가 콜백 시험을 ROS 없는 형제 모듈에 두라고 한다). `ros_bridge.py` 912 → 908줄.
+- 증거: `test_lane_return_odometry.py::test_the_odom_callback_logs_the_sample_under_the_snapshots_stamp`. `wall=wall`을 뺀 변이 커밋 `1a0413b01`(가지에 없음)을 만들었으나 원격 실행은 전송 실패로 확인 못 함.
+- gate 변화: SOURCE 근거만, 호스트 시험 미확인.
+- 결정: D-758 0단계 독립 Safety-Review 조건 2.
+- 교훈: 없음.
+
 ## 2026-10-14 · 775b1f3f6 · 설정 line_follow.turn_map_entry_enabled를 읽는다 (D-759 개정 1)
 - 변경: `core/drive/line_follow.py`가 `turn_map_entry_enabled`를 bool로만 읽는다(기본 꺼짐).
 - 증거: `test/test_line_junction_api.py`(기본값, 켬, 문자열 거절), `test/test_capabilities_controls.py`. 원격 결과는 이 브랜치의 최종 보고에 적는다.

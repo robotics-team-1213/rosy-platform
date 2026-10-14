@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.232
+**Version:** v1.234
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -14,6 +14,18 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 > 구현 시 본 문서를 OpenAPI(YAML)로 기계 판독 가능하게 유지하는 것을 원칙으로 한다(계약 테스트의 원천).
 
 **관련 문서:** ROSY-CORE-SRS-001 / ROSY-FLEET-SRS-001 / ROSY-ADR-001 / ROSY-PLN-001
+
+### v1.234 odom 세대와 단조 수신 시각, odom 기록은 발행한 stamp로 찾는다 (D-758 0단계)
+
+스냅숏 `odom_pose`에 선택 필드 둘을 더한다. 필드가 없는 스냅숏(v1.233 이하 CORE)은 그대로 읽힌다. 요청·응답·envelope 1.0 변경 없음.
+
+| 필드 | 형식 | 뜻 |
+|---|---|---|
+| `odom_pose.epoch` | 정수 ≥ 0 | CORE 시작 뒤 odom 불연속 횟수. 한 표본에서 0.02 m + 0.2 m/s × 수신 간격을 넘는 이동, odom 메시지 `frame_id` 변경, ROS 헤더 시각이 뒤로 감 가운데 하나일 때만 는다. 원점을 지나 달리는 것과 line-follow 모드 변경은 세지 않는다 |
+| `odom_pose.mono_s` | 유한 실수 | 같은 수신의 CORE 단조 시각(s). 로봇 사이·재시작 사이에 비교하지 않는다 |
+
+- **CORE 조회.** `POST /line-follow/authority`의 `pose_stamp`, lane cue의 `pose_stamp`, `exit_segment.map_anchor`·`map_entry`의 `odom_stamp_s`는 그대로 스냅숏 `odom_pose.stamp`다. CORE는 그 stamp로 발행한 odom 표본을 찾고(|차| ≤ 1 µs, 같은 값이 둘이면 가장 새것), 그 표본의 나이와 순서는 line-follow 시계(장치 `time.monotonic`, `use_sim_time`에서 시뮬레이션 시각)로 잰다. 벽시계가 움직여도 같은 표본을 찾는다. 발행한 값과 맞지 않는 stamp(옛 Fleet의 계산한 값)는 v1.226과 같이 벽시계에서 그 이전 표본을 찾는다. 통행권의 `seq` 기억도 line-follow 시계로 잰다.
+- **Fleet.** 지도 자세 추적기는 `epoch`가 바뀐 표본을 받으면 이동이 없어도 odom 기록과 기준을 버린다(`epoch`가 없는 로봇은 그대로 이동 크기로 판정한다). Fleet이 돌려주는 stamp는 바뀌지 않는다.
 
 ### v1.232 trip 읽기의 기다림 `wait.waiting`·`bound_s`·`over_bound` (D-763 조각 2, 8항)
 
@@ -884,8 +896,10 @@ v1.70 추가 경로(모두 Bearer 인증):
 `odom_pose` 는 v1.112 additive 다(D-494 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-494 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
 
 ```json
-"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123 }
+"odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123, "epoch": 0, "mono_s": 5123.875 }
 ```
+
+v1.234(D-758 0단계)부터 `epoch`(odom 불연속 횟수)와 `mono_s`(같은 수신의 CORE 단조 시각)를 같이 싣는다. 뜻과 규칙은 위 「v1.234」 절이다. 이전 CORE는 둘을 싣지 않는다.
 
 `safety_policy` 는 v1.71 additive 다(D-400). 공급자가 없거나 공급자가 실패하면 `null` 이다(CORE 가 실패를 로그에 남긴다). 같은 블록이 Fleet 하트비트의 상태 스냅샷에도 실린다. `safety` 는 e-stop 요약, `safety_policy` 는 D-400 정책 모드·그림자 기록이다.
 
@@ -3024,6 +3038,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.234 | 2026-10-14 | Additive (D-758 0단계, fix/odom-log-monotonic-epoch, Safety-Review 대상): 스냅숏 `odom_pose.epoch`(odom 불연속 횟수)·`mono_s`(CORE 단조 수신 시각). CORE는 통행권·lane cue·호 기준의 odom 표본을 발행한 `odom_pose.stamp`로 찾고 나이·순서를 line-follow 시계로 잰다(벽시계 이동에 무관). 맞지 않는 stamp는 v1.226과 같다. Fleet 지도 자세 추적기는 `epoch`가 바뀌면 기준을 버린다. 요청·응답·envelope 1.0 변경 없음. |
 | v1.232 | 2026-10-14 | Additive (D-763 조각 2, feat/fleet-work-wait-read): trip 읽기의 `wait`에 `waiting`·`bound_s`·`over_bound`를 싣는다. 한 주기에 한 번 쓰고, 판정에 닿지 못한 주기에는 null이다. 상한을 넘은 기다림은 경고이고 개입이 아니다(개정 2 질문 7). |
 | v1.231 | 2026-10-14 | Additive (D-759 개정 1): `POST /api/v1/line-follow/junction` `map_entry`를 `turn_deg`가 있는 `left`·`right`에도 받는다(`yaw_rad` = 출구 차로의 지도 방향, 그 밖의 action은 400 `VALIDATION_ERROR`), 능력 `base_velocity.lane_turn_map_entry`(설정 `line_follow.turn_map_entry_enabled`, 기본 꺼짐), 회전에서도 `line_follow.junction.map_entry_used`·`map_entry_reason`. 오늘 목표에서 15° 넘게 어긋나거나 풀지 못한 방향은 거절이 아니라 오늘의 목표다. v1.231. Fleet trip 보기 `caps.lane_turn_map_entry`. envelope 1.0 변경 없음. |
 | v1.230 | 2026-10-14 | Additive (D-763 조각 5·5b, feat/fleet-approval-registry): `POST /api/fleet/missions/{mission_id}/reject` — 승인 대기 작업의 철회·거절. 본문 `FleetWorkDecisionRequest` `{expected_generation}`. Cell Job은 HOLD/`CANCELLED_BY_OPERATOR`, 레거시 Mission은 `CANCELED`(reason `WITHDRAWN_BY_PROPOSER`\|`REJECTED_BY_OPERATOR`), claim 없음, 감사 사건. 409 `MISSION_REJECT_REFUSED`. admit 승인은 단계 종류 등록부에서 판정(동작 같음). |
