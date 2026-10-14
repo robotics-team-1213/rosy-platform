@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import shlex
 import time
@@ -14,6 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
+import remote_job as rj  # noqa: E402
 import remote_pytest as rp  # noqa: E402
 
 
@@ -94,9 +96,9 @@ def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path)
     monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
     monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
-    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: sent.append(command[-1]) or 0)
+    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or 0)
     rp.run_on(other, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
-    assert " 400% test/x.py" in sent[0]  # CPU cap
+    assert sent[0][2] == "400%"  # CPU cap
 
 
 def test_unreachable_and_local_env_rejected(monkeypatch):
@@ -208,10 +210,10 @@ def test_site_pc_pytest_gets_a_cpu_quota(monkeypatch, tmp_path):
     monkeypatch.setattr(rp, "ship", lambda *a: None)
     monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
     monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
-    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: sent.append(command[-1]) or 0)
+    monkeypatch.setattr(rp.remote_job, "run", lambda host, name, k, log, job, inv, *a: sent.append(job) or 0)
     for h in (rp.SITE_HOST, "model@1"):
         rp.run_on(h, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
-    assert " 400% test/x.py" in sent[0] and "'' test/x.py" in sent[1]
+    assert sent[0][2] == "400%" and sent[1][2] == ""
 
 
 def test_unreachable_hosts_stop_the_gate(monkeypatch, tmp_path):
@@ -260,8 +262,8 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
 
 def test_pytest_uses_the_same_dependency_environment_as_setup():
     assert 'V=$R/venvs/$DEPS' in rp.VENV
-    assert 'V=$R/venvs/$DEPS' in rp.PYTEST
-    assert '[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ]' in rp.PYTEST
+    assert 'V=$R/venvs/$DEPS' in rj.START and 'V=$R/venvs/$2' in rj.JOB
+    assert '[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ]' in rj.START
 
 
 def test_lock_change_does_not_rebuild_venv_but_install_change_does(monkeypatch):
@@ -356,7 +358,7 @@ def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
 def test_remote_pytest_failure_and_signal_death_propagate(tmp_path, monkeypatch):
     _fake_ssh(tmp_path, monkeypatch, "systemd-run")
     assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
-    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: -9)
+    monkeypatch.setattr(rp.remote_job, "run", lambda *a, **kw: -9)
     assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
 
 
@@ -404,3 +406,154 @@ def test_a_host_that_fails_setup_hands_its_share_to_a_working_host(monkeypatch, 
     monkeypatch.setattr(rp, "run_on", run_on)
     assert rp.run([["x"], ["y"]], [tmp_path / "1.txt", tmp_path / "2.txt"], repo=tmp_path) == [0, 0]
     assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["y"])]
+
+
+class FakeJobHost:
+    """A host whose job log grows by one chunk per call (also while the link is down)."""
+
+    def __init__(self, chunks, rc, fail=(), junk=()):
+        self.chunks, self.rc, self.fail, self.junk = list(chunks), rc, set(fail), set(junk)
+        self.log, self.polls, self.scripts = b"", 0, []
+
+    def __call__(self, ssh, host, script, *args):
+        self.scripts.append(script)
+        if script != rj.POLL:
+            return subprocess.CompletedProcess([], 0, b"", b"")
+        self.polls += 1
+        if self.chunks:
+            self.log += self.chunks.pop(0)
+        if self.polls in self.fail:
+            return None
+        if self.polls in self.junk:  # ssh exit 0 but cut before the marker line ended
+            return subprocess.CompletedProcess([], 0, b"motd\nROSYJ", b"")
+        rc = b"-" if self.chunks else str(self.rc).encode()
+        return subprocess.CompletedProcess([], 0, b"Welcome\nROSYJOB " + rc + b"\n" + self.log[int(args[2]):], b"")
+
+
+def _clock():
+    now = [0.0]
+    return now, (lambda s: now.__setitem__(0, now[0] + s)), (lambda: now[0])
+
+
+def test_polls_that_fail_then_recover_give_the_real_code_and_the_whole_log(tmp_path):
+    chunks = [b"collecting\n", b"..F", b".\xc3\xa9\r\n", b"FAILED test/x.py::t\n", b"1 failed\n"]
+    fake = FakeJobHost(chunks, 1, fail={2, 3, 4}, junk={5})
+    now, sleep, clock = _clock()
+    log = tmp_path / "run-1.txt"
+    assert rj.run("h", "r", 0, log, ["r", "d", ""], ["test/x.py"], 60, [], call=fake, sleep=sleep, clock=clock) == 1
+    # Byte-identical: a stuck offset would duplicate a chunk, an early advance would drop one.
+    assert log.read_bytes() == fake.log == b"".join(chunks)
+    assert fake.scripts[0] == rj.START and fake.polls == 6
+
+
+def test_polls_failing_past_the_budget_raise_lost_and_run_on_leaves_the_job(tmp_path, monkeypatch, capsys):
+    fake = FakeJobHost([b"a", b"b", b"c"], 0, fail=set(range(2, 99)))
+    now, sleep, clock = _clock()
+    with pytest.raises(rj.Lost, match=r"lost contact with h for 60 s; the run continues there: h:~/rosy-test"):
+        rj.run("h", "r", 0, tmp_path / "1.txt", ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock,
+               budget=60)
+    assert (tmp_path / "1.txt").read_bytes() == b"a" and rj.KILL not in fake.scripts
+    calls = []
+    monkeypatch.setattr(rp, "ship", lambda *a: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda host, script, *a, **kw: calls.append(script) or
+                        subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp.remote_job, "run", lambda *a: (_ for _ in ()).throw(rj.Lost("lost contact with h")))
+    codes = rp.run_on("h", [["a"], ["b"]], [tmp_path / "1.txt", tmp_path / "2.txt"], "ab" * 20, tmp_path, None)
+    assert codes == [255, 255] and rp.CLEANUP not in calls  # no cleanup under a live job
+    assert "lost contact with h" in capsys.readouterr().err
+
+
+def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
+    assert rj.parse_poll(b"motd\nROSYJOB -\nlog") == (None, b"log")
+    assert rj.parse_poll(b"ROSYJOB 3\n") == (3, b"")
+    assert rj.parse_poll(b"ROSYJOB 1") is None and rj.parse_poll(b"partial") is None
+    assert rj.parse_poll(b"ROSYJOB x\nlog") == (None, b"log")
+    # The job writes the code beside the file and renames it; POLL reads only the final name.
+    assert 'echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' in rj.JOB
+    assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
+    assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
+    assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
+
+
+def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
+    head, answers, sent = _git(repo, "rev-parse", "HEAD"), [255, 255, 0], []
+    monkeypatch.setattr(rp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(rp, "remote", lambda host, script, *a, input=None, **kw: sent.append(input) or
+                        subprocess.CompletedProcess([], answers.pop(0), b"", b""))
+    rp.ship(repo, "h", head, "run1")
+    assert len(sent) == 3 and sent[0] == sent[2]  # the whole bundle again each time
+    answers[:] = [255, 255, 255]
+    with pytest.raises(SystemExit, match="exit 255"):
+        rp.ship(repo, "h", head, "run2")
+    assert 'git worktree remove --force "$R/runs/$NAME"' in rp.SHIP  # a second attempt can add it again
+
+
+def _job_env(tmp_path, python_body):
+    """A fake host home: run dir, venv whose python runs python_body, systemd-run that just execs."""
+    home = tmp_path / "home"
+    (home / "rosy-test" / "runs" / "r").mkdir(parents=True)
+    venv = home / "rosy-test" / "venvs" / "d"
+    (venv / "bin").mkdir(parents=True)
+    (venv / ".deps-sha").write_text("d\n")
+    (venv / "bin" / "python").write_text("#!/bin/bash\n" + python_body)
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    (fakebin / "systemd-run").write_text('#!/bin/bash\nwhile [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
+    for f in (venv / "bin" / "python", fakebin / "systemd-run"):
+        f.chmod(0o755)
+    return home, {"HOME": str(home), "PATH": f"{fakebin}:/usr/bin:/bin"}
+
+
+def _sh(script, env, *args):
+    return subprocess.run(["bash", "-c", script, "remote", *args], env=env, capture_output=True, timeout=20)
+
+
+def _wait_for_lock(lock):
+    for _ in range(50):  # START has returned; the job runs on without it
+        if lock.exists() and lock.read_text().strip():
+            return int(lock.read_text().split()[0])
+        time.sleep(0.1)
+    pytest.fail("job never wrote its lock")
+
+
+def _poll_until_done(env):
+    for _ in range(100):
+        code, _ = rj.parse_poll(_sh(rj.POLL, env, "r", "0", "0").stdout)
+        if code is not None:
+            return code
+        time.sleep(0.1)
+    pytest.fail("job never wrote its exit code")
+
+
+def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, 'echo out; echo err >&2; sleep 2; echo "args $*"; exit 3\n')
+    start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, "test/x.py", "-q")
+    assert start.returncode == 0, start.stderr
+    lock, jobs = home / "rosy-jobs" / "r.lock", home / "rosy-test" / "runs" / "r.jobs"
+    pid = _wait_for_lock(lock)
+    assert lock.read_text().split()[1:] == ["pytest", "2", "6"]
+    assert os.getpgid(pid) == pid  # KILL's process-group target
+    assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0  # a retried start: no second job
+    assert _poll_until_done(env) == 3
+    assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
+    out = (jobs / "0.log").read_bytes()
+    assert out.startswith(b"out\nerr\n") and out.endswith(b"args -m pytest test/x.py -q\n")
+    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, out[4:])  # offset 4: after "out\n"
+
+
+def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, "sleep 30\n")
+    assert _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB).returncode == 0
+    lock = home / "rosy-jobs" / "r.lock"
+    _wait_for_lock(lock)
+    _sh(rj.KILL, env, "r")
+    assert _poll_until_done(env) != 0 and not lock.exists()
