@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 08fd296c0 · fix(fleet): 현장 지도·Cell 본문 접힘을 60rem으로 (D-741 2)
 - 2026-10-14 · 8b44b2399 · test(fleet): 폭마다 열 수를 고정하고 360·1349를 더함 (검토 반영)
 - 2026-10-14 · ac505f819 · test(fleet): 기록 영역을 320×568·밝게·1024에서 잼 (D-741 8)
 - 2026-10-14 · 33f6d8415 · fix(fleet): 현장 지도·Cell의 열이 본문 폭에 답한다 (D-741 2)
 - 2026-10-14 · 390f2c6de · feat(fleet): five areas, sub-nav seat, work and records areas (D-741 조각 6·7·8)
-- 2026-10-13 · 9e2d4ef0c · feat(fleet): one-row app bar and named rail (D-741 조각 4·5)
