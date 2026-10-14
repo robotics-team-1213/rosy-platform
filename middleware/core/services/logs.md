@@ -1060,6 +1060,21 @@
 - gate 변화: 없음. SOURCE 구조 근거만 더한다. 부모 단위 3,167줄 → 2,421줄, 새 단위 756줄. 두 판정은 제안값이고 읽기 전용 critic의 독립 재판정이 남아 있다.
 - 결정: 새 ADR 없음. `docs/plans/2026-10-10-core-line-follow-size-unit.md`의 2026-10-14 추가.
 - 교훈: 소스 파일을 글자로 읽는 시험은 재수출 모듈을 가리키면 빈 검사가 된다. 파일을 옮길 때 `__file__`을 읽는 시험을 같이 찾는다.
+## 2026-10-14 · 1ee33639c · D-760 2단계: 통행권 줄이기·순서, trip 임대 중 강제 (API v1.225)
+
+- 변경: `line_follow/authority.py` — `set_authority(..., shrink=False, seq=None)`. `seq`가 같은 `leg_id`에서 마지막으로 본 값 이하면 `accepted: false`, `reason: stale_seq`로 무시하고 쥔 끝과 만료를 건드리지 않는다. `seq`는 거절 판정 전에 기억한다(거절된 줄이기보다 먼저 보낸 늘리기가 늦게 닿아도 받지 않게). 기억 `_authority_seq`는 `leg_id` 하나에 대한 것이고 모드 변경에도 남는다(모드를 껐다 켠 사이에 늦게 닿은 옛 요청이 새 통행권이 되지 않게). `shrink: true`면 끝 = `min(쥔 끝, 요청 끝)`이고 만료를 갱신한다. 강제 조건은 `_authority_on()` 한 곳이다: 설정 `authority_required`, 이 세션의 요청, 또는 `authority_leased()`(CORE가 trip 임대를 묶는다, 기본 거짓). `recovery/junction/gate.py`의 기동 시계 멈춤도 같은 조건을 쓴다(줄 수 변화 없음, 600줄).
+- 증거: `middleware/core/services/test/test_line_authority.py`에 14건을 더했다: 4.9 s FREE·5.1 s EXPIRED, 벽시계를 ±1시간 옮겨도 만료가 같음, 늘리기(seq 3) → 줄이기(seq 4) → 늦은 늘리기(seq 2), 낡은 `seq`가 만료를 늦추지 않음, 구간별 `seq`와 모드 변경, `seq`·`shrink` 없는 요청의 옛 동작, `shrink` + `until_m: 0`의 다음 틱 HOLD `authority_end`, 줄이기가 끝을 늘리지 않음, 거절된 줄이기가 통행권을 버림, 임대 중 첫 통행권 전 `authority_none`, 임대 중 모드 변경, 임대 없는 주행, IR 가드·몸체 정지·E-stop 사유가 임대 중에도 앞섬. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. Gazebo·장치 수용은 미검증이다. `authority.py` 165줄 → 175줄. 크기 단위 `drive/behaviors/line_follow`는 3167줄 → 3177줄로 한도 3168을 넘는다(`test_size_verdicts_are_well_formed_and_current` 실패). 디스패처가 아는 실패이고 `refactor/line-follow-crosswalk-unit`이 자리를 낸다. 이 브랜치에서 판정을 고치지 않았다.
+- 결정: D-760 Decision 2·3, Open 1(장치의 `ttl_s` 시계는 `time.monotonic`이다. `core/bridge/traffic_gate.py::line_clock`, `test_line_follow_sim_clock.py`가 고정한다. D-517 4항 구현 노트의 "장치에서는 ROS 시계"는 틀렸고 `use_sim_time`일 때만 ROS 시계다). Open 2는 바꾸지 않았다: 통행권 문은 교차로 회전·접근·굽이·호의 명령도 0으로 만든다. 교차로 기동은 그동안 기동 시계가 서고(합계 `crosswalk_report_s + crosswalk_clear_s`까지) 그 뒤 `timeout`으로 중단된다. 호는 시계가 서지 않아 `length_m`/v + 2 s 뒤 `lane_arc_timeout`으로 멈추고 다시 열리지 않는다.
+- 교훈: 순서 번호는 "받았다"가 아니라 "봤다"로 기억해야 한다. 받은 것만 기억하면 거절된 줄이기 뒤의 늦은 늘리기가 통행권을 되살린다.
+
+## 2026-10-14 · 8a73125e6 · D-760 2단계 안전 검토 반영: 임대 래치, 구간별 seq 기억, 줄이기는 주지 않는다 (API v1.225)
+
+- 변경: `line_follow/authority.py`. (M1) 임대 중 강제를 차선 세션에 래치한다: 모드를 고를 때 임대가 열려 있거나(`_init_authority`) 문이 임대가 열린 것을 한 번 보면(`_authority_on`) `_authority_seen`이 참이 되고 모드 변경까지 남는다. 임대가 첫 통행권 전에 풀림·만료·인수로 끝나도 로봇은 `authority_none`으로 서 있다. (M2) `seq` 기억을 구간별 사전으로 바꿨다(`SEQ_LEGS` 8개). 어떤 구간을 마지막으로 본 CORE 벽시계 시각이 odom 기록의 가장 오래된 표본보다 앞일 때만 지운다. 그 구간의 늦은 요청은 그 시각보다 앞선 `pose_stamp`를 실으므로 `AUTHORITY_POSE_STALE`로 거절된다. 지울 수 없는 구간이 8개면 새 구간은 `seq_legs_full`로 무시한다. `seq`를 본 구간의 `seq` 없는 요청은 `seq_required`로 무시한다. (M3) 같은 구간·같은 odom 궤적의 만료 전 통행권이 없을 때의 `shrink`는 통행권을 만들지 않고 쥔 것도 버린다(`shrink_none_held`).
+- 증거: `test_line_authority.py` 11건 추가·1건 고침(임대가 끝난 뒤에도 정지, 모드 변경 때의 래치, 옛 구간의 늦은 요청, 기록 밖으로 나간 구간만 잊음, 9번째 구간 거절, `seq` 없는 요청 무시, `shrink` 세 경우, 문은 0인 결정을 올리지 않음). `test_junction_bend.py`(통행권 정지 중 기동 시계가 15 s까지 서고 `timeout`, HOLD `junction_aborted`), `test_lane_arc.py`(호는 시계가 서지 않아 `lane_arc_timeout`, 통행권이 돌아와도 HOLD). 변이 시험 표와 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: SOURCE·호스트 근거만 더한다. `authority.py` 175줄 → 192줄. 크기 단위 `drive/behaviors/line_follow`는 이 브랜치에서 모두 +27줄이다.
+- 결정: D-760 Decision 2·3. 순서(코드): 교차로 문(D-740 0.5 s 유지는 `recovery/junction/gate.py::_unconfirmed`) → 통행권 문 → 횡단보도 문(`manager.py`의 틱 합성) → 교통 정책 → `CommandManager`의 D-400 `policy_hold`(`command/manager.py`). 통행권 문은 0이 아닌 결정을 0으로 만들 뿐이라 뒤의 정지를 풀 수 없고, 앞의 정지(0인 결정)는 그대로 지난다.
+- 교훈: 열려 있는 동안만 참인 조건을 문이 그대로 읽으면 그 조건이 끝나는 순간이 열린 쪽 실패다. 범위 밖 `ttl_s`는 CORE API에서 400 `VALIDATION_ERROR`다(계획서의 422는 틀렸다).
 
 ## 2026-10-14 · cd937291b · 가상 신호 mixin을 `line_follow/signal` 크기 단위로 옮김 (동작 변경 없음)
 

@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-14 · 8a73125e6 · 통행권 응답 사유를 API 설명에 더함 (D-760 2단계 안전 검토, API v1.225)
+- 2026-10-14 · 1ee33639c · 통행권 shrink·seq 전달과 능력 플래그 둘 (D-760 2단계, API v1.225)
 - 2026-10-14 · a9901c702 · 굽이 지시의 map_entry와 능력 lane_bend_map_entry (D-759, API v1.224)
 - 2026-10-14 · 3788d7696 · feat: Rosy Account 통합 로그인과 권한 검증 (D-757)
 - 2026-10-13 · 7c9547f52 · docs: correct dashboard source holder guidance
-- 2026-10-12 · 4554e84c6e · D-732 선택적 owner 누락에도 E-Stop 유지
-- 2026-10-12 · ddbc7f64aa · D-732 정지 receipt 캡처는 잠금을 기다리지 않는다

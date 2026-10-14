@@ -669,3 +669,110 @@ def test_localization_mission_is_trip_leased_for_non_owners(core_client):
 def test_restart_has_no_lease(core_client):
     _, services = core_client()
     assert services.trip_lease.current() is None
+
+
+# --- D-760 2: line follow needs a held authority while the lease is open ------------------
+
+
+def _gated(services, t):
+    """The linear speed the authority gate leaves of a moving line decision at line time ``t``."""
+    from core_features.line_follow.model import LineFollowDecision, LineFollowMode
+
+    moving = LineFollowDecision(linear=0.05, angular=0.0, generation=0, evidence_revision=0,
+                                mode=LineFollowMode.CAMERA_LINE)
+    return services.line_follow._authority_gate(t, moving).linear
+
+
+def _camera_lane(client, headers=FLEET):
+    return client.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=headers)
+
+
+def _line_status(client):
+    return client.get("/api/v1/line-follow", headers=VIEWER).json()
+
+
+def test_lane_following_without_a_lease_needs_no_authority(robot):
+    client, services, _ = robot
+    assert services.line_follow.config.authority_required is False
+    assert _camera_lane(client).status_code == 200
+    assert _gated(services, services.line_follow._clock()) == 0.05
+    assert "authority" not in _line_status(client)
+
+
+def test_under_a_lease_lane_following_stands_until_an_authority_and_again_after_a_mode_change(robot):
+    client, services, _ = robot
+    line = {"t": 10.0}
+    lf = services.line_follow
+    lf.bind_clock(lambda: line["t"])
+    lf._wall = lambda: 1_800_000_000.0 + line["t"]
+    _open(client)
+    assert _camera_lane(client).status_code == 200
+    assert _gated(services, line["t"]) == 0.0
+    assert (lf.status().state, lf.status().reason) == ("HOLD", "authority_none")
+    assert _line_status(client)["authority"]["state"] == "NONE"
+    stamp = round(line["t"] * 1e9)
+    lf.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame="odom", x=0.0, y=0.0, yaw=0.0,
+                           received_at=line["t"])
+    body = {"authority_id": "trip-7:1", "leg_id": "trip-7:0", "pose_stamp": 1_800_000_000.0 + line["t"],
+            "until_m": 1.0, "ttl_s": 5.0}
+    assert client.post("/api/v1/line-follow/authority", json=body, headers=FLEET).json()["accepted"] is True
+    assert _gated(services, line["t"]) == 0.05
+    # The owner's lane -> free -> lane keeps the lease and drops the authority: required again.
+    assert _goal(client).status_code == 200 and not lf.active
+    assert _camera_lane(client).status_code == 200
+    assert services.trip_lease.current() is not None
+    assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
+    assert client.delete(f"{URL}/lease-1", headers=FLEET).status_code == 200
+    # The lease ended while line follow is on: latched, so nothing drives without an authority.
+    assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
+    assert _line_status(client)["authority"]["state"] == "NONE"
+    # A mode change ends the session.
+    assert client.put("/api/v1/line-follow/mode", json={"mode": "OFF"}, headers=FLEET).status_code == 200
+    assert _camera_lane(client).status_code == 200
+    assert _gated(services, line["t"]) == 0.05
+    assert "authority" not in _line_status(client)
+
+
+def test_a_lapsed_lease_still_requires_an_authority_until_the_timer_ends_it(robot):
+    client, services, clock = robot
+    _open(client)
+    assert services.line_follow.authority_leased() is True
+    clock.now += 5.1
+    assert services.line_follow.authority_leased() is True    # lapsed, not yet processed: safe side
+    services.trip_lease.expire_due()
+    assert services.line_follow.authority_leased() is False
+
+
+def _gate_when_halted(services):
+    """What the authority gate leaves at the moment the ended lease halts the robot."""
+    seen, halt = [], services.trip_lease.halt
+
+    def spy(reason):
+        seen.append((reason, services.trip_lease.current(), services.line_follow.active,
+                     _gated(services, services.line_follow._clock())))
+        halt(reason)
+    services.trip_lease.halt = spy
+    return seen
+
+
+def test_expiry_before_the_first_authority_never_frees_the_robot(robot):
+    client, services, clock = robot
+    _open(client)
+    assert _camera_lane(client).status_code == 200
+    seen = _gate_when_halted(services)
+    clock.now += 5.1
+    services.trip_lease.expire_due()
+    # end() clears the lease, then halts: in between line follow is on, lease-less, and still zeroed.
+    assert seen == [("expired", None, True, 0.0)]
+    assert not services.line_follow.active and services.modes.mode.value == "IDLE"
+
+
+def test_takeover_before_the_first_authority_never_frees_the_robot(robot):
+    client, services, _ = robot
+    _open(client)
+    assert _camera_lane(client).status_code == 200
+    seen = _gate_when_halted(services)
+    taken = client.post(f"{URL}/takeover", json={"lease_id": "lease-1"}, headers=OTHER)
+    assert taken.status_code == 200, taken.text
+    assert seen == [("taken_over", None, True, 0.0)]
+    assert not services.line_follow.active and services.modes.mode.value == "IDLE"

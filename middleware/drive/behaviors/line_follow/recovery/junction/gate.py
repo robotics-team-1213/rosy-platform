@@ -415,7 +415,7 @@ class JunctionMixin(JunctionSignalMixin, JunctionApproachMixin, JunctionBendMixi
         # Time a later gate takes is not the maneuver's (Gazebo lap m4: a D-573 look inside a bend pass
         # ended it 'timeout'): looking/waiting or a non-FREE D-517 authority stop the phase clock, a
         # crossing slower than the maneuver takes its lost share; crosswalk_report_s + clear_s in all.
-        c, auth = self._config, (self._config.authority_required or self._authority_seen) and self._authority_state(now)
+        c, auth = self._config, self._authority_on() and self._authority_state(now)
         xw, dt = (self._xwalk.status(now) or {}).get('state'), now-j.get('tick_at', now)
         lost = (1. if (auth and auth[0] != 'FREE') or xw in ('looking', 'waiting') else
                 max(0., 1-c.crosswalk_cross_speed/j['speed']) if xw == 'crossing' and j.get('speed') else 0.)

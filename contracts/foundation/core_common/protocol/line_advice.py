@@ -12,7 +12,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core_common.protocol.line_authority import MAX_TTL_S
+#: Advice ``ttl_s`` is in (0, MAX_TTL_S]. Its own bound: D-760 raised the authority cap only.
+MAX_TTL_S = 2.0
 
 
 class SignalAdvice(BaseModel):
