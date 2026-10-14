@@ -490,8 +490,8 @@ def test_a_short_odom_gap_while_bending_holds_and_the_bend_goes_on():
     until(rig, 'bending')
     for _ in range(12):                                   # 0.6 s without a pose
         decision, status = site_step(rig, pose=False)
-        assert status.junction.state == 'bending' and decision.linear == 0.
-    assert status.reason == 'junction_pose_gap'
+        assert status.junction.state == 'bending'
+    assert status.reason == 'junction_pose_gap' and decision.linear == 0.
     until(rig, 'reacquiring')
 
 
