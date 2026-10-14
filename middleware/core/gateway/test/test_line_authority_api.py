@@ -1,4 +1,4 @@
-"""D-517 4 (M2): POST /api/v1/line-follow/authority, its validation and the status field."""
+"""D-517 4 (M2), D-760 1-3: POST /api/v1/line-follow/authority, its validation and the status field."""
 import pytest
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -40,8 +40,8 @@ def test_refused_unless_line_follow_is_active(core_client):
 
 
 @pytest.mark.parametrize("fields", [
-    {"ttl_s": 0}, {"ttl_s": 2.5}, {"until_m": -0.1}, {"until_m": 10.5}, {"pose_stamp": 0},
-    {"authority_id": ""}, {"leg_id": None},
+    {"ttl_s": 0}, {"ttl_s": 5.01}, {"until_m": -0.1}, {"until_m": 10.5}, {"pose_stamp": 0},
+    {"authority_id": ""}, {"leg_id": None}, {"seq": -1}, {"seq": 1.5}, {"shrink": "maybe"},
 ])
 def test_invalid_fields_are_400(core_client, fields):
     client, _, clock = _active(core_client)
@@ -76,3 +76,23 @@ def test_accepted_and_shown_only_while_enforced(core_client):
                      "expires_in_s": 2.0, "reason": None}
     smaller = client.post(URL, json=_body(clock, until_m=0.5), headers=OPERATOR).json()
     assert (smaller["accepted"], smaller["reason"]) == (False, "shrink")
+
+
+def test_a_five_second_ttl_is_accepted(core_client):
+    client, _, clock = _active(core_client)
+    answer = client.post(URL, json=_body(clock, ttl_s=5.0), headers=OPERATOR)
+    assert answer.status_code == 200 and answer.json()["authority"]["expires_in_s"] == 5.0
+
+
+def test_shrink_and_seq_reach_the_gate(core_client):
+    client, _, clock = _active(core_client)
+    assert client.post(URL, json=_body(clock, seq=3), headers=OPERATOR).json()["accepted"] is True
+    shrunk = client.post(URL, json=_body(clock, until_m=0.0, shrink=True, seq=4), headers=OPERATOR).json()
+    assert shrunk["accepted"] is True
+    assert (shrunk["authority"]["state"], shrunk["authority"]["reason"]) == ("HOLDING", "authority_end")
+    late = client.post(URL, json=_body(clock, seq=2), headers=OPERATOR)  # the older extend arrives last
+    assert late.status_code == 200
+    assert (late.json()["accepted"], late.json()["reason"]) == (False, "stale_seq")
+    assert late.json()["authority"]["remaining_m"] == 0.0
+    plain = client.post(URL, json=_body(clock, until_m=0.5), headers=OPERATOR).json()  # a Fleet before D-760
+    assert plain["accepted"] is True and plain["authority"]["remaining_m"] == 0.5

@@ -33,8 +33,8 @@ class Rig:
         self.m.observe(LineObservation(CAMERA, self.now, True, 0., .9), received_at=self.now)
         return self.m.tick(self.now)
 
-    def send(self, until_m, leg='L1', ttl_s=2., stamp=None):
-        return self.m.set_authority('A1', leg, WALL + self.now if stamp is None else stamp, until_m, ttl_s)
+    def send(self, until_m, leg='L1', ttl_s=2., stamp=None, **order):  # order: shrink, seq (D-760 3)
+        return self.m.set_authority('A1', leg, WALL + self.now if stamp is None else stamp, until_m, ttl_s, **order)
 
     def authority(self):
         return self.m.authority_status()
@@ -189,3 +189,183 @@ def test_the_stop_gap_is_from_max_linear_not_cruise():
     rig.send(rig.m.config.derived_stop_gap_m(.10) - .001)
     assert rig.step().linear == 0. and rig.authority()['state'] == 'HOLDING'
     assert rig.m.config.derived_stop_gap_m(.04) < rig.m.config.derived_stop_gap_m(.10) - .001
+
+
+# --- D-760 1: ttl_s up to 5 s ---
+
+def test_a_five_second_ttl_is_free_at_4_9_s_and_expired_at_5_1_s():
+    rig = Rig()
+    rig.step()
+    rig.send(10., ttl_s=5.)
+    sent = rig.now
+    while rig.now < sent + 4.9 - 1e-6:
+        decision = rig.step()
+    assert decision.linear > 0. and rig.authority()['state'] == 'FREE'
+    while rig.now < sent + 5.1 - 1e-6:
+        decision = rig.step()
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert rig.authority()['state'] == 'EXPIRED' and rig.m.status().reason == 'authority_expired'
+
+
+def test_the_ttl_is_not_moved_by_a_wall_clock_step():
+    rig = Rig()
+    rig.step()
+    rig.send(10., ttl_s=1.)
+    rig.m._wall = lambda: WALL + rig.now + 3600.  # the wall clock jumps an hour ahead
+    assert rig.step().linear > 0. and rig.authority()['expires_in_s'] == pytest.approx(.95)
+    rig.m._wall = lambda: WALL + rig.now - 3600.  # and two hours back
+    assert rig.step().linear > 0. and rig.authority()['expires_in_s'] == pytest.approx(.9)
+
+
+# --- D-760 3: seq and shrink ---
+
+def test_a_late_older_extend_does_not_undo_a_shrink():
+    rig = Rig()
+    rig.step()
+    assert rig.send(1., seq=3)['accepted'] is True
+    shrunk = rig.send(.4, shrink=True, seq=4)
+    assert shrunk['accepted'] is True and shrunk['authority']['remaining_m'] == pytest.approx(.4)
+    late = rig.send(1., seq=2)  # the extend sent before the shrink arrives after it
+    assert (late['accepted'], late['reason']) == (False, 'stale_seq')
+    assert rig.authority()['remaining_m'] == pytest.approx(.4)
+    assert rig.send(1., seq=4)['reason'] == 'stale_seq'  # a repeat of the last seq too
+    assert rig.send(1., seq=5)['accepted'] is True  # a newer extend lengthens it again
+    assert rig.authority()['remaining_m'] == pytest.approx(1.)
+
+
+def test_a_stale_seq_leaves_the_end_and_the_ttl_untouched():
+    rig = Rig()
+    rig.step()
+    rig.send(1., ttl_s=.52, seq=7)
+    for _ in range(10):  # 0.5 s of older requests, each ignored
+        assert rig.send(2., ttl_s=5., seq=6)['accepted'] is False
+        assert rig.step().linear > 0.
+    assert rig.step().linear == 0. and rig.authority()['state'] == 'EXPIRED'
+    assert rig.send(2., seq=6)['reason'] == 'stale_seq'  # still older after the expiry
+    assert rig.step().linear == 0.
+
+
+def test_seq_is_per_leg_and_outlives_a_mode_change():
+    rig = Rig()
+    rig.step()
+    rig.send(1., seq=9)
+    assert rig.send(.5, leg='L2', seq=0)['accepted'] is True  # another leg starts its own order
+    assert rig.send(1., leg='L2', seq=1)['accepted'] is True
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.set_mode(CAMERA)
+    rig.step()
+    assert rig.send(1., leg='L2', seq=1)['reason'] == 'stale_seq'  # sent before the mode change
+    assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
+    assert rig.send(1., leg='L2', seq=2)['accepted'] is True
+
+
+def test_a_request_without_seq_or_shrink_behaves_as_before():
+    rig = Rig()
+    rig.step()
+    rig.send(1., seq=5)
+    assert rig.send(1.5)['accepted'] is True  # an old Fleet: no order, the end extends
+    assert rig.authority()['remaining_m'] == pytest.approx(1.5)
+    ignored = rig.send(.5)
+    assert (ignored['accepted'], ignored['reason']) == (False, 'shrink')
+    assert rig.send(.5, shrink=False)['reason'] == 'shrink'
+    assert rig.send(2., seq=6)['accepted'] is True  # and it did not move the remembered seq
+    assert rig.send(2., seq=5)['reason'] == 'stale_seq'
+
+
+def test_shrink_to_zero_holds_on_the_next_tick():
+    rig = Rig()
+    rig.step()
+    rig.send(1., ttl_s=.5)
+    assert rig.step(dx=.01).linear > 0.
+    answer = rig.send(0., ttl_s=2., shrink=True)
+    assert answer['accepted'] is True and answer['authority']['state'] == 'HOLDING'
+    assert answer['authority']['expires_in_s'] == pytest.approx(2.)  # ttl_s refreshed
+    decision = rig.step()
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (rig.m.status().state, rig.m.status().reason) == ('HOLD', 'authority_end')
+    for _ in range(12):  # past the first ttl: still held, not expired
+        rig.step()
+    assert rig.authority()['state'] == 'HOLDING'
+
+
+def test_shrink_never_lengthens_the_held_end():
+    rig = Rig()
+    rig.step()
+    rig.send(.5, ttl_s=.5)
+    answer = rig.send(2., ttl_s=2., shrink=True)
+    assert answer['accepted'] is True and answer['authority']['remaining_m'] == pytest.approx(.5)
+    assert answer['authority']['expires_in_s'] == pytest.approx(2.)
+
+
+def test_a_refused_shrink_drops_the_authority_and_the_robot_stands():
+    rig = Rig()
+    for _ in range(3):
+        rig.step()
+    rig.send(1., seq=1)
+    with pytest.raises(AuthorityRefused) as err:
+        rig.send(0., stamp=WALL + rig.now - 6., shrink=True, seq=2)
+    assert err.value.code == 'AUTHORITY_POSE_STALE'
+    assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
+    assert rig.send(1., seq=1)['reason'] == 'stale_seq'  # the refused shrink's seq was still seen
+    assert rig.step().linear == 0.
+
+
+# --- D-760 2: enforced while CORE's trip lease is open ---
+
+def _leased(**config):
+    rig = Rig(**config)
+    rig.leased = True
+    rig.m.authority_leased = lambda: rig.leased
+    return rig
+
+
+def test_under_a_lease_line_follow_stands_until_the_first_authority():
+    rig = _leased()
+    assert rig.m._authority_seen is False and rig.m.config.authority_required is False
+    for _ in range(3):
+        decision = rig.step()
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (rig.m.status().state, rig.m.status().reason) == ('HOLD', 'authority_none')
+    assert rig.authority()['state'] == 'NONE'
+    rig.send(1.)
+    assert rig.step().linear > 0. and rig.authority()['state'] == 'FREE'
+
+
+def test_under_a_lease_a_mode_change_still_requires_an_authority():
+    rig = _leased()
+    rig.step()
+    rig.send(1.)
+    assert rig.step().linear > 0.
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.set_mode(CAMERA)
+    for _ in range(3):
+        decision = rig.step()
+    assert decision.linear == 0. and rig.m.status().reason == 'authority_none'
+
+
+def test_without_a_lease_the_rule_before_d760_stands():
+    rig = _leased()
+    rig.leased = False  # the lease ended: neither config nor a request this session
+    for _ in range(3):
+        decision = rig.step()
+    assert decision.linear > 0. and rig.authority() is None
+    rig.send(1., ttl_s=.1)  # a request this session enforces it, as before
+    for _ in range(4):
+        decision = rig.step()
+    assert decision.linear == 0. and rig.authority()['state'] == 'EXPIRED'
+
+
+def test_the_default_manager_holds_no_lease():
+    assert Rig().m.authority_leased() is False
+
+
+def test_earlier_stops_keep_their_reason_under_a_lease_without_authority():
+    rig = _leased(ir_guard_enabled=True)  # no IR evidence yet: the D-491 guard is stale
+    assert rig.step().linear == 0. and rig.m.status().reason == 'lane_guard_stale'
+    rig = _leased()
+    rig.step()
+    rig.m.observe_clearance(.01, received_at=rig.now + .05)  # D-422: something right ahead
+    assert rig.step().linear == 0. and rig.m.status().reason == 'obstacle_ahead'
+    rig.m.stop('estop')
+    decision = rig.step()
+    assert decision.linear == 0. and (rig.m.status().state, rig.m.status().reason) == ('OFF', 'mode_off')
