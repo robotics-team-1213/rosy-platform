@@ -104,6 +104,50 @@ def open_page(playwright, width: int, height: int, *, url: str | None = None):
     return browser, page, errors
 
 
+# D-741 — what a Fleet document's body still offers once the rail and the sub-nav took their seats: sideways overflow,
+# sub-nav entries that are off screen or under something, grids whose cells got narrow, buttons and selects whose own
+# text is cut (a text input scrolls its value, so it is not counted), controls that reach past the window, and the
+# stop. A grid with nothing visible in it is left out. The caller decides what is too narrow.
+BODY_FIT = """() => {
+  const seen = (node) => node.checkVisibility({visibilityProperty: true}) && node.getClientRects().length > 0;
+  const onTop = (node) => { const r = node.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth
+      && node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); };
+  const ctx = document.createElement('canvas').getContext('2d');
+  const cut = [];
+  for (const node of document.querySelectorAll('main :is(ui-button, select)')) {
+    if (!seen(node)) continue;
+    const style = getComputedStyle(node);
+    let need = node.scrollWidth;
+    if (node.matches('select')) {
+      ctx.font = style.font;
+      need = ctx.measureText(node.selectedOptions[0]?.textContent ?? '').width
+        + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    }
+    if (need > node.clientWidth + 1) cut.push(`${node.id || node.tagName} needs ${Math.round(need)} has ${node.clientWidth}`);
+  }
+  const cells = (node) => [...node.children].filter(seen).map((child) => child.getBoundingClientRect().width);
+  const grids = [...document.querySelectorAll('main :is(.form, .scope, .draft-actions, .documents, .map-workflow)')]
+    .filter((node) => seen(node) && cells(node).length).map((node) => ({
+      name: node.id || node.className, columns: getComputedStyle(node).gridTemplateColumns.split(' ').length,
+      width: Math.round(node.getBoundingClientRect().width), narrowest: Math.round(Math.min(...cells(node))),
+    }));
+  const outside = [...document.querySelectorAll('main :is(ui-button, select, input, textarea)')].filter((node) => {
+    const r = node.getBoundingClientRect();
+    return seen(node) && (r.left < -1 || r.right > innerWidth + 1);
+  }).map((node) => node.id || node.tagName);
+  const nav = document.querySelector('.fleet-body > .ui-subnav > nav'), box = nav.getBoundingClientRect();
+  const stop = document.getElementById('estop');
+  return {
+    overflow: document.documentElement.scrollWidth - innerWidth,
+    body: Math.round(document.querySelector('main').getBoundingClientRect().width),
+    nav: {column: getComputedStyle(nav).flexDirection === 'column', top: Math.round(box.top), bottom: Math.round(box.bottom)},
+    unreachable: [...nav.querySelectorAll('a')].filter((link) => !onTop(link)).map((link) => link.textContent),
+    grids, cut, outside, stop: onTop(stop),
+  };
+}"""
+
+
 DECLINE_CONFIRM = """
     window.__confirms = [];
     window.confirm = (message) => { window.__confirms.push(String(message)); return false; };

@@ -664,6 +664,54 @@ def test_connection_offer_names_this_robot_before_the_neighbour(tablet_page):
     assert errors == [], errors
 
 
+CONNECT_BAR = """() => {
+  const box = (selector) => { const r = document.querySelector(selector).getBoundingClientRect();
+    return {x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height}; };
+  const name = document.querySelector('[data-pilot-robot]');
+  const shown = {bar: box('ui-topbar'), stop: box('[data-estop]'), brand: box('ui-brand'), mark: box('ui-brand b'),
+    name: box('[data-pilot-robot]'), cut: name.scrollWidth > name.clientWidth,
+    em: parseFloat(getComputedStyle(document.querySelector('ui-brand b')).fontSize),
+    overflow: document.documentElement.scrollWidth - innerWidth};
+  const hit = document.elementFromPoint(shown.stop.x + shown.stop.width / 2, shown.stop.y + shown.stop.height / 2);
+  name.hidden = true;
+  const bare = {bar: box('ui-topbar'), stop: box('[data-estop]')};
+  name.hidden = false;
+  return {shown, bare, stopOnTop: Boolean(hit?.closest('[data-estop]'))};
+}"""
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+@pytest.mark.parametrize("robot_id", ["rosy_26", "rosy-pinky-with-a-very-long-robot-name-0026"])
+def test_connect_app_bar_names_this_robot_at_phone_width(tablet_page, width, height, robot_id):
+    """D-741 3: the connect screen's app bar says which robot this is at phone width too. Below 30rem the wordmark
+    folds to the R mark and the name stands beside it in the same row. A long name is cut with an ellipsis.
+    The name neither moves nor covers the stop and the bar does not grow."""
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": robot_id, "transport": "https"}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    name = page.locator("ui-topbar ui-brand [data-pilot-robot]")
+    playwright_sync.expect(name).to_have_text(robot_id)
+    got = page.evaluate(CONNECT_BAR)
+    print(json.dumps({"width": width, "robot_id": robot_id, **got}))
+    shown, bare = got["shown"], got["bare"]
+    assert name.is_visible() and shown["name"]["width"] > 0, got
+    assert shown["mark"]["width"] <= shown["em"] + 1, got  # the R mark alone
+    assert shown["mark"]["right"] <= shown["name"]["x"] + 1 and shown["name"]["right"] <= shown["stop"]["x"], got
+    assert shown["brand"]["y"] - 1 <= shown["name"]["y"] and shown["name"]["bottom"] <= shown["brand"]["bottom"] + 1, got
+    assert shown["brand"]["height"] <= 64, got
+    assert shown["cut"] == (len(robot_id) > 20), got
+    assert shown["bar"]["height"] == bare["bar"]["height"], got
+    assert all(abs(shown["stop"][key] - bare["stop"][key]) <= 0.5 for key in ("x", "y", "width", "height")), got
+    assert got["stopOnTop"] and shown["stop"]["right"] <= width and shown["stop"]["height"] >= 44, got
+    assert shown["overflow"] <= 0, got
+    assert page.locator("ui-topbar ui-brand a").get_attribute("aria-label") == "Rosy Pilot 접속 홈"
+    assert errors == [], errors
+
+
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_development_connection_enters_without_a_screen_code(tablet_page):
     """development mode offers a one-hour operator session. paired mode does not."""
@@ -1560,6 +1608,9 @@ def _arm_auto(page, base_url):
                          "angular": 0.0, "reason": "tracking"}).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
     urllib.request.urlopen(req).read()
+    # 진행은 이 화면이 수동 모드를 잡은 뒤에만 받는다(drive.js `!engaged`). 그 전의 누름은 버려지고 다시 오지 않는다.
+    # 조작 응답 표시는 잡은 뒤의 hold 루프만 쓰므로, 그 글이 뜬 것이 잡았다는 화면 증거다.
+    page.wait_for_function(ENGAGED)
     page.click("[data-drive-auto]")
     page.wait_for_selector("[data-drive-go]", state="visible")
     dev_server.LINE_FOLLOW_MODE_LOG.clear()
@@ -1574,6 +1625,41 @@ def _wait_for_modes(page, *expected):
 
 
 GO_ACTIVE = "document.querySelector('[data-drive-go]').classList.contains('active')"
+ENGAGED = "document.querySelector('[data-drive-fact=latency]').textContent.startsWith('조작 응답 ')"
+
+
+@pytest.mark.skipif(not browser_tests_enabled(),
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_go_pressed_before_manual_mode_is_held_starts_nothing(tablet_page):
+    """수동 모드를 잡기 전의 진행 누름은 CORE 에 닿지 않는다. 잡은 뒤의 누름만 차선 추종을 켠다."""
+    base_url, page, errors = tablet_page
+    held = []
+
+    def mode(route):
+        if route.request.method == "POST" and not held:
+            held.append(route)
+        else:
+            route.continue_()
+    page.route("**/api/v1/mode", mode)
+    _enter_drive(page, base_url)
+    page.click("[data-drive-auto]")
+    page.wait_for_selector("[data-drive-go]", state="visible")
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+    page.dispatch_event("[data-drive-go]", "pointerdown")
+    assert not page.evaluate(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointerup")
+    assert len(held) == 1 and not page.evaluate(ENGAGED)
+    held[0].continue_()
+    page.wait_for_function(ENGAGED)
+    assert dev_server.LINE_FOLLOW_MODE_LOG == []
+    page.dispatch_event("[data-drive-go]", "pointerdown")
+    page.wait_for_function(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointerup")
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    playwright_sync.expect(page.locator("[data-drive-motion]")).to_have_text("대기")  # back at idle: nothing in flight
+    # Exactly the one held press. An early press that leaked to CORE late would add a second pair.
+    assert dev_server.LINE_FOLLOW_MODE_LOG == ["CAMERA_LINE", "OFF"], dev_server.LINE_FOLLOW_MODE_LOG
+    assert errors == [], errors
 
 
 @pytest.mark.skipif(not browser_tests_enabled(),
@@ -1621,7 +1707,8 @@ def test_stick_takes_over_auto(tablet_page):
     _wait_for_modes(page, "CAMERA_LINE", "OFF")
     page.wait_for_function(f"!({GO_ACTIVE})")
     page.mouse.up()
-    assert page.inner_text("[data-drive-motion]") == "대기"
+    # 진행 표시는 멈추는 중에 이미 꺼진다. 동작 표시는 CORE 가 수동을 돌려준 뒤(idle)에 대기로 돌아온다.
+    playwright_sync.expect(page.locator("[data-drive-motion]")).to_have_text("대기")
     assert errors == [], errors
 
 
@@ -2762,7 +2849,11 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, widt
     assert not page.locator('[data-pilot-token-form]').count()
     capture_target_error('unavailable')
     state.update(status=200, body={"kind": "invalid"})
+    # The first failure already shows this text, so it cannot mark the end of this attempt. The attempt ends when
+    # start() swaps in a fresh screen: measuring before that reads the old button while it is being detached.
+    shown = retry.element_handle()
     retry.click()
+    page.wait_for_function("shown => !shown.isConnected", arg=shown)
     expect(page.locator('[data-screen=connect]')).to_contain_text('연결과 대상 정보를 확인한 뒤 다시 시도하세요')
     expect(page.locator('[data-screen=connect]')).not_to_contain_text('invalid simulation target')
     capture_target_error('invalid')
