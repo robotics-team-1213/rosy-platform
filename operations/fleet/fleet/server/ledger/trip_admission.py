@@ -134,6 +134,7 @@ class TripAdmission:
         if not live.open:  # canceled or the lease lost meanwhile
             return False
         live.view["state"] = "running"  # ``wait`` stays until this step ends without a link fault
+        live.last_goal = None  # its goal lease was not renewed while waiting: a free robot gets its goal again
         return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
