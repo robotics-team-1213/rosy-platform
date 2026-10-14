@@ -8468,3 +8468,9 @@ osy-d395-s1d\`.
 - 증거: 고친 정의로 `main` 3c3ff0bc2에 실험실 전체 티어 18개 호출을 다시 돌렸다. 25,596 passed, 1,835 skipped, 1 failed(`operations/fleet/test/test_model_recovery_submit.py::test_worker_real_model_writer_audit_readback_and_final_handoff[unknown]`, "worker did not become idle", 같은 파일 재실행 29 passed: 불안정), 19분 32초(모델 PC와 AI PC, `X:\DevTemp\land-recent\stage0\4`, `5`). 더해진 두 호출은 1,426 passed/290 skipped와 170 passed/13 skipped다.
 - gate 변화: FULL 착지의 시험 범위가 예전 경로의 상위 집합이 됐다. 남은 우회(`--tests none`, 손 `--ff-only`, 브랜치 자신의 `safety_review.py` 사본)와 한계는 D-762 단계 0 보충에 적었다.
 - 결정: 디스패처 검토(DO NOT LAND) 항목 1–7과 EXEMPT 데이터 파일 요청을 반영했다.
+
+## 2026-10-14 · uncommitted · feat: Hugging Face 연결로 비공개 저장소 관리
+
+- 변경: D-765. 저장된 PAT·OAuth 연결의 기록된 범위와 learning.publish로 비공개 데이터셋·모델 저장소를 조회·생성·삭제한다. 읽기 연결과 가져오기는 유지한다. 파일 업로드와 Spaces는 포함하지 않는다.
+- 증거: 원격 pytest와 known_failures 비교는 이 커밋 뒤에 기록한다.
+- gate 변화: 없음. 실제 Hugging Face 계정 수용, 파일 업로드, 운영 배포는 이 변경으로 활성화하지 않는다.

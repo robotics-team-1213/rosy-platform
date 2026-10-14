@@ -3523,6 +3523,19 @@ intent may be SUPERSEDED while result evidence remains in the existing Fleet dat
 
 `/api/accounts/*`는 세션·계정 연결, `/api/learning/imports`와 그 `create|retry|cancel` 하위 POST는 고정 revision 읽기 가져오기다. `/oauth/huggingface/callback`은 등록된 HTTPS URI에 대한 일회성 OAuth callback이다. 현재 신원과 프로젝트 권한은 기존 검수 자료 읽기·수정에도 적용되며 계정 연결 자체는 프로젝트 가입이나 학습 승인이 아니다. 협업 모드의 임의 서버 경로 등록과 인증 없는 `--decisions-port`는 허용하지 않는다. 가져오기 완료는 검수 대기이며 모델 적재·외부 게시·CORE/OMX 명령 권한을 만들지 않는다.
 
+### D-765 비공개 데이터셋·모델 저장소
+
+검수 앱 로컬 경로이며 CORE `/api/v1`이 아니다. `learning.publish`와 연결에 기록된 저장소 범위가 둘 다 있어야 한다. `learning.import`와 `learning.manage`는 이 경로를 대신하지 않는다. 개인 연결은 그 Hugging Face 사용자 이름의 저장소만 만들고, 프로젝트 연결은 허용 목록의 `dataset:`·`model:`만 다룬다. 생성은 `visibility: private`이며 만든 뒤 private가 아니면 실패한다. 공개 상태를 바꾸거나 자동으로 지우지 않는다. 삭제는 `confirm`이 `repo_id`와 같고 조회 결과가 private일 때만 한다. 응답에 토큰을 넣지 않는다. 파일 업로드, Spaces, 과금은 이 경로에 없다.
+
+| 경로 | 입력과 반환 |
+|---|---|
+| `GET /api/accounts/repos` | 정확한 쿼리 `connection_id`, `repo_type`(dataset 또는 model). `repos`에 `repo_id`, `private`, `sha`를 최대 50개 반환한다. 프로젝트 연결의 없는 저장소는 `missing: true`다. |
+| `POST /api/accounts/repos/create` | 정확한 본문 `connection_id`, `repo_type`, `repo_id`. 비공개로 확인된 저장소 항목을 반환한다. 409는 기존 저장소를 성공으로 보지 않는다. |
+| `POST /api/accounts/repos/delete` | 정확한 본문 `connection_id`, `repo_type`, `repo_id`, `confirm`. `confirm`은 `repo_id`와 같아야 한다. |
+| `POST /api/accounts/oauth` | `purpose`에 기존 `login`·`link` 외에 `manage`를 둔다. manage는 쓰기와 저장소 관리 범위가 모두 있을 때만 연결한다. |
+
+권한 거부는 기존 403이다. 범위 부족, 이름 불일치, 공개 저장소, Hub 실패는 400이며 비밀이나 Hub 본문을 포함하지 않는다.
+
 가져오기 작업은 파일별 `downloaded_bytes`, `partial_sha256`, 완료 `sha256`와 작업의 `reserved_bytes`를 반환한다. 부분 bytes는 검증 완료나 학습 승인이 아니다. 서버가 제공한 SHA-256과 로컬 부분 해시가 있는 파일만 같은 revision·연결 세대로 Range 재개한다. Range를 무시한 전체 응답은 덧붙이지 않고 처음부터 다시 받는다. `insufficient_space`, `storage_unavailable`, `verification_failed`, `access_revoked`, `worker_interrupted`, `import_failed`는 비밀을 포함하지 않는 실패 코드다. 저장소 실행 잠금과 남은 bytes의 논리 예약은 같은 imports root의 worker만 조정하며 파일시스템 전체의 물리 예약은 아니다. 운영자 전용 `import_limits` 설정은 웹 입력으로 변경할 수 없다.
 
 ### 학습 저장 현황과 공간 사전 점검 (D-755 후속)
