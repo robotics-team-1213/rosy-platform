@@ -362,7 +362,7 @@ class LaneKeeper:
                     and (paint_spans_lane or ((paint_crosses or paint_outside) and far_lateral))):
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
-                lines += near_run(points, ends, half, (STEEP_MIN_ANGLE_RAD, AMBIGUOUS_LATERAL_M, CORE_HALF_M, MAX_GAP_M, MIN_LINE_LENGTH_M))
+                lines += near_run(points, ends, half, parallel, (STEEP_MIN_ANGLE_RAD, AMBIGUOUS_LATERAL_M, CORE_HALF_M, MAX_GAP_M, MIN_LINE_LENGTH_M))
                 continue
             near_y = float(min(ends, key=lambda p: p[0])[1])  # D-507 B9: a steep line is sided by its seen paint
             at = near_y if bend_expected and abs(heading) > STEEP_MIN_ANGLE_RAD and abs(near_y) >= half / 2.0 else lateral
