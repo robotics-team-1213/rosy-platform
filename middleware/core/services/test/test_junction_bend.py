@@ -185,18 +185,28 @@ def test_arc_time_bound():
     assert decision.linear == 0.
 
 
-def _seconds_until_timeout(look):
-    """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`."""
+def _seconds_until_timeout(look, leased=False):
+    """A bend commanded but not moving: seconds until 'timeout', with the crosswalk state `look`
+    (leased: under a trip lease with no authority, D-760 2)."""
     rig = armed_rig()
     until(rig, 'bending')
+    rig.m.authority_leased = lambda: leased
     rig.m._xwalk.status = lambda now: {'state': look} if look else None
     start = rig.now
     for _ in range(3000):
         decision, status = site_step(rig)
         if status.junction.state != 'bending':
             assert (status.junction.state, status.junction.reason) == ('aborted', 'timeout')
+            assert (decision.linear, decision.angular, status.state, status.reason) == (0., 0., 'HOLD', 'junction_aborted')
             return rig.now-start
     raise AssertionError('never timed out')
+
+
+def test_an_authority_hold_stops_the_maneuver_clock_up_to_the_cap_then_it_aborts():
+    """D-760 Open 2, today's behaviour: the authority gate zeroes a junction maneuver's twist; its
+    phase clock stands for at most crosswalk_report_s + crosswalk_clear_s (15 s), then 'timeout'
+    and HOLD junction_aborted until the next instruction."""
+    assert _seconds_until_timeout(None, leased=True) == pytest.approx(_seconds_until_timeout(None)+15., abs=.3)
 
 
 def test_time_under_a_crosswalk_look_is_not_the_bends():

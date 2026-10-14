@@ -3,7 +3,7 @@ import pytest
 
 from core_features.line_follow.authority import AuthorityRefused
 from core_features.line_follow.manager import LineFollowManager
-from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
+from core_features.line_follow.model import LineFollowConfig, LineFollowDecision, LineFollowMode, LineObservation
 
 CAMERA = LineFollowMode.CAMERA_LINE
 WALL = 1_800_000_000.0  # CORE wall clock = line clock + WALL in this rig
@@ -262,14 +262,105 @@ def test_seq_is_per_leg_and_outlives_a_mode_change():
 def test_a_request_without_seq_or_shrink_behaves_as_before():
     rig = Rig()
     rig.step()
-    rig.send(1., seq=5)
-    assert rig.send(1.5)['accepted'] is True  # an old Fleet: no order, the end extends
+    rig.send(1.)
+    assert rig.send(1.5)['accepted'] is True  # a Fleet before D-760: no order, the end extends
     assert rig.authority()['remaining_m'] == pytest.approx(1.5)
     ignored = rig.send(.5)
     assert (ignored['accepted'], ignored['reason']) == (False, 'shrink')
     assert rig.send(.5, shrink=False)['reason'] == 'shrink'
-    assert rig.send(2., seq=6)['accepted'] is True  # and it did not move the remembered seq
-    assert rig.send(2., seq=5)['reason'] == 'stale_seq'
+    assert rig.m._authority_seq == {}  # nothing without seq is remembered
+
+
+def test_a_leg_that_has_seen_a_seq_ignores_requests_without_one():
+    rig = Rig()
+    rig.step()
+    rig.send(1., ttl_s=.52, seq=3)
+    assert rig.send(0., shrink=True, ttl_s=.52, seq=4)['accepted'] is True
+    for _ in range(10):  # 0.5 s of seq-less extends: none re-extends the shrunk end or its ttl
+        late = rig.send(1.)
+        assert (late['accepted'], late['reason']) == (False, 'seq_required')
+        assert late['authority']['remaining_m'] == pytest.approx(0.)
+        assert rig.step().linear == 0. and rig.m.status().reason == 'authority_end'
+    assert rig.step().linear == 0. and rig.authority()['state'] == 'EXPIRED'
+    assert rig.send(1.)['reason'] == 'seq_required' and rig.step().linear == 0.
+    assert rig.send(1., leg='L2')['accepted'] is True  # a leg that never had a seq keeps the old rule
+
+
+def test_a_late_request_for_an_older_leg_does_not_reopen_the_newer_legs_order():
+    rig = Rig()
+    rig.step()
+    rig.send(1., leg='L1', seq=5)
+    rig.send(1., leg='L2', seq=1)
+    assert rig.send(0., leg='L2', shrink=True, seq=2)['accepted'] is True
+    late = rig.send(2., leg='L1', seq=4)  # an old leg's request arrives late
+    assert (late['accepted'], late['reason']) == (False, 'stale_seq')
+    assert rig.send(2., leg='L2', seq=1)['reason'] == 'stale_seq'  # L2's order is still remembered
+    assert rig.authority()['leg_id'] == 'L2' and rig.authority()['remaining_m'] == pytest.approx(0.)
+    assert rig.step().linear == 0.
+
+
+def test_a_leg_is_forgotten_only_once_its_late_requests_are_older_than_the_odom_log():
+    rig = Rig()
+    rig.step()
+    seen = WALL + rig.now
+    rig.send(1., leg='L1', seq=5)
+    for _ in range(199):  # the log keeps 200 samples: L1's last sight is still inside it
+        rig.step()
+    rig.send(1., leg='L2', seq=1)
+    assert set(rig.m._authority_seq) == {'L1', 'L2'}
+    for _ in range(2):
+        rig.step()
+    rig.send(1., leg='L2', seq=2)
+    assert set(rig.m._authority_seq) == {'L2'}  # L1 was last seen before the oldest odom sample
+    with pytest.raises(AuthorityRefused) as err:  # whatever was sent before that sight is older still
+        rig.send(2., leg='L1', seq=4, stamp=seen)
+    assert err.value.code == 'AUTHORITY_POSE_STALE'
+    assert rig.authority()['state'] == 'NONE' and rig.step().linear == 0.
+
+
+def test_more_live_legs_than_the_memory_holds_are_refused_not_forgotten():
+    from core_features.line_follow.authority import SEQ_LEGS
+
+    rig = Rig()
+    rig.step()
+    for n in range(SEQ_LEGS):
+        assert rig.send(1., leg=f'L{n}', seq=1)['accepted'] is True
+    full = rig.send(2., leg='one-more', seq=1)
+    assert (full['accepted'], full['reason']) == (False, 'seq_legs_full')
+    assert rig.authority()['leg_id'] == f'L{SEQ_LEGS-1}' and rig.authority()['remaining_m'] == pytest.approx(1.)
+    assert rig.send(2., leg='L0', seq=1)['reason'] == 'stale_seq'  # the first leg was not pushed out
+
+
+@pytest.mark.parametrize('held', ['none', 'expired', 'other_leg'])
+def test_a_shrink_never_grants(held):
+    rig = Rig()
+    rig.step()
+    if held == 'expired':
+        rig.send(1., ttl_s=.04)
+        rig.step()
+    elif held == 'other_leg':
+        rig.send(1., leg='L0')
+        assert rig.step().linear > 0.
+    answer = rig.send(1., shrink=True)
+    assert (answer['accepted'], answer['reason']) == (False, 'shrink_none_held')
+    assert answer['authority']['state'] == 'NONE' and rig.m._authority is None
+    decision = rig.step()
+    assert decision.linear == 0. and rig.m.status().reason == 'authority_none'
+
+
+def test_the_gate_never_raises_a_decision():
+    # D-400 policy_hold and every earlier stop hand the gate a zero decision: it stays zero even when FREE.
+    rig = Rig()
+    rig.step()
+    rig.send(1.)
+    zero = LineFollowDecision(mode=CAMERA)
+    moving = LineFollowDecision(linear=.05, angular=.2, mode=CAMERA)
+    assert rig.authority()['state'] == 'FREE'
+    assert rig.m._authority_gate(rig.now, zero) is zero and rig.m._authority_gate(rig.now, moving) is moving
+    rig.m._authority = None
+    assert rig.m._authority_gate(rig.now, zero) is zero
+    held = rig.m._authority_gate(rig.now, moving)
+    assert (held.linear, held.angular) == (0., 0.)
 
 
 def test_shrink_to_zero_holds_on_the_next_tick():
@@ -343,9 +434,36 @@ def test_under_a_lease_a_mode_change_still_requires_an_authority():
     assert decision.linear == 0. and rig.m.status().reason == 'authority_none'
 
 
+def test_a_lease_that_ends_before_the_first_authority_frees_nothing():
+    rig = _leased()  # the lease opens after the mode change: latched by the first tick
+    assert rig.step().linear == 0. and rig.m.status().reason == 'authority_none'
+    rig.leased = False  # released, expired or taken over while line follow is still on
+    for _ in range(3):
+        decision = rig.step()
+    assert decision.linear == 0. and rig.m.status().reason == 'authority_none'
+    assert rig.authority()['state'] == 'NONE'
+    rig.send(1.)
+    assert rig.step().linear > 0.  # an authority still drives it
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.set_mode(CAMERA)  # the mode change ends the session: dashboard use is as before
+    for _ in range(3):
+        decision = rig.step()
+    assert decision.linear > 0. and rig.authority() is None
+
+
+def test_a_lease_open_at_the_mode_change_latches_before_any_tick():
+    rig = _leased()
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.set_mode(CAMERA)  # under the lease
+    rig.leased = False  # gone before the first tick or status read
+    for _ in range(3):
+        decision = rig.step()
+    assert decision.linear == 0. and rig.m.status().reason == 'authority_none'
+
+
 def test_without_a_lease_the_rule_before_d760_stands():
     rig = _leased()
-    rig.leased = False  # the lease ended: neither config nor a request this session
+    rig.leased = False  # never seen open: neither config nor a request this session
     for _ in range(3):
         decision = rig.step()
     assert decision.linear > 0. and rig.authority() is None

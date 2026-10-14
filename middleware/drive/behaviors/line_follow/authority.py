@@ -25,16 +25,21 @@ ARC_ANCHOR_MAX_RADIAL_M = .045
 #: D-744 5: the heading may be this far off the placed circle's tangent at the opening: above the
 #: 10 deg pivot error measured in Gazebo (2026-10-13); more is a wrong map yaw, not a pivot error.
 ARC_ANCHOR_MAX_HEADING_RAD = math.radians(25.)
+#: D-760 3: legs whose newest ``seq`` is remembered at once. A leg is forgotten only when it was last seen
+#: before the oldest sample of the odom log: a late request for it carries an older pose_stamp and is refused
+#: (AUTHORITY_POSE_STALE, the robot stands). A new leg beyond this many live ones is refused (seq_legs_full).
+SEQ_LEGS = 8
 ARC_ANCHOR_FIELDS = ('centre_x_m', 'centre_y_m', 'pose_x_m', 'pose_y_m', 'pose_yaw_rad', 'odom_stamp_s')
 
 
 class AuthorityMixin:
     _wall = staticmethod(time.time)  # CORE wall clock, the one odom_pose.stamp is on
     authority_leased = staticmethod(lambda: False)  # D-760 2: CORE binds "a trip lease is open" (core/trip_lease.py)
-    _authority_seq = (None, -1)  # D-760 3: (leg_id, newest seq seen); outlives mode changes, a new leg restarts it
+    _authority_seq = {}  # D-760 3: leg_id -> (newest seq seen, CORE wall time); replaced, never mutated; outlives modes
 
     def _init_authority(self):  # odom log: (wall, (epoch, frame), stamp_ns, path_m, x, y), >= 4 s at 50 Hz
-        self._odom_log, self._authority, self._authority_seen, self._authority_held = deque(maxlen=200), None, False, False
+        self._odom_log, self._authority, self._authority_held = deque(maxlen=200), None, False
+        self._authority_seen = bool(self.authority_leased())  # D-760 2: a lease open at the mode change latches too
 
     def observe_return_pose(self, **sample):
         accepted = super().observe_return_pose(**sample)
@@ -52,16 +57,21 @@ class AuthorityMixin:
 
     def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None):
         """Store Fleet's authority. ``AuthorityRefused`` drops the held one too (the robot stands). D-760 3:
-        ``seq`` at or below the newest seen on the leg is ignored; ``shrink`` takes min(held end, this end)."""
+        ``seq`` at or below the newest seen on the leg is ignored, as is a request without ``seq`` on a leg that
+        has one; ``shrink`` takes min(held end, this end) and never grants: with nothing live to shrink, none is held."""
         with self._lock:
             if self._mode.value == 'OFF':
                 raise AuthorityRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow is OFF')
             now, log, ev = self._clock() if now is None else now, self._odom_log, self._return_evidence
             self._authority_seen, pose = True, self._fresh_pose(now)
+            seqs = {k: v for k, v in self._authority_seq.items() if k == leg_id or not log or v[1] >= log[0][0]}
+            ignored = ((None if leg_id not in seqs else 'seq_required') if seq is None else
+                       'stale_seq' if seq <= seqs.get(leg_id, (-1,))[0] else
+                       'seq_legs_full' if leg_id not in seqs and len(seqs) >= SEQ_LEGS else None)
+            if ignored:  # the held end and its ttl stay as they are
+                return dict(accepted=False, reason=ignored, authority=self.authority_status(now))
             if seq is not None:  # seen before any refusal: a refused shrink still outranks an older extend
-                if self._authority_seq[0] == leg_id and seq <= self._authority_seq[1]:
-                    return dict(accepted=False, reason='stale_seq', authority=self.authority_status(now))
-                self._authority_seq = (leg_id, seq)
+                self._authority_seq = {**seqs, leg_id: (seq, self._wall())}
             fresh = pose is not None and bool(log) and log[-1][1] == (ev.epoch, pose.frame)
             # The sample at or before pose_stamp: never less travel than since the pose.
             base = next((e for e in reversed(log) if e[0] <= pose_stamp), None) if fresh else None
@@ -73,7 +83,11 @@ class AuthorityMixin:
                 self._authority = None
                 raise AuthorityRefused(*refusal)
             end, a = base[3]+until_m, self._authority
-            if a is not None and (a['leg_id'], a['key']) == (leg_id, base[1]) and now <= a['expires_at']:
+            live = a is not None and (a['leg_id'], a['key']) == (leg_id, base[1]) and now <= a['expires_at']
+            if shrink and not live:  # a shrink never grants: Fleet wants less, so whatever is held goes too
+                self._authority = None
+                return dict(accepted=False, reason='shrink_none_held', authority=self.authority_status(now))
+            if live:
                 if end < a['end']-SHRINK_TOL_M and not shrink:  # never shrinks unasked: ignored, so it expires
                     logging.getLogger(__name__).info('authority %s on leg %s ignored: %.3f m short', authority_id, leg_id, a['end']-end)
                     return dict(accepted=False, reason='shrink', authority=self.authority_status(now))
@@ -81,8 +95,11 @@ class AuthorityMixin:
             self._authority = dict(authority_id=authority_id, leg_id=leg_id, end=end, key=base[1], expires_at=now+ttl_s)
             return dict(accepted=True, reason=None, authority=self.authority_status(now))
 
-    def _authority_on(self):  # enforced: by config, by a request this session, or under a trip lease (D-760 2)
-        return self._config.authority_required or self._authority_seen or self.authority_leased()
+    def _authority_on(self):
+        """Enforced: by config, by a request this session, or once a trip lease was seen open (D-760 2: latched
+        until the mode changes, so a lease that ends before the first authority frees nothing). Locked."""
+        self._authority_seen = self._authority_seen or bool(self.authority_leased())
+        return self._config.authority_required or self._authority_seen
 
     def _authority_state(self, now):
         """(state, remaining_m, reason); HOLDING latches with the D-422 stop gap + hysteresis. Locked."""

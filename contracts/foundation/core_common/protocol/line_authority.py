@@ -40,10 +40,12 @@ class LineAuthorityRequest(BaseModel):
     until_m: float = Field(ge=0, le=MAX_UNTIL_M, allow_inf_nan=False)
     ttl_s: float = Field(gt=0, le=MAX_TTL_S, allow_inf_nan=False)
     #: D-760 3: true makes the end min(held end, this end) and refreshes ttl_s (``until_m`` 0: stand here);
+    #: with no live authority on the leg it grants nothing (``reason`` shrink_none_held, none held).
     #: false or absent keeps D-517 4 (a smaller end is ignored and does not refresh ttl_s).
     shrink: bool = False
     #: D-760 3: rises per (robot, leg_id). CORE ignores a request at or below the newest seq it saw on that
-    #: leg (``accepted`` false, ``reason`` stale_seq); absent: no order check (a Fleet before D-760).
+    #: leg (``accepted`` false, ``reason`` stale_seq), and one without seq on a leg that has one
+    #: (seq_required); absent on a leg that never had one: no order check (a Fleet before D-760).
     seq: Optional[int] = Field(default=None, ge=0)
 
 

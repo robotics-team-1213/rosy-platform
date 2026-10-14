@@ -723,7 +723,11 @@ def test_under_a_lease_lane_following_stands_until_an_authority_and_again_after_
     assert services.trip_lease.current() is not None
     assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
     assert client.delete(f"{URL}/lease-1", headers=FLEET).status_code == 200
-    assert _gated(services, line["t"]) == 0.05            # the lease ended: the rule before D-760
+    # The lease ended while line follow is on: latched, so nothing drives without an authority.
+    assert _gated(services, line["t"]) == 0.0 and lf.status().reason == "authority_none"
+    assert _line_status(client)["authority"]["state"] == "NONE"
+    assert _lane(client).status_code == 200             # a mode change ends the session
+    assert _gated(services, line["t"]) == 0.05
     assert "authority" not in _line_status(client)
 
 
@@ -735,3 +739,38 @@ def test_a_lapsed_lease_still_requires_an_authority_until_the_timer_ends_it(robo
     assert services.line_follow.authority_leased() is True    # lapsed, not yet processed: safe side
     services.trip_lease.expire_due()
     assert services.line_follow.authority_leased() is False
+
+
+def _gate_when_halted(services):
+    """What the authority gate leaves at the moment the ended lease halts the robot."""
+    seen, halt = [], services.trip_lease.halt
+
+    def spy(reason):
+        seen.append((reason, services.trip_lease.current(), services.line_follow.active,
+                     _gated(services, services.line_follow._clock())))
+        halt(reason)
+    services.trip_lease.halt = spy
+    return seen
+
+
+def test_expiry_before_the_first_authority_never_frees_the_robot(robot):
+    client, services, clock = robot
+    _open(client)
+    assert _camera_lane(client).status_code == 200
+    seen = _gate_when_halted(services)
+    clock.now += 5.1
+    services.trip_lease.expire_due()
+    # end() clears the lease, then halts: in between line follow is on, lease-less, and still zeroed.
+    assert seen == [("expired", None, True, 0.0)]
+    assert not services.line_follow.active and services.modes.mode.value == "IDLE"
+
+
+def test_takeover_before_the_first_authority_never_frees_the_robot(robot):
+    client, services, _ = robot
+    _open(client)
+    assert _camera_lane(client).status_code == 200
+    seen = _gate_when_halted(services)
+    taken = client.post(f"{URL}/takeover", json={"lease_id": "lease-1"}, headers=OTHER)
+    assert taken.status_code == 200, taken.text
+    assert seen == [("taken_over", None, True, 0.0)]
+    assert not services.line_follow.active and services.modes.mode.value == "IDLE"
