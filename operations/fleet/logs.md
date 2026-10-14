@@ -3576,3 +3576,11 @@
 - gate 변화: 없음.
 - 결정: D-760 Decision 3. 능력 플래그에 따라 5 s를 보내는 것은 3단계다.
 - 교훈: 없음.
+
+## 2026-10-14 · 97ad6ca74 · 목표 임대 갱신은 그 목표를 보낸 클라이언트로 (D-760 5단계 확인)
+
+- 변경: 시험만. `test/test_goal_lease.py`에 `SenderRobot`(CORE의 D-760 9 규칙을 흉내 낸 가짜)와 갱신 경로 네 개(operator, dispatch, yield, trip) 매개 시험을 더했다. 보내기(`goal_lease.py:112`, 로스터 클라이언트)와 갱신(`goal_lease.py:173-177`, 같은 로스터 `_clients[rid]`)이 같은 객체임을 고정한다. stuck resolver 클라이언트(`cli.py:640`)는 목표를 보내지도 갱신하지도 않는다.
+- 증거: `operations/fleet/test/test_goal_lease.py` 원격 exit 0.
+- gate 변화: 없음.
+- 결정: D-760 Decision 9.
+- 교훈: 주소 이동(`_replace_client`, 새 토큰)은 임대 행을 남긴다. 새 토큰의 갱신은 403이고 Fleet은 경고만 남긴다. 목표는 CORE에서 ttl(≤5 s) 안에 끝나고 다음 갱신이 409라 행이 지워진다. 화면 코드 교환은 5 s보다 길어 실제로는 이미 끝난 목표다.
