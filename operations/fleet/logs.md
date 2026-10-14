@@ -3705,7 +3705,7 @@
 - 증거: 실패 로그 `gh run view 38568954601 --log-failed`(0.8307 s); 수정 전 같은 시험 20회 랩 PC 20 passed. 수정 뒤 반복, 그리고 쓰기를 이벤트 루프로 되돌린 변이에서 새 시험이 실패하는지는 이 브랜치 보고에 적는다.
 - gate 변화: 없음. 정지 한도를 느슨하게 하지 않았다: 지연 여부는 이제 결정적으로 판정한다.
 
-## 2026-10-15 - 0bc2a16c1 - native readback and background shutdown
+## 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
 
 - Change: reconcile up to 20 existing native Task owners concurrently; keep identity, quiescence, two-second freshness, claim CAS and UNKNOWN ownership. Cancel all app background workers before awaiting their results; log failed workers without interrupting remaining cleanup.
 - Evidence: shutdown RED e4804ba77; corrected readback RED b73b04577 reached UNKNOWN instead of COMPLETED. Remote AI PC regression at 0bc2a16c1: 117 passed, exit 0, known_failures NEW 0. Raw logs: X: runtime-pipelines--0fd8e5 session logs/green-2/run-1.txt.
