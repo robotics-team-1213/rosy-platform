@@ -3,7 +3,7 @@
 Usage: python tools/harness/size_range.py BASE HEAD
 
 Each commit's tree is measured through git (``ls-tree`` + ``cat-file``, nothing is checked out
-and no test runs) with the architecture guard's own rule (``size_limits.py``) against that
+and no test runs) with that commit's own ``size_limits.py`` (the architecture guard's rule) against that
 commit's ``size_ratchet.txt`` and ``size_units.txt``, and the rows at its first parent as the
 base. Only what the commit touched is reported: its changed files, the units and packages that
 hold them, and its changed ratchet rows (every key when it changed ``size_units.txt``). A commit
@@ -17,6 +17,7 @@ import datetime as dt
 import re
 import subprocess
 import sys
+import types
 import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
@@ -48,18 +49,28 @@ def _blobs(commit: str, paths: list[str]) -> dict[str, bytes]:
     return blobs
 
 
-def measure_commit(commit: str, units: list[str]) -> tuple[dict, dict, dict]:
+def rule_at(commit: str):
+    """The commit's own ``size_limits.py``, so a later rule change never reddens an earlier commit."""
+    source = _show(commit, "tools/harness/size_limits.py")
+    if source is None:
+        return size_limits
+    module = types.ModuleType("size_limits_at_commit")
+    exec(compile(source, "size_limits.py", "exec"), module.__dict__)
+    return module
+
+
+def measure_commit(commit: str, units: list[str], limits=size_limits) -> tuple[dict, dict, dict]:
     roots = colcon_roots()
     paths = _git("ls-tree", "-r", "--name-only", "-z", commit).split("\0")
-    code = [p for p in paths if PurePosixPath(p).suffix in size_limits.CODE_SUFFIXES | size_limits.WEB_SUFFIXES]
+    code = [p for p in paths if PurePosixPath(p).suffix in limits.CODE_SUFFIXES | limits.WEB_SUFFIXES]
     blobs = _blobs(commit, code)
     files = {path: blob.count(b"\n") + (not blob.endswith(b"\n") and bool(blob)) for path, blob in blobs.items()}
     xmls = [p for p in paths if p.endswith("/package.xml") and any(
-        p.startswith(root + "/") and size_limits.is_prod(PurePosixPath(p[len(root) + 1:]).parts) for root in roots)]
+        p.startswith(root + "/") and limits.is_prod(PurePosixPath(p[len(root) + 1:]).parts) for root in roots)]
     packages = {ET.fromstring(blob).findtext("name"): str(PurePosixPath(path).parent)
                 for path, blob in _blobs(commit, xmls).items()}
-    packages.update(size_limits.STANDALONE)
-    return size_limits.measure(files, packages, roots, units)
+    packages.update(getattr(limits, "STANDALONE", {}))
+    return limits.measure(files, packages, roots, units)
 
 
 def safety_commit(at: str, key: str, safety: dict) -> tuple[dt.date, bool] | None:
@@ -74,21 +85,22 @@ def safety_commit(at: str, key: str, safety: dict) -> tuple[dt.date, bool] | Non
 
 
 def check(commit: str) -> list[str]:
-    ratchet = _show(commit, size_limits.RATCHET)
+    limits = rule_at(commit)
+    ratchet = _show(commit, limits.RATCHET)
     if ratchet is None:
         return []
-    rows, safety = size_limits.parse_ratchet(ratchet)
-    units, small = size_limits.parse_units(_show(commit, size_limits.UNITS) or "")
+    rows, safety = limits.parse_ratchet(ratchet)
+    units, small = limits.parse_units(_show(commit, limits.UNITS) or "")
     parents = _git("rev-list", "--parents", "-n", "1", commit).split()[1:]
     parent = parents[0] if parents else None
-    base_text = _show(parent, size_limits.RATCHET) if parent else None
-    base_rows, base_safety = size_limits.parse_ratchet(base_text) if base_text is not None else (None, {})
-    counts, over, owner = measure_commit(commit, units)
+    base_text = _show(parent, limits.RATCHET) if parent else None
+    base_rows, base_safety = limits.parse_ratchet(base_text) if base_text is not None else (None, {})
+    counts, over, owner = measure_commit(commit, units, limits)
     listing = (_git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
                if parent else _git("ls-tree", "-z", "-r", "--name-only", commit))
     changed = [path for path in listing.split("\0") if path]
     keys = None
-    if size_limits.UNITS not in changed:
+    if limits.UNITS not in changed:
         roots = colcon_roots()
         keys = set()
         for path in changed:
@@ -101,12 +113,12 @@ def check(commit: str) -> list[str]:
         keys |= {key for key in {*rows, *(base_rows or {})} if (base_rows or {}).get(key) != rows.get(key)}
         keys |= {key for key in {*safety, *base_safety} if safety.get(key) != base_safety.get(key)}  # whole rows
     date = dt.date.fromisoformat(_git("log", "-1", "--format=%cs", commit).strip())
-    bad = size_limits.ratchet_problems(over, rows, safety, base_rows, date,
+    bad = limits.ratchet_problems(over, rows, safety, base_rows, date,
                                        lambda key: safety_commit(commit, key, safety), keys, base_safety)
-    base_units_text = _show(parent, size_limits.UNITS) if parent else None
-    base_units = size_limits.parse_units(base_units_text)[1] if base_units_text is not None else small
+    base_units_text = _show(parent, limits.UNITS) if parent else None
+    base_units = limits.parse_units(base_units_text)[1] if base_units_text is not None else small
     if keys is None:
-        bad += size_limits.unit_problems(counts, owner, units, small, base_units)
+        bad += limits.unit_problems(counts, owner, units, small, base_units)
     return bad
 
 

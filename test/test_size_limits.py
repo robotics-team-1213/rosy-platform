@@ -1,6 +1,7 @@
 """D-766 size rule (tools/harness/size_limits.py): the mutation proofs of D-766 7(a) 6 on small inputs."""
 
 import datetime as dt
+from pathlib import Path
 
 import pytest
 
@@ -136,6 +137,11 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
     assert size_range.main([base, "HEAD"]) == 1
     assert "grow a.py past 600" in capsys.readouterr().err
     assert size_range.main([grown, "HEAD"]) == 0
+    # Each commit is judged by its own size_limits.py: a later stricter rule does not redden it.
+    rule = Path(s.__file__).read_text(encoding="utf-8")
+    loose = commit({"tools/harness/size_limits.py": rule.replace("FILE_LIMIT = 600", "FILE_LIMIT = 700"),
+                    "middleware/pkg/pkg/c.py": "z = 1\n" * 650}, "c.py at 650 under a 700 rule")
+    assert size_range.check(loose) == []
 
 
 def test_a_row_moves_with_a_pure_move_only_when_the_old_row_goes():
