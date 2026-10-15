@@ -287,6 +287,9 @@ class LineJunctionRequest(BaseModel):
     # D-754: a bend's lane distance from its vertex to the next junction's cross line (2 = that far
     # or further), sent only to a robot announcing lane_bend_next_line.
     next_line_in_m: Optional[float] = Field(default=None, ge=0, le=2.0, allow_inf_nan=False)
+    # D-767 A: the odom stamp (CORE wall clock, snapshot odom_pose.stamp) of the pose expect_in_m /
+    # bend_in_m were measured from, sent only to a robot announcing lane_instruction_stamp.
+    pose_stamp: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
 
 
 def _expect(body: LineJunctionRequest):
@@ -344,7 +347,8 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
                                               body.stop_after_m, body.turn_deg, body.advance_m,
                                               expect=_expect(body),
                                               exit_segment=(None if body.exit_segment is None
-                                                            else body.exit_segment.model_dump(exclude_none=True)))
+                                                            else body.exit_segment.model_dump(exclude_none=True)),
+                                              pose_stamp=body.pose_stamp)
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
