@@ -192,6 +192,10 @@ class CrosswalkGateMixin:
             return "crosswalk_wait" if xw["state"] == WAITING else "crosswalk_look"
         return "crosswalk_held" if xw.get("look_progress") is not None else None
 
+    @property
+    def supports_lane_crosswalk_gate(self) -> bool:  # D-763 10 (c): line_follow.crosswalk_gate_enabled
+        return self._config.crosswalk_gate_enabled
+
     def _crosswalk_armed(self) -> bool:
         return self._config.crosswalk_gate_enabled and self._xwalk.zone is not None
 

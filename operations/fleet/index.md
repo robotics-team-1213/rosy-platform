@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
-- 2026-10-15 · febf77ca9 · D-760 4단계 재검토: SIM 자세 포트 옆에서도 교차로 읽기에 울타리
-- 2026-10-15 · 95c9263a5 · D-760 4단계 독립 Safety-Review CONDITIONS 반영
-- 2026-10-15 · 39d8e72973 · finish resource cleanup after worker shutdown
-- 2026-10-15 · 0bc2a16c1 · native readback and background shutdown
-- 2026-10-15 · e0febb524 · 잘못된 drive_modes는 leg_unknown, 다리 시험을 반증 가능하게
+- 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+- 2026-10-15 · ca386fb1a · 크기: trip 시작 검사를 단위 `server/trip_checks`로, 신호 구간 걷기를 그 옆으로
+- 2026-10-15 · uncommitted · D-763 10항 (c) 독립 검토 반영: 운영자 재계획·다음 바퀴·잘못된 값·지난 경고
+- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)

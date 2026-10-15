@@ -1145,6 +1145,22 @@
 - 결정: D-759 개정 1(Proposed).
 - 교훈: 새 odom 실행은 경로 길이를 0부터 센다. 경로 차이만 보는 `carry`는 실행이 바뀌면 음수가 되어 통과한다. 키를 같이 본다.
 
+## 2026-10-15 · 9a9ea4554 · 규제 능력 속성 (D-763 10항 (c), API v1.233)
+
+- 변경: `line_follow/crosswalk/gate.py`에 `supports_lane_crosswalk_gate`(= `crosswalk_gate_enabled`), `line_follow/signal/gate.py`에 `supports_lane_junction_signal`(= `junction_signal_enabled`). 동작은 바뀌지 않는다.
+- 증거: `middleware/core/gateway/test/test_capabilities_controls.py`.
+- gate 변화: 없음. 크기 단위 `crosswalk`·`signal` 각 +4줄.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
 ## 2026-10-15 · uncommitted · D-620 trip 중 무응답 대기, D-760 개정 4 HOLDING 대기 시계 (API v1.239)
 
 - 변경: `line_follow/signal/gate.py` `_signal_gate` — `_authority_on()`(통행권 강제·trip lease)이면 3초 무응답 우측 fallback을 고르지 않고 대기, journal 한 줄. `line_follow/crosswalk/gate.py` `_regulated_wait_share`가 시계 dict를 받아 상한까지 적용: 앞뒤 두 틱이 통행권 `HOLDING`이면 전부, 그 밖(`NONE`·`EXPIRED`·횡단보도)은 15 s. `recovery/junction/gate.py` `_maneuver`와 `arc/lane_arc.py`가 자기 dict를 넘긴다.
