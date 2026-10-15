@@ -3803,3 +3803,11 @@
 - gate 변화: 없음.
 - 결정: D-763 개정 2 질문 10 (c), 독립 검토 LAND-WITH-CONDITIONS.
 - 교훈: 거절 검사는 경로를 바꾸는 모든 입구(시작, AI 재계획, 운영자 재계획, 다음 바퀴)에 같이 둔다.
+
+## 2026-10-15 · ca386fb1a · 크기: trip 시작 검사를 단위 `server/trip_checks`로, 신호 구간 걷기를 그 옆으로
+
+- 변경: main `c4cd2bf95` 병합 뒤 원장 단위 7,170(한도 7,135), `trip_runner.py` 903(한도 901), `traffic` 2,202(한도 2,201)였다. `trip_admission.py`·`trip_progress.py`를 내용 그대로 `server/trip_checks/`(새 `SERVER_HOLDERS` 보관 자리, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. `TrafficService.route_signals`를 지우고 `signal_service.py`를 main 그대로 두었으며, 같은 구간 걷기를 `trip_admission.signals_on`으로 옮겼다. 운영자 재계획 확인은 `TripAdmission._admit_replan`(검사 뒤 `_apply_replan`)을 한 줄로 부른다. 동작은 바뀌지 않는다.
+- 증거: 원장 6,714, `trip_checks` 472, `trip_runner.py` 901, `traffic` 2,195. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), `docs/plans/2026-10-14-fleet-ledger-size-unit.md` 2026-10-15 부기.
+- 교훈: 남의 착지로 한도가 찬 단위에 더할 때는 판정이 이름 붙인 경계로 먼저 옮긴다.
