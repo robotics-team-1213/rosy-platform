@@ -179,8 +179,18 @@ class JunctionBendMixin:
             anchor = None
         # D-759 note (m35): no straight tick? A usable map heading stands in, judged on the body's yaw.
         entry = self._map_entry_yaw(j, pose.yaw if anchor is None else anchor[2])
+        j['entry_used'] = False  # until the pass starts (review: a refused pass did not use it)
         if anchor is None and entry is None:
             return self._abort(j, 'no_anchor', decision)
+        if anchor is None:
+            # The path then starts at the body: only from a tracking tick near the lane (3x the
+            # straight bound), else stay armed until the latest arc start (review H1).
+            st = self._status
+            if not (st.state == 'TRACKING' and (st.reason or '').removeprefix('camera_') == 'tracking'
+                    and st.error is not None and abs(st.error) <= 3*self._config.bridge_arm_max_error):
+                if j['travel']-j['bend_in'] > j['tol']:
+                    return self._abort(j, 'no_anchor', decision)
+                return decision
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
             return self._abort(j, refusal, decision)
@@ -188,6 +198,7 @@ class JunctionBendMixin:
         if speed <= 0:
             return self._abort(j, 'linear_limit_zero', decision)
         x, y, yaw, travel = anchor or (pose.x, pose.y, pose.yaw, j['travel'])
+        j['entry_used'] = entry is not None
         if entry is not None:
             # D-759 4: the lane's heading, from where the body is now. The straight-tick point may
             # be BEND_LEAD_M back and off a line on another heading (0.2 m at 21.6 deg: 7 cm, past
