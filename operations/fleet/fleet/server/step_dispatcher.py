@@ -95,6 +95,8 @@ class StepJobDispatcher:
         self._io = 0
         work = [("readback", job) for job in self.store.jobs("RUNNING") + self.store.next_unresolved()]
         work += [("submit", job) for job in self.store.jobs("READY")]
+        work = [(kind, job) for kind, job in work  # D-763 7: a TRIP step is the trip loop's, not a device Action
+                if step_action_kind(job["steps"][job["current_step_index"]]["action_kind"]).grant_model is not None]
         work.sort(key=lambda item: item[1]["mission_id"])
         start = next((i for i, (_, job) in enumerate(work) if job["mission_id"] > self._cursor), 0)
         outcomes = []
