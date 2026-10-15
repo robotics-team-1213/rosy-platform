@@ -41,6 +41,7 @@ import os
 import re
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -62,6 +63,8 @@ _FILE_HOSTS = _LAB.get("test_hosts") or []
 if not isinstance(_FILE_HOSTS, list):
     raise SystemExit("lab-hosts.json test_hosts must be a list")
 DEFAULT_HOSTS = " ".join(str(item).strip() for item in _FILE_HOSTS if str(item).strip())
+# Tailscale profile (`tailscale switch --list` ID) the test PCs are on; absent -> not checked.
+TAILSCALE_PROFILE = str(_LAB.get("tailscale_profile") or "").strip()
 # D-568 2: (free cores, free GB) a host needs for one job of the class.
 NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 SITE_RESERVE = (2, 4)
@@ -269,9 +272,37 @@ def refuse_local() -> None:
         raise SystemExit(LOCAL_REFUSED.format(what="ROSY_TEST_LOCAL"))
 
 
+def current_profile(listing: str) -> list[str]:
+    """`tailscale switch --list` -> the columns of the row marked `*` (ID first), [] if none."""
+    for line in listing.splitlines()[1:]:
+        if "*" in line:
+            return line.replace("*", " ").split()
+    return []
+
+
+def check_tailscale_profile(expected: str | None = None, which=shutil.which, run=subprocess.run) -> None:
+    """Fail fast when this PC's Tailscale profile is not the one the test PCs are on. Never switches it.
+
+    An explicit ROSY_TEST_HOSTS is a manual override: those hosts may be on any tailnet."""
+    expected = TAILSCALE_PROFILE if expected is None else expected
+    if not expected or os.environ.get("ROSY_TEST_HOSTS") is not None or not which("tailscale"):
+        return
+    try:
+        listing = run(["tailscale", "switch", "--list"], capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(f"[remote-pytest] tailscale profile not checked: {error}", file=sys.stderr, flush=True)
+        return
+    current = current_profile(listing.stdout or "")
+    if listing.returncode == 0 and current and expected not in current:
+        raise SystemExit(f"[remote-pytest] wrong Tailscale profile: current {current[0]} ({' '.join(current[1:])}),"
+                         f" expected {expected} (lab-hosts.json tailscale_profile); the test PCs are not on this"
+                         f" tailnet. Switch by hand: tailscale switch {expected}")
+
+
 def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
     """Hosts for cls by measured headroom (D-568), printing why; empty when none fits."""
     refuse_local()
+    check_tailscale_profile()
     if hosts is None:
         hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
     if not hosts:

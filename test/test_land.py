@@ -522,3 +522,113 @@ def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, ca
     assert calls == [[["pkg/test"]], [["pkg/test"]]]
     assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
     assert "line_0 = -1" in (main / "moved/big.py").read_text()
+
+
+def dated(day: str, who: str) -> str:
+    return ENTRY.replace("2026-10-07", day).format(who=who)
+
+
+def test_logs_md_appends_merge_in_date_order_and_pass_lint():
+    sys.path.insert(0, str(ROOT / "tools/harness"))
+    import rosy_harness
+
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    theirs = base + dated("2026-10-15", "peer")             # main landed the newer entry first
+    ours = base + dated("2026-10-14", "branch") + dated("2026-10-15", "branch2")
+    merged = land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode()
+    assert merged == base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer") + dated("2026-10-15", "branch2")
+    assert rosy_harness.validate_log(merged) == []
+
+
+def test_logs_md_moved_own_entry_then_new_main_entry_lands(repos):
+    """The 2026-10-15 stop: an earlier landing merged main after our older entry; we moved it by hand."""
+    main, wt = repos
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    commit(main, {"docs/logs.md": base}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": base + dated("2026-10-14", "branch")}, "branch entry")
+    commit(main, {"docs/logs.md": base + dated("2026-10-15", "peer")}, "peer entry")
+    subprocess.run(["git", "-C", str(wt), "merge", "-q", "main"], capture_output=True)  # may conflict
+    # The stopped landing's merge commit: main's entry first, ours after it, out of date order.
+    commit(wt, {"docs/logs.md": base + dated("2026-10-15", "peer") + dated("2026-10-14", "branch")}, "merge")
+    commit(wt, {"docs/logs.md": base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer")}, "move entry")
+    commit(main, {"docs/logs.md": base + dated("2026-10-15", "peer") + dated("2026-10-16", "peer2")}, "peer 2")
+    assert land.main(["--tests", "none"]) == 0
+    assert (main / "docs/logs.md").read_text(encoding="utf-8") == (
+        base + dated("2026-10-14", "branch") + dated("2026-10-15", "peer") + dated("2026-10-16", "peer2"))
+
+
+def test_logs_md_edit_of_an_existing_entry_still_refuses():
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    ours = base + dated("2026-10-14", "branch")
+    theirs = base.replace("- 증거: 없음", "- 증거: 있음") + dated("2026-10-15", "peer")
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+@pytest.mark.parametrize("files, calls_expected, code", [
+    # A NEW guard failure stops before the long round (pkg/test never runs).
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
+     [[["test/architecture"]]], 1),
+    # Green guards, then the round as selected.
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
+     [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
+    # The selection already is guards only: no extra round.
+    ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n"},
+     [[["test/architecture/test_rule.py"]]], 0),
+])
+def test_guard_round_runs_first_and_stops_on_new(repos, monkeypatch, files, calls_expected, code):
+    main, wt = repos
+    commit(wt, files, "branch")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+    assert land.main(["--tests", "auto"]) == code
+    assert calls == calls_expected
+
+
+def test_logs_md_side_reordering_base_entries_refuses():
+    a, b = dated("2026-10-13", "a"), dated("2026-10-14", "b")
+    base = "# docs logs\n" + a + b
+    ours = base + dated("2026-10-15", "branch")
+    theirs = "# docs logs\n" + b + a  # main's entries swapped: not ours to move
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_same_new_entry_on_both_sides_is_written_once():
+    base = "# docs logs\n" + dated("2026-10-13", "base")
+    picked = dated("2026-10-14", "picked")
+    ours = base + picked + dated("2026-10-15", "branch")
+    theirs = base + picked
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == ours
+
+
+def test_logs_md_both_sides_inserting_mid_file_refuses():
+    a, b = dated("2026-10-13", "a"), dated("2026-10-15", "b")
+    base = "# docs logs\n" + a + b
+    ours = "# docs logs\n" + a + dated("2026-10-14", "x") + b
+    theirs = "# docs logs\n" + a + dated("2026-10-14", "y") + b
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_entry_older_than_the_last_base_entry_stays_below_it():
+    base = "# docs logs\n" + dated("2026-10-13", "a") + dated("2026-10-15", "b")
+    theirs = base + dated("2026-10-16", "peer")
+    ours = base + dated("2026-10-14", "late")
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == (
+        base + dated("2026-10-14", "late") + dated("2026-10-16", "peer"))
+
+
+def test_main_moving_during_the_guard_round_skips_to_the_next_round(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"}, "b")
+    real, calls = land.remote_pytest.run, []
+
+    def run(inv, *a, **k):
+        calls.append(inv)
+        if len(calls) == 1:  # a peer lands while the guards run
+            commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return real(inv, *a, **k)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    assert land.main(["--tests", "auto"]) == 0
+    long_round = [["pkg/test", "test/architecture/test_rule.py"]]
+    assert calls == [[["test/architecture"]], [["test/architecture"]], long_round]

@@ -40,6 +40,7 @@ from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     hold_back_m, lap_due, lap_retry_due, next_lap, stop_points)
 from fleet.server.trip_progress import MANOEUVRE, TripProgress
+from fleet.server.trip_preview import observe
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -196,7 +197,7 @@ class TripRunner(TripAdmission, TripProgress):
                              "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
                              "lane_arc": caps.lane_arc, "lane_arc_map_anchor": getattr(caps, "lane_arc_map_anchor", False),
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),  # D-760 3: shrink
-                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False),
+                             "line_follow_authority_shrink": getattr(caps, "line_follow_authority_shrink", False), "lane_instruction_stamp": getattr(caps, "lane_instruction_stamp", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False), "lane_turn_map_entry": getattr(caps, "lane_turn_map_entry", False),
                              "lane_bend": caps.lane_bend, "lane_bend_next_line": getattr(caps, "lane_bend_next_line", False), "lane_bend_map_entry": getattr(caps, "lane_bend_map_entry", False)}
                 plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
@@ -316,15 +317,12 @@ class TripRunner(TripAdmission, TripProgress):
             if hold is None:
                 raise TripError(409, "TRIP_NO_REPLAN")
             if hold.get("plan") is None and hold.get("reason") == "lap":  # the operator retries the lap check
-                if await self._retry_lap(live, live.view["segment_index"]):
+                # carried on, or a changed lap (shown first, confirmed next); a failed retry leaves a hold
+                if await self._retry_lap(live, live.view["segment_index"]) or live.view["hold"].get("plan") is not None:
                     self._describe(live)
                     self._save(live)
                     return live.view
                 hold = live.view["hold"]
-                if hold.get("plan") is not None:  # a changed lap: shown first, confirmed next
-                    self._describe(live)
-                    self._save(live)
-                    return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
             await self._admit_replan(live, hold, principal_id)  # D-763 10 (c): checked as at a start
@@ -432,6 +430,7 @@ class TripRunner(TripAdmission, TripProgress):
         settled = [live for r, live in self._live.items() if r not in self._inflight]  # mid-step: none
         self.authority.period(self._live.values(), set(self._inflight))  # mid-step: nothing (Safety-Review MEDIUM-3)
         self.advice.period(settled, slow)  # after the authority, own in-flight slot: never delays it
+        observe(self._live.values(), self._inflight, self.traffic, self._store, self._routing, self.config, self._clock())
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -721,8 +720,9 @@ class TripRunner(TripAdmission, TripProgress):
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
-            if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
-                live.view["detail"]["junction_retry"] = exc.code
+            if exc.code in ("JUNCTION_ODOM_STALE", "INSTRUCTION_STAMP_UNUSABLE"):  # D-507 2 / D-767 A: next tick, fresh pose
+                live.view["detail"]["junction_retry"] = " ".join(filter(None, (exc.code, (exc.detail or {}).get("reason"))))  # D-767 A: + why
+                live.view["caps"]["lane_instruction_stamp"] = live.view["caps"].get("lane_instruction_stamp") and (exc.detail or {}).get("reason") != "disabled"
                 return
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
@@ -741,14 +741,13 @@ class TripRunner(TripAdmission, TripProgress):
 
     async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
         segment = live.segments[index]
-        arc = live.arc(index)
         if live.view["hold"] is not None:  # hold at the place: the goal is the place itself
-            x, y, yaw = arc.point_at(segment["s_to"])
+            x, y, yaw = live.arc(index).point_at(segment["s_to"])
         elif s + STEP_M > segment["s_to"] and index + 1 < len(live.segments):
             nxt = live.segments[index + 1]
             x, y, yaw = live.arc(index + 1).point_at(min(nxt["s_from"] + s + STEP_M - segment["s_to"], nxt["s_to"]))
         else:
-            x, y, yaw = arc.point_at(min(s + STEP_M, segment["s_to"]))
+            x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment["s_to"]))
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
             return
         if not live.open:

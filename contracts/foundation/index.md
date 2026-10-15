@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · 1a9960df2 · lane_instruction_stamp, distance_basis, instruction_stamp_enabled 기본값 (D-767 A부, API v1.241)
 - 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
 - 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
 - 2026-10-15 · 9a9ea4554 · 능력 lane_crosswalk_gate·lane_junction_signal (D-763 10항 (c), API v1.233)
 - 2026-10-15 · 868461505 · 작업 읽기 계약 확장 (D-763 조각 4, API v1.235)
-- 2026-10-15 · 84f0c8456 · trip lease 상태 job_id와 능력 trip_lease_job (D-763 조각 6, API v1.236)
