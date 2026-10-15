@@ -98,6 +98,10 @@ def check(commit: str) -> list[str]:
     transition = len(parents) > 1 and any(_show(p, limits.RATCHET) is None for p in parents)
     base_text = _show(parent, limits.RATCHET) if parent and not transition else None
     base_rows, base_safety = limits.parse_ratchet(base_text) if base_text is not None else (None, {})
+    if base_rows is not None and len(parents) > 1:  # a merge: each side's rows were checked on that side
+        for other in parents[1:]:
+            for key, count in limits.parse_ratchet(_show(other, limits.RATCHET))[0].items():
+                base_rows[key] = max(count, base_rows.get(key, count))
     counts, over, owner = measure_commit(commit, units, limits)
     listing = (_git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
                if parent else _git("ls-tree", "-z", "-r", "--name-only", commit))
