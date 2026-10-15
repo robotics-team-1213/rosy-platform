@@ -146,26 +146,34 @@ class CrosswalkGateMixin:
             self._status = self._status.model_copy(update=update)
         return replace(decision, linear=linear, angular=angular)
 
-    def _regulated_wait_share(self, now: float, dt: float, speed: Optional[float]) -> float:
+    def _regulated_wait_share(self, now: float, dt: float, speed: Optional[float], clock: Optional[dict] = None) -> float:
         """D-507 13 / D-760 2b, for a maneuver's or an arc's clock: the seconds of the last dt a later
         gate took. All of it while a non-FREE D-517 authority, a D-573 look/wait or a crossing held by a
         return ahead (look_progress) stands the robot; a crossing's slower share against `speed`. dt
-        counts at most stale_after_s, only with a matching previous tick that also lost time. Locked."""
+        counts at most stale_after_s, only with a matching previous tick that also lost time. With `clock`
+        (the maneuver or arc, its 'added'): an authority wait on both ticks in full, its lease and ttl
+        bound it (m33c: 30 s behind a parked robot); any other share crosswalk_report_s + clear_s in all. Locked."""
         c = self._config
-        if self._regulation_wait(now) is not None:
+        wait = self._regulation_wait(now)
+        if wait is not None:
             lost = 1.0
         else:
             xw = self._xwalk.status(now) or {}
             lost = max(0.0, 1 - c.crosswalk_cross_speed / speed) if xw.get("state") == CROSSING and speed else 0.0
-        previous = getattr(self, '_regulated_wait_sample', None)
+        auth, previous = wait == "authority", getattr(self, '_regulated_wait_sample', None)
         if previous is not None and now == previous[0]:
-            self._regulated_wait_sample = (now, min(lost, previous[1]))
+            self._regulated_wait_sample = (now, min(lost, previous[1]), auth and previous[2])
             return 0.0
-        self._regulated_wait_sample = (now, lost)
+        self._regulated_wait_sample = (now, lost, auth)
         if (previous is None or now <= previous[0]
                 or abs(now - dt - previous[0]) > 1e-6):
             return 0.0
-        return max(0.0, min(dt, c.stale_after_s)) * min(lost, previous[1])
+        share = max(0.0, min(dt, c.stale_after_s)) * min(lost, previous[1])
+        if clock is None or (auth and previous[2]):
+            return share
+        share = min(share, c.crosswalk_report_s + c.crosswalk_clear_s - clock.get('added', 0.0))
+        clock['added'] = clock.get('added', 0.0) + share
+        return share
 
     def _regulation_wait(self, now: float) -> Optional[str]:
         """D-760 rev 3 9 ``line_follow.regulation_wait`` and the share above: the regulation standing
