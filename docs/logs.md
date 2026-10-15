@@ -8551,6 +8551,12 @@ osy-d395-s1d\`.
 - 증거: 기본 수신기 첫 150초 top 4.913/front 1.913 FPS, 같은 전송 설정 수신기는 30.082초 front 300/top 299장. 최대 간격과 새 시각도 기록했다.
 - gate 변화: 없음. 30분·보정·실물 제어·지속 AI/Fleet 소비 완료를 주장하지 않는다.
 
+## 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
+
+- 변경: `docs/omx-camera-endurance`에서 종료된 두 수신기의 30분 결과와 graph의 소비 공백을 새 frozen evidence로 기록했다. 기존 30초 기록은 보존했다.
+- 증거: 같은 설정 top/front 각각 9.985 FPS, 최대 간격 0.121/0.113초, 두 프로세스 exit 0. 원문 해시와 계측 범위를 기록했다. 문서 경계 독립 검토에서 중요 문제 없음; 수치는 직접 원문과 대조했다.
+- gate 변화: 없음. 영상 메시지 수신만 확인했으며 실물 제어·보정·운영 소비·재부팅 수용은 미완료다.
+
 ## 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
 - 변경: 사용자 결정(2026-10-15)으로 `reference/AGENTS.md`·`reference/src/AGENTS.md` 삭제를 커밋했다. upstream pinky_pro zip은 이미 디스크에 없고 삭제를 소유한 세션이 없었다. 루트 `AGENTS.md` 표의 행, `docs/AGENTS.md`의 안내 문구, `.gitignore`의 zip 행, `test_folder_layout.py`의 보관 AGENTS 검사를 함께 뺐다. `docs/plans/2026-10-13-folder-responsibility-cleanup.md` 3항에 결정을 적었다.
 - 증거: 원격 pytest `test/architecture/test_folder_layout.py` (아래 착지 기록)
