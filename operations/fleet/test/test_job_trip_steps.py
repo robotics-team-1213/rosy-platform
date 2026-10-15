@@ -16,6 +16,7 @@ from fleet.server.mission_store import MissionConflict
 from fleet.server.step_action_kinds import dispatch_open, open_kinds, required_approval
 from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.trip_guard import install_trip_guard
+from fleet.server.trip_job_routes import create_trip_job
 from fleet.server.trip_ports import TripError
 from fleet.traffic import rule_m
 from test_approval_registry import _app, _post
@@ -79,7 +80,7 @@ class Rig:
         asyncio.run(go())
 
     def create(self, steps=TWO, principal="kim"):
-        return self.do(self.jobs.create(R, steps, principal))["mission_id"]
+        return self.do(create_trip_job(self.jobs, R, steps, principal))["mission_id"]
 
     def job(self, mission_id):
         return self.store.get(mission_id)

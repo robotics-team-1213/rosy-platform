@@ -8532,3 +8532,33 @@ osy-d395-s1d\`.
 - 검토: 학습·UI·아키텍처를 병렬 조사/검토했다. 반응형 추론을 작업셀 로컬 경로로 정정하고 AI PC/Fleet 후보·admission과 분리했으며, native 수집 T2a와 ROSY 실물 운용 T2b를 나눴다. 없는 action readback을 추정하지 않는다.
 - 증거: 문서 정적/원격 검사는 별도 기록한다. 앞선 연결 시험703 passed·7 skipped·NEW 0은 조작 정책 학습 품질·RL 구현·실물 수용 증거가 아니다.
 - gate 변화: 없음. 신규 holder·API·RL 계약은 제안이고 장치/학습/Spaces를 활성화하지 않는다.
+
+## 2026-10-15 · 731c5ae61 · OMX 실물 제어 완성 목표
+
+- 변경: 실물 요청→local owner→vendor controller→물리 feedback→정지/복구→결과와 딸기 왕복을 목표로 design/execute 계획을 작성했다. G1 완료, G2 build/link 준비만 진행했고 G3–G6은 미완료다.
+- 증거: 원격60시험 NEW0, 현장 비구동 build/readback. Proposed D-496, disabled profile, SIM/실물 권한 경계는 유지하며 실물 수용으로 보고하지 않는다.
+- gate 변화: 없음. 새 목표의 물리 제어·정지·보정·왕복 수용은 미완료다.
+
+## 2026-10-15 · b5539986f · docs(omx): G3 실측 문서 검사 진행 기록
+
+- 변경: 실행 계획에서 문서 검사와 실제 측정·정지·runtime binding을 구분했다.
+- 증거: `omx_adapter.hardware_profile`의 원격 39 passed·NEW 0 및 독립 재검토.
+- gate 변화: 없음. G3 물리 관문 및 G4–G6는 미완료다.
+
+## 2026-10-15 · uncommitted · docs(omx): 수신기별 영상 전달 비교
+
+- 변경: 기존 카메라의 기본/동일 설정 수신기를 동시 비교한 결과와 근거 한계를 기록했다.
+- 증거: 기본 수신기 첫 150초 top 4.913/front 1.913 FPS, 같은 전송 설정 수신기는 30.082초 front 300/top 299장. 최대 간격과 새 시각도 기록했다.
+- gate 변화: 없음. 30분·보정·실물 제어·지속 AI/Fleet 소비 완료를 주장하지 않는다.
+
+## 2026-10-15 · uncommitted · docs(omx): 30분 수신과 실제 소비 경로 기록
+
+- 변경: `docs/omx-camera-endurance`에서 종료된 두 수신기의 30분 결과와 graph의 소비 공백을 새 frozen evidence로 기록했다. 기존 30초 기록은 보존했다.
+- 증거: 같은 설정 top/front 각각 9.985 FPS, 최대 간격 0.121/0.113초, 두 프로세스 exit 0. 원문 해시와 계측 범위를 기록했다. 문서 경계 독립 검토에서 중요 문제 없음; 수치는 직접 원문과 대조했다.
+- gate 변화: 없음. 영상 메시지 수신만 확인했으며 실물 제어·보정·운영 소비·재부팅 수용은 미완료다.
+
+## 2026-10-15 · uncommitted · docs(omx): 미완료 범위와 재개 인계
+
+- 변경: `docs/omx-unfinished-handoff`에서 모델 전달·CORE 연결·지속 관측·실물 제어·IL/RL·Web/Android UX·FIELD의 미완료 항목, 담당 역할, 선행 조건과 완료 증거를 정리했다. 실물 제어 실행 계획에서 연결했다.
+- 증거: 당일 runtime 재확인과 기존 검증 기록을 연결했다. 물리 차단과 남은 소프트웨어 구현을 구분했으며 미완료 항목을 완료로 승격하지 않았다.
+- gate 변화: 없음. 사용자 요청은 문서 커밋과 로컬 병합이며 push·활성화·실물 운용은 포함하지 않는다.

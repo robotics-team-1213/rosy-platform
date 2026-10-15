@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from fleet.server.job_trip_rows import ACTIVE, TripJobRows
 from fleet.server.job_trip_steps import KIND, JobTripSteps
 from fleet.server.mission_store import MissionConflict
-from fleet.server.step_action_kinds import dispatch_open
+from fleet.server.step_action_kinds import dispatch_open, required_approval
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_routes import PlaceRef, TripRequest
 
@@ -28,6 +29,26 @@ class TripJobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     robot_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     steps: list[TripJobStep] = Field(min_length=1, max_length=8)
+
+
+async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str) -> dict:
+    """The 새 작업 approval: one named operator approves and starts it (registry ``one_person``); the gate is
+    ``hold_job``'s, then the ledger row (``JobTripSteps`` runs it from there)."""
+    if required_approval([KIND] * len(steps)) != "one_person":
+        raise ValueError("a trip job needs a one-person kind")
+    mission_id, epoch = uuid.uuid4().hex, jobs.runner._start_token(robot_id)[0]  # read before any await
+    await jobs.runner.hold_job(robot_id, mission_id, principal_id, await jobs.caps(robot_id))
+    jobs.runner.lease.jobs[robot_id].view.update(stop_epoch=epoch, creating=True)  # no row yet: the tick waits
+    if jobs.runner._stop_epoch != epoch:  # an E-stop landed while the lease opened: no job
+        jobs.runner.release_job(robot_id, mission_id)
+        raise TripError(409, "JOB_ESTOP")
+    try:
+        job = await asyncio.to_thread(jobs.rows.create, mission_id, robot_id, principal_id, steps)
+    except BaseException:
+        jobs.runner.release_job(robot_id, mission_id)
+        raise
+    jobs.runner.lease.jobs[robot_id].view.pop("creating", None)
+    return job
 
 
 def install_trip_job_routes(app, *, store, runner, console, deployment_profile: str, episodes,
@@ -74,7 +95,7 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
             raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
         try:
             steps = [step.model_dump(mode="json") for step in body.steps]
-            return {"job": await jobs.create(body.robot_id, steps, principal.principal_id)}
+            return {"job": await create_trip_job(jobs, body.robot_id, steps, principal.principal_id)}
         except TripError as exc:
             raise HTTPException(exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc
         except MissionConflict as exc:
@@ -82,4 +103,4 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
     return jobs
 
 
-__all__ = ["install_trip_job_routes"]
+__all__ = ["create_trip_job", "install_trip_job_routes"]

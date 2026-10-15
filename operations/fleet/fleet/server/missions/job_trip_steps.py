@@ -16,11 +16,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import uuid
 
 from fleet.server.cell_job_store import CANCELLED_REASON
 from fleet.server.job_trip_rows import ACTIVE, ADMISSIONS, KIND, TripJobRows
-from fleet.server.step_action_kinds import required_approval
 from fleet.server.trip_ports import OPEN, TripError
 
 _LOG = logging.getLogger(__name__)
@@ -36,24 +34,6 @@ class JobTripSteps:
     def recover(self) -> int:
         """D-494 5 at startup: no job step drives again by itself; every open trip job HOLDs (its case: ``tick``)."""
         return sum(self.rows.hold(mission_id, "FLEET_RESTARTED", {}) for mission_id in self.rows.ids(ACTIVE))
-
-    async def create(self, robot_id: str, steps: list, principal_id: str) -> dict:
-        """One named operator approves and starts it (registry ``one_person``); the gate is ``hold_job``'s."""
-        if required_approval([KIND] * len(steps)) != "one_person":
-            raise ValueError("a trip job needs a one-person kind")
-        mission_id, epoch = uuid.uuid4().hex, self.runner._start_token(robot_id)[0]  # read before any await
-        await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
-        self.runner.lease.jobs[robot_id].view.update(stop_epoch=epoch, creating=True)  # no row yet: the tick waits
-        if self.runner._stop_epoch != epoch:  # an E-stop landed while the lease opened: no job
-            self.runner.release_job(robot_id, mission_id)
-            raise TripError(409, "JOB_ESTOP")
-        try:
-            job = await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
-        except BaseException:
-            self.runner.release_job(robot_id, mission_id)
-            raise
-        self.runner.lease.jobs[robot_id].view.pop("creating", None)
-        return job
 
     async def tick(self) -> None:
         for mission_id in await asyncio.to_thread(self.rows.ids, ("READY", "RUNNING")):

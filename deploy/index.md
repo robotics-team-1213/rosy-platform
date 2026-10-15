@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · docs(omx): native preview 수신기 전송 조건
+- 2026-10-15 · 731c5ae61 · OMX 실물 제어 준비와 비구동 진단
 - 2026-10-15 · dbe5db55b · fix(omx): 카메라 사용자 서비스 복구
 - 2026-10-14 · uncommitted · feat(review): AI 실행과 저장 버전 조회
 - 2026-10-14 · b3d6f4cd5 · OMX 녹화 검증 개선
-- 2026-10-14 · 91995a99e · OMX SIM 준비 회귀 결과
-- 2026-10-14 · uncommitted · OMX Pilot SIM 실행 준비

@@ -198,6 +198,7 @@ class CrosswalkGate:
         self._scan_at: Optional[float] = None
         self._blocked_since: Optional[float] = None
         self._held = False                       # crossing, stopped by a return ahead
+        self._lane_yaw: Optional[float] = None  # 개정 5 8항: the lane yaw a corridor last gave this zone
         self._edge_hist: list = []               # edge-band cells of the last persist_n scans
         self.report: Optional[str] = None       # D-407 detail once blocked >= report_s
 
@@ -269,21 +270,28 @@ class CrosswalkGate:
         # Odom drift since the image pose widens every edge (D-491 margin rule).
         drift = odom_error_fraction * math.hypot(pose.x - self._zone.x, pose.y - self._zone.y)
         z = replace(self._zone, margin=self._zone.margin + drift, lateral=self._zone.lateral + drift)
-        if corridor is not None:
-            # The lane edges the camera sees now cap the zone's own edges plus drift since its
-            # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A).
-            # 개정 5: A is judged along the lane as that image saw it, not along the zone's older
-            # anchor: the heading difference between the two used to widen A by its slope over A's
-            # length (0.02-0.03 m on a lane whose walls stand 0.038 m outside its edges). Only while
-            # that turn moves A's ends along the road by less than the zone's own margin; a larger
-            # one keeps the zone's frame and the slope pad. The zone's own edges keep the slope.
-            cpose, cleft, cright, unc, *reach = corridor
-            cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
-            skew, own = _angle(cpose.yaw - z.yaw), z.lateral
+        # The lane edges the camera sees now cap the zone's own edges plus drift since its
+        # image (SIM 2026-10-10: 0.05 x 0.6 m of assumed drift put the track wall in A).
+        # 개정 5: A is judged along the lane as that image saw it, not along the zone's older
+        # anchor: the heading difference between the two used to widen A by its slope over A's
+        # length (0.02-0.03 m on a lane whose walls stand 0.038 m outside its edges). Only while
+        # that turn moves A's ends along the road by less than the zone's own margin; a larger
+        # one keeps the zone's frame and the slope pad. The zone's own edges keep the slope.
+        # 개정 5 8항: a tick without a corridor keeps the lane yaw the last one applied to this zone, not
+        # the zone's body yaw (m34/m35: 0.106 rad off the lane swept A onto the wall mid-crossing).
+        lane_yaw = corridor[0].yaw if corridor is not None else self._lane_yaw
+        if lane_yaw is not None:
+            skew, own = _angle(lane_yaw - z.yaw), z.lateral
             turn = abs(math.sin(skew)) * (z.far + z.margin + geo.exit_m)
             shift = z.far * (1 - math.cos(skew)) + geo.lane_half_m * abs(math.sin(skew))
             if shift <= z.margin:    # the turn's along-road shift of A's ends is added, not spent
-                z, own, turn = replace(z, yaw=cpose.yaw, margin=z.margin + shift), own + turn, 0.0
+                z, own, turn = replace(z, yaw=lane_yaw, margin=z.margin + shift), own + turn, 0.0
+                self._lane_yaw = lane_yaw
+            if corridor is None:
+                z = replace(z, lateral=own)     # the zone's own edges keep the turn pad
+        if corridor is not None:
+            cpose, cleft, cright, unc, *reach = corridor
+            cleft, cright = lane_edges(cleft, cright, geo.lane_half_m, geo.body_half_m)
             ahead, offset = self._local(z, cpose, 0.0)
             if reach:   # past the range the edges were seen over, the lane may run on at their slope
                 turn += reach[0] * max(0.0, z.far + z.margin + geo.exit_m - ahead - reach[1])
