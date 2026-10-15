@@ -661,8 +661,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    const power = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
-    actions.append(aim, pin, trip.toggle(robot), cancel, identify, power);
+    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
+    actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
       const move = document.createElement("ui-button");

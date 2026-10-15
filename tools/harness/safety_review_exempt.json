@@ -378,33 +378,5 @@
   {
     "commit": "1a9960df2c2d6123e88d9bb61ea827706d428fda",
     "reason": "Independent read-only critic (opus), 2026-10-15, D-767 Part A instruction pose_stamp: CONDITIONS (HIGH stale fallback worse than before) then CONDITIONS MET after fail-closed refusal INSTRUCTION_STAMP_UNUSABLE, no 2 s age cut for counting travel, Fleet stamps only instructions with a distance; MEDIUM stamp-check ordering fixed (armed-bend refresh / running-maneuver resend unaffected). Flag default off; remote services/gateway/fleet/guards exit 0, known_failures 0 new; no device acceptance."
-  },
-  {
-    "commit": "6c385733ebe820b24f628345f65eadca00843555",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "82dadfb76c83cc2aca01b49f9415cf86b0e3d522",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "a921f79c42734deedf28991bac61e926e1a0d497",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "815007ecdc1ee36947548389b66eb6a8d0e211d4",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "710c99dd7f375c5fe9259ff18ad4f6e570b1d6df",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "b3e3f9590c663ddee21f330daf5663975838914f",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
-  },
-  {
-    "commit": "df82986e415270b70a225a9bc022565ce70ad135",
-    "reason": "Independent Codex /root/camera_review SOURCE-only retrospective review, 2026-10-15: exact D-171 message/TF/parameter extraction preserves values, order, QoS and failure handling; moved-path merge reviewed. See docs/validation/remaining-branches-2026-10-15/result.md. Remote tests still required; no ROS, device or motion acceptance."
   }
 ]

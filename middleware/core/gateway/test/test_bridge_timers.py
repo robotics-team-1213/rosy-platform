@@ -347,7 +347,7 @@ def test_the_bridge_opens_the_same_service_clients(registered):
 
 @pytest.mark.parametrize('mode,number', [('raw',0), ('annotated',1)])
 def test_typed_recording_start_transports_the_closed_mode(registered, monkeypatch, mode, number):
-    module = sys.modules['core.bridge.pilot_recorder_client']
+    module = sys.modules[type(registered.bridge).__module__].pilot_recorder_client
     requests = []
     response = types.SimpleNamespace(success=True, message='confirmed')
     monkeypatch.setattr(module, 'PilotRecordingStart', types.SimpleNamespace(Request=types.SimpleNamespace))
