@@ -91,6 +91,33 @@ found positions outside the vendor startup limits. Do not start the default
 launch merely to create an Action server: even inactive initialization writes
 configuration. Hardware profile, initialization and physical stop acceptance
 remain prerequisites for control.
+
+### Bounded physical joint observation
+
+```bash
+python3 deploy/robot/omx/hardware_observer.py --device /dev/serial/by-id/<confirmed-follower> --domain-id <workcell-domain> --duration 120
+```
+
+This commissioning process holds the same read-only, exclusive port for at most
+the requested 1..300 seconds. It publishes nominal vendor radians at up to 10 Hz
+on `/omx_commissioning/joint_states`, separate from synthetic `/joint_states`.
+The gripper value is an angle, not a measured jaw width. Homing Offset is already
+included in Present Position and is not applied a second time.
+
+Every published sample requires the six ordered, matching motor models, torque
+off, no hardware errors, and a read window of at most 250 ms. A failed sample
+ends the process without publishing that sample; exit 2 also covers cleanup or
+early ROS termination. Timestamp is the start of the read, not publication time.
+Private JSONL stdout contains the raw snapshots. Normal duration completion is
+exit 0. A controller must not consume this uncalibrated commissioning topic.
+
+The process pins Fast DDS, clears static peers and requests localhost discovery;
+external DDS profiles/discovery-server overrides are rejected. This limits
+discovery, not an authorization boundary against other local or privileged
+processes. It has no Action server, subscription or register-write path, never
+enables torque and never reconnects automatically. Stop it before any subsequent
+accepted controller takes the port. It is physical feedback preparation, not an
+operational arm control server or mechanical calibration acceptance.
 Use the [hardware control plan](../../../docs/plans/2026-10-15-omx-hardware-control.md)
 for the remaining native runtime and physical acceptance work.
 

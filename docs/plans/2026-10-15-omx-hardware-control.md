@@ -83,7 +83,10 @@ SIM profile·SIM gripper·SIM API는 실물에서 재사용하지 않는다. 현
   controller 4개 패키지 private extraction·핵심 라이브러리 2개 `ldd` 누락 0.
   지원 runtime/설치 승인·lifecycle/실물 시험은 미완료다. 시스템 패키지·서비스는 변경하지 않았다.
 - G3 문서 검사 부분 구현: `omx_adapter.hardware_profile` CLI가 D-496 초안의 필수 측정값·순서·수치·기하·중복 YAML 키를 검사한다. 원격 39시험 통과·NEW 0 및 독립 재검토. 문서 일관성만 검사하며 실측 진위·정지 수용·runtime binding은 확인하지 않는다.
-- G3 물리 측정과 G4–G6 미완료. follower 역할·실측 profile·독립 정지·보정이 없어 driver activation·명령은 실행하지 않았다.
+- G3 후속: 우측 follower 케이블 역할을 사용자와 확인하고 실제 6개 모터 register 및 기존 보정 파일을 대조했다.
+  읽기 전용 지속 관측에서 120초 1,197 snapshot, 독립 수신 301개와 포트 독점을 확인했다.
+  [실제 피드백 증거](../validation/omx-physical-feedback-2026-10-15/result.md). 측면 카메라 추가를 선행 조건으로 두지 않는다.
+- G3의 기구 한계·독립 정지·물리 보정, G4–G6 미완료. 실측 profile과 구동 초기화 검증이 없어 driver activation·명령은 실행하지 않았다.
   전체 목표는 아직 완료가 아니다. [직접 증거와 재개 조건](../validation/omx-hardware-control-preparation-2026-10-15/result.md).
 - pytest는 커밋된 HEAD를 `tools/remote/remote_pytest.py`로 원격 실행하고 `test/known_failures.py`로 비교한다.
 - stage마다 실제 source·테스트·runtime·물리 증거를 따로 기록한다. 관련 safety 경로 변경은 독립 리뷰를 받는다.
