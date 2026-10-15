@@ -187,8 +187,10 @@ class TripAdmission:
         return caps
 
     async def _admit_replan(self, live, hold: dict, principal_id: str) -> None:
-        """An operator-confirmed replan: the D-763 10 (c) capability checks as at a start, then the switch.
-        A changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``)."""
+        """The operator-confirmed replan path only (``confirm_replan``): the D-763 10 (c) capability checks as
+        at a start, then the switch; a changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``).
+        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. This path runs no
+        ``_pose_checks``; that gap predates D-763 10 (c) and is not closed here."""
         active = self._store.active()
         if active is not None and active[0] == hold["map_version"]:
             await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
