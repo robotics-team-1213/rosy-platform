@@ -154,6 +154,7 @@ class TripCaps:
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
     lane_bend_map_entry: bool = False  #: D-759 2: CORE takes the bend's ``map_entry``; absent = no
     lane_turn_map_entry: bool = False  #: D-759 rev 1: the same for a left/right turn's exit heading
+    lane_instruction_stamp: bool = False  #: D-767 A: CORE measures from a junction instruction's pose_stamp
     lane_bend_next_line: bool = False  #: D-754: CORE takes next_line_in_m; absent = no
     trip_lease: bool = False  #: D-541 1: CORE takes PUT/DELETE /trip-lease; absent = no
     #: D-604: CORE's ``line_follow.camera`` ``{available, age_ms, source}``; None from an older CORE.
@@ -190,6 +191,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,
                             lane_bend_map_entry=item.get("lane_bend_map_entry") is True, lane_turn_map_entry=item.get("lane_turn_map_entry") is True,
+                            lane_instruction_stamp=item.get("lane_instruction_stamp") is True,
                             line_camera=camera if isinstance(camera, dict) else None)
     return None
 
