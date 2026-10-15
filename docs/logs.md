@@ -8566,6 +8566,7 @@ osy-d395-s1d\`.
 ## 2026-10-15 · uncommitted · docs: remove the retired repo-root reference/ folder
 - 변경: 사용자 결정(2026-10-15)으로 `reference/AGENTS.md`·`reference/src/AGENTS.md` 삭제를 커밋했다. upstream pinky_pro zip은 이미 디스크에 없고 삭제를 소유한 세션이 없었다. 루트 `AGENTS.md` 표의 행, `docs/AGENTS.md`의 안내 문구, `.gitignore`의 zip 행, `test_folder_layout.py`의 보관 AGENTS 검사를 함께 뺐다. `docs/plans/2026-10-13-folder-responsibility-cleanup.md` 3항에 결정을 적었다.
 - 증거: 원격 pytest `test/architecture/test_folder_layout.py` (아래 착지 기록)
+- gate 변화: 없음(문서 삭제만)
 
 ## 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move
 - 변경: `docs/plans/2026-10-15-main-gateway-handoff.md` 신규. 컴퓨터 이전 전에 D-762/D-761 상태, 2026-11-15 마감, 열린 결정(두 번째 관리자), Dependabot 처리, 이 클론에만 있는 ref의 번들과 복원 명령, 새 컴퓨터 준비(Tailscale 프로필, ssh, 도구), 착지 대기열을 적었다.
