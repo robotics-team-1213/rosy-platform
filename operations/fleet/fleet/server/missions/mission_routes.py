@@ -264,22 +264,33 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
             "reason": proposal["reason"], "expires_at": proposal["expires_at"],
         }, "physical_submission": "NOT_CONNECTED"}
 
+    def cell_job_view(proposal: dict, principal: SitePrincipal) -> tuple[bool, dict | None]:
+        """Whether this reader may see a Cell Job proposal, and its job as that reader sees it (None before resolve)."""
+        job = cell_job_store.get(proposal["proposal_id"]) if cell_job_store is not None else None
+        if proposal["principal_id"] == principal.principal_id:
+            return True, job
+        try:  # D-763 4 / rev 2 Q6: the work list's scope; another's PROPOSED job only to a named operator
+            seen = principal.permits_site("fleet.operate", {"operator"}) and (
+                job is not None and job["status"] != "PROPOSED" or bool(require_named_operator(principal)))
+        except HTTPException:
+            seen = False
+        if seen and job is not None:  # the proposer's identity never reaches another reader; the plan stays
+            job = {**{key: value for key, value in job.items() if key != "proposal_principal_id"}, "events": [
+                {**e, "actor_id": "proposer"} if e["actor_id"] == job["proposal_principal_id"] else e for e in job["events"]]}
+        return seen, job
+
     @app.get("/api/fleet/proposals/{proposal_id}", dependencies=read_guard,
              tags=["fleet-missions"])
     def fleet_proposal_read(proposal_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
-        proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
-        if proposal is None and principal.permits_site("fleet.operate", {"operator"}):
-            candidate_proposal = proposal_store.get(proposal_id)
-            if (candidate_proposal is not None
-                    and candidate_proposal["candidate"].get("kind") == "cell_job"):
-                proposal = candidate_proposal
-        if proposal is None:
-            raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
-        if proposal["candidate"].get("kind") == "cell_job":
-            return _mission_candidate_result(proposal, cell_job_store.get(proposal_id))
-        mission = mission_service.get(proposal_id)
-        return _mission_candidate_result(proposal, mission)
+        proposal = proposal_store.get(proposal_id)
+        if proposal is not None and proposal["candidate"].get("kind") == "cell_job":
+            seen, job = cell_job_view(proposal, principal)  # the Cell Job detail's scope, not a second door
+            if seen:
+                return _mission_candidate_result(proposal, job)
+        elif proposal is not None and proposal["principal_id"] == principal.principal_id:
+            return _mission_candidate_result(proposal, mission_service.get(proposal_id))
+        raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
 
     @app.post("/api/fleet/proposals/{proposal_id}/resolve",
               dependencies=[Depends(require_proposer)],
@@ -346,18 +357,11 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     def fleet_cell_job_read(mission_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
         proposal = proposal_store.get(mission_id)
-        job = cell_job_store.get(mission_id) if cell_job_store is not None and proposal is not None else None
-        own = job is not None and proposal["principal_id"] == principal.principal_id
-        try:  # D-763 4 / rev 2 Q6: the work list's scope; another's PROPOSED job only to a named operator
-            seen = own or job is not None and principal.permits_site("fleet.operate", {"operator"}) and (
-                job["status"] != "PROPOSED" or bool(require_named_operator(principal)))
-        except HTTPException:
-            seen = False
-        if not seen or proposal["candidate"].get("kind") != "cell_job" or proposal["state"] != "RESOLVED":
+        if proposal is None or proposal["candidate"].get("kind") != "cell_job" or proposal["state"] != "RESOLVED":
             raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
-        if not own:  # the proposer's identity never reaches another reader; the plan stays (detail scope)
-            job = {**{key: value for key, value in job.items() if key != "proposal_principal_id"}, "events": [
-                {**e, "actor_id": "proposer"} if e["actor_id"] == job["proposal_principal_id"] else e for e in job["events"]]}
+        seen, job = cell_job_view(proposal, principal)
+        if not seen or job is None:
+            raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
         return {"proposal_id": mission_id, "proposal_state": proposal["state"], "job": job}
 
     @app.get("/api/fleet/missions/{mission_id}", dependencies=read_guard,
