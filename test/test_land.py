@@ -118,10 +118,14 @@ def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, s
     assert (main / "pkg/a.py").read_text() == "x = 2\n"
 
 
-def test_browser_flag_refused_not_run_locally(repos):
+def test_web_change_adds_its_browser_tests_opted_in_and_other_changes_do_not(repos):
     _, wt = repos
-    with pytest.raises(land.Stop, match="D-584"):
-        land.run_tests(wt, type("A", (), {"browser": True, "node": False})(), [["pkg/test"]], wt.parent, 1)
+    commit(wt, {"operations/apps/games/x.py": "y = 1\n"}, "games page")
+    browser = [[land.remote_pytest.BROWSER_ENV, "test/test_games_board_browser.py"]]  # test/browser_scope.py GAMES
+    assert land.browser_tier(wt, "main") == browser
+    assert land.select(wt, "main", sys.executable) == ([["test"], *browser], None)  # fallback: nearest test/
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "not web")
+    assert land.browser_tier(wt, "HEAD~1") == []
 
 
 def test_dirty_worktree_refused(repos):

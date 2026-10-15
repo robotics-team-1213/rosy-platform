@@ -479,3 +479,9 @@
 - 변경: USB 대역폭 부족의 raw 캡처를 MJPEG 640×480으로 고정하고 실제 형식·한 장 버퍼를 확인한다. USB 부재·빈 프레임은 다시 열고 막힌 캡처는 watchdog으로 재시작한다. 호스트 수신 시각의 미리보기만 발행하며 CameraInfo·보정·팔 권한은 만들지 않는다.
 - 증거: 원격 RED 재현 뒤 adapter/배치 526 passed·7 skipped, Fleet OMX UDS/dispatch/observation 37 passed, 각각 NEW 0. 두 실제 카메라의 증가하는 영상과 단일 JPEG AI 추론을 확인했다. 독립 재검토에서 추가 중대 결함 없음.
 - gate 변화: 없음. 실물 프로필·보정·정지 수용과 지속 camera→AI→Fleet 연결은 미완료다. 실제 장치 식별자·로그는 비공개 X: 세션에 보존했다.
+
+## 2026-10-15 · b5539986f · feat(omx): 실측 문서 검사 CLI
+
+- 변경: D-496 초안 문서의 필수 값·관절 순서·유한 수치·범위·jaw 기하·중복 YAML 검사와 독립 CLI. `motion_admitted`는 항상 false다.
+- 증거: 리뷰 결함 5개 RED 재현 후 수정, 원격 39 passed·NEW 0, 독립 재검토에서 추가 중대 결함 없음. 최종 영향 시험은 착지 기록으로 확인한다.
+- gate 변화: 없음. 문서 검사는 측정 진위·독립 정지·실물 수용이 아니다. 기존 disabled profile과 SIM runtime은 유지된다.
