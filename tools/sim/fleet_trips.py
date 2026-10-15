@@ -12,7 +12,7 @@ map_v2_fleet_multi_real (two camera robots, two COREs) with the regulated SIM CO
 of the D-763 checks (line authority, trip lease), starts Fleet with the D-725 native Gazebo pose,
 and sends each robot one lane trip TRIP_M along a straight lane-graph stretch to a stop place
 seeded into site map version 1:
-rosy_01 on the east road, rosy_02 on the west road. Pass = both trips `arrived` after moving.
+rosy_01 on the east road, rosy_02 on the west road. Pass = both trips `arrived` and settled within ARRIVE_M of the place.
 result.json and the logs go to --out; tokens and configs stay in a temp run root.
 `fleet` (internal) is the Fleet console with the native pose port bound to the run.
 """
@@ -55,6 +55,9 @@ TRIPS = {'rosy_01': ('east', 'rev', 0.92), 'rosy_02': ('west', 'rev', 1.00)}
 #: once and counts CORE holding it as arrived (run-2: `arrived` after 0.03 m of a 0.30 m trip).
 TRIP_M = 0.42
 SPEED_CAP = 0.08
+#: Pass: `arrived` and, SETTLE_AFTER_S later, within Fleet's own lane arrive_lane_m (trip_ports.py) of the place.
+ARRIVE_M = 0.15
+SETTLE_AFTER_S = 10.0
 TERMINAL = ('arrived', 'canceled', 'stopped', 'failed')
 #: Marks this run's children so cleanup never touches a parent shell or another run.
 MARK = 'FLEET_TRIPS_RUN'
@@ -228,10 +231,17 @@ def drive(fleet, operator, trips, budget_s, log):
     until(budget_s, poll)
     for row in open_rows():
         row['cancel'] = call(f"{fleet}/trips/{row['trip_id']}/cancel", operator, 'POST', {}, log)
+    time.sleep(SETTLE_AFTER_S)  # CORE may still be closing on the place when Fleet reports arrived
     for ns, row in rows.items():
+        _, pose = call(f'{fleet}/robots/{ns}/map-pose', operator, log=log)
+        if isinstance(pose.get('x'), (int, float)) and isinstance(pose.get('y'), (int, float)):
+            row['settled_xy'] = (pose['x'], pose['y'])
         # From the spawn pose: polling starts after both starts, so its first sample can be late.
-        moved = math.dist(trips[ns][0][:2], row['last_xy']) if 'last_xy' in row else 0.0
-        row.update(moved_m=round(moved, 3), arrived=row['states'][-1:] == ['arrived'] and moved >= TRIP_M / 2)
+        xy = row.get('settled_xy') or row.get('last_xy')
+        moved = math.dist(trips[ns][0][:2], xy) if xy else 0.0
+        short = math.dist(trips[ns][1][:2], xy) if xy else math.inf
+        row.update(moved_m=round(moved, 3), short_m=round(short, 3),
+                   arrived=row['states'][-1:] == ['arrived'] and short <= ARRIVE_M)
     return rows
 
 
@@ -305,7 +315,7 @@ def run(args):
     result['pass'] = len(robots) == len(ROBOTS) and all(row['arrived'] for row in robots.values())
     (out / 'result.json').write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
     print(json.dumps({k: result.get(k) for k in ('core_ready', 'localized', 'camera')}))
-    print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m']) for ns, row in robots.items()}))
+    print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m'], short_m=row['short_m']) for ns, row in robots.items()}))
     print('[fleet-trips]', 'PASS' if result['pass'] else 'FAIL', out / 'result.json', flush=True)
     return 0 if result['pass'] else 1
 
