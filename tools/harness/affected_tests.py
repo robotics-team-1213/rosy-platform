@@ -72,7 +72,9 @@ FULL_TRIGGERS = (
     ("test/known_failures.txt", "known failures list"),
 )
 # D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
-NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt")
+# D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
+NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
+                "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
 
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.

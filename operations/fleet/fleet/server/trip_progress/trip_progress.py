@@ -19,7 +19,26 @@ MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
 CROSSWALK_WAIT_S = 15.0  # CORE crosswalk_report_s 10 + crosswalk_clear_s 5 (D-573 3 defaults)
 
 
+def inherited_stop(live: LiveTrip) -> bool:
+    """SIM r4 (D-763 7): a lane arrival leaves CORE holding that trip's ``stop`` (``executing``). A trip started there
+    (a job's next step, an operator's next trip) that has sent nothing yet may replace exactly that stop: the seq and
+    place this robot's last arrived trip sent (``TripRunner.held_stops``), at this trip's next place. A halt's stop
+    (stall, cancel, E-stop) or anyone else's instruction has another seq and keeps the trip waiting, as before."""
+    junction, held = live.junction, getattr(live, "inherited", None)  # set at the trip's start
+    return (live.sent is None and held is not None and junction.get("state") == "executing"
+            and junction.get("pending_action") == STOP and (junction.get("seq"), junction.get("place_id")) == held
+            and held[1] == live.place(live.view["segment_index"]))
+
+
 class TripProgress:
+    @staticmethod
+    def _core_busy(live: LiveTrip) -> bool:
+        """A new instruction would abort CORE's manoeuvre, or CORE is carrying one out (only our own
+        held replan stop, or the stop a trip inherits, may be replaced)."""
+        state = live.junction.get("state")
+        return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable
+                                      and not inherited_stop(live))
+
     def _locate(self, live: LiveTrip, pose: MapPose) -> tuple[int, float, Optional[float]]:
         """``(segment index, s on it, off-lane distance or None)``; moves past finished segments."""
         index = live.view["segment_index"]
