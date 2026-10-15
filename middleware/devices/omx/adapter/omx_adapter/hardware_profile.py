@@ -16,10 +16,14 @@ def _fields(value, names, label):
     return value
 
 
-def _number(value, label, *, positive=False, nonnegative=False):
-    if type(value) not in (int, float) or not math.isfinite(value):
+def _number(value, label, *, positive=False):
+    try:
+        finite = type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
         raise ValueError(f"{label}: expected finite numeric measurement")
-    if (positive and value <= 0) or (nonnegative and value < 0):
+    if positive and value <= 0:
         raise ValueError(f"{label}: measurement outside allowed range")
     return value
 
@@ -77,13 +81,15 @@ def validate_profile(data):
     low, high = _range(gripper["position"], "gripper.position")
     opened = _number(gripper["open"], "gripper.open")
     closed = _number(gripper["closed"], "gripper.closed")
-    preload = _number(gripper["preload"], "gripper.preload", nonnegative=True)
-    if not low <= closed < opened <= high or closed - preload < low:
+    preload = _number(gripper["preload"], "gripper.preload", positive=True)
+    if not low <= closed < opened <= high or closed - preload < low or preload >= opened - closed:
         raise ValueError("gripper: open, closed and preload must fit measured position range")
     jaw = _fields(gripper["jaw"], "pivot_y_m contact_point_m squeeze_m min_grasp_width_m "
                   "max_grasp_width_m release_clearance_m", "gripper.jaw")
-    for key in ("pivot_y_m", "contact_point_m"):
-        _vector(jaw[key], 2, f"jaw.{key}")
+    pivot_a, pivot_b = _vector(jaw["pivot_y_m"], 2, "jaw.pivot_y_m")
+    contact_x, _ = _vector(jaw["contact_point_m"], 2, "jaw.contact_point_m")
+    if pivot_a <= pivot_b or contact_x <= 0:
+        raise ValueError("jaw: expected ordered pivots and contact point ahead of pivot")
     for key in ("squeeze_m", "min_grasp_width_m", "max_grasp_width_m", "release_clearance_m"):
         _number(jaw[key], f"jaw.{key}", positive=True)
     if jaw["min_grasp_width_m"] >= jaw["max_grasp_width_m"] or jaw["squeeze_m"] >= jaw["min_grasp_width_m"]:
