@@ -10,7 +10,8 @@ The run owns its ROS domain (80-99), CORE/console ports and Gazebo partition (fl
 Reservations, D-426) and a ~/rosy-jobs lock unless remote_sim already holds one. It launches
 map_v2_fleet_multi_real (two camera robots, two COREs) with the regulated SIM CORE/Fleet settings
 of the D-763 checks (line authority, trip lease), starts Fleet with the D-725 native Gazebo pose,
-and sends each robot one coordinate lane trip TRIP_M along a straight lane-graph stretch:
+and sends each robot one lane trip TRIP_M along a straight lane-graph stretch to a stop place
+seeded into site map version 1:
 rosy_01 on the east road, rosy_02 on the west road. Pass = both trips `arrived` after moving.
 result.json and the logs go to --out; tokens and configs stay in a temp run root.
 `fleet` (internal) is the Fleet console with the native pose port bound to the run.
@@ -78,6 +79,22 @@ def plan_trips(graph):
     """robot -> (spawn pose, trip end pose)."""
     return {ns: (lane_pose(graph, seg, way, s), lane_pose(graph, seg, way, s + TRIP_M))
             for ns, (seg, way, s) in TRIPS.items()}
+
+
+def place_id(ns):
+    return f'{ns}_end'
+
+
+def seed_site_map(tasks_db):
+    """Site map version 1 = the lane graph import plus each trip end as a stop place: a lane trip
+    must end at a place (Fleet refuses LANE_END_NOT_A_PLACE). Fleet's own import then finds a map."""
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.site_map import SiteMap, from_lane_graph
+    base = from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
+    ends = [dict(id=place_id(ns), name=place_id(ns), kind='stop', x=end[0], y=end[1], yaw=end[2])
+            for ns, (_, end) in plan_trips(yaml.safe_load(GRAPH.read_text(encoding='utf-8'))).items()]
+    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends}),
+                                                 source=GRAPH.name)
 
 
 def call(url, token, method='GET', body=None, log=None):
@@ -186,9 +203,8 @@ def write_run(root, run_id, partition, reservations):
 def drive(fleet, operator, trips, budget_s, log):
     """Plan and start one trip per robot, poll until both end. Returns the per-robot evidence."""
     rows = {}
-    for ns, (_, end) in trips.items():
-        code, plan = call(f'{fleet}/robots/{ns}/trip', operator, 'POST',
-                          {'to': {'x': end[0], 'y': end[1], 'yaw': end[2]}, 'speed_cap': SPEED_CAP}, log)
+    for ns in trips:
+        code, plan = call(f'{fleet}/robots/{ns}/trip', operator, 'POST', {'to': place_id(ns), 'speed_cap': SPEED_CAP}, log)
         rows[ns] = {'plan_status': code, 'plan': plan, 'states': [], 'trip_id': None}
         if code == 200:
             code, started = call(f"{fleet}/trips/{plan['plan_id']}/start", operator, 'POST', {}, log)
@@ -386,6 +402,7 @@ def fleet_console(binding_path, cli_args):
         return app
 
     app_module.create_app = create_app
+    seed_site_map(cli_args[cli_args.index('--tasks-db') + 1])
     return fleet_main(cli_args)
 
 
