@@ -15,7 +15,7 @@ ROSY_SIM_HOSTS="rosy@100.98.162.71=model ai@100.108.76.123=ai" \
 # AI PC: --host ai ... -- --render cpu
 ```
 
-결과는 `<log-dir>/out/trips/result.json`(`pass`, 로봇별 `states`, `moved_m`), `api-log.jsonl`, `launch.log`, `fleet.log`다. 종료 코드 0은 두 trip이 모두 `arrived`이고 각자 TRIP_M의 절반 이상 움직였다는 뜻이다. 시험 PC에서 직접 돌릴 때는 ROS와 colcon install을 source한 셸에서 `python3 tools/sim/fleet_trips.py --out DIR [--render gpu]`.
+결과는 `<log-dir>/out/trips/result.json`(`pass`, 로봇별 `states`, `moved_m`), `api-log.jsonl`, `launch.log`, `fleet.log`다. 종료 코드 0은 두 trip이 모두 `arrived`이고 10 s 뒤 자세가 장소에서 Fleet `arrive_lane_m`(0.15 m) 안이라는 뜻이다(`short_m`). 시험 PC에서 직접 돌릴 때는 ROS와 colcon install을 source한 셸에서 `python3 tools/sim/fleet_trips.py --out DIR [--render gpu]`.
 
 ## 고친 것 (gap → 원인 → 변경)
 
@@ -30,9 +30,11 @@ ROSY_SIM_HOSTS="rosy@100.98.162.71=model ai@100.108.76.123=ai" \
 - 원격 회귀: 관련 8개 파일 exit 0, `known_failures` NEW 0 (`X:/DevTemp/sim-multi/pytest-2/run-1.txt`, 모델 PC). 첫 실행(`pytest-1`)에서 launch 인자 기본값 누락 NEW 2를 잡아 `5cba01019`로 고쳤다.
 - 실제 Gazebo 실행 `run-1`(AI PC, ca7be811d, `--render cpu`, ai 상한 4 CPU/4 GB): 빌드·두 CORE 응답·두 로봇 Fleet `LOCALIZED`(D-725 native pose)·두 카메라 front status가 모두 참이었다. 두 계획은 200이었지만 출발이 `422 TRIP_MODE_UNSUPPORTED {reason: LANE_END_NOT_A_PLACE}`로 거절돼 아무도 움직이지 않았다. 차선 trip의 끝은 장소여야 한다. `48b5c9c85`가 trip 끝마다 stop 장소를 site map 1판에 미리 넣는다. `run-2`(AI PC, 48b5c9c85): 두 trip 모두 출발 200, Fleet `started/running → arrived`, 정리 뒤 남은 프로세스 0. 그러나 두 로봇은 0.031 m만 움직였고 장소까지 0.269 m가 남았다. 원인: Fleet 차선 도착 규칙(`trip_progress._arrived`)은 "CORE가 이 장소의 stop을 잡고 남은 거리 ≤ `pass_window_m`(0.3, `trip_ports.py`)"도 도착으로 친다. 0.30 m trip은 시작부터 그 창 안이라 stop이 바로 나가고 1 s 만에 `arrived`가 됐다. 벤치의 FAIL 판정은 맞다(이동 기준은 이제 spawn에서 잰다; 전에는 첫 poll 표본이 늦어 같은 0.031이 우연히 맞았다). 다음 커밋이 TRIP_M을 0.42 m로 늘렸다. 창 밖에서 출발하므로 움직이기는 하지만, 같은 규칙이면 장소 0.3 m 앞에서 `arrived`가 날 수 있다. 그러면 이동 0.12 m < TRIP_M/2라 FAIL로 드러난다. 그 경우는 실행기가 아니라 Fleet 도착 규칙(창 안 stop을 도착으로 치는 것)의 문제로 보고 Fleet 소유자와 정한다. 로그: `X:\DevTemp\sim-multi\run-2\out\trips\`.
 
+- `run-3`(AI PC, 9852e2ec2, TRIP_M 0.42): 두 로봇이 Fleet 통행권 아래 실제로 달렸다(rosy_01 0.143 m, rosy_02 0.168 m). 두 trip 모두 `arrived`였고 정리 뒤 남은 프로세스는 0이다. 그러나 `arrived`를 본 순간 장소까지 0.277/0.252 m가 남아 있었다. 위 Fleet 도착 규칙과 맞는 값이다. 그 뒤 CORE가 장소까지 마저 가는지는 이 실행이 재지 않았다. 다음 커밋이 판정을 바꿨다: `arrived` 10 s 뒤의 자세를 다시 읽고, 장소까지 `arrive_lane_m` 안일 때만 통과다. 로그: `X:\DevTemp\sim-multi\run-3\out\trips\`.
+
 ## 남은 일
 
-1. 실제 실행에서 두 trip이 `arrived`하는지 확인한다. 아니면 `result.json`의 `core_ready`/`localized`/`camera`와 `states`로 어디서 멈췄는지 보고 고친다. 4 GB 상한에서 메모리가 모자라면 모델 PC(`--host model -- --render gpu`, 6 GB)로 다시 돈다. 상한 변경은 D-571 결정이라 여기서 하지 않았다.
+1. 이 팁으로 `run-4`를 돌린다(`wait-and-run.sh 4`, 또는 위 한 줄). `short_m` ≤ 0.15면 통과로 기록한다. 0.25 m 근처에서 멈춰 있으면 Fleet이 장소 0.3 m 앞에서 trip을 끝내고 CORE가 거기서 선 것이다. 그때는 `trip_progress._arrived`의 창 안 stop 규칙을 Fleet 소유자와 정한다(이 브랜치 범위 밖). 그 밖에는 아니면 `result.json`의 `core_ready`/`localized`/`camera`와 `states`로 어디서 멈췄는지 보고 고친다. 4 GB 상한에서 메모리가 모자라면 모델 PC(`--host model -- --render gpu`, 6 GB)로 다시 돈다. 상한 변경은 D-571 결정이라 여기서 하지 않았다.
 2. 통과하면 `integrations/simulation/gazebo/logs.md`에 증거 한 줄을 추가하고 `python tools/harness/rosy_harness.py generate`.
 3. 통과한 뒤 AI PC의 개인 rig `~/rosy-test/d763-sim`(1.3 GB)은 지워도 된다(사용자 메모). 그 전에는 지우지 않는다.
 4. 범위 밖으로 남긴 것: bend 장소가 있는 SIM 사이트 지도(모서리를 도는 trip, 한 바퀴), D-763 slice 6의 `hold_job`/`release_job` HTTP 진입점(제품 slice 7), `line/lane_guide` 생산자(drivable 목표), 학습 모델 위치(저장소에 없음).
