@@ -66,14 +66,15 @@ class Rig:
             return result
         return asyncio.run(go())
 
-    def ticks(self, n=1, dt=0.5):
+    def ticks(self, n=1, dt=0.5, jobs=True):
         async def go():
             for _ in range(n):
                 self.ports.now += dt
                 await self.runner.tick()
                 await _settle(self.runner)
-                await self.jobs.tick()
-                await _settle(self.runner)
+                if jobs:
+                    await self.jobs.tick()
+                    await _settle(self.runner)
         asyncio.run(go())
 
     def create(self, steps=TWO, principal="kim"):
@@ -220,8 +221,8 @@ def test_a_lease_lost_between_steps_holds_the_job_with_one_incident_and_never_dr
     mid = rig.create()
     rig.ticks()
     rig.arrive("ab:fwd")
-    rig.ports.lease.down = True                          # Fleet loses the robot between the steps
-    rig.ticks(18)
+    rig.ports.lease.down = True                          # Fleet loses the robot before step 2 is planned
+    rig.ticks(18, jobs=False)
     job = rig.job(mid)
     assert job["status"] == "HOLD" and job["reason"] == "JOB_LEASE_LOST" and rig.incidents == [(mid, "JOB_LEASE_LOST")]
     held = [e for e in job["events"] if e["event_type"] == "CELL_JOB_HELD"][-1]["detail"]
