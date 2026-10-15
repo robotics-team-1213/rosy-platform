@@ -135,17 +135,36 @@ def _select(sample: Path, *changed: str) -> affected.Selection:
     return affected.select(affected.Repo.load(sample), list(changed))
 
 
+@pytest.mark.parametrize("consumer", ["package_export", "transitive_runtime", "broad_owner"])
+def test_foundation_indirect_runtime_consumers_keep_full(sample, consumer):
+    repo = affected.Repo.load(sample)
+    power = "contracts/foundation/core_common/power.py"
+    repo._texts["contracts/foundation/core_common/schemas.py"] = "X = 1\n"
+    repo._texts["middleware/perception/control/battery.py"] = "X = 1\n"
+    if consumer == "package_export":
+        repo._texts["contracts/foundation/core_common/__init__.py"] = "from .power import P\n"
+        repo._texts["middleware/core/gateway/core/node.py"] = "from core_common import P\n"
+    elif consumer == "transitive_runtime":
+        repo._texts["middleware/perception/control/battery.py"] = "from core_common.power import P\n"
+    else:
+        runtime = "deploy/robot/runtime.py"
+        repo.tracked.append(runtime)
+        repo._texts[runtime] = "from core_common.power import P\n"
+    selection = affected.select(repo, [power])
+    assert selection.mode == "full", "unresolved runtime consumers must not narrow the foundation gate"
+    selected = {path for invocation in selection.invocations for path in invocation}
+    assert {"middleware/core/gateway/test", "middleware/core/api/test", "test"} <= selected
+
+
 # (case, changed files, expected mode, expected selection beyond the guard set)
 CASES = [
     ("tools/ssh only -> guards + the tests naming the script",
      ["tools/ssh/rosy_ssh_enroll.py"], "affected", {"test/test_rosy_ssh_enroll.py"}),
     # D-762 stage 0: contracts/foundation and .github/workflows select their real readers.
-    ("core_common module -> foundation suite + importers' suites, not full",
-     ["contracts/foundation/core_common/schemas.py"], "affected",
-     {"contracts/foundation/test", "middleware/perception/test"}),
+    ("core_common runtime consumer -> full until downstream coverage is resolved",
+     ["contracts/foundation/core_common/schemas.py"], "full", None),
     ("core_common module re-exported (relative import) -> the re-exporter's importers too",
-     ["contracts/foundation/core_common/power.py"], "affected",
-     {"contracts/foundation/test", "middleware/perception/test"}),
+     ["contracts/foundation/core_common/power.py"], "full", None),
     ("core_common module nobody imports -> full (unresolved)", ["contracts/foundation/core_common/orphan.py"],
      "full", None),
     ("core_common __init__ exports -> full", ["contracts/foundation/core_common/__init__.py"], "full", None),
@@ -154,13 +173,12 @@ CASES = [
     ("foundation packaging -> full", ["contracts/foundation/setup.py"], "full", None),
     ("foundation test file -> only that file", ["contracts/foundation/test/test_schemas.py"], "affected",
      {"contracts/foundation/test/test_schemas.py"}),
-    ("foundation config read by a test -> that test + foundation suite",
-     ["contracts/foundation/config/rosy_default.yaml"], "affected",
-     {"contracts/foundation/test", "middleware/core/gateway/test/test_runtime_config.py"}),
+    ("foundation config textual reader does not establish all runtime consumers",
+     ["contracts/foundation/config/rosy_default.yaml"], "full", None),
     ("foundation config no test reads -> full (fallback)", ["contracts/foundation/config/rosy_dev_auth.yaml"],
      "full", None),
-    ("workflow read by a test -> that test", [".github/workflows/release.yml"], "affected",
-     {"test/test_release_workflow.py"}),
+    ("workflow textual reader does not establish execution coverage",
+     [".github/workflows/release.yml"], "full", None),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
