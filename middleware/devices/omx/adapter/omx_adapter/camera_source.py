@@ -32,6 +32,8 @@ def open_capture(cv, device):
                 or capture.get(cv.CAP_PROP_FRAME_WIDTH) != 640
                 or capture.get(cv.CAP_PROP_FRAME_HEIGHT) != 480):
             raise OSError('camera capture format differs from MJPEG 640x480')
+        if capture.get(cv.CAP_PROP_BUFFERSIZE) != 1:
+            raise OSError('camera driver did not accept a one-frame buffer')
         return capture
     except Exception:
         capture.release()
@@ -85,6 +87,7 @@ def main():
                     capture = open_capture(cv2, selected_device(args.device))
                     node.get_logger().info('MJPEG 640x480 preview; timestamp=host_receive; calibration=unverified')
                 image = bridge.cv2_to_imgmsg(read_frame(capture), encoding='bgr8')
+                # shortcut: receipt time only; use exposure timestamps before calibrated control or recording.
                 image.header.stamp = node.get_clock().now().to_msg()
                 image.header.frame_id = args.frame_id
                 publisher.publish(image)
