@@ -311,7 +311,7 @@ PERIODIC = ("server/app.py", "server/map_pose_service.py", "server/trips/trip_ru
             "server/trips/trip_ports.py", "server/lane_compliance_service.py",
             "server/localization_service.py", "server/path_history.py", "swarm/anchor.py",
             "server/tether_routes.py", "server/tether_watch.py",
-            "server/console/console.py")
+            "server/console/console.py", "server/trips/trip_preview.py")
 #: Where a direct read may stay: a constructor's fallback without the shared read, and app.py's
 #: ``_rest_state``, the shared read's own transport.
 ALLOWED = {"__init__", "_rest_state"}

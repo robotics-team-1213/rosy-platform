@@ -14,6 +14,7 @@ D-573 1: ``crosswalks`` are areas, not places. The polygon comes from ``lane_gra
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import math
 from pathlib import Path
@@ -191,6 +192,25 @@ def _polyline_polygon_gap(polyline, polygon) -> float:
             gap = min(gap, _point_segment(a, c, d), _point_segment(b, c, d),
                       _point_segment(c, a, b), _point_segment(d, a, b))
     return gap
+
+
+def crosswalk_spans(route, lo: float, hi: float, polygon, step: float = 0.01) -> list:
+    """D-767 P0: ``[(near, far or None)]`` route metres in (lo, hi] where a route enters ``polygon`` from
+    outside (CORE's near edge, D-491) and leaves it again, each to 1 mm. ``route``: ``[(route m where an
+    arc's piece starts, arc, its s there)]`` in route order (``arc.point_at``)."""
+    def point(d):
+        base, arc, s = route[max(0, bisect.bisect_right([r[0] for r in route], d) - 1)]
+        return arc.point_at(s + d - base)[:2]
+
+    found, was = [], _inside(point(lo), polygon)
+    for k in range(max(0, math.ceil((hi - lo) / step - 1e-9))):
+        a, b = lo + k * step, min(lo + (k + 1) * step, hi)
+        if _inside(point(b), polygon) != was:
+            was = not was
+            while b - a > 0.001:
+                a, b = (a, (a + b) / 2) if _inside(point((a + b) / 2), polygon) == was else ((a + b) / 2, b)
+            found.append((b, was))
+    return [(d, next((e for e, now in found[i + 1:] if not now), None)) for i, (d, now) in enumerate(found) if now]
 
 
 class SiteCrosswalk(BaseModel):
