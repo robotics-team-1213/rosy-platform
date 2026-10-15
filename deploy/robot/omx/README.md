@@ -67,6 +67,30 @@ starts no controller and sends no goal. Exit 2 means the software path is missin
 or discovery failed; exit 0 means only the observed software prerequisites exist.
 `motion_admitted` is always false. Publisher names, action presence and package
 availability do not establish hardware identity, measured limits or a real stop.
+
+### Supervised register inspection
+
+After physically identifying the follower cable, use the pinned DynamixelSDK
+Python package and pyserial on the native host:
+
+```bash
+python3 deploy/robot/omx/register_probe.py --device /dev/serial/by-id/<confirmed-follower>
+```
+
+This opens the confirmed port exclusively at 1 Mbps and permits only PING and
+READ(0,147) packets for IDs 11..16. It rechecks ownership after the exclusive
+lock; run as the device owner without privileged competing serial processes.
+It never configures motors, enables torque or starts the controller. Models
+other than 1060/1200, busy ports, incomplete responses and transport failures
+return exit 2. Exit 0 means a complete snapshot, including any reported motor
+faults or enabled torque; `motion_admitted` remains false. Raw position limits
+are not measured mechanical limits. Keep output private.
+
+The [first follower inspection](../../../docs/validation/omx-follower-registers-2026-10-15/result.md)
+found positions outside the vendor startup limits. Do not start the default
+launch merely to create an Action server: even inactive initialization writes
+configuration. Hardware profile, initialization and physical stop acceptance
+remain prerequisites for control.
 Use the [hardware control plan](../../../docs/plans/2026-10-15-omx-hardware-control.md)
 for the remaining native runtime and physical acceptance work.
 
