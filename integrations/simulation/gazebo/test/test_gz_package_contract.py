@@ -32,6 +32,15 @@ def test_single_robot_launch_declares_description_runtime_dependency():
     assert "<exec_depend>description</exec_depend>" in package
 
 
+def test_multi_robot_core_default_profile_is_a_runtime_dependency():
+    from xml.etree import ElementTree
+    from core_common.profile import DEFAULT_ROBOT
+
+    package = ElementTree.parse(ROOT / "package.xml").getroot()
+    runtime = {entry.text for entry in package if entry.tag in {"depend", "exec_depend"}}
+    assert DEFAULT_ROBOT in runtime, "gz_sim's colcon closure must include CORE's default robot profile"
+
+
 def test_single_robot_gazebo_gui_is_optional():
     """Headless sensor validation must not require a Gazebo GUI process."""
     launch = (ROOT / "launch" / "launch_sim.launch.xml").read_text(
