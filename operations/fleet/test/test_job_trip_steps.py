@@ -414,16 +414,16 @@ def test_a_trip_from_the_stop_its_last_trip_left_held_sends_its_first_instructio
     """SIM r4 (2026-10-15, D-763 7): a lane trip arrives and CORE keeps holding its stop (``executing``); the next
     trip from there (a job's next step, or an operator's) must replace that held stop, not wait on it to a stall."""
     runner, store, ports = _lane_setup()
-    arc = _arc(store, "east:fwd")
-    _plan(store, ports, "east:fwd", 0.5, "SE")
+    arc = _arc(store, "ring_w:fwd")
+    _plan(store, ports, "ring_w:fwd", 0.1, "SW")
     asyncio.run(runner.start("p1", "bob"))
     _lane_ticks(runner, ports)
     for s in (arc.length_m - 0.55, arc.length_m - 0.3, arc.length_m - 0.05):
         ports.at(arc, s)
         _lane_ticks(runner, ports, 2)
     assert runner.view("p1")["state"] == "arrived" and ports.core.status()["state"] == "executing"
-    _plan(store, ports, "east:fwd", arc.length_m - 0.05, "NE", plan_id="p2")
+    _plan(store, ports, "ring_w:fwd", arc.length_m - 0.05, "SE", plan_id="p2")
     asyncio.run(runner.start("p2", "bob"))
     sent = len(ports.sent)
     _lane_ticks(runner, ports, 3)
-    assert ports.sent[sent:] and ports.sent[sent][1] == "SE"   # the next instruction at the held place
+    assert ports.sent[sent:] and ports.sent[sent][1] == "SW"   # the next instruction at the held place
