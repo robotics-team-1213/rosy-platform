@@ -153,13 +153,13 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
             raise TripError(404, "TRIP_PLAN_UNKNOWN")
         robot_id = row["robot_id"]
-        start_token = self._start_token(robot_id)
+        start_token = self._start_token(robot_id) if start_token is None else start_token  # a job: before its plan
         async with self._lock_for(robot_id):
             if self._store.trip(plan_id) is not None:
                 raise TripError(409, "TRIP_ALREADY_STARTED")

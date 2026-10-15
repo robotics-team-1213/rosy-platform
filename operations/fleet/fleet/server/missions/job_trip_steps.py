@@ -14,11 +14,12 @@ its start checks. After a Fleet restart every open trip job HOLDs (``recover``).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 
 from fleet.server.cell_job_store import CANCELLED_REASON
-from fleet.server.job_trip_rows import ACTIVE, KIND, TripJobRows
+from fleet.server.job_trip_rows import ACTIVE, ADMISSIONS, KIND, TripJobRows
 from fleet.server.step_action_kinds import required_approval
 from fleet.server.trip_ports import OPEN, TripError
 
@@ -32,7 +33,7 @@ class JobTripSteps:
         runner.lease.on_job_lost = self._lost
 
     def recover(self) -> int:
-        """D-494 5 at startup: no job step drives again by itself; every open trip job HOLDs for re-approval."""
+        """D-494 5 at startup: no job step drives again by itself; every open trip job HOLDs (its case: ``tick``)."""
         return sum(self.rows.hold(mission_id, "FLEET_RESTARTED", {}) for mission_id in self.rows.ids(ACTIVE))
 
     async def create(self, robot_id: str, steps: list, principal_id: str) -> dict:
@@ -41,6 +42,7 @@ class JobTripSteps:
             raise ValueError("a trip job needs a one-person kind")
         mission_id = uuid.uuid4().hex
         await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
+        self.runner.lease.jobs[robot_id].view["approvals"] = 1  # the lease of this one approval (``_step``)
         try:
             return await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
         except BaseException:
@@ -54,11 +56,21 @@ class JobTripSteps:
             except Exception:  # noqa: BLE001 - one job's failure is that job's, never the loop's
                 _LOG.exception("trip step of job %s failed", mission_id)
         for robot_id, hold in list(self.runner.lease.jobs.items()):  # each HOLD gives the lease up; an end frees it
-            job = await asyncio.to_thread(self.store.get, hold.view["job_id"])
-            if job is None or job["status"] == "GOAL_CONFIRMED" or job["reason"] == CANCELLED_REASON:
-                self.runner.release_job(robot_id, hold.view["job_id"])
-            elif job["status"] == "HOLD" and hold.view["lease"]["state"] == "held":
-                await self.runner.stop_job(robot_id, job["reason"])
+            try:
+                job = await asyncio.to_thread(self.store.get, hold.view["job_id"])
+                if job is None or job["status"] == "GOAL_CONFIRMED" or job["reason"] == CANCELLED_REASON:
+                    self.runner.release_job(robot_id, hold.view["job_id"])
+                elif job["status"] == "HOLD" and hold.view["lease"]["state"] == "held":
+                    await self.runner.stop_job(robot_id, job["reason"])
+            except Exception:  # noqa: BLE001
+                _LOG.exception("trip job lease of %s could not be settled", robot_id)
+        for row in await asyncio.to_thread(self.rows.uncased):  # every HOLD, whoever wrote it, reaches a person once
+            try:
+                detail = json.loads(row["detail_json"])
+                await self.incident(row["instance_id"], row["mission_id"], row["reason"], detail)
+                await asyncio.to_thread(self.rows.cased, row["mission_id"], row["event_id"])
+            except Exception:  # noqa: BLE001 - not marked: the next pass tries again
+                _LOG.exception("case of held trip job %s could not be opened", row["mission_id"])
 
     async def run(self) -> None:
         while True:
@@ -72,36 +84,46 @@ class JobTripSteps:
         mission_id, robot_id, index = job["mission_id"], job["instance_id"], job["current_step_index"]
         step = job["steps"][index]
         if job["status"] == "RUNNING":
-            view = self.runner.view(step["action_id"]) or {"state": "missing", "reason": "TRIP_UNKNOWN"}
+            live = self.runner._find(step["action_id"])  # a closed trip is read from storage off the loop
+            view = (live.view if live is not None
+                    else await asyncio.to_thread(self.runner._store.trip, step["action_id"]))
+            view = view or {"state": "missing", "reason": "TRIP_UNKNOWN"}
             if view["state"] == "arrived":
                 await asyncio.to_thread(self.rows.arrived, mission_id, index, step["action_id"])
             elif view["state"] not in OPEN:
                 await self._fail(job, view.get("reason") or view["state"], {"trip_id": step["action_id"],
                                                                              "trip_state": view["state"]})
             return
-        actor = next((event["actor_id"] for event in reversed(job["events"]) if event["event_type"] in (
-            "CELL_JOB_ADMITTED", "CELL_JOB_RESUMED")), job["proposal_principal_id"])
+        admissions = [event for event in job["events"] if event["event_type"] in ADMISSIONS]
+        actor, token = admissions[-1]["actor_id"], self.runner._start_token(robot_id)  # a stop after this refuses it
         try:
             hold = self.runner.lease.jobs.get(robot_id)
-            if hold is None or hold.view["job_id"] != mission_id or hold.view["lease"]["state"] != "held":
-                await self.runner.hold_job(robot_id, mission_id, actor, await self.caps(robot_id))  # re-approval
+            mine = hold is not None and hold.view["job_id"] == mission_id
+            if not mine or hold.view["lease"]["state"] != "held":  # a lease only for an approval newer than the loss
+                if not (hold.view.get("approvals", 0) < len(admissions) if mine
+                        else job["events"][-1]["event_type"] == "CELL_JOB_RESUMED"):
+                    raise TripError(409, "JOB_LEASE_LOST", {"robot_state": "unconfirmed"})
+                await self.runner.hold_job(robot_id, mission_id, actor, await self.caps(robot_id))
+                self.runner.lease.jobs[robot_id].view["approvals"] = len(admissions)
+            elif self.runner.lease.now() - hold.view["lease"]["renewed_at"] > 2 * self.period_s:
+                return  # no renew confirmed lately: the lease rule decides before a new step starts
             plan_id = await self.plan(robot_id, step["step"], actor)
             if await asyncio.to_thread(self.rows.started, mission_id, index, plan_id, actor):
-                await self.runner.start(plan_id, actor, job_id=mission_id)
+                await self.runner.start(plan_id, actor, job_id=mission_id, start_token=token)
         except TripError as exc:
             await self._fail(job, exc.code, {"detail": exc.detail})
 
     async def _fail(self, job: dict, reason: str, detail: dict) -> None:
-        if await asyncio.to_thread(self.rows.hold, job["mission_id"], reason, detail):
-            await self.incident(job["instance_id"], job["mission_id"], reason, detail)
-        await self.runner.stop_job(job["instance_id"], reason)  # its hook finds the HOLD: no second case
+        try:
+            await asyncio.to_thread(self.rows.hold, job["mission_id"], reason, detail)
+        finally:  # the lease goes even when the ledger write fails; the case opens in ``tick``
+            await self.runner.stop_job(job["instance_id"], reason)
 
     async def _lost(self, view: dict, detail: dict) -> None:
         """``TripLease.on_job_lost``: declared at ttl after the last confirmed renew, before CORE's own expiry, so
         the robot is never assumed IDLE here (D-763 10); the start checks of a resumed step read it again."""
         detail = {**detail, "robot_state": "unconfirmed"}
-        if await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail):
-            await self.incident(view["robot_id"], view["job_id"], "JOB_LEASE_LOST", detail)
+        await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail)
 
 
 __all__ = ["KIND", "JobTripSteps"]
