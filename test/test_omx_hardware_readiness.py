@@ -1,6 +1,8 @@
 """Software inventory must not turn a camera graph into hardware admission."""
 import importlib.util
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -54,3 +56,18 @@ def test_missing_distribution_is_unknown_not_a_match():
     report = readiness.evaluate_runtime(
         ros_distro="", expected_ros_distro="jazzy", packages=set(), actions={}, joint_state_publishers=set())
     assert "ros_distribution_mismatch" in report["blockers"]
+
+
+def test_ros_initialization_failure_is_a_closed_json_report(monkeypatch, capsys):
+    def refuse_init(**kwargs):
+        raise RuntimeError("DDS initialization refused")
+    fake_ros = SimpleNamespace(init=refuse_init)
+    fake_index = SimpleNamespace(get_package_prefix=lambda package: "/test/prefix",
+                                 PackageNotFoundError=LookupError)
+    monkeypatch.setitem(sys.modules, "rclpy", fake_ros)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", fake_index)
+    assert readiness.main(["--domain-id", "13"]) == 2
+    import json
+    report = json.loads(capsys.readouterr().out)
+    assert report["motion_admitted"] is False
+    assert report["blockers"] == ["runtime_discovery_failed"]
