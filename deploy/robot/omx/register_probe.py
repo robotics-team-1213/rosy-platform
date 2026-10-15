@@ -2,6 +2,7 @@
 """Read six confirmed OMX follower motors without configuring or enabling them."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -42,6 +43,12 @@ def decode_registers(model, data):
     }
 
 
+def check_exclusive_owner(device, pid):
+    users = subprocess.run(["fuser", str(device)], capture_output=True, text=True, timeout=5)
+    if users.returncode != 0 or users.stdout.split() != [str(pid)]:
+        raise RuntimeError("Serial device has another owner or ownership is unverified")
+
+
 def collect(device):
     import fcntl
     import termios
@@ -66,6 +73,8 @@ def collect(device):
     try:
         port.ser.open()
         fcntl.ioctl(port.ser.fileno(), termios.TIOCEXCL)
+        # TIOCEXCL blocks new opens, but does not evict an opener racing the first check.
+        check_exclusive_owner(resolved, os.getpid())
         port.is_open = True
         port.tx_time_per_byte = .01
         packet = PacketHandler(2.0)
