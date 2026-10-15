@@ -18,7 +18,7 @@ def test_current_camera_only_host_reports_each_missing_control_boundary():
     report = readiness.evaluate_runtime(
         ros_distro="lyrical", expected_ros_distro="jazzy",
         packages={"controller_manager"}, actions={},
-        joint_state_publishers={"joint_state_publisher"})
+        joint_state_publishers={"/joint_state_publisher"})
     assert report["software_path_available"] is False
     assert report["motion_admitted"] is False
     assert "ros_distribution_mismatch" in report["blockers"]
@@ -32,9 +32,9 @@ def test_current_camera_only_host_reports_each_missing_control_boundary():
 def test_complete_software_graph_still_does_not_admit_motion():
     report = readiness.evaluate_runtime(
         ros_distro="jazzy", expected_ros_distro="jazzy",
-        packages=readiness.REQUIRED_PACKAGES,
+        packages=readiness.REQUIRED_PACKAGES, namespace="/cell",
         actions={"/cell/arm_controller/follow_joint_trajectory": ["control_msgs/action/FollowJointTrajectory"]},
-        joint_state_publishers={"controller_manager"})
+        joint_state_publishers={"/cell/controller_manager"})
     assert report["software_path_available"] is True
     assert report["blockers"] == []
     assert report["motion_admitted"] is False
@@ -47,7 +47,7 @@ def test_joint_topic_presence_and_matching_action_name_are_insufficient(publishe
     report = readiness.evaluate_runtime(
         ros_distro="jazzy", expected_ros_distro="jazzy", packages=readiness.REQUIRED_PACKAGES,
         actions={"/arm_controller/follow_joint_trajectory": ["example_interfaces/action/Fibonacci"]},
-        joint_state_publishers={publisher})
+        joint_state_publishers={"/" + publisher})
     assert "trajectory_action_missing" in report["blockers"]
     assert "hardware_joint_state_source_missing" in report["blockers"]
 
@@ -66,8 +66,26 @@ def test_ros_initialization_failure_is_a_closed_json_report(monkeypatch, capsys)
                                  PackageNotFoundError=LookupError)
     monkeypatch.setitem(sys.modules, "rclpy", fake_ros)
     monkeypatch.setitem(sys.modules, "ament_index_python.packages", fake_index)
-    assert readiness.main(["--domain-id", "13"]) == 2
+    assert readiness.main(["--domain-id", "13", "--namespace", "/"]) == 2
     import json
     report = json.loads(capsys.readouterr().out)
     assert report["motion_admitted"] is False
     assert report["blockers"] == ["runtime_discovery_failed"]
+
+
+def test_other_cell_action_cannot_supply_this_cell_software_path():
+    report = readiness.evaluate_runtime(
+        ros_distro="jazzy", expected_ros_distro="jazzy", packages=readiness.REQUIRED_PACKAGES,
+        namespace="/cell_a", joint_state_publishers={"/cell_b/controller_manager"},
+        actions={"/cell_b/arm_controller/follow_joint_trajectory": ["control_msgs/action/FollowJointTrajectory"]})
+    assert "trajectory_action_missing" in report["blockers"]
+    assert "hardware_joint_state_source_missing" in report["blockers"]
+
+
+def test_missing_lock_reports_failure_before_ros_initialization(monkeypatch, capsys):
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("lock unavailable")
+    monkeypatch.setattr(readiness.Path, "read_text", missing)
+    assert readiness.main(["--domain-id", "13", "--namespace", "/"]) == 2
+    import json
+    assert json.loads(capsys.readouterr().out)["blockers"] == ["runtime_discovery_failed"]
