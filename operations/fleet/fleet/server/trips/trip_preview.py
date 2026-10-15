@@ -13,7 +13,7 @@ from core_common.robot_body import PINKY_PRO
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import exit_segment, lane_action, turn_target
 from fleet.server.trip_ports import MAX_EXPECT_IN_M, bend_geometry, line_past, next_bend
-from fleet.site_map import CROSSWALK_MAX_SPAN_M, crosswalk_spans
+from fleet.site_map import route_crosswalks
 from fleet.traffic.trip_advice import FLEET_EPOCH
 from fleet.traffic.zone_hold import hold_back_m
 
@@ -27,28 +27,26 @@ def build(live, active, approaches: dict, traffic, routing, config):
     table, view, segs, graph = live.traffic or {}, live.view, live.segments, live.graph
     front, reach = table.get("front_d_m"), table.get("authority_end_m")  # R: 0 under hold_back
     if (live.at is None or front is None or view["state"] == "link_wait" or active is None
-            or active[0] != view["map_version"] or "pose_jump" in (table.get("waiting_for") or ())):
+            or active[0] != view["map_version"] or "pose_jump" in (table.get("waiting_for") or ())
+            or time.monotonic() - _STARTED < START_QUIET_S):
         return None
-    (index, s), events, reach = live.at, [], reach if view.get("traffic_authority") == "core" else None
+    index, events, reach = live.at[0], [], reach if view.get("traffic_authority") == "core" else None
     route = [(segs[0]["s_from"] + live.progress(i, g["s_from"]), live.arc(i), g["s_from"]) for i, g in enumerate(segs)]
-    here, end = route[index][0] + s - segs[index]["s_from"], route[-1][0] + segs[-1]["s_to"] - segs[-1]["s_from"]
+    end = route[-1][0] + segs[-1]["s_to"] - segs[-1]["s_from"]
     speed = (view.get("caps") or {}).get("max_speed") or 0.0
     room = max(0.0, (front if reach is None else reach) - front) + PINKY_PRO.stop_gap_m(speed)
     horizon = max(0.0, min(MAX_EXPECT_IN_M, end - front, max(room, speed * LEASE_S)))
-    for k in range(index, len(segs)):
+    for k in [k for k in range(index, len(segs)) if route[k][0] <= front + horizon]:
         (base, arc, lo), hi, place, last = route[k], segs[k]["s_to"], live.place(k), k == len(segs) - 1
         at, held = base + hi - lo, view["hold"] is not None and k == index
-        if base > front + horizon:
-            break
         if place is not None and (held or last and not live.repeat):
             back = hold_back_m(traffic, segs[k]) or 0.0
             events.append((at - back, "stop", place, {"reason": "hold" if held else "trip_end", "hold_back_m": back}))
         if arc.drive_mode != "lane":
             continue
-        for place_id, bend in graph.places.items():
-            g = None if (k, place_id) in live.bends_done else bend_geometry(bend, arc)
-            if g is not None and lo <= g[0] < hi:
-                events.append((base + g[0] - lo, "bend", place_id, {"turn_deg": round(g[2], 1), "radius_m": g[3]}))
+        bends = ((p, bend_geometry(b, arc)) for p, b in graph.places.items() if (k, p) not in live.bends_done)
+        events += [(base + g[0] - lo, "bend", p, {"turn_deg": round(g[2], 1), "radius_m": g[3]})
+                   for p, g in bends if g is not None and lo <= g[0] < hi]
         if place is not None and arc.id in approaches:
             events.append((at, "signal", place, {"signal_id": approaches[arc.id], "approach": arc.id}))
         if place is None or last or held:
@@ -63,54 +61,57 @@ def build(live, active, approaches: dict, traffic, routing, config):
                                              outer_line_offset_m=config.arc_outer_line_offset_m)
         if ex:
             events.append((at, "arc", place, {"curvature_1pm": ex["curvature_1pm"], "length_m": ex["length_m"]}))
-    for walk in active[1].crosswalks:  # CORE's near edge (D-491), before the D-573 s_wait
-        for near, far in crosswalk_spans(route, here, min(end, front + horizon + CROSSWALK_MAX_SPAN_M), walk.polygon):
-            length = None if far is None else round(far - near, 3)
-            events.append((near, "crosswalk", None, {"zone_id": walk.id, "length_m": length}))
+    walks = tuple((walk.id, tuple(map(tuple, walk.polygon))) for walk in active[1].crosswalks)  # CORE's near edge
+    for near, far, zone in route_crosswalks(tuple(route), end, walks):  # (D-491), before the D-573 s_wait
+        events.append((near, "crosswalk", None, {"zone_id": zone, "length_m": far and round(far - near, 3)}))
     if reach is not None:
         events.append((reach, "authority_end", None, {"authority_id": (live.authority or {}).get("authority_id")}))
-    rows = sorted((e for e in events if here <= e[0] <= front + horizon), key=lambda e: e[0])[:MAX_EVENTS]
+    rows = sorted((e for e in events if front <= e[0] <= front + horizon), key=lambda e: e[0])[:MAX_EVENTS]
     return {"leg_id": f"{view['trip_id']}:{live.route_rev}:{FLEET_EPOCH}", "pose_stamp": table.get("pose_stamp"),
             "map_version": view["map_version"], "horizon_m": round(horizon, 3), "front_d_m": front,
             "events": [{"s_m": round(d, 3), "at_m": round(d - front, 3), "kind": kind, "place_id": place_id,
                         "params": params} for d, kind, place_id, params in rows]}
 
 
+def _record(live, new, traffic, now: float) -> None:
+    old, seen, live.preview_sent = getattr(live, "preview", None), getattr(live, "preview_sent", None), live.sent
+    if new is not None:
+        key = lambda p: (p["leg_id"], [(e["kind"], e["place_id"], e["params"]) for e in p["events"]])  # noqa: E731
+        changed = old is not None and (key(old) != key(new) or any(
+            abs(a["s_m"] - b["s_m"]) > CHANGE_M for a, b in zip(old["events"], new["events"])))
+        new.update(seq=0 if old is None else old["seq"] + changed, built_at=now)  # seq counts the changes
+        live.preview = new
+        if os.environ.get(LOG_ENV):
+            with open(os.environ[LOG_ENV], "a", encoding="utf-8") as out:
+                out.write(json.dumps({"robot_id": live.view["robot_id"], "t": now, **new}) + "\n")
+    if new is None or (sent := live.sent) is None or sent is seen or sent["index"] != live.at[0]:
+        return
+    (index, s), kind = live.at, {"bend": "bend", STOP: "stop"}.get(sent["action"], "turn")
+    seg, back = live.segments[index], (hold_back_m(traffic, live.segments[index]) or 0.0) if kind == "stop" else 0.0
+    bend = next_bend(live, index, s) if kind == "bend" else {"place_id": sent["place"], "s_start": seg["s_to"] - back}
+    point = (live.segments[0]["s_from"] + live.progress(index, bend["s_start"])  # before any lead
+             if bend and bend["place_id"] == sent["place"] else None)
+    hit = [e["s_m"] for e in new["events"] if e["place_id"] == sent["place"] and e["kind"] in (kind, "turn")]
+    if point is not None and point >= new["front_d_m"] and (not hit or abs(hit[0] - point) > MISMATCH_TOL_M):
+        counts = live.preview_mismatch = getattr(live, "preview_mismatch", {})
+        counts[kind] = counts.get(kind, 0) + 1
+
+
 def observe(lives, inflight, traffic, store, routing, config, now: float) -> None:
-    """After the table: build each settled robot's preview, count changes ("changed": another leg, event set or
-    params, or an ``s_m`` moved > CHANGE_M) and mismatches, put a fresh one (≤ TTL_S) on its /traffic row."""
+    """After the table: build, record and show each fresh preview (≤ TTL_S); ``ROSY_ROUTE_PREVIEW=off``: rollback."""
+    if os.environ.get("ROSY_ROUTE_PREVIEW", "observe") == "off":
+        return
     active, rows = store.active(), {row["robot_id"]: row for row in traffic.view().get("robots") or ()}
     approaches = {a["approach"]: g["signal_id"] for g in traffic.view().get("signals") or () for a in g["approaches"]}
     for live in [live for live in lives if live.open and live.view["robot_id"] not in inflight]:
-        old, quiet = getattr(live, "preview", None), time.monotonic() - _STARTED < START_QUIET_S
-        new = None if quiet else build(live, active, approaches, traffic, routing, config)
-        if new is not None:
-            key = lambda p: (p["leg_id"], [(e["kind"], e["place_id"], e["params"]) for e in p["events"]])  # noqa: E731
-            changed = old is not None and (key(old) != key(new) or any(
-                abs(a["s_m"] - b["s_m"]) > CHANGE_M for a, b in zip(old["events"], new["events"])))
-            live.preview_changes = getattr(live, "preview_changes", 0) + changed
-            new.update(seq=0 if old is None or old["leg_id"] != new["leg_id"] else old["seq"] + changed, built_at=now)
-            live.preview = new
-            if os.environ.get(LOG_ENV):
-                with open(os.environ[LOG_ENV], "a", encoding="utf-8") as out:
-                    out.write(json.dumps({"robot_id": live.view["robot_id"], "t": now, **new}) + "\n")
-        sent, seen, live.preview_sent = live.sent, getattr(live, "preview_sent", None), live.sent
-        if new is None or sent is None or sent is seen or sent["index"] != live.at[0]:
-            continue
-        # the instruction's place from the pose it was made from, before any lead (a bend: ``next_bend``)
-        (index, s), kind = live.at, {"bend": "bend", STOP: "stop"}.get(sent["action"], "turn")
-        seg, d = live.segments[index], live.segments[0]["s_from"] + live.progress(index, s)
-        point = d + max(round(seg["s_to"] - s, 3) - ((hold_back_m(traffic, seg) or 0.0) if kind == "stop" else 0), 0.0)
-        if kind == "bend":
-            bend = next_bend(live, index, s)
-            point = None if bend is None or bend["place_id"] != sent["place"] else d + bend["s_start"] - s
-        hit = [e["s_m"] for e in new["events"] if e["place_id"] == sent["place"] and e["kind"] in (kind, "turn")]
-        if point is not None and (not hit or abs(hit[0] - point) > MISMATCH_TOL_M):
-            counts = live.preview_mismatch = getattr(live, "preview_mismatch", {})
-            counts[kind] = counts.get(kind, 0) + 1
-            _LOG.warning("preview_mismatch %s %s %s: %s, %.3f", live.view["robot_id"], kind, sent["place"], hit, point)
+        try:
+            _record(live, build(live, active, approaches, traffic, routing, config), traffic, now)
+        except Exception:  # noqa: BLE001 - one robot's fault blanks only its own preview; logged once a trip
+            level = logging.DEBUG if getattr(live, "preview_broken", False) else logging.ERROR
+            _LOG.log(level, "route preview for %s failed", live.view["robot_id"], exc_info=True)
+            live.preview, live.preview_broken = None, True
     for live in lives:
         preview, row = getattr(live, "preview", None), rows.get(live.view["robot_id"])
         if live.open and preview is not None and row is not None and now - preview["built_at"] <= TTL_S:
             row["preview"] = {**preview, "age_s": round(now - preview["built_at"], 1),
-                              "changes": live.preview_changes, "mismatch": dict(getattr(live, "preview_mismatch", {}))}
+                              "mismatch": dict(getattr(live, "preview_mismatch", {}))}

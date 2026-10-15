@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import copy
 import json
+import logging
 
 import pytest
 
 from core_common.robot_body import PINKY_PRO
+from fleet import site_map
 from fleet.server import trip_preview
 from fleet.server.trip_ports import bend_geometry
 from fleet.site_map import SiteMap, crosswalk_spans
@@ -66,10 +69,10 @@ def test_the_preview_changes_only_with_its_events_not_as_the_robot_drives_on():
     runner, store, ports, live = _running(TURN_MAP, "ab:fwd", 0.2, "C")
     ports.at(_arc(store, "ab:fwd"), 0.205)
     _ticks(runner, ports)
-    assert live.preview_changes == 0 and live.preview["seq"] == 0               # at_m shrank: not a change
+    assert live.preview["seq"] == 0                                              # at_m shrank: not a change
     ports.at(_arc(store, "ab:fwd"), 0.6)                                         # C enters the horizon
     _ticks(runner, ports)
-    assert live.preview_changes == 1 and live.preview["seq"] == 1
+    assert live.preview["seq"] == 1                                              # seq counts the changes
 
 
 def test_an_expired_or_quiet_preview_shows_as_nothing(monkeypatch):
@@ -171,3 +174,51 @@ def test_the_preview_sends_nothing_to_the_robot(monkeypatch, tmp_path):
     assert len(lines) >= 1 and {"robot_id", "t", "pose_stamp", "front_d_m", "events"} <= set(lines[0])
     monkeypatch.setattr("fleet.server.trip_runner.observe", lambda *a, **k: None)
     assert drive() == with_preview
+
+
+def test_crosswalks_are_sampled_once_per_route_and_far_ones_never(monkeypatch):
+    calls, real = [], site_map._inside
+    monkeypatch.setattr(site_map, "_inside", lambda point, poly: calls.append(tuple(poly)) or real(point, poly))
+    site_map.route_crosswalks.cache_clear()
+    slant = [[0.7, -0.2], [0.9, -0.2], [1.0, 0.2], [0.8, 0.2]]
+    far = [[5.9, 4.8], [6.1, 4.8], [6.1, 5.2], [5.9, 5.2]]   # on the lane C -> D, which this trip never drives
+    places = [("A", 0, 0), ("B", 2, 0), ("C", 5, 5), ("D", 7, 5)]
+    runner, store, ports, _live = _running(_line(places, [("cw1", slant), ("cw2", far)]), "ab:fwd", 0.3, "B")
+    near_calls = [c for c in calls if c == tuple(map(tuple, slant))]
+    assert [c for c in calls if c == tuple(map(tuple, far))] == []              # its box misses the route's
+    assert 0 < len(near_calls) <= 2.0 / 0.02 + 30                                 # 2 cm steps, bisection at 2 edges
+    calls.clear()
+    ports.at(_arc(store, "ab:fwd"), 0.35)
+    _ticks(runner, ports, 3)
+    assert calls == [] and _row(runner)["preview"]["events"][0]["kind"] == "crosswalk"   # cached per route
+
+
+def test_one_robots_bad_build_is_logged_once_and_blanks_only_its_own_preview(monkeypatch, caplog):
+    runner, store, ports, live = _running(TURN_MAP, "ab:fwd", 0.5, "C")
+    other = copy.copy(live)
+    other.view, other.preview = {**live.view, "robot_id": "rosy_61"}, None
+    real = trip_preview.build
+    monkeypatch.setattr(trip_preview, "build", lambda one, *a: (_ for _ in ()).throw(ValueError("bad"))
+                        if one is live else real(one, *a))
+    runner.traffic.period([live])
+    runner.traffic.view()["robots"].append({"robot_id": "rosy_61"})
+    with caplog.at_level(logging.ERROR, logger=trip_preview.__name__):
+        for _ in range(2):
+            trip_preview.observe([live, other], set(), runner.traffic, store, runner._routing, runner.config, ports.now)
+    rows = {row["robot_id"]: row for row in runner.traffic.view()["robots"]}
+    assert "preview" not in rows["rosy_60"] and live.preview is None
+    assert rows["rosy_61"]["preview"]["events"][0]["place_id"] == "B"
+    assert len([r for r in caplog.records if "rosy_60" in r.getMessage()]) == 1     # repeats muted
+
+
+def test_an_event_between_the_pose_and_the_front_is_not_listed():
+    runner, *_rest, live = _running(TURN_MAP, "ab:fwd", 0.98, "C")             # B is 2 cm ahead, the front 4 cm
+    events = _row(runner)["preview"]["events"]
+    assert all(e["at_m"] >= 0 for e in events) and "B" not in [e["place_id"] for e in events]
+    assert getattr(live, "preview_mismatch", {}) == {}                            # the turn sent there is not a miss
+
+
+def test_the_rollback_switch_turns_the_preview_off(monkeypatch):
+    monkeypatch.setenv("ROSY_ROUTE_PREVIEW", "off")
+    runner, *_rest, live = _running(TURN_MAP, "ab:fwd", 0.5, "C")
+    assert "preview" not in _row(runner) and getattr(live, "preview", None) is None
