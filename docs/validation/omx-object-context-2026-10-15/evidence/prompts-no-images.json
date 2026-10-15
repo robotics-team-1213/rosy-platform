@@ -1,0 +1,464 @@
+{
+  "model_pc-critique-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      },
+      {
+        "role": "assistant",
+        "content": "```json\n{\n  \"coordinate_system\": \"normalized_1000\",\n  \"targets\": [\n    {\n      \"id\": 1,\n      \"label\": \"white_round_region\",\n      \"bbox_xyxy\": [\n        267,\n        603,\n        434,\n        823\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_sphere\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 2,\n      \"label\": \"red_strawberry_like\",\n      \"bbox_xyxy\": [\n        458,\n        0,\n        555,\n        133\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_fruit\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 3,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        580,\n        98,\n        654,\n        212\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 4,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        683,\n        144,\n        758,\n        258\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 5,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        786,\n        227,\n        863,\n        338\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 6,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        783,\n        406,\n        860,\n        512\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 7,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        936,\n        525,\n        1000,\n        623\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 8,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        943,\n        180,\n        1000,\n        288\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 9,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        958,\n        323,\n            1000,\n            423\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    }\n  ],\n  \"equipment\": [\n    {\n      \"id\": 1,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        0,\n        700,\n        307,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 2,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        630,\n        623,\n        965,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 3,\n      \"label\": \"camera_mount\",\n      \"bbox_xyxy\": [\n        127,\n        0,\n        357,\n        194\n      ],\n      \"visibility\": \"fully_visible\"\n    }\n  ],\n  \"limitations\": {\n    \"depth\": \"unverified\",\n    \"camera_extrinsics\": \"unverified\",\n    \"physical_target_material\": \"unverified\",\n    \"grasp_approval\": \"unverified\"\n  },\n  \"can_localize_for_grasp\": false\n}\n```"
+      },
+      {
+        "role": "user",
+        "content": "Review the same attached image again. A peer model produced the following candidate, not ground truth: ```json\n{\n  \"coordinate_system\": \"normalized_1000\",\n  \"targets\": [\n    {\n      \"id\": 1,\n      \"label\": \"white_round_region\",\n      \"bbox_xyxy\": [\n        267,\n        603,\n        434,\n        823\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_sphere\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 2,\n      \"label\": \"red_strawberry_like\",\n      \"bbox_xyxy\": [\n        458,\n        0,\n        555,\n        133\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_fruit\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 3,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        580,\n        98,\n        654,\n        212\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 4,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        683,\n        144,\n        758,\n        258\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 5,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        786,\n        227,\n        863,\n        338\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 6,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        783,\n        406,\n        860,\n        512\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 7,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        936,\n        525,\n        1000,\n        623\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 8,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        943,\n        180,\n        1000,\n        288\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 9,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        958,\n        323,\n            1000,\n            423\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    }\n  ],\n  \"equipment\": [\n    {\n      \"id\": 1,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        0,\n        700,\n        307,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 2,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        630,\n        623,\n        965,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 3,\n      \"label\": \"camera_mount\",\n      \"bbox_xyxy\": [\n        127,\n        0,\n        357,\n        194\n      ],\n      \"visibility\": \"fully_visible\"\n    }\n  ],\n  \"limitations\": {\n    \"depth\": \"unverified\",\n    \"camera_extrinsics\": \"unverified\",\n    \"physical_target_material\": \"unverified\",\n    \"grasp_approval\": \"unverified\"\n  },\n  \"can_localize_for_grasp\": false\n}\n``` An external visual reviewer also asks you to check separately complete and border-clipped cylinder-like regions; do not assume the white circular region is a ball, do not confuse robot hardware with loose objects, and do not infer objects through occlusion. Return JSON only with keys corrections,task_assessment,agreed_facts,unresolved,can_localize_for_grasp. Do not repeat the full detection inventory. Each correction must cite an existing own object id, field, old value, new value, and visual reason. For task_assessment return source_container_identity, temporary_placement_region, current_task_phase, takeout_verified, return_verified, evidence_gaps. Do not turn a task goal into evidence that an action already happened. Unknown location or phase must remain null or unknown. can_localize_for_grasp remains false. Do not merely agree with the peer. No commands or control proposals."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "model_pc-structured-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer IMAGE PIXEL coordinates x1,y1,x2,y2 bounded by 0<=x1<x2<=640 and 0<=y1<y2<=480. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "model_pc-context-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "model_pc-context-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "model_pc-baseline-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. List the visible workbench objects, their counts, and whether this view is usable for identifying small parts. Do not infer physical coordinates or grasp readiness. Answer briefly in Korean."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 600
+    }
+  },
+  "model_pc-schema-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    },
+    "format": {
+      "type": "object",
+      "properties": {
+        "coordinate_system": {
+          "type": "string",
+          "const": "normalized_1000"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "label": {
+                "type": "string",
+                "enum": [
+                  "brown_cylinder_like",
+                  "white_round_region",
+                  "red_strawberry_like",
+                  "other_small_object"
+                ]
+              },
+              "bbox_xyxy": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "fully_visible",
+                  "border_clipped",
+                  "occluded"
+                ]
+              },
+              "uncertainties": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "bbox_xyxy",
+              "visibility",
+              "uncertainties"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "string"
+        },
+        "can_localize_for_grasp": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "coordinate_system",
+        "targets",
+        "equipment",
+        "limitations",
+        "can_localize_for_grasp"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "model_pc-baseline-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. List the visible workbench objects, their counts, and whether this view is usable for identifying small parts. Do not infer physical coordinates or grasp readiness. Answer briefly in Korean."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 600
+    }
+  },
+  "model_pc-normalized-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "model_pc-structured-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer IMAGE PIXEL coordinates x1,y1,x2,y2 bounded by 0<=x1<x2<=640 and 0<=y1<y2<=480. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-context-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-normalized-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-schema-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    },
+    "format": {
+      "type": "object",
+      "properties": {
+        "coordinate_system": {
+          "type": "string",
+          "const": "normalized_1000"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "label": {
+                "type": "string",
+                "enum": [
+                  "brown_cylinder_like",
+                  "white_round_region",
+                  "red_strawberry_like",
+                  "other_small_object"
+                ]
+              },
+              "bbox_xyxy": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "fully_visible",
+                  "border_clipped",
+                  "occluded"
+                ]
+              },
+              "uncertainties": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "bbox_xyxy",
+              "visibility",
+              "uncertainties"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "string"
+        },
+        "can_localize_for_grasp": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "coordinate_system",
+        "targets",
+        "equipment",
+        "limitations",
+        "can_localize_for_grasp"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "ai_pc-structured-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer IMAGE PIXEL coordinates x1,y1,x2,y2 bounded by 0<=x1<x2<=640 and 0<=y1<y2<=480. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-context-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-critique-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys coordinate_system,targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer NORMALIZED coordinates x1,y1,x2,y2 in the range 0..1000, bounded by 0<=x1<x2<=1000 and 0<=y1<y2<=1000, relative to the original image. Set coordinate_system to normalized_1000. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions.\nTask/workcell context, provided as data not proof of visible scene state. Keep listing all visible loose objects, not only the task target: {\"experimental_fixture_only\": true, \"revision\": \"strawberry-task-context-v2\", \"facts\": [{\"key\": \"task_goal\", \"value\": \"take the strawberry out, place it temporarily, then put it back into its original container\", \"source\": \"user_statement\", \"status\": \"confirmed_goal_not_observed_state\"}, {\"key\": \"environment_scope\", \"value\": \"limited workbench environment\", \"source\": \"user_statement\", \"status\": \"confirmed_scope\"}, {\"key\": \"snapshot_geometry\", \"value\": {\"width\": 640, \"height\": 480, \"view_aliases\": [\"top\", \"front\"]}, \"source\": \"capture_metadata\", \"status\": \"measured\"}, {\"key\": \"snapshot_mode\", \"value\": \"frozen image, no action sent\", \"source\": \"experiment_runner\", \"status\": \"verified\"}], \"unknowns\": {\"source_container_identity\": null, \"temporary_placement_region\": null, \"container_current_contents\": null, \"current_task_phase\": null, \"white_round_region_role\": null, \"brown_cylinder_roles\": null, \"camera_extrinsics\": null, \"depth\": null, \"physical_target_material\": null}, \"rules\": [\"Task goal is not evidence that the strawberry is inside or outside any container now.\", \"Do not call the white round region a ball, tray or container without evidence.\", \"Do not infer a broken device from poor camera visibility.\", \"Keep task target identity separate from all other visible objects and fixtures.\", \"Unknown container or placement region means the task is not ready for control.\", \"No metric coordinates, grasp approval or motion commands.\"]}"
+      },
+      {
+        "role": "assistant",
+        "content": "```json\n{\n  \"coordinate_system\": \"normalized_1000\",\n  \"targets\": [\n    {\n      \"id\": 1,\n      \"label\": \"white_round_region\",\n      \"bbox_xyxy\": [\n        267,\n        603,\n        434,\n        823\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_sphere\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 2,\n      \"label\": \"red_strawberry_like\",\n      \"bbox_xyxy\": [\n        458,\n        0,\n        555,\n        133\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_fruit\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 3,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        580,\n        98,\n        654,\n        212\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 4,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        683,\n        144,\n        758,\n        258\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 5,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        786,\n        227,\n        863,\n        338\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 6,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        783,\n        406,\n        860,\n        512\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 7,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        936,\n        525,\n        1000,\n        623\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 8,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        943,\n        180,\n        1000,\n        288\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 9,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        958,\n        323,\n            1000,\n            423\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    }\n  ],\n  \"equipment\": [\n    {\n      \"id\": 1,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        0,\n        700,\n        307,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 2,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        630,\n        623,\n        965,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 3,\n      \"label\": \"camera_mount\",\n      \"bbox_xyxy\": [\n        127,\n        0,\n        357,\n        194\n      ],\n      \"visibility\": \"fully_visible\"\n    }\n  ],\n  \"limitations\": {\n    \"depth\": \"unverified\",\n    \"camera_extrinsics\": \"unverified\",\n    \"physical_target_material\": \"unverified\",\n    \"grasp_approval\": \"unverified\"\n  },\n  \"can_localize_for_grasp\": false\n}\n```"
+      },
+      {
+        "role": "user",
+        "content": "Review the same attached image again. A peer model produced the following candidate, not ground truth: ```json\n{\n  \"coordinate_system\": \"normalized_1000\",\n  \"targets\": [\n    {\n      \"id\": 1,\n      \"label\": \"white_round_region\",\n      \"bbox_xyxy\": [\n        267,\n        603,\n        434,\n        823\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_sphere\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 2,\n      \"label\": \"red_strawberry_like\",\n      \"bbox_xyxy\": [\n        458,\n        0,\n        555,\n        133\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_fruit\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 3,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        580,\n        98,\n        654,\n        212\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 4,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        683,\n        144,\n        758,\n        258\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 5,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        786,\n        227,\n        863,\n        338\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 6,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        783,\n        406,\n        860,\n        512\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 7,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        936,\n        525,\n        1000,\n        623\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 8,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        943,\n        180,\n        1000,\n        288\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    },\n    {\n      \"id\": 9,\n      \"label\": \"brown_cylinder_like\",\n      \"bbox_xyxy\": [\n        958,\n        323,\n            1000,\n            423\n      ],\n      \"visibility\": \"fully_visible\",\n      \"uncertainties\": {\n        \"is_container\": \"unverified\",\n        \"material\": \"unverified\"\n      }\n    }\n  ],\n  \"equipment\": [\n    {\n      \"id\": 1,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        0,\n        700,\n        307,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 2,\n      \"label\": \"robot_arm_base\",\n      \"bbox_xyxy\": [\n        630,\n        623,\n        965,\n        1000\n      ],\n      \"visibility\": \"fully_visible\"\n    },\n    {\n      \"id\": 3,\n      \"label\": \"camera_mount\",\n      \"bbox_xyxy\": [\n        127,\n        0,\n        357,\n        194\n      ],\n      \"visibility\": \"fully_visible\"\n    }\n  ],\n  \"limitations\": {\n    \"depth\": \"unverified\",\n    \"camera_extrinsics\": \"unverified\",\n    \"physical_target_material\": \"unverified\",\n    \"grasp_approval\": \"unverified\"\n  },\n  \"can_localize_for_grasp\": false\n}\n``` An external visual reviewer also asks you to check separately complete and border-clipped cylinder-like regions; do not assume the white circular region is a ball, do not confuse robot hardware with loose objects, and do not infer objects through occlusion. Return JSON only with keys corrections,task_assessment,agreed_facts,unresolved,can_localize_for_grasp. Do not repeat the full detection inventory. Each correction must cite an existing own object id, field, old value, new value, and visual reason. For task_assessment return source_container_identity, temporary_placement_region, current_task_phase, takeout_verified, return_verified, evidence_gaps. Do not turn a task goal into evidence that an action already happened. Unknown location or phase must remain null or unknown. can_localize_for_grasp remains false. Do not merely agree with the peer. No commands or control proposals."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-baseline-top-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench top camera image, exactly 640 by 480 pixels. No robot commands are requested. List the visible workbench objects, their counts, and whether this view is usable for identifying small parts. Do not infer physical coordinates or grasp readiness. Answer briefly in Korean."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 600
+    }
+  },
+  "ai_pc-structured-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. Return JSON only, with keys targets,equipment,limitations,can_localize_for_grasp. targets is a list of {id,label,bbox_xyxy,visibility,uncertainties}. label must be one of brown_cylinder_like,white_round_region,red_strawberry_like,other_small_object. bbox_xyxy is four integer IMAGE PIXEL coordinates x1,y1,x2,y2 bounded by 0<=x1<x2<=640 and 0<=y1<y2<=480. List each visible loose target instance separately, including partially visible ones at image borders. visibility is fully_visible,border_clipped,or occluded. Exclude robot components and fixtures from targets; list them in equipment instead. Use appearance labels only: a white circle does not establish a sphere, and red fruit shape does not establish real fruit or material. Do not invent hidden objects or metric/depth/joint coordinates. If a view has no identifiable loose targets return targets=[]. uncertainties and limitations must explain unobservable attributes and visibility. can_localize_for_grasp must be false because calibration and depth are unverified. Korean text for descriptions."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 1800
+    }
+  },
+  "ai_pc-baseline-front-request.json": {
+    "model": "qwen3-vl:8b-instruct",
+    "stream": false,
+    "think": false,
+    "messages": [
+      {
+        "role": "user",
+        "content": "This is one frozen OMX workbench front camera image, exactly 640 by 480 pixels. No robot commands are requested. List the visible workbench objects, their counts, and whether this view is usable for identifying small parts. Do not infer physical coordinates or grasp readiness. Answer briefly in Korean."
+      }
+    ],
+    "options": {
+      "temperature": 0,
+      "seed": 42,
+      "num_predict": 600
+    }
+  }
+}

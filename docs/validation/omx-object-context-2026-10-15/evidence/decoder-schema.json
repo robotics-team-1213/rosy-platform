@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "coordinate_system": {
+      "type": "string",
+      "const": "normalized_1000"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "brown_cylinder_like",
+              "white_round_region",
+              "red_strawberry_like",
+              "other_small_object"
+            ]
+          },
+          "bbox_xyxy": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "fully_visible",
+              "border_clipped",
+              "occluded"
+            ]
+          },
+          "uncertainties": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "bbox_xyxy",
+          "visibility",
+          "uncertainties"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "string"
+    },
+    "can_localize_for_grasp": {
+      "type": "boolean",
+      "const": false
+    }
+  },
+  "required": [
+    "coordinate_system",
+    "targets",
+    "equipment",
+    "limitations",
+    "can_localize_for_grasp"
+  ],
+  "additionalProperties": false
+}
