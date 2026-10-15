@@ -770,13 +770,14 @@ def test_a_crossing_held_by_a_return_ahead_is_credited_and_a_crossing_takes_its_
 
 
 def test_the_hold_cap_is_per_arc_not_per_hold():
-    """A 10 s hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
-    within the second hold (a cap per hold would let it stand 25 s)."""
+    """A 10 s crosswalk hold, then another: 15 s in all, so the arc times out 15 s past its own deadline
+    within the second hold (a cap per hold would let it stand 25 s). Authority waits are not capped
+    (D-760 개정 4), so both holds here are the crosswalk's."""
     rig = ArcRig()
     rig.open()
     deadline = rig.m._arc['deadline']
     rig.drive(10, seen=False)
-    _held(rig, 10., 'authority')
+    _held(rig, 10., 'looking')
     rig.drive(10, seen=False)
     assert running(rig)
     _held(rig, 20., 'waiting')
