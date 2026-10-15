@@ -1,9 +1,8 @@
 """D-762 stage 0 narrowing for the ``affected`` tier (split from ``affected_tests.py``).
 
-A ``contracts/foundation`` module, config file or CI workflow matches a FULL trigger, but the
-selector can find its real readers: the suites that import or name it. Such a path selects
-those readers instead of the full tier; when none is found it stays FULL (unknown means
-everything). ``affected_tests.select`` calls `add_readers` for every triggered path.
+A ``contracts/foundation`` module may select its known test readers. Runtime consumers,
+config files and CI workflows retain FULL until their downstream coverage is established.
+``affected_tests.select`` calls `add_readers` for every triggered path.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ import affected_tests as at  # attributes read at call time, so the cyclic impor
 
 # D-762 stage 0 ("넓은 경로 일치가 아니라 실제 영향"): triggers whose real readers the selector can
 # find. A path matching only these selects its readers (`narrowed`); no reader found -> FULL.
-NARROWABLE_TRIGGERS = (".github/workflows/**", "contracts/foundation/**")
+NARROWABLE_TRIGGERS = ("contracts/foundation/**",)
 FOUNDATION = "contracts/foundation"
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
 
@@ -79,7 +78,7 @@ def module_importers(repo: at.Repo, path: str) -> list[str]:
     queue = [path]
     while queue:
         current = queue.pop()
-        dotted = ".".join(PurePosixPath(current).relative_to(FOUNDATION).with_suffix("").parts)
+        dotted = ".".join(PurePosixPath(current).relative_to(FOUNDATION).with_suffix("").parts).removesuffix(".__init__")
         for src in repo.tracked:
             if src.endswith(".py") and src != path and src not in found and _uses(repo, src, dotted):
                 found.append(src)
@@ -101,6 +100,9 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
     if at._under(path, f"{FOUNDATION}/core_common") and path.endswith(".py"):
         importers = module_importers(repo, path)
         if not importers:
+            return None
+        # Runtime wrappers and broad owners need downstream coverage, not just named readers.
+        if any(not at.TEST_FILE.search(src) and not at._under(src, FOUNDATION) for src in importers):
             return None
         tests = {t: f"references {path}" for t in repo.referencing_tests(path)}
         for src in importers:
@@ -126,5 +128,4 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
         return tests
     if path.endswith(".py"):
         return None
-    readers = repo.referencing_tests(path)
-    return {t: f"references {path}" for t in readers} or None
+    return None  # Naming a config file does not establish all consumers of its values.
