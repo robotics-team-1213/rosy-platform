@@ -168,7 +168,7 @@ class TripRunner(TripAdmission, TripProgress):
             repeat = bool((row.get("request") or {}).get("repeat"))
             graph = self._graph_for(plan["map_version"])
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
-                                           plan["actions"][-1]["place_id"])
+                                           plan["actions"][-1]["place_id"], detail=(notes := {}))
             body = nominal_body_for(caps.kind)
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
@@ -221,7 +221,7 @@ class TripRunner(TripAdmission, TripProgress):
                 raise
             now = self._clock()
             view = {"trip_id": plan_id, "plan_id": plan_id, "robot_id": robot_id, "started_by": principal_id,
-                    "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
+                    "state": "started", "reason": None, "detail": notes, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "body_half_width_m": body.half_width_m if body is not None else None,
@@ -324,7 +324,7 @@ class TripRunner(TripAdmission, TripProgress):
                     return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
-            self._apply_replan(live, hold, principal_id)
+            await self._admit_replan(live, hold, principal_id)  # D-763 10 (c): checked as at a start
             self._describe(live)
             self._save(live)
             return live.view
@@ -369,7 +369,7 @@ class TripRunner(TripAdmission, TripProgress):
 
         try:
             graph = self._graph_for(hold["map_version"])
-            await self._caps_checks(robot_id, graph, segments, bool(live.repeat))
+            await self._caps_checks(robot_id, graph, segments, bool(live.repeat), detail=live.view["detail"])
             if not current():
                 return
             await self._pose_checks(robot_id, graph, segments)
@@ -780,10 +780,10 @@ class TripRunner(TripAdmission, TripProgress):
         end = live.arc(len(segments) - 1).point_at(segments[-1]["s_to"])
         try:
             graph = self._graph_for(live.view["map_version"])
-            await self._caps_checks(robot_id, graph, segments[index:], True)
             await self._pose_checks(robot_id, graph, segments[index:])
             body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
                 self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
+            await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True, detail=live.view["detail"])
         except TripError as exc:
             body, hold = None, {"plan": None, "code": exc.code, "detail": exc.detail}
         if not live.open:

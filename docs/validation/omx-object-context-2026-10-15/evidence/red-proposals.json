@@ -1,0 +1,99 @@
+{
+  "experiment": "red_pixel_proposal_no_roi",
+  "hsv_ranges": [
+    [
+      0,
+      80,
+      60,
+      15,
+      255,
+      255
+    ],
+    [
+      165,
+      80,
+      60,
+      179,
+      255,
+      255
+    ]
+  ],
+  "min_area": 50,
+  "regions": {
+    "top": [
+      {
+        "bbox_xyxy": [
+          298,
+          0,
+          357,
+          63
+        ],
+        "red_pixel_area": 2631,
+        "border_contact": true
+      },
+      {
+        "bbox_xyxy": [
+          160,
+          453,
+          197,
+          480
+        ],
+        "red_pixel_area": 563,
+        "border_contact": true
+      },
+      {
+        "bbox_xyxy": [
+          0,
+          442,
+          25,
+          480
+        ],
+        "red_pixel_area": 488,
+        "border_contact": true
+      },
+      {
+        "bbox_xyxy": [
+          408,
+          457,
+          443,
+          480
+        ],
+        "red_pixel_area": 365,
+        "border_contact": true
+      },
+      {
+        "bbox_xyxy": [
+          586,
+          450,
+          617,
+          472
+        ],
+        "red_pixel_area": 303,
+        "border_contact": false
+      },
+      {
+        "bbox_xyxy": [
+          437,
+          466,
+          446,
+          480
+        ],
+        "red_pixel_area": 82,
+        "border_contact": true
+      },
+      {
+        "bbox_xyxy": [
+          146,
+          51,
+          173,
+          56
+        ],
+        "red_pixel_area": 80,
+        "border_contact": false
+      }
+    ],
+    "front": []
+  },
+  "semantic_identity_verified": false,
+  "command_sent": false
+}

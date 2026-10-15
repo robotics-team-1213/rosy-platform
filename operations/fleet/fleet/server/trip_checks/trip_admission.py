@@ -8,6 +8,7 @@ alignment against the first lane (``start_check``) and the plan-time line camera
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from types import SimpleNamespace
 
@@ -19,7 +20,9 @@ from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.traffic import rule_m
+from fleet.site_map import _inside
 
+_LOG = logging.getLogger(__name__)
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
 LINE_MODES = ("CAMERA_LINE",)
@@ -31,6 +34,30 @@ ALIGN_WAIT_S = 12.0
 ALIGN_SIGHTING_S = 3.0
 #: D-763 rev 2 Q10 (b): a multi-step job's robot announces these (plus an authority enforced under the lease).
 JOB_CAPS = ("trip_lease", "trip_lease_job", "goal_lease")
+#: D-763 10 (c): sample step along the route's lanes for the crosswalk test (m).
+CROSSWALK_STEP_M = 0.02
+
+
+def crosswalks_on(graph, segments: list, crosswalks) -> list:
+    """D-763 10 (c): ids of the site-map crosswalks (D-573 1) a lane segment of this route enters."""
+    hit, polygons = set(), [(c.id, [tuple(p) for p in c.polygon]) for c in crosswalks]
+    for seg in segments if polygons else ():
+        arc = graph.arcs[arc_id(seg)]
+        if arc.drive_mode != "lane":
+            continue
+        s0, s1 = seg.get("s_from", 0.0), seg.get("s_to", arc.length_m)
+        points = [arc.point_at(min(s0 + k * CROSSWALK_STEP_M, s1)) for k in range(int((s1 - s0) / CROSSWALK_STEP_M) + 2)]
+        hit |= {cid for cid, polygon in polygons if any(_inside((x, y), polygon) for x, y, _ in points)}
+    return sorted(hit)
+
+
+def signals_on(traffic, segments: list) -> list:
+    """D-763 10 (c): ids of the D-525 signals whose zone this route crosses (the span walk of
+    ``TrafficService.signal_refusal``, kept here so the traffic unit does not grow)."""
+    zones = {plan.zone: signal_id for signal_id, plan in traffic._signals.items()}
+    layout = traffic._layout_for(traffic._store.active()) if zones and segments else None
+    spans = layout.route(traffic._store.active()[2], [arc_id(seg) for seg in segments]) if layout else ()
+    return sorted({zones[span.unit] for span in spans if span.unit in zones})
 
 
 def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) -> dict:
@@ -119,8 +146,9 @@ class TripAdmission:
         if token != self._start_token(robot_id):
             raise TripError(409, "TRIP_START_CANCELED")
 
-    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None):
-        """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
+    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None, detail=None):
+        """D-494 start checks on the robot's capabilities; the caps, or ``TripError``. ``detail``: the trip's
+        detail dict that takes the D-763 10 (c) ``regulation_caps_unknown`` warning."""
         map_id = self._store.active()[1].map_id
         lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
         caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
@@ -142,7 +170,32 @@ class TripAdmission:
             raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")
         if lane and self.authority.mode(caps) != "core" and bounded:
             raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
+        # D-763 10 (c): a lane route over a crosswalk or a signalled zone needs CORE's matching rule on, else
+        # the rule would silently not run there. A CORE announcing it off is refused.
+        need = {"lane_crosswalk_gate": crosswalks_on(graph, segments, getattr(self._store.active()[1], "crosswalks", ())),
+                "lane_junction_signal": signals_on(self.traffic, segments)} if lane else {}
+        missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is False}
+        if missing:
+            raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})
+        # ponytail: an older CORE (field absent) only warns; refuse it like False once every robot runs v1.237+.
+        unknown = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is None}
+        if unknown:
+            _LOG.warning("trip of %s crosses regulation its CORE does not announce: %s", robot_id, unknown)
+        if detail is not None:  # set, or cleared by a later clean check
+            detail.pop("regulation_caps_unknown", None)
+            detail.update({"regulation_caps_unknown": unknown} if unknown else {})
         return caps
+
+    async def _admit_replan(self, live, hold: dict, principal_id: str) -> None:
+        """The operator-confirmed replan path only (``confirm_replan``): the D-763 10 (c) capability checks as
+        at a start, then the switch; a changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``).
+        The AI path (``_ai_confirm``) calls ``_caps_checks`` and ``_pose_checks`` itself. This path runs no
+        ``_pose_checks``; that gap predates D-763 10 (c) and is not closed here."""
+        active = self._store.active()
+        if active is not None and active[0] == hold["map_version"]:
+            await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
+                                    detail=live.view["detail"])
+        self._apply_replan(live, hold, principal_id)
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):
         """D-494 start checks on line following and the map pose: ``(pose, enable)`` or ``TripError``.
