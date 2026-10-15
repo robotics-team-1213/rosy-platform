@@ -66,3 +66,10 @@ def test_disconnected_or_changed_frame_closes_device_for_reopen(camera, frame):
 def test_numeric_device_selection_is_refused_before_open():
     with pytest.raises(ValueError, match="persistent"):
         selected_device("/dev/video2")
+
+
+def test_unplugged_persistent_device_is_retryable(monkeypatch):
+    monkeypatch.setattr("omx_adapter.camera_source.Path.is_symlink", lambda path: False)
+    monkeypatch.setattr("omx_adapter.camera_source.Path.exists", lambda path: False)
+    with pytest.raises(OSError, match="unavailable"):
+        selected_device("/dev/v4l/by-id/unplugged-camera")
