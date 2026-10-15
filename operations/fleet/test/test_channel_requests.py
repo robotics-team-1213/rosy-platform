@@ -157,7 +157,7 @@ def test_evidence_producer_credential_cannot_be_transport_key(tmp_path, service_
     with pytest.raises(ValueError, match="isolated"):
         install_channel_feature(
             client.app, config=config, task_service=tasks,
-            principals={}, site_logins={}, require_operator=None, read_guard=[],
+            principals={}, site_logins={}, require_operator=None, require_named_operator=None, read_guard=[],
             console=client.app.state.console, existing_tokens=(), secret_owners=())
     assert not hasattr(client.app.state, "channel_requests")
 
@@ -180,7 +180,7 @@ def test_bot_token_file_is_optional_private_and_isolated(tmp_path, kind):
     with pytest.raises(ValueError) as error:
         install_channel_feature(
             client.app, config=config, task_service=tasks, principals={}, site_logins={},
-            require_operator=None, read_guard=[], console=client.app.state.console,
+            require_operator=None, require_named_operator=None, read_guard=[], console=client.app.state.console,
             existing_tokens=(), secret_owners=())
     assert token not in str(error.value) and KEY not in str(error.value)
     assert not hasattr(client.app.state, "channel_requests")
