@@ -99,8 +99,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · uncommitted · D-763 조각 7: 작업의 운행 단계가 Step 원장 안의 trip이 된다
 - 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
 - 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
 - 2026-10-15 · ca386fb1a · 크기: trip 시작 검사를 단위 `server/trip_checks`로, 신호 구간 걷기를 그 옆으로
 - 2026-10-15 · uncommitted · D-763 10항 (c) 독립 검토 반영: 운영자 재계획·다음 바퀴·잘못된 값·지난 경고
-- 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)

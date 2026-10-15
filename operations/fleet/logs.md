@@ -3854,3 +3854,11 @@
 - gate 변화: 없음.
 - 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
 - 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 조각 7: 작업의 운행 단계가 Step 원장 안의 trip이 된다
+
+- 변경: Step 원장 CHECK가 등록부의 종류가 되었다(사용자 결정 2026-10-15 "작게 풀고 진행"). 표 정의는 `work/step_ledger_schema.py`에 있고, CHECK가 다른 표는 행을 그대로 두고 다시 만든다. 이관 버전은 2다. 등록부에 `TRIP`(한 사람 승인, SIM 전용)을 더했다. `JobTripSteps`(`missions/job_trip_steps.py`)가 단계마다 `trip_routes` `plan`으로 계획하고 `TripRunner.start(job_id=)`로 시작한다. `arrived`만 다음 단계로 간다. 나머지는 HOLD, lease 놓기, 사건 하나다(사건은 누가 쓴 HOLD든 tick이 연다). 원장 행은 `ledger/job_trip_rows.py`, 입구 `POST /api/fleet/trip-jobs`는 `trips/trip_job_routes.py`에 있다. 독립 안전 검토 지적 1–6·8–10을 고쳤다: lease를 잃은 표시, 비상 정지에서 lease 놓기, start token, 모든 HOLD에 사건, `stop_job`이 단계 trip을 끝냄, 이관 버전. SIM에서 찾은 trip 사이 넘겨받기도 고쳤다(`trip_progress.inherited_stop`, `TripRunner.held_stops`, `_core_busy`를 `TripProgress`로 옮김). 이어진 독립 검토 세 번의 지적도 고쳤다: E-stop epoch를 lease 전에 읽음, 넘겨받은 정지는 한 번만 쓰고 멈춤이나 E-stop이 지움, 행이 없을 때는 표시를 지우지 않음, 사건 중복 방지, 프로필이 닫히면 HOLD, Cell 재개 이벤트의 `approvals`.
+- 증거: 원격 pytest(X:/DevTemp/job-trip-steps/held, fix3, fleet2, arch2, gateway2). AI PC Gazebo s7-1·s7-2·s7-3에서 두 단계가 모두 달려 `arrived`, `GOAL_CONFIRMED`, lease 풀림(X:/DevTemp/job-trip-steps/sim/s7-1). 크기: fleet 31,884 → 31,873, ledger 2,018, missions 2,704, work 188, trips 2,354, trip_checks 342, trip_progress 153, `trip_runner.py` 894.
+- gate 변화: SIM(한 번, 2대 Gazebo). 장치는 하지 않았다.
+- 결정: D-763 2026-10-15 부기(조각 7), D-420 2026-10-15 부기.
+- 교훈: 차로 `arrived`는 CORE에 쥔 정지를 남긴다. 연이은 trip은 처음부터 그 정지를 넘겨받아야 한다. 같은 fence에서 다시 승인하면 이벤트가 중복으로 지워지므로, 원장 이벤트 수로 재승인을 셀 수 없다.
