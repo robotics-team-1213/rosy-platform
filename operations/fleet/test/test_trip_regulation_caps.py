@@ -11,7 +11,7 @@ import sys
 import pytest
 
 from fleet.server.console_view import trip_caps
-from fleet.server.trip_admission import crosswalks_on
+from fleet.server.trip_admission import crosswalks_on, signals_on
 from fleet.server.trip_runner import TripError
 from fleet.site_map import SiteMap, from_lane_graph
 from test_lane_traffic import START_N, _s_of, _trip
@@ -122,3 +122,14 @@ def test_the_next_lap_is_checked_on_its_own_segments(monkeypatch):
     monkeypatch.setattr(module, "carry_on", lambda *_args: None)
     run(runner._next_lap(live, 0))
     assert checked == [body["segments"]]
+
+def test_signals_on_walks_the_same_spans_as_signal_refusal():
+    """``signals_on`` copies ``TrafficService.signal_refusal``'s span walk (and reads its private table);
+    on the same route both name the same crossed signals, and neither names one without signals."""
+    route = [{"edge_id": "east", "forward": True}, {"edge_id": "ring_n", "forward": True}]
+    runner, _store, _fleet, _entries = test_traffic_signals._setup()
+    assert signals_on(runner.traffic, route) == ["sig"]
+    assert runner.traffic.signal_refusal(route, "hold_back") == (
+        "TRIP_SIGNAL_NEEDS_AUTHORITY", {"signals": signals_on(runner.traffic, route)})
+    runner, _store, _fleet, _entries = test_traffic_signals._setup(plans=[])
+    assert signals_on(runner.traffic, route) == [] and runner.traffic.signal_refusal(route, "hold_back") is None
