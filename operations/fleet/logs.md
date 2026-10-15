@@ -3853,6 +3853,8 @@
 - 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
 - gate 변화: 없음.
 - 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
+- 교훈: 없음.
+
 ## 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
 
 - 변경: `server/console/console_view.py` `TripCaps.lane_instruction_stamp`. `server/trips/trip_runner.py` trip 능력 보기에 그 키(기존 줄 안, 901줄 그대로). `server/trips/trip_ports.py`: 능력이 참이고 이 걸음의 자세에 odom stamp(`live.at_stamp`)가 있으면 교차로·굽이 필드에 `pose_stamp`(= `map_entry.odom_stamp_s`), 굽이 앞당김 0, `_pose_tol`에서 읽기→전송·`SEND_ALLOWANCE_S` 항 제외(자세 나이·dead reckoning·드리프트는 남음). 600줄 그대로(주석을 줄였다). 능력이 없는 로봇은 그대로.
@@ -3860,6 +3862,7 @@
 - gate 변화: 없음.
 - 결정: D-767 A부 4항. `bend_send_s`는 능력 없는 로봇에 그대로 쓴다.
 - 교훈: 없음.
+
 ## 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
 
 - 변경: `server/trips/trip_runner.py` `_send`: `INSTRUCTION_STAMP_UNUSABLE`을 `JUNCTION_ODOM_STALE`처럼 다음 주기에 새 자세로 다시 보낸다. `detail.reason`이 `disabled`이면 그 trip의 `caps.lane_instruction_stamp`를 거짓으로 고쳐 다음부터 stamp 없이 앞당김을 넣는다. 901줄 그대로(`_step_free`의 한 번 쓰는 `arc` 지역 변수를 없앴다). `trip_ports.py`: `pose_stamp`는 창 있는 교차로 지시와 굽이에만. 600줄 그대로.
@@ -3867,6 +3870,7 @@
 - gate 변화: 없음.
 - 결정: D-767 개정 2.
 - 교훈: 없음.
+
 ## 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
 
 - 변경: `server/trips/trip_runner.py` `_send`: `detail.junction_retry` = 코드와 `detail.reason`(예: `INSTRUCTION_STAMP_UNUSABLE no_sample`). 901줄 그대로.
