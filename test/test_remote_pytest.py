@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import shlex
+import threading
 import time
 import shutil
 import sys
@@ -380,32 +381,93 @@ def test_timeout_is_a_failed_step(monkeypatch):
     assert rp.remote("h", "true", timeout=1).returncode == 124
 
 
-def test_several_invocations_spread_over_every_reachable_host(monkeypatch, tmp_path):
+def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
+    """run() over fake hosts: setup succeeds (venv fails on venv_fails), job(host, inv) is one pytest."""
     seen = []
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
-    monkeypatch.setattr(rp, "probe", lambda h: None if h == "down@3" else host())
-    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2 down@3")
-    monkeypatch.setattr(rp, "run_on", lambda host, invs, logs, *rest: [seen.append((host, inv)) or len(inv[0])
-                                                                       for inv in invs])
+    monkeypatch.setattr(rp, "probe", lambda h: None if h.startswith("down") else host())
+    monkeypatch.setenv("ROSY_TEST_HOSTS", " ".join(hosts))
+    monkeypatch.setattr(rp, "ship", lambda *a: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda h, script, *a, **kw: subprocess.CompletedProcess(
+        [], 1 if script == rp.VENV and h in venv_fails else 0, b"", b""))
+
+    def run(h, name, k, log, job_args, inv, *a):
+        seen.append((h, inv[0]))
+        code = job(h, inv[0])
+        log.write_bytes(b"")
+        return code
+    monkeypatch.setattr(rp.remote_job, "run", run)
+    return seen
+
+
+def test_several_invocations_spread_over_every_reachable_host(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2", "down@3"], lambda h, path: len(path))
     invocations = [["x"], ["yy"], ["zzz"]]
     codes = rp.run(invocations, [tmp_path / f"{i}.txt" for i in range(3)], repo=tmp_path)
     assert codes == [1, 2, 3], "codes come back in invocation order"
-    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["zzz"]), ("b@2", ["yy"])]
+    assert sorted(p for _, p in seen) == ["x", "yy", "zzz"] and {h for h, _ in seen} <= {"a@1", "b@2"}
 
 
 def test_a_host_that_fails_setup_hands_its_share_to_a_working_host(monkeypatch, tmp_path):
-    seen = []
-    monkeypatch.setattr(rp, "git", lambda repo, *args: str(tmp_path) if "--show-toplevel" in args else "ab" * 20)
-    monkeypatch.setattr(rp, "probe", lambda h: host())
-    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2")
-
-    def run_on(host, invs, logs, *rest):
-        if host == "b@2":
-            raise SystemExit("venv setup failed")
-        return [seen.append((host, inv)) or 0 for inv in invs]
-    monkeypatch.setattr(rp, "run_on", run_on)
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path: 0, venv_fails={"b@2"})
     assert rp.run([["x"], ["y"]], [tmp_path / "1.txt", tmp_path / "2.txt"], repo=tmp_path) == [0, 0]
-    assert sorted(seen) == [("a@1", ["x"]), ("a@1", ["y"])]
+    assert sorted(seen) == [("a@1", "x"), ("a@1", "y")]
+
+
+def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path):
+    # Fixed k % n gave slow@2 items 1 and 3, so fast@1 could finish only 3 and slow@2 timed out waiting.
+    slow_started, released, fast_done = threading.Event(), threading.Event(), []
+
+    def job(h, path):
+        if h == "slow@2":
+            slow_started.set()
+            assert released.wait(10), "the fast host did not take the rest of the queue"
+        else:
+            assert slow_started.wait(10)
+            fast_done.append(path)
+            if len(fast_done) == 4:
+                released.set()
+        return int(path)
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["fast@1", "slow@2"], job)
+    codes = rp.run([[str(i)] for i in range(5)], [tmp_path / f"{i}.txt" for i in range(5)], repo=tmp_path)
+    assert codes == [0, 1, 2, 3, 4]
+    assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
+
+
+def test_an_invocation_that_fails_mid_run_is_retried_on_another_host_and_a_lost_one_is_not(monkeypatch, tmp_path):
+    failed = []
+
+    def job(h, path):
+        if path == "boom" and not failed:
+            failed.append(h)
+            raise SystemExit("ssh died")  # neither an exit code nor Lost: that host is out
+        if path == "gone":
+            raise rj.Lost("lost contact with " + h)
+        return 0
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], job)
+    order = ["boom", "x", "y", "z"]
+    codes = rp.run([[p] for p in order], [tmp_path / f"{p}.txt" for p in order], repo=tmp_path)
+    assert codes == [0, 0, 0, 0]
+    boom = [h for h, p in seen if p == "boom"]
+    assert len(boom) == 2 and boom[0] == failed[0] != boom[1]  # retried once, on the other host
+    assert sorted(p for _, p in seen if p != "boom") == ["x", "y", "z"]  # nothing dropped or run twice
+    # A lost invocation keeps running on its host: 255, never rerun elsewhere (no double count).
+    seen.clear()
+    codes = rp.run([["gone"], ["x"]], [tmp_path / "g.txt", tmp_path / "x2.txt"], repo=tmp_path)
+    assert codes == [rj.LOST_EXIT, 0] and [p for _, p in seen].count("gone") == 1
+
+
+def test_largest_test_files_are_queued_first(tmp_path):
+    (tmp_path / "big.py").write_text("x" * 100)
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "a.py").write_text("x" * 30)
+    (tmp_path / "d" / "b.py").write_text("x" * 30)
+    assert rp.cost(tmp_path, [rp.BROWSER_ENV, "big.py::test_t", "-q"]) == 100
+    assert rp.cost(tmp_path, ["d"]) == 60 and rp.cost(tmp_path, ["missing.py"]) == 0
 
 
 class FakeJobHost:
