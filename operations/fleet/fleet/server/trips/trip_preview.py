@@ -9,7 +9,7 @@ import logging
 import os
 import time
 
-from core_common.robot_body import PINKY_PRO
+from core_common.robot_body import nominal_body_for
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import exit_segment, lane_action, turn_target
 from fleet.server.trip_ports import MAX_EXPECT_IN_M, bend_geometry, line_past, next_bend
@@ -33,8 +33,8 @@ def build(live, active, approaches: dict, traffic, routing, config):
     index, events, reach = live.at[0], [], reach if view.get("traffic_authority") == "core" else None
     route = [(segs[0]["s_from"] + live.progress(i, g["s_from"]), live.arc(i), g["s_from"]) for i, g in enumerate(segs)]
     end = route[-1][0] + segs[-1]["s_to"] - segs[-1]["s_from"]
-    speed = (view.get("caps") or {}).get("max_speed") or 0.0
-    room = max(0.0, (front if reach is None else reach) - front) + PINKY_PRO.stop_gap_m(speed)
+    speed, body = (caps := view.get("caps") or {}).get("max_speed") or 0.0, nominal_body_for(caps.get("kind"))
+    room = max(0.0, (front if reach is None else reach) - front) + (body.stop_gap_m(speed) if body else 0.0)
     horizon = max(0.0, min(MAX_EXPECT_IN_M, end - front, max(room, speed * LEASE_S)))
     for k in [k for k in range(index, len(segs)) if route[k][0] <= front + horizon]:
         (base, arc, lo), hi, place, last = route[k], segs[k]["s_to"], live.place(k), k == len(segs) - 1
