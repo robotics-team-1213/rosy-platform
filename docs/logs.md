@@ -8494,3 +8494,9 @@ osy-d395-s1d\`.
 - Evidence: 0bc2a16c1 remote regression: 117 passed, terminal exit 0, NEW 0. Live intake, model quality, signed admission, ROS-SIM and device readback remain separate. This branch is separate from shared main.
 - Gate: unchanged. The inventory is a source audit, not runtime or physical acceptance.
 - Final evidence: 30b06737a remote regression: 273 passed, terminal exit 0, NEW 0. Earlier broad affected checkpoint: 6278 passed, 330 skipped and 3 format/size failures, all rechecked passing in the final regression. Local lint exit 0, errors 0, drift warnings 29. No whole-platform acceptance claim.
+
+## 2026-10-15 · dbe5db55b · OMX 관측 경로 복구와 운용 경계
+
+- 변경: docs/plans/2026-10-15-omx-camera-recovery.md에 두 카메라 복구·독립 검토·실제 추론·미완료 연결을 기록했다. 오래된 장치 미연결 blocker를 실제 USB 관측과 미수용 항목으로 바로잡았다.
+- 증거: adapter/배치 원격 526 passed·7 skipped, Fleet OMX 계약 37 passed, NEW 0. 현재 두 영상으로 AI PC 고정 모델에 단일 관측 질의 성공. 장치 명령·외부 메시지 없음.
+- gate 변화: 없음. Fleet의 실제 OMX owner 연결·실측 보정·관절/그리퍼/정지 수용은 남아 있다. 천장/Pinky 입력을 OMX로 대체하지 않았다.
