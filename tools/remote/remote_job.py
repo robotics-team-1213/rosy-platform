@@ -24,7 +24,7 @@ BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
 CALL_TIMEOUT = 60
 
-# $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then pytest args.
+# $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
 JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.lock
 echo "$$ pytest 2 6" > "$L"; echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
@@ -33,6 +33,11 @@ echo $c > "$D/$K.rc.tmp"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"; rm -f "$L"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
 shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
+# Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
+while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
+# Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
+[ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
+  > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@"

@@ -75,7 +75,7 @@ class TripLease:
         job = self.jobs.get(robot_id)
         if job is not None:  # D-763 6: only that job's own step adopts its lease; any other start is refused
             if view.get("job_id") != job.view["job_id"] or job.view["lease"]["state"] != HELD:
-                raise TripError(409, "TRIP_ROBOT_BUSY", {"job_id": job.view["job_id"]})
+                raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             return job.view["lease"]
         if not self.required:
             return None
