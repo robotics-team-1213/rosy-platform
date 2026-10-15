@@ -841,7 +841,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             require_proposer=require_proposer, read_guard=read_guard, operator_guard=operator_guard)
         from fleet.server.cell_job_routes import install_cell_job_routes
 
-        install_cell_job_routes(app, cell_job_store=cell_job_store,
+        install_cell_job_routes(app, cell_job_store=cell_job_store, proposal_store=proposal_store,
+                                require_viewer=require_viewer,
                                 require_named_operator=require_named_operator,
                                 operator_guard=operator_guard, read_guard=read_guard)
 
