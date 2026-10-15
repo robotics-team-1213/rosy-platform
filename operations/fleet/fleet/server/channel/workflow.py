@@ -155,7 +155,8 @@ class ChannelWorkflow:
             return self._view(conn, receipt)
 
 
-def install_workflow_routes(app, workflow, *, require_operator, read_guard, task_service=None, console=None):
+def install_workflow_routes(app, workflow, *, require_operator, require_named_operator, read_guard, task_service=None,
+                            console=None):
     @app.get('/api/fleet/channel-requests/{request_id}/review', dependencies=read_guard,
              response_model=ChannelWorkflowView, tags=['fleet-work'])
     def read_review(request_id: str, principal=Depends(require_operator)):
@@ -173,7 +174,8 @@ def install_workflow_routes(app, workflow, *, require_operator, read_guard, task
 
     @app.post('/api/fleet/channel-requests/{request_id}/submit', dependencies=read_guard,
               response_model=ChannelWorkflowView, tags=['fleet-work'])
-    async def submit_request(request_id: str, body: ChannelSubmitRequest, principal=Depends(require_operator)):
+    async def submit_request(request_id: str, body: ChannelSubmitRequest,
+                             principal=Depends(require_named_operator)):  # a Task moves a robot, as /goal
         if task_service is None:
             raise HTTPException(503, detail='CHANNEL_TASK_SERVICE_REQUIRED')
         snapshot = workflow.read(request_id, principal.principal_id)
