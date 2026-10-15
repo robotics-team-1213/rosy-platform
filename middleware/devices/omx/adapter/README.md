@@ -83,6 +83,25 @@ immutable artifact provenance, target-host timing, selected-device identity,
 physical stop/recovery, and measured camera format/FPS/drop/latency evidence
 exist.
 
+## Measured hardware document validation (D-496)
+
+From an installed adapter environment, run
+`python -m omx_adapter.hardware_profile <private-measured-profile.yaml>`.
+This checks the draft `rosy.omx-hardware-profile.v1` document's required fields,
+ordered joint1 through joint5 (rad, rad/s, rad/s²), gripper range and preload,
+jaw/workspace geometry, positive timing/power values, persistent serial path
+syntax, and matching measurement-date/evidence-path syntax. Duplicate YAML
+keys, unknown fields, missing measurements and non-finite values are rejected.
+It reads only the supplied file; it does not resolve/open the serial device.
+
+Exit 0 means **document consistency only**. `motion_admitted` is always false.
+The referenced evidence is not authenticated or read; values copied from SIM
+and relabelled as hardware cannot be detected by this structural check. Physical
+identity, real measurements, independent stop, calibration, payload, recovery,
+and binding to an accepted runtime still require independent acceptance. The
+validator is not connected to a command owner and does not enable the disabled
+profile. Keep actual device identities and filled measurements in `private/`.
+
 ## D-442 owner HOLD recovery
 
 Simulation CellOwner optionally exposes GetOwnerState and RecoverOwner on the existing

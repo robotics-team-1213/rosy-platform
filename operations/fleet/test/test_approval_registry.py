@@ -267,3 +267,43 @@ def test_rejecting_channel_linked_work_replies_to_the_requester(tmp_path, kind):
         workflow = conn.execute("SELECT state FROM fleet_channel_workflow WHERE work_id=?", (work_id,)).fetchone()
     assert [tuple(row) for row in rows] == [(f"{kind.upper()}:{status}", "PENDING")]
     assert workflow[0] == "LINKED"  # the relation is final; the outcome travels as the reply
+
+
+def test_admit_and_reject_answers_never_name_the_cell_proposer(tmp_path):
+    """Security review L1: the decision answer is another door to the Cell Job; same redaction."""
+    from test_cell_job_api import _candidate as cell_candidate
+    client, tasks = _app(tmp_path)
+    job = _resolved(client, "cell-secret", cell_candidate())
+    second = _resolved(client, "cell-secret", cell_candidate(), key="req-2")
+    generation = _generation(tasks)
+    rejected = _post(client, f"/api/fleet/missions/{second}/reject", "op1-secret", {"expected_generation": generation})
+    assert rejected.status_code == 200 and "cell-service" not in rejected.text
+    assert "proposal_principal_id" not in rejected.json()["mission"]
+    admitted = _post(client, f"/api/fleet/missions/{job}/admit", "op1-secret", {"expected_generation": generation})
+    assert admitted.status_code == 200, admitted.text
+    assert "proposal_principal_id" not in admitted.json()["mission"] and "cell-service" not in admitted.text
+
+
+def test_resource_claims_show_owners_only_to_who_may_see_them(tmp_path):
+    """Security review L2: viewers see what is held; a legacy Mission's owner id only its own proposer sees.
+
+    The operator's full Cell Job row is test_cell_job_recovery's claims test (the two would share omx_01).
+    """
+    client, tasks = _app(tmp_path)
+    mission = _resolved(client, "op1-secret", _er2_candidate())
+    assert _post(client, f"/api/fleet/missions/{mission}/admit", "op1-secret",
+                 {"expected_generation": _generation(tasks)}).status_code == 200
+
+    def claims(token):
+        response = client.get("/api/fleet/resource-claims", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200, response.text
+        return {(claim["resource_kind"], claim["resource_id"]): claim for claim in response.json()["claims"]}
+
+    purges = []
+    client.app.state.proposal_store.purge_expired = lambda **kwargs: purges.append(kwargs) or 0
+    shown, own, other = claims("viewer-secret"), claims("op1-secret"), claims("op2-secret")
+    assert purges == []  # N1: a poll of three legacy rows takes no write lock
+    assert set(shown) == set(own) == set(other) and ("object", "block-1") in shown
+    assert all(set(claim) == {"resource_key", "resource_kind", "resource_id", "phase"} for claim in shown.values())
+    assert own[("object", "block-1")]["owner_id"] == mission
+    assert set(other[("object", "block-1")]) == set(shown[("object", "block-1")]) and mission not in str(other)

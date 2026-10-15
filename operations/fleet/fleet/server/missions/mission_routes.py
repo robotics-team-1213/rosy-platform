@@ -200,6 +200,15 @@ def _stable_resolution(value: Mapping) -> str:
                       allow_nan=False)
 
 
+def redact_cell_job(job: dict | None, principal: SitePrincipal) -> dict | None:
+    """A Cell Job as this reader sees it: only the proposer sees the proposer's identity (D-763 4 / rev 2 Q6)."""
+    if job is None or job["proposal_principal_id"] == principal.principal_id:
+        return job
+    proposer = job["proposal_principal_id"]
+    return {**{key: value for key, value in job.items() if key != "proposal_principal_id"}, "events": [
+        {**e, "actor_id": "proposer"} if e["actor_id"] == proposer else e for e in job.get("events", [])]}
+
+
 def _require_cell_role(candidate: Mapping, principal: SitePrincipal) -> bool:
     """Only the service principal proposes a Cell Job, and it proposes nothing else."""
     cell = candidate.get("kind") == "cell_job"
@@ -264,22 +273,30 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
             "reason": proposal["reason"], "expires_at": proposal["expires_at"],
         }, "physical_submission": "NOT_CONNECTED"}
 
+    def cell_job_view(proposal: dict, principal: SitePrincipal) -> tuple[bool, dict | None]:
+        """Whether this reader may see a Cell Job proposal, and its job as that reader sees it (None before resolve)."""
+        job = cell_job_store.get(proposal["proposal_id"]) if cell_job_store is not None else None
+        if proposal["principal_id"] == principal.principal_id:
+            return True, job
+        try:  # D-763 4 / rev 2 Q6: the work list's scope; another's PROPOSED job only to a named operator
+            seen = principal.permits_site("fleet.operate", {"operator"}) and (
+                job is not None and job["status"] != "PROPOSED" or bool(require_named_operator(principal)))
+        except HTTPException:
+            seen = False
+        return seen, redact_cell_job(job, principal) if seen else job
+
     @app.get("/api/fleet/proposals/{proposal_id}", dependencies=read_guard,
              tags=["fleet-missions"])
     def fleet_proposal_read(proposal_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
-        proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
-        if proposal is None and principal.permits_site("fleet.operate", {"operator"}):
-            candidate_proposal = proposal_store.get(proposal_id)
-            if (candidate_proposal is not None
-                    and candidate_proposal["candidate"].get("kind") == "cell_job"):
-                proposal = candidate_proposal
-        if proposal is None:
-            raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
-        if proposal["candidate"].get("kind") == "cell_job":
-            return _mission_candidate_result(proposal, cell_job_store.get(proposal_id))
-        mission = mission_service.get(proposal_id)
-        return _mission_candidate_result(proposal, mission)
+        proposal = proposal_store.get(proposal_id)
+        if proposal is not None and proposal["candidate"].get("kind") == "cell_job":
+            seen, job = cell_job_view(proposal, principal)  # the Cell Job detail's scope, not a second door
+            if seen:
+                return _mission_candidate_result(proposal, job)
+        elif proposal is not None and proposal["principal_id"] == principal.principal_id:
+            return _mission_candidate_result(proposal, mission_service.get(proposal_id))
+        raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
 
     @app.post("/api/fleet/proposals/{proposal_id}/resolve",
               dependencies=[Depends(require_proposer)],
@@ -346,18 +363,11 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
     def fleet_cell_job_read(mission_id: str,
                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
         proposal = proposal_store.get(mission_id)
-        job = cell_job_store.get(mission_id) if cell_job_store is not None and proposal is not None else None
-        own = job is not None and proposal["principal_id"] == principal.principal_id
-        try:  # D-763 4 / rev 2 Q6: the work list's scope; another's PROPOSED job only to a named operator
-            seen = own or job is not None and principal.permits_site("fleet.operate", {"operator"}) and (
-                job["status"] != "PROPOSED" or bool(require_named_operator(principal)))
-        except HTTPException:
-            seen = False
-        if not seen or proposal["candidate"].get("kind") != "cell_job" or proposal["state"] != "RESOLVED":
+        if proposal is None or proposal["candidate"].get("kind") != "cell_job" or proposal["state"] != "RESOLVED":
             raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
-        if not own:  # the proposer's identity never reaches another reader; the plan stays (detail scope)
-            job = {**{key: value for key, value in job.items() if key != "proposal_principal_id"}, "events": [
-                {**e, "actor_id": "proposer"} if e["actor_id"] == job["proposal_principal_id"] else e for e in job["events"]]}
+        seen, job = cell_job_view(proposal, principal)
+        if not seen or job is None:
+            raise HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
         return {"proposal_id": mission_id, "proposal_state": proposal["state"], "job": job}
 
     @app.get("/api/fleet/missions/{mission_id}", dependencies=read_guard,
@@ -462,7 +472,8 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                 "code": "CELL_JOB_ADMISSION_REFUSED" if cell else "MISSION_ADMISSION_REFUSED",
                 "message": str(exc)}) from exc
         return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
-                "mission": admitted, "physical_submission": "NOT_CONNECTED"}
+                "mission": redact_cell_job(admitted, principal) if cell else admitted,
+                "physical_submission": "NOT_CONNECTED"}
 
     @app.post("/api/fleet/missions/{mission_id}/reject", dependencies=operator_guard,
               tags=["fleet-missions"])
@@ -470,7 +481,8 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                              principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         """D-763 5b: the proposer withdraws, another operator rejects; nothing is claimed."""
         proposal, _, _ = decidable(mission_id, principal)
-        reject = (cell_job_store.cancel if proposal["candidate"].get("kind") == "cell_job"
+        cell = proposal["candidate"].get("kind") == "cell_job"
+        reject = (cell_job_store.cancel if cell
                   else mission_service.store.reject)
         decision = ("WITHDRAWN_BY_PROPOSER" if proposal["principal_id"] == principal.principal_id
                     else "REJECTED_BY_OPERATOR")
@@ -481,6 +493,6 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
             raise HTTPException(status_code=409, detail={"code": "MISSION_REJECT_REFUSED",
                                                          "message": str(exc)}) from exc
         return {"proposal": _mission_candidate_result(proposal, rejected)["proposal"],
-                "mission": rejected, "decision": decision}
+                "mission": redact_cell_job(rejected, principal) if cell else rejected, "decision": decision}
 
     return fleet_proposal_create, fleet_proposal_resolve, fleet_mission_admit
