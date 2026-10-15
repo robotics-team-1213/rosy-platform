@@ -17,6 +17,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | File | Description |
 |------|-------------|
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
+| `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
 | `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |

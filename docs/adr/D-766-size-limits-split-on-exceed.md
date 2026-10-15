@@ -182,4 +182,29 @@ main `c1def3006`, `_over_budget()` 그대로. 이 62개가 4항의 ratchet 대�
 | 8. `test_module_structure.py` 변경은 한산한 시간의 착지 창 하나, 진행 중 브랜치는 옛 규칙 | Decision 6항, 7(a) 머리 |
 | Status | Proposed → Accepted, Log 행 같이 |
 
+### 덧붙임 — 7(a) 구현 (2026-10-15)
+
+7(a)를 만들면서 바꾸거나 정한 것이다. 결정 1–8항은 그대로다.
+
+- **단위 목록도 데이터 파일이다.** 5항은 `SIZE_UNITS`를 시험 안에 남긴다고 했다. 구조 검토(architecture review)가 단위 등록도 FULL 착지가 되지 않게 하자고 제안해서, 단위는 `test/architecture/size_units.txt`(`<경로>` 또는 `<경로> small`)에 두고 `NOT_TRIGGERS`에 넣었다. `small` 표시가 `SMALL_UNITS`다(오늘 25개). 검사: 단위는 `__init__.py` 하위 패키지이거나 선언된 보관 자리여야 하고, 줄을 세며, 부모가 2,000줄 이상이면 1,000줄 이상이다. `small` 표시는 기점보다 늘지 않고, 1,000줄을 넘으면 지운다.
+- **보관 자리 인정을 넓혔다.** `FLEET_SERVER_HOLDER_UNITS`(5항 「남긴다」) 대신 `fleet/_source_layout.py`의 `SERVER_HOLDERS`, `control/_source_layout.py`의 `PACKAGE_DIRS`/`FLAT_ROOTS`/`CONTROL_ROOTS`, 패키지 CMake의 `install(DIRECTORY …)` 폴더를 모두 보관 자리로 본다.
+- **세는 규칙은 `tools/harness/size_limits.py`에 있다.** 시험과 범위 검사(`size_range.py`)가 같은 함수를 부른다. main `3906def17`에서 옛 `_over_budget()`과 같은 결과(넘은 것 62개, 단위 줄 수 같음)를 냈다.
+- **기점.** `ROSY_SIZE_BASE`, `main`과의 merge-base, `origin/main`과의 merge-base 가운데 `size_ratchet.txt`가 있는 가장 새 것, 없으면 그것이 있는 가장 가까운 첫 부모 조상이다. git 기록이 없으면 시험이 실패한다(건너뛰지 않는다). 기점에 있던 `safety` 행은 바꿀 수 없다(갱신 없음).
+- **순수 이동은 행을 옮긴다.** 4항의 "새 행 금지"에 예외를 하나 더 둔다. 같은 변경에서 같은 종류(파일 또는 단위)의 기점 행 하나가 없어지고 새 행이 그 값 이하이면 이름 바꿈으로 본다. 묶인 파일(예: `proposal_store.py` 797줄)을 새 보관 자리로 옮기는 순수 이동이 이 길로 된다. 독립 검토가 제안했다.
+- **`safety` 행에서 커밋 칸을 뺐다.** 7(a) 3번의 형식은 `safety <줄 수> <경로> <만료일> <커밋>`이지만, 행을 더하는 커밋은 자기 해시를 적을 수 없다. 형식은 `safety <줄 수> <경로> <만료일>`이고, 검사가 `git log -S`로 그 행을 더한 커밋을 찾아 trailer와 날짜를 본다.
+- **범위 검사(7(a) 5번).** `tools/harness/size_range.py BASE HEAD`는 커밋마다 git으로 트리를 재고 그 커밋의 표와 비교하며, 그 커밋이 건드린 파일·단위·행만 보고한다. `tools/hooks/pre-push`와 CI(Safety-Review 단계 옆, 같은 범위)가 돌린다. `tools/land.py`(588줄)에 걸면 600줄을 넘으므로 걸지 않았다.
+- **이동 검사(7(a) 4번).** `split_check.py`는 바뀐 `.py` 파일의 정의를 `ast.dump`로 비교하고(한 기점 파일에서 온 정의는 순서도 같아야 한다), 문자열 상수는 이름별로 값이 같아야 하며(경로 모양만 바뀔 수 있다), import는 이름 → 대상으로 비교한다(새 대상은 옮긴 파일 집합 안만). `.py`가 아닌 파일이 바뀌면 순수 이동이 아니다.
+- **변이 증명(7(a) 6번)은 `test/test_size_limits.py`다.** 새 초과, 묶인 것 1줄 증가, 표 값 올리기, 표가 잰 값보다 높음, 새 행, 바닥 아래 새 단위, 만료된·trailer 없는·+30 넘는 안전 초과, 넘긴 뒤 나눈 커밋 순서가 각각 적색이다.
+- **관문 경로 제안(4항)은 아직이다.** `test_module_structure.py`와 `tools/harness/size_limits.py`를 D-762 단계 3 관문 목록에 더하는 것은 따로 승인받는다.
+
+### 덧붙임 — 세지 않던 루트와 `.kt` (2026-10-15)
+
+modularization 계획의 열린 항목(검토 지적 8)을 닫는다. 결정 1–8항은 그대로다.
+
+- **모든 생산 코드를 센다.** colcon 루트와 운영 루트 아래 추적되는 코드 파일(`.py`/`.cpp`/`.hpp`/`.sh`/`.kt`, `.js`/`.mjs`/`.ts`/`.html`/`.css`)은 패키지, 단위, 운영 루트 가운데 하나가 센다. `test_every_product_code_file_is_measured`가 이것을 보고, 예외는 `SIZE_UNMEASURED`(이유 필수, 오늘 비어 있다)다.
+- **Kotlin은 600줄이다.** 1항의 제품 파일 한도를 그대로 쓴다. `.mjs`/`.ts`는 웹 자산(800줄)이다.
+- **Fleet 보관 자리는 `fleet/_source_layout.py`의 `SOURCE_ROOTS`와 같다.** `operations/situation`(운영 루트에서 옮김)과 `operations/site_execution`을 더했고, 시험이 두 목록이 같은지 본다. 두 폴더는 자기 단위(`situation` 1,446줄, `site_execution` 1,012줄, 바닥 1,000 이상)로 등록해 `fleet` 행(17,788)이 그대로다.
+- **package.xml 없는 루트는 패키지처럼 센다.** `size_limits.STANDALONE`: pyproject 배포 11개(`contracts/learning`·`motion`·`skill`, `integrations/robots/omx`, `middleware/devices/omx/agent`, `middleware/robot_execution/local`, `middleware/skills/api`·`manipulation`, `operations/apps/fleet`, `operations/processes/palletizing`, `operations/world`)와 Gradle 앱 `operations/site_ui/cam`(`rosy-cam` 9,964줄, 95% 선 위라 더하기 전에 나눈다). `operations/signal_observation`(파일 하나)은 운영 루트다. 운영 루트는 웹 자산도 800줄로 잰다(`learning/curation/perception/review_app_web`).
+- **처음 잰 것의 행은 이 변경에서만 새로 생긴다.** 4항의 "새 행 금지"에 대한 한 번의 예외다. 이 변경으로 처음 잰 파일 가운데 한도를 넘은 것은 `site_ui/cam/.../camera/CameraController.kt` 791줄 하나이고, `size_limits.COVERAGE_ROWS`에 그 값으로 적어 새 행을 허용한다. 그 값 위의 새 행은 적색이고, 목록에 더하려면 검사 자체를 바꿔야 한다(4항). 행이 기점에 들어간 뒤에는 보통 행처럼 내려가기만 한다.
+
 **References:** D-168(P6, Alternatives), D-362, D-430(§5 `Safety-Review:`), D-436(`GUARD_SET`, FULL 트리거), D-753, D-762(단계 3 CODEOWNERS, `merge_group`), D-763, [module split criteria](../plans/2026-09-06-module-split-criteria.md), [file size budget](../plans/2026-09-30-file-size-budget-and-refactor-queue.md), `docs/plans/2026-10-14-fleet-console-size-unit.md`, `docs/plans/2026-10-14-fleet-ledger-size-unit.md`, `test/architecture/test_module_structure.py`, `tools/harness/affected_tests.py`, `tools/harness/safety_review.py`.

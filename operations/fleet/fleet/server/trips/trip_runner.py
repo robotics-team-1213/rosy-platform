@@ -111,6 +111,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
+        self.held_stops: dict[str, tuple] = {}  # robot id -> (seq, place) of the stop its last lane arrival left held
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -153,13 +154,13 @@ class TripRunner(TripAdmission, TripProgress):
 
     # ---- operator actions -------------------------------------------------------------
 
-    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None) -> dict:
+    async def start(self, plan_id: str, principal_id: str, job_id: Optional[str] = None, start_token=None) -> dict:
         row = self._store.plan(plan_id)
         plan = (row or {}).get("result", {}).get("plan")
         if plan is None:
             raise TripError(404, "TRIP_PLAN_UNKNOWN")
         robot_id = row["robot_id"]
-        start_token = self._start_token(robot_id)
+        start_token = self._start_token(robot_id) if start_token is None else start_token  # a job: before its plan
         async with self._lock_for(robot_id):
             if self._store.trip(plan_id) is not None:
                 raise TripError(409, "TRIP_ALREADY_STARTED")
@@ -234,6 +235,7 @@ class TripRunner(TripAdmission, TripProgress):
             if turns:  # D-603: the alignment turns CORE made before this start
                 view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
+            live.inherited = self.held_stops.pop(robot_id, None) if plan["segments"] else None  # D-763 7
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
             self.halts.restarted = [t for t in self.halts.restarted if t["robot_id"] != robot_id]  # this trip owns it
@@ -276,6 +278,7 @@ class TripRunner(TripAdmission, TripProgress):
     def close_all(self, reason: str) -> list[LiveTrip]:
         """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
         self._stop_epoch += 1
+        self.held_stops.clear()  # CORE leaves line following: no arrival stop is held any more
         closed = [live for live in self._live.values() if live.open]
         for live in closed:
             live.view.update(state="canceled", reason=reason)
@@ -577,6 +580,8 @@ class TripRunner(TripAdmission, TripProgress):
         # after the step, so the last place's stop has gone out before "arrived"
         if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane):
             live.view["state"] = "arrived"
+            if lane and (live.sent or {}).get("action") == STOP:
+                self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
             if not lane:
                 self._release_queue(robot_id)
             self._save(live)
@@ -676,13 +681,6 @@ class TripRunner(TripAdmission, TripProgress):
         await self._send(live, index, "bend", bend["place_id"], None, turn_deg=round(bend["turn_deg"], 1),
                          expect=fields)
         return True
-
-    @staticmethod
-    def _core_busy(live: LiveTrip) -> bool:
-        """A new instruction would abort CORE's manoeuvre, or CORE is carrying one out (only our own
-        held replan stop may be replaced)."""
-        state = live.junction.get("state")
-        return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
 
     async def _dismiss_sighting(self, live: LiveTrip, index: int, remaining: float, failed: tuple) -> bool:
         """Map vote (user 2026-10-13): CORE waits at a junction its keeper saw where the map has no
@@ -836,6 +834,7 @@ class TripRunner(TripAdmission, TripProgress):
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
+        self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
         return await self.halts.halt_robot(live.view["robot_id"], live.arc(i).drive_mode == "lane", live.place(i))
 

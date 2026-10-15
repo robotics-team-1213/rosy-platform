@@ -5,6 +5,7 @@ const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", 
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
   CANCELED: "취소", EXPIRED: "만료", CLAIMED: "사건 인수", CLOSED: "사건 종료",
   started: "운행 출발", running: "운행 중", link_wait: "연결 대기", arrived: "도착", stopped: "운행 정지", failed: "운행 실패", canceled: "운행 취소"};
+const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 있는 운영자가 승인", proposer_only: "제안한 사람이 승인", one_person: "한 사람 · 이름 있는 운영자"};
 // D-763 8 — 서버가 준 보이는 상태(읽기 투영). 원장 상태는 상세의 「상태」 그대로다.
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
@@ -52,6 +53,8 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
     field("실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔");
     field("상태", workStatus(row.status));
+    // D-763 7 — the step-kind registry's rule on the work read (PROPOSED rows only); read-only, no approve here.
+    if (row.approval) field("승인 조건", approvals[row.approval] || "승인 조건 확인 필요");
     field("최근 원장 갱신", new Date(row.updated_at).toLocaleString());
     field("사유", row.reason || "기록된 사유 없음");
     field("작업 식별자", row.source_id);
@@ -85,7 +88,7 @@ export function createWorkView({scope, call, el, channelRequestView}) {
     list.replaceChildren();
     for (const row of rows.filter(row => filter === "all" || row.source === filter)) {
       const item = document.createElement("li"), button = document.createElement("ui-button");
-      button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
+      button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");  // toggle: aria-pressed draws the selection
       button.dataset.workKey = workKey(row);
       button.setAttribute("data-work-read", "");
       button.setAttribute("aria-pressed", String(selected === workKey(row)));

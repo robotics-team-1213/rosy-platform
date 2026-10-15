@@ -70,6 +70,21 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `test/` | pytest for geometry, assignment, robots, transport, relay, arming, session, CLI, hub, and the import-boundary check (see `test/AGENTS.md`) |
 | `resource/` | ament index marker `fleet` |
 
+### Size units (D-766)
+
+Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 lines; the rest stays in `fleet`). Paths are relative to the colcon root.
+
+| Unit | Responsibility |
+|------|----------------|
+| `fleet/fleet/server/auth` | Server holder (`SERVER_HOLDERS`, no `__init__.py`): robot enrollment and TLS, pairing, site accounts and users, password and development sessions |
+| `fleet/fleet/server/console` | Server holder: the Fleet console page builders, view, routes and static asset routes (D-430 safety file `console.py`) |
+| `fleet/fleet/server/cell` | Server holder: Rosy Cell app and job store, compiler, goal evidence registry and routes |
+| `fleet/fleet/swarm` | Formation session: robots, transport, relay, arming, anchor (see `fleet/swarm/AGENTS.md`) |
+| `fleet/fleet/routing` | D-489/D-490 route planning on the D-488 site map, standard library only |
+| `decision/src/rosy/decision` | Holder `operations/decision`: proposal-only model adapters (`rosy.decision`) outside its own deliberation/conversation units |
+| `situation` | Holder `operations/situation` (`SOURCE_ROOTS['assessment']`): the D-577 AI PC situation service `rosy_situation` (see its `AGENTS.md`) |
+| `site_execution` | Holder `operations/site_execution` (`SOURCE_ROOTS['execution']`): `rosy.execution.api`/`site` PlanBundle and cell workflow projections (see its `AGENTS.md`) |
+
 ## For AI Agents
 
 ### Working In This Directory

@@ -8,7 +8,7 @@
 
 ## Purpose
 
-D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plans/2026-10-10-fleet-stuck-subpackage.md`). Fleet picks one answer per open lane stuck by fixed rules, or hands it to a human; CORE re-checks every answer (D-407). Own P6 size unit (`SIZE_UNITS` in `test/architecture/test_module_structure.py`).
+D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plans/2026-10-10-fleet-stuck-subpackage.md`). Fleet picks one answer per open lane stuck by fixed rules, or hands it to a human; CORE re-checks every answer (D-407). Own P6 size unit (`test/architecture/size_units.txt`, D-766).
 
 ## Key Files
 

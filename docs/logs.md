@@ -8575,3 +8575,23 @@ osy-d395-s1d\`.
 - 변경: `feat/omx-hardware-server`에서 `register_probe.py`를 추가했다. 확인된 by-id 포트를 독점하고 ID 11..16 PING/READ만 송신한다. 초기화 설정·torque·reboot·goal은 없다. README와 `docs/validation/omx-follower-registers-2026-10-15/result.md`에 사용법과 vendor 초기화 충돌을 기록했다.
 - 증거: AI PC 원격 24 passed, known_failures NEW 0. 독립 검토의 포트 open 경쟁 지적을 TIOCEXCL 뒤 자기 PID 재검사로 해결했고 재검토했다. 송신 guard를 메모리에서 제거한 mutation은 forbidden REBOOT 송신 검사에서 RED, 원본은 GREEN이었다. 현장 도구 재실행은 snapshot_complete=true, 6개 torque=0/hardware_error=0이었다. 원문은 비공개 X: 세션의 `logs/register-*`에 있다.
 - gate 변화: 없음. 물리 케이블 역할과 register 관측은 확인했지만 측정 한계·정지·실물 제어 서버·Fleet/Pilot 운용은 미완료다. 기본 launch는 현재 ID 12/13 위치 밖의 한계를 쓰므로 실행하지 않았다.
+## 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
+- 변경: `test/architecture/test_module_structure.py`에서 `SIZE_VERDICTS`·`REGROWTH_ALLOWANCE`·`HARD_TIER`·`_allowance()`·`FLEET_SERVER_HOLDER_UNITS`를 지우고(2,422 → 약 530줄) `size_ratchet.txt`(넘은 것 62행)와 `size_units.txt`(단위 38개, `small` 25개)를 둔다. 세는 규칙은 `tools/harness/size_limits.py`, 커밋별 검사 `size_range.py`, 순수 이동 검사 `split_check.py`. 두 데이터 파일은 `affected_tests.py` `NOT_TRIGGERS`. D-362 제목·표·4항, 2026-09-30 예산 계획 표·3항, D-168 P6·Alternatives, 분리 기준 X1, `test/architecture/AGENTS.md`, `tools/harness/AGENTS.md`, D-766 덧붙임, slice (c) 계획 `docs/plans/2026-10-15-d766-modularization-plan.md`
+- 증거: 시험 PC `tools/remote/remote_pytest.py`, 아래 보고의 로그
+- gate 변화: 없음(SOURCE 구조 증거)
+- 결정: D-766 덧붙임(단위 데이터 파일, safety 행 커밋 칸 없음, 범위 검사 미연결)
+- 교훈: 없음
+
+## 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
+- 변경: `test_web_budgets.py`가 `size_limits.py`와 ratchet을 읽는다. `split_check.py`가 문자열 상수·import 대상·순서·비 `.py` 변경을 본다. 기점은 건너뛰지 않고(main·origin/main merge-base 또는 첫 부모 조상, git 없으면 실패), 행은 다시 생성해도 올라가지 않으며, 기점의 `safety` 행은 바꿀 수 없고, 순수 이동은 행 이름을 바꿀 수 있다. `size_range.py`를 pre-push와 CI에 걸었다. D-362 Superseded by D-766. 계획에 세지 않는 루트를 열린 항목으로
+- 증거: 앞 항목의 "아래 보고의 로그"는 시험 PC `test/` 전체 012ceea86 exit 0, `known_failures` 0 new(`X:/DevTemp/size-ratchet/run-1.txt`)다. 이 항목의 결과는 착지 보고에 적는다
+- gate 변화: 없음(SOURCE 구조 증거)
+- 결정: D-766 덧붙임 갱신(기점, 행 이름 바꿈, 범위 검사 연결)
+- 교훈: 없음
+
+## 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
+- 변경: `size_units.txt`에 레인 A 단위 16개(모두 1,000줄 이상)와 Fleet 보관 자리 단위 `situation`·`site_execution`을 더했다. `size_limits.py`: `.kt`(600)·`.mjs`/`.ts`(800), Fleet `PACKAGE_HOLDERS` = `SOURCE_ROOTS`, `STANDALONE`(pyproject 11개, `rosy-cam`), 운영 루트 `operations/signal_observation`, `COVERAGE_ROWS`(`CameraController.kt` 791). `size_range.py`는 커밋마다 그 커밋의 `size_limits.py`로 잰다. 시험: 모든 생산 코드 파일이 세어지는지, Fleet 보관 자리 = `SOURCE_ROOTS`
+- 증거: 시험 PC(`tools/remote/remote_pytest.py`) `test/architecture` 외 3개, `test/` 전체, `middleware/robot_ui/robot/test/` 모두 exit 0, `test/known_failures.py` 0 new. `python tools/harness/size_range.py main HEAD` exit 0
+- gate 변화: 없음. ratchet: `core_common`·`dashboard` 행 삭제, `fleet` 31,884 → 17,788, `control` 30,125 → 15,931, `site_ui/console` 17,718 → 13,330
+- 결정: D-766 덧붙임 「세지 않던 루트와 `.kt`」
+- 교훈: 세는 규칙을 바꾸면 범위 검사가 앞선 커밋을 새 규칙으로 쟀다. 커밋마다 그 커밋의 규칙을 쓴다

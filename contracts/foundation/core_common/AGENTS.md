@@ -32,7 +32,7 @@ The importable Python package of the `core_common` module: config loading, ident
 
 | Directory | Purpose |
 |-----------|---------|
-| `protocol/` | Wire schemas, evidence and pairing vectors (see `protocol/AGENTS.md`) |
+| `protocol/` | Wire schemas, evidence and pairing vectors (see `protocol/AGENTS.md`). D-766 size unit (`test/architecture/size_units.txt`). |
 | `domain/` | Concept snapshot types, covered below |
 
 ### domain/
