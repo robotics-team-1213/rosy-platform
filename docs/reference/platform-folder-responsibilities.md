@@ -1,6 +1,6 @@
 # ROSY Platform 현재 폴더 책임
 
-2026-10-13 폴더 정리의 착지 범위는 [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이다. 그 기록과 아래 단계 표가 다르면, 현재 경로는 편집 집 표와 manifest다. 원격 재검증·CI·배포·장치는 그 기록이 NOT RUN으로 남긴 항목이다.
+2026-10-13 폴더 정리의 착지 범위는 [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이다. 아래 단계 표의 S3–S10은 그 기록과 같고, S1은 D-743, S2는 D-747이다. 원격 재검증·CI·배포·장치는 그 기록이 NOT RUN으로 남긴 항목이다. 단계 표와 편집 집·manifest가 다르면 편집 집 표와 manifest가 현재 경로다.
 
 2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
 
@@ -46,27 +46,36 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | execution | 로봇 로컬 policy·receipt | 별도 root | `middleware/robot_execution/local` |
 | execution | 현장 목표·진척 | 10 | `operations/site_execution` |
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/front_camera` |
-| vision | 천장 관측 | 11 | `operations/overhead`, `operations/signal_observation` |
+| vision | 천장 관측 서비스 Rosy Vision | 11 | `operations/overhead`. 패키지 `rosy_vision`, 명령 `rosy-vision`. 화면은 없다. 폴더 이름이 단어와 다른 것은 D-748 |
+| vision | 신호등 관측 | 11 | `operations/signal_observation`. 천장 카메라 앱이 아니다 |
+| console | Rosy Fleet 화면 | 11 | `operations/site_ui/console`. 표시 이름은 Rosy Fleet이다(D-487). 레지스트리 id, 아이콘 `console.svg`, 경로 `/console`은 유지한다 |
+| console | 로봇 한 대의 운용 칸 | 1 | Rosy Robot의 경로 `/console`. 폴더는 `middleware/robot_ui/robot`이고 포트는 CORE 8080 |
+| console | Fleet 서버의 콘솔 조립 | 8 | `operations/fleet/fleet/server/console`. 화면 파일이 아니다 |
+| fleet | 현장 서비스와 원장 | 8, 9 | `operations/fleet`. 패키지 `fleet`. 화면 표시 이름 Rosy Fleet과 같은 서비스다 |
+| fleet | 사이트 게이트웨이 휠 | 11 옆 | `operations/apps/fleet`. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Rosy Fleet 화면이 아니고 `operations/fleet`도 아니다 |
+| ui | 로봇 쪽 화면 집 | 1 | `middleware/robot_ui`. 권한은 자식 `robot`, `pilot`, `face`에 있다. 각각 Rosy Robot, Rosy Pilot, 얼굴 LCD |
+| ui | 현장 화면 집 | 11 | `operations/site_ui`. 권한은 자식 `console`, `cam`에 있다. 각각 Rosy Fleet 원본과 Rosy Cam |
 
 `middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측 폴더는 만들지 않는다.
 
 ## 폴더 이름과 묶음
 
-[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표가 현재 경로다. S1은 D-743, S10의 MapPose 직접 import는 D-752로 끝났다. S2~S9 칸이 「이동 전」이면 그 문장이 기록한 시점이다. 편집 집 표나 manifest와 다르면 편집 집 표와 manifest가 현재 경로다.
+[D-738](../adr/D-738-folder-one-authority.md)이 트리 전체의 규칙이다. `control` 한 곳의 개명이 아니다. 위의 편집 집 표가 현재 경로다. S1은 D-743, S2는 D-747, S6은 D-748, S7은 D-749, S8은 D-750, S9는 D-751, S10은 D-752다. S3부터 S10의 소스 착지는 [남은 폴더 정리](../validation/folder-remaining-2026-10-13/result.md)다. 그 기록의 원격 pytest·CI·배포·장치는 NOT RUN이다. 편집 집 표나 manifest와 다르면 편집 집 표와 manifest가 현재 경로다.
 
 규칙은 여섯 가지다. 디렉터리의 마지막 이름은 권한 하나다. import와 ROS 패키지 이름은 유지한다. 같은 입력과 같은 출력은 한 기능 폴더에 둔다. 사실, 명령, 원장, 임대, 후보 검사는 나눈다. 경로는 실행 PC가 아니다. 한 커밋에 한 단계만 착지한다.
 
-| 단계 | 목표 | 이 문서가 기록한 시점 |
+| 단계 | 목표 | 소스 착지 |
 |---|---|---|
-| 1 | `middleware/control/drive`를 `middleware/drive`로 승격 | D-743 구현, 원격 검사·착지 결과는 검증 기록 참조 |
-| 2–3 | 인지 노드의 순수 판단을 그 기능 폴더로 모으고, 남는 조립 폴더를 `middleware/perception/nodes`로 | 이동 전 |
-| 4 | `robot_execution`, `site_execution` | 이동 전 |
-| 5 | `robot_ui`, `site_ui` | 이동 전 |
-| 6 | `overhead`, `front_camera` | 이동 전 |
-| 7 | `lane_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 남긴다 | 이동 전 |
-| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | 이동 전. SQLite는 하나 |
-| 9 | `perception/tools`의 호스트 도구를 `tools/sim`, `tools/calibration`로 | 이동 전 |
-| 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import. Fleet alias 없음 |
+| 1 | `middleware/drive` | D-743. 설치 이름은 유지한다. 원격 검사·배포·장치는 그 검증 기록 |
+| 2 | 인지의 순수 판단을 기능 폴더로 | D-747. 편집 집 5가 현재 경로다 |
+| 3 | 남는 조립은 `middleware/perception/nodes`. `perception/control`은 다섯 설치 호환 초기화 | 검증 기록 S3. 원격·장치는 NOT RUN |
+| 4 | `middleware/robot_execution`, `operations/site_execution` | 검증 기록 S4. 설치 이름은 `rosy.execution.local`, `rosy.execution` |
+| 5 | `middleware/robot_ui`, `operations/site_ui` | 검증 기록 S5. 설치 이름은 `dashboard`, `emotion`, `fleet.server.web`, Rosy Cam |
+| 6 | `operations/overhead`, `operations/signal_observation`, `middleware/perception/front_camera` | D-748. 검증 기록 S6. 패키지 `rosy_vision` |
+| 7 | `action_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 facade | D-749. 검증 기록 S7. 폴더 이름 `lane_rules`는 쓰지 않는다 |
+| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나 |
+| 9 | 호스트 도구를 `tools/sim`, `tools/calibration`, `tools/validation`로 | D-751. 검증 기록 S9. `middleware/perception/tools/device`의 hotpath·IR 측정은 그 자리에 남긴다 |
+| 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 검증 기록 S10. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import |
 
 권한이 다른 폴더는 이름이 같아도 합치지 않는다. 보정 세션 임대, 공통 Safety, 장치 로컬 허용 동작, 상황 사실, 로봇 로컬 실행, 천장 관측, CORE 조립은 각 단계를 지나도 자기 폴더에 남는다. 다섯 설치 이름 폴더 `control`, `planning`, `safety`, `sensing`, `wander`도 남는다.
 
@@ -81,39 +90,43 @@ rosy-platform/
 ├─ middleware/
 │  ├─ core/
 │  │  ├─ gateway/ (core/services.py, core/drive, core/system, core/bridge)
-│  │  ├─ services/ (core_features: command, safety, line_follow, navigation 등)
+│  │  ├─ services/ (core_features: command, safety_gate, action_rules, preview)
 │  │  ├─ api/ (core_api_web)
 │  │  └─ events/ (core_events)
 │  ├─ drive/
+│  │  ├─ behaviors/
 │  │  ├─ planning/{nav2,grid}
 │  │  ├─ tracking/wander
 │  │  ├─ recovery/
 │  │  ├─ calibration/
-│  │  └─ safety/adapter
+│  │  └─ motion_limits/
 │  ├─ perception/
-│  │  ├─ sensors/sensing
-│  │  ├─ vision/perception (learned 등)
-│  │  └─ control/ (기존 ROS node 조립·import 호환 진입점)
-│  ├─ devices/{pinky,omx}/ (bringup·profile·description 또는 adapter·agent)
+│  │  ├─ sensors/{sensing,line_observation}
+│  │  ├─ front_camera/{perception,object_observation}
+│  │  ├─ {localization,graph_health,snapshots}
+│  │  ├─ nodes/ (ROS 패키지 control의 남는 조립)
+│  │  └─ control/ (설치 이름 다섯 개의 호환 초기화)
+│  ├─ devices/{pinky,omx}/
 │  ├─ drivers/{imu_bno055,pinky_adc,pinky_lamp,pinky_led}
 │  ├─ skills/{api,manipulation}
-│  ├─ execution/local
-│  └─ ui/{robot,pilot,face}
+│  ├─ robot_execution/local
+│  └─ robot_ui/{robot,pilot,face}
 ├─ operations/
-│  ├─ fleet/ (transaction·serving·기존 배포 owner)
-│  │  └─ fleet/incidents/ (handoff.py: 사람 인수, notifications.py: 팀 알림)
-│  ├─ decision/ (src/rosy/decision, 기존 Fleet 배포에 포함)
-│  ├─ world/ (src/rosy/world/api, state/projections)
-│  ├─ situation/ (rosy_situation/assessment, snapshot_assessment, analyzers, incidents)
-│  ├─ execution/ (src/rosy/execution/api, site: goal_evidence, workflow 등)
+│  ├─ fleet/ (원장·서빙·패키지 fleet)
+│  │  └─ fleet/server/{ledger,auth,cell,console,peer,channel}
+│  ├─ decision/
+│  ├─ world/ (state/projections/map_pose)
+│  ├─ situation/
+│  ├─ site_execution/ (rosy.execution)
 │  ├─ processes/{cell,palletizing}
-│  ├─ vision/signal_observer
+│  ├─ overhead/ (rosy_vision)
+│  ├─ signal_observation/
 │  ├─ site_devices/{dock,signal}/firmware
-│  ├─ apps/{fleet,games}
-│  └─ ui/{cam,console}
+│  ├─ apps/{fleet,games} (fleet는 rosy-app-gateway, games는 경기 보드)
+│  └─ site_ui/{console,cam}
 ├─ learning/
 │  ├─ curation/{pinky,omx,perception}
-│  ├─ training/{pinky,omx,perception} (trainer만)
+│  ├─ training/{pinky,omx,perception}
 │  ├─ registry/{policy,perception}
 │  ├─ evaluation/perception
 │  └─ envs/isaac
@@ -170,7 +183,7 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/site_execution/src/rosy/execution/site` | `rosy.execution.site` | 분리 완료 — 기존 site 실행·권한 projection과 D-657 순수 `goal_evidence`, `workflow` 전체 progress 계산 및 시각/step 상태 helper. producer 인증·원장 전이·local loader·장치 writer는 소유하지 않음 |
 | `middleware/robot_ui/robot` | ROS `dashboard`; web assets | 유지 — CORE가 제공하는 robot dashboard. 명령 admission은 CORE API에 남음 |
 | `middleware/robot_ui/pilot` | ROS `pilot`; web assets | 유지 — CORE 제공 Pilot UI. 장치 API의 현재 소비자 |
-| `middleware/robot_ui/pilot/android` | Android native discovery shell | 유지 — 기존 Pilot web UI를 재사용하는 발견 shell. 별도 제어 권한 없음 |
+| `middleware/robot_ui/pilot/android` | Android native discovery shell | 유지 — `pilot-device-lobby`만 소유한다. 수동 운전과 비상 정지의 소유자는 Rosy Pilot PWA다 (D-639) |
 | `middleware/robot_ui/face` | ROS `emotion`; `emotion` | 유지 — robot face/display. 제어 정책과 구분 |
 | `operations/site_devices/dock` | dock contract·firmware 소스 | 유지 — 현장 dock 소유. robot docking manager의 직접 `/status` polling은 그대로 |
 | `operations/site_devices/dock/firmware` | dock MCU firmware | 유지 — limit-switch interlock·0 V boot. CORE/Arm Safety와 별도 현장 보호 대상 |
@@ -247,7 +260,7 @@ D-657은 D-648 단계 2와 단계 3의 첫 계산 단위만 수용한다. 실제
 
 행동 조건부 미래 예측은 D-625의 **계획 책임**이다. 구현하려면 현재 state revision, action candidate, horizon, model revision, 만료/불확실성 결과, 실제 decision 소비자, 독립 평가가 먼저 있어야 한다. `operations/prediction/world_model` 및 대응 학습·평가 holder는 현재 생성하지 않았다. `learning/training/omx/act_inference.py`의 ACT policy action 출력은 그 World model의 구현으로 집계하지 않는다. 기존 state projection, 학습/연구, 미래 예측 계획을 각각 기록한다.
 
-이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 90개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
+이 안내의 이전/분리 완료는 local main에 반영한 소스 수준 판정이다. 90개 root를 판정했고 실제 빈 제품 폴더는 없었다. `data/drive/.gitkeep`는 계약용 placeholder로 유지했다. 공유 main의 이전 `middleware/core/api_web`, `middleware/apps/device` 경로에는 추적 제품 파일이 없지만 ignored cache·`.omc` 상태가 남을 수 있다. 추적 파일이 없는 `middleware/ui`, `middleware/execution`, `operations/execution`, `operations/vision`, `middleware/perception/vision`도 소유자가 아니다. 현재 경로는 `robot_ui`, `robot_execution`, `site_execution`, `overhead`, `front_camera`다. 동료 도구 상태를 삭제하거나 옮겨 제품 이동으로 집계하지 않는다. Decision/Console source 분리는 완료했고 기존 Fleet 배포·transaction·serving을 유지한다. 별도 배포 패키지 생성과 행동 조건부 World model은 이번 범위가 아니다. 해당 committed SHA의 remote 시험, checkout 밖 설치 확인과 남은 CI·ROS·ARM64·배포·장치·현장 gate는 [검증 기록](../validation/d637-remaining-folders-2026-10-11/result.md)에서 확인한다.
 
 D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1파일, 총 299파일을 처리했다. Console은 67개 source 파일 중 65개 설치 자산이며 AGENTS와 package.json은 개발 안내/도구 입력이다. `test/learning/perception`은 기존 99파일의 shared workflow 시험 위치다. 퇴역 WSL 도구 6개는 `docs/reference/legacy-tools/wsl`로 동결했고 현재 운영 경로에 재연결하지 않는다.
 

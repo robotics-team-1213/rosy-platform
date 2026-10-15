@@ -8506,3 +8506,22 @@ osy-d395-s1d\`.
 - 변경: docs/plans/2026-10-15-omx-camera-recovery.md에 두 카메라 복구·독립 검토·실제 추론·미완료 연결을 기록했다. 오래된 장치 미연결 blocker를 실제 USB 관측과 미수용 항목으로 바로잡았다.
 - 증거: adapter/배치 원격 526 passed·7 skipped, Fleet OMX 계약 37 passed, NEW 0. 현재 두 영상으로 AI PC 고정 모델에 단일 관측 질의 성공. 장치 명령·외부 메시지 없음.
 - gate 변화: 없음. Fleet의 실제 OMX owner 연결·실측 보정·관절/그리퍼/정지 수용은 남아 있다. 천장/Pinky 입력을 OMX로 대체하지 않았다.
+
+## 2026-10-15 · cbf3ab55bd · native SIM installation and actual acceptance-input search
+
+- Change: record the completed resource-cleanup landing and the native Gazebo profile/wheel closure. Update the pipeline inventory with the current reviewed-data and operating-approval search results.
+- Evidence: real native build and contract wheel import smoke succeeded, followed by three matching CORE robot_id readbacks. Formation arming did not pass. Read-only search verified 2769 human-reviewed image/mask pairs with 5538 matching hashes and 857 lane-approved rows; current review owner has zero approved masks and holds no_approved_masks. No qualifying independent signed operating receipt was found in the bounded search.
+- Gate: unchanged. Existing lane-bounded labels are not independent road_surface ground truth. Startup, synthetic READY and conversation admission do not discharge operating or physical acceptance. No push, approval generation, model activation or device motion.
+
+## 2026-10-15 · 271f923283 · preserve product boundaries in SIM installation closure
+
+- Change: revise the plan after the full guard rejected the generic Gazebo package's robot literal. Default profile selection now belongs to the remote build composition; the package manifest is restored.
+- Evidence: initial FULL 25944 passed, 1848 skipped, one NEW literal failure and no landing. The corrected remote profile/installer/literal/package regression passed 36 checks, exit 0, NEW 0. Failure/backlog policies remain unchanged.
+- Gate: unchanged. Actual final-composition SIM, landing and operating acceptance remain separate evidence.
+
+
+## 2026-10-15 · uncommitted · docs: 화면 폴더 안내를 착지된 경로에 맞춘다
+
+- 변경: 폴더 책임 안내의 단계 표를 S1–S10 소스 착지로 고치고, 의미 구조 그림을 robot_ui·site_ui·overhead·front_camera에 맞췄다. 같은 영어 단어 표에 console·fleet·ui를 넣어 Rosy Fleet, 로봇 /console, 서버 콘솔 조립, rosy-app-gateway를 구분했다. Pilot 셸 행은 pilot-device-lobby만 소유한다고 고쳤다. test_app_identity의 robot·console 보류 주석을 현재 폴더로 고쳤다. robot_ui·site_ui 안내 제목을 폴더 이름으로 맞췄다.
+- 증거: 폴더 이동과 패키지 이름 변경은 없다. id console과 경로 /console은 유지한다. 패키지 dashboard와 emotion은 유지한다.
+- gate 변화: 없음. 안내 정합이며 구현, 장치, 현장 수용은 아니다.
