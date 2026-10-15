@@ -49,6 +49,23 @@ software admission check; only a later, separately validated native control
 runner may consume the returned per-workcell paths. No camera is opened by
 this preflight.
 
+## Local camera preview recovery
+
+`omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
+camera through V4L2 MJPEG at 640×480, publishing at most 10 Hz with a one-image
+queue. It refuses raw-format fallback, reopens failed capture, and notifies the
+`rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
+It publishes host-receive timestamps and no CameraInfo or calibrated target;
+these previews do not admit an arm operation.
+
+Install the reviewed source snapshot and user unit on the camera host. Each
+`~/.config/rosy/omx-camera-<name>.env` binds `ROSY_ROS_SETUP`, `ROSY_CAMERA_SOURCE`,
+`ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC`, `ROSY_CAMERA_FRAME`, and `ROS_DOMAIN_ID`
+to that host's accepted runtime and selected camera. Keep device identities and
+host paths in private configuration. Stop the previous producer for that exact
+camera before starting the unit, and verify advancing fresh frames and measured
+format after start. Arm drivers and their admission profiles remain separate.
+
 ## Build and shell profiles
 
 The hardware profile takes `OMX_ROS_DOMAIN_ID` and
