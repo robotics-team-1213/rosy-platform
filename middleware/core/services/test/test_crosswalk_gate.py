@@ -722,7 +722,7 @@ def _cross_between_walls(*, seen_while_looking=True, walls=True, person=()):
         seen = (pose, 0.079, -0.079, 0.02) if seen_while_looking and not moving else None
         scan = Scan(rays_at(px, things + (list(person) if moving else []), step_deg=1), 0.05, t)
         cap, reason = _step(g, zone, geo, pose, t, scan, corridor=seen)
-        out.append((cap, reason, g._lane_yaw))
+        out.append((cap, reason, getattr(g, "_lane_yaw", None)))
         if cap is None and moving:
             return out                                  # past the zone
         if cap:
