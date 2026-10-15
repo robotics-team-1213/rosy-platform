@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 
-from core_features.line_follow.authority import STAMP_MATCH_S
+from core_features.line_follow.authority import STAMP_MATCH_S, STAMP_TOL_S
 from core_features.line_follow.crosswalk.zone import CORRIDOR_HALF_M
 
 MAX_EXPECT_IN_M, MAX_EXPECT_TOL_M, MAX_PIVOT_PAST_LINE_M = 2., .30, .30
@@ -105,18 +105,23 @@ class JunctionApproachMixin:
 
     def _stamp_odometer(self, stamp, now):
         """D-767 A 2-3: ((odometer, received_at), None): the junction trail odometer (trail.odometer, not the
-        authority log's path_m) at the odom sample published at ``stamp`` (D-758 0, that sample only), the
-        basis of this instruction's expect_in_m / bend_in_m; else (None, why) for today's receipt basis:
-        none_sent, disabled, ambiguous, stale, future, no_sample, epoch. Locked."""
-        if stamp is None or not self._config.instruction_stamp_enabled:
-            return None, 'none_sent' if stamp is None else 'disabled'
-        hits = sum(abs(e[0]-stamp) <= STAMP_MATCH_S for e in self._odom_log)
-        found = 'ambiguous' if hits > 1 else self._odom_at_stamp(stamp, now)
-        if isinstance(found, str):
-            return None, found
-        # An "at or before" sample would count more travel than since the pose: only the exact one.
-        odometer = self._return_evidence.trail.odometer_at(found[0]) if hits else None
-        return (None, 'no_sample') if odometer is None else ((odometer, found[0].received_at), None)
+        authority log's path_m) at the odom sample published at ``stamp`` (D-758 0, that sample only; an
+        "at or before" one would count more travel than since the pose), the basis of this instruction's
+        expect_in_m / bend_in_m. No age cut (review): travel is counted while the trail holds the sample.
+        Else (None, why), and set_junction refuses: disabled, ambiguous, future, no_sample, epoch, stale
+        (the sample has left the trail). Locked."""
+        if not self._config.instruction_stamp_enabled:
+            return None, 'disabled'
+        log, pose, ev = self._odom_log, self._fresh_pose(now), self._return_evidence
+        hits = [e for e in log if abs(e[0]-stamp) <= STAMP_MATCH_S]
+        if len(hits) != 1 or pose is None:
+            return None, ('ambiguous' if len(hits) > 1 else 'future' if not hits and log and stamp > log[-1][0]+STAMP_TOL_S
+                          else 'no_sample')
+        if hits[0][1] != (ev.epoch, pose.frame):
+            return None, 'epoch'
+        sample = next((p for p in ev.trail.samples if p.stamp_ns == hits[0][2]), None)
+        odometer = None if sample is None else ev.trail.odometer_at(sample)
+        return (None, 'stale') if odometer is None else ((odometer, sample.received_at), None)
 
     def _expect_window(self, expect, now, basis=None):
         """The odom placement of the expected window, None without the fields, False without

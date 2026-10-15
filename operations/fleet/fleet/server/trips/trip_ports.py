@@ -321,7 +321,7 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
                          view.get("trip_id"), view["map_version"])
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
-    fields = {"map_id": active[1].map_id, **({"pose_stamp": live.at_stamp} if caps.get("lane_instruction_stamp") and live.at_stamp else {})}
+    fields = {"map_id": active[1].map_id}
     expect_in = round(remaining, 3)
     window = 0.0 < expect_in <= MAX_EXPECT_IN_M
     if action in (STRAIGHT, LEFT, RIGHT):
@@ -340,7 +340,7 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         return fields  # no window: map-backed CORE holds a junction sighting here
     tol = _pose_tol(live, config, expect_in,
                     _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose))
-    fields.update(expect_in_m=expect_in, expect_tol_m=tol)
+    fields.update(expect_in_m=expect_in, expect_tol_m=tol, **({"pose_stamp": live.at_stamp} if caps.get("lane_instruction_stamp") and live.at_stamp else {}))
     if action == STRAIGHT:  # lap SIM 2: CORE follows a keeper corner the way this lane turns
         turn = math.degrees(_lane_turn(live.arc(index), live.segments[index]["s_to"], remaining))
         fields["lane_turn_deg"] = round(max(-MAX_LANE_TURN_DEG, min(turn, MAX_LANE_TURN_DEG)), 1)

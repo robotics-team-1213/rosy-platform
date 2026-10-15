@@ -287,7 +287,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   turn_map_entry_enabled: false
   # D-767 A: a junction/bend instruction's expect_in_m / bend_in_m count from the odom sample at its
   # pose_stamp (capability lane_instruction_stamp; Fleet then drops its latency lead). Unusable stamp:
-  # receipt basis with line_follow.junction.distance_basis_reason. Off until Safety-Review + SIM lap.
+  # 409 INSTRUCTION_STAMP_UNUSABLE, Fleet resends. Off until Safety-Review + SIM lap.
   instruction_stamp_enabled: false
   route_context_enabled: false      # D-531: CORE route evidence to perception; off until replay/SIM/device review
   arc_curvature_gain: 1.0          # [0.8, 1.25]; per robot from the D-500 measured motion response

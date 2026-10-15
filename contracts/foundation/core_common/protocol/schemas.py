@@ -1007,7 +1007,7 @@ class LineJunctionStatus(BaseModel):
     #: D-767 A: what a window's or bend's distance counts from: stamp (the odom sample at pose_stamp) |
     #: receipt (as before); None for an instruction without either.
     distance_basis: Optional[str] = None
-    #: D-767 A: why receipt: none_sent, disabled, ambiguous, stale, future, no_sample, epoch.
+    #: D-767 A: none_sent when receipt (an unusable pose_stamp is refused, 409 INSTRUCTION_STAMP_UNUSABLE).
     distance_basis_reason: Optional[str] = None
 
 
