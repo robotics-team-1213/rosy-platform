@@ -107,7 +107,7 @@ class ChannelMissions:
         return self.workflow.read(request_id, principal)
 
 
-def install_channel_mission_routes(app, owners, *, require_operator, read_guard):
+def install_channel_mission_routes(app, owners, *, require_operator, require_named_operator, read_guard):
     @app.post('/api/fleet/channel-requests/{request_id}/prepare', dependencies=read_guard,
               response_model=ChannelWorkflowView, tags=['fleet-work'])
     def prepare(request_id: str, body: ChannelMissionPrepareRequest | ChannelCellPrepareRequest,
@@ -116,5 +116,5 @@ def install_channel_mission_routes(app, owners, *, require_operator, read_guard)
 
     @app.post('/api/fleet/channel-requests/{request_id}/admit', dependencies=read_guard,
               response_model=ChannelWorkflowView, tags=['fleet-work'])
-    def admit(request_id: str, body: ChannelWorkAdmitRequest, principal=Depends(require_operator)):
+    def admit(request_id: str, body: ChannelWorkAdmitRequest, principal=Depends(require_named_operator)):
         return owners.admit(request_id, principal.principal_id, body)

@@ -74,7 +74,7 @@ Ignore `__pycache__/`.
 - Run it before shipping dashboard JS: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. Opt-in tests that are never run are not coverage.
 - Browser opt-in: gate every real-Chromium test with `pytest.mark.skipif(not browser_tests_enabled(), ...)` from `browser_harness.py`. `ROSY_RUN_BROWSER_TESTS=1` is canonical; `ROSY_BROWSER_TESTS=1` still works. Do not read either variable directly — a second name silently skipped the Fleet start-point tests until 2026-10-07.
 - Local servers a page loads must bind through `safe_listener()` or `free_port()`, not port 0: this laptop's dynamic range starts at 1024 and port 0 handed out 2049 (`net::ERR_UNSAFE_PORT`). A new browser test that loads a new page family gets a `SCOPE` entry in `browser_scope.py`.
-- Full browser suites run on the site PC or model PC, not this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). Command pattern: `docs/reference/developer-guide.md` 「브라우저 시험」.
+- Browser tests run on the test PCs, never this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). `tools/land.py` adds the ones `browser_scope.py` maps the changed paths to, opted in; by hand: `-- ROSY_RUN_BROWSER_TESTS=1 <paths>` to `tools/remote/remote_pytest.py`. `docs/reference/developer-guide.md` 「브라우저 시험」.
 - A new guard, gate or contract test is not believed until it has been **mutation-proven**: change the thing it guards, watch it go red, restore, watch it go green — and confirm the mutation actually landed before trusting the red. Assertions on source text are the easiest to write as tautologies, so mutate them harder, not less (`docs/solutions/workflow-issues/inability-to-check-recorded-as-clean-result.md`).
 
 ### Testing Requirements
@@ -82,8 +82,8 @@ Ignore `__pycache__/`.
 ```bash
 python tools/remote/remote_pytest.py --log-dir X:/DevTemp/repo-test -- test/ -v
 python tools/remote/remote_pytest.py --log-dir X:/DevTemp/motor-test -- test/test_motor_control.py test/test_host_agent.py -v
-# The following browser command runs only on the selected Linux test PC:
-t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider
+# Browser tests: leading ROSY_*=value words are the job's environment on the test PC.
+t=$(python test/browser_scope.py <changed paths...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/browser -- ROSY_RUN_BROWSER_TESTS=1 $t
 ```
 
 ### Common Patterns

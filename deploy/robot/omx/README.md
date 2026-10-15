@@ -49,6 +49,27 @@ software admission check; only a later, separately validated native control
 runner may consume the returned per-workcell paths. No camera is opened by
 this preflight.
 
+## Native arm software readiness
+
+After sourcing the selected native ROS installation, run:
+
+```bash
+python3 deploy/robot/omx/hardware_readiness.py --domain-id <workcell-domain> --namespace <workcell-namespace>
+```
+
+This read-only probe takes the expected ROS distribution from `stack.lock.yaml`,
+checks required package discovery, and observes typed trajectory actions and
+the selected namespace's `/arm_controller/follow_joint_trajectory` and
+`/joint_states` publisher names for three seconds. Use `--namespace /` for a
+root graph. A different cell's action or publisher cannot supply these checks.
+It opens no serial device,
+starts no controller and sends no goal. Exit 2 means the software path is missing
+or discovery failed; exit 0 means only the observed software prerequisites exist.
+`motion_admitted` is always false. Publisher names, action presence and package
+availability do not establish hardware identity, measured limits or a real stop.
+Use the [hardware control plan](../../../docs/plans/2026-10-15-omx-hardware-control.md)
+for the remaining native runtime and physical acceptance work.
+
 ## Local camera preview recovery
 
 `omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
@@ -75,6 +96,33 @@ For boot activation, enable the user units and verify `loginctl show-user
 does not prove boot activation. Capture buffer size must read back as one;
 host-receive stamps do not measure sensor exposure age. Test actual USB
 unplug/replug and cold boot on site before accepting unattended operation.
+
+### Native preview receiver transport check
+
+Measure advancing frames at the **consumer**, not just the camera unit's active
+state. On the separately observed Lyrical/Fast DDS preview host, a default
+receiver later fell below the earlier 10 Hz result while a concurrent receiver
+with the publisher's transport settings received about 10 Hz from both cameras:
+[receiver comparison](../../../docs/validation/omx-preview-receiver-2026-10-15/result.md).
+For that preview environment only, scope this setting to the receiving process
+or its private service environment **before** it initializes ROS:
+
+```bash
+export FASTDDS_BUILTIN_TRANSPORTS='DEFAULT?max_msg_size=60KB&sockets_size=2MB&non_blocking=true'
+```
+
+Keep the quotes in a shell: `&` belongs to the value. Source the selected ROS
+environment and supply the explicitly selected workcell domain separately.
+This is a measured preview-host configuration, not a global ROS/RMW change or
+a replacement for the pinned Jazzy/CycloneDDS development and actuator contract.
+It is not consumed by CycloneDDS. Do not apply it to unrelated robot services.
+
+Compare the same subscriber workload with and without the setting; record
+duration, received frames/FPS, maximum gaps, nonadvancing/stale stamps, frame
+IDs and formats for **both** cameras. A short successful sample does not prove
+continuous delivery, USB recovery, boot behavior, calibrated exposure timing,
+or AI/Fleet consumption. Complete the long run on the actual consumer before
+calling that consumer ready; transport settings alone grant no arm authority.
 
 ## Build and shell profiles
 

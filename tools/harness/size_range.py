@@ -80,14 +80,17 @@ def check(commit: str) -> list[str]:
     units, small = size_limits.parse_units(_show(commit, size_limits.UNITS) or "")
     parents = _git("rev-list", "--parents", "-n", "1", commit).split()[1:]
     parent = parents[0] if parents else None
-    base_text = _show(parent, size_limits.RATCHET) if parent else None
+    # A merge of history from before D-766 (a parent without the ratchet) is the transition: its
+    # rows are the new rows, measured on the merged tree, like the landing commit itself.
+    transition = len(parents) > 1 and any(_show(p, size_limits.RATCHET) is None for p in parents)
+    base_text = _show(parent, size_limits.RATCHET) if parent and not transition else None
     base_rows, base_safety = size_limits.parse_ratchet(base_text) if base_text is not None else (None, {})
     counts, over, owner = measure_commit(commit, units)
     listing = (_git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
                if parent else _git("ls-tree", "-z", "-r", "--name-only", commit))
     changed = [path for path in listing.split("\0") if path]
     keys = None
-    if size_limits.UNITS not in changed:
+    if size_limits.UNITS not in changed and not transition:
         roots = colcon_roots()
         keys = set()
         for path in changed:
@@ -102,7 +105,7 @@ def check(commit: str) -> list[str]:
     date = dt.date.fromisoformat(_git("log", "-1", "--format=%cs", commit).strip())
     bad = size_limits.ratchet_problems(over, rows, safety, base_rows, date,
                                        lambda key: safety_commit(commit, key, safety), keys, base_safety)
-    base_units_text = _show(parent, size_limits.UNITS) if parent else None
+    base_units_text = _show(parent, size_limits.UNITS) if parent and not transition else None
     base_units = size_limits.parse_units(base_units_text)[1] if base_units_text is not None else small
     if keys is None:
         bad += size_limits.unit_problems(counts, owner, units, small, base_units)

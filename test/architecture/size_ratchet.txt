@@ -8,7 +8,7 @@
 30125 control
 748 core/events/core_events/events/audit.py
 908 core/gateway/core/bridge/ros_bridge.py
-10665 core_common
+10673 core_common
 11085 dashboard
 817 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
 1273 deploy/robot/pinky_pro/native/rosy-face.py
@@ -29,9 +29,9 @@
 691 drive/behaviors/swarm/manager.py
 630 drive/behaviors/traffic_policy/manager.py
 847 drive/motion_limits/adapter/node.py
-31884 fleet
+31901 fleet
 923 fleet/fleet/cli.py
-982 fleet/fleet/server/app.py
+984 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 963 fleet/fleet/server/cell/cell_job_store.py
 1325 fleet/fleet/server/console/console.py
@@ -56,7 +56,7 @@
 898 robot_ui/robot/app.js
 856 simulation/gazebo/scripts/lane_live_view.html
 709 simulation/gazebo/scripts/lane_live_view.py
-17717 site_ui/console
+17718 site_ui/console
 1079 site_ui/console/console.js
 952 site_ui/console/map-view.js
 862 site_ui/console/shared/styles.css

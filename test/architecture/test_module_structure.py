@@ -414,8 +414,17 @@ def _base() -> str | None:
     found = [sha for sha in candidates if _git("cat-file", "-e", f"{sha}:{size_limits.RATCHET}") is not None]
     if found:
         return max(found, key=lambda sha: int(_git("log", "-1", "--format=%ct", sha)))
-    sha = (_git("log", "-1", "--first-parent", "--format=%H", "HEAD~1", "--", size_limits.RATCHET) or "").strip()
-    return sha if sha and _git("cat-file", "-e", f"{sha}:{size_limits.RATCHET}") is not None else None
+    # Nearest first-parent ancestor with the ratchet. A merge of pre-D-766 history (a parent
+    # without it) is the transition: it is the base for later commits and has no base itself.
+    for index, sha in enumerate((_git("rev-list", "--first-parent", "HEAD") or "").split()):
+        if _git("cat-file", "-e", f"{sha}:{size_limits.RATCHET}") is None:
+            return None
+        parents = _git("rev-list", "--parents", "-n", "1", sha).split()[1:]
+        if len(parents) > 1 and any(_git("cat-file", "-e", f"{p}:{size_limits.RATCHET}") is None for p in parents):
+            return sha if index else None
+        if index:
+            return sha
+    return None
 
 
 def _base_text(path: str) -> str | None:

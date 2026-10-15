@@ -3791,3 +3791,86 @@
 - 증거: 원격(AI PC, db7b5cf3a) `operations/fleet/test` 전체 5,249 passed, 293 skipped(브라우저 opt-in), 계약·구조 176 passed, `known_failures` 0 new, 로그 X: `work-read/r4a/run-1.txt`, `work-read/r4b/run-1.txt`. 브라우저 3개 파일 93 passed, 로그 X: `browser-run/wrs4-b4.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4, 계획 `docs/plans/2026-10-15-fleet-ledger-missions-unit.md`.
+
+## 2026-10-15 · f4fb26e0c · D-525 여러 호에 걸친 구역 span의 입구 보존
+
+- 변경: `Layout.route`가 같은 구역의 이웃 span을 합칠 때 입구(`entry`)를 버렸다(`traffic/blocks.py`). 원형 교차로를 `west:fwd → ring_s → ring_e → ring_n`처럼 세 호 이상 지나는 경로는 구역 span의 입구가 `""`가 되어, 가상 신호가 그 로봇을 녹색에도 들이지 않았다(Gazebo m33: 녹색·빈 구역에서도 1,442 표본 대기). 합칠 때 첫 span의 입구를 유지한다. 입구를 읽는 곳(`step`의 적색 판정, `signal_phase.zone_occupancy`, `signal_service._signals_ahead`)은 모두 이 값을 쓴다.
+- 증거: `test_signal_phase.py`에 네 호 경로가 입구 `west:fwd`를 유지하고 그 접근로 녹색에 들어가며 다른 접근로 녹색에는 막히는 시험을 넣었다. 원격 결과는 이 브랜치 보고에 적는다.
+- 확인: `fleet_sim_camera_site.yaml`의 `west:rev`는 공유 지도(west가 SW→NW 양방향, 링은 CCW)에서 SW 입구로 들어가는 호라 맞다. m32/m33의 `west:fwd`는 저장소 밖 SIM 부트스트랩이 west를 NW→SW 일방으로 뒤집은 지도 기준이라 설정은 바꾸지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-15 · 84bbabeca · D-763 10항 (c): 규제 능력 없는 로봇에 횡단보도·신호 구역 경로를 거절 (API v1.233)
+
+- 변경: `TripCaps`가 `lane_crosswalk_gate`·`lane_junction_signal`을 읽는다(없으면 꺼짐). `ledger/trip_admission.py` `_caps_checks`(시작·바퀴·재계획)가 lane 경로가 현장 지도 횡단보도 다각형에 들어가거나(`crosswalks_on`, 2 cm 표본) 신호 구역을 지나는데(`TrafficService.route_signals`, `signal_refusal`이 하던 구간 걷기) 능력이 없으면 422 `TRIP_REGULATION_CAPS_MISSING` `{missing: {능력: [id]}}`. 콘솔 문구 추가. 시험 fixture `LANE`·`BOTH`·`PIVOT`·`LEGACY`는 map_v2_fleet에 횡단보도가 있어 `lane_crosswalk_gate`를 알린다.
+- 증거: `test/test_trip_regulation_caps.py`, `test_traffic_signals.py`. 원격 시험(AI PC, cb1e6c61f) `operations/fleet/test` 전체 통과, `known_failures` 0 new.
+- gate 변화: 없음. 크기: 서버 단위 순증 0(`console_view.py` 주석 압축), ledger +23, traffic +2.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 횡단보도가 있는 기본 시험 지도 때문에 능력 하나를 요구하는 검사가 trip 시험 112개를 깨뜨렸다. 공유 caps fixture를 현재 로봇처럼 고치면 된다.
+
+## 2026-10-15 · 4ca431d25 · D-763 10항 (c) 사용자 결정: 필드 없는 옛 CORE는 경고, false만 거절
+
+- 변경: `TripCaps`의 두 능력이 `None`(알리지 않음)과 `false`를 가른다. `_caps_checks`가 `false`만 422 `TRIP_REGULATION_CAPS_MISSING`, `None`은 trip detail `regulation_caps_unknown {능력: [id]}`와 경고 로그 한 줄(ponytail: 새 릴리스가 다 깔리면 거절로 좁힌다). 시작·바퀴·재계획이 detail을 넘긴다. 공유 trip fixture의 `lane_crosswalk_gate=True`는 되돌렸다. 콘솔 문구·API 참조·D-763 부기 갱신.
+- 증거: `test/test_trip_regulation_caps.py`(없음 → 시작+경고, false → 거절, true → 시작, 둘 다 없는 경로 → 시작). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 사용자 결정 2026-10-15.
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.233 → v1.237 (main 병합)
+
+- 변경: main이 v1.234(D-758 0단계)를 썼고 v1.235·v1.236은 다른 세션이 예약했다. 이 브랜치의 위 항목에 적힌 v1.233은 v1.237로 읽는다. API 참조 머리·절·이력, `app.py`, 버전 고정 시험이 v1.237이다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 독립 검토 반영: 운영자 재계획·다음 바퀴·잘못된 값·지난 경고
+
+- 변경: `confirm_replan`이 `_apply_replan` 전에 보류된 계획의 구간으로 `_caps_checks`를 돈다(지도가 바뀌었으면 그대로 `TRIP_MAP_CHANGED`). `_next_lap`이 지금 바퀴의 남은 구간이 아니라 다음 바퀴 `body`의 구간을 검사한다. `TripCaps`는 있는데 bool이 아닌 값을 `false`로 읽어 거절한다. 깨끗한 검사가 trip detail의 `regulation_caps_unknown`을 지운다. `trip_runner.py` 896 → 898줄(한도 901).
+- 증거: `test/test_trip_regulation_caps.py`(운영자 재계획 거절·통과와 경고 지움, 다음 바퀴 구간, 잘못된 값). 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), 독립 검토 LAND-WITH-CONDITIONS.
+- 교훈: 거절 검사는 경로를 바꾸는 모든 입구(시작, AI 재계획, 운영자 재계획, 다음 바퀴)에 같이 둔다.
+
+## 2026-10-15 · ca386fb1a · 크기: trip 시작 검사를 단위 `server/trip_checks`로, 신호 구간 걷기를 그 옆으로
+
+- 변경: main `c4cd2bf95` 병합 뒤 원장 단위 7,170(한도 7,135), `trip_runner.py` 903(한도 901), `traffic` 2,202(한도 2,201)였다. `trip_admission.py`·`trip_progress.py`를 내용 그대로 `server/trip_checks/`(새 `SERVER_HOLDERS` 보관 자리, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. `TrafficService.route_signals`를 지우고 `signal_service.py`를 main 그대로 두었으며, 같은 구간 걷기를 `trip_admission.signals_on`으로 옮겼다. 운영자 재계획 확인은 `TripAdmission._admit_replan`(검사 뒤 `_apply_replan`)을 한 줄로 부른다. 동작은 바뀌지 않는다.
+- 증거: 원장 6,714, `trip_checks` 472, `trip_runner.py` 901, `traffic` 2,195. 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c), `docs/plans/2026-10-14-fleet-ledger-size-unit.md` 2026-10-15 부기.
+- 교훈: 남의 착지로 한도가 찬 단위에 더할 때는 판정이 이름 붙인 경계로 먼저 옮긴다.
+
+## 2026-10-15 · uncommitted · D-763 10항 (c) 규제 능력의 API 버전 v1.237 → v1.238 (main 0cf827362 병합)
+
+- 변경: main이 v1.237(D-763 조각 4, `feat/fleet-work-read-sources`)을 썼다. 이 브랜치의 위 항목에 적힌 v1.233·v1.237은 v1.238로 읽는다. 시작 검사 파일은 main의 `server/trip_checks/`, trip 루프는 `server/trips/`에 있다.
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: D-763 개정 2 질문 10 (c).
+- 교훈: 없음.
+
+## 2026-10-15 · d6d84dffd · 크기: `trip_checks`를 두 단위로 — `trip_progress` 보관 자리
+
+- 변경: main 병합 뒤 `trip_checks` 474(한도 422, 이 브랜치의 D-763 10항 (c) +53). 판정 문구대로 수용하지 않고 `trip_progress.py`를 바이트 그대로 새 `server/trip_progress/`(`SERVER_HOLDERS`, 크기 단위, 판정 제안·독립 재판정 필요)로 옮겼다. import는 그대로다. `trip_checks` 338(기준 192, 한도 342), `trip_progress` 136(기준 80, 한도 230).
+- 증거: 원격 결과는 이 브랜치의 최종 보고에 적는다.
+- gate 변화: 없음.
+- 결정: `docs/plans/2026-10-15-fleet-ledger-trips-unit.md` 2026-10-15 부기.
+- 교훈: 없음.
+## 2026-10-15 · 7f3bd72a1 · 제안 읽기는 Cell Job 상세 범위를, 채널 제출·승인은 이름 있는 운영자를 (D-763 조각 4 리뷰)
+
+- 변경: `GET /api/fleet/proposals/{id}`가 Cell Job 제안을 `GET /api/fleet/cell-jobs/{id}`와 같은 범위·가림으로 읽는다(두 경로가 한 도우미 `cell_job_view`를 쓴다). 이전에는 운영자 누구나 남의 Cell Job 제안을 읽었고 응답의 `mission`에 `proposal_principal_id`가 실렸다. 이제 제안자, `PROPOSED`가 아닌 Job은 운영자, 남의 미판정·`PROPOSED` 제안은 이름 있는 운영자만 읽고 나머지는 404 `PROPOSAL_NOT_FOUND`다. 레거시 Mission 제안은 그대로 제안자만. `POST /api/fleet/channel-requests/{id}/admit`·`/submit`은 `require_named_operator`다(직접 Mission admit·`/goal`과 같다). API 참조의 세 경로 인증 문구, 버전 머리는 그대로.
+- 증거: 원격(모델 PC, 7f3bd72a1) `operations/fleet/test` exit 0(293 skipped, 브라우저 opt-in), `test/architecture` exit 0, `known_failures` 둘 다 0 new, 로그 X: `proposal-scope/fleet/run-1.txt`, `proposal-scope/arch/run-1.txt`. 고치기 전 빨강 X: `proposal-scope/red/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 리뷰. API 변경 이력 번호는 착지 때 정한다.
+
+## 2026-10-15 · c0c7fb706 · Cell Job 제안자 가림을 모든 응답에, 자원 claim 읽기는 역할별로, API v1.240 (D-763 조각 4 보안 리뷰 L1/L2)
+
+- 변경: 가림을 모듈 수준 `redact_cell_job(job, principal)`로 옮기고 Cell Job을 돌려주는 모든 응답(제안 읽기, Cell Job 상세, Mission admit·reject, Cell Job reconcile·resume·cancel)에 쓴다. 제안자 아닌 호출자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`다. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. API 참조 v1.240(머리, 변경 이력 행, 해당 경로 행), 버전을 고정한 시험 다섯 곳과 `core_api_web` app.py 설명. 시험: 숨긴 id의 404 본문이 없는 id와 같음, 제안자 사건이 두 읽기에서 `proposer`, 실제 `build_role_guards`와 `install_channel_feature`로 이름 없는 운영자의 채널 admit 403, L1/L2.
+- 증거: 원격(AI PC, 2a2c1871a) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet4/run-1.txt`. 원격(165a1d95d) `test/architecture`, `test/test_line_follow_contract_docs.py`, `middleware/core/api/test` exit 0, 0 new, 로그 X: `proposal-scope/arch2/run-1.txt`. 중간 실패 2건(새 시험이 stop generation을 두 번 rearm)은 2a2c1871a에서 시험을 고쳤다, 로그 X: `proposal-scope/fleet2/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰(APPROVE 뒤 L1/L2). API v1.240은 동료와 조율해 받은 번호다.
+
+## 2026-10-15 · bbfac7c5c · claim 읽기는 행마다 쓰지 않고, 채널 submit 배선 시험, 작업이 쥔 로봇의 거절에 mission id 없음 (D-763 조각 4 보안 리뷰 N1·후속)
+
+- 변경: N1(dd0da079a) — `GET /api/fleet/resource-claims`가 레거시 Mission 주인을 기존 `get_in_transaction`으로 한 연결에서 읽는다. 행마다 `get()`이 돌리던 `purge_expired()`(SQLite 쓰기 잠금을 잡는 DELETE)가 없다. 만료 행은 None으로 읽혀 답은 같다. 후속(bbfac7c5c) — 다른 작업이 쥔 로봇의 409 `TRIP_ROBOT_BUSY` 세 곳(trip 시작 `trip_runner`, 작업 단계 admission `trip_admission`, lease 채택 `trip_lease`)이 그 작업의 `job_id`를 실었다. 이제 `{"reason": "job", "owner_kind": "mission"}`이다. `trip_guard.py:35`의 `lease.claimed`는 그 `job_id`의 출처이고 그 자체는 응답에 나가지 않는다. `console_view.trip_refusal`의 문구는 로봇 id만 싣는다. API 참조 v1.240 절과 이력 행에 한 줄. 시험: 실제 `build_role_guards`·`install_channel_feature`로 이름 없는 운영자의 채널 `/submit` 403과 Task 0건, purge 0회, 거절 detail에 mission id 없음. fleet 줄 수 변화 0(31,901/31,930).
+- 증거: 원격(AI PC, bbfac7c5c) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet6/run-1.txt`. N1은 dd0da079a에서 같은 결과, 로그 X: `proposal-scope/fleet5/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰 후속. API v1.240 안에 든다.

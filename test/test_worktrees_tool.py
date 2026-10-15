@@ -199,6 +199,14 @@ def test_agent_state_under_omc_blocks_removal(main):
     assert (wt / ".omc" / "notes.md").is_file()
 
 
+def test_hook_state_under_omc_state_is_a_cache(main):
+    wt = add(main, "hooks", commit=True, merge=True)
+    (wt / ".omc" / "state" / "sessions" / "s1").mkdir(parents=True)
+    (wt / ".omc" / "state" / "sessions" / "s1" / "throttle.json").write_text("{}", encoding="utf-8")
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    assert not wt.exists()
+
+
 def test_log_dir_is_a_cache_only_at_the_root_or_beside_a_marker(main):
     wt = add(main, "bags", commit=True, merge=True)
     for rel in ("build/a", "install/b", "log/c",                      # worktree root
