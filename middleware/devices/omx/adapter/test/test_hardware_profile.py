@@ -88,3 +88,17 @@ def test_cli_rejects_duplicate_yaml_fields(profile, tmp_path, capsys):
     path.write_text(yaml.safe_dump(profile, sort_keys=False) + "profile: hardware\n")
     assert main([str(path)]) == 2
     assert json.loads(capsys.readouterr().out)["motion_admitted"] is False
+
+
+def test_huge_numeric_measurement_returns_invalid_report(profile, tmp_path, capsys):
+    profile["power"]["noted_load_a"] = 10 ** 400
+    path = tmp_path / "profile.yaml"
+    path.write_text(yaml.safe_dump(profile, sort_keys=False))
+    assert main([str(path)]) == 2
+    assert json.loads(capsys.readouterr().out)["profile_document_valid"] is False
+
+
+def test_preload_cannot_exceed_gripper_stroke(profile):
+    profile["gripper"].update(position=[-2., 1.], preload=1.)
+    with pytest.raises(ValueError, match="gripper"):
+        validate_profile(profile)
