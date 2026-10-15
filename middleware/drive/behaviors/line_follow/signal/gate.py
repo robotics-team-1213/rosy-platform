@@ -9,6 +9,10 @@ WAIT_S, REPLY_FRESH_S = 3.0, 2.0
 
 
 class JunctionSignalMixin:
+    @property
+    def supports_lane_junction_signal(self):  # D-763 10 (c): line_follow.junction_signal_enabled
+        return self._config.junction_signal_enabled
+
     def junction_signal_link_refused(self):
         return False
 

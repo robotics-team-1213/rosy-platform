@@ -99,7 +99,7 @@ def _local(spec):
 
 
 def _path(name):
-    for folder in ("shared", "cell"):
+    for folder in ("shared", "cell", "work"):
         path = WEB / folder / name
         if path.is_file():
             return path

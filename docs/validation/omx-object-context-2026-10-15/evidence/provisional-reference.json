@@ -1,0 +1,111 @@
+{
+  "assessor": "assistant_visual_review_provisional",
+  "physical_identity_verified": false,
+  "targets": [
+    {
+      "id": "c1",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        372,
+        45,
+        422,
+        99
+      ],
+      "visibility": "fully_visible"
+    },
+    {
+      "id": "c2",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        438,
+        65,
+        488,
+        119
+      ],
+      "visibility": "fully_visible"
+    },
+    {
+      "id": "c3",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        509,
+        106,
+        555,
+        161
+      ],
+      "visibility": "fully_visible"
+    },
+    {
+      "id": "c4",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        615,
+        84,
+        640,
+        133
+      ],
+      "visibility": "border_clipped"
+    },
+    {
+      "id": "c5",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        611,
+        146,
+        640,
+        200
+      ],
+      "visibility": "border_clipped"
+    },
+    {
+      "id": "c6",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        507,
+        191,
+        552,
+        244
+      ],
+      "visibility": "fully_visible"
+    },
+    {
+      "id": "c7",
+      "label": "brown_cylinder_like",
+      "bbox_xyxy": [
+        590,
+        250,
+        640,
+        301
+      ],
+      "visibility": "border_clipped"
+    },
+    {
+      "id": "w1",
+      "label": "white_round_region",
+      "bbox_xyxy": [
+        170,
+        290,
+        279,
+        398
+      ],
+      "visibility": "fully_visible"
+    },
+    {
+      "id": "r1",
+      "label": "red_strawberry_like",
+      "bbox_xyxy": [
+        295,
+        0,
+        357,
+        65
+      ],
+      "visibility": "border_clipped"
+    }
+  ],
+  "notes": [
+    "Approximate hand-marked image boxes only; not calibrated or independently labelled ground truth",
+    "White region saturated; sphere vs disk unknown",
+    "Red strawberry-like shape: physical material/real fruit unknown",
+    "Front loose target count not verifiable; no identifiable target instances"
+  ]
+}

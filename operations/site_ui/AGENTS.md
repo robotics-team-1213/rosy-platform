@@ -1,11 +1,11 @@
-# ui
+# site_ui
 
 **Parent context:** `../AGENTS.md`
 **Generated:** 2026-10-07 · **Updated:** 2026-10-11
 
 ## Purpose
 
-Site UI source holders: Fleet Console in `operations/site_ui/console` and Rosy Cam in `operations/site_ui/cam`. The existing Fleet distribution installs and serves Console as `fleet/server/web`; API, ledger and final execution authority remain with their existing owners (D-637).
+Site screen home. The parent folder is not a product. `console/` is the Rosy Fleet source (registry id `console`, D-487). `cam/` is Rosy Cam. `operations/apps/fleet` is the `rosy-app-gateway` wheel, not this screen. The existing Fleet distribution installs and serves Console as `fleet/server/web`; API, ledger and final execution authority remain with their existing owners (D-637).
 
 ## Subdirectories
 

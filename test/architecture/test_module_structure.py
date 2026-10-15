@@ -126,10 +126,18 @@ SIZE_UNITS = ("drive/behaviors/line_follow",
               "perception/front_camera/perception/learned",
               "perception/front_camera/perception/drivable",
               "site_ui/console",
-              "fleet/fleet/server/ledger")
+              "site_ui/console/work",
+              "fleet/fleet/server/ledger",
+              "fleet/fleet/server/missions",
+              "fleet/fleet/server/work",
+              "fleet/fleet/server/trips",
+              "fleet/fleet/server/trip_checks",
+              "fleet/fleet/server/trip_progress")
 
 #: Fleet server source holders (fleet/_source_layout.py SERVER_HOLDERS) registered as size units.
-FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger",)
+FLEET_SERVER_HOLDER_UNITS = ("fleet/fleet/server/ledger", "fleet/fleet/server/missions", "fleet/fleet/server/work",
+                             "fleet/fleet/server/trips", "fleet/fleet/server/trip_checks",
+                             "fleet/fleet/server/trip_progress")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -311,7 +319,7 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-11-fleet-team-incidents-subpackage.md; same DB, no resolver or device authority. "
         "Measured at 360 after unchanged relocation; +150 remains, re-judge before separate responsibility growth.",
     ),
-    "fleet/fleet/server/ledger/trip_runner.py": (
+    "fleet/fleet/server/trips/trip_runner.py": (
         751,
         "split: measured at 751 on 2026-10-10 after the named admission/progress seam was applied (pure move, "
         "no behaviour change): the start checks are in server/trip_admission.py and the progress predicates in "
@@ -485,7 +493,13 @@ SIZE_VERDICTS = {
         "See docs/plans/2026-10-12-hourly-channel-health-subpackage.md.",
     ),
     "site_ui/console": (
-        17_933,
+        17_569,
+        "split: D-763 slice 4 moved the work area (work-view.js, channel-request-view.js) into its own unit "
+        "site_ui/console/work (docs/plans/2026-10-15-fleet-console-work-unit.md). Baseline17569 = the console "
+        "17933 split at the D-757 verdict commit61aa49b32 into console17569 + work364 (measured). The +150 already "
+        "used stays used and is not rebaselined; console.js1175 HARD_TIER, map-view.js984 and styles.css802 file "
+        "verdicts are unchanged. paintMove and the work-new/work-move seats stay in console.js (shell closures). "
+        "Previous verdict: "
         "split: D-763 slice 3 registers the browser console as its own size unit; see "
         "docs/plans/2026-10-14-fleet-console-size-unit.md. Baseline17933 is the console measured at the D-757 "
         "verdict commit61aa49b32 (fleet server38822, combined56755); at branch base06e97383b it was17988 (+55), "
@@ -494,8 +508,81 @@ SIZE_VERDICTS = {
         "styles.css802 file verdicts. At the next +150 work-view.js and console.js's work-area wiring "
         "(paintMove, the work-new/work-move seats) leave for their own subpackage, not an accept.",
     ),
+    "site_ui/console/work": (
+        364,
+        "split: D-763 slice 4 registers the console work area (work-view.js, channel-request-view.js, the "
+        "/console?view=work read and 대화 요청 review) as its own unit; see "
+        "docs/plans/2026-10-15-fleet-console-work-unit.md. Baseline364 = those two files at the D-757 verdict "
+        "commit61aa49b32 (work-view.js143 + channel-request-view.js221), measured the way the console and ledger "
+        "plans measured theirs. Keep every nested/file/HARD_TIER rule. At the next +150 the 5c approval seat "
+        "goes to its own module in this unit, not an accept.",
+    ),
+    "fleet/fleet/server/missions": (
+        2_575,
+        "split: D-763 slice 4 (after the slice-6 merge) registers the Mission owners (mission_store, "
+        "mission_service, mission_routes incl. admit/reject, mission_progress, mission_dispatcher and the three "
+        "mission_model_turn_* files) as their own fleet.server holder unit; see "
+        "docs/plans/2026-10-15-fleet-ledger-missions-unit.md. Baseline2575 = those eight files at the D-757 verdict "
+        "commit61aa49b32 (measured). Keep every file verdict and HARD_TIER rule. The next split is "
+        "mission_model_turn_*: at the next +150 the model turns leave for their own unit, not an accept.",
+    ),
+    "fleet/fleet/server/work": (
+        57,
+        "split: D-763 slice 4 registers the D-664 work read (work_read.py, work_routes.py) as its own fleet.server "
+        "holder unit; see docs/plans/2026-10-15-fleet-ledger-missions-unit.md. Baseline57 = work_read25 + "
+        "work_routes32 at the D-757 verdict commit61aa49b32, both then in the server unit (measured). Keep every "
+        "file and HARD_TIER rule; later work-read growth is its own, not the server's or the ledger's.",
+    ),
+    "fleet/fleet/server/trips": (
+        2_238,
+        "split: D-763 slice 4 registers the trip owners (trip_guard, trip_halts, trip_laps, trip_ports, "
+        "trip_routes, trip_runner) as their own fleet.server holder unit, the split the ledger verdict named; see "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md. Baseline2238 = those six files at the D-757 verdict "
+        "commit61aa49b32 (measured). Keep the trip_runner.py file verdict and every HARD_TIER rule. At the next +150 "
+        "the trip ports (trip_ports, the CORE/pose seams) leave for their own unit, not an accept.",
+    ),
+    "fleet/fleet/server/trip_progress": (
+        80,
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The trip loop's "
+        "progress predicates (trip_progress.py, a TripRunner mixin) moved byte-identical out of "
+        "fleet/fleet/server/trip_checks as the two-unit split that unit's verdict named; a fleet.server source "
+        "holder (SERVER_HOLDERS, no __init__.py), imports unchanged (fleet.server.trip_progress). Baseline80 = "
+        "trip_progress at the D-757 verdict commit61aa49b32 (measured); now 136. Not rebaselined. Next growth "
+        "past +150: the wait predicates (_waiting, _wait_bound) leave for their own unit, not an accept "
+        "(docs/plans/2026-10-15-fleet-ledger-trips-unit.md, 2026-10-15 addendum).",
+    ),
+    "fleet/fleet/server/trip_checks": (
+        192,
+        "split: proposed 2026-10-15 on feat/regulation-capabilities, independently re-judged 2026-10-15 by a read-only critic, AGREE-WITH-CONDITIONS. The split the "
+        "previous text named is applied: the D-763 10 (c) growth (+53 in trip_admission: crosswalks_on, signals_on, "
+        "the regulation capability check, _admit_replan) took the unit to 474 > 272+150, so trip_progress.py moves "
+        "byte-identical to its own holder unit fleet/fleet/server/trip_progress and this unit keeps the start "
+        "admission only. Baseline192 = trip_admission at the D-757 verdict commit61aa49b32 (measured); now 338. "
+        "Not rebaselined. 4 lines of room: the next change that grows trip_admission.py first moves crosswalks_on, "
+        "signals_on and the lane_crosswalk_gate/lane_junction_signal block of _caps_checks to their own holder unit "
+        "(server/trip_regulation), not an accept or rebaseline "
+        "(docs/plans/2026-10-15-fleet-ledger-trips-unit.md, 2026-10-15 addendum). Previous verdict: "
+        "split: D-763 slice 4 registers the trip loop's two named mixins, the start admission (trip_admission) and "
+        "the progress predicates (trip_progress), carved out of trip_runner on 2026-10-10 "
+        "(docs/plans/2026-10-07-fleet-site-map-web-server-seam.md), as their own fleet.server holder unit; see "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md. Baseline272 = trip_admission192 + trip_progress80 at the "
+        "D-757 verdict commit61aa49b32 (measured). Keep every file and HARD_TIER rule. At the next +150 the start "
+        "admission and the progress predicates become two units, not an accept.",
+    ),
     "fleet/fleet/server/ledger": (
-        6_985,
+        1_900,
+        "split: D-763 slice 4 moved the trip owners into fleet/fleet/server/trips and fleet/fleet/server/trip_checks "
+        "(the split this verdict named; "
+        "docs/plans/2026-10-15-fleet-ledger-trips-unit.md). Baseline1900 = ledger4410 minus trips2510 at the D-757 "
+        "verdict commit61aa49b32 (measured; trips2238 + trip_checks272): the Task owners, action_receipts and core_event_store. Keep every "
+        "ledger file verdict and HARD_TIER rule. At the next +150 the Task dispatch routes leave for their own unit "
+        "(task_dispatch_routes keeps its D-430 safety tag), not an accept. Previous verdict: "
+        "split: D-763 slice 4 moved the Mission owners into fleet/fleet/server/missions (the split this verdict "
+        "named) and the work read into fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). "
+        "Baseline4410 = ledger6985 minus missions2575 at the D-757 verdict commit61aa49b32 (measured). Growth since "
+        "the verdict stays used and is not rebaselined. Keep every ledger file verdict and HARD_TIER rule. "
+        "At the next +150 the trip owners (trip_*) leave for their own unit, not an accept. "
+        "Previous verdict: "
         "split: D-763 slices 5/5b register the Fleet work-ledger holder (Task, trip and Mission owners incl. "
         "the approval/reject routes) as its own unit; see docs/plans/2026-10-14-fleet-ledger-size-unit.md. "
         "Baseline6985 is the ledger measured at the D-757 verdict commit61aa49b32; at branch base06e97383b it "
@@ -504,7 +591,11 @@ SIZE_VERDICTS = {
         "approval/reject routes and mission_store leave for their own subpackage, not an accept.",
     ),
     "fleet": (
-        31_837,
+        31_780,
+        "split: D-763 slice 4 moved the work read (work_read25 + work_routes32 at 61aa49b32) into its own unit "
+        "fleet/fleet/server/work (docs/plans/2026-10-15-fleet-ledger-missions-unit.md). Baseline31780 = 31837 minus "
+        "those 57 lines (measured). No functional-growth allowance was added; later D-763 slices stay net-zero on "
+        "this server unit (slice 4: before 31847, after 31846, both without the work read). Previous verdict: "
         "split: D-763 slices 5/5b moved the work-ledger holder operations/fleet/fleet/server/ledger into its own "
         "unit (docs/plans/2026-10-14-fleet-ledger-size-unit.md). Baseline31837 = the console-split 38822 split "
         "at the D-757 verdict commit61aa49b32 into server31837 + ledger6985 (measured). At branch base06e97383b "
@@ -1229,7 +1320,7 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "fleet/fleet/server/ledger/mission_store.py": (
+    "fleet/fleet/server/missions/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
