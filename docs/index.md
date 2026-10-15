@@ -336,8 +336,8 @@
 
 ## 최근 기록
 
+- 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
+- 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
 - 2026-10-15 · e767033de · D-766 레인 A 등록과 세지 않던 루트·`.kt` 셈
 - 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
 - 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
-- 2026-10-15 · 7c1fa973f · feat(omx): follower register inspection
-- 2026-10-15 · uncommitted · docs(plans): main gateway handoff before the computer move

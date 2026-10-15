@@ -1145,3 +1145,10 @@
 - gate 변화: 없음. SOURCE·호스트 근거만이다. 장치 미확인.
 - 결정: D-763 4항·조각 6, 개정 2 질문 2·3. 팔 단계 중 만료의 동작은 정하지 않았다(남은 질문 1).
 - 교훈: 없음.
+## 2026-10-15 · 1a9960df2 · line_follow.instruction_stamp_enabled 설정 읽기와 능력 lane_instruction_stamp (D-767 A부, API v1.241)
+
+- 변경: `core/drive/line_follow.py`가 `instruction_stamp_enabled`(bool 엄격)를 읽는다.
+- 증거: `test/test_capabilities_controls.py`(능력이 설정을 따름), `test/test_line_junction_api.py`(설정 읽기, `distance_basis` 기록). 원격(모델 PC, 9639a41b8) `middleware/core/gateway/test` 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 4항.
+- 교훈: 없음.

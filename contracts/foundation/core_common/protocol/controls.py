@@ -55,6 +55,9 @@ class BaseVelocityControl(_Wire):
     (``line_follow.bend_map_entry_enabled``, off by default, with ``lane_bend``); Fleet sends it only then.
     ``lane_turn_map_entry`` (D-759 rev 1) is the same for a left/right turn's exit heading
     (``line_follow.turn_map_entry_enabled``, off by default, with ``junction_turn``).
+    ``lane_instruction_stamp`` (D-767 A) is true when CORE measures a junction instruction's
+    ``expect_in_m`` / ``bend_in_m`` from its ``pose_stamp`` odom sample
+    (``line_follow.instruction_stamp_enabled``, off by default); Fleet sends ``pose_stamp`` only then.
     ``lane_bend_next_line`` (D-754) is true when CORE takes a bend's ``next_line_in_m``; Fleet
     sends it only then.
     ``lane_crosswalk_gate`` / ``lane_junction_signal`` (D-763 10 (c)) are true only when
@@ -82,6 +85,7 @@ class BaseVelocityControl(_Wire):
     lane_bend: bool | None = None
     lane_bend_map_entry: bool | None = None
     lane_turn_map_entry: bool | None = None
+    lane_instruction_stamp: bool | None = None
     lane_bend_next_line: bool | None = None
     lane_crosswalk_gate: bool | None = None
     lane_junction_signal: bool | None = None
@@ -189,6 +193,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    lane_arc_map_anchor: bool | None = None,
                    lane_bend_map_entry: bool | None = None, lane_turn_map_entry: bool | None = None,
+                   lane_instruction_stamp: bool | None = None,
                    lane_bend_next_line: bool | None = None,
                    lane_crosswalk_gate: bool | None = None, lane_junction_signal: bool | None = None,
                    route_context: bool | None = None,
@@ -216,6 +221,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          lane_arc_map_anchor=lane_arc_map_anchor,
                                          lane_bend_map_entry=lane_bend_map_entry,
                                          lane_turn_map_entry=lane_turn_map_entry,
+                                         lane_instruction_stamp=lane_instruction_stamp,
                                          lane_bend_next_line=lane_bend_next_line,
                                          lane_crosswalk_gate=lane_crosswalk_gate,
                                          lane_junction_signal=lane_junction_signal,

@@ -8599,3 +8599,16 @@ osy-d395-s1d\`.
 - gate 변화: 없음. ratchet: `core_common`·`dashboard` 행 삭제, `fleet` 31,884 → 17,788, `control` 30,125 → 15,931, `site_ui/console` 17,718 → 13,330
 - 결정: D-766 덧붙임 「세지 않던 루트와 `.kt`」
 - 교훈: 세는 규칙을 바꾸면 범위 검사가 앞선 커밋을 새 규칙으로 쟀다. 커밋마다 그 커밋의 규칙을 쓴다
+
+## 2026-10-15 · uncommitted · 착지 경합 교훈 네 건 (ce-compound)
+
+- 변경: `docs/solutions/workflow-issues/`에 교훈 네 건(API 번호 경합, 로그 병합 날짜 순서, FULL 전 구조 가드, 감시 없는 착지와 Tailscale 프로필 뒤집힘).
+- 증거: 2026-10-14..15 D-758 0단계 번호 네 번 변경, D-760 4단계 lint out-of-order·재병합 거절, 2c 앵커 누락 FULL 실패, 6시간 무감시 착지 정지.
+- gate 변화: 없음. 도구 개선은 `fix/land-fast-fail-and-log-order`에서 따로 한다.
+
+## 2026-10-15 · e5a9cb392 · 착지 도구: logs.md 날짜 순서 머지, 가드 회차 먼저, Tailscale 프로필 확인
+
+- 변경: (1) `tools/land_logs.py`가 logs.md 충돌을 `## ` 항목 단위로 푼다. 머지 base와 항목을 다중집합으로 비교해 base 항목을 고치거나 지운 쪽만 사람에게 넘기고, 한쪽(항목을 끼워 넣거나 옮긴 쪽, 없으면 main)의 순서를 지킨 채 다른 쪽의 새 항목을 날짜 순서로 마지막 base 항목 뒤에 끼운다. 자기 항목을 손으로 옮긴 브랜치도 다음 착지에서 풀린다. (2) `tools/land_guards.py`: `--tests auto` 회차는 `test/architecture`와 `test/test_harness_contracts.py`를 먼저 돌리고 NEW면 긴 회차 전에 멈춘다. 선택이 이미 가드뿐이면 건너뛴다. (3) `remote_pytest.placed_hosts`가 `private/lab-hosts.json`의 `tailscale_profile`과 `tailscale switch --list`의 `*` 행을 비교해 다르면 두 프로필과 `tailscale switch <id>`를 찍고 끝낸다. 자동으로 바꾸지 않는다. 키나 CLI가 없으면 건너뛴다.
+- 증거: 원격 `test/test_land.py`, `test/test_remote_pytest.py` 통과(X:/DevTemp/land-fixes). 착지·푸시 안 함.
+- gate 변화: 가드 실패가 FULL 회차(~25분) 전에 드러난다. 운영자는 lab-hosts.json에 `"tailscale_profile": "665e"`를 넣어야 확인이 켜진다.
+- 결정: 없음.
