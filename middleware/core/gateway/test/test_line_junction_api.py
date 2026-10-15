@@ -343,9 +343,9 @@ def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
         assert services.line_follow.supports_junction_pivot is on, marker
 
 
-def test_d767_pose_stamp_validation_and_record(core_client):
+def test_d767_pose_stamp_validation_and_refusal(core_client):
     client, services, clock = _active(core_client)
-    for bad in (0, -1.0, "now", [1.0]):
+    for bad in (0, -1.0, "now", "1.5", True, [1.0]):  # review: strict, no JSON true or numeric string
         assert client.post(URL, json={**BEND, "pose_stamp": bad}, headers=OPERATOR).status_code == 400, bad
     _pose(services, clock)
     lf = services.line_follow
@@ -353,10 +353,14 @@ def test_d767_pose_stamp_validation_and_record(core_client):
     assert _line_follow_config({"instruction_stamp_enabled": True}).instruction_stamp_enabled is True
     with pytest.raises(ValueError):
         _line_follow_config({"instruction_stamp_enabled": "true"})
-    assert client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR).json()["state"] == "armed"
-    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
-    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "disabled")
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INSTRUCTION_STAMP_UNUSABLE"
+    assert response.json()["error"]["detail"] == {"reason": "disabled"}
     lf._config = replace(lf.config, instruction_stamp_enabled=True)
-    client.post(URL, json={**BEND, "place_id": "B3", "pose_stamp": 1.0}, headers=OPERATOR)
+    response = client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR)  # a stamp of 1970
+    assert (response.status_code, response.json()["error"]["detail"]) == (409, {"reason": "no_sample"})
+    assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["state"] == "idle"
+    assert client.post(URL, json=BEND, headers=OPERATOR).json()["state"] == "armed"
     junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
-    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "stale")  # 1970
+    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "none_sent")
