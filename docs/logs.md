@@ -8532,3 +8532,17 @@ osy-d395-s1d\`.
 - 검토: 학습·UI·아키텍처를 병렬 조사/검토했다. 반응형 추론을 작업셀 로컬 경로로 정정하고 AI PC/Fleet 후보·admission과 분리했으며, native 수집 T2a와 ROSY 실물 운용 T2b를 나눴다. 없는 action readback을 추정하지 않는다.
 - 증거: 문서 정적/원격 검사는 별도 기록한다. 앞선 연결 시험703 passed·7 skipped·NEW 0은 조작 정책 학습 품질·RL 구현·실물 수용 증거가 아니다.
 - gate 변화: 없음. 신규 holder·API·RL 계약은 제안이고 장치/학습/Spaces를 활성화하지 않는다.
+
+## 2026-10-15 · 90734f635 · D-766 7(a): 절대 한도와 내려가기만 하는 천장, 단위 데이터 파일, 이동·범위 검사
+- 변경: `test/architecture/test_module_structure.py`에서 `SIZE_VERDICTS`·`REGROWTH_ALLOWANCE`·`HARD_TIER`·`_allowance()`·`FLEET_SERVER_HOLDER_UNITS`를 지우고(2,422 → 약 530줄) `size_ratchet.txt`(넘은 것 62행)와 `size_units.txt`(단위 38개, `small` 25개)를 둔다. 세는 규칙은 `tools/harness/size_limits.py`, 커밋별 검사 `size_range.py`, 순수 이동 검사 `split_check.py`. 두 데이터 파일은 `affected_tests.py` `NOT_TRIGGERS`. D-362 제목·표·4항, 2026-09-30 예산 계획 표·3항, D-168 P6·Alternatives, 분리 기준 X1, `test/architecture/AGENTS.md`, `tools/harness/AGENTS.md`, D-766 덧붙임, slice (c) 계획 `docs/plans/2026-10-15-d766-modularization-plan.md`
+- 증거: 시험 PC `tools/remote/remote_pytest.py`, 아래 보고의 로그
+- gate 변화: 없음(SOURCE 구조 증거)
+- 결정: D-766 덧붙임(단위 데이터 파일, safety 행 커밋 칸 없음, 범위 검사 미연결)
+- 교훈: 없음
+
+## 2026-10-15 · 476fcd17c · D-766 7(a) 독립 검토 반영(REQUEST CHANGES)
+- 변경: `test_web_budgets.py`가 `size_limits.py`와 ratchet을 읽는다. `split_check.py`가 문자열 상수·import 대상·순서·비 `.py` 변경을 본다. 기점은 건너뛰지 않고(main·origin/main merge-base 또는 첫 부모 조상, git 없으면 실패), 행은 다시 생성해도 올라가지 않으며, 기점의 `safety` 행은 바꿀 수 없고, 순수 이동은 행 이름을 바꿀 수 있다. `size_range.py`를 pre-push와 CI에 걸었다. D-362 Superseded by D-766. 계획에 세지 않는 루트를 열린 항목으로
+- 증거: 앞 항목의 "아래 보고의 로그"는 시험 PC `test/` 전체 012ceea86 exit 0, `known_failures` 0 new(`X:/DevTemp/size-ratchet/run-1.txt`)다. 이 항목의 결과는 착지 보고에 적는다
+- gate 변화: 없음(SOURCE 구조 증거)
+- 결정: D-766 덧붙임 갱신(기점, 행 이름 바꿈, 범위 검사 연결)
+- 교훈: 없음

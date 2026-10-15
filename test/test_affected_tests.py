@@ -258,12 +258,13 @@ def test_committed_folder_moves_escalate(sample, capsys, change, mode):
 
 
 def test_real_repo_wide_ordinary_edits_stay_affected():
-    """D-762 stage 0: an API version bump (its pin files) and ADR-gap records are not FULL."""
+    """D-762 stage 0: an API version bump (its pin files), ADR-gap records and D-766 size data are not FULL."""
     repo = affected.Repo.load(ROOT)
     pins = ["middleware/core/api/core_api_web/api/app.py", "docs/reference/ROSY API & Protocol Reference.md",
             "operations/fleet/test/test_lane_route.py", "operations/fleet/test/test_mission_progress.py",
             "test/test_line_follow_contract_docs.py"]
-    for changed in (pins, ["tools/harness/adr_gaps.txt"]):
+    for changed in (pins, ["tools/harness/adr_gaps.txt"], ["test/architecture/size_ratchet.txt"],
+                    ["test/architecture/size_units.txt"]):  # D-766 4: ratchet rows and units are data
         sel = affected.select(repo, changed)
         assert sel.mode == "affected", sel.escalations
 
