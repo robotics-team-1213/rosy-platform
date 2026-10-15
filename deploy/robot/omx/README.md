@@ -54,12 +54,15 @@ this preflight.
 After sourcing the selected native ROS installation, run:
 
 ```bash
-python3 deploy/robot/omx/hardware_readiness.py --domain-id <workcell-domain>
+python3 deploy/robot/omx/hardware_readiness.py --domain-id <workcell-domain> --namespace <workcell-namespace>
 ```
 
 This read-only probe takes the expected ROS distribution from `stack.lock.yaml`,
 checks required package discovery, and observes typed trajectory actions and
-`/joint_states` publisher names for three seconds. It opens no serial device,
+the selected namespace's `/arm_controller/follow_joint_trajectory` and
+`/joint_states` publisher names for three seconds. Use `--namespace /` for a
+root graph. A different cell's action or publisher cannot supply these checks.
+It opens no serial device,
 starts no controller and sends no goal. Exit 2 means the software path is missing
 or discovery failed; exit 0 means only the observed software prerequisites exist.
 `motion_admitted` is always false. Publisher names, action presence and package
