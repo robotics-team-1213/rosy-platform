@@ -736,3 +736,32 @@ def test_browser_reruns_keep_the_environment(tmp_path, monkeypatch):
     inv = [rp.BROWSER_ENV, "test/q_browser.py"]
     assert rp.run_on("h", [inv], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None) == [0]
     assert calls[0][:2] == inv and calls[1][:2] == [rp.BROWSER_ENV, "test/q_browser.py::test_f"]
+
+
+LISTING = ("ID    Tailnet                 Account\n"
+           "665e  team@example.com        team@example.com*\n"
+           "bc4d  other@example.com       other@example.com\n")
+
+
+def test_tailscale_current_profile_is_the_starred_row():
+    assert rp.current_profile(LISTING) == ["665e", "team@example.com", "team@example.com"]
+    assert rp.current_profile(LISTING.replace("*", "")) == []
+
+
+def test_tailscale_profile_mismatch_fails_fast_naming_both(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_HOSTS", raising=False)
+    listing = subprocess.CompletedProcess([], 0, LISTING, "")
+    with pytest.raises(SystemExit) as error:
+        rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=lambda *a, **k: listing)
+    assert "current 665e" in str(error.value) and "tailscale switch bc4d" in str(error.value)
+    rp.check_tailscale_profile("665e", which=lambda _: "tailscale", run=lambda *a, **k: listing)  # match: passes
+
+
+def test_tailscale_profile_check_skipped_without_cli_or_key_or_with_explicit_hosts(monkeypatch):
+    def never(*a, **k):
+        raise AssertionError("tailscale must not be called")
+
+    rp.check_tailscale_profile("bc4d", which=lambda _: None, run=never)   # no CLI
+    rp.check_tailscale_profile("", which=lambda _: "tailscale", run=never)  # no lab-hosts.json key
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "user@host")
+    rp.check_tailscale_profile("bc4d", which=lambda _: "tailscale", run=never)  # manual host override
