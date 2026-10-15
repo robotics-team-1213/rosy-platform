@@ -4,7 +4,7 @@ Each robot also gets the Gazebo IR floor rays (scripts/sim_ir_floor.py) and the 
 the matching SIM IR calibration (gz_multi_parts.SIM_IR_CALIBRATION), so a CORE with
 ir_guard_enabled sees fresh calibrated IR instead of holding lane_guard_stale.
 Learned paint needs learned_lane_pointer (a model folder on the sim host) and onnxruntime from
-deploy/robot/pinky_pro/image/learned-perception-requirements.txt on ROSY_LEARNED_SITE (D-373);
+the robot image's learned-perception-requirements.txt on ROSY_LEARNED_SITE (D-373);
 without a pointer the observers run their denoise paint and the run is not a learned-paint run.
 """
 import os
