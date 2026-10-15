@@ -3771,3 +3771,10 @@
 - 증거: `test_shared_state_read_fences.py`의 0.43 s 재송신 시험을 SIM 자세 포트로도 돌린다(직진 지시: 지시 앞의 idle 읽기면 다시 보낸다). 수정 전 SIM 경우 실패를 원격에서 확인했다(`X:/DevTemp/shared-state-read/red4/run-1.txt`). 원격 결과는 이 브랜치 보고에 적는다.
 - gate 변화: 없음.
 - 결정: D-760 4단계 Safety-Review 재검토 MEDIUM.
+
+## 2026-10-15 · (이 커밋) · D-525 여러 호에 걸친 구역 span의 입구 보존
+
+- 변경: `Layout.route`가 같은 구역의 이웃 span을 합칠 때 입구(`entry`)를 버렸다(`traffic/blocks.py`). 원형 교차로를 `west:fwd → ring_s → ring_e → ring_n`처럼 세 호 이상 지나는 경로는 구역 span의 입구가 `""`가 되어, 가상 신호가 그 로봇을 녹색에도 들이지 않았다(Gazebo m33: 녹색·빈 구역에서도 1,442 표본 대기). 합칠 때 첫 span의 입구를 유지한다. 입구를 읽는 곳(`step`의 적색 판정, `signal_phase.zone_occupancy`, `signal_service._signals_ahead`)은 모두 이 값을 쓴다.
+- 증거: `test_signal_phase.py`에 네 호 경로가 입구 `west:fwd`를 유지하고 그 접근로 녹색에 들어가며 다른 접근로 녹색에는 막히는 시험을 넣었다. 원격 결과는 이 브랜치 보고에 적는다.
+- 확인: `fleet_sim_camera_site.yaml`의 `west:rev`는 공유 지도(west가 SW→NW 양방향, 링은 CCW)에서 SW 입구로 들어가는 호라 맞다. m32/m33의 `west:fwd`는 저장소 밖 SIM 부트스트랩이 west를 NW→SW 일방으로 뒤집은 지도 기준이라 설정은 바꾸지 않았다.
+- gate 변화: 없음.
