@@ -144,6 +144,8 @@ def cmd_next(reason: str) -> int:
 
 
 def cmd_list(ns: str = "refs/adr") -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # a cp949 console cannot print reasons such as an em dash
+        sys.stdout.reconfigure(errors="replace")
     for name, sha in sorted(reserved(ns).items(), key=lambda kv: _trailing_number(kv[0])):
         print(f"{name}\t{sha[:9]}\t{reason_of(name, ns)}")
     return 0
