@@ -232,9 +232,18 @@ h1 {
    스크롤해도 정지가 남는다. 스페이스 안내와 요청 결과는 같은 머리의 아랫줄이다. */
 ui-shell[grammar="focal"] ui-topbar {
   display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content max-content;
   row-gap: var(--space-1);
 }
+
+/* D-741 3 — 나: 계정 링크는 앱 바의 로그인·로그아웃 옆에 선다(본문 위 기본 파란 링크가 아니다). */
+ui-topbar :is(#account-login, [data-account-profile]) {
+  align-self: center;
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-underline-offset: 0.2em;
+}
+[data-account-profile] { grid-column: 4; grid-row: 1; }
 
 .halt-note {
   display: flex;
@@ -254,8 +263,8 @@ ui-shell[grammar="focal"] ui-topbar {
 
 #halt { min-width: 96px; }
 #halt[hidden], #account-login[hidden], #account-logout[hidden] { display: none; }
-#account-login, #account-logout { grid-column: 4; grid-row: 1; }
-#halt { grid-column: 5; grid-row: 1; }
+#account-login, #account-logout { grid-column: 5; grid-row: 1; }
+#halt { grid-column: 6; grid-row: 1; }
 
 @media (width < 64rem) {
   ui-shell[grammar="focal"] ui-topbar {
@@ -267,6 +276,7 @@ ui-shell[grammar="focal"] ui-topbar {
   #phase { margin: 0; }
   #connection { grid-column: 1 / -1; margin: 0; }
   #account-login, #account-logout { grid-column: 2; grid-row: 1; justify-self: end; }
+  [data-account-profile] { grid-column: 1 / -1; grid-row: auto; justify-self: start; }
   #halt { grid-column: 3; grid-row: 1; }
   .halt-note { justify-content: flex-start; }
 
@@ -283,17 +293,24 @@ ui-shell[grammar="focal"] ui-topbar {
   }
 }
 
-/* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)는
-   접고 경기 단계·정지, 연결 증거, 정지 안내의 세 줄만 남긴다. */
+/* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)와
+   워드마크 글은 접고(D-741 5, R 심볼과 접근 이름은 남는다) 경기 단계·정지, 연결 증거와 계정,
+   정지 안내의 세 줄만 남긴다. */
 @media (width < 30rem) {
   ui-shell[grammar="focal"] ui-topbar {
     padding-block: var(--space-1);
-    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
     column-gap: var(--space-1);
   }
-  ui-topbar ui-brand { display: none; }
-  #phase { grid-column: 1; grid-row: 1; }
+  ui-topbar ui-brand small { display: none; }
+  ui-topbar .board-wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #phase { grid-column: 2; grid-row: 1; }
+  #account-login, #account-logout { grid-column: 3; }
+  #halt { grid-column: 4; }
   #account-logout { padding-inline: var(--space-1); }
+  #connection { grid-column: 1 / 3; grid-row: 2; }
+  [data-account-profile] { grid-column: 3 / -1; grid-row: 2; justify-self: end; text-align: end; }
+  .halt-note { grid-row: 3; }
 }
 /* 전화 화면의 HOLD에서는 유실 이유를 피치보다 먼저 놓는다. */
 @media (width < 30rem) {

@@ -950,7 +950,12 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
               canvasScale: document.querySelector('#pitch').clientWidth / document.querySelector('#pitch').width,
               chips: [...document.querySelectorAll('#markers li')]
                 .filter(li => li.scrollWidth > li.clientWidth).map(li => li.textContent),
+              account: (() => { const link = document.querySelector('[data-account-profile]');
+                return {...link.getBoundingClientRect().toJSON(), inBar: !!link.closest('ui-topbar'),
+                  color: getComputedStyle(link).color}; })(),
+              mark: document.querySelector('ui-brand b').getBoundingClientRect().width,
             })""")
+            mark_status = page.evaluate("fetch('/common/brand/mark.svg').then(response => response.status)")
             save_temp_screenshot(page, f"games_board_live_{width}x{height}.png")
             browser.close()
     finally:
@@ -968,6 +973,13 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
+    # D-741 3·5: the R mark stays when the wordmark folds; the account link is in the bar's 나 seat, in the gutter,
+    # in the page's ink (it was a default-blue link flush at x=0 under the bar).
+    assert mark_status == 200 and fit["mark"] >= 16, (mark_status, fit)
+    account = fit["account"]
+    assert account["inBar"] and account["width"] > 0 and account["bottom"] <= fit["topbar"], fit
+    assert account["left"] >= fit["panels"][0]["x"] - 1 and account["right"] <= fit["panels"][0]["right"] + 1, fit
+    assert account["color"] != "rgb(0, 0, 238)", fit
 def test_visibility_observations_are_not_operational_approval():
     from playwright.sync_api import sync_playwright, expect
     board = PreviewBoard(clock=lambda: 100.0)
