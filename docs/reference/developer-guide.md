@@ -83,11 +83,11 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 
 실제 Chromium 시험은 옵트인이다. 정식 이름은 `ROSY_RUN_BROWSER_TESTS=1`이고, 예전 Fleet 이름 `ROSY_BROWSER_TESTS=1`도 받는다(`test/browser_harness.py`의 `browser_tests_enabled()`). 로컬 서버 포트는 `safe_listener()`/`free_port()`로 잡는다. Windows 동적 포트 범위가 1024부터면(`netsh int ipv4 show dynamicport tcp`) port 0이 Chromium 차단 포트(2049, 6000, 10080 등)를 주고 `net::ERR_UNSAFE_PORT`로 실패한다.
 
-선택한 Linux 시험 PC에서 바꾼 경로에 걸린 브라우저 시험만 돌린다. 아래 browser 명령은 그 PC에서 실행하며, 노트북 환경 변수는 remote runner가 전달하지 않는다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
+바꾼 경로에 걸린 브라우저 시험만 시험 PC에서 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다. `tools/land.py --tests auto`는 고른 시험 묶음 뒤에 이 브라우저 시험을 `ROSY_RUN_BROWSER_TESTS=1` 묶음으로 더 돌린다. 손으로 돌릴 때는 `tools/remote/remote_pytest.py`의 `--` 뒤 맨 앞에 `ROSY_RUN_BROWSER_TESTS=1`을 둔다. 앞에 오는 `ROSY_*=값` 단어는 시험 PC 작업의 환경 변수가 되고 pytest 인자가 아니다. 그 작업은 먼저 venv의 playwright에 맞는 Chromium을 그 PC의 `~/.cache/ms-playwright`에 설치한다(있으면 그대로 둔다).
 
 ```bash
-t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > <scratch>/browser.txt
-python test/known_failures.py <scratch>/browser.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- ROSY_RUN_BROWSER_TESTS=1 $t
+python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
 ```
 
 전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.
