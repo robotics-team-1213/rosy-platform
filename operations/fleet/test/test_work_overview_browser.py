@@ -360,8 +360,8 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
             page.locator("#work-list ui-button").click()
             page.wait_for_function("() => document.getElementById('work-detail').textContent.includes('Cell 적재')")
             assert "packing" in page.locator("#work-detail").inner_text()
-            assert "승인 조건두 사람" in page.locator("#work-detail").inner_text().replace("
-", "")  # D-763 7, read-only
+            terms = page.locator("#work-detail dt").all_inner_texts()  # D-763 7: the rule is shown, read-only
+            assert page.locator("#work-detail dd").nth(terms.index("승인 조건")).inner_text().startswith("두 사람"), terms
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             page.evaluate("window.scrollTo(0, 0); document.querySelector('.console-secondary')?.scrollTo(0, 0)")
             stop = page.locator("#estop").bounding_box()
