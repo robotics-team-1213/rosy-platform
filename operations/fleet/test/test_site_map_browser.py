@@ -565,9 +565,20 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       header: document.querySelector('ui-topbar').getBoundingClientRect().height,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
-      stop: document.querySelector('#estop').getBoundingClientRect().right
+      stop: document.querySelector('#estop').getBoundingClientRect().right,
+      // A select's own width with its chosen words and the native arrow, measured on an unsqueezed copy.
+      selects: [...document.querySelectorAll('ui-head select')].map((node) => {
+        const copy = node.cloneNode(true);
+        copy.style.cssText = 'width:auto;min-width:0;max-width:none;position:absolute';
+        copy.replaceChildren(new Option(node.selectedOptions[0].textContent));
+        document.body.append(copy);
+        const need = copy.offsetWidth;
+        copy.remove();
+        return [node.id, need, node.offsetWidth];
+      })
     })""")
     assert sizes["overflow"] <= 0, sizes
+    assert all(need <= has + 1 for _id, need, has in sizes["selects"]), sizes
     assert sizes["label"] >= 12, sizes
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
