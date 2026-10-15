@@ -585,3 +585,28 @@ def test_a_held_stop_is_taken_over_once_and_forgotten_on_any_halt():
     """Delta review 2: a recorded arrival stop is consumed by the next trip and cleared by a halt or E-stop."""
     runner, store, ports, arc = _lane_arrived()
     assert runner.held_stops and runner.close_all("operator_estop") == [] and runner.held_stops == {}
+
+
+# ---- last delta review 2026-10-15 ----------------------------------------------------------------
+
+def test_a_tick_while_the_job_row_is_written_leaves_its_new_lease_alone(tmp_path):
+    rig = Rig(tmp_path)
+    rows_create = rig.jobs.rows.create
+
+    def create_with_a_tick(mission_id, *args):
+        asyncio.run(rig.jobs.tick())                     # the job loop runs before the row exists
+        assert rig.runner.lease.job_of(R) == mission_id and rig.ports.lease.deletes == []
+        return rows_create(mission_id, *args)
+    rig.jobs.rows.create = create_with_a_tick
+    mid = rig.create()
+    rig.ticks()
+    assert rig.job(mid)["status"] == "RUNNING" and rig.runner.view("p1")["state"] in ("started", "running")
+
+
+def test_a_zero_segment_trip_does_not_consume_the_held_stop():
+    runner, store, ports, arc = _lane_arrived()
+    held = dict(runner.held_stops)
+    _plan(store, ports, "ring_w:fwd", arc.length_m - 0.05, "SW", plan_id="p0")   # already there
+    asyncio.run(runner.start("p0", "bob"))
+    assert runner.view("p0")["state"] == "arrived" and runner.held_stops == held
+    assert _next_trip_sends(runner, store, ports, arc)[0][1] == "SW"
