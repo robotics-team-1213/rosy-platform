@@ -252,6 +252,7 @@ def test_resume_is_a_named_operators_new_lease_and_a_new_trip_after_its_start_ch
     rig.store.resume(mid, actor_id="lee", expected_generation=rig.enabled["generation"])
     rig.ticks()
     trip = rig.runner.view(rig.plans[-1])
+    assert trip is not None, (rig.plans, rig.job(mid)["status"], rig.job(mid)["reason"])
     assert trip["state"] in ("started", "running") and trip["started_by"] == "lee"
     assert trip["lease"]["lease_id"] != old and trip["lease"]["state"] == "held"
 
