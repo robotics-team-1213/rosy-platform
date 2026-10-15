@@ -61,7 +61,8 @@ export PATH=/usr/bin:/bin:$PATH  # ~/.local/bin may hold another python3 (Isaac'
 """ + DEPS + r"""source /opt/ros/jazzy/setup.bash
 export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
 COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim \
+DEFAULT_ROBOT="$(PYTHONPATH="contracts/foundation:$PYTHONPATH" python3 -c 'from core_common.profile import DEFAULT_ROBOT; print(DEFAULT_ROBOT)')"
+colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim "$DEFAULT_ROBOT" \
   --parallel-workers "$CPUS" --build-base "$OUT/build" --install-base "$OUT/install" \
   > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
