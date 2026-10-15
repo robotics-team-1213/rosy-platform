@@ -55,8 +55,8 @@
 
 1. **필드.** `POST /api/v1/line-follow/junction`에 선택 최상위 필드 `pose_stamp`(float > 0, CORE 벽시계, 스냅숏 `odom_pose.stamp`)를 더한다. 뜻: 이 지시의 `expect_in_m`과 `bend_in_m`은 그 stamp의 odom 표본에서 Fleet이 본 자세로부터 잰 거리다. 값은 같은 주기의 `map_entry.odom_stamp_s`(D-759)·통행권 `pose_stamp`와 같다. 각 필드의 기준점은 그대로다(`expect_in_m`은 로봇의 차로 투영점, `bend_in_m`은 지금처럼). 바뀌는 것은 시간 기준뿐이다.
 2. **CORE.** 받을 때 `_odom_entry`(D-758 0, 정확한 표본)로 그 표본을 찾고, 같은 표본의 **교차로 주행 거리계** 값 `trail.odometer_at(표본)`을 창·굽이 통과의 기준으로 둔다(지금은 받은 때의 `trail.odometer`). 통행권의 `_odom_log` 경로 길이(`path_m`)와 교차로의 `trail.odometer`는 다른 누적기이므로 섞지 않는다. 표본은 `_odom_entry`로 찾고 거리는 `trail`로 잰다. 두 누적기가 같은 표본에서 같은 시각을 가리키는지는 구현 시험이 고정한다.
-3. **못 쓰면 오늘의 기준.** 표본이 없거나(`no_sample`), 2 s보다 오래됐거나(`stale`), CORE 시계보다 0.05 s 넘게 앞서거나(`future`), 같은 stamp 둘(`ambiguous`), odom epoch·frame이 다르면(`epoch`) 지시는 거절하지 않고 받은 때를 기준으로 쓴다. 상태 `line_follow.junction.distance_basis: stamp|receipt`와 `distance_basis_reason`에 남긴다. 상수는 D-744·D-759의 `ARC_ANCHOR_MAX_AGE_S` 2, `STAMP_TOL_S` 0.05 그대로다.
-4. **능력과 Fleet.** CORE는 `base_velocity`에 `lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled` 기본 false와 묶음)를 알린다. Fleet은 이 능력이 참인 로봇에 `pose_stamp`를 싣고, 그 로봇의 `bend_in_m`에서 앞당김을 빼며(`lead` = 0), `expect_tol_m`에서 읽기→전송·`SEND_ALLOWANCE_S` 항을 뺀다(자세 나이·dead reckoning·드리프트 항은 남는다). 받은 때 기준으로 떨어진 경우는 앞당김 없는 오늘의 오차(2 cm 늦음 꼴)이고 `bend_tol_m` 최소 0.12 안이다.
+3. **못 쓰면 거절하고 Fleet이 다시 보낸다(개정 2, Safety-Review CONDITIONS).** 거리(`expect_in_m` 또는 굽이)가 있는 지시에 `pose_stamp`가 실렸는데 CORE가 쓸 수 없으면 — 설정 꺼짐(`disabled`), 같은 stamp 둘(`ambiguous`), CORE 기록의 가장 새 표본보다 0.05 s(`STAMP_TOL_S`) 넘게 앞섬(`future`), 그 stamp로 발행된 표본 없음·신선한 odom 없음(`no_sample`), odom epoch·frame이 다름(`epoch`), 표본이 교차로 궤적에서 빠짐(`stale`) — 지시를 409 `INSTRUCTION_STAMP_UNUSABLE`(`detail.reason`)로 거절하고 지금 상태를 그대로 둔다. 받은 때 기준으로 조용히 떨어지지 않는다: 그 로봇에는 Fleet이 앞당김을 빼고 보냈으므로 받은 때 기준은 오늘보다 늦다(속도 × 자세 나이·읽기→전송·전달). 나이 상한은 없다: 주행 거리만 세므로 궤적(5 s)이 그 표본을 가진 동안 쓴다(D-744의 2 s `ARC_ANCHOR_MAX_AGE_S`는 지도 자세 기하용이라 여기에 쓰지 않는다). `pose_stamp` 없는 지시는 오늘처럼 받은 때 기준이다. 상태 `line_follow.junction.distance_basis: stamp|receipt`, `distance_basis_reason`(`receipt`이면 `none_sent`).
+4. **능력과 Fleet.** CORE는 `base_velocity`에 `lane_instruction_stamp`(설정 `line_follow.instruction_stamp_enabled` 기본 false와 묶음)를 알린다. Fleet은 이 능력이 참인 로봇에 `pose_stamp`를 싣고, 그 로봇의 `bend_in_m`에서 앞당김을 빼며(`lead` = 0), `expect_tol_m`에서 읽기→전송·`SEND_ALLOWANCE_S` 항을 뺀다(자세 나이·dead reckoning·드리프트 항은 남는다). `pose_stamp`는 거리가 있는 지시(창이 있는 교차로, 굽이)에만 싣는다. CORE가 `INSTRUCTION_STAMP_UNUSABLE`로 거절하면 Fleet은 다음 주기에 새 자세·stamp로 다시 보낸다(`JUNCTION_ODOM_STALE`과 같은 재시도). 사유가 `disabled`이면 CORE 설정이 능력과 어긋난 것이므로 그 trip은 능력을 거짓으로 고쳐 쓰고 다음부터 stamp 없이 앞당김을 넣어 보낸다.
 5. **검토.** 교차로 게이트 경로라 **Safety-Review**. 이것이 개정 전의 P3a를 대신한다. 미리보기와 관계없다.
 
 #### B부 — 경로 미리보기
@@ -111,7 +111,7 @@
 
     | 단계 | 무엇 | 끝난 기준 | 검토 | 되돌림 |
     |---|---|---|---|---|
-    | A | 시각 붙은 지시(1–5항) | 호스트: 0.2 s 늦게 닿은 지시의 굽이 시작이 0.005 m 안, 떨어짐 사유 각각, 설정 꺼짐 = 오늘. Gazebo: 굽이 시작 오차가 m18 기준(±7 mm)보다 나쁘지 않고 `junction_unexpected` 증가 없음. 장치 2대 10바퀴 | **Safety-Review** | 설정 false, Fleet 앞당김 복귀 |
+    | A | 시각 붙은 지시(1–5항) | 호스트: 0.2 s 늦게 닿은 지시의 굽이 시작이 0.005 m 안, 못 쓰는 사유 각각 거절·상태 그대로, 설정 꺼짐 = `disabled` 거절과 Fleet의 앞당김 복귀. Gazebo: 굽이 시작 오차가 m18 기준(±7 mm)보다 나쁘지 않고 `junction_unexpected` 증가 없음. 장치 2대 10바퀴 | **Safety-Review** | 설정 false, Fleet 앞당김 복귀 |
     | P0 | Fleet 미리보기(6항), 관제 표시, 정확도 기록 | 7항 기준, `preview_mismatch` 0 | 코드 리뷰 | 설정 `off` |
     | P1 | 차로 신호 trip 변형, CORE 저장·표시 | **사용자가 P2를 원한다고 정함** + P0 통과. 호스트: 순서·버림·다시 재기·import-lint·성질 시험 | 코드 리뷰(움직임 없음) | Fleet이 trip 변형을 싣지 않음 |
     | P2 | 미리 감속(9항) | 호스트: D-551 9항 시험 목록 + 종류별 감속 시작점 + `slow_from`·`v_cross`와 `min`. Gazebo 2대 30분 접촉 0·블록 중복 0·정체 판정 증가 없음. 장치 2대 10바퀴 | **Safety-Review** | 설정 false |
@@ -145,8 +145,8 @@
 1. **크기.** `trip_runner.py`(901)는 ratchet 천장이다. 배선 한 줄은 같은 커밋에서 실제 줄 하나 이상을 비워 갚는다(문장 합치기 금지, rosy-fc). `trip_ports.py`(600)에는 아무것도 더하지 않는다: A부의 Fleet 변경(앞당김 0, 허용치 항 빼기)은 줄을 늘리지 않는 꼴로 하거나 줄을 옮긴 뒤에 한다. B부 코드는 `server/trips/trip_preview.py` 새 파일 하나다(`traffic/`에 두면 `traffic → trips` import가 방향을 뒤집는다). D-763 조각 4 착지와 main 병합이 먼저다. CORE 쪽 새 저장소는 `line_follow` 최상위(여유 약 100줄)나 `line_follow/cue`(약 140줄) 안의 파일로 한다.
 2. **미리보기를 허가로 읽는 사람.** 관제 문구는 "예고"이고 지시 상태(`armed` 등)를 옆에 보인다.
 3. **지도 오류.** 장소·호 반지름이 틀리면 미리보기와 지시가 같이 틀린다. P0 참값 비교가 이것을 드러낸다.
-4. **두 누적기(A부 2항).** `_odom_log` 경로와 `trail.odometer`의 표본 시각이 어긋나면 기준이 틀린다. 같은 표본을 가리킴을 시험으로 고정하고, 못 찾으면 받은 때 기준(오늘)으로 떨어진다.
-5. **Pi 시계.** `pose_stamp`는 CORE 벽시계다. 정확한 표본 찾기(D-758 0)가 벽시계 튐을 막고, 같은 stamp 둘이나 뒤로 간 벽시계는 받은 때 기준으로 떨어진다.
+4. **두 누적기(A부 2항).** `_odom_log` 경로와 `trail.odometer`의 표본 시각이 어긋나면 기준이 틀린다. 같은 표본을 가리킴을 시험으로 고정하고, 못 찾으면 지시를 거절한다(3항).
+5. **Pi 시계.** `pose_stamp`는 CORE 벽시계다. 정확한 표본 찾기(D-758 0)가 벽시계 튐을 막고, 같은 stamp 둘이나 뒤로 간 벽시계는 거절된다(3항).
 
 ### Open — 사용자에게 남은 것
 
@@ -177,3 +177,12 @@
 | rosy-fc: 다음 단계 미리보기 없음, `work_read`에 넣지 않음, 공유 상태 읽기 `max_age_s`·`PERIODIC` | 6항 |
 | rosy-fc: 바뀔 때 + `ttl/2` 유지, 만료는 아무것도 안 보임 | 8항(대안 경로), 계획 |
 | 조정자: P1은 사용자가 P2를 원할 때만 | Status, 8항, 11항, Open 1 |
+
+### 개정 2 (2026-10-15) — A부 독립 Safety-Review CONDITIONS 반영
+
+| 지적 | 고친 곳 |
+|---|---|
+| HIGH: 앞당김을 뺀 로봇이 받은 때 기준으로 떨어지면 오늘보다 늦다. 2 s 나이 상한(D-744용) 때문에 `stale`이 잦다 | 3항: 나이 상한 없음(궤적이 표본을 가진 동안), 못 쓰면 409 `INSTRUCTION_STAMP_UNUSABLE` 거절, 4항: Fleet 재전송, `disabled`면 그 trip은 stamp 없이 앞당김 |
+| MEDIUM-2 능력과 설정의 어긋남 | 4항 `disabled` 처리 |
+| MINOR `pose_stamp` 검증 | API: JSON `true`·숫자 문자열 400(strict) |
+| 빠진 시험: stamp와 받음 사이 후진 | 창의 후퇴 감지 시험 |

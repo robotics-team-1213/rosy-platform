@@ -79,7 +79,8 @@ def test_idle_tracks_and_reports_idle():
     assert status.junction.model_dump() == dict(pending_action=None, place_id=None, state='idle',
                                                 seq=0, turn_deg=None, reason=None, pivot_basis=None,
                                                 signal_request_id=None, signal_state=None,
-                                                map_entry_used=False, map_entry_reason=None)
+                                                map_entry_used=False, map_entry_reason=None,
+                                                distance_basis=None, distance_basis_reason=None)
 
 
 def test_no_instruction_at_a_junction_waits_and_latches():

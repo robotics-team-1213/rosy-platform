@@ -1168,3 +1168,24 @@
 - gate 변화: 없음. `recovery/junction` 단위 1줄 감소.
 - 결정: D-620 노트 2026-10-15, D-760 개정 4.
 - 교훈: 상한 없는 대기 크레딧은 살아 있는 상대가 기다리라고 할 때만 준다. 링크 끊김은 상한으로 닫는다.
+## 2026-10-15 · 1a9960df2 · 교차로·굽이 지시의 거리를 pose_stamp의 odom 표본부터 잰다 (D-767 A부, API v1.241)
+
+- 변경: `line_follow/recovery/junction/approach.py` `_stamp_odometer`·`supports_lane_instruction_stamp`, `_expect_window`의 기준 인자. `gate.py` `set_junction(pose_stamp=)`: 설정 `instruction_stamp_enabled`(기본 꺼짐)가 켜져 있으면 `_odom_entry`(D-758 0)로 그 stamp에 발행된 표본을 찾고(정확한 표본만), 같은 표본의 교차로 궤적 주행 거리계(`trail.odometer_at`)를 창의 기준으로, 그 뒤 달린 거리(`trail.odometer` − 그 값)를 굽이의 처음 `travel`로 둔다. 통행권 기록의 `path_m`은 쓰지 않는다. 못 쓰면 받은 때 기준, 거절 없음: 상태 `distance_basis`·`distance_basis_reason`(none_sent·disabled·ambiguous·stale·future·no_sample·epoch). `model.py` 설정 한 줄.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 895d7f30b → 초록): stamp 뒤 0.05 m 움직인 굽이는 Fleet 자세에서 `bend_in − tol`에 시작, 창 기준은 stamp 표본의 odometer, 두 기록이 같은 odom 메시지(stamp_ns), 벽시계 ±5 s, 떨어짐 사유 넷, 설정 꺼짐 = 명령이 같음, 거리 없는 지시는 기준 없음, 능력, 잘못된 stamp. 원격(모델 PC, 9639a41b8) `middleware/core/services/test` 통과, `known_failures` 0 new, 로그 X: `instruction-stamp/services/run-1.txt`.
+- gate 변화: 없음. 호스트 근거만이다. Gazebo·장치 미확인.
+- 결정: D-767 A부 1–3항.
+- 교훈: 코드 경로상 `epoch`는 거의 나오지 않는다(새 odom run의 첫 표본에서 통행권 기록이 비워지고, 그 전에는 신선한 자세가 없어 `no_sample`). 이 사유는 시험하지 않았다.
+## 2026-10-15 · 0f7ae1a51 · D-767 A 검토 반영: 쓸 수 없는 pose_stamp는 거절, 나이 상한 없음 (API v1.241)
+
+- 변경: `recovery/junction/approach.py` `_stamp_odometer`는 `_odom_at_stamp`의 2 s 나이 상한(D-744 지도 자세용)을 쓰지 않고, 정확한 표본을 교차로 궤적이 가진 동안 쓴다. `gate.py`: 거리(창 또는 굽이) 있는 지시의 `pose_stamp`를 못 쓰면 상태를 바꾸기 전에 `JunctionRefused('INSTRUCTION_STAMP_UNUSABLE', reason=…)`(disabled·ambiguous·future·no_sample·epoch·stale). 받은 때 기준으로 조용히 떨어지지 않는다. `pose_stamp` 없는 지시와 거리 없는 지시는 그대로.
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 eb3a3e8b2 → 초록): 2.5 s 묵은 stamp도 기준, 못 쓰는 사유 다섯 × 굽이·창 거절과 상태 그대로, 설정 꺼짐 `disabled`, stamp와 받음 사이 후진이 창의 후퇴로 잡힘(이 시험은 처음부터 초록: 구현이 이미 맞았다). 원격(모델 PC) 통과, `known_failures` 0 new.
+- gate 변화: 없음. 호스트 근거만.
+- 결정: D-767 개정 2(A부 3·4항), 독립 Safety-Review CONDITIONS.
+- 교훈: Fleet이 보정을 빼고 보낸 지시에서 CORE가 옛 기준으로 조용히 떨어지면 오늘보다 나빠진다. 보정을 뺀 쪽과 받는 쪽의 떨어짐은 같이 설계한다.
+## 2026-10-15 · 02fb4929d · D-767 A 재검토: 돌던 동작의 재전송과 무장한 굽이의 갱신은 stamp로 거절하지 않는다 (API v1.241)
+
+- 변경: `recovery/junction/gate.py` `set_junction`의 stamp 검사를 재전송·굽이 갱신 갈래 뒤로 옮겼다. 둘은 stamp로 재지 않으므로 쓸 수 없는 stamp에도 받는다(되풀이된 거절로 이미 잰 굽이가 만료되던 일).
+- 증거: `test/test_junction_instruction_stamp.py`(빨강 4865e2b0e → 초록): 갱신은 travel을 지키고 받음, `bending` 중 재전송 그대로. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2, 재검토 MEDIUM.
+- 교훈: 없음.

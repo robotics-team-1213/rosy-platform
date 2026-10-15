@@ -3888,3 +3888,27 @@
 - 되돌림: `ROSY_ROUTE_PREVIEW=off`(Fleet 프로세스 환경). `TripConfig` 필드(`fleet.trip.route_preview`)가 허락될 때까지 이것이 D-767 P0의 되돌림이다.
 - 증거: 원격(f4162e635) `operations/fleet/test` 5,294 passed, 293 skipped(브라우저 opt-in), `known_failures` 0 new, 로그 X: `route-preview-p0/r3fleet/run-1.txt`. 구조·하네스·채점기·`operations/world/test` 148 passed, 0 new, 로그 X: `route-preview-p0/r3arch/run-1.txt`. 새 시험: 경로당 한 번 표본(두 번째 주기 0회, 먼 횡단보도 0회, 첫 주기 ≤ 130회), 한 로봇 실패 격리·로그 한 번, 앞 끝 거름, 끄기 스위치, 채점기 시계·다리.
 - gate 변화: 없음.
+
+## 2026-10-15 · 64816ae7e · lane_instruction_stamp 로봇에 pose_stamp, 지연 추정 없음 (D-767 A부, API v1.241)
+
+- 변경: `server/console/console_view.py` `TripCaps.lane_instruction_stamp`. `server/trips/trip_runner.py` trip 능력 보기에 그 키(기존 줄 안, 901줄 그대로). `server/trips/trip_ports.py`: 능력이 참이고 이 걸음의 자세에 odom stamp(`live.at_stamp`)가 있으면 교차로·굽이 필드에 `pose_stamp`(= `map_entry.odom_stamp_s`), 굽이 앞당김 0, `_pose_tol`에서 읽기→전송·`SEND_ALLOWANCE_S` 항 제외(자세 나이·dead reckoning·드리프트는 남음). 600줄 그대로(주석을 줄였다). 능력이 없는 로봇은 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 허용치 0.095(지연 0.5 s 무시), 능력·stamp 없으면 0.235와 `pose_stamp` 없음, 굽이 0.4 무앞당김과 `pose_stamp` = `map_entry.odom_stamp_s`, 능력 없으면 0.38. 원격(모델 PC, 9639a41b8) `operations/fleet/test` 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 A부 4항. `bend_send_s`는 능력 없는 로봇에 그대로 쓴다.
+- 교훈: 없음.
+
+## 2026-10-15 · 0f7ae1a51 · INSTRUCTION_STAMP_UNUSABLE 재시도, disabled면 stamp 없이 앞당김 (D-767 A 검토, API v1.241)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `INSTRUCTION_STAMP_UNUSABLE`을 `JUNCTION_ODOM_STALE`처럼 다음 주기에 새 자세로 다시 보낸다. `detail.reason`이 `disabled`이면 그 trip의 `caps.lane_instruction_stamp`를 거짓으로 고쳐 다음부터 stamp 없이 앞당김을 넣는다. 901줄 그대로(`_step_free`의 한 번 쓰는 `arc` 지역 변수를 없앴다). `trip_ports.py`: `pose_stamp`는 창 있는 교차로 지시와 굽이에만. 600줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`(빨강 → 초록): 창 없는 지시엔 `pose_stamp` 없음, 거절 뒤 새 stamp로 재전송, `disabled` 뒤 stamp 없이 0.38 앞당김. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
+
+## 2026-10-15 · 02fb4929d · junction_retry가 거절 까닭을 보인다 (D-767 A 재검토)
+
+- 변경: `server/trips/trip_runner.py` `_send`: `detail.junction_retry` = 코드와 `detail.reason`(예: `INSTRUCTION_STAMP_UNUSABLE no_sample`). 901줄 그대로.
+- 증거: `test/test_trip_instruction_stamp.py`. 원격 통과, `known_failures` 0 new.
+- gate 변화: 없음.
+- 결정: D-767 개정 2.
+- 교훈: 없음.
