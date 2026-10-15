@@ -51,6 +51,15 @@ def crosswalks_on(graph, segments: list, crosswalks) -> list:
     return sorted(hit)
 
 
+def signals_on(traffic, segments: list) -> list:
+    """D-763 10 (c): ids of the D-525 signals whose zone this route crosses (the span walk of
+    ``TrafficService.signal_refusal``, kept here so the traffic unit does not grow)."""
+    zones = {plan.zone: signal_id for signal_id, plan in traffic._signals.items()}
+    layout = traffic._layout_for(traffic._store.active()) if zones and segments else None
+    spans = layout.route(traffic._store.active()[2], [arc_id(seg) for seg in segments]) if layout else ()
+    return sorted({zones[span.unit] for span in spans if span.unit in zones})
+
+
 def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) -> dict:
     """D-601 D: the robot against its plan's first lane (``code`` None: it may start). Off the lane is
     the trip loop's own rule (more than half the lane width, ``_locate``); the heading is compared
@@ -164,7 +173,7 @@ class TripAdmission:
         # D-763 10 (c): a lane route over a crosswalk or a signalled zone needs CORE's matching rule on, else
         # the rule would silently not run there. A CORE announcing it off is refused.
         need = {"lane_crosswalk_gate": crosswalks_on(graph, segments, getattr(self._store.active()[1], "crosswalks", ())),
-                "lane_junction_signal": sorted(set(self.traffic.route_signals(segments)) - {None})} if lane else {}
+                "lane_junction_signal": signals_on(self.traffic, segments)} if lane else {}
         missing = {cap: ids for cap, ids in need.items() if ids and getattr(caps, cap, None) is False}
         if missing:
             raise TripError(422, "TRIP_REGULATION_CAPS_MISSING", {"missing": missing})
@@ -176,6 +185,15 @@ class TripAdmission:
             detail.pop("regulation_caps_unknown", None)
             detail.update({"regulation_caps_unknown": unknown} if unknown else {})
         return caps
+
+    async def _admit_replan(self, live, hold: dict, principal_id: str) -> None:
+        """An operator-confirmed replan: the D-763 10 (c) capability checks as at a start, then the switch.
+        A changed map is left to ``_apply_replan`` (409 ``TRIP_MAP_CHANGED``)."""
+        active = self._store.active()
+        if active is not None and active[0] == hold["map_version"]:
+            await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
+                                    detail=live.view["detail"])
+        self._apply_replan(live, hold, principal_id)
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None, caps=None):
         """D-494 start checks on line following and the map pose: ``(pose, enable)`` or ``TripError``.

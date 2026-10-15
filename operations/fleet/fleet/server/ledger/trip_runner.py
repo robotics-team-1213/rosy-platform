@@ -324,9 +324,7 @@ class TripRunner(TripAdmission, TripProgress):
                     return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
-            if (self._store.active() or (None,))[0] == hold["map_version"]:  # D-763 10 (c) as at a start; else TRIP_MAP_CHANGED below
-                await self._caps_checks(live.view["robot_id"], self._store.active()[2], hold["plan"]["segments"], bool(live.repeat), detail=live.view["detail"])
-            self._apply_replan(live, hold, principal_id)
+            await self._admit_replan(live, hold, principal_id)  # D-763 10 (c): checked as at a start
             self._describe(live)
             self._save(live)
             return live.view
