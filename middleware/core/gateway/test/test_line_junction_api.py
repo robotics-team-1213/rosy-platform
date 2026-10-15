@@ -59,7 +59,8 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
                                     "state": "unresolved", "seq": 2, "turn_deg": None,
                                     "reason": None, "pivot_basis": None,
                                     "signal_request_id": None, "signal_state": None,
-                                    "map_entry_used": False, "map_entry_reason": None}
+                                    "map_entry_used": False, "map_entry_reason": None,
+                                    "distance_basis": None, "distance_basis_reason": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
@@ -340,3 +341,22 @@ def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
         raw = json.dumps({"reason": "no_boundary", "stamp": clock["t"], "junction_ahead_v": marker})
         observation.keep_junction(services, raw, source_now=clock["t"], received_at=clock["t"])
         assert services.line_follow.supports_junction_pivot is on, marker
+
+
+def test_d767_pose_stamp_validation_and_record(core_client):
+    client, services, clock = _active(core_client)
+    for bad in (0, -1.0, "now", [1.0]):
+        assert client.post(URL, json={**BEND, "pose_stamp": bad}, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    lf = services.line_follow
+    assert _line_follow_config({}).instruction_stamp_enabled is False       # off by default
+    assert _line_follow_config({"instruction_stamp_enabled": True}).instruction_stamp_enabled is True
+    with pytest.raises(ValueError):
+        _line_follow_config({"instruction_stamp_enabled": "true"})
+    assert client.post(URL, json={**BEND, "pose_stamp": 1.0}, headers=OPERATOR).json()["state"] == "armed"
+    junction = client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]
+    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "disabled")
+    lf._config = replace(lf.config, instruction_stamp_enabled=True)
+    client.post(URL, json={**BEND, "place_id": "B3", "pose_stamp": 1.0}, headers=OPERATOR)
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["distance_basis"], junction["distance_basis_reason"]) == ("receipt", "stale")  # 1970
