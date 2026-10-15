@@ -31,6 +31,9 @@ jobs:
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
+    # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
+    # install step). Measured scope: ~35 s.
+    timeout-minutes: 10
     outputs:
       mode: ${{ steps.scope.outputs.mode }}
       matrix: ${{ steps.scope.outputs.matrix }}
@@ -99,6 +102,8 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
+    # Longest entry on 2026-10-16: fleet-2of4, 751 s. A timeout is a failure, so ci-result fails.
+    timeout-minutes: 25
     continue-on-error: ${{ !matrix.gating }}
     strategy:
       fail-fast: false
@@ -369,6 +374,7 @@ jobs:
     needs: [scope, test]
     if: always()
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     steps:
       - name: All gating jobs passed
         env:

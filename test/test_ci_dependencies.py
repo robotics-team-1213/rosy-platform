@@ -258,6 +258,15 @@ def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")
 
 
+def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
+    """A lost runner held run 38588670328 for 45 min; without a bound it can hold a run for 6 h."""
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for name, job in jobs.items():
+        assert 0 < int(job.get("timeout-minutes", 0)) <= 30, name
+
+
 def test_merge_group_runs_the_full_tier_against_the_group_base():
     """D-762 stage 1: a merge queue group is a full-tier event and checks its own base..head."""
     import yaml
