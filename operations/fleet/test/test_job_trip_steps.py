@@ -10,6 +10,7 @@ import pytest
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.cell_job_store import CellJobStore
+from fleet.server.dispatch_admission import reserve as reserve_claims
 from fleet.server.job_trip_steps import KIND, JobTripSteps
 from fleet.server.mission_store import MissionConflict
 from fleet.server.step_action_kinds import dispatch_open, open_kinds, required_approval
@@ -17,6 +18,7 @@ from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.trip_guard import install_trip_guard
 from fleet.server.trip_ports import TripError
 from fleet.traffic import rule_m
+from test_approval_registry import _app, _post
 from test_cell_job_store import _claim_phases, _stores
 from test_step_dispatcher import REVISIONS, Transport
 from test_trip_job_lease import CAPS, _Console
@@ -275,11 +277,14 @@ def test_create_refuses_an_unbounded_robot_and_leaves_no_job(tmp_path):
 
 def test_create_refuses_a_robot_another_owner_claims_and_gives_the_lease_back(tmp_path):
     rig = Rig(tmp_path)
-    rig.create()
-    rig.runner.lease.jobs.clear()                        # the durable claim alone still holds the robot
+    with rig.store._connect() as connection:            # a navigate Task holds the robot
+        assert reserve_claims(connection, owner_kind="task", owner_id="t-1", resources=[("robot", R)],
+                              generation=rig.enabled["generation"], phase="CLAIMED")
     with pytest.raises(MissionConflict):
         rig.create()
     assert rig.runner.lease.job_of(R) is None and len(rig.ports.lease.deletes) == 1
+    with rig.store._connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_cell_jobs").fetchone()[0] == 0
 
 
 def test_the_device_dispatcher_leaves_trip_steps_to_the_trip_loop(tmp_path):
@@ -289,3 +294,27 @@ def test_the_device_dispatcher_leaves_trip_steps_to_the_trip_loop(tmp_path):
     dispatcher = StepJobDispatcher(rig.store, rig.tasks, Transport(), {"omx_01": "omx_01_control"}, REVISIONS,
                                    deployment_profile="simulation")
     assert dispatcher.dispatch_next() is None and rig.job(mid)["status"] == "RUNNING"
+
+
+# ---- the route ------------------------------------------------------------------------------------
+
+def _routes(app) -> set:
+    return {getattr(route, "path", None) for route in app.routes}
+
+
+def test_the_route_exists_only_in_the_simulation_profile(tmp_path, monkeypatch):
+    for name in ("production", "simulation"):
+        (tmp_path / name).mkdir()
+    client, _ = _app(tmp_path / "production")
+    assert "/api/fleet/trip-jobs" not in _routes(client.app) and getattr(client.app.state, "job_trips", None) is None
+    import test_approval_registry
+    original = test_approval_registry.create_app
+    monkeypatch.setattr(test_approval_registry, "create_app",
+                        lambda *a, **k: original(*a, deployment_profile="simulation", **k))
+    client, _ = _app(tmp_path / "simulation")
+    assert "/api/fleet/trip-jobs" in _routes(client.app) and client.app.state.job_trips is not None
+    body = {"robot_id": "rosy_01", "steps": [{"to": "B"}]}
+    assert _post(client, "/api/fleet/trip-jobs", "viewer-secret", body).status_code == 403
+    refused = _post(client, "/api/fleet/trip-jobs", "op1-secret", body)      # no active site map here
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "TRIP_UNKNOWN_PLACE"
+    assert _post(client, "/api/fleet/trip-jobs", "op1-secret", {**body, "robot_id": "rosy_99"}).status_code == 404
