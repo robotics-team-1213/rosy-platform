@@ -111,6 +111,7 @@ class TripRunner(TripAdmission, TripProgress):
         self.traffic.authority_reach, self._unread, self._read_after = self.authority.reach, set(), {}  # D-760 3; 4 state reads; 8 read fence
         self.advice = AdviceSender(junction, self.traffic, signal_advice)  # D-551, display only
         self.lease = TripLease(junction, time.monotonic, config.port_timeout_s, self._lease_lost, **(lease or {}))  # D-541 7
+        self.held_stops: dict[str, tuple] = {}  # robot id -> (seq, place) of the stop its last lane arrival left held
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -234,6 +235,7 @@ class TripRunner(TripAdmission, TripProgress):
             if turns:  # D-603: the alignment turns CORE made before this start
                 view["detail"]["aligned"] = turns
             live = LiveTrip(view, graph, request)
+            live.inherited = self.held_stops.get(robot_id)  # D-763 7: the one held stop this trip may replace
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
             self.halts.restarted = [t for t in self.halts.restarted if t["robot_id"] != robot_id]  # this trip owns it
@@ -577,6 +579,8 @@ class TripRunner(TripAdmission, TripProgress):
         # after the step, so the last place's stop has gone out before "arrived"
         if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane):
             live.view["state"] = "arrived"
+            if lane and (live.sent or {}).get("action") == STOP:
+                self.held_stops[robot_id] = (live.sent["seq"], live.sent["place"])
             if not lane:
                 self._release_queue(robot_id)
             self._save(live)

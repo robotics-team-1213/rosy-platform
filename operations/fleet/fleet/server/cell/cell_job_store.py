@@ -118,7 +118,6 @@ class CellJobStore:
                 );
                 """
             )
-            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
             connection.execute(
                 "INSERT OR IGNORE INTO fleet_component_migrations(component, version, applied_at) "
                 "VALUES ('cell_jobs', ?, ?)", (_MIGRATION_VERSION, _now()),
@@ -128,6 +127,7 @@ class CellJobStore:
             ).fetchone()[0]
             if applied > _MIGRATION_VERSION:
                 raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
+            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
             sheets.migrate(connection)
             connection.commit()
 
@@ -582,7 +582,8 @@ class CellJobStore:
                 (state, index, control["authority_epoch"], expected_generation, now, mission_id))
             self._event(connection, mission_id, index, "CELL_JOB_RESUMED", actor_id, {
                 "authority_epoch": control["authority_epoch"], "dispatch_generation": expected_generation,
-                "previous_generation": job["dispatch_generation"], "step_status": state})
+                "previous_generation": job["dispatch_generation"], "step_status": state,
+                "approvals": self._approvals(connection, job)})  # a later resume at the same fence is a new event
             result = self._get(connection, mission_id)
             connection.commit()
         return result

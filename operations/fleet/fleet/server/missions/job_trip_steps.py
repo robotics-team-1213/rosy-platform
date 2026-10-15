@@ -43,6 +43,7 @@ class JobTripSteps:
             raise ValueError("a trip job needs a one-person kind")
         mission_id = uuid.uuid4().hex
         await self.runner.hold_job(robot_id, mission_id, principal_id, await self.caps(robot_id))
+        self.runner.lease.jobs[robot_id].view["stop_epoch"] = self.runner._stop_epoch  # an E-stop after this: HOLD
         try:
             return await asyncio.to_thread(self.rows.create, mission_id, robot_id, principal_id, steps)
         except BaseException:
@@ -68,7 +69,7 @@ class JobTripSteps:
                 _LOG.exception("trip job lease of %s could not be settled", robot_id)
         for row in await asyncio.to_thread(self.rows.uncased):  # every HOLD, whoever wrote it, reaches a person once
             try:
-                detail = json.loads(row["detail_json"])
+                detail = {**json.loads(row["detail_json"]), "held_event": row["event_id"]}
                 await self.incident(row["instance_id"], row["mission_id"], row["reason"], detail)
                 await asyncio.to_thread(self.rows.cased, row["mission_id"], row["event_id"])
             except Exception:  # noqa: BLE001 - not marked: the next pass tries again
@@ -105,6 +106,9 @@ class JobTripSteps:
                 if mission_id in self._lost_jobs:
                     raise TripError(409, "JOB_LEASE_LOST", {"robot_state": "unconfirmed"})
                 await self.runner.hold_job(robot_id, mission_id, actor, await self.caps(robot_id))
+                self.runner.lease.jobs[robot_id].view["stop_epoch"] = token[0]
+            elif hold.view.get("stop_epoch") != token[0]:  # an E-stop since the lease (its end_trip may not have run)
+                raise TripError(409, "JOB_ESTOP")
             elif self.runner.lease.now() - hold.view["lease"]["renewed_at"] > 2 * self.period_s:
                 return  # no renew confirmed lately: the lease rule decides before a new step starts
             plan_id = await self.plan(robot_id, step["step"], actor)
@@ -124,7 +128,8 @@ class JobTripSteps:
         the robot is never assumed IDLE here (D-763 10); the start checks of a resumed step read it again."""
         self._lost_jobs.add(view["job_id"])  # before any await: a tick in the gap must not take a new lease
         detail = {**detail, "robot_state": "unconfirmed"}
-        await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail)
+        if not await asyncio.to_thread(self.rows.hold, view["job_id"], "JOB_LEASE_LOST", detail):
+            self._lost_jobs.discard(view["job_id"])  # it was HOLD already: a resume after this is the operator's
 
 
 __all__ = ["KIND", "JobTripSteps"]

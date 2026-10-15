@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from fleet.server.job_trip_rows import ACTIVE, TripJobRows
 from fleet.server.job_trip_steps import KIND, JobTripSteps
 from fleet.server.mission_store import MissionConflict
 from fleet.server.step_action_kinds import dispatch_open
@@ -33,7 +33,13 @@ class TripJobRequest(BaseModel):
 def install_trip_job_routes(app, *, store, runner, console, deployment_profile: str, episodes,
                             require_named_operator, operator_guard):
     """The route and the loop (``app.state.job_trips``); nothing at all outside a profile the registry opens."""
-    if store is None or not dispatch_open(deployment_profile, KIND):
+    if store is None:
+        return None
+    if not dispatch_open(deployment_profile, KIND):  # a TRIP ledger opened here: its open jobs keep no robot moving
+        rows = TripJobRows(store)
+        for mission_id in rows.ids(ACTIVE):
+            rows.hold(mission_id, "FLEET_PROFILE_CLOSED", {})
+            _LOG.warning("trip job %s held: the %s profile does not run trip steps", mission_id, deployment_profile)
         return None
 
     async def plan(robot_id, step, principal_id):
@@ -46,8 +52,8 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
         """The case of a held job (rev 2 Q3): a human-tier problem episode the AI PC reads; the work list shows 개입."""
         _LOG.warning("trip job %s on %s holds: %s %s", job_id, robot_id, reason, detail)
         await asyncio.to_thread(episodes.opened, robot_id=robot_id, kind="job_hold", tier="human",
-                                problem_id=f"job_hold:{job_id}:{int(time.time())}", type_key=f"job_hold:{robot_id}:trip",
-                                context={"job_id": job_id, "reason": reason, **detail}, decision=None)
+                                problem_id=f"job_hold:{job_id}:{detail['held_event']}",  # one per HOLD, retried
+                                type_key=f"job_hold:{robot_id}:trip", context={"job_id": job_id, "reason": reason, **detail}, decision=None)
 
     jobs = app.state.job_trips = JobTripSteps(store, runner, plan=plan, caps=console._shown_capabilities,
                                               incident=incident)
