@@ -281,9 +281,11 @@ def current_profile(listing: str) -> list[str]:
 
 
 def check_tailscale_profile(expected: str | None = None, which=shutil.which, run=subprocess.run) -> None:
-    """Fail fast when this PC's Tailscale profile is not the one the test PCs are on. Never switches it."""
+    """Fail fast when this PC's Tailscale profile is not the one the test PCs are on. Never switches it.
+
+    An explicit ROSY_TEST_HOSTS is a manual override: those hosts may be on any tailnet."""
     expected = TAILSCALE_PROFILE if expected is None else expected
-    if not expected or not which("tailscale"):
+    if not expected or os.environ.get("ROSY_TEST_HOSTS") is not None or not which("tailscale"):
         return
     try:
         listing = run(["tailscale", "switch", "--list"], capture_output=True, text=True, timeout=15)
