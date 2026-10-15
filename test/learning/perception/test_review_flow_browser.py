@@ -190,6 +190,27 @@ def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
         assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 390
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_disabled_ai_draft_and_photo_caption_keep_their_words_in_their_boxes(browser_workspace, width):
+    """2026-10-15 screenshots: the disabled AI draft button's label sat on its dashed edge (no room for the reason
+    under it) and the photo caption was cut at the edge of a sideways-scrolling bar at 390px."""
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.reload(wait_until='networkidle')
+    button = page.locator('#review-ai-object_draft')
+    expect(button).to_have_attribute('reason', re.compile('.'))
+    fit = page.evaluate("""() => {
+      const button = document.getElementById('review-ai-object_draft'), box = button.getBoundingClientRect();
+      const range = document.createRange(); range.selectNodeContents(button);
+      const words = range.getBoundingClientRect(), caption = document.getElementById('view-status');
+      const cut = caption.getBoundingClientRect();
+      return {top: words.top - box.top, bottom: box.bottom - words.bottom, captionRight: cut.right, width: innerWidth,
+        captionCut: caption.scrollWidth - caption.clientWidth};
+    }""")
+    assert fit['top'] >= 2 and fit['bottom'] >= 2, fit
+    assert fit['captionRight'] <= fit['width'] and fit['captionCut'] <= 0, fit
+
+
 def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
     page, store, expect = browser_workspace
     expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
