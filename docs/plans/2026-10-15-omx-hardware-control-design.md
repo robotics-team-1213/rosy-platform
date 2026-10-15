@@ -74,10 +74,16 @@ positive graph에서도 motion admission은 항상 false다. node 이름은 물�
 불가능하면 별도 native Jazzy host 또는 호스트 재구성이 필요하며 운영 host의 ROS/OS를 자동 교체하지 않는다.
 기존 카메라 환경은 계속 동작하게 둔다. OCI는 개발 시험용이며 현장 actuator runtime으로 바꾸지 않는다(D-246).
 
-벤더 고정 `omx_f.launch.py`에는 `init_position=true`인 시작 동작과 controller spawner가 있다.
+벤더 고정 [omx_f.launch.py](https://github.com/ROBOTIS-GIT/open_manipulator/blob/0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_bringup/launch/omx_f.launch.py)에는
+`init_position=true`인 시작 동작과 controller spawner가 있다.
 단순 launch가 무동작 준비라고 가정하지 않는다. 실물 진입점은 자동 초기 위치 이동을 제거하고,
 driver configure/activate가 torque·목표값에 미치는 영향까지 검증한 뒤 사용한다.
 정지 불명 상태에서 torque-off를 실행하면 팔이 처질 수 있으므로 안전 정지 대용으로 쓰지 않는다.
+
+10/15 후속 비구동 검증에서 고정 벤더 8패키지와 ROSY adapter가 현장 Lyrical의 별도 prefix에
+빌드됐다. controller 관련 4개 배포 패키지도 시스템 설치 없이 별도 prefix에 추출해 검사했다.
+두 핵심 라이브러리의 `ldd` 누락은 0이다. 이는 build/link 준비이며 지원 runtime 승인·driver lifecycle·
+실물 실행 수용이 아니다. [준비 결과](../validation/omx-hardware-control-preparation-2026-10-15/result.md).
 
 측정 profile·독립 stop이 없는 동안 할 수 있는 것은 source 구현·비구동 build·오프라인/ROS-SIM 시험이다.
 하드웨어 미실측 상태에서 빈값을 SIM 명목값으로 채우거나 가짜 JointState로 관문을 넘기지 않는다.
