@@ -3,7 +3,8 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 흰 원형 용기의 딸기를 꺼내 임시로 놓고 원래 용기에 다시 넣는 교시·IL·SIM RL·평가·제한 운용과 Web UI/UX를 연결한다.
-용기 역할은 사용자 확인이다. 임시 놓을 위치·내용물·현재 단계는 아직 미확인이다.
+용기 역할은 사용자 확인이다. 임시 위치는 용기 오른쪽 위 중앙의 top pixel 중심 (330,230),
+구역 [290,190,370,270]으로 선정했다. 실제 놓기·내용물·현재 단계·도달성은 미확인이다.
 선행 관측 작업은 [물체·문맥 계획](2026-10-15-omx-object-context.md)에 둔다.
 
 **Architecture:** 기존 [통합 설계](2026-10-15-omx-learning-operations-design.md)와 D-756 준비 도구를 사용한다.
