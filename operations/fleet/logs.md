@@ -3798,3 +3798,10 @@
 - 증거: 원격(모델 PC, 7f3bd72a1) `operations/fleet/test` exit 0(293 skipped, 브라우저 opt-in), `test/architecture` exit 0, `known_failures` 둘 다 0 new, 로그 X: `proposal-scope/fleet/run-1.txt`, `proposal-scope/arch/run-1.txt`. 고치기 전 빨강 X: `proposal-scope/red/run-1.txt`.
 - gate 변화: 없음.
 - 결정: D-763 조각 4 리뷰. API 변경 이력 번호는 착지 때 정한다.
+
+## 2026-10-15 · c0c7fb706 · Cell Job 제안자 가림을 모든 응답에, 자원 claim 읽기는 역할별로, API v1.240 (D-763 조각 4 보안 리뷰 L1/L2)
+
+- 변경: 가림을 모듈 수준 `redact_cell_job(job, principal)`로 옮기고 Cell Job을 돌려주는 모든 응답(제안 읽기, Cell Job 상세, Mission admit·reject, Cell Job reconcile·resume·cancel)에 쓴다. 제안자 아닌 호출자는 `proposal_principal_id`가 없고 제안자의 사건은 `actor_id: "proposer"`다. `GET /api/fleet/resource-claims`: viewer는 `resource_key`·`resource_kind`·`resource_id`·`phase`만, 운영자는 Cell Job claim 행 전체, 다른 claim은 그 레거시 Mission의 제안자만 행 전체. API 참조 v1.240(머리, 변경 이력 행, 해당 경로 행), 버전을 고정한 시험 다섯 곳과 `core_api_web` app.py 설명. 시험: 숨긴 id의 404 본문이 없는 id와 같음, 제안자 사건이 두 읽기에서 `proposer`, 실제 `build_role_guards`와 `install_channel_feature`로 이름 없는 운영자의 채널 admit 403, L1/L2.
+- 증거: 원격(AI PC, 2a2c1871a) `operations/fleet/test` exit 0, `known_failures` 0 new, 로그 X: `proposal-scope/fleet4/run-1.txt`. 원격(165a1d95d) `test/architecture`, `test/test_line_follow_contract_docs.py`, `middleware/core/api/test` exit 0, 0 new, 로그 X: `proposal-scope/arch2/run-1.txt`. 중간 실패 2건(새 시험이 stop generation을 두 번 rearm)은 2a2c1871a에서 시험을 고쳤다, 로그 X: `proposal-scope/fleet2/run-1.txt`.
+- gate 변화: 없음.
+- 결정: D-763 조각 4 보안 리뷰(APPROVE 뒤 L1/L2). API v1.240은 동료와 조율해 받은 번호다.
