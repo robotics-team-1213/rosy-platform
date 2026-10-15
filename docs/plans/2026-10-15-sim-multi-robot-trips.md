@@ -32,9 +32,11 @@ ROSY_SIM_HOSTS="rosy@100.98.162.71=model ai@100.108.76.123=ai" \
 
 - `run-3`(AI PC, 9852e2ec2, TRIP_M 0.42): 두 로봇이 Fleet 통행권 아래 실제로 달렸다(rosy_01 0.143 m, rosy_02 0.168 m). 두 trip 모두 `arrived`였고 정리 뒤 남은 프로세스는 0이다. 그러나 `arrived`를 본 순간 장소까지 0.277/0.252 m가 남아 있었다. 위 Fleet 도착 규칙과 맞는 값이다. 그 뒤 CORE가 장소까지 마저 가는지는 이 실행이 재지 않았다. 다음 커밋이 판정을 바꿨다: `arrived` 10 s 뒤의 자세를 다시 읽고, 장소까지 `arrive_lane_m` 안일 때만 통과다. 로그: `X:\DevTemp\sim-multi\run-3\out\trips\`.
 
+- **`run-4`(AI PC, 5eb721d11, `--render cpu`, 4 CPU/4 GB): PASS, exit 0.** 두 CORE 응답, 두 로봇 `LOCALIZED`, 카메라 live. 두 trip 모두 `running → arrived`였다. 10 s 뒤 rosy_01(동쪽 도로)은 0.423 m를 움직여 장소에서 0.021 m, rosy_02(서쪽 도로)는 0.401 m를 움직여 장소에서 0.019 m에 섰다. 정리 뒤 남은 프로세스는 0이다. Fleet은 장소 약 0.25 m 앞에서 `arrived`를 내고, CORE는 그 뒤 장소의 stop까지 간다(run-3의 수치는 그 중간 표본이었다). 로그: `X:\DevTemp\sim-multi\run-4\out\trips\`(result.json, api-log.jsonl, launch.log, fleet.log). SIM 증거일 뿐이다. 학습 페인트(모델 없음, denoise)도, DEVICE·FIELD 수용도 아니다.
+
 ## 남은 일
 
-1. 이 팁으로 `run-4`를 돌린다(`wait-and-run.sh 4`, 또는 위 한 줄). `short_m` ≤ 0.15면 통과로 기록한다. 0.25 m 근처에서 멈춰 있으면 Fleet이 장소 0.3 m 앞에서 trip을 끝내고 CORE가 거기서 선 것이다. 그때는 `trip_progress._arrived`의 창 안 stop 규칙을 Fleet 소유자와 정한다(이 브랜치 범위 밖). 그 밖에는 아니면 `result.json`의 `core_ready`/`localized`/`camera`와 `states`로 어디서 멈췄는지 보고 고친다. 4 GB 상한에서 메모리가 모자라면 모델 PC(`--host model -- --render gpu`, 6 GB)로 다시 돈다. 상한 변경은 D-571 결정이라 여기서 하지 않았다.
-2. 통과하면 `integrations/simulation/gazebo/logs.md`에 증거 한 줄을 추가하고 `python tools/harness/rosy_harness.py generate`.
-3. 통과한 뒤 AI PC의 개인 rig `~/rosy-test/d763-sim`(1.3 GB)은 지워도 된다(사용자 메모). 그 전에는 지우지 않는다.
+1. 끝남: `run-4` PASS. 남은 관찰 하나: Fleet `arrived`는 CORE가 장소에 서기 전(약 0.25 m 앞)에 난다. trip 끝 이벤트를 쓰는 소비자(D-763 work 행, 다음 단계 시작)가 그 사이 로봇이 아직 움직인다는 것을 알아야 하는지 Fleet 소유자와 정한다.
+2. 했음: `integrations/simulation/gazebo/logs.md`에 기록.
+3. 커밋된 실행기가 통과했으므로 AI PC의 개인 rig `~/rosy-test/d763-sim`(1.3 GB)은 지워도 된다(사용자 메모). 이 세션은 지우지 않았다. D-763 probe를 이 실행기 위에 올리기 전에 rig의 `probe-d763.py`를 저장소로 옮길지 먼저 정한다.
 4. 범위 밖으로 남긴 것: bend 장소가 있는 SIM 사이트 지도(모서리를 도는 trip, 한 바퀴), D-763 slice 6의 `hold_job`/`release_job` HTTP 진입점(제품 slice 7), `line/lane_guide` 생산자(drivable 목표), 학습 모델 위치(저장소에 없음).
